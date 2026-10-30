@@ -1,8 +1,11 @@
 export const dynamic = "force-dynamic"
 
+import Link from "next/link"
+
 import { prisma } from "@/lib/db/prisma"
 import { requireAuth } from "@/lib/auth/permissions"
 import { formatDate } from "@/lib/utils/format"
+import { notificationBodyHref } from "@/lib/notifications/body-href"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
@@ -39,7 +42,9 @@ export default async function NotificationsPage() {
             <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada notifikasi</p>
           </div>
         ) : (
-          notifications.map((n) => (
+          notifications.map((n) => {
+            const href = notificationBodyHref(n.body)
+            return (
             <div
               key={n.id}
               className={`bg-surface rounded-xl border border-default shadow-sm px-5 py-4 border-l-3 ${!n.readAt ? "border-l-primary" : "border-l-transparent"} ${n.readAt ? "opacity-70" : ""}`}
@@ -50,14 +55,21 @@ export default async function NotificationsPage() {
                     <span className="text-[0.9375rem] font-semibold">{n.title}</span>
                     {!n.readAt && <span className="notification-badge static w-1.5 h-1.5" />}
                   </div>
-                  <p className="text-[0.8125rem] text-secondary m-0">{n.body}</p>
+                  {href ? (
+                    <Link href={href} className="text-[0.8125rem] text-primary hover:underline">
+                      Buka dokumen terkait
+                    </Link>
+                  ) : (
+                    <p className="text-[0.8125rem] text-secondary m-0">{n.body}</p>
+                  )}
                 </div>
                 <span className="text-muted-foreground text-xs whitespace-nowrap">
                   {formatDate(n.createdAt)}
                 </span>
               </div>
             </div>
-          ))
+            )
+          })
         )}
       </div>
     </div>

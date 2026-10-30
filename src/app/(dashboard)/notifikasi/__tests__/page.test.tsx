@@ -55,4 +55,21 @@ describe("halaman notifikasi", () => {
     })
     act(() => root.unmount())
   })
+
+  it("R6WN-10: body path-only menjadi link dokumen, teks biasa tetap teks", async () => {
+    mocks.findMany.mockResolvedValue([
+      { id: 1, title: "Penawaran diterima", body: "/penjualan/penawaran/5", readAt: null, createdAt: new Date() },
+      { id: 2, title: "Stok menipis", body: "Stok Oli tinggal 2", readAt: null, createdAt: new Date() },
+    ])
+    const node = await NotificationsPage()
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const root: Root = createRoot(container)
+    act(() => root.render(node))
+    const link = container.querySelector('a[href="/penjualan/penawaran/5"]')
+    expect(link?.textContent).toContain("Buka dokumen terkait")
+    expect(container.textContent).toContain("Stok Oli tinggal 2")
+    expect(container.querySelector('a[href="/penjualan/penawaran/5"]')?.closest("div")).not.toBeNull()
+    act(() => root.unmount())
+  })
 })

@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button"
 import { useState, useRef, useEffect } from "react"
 import { Bell } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+
+import { notificationBodyHref } from "@/lib/notifications/body-href"
 
 interface Notification {
   id: number
@@ -16,6 +19,7 @@ interface Notification {
 }
 
 export function NotificationDropdown() {
+  const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -136,7 +140,9 @@ export function NotificationDropdown() {
                 <p className="text-sm">Tidak ada notifikasi</p>
               </div>
             ) : (
-              notifications.slice(0, 5).map((notif) => (
+              notifications.slice(0, 5).map((notif) => {
+                const href = notificationBodyHref(notif.body)
+                return (
                 <button
                   key={notif.id}
                   type="button"
@@ -144,20 +150,27 @@ export function NotificationDropdown() {
                   className={`w-full text-left flex gap-3 px-4 py-3 border-b border-default last:border-0 hover:bg-surface-secondary transition-colors cursor-pointer ${!notif.readAt ? "bg-primary/5" : ""}`}
                   onClick={() => {
                     if (!notif.readAt) void markAsRead(notif.id)
+                    if (href) {
+                      setIsOpen(false)
+                      router.push(href)
+                    }
                   }}
                 >
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm truncate ${!notif.readAt ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
                       {notif.title}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">{notif.body}</p>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">
+                      {href ? "Buka dokumen terkait" : notif.body}
+                    </p>
                     <p className="text-[10px] text-muted-foreground mt-1">{timeAgo(notif.createdAt)}</p>
                   </div>
                   {!notif.readAt && (
                     <div className="flex-shrink-0 w-2 h-2 mt-2 rounded-full bg-primary" />
                   )}
                 </button>
-              ))
+                )
+              })
             )}
           </div>
 
