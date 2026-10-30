@@ -145,6 +145,13 @@ export function publicUrl(key: string, assetBaseUrl?: string): string {
   return base ? `${base}/${clean}` : `/uploads/${clean}`
 }
 
+// R7PB-01: kategori privat — scan tanda tangan jabatan & avatar pengguna
+// adalah data personal, JANGAN ditulis ke public/uploads (proxy mem-bypass
+// auth untuk ekstensi gambar). Disimpan di private/uploads/<category>/ dan
+// disajikan lewat /api/uploads/<category>/<filename> terotentikasi.
+// items/logos memang aset publik (katalog/cetak) — tetap di public/.
+const PRIVATE_CATEGORIES: ReadonlySet<UploadCategory> = new Set(["avatars", "signatures"])
+
 // Resolve the on-disk extension. Prefer the canonical extension for the
 // validated MIME type; only fall back to the client filename's extension when
 // the MIME is unknown, and never honour a script/active extension.
@@ -180,7 +187,11 @@ export async function uploadToStorage(file: File, opts: UploadOptions): Promise<
   // P2-4: isi biner harus cocok dengan MIME yang diklaim — SEBELUM tulis.
   assertMagicBytes(buffer, file.type)
 
-  if (config.driver === "r2") {
+  // R7PB-01: kategori privat selalu lokal & terotentikasi, tidak pernah
+  // R2/CDN publik — bucket R2 di sini diasumsikan publik lewat assetBaseUrl.
+  const isPrivate = PRIVATE_CATEGORIES.has(opts.category)
+
+  if (!isPrivate && config.driver === "r2") {
     try {
       await uploadToR2(key, buffer, file.type, config)
       return { url: publicUrl(key, config.assetBaseUrl), key }
@@ -194,6 +205,11 @@ export async function uploadToStorage(file: File, opts: UploadOptions): Promise<
     }
   }
 
+  if (isPrivate) {
+    await uploadToPrivate(key, buffer)
+    return { url: `/api/uploads/${key}`, key }
+  }
+
   await uploadToLocal(key, buffer)
   // For pure-local driver, an assetBaseUrl that proxies the app (e.g. Cloudflare
   // CDN in front of Next) still resolves /uploads, so honor it when set.
@@ -202,6 +218,14 @@ export async function uploadToStorage(file: File, opts: UploadOptions): Promise<
 
 async function uploadToLocal(key: string, buffer: Buffer): Promise<void> {
   const fullPath = path.join(process.cwd(), "public", "uploads", key)
+  await mkdir(path.dirname(fullPath), { recursive: true })
+  await writeFile(fullPath, buffer)
+}
+
+/** R7PB-01: penulisan kategori privat — di luar public/, hanya route
+ *  terotentikasi /api/uploads/<category>/<filename> yang boleh menyajikan. */
+async function uploadToPrivate(key: string, buffer: Buffer): Promise<void> {
+  const fullPath = path.join(process.cwd(), "private", "uploads", key)
   await mkdir(path.dirname(fullPath), { recursive: true })
   await writeFile(fullPath, buffer)
 }

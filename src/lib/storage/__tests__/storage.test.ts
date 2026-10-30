@@ -176,6 +176,29 @@ describe("uploadToStorage", () => {
     expect(res.key).not.toContain("/etc/")
   })
 
+  it("R7PB-01: private categories (avatars/signatures) never write to public/ and return the authenticated URL", async () => {
+    findFirstMock.mockResolvedValue(null)
+    for (const category of ["avatars", "signatures"] as const) {
+      writeFileMock.mockClear()
+      const file = makeRealFile("a.png", "image/png")
+      const res = await uploadToStorage(file, { category, prefix: `${category}-u1` })
+      expect(res.url).toBe(`/api/uploads/${res.key}`)
+      expect(res.url.startsWith("/uploads/")).toBe(false)
+      const writtenPath = String(writeFileMock.mock.calls[0][0])
+      expect(writtenPath).toContain("private")
+      expect(writtenPath).not.toContain(`${"public"}/uploads`)
+    }
+  })
+
+  it("R7PB-01: public categories (items/logos) still write to public/ with a public URL", async () => {
+    findFirstMock.mockResolvedValue(null)
+    writeFileMock.mockClear()
+    const file = makeRealFile("a.png", "image/png")
+    const res = await uploadToStorage(file, { category: "items", prefix: "item" })
+    expect(res.url).toMatch(/^\/uploads\/items\//)
+    expect(String(writeFileMock.mock.calls[0][0])).toContain("public")
+  })
+
   it("honors a custom allowedTypes list", async () => {
     findFirstMock.mockResolvedValue(null)
     const pdf = makeRealFile("doc.pdf", "application/pdf")

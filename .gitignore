@@ -94,6 +94,12 @@ SOUL.md
 TOOLS.md
 USER.md
 
+# Runtime uploads — user data must never be committed (R7PB-01: avatars
+# & signatures moved to authenticated private serving; old public files
+# were also tracked in git and removed from the index)
+/public/uploads/
+/private/uploads/
+
 # Ad-hoc one-off debug/diagnostic scripts (not part of the app)
 /scripts/tmp-*
 /scripts/check-*
