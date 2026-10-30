@@ -18,6 +18,12 @@ interface VoidButtonProps {
       memanggil aksi. Aksi server tetap pemilik validasi (nol mutasi bila
       kosong); UI hanya cermin agar operator tidak menunggu round-trip. */
   requireReason?: boolean
+  /**
+   * Izin aksi batal, dihitung server di halaman pemanggil (hasPermission).
+   * Tanpa ini tombol tampil hanya berdasar status — pengguna lihat-saja pun
+   * melihat tombol batal dan hanya menerima penolakan dari server.
+   */
+  canVoid?: boolean
   reasonLabel?: string
   reasonPlaceholder?: string
 }
@@ -38,6 +44,7 @@ export function VoidButton({
   requireReason = false,
   reasonLabel = "Alasan pembatalan",
   reasonPlaceholder = "Tulis alasan pembatalan (wajib diisi)",
+  canVoid = true,
 }: VoidButtonProps) {
   const { isPending, isOpen, setIsOpen, reason, setReason, submit, handleOpenChange } =
     useConfirmReasonAction({
@@ -46,6 +53,8 @@ export function VoidButton({
       errorFallback: "Gagal membatalkan dokumen",
       onSuccess,
     })
+
+  if (!canVoid) return null
 
   function handleVoid() {
     if (requireReason && !reason.trim()) {

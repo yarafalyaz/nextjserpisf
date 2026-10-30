@@ -11,7 +11,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 
 import type { Metadata } from "next";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { hasPermission, requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
 import { statusLabel } from "@/lib/utils/status-labels";
@@ -54,6 +54,8 @@ export default async function DeliveryOrderDetailPage({
 
   if (!deliveryOrder) notFound();
 
+  const canEditDeliveryOrders = await hasPermission("edit_delivery_orders")
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs
@@ -88,6 +90,7 @@ export default async function DeliveryOrderDetailPage({
               <ProcessButton
                 id={deliveryOrder.id}
                 action={shipDeliveryOrder}
+                canProcess={canEditDeliveryOrders}
                 label="Tandai Dikirim"
                 confirmTitle="Tandai surat jalan ini dikirim?"
                 confirmBody="Barang keluar dari gudang dan baris surat jalan mulai dihitung sebagai terkirim di laporan Pemenuhan Pesanan. Setelah dikirim, surat jalan ini tidak bisa dihapus."
@@ -98,6 +101,7 @@ export default async function DeliveryOrderDetailPage({
               <ProcessButton
                 id={deliveryOrder.id}
                 action={deliverDeliveryOrder}
+                canProcess={canEditDeliveryOrders}
                 label="Tandai Terkirim"
                 confirmTitle="Tandai surat jalan ini terkirim?"
                 confirmBody="Pelanggan sudah menerima barang. Tanggal terkirim dicatat dan baris surat jalan ini tetap dihitung sebagai terkirim di laporan Pemenuhan Pesanan."

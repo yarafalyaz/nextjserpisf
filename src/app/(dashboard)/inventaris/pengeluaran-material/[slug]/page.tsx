@@ -14,7 +14,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope"
 import { entityEditHref } from "@/lib/utils/entity-url"
@@ -65,6 +65,7 @@ export default async function MaterialIssueDetailPage({
     select: { id: true, name: true },
   })
   const itemNameMap = new Map(items.map((i) => [i.id, i.name]))
+  const canEditMaterialIssue = await hasPermission("edit_material_issues")
 
   return (
     <div className="flex flex-col gap-6">
@@ -79,6 +80,7 @@ export default async function MaterialIssueDetailPage({
                 <ProcessButton
                   id={issue.id}
                   action={completeMaterialIssue}
+                  canProcess={canEditMaterialIssue}
                   successMessage="Pengeluaran material berhasil diposting"
                   label="Posting"
                 />

@@ -133,7 +133,8 @@ export default async function InventoryTransferDetailPage({
   })
 
   const isReceivable = transfer.status === "processed" || transfer.status === "partially_received"
-  const canEditTransfer = isReceivable && (await hasPermission("edit_inventory_transfers"))
+  const canProcessInventoryTransfer = await hasPermission("edit_inventory_transfers")
+  const canEditTransfer = isReceivable && canProcessInventoryTransfer
   const canCloseShortage = await hasPermission("create_stock_adjustments")
   const receiptEvents = transfer.receipts
   const activeShortage = transfer.shortageAdjustments.find((a) =>
@@ -158,6 +159,7 @@ export default async function InventoryTransferDetailPage({
                 <ProcessButton
                   id={transfer.id}
                   action={processInventoryTransfer}
+                  canProcess={canProcessInventoryTransfer}
                   successMessage="Transfer stok berhasil dikirim"
                   label="Kirim"
                 />

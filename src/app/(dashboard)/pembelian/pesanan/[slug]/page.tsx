@@ -31,6 +31,7 @@ export default async function PurchaseOrderDetailPage({
 }) {
   await requirePermission("view_purchase_orders")
   const canApprove = await hasPermission("approve_purchase_orders")
+  const canCancelPurchaseOrder = await hasPermission("edit_purchase_orders")
   const { slug } = await params
 
   const po = await resolveEntity(
@@ -101,7 +102,7 @@ export default async function PurchaseOrderDetailPage({
             {/* Status yang sama dengan penjagaan di cancelPurchaseOrder: tombol tak
                 muncul di tempat yang aksinya pasti menolak. */}
             {!["received", "cancelled", "partial_received"].includes(po.status) && (
-              <VoidButton id={po.id} action={cancelPurchaseOrder} />
+              <VoidButton id={po.id} action={cancelPurchaseOrder} canVoid={canCancelPurchaseOrder} />
             )}
             <DeleteButton id={po.id} action={deletePurchaseOrder} />
             <BackButton href="/pembelian/pesanan" />

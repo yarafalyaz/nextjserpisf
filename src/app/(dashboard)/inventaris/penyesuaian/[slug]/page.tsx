@@ -15,7 +15,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope"
 import { entityEditHref } from "@/lib/utils/entity-url"
@@ -77,6 +77,8 @@ export default async function StockAdjustmentDetailPage({
     approverName = approver?.name || null
   }
 
+  const canProcessStockAdjustment = await hasPermission("process_stock_adjustments")
+
   const typeMap: Record<string, string> = {
     increase: "Penambahan",
     decrease: "Pengurangan",
@@ -106,6 +108,7 @@ export default async function StockAdjustmentDetailPage({
                 <ProcessButton
                   id={adjustment.id}
                   action={processStockAdjustment}
+                  canProcess={canProcessStockAdjustment}
                   successMessage="Penyesuaian stok berhasil diposting"
                   label="Posting"
                 />

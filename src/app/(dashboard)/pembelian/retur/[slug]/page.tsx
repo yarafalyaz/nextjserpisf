@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 
 import type { Metadata } from "next"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 import { CanCreate } from "@/components/auth/can-create"
@@ -56,6 +56,8 @@ export default async function PurchaseReturnDetailPage({
 
   if (!purchaseReturn) notFound()
 
+  const canApprovePurchaseReturn = await hasPermission("approve_purchase_returns")
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -78,6 +80,7 @@ export default async function PurchaseReturnDetailPage({
               <ProcessButton
                 id={purchaseReturn.id}
                 action={processPurchaseReturn}
+                canProcess={canApprovePurchaseReturn}
                 label="Proses Retur"
                 confirmTitle="Proses retur ini?"
                 confirmBody="Stok akan dikembalikan ke pemasok dan jurnal pembaliknya diposting. Jalankan setelah barang benar-benar dikirim."

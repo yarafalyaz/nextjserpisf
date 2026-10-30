@@ -24,7 +24,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 
 import type { Metadata } from "next";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { hasPermission, requirePermission } from "@/lib/auth/permissions";
 import {
   GOODS_RECEIPT_JOURNAL_REF_TYPE,
   GOODS_RECEIPT_SERVICE_JOURNAL_REF_TYPE,
@@ -77,6 +77,8 @@ export default async function GoodsReceiptDetailPage({
   );
 
   if (!receipt) notFound();
+
+  const canVerifyGoodsReceipt = await hasPermission("verify_goods_receipts");
 
   // Batas gudang: penjagaan yang SAMA dengan lampiran & cetak
   // (lib/auth/document-scope) — dokumen gudang lain tidak boleh dibaca.
@@ -156,6 +158,7 @@ export default async function GoodsReceiptDetailPage({
                 <ProcessButton
                   id={receipt.id}
                   action={verifyGoodsReceipt}
+                  canProcess={canVerifyGoodsReceipt}
                   confirmTitle="Verifikasi penerimaan barang ini?"
                   confirmBody="Verifikasi akan menambah stok ke gudang, membuat mutasi stok, dan mencatat nilai HPP. Pastikan jumlah, lokasi rak/baris, dan harga sudah benar."
                   successMessage="Penerimaan barang berhasil diverifikasi"

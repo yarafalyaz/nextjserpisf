@@ -14,6 +14,12 @@ interface ProcessButtonProps {
   confirmBody?: string
   successMessage?: string
   label?: string
+  /**
+   * Izin aksi proses, dihitung server di halaman pemanggil (hasPermission).
+   * Tanpa ini tombol tampil hanya berdasar status — pengguna lihat-saja pun
+   * melihat tombol proses dan hanya menerima penolakan dari server.
+   */
+  canProcess?: boolean
 }
 
 export function ProcessButton({
@@ -23,10 +29,13 @@ export function ProcessButton({
   confirmBody = "Data yang diposting akan meng-update stok dan jurnal keuangan. Pastikan data sudah benar.",
   successMessage = "Data berhasil diposting",
   label = "Posting",
+  canProcess = true,
 }: ProcessButtonProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isOpen, setIsOpen] = useState(false)
+
+  if (!canProcess) return null
 
   function handleProcess() {
     startTransition(async () => {

@@ -96,11 +96,13 @@ export default async function InvoiceDetailPage({
 
   // Dokumen denda piutang (F-2026-10-22-093-V): tab hanya untuk pemegang
   // view_sales_late_fees; loader menegakkan izin yang sama fail-closed.
-  const [canViewLateFees, canCreateLateFee, canReverseLateFee] =
+  const [canViewLateFees, canCreateLateFee, canReverseLateFee, canPost, canVoid] =
     await Promise.all([
       hasPermission("view_sales_late_fees"),
       hasPermission("create_sales_late_fees"),
       hasPermission("delete_sales_late_fees"),
+      hasPermission("post_sales_invoices"),
+      hasPermission("delete_sales_invoices"),
     ])
   const [lateFeeBundle, whatsappTrail, availableItems, pmMap] = await Promise.all([
     canViewLateFees
@@ -199,6 +201,7 @@ export default async function InvoiceDetailPage({
               <ProcessButton
                 id={invoice.id}
                 action={postInvoice}
+                canProcess={canPost}
                 label="Posting"
                 confirmTitle="Posting faktur ini?"
                 confirmBody="Faktur akan diposting: piutang diakui di jurnal dan stok barang berkurang sesuai barang pada faktur. Pastikan data sudah benar."
@@ -209,6 +212,7 @@ export default async function InvoiceDetailPage({
               <VoidButton
                 id={invoice.id}
                 action={voidSalesInvoice}
+                canVoid={canVoid}
                 requireReason
                 title={`Batalkan faktur ${salesInvoiceLabel(invoice)}?`}
                 body="Faktur ditandai dibatalkan dan seluruh dampak jurnal serta stoknya dibalik. Bila faktur masih punya pembayaran aktif, batalkan dulu tiap pembayaran lewat jalur reversal beralasan, baru batalkan faktur ini."

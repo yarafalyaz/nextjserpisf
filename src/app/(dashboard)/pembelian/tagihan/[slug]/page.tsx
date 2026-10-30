@@ -72,6 +72,8 @@ export default async function VendorBillDetailPage({
     Number(bill.tax ?? 0) > 0 &&
     !isValidVendorTaxInvoiceNumber(bill.taxInvoiceNumber ?? null)
   const canSetTaxInvoiceNumber = await hasPermission("approve_vendor_bills")
+  const canApproveVendorBill = await hasPermission("approve_vendor_bills")
+  const canVoidVendorBill = await hasPermission("delete_vendor_bills")
 
   return (
     <div className="flex flex-col gap-6">
@@ -85,6 +87,7 @@ export default async function VendorBillDetailPage({
               <ProcessButton
                 id={bill.id}
                 action={confirmVendorBill}
+                canProcess={canApproveVendorBill}
                 label="Konfirmasi"
                 confirmTitle="Konfirmasi tagihan ini?"
                 confirmBody="Tagihan akan diposting: utang diakui di jurnal. Pastikan data sudah benar."
@@ -104,7 +107,7 @@ export default async function VendorBillDetailPage({
           )}
           <PrintButton documentType="vendor-bill" documentId={bill.id} />
           {bill.status !== "draft" && bill.status !== "cancelled" && (
-            <VoidButton id={bill.id} action={voidVendorBill} />
+            <VoidButton id={bill.id} action={voidVendorBill} canVoid={canVoidVendorBill} />
           )}
           <CanCreate permission="delete_vendor_bills">
             <DeleteButton id={bill.id} action={deleteVendorBill} />
