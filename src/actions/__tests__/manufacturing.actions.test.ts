@@ -446,6 +446,26 @@ describe("Production Order Actions", () => {
     expect(mocks.prismaMock.$executeRaw).toHaveBeenCalledOnce()
   })
 
+  it("STOK-17: PO issue menilai expiry per tanggal issue aktual, bukan startDate order", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0,
+      startDate: new Date("2026-09-01"), createdAt: new Date("2026-09-01"),
+    })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+    }])
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 99 })
+
+    const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 3 }])
+
+    expect(res.success).toBe(true)
+    const fifoArg = mocks.consumeFifoLayersMock.mock.calls.at(-1)![1]
+    // documentDate harus ~sekarang (tanggal issue), bukan 2026-09-01.
+    expect(fifoArg.documentDate.getTime()).toBeGreaterThan(Date.now() - 60_000)
+  })
+
   it("refuses PO issue when the linked WO was already consumed via MI (P1-4)", async () => {
     mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
       id: 8, documentNo: "MO-008", status: "in_progress", totalActualCost: 0, workOrderId: 42,

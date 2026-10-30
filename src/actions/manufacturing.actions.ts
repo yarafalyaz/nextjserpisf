@@ -1006,8 +1006,10 @@ export async function issueMaterial(
           qty,
           label: `perintah produksi ${order.documentNo}`,
           // F-2026-10-21-011: issueMaterial PO juga jalur keluar — lot
-          // kedaluwarsa ditolak per tanggal terbit order (startDate bila ada).
-          documentDate: order.startDate ?? order.createdAt ?? new Date(),
+          // kedaluwarsa ditolak per tanggal ISSUE AKTUAL (STOK-17: dulu
+          // startDate order, sehingga lot yang expired di antara mulai
+          // order dan issue fisik lolos; evaluasi sekarang = waktu proses).
+          documentDate: new Date(),
         });
         const unitCost = qty > 0 ? consumedCost / qty : resolveItemCost(itm);
         const lineCost = safeMultiply(qty, unitCost, 2);
