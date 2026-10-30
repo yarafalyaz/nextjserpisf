@@ -114,6 +114,20 @@ describe("proxy public API allowlist", () => {
     expect(PUBLIC_API_PATHS).toContain("/api/auth")
     expect(PUBLIC_API_PATHS).toContain("/api/cron")
   })
+
+  it("R7PB-03: allowlist publik tetap melewati rate-limit generik", () => {
+    const src = readFileSync(join(process.cwd(), "src/proxy.ts"), "utf8")
+    for (const marker of [
+      'pathname.startsWith("/api/cron")',
+      'pathname === "/api/health"',
+      'pathname === "/api/address"',
+    ]) {
+      const branch = src.slice(src.indexOf(marker), src.indexOf(marker) + 700)
+      expect(branch).toContain("mayBlockOnIp")
+      expect(branch).toContain("takeRateLimit(`api:${clientKey}`, RATE_LIMITS.api)")
+      expect(branch).toContain('apiError("RATE_LIMITED", "Rate limit exceeded")')
+    }
+  })
 })
 
 describe("proxy public metadata allowlist (ISF-011)", () => {

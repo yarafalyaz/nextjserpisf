@@ -33,8 +33,9 @@ describe("proxy API error contract", () => {
 
   it("respons 429 memakai kode RATE_LIMITED", () => {
     const count = (src.match(/"RATE_LIMITED"/g) ?? []).length
-    // 4 titik throttling: /login POST, /api/auth POST, upload, API umum.
-    expect(count).toBe(4)
+    // 7 titik throttling: /login POST, /api/auth POST, cron, health, address,
+    // upload, API umum (R7PB-03 menambah limit ke allowlist publik).
+    expect(count).toBe(7)
   })
 
   it("respons 401 API memakai kode UNAUTHORIZED", () => {

@@ -182,8 +182,20 @@ export async function proxy(req: NextRequest) {
       return addSecurityHeaders(req, nextPage());
     }
 
-    // Cron routes use their own CRON_SECRET verification
+    // R7PB-03: allowlist di bawah publik/ber-secret sendiri, tapi tetap kena
+    // limit generik bila kunci klien tepercaya — flood tak boleh membebani
+    // query DB/CSV/cron tanpa batas. Tanpa IP tepercaya, bucket bersama
+    // tidak memblokir (pola mayBlockOnIp yang sama seperti login).
+    // Cron routes use their own CRON_SECRET verification.
     if (pathname.startsWith("/api/cron")) {
+      if (mayBlockOnIp) {
+        const result = await takeRateLimit(`api:${clientKey}`, RATE_LIMITS.api);
+        if (!result.allowed) {
+          return addSecurityHeaders(req,
+            apiError("RATE_LIMITED", "Rate limit exceeded"),
+          );
+        }
+      }
       return addSecurityHeaders(req, nextPage());
     }
 
@@ -191,6 +203,14 @@ export async function proxy(req: NextRequest) {
     // probe for monitors / load balancers / k8s / CI. It exposes no sensitive
     // data (DB SELECT 1 + status) and returns 200/503 by design.
     if (pathname === "/api/health") {
+      if (mayBlockOnIp) {
+        const result = await takeRateLimit(`api:${clientKey}`, RATE_LIMITS.api);
+        if (!result.allowed) {
+          return addSecurityHeaders(req,
+            apiError("RATE_LIMITED", "Rate limit exceeded"),
+          );
+        }
+      }
       return addSecurityHeaders(req, nextPage());
     }
 
@@ -198,6 +218,14 @@ export async function proxy(req: NextRequest) {
     // the address pickers, including the first-run setup wizard which runs
     // before any session exists.
     if (pathname === "/api/address") {
+      if (mayBlockOnIp) {
+        const result = await takeRateLimit(`api:${clientKey}`, RATE_LIMITS.api);
+        if (!result.allowed) {
+          return addSecurityHeaders(req,
+            apiError("RATE_LIMITED", "Rate limit exceeded"),
+          );
+        }
+      }
       return addSecurityHeaders(req, nextPage());
     }
 
