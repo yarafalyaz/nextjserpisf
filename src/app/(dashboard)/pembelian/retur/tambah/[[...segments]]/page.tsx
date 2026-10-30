@@ -97,6 +97,42 @@ export default async function CreatePurchaseReturnPage({
       }
     : undefined
 
+  // STOK-16: opsi baris penerimaan asal (GR terverifikasi/selesai) untuk
+  // picker per baris retur; label memuat dokumen + qty + batch.
+  const receiptLineRows = await prisma.goodsReceiptItem.findMany({
+    where: {
+      goodsReceipt: {
+        status: { in: ["verified", "completed"] },
+        purchaseOrder: { deletedAt: null },
+      },
+    },
+    select: {
+      id: true,
+      itemId: true,
+      qty: true,
+      uom: true,
+      batchNumber: true,
+      goodsReceipt: {
+        select: {
+          documentNo: true,
+          purchaseOrderId: true,
+          createdAt: true,
+        },
+      },
+    },
+    orderBy: { goodsReceipt: { createdAt: "desc" } },
+    take: 1000,
+  })
+  const receiptLines = receiptLineRows.map((l) => ({
+    id: l.id,
+    purchaseOrderId: l.goodsReceipt.purchaseOrderId,
+    itemId: l.itemId,
+    qty: Number(l.qty),
+    uom: l.uom,
+    batchNumber: l.batchNumber,
+    label: `${l.goodsReceipt.documentNo} — ${Number(l.qty)}${l.uom ? ` ${l.uom}` : ""}${l.batchNumber ? ` — batch ${l.batchNumber}` : ""} — ${l.goodsReceipt.createdAt.toISOString().slice(0, 10)}`,
+  }))
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
@@ -126,7 +162,7 @@ export default async function CreatePurchaseReturnPage({
           </AlertDescription>
         </Alert>
       )}
-      <PurchaseReturnForm purchaseOrders={poOptions} items={items} returnData={returnPrefill} />
+      <PurchaseReturnForm purchaseOrders={poOptions} items={items} returnData={returnPrefill} receiptLines={receiptLines} />
     </div>
   )
 }

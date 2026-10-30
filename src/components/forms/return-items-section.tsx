@@ -22,7 +22,7 @@ export interface ReturnItemsSectionProps<TItem> {
   removeItem: (index: number) => void
   updateItem: (
     index: number,
-    field: "itemId" | "qty" | "serialNumbers" | "batchNumbers",
+    field: "itemId" | "qty" | "serialNumbers" | "batchNumbers" | "goodsReceiptItemId",
     value: number | string,
   ) => void
   extraHeaders?: ReactNode

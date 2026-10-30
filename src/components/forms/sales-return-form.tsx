@@ -60,7 +60,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
     setReturnItems(returnItems.filter((_, i) => i !== index))
   }
 
-  function updateItem(index: number, field: "itemId" | "qty" | "serialNumbers" | "batchNumbers", value: number | string) {
+  function updateItem(index: number, field: "itemId" | "qty" | "serialNumbers" | "batchNumbers" | "goodsReceiptItemId", value: number | string) {
     const updated = [...returnItems]
     updated[index] = { ...updated[index], [field]: value } as ReturnItem
     setReturnItems(updated)

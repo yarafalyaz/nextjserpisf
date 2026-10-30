@@ -10,21 +10,33 @@ import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { nextItemUid } from "@/lib/utils/item-uid"
 import { ReturnItemsSection, ReturnFormActions, ReturnDateAndReason, ReturnTaxNoteFields } from "@/components/forms/return-items-section"
 
+export interface ReceiptLineOption {
+  id: number
+  purchaseOrderId: number
+  itemId: number
+  qty: number
+  uom: string | null
+  batchNumber: string | null
+  label: string
+}
+
 interface PurchaseReturnFormProps {
   purchaseOrders: { id: number; documentNo: string
 }[]
-  returnData?: { id: number; purchaseOrderId: number; date: string; reason?: string | null; taxReturnNoteNumber?: string | null; taxReturnNoteDate?: string | null; items?: Array<{ itemId: number; qty: number; notes?: string }> }
+  returnData?: { id: number; purchaseOrderId: number; date: string; reason?: string | null; taxReturnNoteNumber?: string | null; taxReturnNoteDate?: string | null; items?: Array<{ itemId: number; qty: number; notes?: string; goodsReceiptItemId?: number | null }> }
   items: { id: number; sku: string; name: string }[]
+  receiptLines?: ReceiptLineOption[]
 }
 
 interface ReturnItem {
   itemId: number
   qty: number
+  goodsReceiptItemId?: number | null
   /** Kunci baris untuk React; dibuang sebelum dikirim ke server. */
   uid: string;
 }
 
-export function PurchaseReturnForm({ purchaseOrders, items, returnData }: PurchaseReturnFormProps) {
+export function PurchaseReturnForm({ purchaseOrders, items, returnData, receiptLines = [] }: PurchaseReturnFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [date, setDate] = useState(returnData?.date ?? toLocalDateOnly(new Date()))
@@ -34,12 +46,19 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
   // silently wipe all existing line items to a single empty row.
   const [returnItems, setReturnItems] = useState<ReturnItem[]>(
     returnData?.items && returnData.items.length > 0
-      ? returnData.items.map((it) => ({ itemId: it.itemId, qty: it.qty, uid: nextItemUid() }))
+      ? returnData.items.map((it) => ({ itemId: it.itemId, qty: it.qty, goodsReceiptItemId: it.goodsReceiptItemId ?? null, uid: nextItemUid() }))
       : [{ itemId: 0, qty: 1, uid: nextItemUid() }],
   )
 
   function addItem() {
     setReturnItems([...returnItems, { itemId: 0, qty: 1, uid: nextItemUid() }])
+  }
+
+  /** Baris penerimaan asal yang cocok untuk baris retur ini (PO + item). */
+  function receiptOptionsFor(row: ReturnItem): ReceiptLineOption[] {
+    const poId = Number(purchaseOrderId)
+    if (!poId || !row.itemId) return []
+    return receiptLines.filter((l) => l.purchaseOrderId === poId && l.itemId === row.itemId)
   }
 
   function removeItem(index: number) {
@@ -49,6 +68,12 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
   function updateItem(index: number, field: keyof ReturnItem, value: number) {
     const updated = [...returnItems]
     updated[index] = { ...updated[index], [field]: value }
+    setReturnItems(updated)
+  }
+
+  function setReceiptLine(index: number, value: string) {
+    const updated = [...returnItems]
+    updated[index] = { ...updated[index], goodsReceiptItemId: value ? Number(value) : null }
     setReturnItems(updated)
   }
 
@@ -105,6 +130,26 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
         removeItem={removeItem}
         updateItem={(index, field, value) => {
           if (field === "itemId" || field === "qty") updateItem(index, field, value as number)
+        }}
+        extraHeaders={<th style={{ minWidth: "190px" }}>Penerimaan Asal</th>}
+        renderExtraCells={(row, index) => {
+          const options = receiptOptionsFor(row)
+          return (
+            <td>
+              <select
+                aria-label={`Penerimaan asal baris ${index + 1}`}
+                value={row.goodsReceiptItemId ? String(row.goodsReceiptItemId) : ""}
+                disabled={!row.itemId || options.length === 0}
+                onChange={(e) => setReceiptLine(index, e.target.value)}
+                className="form-input"
+              >
+                <option value="">Otomatis (terbaru)</option>
+                {options.map((o) => (
+                  <option key={o.id} value={o.id}>{o.label}</option>
+                ))}
+              </select>
+            </td>
+          )
         }}
       />
 

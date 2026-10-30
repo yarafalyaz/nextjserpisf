@@ -135,6 +135,37 @@ describe("purchase return UoM and receipt warehouse", () => {
     expect(spies.returnUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 7 }, data: { status: "returned" } }))
   })
 
+  it("STOK-16: baris tertaut memakai UOM/gudang baris GR-nya sendiri, bukan receipt terbaru", async () => {
+    const { spies, tx } = makeTx({
+      // Urutan desc createdAt: baris terbaru PCS di gudang 8 dulu, lalu baris
+      // tertaut BOX di gudang 2. Tanpa tautan hook akan memakai PCS/gudang 8.
+      receiptItemFindMany: vi.fn().mockResolvedValue([
+        { id: 21, itemId: 3, uom: "PCS", warehouseId: 8, goodsReceipt: { warehouseId: 9 } },
+        { id: 20, itemId: 3, uom: "BOX", warehouseId: 2, goodsReceipt: { warehouseId: 1 } },
+      ]),
+    })
+    spies.returnFindUniqueOrThrow.mockResolvedValue({
+      id: 7,
+      documentNo: "PR-7",
+      purchaseOrderId: 4,
+      date: new Date("2026-10-01"),
+      status: "processing",
+      items: [{ itemId: 3, qty: 2, cost: 120, goodsReceiptItemId: 20 }],
+    })
+
+    await onPurchaseReturnProcessed(7, 9)
+
+    expect(mocks.toBaseFactor).toHaveBeenCalledWith(tx, 3, "BOX")
+    expect(mocks.consumeFifoLayers).toHaveBeenCalledWith(tx, expect.objectContaining({
+      itemId: 3,
+      warehouseId: 2,
+      qty: 24,
+    }))
+    expect(spies.moveCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ itemId: 3, warehouseId: 2, qty: 24 }),
+    }))
+  })
+
   // Regression: the purchase-return hook must record the serial units that left
   // stock (consumeFifoLayers marks them "used" for trackSerial items) on the
   // return line, so the document keeps the attribution.

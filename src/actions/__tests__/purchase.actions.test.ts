@@ -1182,6 +1182,65 @@ describe("Purchase Return Actions", () => {
     vi.mocked(findOverReturn).mockReturnValue(null)
   })
 
+  it("STOK-16: tautan baris penerimaan asal disimpan dan cap per baris GR ditegakkan", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    // Dua penerimaan item sama, UOM beda: GR 11 = 1 BOX (12 PCS), GR 12 = 5 PCS.
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ unitOfMeasure: "PCS" })
+    mocks.prismaMock.uomConversion.findUnique.mockImplementation(async ({ where }: any) =>
+      where?.itemId_code?.code === "BOX" ? { factorToBase: 12 } : null,
+    )
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValue([
+      { id: 11, itemId: 1, qty: 1, uom: "BOX" },
+      { id: 12, itemId: 1, qty: 5, uom: "PCS" },
+    ])
+    // Tautan GR 12 hanya menampung 5 PCS: retur tertaut 6 PCS ditolak walau
+    // cap agregat per item (17 PCS) masih longgar.
+    const over = await actions.createPurchaseReturn(fdMap({
+      purchaseOrderId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 6, goodsReceiptItemId: 12 }]),
+    }))
+    expect(over?.success).toBe(false)
+    expect(over?.error).toContain("melebihi sisa penerimaan asal")
+    expect(mocks.prismaMock.purchaseReturn.create).not.toHaveBeenCalled()
+    // Retur dalam sisa GR 12 lolos dan tautan tersimpan apa adanya.
+    const ok = await actions.createPurchaseReturn(fdMap({
+      purchaseOrderId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 5, goodsReceiptItemId: 12 }]),
+    }))
+    expect(ok?.success).toBe(true)
+    const arg = mocks.prismaMock.purchaseReturn.create.mock.calls.at(-1)![0]
+    expect(arg.data.items.create[0]).toEqual(expect.objectContaining({ itemId: 1, qty: 5, goodsReceiptItemId: 12 }))
+  })
+
+  it("STOK-16: tautan GR dari PO lain / item lain ditolak; tautan tak valid ditolak parser", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValue([
+      { id: 11, itemId: 1, qty: 1, uom: "PCS" },
+    ])
+    // Tautan menunjuk baris GR yang tidak ada pada PO ini.
+    const unknown = await actions.createPurchaseReturn(fdMap({
+      purchaseOrderId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1, goodsReceiptItemId: 99 }]),
+    }))
+    expect(unknown?.success).toBe(false)
+    expect(unknown?.error).toContain("tidak ditemukan pada PO ini")
+    // Tautan ada tetapi item baris GR berbeda dari item retur.
+    const wrongItem = await actions.createPurchaseReturn(fdMap({
+      purchaseOrderId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 2, qty: 1, goodsReceiptItemId: 11 }]),
+    }))
+    expect(wrongItem?.success).toBe(false)
+    expect(wrongItem?.error).toContain("tidak ditemukan pada PO ini")
+    // Tautan bukan angka positif ditolak parser sebelum query apa pun.
+    const badLink = await actions.createPurchaseReturn(fdMap({
+      purchaseOrderId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1, goodsReceiptItemId: "abc" }]),
+    }))
+    expect(badLink?.success).toBe(false)
+    expect(badLink?.error).toMatch(/Baris penerimaan asal item #1 tidak valid/i)
+    expect(mocks.prismaMock.purchaseReturn.create).not.toHaveBeenCalled()
+  })
+
   it("createPurchaseReturn menulis nomor + tanggal nota retur pajak", async () => {
     const res = await actions.createPurchaseReturn(fdMap({
       purchaseOrderId: "1",

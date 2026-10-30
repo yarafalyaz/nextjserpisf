@@ -477,6 +477,7 @@ type PurchaseReturnItemInput = {
   itemId: number;
   qty: number;
   price: number | null;
+  goodsReceiptItemId?: number | null;
 };
 
 function parsePurchaseReturnItems(
@@ -484,7 +485,7 @@ function parsePurchaseReturnItems(
 ): PurchaseReturnItemInput[] {
   const rows =
     safeJsonParse<
-      { itemId?: unknown; qty?: unknown; price?: unknown }[]
+      { itemId?: unknown; qty?: unknown; price?: unknown; goodsReceiptItemId?: unknown }[]
     >(itemsJson ?? null) ?? [];
   const items: PurchaseReturnItemInput[] = [];
   for (const row of rows) {
@@ -512,7 +513,18 @@ function parsePurchaseReturnItems(
         );
       }
     }
-    items.push({ itemId, qty, price });
+    // STOK-16: tautan baris penerimaan asal (opsional; divalidasi di cap).
+    let goodsReceiptItemId: number | null = null;
+    if (row.goodsReceiptItemId != null && row.goodsReceiptItemId !== "") {
+      const linkId = parseLocaleNumber(
+        row.goodsReceiptItemId as string | number | null | undefined,
+      );
+      if (linkId === null || linkId <= 0) {
+        throw new Error(`Baris penerimaan asal item #${itemId} tidak valid.`);
+      }
+      goodsReceiptItemId = linkId;
+    }
+    items.push({ itemId, qty, price, goodsReceiptItemId });
   }
   return items;
 }
@@ -534,6 +546,7 @@ function purchaseReturnItemData(
     qty: item.qty,
     cost: documentCostByItem.get(item.itemId) ?? 0,
     price: item.price ?? (billPriceByItem.get(item.itemId) ?? null),
+    goodsReceiptItemId: item.goodsReceiptItemId ?? null,
   }));
 }
 
@@ -561,8 +574,19 @@ async function assertPurchaseReturnWithinReceived(
       },
       itemId: { in: itemIds },
     },
-    select: { itemId: true, qty: true, uom: true },
+    select: { id: true, itemId: true, qty: true, uom: true },
   });
+  // STOK-16: tautan eksplisit wajib milik PO ini, item sama, GR terverifikasi.
+  const grById = new Map(grItems.map((l) => [l.id, l]));
+  for (const it of items) {
+    if (it.goodsReceiptItemId == null) continue;
+    const linked = grById.get(it.goodsReceiptItemId);
+    if (!linked || linked.itemId !== it.itemId) {
+      throw new Error(
+        `Baris penerimaan asal item #${it.itemId} tidak ditemukan pada PO ini.`,
+      );
+    }
+  }
   const uomByItem = new Map<number, string | null>();
   for (const line of grItems) {
     if (!uomByItem.has(line.itemId)) uomByItem.set(line.itemId, line.uom);
@@ -602,11 +626,18 @@ async function assertPurchaseReturnWithinReceived(
     );
   }
   // Baris retur masuk dalam UOM receipt pertama per item (konvensi hook) —
-  // samakan basisnya ke qty dasar sebelum cap dibandingkan.
-  const returnBaseItems = items.map((it) => ({
-    itemId: it.itemId,
-    qty: it.qty * (factorByItem.get(it.itemId) ?? 1),
-  }))
+  // samakan basisnya ke qty dasar sebelum cap dibandingkan. Baris STOK-16
+  // tertaut memakai UOM baris GR-nya sendiri.
+  const returnBaseItems = items.map((it) => {
+    const linked = it.goodsReceiptItemId != null ? grById.get(it.goodsReceiptItemId) : undefined
+    const factor = linked
+      ? (factorByKey.get(`${linked.itemId}:${linked.uom ?? ""}`) ?? 1)
+      : (factorByItem.get(it.itemId) ?? 1)
+    return {
+      itemId: it.itemId,
+      qty: it.qty * factor,
+    }
+  })
   const priorReturns = await tx.purchaseReturnItem.findMany({
     where: {
       purchaseReturn: {
@@ -616,7 +647,7 @@ async function assertPurchaseReturnWithinReceived(
       },
       itemId: { in: itemIds },
     },
-    select: { itemId: true, qty: true },
+    select: { itemId: true, qty: true, goodsReceiptItemId: true },
   });
   const alreadyReturnedByItem = new Map<number, number>();
   for (const r of priorReturns) {
@@ -624,6 +655,31 @@ async function assertPurchaseReturnWithinReceived(
       r.itemId,
       (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty),
     );
+  }
+  // STOK-16: baris tertaut juga dibatasi per baris GR asal — dua penerimaan
+  // item sama tidak bisa saling meminjam kuota retur.
+  const returnedByGrItem = new Map<number, number>();
+  for (const r of priorReturns) {
+    if (r.goodsReceiptItemId == null) continue;
+    const linked = grById.get(r.goodsReceiptItemId);
+    const f = linked ? (factorByKey.get(`${linked.itemId}:${linked.uom ?? ""}`) ?? 1) : 1;
+    returnedByGrItem.set(
+      r.goodsReceiptItemId,
+      (returnedByGrItem.get(r.goodsReceiptItemId) ?? 0) + Number(r.qty) * f,
+    );
+  }
+  for (const it of items) {
+    if (it.goodsReceiptItemId == null) continue;
+    const linked = grById.get(it.goodsReceiptItemId)!;
+    const f = factorByKey.get(`${linked.itemId}:${linked.uom ?? ""}`) ?? 1;
+    const receivedBase = Number(linked.qty) * f;
+    const alreadyBase = returnedByGrItem.get(it.goodsReceiptItemId) ?? 0;
+    if (it.qty * f > receivedBase - alreadyBase + 1e-9) {
+      throw new Error(
+        `Jumlah retur item #${it.itemId} melebihi sisa penerimaan asal ` +
+          `(diterima: ${receivedBase}, sudah diretur: ${alreadyBase}, sisa: ${receivedBase - alreadyBase}).`,
+      );
+    }
   }
   const violation = findOverReturn(
     returnBaseItems,

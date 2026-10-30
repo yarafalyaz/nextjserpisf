@@ -20,11 +20,17 @@ export default async function EditPage({
 
   const { slug } = await params;
 
+  const includeDetail = {
+    items: {
+      select: { itemId: true, qty: true, goodsReceiptItemId: true },
+      orderBy: { id: "asc" as const },
+    },
+  };
   const data = await resolveEntity(
     { segment: slug, fallbackWhere: {} },
     {
-      bySlug: (s, where) => prisma.purchaseReturn.findFirst({ where: { slug: s, ...where } }),
-      byId: (id, where) => prisma.purchaseReturn.findUnique({ where: { id, ...where } }),
+      bySlug: (s, where) => prisma.purchaseReturn.findFirst({ where: { slug: s, ...where }, include: includeDetail }),
+      byId: (id, where) => prisma.purchaseReturn.findUnique({ where: { id, ...where }, include: includeDetail }),
     },
   );
 
@@ -37,9 +43,14 @@ export default async function EditPage({
     reason: data.reason,
     taxReturnNoteNumber: data.taxReturnNoteNumber,
     taxReturnNoteDate: data.taxReturnNoteDate ? data.taxReturnNoteDate.toISOString().split("T")[0] : null,
+    items: data.items.map((it) => ({
+      itemId: it.itemId,
+      qty: Number(it.qty),
+      goodsReceiptItemId: it.goodsReceiptItemId ?? null,
+    })),
   };
 
-  const [purchaseOrders, items] = await Promise.all([
+  const [purchaseOrders, items, receiptLineRows] = await Promise.all([
     prisma.purchaseOrder.findMany({
       orderBy: { createdAt: "desc" },
       select: { id: true, documentNo: true },
@@ -49,7 +60,37 @@ export default async function EditPage({
       orderBy: { name: "asc" },
       select: { id: true, sku: true, name: true },
     }),
+    // STOK-16: opsi baris penerimaan asal untuk picker per baris retur.
+    prisma.goodsReceiptItem.findMany({
+      where: {
+        goodsReceipt: {
+          purchaseOrderId: data.purchaseOrderId,
+          status: { in: ["verified", "completed"] },
+        },
+      },
+      select: {
+        id: true,
+        itemId: true,
+        qty: true,
+        uom: true,
+        batchNumber: true,
+        goodsReceipt: {
+          select: { documentNo: true, purchaseOrderId: true, createdAt: true },
+        },
+      },
+      orderBy: { goodsReceipt: { createdAt: "desc" } },
+      take: 1000,
+    }),
   ]);
+  const receiptLines = receiptLineRows.map((l) => ({
+    id: l.id,
+    purchaseOrderId: l.goodsReceipt.purchaseOrderId,
+    itemId: l.itemId,
+    qty: Number(l.qty),
+    uom: l.uom,
+    batchNumber: l.batchNumber,
+    label: `${l.goodsReceipt.documentNo} — ${Number(l.qty)}${l.uom ? ` ${l.uom}` : ""}${l.batchNumber ? ` — batch ${l.batchNumber}` : ""} — ${l.goodsReceipt.createdAt.toISOString().slice(0, 10)}`,
+  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -68,6 +109,7 @@ export default async function EditPage({
         returnData={returnData}
         purchaseOrders={purchaseOrders}
         items={items}
+        receiptLines={receiptLines}
       />
     </div>
   );

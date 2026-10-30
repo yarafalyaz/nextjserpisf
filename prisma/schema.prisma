@@ -2390,6 +2390,7 @@ model GoodsReceiptItem {
   rackRow        RackRow?     @relation(fields: [rackRowId], references: [id], onDelete: Restrict)
   stockMove      StockMove?   @relation(fields: [stockMoveId], references: [id], onDelete: SetNull)
   vendorBillItems VendorBillItem[]
+  purchaseReturnItems PurchaseReturnItem[]
 
   @@index([goodsReceiptId], map: "goods_receipt_items_goods_receipt_id_fkey")
   @@index([itemId])
@@ -2448,10 +2449,15 @@ model PurchaseReturnItem {
   sourceTaxRate    Decimal?       @map("source_tax_rate") @db.Decimal(5, 2)
   sourceTaxInvoiceId Int?         @map("source_tax_invoice_id")
   serialNumbers    Json?          @map("serial_numbers")
+  // STOK-16: tautan eksplisit ke baris penerimaan asal (UOM/gudang/batch
+  // baris itu yang dipakai hook). NULL = legacy, fallback receipt terbaru.
+  goodsReceiptItemId Int?         @map("goods_receipt_item_id")
+  goodsReceiptItem   GoodsReceiptItem? @relation(fields: [goodsReceiptItemId], references: [id], onDelete: SetNull)
   purchaseReturn   PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
 
   @@index([purchaseReturnId], map: "purchase_return_items_purchase_return_id_fkey")
   @@index([itemId])
+  @@index([goodsReceiptItemId])
   @@map("purchase_return_items")
 }
 

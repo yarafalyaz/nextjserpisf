@@ -35,6 +35,7 @@ export async function loadPurchaseReturnWarehouseContext(
   client: WarehouseResolutionClient,
   purchaseOrderId: number,
   itemIds: number[],
+  linkedReceiptItemIds: number[] = [],
 ) {
   const uniqueItemIds = Array.from(new Set(itemIds));
   const receiptLines = await client.goodsReceiptItem.findMany({
@@ -42,11 +43,16 @@ export async function loadPurchaseReturnWarehouseContext(
       goodsReceipt: { purchaseOrderId, status: { in: ["verified", "completed"] } },
       ...(uniqueItemIds.length ? { itemId: { in: uniqueItemIds } } : {}),
     },
-    select: { itemId: true, uom: true, warehouseId: true, goodsReceipt: { select: { warehouseId: true } } },
+    select: { id: true, itemId: true, uom: true, warehouseId: true, goodsReceipt: { select: { warehouseId: true } } },
     orderBy: { goodsReceipt: { createdAt: "desc" } },
   });
   const receiptByItem = new Map<number, (typeof receiptLines)[number]>();
   for (const line of receiptLines) if (!receiptByItem.has(line.itemId)) receiptByItem.set(line.itemId, line);
+  // STOK-16: baris tertaut eksplisit didahulukan atas fallback per item.
+  const linkedIds = [...new Set(linkedReceiptItemIds.filter((n) => n > 0))];
+  const receiptById = new Map(
+    receiptLines.filter((l) => linkedIds.includes(l.id)).map((l) => [l.id, l]),
+  );
 
   const activeWarehouse = await client.warehouse.findFirst({
     where: { isActive: true, deletedAt: null },
@@ -65,7 +71,7 @@ export async function loadPurchaseReturnWarehouseContext(
     : [];
   const defaultWarehouseByItem = new Map<number, number | null>(defaultWarehouseRows.map((r) => [r.id, r.defaultWarehouseId]));
 
-  return { receiptByItem, defaultWarehouseByItem, activeWarehouseId: activeWarehouse?.id ?? null, anyWarehouseId: anyWarehouse?.id ?? null };
+  return { receiptByItem, receiptById, defaultWarehouseByItem, activeWarehouseId: activeWarehouse?.id ?? null, anyWarehouseId: anyWarehouse?.id ?? null };
 }
 
 export async function onPurchaseReturnProcessed(
@@ -124,8 +130,13 @@ export async function onPurchaseReturnProcessed(
 
     // Use each item's receipt line: one PO can receive different items into different warehouses.
     const activeItems = purchaseReturn.items.filter((it) => Number(it.qty) > 0);
-    const { receiptByItem, defaultWarehouseByItem, activeWarehouseId, anyWarehouseId } =
-      await loadPurchaseReturnWarehouseContext(tx, purchaseReturn.purchaseOrderId, activeItems.map((it) => it.itemId));
+    const { receiptByItem, receiptById, defaultWarehouseByItem, activeWarehouseId, anyWarehouseId } =
+      await loadPurchaseReturnWarehouseContext(
+        tx,
+        purchaseReturn.purchaseOrderId,
+        activeItems.map((it) => it.itemId),
+        activeItems.map((it) => it.goodsReceiptItemId ?? 0),
+      );
 
     // Create Stock Move OUT per item (goods returned to vendor)
     if (activeItems.length > 0) {
@@ -136,10 +147,16 @@ export async function onPurchaseReturnProcessed(
 
       let docIdx = 0;
       for (const item of activeItems) {
-        const receipt = receiptByItem.get(item.itemId);
+        // STOK-16: baris tertaut memakai UOM/gudangnya sendiri; tanpa
+        // tautan fallback receipt terbaru per item (perilaku legacy).
+        const receipt =
+          (item.goodsReceiptItemId != null ? receiptById.get(item.goodsReceiptItemId) : undefined) ??
+          receiptByItem.get(item.itemId);
         const factor = await toBaseFactor(tx, item.itemId, receipt?.uom);
         const baseQty = Number(item.qty) * factor;
-        const warehouseId = resolvePurchaseReturnWarehouse(item.itemId, receiptByItem, defaultWarehouseByItem, activeWarehouseId, anyWarehouseId);
+        const warehouseId =
+          receipt?.warehouseId ?? receipt?.goodsReceipt?.warehouseId ??
+          resolvePurchaseReturnWarehouse(item.itemId, receiptByItem, defaultWarehouseByItem, activeWarehouseId, anyWarehouseId);
 
         if (!warehouseId) {
           throw new Error("Gudang retur pembelian tidak ditemukan.");
