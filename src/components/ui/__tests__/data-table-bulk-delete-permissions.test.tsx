@@ -153,9 +153,8 @@ describe("kontrak bulk delete bersama server/client", () => {
     expect(src).not.toContain("const modelPermissionMap: Record<ModelName, PermissionName>")
   })
 
-  it("10 tabel model boleh: BULK_MODEL tak masuk daftar individual + izin diteruskan", () => {
+  it("9 tabel model boleh: BULK_MODEL tak masuk daftar individual + izin diteruskan", () => {
     const expected: Array<{ file: string; model: BulkDeleteModel; permission: string }> = [
-      { file: "src/app/(dashboard)/sdm/apresiasi/_components/appreciation-table.tsx", model: "appreciation", permission: "delete_appreciations" },
       { file: "src/app/(dashboard)/crm/leads/_components/lead-table.tsx", model: "lead", permission: "delete_leads" },
       { file: "src/app/(dashboard)/master/pelanggan/_components/customer-table.tsx", model: "customer", permission: "delete_customers" },
       { file: "src/app/(dashboard)/master/barang/_components/item-table.tsx", model: "item", permission: "delete_items" },
@@ -188,6 +187,8 @@ describe("kontrak bulk delete bersama server/client", () => {
       ["src/app/(dashboard)/inventaris/transfer/_components/transfer-table.tsx", "stockTransfer"],
       ["src/app/(dashboard)/pengaturan/persetujuan/_components/approval-table.tsx", "approval"],
       ["src/app/(dashboard)/aset/_components/asset-table.tsx", "asset"],
+      // ROUND5-SCOPE: apresiasi terikat cakupan HR per karyawan.
+      ["src/app/(dashboard)/sdm/apresiasi/_components/appreciation-table.tsx", "appreciation"],
     ]
     for (const [file, model] of dead) {
       expect(BULK_DELETE_REQUIRES_INDIVIDUAL.has(model), model).toBe(true)

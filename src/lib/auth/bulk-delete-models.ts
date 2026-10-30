@@ -214,4 +214,7 @@ export const BULK_DELETE_REQUIRES_INDIVIDUAL = new Set<BulkDeleteModel>([
   // Baris approval adalah status workflow, bukan master data: hapus massal
   // approval pending menghapus keputusan yang sedang berjalan tanpa guard.
   "approval",
+  // Apresiasi karyawan terikat cakupan HR per karyawan: hapus massal mentah
+  // melewati assertHrEmployeeAccess yang dijaga delete tunggal.
+  "appreciation",
 ])

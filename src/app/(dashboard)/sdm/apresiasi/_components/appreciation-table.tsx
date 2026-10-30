@@ -7,9 +7,6 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteAppreciation } from "@/actions/hrm.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
-import { bulkDelete } from "@/actions/bulk.actions"
-import { BULK_DELETE_PERMISSIONS, type BulkDeleteModel } from "@/lib/auth/bulk-delete-models"
-import { useBulkDeleteSessionUser } from "@/components/ui/data-table-bulk-select"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface AppreciationData {
@@ -89,10 +86,9 @@ interface AppreciationTableProps {
   showActions?: boolean
 }
 
-const BULK_MODEL: BulkDeleteModel = "appreciation"
-
+// Apresiasi TIDAK bulk-delete: hapus tunggal menjaga cakupan HR per
+// karyawan (BULK_DELETE_REQUIRES_INDIVIDUAL memuat "appreciation").
 export function AppreciationTable({ data, total, page, pageSize, toolbar, filters, showActions = true }: AppreciationTableProps) {
-  const bulkDeleteUser = useBulkDeleteSessionUser()
   const visibleColumns = useMemo(() => {
     if (!showActions) return columns.filter((c: any) => c.id !== "actions")
     return columns
@@ -107,9 +103,6 @@ export function AppreciationTable({ data, total, page, pageSize, toolbar, filter
       selectable={true}
       toolbar={toolbar}
       filters={filters}
-      onBulkDelete={(ids) => bulkDelete(BULK_MODEL, ids)}
-      bulkDeletePermission={BULK_DELETE_PERMISSIONS[BULK_MODEL]}
-      bulkDeleteUser={bulkDeleteUser}
     />
   )
 }
