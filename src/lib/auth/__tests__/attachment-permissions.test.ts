@@ -65,6 +65,21 @@ describe("canAccessAttachment", () => {
     await expect(canAccessAttachment("sales_invoice", 1)).resolves.toBe(false)
   })
 
+  it("R6PA-02: menolak lampiran dokumen induk soft-deleted", async () => {
+    hasPermissionMock.mockResolvedValue(true)
+    documentFindUniqueMock.mockResolvedValue({ id: 1, deletedAt: new Date("2026-10-01") })
+    await expect(canAccessAttachment("sales_invoice", 1)).resolves.toBe(false)
+    await expect(canAccessAttachment("vendor_bill", 1)).resolves.toBe(false)
+  })
+
+  it("R6PA-02: dokumen hidup (deletedAt null / model tanpa kolom) tetap lolos", async () => {
+    hasPermissionMock.mockResolvedValue(true)
+    documentFindUniqueMock.mockResolvedValue({ id: 1, deletedAt: null })
+    await expect(canAccessAttachment("sales_invoice", 1)).resolves.toBe(true)
+    documentFindUniqueMock.mockResolvedValue({ id: 1 })
+    await expect(canAccessAttachment("vendor_bill", 1)).resolves.toBe(true)
+  })
+
   it("denies warehouse documents outside the user's assigned warehouses", async () => {
     hasPermissionMock.mockResolvedValue(true)
     documentFindUniqueMock.mockResolvedValue({ id: 1, warehouseId: 12 })

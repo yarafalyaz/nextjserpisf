@@ -72,8 +72,11 @@ async function canAccessAttachmentWithPermission(
 
   const model = (prisma as any)[modelKey]
   if (!model?.findUnique) return false
-  const document = await model.findUnique({ where: { id: referenceId }, select: { id: true } })
-  if (!document) return false
+  // R6PA-02: dokumen induk soft-deleted tidak boleh lagi melayani lampiran
+  // (unduh/daftar/tulis). Model tanpa kolom deletedAt menjawab undefined,
+  // yang lolos cek ini — hanya baris benar-benar terhapus yang ditolak.
+  const document = await model.findUnique({ where: { id: referenceId }, select: { id: true, deletedAt: true } })
+  if (!document || document.deletedAt) return false
 
   // Dokumen yang dibatasi gudang memakai penjagaan bersama dengan route cetak,
   // sehingga lampiran dan cetak tidak bisa berbeda aturan. Dokumen lain lolos.
