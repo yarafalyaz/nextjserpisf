@@ -255,6 +255,26 @@ describe("POST /api/workflow/[...path]", () => {
     expect(mocks.approveOvertimeMock).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ["cuti", "approve_leave_requests"],
+    ["lembur", "approve_overtime_requests"],
+    ["pinjaman", "approve_loans"],
+  ])("R6PA-05: manual %s hanya boleh transisi dari pending", async (module, permission) => {
+    mocks.authFn.mockResolvedValue({
+      user: { id: 2, roles: ["staff"], permissions: [permission] },
+    })
+    mocks.employeeFindFirst.mockResolvedValue({ id: 7, departmentId: 3 })
+    mocks.findUnique.mockResolvedValue({ employeeId: 7, employee: { userId: 99 } })
+    mocks.updateMany.mockResolvedValue({ count: 1 })
+
+    const res = await POST(makeReq(), makeParams(["sdm", module, "5", "reject"]))
+    expect(res.status).toBe(200)
+    expect(mocks.updateMany).toHaveBeenCalledWith({
+      where: { id: 5, status: { in: ["pending"] } },
+      data: { status: "rejected" },
+    })
+  })
+
   it("rejects successfully", async () => {
     mocks.authFn.mockResolvedValue(adminSession)
     mocks.updateMany.mockResolvedValue({ count: 1 })

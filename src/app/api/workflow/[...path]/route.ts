@@ -49,6 +49,15 @@ const MODULE_MAP: Record<string, { model: string; modelType: string; revalidate:
  */
 const STATUS_ALLOWED_FROM = ["pending", "draft", "sent"]
 
+// R6PA-05: model HR lahir langsung `pending`; klaim generik approval
+// (APPROVE_CLAIMS/REJECT_CLAIMS) juga hanya menerima pending. Draft/sent
+// bukan pre-state sah ketiga model ini di jalur manual.
+const MANUAL_STATUS_ALLOWED_FROM: Record<string, string[]> = {
+  LeaveRequest: ["pending"],
+  OvertimeRequest: ["pending"],
+  EmployeeLoan: ["pending"],
+}
+
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
@@ -269,7 +278,7 @@ export async function POST(
     if (config.model === "employeeLoan" && newStatus === Status.APPROVED) {
       newStatus = "active"
     }
-    const allowedFrom = STATUS_ALLOWED_FROM
+    const allowedFrom = MANUAL_STATUS_ALLOWED_FROM[modelType] ?? STATUS_ALLOWED_FROM
     const delegate = prisma[config.model as keyof typeof prisma] as any
 
     // Maker-Checker untuk jalur manual (tanpa workflow aktif): pembuat dokumen
