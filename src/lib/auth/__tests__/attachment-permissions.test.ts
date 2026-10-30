@@ -7,6 +7,8 @@ vi.mock("server-only", () => ({}))
 
 const hasPermissionMock = vi.fn()
 const documentFindUniqueMock = vi.fn()
+const taxDocumentFindUniqueMock = vi.fn()
+const taxParentFindUniqueMock = vi.fn()
 const authMock = vi.fn()
 const warehouseAssignmentsMock = vi.fn()
 
@@ -22,6 +24,8 @@ vi.mock("@/lib/db/prisma", () => ({
     vendorBill: { findUnique: (...a: unknown[]) => documentFindUniqueMock(...a) },
     stockAdjustment: { findUnique: (...a: unknown[]) => documentFindUniqueMock(...a) },
     warrantyClaim: { findUnique: (...a: unknown[]) => documentFindUniqueMock(...a) },
+    taxAssessment: { findUnique: (...a: unknown[]) => taxParentFindUniqueMock(...a) },
+    taxDisputeStep: { findUnique: (...a: unknown[]) => taxDocumentFindUniqueMock(...a) },
     userWarehouse: { findMany: (...a: unknown[]) => warehouseAssignmentsMock(...a) },
   },
 }))
@@ -31,9 +35,13 @@ import { canAccessAttachment, ATTACHMENT_PERMISSION } from "../attachment-permis
 beforeEach(() => {
   hasPermissionMock.mockReset()
   documentFindUniqueMock.mockReset()
+  taxDocumentFindUniqueMock.mockReset()
+  taxParentFindUniqueMock.mockReset()
   authMock.mockReset()
   warehouseAssignmentsMock.mockReset()
   documentFindUniqueMock.mockResolvedValue({ id: 1 })
+  taxDocumentFindUniqueMock.mockResolvedValue({ id: 1, assessmentId: 9 })
+  taxParentFindUniqueMock.mockResolvedValue({ id: 9, deletedAt: null })
   authMock.mockResolvedValue({ user: { id: 1, roles: [] } })
   warehouseAssignmentsMock.mockResolvedValue([])
 })
@@ -106,5 +114,40 @@ describe("canAccessAttachment", () => {
     for (const [refType, perm] of Object.entries(ATTACHMENT_PERMISSION)) {
       expect(perm.startsWith("view_"), `${refType} -> ${perm}`).toBe(true)
     }
+  })
+
+  it("R7API-01: lampiran ketetapan pajak memakai view_tax_disputes (dulu selalu ditolak)", async () => {
+    hasPermissionMock.mockResolvedValue(true)
+    await expect(canAccessAttachment("tax_assessment", 9)).resolves.toBe(true)
+    expect(hasPermissionMock).toHaveBeenCalledWith("view_tax_disputes")
+    expect(taxParentFindUniqueMock).toHaveBeenCalled()
+  })
+
+  it("R7API-01: ketetapan terhapus menutup lampirannya walau izin ada", async () => {
+    hasPermissionMock.mockResolvedValue(true)
+    taxParentFindUniqueMock.mockResolvedValue({ id: 9, deletedAt: new Date("2026-10-01") })
+    await expect(canAccessAttachment("tax_assessment", 9)).resolves.toBe(false)
+  })
+
+  it("R7API-01: lampiran langkah sengketa lolos bila langkah + ketetapan hidup", async () => {
+    hasPermissionMock.mockResolvedValue(true)
+    await expect(canAccessAttachment("tax_dispute_step", 1)).resolves.toBe(true)
+    expect(taxDocumentFindUniqueMock).toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ assessmentId: true }) }),
+    )
+    expect(taxParentFindUniqueMock).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 9 } }),
+    )
+  })
+
+  it("R7API-01: ketetapan induk terhapus menutup lampiran langkahnya", async () => {
+    hasPermissionMock.mockResolvedValue(true)
+    taxParentFindUniqueMock.mockResolvedValue({ id: 9, deletedAt: new Date("2026-10-01") })
+    await expect(canAccessAttachment("tax_dispute_step", 1)).resolves.toBe(false)
+  })
+
+  it("R7API-01: tanpa view_tax_disputes lampiran sengketa tetap ditolak", async () => {
+    hasPermissionMock.mockResolvedValue(false)
+    await expect(canAccessAttachment("tax_dispute_step", 1)).resolves.toBe(false)
   })
 })

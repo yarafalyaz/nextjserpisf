@@ -13,6 +13,9 @@ export const ATTACHMENT_REFERENCE_TYPES = [
   "customer_vehicle", "project_stage", "work_order_operation", "qc_inspection",
   // Sengketa pajak 113-B: lampiran ketetapan + upaya (maps izin create/view ada).
   "tax_assessment", "tax_dispute_step",
+  // R7API-01 (kebalikan): rekod disiplin sudah ada di model + peta izin,
+  // tapi hilang dari whitelist route sehingga ditolak sebelum cek izin.
+  "EmployeeDisciplinaryRecord",
 ] as const
 
 /** Field kontrak POST/GET: tanpa select, kolom internal ikut bocor. */

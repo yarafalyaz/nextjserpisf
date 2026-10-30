@@ -38,6 +38,18 @@ const ATTACHMENT_MODEL: Record<string, string> = {
   petty_cash: "pettyCash",
   WarrantyClaim: "warrantyClaim",
   EmployeeDisciplinaryRecord: "employeeDisciplinaryRecord",
+  // R7API-01/R7PR-04: tipe ini sudah ada di whitelist route + peta izin +
+  // UI sengketa pajak, tapi tak pernah dipetakan ke delegate — semua
+  // operasi lampirannya 403 termasuk super_admin.
+  tax_assessment: "taxAssessment",
+  tax_dispute_step: "taxDisputeStep",
+}
+
+// R7API-01: induk yang wajib ikut diperiksa deletedAt-nya. TaxDisputeStep
+// sendiri tak punya kolom deletedAt; ketetapan induk yang terhapus harus
+// menutup lampiran langkahnya juga (mode gerbang R6PA-02).
+const ATTACHMENT_PARENT: Record<string, { model: string; foreignKey: string }> = {
+  tax_dispute_step: { model: "taxAssessment", foreignKey: "assessmentId" },
 }
 
 // F-2026-10-24-096-S: model induk foto tahap/inspeksi.
@@ -75,8 +87,26 @@ async function canAccessAttachmentWithPermission(
   // R6PA-02: dokumen induk soft-deleted tidak boleh lagi melayani lampiran
   // (unduh/daftar/tulis). Model tanpa kolom deletedAt menjawab undefined,
   // yang lolos cek ini — hanya baris benar-benar terhapus yang ditolak.
-  const document = await model.findUnique({ where: { id: referenceId }, select: { id: true, deletedAt: true } })
+  const parent = ATTACHMENT_PARENT[referenceType]
+  const document = await model.findUnique({
+    where: { id: referenceId },
+    select: parent
+      ? { id: true, deletedAt: true, [parent.foreignKey]: true }
+      : { id: true, deletedAt: true },
+  })
   if (!document || document.deletedAt) return false
+
+  // R7API-01: induk (mis. ketetapan dari langkah sengketa) yang terhapus
+  // menutup lampirannya — dicek langsung karena deletedAt langkah kosong.
+  if (parent) {
+    const parentModel = (prisma as any)[parent.model]
+    if (!parentModel?.findUnique) return false
+    const parentDoc = await parentModel.findUnique({
+      where: { id: document[parent.foreignKey] },
+      select: { id: true, deletedAt: true },
+    })
+    if (!parentDoc || parentDoc.deletedAt) return false
+  }
 
   // Dokumen yang dibatasi gudang memakai penjagaan bersama dengan route cetak,
   // sehingga lampiran dan cetak tidak bisa berbeda aturan. Dokumen lain lolos.
