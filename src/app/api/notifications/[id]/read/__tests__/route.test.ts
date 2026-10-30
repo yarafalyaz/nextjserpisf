@@ -36,6 +36,13 @@ describe("POST /api/notifications/[id]/read", () => {
     expect(res.status).toBe(401)
   })
 
+  it("R7PB-02: returns 401 when user deactivated (isActive false)", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 1, isActive: false } })
+    const res = await POST(makeReq(), makeParams("1"))
+    expect(res.status).toBe(401)
+    expect(mocks.markAsRead).not.toHaveBeenCalled()
+  })
+
   it("returns 400 when notification id is invalid", async () => {
     mocks.authFn.mockResolvedValue({ user: { id: 1 } })
     const res = await POST(makeReq(), makeParams("abc"))

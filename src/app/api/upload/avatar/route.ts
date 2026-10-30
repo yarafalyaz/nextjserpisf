@@ -12,7 +12,9 @@ import { assertCSRF } from "@/lib/security/csrf"
  */
 export async function POST(req: NextRequest) {
   const session = await auth()
-  if (!session?.user?.id) {
+  // R7PB-02: proxy hanya membaca JWT; user nonaktif dari callback
+  // (isActive=false) wajib ditolak di sini juga.
+  if (!session?.user?.id || session.user.isActive === false) {
     return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
   try {

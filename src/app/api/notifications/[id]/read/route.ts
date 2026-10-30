@@ -10,7 +10,9 @@ export async function POST(
 ) {
   try {
     const session = await auth()
-    if (!session?.user) return apiError("UNAUTHORIZED", "Tidak terotorisasi")
+    // R7PB-02: proxy hanya membaca JWT; user nonaktif dari callback
+    // (isActive=false) wajib ditolak di sini juga.
+    if (!session?.user || session.user.isActive === false) return apiError("UNAUTHORIZED", "Tidak terotorisasi")
     await assertCSRF()
 
     const { id } = await params

@@ -37,6 +37,13 @@ describe("GET /api/notifications", () => {
     expect(res.status).toBe(401)
   })
 
+  it("R7PB-02: returns 401 when user deactivated (isActive false)", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 7, isActive: false } })
+    const res = await GET()
+    expect(res.status).toBe(401)
+    expect(mocks.notificationFindMany).not.toHaveBeenCalled()
+  })
+
   it("returns 400 when user.id is not a positive integer", async () => {
     mocks.authFn.mockResolvedValue({ user: { id: "abc" } })
     const res = await GET()

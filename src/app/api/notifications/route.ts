@@ -6,7 +6,9 @@ import { apiError } from "@/lib/api-response"
 export async function GET() {
   try {
     const session = await auth()
-    if (!session?.user) return apiError("UNAUTHORIZED", "Tidak terotorisasi")
+    // R7PB-02: proxy hanya membaca JWT; user nonaktif dari callback
+    // (isActive=false) wajib ditolak di sini juga.
+    if (!session?.user || session.user.isActive === false) return apiError("UNAUTHORIZED", "Tidak terotorisasi")
 
     const userIdRaw = String(session.user.id)
     if (!/^\d+$/.test(userIdRaw)) return apiError("BAD_REQUEST", "Pengguna tidak valid")

@@ -48,6 +48,15 @@ describe("POST /api/upload/avatar", () => {
     expect(res.status).toBe(401)
   })
 
+  it("R7PB-02: returns 401 when user deactivated (isActive false)", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 7, isActive: false } })
+    const file = new File(["test"], "a.png", { type: "image/png" })
+    const res = await POST(makeReq({ file }))
+    expect(res.status).toBe(401)
+    expect(mocks.uploadToStorage).not.toHaveBeenCalled()
+    expect(mocks.userUpdate).not.toHaveBeenCalled()
+  })
+
   it("returns 400 when no file or avatar field", async () => {
     const res = await POST(makeReq({}))
     expect(res.status).toBe(400)
