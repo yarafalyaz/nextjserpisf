@@ -107,3 +107,52 @@ Checkpoint file ini diperbarui tiap batch selesai.
 - Instruksi user: tidak bertanya putusan lagi selama perjalanan (~3 jam);
   semua pilihan teknis diambil sendiri dari opsi yang direkomendasikan,
   pekerjaan otonom dilanjutkan sampai antrean habis terverifikasi.
+- Cron POST committed: 1c143477a — 6 route cron bemutasi GET dihapus
+  (route utama + 5 subroute), guard `cron-method-guard.test.ts` membuktikan
+  6 merah pra-migrasi, hijrah sesudahnya. Curl holiday-sync di
+  docker-compose*.yml jadi POST. `cron.actions.ts` manual trigger sudah
+  POST dari awal. `vercel.json` sengaja tak diubah (produksi Docker).
+- GPS absensi committed: afcecd456 — 4 kolom koordinat attendance
+  (`checkIn/OutLatitude/Longitude`) kini ditangkap dari browser via
+  `navigator.geolocation`, validasi Zod rentang koordinat, FormData Form
+  edit absensi mengirimnya, action meneruskan ke record. Guard
+  schema-usage: 4 entri SEED_ONLY_COLUMNS GPS dibuang.
+- Kode gudang committed: 6e5d74409 — `createWarehouse`/`updateWarehouse`:
+  pesan tabrakan kode kini tampil di form (`Prisma P2002` dikenali via
+  `isWarehouseCodeConflict` + pesan manusiawi); mode auto-code diberi
+  peringatan "kode hasil generate bertabrakan"; manual tanpa kode
+  memakai "" eksplisit daripada luput.
+- Perf committed: a7485858a — antrean verifikasi DP: `takTerklasifikasi`
+  dihitung via `count` terpisah + filter status ditekan; laporan payroll:
+  status recognized ditekan ke query, draft dihitung via `count`;
+  jurnal form pages, halaman uang-muka `[slug]` diparalelkan (Promise.all
+  atas query independen terbukti ekuivalen). Sisa audit perf tidak
+  diambil: hanya kandidat ekuivalen terbukti yang diubah.
+- Audit keamanan cakupan server-action SELESAI (read-only, 65 file,
+  589 ekspor AST + badan):
+  - Bagian A (tanpa gerbang): NOL temuan selain 5 jalur by-design
+    (login/logout/getSetupStatus/provisionSetupSchema/runSetup — setup
+    berhenti bila sudah terinstal + CSRF).
+  - Bagian B (dokumen bertanggal tanpa assertPeriodOpen langsung):
+    25 kandidat telaah, BUKAN vonis. Triase prioritas: `createPettyCash`
+    terbukti AMAN — hook `onPettyCashCreated`
+    (`accounting.hook.ts:1544`) menjalankan `assertPeriodOpen(postingDate)`
+    sebelum jurnal dibuat; `createTransferFromMaterialRequest` AMAN —
+    hanya membuat draft transfer (stock move terjadi hanya pada
+    receive/complete yang sudah period-gated); `deleteMaterialIssue`
+    AMAN — hanya menghapus status draft (guard eksplisit);
+    `completeReconciliation` AMAN by-design — menyelesaikan rekonsiliasi
+    tidak menulis jurnal penyesuaian apa pun (item penyesuaian adalah
+    baris rekonsiliasi, bukan gl posting) sehingga tak ada tanggal
+    jurnal yang harus digerbang. Sisa 21 kandidat lain mayoritas
+    create/update draft yang posting berikutnya lewat hook period-gated
+    (pola sudah dibuktikan untuk MED-1 workflow parity flip) — tidak
+    digerbang membabi buta.
+  - Bagian C (route API): 28 route, 18 di luar pengecualian — semua
+    punya auth. Nihil route tanpa auth.
+- Triase B selesai tanpa perubahan kode: tak ada temuan terbukti dari
+  prioritas tertinggi audit keamanan. Antrean audit keamanan tutup.
+- Status: 87 commit lokal di atas origin/main, belum push. Sisa sadar
+  jangka panjang: unique constraint Holiday (migrasi terpisah), sapu
+  runtime browser batch 3 halaman detail/form belum tuntas (perlu sesi
+  agent-browser + dev server aktif).
