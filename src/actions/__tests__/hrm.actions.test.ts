@@ -1910,6 +1910,114 @@ describe("Kalender Kerja", () => {
     expect(prismaMock.holiday.create).not.toHaveBeenCalled()
   })
 
+  it("createHoliday menolak tanggal yang sudah terisi hari libur lain (duplikat diam-diam)", async () => {
+    prismaMock.holiday.findFirst.mockResolvedValue({ id: 3 })
+    const res = await actions.createHoliday(fd({ name: "Libur lain", date: "2026-08-17" }))
+
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("Sudah ada hari libur pada tanggal")
+    expect(prismaMock.holiday.create).not.toHaveBeenCalled()
+  })
+
+  it("createHoliday memetakan P2002 balapan menjadi pesan ramah, bukan error mentah", async () => {
+    prismaMock.holiday.findFirst.mockResolvedValue(null)
+    prismaMock.holiday.create.mockRejectedValue(
+      Object.assign(new Error("Unique constraint failed on the fields: (`date`)"), { code: "P2002" }),
+    )
+    const res = await actions.createHoliday(fd({ name: "Libur balapan", date: "2026-08-17" }))
+
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("Sudah ada hari libur pada tanggal")
+  })
+
+  it("updateHoliday menolak tanggal bentrok milik baris lain", async () => {
+    prismaMock.holiday.findFirst.mockResolvedValue({ id: 9 })
+    const res = await actions.updateHoliday(
+      5,
+      fd({ name: "Cuti bersama", date: "2026-12-24" }),
+    )
+
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("Sudah ada hari libur pada tanggal")
+    expect(prismaMock.holiday.update).not.toHaveBeenCalled()
+  })
+
+  it("updateHoliday memetakan P2002 balapan menjadi pesan ramah", async () => {
+    prismaMock.holiday.findFirst.mockResolvedValue(null)
+    prismaMock.holiday.update.mockRejectedValue(
+      Object.assign(new Error("Unique constraint failed on the fields: (`date`)"), { code: "P2002" }),
+    )
+    const res = await actions.updateHoliday(
+      5,
+      fd({ name: "Cuti bersama", date: "2026-12-24" }),
+    )
+
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("Sudah ada hari libur pada tanggal")
+  })
+
+  it("createDepartmentHoliday menolak tanggal duplikat dalam departemen yang sama", async () => {
+    prismaMock.departmentHoliday.findFirst.mockResolvedValue({ id: 4 })
+    const res = await actions.createDepartmentHoliday(
+      fd({ departmentId: "2", name: "Cuti pabrik", date: "2026-12-24" }),
+    )
+
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain(
+      "Sudah ada libur departemen pada tanggal",
+    )
+    expect(prismaMock.departmentHoliday.create).not.toHaveBeenCalled()
+  })
+
+  it("createDepartmentHoliday memetakan P2002 balapan menjadi pesan ramah", async () => {
+    prismaMock.departmentHoliday.findFirst.mockResolvedValue(null)
+    prismaMock.departmentHoliday.create.mockRejectedValue(
+      Object.assign(new Error("Unique constraint failed on the fields: (`department_id`,`date`)"), {
+        code: "P2002",
+      }),
+    )
+    const res = await actions.createDepartmentHoliday(
+      fd({ departmentId: "2", name: "Cuti pabrik", date: "2026-12-24" }),
+    )
+
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain(
+      "Sudah ada libur departemen pada tanggal",
+    )
+  })
+
+  it("updateDepartmentHoliday menolak tanggal bentrok milik baris lain", async () => {
+    prismaMock.departmentHoliday.findFirst.mockResolvedValue({ id: 8 })
+    const res = await actions.updateDepartmentHoliday(
+      9,
+      fd({ departmentId: "2", name: "Cuti pabrik", date: "2026-12-24" }),
+    )
+
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain(
+      "Sudah ada libur departemen pada tanggal",
+    )
+    expect(prismaMock.departmentHoliday.update).not.toHaveBeenCalled()
+  })
+
+  it("updateDepartmentHoliday memetakan P2002 balapan menjadi pesan ramah", async () => {
+    prismaMock.departmentHoliday.findFirst.mockResolvedValue(null)
+    prismaMock.departmentHoliday.update.mockRejectedValue(
+      Object.assign(new Error("Unique constraint failed on the fields: (`department_id`,`date`)"), {
+        code: "P2002",
+      }),
+    )
+    const res = await actions.updateDepartmentHoliday(
+      9,
+      fd({ departmentId: "2", name: "Cuti pabrik", date: "2026-12-24" }),
+    )
+
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain(
+      "Sudah ada libur departemen pada tanggal",
+    )
+  })
+
   it("updateHoliday memakai izin edit_holidays dan menolak id tidak valid", async () => {
     prismaMock.holiday.update.mockResolvedValue({})
     const res = await actions.updateHoliday(

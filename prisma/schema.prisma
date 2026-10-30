@@ -3650,8 +3650,8 @@ model Holiday {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  @@unique([date])
   @@index([createdAt])
-  @@index([date])
   @@map("holidays")
 }
 
@@ -3747,9 +3747,9 @@ model DepartmentHoliday {
   updatedAt    DateTime   @updatedAt @map("updated_at")
   department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
 
+  @@unique([departmentId, date])
   @@index([departmentId], map: "department_holidays_department_id_fkey")
   @@index([createdAt])
-  @@index([date])
   @@map("department_holidays")
 }
 

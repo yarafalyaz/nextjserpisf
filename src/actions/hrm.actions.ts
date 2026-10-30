@@ -3966,17 +3966,36 @@ function requirePositiveId(id: number, label: string): number {
   return id;
 }
 
+function isHolidayDateConflict(e: unknown): boolean {
+  const err = e as { code?: string; meta?: { target?: string[] }; message?: string };
+  return (
+    err?.code === "P2002" &&
+    ((Array.isArray(err?.meta?.target) && err.meta.target.includes("date")) ||
+      String(err?.message || "").includes("date"))
+  );
+}
+
+const HOLIDAY_DATE_TAKEN = "Sudah ada hari libur pada tanggal tersebut. Ubah tanggal atau edit libur yang sudah ada.";
+const DEPT_HOLIDAY_DATE_TAKEN = "Sudah ada libur departemen pada tanggal tersebut untuk departemen ini.";
+
 export async function createHoliday(formData: FormData) {
   try {
     await requirePermission("create_holidays");
     const parsed = parseFormData(holidaySchema, formData);
     if (!parsed.success) return { success: false as const, error: parsed.error };
     const v = parsed.data;
+    const date = wibDateToUtcMidnight(v.date);
+
+    const existing = await prisma.holiday.findFirst({
+      where: { date },
+      select: { id: true },
+    });
+    if (existing) return { success: false as const, error: HOLIDAY_DATE_TAKEN };
 
     const holiday = await prisma.holiday.create({
       data: {
         name: v.name,
-        date: wibDateToUtcMidnight(v.date),
+        date,
         description: v.description ?? null,
       },
     });
@@ -3986,6 +4005,7 @@ export async function createHoliday(formData: FormData) {
     return { success: true as const, id: holiday.id };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
+    if (isHolidayDateConflict(e)) return { success: false as const, error: HOLIDAY_DATE_TAKEN };
     console.error("[createHoliday]", getErrorMessage(e) || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
@@ -3997,12 +4017,20 @@ export async function updateHoliday(id: number, formData: FormData) {
     const parsed = parseFormData(holidaySchema, formData);
     if (!parsed.success) return { success: false as const, error: parsed.error };
     const v = parsed.data;
+    const holidayId = requirePositiveId(id, "hari libur");
+    const date = wibDateToUtcMidnight(v.date);
+
+    const clash = await prisma.holiday.findFirst({
+      where: { date, id: { not: holidayId } },
+      select: { id: true },
+    });
+    if (clash) return { success: false as const, error: HOLIDAY_DATE_TAKEN };
 
     await prisma.holiday.update({
-      where: { id: requirePositiveId(id, "hari libur") },
+      where: { id: holidayId },
       data: {
         name: v.name,
-        date: wibDateToUtcMidnight(v.date),
+        date,
         description: v.description ?? null,
       },
     });
@@ -4012,6 +4040,7 @@ export async function updateHoliday(id: number, formData: FormData) {
     return { success: true as const };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
+    if (isHolidayDateConflict(e)) return { success: false as const, error: HOLIDAY_DATE_TAKEN };
     console.error("[updateHoliday]", getErrorMessage(e) || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
@@ -4037,12 +4066,19 @@ export async function createDepartmentHoliday(formData: FormData) {
     const parsed = parseFormData(departmentHolidaySchema, formData);
     if (!parsed.success) return { success: false as const, error: parsed.error };
     const v = parsed.data;
+    const date = wibDateToUtcMidnight(v.date);
+
+    const existing = await prisma.departmentHoliday.findFirst({
+      where: { departmentId: v.departmentId, date },
+      select: { id: true },
+    });
+    if (existing) return { success: false as const, error: DEPT_HOLIDAY_DATE_TAKEN };
 
     const holiday = await prisma.departmentHoliday.create({
       data: {
         departmentId: v.departmentId,
         name: v.name,
-        date: wibDateToUtcMidnight(v.date),
+        date,
       },
     });
 
@@ -4056,6 +4092,7 @@ export async function createDepartmentHoliday(formData: FormData) {
     return { success: true as const, id: holiday.id };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
+    if (isHolidayDateConflict(e)) return { success: false as const, error: DEPT_HOLIDAY_DATE_TAKEN };
     console.error("[createDepartmentHoliday]", getErrorMessage(e) || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
@@ -4067,13 +4104,21 @@ export async function updateDepartmentHoliday(id: number, formData: FormData) {
     const parsed = parseFormData(departmentHolidaySchema, formData);
     if (!parsed.success) return { success: false as const, error: parsed.error };
     const v = parsed.data;
+    const holidayId = requirePositiveId(id, "hari libur departemen");
+    const date = wibDateToUtcMidnight(v.date);
+
+    const clash = await prisma.departmentHoliday.findFirst({
+      where: { departmentId: v.departmentId, date, id: { not: holidayId } },
+      select: { id: true },
+    });
+    if (clash) return { success: false as const, error: DEPT_HOLIDAY_DATE_TAKEN };
 
     await prisma.departmentHoliday.update({
-      where: { id: requirePositiveId(id, "hari libur departemen") },
+      where: { id: holidayId },
       data: {
         departmentId: v.departmentId,
         name: v.name,
-        date: wibDateToUtcMidnight(v.date),
+        date,
       },
     });
 
@@ -4087,6 +4132,7 @@ export async function updateDepartmentHoliday(id: number, formData: FormData) {
     return { success: true as const };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
+    if (isHolidayDateConflict(e)) return { success: false as const, error: DEPT_HOLIDAY_DATE_TAKEN };
     console.error("[updateDepartmentHoliday]", getErrorMessage(e) || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
