@@ -37,7 +37,9 @@ export function buildQuotationFollowUpExportRows(
 }
 
 function escapeCsvCell(cell: string): string {
-  return /[",\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell
+  // Anti formula-injection spreadsheet, pola statement-csv.ts.
+  const safeCell = /^[=+\-@\t|%]/.test(cell) ? `\t${cell}` : cell
+  return /[",\n]/.test(safeCell) ? `"${safeCell.replace(/"/g, '""')}"` : safeCell
 }
 
 export function buildQuotationFollowUpCsv(rows: QuotationFollowUpRow[]): string {

@@ -45,4 +45,24 @@ describe("quotation-followup-export F-2026-10-22-091-S Q-QF-4", () => {
     expect(exported[0]?.[5]).toBe("—")
     expect(exported[0]?.[7]).toBe("Tanpa Masa Berlaku")
   })
+
+  it("R6IE-03: sel berawalan karakter formula dinetralkan", () => {
+    const rows = buildQuotationFollowUpQueue(
+      [
+        input({
+          customerName: "=2+5+cmd",
+          documentNo: "+SUM(1,2)",
+          salesEmployeeName: "@penjual",
+        }),
+      ],
+      NOW,
+    )
+    const dataLine = buildQuotationFollowUpCsv(rows).split("\n")[1] ?? ""
+
+    expect(dataLine.startsWith("\t=")).toBe(true)
+    expect(dataLine).toContain('"\t+SUM(1,2)"')
+    expect(dataLine).toContain("\t@penjual")
+    expect(dataLine).not.toMatch(/(^|,)=/)
+    expect(dataLine).not.toContain(",+SUM")
+  })
 })
