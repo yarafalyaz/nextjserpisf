@@ -43,10 +43,12 @@ export interface MinStockReport {
   periodCaption: string
 }
 
-export async function loadMinStock(period: {
-  start: Date
-  end: Date
-}): Promise<MinStockReport> {
+/**
+ * Posisi stok SAAT INI — tidak ada parameter periode: angka selalu posisi
+ * kini (`qtyOnHand`, lapisan tersisa), bukan posisi historis. Caption
+ * menyebut tanggal posisi supaya tidak terbaca sebagai rentang periode.
+ */
+export async function loadMinStock(asOf: Date = new Date()): Promise<MinStockReport> {
   const items = await prisma.item.findMany({
     where: { isActive: true, deletedAt: null, isService: false },
     select: {
@@ -143,6 +145,6 @@ export async function loadMinStock(period: {
         cost: Number(item.cost ?? 0),
       })),
     ),
-    ...rangePeriodLabels(period),
+    ...rangePeriodLabels({ start: asOf, end: asOf }),
   }
 }

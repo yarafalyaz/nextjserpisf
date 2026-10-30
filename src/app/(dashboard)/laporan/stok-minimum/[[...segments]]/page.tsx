@@ -15,27 +15,22 @@ import { loadMinStock } from "@/lib/reports/min-stock-data"
 import { loadReorderPoints } from "@/lib/reports/reorder-point-data"
 import { ReorderPointCard } from "@/components/reports/reorder-point-card"
 import { formatDate } from "@/lib/utils/format"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
+import { buildReportPeriodSlug } from "@/lib/reports/report-period"
 
 export const metadata: Metadata = { title: "Barang Stok Minimum" }
 
-export default async function MinStockPage({
-  params: routeParams,
-  searchParams,
-}: {
-  params: Promise<{ segments?: string[] }>
-  searchParams: Promise<Record<string, string | undefined>>
-}) {
+/**
+ * Laporan posisi kini: angka selalu stok saat ini, bukan posisi pada
+ * rentang tanggal. Filter periode sengaja tidak dipasang supaya caption
+ * tidak mengklaim rentang yang tidak pernah menyaring angka.
+ */
+export default async function MinStockPage() {
   const user = await requirePermission("view_reports")
-  const period = await reportPeriodFromRoute(routeParams, searchParams, (now) => ({
-    start: new Date(now.getFullYear(), 0, 1),
-    end: now,
-  }))
+  const asOf = new Date()
 
   const { report, warehouseShortages, warehouseNote, periodLabel, periodCaption } =
-    await loadMinStock(period)
+    await loadMinStock(asOf)
   const reorderPointReport = await loadReorderPoints()
   const requestHref = buildMinStockRequestHref(report.shortageLines)
   const canCreateRequest =
@@ -54,9 +49,8 @@ export default async function MinStockPage({
       filter={
         <ReportPeriodFilter
           basePath="/laporan/stok-minimum"
-          mode="range"
-          defaultStartDate={toLocalDateOnly(period.start)}
-          defaultEndDate={toLocalDateOnly(period.end)}
+          mode="none"
+          defaultStartDate=""
         />
       }
       actions={
@@ -71,7 +65,7 @@ export default async function MinStockPage({
           ) : null}
           <ExportButtons
             title="Barang Stok Minimum"
-            pdfHref={buildReportPdfHref("stok-minimum", period.slug)}
+            pdfHref={buildReportPdfHref("stok-minimum", buildReportPeriodSlug(asOf, asOf))}
           />
         </div>
       }

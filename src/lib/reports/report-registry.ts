@@ -686,8 +686,10 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     title: "Barang Stok Minimum",
     subtitle: "Barang yang Sudah Mencapai Batas Minimum",
     defaultPeriod: startOfYear,
-    async load({ period }) {
-      const report = await loadMinStock(period)
+    async load() {
+      // Posisi kini: periode path tidak dipakai agar caption tidak
+      // mengklaim rentang yang tidak pernah menyaring angka.
+      const report = await loadMinStock()
       return {
         kind: "table",
         table: report.report.table,

@@ -19,7 +19,7 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
 
 import { loadMinStock, MIN_STOCK_WAREHOUSE_NOTE } from "../min-stock-data"
 
-const period = { start: new Date("2026-01-01"), end: new Date("2026-12-31") }
+const asOf = new Date("2026-10-15T00:00:00+07:00")
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -44,11 +44,11 @@ describe("loadMinStock override per gudang", () => {
     mocks.prismaMock.itemWarehouseSetting.findMany.mockResolvedValue([
       { itemId: 1, warehouseId: 2, minStock: 2 },
     ])
-    const withOverride = await loadMinStock(period)
+    const withOverride = await loadMinStock(asOf)
     expect(withOverride.warehouseShortages).toEqual([])
 
     mocks.prismaMock.itemWarehouseSetting.findMany.mockResolvedValue([])
-    const without = await loadMinStock(period)
+    const without = await loadMinStock(asOf)
     expect(without.warehouseShortages).toMatchObject([
       { warehouseId: 2, minStock: 5, minStockSource: "global", shortage: 2 },
     ])
@@ -59,7 +59,7 @@ describe("loadMinStock override per gudang", () => {
     mocks.prismaMock.itemWarehouseSetting.findMany.mockResolvedValue([
       { itemId: 1, warehouseId: 2, minStock: 10 },
     ])
-    const res = await loadMinStock(period)
+    const res = await loadMinStock(asOf)
     expect(res.warehouseShortages).toMatchObject([
       { warehouseId: 2, minStock: 10, minStockSource: "override", shortage: 7 },
     ])
@@ -69,7 +69,14 @@ describe("loadMinStock override per gudang", () => {
     mocks.prismaMock.itemWarehouseSetting.findMany.mockResolvedValue([
       { itemId: 1, warehouseId: 99, minStock: 50 },
     ])
-    const res = await loadMinStock(period)
+    const res = await loadMinStock(asOf)
     expect(res.warehouseShortages.map((r) => r.warehouseId)).not.toContain(99)
+  })
+
+  it("caption posisi tunggal (bukan rentang): periode tidak pernah mengklaim menyaring angka", async () => {
+    mocks.prismaMock.itemWarehouseSetting.findMany.mockResolvedValue([])
+    const res = await loadMinStock(asOf)
+    expect(res.periodCaption).toBe("Periode 15 Okt 2026 – 15 Okt 2026")
+    expect(res.periodCaption).not.toContain("2025")
   })
 })
