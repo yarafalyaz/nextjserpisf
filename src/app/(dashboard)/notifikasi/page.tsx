@@ -12,13 +12,15 @@ export const metadata: Metadata = { title: "Notifikasi" }
 export default async function NotificationsPage() {
   const user = await requireAuth()
 
-  const notifications = await prisma.notification.findMany({
-    where: { userId: Number(user.id) },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  })
-
-  const unread = notifications.filter((n) => !n.readAt)
+  const [notifications, unreadCount] = await Promise.all([
+    prisma.notification.findMany({
+      where: { userId: Number(user.id) },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+    // R6WN-10: hitung dari DB, bukan dari jendela 50 terbaru.
+    prisma.notification.count({ where: { userId: Number(user.id), readAt: null } }),
+  ])
 
   return (
     <div className="flex flex-col gap-6">
@@ -28,7 +30,7 @@ export default async function NotificationsPage() {
 ]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Notifikasi</h1>
-        <span className="text-muted-foreground">{unread.length} belum dibaca</span>
+        <span className="text-muted-foreground">{unreadCount} belum dibaca</span>
       </div>
 
       <div className="grid grid-cols-1 gap-5">

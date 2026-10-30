@@ -24,6 +24,11 @@ export function NotificationDropdown() {
   const [now] = useState(() => Date.now())
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  // R6WN-08: badge harus tampil sejak mount, bukan baru sesudah dropdown dibuka.
+  useEffect(() => {
+    void fetchNotifications()
+  }, [])
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
