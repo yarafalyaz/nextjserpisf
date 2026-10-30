@@ -2198,8 +2198,8 @@ export async function completeSalesReturn(returnId: number) {
     // retur, baca ulang, dan klaim kondisional draft. Perhatian: kolom
     // status retur tidak mengenal "processing" (kosakata status hook:
     // draft→completed), jadi klaim tidak menulis status perantara —
-    // row lock menahan pesaing sampai hook menulis completed, dan
-    // updateMany kondisional memastikan count 1 hanya dari draft.
+    // row lock menahan pesaing sampai hook menulis completed, dan baca
+    // ulang di bawah memastikan hanya draft yang lanjut.
     if (typeof tx.$executeRaw === "function") {
       await tx.$executeRaw`SELECT id FROM sales_returns WHERE id = ${returnId} FOR UPDATE`
     }
