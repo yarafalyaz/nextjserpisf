@@ -82,6 +82,10 @@ export const ATTACHMENT_CREATE_PERMISSION: Record<string, PermissionName> = {
   expense: "create_expenses",
   sales_payment: "create_sales_payments",
   vendor_bill: "create_vendor_bills",
+  // R7API-02: form pembayaran vendor selalu unggah temp (referenceId 0) —
+  // tanpa entri ini canModifyAttachment(id 0) selalu false → 403 walau
+  // createVendorPayment sudah mendukung attachmentIds + klaim lampiran.
+  vendor_payment: "create_vendor_payments",
   petty_cash: "create_petty_cash",
 }
 

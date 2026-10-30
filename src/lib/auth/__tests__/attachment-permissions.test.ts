@@ -30,7 +30,7 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }))
 
-import { canAccessAttachment, ATTACHMENT_PERMISSION } from "../attachment-permissions"
+import { canAccessAttachment, canModifyAttachment, ATTACHMENT_PERMISSION } from "../attachment-permissions"
 
 beforeEach(() => {
   hasPermissionMock.mockReset()
@@ -149,5 +149,16 @@ describe("canAccessAttachment", () => {
   it("R7API-01: tanpa view_tax_disputes lampiran sengketa tetap ditolak", async () => {
     hasPermissionMock.mockResolvedValue(false)
     await expect(canAccessAttachment("tax_dispute_step", 1)).resolves.toBe(false)
+  })
+
+  it("R7API-02: unggah temp vendor_payment (referenceId 0) lolos dengan create_vendor_payments", async () => {
+    hasPermissionMock.mockResolvedValue(true)
+    await expect(canModifyAttachment("vendor_payment", 0)).resolves.toBe(true)
+    expect(hasPermissionMock).toHaveBeenCalledWith("create_vendor_payments")
+  })
+
+  it("R7API-02: tanpa izin buat, unggah temp vendor_payment tetap ditolak", async () => {
+    hasPermissionMock.mockResolvedValue(false)
+    await expect(canModifyAttachment("vendor_payment", 0)).resolves.toBe(false)
   })
 })
