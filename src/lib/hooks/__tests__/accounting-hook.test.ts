@@ -2975,6 +2975,22 @@ describe("onPayrollPaid — kaki kompensasi PKWT (F-2026-10-24-132-V Putusan 5)"
     expect(mocks.journalCreate).not.toHaveBeenCalled();
   });
 
+  it("FINHR-6: kaki PKWT melebihi total kredit -> throw, jurnal tidak dibuat", async () => {
+    pkwtLinesMock.findMany.mockResolvedValue([
+      { pkwtEventId: 9, pkwtSettledViaAccrual: false, amount: 5000, accountIdSnapshot: 631 },
+    ]);
+    mocks.payrollFindUniqueOrThrow.mockResolvedValue({
+      // Gross tersimpan 10.000 lolos guard pkwt<=gross, tetapi komponen
+      // kredit hanya 900 -> self-heal mendorong kaki gaji ke negatif.
+      ...basePayroll(), grossSalary: 10000, netSalary: 900,
+      bpjsHealthEmployee: 0, bpjsEmploymentEmployee: 0, pph21: 0,
+      loanDeduction: 0, lateDeduction: 0, absentDeduction: 0,
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await expect(onPayrollPaid(1)).rejects.toThrow("negatif");
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
   it("TASK-018 (5) terakrual parsial: Dr utang dibatasi akrual, sisa ke beban", async () => {
     // Peristiwa 2.500 baru terakrual 2.000 — debit utang penuh menyisakan
     // saldo -500; jurnal wajib pecah 2.000 utang + 500 beban.

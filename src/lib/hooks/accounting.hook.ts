@@ -3413,6 +3413,14 @@ export async function onPayrollPaid(
       // entries[0] = kredit − Σ debit lain.
       const otherDebit = entries.slice(1).reduce((s, e) => safeAdd(s, e.debit, 2), 0);
       entries[0].debit = safeAdd(creditTotal, -otherDebit, 2);
+      // FINHR-6: debit lain (mis. PKWT) melebihi total kredit -> kaki gaji
+      // negatif. Jurnal entri negatif tidak sah; gagal keras supaya slip
+      // diperbaiki, jangan diposting dengan header yang mengaku balance.
+      if (entries[0].debit < 0) {
+        throw new Error(
+          "Jurnal penggajian tidak dapat dibentuk: total potongan debit melebihi total kredit slip (kaki gaji menjadi negatif). Periksa komponen slip gaji.",
+        );
+      }
     }
 
     await tx.journal.create({

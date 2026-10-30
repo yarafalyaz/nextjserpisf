@@ -264,12 +264,26 @@ export async function setReimbursementClaimAccounts(
     if (claim.status !== "draft") {
       throw new Error("Akun klaim hanya dapat ditetapkan saat klaim masih draft.")
     }
-    for (const aid of [v.accountId, v.paidFromAccountId]) {
-      if (aid != null) {
-        const ok = await prisma.account.count({ where: { id: aid } })
-        if (!ok)
-          throw new Error(`Akun tidak ditemukan (id: ${aid}). Pilih ulang akun.`)
-      }
+    // FINHR-8: akun final wajib valid, bukan sekadar ada — beban harus
+    // EXPENSE aktif tak terhapus; akun bayar harus ASSET (kas/bank) aktif
+    // tak terhapus. Payload manual tidak boleh menanam akun salah/nonaktif.
+    const checks: Array<{ id: number; type: string; label: string }> = [
+      { id: v.accountId, type: "EXPENSE", label: "Akun beban" },
+      ...(v.paidFromAccountId != null
+        ? [{ id: v.paidFromAccountId, type: "ASSET", label: "Akun bayar" }]
+        : []),
+    ]
+    for (const check of checks) {
+      const account = await prisma.account.findUnique({
+        where: { id: check.id },
+        select: { type: true, isActive: true, deletedAt: true },
+      })
+      if (!account)
+        throw new Error(`Akun tidak ditemukan (id: ${check.id}). Pilih ulang akun.`)
+      if (account.deletedAt || !account.isActive)
+        throw new Error(`${check.label} nonaktif/terhapus — pilih akun aktif.`)
+      if (account.type !== check.type)
+        throw new Error(`${check.label} harus bertipe ${check.type}.`)
     }
 
     const updated = await prisma.expense.updateMany({

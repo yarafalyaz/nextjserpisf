@@ -15,6 +15,7 @@ const employeeFindUniqueMock = vi.fn()
 const employeeFindFirstMock = vi.fn()
 const accountFindFirstMock = vi.fn()
 const accountCountMock = vi.fn()
+const accountFindUniqueMock = vi.fn()
 const attachmentCountMock = vi.fn()
 const journalFindFirstMock = vi.fn()
 const journalFindManyMock = vi.fn()
@@ -65,6 +66,7 @@ vi.mock("@/lib/db/prisma", () => ({
     account: {
       findFirst: (...a: unknown[]) => accountFindFirstMock(...a),
       count: (...a: unknown[]) => accountCountMock(...a),
+      findUnique: (...a: unknown[]) => accountFindUniqueMock(...a),
     },
     transactionAttachment: {
       count: (...a: unknown[]) => attachmentCountMock(...a),
@@ -111,7 +113,7 @@ vi.mock("next/cache", () => ({
 }))
 
 import { approveExpense, markExpensePaid } from "../finance.actions"
-import { createReimbursementClaim, getMyReimbursementClaims } from "../reimbursement.actions"
+import { createReimbursementClaim, getMyReimbursementClaims, setReimbursementClaimAccounts } from "../reimbursement.actions"
 
 function form(entries: Record<string, string>): FormData {
   const fd = new FormData()
@@ -121,7 +123,7 @@ function form(entries: Record<string, string>): FormData {
 
 const CLAIM = {
   id: 42, status: "draft", documentNo: "EXP-0042",
-  isReimbursementClaim: true, employeeId: 5,
+  isReimbursementClaim: true, employeeId: 5, accountId: 610,
   referenceNo: "NOTA-1", receiptImage: "/nota.jpg", amount: 150000,
 }
 
@@ -138,6 +140,8 @@ beforeEach(() => {
   attachmentCountMock.mockResolvedValue(1)
   employeeFindFirstMock.mockResolvedValue(null) // approver bukan karyawan tertaut
   journalFindFirstMock.mockResolvedValue({ totalDebit: 150000 })
+  // FINHR-8 default: akun beban klaim valid EXPENSE aktif.
+  accountFindUniqueMock.mockResolvedValue({ type: "EXPENSE", isActive: true, deletedAt: null })
 })
 
 describe("approveExpense klaim (AC-RB-B3/B4, E-RB5-1)", () => {
@@ -166,6 +170,14 @@ describe("approveExpense klaim (AC-RB-B3/B4, E-RB5-1)", () => {
     expect(accrualMock).toHaveBeenCalledWith(42, 7, expect.anything())
   })
 
+  it("FINHR-8: approve klaim dengan akun beban non-EXPENSE ditolak sebelum jurnal", async () => {
+    expenseFindUniqueOrThrowMock.mockResolvedValue({ ...CLAIM })
+    accountFindUniqueMock.mockResolvedValue({ type: "ASSET", isActive: true, deletedAt: null })
+    const r = await approveExpense(42)
+    expect(r.success).toBe(false)
+    expect(accrualMock).not.toHaveBeenCalled()
+  })
+
   it("Expense non-klaim: perilaku existing utuh (nol gerbang klaim)", async () => {
     expenseFindUniqueOrThrowMock.mockResolvedValue({
       ...CLAIM, isReimbursementClaim: false, employeeId: null,
@@ -176,6 +188,45 @@ describe("approveExpense klaim (AC-RB-B3/B4, E-RB5-1)", () => {
     expect(r.success).toBe(true)
     expect(accrualMock).not.toHaveBeenCalled()
     expect(expenseUpdateManyMock).toHaveBeenCalled()
+  })
+})
+
+describe("setReimbursementClaimAccounts validasi akun final (FINHR-8)", () => {
+  beforeEach(() => {
+    expenseFindUniqueOrThrowMock.mockResolvedValue({ ...CLAIM })
+  })
+
+  it("akun beban EXPENSE aktif diterima", async () => {
+    accountFindUniqueMock.mockResolvedValue({ type: "EXPENSE", isActive: true, deletedAt: null })
+    const r = await setReimbursementClaimAccounts(42, form({ accountId: "610" }))
+    expect(r.success).toBe(true)
+    expect(expenseUpdateManyMock).toHaveBeenCalled()
+  })
+
+  it("akun beban non-EXPENSE ditolak", async () => {
+    accountFindUniqueMock.mockResolvedValue({ type: "ASSET", isActive: true, deletedAt: null })
+    const r = await setReimbursementClaimAccounts(42, form({ accountId: "610" }))
+    expect(r.success).toBe(false)
+    expect(expenseUpdateManyMock).not.toHaveBeenCalled()
+  })
+
+  it("akun beban nonaktif ditolak", async () => {
+    accountFindUniqueMock.mockResolvedValue({ type: "EXPENSE", isActive: false, deletedAt: null })
+    const r = await setReimbursementClaimAccounts(42, form({ accountId: "610" }))
+    expect(r.success).toBe(false)
+    expect(expenseUpdateManyMock).not.toHaveBeenCalled()
+  })
+
+  it("akun bayar non-ASSET ditolak", async () => {
+    accountFindUniqueMock
+      .mockResolvedValueOnce({ type: "EXPENSE", isActive: true, deletedAt: null })
+      .mockResolvedValueOnce({ type: "EXPENSE", isActive: true, deletedAt: null })
+    const r = await setReimbursementClaimAccounts(
+      42,
+      form({ accountId: "610", paidFromAccountId: "620" }),
+    )
+    expect(r.success).toBe(false)
+    expect(expenseUpdateManyMock).not.toHaveBeenCalled()
   })
 })
 

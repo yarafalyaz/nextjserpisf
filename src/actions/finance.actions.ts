@@ -833,6 +833,16 @@ export async function approveExpense(expenseId: number) {
     // nol perubahan). Bukti BR-RB-04 + SoD BR-RB-07 + nominal <= bukti.
     const isClaim = expense.isReimbursementClaim;
     if (isClaim) {
+      // FINHR-8: approve fail-closed bila akun beban klaim belum final —
+      // harus EXPENSE aktif tak terhapus (placeholder/lama bisa nonaktif
+      // atau berganti tipe sesudah klaim dibuat).
+      const claimAccount = await prisma.account.findUnique({
+        where: { id: expense.accountId },
+        select: { type: true, isActive: true, deletedAt: true },
+      });
+      if (!claimAccount || claimAccount.deletedAt || !claimAccount.isActive || claimAccount.type !== "EXPENSE") {
+        throw new Error("Akun beban klaim belum valid (wajib akun beban EXPENSE aktif) — tetapkan akun final sebelum menyetujui.");
+      }
       const attachmentCount = await prisma.transactionAttachment.count({
         where: { referenceType: "expense", referenceId: expenseId },
       });

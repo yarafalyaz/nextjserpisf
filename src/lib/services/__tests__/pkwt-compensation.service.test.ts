@@ -221,6 +221,19 @@ describe("E132-2 akrual bulanan agregat", () => {
     expect(Number(accrualCreate[0].data.amount)).toBe(416_666.67)
   })
 
+  it("FINHR-7: closing negatif (akrual lalu > nominal peristiwa) -> throw, tanpa jurnal", async () => {
+    const client = baseClient()
+    client.employee.findMany.mockResolvedValue([
+      { id: 1, contractStartDate: d("2026-01-01"), contractEndDate: d("2026-06-30") },
+    ])
+    client.pkwtCompensationEvent.findFirst = vi.fn().mockResolvedValue({
+      id: 7, amount: 2_000_000, basisMonthly: 5_000_000, segmentEnd: d("2026-06-30"),
+    })
+    client.pkwtCompensationAccrual.aggregate.mockResolvedValue({ _sum: { amount: 2_500_000 } })
+    await expect(runPkwtMonthlyAccrual(client, "2026-06", 1)).rejects.toThrow("negatif")
+    expect(journalServiceMocks.createJournal).not.toHaveBeenCalled()
+  })
+
   it("anti-dobel: bulan sudah terakrual dilewati", async () => {
     const client = baseClient()
     client.employee.findMany.mockResolvedValue([

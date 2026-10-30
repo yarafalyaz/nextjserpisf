@@ -291,6 +291,14 @@ export async function runPkwtMonthlyAccrual(
       amount = safeRound(Number(event.amount) - Number(prior._sum.amount ?? 0), 2)
     }
     if (amount === 0) continue
+    // FINHR-7: closing negatif = akrual terdahulu sudah melebihi nominal
+    // peristiwa. Baris negatif diam-diam menggerus jurnal agregat dan
+    // subledger karyawan; koreksi harus reversal eksplisit, bukan akrual.
+    if (amount < 0) {
+      throw new Error(
+        `Akrual kompensasi PKWT karyawan ${emp.id} periode ${period} menjadi negatif (${amount}): akrual sebelumnya melebihi nominal peristiwa. Koreksi lewat reversal, bukan akrual negatif.`,
+      )
+    }
     rows.push({
       employeeId: emp.id,
       eventId: event?.id ?? null,
