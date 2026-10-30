@@ -64,6 +64,34 @@ describe("loadCustomerCreditExposure (F5-2)", () => {
     )
   })
 
+  it("overdue dinilai per akhir periode, bukan hari ini (laporan historis)", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2027-06-01"))
+    try {
+      mocks.prismaMock.salesInvoice.findMany.mockImplementation(async (args: { where: Record<string, unknown> }) =>
+        args.where.date
+          ? [
+              {
+                id: 12,
+                customerId: 1,
+                grandTotal: 100,
+                paidAmount: 0,
+                dueDate: new Date("2027-02-01"),
+                customer: { name: "PT Invoice", creditLimit: 100 },
+              },
+            ]
+          : [],
+      )
+
+      const { rows } = await loadCustomerCreditExposure(period)
+
+      const row = rows.find((r) => r.customerId === 1)
+      expect(row).toMatchObject({ outstanding: 100, overdue: 0 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("baris invoice: sisa kredit dari paparan bersih, bukan K1 saja (F5-5)", async () => {
     mocks.prismaMock.salesInvoice.findMany.mockImplementation(async (args: { where: Record<string, unknown> }) =>
       args.where.date

@@ -535,7 +535,8 @@ export async function loadCustomerCreditExposure(period: Period): Promise<Custom
   const returnCreditByInvoiceId = await loadReturnCreditByInvoiceId(
     invoices.map((inv) => inv.id),
   )
-  const now = new Date()
+  // Ember overdue dinilai per akhir periode yang diminta, bukan hari ini —
+  // supaya laporan historis mereproduksi posisi per tanggal itu.
   const bucketList = aggregateCustomerReceivables(
     invoices.map((inv) => ({
       customerId: inv.customerId,
@@ -546,7 +547,7 @@ export async function loadCustomerCreditExposure(period: Period): Promise<Custom
       returnCreditAmount: returnCreditByInvoiceId.get(inv.id) ?? 0,
       dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
     })),
-    now,
+    period.end,
   )
   const buckets = new Map(bucketList.map((b) => [b.customerId, b]))
   const paymentsByCustomer = new Map<number, { invoiceDate: Date; paymentDate: Date; amount: number }[]>()
