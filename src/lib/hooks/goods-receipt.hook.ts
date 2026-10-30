@@ -301,12 +301,20 @@ export async function onGoodsReceiptVerified(
     // which keeps the same allocation across receipts regardless of whether
     // this GR happened to enter a different unitCost than the PO.
     const landedPo = goodsReceipt.purchaseOrder;
-    const poItemsById = new Map((landedPo?.items ?? []).map((pi) => [pi.itemId, pi]));
+    // STOK-09: item PO duplikat (dua baris harga beda) diagregasi
+    // Σtotal/Σqty — Map per itemId menimpa ke baris terakhir sehingga bobot
+    // alokasi memakai harga salah untuk seluruh penerimaan item itu.
+    const poAggregateByItem = new Map<number, { qty: number; total: number }>()
+    for (const pi of landedPo?.items ?? []) {
+      const agg = poAggregateByItem.get(pi.itemId) ?? { qty: 0, total: 0 }
+      agg.qty += Number(pi.qty)
+      agg.total += Number(pi.total)
+      poAggregateByItem.set(pi.itemId, agg)
+    }
     const poNetUnitPriceOf = (itemId: number): number => {
-      const pi = poItemsById.get(itemId);
-      if (!pi) return 0;
-      const qty = Number(pi.qty);
-      return qty > 0 ? Number(pi.total) / qty : 0;
+      const agg = poAggregateByItem.get(itemId);
+      if (!agg) return 0;
+      return agg.qty > 0 ? agg.total / agg.qty : 0;
     };
 
     // Per-line base qty + allocation weight, in the same order as

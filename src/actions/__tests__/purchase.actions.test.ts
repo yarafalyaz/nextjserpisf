@@ -1122,6 +1122,43 @@ describe("Purchase Return Actions", () => {
   })
 
   // F-004 §3 simetris: nomor + tanggal nota retur pajak beli ditulis apa adanya.
+  it("STOK-05: cap retur beli dalam qty dasar lintas UOM (1 BOX=12 + 1 PCS = 13)", async () => {
+    // toBaseFactor nyata: BOX->PCS faktor 12 lewat uomConversion.
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ unitOfMeasure: "PCS" })
+    mocks.prismaMock.uomConversion.findUnique.mockImplementation(async ({ where }: any) =>
+      where?.itemId_code?.code === "BOX" ? { factorToBase: 12 } : null,
+    )
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValue([
+      { itemId: 1, qty: 1, uom: "BOX" },
+      { itemId: 1, qty: 1, uom: "PCS" },
+    ])
+    const ok = await actions.createPurchaseReturn(fdMap({
+      purchaseOrderId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 13 }]),
+    }))
+    expect(ok?.success).toBe(true)
+    // Buang retur pertama dari hitungan prior: create mock tidak benar-benar
+    // menyimpan, tetapi priorReturns membaca purchaseReturnItem.findMany
+    // default [] — panggilan kedua bersih. Set ulang GR supaya deterministik.
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValue([
+      { itemId: 1, qty: 1, uom: "BOX" },
+      { itemId: 1, qty: 1, uom: "PCS" },
+    ])
+    // findOverReturn di-mock null secara global di file ini — pakai
+    // implementasi asli untuk membuktikan cap basis-dasar bekerja.
+    const real = await vi.importActual<typeof import("@/lib/sales/return-validation")>("@/lib/sales/return-validation")
+    const { findOverReturn } = await import("@/lib/sales/return-validation")
+    vi.mocked(findOverReturn).mockImplementation(real.findOverReturn)
+    const over = await actions.createPurchaseReturn(fdMap({
+      purchaseOrderId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 14 }]),
+    }))
+    expect(over?.success).toBe(false)
+    expect(over?.error).toContain("melebihi yang diterima")
+    vi.mocked(findOverReturn).mockReset()
+    vi.mocked(findOverReturn).mockReturnValue(null)
+  })
+
   it("createPurchaseReturn menulis nomor + tanggal nota retur pajak", async () => {
     const res = await actions.createPurchaseReturn(fdMap({
       purchaseOrderId: "1",

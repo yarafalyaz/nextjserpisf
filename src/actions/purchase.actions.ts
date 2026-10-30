@@ -567,6 +567,19 @@ async function assertPurchaseReturnWithinReceived(
   for (const line of grItems) {
     if (!uomByItem.has(line.itemId)) uomByItem.set(line.itemId, line.uom);
   }
+  // STOK-05: cap diterima dalam qty DASAR per baris (UOM baris GR sendiri).
+  // Menjumlah qty mentah lintas UOM (1 BOX + 1 PCS = 2) menolak retur sah
+  // dan dapat meloloskan retur berlebih saat hook memakai faktor lain.
+  const distinctUoms = [...new Set(grItems.map((l) => `${l.itemId}:${l.uom ?? ""}`))]
+  const factorByKey = new Map<string, number>()
+  await Promise.all(
+    distinctUoms.map(async (key) => {
+      const sep = key.lastIndexOf(":")
+      const itemId = Number(key.slice(0, sep))
+      const uom = key.slice(sep + 1) || null
+      factorByKey.set(key, await toBaseFactor(tx, itemId, uom))
+    }),
+  )
   const factorRows = await Promise.all(
     itemIds.map(
       async (itemId) =>
@@ -582,11 +595,18 @@ async function assertPurchaseReturnWithinReceived(
   );
   const receivedQtyByItem = new Map<number, number>();
   for (const it of grItems) {
+    const f = factorByKey.get(`${it.itemId}:${it.uom ?? ""}`) ?? 1
     receivedQtyByItem.set(
       it.itemId,
-      (receivedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty),
+      (receivedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty) * f,
     );
   }
+  // Baris retur masuk dalam UOM receipt pertama per item (konvensi hook) —
+  // samakan basisnya ke qty dasar sebelum cap dibandingkan.
+  const returnBaseItems = items.map((it) => ({
+    itemId: it.itemId,
+    qty: it.qty * (factorByItem.get(it.itemId) ?? 1),
+  }))
   const priorReturns = await tx.purchaseReturnItem.findMany({
     where: {
       purchaseReturn: {
@@ -606,7 +626,7 @@ async function assertPurchaseReturnWithinReceived(
     );
   }
   const violation = findOverReturn(
-    items.map((it) => ({ itemId: it.itemId, qty: it.qty })),
+    returnBaseItems,
     receivedQtyByItem,
     alreadyReturnedByItem,
   );
@@ -1092,9 +1112,12 @@ export async function createGoodsReceipt(formData: FormData) {
       // detail page's "Qty Dipesan" reads the (always 0) column and the receipt
       // looks like it was ordered for nothing. `poQtyMap` is reused below for
       // the over-receive guard.
-      const orderedQtyByItem = new Map<number, number>(
-        po.items.map((i) => [i.itemId, Number(i.qty)]),
-      );
+      // STOK-18: baris PO duplikat diagregasi — Map langsung menimpa
+      // sehingga snapshot qtyOrdered hanya baris terakhir, bukan total.
+      const orderedQtyByItem = new Map<number, number>();
+      for (const i of po.items) {
+        orderedQtyByItem.set(i.itemId, (orderedQtyByItem.get(i.itemId) ?? 0) + Number(i.qty));
+      }
       if (
         po.status !== "approved" &&
         po.status !== "ordered" &&

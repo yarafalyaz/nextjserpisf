@@ -178,7 +178,11 @@ export async function consumeReservationsForMaterialIssueTx(
   for (const item of input.items) {
     const qty = Number(item.qty)
     if (qty <= 0) continue
-    const reservation = await tx.stockReservation.findFirst({
+    // STOK-07: konsumsi SEMUA reservasi aktif item+gudang ini berurutan
+    // (WO multi-baris material sama melahirkan beberapa reservasi).
+    // findFirst tunggal menyisakan reservasi kedua aktif selamanya dan
+    // sisa qty tercatat unreserved walau masih ada cadangan.
+    const reservations = await tx.stockReservation.findMany({
       where: {
         workOrderId: input.workOrderId,
         itemId: item.itemId,
@@ -187,26 +191,27 @@ export async function consumeReservationsForMaterialIssueTx(
       },
       orderBy: { id: "asc" },
     })
-    if (!reservation) {
-      unreservedOutflow.set(item.itemId, (unreservedOutflow.get(item.itemId) ?? 0) + qty)
-      continue
+    let outstanding = qty
+    for (const reservation of reservations) {
+      if (outstanding <= 0) break
+      const remaining = Number(reservation.qtyReserved) - Number(reservation.qtyConsumed)
+      const plan = planReservationConsumption({ activeRemaining: remaining, qty: outstanding })
+      if (plan.consumedFromReservation > 0) {
+        const nextConsumed = dec(reservation.qtyConsumed).plus(plan.consumedFromReservation)
+        await tx.stockReservation.update({
+          where: { id: reservation.id },
+          data: {
+            qtyConsumed: nextConsumed,
+            status: plan.nextStatus ?? reservation.status,
+          },
+        })
+      }
+      outstanding = plan.overReservedQty
     }
-    const remaining = Number(reservation.qtyReserved) - Number(reservation.qtyConsumed)
-    const plan = planReservationConsumption({ activeRemaining: remaining, qty })
-    if (plan.consumedFromReservation > 0) {
-      const nextConsumed = dec(reservation.qtyConsumed).plus(plan.consumedFromReservation)
-      await tx.stockReservation.update({
-        where: { id: reservation.id },
-        data: {
-          qtyConsumed: nextConsumed,
-          status: plan.nextStatus ?? reservation.status,
-        },
-      })
-    }
-    if (plan.overReservedQty > 0) {
+    if (outstanding > 0) {
       unreservedOutflow.set(
         item.itemId,
-        (unreservedOutflow.get(item.itemId) ?? 0) + plan.overReservedQty,
+        (unreservedOutflow.get(item.itemId) ?? 0) + outstanding,
       )
     }
   }

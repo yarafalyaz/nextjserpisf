@@ -51,13 +51,13 @@ describe("consumeReservationsForMaterialIssueTx", () => {
   })
 
   it("AC-RES-2: query dibatasi WO pemilik + gudang MI + status active", async () => {
-    findFirstMock.mockResolvedValue(null)
+    findManyMock.mockResolvedValue([])
     await consumeReservationsForMaterialIssueTx(txMock(), {
       workOrderId: 9,
       warehouseId: 5,
       items: [{ itemId: 10, qty: 1 }],
     })
-    expect(findFirstMock).toHaveBeenCalledWith(
+    expect(findManyMock).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { workOrderId: 9, itemId: 10, warehouseId: 5, status: "active" },
       }),
@@ -65,11 +65,11 @@ describe("consumeReservationsForMaterialIssueTx", () => {
   })
 
   it("AC-RES-3: qty melebihi sisa → consumed penuh, kelebihan tanpa cadangan", async () => {
-    findFirstMock.mockResolvedValue({
+    findManyMock.mockResolvedValue([{
       id: 3,
       qtyReserved: new Prisma.Decimal("2.00"),
       qtyConsumed: new Prisma.Decimal("0.00"),
-    })
+    }])
     const out = await consumeReservationsForMaterialIssueTx(txMock(), {
       workOrderId: 9,
       warehouseId: 5,
@@ -83,6 +83,23 @@ describe("consumeReservationsForMaterialIssueTx", () => {
     )
     expect(Number(updateMock.mock.calls[0][0].data.qtyConsumed)).toBe(2)
     expect(out.get(10)).toBe(3)
+  })
+
+  it("STOK-07: dua reservasi aktif 6+6, MI 10 -> konsumsi 6 dan 4, tanpa sisa unreserved", async () => {
+    findManyMock.mockResolvedValue([
+      { id: 3, qtyReserved: new Prisma.Decimal("6.00"), qtyConsumed: new Prisma.Decimal("0.00") },
+      { id: 4, qtyReserved: new Prisma.Decimal("6.00"), qtyConsumed: new Prisma.Decimal("0.00") },
+    ])
+    const out = await consumeReservationsForMaterialIssueTx(txMock(), {
+      workOrderId: 9,
+      warehouseId: 5,
+      items: [{ itemId: 10, qty: 10 }],
+    })
+    expect(updateMock).toHaveBeenCalledTimes(2)
+    expect(Number(updateMock.mock.calls[0][0].data.qtyConsumed)).toBe(6)
+    expect(updateMock.mock.calls[0][0].data.status).toBe("consumed")
+    expect(Number(updateMock.mock.calls[1][0].data.qtyConsumed)).toBe(4)
+    expect(out.get(10)).toBeUndefined()
   })
 })
 
