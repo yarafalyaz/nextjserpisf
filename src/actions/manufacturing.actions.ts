@@ -2750,6 +2750,25 @@ export async function cancelWorkOrder(workOrderId: number, reason?: string) {
           `Perintah kerja hanya dapat dibatalkan dari status 'in_progress' (saat ini '${wo.status}').`,
         );
       }
+      // STOK-13: WO dengan pengeluaran material completed atau order
+      // produksi anak aktif tidak boleh dibatalkan — material/biaya sudah
+      // keluar dan anak akan yatim. Selesaikan/reversal dulu secara eksplisit.
+      const [completedIssues, activeChildOrders] = await Promise.all([
+        tx.materialIssue.count({ where: { workOrderId, status: "completed" } }),
+        tx.productionOrder.count({
+          where: { workOrderId, status: { notIn: ["completed", "cancelled", "closed"] } },
+        }),
+      ]);
+      if (completedIssues > 0) {
+        throw new Error(
+          "Perintah kerja memiliki pengeluaran material yang sudah selesai — batalkan/retur pengeluaran material terlebih dahulu sebelum membatalkan perintah kerja.",
+        );
+      }
+      if (activeChildOrders > 0) {
+        throw new Error(
+          "Perintah kerja memiliki order produksi anak yang masih aktif — selesaikan atau batalkan order produksi anak terlebih dahulu.",
+        );
+      }
       const claim = await tx.workOrder.updateMany({
         where: { id: workOrderId, status: "in_progress" },
         data: { status: "cancelled" },
