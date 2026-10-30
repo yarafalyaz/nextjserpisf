@@ -7,7 +7,6 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deletePettyCash } from "@/actions/finance.actions"
 import { formatDate, formatCurrency } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface PettyCashData {
@@ -98,7 +97,6 @@ export function PettyCashTable({ data, toolbar, filters }: PettyCashTableProps) 
       selectable={true}
       toolbar={toolbar}
       filters={filters}
-      onBulkDelete={(ids) => bulkDelete("pettyCash", ids)}
     />
   )
 }

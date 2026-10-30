@@ -7,7 +7,6 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteJournal, postJournal, reverseJournal } from "@/actions/finance.actions"
 import { formatDate, formatReferenceType } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface JournalData {
@@ -142,7 +141,6 @@ export function JournalTable({ data, toolbar, filters }: JournalTableProps) {
       selectable={true}
       toolbar={toolbar}
       filters={filters}
-      onBulkDelete={(ids) => bulkDelete("journal", ids)}
     />
   )
 }

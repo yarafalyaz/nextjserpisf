@@ -7,7 +7,6 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { StatusChip } from "@/components/ui/status-chip"
 import { deleteProductionOrder } from "@/actions/manufacturing.actions"
 import { formatDate } from "@/lib/utils/format"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface ProductionOrder {
@@ -83,7 +82,6 @@ export function ProductionOrderTable({ data, total, page, pageSize, toolbar, fil
       selectable={true}
       toolbar={toolbar}
       filters={filters}
-      onBulkDelete={(ids) => bulkDelete("productionOrder", ids)}
     />
   )
 }

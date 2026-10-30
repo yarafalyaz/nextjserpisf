@@ -6,7 +6,6 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteAssetTransfer } from "@/actions/asset.actions"
 import { formatDate } from "@/lib/utils/format"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface AssetTransferData {
@@ -74,7 +73,6 @@ export function AssetTransferTable({ data, total, page, pageSize }: AssetTransfe
       selectable={true}
       searchColumn="assetName"
       searchPlaceholder="Cari nama aset..."
-      onBulkDelete={(ids) => bulkDelete("assetTransfer", ids)}
     />
   )
 }

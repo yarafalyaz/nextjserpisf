@@ -5,7 +5,6 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteBank } from "@/actions/master.actions"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface Bank {
@@ -63,7 +62,6 @@ export function BankTable({ data, total, page, pageSize }: BankTableProps) {
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama atau kode bank..."
-      onBulkDelete={(ids) => bulkDelete("bank", ids)}
     />
   )
 }

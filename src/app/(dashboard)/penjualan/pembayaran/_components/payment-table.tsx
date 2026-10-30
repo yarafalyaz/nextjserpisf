@@ -6,7 +6,6 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteSalesPayment } from "@/actions/sales.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface SalesPayment {
@@ -83,7 +82,6 @@ export function PaymentTable({ data, total, page, pageSize }: PaymentTableProps)
       selectable={true}
       searchColumn="documentNo"
       searchPlaceholder="Cari no. dokumen atau pelanggan..."
-      onBulkDelete={(ids) => bulkDelete("salesPayment", ids)}
     />
   )
 }

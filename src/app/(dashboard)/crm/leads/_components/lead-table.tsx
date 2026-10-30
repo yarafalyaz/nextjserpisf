@@ -7,6 +7,8 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { BULK_DELETE_PERMISSIONS, type BulkDeleteModel } from "@/lib/auth/bulk-delete-models"
+import { useBulkDeleteSessionUser } from "@/components/ui/data-table-bulk-select"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface LeadData {
@@ -78,7 +80,10 @@ interface LeadTableProps {
   filters?: React.ReactNode
 }
 
+const BULK_MODEL: BulkDeleteModel = "lead"
+
 export function LeadTable({ data, total, page, pageSize, toolbar, filters }: LeadTableProps) {
+  const bulkDeleteUser = useBulkDeleteSessionUser()
   return (
     <DataTable
       data={data}
@@ -88,7 +93,9 @@ export function LeadTable({ data, total, page, pageSize, toolbar, filters }: Lea
       selectable={true}
       toolbar={toolbar}
       filters={filters}
-      onBulkDelete={(ids) => bulkDelete("lead", ids)}
+      onBulkDelete={(ids) => bulkDelete(BULK_MODEL, ids)}
+      bulkDeletePermission={BULK_DELETE_PERMISSIONS[BULK_MODEL]}
+      bulkDeleteUser={bulkDeleteUser}
     />
   )
 }

@@ -5,7 +5,6 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deletePosition } from "@/actions/master.actions"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface Position {
@@ -64,7 +63,6 @@ export function PositionTable({ data, total, page, pageSize }: PositionTableProp
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama jabatan..."
-      onBulkDelete={(ids) => bulkDelete("position", ids)}
     />
   )
 }

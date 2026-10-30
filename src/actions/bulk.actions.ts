@@ -1,139 +1,16 @@
 
 "use server"
 
-import type { PermissionName } from "@/lib/setup/base-data"
+import { BULK_DELETE_PERMISSIONS, BULK_DELETE_REQUIRES_INDIVIDUAL, type BulkDeleteModel } from "@/lib/auth/bulk-delete-models"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
 import { Prisma } from "@prisma/client"
 import { logActivity } from "@/lib/services/activity-log.service"
 
-type ModelName =
-  | "purchaseRequest"
-  | "purchaseOrder"
-  | "goodsReceipt"
-  | "vendorBill"
-  | "vendorPayment"
-  | "purchaseReturn"
-  | "salesQuotation"
-  | "salesOrder"
-  | "deliveryOrder"
-  | "salesInvoice"
-  | "salesPayment"
-  | "salesReturn"
-  | "downPayment"
-  | "customer"
-  | "vendor"
-  | "item"
-  | "itemCategory"
-  | "itemGroup"
-  | "brand"
-  | "warehouse"
-  | "employee"
-  | "department"
-  | "position"
-  | "bank"
-  | "tax"
-  | "currency"
-  | "paymentTerm"
-  | "journal"
-  | "expense"
-  | "expenseCategory"
-  | "pettyCash"
-  | "costCenter"
-  | "leave"
-  | "overtime"
-  | "holiday"
-  | "loan"
-  | "timesheet"
-  | "workSchedule"
-  | "stockAdjustment"
-  | "stockTransfer"
-  | "materialIssue"
-  | "rack"
-  | "rackRow"
-  | "productionOrder"
-  | "workOrder"
-  | "product"
-  | "project"
-  | "assetBrand"
-  | "assetCategory"
-  | "asset"
-  | "assetTransfer"
-  | "vehicleBrand"
-  | "vehicleModel"
-  | "vehicleFitmentRule"
-  | "vehicle"
-  | "appreciation"
-  | "departmentHoliday"
-  | "paymentMethod"
-  | "shippingMethod"
-  | "lead"
-  | "approval"
+type ModelName = BulkDeleteModel
 
-const modelPermissionMap: Record<ModelName, PermissionName> = {
-  purchaseRequest: "delete_purchase_requests",
-  purchaseOrder: "delete_purchase_orders",
-  goodsReceipt: "delete_goods_receipts",
-  vendorBill: "delete_vendor_bills",
-  vendorPayment: "delete_vendor_payments",
-  purchaseReturn: "delete_purchase_returns",
-  salesQuotation: "delete_quotations",
-  salesOrder: "delete_sales_orders",
-  deliveryOrder: "delete_delivery_orders",
-  salesInvoice: "delete_sales_invoices",
-  salesPayment: "delete_sales_payments",
-  salesReturn: "delete_sales_returns",
-  downPayment: "delete_down_payments",
-  customer: "delete_customers",
-  vendor: "delete_vendors",
-  item: "delete_items",
-  itemCategory: "delete_item_categories",
-  itemGroup: "delete_item_groups",
-  brand: "delete_brands",
-  warehouse: "delete_warehouses",
-  employee: "delete_employees",
-  department: "delete_departments",
-  position: "delete_positions",
-  bank: "delete_banks",
-  tax: "delete_taxes",
-  currency: "delete_currencies",
-  paymentTerm: "delete_payment_terms",
-  journal: "delete_journals",
-  expense: "delete_expenses",
-  expenseCategory: "manage_expense_categories",
-  pettyCash: "delete_petty_cash",
-  costCenter: "delete_cost_centers",
-  leave: "delete_leave_requests",
-  overtime: "delete_overtime_requests",
-  holiday: "delete_holidays",
-  loan: "delete_loans",
-  timesheet: "delete_timesheets",
-  workSchedule: "delete_work_schedules",
-  stockAdjustment: "delete_stock_adjustments",
-  stockTransfer: "delete_inventory_transfers",
-  materialIssue: "delete_material_issues",
-  rack: "delete_warehouses",
-  rackRow: "manage_inventory",
-  productionOrder: "delete_production_orders",
-  workOrder: "delete_work_orders",
-  product: "delete_products",
-  project: "delete_projects",
-  assetBrand: "delete_asset_brands",
-  assetCategory: "delete_asset_categories",
-  asset: "delete_assets",
-  assetTransfer: "delete_asset_transfers",
-  vehicleBrand: "delete_vehicle_brands",
-  vehicleModel: "delete_vehicle_models",
-  vehicleFitmentRule: "delete_vehicle_fitments",
-  vehicle: "delete_vehicles",
-  appreciation: "delete_appreciations",
-  departmentHoliday: "delete_holidays",
-  paymentMethod: "delete_payment_methods",
-  shippingMethod: "delete_shipping_methods",
-  lead: "delete_leads",
-  approval: "approve_workflows",
-}
+const modelPermissionMap = BULK_DELETE_PERMISSIONS
 
 // Route to revalidate after a successful bulk delete. `null` means there is no
 // live page for that model (the module was removed from the app), so there is
@@ -223,85 +100,6 @@ const prismaModelAlias: Record<string, string> = {
 }
 
 const BULK_DELETE_MAX = 500
-
-/**
- * Models with financial (GL journal) or stock (FIFO/qtyOnHand) side effects, or
- * a status guard on their single-delete path. Raw bulkDelete bypasses both the
- * per-entity reversal hooks (orphaning GL journals / corrupting stock) AND the
- * status guards that forbid deleting posted/confirmed records. These MUST be
- * deleted one-by-one through their dedicated server actions, which reverse the
- * journal, recompute running balances, undo stock moves, and refuse to delete
- * already-posted records. Pure master/config models are not listed and remain
- * safe for raw bulk delete.
- */
-const BULK_DELETE_REQUIRES_INDIVIDUAL = new Set<ModelName>([
-  // Sales / purchasing — reverse downstream documents and honor state guards
-  "salesQuotation",
-  "salesOrder",
-  "purchaseRequest",
-  "purchaseOrder",
-  // Finance — post GL journals
-  "pettyCash",
-  "expense",
-  "journal",
-  "salesPayment",
-  "vendorPayment",
-  "salesInvoice",
-  "vendorBill",
-  "downPayment",
-  "salesReturn",
-  "purchaseReturn",
-  // Inventory / stock — post stock moves + FIFO layers
-  "goodsReceipt",
-  "materialIssue",
-  "stockAdjustment",
-  "stockTransfer",
-  "deliveryOrder",
-  // Manufacturing / payroll — downstream side effects
-  "productionOrder",
-  "workOrder",
-  "project",
-  "loan",
-  // HR records — preserve employee scope, approval cleanup, and status guards
-  "leave",
-  "overtime",
-  "timesheet",
-  // WorkSchedule deletion refuses while assigned to employees/departments
-  // (M2M cascade would silently detach schedules used by attendance).
-  "workSchedule",
-  // Rack deletion has a reference guard to preserve item and stock locations
-  "rack",
-  "rackRow",
-  // Item group deletion has a reference guard: items.group_id is ON DELETE SET NULL,
-  // so a raw bulk delete would silently detach every item from its group.
-  "itemGroup",
-  // Fixed assets and vehicles — have GL or dependent records guards
-  "asset",
-  "vehicle",
-  // Vehicle catalog — brand/model guards protect product compatibility tags and
-  // the ProductVehicleModel junction. (Variants have no bulk path of their own.)
-  "vehicleBrand",
-  "vehicleModel",
-  // Master/config rows whose single-delete actions refuse while still
-  // referenced (SET NULL / bare-Int / cascade side effects). Raw bulk delete
-  // would silently detach the referencing rows instead of refusing.
-  "assetBrand",
-  "assetCategory",
-  "assetTransfer",
-  "bank",
-  "brand",
-  "costCenter",
-  "department",
-  "employee",
-  "expenseCategory",
-  "itemCategory",
-  "paymentTerm",
-  "position",
-  "tax",
-  // Approval rows are workflow state, not master data: bulk-deleting a
-  // pending approval would erase an in-flight decision with no per-row guard.
-  "approval",
-])
 
 export async function bulkDelete(model: ModelName, ids: number[]) {
   const safeIds = Array.from(new Set(ids.filter((id) => Number.isInteger(id) && id > 0)))

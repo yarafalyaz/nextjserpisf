@@ -6,7 +6,6 @@ import { DataTable } from "@/components/ui/data-table"
 import { StatusChip } from "@/components/ui/status-chip"
 import { formatDate } from "@/lib/utils/format"
 import { APPROVAL_MODEL_LABELS } from "@/lib/constants/approval"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface ApprovalData {
@@ -81,7 +80,6 @@ export function ApprovalTable({ data, total, page, pageSize, filters }: Approval
       ariaLabel="Daftar persetujuan"
       serverPagination={{ total, page, pageSize }}
       filters={filters}
-      onBulkDelete={(ids) => bulkDelete("approval", ids)}
     />
   )
 }

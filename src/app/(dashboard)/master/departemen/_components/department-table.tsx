@@ -5,7 +5,6 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteDepartment } from "@/actions/master.actions"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface Department {
@@ -67,7 +66,6 @@ export function DepartmentTable({ data, total, page, pageSize }: DepartmentTable
       ariaLabel="Daftar departemen"
       selectable={true}
       searchPlaceholder="Cari nama atau kode..."
-      onBulkDelete={(ids) => bulkDelete("department", ids)}
       serverPagination={{ total, page, pageSize }}
       searchParam="cari"
     />

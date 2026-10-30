@@ -3,7 +3,6 @@
 import { Pencil } from "lucide-react"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 import type { ErpColumnDef as ColumnDef } from "@/lib/table"
 
@@ -92,7 +91,6 @@ export function VehicleTable({ data, total, page, pageSize }: { data: VehicleRow
         selectable={true}
         searchColumn="name"
         searchPlaceholder="Cari nama tipe, merek, model, atau varian..."
-        onBulkDelete={(ids) => bulkDelete("vehicle", ids)}
       />
   )
 }

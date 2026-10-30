@@ -5,7 +5,6 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteItemGroup } from "@/actions/master.actions"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface ItemGroup {
@@ -83,7 +82,6 @@ export function ItemGroupTable({ data, total, page, pageSize }: ItemGroupTablePr
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama grup..."
-      onBulkDelete={(ids) => bulkDelete("itemGroup", ids)}
     />
   )
 }

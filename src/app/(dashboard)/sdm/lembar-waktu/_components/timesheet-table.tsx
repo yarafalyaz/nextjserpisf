@@ -7,7 +7,6 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteTimesheet } from "@/actions/hrm.actions"
 import { formatDate } from "@/lib/utils/format"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface Timesheet {
@@ -80,7 +79,6 @@ export function TimesheetTable({ data, total, page, pageSize, showActions = true
       selectable={true}
       searchColumn="employeeName"
       searchPlaceholder="Cari nama karyawan..."
-      onBulkDelete={(ids) => bulkDelete("timesheet", ids)}
     />
   )
 }

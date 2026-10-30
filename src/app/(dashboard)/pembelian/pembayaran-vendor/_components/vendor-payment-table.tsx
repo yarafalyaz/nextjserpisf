@@ -7,7 +7,6 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { confirmVendorPayment, deleteVendorPayment } from "@/actions/purchase.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface VendorPayment {
@@ -94,7 +93,6 @@ export function VendorPaymentTable({ data, total, page, pageSize }: VendorPaymen
       selectable={true}
       searchColumn="documentNo"
       searchPlaceholder="Cari no. dokumen atau pemasok..."
-      onBulkDelete={(ids) => bulkDelete("vendorPayment", ids)}
     />
   )
 }

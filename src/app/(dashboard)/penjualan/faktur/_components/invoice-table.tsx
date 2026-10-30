@@ -6,7 +6,6 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { postInvoice } from "@/actions/sales.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
@@ -100,7 +99,6 @@ export function InvoiceTable({ data, total, page, pageSize }: InvoiceTableProps)
       selectable={true}
       searchColumn="documentNo"
       searchPlaceholder="Cari no. dokumen atau pelanggan..."
-      onBulkDelete={(ids) => bulkDelete("salesInvoice", ids)}
     />
   )
 }

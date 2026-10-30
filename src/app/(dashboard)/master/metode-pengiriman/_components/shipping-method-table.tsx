@@ -6,6 +6,8 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteShippingMethod } from "@/actions/method.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { BULK_DELETE_PERMISSIONS, type BulkDeleteModel } from "@/lib/auth/bulk-delete-models"
+import { useBulkDeleteSessionUser } from "@/components/ui/data-table-bulk-select"
 import { entityEditHref } from "@/lib/utils/entity-url"
 
 interface ShippingMethod {
@@ -55,7 +57,10 @@ const columns = [
   }),
 ]
 
+const BULK_MODEL: BulkDeleteModel = "shippingMethod"
+
 export function ShippingMethodTable({ data, total, page, pageSize }: { data: ShippingMethod[]; total: number; page: number; pageSize: number }) {
+  const bulkDeleteUser = useBulkDeleteSessionUser()
   return (
     <DataTable
       data={data}
@@ -65,7 +70,9 @@ export function ShippingMethodTable({ data, total, page, pageSize }: { data: Shi
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama atau kode..."
-      onBulkDelete={(ids) => bulkDelete("shippingMethod", ids)}
+      onBulkDelete={(ids) => bulkDelete(BULK_MODEL, ids)}
+      bulkDeletePermission={BULK_DELETE_PERMISSIONS[BULK_MODEL]}
+      bulkDeleteUser={bulkDeleteUser}
     />
   )
 }

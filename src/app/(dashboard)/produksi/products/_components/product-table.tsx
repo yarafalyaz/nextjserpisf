@@ -6,6 +6,8 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteProduct } from "@/actions/manufacturing.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { BULK_DELETE_PERMISSIONS, type BulkDeleteModel } from "@/lib/auth/bulk-delete-models"
+import { useBulkDeleteSessionUser } from "@/components/ui/data-table-bulk-select"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface Product {
@@ -52,7 +54,10 @@ interface ProductTableProps {
   pageSize: number
 }
 
+const BULK_MODEL: BulkDeleteModel = "product"
+
 export function ProductTable({ data, total, page, pageSize }: ProductTableProps) {
+  const bulkDeleteUser = useBulkDeleteSessionUser()
   return (
     <DataTable
       data={data}
@@ -62,7 +67,9 @@ export function ProductTable({ data, total, page, pageSize }: ProductTableProps)
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama produk..."
-      onBulkDelete={(ids) => bulkDelete("product", ids)}
+      onBulkDelete={(ids) => bulkDelete(BULK_MODEL, ids)}
+      bulkDeletePermission={BULK_DELETE_PERMISSIONS[BULK_MODEL]}
+      bulkDeleteUser={bulkDeleteUser}
     />
   )
 }

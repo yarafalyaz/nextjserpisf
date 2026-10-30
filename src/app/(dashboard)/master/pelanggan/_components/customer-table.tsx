@@ -7,6 +7,8 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { StatusChip } from "@/components/ui/status-chip"
 import { deleteCustomer } from "@/actions/master.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { BULK_DELETE_PERMISSIONS, type BulkDeleteModel } from "@/lib/auth/bulk-delete-models"
+import { useBulkDeleteSessionUser } from "@/components/ui/data-table-bulk-select"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface Customer {
@@ -67,7 +69,10 @@ interface CustomerTableProps {
   pageSize: number
 }
 
+const BULK_MODEL: BulkDeleteModel = "customer"
+
 export function CustomerTable({ data, total, page, pageSize }: CustomerTableProps) {
+  const bulkDeleteUser = useBulkDeleteSessionUser()
   return (
     <DataTable
       data={data}
@@ -77,7 +82,9 @@ export function CustomerTable({ data, total, page, pageSize }: CustomerTableProp
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama, kode, atau telepon..."
-      onBulkDelete={(ids) => bulkDelete("customer", ids)}
+      onBulkDelete={(ids) => bulkDelete(BULK_MODEL, ids)}
+      bulkDeletePermission={BULK_DELETE_PERMISSIONS[BULK_MODEL]}
+      bulkDeleteUser={bulkDeleteUser}
     />
   )
 }

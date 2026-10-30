@@ -5,7 +5,6 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteRackRow } from "@/actions/inventory.actions"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { formatDate } from "@/lib/utils/format"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
@@ -87,7 +86,6 @@ export function RackRowTable({ data, total, page, pageSize }: RackRowTableProps)
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama atau kode baris rak..."
-      onBulkDelete={(ids) => bulkDelete("rackRow", ids)}
       initialColumnVisibility={{ createdAt: false }}
     />
   )

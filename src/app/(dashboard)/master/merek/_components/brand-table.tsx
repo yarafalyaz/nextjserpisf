@@ -5,7 +5,6 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteBrand } from "@/actions/master.actions"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface Brand {
@@ -86,7 +85,6 @@ export function BrandTable({ data, total, page, pageSize }: BrandTableProps) {
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama merek..."
-      onBulkDelete={(ids) => bulkDelete("brand", ids)}
     />
   )
 }

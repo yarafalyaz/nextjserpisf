@@ -6,6 +6,8 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteVehicleFitment } from "@/actions/vehicle-fitment.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { BULK_DELETE_PERMISSIONS, type BulkDeleteModel } from "@/lib/auth/bulk-delete-models"
+import { useBulkDeleteSessionUser } from "@/components/ui/data-table-bulk-select"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 const RESULT_LABEL: Record<string, string> = {
@@ -116,7 +118,10 @@ interface VehicleFitmentTableProps {
   pageSize: number
 }
 
+const BULK_MODEL: BulkDeleteModel = "vehicleFitmentRule"
+
 export function VehicleFitmentTable({ data, total, page, pageSize }: VehicleFitmentTableProps) {
+  const bulkDeleteUser = useBulkDeleteSessionUser()
   return (
     <DataTable
       data={data}
@@ -124,7 +129,9 @@ export function VehicleFitmentTable({ data, total, page, pageSize }: VehicleFitm
       ariaLabel="Daftar aturan kompatibilitas kendaraan"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
-      onBulkDelete={(ids) => bulkDelete("vehicleFitmentRule", ids)}
+      onBulkDelete={(ids) => bulkDelete(BULK_MODEL, ids)}
+      bulkDeletePermission={BULK_DELETE_PERMISSIONS[BULK_MODEL]}
+      bulkDeleteUser={bulkDeleteUser}
     />
   )
 }

@@ -28,7 +28,7 @@ describe("DataTable toolbar target sentuh 44px (360-430px)", () => {
   })
 
   it("tombol Hapus Terpilih setinggi 44px (h-11, bukan size-sm h-8)", () => {
-    const idx = src.indexOf("Hapus Terpilih")
+    const idx = src.lastIndexOf('"Hapus Terpilih"')
     expect(idx, "tombol Hapus Terpilih tidak ditemukan").toBeGreaterThan(0)
     const window = src.slice(Math.max(0, idx - 300), idx)
     expect(window).toContain('className="h-11"')

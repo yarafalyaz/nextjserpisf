@@ -8,7 +8,6 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteEmployeeLoan } from "@/actions/hrm.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface LoanData {
@@ -107,7 +106,6 @@ export function LoanTable({ data, total, page, pageSize, toolbar, filters, showA
       selectable={!readOnly}
       toolbar={toolbar}
       filters={filters}
-      onBulkDelete={readOnly ? undefined : (ids) => bulkDelete("loan", ids)}
     />
   )
 }

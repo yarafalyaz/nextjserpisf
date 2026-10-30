@@ -6,6 +6,8 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deletePaymentMethod } from "@/actions/method.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { BULK_DELETE_PERMISSIONS, type BulkDeleteModel } from "@/lib/auth/bulk-delete-models"
+import { useBulkDeleteSessionUser } from "@/components/ui/data-table-bulk-select"
 import { entityEditHref } from "@/lib/utils/entity-url"
 
 interface PaymentMethod {
@@ -55,7 +57,10 @@ const columns = [
   }),
 ]
 
+const BULK_MODEL: BulkDeleteModel = "paymentMethod"
+
 export function PaymentMethodTable({ data, total, page, pageSize }: { data: PaymentMethod[]; total: number; page: number; pageSize: number }) {
+  const bulkDeleteUser = useBulkDeleteSessionUser()
   return (
     <DataTable
       data={data}
@@ -65,7 +70,9 @@ export function PaymentMethodTable({ data, total, page, pageSize }: { data: Paym
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama atau kode..."
-      onBulkDelete={(ids) => bulkDelete("paymentMethod", ids)}
+      onBulkDelete={(ids) => bulkDelete(BULK_MODEL, ids)}
+      bulkDeletePermission={BULK_DELETE_PERMISSIONS[BULK_MODEL]}
+      bulkDeleteUser={bulkDeleteUser}
     />
   )
 }

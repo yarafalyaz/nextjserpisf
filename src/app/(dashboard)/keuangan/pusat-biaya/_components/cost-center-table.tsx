@@ -6,7 +6,6 @@ import { ChevronRight } from "lucide-react"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteCostCenter } from "@/actions/finance.actions"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { cn } from "@/lib/utils"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
@@ -86,7 +85,6 @@ export function CostCenterTable({ data, total, page, pageSize }: CostCenterTable
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari kode atau nama..."
-      onBulkDelete={(ids) => bulkDelete("costCenter", ids)}
     />
   )
 }

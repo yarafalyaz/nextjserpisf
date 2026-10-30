@@ -55,6 +55,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { buildSearchParamsString, buildServerSearchUrl } from "@/components/ui/data-table-utils"
 import { isActionsColumnId, TableMobileCards } from "@/components/ui/table-mobile-cards"
+import { canBulkDelete, type BulkDeleteSessionUser } from "@/components/ui/data-table-bulk-select"
 
 /** Heuristic: is this an actions/buttons column (kept visible on mobile)? */
 function isActionsColumn(id: string): boolean {
@@ -81,6 +82,26 @@ interface DataTableProps<TData extends RowData> {
   onSelectionChange?: (selectedIds: Set<string>) => void
   bulkActions?: React.ReactNode
   onBulkDelete?: (ids: number[]) => Promise<{ success: boolean; message?: string }>
+  /**
+   * Permission yang dituntut server untuk hapus massal model ini — diambil
+   * dari `BULK_DELETE_PERMISSIONS` (daftar bersama server/client di
+   * `src/lib/auth/bulk-delete-models.ts`), BUKAN string bebas: tombol
+   * "Hapus Terpilih" hanya tampil untuk super_admin atau pemegang
+   * permission itu. Tanpa prop ini kontrol tidak digerbang (perilaku lama
+   * untuk pemanggil yang belum bermigrasi). Model di
+   * `BULK_DELETE_REQUIRES_INDIVIDUAL` tidak boleh meneruskan prop ini sama
+   * sekali — server selalu menolaknya dan kontrolnya tak pernah berhasil.
+   */
+  bulkDeletePermission?: string
+  /**
+   * Pengguna sesi untuk gerbang `bulkDeletePermission`, diambil pemanggil
+   * lewat `useBulkDeleteSessionUser()`. DataTable sengaja tidak memanggil
+   * useSession sendiri: hook itu throw di luar SessionProvider (dev) dan
+   * DataTable juga dirender halaman/test tanpa provider. Hanya wajib bila
+   * `bulkDeletePermission` diteruskan; tanpa keduanya tombol tampil seperti
+   * perilaku lama.
+   */
+  bulkDeleteUser?: BulkDeleteSessionUser | null
   /** Column id to attach the built-in search box to. When set, a filter input is shown in the toolbar. */
   searchColumn?: string
   /** Placeholder for the built-in search box. */
@@ -129,6 +150,8 @@ export function DataTable<TData extends { id: number | string }>({
   onSelectionChange,
   bulkActions,
   onBulkDelete,
+  bulkDeletePermission,
+  bulkDeleteUser,
   searchColumn,
   searchPlaceholder = "Cari...",
   searchParam = "cari",
@@ -148,6 +171,10 @@ export function DataTable<TData extends { id: number | string }>({
   const [isDeleting, setIsDeleting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [pendingDeleteIds, setPendingDeleteIds] = useState<number[]>([])
+  // Gerbang izin bulk delete murni dari prop: sesi diambil pemanggil, bukan
+  // di sini — useSession throw di luar SessionProvider (dev) dan DataTable
+  // juga dirender tanpa provider.
+  const showBulkDelete = canBulkDelete(bulkDeleteUser, bulkDeletePermission)
 
   // Server-side pagination helpers
   const isServer = Boolean(serverPagination)
@@ -408,10 +435,10 @@ export function DataTable<TData extends { id: number | string }>({
         )}
 
         {/* Bulk action bar (shown when rows are selected) */}
-        {selectedCount > 0 && (bulkActions || onBulkDelete) && (
+        {selectedCount > 0 && (bulkActions || (onBulkDelete && showBulkDelete)) && (
           <div className="mb-2 flex items-center gap-3 rounded-md border bg-muted/50 px-4 py-2">
             <span className="text-sm font-medium">{selectedCount} data dipilih</span>
-            {onBulkDelete && (
+            {onBulkDelete && showBulkDelete && (
               <Button variant="destructive" className="h-11" onClick={handleBulkDelete} disabled={isDeleting}>
                 <Trash2 className="size-3" aria-hidden="true" /> {isDeleting ? "Menghapus..." : "Hapus Terpilih"}
               </Button>

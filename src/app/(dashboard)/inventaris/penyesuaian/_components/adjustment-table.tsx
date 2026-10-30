@@ -7,7 +7,6 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { StatusChip } from "@/components/ui/status-chip"
 import { deleteStockAdjustment } from "@/actions/inventory.actions"
 import { formatDate } from "@/lib/utils/format"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface AdjustmentItem {
@@ -104,7 +103,6 @@ export function AdjustmentTable({ data, total, page, pageSize, toolbar, filters 
       selectable={true}
       toolbar={toolbar}
       filters={filters}
-      onBulkDelete={(ids) => bulkDelete("stockAdjustment", ids)}
     />
   )
 }

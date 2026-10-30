@@ -5,7 +5,6 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deletePaymentTerm } from "@/actions/master.actions"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface PaymentTerm {
@@ -77,7 +76,6 @@ export function PaymentTermTable({ data, total, page, pageSize }: PaymentTermTab
       selectable={true}
       searchColumn="code"
       searchPlaceholder="Cari nama atau kode termin..."
-      onBulkDelete={(ids) => bulkDelete("paymentTerm", ids)}
     />
   )
 }

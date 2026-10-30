@@ -8,7 +8,6 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { deleteEmployee } from "@/actions/master.actions"
 import { getInitials } from "@/lib/utils/format"
 import { Avatar, AvatarFallback } from "@/components/ui/shadcn/avatar"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 import { employmentStatusLabel } from "@/lib/reports/employee-lifecycle"
 
@@ -110,7 +109,6 @@ export function EmployeeTable({ data, total, page, pageSize }: EmployeeTableProp
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama, NIP, atau telepon..."
-      onBulkDelete={(ids) => bulkDelete("employee", ids)}
     />
   )
 }

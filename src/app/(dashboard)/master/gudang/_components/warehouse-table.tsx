@@ -6,6 +6,8 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteWarehouse } from "@/actions/master.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { BULK_DELETE_PERMISSIONS, type BulkDeleteModel } from "@/lib/auth/bulk-delete-models"
+import { useBulkDeleteSessionUser } from "@/components/ui/data-table-bulk-select"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface Warehouse {
@@ -64,7 +66,10 @@ interface WarehouseTableProps {
   pageSize: number
 }
 
+const BULK_MODEL: BulkDeleteModel = "warehouse"
+
 export function WarehouseTable({ data, total, page, pageSize }: WarehouseTableProps) {
+  const bulkDeleteUser = useBulkDeleteSessionUser()
   return (
     <DataTable
       data={data}
@@ -74,7 +79,9 @@ export function WarehouseTable({ data, total, page, pageSize }: WarehouseTablePr
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama atau kode..."
-      onBulkDelete={(ids) => bulkDelete("warehouse", ids)}
+      onBulkDelete={(ids) => bulkDelete(BULK_MODEL, ids)}
+      bulkDeletePermission={BULK_DELETE_PERMISSIONS[BULK_MODEL]}
+      bulkDeleteUser={bulkDeleteUser}
     />
   )
 }

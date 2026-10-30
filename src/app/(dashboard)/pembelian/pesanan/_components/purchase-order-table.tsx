@@ -7,7 +7,6 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deletePurchaseOrder } from "@/actions/purchase.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface PurchaseOrder {
@@ -86,7 +85,6 @@ export function PurchaseOrderTable({ data, total, page, pageSize, toolbar, filte
       selectable={true}
       toolbar={toolbar}
       filters={filters}
-      onBulkDelete={(ids) => bulkDelete("purchaseOrder", ids)}
     />
   )
 }

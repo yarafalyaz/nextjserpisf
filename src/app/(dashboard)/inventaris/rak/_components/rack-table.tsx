@@ -5,7 +5,6 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteRack } from "@/actions/inventory.actions"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface Warehouse {
@@ -75,7 +74,6 @@ export function RackTable({ data, total, page, pageSize }: RackTableProps) {
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama rak..."
-      onBulkDelete={(ids) => bulkDelete("rack", ids)}
     />
   )
 }

@@ -5,7 +5,6 @@ import { DataTable } from "@/components/ui/data-table"
 import { createColumnHelper } from "@/lib/table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteExpenseCategory } from "@/actions/expense-category.actions"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface CategoryRow {
@@ -69,7 +68,6 @@ export function CategoryTable({ data, total, page, pageSize }: { data: CategoryR
       columns={columns}
       ariaLabel="Kategori pengeluaran"
       serverPagination={{ total, page, pageSize }}
-      onBulkDelete={(ids) => bulkDelete("expenseCategory", ids)}
     />
   )
 }

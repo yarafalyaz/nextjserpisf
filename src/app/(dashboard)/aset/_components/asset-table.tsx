@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/shadcn/badge"
 import { formatCurrency } from "@/lib/utils/format"
 import { DataTable } from "@/components/ui/data-table"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 import { AssetUseStatus } from "./asset-use-status"
 import type { ErpColumnDef as ColumnDef } from "@/lib/table"
@@ -142,7 +141,6 @@ export function AssetTable({
       selectable={true}
       searchColumn="code"
       searchPlaceholder="Cari nama, kode, atau lokasi..."
-      onBulkDelete={(ids) => bulkDelete("asset", ids)}
     />
   )
 }

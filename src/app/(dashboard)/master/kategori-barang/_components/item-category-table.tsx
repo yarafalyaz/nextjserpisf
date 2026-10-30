@@ -5,7 +5,6 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteItemCategory } from "@/actions/master.actions"
-import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface ItemCategory {
@@ -63,7 +62,6 @@ export function ItemCategoryTable({ data, total, page, pageSize }: ItemCategoryT
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama kategori..."
-      onBulkDelete={(ids) => bulkDelete("itemCategory", ids)}
     />
   )
 }

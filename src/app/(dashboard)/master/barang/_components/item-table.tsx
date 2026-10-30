@@ -9,6 +9,8 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteItem } from "@/actions/master.actions"
 import { formatCurrency } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { BULK_DELETE_PERMISSIONS, type BulkDeleteModel } from "@/lib/auth/bulk-delete-models"
+import { useBulkDeleteSessionUser } from "@/components/ui/data-table-bulk-select"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface Item {
@@ -137,7 +139,10 @@ interface ItemTableProps {
   filters?: React.ReactNode
 }
 
+const BULK_MODEL: BulkDeleteModel = "item"
+
 export function ItemTable({ data, total, page, pageSize, toolbar, filters }: ItemTableProps) {
+  const bulkDeleteUser = useBulkDeleteSessionUser()
   return (
     <DataTable
       data={data}
@@ -147,7 +152,9 @@ export function ItemTable({ data, total, page, pageSize, toolbar, filters }: Ite
       selectable={true}
       toolbar={toolbar}
       filters={filters}
-      onBulkDelete={(ids) => bulkDelete("item", ids)}
+      onBulkDelete={(ids) => bulkDelete(BULK_MODEL, ids)}
+      bulkDeletePermission={BULK_DELETE_PERMISSIONS[BULK_MODEL]}
+      bulkDeleteUser={bulkDeleteUser}
     />
   )
 }
