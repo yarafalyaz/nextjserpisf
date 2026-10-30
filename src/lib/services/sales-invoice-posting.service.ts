@@ -90,12 +90,18 @@ export async function reverseSalesInvoicePostingTx(
 
     const allocations: Array<{ batchNumber: string | null; warehouseId: number | null; qty: number }> = []
     if (typeof tx.inventoryLayer.findMany === "function") {
+      // STOK-01/STOK-04: atribusi batch WAJIB berasal dari layer yang
+      // benar-benar dikonsumsi OUT move ini. Layer ditandai stockMoveId =
+      // move yang menciptakannya; konsumsi FIFO menaikkan qtyOut layer itu
+      // sendiri. Mengambil SEMUA layer item+gudang qtyOut>0 memulihkan lot
+      // milik penjualan lain (identitas lot tertukar antar-faktur).
       const sourceLayers = await tx.inventoryLayer.findMany({
         where: {
           itemId: m.itemId,
           ...(m.warehouseId != null ? { warehouseId: m.warehouseId } : {}),
           qtyOut: { gt: 0 },
           batchNumber: { not: null },
+          stockMoveId: m.id,
         },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         select: { batchNumber: true, warehouseId: true, qtyOut: true },

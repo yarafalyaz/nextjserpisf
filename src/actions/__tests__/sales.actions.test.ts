@@ -1155,6 +1155,19 @@ describe("Sales Return Actions", () => {
     expect(arg.data.taxReturnNoteDate).toEqual(new Date(Date.UTC(2026, 6, 1)))
   })
 
+  it("STOK-01: cost snapshot retur dari layer terkonsumsi faktur asal, bukan master cost", async () => {
+    mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 1, cost: 120_000, price: 200_000 }])
+    mocks.prismaMock.stockMove.findMany.mockResolvedValueOnce([{ id: 42, itemId: 1 }])
+    mocks.prismaMock.inventoryLayer.findMany.mockResolvedValueOnce([
+      { stockMoveId: 42, qtyOut: 10, unitCost: 80_000 },
+    ])
+    const items = JSON.stringify([{ itemId: 1, qty: 2 }])
+    const res = await actions.createSalesReturn(fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesReturn.create.mock.calls.at(-1)![0]
+    expect(arg.data.items.create[0].cost).toBe(80_000)
+  })
+
   it("createSalesReturn tanpa nota retur pajak menulis null (masa jatuh ke tanggal retur)", async () => {
     const items = JSON.stringify([{ itemId: 1, qty: 1 }])
     const res = await actions.createSalesReturn(fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))

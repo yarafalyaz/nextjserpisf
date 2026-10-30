@@ -2320,7 +2320,37 @@ export async function createSalesReturn(formData: FormData) {
   }
   const factorRows = await Promise.all(returnItemIds.map(async (itemId) => [itemId, await toBaseFactor(prisma, itemId, invoiceUomByItem.get(itemId))] as const))
   const factorByItem = new Map(factorRows)
-  const returnCostMap = new Map([...baseReturnCostMap].map(([itemId, cost]) => [itemId, cost * (factorByItem.get(itemId) ?? 1)]))
+  // STOK-01: biaya restock retur tertaut faktur = biaya layer yang
+  // benar-benar dikonsumsi penjualan asal (qtyOut layer sumber OUT move
+  // faktur), BUKAN Item.cost berjalan. Master cost hanya fallback retur
+  // tanpa faktur / tanpa layer sumber. Per UOM faktur (sama basis returnCostMap).
+  const soldCostByItem = new Map<number, number>()
+  if (invoiceId && returnItemIds.length > 0) {
+    const outMoves = await prisma.stockMove.findMany({
+      where: { referenceType: "SalesInvoice", referenceId: invoiceId, impact: "OUT", status: "posted", itemId: { in: returnItemIds } },
+      select: { id: true, itemId: true },
+    })
+    if (outMoves.length > 0) {
+      const consumedLayers = await prisma.inventoryLayer.findMany({
+        where: { stockMoveId: { in: outMoves.map((m) => m.id) }, qtyOut: { gt: 0 } },
+        select: { stockMoveId: true, qtyOut: true, unitCost: true },
+      })
+      const moveItemById = new Map(outMoves.map((m) => [m.id, m.itemId]))
+      const aggByItem = new Map<number, { qty: number; value: number }>()
+      for (const layer of consumedLayers) {
+        const itemId = moveItemById.get(layer.stockMoveId)
+        if (itemId === undefined) continue
+        const agg = aggByItem.get(itemId) ?? { qty: 0, value: 0 }
+        agg.qty += Number(layer.qtyOut)
+        agg.value += Number(layer.qtyOut) * Number(layer.unitCost)
+        aggByItem.set(itemId, agg)
+      }
+      for (const [itemId, agg] of aggByItem) {
+        if (agg.qty > 0) soldCostByItem.set(itemId, Math.round((agg.value / agg.qty) * 100) / 100)
+      }
+    }
+  }
+  const returnCostMap = new Map([...baseReturnCostMap].map(([itemId, cost]) => [itemId, (soldCostByItem.get(itemId) ?? cost) * (factorByItem.get(itemId) ?? 1)]))
   const masterPriceMap = new Map([...baseMasterPriceMap].map(([itemId, price]) => [itemId, price * (factorByItem.get(itemId) ?? 1)]))
   // Unit prices and costs are stored per invoice UoM; stock quantities/costs use base UoM.
   const resolvePrice = (itemId: number) =>
@@ -3637,7 +3667,35 @@ export async function updateSalesReturn(id: number, formData: FormData) {
   }
   const updFactorRows = await Promise.all(updReturnIds.map(async (itemId) => [itemId, await toBaseFactor(prisma, itemId, updInvoiceUomByItem.get(itemId))] as const))
   const updFactorByItem = new Map(updFactorRows)
-  const updReturnCostMap = new Map([...baseUpdReturnCostMap].map(([itemId, cost]) => [itemId, cost * (updFactorByItem.get(itemId) ?? 1)]))
+  // STOK-01: biaya restock dari layer terkonsumsi penjualan asal, bukan
+  // Item.cost berjalan (sama dengan createSalesReturn).
+  const updSoldCostByItem = new Map<number, number>()
+  if (updInvoiceId && updReturnIds.length > 0) {
+    const outMoves = await prisma.stockMove.findMany({
+      where: { referenceType: "SalesInvoice", referenceId: updInvoiceId, impact: "OUT", status: "posted", itemId: { in: updReturnIds } },
+      select: { id: true, itemId: true },
+    })
+    if (outMoves.length > 0) {
+      const consumedLayers = await prisma.inventoryLayer.findMany({
+        where: { stockMoveId: { in: outMoves.map((m) => m.id) }, qtyOut: { gt: 0 } },
+        select: { stockMoveId: true, qtyOut: true, unitCost: true },
+      })
+      const moveItemById = new Map(outMoves.map((m) => [m.id, m.itemId]))
+      const aggByItem = new Map<number, { qty: number; value: number }>()
+      for (const layer of consumedLayers) {
+        const itemId = moveItemById.get(layer.stockMoveId)
+        if (itemId === undefined) continue
+        const agg = aggByItem.get(itemId) ?? { qty: 0, value: 0 }
+        agg.qty += Number(layer.qtyOut)
+        agg.value += Number(layer.qtyOut) * Number(layer.unitCost)
+        aggByItem.set(itemId, agg)
+      }
+      for (const [itemId, agg] of aggByItem) {
+        if (agg.qty > 0) updSoldCostByItem.set(itemId, Math.round((agg.value / agg.qty) * 100) / 100)
+      }
+    }
+  }
+  const updReturnCostMap = new Map([...baseUpdReturnCostMap].map(([itemId, cost]) => [itemId, (updSoldCostByItem.get(itemId) ?? cost) * (updFactorByItem.get(itemId) ?? 1)]))
   const updMasterPriceMap = new Map([...baseUpdMasterPriceMap].map(([itemId, price]) => [itemId, price * (updFactorByItem.get(itemId) ?? 1)]))
   const resolveUpdPrice = (itemId: number) =>
     updInvoicePriceMap.get(itemId) ?? (updMasterPriceMap.get(itemId) || updReturnCostMap.get(itemId) || 0)
@@ -3661,6 +3719,11 @@ export async function updateSalesReturn(id: number, formData: FormData) {
   // (its existing rows are about to be deleted/replaced; counting them would
   // double-count).
   const salesReturn = await prisma.$transaction(async (tx) => {
+    // STOK-11: kunci baris retur SEBELUM item dihapus — tanpa lock, update
+    // konkuren dengan complete dapat menimpa transisi terminal.
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM sales_returns WHERE id = ${id} FOR UPDATE`
+    }
     if (updInvoiceId) {
       await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${updInvoiceId} FOR UPDATE`
 

@@ -221,3 +221,22 @@ describe("reverseSalesInvoicePostingTx", () => {
     expect(salesPaymentFindMany).not.toHaveBeenCalled()
   })
 })
+
+describe("reverseSalesInvoicePostingTx — atribusi batch per move (STOK-04)", () => {
+  it("query layer sumber dibatasi stockMoveId move yang di-void", async () => {
+    stockMoveFindMany.mockResolvedValue([
+      { id: 42, itemId: 10, warehouseId: 2, qty: 5, cost: 1000 },
+    ])
+    inventoryLayerFindMany.mockResolvedValue([
+      { batchNumber: "LOT-B", warehouseId: 2, qtyOut: 5 },
+    ])
+    await reverseSalesInvoicePostingTx(client as never, 7)
+    expect(inventoryLayerFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ stockMoveId: 42, itemId: 10 }),
+      }),
+    )
+    const layerArg = inventoryLayerCreateMany.mock.calls.at(-1)?.[0]
+    expect(JSON.stringify(layerArg)).toContain("LOT-B")
+  })
+})
