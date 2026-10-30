@@ -63,6 +63,7 @@ const mocks = vi.hoisted(() => {
     prismaMock,
     revalidateMock: vi.fn(),
     logActivityMock: vi.fn(),
+    getSystemSettingsMock: vi.fn().mockResolvedValue({ enableAutoCustomerCode: true }),
   }
 })
 
@@ -72,7 +73,7 @@ vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }))
 vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: mocks.logActivityMock }))
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn().mockResolvedValue("DOC-001") }))
-vi.mock("@/lib/utils/settings", () => ({ getSystemSettings: vi.fn().mockResolvedValue({ enableAutoCustomerCode: true }) }))
+vi.mock("@/lib/utils/settings", () => ({ getSystemSettings: (...a: any) => mocks.getSystemSettingsMock(...a) }))
 vi.mock("bcryptjs", () => {
   const m = {
     hash: vi.fn().mockResolvedValue("hash"),
@@ -423,6 +424,47 @@ describe("Warehouse Actions", () => {
   it("deleteWarehouse succeeds", async () => {
     const res = await actions.deleteWarehouse(1)
     expect(res?.success).toBe(true)
+  })
+})
+
+describe("Warehouse kode unik: tabrakan dilaporkan bisa ditindak, bukan P2002 mentah", () => {
+  it("createWarehouse: kode manual sudah dipakai gudang aktif -> ditolak sebelum create", async () => {
+    // Manual code only survives when auto-code is off; without this the
+    // action overwrites the submitted code with an auto-generated one.
+    mocks.getSystemSettingsMock.mockResolvedValue({ enableAutoWarehouseCode: false })
+    mocks.prismaMock.warehouse.findFirst.mockImplementation(async (args: any) =>
+      args?.where?.code === "WH-0001" && args?.where?.deletedAt === null ? { id: 9 } : null,
+    )
+    const res = await actions.createWarehouse(fdMap({ name: "Gudang Baru", code: "WH-0001" }))
+    expect(res?.success).toBe(false)
+    if (res && !res.success) expect(res.error).toContain("WH-0001")
+    expect(mocks.prismaMock.warehouse.create).not.toHaveBeenCalled()
+  })
+
+  it("createWarehouse: balapan lolos cek, create menolak P2002 code -> pesan persahabatan", async () => {
+    mocks.prismaMock.warehouse.create.mockRejectedValueOnce({
+      code: "P2002",
+      meta: { target: ["code"] },
+    })
+    const res = await actions.createWarehouse(fdMap({ name: "Gudang Baru", code: "WH-0002" }))
+    expect(res?.success).toBe(false)
+    if (res && !res.success) {
+      expect(res.error).toContain("sudah dipakai")
+      expect(res.error).not.toContain("P2002")
+    }
+  })
+
+  it("updateWarehouse: kode diubah menabrak gudang lain (P2002) -> pesan persahabatan", async () => {
+    mocks.prismaMock.warehouse.update.mockRejectedValueOnce({
+      code: "P2002",
+      meta: { target: ["code"] },
+    })
+    const res = await actions.updateWarehouse(1, fdMap({ name: "Gudang", code: "WH-0009" }))
+    expect(res?.success).toBe(false)
+    if (res && !res.success) {
+      expect(res.error).toContain("sudah dipakai")
+      expect(res.error).not.toContain("P2002")
+    }
   })
 })
 

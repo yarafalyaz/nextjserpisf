@@ -879,6 +879,25 @@ export async function updateItem(itemId: number, formData: FormData) {
 
 // ==================== WAREHOUSE ACTIONS ====================
 
+/**
+ * Tabrakan unik kode gudang pada create/update? `code` unik di DB
+ * (`warehouses_code_key`); slug dihitung server lewat `nextSlug` dan tidak
+ * ditabrakkan klien, jadi satu-satunya target unik yang bisa ditolak P2002
+ * di sini adalah kode. Pesan DB mentah tidak boleh sampai ke pengguna.
+ */
+function isWarehouseCodeConflict(e: unknown): boolean {
+  const err = e as {
+    code?: string;
+    meta?: { target?: string[] };
+    message?: string;
+  };
+  return (
+    err?.code === "P2002" &&
+    ((Array.isArray(err?.meta?.target) && err.meta.target.includes("code")) ||
+      String(err?.message || "").includes("warehouses_code_key"))
+  );
+}
+
 export async function createWarehouse(formData: FormData) {
   try {
     await requirePermission("create_warehouses");
@@ -934,11 +953,32 @@ export async function createWarehouse(formData: FormData) {
       }
     }
 
+    // Cek kode terpakai di muka: tabrakan kode manual dilaporkan sebagai
+    // pesan yang bisa ditindak, bukan pesan unik-mentah DB dari catch luar.
+    // Baris ter-soft-delete dikecualikan — kodenya dibebaskan blok di atas.
+    const autoCode = settings.enableAutoWarehouseCode !== false || !v.code;
+    if (code) {
+      const usedBy = await prisma.warehouse.findFirst({
+        where: { code, deletedAt: null },
+        select: { id: true },
+      });
+      if (usedBy) {
+        return {
+          success: false,
+          error: autoCode
+            ? "Kode gudang hasil generate bertabrakan dengan data yang sudah ada — silakan coba simpan lagi."
+            : `Kode gudang "${code}" sudah dipakai gudang lain.`,
+        };
+      }
+    }
+
+    // `code` adalah kolom NOT NULL: mode auto selalu menghasilkan kode,
+    // mode manual tanpa kode memakai string kosong (konvensi existing).
     const warehouse = await prisma.warehouse.create({
       data: {
         name: v.name,
         slug: await nextSlug("warehouse", v.name),
-        code,
+        code: code ?? "",
         address: v.address ?? null,
         isActive: true,
       },
@@ -950,6 +990,14 @@ export async function createWarehouse(formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createWarehouse]", getErrorMessage(e) || e);
+    // Balapan dua simpan konkuren bisa lolos cek di muka dan menabrak
+    // constraint unik di DB — perlakukan sama dengan tabrakan terdeteksi.
+    if (isWarehouseCodeConflict(e)) {
+      return {
+        success: false,
+        error: "Kode gudang sudah dipakai gudang lain.",
+      };
+    }
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
@@ -978,6 +1026,14 @@ export async function updateWarehouse(warehouseId: number, formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateWarehouse]", getErrorMessage(e) || e);
+    // Kode diubah menabrak gudang lain: pesan yang bisa ditindak, bukan
+    // pesan unik-mentah DB. Kode sendiri lolos constraint apa adanya.
+    if (isWarehouseCodeConflict(e)) {
+      return {
+        success: false,
+        error: "Kode gudang sudah dipakai gudang lain.",
+      };
+    }
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
