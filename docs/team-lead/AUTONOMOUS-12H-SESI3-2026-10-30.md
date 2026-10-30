@@ -52,6 +52,14 @@ Prioritas CONFIRMED HIGH (uang, stok, scope, data hilang).
 ci:quick penuh; update checkpoint akhir; commit docs lokal.
 
 ## Log
+- 2026-10-31 (kelanjutan): R6WN-09 sisa ditutup `69faeed37` — task
+  low-stock/warehouse/overdue/late-checkin di `/api/cron` generik kini
+  lewat varian IfNew (dedupe per (admin, judul) sejak awal hari, admin
+  ter-resolve sekali); R6WN-10 sisa ditutup `c22a2aa09` — body berupa
+  satu path route tunggal menjadi link "Buka dokumen terkait" di
+  halaman + dropdown (helper `notificationBodyHref`, tanpa migrasi;
+  ponytail mencatat upgrade ke kolom URL bila perlu). WORKFLOW-NOTIF
+  Round 6 kini tuntas semua entri.
 - Sesi 3 dimulai. HEAD 616733668, tree bersih, 123 commit lokal di
   atas origin/main. MIGRATION_CHECK_URL unset (scratch DB lokal akan
   dibuat sendiri untuk check-migrations). Dev app + DB Docker sehat.

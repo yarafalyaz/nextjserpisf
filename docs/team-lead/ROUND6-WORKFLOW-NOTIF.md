@@ -169,7 +169,7 @@ transaksional, antrean notifikasi, retry terjadwal, delivery log, atau deep-link
 - Dampak lanjutan: `now` dibekukan pada mount (`:24`), jadi label “x menit lalu” tidak menua selama
   komponen hidup.
 
-## R6WN-09 — MEDIUM · CONFIRMED — Dedupe cron harian berbasis judul + “recipient mana pun” menahan penerima baru; cron generik tanpa dedupe dapat mengirim spam dobel bila dijadwalkan eksternal
+## R6WN-09 — MEDIUM · CONFIRMED · SELESAI (`e1b157d2` + `69faeed37`) — Dedupe cron harian berbasis judul + “recipient mana pun” menahan penerima baru; cron generik tanpa dedupe dapat mengirim spam dobel bila dijadwalkan eksternal
 
 - Lokasi: `src/lib/services/notification.service.ts:111-176`;
   `src/app/api/cron/daily-notifications/route.ts:90-122`;
@@ -189,7 +189,7 @@ transaksional, antrean notifikasi, retry terjadwal, delivery log, atau deep-link
 - Tidak ada unique dedupe key. Komentar service sendiri mengakui race dua run paralel dengan judul sama
   dapat sama-sama lolos (`notification.service.ts:104-110`).
 
-## R6WN-10 — LOW · CONFIRMED — Halaman `/notifikasi` menghitung “belum dibaca” hanya dari 50 notifikasi terbaru dan body path tidak menjadi link
+## R6WN-10 — LOW · CONFIRMED · SELESAI (`0878f637` + `c22a2aa09`) — Halaman `/notifikasi` menghitung “belum dibaca” hanya dari 50 notifikasi terbaru dan body path tidak menjadi link
 
 - Lokasi: `src/app/(dashboard)/notifikasi/page.tsx:15-31`, `:40-58`;
   `prisma/schema.prisma:397-411`.
