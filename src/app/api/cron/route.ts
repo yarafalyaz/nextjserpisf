@@ -389,8 +389,22 @@ async function taskSweepOrphanAttachments(): Promise<string> {
     return "Tidak ada lampiran yatim kedaluwarsa"
   }
 
-  const uploadsRoot = path.join(process.cwd(), "private", "uploads", "attachments")
+  // Hapus BARIS dulu, berkas belakangan (urutan deleteTransactionAttachmentsTx):
+  // submit form yang mengklaim baris (referenceId 0 -> dokumen) di antara
+  // unlink dan delete akan kehilangan berkasnya bila unlink didahulukan.
+  // deleteMany hanya mengembalikan count, jadi hapus per baris dengan syarat
+  // klaim yang sama; hanya baris yang benar-benar terhapus (count 1) yang
+  // berkasnya boleh di-unlink — baris count 0 sudah diklaim dokumen lain.
+  const deletedRows: typeof orphans = []
   for (const orphan of orphans) {
+    const deleted = await prisma.transactionAttachment.deleteMany({
+      where: { id: orphan.id, referenceId: 0 },
+    })
+    if (deleted.count === 1) deletedRows.push(orphan)
+  }
+
+  const uploadsRoot = path.join(process.cwd(), "private", "uploads", "attachments")
+  for (const orphan of deletedRows) {
     const match = /^\/api\/attachments\/[^/]+\/([^/]+)$/.exec(orphan.fileUrl)
     const filename = match?.[1] ?? ""
     if (!filename || filename.includes("..")) continue
@@ -403,9 +417,5 @@ async function taskSweepOrphanAttachments(): Promise<string> {
     }
   }
 
-  const deleted = await prisma.transactionAttachment.deleteMany({
-    where: { id: { in: orphans.map((o) => o.id) }, referenceId: 0 },
-  })
-
-  return `${deleted.count} lampiran yatim kedaluwarsa disapu`
+  return `${deletedRows.length} lampiran yatim kedaluwarsa disapu`
 }

@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => {
     idempotencyKeyDeleteMany: vi.fn(),
     attachmentFindMany: vi.fn(),
     attachmentDeleteMany: vi.fn(),
+    unlink: vi.fn(),
     notificationLowStock: vi.fn(),
     notificationNotifyAdmins: vi.fn(),
     notificationLateCheckIn: vi.fn(),
@@ -91,6 +92,10 @@ vi.mock("@/lib/reports/min-stock-warehouse-alert", () => ({
   loadWarehouseLowStock: vi.fn(async () => []),
 }))
 
+vi.mock("node:fs/promises", () => ({
+  unlink: (...a: unknown[]) => mocks.unlink(...a),
+}))
+
 // Spy on console.error so we don't pollute test output
 vi.spyOn(console, "error").mockImplementation(() => {})
 
@@ -127,6 +132,7 @@ describe("GET /api/cron", () => {
     mocks.activityLogDeleteMany.mockResolvedValue({ count: 0 })
     mocks.attachmentFindMany.mockResolvedValue([])
     mocks.attachmentDeleteMany.mockResolvedValue({ count: 0 })
+    mocks.unlink.mockResolvedValue(undefined)
   })
 
   it("rejects request without valid auth", async () => {
@@ -513,12 +519,37 @@ describe("GET /api/cron", () => {
       expect(findArgs.where.createdAt.lt).toBeInstanceOf(Date)
       const ageMs = Date.now() - findArgs.where.createdAt.lt.getTime()
       expect(ageMs).toBeGreaterThan(20 * 60 * 60 * 1000)
-      // Hapus memakai id yang sama + dikunci referenceId=0 (klaim balap tak ikut terhapus).
+      // Hapus per baris memakai id yang sama + dikunci referenceId=0
+      // (klaim balap tak ikut terhapus); berkas baris terhapus di-unlink.
+      expect(mocks.attachmentDeleteMany).toHaveBeenCalledTimes(1)
       const delArgs = mocks.attachmentDeleteMany.mock.calls[0][0] as {
-        where: { id: { in: number[] }; referenceId: number }
+        where: { id: number; referenceId: number }
       }
-      expect(delArgs.where.id).toEqual({ in: [7] })
+      expect(delArgs.where.id).toBe(7)
       expect(delArgs.where.referenceId).toBe(0)
+      expect(mocks.unlink).toHaveBeenCalledTimes(1)
+      expect(String(mocks.unlink.mock.calls[0][0])).toContain("vendor_bill-0-x.pdf")
+    })
+
+    it("baris yang sudah diklaim dokumen lain (delete count 0) berkasnya TIDAK di-unlink", async () => {
+      // Balap: form submit mengklaim baris (referenceId 0 -> dokumen) di
+      // antara findMany dan delete. deleteMany bersyarat mengembalikan 0,
+      // jadi berkas dokumen yang baru terkait tidak boleh hilang.
+      mocks.attachmentFindMany.mockResolvedValue([
+        { id: 7, referenceType: "vendor_bill", fileUrl: "/api/attachments/vendor_bill/vendor_bill-0-a.pdf" },
+        { id: 8, referenceType: "vendor_bill", fileUrl: "/api/attachments/vendor_bill/vendor_bill-0-b.pdf" },
+      ])
+      mocks.attachmentDeleteMany
+        .mockResolvedValueOnce({ count: 0 }) // id 7 sudah diklaim
+        .mockResolvedValueOnce({ count: 1 }) // id 8 benar-benar yatim
+
+      const res = await GET(makeCronRequest("http://localhost/api/cron?task=sweep-orphan-attachments"))
+      const json = await res.json()
+
+      expect(json.results["sweep-orphan-attachments"].status).toBe("success")
+      expect(json.results["sweep-orphan-attachments"].message).toBe("1 lampiran yatim kedaluwarsa disapu")
+      expect(mocks.unlink).toHaveBeenCalledTimes(1)
+      expect(String(mocks.unlink.mock.calls[0][0])).toContain("vendor_bill-0-b.pdf")
     })
 
     it("reports success when nothing is orphaned", async () => {
