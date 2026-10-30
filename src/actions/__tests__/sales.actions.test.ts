@@ -898,6 +898,17 @@ describe("completeSalesReturn STOK-03", () => {
     const res = await actions.completeSalesReturn(7)
     expect(res?.success).toBe(true)
   })
+
+  it("STOK-10: status berubah cancelled di dalam tx -> complete ditolak, hook stok tak dipanggil", async () => {
+    mocks.prismaMock.salesReturn.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 7, status: "draft", reason: "Barang cacat", createdBy: 3, salesInvoiceId: 9, items: [] })
+      .mockResolvedValueOnce({ id: 7, status: "cancelled" })
+    mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "posted" })
+    const res = await actions.completeSalesReturn(7)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("draft")
+    expect(mocks.prismaMock.stockMove.findFirst).not.toHaveBeenCalled()
+  })
 })
 
 describe("Sales Payment Actions", () => {

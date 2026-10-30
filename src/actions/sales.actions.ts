@@ -2193,6 +2193,23 @@ export async function completeSalesReturn(returnId: number) {
         throw new Error("Faktur asal retur sudah dibatalkan — retur tidak bisa diselesaikan.")
       }
     }
+    // STOK-10: klaim status di DALAM transaksi — snapshot action di luar
+    // tx tidak cukup (status bisa berubah di antaranya). Kunci baris
+    // retur, baca ulang, dan klaim kondisional draft. Perhatian: kolom
+    // status retur tidak mengenal "processing" (kosakata status hook:
+    // draft→completed), jadi klaim tidak menulis status perantara —
+    // row lock menahan pesaing sampai hook menulis completed, dan
+    // updateMany kondisional memastikan count 1 hanya dari draft.
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM sales_returns WHERE id = ${returnId} FOR UPDATE`
+    }
+    const freshReturn = await tx.salesReturn.findUniqueOrThrow({
+      where: { id: returnId },
+      select: { status: true },
+    })
+    if (freshReturn.status !== "draft") {
+      throw new Error("Retur penjualan hanya bisa diselesaikan dari status draft")
+    }
     // Stock Move IN — the stock hook sets status to "completed" at the end. Do NOT
     // set it here first, otherwise the hook's "already completed" guard aborts and
     // stock is never returned while the accounting leg still posts (GL/stock drift).
