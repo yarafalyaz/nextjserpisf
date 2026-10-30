@@ -34,6 +34,12 @@ const mocks = vi.hoisted(() => ({
   expenseFindUnique: vi.fn(),
   paymentMethodFindUnique: vi.fn(),
   shippingMethodFindUnique: vi.fn(),
+  salesInvoiceFindFirst: vi.fn(),
+  quotationFindFirst: vi.fn(),
+  salesOrderFindFirst: vi.fn(),
+  purchaseOrderFindFirst: vi.fn(),
+  vendorPaymentFindFirst: vi.fn(),
+  vendorBillFindFirst: vi.fn(),
   itemFindMany: vi.fn(),
 }))
 
@@ -56,20 +62,20 @@ vi.mock("@/lib/utils/method-labels", () => ({
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    salesInvoice: { findUnique: (...a: unknown[]) => mocks.salesInvoiceFindUnique(...a) },
-    quotation: { findUnique: (...a: unknown[]) => mocks.quotationFindUnique(...a) },
-    salesOrder: { findUnique: (...a: unknown[]) => mocks.salesOrderFindUnique(...a) },
+    salesInvoice: { findUnique: (...a: unknown[]) => mocks.salesInvoiceFindUnique(...a), findFirst: (...a: unknown[]) => mocks.salesInvoiceFindFirst(...a) },
+    quotation: { findUnique: (...a: unknown[]) => mocks.quotationFindUnique(...a), findFirst: (...a: unknown[]) => mocks.quotationFindFirst(...a) },
+    salesOrder: { findUnique: (...a: unknown[]) => mocks.salesOrderFindUnique(...a), findFirst: (...a: unknown[]) => mocks.salesOrderFindFirst(...a) },
     workOrder: { findUnique: (...a: unknown[]) => mocks.workOrderFindUnique(...a) },
-    purchaseOrder: { findUnique: (...a: unknown[]) => mocks.purchaseOrderFindUnique(...a) },
+    purchaseOrder: { findUnique: (...a: unknown[]) => mocks.purchaseOrderFindUnique(...a), findFirst: (...a: unknown[]) => mocks.purchaseOrderFindFirst(...a) },
     deliveryOrder: { findUnique: (...a: unknown[]) => mocks.deliveryOrderFindUnique(...a) },
     downPayment: { findUnique: (...a: unknown[]) => mocks.downPaymentFindUnique(...a) },
     salesPayment: { findUnique: (...a: unknown[]) => mocks.salesPaymentFindUnique(...a) },
-    vendorPayment: { findUnique: (...a: unknown[]) => mocks.vendorPaymentFindUnique(...a) },
+    vendorPayment: { findUnique: (...a: unknown[]) => mocks.vendorPaymentFindUnique(...a), findFirst: (...a: unknown[]) => mocks.vendorPaymentFindFirst(...a) },
     salesReturn: { findUnique: (...a: unknown[]) => mocks.salesReturnFindUnique(...a) },
     purchaseReturn: { findUnique: (...a: unknown[]) => mocks.purchaseReturnFindUnique(...a) },
     goodsReceipt: { findUnique: (...a: unknown[]) => mocks.goodsReceiptFindUnique(...a) },
     purchaseRequest: { findUnique: (...a: unknown[]) => mocks.purchaseRequestFindUnique(...a) },
-    vendorBill: { findUnique: (...a: unknown[]) => mocks.vendorBillFindUnique(...a) },
+    vendorBill: { findUnique: (...a: unknown[]) => mocks.vendorBillFindUnique(...a), findFirst: (...a: unknown[]) => mocks.vendorBillFindFirst(...a) },
     expense: { findUnique: (...a: unknown[]) => mocks.expenseFindUnique(...a) },
     paymentMethod: { findUnique: (...a: unknown[]) => mocks.paymentMethodFindUnique(...a) },
     shippingMethod: { findUnique: (...a: unknown[]) => mocks.shippingMethodFindUnique(...a) },
@@ -150,7 +156,7 @@ describe("GET /api/print", () => {
 
   describe("invoice", () => {
     it("returns invoice print data with items and summary", async () => {
-      mocks.salesInvoiceFindUnique.mockResolvedValue({
+      mocks.salesInvoiceFindFirst.mockResolvedValue({
         documentNo: "INV-1",
         date: new Date("2026-01-15"),
         dueDate: new Date("2026-02-15"),
@@ -184,13 +190,22 @@ describe("GET /api/print", () => {
     })
 
     it("returns 404 when invoice not found", async () => {
-      mocks.salesInvoiceFindUnique.mockResolvedValue(null)
+      mocks.salesInvoiceFindFirst.mockResolvedValue(null)
       const res = await GET(makeReq("http://localhost/api/print?tipe=invoice&id=99"))
       expect(res.status).toBe(404)
     })
 
+    it("R6PA-01: query cetak invoice menyaring soft-deleted (deletedAt: null)", async () => {
+      mocks.salesInvoiceFindFirst.mockResolvedValue(null)
+      const res = await GET(makeReq("http://localhost/api/print?tipe=invoice&id=1042"))
+      expect(res.status).toBe(404)
+      expect(mocks.salesInvoiceFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 1042, deletedAt: null } }),
+      )
+    })
+
     it("uses street when address is null", async () => {
-      mocks.salesInvoiceFindUnique.mockResolvedValue({
+      mocks.salesInvoiceFindFirst.mockResolvedValue({
         documentNo: "INV-1", date: new Date(), dueDate: null,
         subtotal: 0, grandTotal: 0, customer: { name: "X", address: null, street: "Jl B", phone: null },
         items: [],
@@ -203,7 +218,7 @@ describe("GET /api/print", () => {
 
   describe("quotation", () => {
     it("returns quotation with vehicle info and method labels", async () => {
-      mocks.quotationFindUnique.mockResolvedValue({
+      mocks.quotationFindFirst.mockResolvedValue({
         documentNo: "Q-1",
         date: new Date(),
         validUntil: new Date(),
@@ -238,7 +253,7 @@ describe("GET /api/print", () => {
     })
 
     it("falls back to static label when payment method row missing", async () => {
-      mocks.quotationFindUnique.mockResolvedValue({
+      mocks.quotationFindFirst.mockResolvedValue({
         documentNo: "Q-1", date: new Date(), validUntil: null,
         paymentMethod: "cash", shippingMethod: null,
         subtotal: 0, discount: 0, tax: 0, grandTotal: 0,
@@ -253,7 +268,7 @@ describe("GET /api/print", () => {
     })
 
     it("returns 404 when quotation not found", async () => {
-      mocks.quotationFindUnique.mockResolvedValue(null)
+      mocks.quotationFindFirst.mockResolvedValue(null)
       const res = await GET(makeReq("http://localhost/api/print?tipe=quotation&id=99"))
       expect(res.status).toBe(404)
     })
@@ -261,7 +276,7 @@ describe("GET /api/print", () => {
 
   describe("order", () => {
     it("returns sales order print data", async () => {
-      mocks.salesOrderFindUnique.mockResolvedValue({
+      mocks.salesOrderFindFirst.mockResolvedValue({
         documentNo: "SO-1", date: new Date(), deliveryDate: new Date(),
         subtotal: 100, discount: 0, tax: 10, grandTotal: 110,
         customer: { name: "A", address: "B", street: null, phone: "" },
@@ -273,7 +288,7 @@ describe("GET /api/print", () => {
     })
 
     it("returns 404 when order not found", async () => {
-      mocks.salesOrderFindUnique.mockResolvedValue(null)
+      mocks.salesOrderFindFirst.mockResolvedValue(null)
       const res = await GET(makeReq("http://localhost/api/print?tipe=order&id=99"))
       expect(res.status).toBe(404)
     })
@@ -305,20 +320,20 @@ describe("GET /api/print", () => {
   })
 
   it("query pihak cetak memakai select sempit, bukan baris utuh (bocor PII internal)", async () => {
-    mocks.salesInvoiceFindUnique.mockResolvedValue({
+    mocks.salesInvoiceFindFirst.mockResolvedValue({
       documentNo: "INV-1", date: new Date(), dueDate: null,
       subtotal: 0, grandTotal: 0,
       customer: { name: "X", address: null, street: "Jl B", phone: null },
       items: [],
     })
-    mocks.quotationFindUnique.mockResolvedValue({
+    mocks.quotationFindFirst.mockResolvedValue({
       documentNo: "Q-1", date: new Date(), validUntil: null,
       paymentMethod: null, shippingMethod: null,
       subtotal: 0, discount: 0, tax: 0, grandTotal: 0,
       customer: { name: "X", address: "a", street: null, phone: "", email: "c@x.id" },
       customerVehicle: null, sections: [],
     })
-    mocks.purchaseOrderFindUnique.mockResolvedValue({
+    mocks.purchaseOrderFindFirst.mockResolvedValue({
       documentNo: "PO-1", date: new Date(), expectedDate: null,
       subtotal: 0, discount: 0, tax: 0, grandTotal: 0,
       vendor: { name: "V", address: null, street: "Jl V", phone: null },
@@ -337,15 +352,15 @@ describe("GET /api/print", () => {
     await GET(makeReq("http://localhost/api/print?tipe=expense&id=1"))
 
     const partySelect = { name: true, address: true, street: true, phone: true }
-    expect(mocks.salesInvoiceFindUnique.mock.calls[0][0].include.customer).toEqual({ select: partySelect })
-    expect(mocks.quotationFindUnique.mock.calls[0][0].include.customer).toEqual({
+    expect(mocks.salesInvoiceFindFirst.mock.calls[0][0].include.customer).toEqual({ select: partySelect })
+    expect(mocks.quotationFindFirst.mock.calls[0][0].include.customer).toEqual({
       select: { ...partySelect, email: true },
     })
     // Merek kendaraan hanya nama yang dirender di kop penawaran.
     expect(
-      mocks.quotationFindUnique.mock.calls[0][0].include.customerVehicle.include.vehicle.include.variant.include.model.include.brand,
+      mocks.quotationFindFirst.mock.calls[0][0].include.customerVehicle.include.vehicle.include.variant.include.model.include.brand,
     ).toEqual({ select: { name: true } })
-    expect(mocks.purchaseOrderFindUnique.mock.calls[0][0].include.vendor).toEqual({ select: partySelect })
+    expect(mocks.purchaseOrderFindFirst.mock.calls[0][0].include.vendor).toEqual({ select: partySelect })
     expect(mocks.expenseFindUnique.mock.calls[0][0].include.vendor).toEqual({ select: partySelect })
     expect(mocks.expenseFindUnique.mock.calls[0][0].include.category).toEqual({ select: { label: true } })
   })
@@ -393,7 +408,7 @@ describe("GET /api/print", () => {
     })
 
     it("pembayaran vendor: rincian per tagihan saat ada alokasi", async () => {
-      mocks.vendorPaymentFindUnique.mockResolvedValue({
+      mocks.vendorPaymentFindFirst.mockResolvedValue({
         documentNo: "VP-1",
         paymentDate: new Date("2026-10-04"),
         amount: 3_000_000,
@@ -475,7 +490,7 @@ describe("GET /api/print", () => {
     })
 
     it("tagihan vendor: total yang dibayarkan dikurangi PPh dipotong", async () => {
-      mocks.vendorBillFindUnique.mockResolvedValue({
+      mocks.vendorBillFindFirst.mockResolvedValue({
         documentNo: "BILL-9",
         date: new Date("2026-10-10"),
         dueDate: new Date("2026-11-10"),
@@ -536,7 +551,7 @@ describe("GET /api/print", () => {
 
   describe("purchase-order", () => {
     it("memakai vendor sebagai pihak tujuan dan unit dari master barang", async () => {
-      mocks.purchaseOrderFindUnique.mockResolvedValue({
+      mocks.purchaseOrderFindFirst.mockResolvedValue({
         documentNo: "PO-1",
         date: new Date("2026-10-01"),
         expectedDate: new Date("2026-10-10"),
@@ -559,7 +574,7 @@ describe("GET /api/print", () => {
     })
 
     it("returns 404 when purchase order not found", async () => {
-      mocks.purchaseOrderFindUnique.mockResolvedValue(null)
+      mocks.purchaseOrderFindFirst.mockResolvedValue(null)
       const res = await GET(makeReq("http://localhost/api/print?tipe=purchase-order&id=99"))
       expect(res.status).toBe(404)
     })
@@ -610,14 +625,14 @@ describe("GET /api/print", () => {
   })
 
   it("returns 500 on internal error", async () => {
-    mocks.salesInvoiceFindUnique.mockRejectedValue(new Error("boom"))
+    mocks.salesInvoiceFindFirst.mockRejectedValue(new Error("boom"))
     const res = await GET(makeReq("http://localhost/api/print?tipe=invoice&id=1"))
     expect(res.status).toBe(500)
   })
 
   it("uses default company name when settings empty", async () => {
     mocks.getSystemSettings.mockResolvedValue({})
-    mocks.salesInvoiceFindUnique.mockResolvedValue({
+    mocks.salesInvoiceFindFirst.mockResolvedValue({
       documentNo: "INV-1", date: new Date(), dueDate: null,
       subtotal: 0, grandTotal: 0, customer: { name: "X", address: null, street: null, phone: null },
       items: [],

@@ -131,8 +131,8 @@ export async function GET(request: Request) {
     }
 
     if (type === "invoice") {
-      const doc = await prisma.salesInvoice.findUnique({
-        where: { id },
+      const doc = await prisma.salesInvoice.findFirst({
+        where: { id, deletedAt: null },
         include: { customer: { select: PRINT_CUSTOMER_SELECT }, items: true },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
@@ -170,8 +170,8 @@ export async function GET(request: Request) {
     }
 
     if (type === "quotation") {
-      const doc = await prisma.quotation.findUnique({
-        where: { id },
+      const doc = await prisma.quotation.findFirst({
+        where: { id, deletedAt: null },
         include: {
           customer: { select: { ...PRINT_CUSTOMER_SELECT, email: true } },
           customerVehicle: {
@@ -257,8 +257,8 @@ export async function GET(request: Request) {
     }
 
     if (type === "order") {
-      const doc = await prisma.salesOrder.findUnique({
-        where: { id },
+      const doc = await prisma.salesOrder.findFirst({
+        where: { id, deletedAt: null },
         include: { customer: { select: PRINT_CUSTOMER_SELECT }, items: true },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
@@ -345,8 +345,8 @@ export async function GET(request: Request) {
     }
 
     if (type === "purchase-order") {
-      const doc = await prisma.purchaseOrder.findUnique({
-        where: { id },
+      const doc = await prisma.purchaseOrder.findFirst({
+        where: { id, deletedAt: null },
         include: { vendor: { select: PRINT_VENDOR_SELECT }, items: true },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
@@ -508,8 +508,8 @@ export async function GET(request: Request) {
     }
 
     if (type === "vendor-payment") {
-      const doc = await prisma.vendorPayment.findUnique({
-        where: { id },
+      const doc = await prisma.vendorPayment.findFirst({
+        where: { id, deletedAt: null },
         include: {
           vendor: { select: PRINT_VENDOR_SELECT },
           allocations: { include: { vendorBill: { select: { documentNo: true } } } },
@@ -726,8 +726,8 @@ export async function GET(request: Request) {
     }
 
     if (type === "vendor-bill") {
-      const doc = await prisma.vendorBill.findUnique({
-        where: { id },
+      const doc = await prisma.vendorBill.findFirst({
+        where: { id, deletedAt: null },
         include: { vendor: { select: PRINT_VENDOR_SELECT }, items: true, withholdingType: { select: { name: true, rate: true } } },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
