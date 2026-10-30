@@ -27,7 +27,25 @@ const serverSchema = z.object({
       message: "AUTH_SECRET masih memakai nilai contoh — buat dengan `openssl rand -base64 32`",
     }),
   NEXTAUTH_URL: z.string().url().optional(),
-  CRON_SECRET: z.string().optional(),
+  // R7PB-04: route /api/cron/* menerima mutasi sensitif (cleanup log,
+  // lock-period). Secret pendek atau placeholder dokumenter yang diketahui
+  // publik sama berbahayanya dengan AUTH_SECRET lemah — terapkan kekuatan
+  // yang sama. Operator produksi memberi CRON_CREDENTIAL (alias UI admin):
+  // kedua nama diverifikasi kekuatan sama, tapi hanya bila diisi.
+  CRON_SECRET: z
+    .string()
+    .min(32, "CRON_SECRET minimal 32 karakter — buat dengan `openssl rand -base64 32`")
+    .refine((value) => !PLACEHOLDER_AUTH_SECRETS.has(value.trim()), {
+      message: "CRON_SECRET masih memakai nilai contoh — buat dengan `openssl rand -base64 32`",
+    })
+    .optional(),
+  CRON_CREDENTIAL: z
+    .string()
+    .min(32, "CRON_CREDENTIAL minimal 32 karakter — buat dengan `openssl rand -base64 32`")
+    .refine((value) => !PLACEHOLDER_AUTH_SECRETS.has(value.trim()), {
+      message: "CRON_CREDENTIAL masih memakai nilai contoh — buat dengan `openssl rand -base64 32`",
+    })
+    .optional(),
   STORAGE_DRIVER: z.enum(["local", "r2"]).default("local"),
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),

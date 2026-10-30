@@ -56,6 +56,34 @@ describe("env validation", () => {
     await expect(import("@/lib/env")).rejects.toThrow("Invalid environment variables")
   })
 
+  // R7PB-04: route cron menerima trigger cleanup/lock-period. Secret yang
+  // sama dengan string contoh .env.example (yang siapa pun bisa baca) tidak
+  // boleh diterima; begitu pula secret yang terlalu pendek.
+  it("R7PB-04: menolak CRON_SECRET / CRON_CREDENTIAL berupa nilai contoh", async () => {
+    for (const key of ["CRON_SECRET", "CRON_CREDENTIAL"]) {
+      process.env = { ...originalEnv, DATABASE_URL: DB_VAL, NODE_ENV: "production" } as NodeJS.ProcessEnv
+      process.env[CRED_ENV] = CRED_VAL
+      delete (process.env as unknown as Record<string, unknown>).CI
+      ;(process.env as unknown as Record<string, unknown>)[key] =
+        "generate-with-openssl-rand-base64-32"
+      await expect(import("@/lib/env")).rejects.toThrow("Invalid environment variables")
+      vi.resetModules()
+    }
+  })
+
+  it("R7PB-04: menolak CRON_SECRET yang terlalu pendek, menerima yang sah", async () => {
+    process.env = { ...originalEnv, DATABASE_URL: DB_VAL, NODE_ENV: "production" } as NodeJS.ProcessEnv
+    process.env[CRED_ENV] = CRED_VAL
+    delete (process.env as unknown as Record<string, unknown>).CI
+    process.env.CRON_SECRET = "x"
+    await expect(import("@/lib/env")).rejects.toThrow("Invalid environment variables")
+
+    vi.resetModules()
+    process.env.CRON_SECRET = "cron-cred-value-1234567890-abcdefgh"
+    const mod = await import("@/lib/env")
+    expect(mod.env.CRON_SECRET).toBe("cron-cred-value-1234567890-abcdefgh")
+  })
+
   it("defaults NODE_ENV to development when validated", async () => {
     process.env = { ...originalEnv, DATABASE_URL: DB_VAL } as NodeJS.ProcessEnv
     process.env[CRED_ENV] = CRED_VAL
