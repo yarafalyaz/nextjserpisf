@@ -17,7 +17,9 @@ test.describe("Payroll module flows", () => {
     await page.waitForLoadState("networkidle")
     await expect(page.getByRole("heading", { name: "Proses Penggajian Karyawan" })).toBeVisible({ timeout: 30000 })
     await expect(page.locator("form").first()).toBeVisible({ timeout: 30000 })
-    await expect(page.getByText("Pusat Biaya")).toBeVisible({ timeout: 30000 })
+    // Combobox bernama, bukan getByText("Pusat Biaya"): teks itu juga cocok
+    // substring placeholder "— Pilih pusat biaya —" (strict-mode violation).
+    await expect(page.getByRole("combobox", { name: "Pusat Biaya" })).toBeVisible({ timeout: 30000 })
   })
 
   test("Employee loan list loads", async ({ page }) => {
