@@ -144,6 +144,20 @@ describe("E113 gerbang fail-closed", () => {
     expect(r.rejections[0].reason).toMatch(/temuan rekonsiliasi/)
   })
 
+  it("R6IE-07: snapshot isService null ditolak bernama, bukan ditebak barang", () => {
+    const r = buildCoretaxOutputXml(
+      [base({ lines: [{ description: "X", qty: 1, uom: "PCS", unitPrice: 12_000_000, discount: 0, total: 12_000_000, isService: null }] })],
+      SELLER,
+    )
+    expect(r.xml).toBeNull()
+    expect(r.rejections).toEqual([
+      expect.objectContaining({
+        code: "UNMAPPED_REQUIRED_ELEMENT",
+        reason: expect.stringContaining("Opt (jenis barang/jasa)"),
+      }),
+    ])
+  })
+
   it("E113-7: asal + pengganti satu batch → keduanya ditolak", () => {
     const origin = base({ taxInvoiceId: 10 })
     const replacement = base({

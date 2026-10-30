@@ -1829,7 +1829,7 @@ export async function createSalesInvoice(formData: FormData) {
   // baris. Nilai di-clamp seperti updateSalesInvoice: baris negatif tak tersimpan.
   const itemsJson = v.items
   const rawItems = itemsJson
-    ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; description?: string | null }>>(itemsJson) ?? [])
+    ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; uom?: string | null; description?: string | null }>>(itemsJson) ?? [])
     : null
 
   const invoice = await prisma.$transaction(async (tx) => {
@@ -1879,10 +1879,33 @@ export async function createSalesInvoice(formData: FormData) {
     // F-PRICELIST-01: baris langsung dari form mendapat harga price-list
     // (unitPrice form diperlakukan sebagai Item.price fallback). Baris
     // hasil konversi (salesOrderId terisi) mempertahankan harga SO.
-    const items =
+    let items =
       rawItems && !v.salesOrderId
         ? await applyPriceListLines(tx, v.customerId, wibDateToUtcMidnight(v.date), rawItems)
         : rawItems
+
+    // R6IE-07: bekukan satuan + jenis jasa/barang dari master saat baris lahir.
+    // Baris tanpa itemId adalah penyesuaian bebas; snapshot tetap null supaya
+    // ekspor pajak menolak bernama daripada menebak.
+    if (items?.length) {
+      const itemIds = [...new Set(items.map((item) => item.itemId).filter((id): id is number => id != null))]
+      const masterById = new Map<number, { unitOfMeasure: string; isService: boolean }>()
+      if (itemIds.length > 0) {
+        const masters = await tx.item.findMany({
+          where: { id: { in: itemIds } },
+          select: { id: true, unitOfMeasure: true, isService: true },
+        })
+        for (const master of masters) masterById.set(master.id, master)
+      }
+      items = items.map((item) => {
+        const master = item.itemId != null ? masterById.get(item.itemId) : undefined
+        return {
+          ...item,
+          uom: item.uom ?? master?.unitOfMeasure ?? null,
+          isService: master?.isService ?? null,
+        }
+      })
+    }
 
     let subtotal = 0
     let discountTotal = 0
@@ -1961,6 +1984,8 @@ export async function createSalesInvoice(formData: FormData) {
                     itemId: item.itemId,
                     description: item.description ?? null,
                     qty: safeQty,
+                    uom: (item as { uom?: string | null }).uom ?? null,
+                    isService: (item as { isService?: boolean | null }).isService ?? null,
                     unitPrice: safePrice,
                     discount: safeDiscount,
                     total: Math.max(0, safeSubtract(safeMultiply(safeQty, safePrice, 0), safeDiscount, 0)),
@@ -3247,10 +3272,22 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
         where: { salesInvoiceId: id },
       })
 
+      // R6IE-07: baris hasil edit juga dibekukan dari master yang dipilih.
+      const itemIds = [...new Set(items.map((item) => item.itemId).filter((id): id is number => id != null))]
+      const masterById = new Map<number, { unitOfMeasure: string; isService: boolean }>()
+      if (itemIds.length > 0) {
+        const masters = await tx.item.findMany({
+          where: { id: { in: itemIds } },
+          select: { id: true, unitOfMeasure: true, isService: true },
+        })
+        for (const master of masters) masterById.set(master.id, master)
+      }
+
       // Insert new items
       if (items.length > 0) {
         await tx.salesInvoiceItem.createMany({
           data: items.map((item, idx) => {
+            const master = item.itemId != null ? masterById.get(item.itemId) : undefined
             // Clamp per-line fields to >= 0: a negative qty/unitPrice/discount
             // sent by a tampered client (updateSalesInvoice does NOT run the
             // zod schema) would otherwise persist a negative item row. Negative
@@ -3265,7 +3302,8 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
               itemId: item.itemId,
               description: item.description ?? null,
               qty: safeQty,
-              uom: item.uom || null,
+              uom: item.uom || master?.unitOfMeasure || null,
+              isService: master?.isService ?? null,
               unitPrice: safePrice,
               discount: safeDiscount,
               total: Math.max(0, safeSubtract(safeMultiply(safeQty, safePrice, 0), safeDiscount, 0)),

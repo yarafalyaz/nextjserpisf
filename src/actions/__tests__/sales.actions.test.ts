@@ -785,6 +785,20 @@ describe("Sales Invoice Actions", () => {
     expect(updateCall.paymentStatus).toBe("paid")
   })
 
+  it("R6IE-07: updateSalesInvoice membekukan uom dan isService dari master item", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", paidAmount: 0 })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 1, unitOfMeasure: "JAM", isService: true }])
+    const payload = {
+      customerId: 1,
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100, discount: 0, description: "Jasa" }]),
+    }
+    const res = await actions.updateSalesInvoice(1, fdMap(payload))
+    expect(res?.success).toBe(true)
+    const createManyArg = mocks.prismaMock.salesInvoiceItem.createMany.mock.calls.at(-1)![0] as any
+    expect(createManyArg.data[0]).toMatchObject({ uom: "JAM", isService: true })
+  })
+
   // F-2026-10-25-036-S lanjutan (arsip perilaku pra-GL-BR-003): transisi paid
   // via edit item DULU membekukan snapshot komisi. Sesudah G1 GL-BR-003, edit
   // posted DITOLAK di guard status — snapshot komisi posted hanya lewat jalur
@@ -1424,6 +1438,29 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     // subtotal = 600 + 350 = 950
     expect(Number(arg.data.subtotal)).toBe(950)
     expect(arg.data.salesOrderId).toBe(9)
+  })
+
+  it("R6IE-07: createSalesInvoice membekukan uom dan isService dari master item", async () => {
+    mocks.prismaMock.item.findMany.mockResolvedValue([
+      { id: 11, unitOfMeasure: "BOX", isService: false },
+      { id: 12, unitOfMeasure: "JAM", isService: true },
+    ])
+    const items = JSON.stringify([
+      { itemId: 11, qty: 2, unitPrice: 300, discount: 0, description: "Barang" },
+      { itemId: 12, qty: 1, unitPrice: 400, discount: 0, description: "Jasa" },
+      { itemId: null, qty: 1, unitPrice: 25, discount: 0, description: "Bebas" },
+    ])
+    const res = await actions.createSalesInvoice(fdMap({ customerId: "7", date: "2026-06-12", items }))
+    expect(res?.success).toBe(true)
+
+    const arg = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    expect(arg.data.items.create[0]).toMatchObject({ uom: "BOX", isService: false })
+    expect(arg.data.items.create[1]).toMatchObject({ uom: "JAM", isService: true })
+    expect(arg.data.items.create[2]).toMatchObject({ uom: null, isService: null })
+    expect(mocks.prismaMock.item.findMany).toHaveBeenCalledWith({
+      where: { id: { in: [11, 12] } },
+      select: { id: true, unitOfMeasure: true, isService: true },
+    })
   })
 
   // Baris negatif hasil iseng klien tidak boleh tersimpan sebagai nilai negatif.

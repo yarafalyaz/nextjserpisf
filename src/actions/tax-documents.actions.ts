@@ -17,7 +17,9 @@ import {
   revokeWithholdingCertificate,
   settleWithholdingTax,
 } from "@/lib/services/withholding-certificate.service"
+import { coretaxExportIdempotencyKey } from "@/lib/tax/coretax-xml-export"
 import { loadCoretaxOutputExport } from "@/lib/tax/coretax-xml-export-data"
+import { logActivity } from "@/lib/services/activity-log.service"
 
 /**
  * Server action tipis F-001/F-002 (TaxInvoice) + F-003 (bupot/setor):
@@ -230,10 +232,32 @@ const exportCoretaxSchema = z.object({
 })
 
 export async function exportCoretaxOutputXmlAction(formData: FormData) {
-  await requirePermission("create_tax_invoices")
+  const user = await requirePermission("create_tax_invoices")
   const parsed = parseFormData(exportCoretaxSchema, formData)
   if (!parsed.success) return { success: false as const, error: parsed.error }
   const result = await loadCoretaxOutputExport(parsed.data.taxInvoiceIds)
+
+  // R6IE-07: catat peristiwa ekspor sebagai jejak audit yang bisa ditelusuri
+  // dari kunci idempotensi. Tidak menyentuh kolom impor TaxInvoice dan tidak
+  // mengeklaim status DJP; satu log per faktur agar replay hash terlihat.
+  if (result.xmlHash && result.exportedIds.length > 0) {
+    const metadata = {
+      templateVersion: result.templateVersion,
+      xmlHash: result.xmlHash,
+      exportedIds: result.exportedIds,
+      exportedBy: Number(user.id),
+    }
+    for (const taxInvoiceId of result.exportedIds) {
+      await logActivity(
+        "export",
+        "TaxInvoice",
+        taxInvoiceId,
+        `Ekspor XML Coretax faktur pajak #${taxInvoiceId}`,
+        { ...metadata, key: coretaxExportIdempotencyKey(taxInvoiceId, result.templateVersion) },
+      )
+    }
+  }
+
   return { success: true as const, ...result }
 }
 

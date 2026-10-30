@@ -146,7 +146,14 @@ describe("issueTaxInvoice guards", () => {
 
     // Tertaut faktur penjualan: snapshot = master saat terbit (AC-TX-B1).
     mocks.salesInvoiceFindUnique.mockResolvedValue({
-      customer: { taxId: "0123456789123456", taxpayerName: "PT WP Master", nitku: "0123456789123456000000" },
+      customer: {
+        taxId: "0123456789123456",
+        taxpayerName: "PT WP Master",
+        nitku: "0123456789123456000000",
+        taxAddress: "Alamat Pajak 1",
+        address: "Alamat Umum 1",
+        email: "buyer@example.test",
+      },
     })
     const tertaut = await issueTaxInvoice({
       direction: "out", taxInvoiceNumber: "010.001-26.00000004",
@@ -158,6 +165,8 @@ describe("issueTaxInvoice guards", () => {
     expect(snap.counterpartyTaxId).toBe("0123456789123456")
     expect(snap.counterpartyName).toBe("PT WP Master")
     expect(snap.counterpartyNitku).toBe("0123456789123456000000")
+    expect(snap.buyerAddress).toBe("Alamat Pajak 1")
+    expect(snap.buyerEmail).toBe("buyer@example.test")
     // AC-TX-B2: snapshot objek tersimpan beku — mutasi master mock
     // sesudahnya tidak menulis ulang data create yang sudah terjadi.
     expect(snap.counterpartyName).toBe("PT WP Master")
@@ -209,6 +218,7 @@ describe("replaceTaxInvoice guards", () => {
     djpStatus: "approved", creditStatus: "uncredited", transactionCode: "04", taxRate: 12,
     salesInvoiceId: 1, vendorBillId: null, vendorId: null,
     counterpartyTaxId: null, counterpartyName: null, counterpartyNitku: null,
+    buyerAddress: "Alamat Beku 1", buyerEmail: "frozen@example.test",
   }
 
   it("pengganti: masa SPT = masa faktur diganti, lama → replaced", async () => {
@@ -224,6 +234,8 @@ describe("replaceTaxInvoice guards", () => {
     expect(data.replacesId).toBe(7)
     expect(Number(data.dpp)).toBe(5_500_000)
     expect(Number(data.taxAmount)).toBe(660_000)
+    expect(data.buyerAddress).toBe("Alamat Beku 1")
+    expect(data.buyerEmail).toBe("frozen@example.test")
     expect(mocks.taxInvoiceUpdate).toHaveBeenCalledWith(
       { where: { id: 7 }, data: { djpStatus: "replaced" } },
     )
@@ -343,7 +355,11 @@ describe("issueDownPaymentTaxInvoice (F-2026-10-25-004-V)", () => {
   const dpRow = {
     id: 3, status: "confirmed", paymentDate: new Date(2026, 0, 15),
     vatTransactionCode: "04", vatRate: 12, vatDpp: 11_000_000, vatAmount: 1_320_000,
-    vatTaxPeriod: "2026-01", customer: { name: "PT X", taxpayerName: "PT X WP", taxId: "0123456789123456", nitku: "0123456789123456000001" },
+    vatTaxPeriod: "2026-01",
+    customer: {
+      name: "PT X", taxpayerName: "PT X WP", taxId: "0123456789123456", nitku: "0123456789123456000001",
+      taxAddress: "Alamat Pajak DP", address: "Alamat Umum DP", email: "dp@example.test",
+    },
   }
   it("salin snapshot: tanggal=paymentDate, masa beku, DPP/PPN beku", async () => {
     mocks.dpFindUnique.mockResolvedValue(dpRow)
@@ -358,6 +374,8 @@ describe("issueDownPaymentTaxInvoice (F-2026-10-25-004-V)", () => {
     expect(data.taxInvoiceDate).toEqual(new Date(2026, 0, 15))
     expect(data.downPaymentId).toBe(3)
     expect(data.direction).toBe("out")
+    expect(data.buyerAddress).toBe("Alamat Pajak DP")
+    expect(data.buyerEmail).toBe("dp@example.test")
   })
 
   it("DP bukan confirmed ditolak", async () => {

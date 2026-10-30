@@ -216,11 +216,16 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
         counterpartyName: input.counterpartyName ?? null,
         counterpartyNitku: input.counterpartyNitku ?? null,
       }
+      // R6IE-07: alamat/email pembeli ikut dibekukan dari master saat terbit.
+      let buyerSnapshot: { buyerAddress: string | null; buyerEmail: string | null } = {
+        buyerAddress: null,
+        buyerEmail: null,
+      }
       if (input.direction === "out") {
         if (input.salesInvoiceId != null) {
           const si = await tx.salesInvoice.findUnique({
             where: { id: input.salesInvoiceId },
-            select: { customer: { select: { taxId: true, taxpayerName: true, nitku: true } } },
+            select: { customer: { select: { taxId: true, taxpayerName: true, nitku: true, taxAddress: true, address: true, email: true } } },
           })
           if (si?.customer) {
             snapshot = snapshotCounterpartyFromMaster(si.customer, {
@@ -228,6 +233,10 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
               counterpartyName: input.counterpartyName ?? undefined,
               counterpartyNitku: input.counterpartyNitku ?? undefined,
             })
+            buyerSnapshot = {
+              buyerAddress: si.customer.taxAddress ?? si.customer.address ?? null,
+              buyerEmail: si.customer.email ?? null,
+            }
           }
         }
         const gate = evaluateTaxInvoiceIssueGate(snapshot, { legacy15Confirmed: input.legacy15Confirmed })
@@ -251,6 +260,8 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
           counterpartyTaxId: snapshot.counterpartyTaxId,
           counterpartyName: snapshot.counterpartyName,
           counterpartyNitku: snapshot.counterpartyNitku,
+          buyerAddress: buyerSnapshot.buyerAddress,
+          buyerEmail: buyerSnapshot.buyerEmail,
           xmlPayload: input.xmlPayload ?? null,
           // Jejak impor XML Coretax: hash isi + waktu impor, untuk rekonsiliasi
           // dobel-impor (dokumen sama tidak diterbitkan dua kali).
@@ -323,7 +334,7 @@ export async function issueDownPaymentTaxInvoice(
       }
       const dp = await tx.downPayment.findUnique({
         where: { id: input.downPaymentId },
-        include: { customer: { select: { name: true, taxId: true, taxpayerName: true, nitku: true } } },
+        include: { customer: { select: { name: true, taxId: true, taxpayerName: true, nitku: true, taxAddress: true, address: true, email: true } } },
       })
       if (!dp) throw definitive(`Uang muka #${input.downPaymentId} tidak ditemukan`)
       if (dp.status !== "confirmed") {
@@ -389,6 +400,8 @@ export async function issueDownPaymentTaxInvoice(
           counterpartyTaxId: finalIdentity.counterpartyTaxId,
           counterpartyName: finalIdentity.counterpartyName,
           counterpartyNitku: finalIdentity.counterpartyNitku,
+          buyerAddress: dp.customer?.taxAddress ?? dp.customer?.address ?? null,
+          buyerEmail: dp.customer?.email ?? null,
           createdBy: input.userId ?? null,
         },
       })
@@ -490,6 +503,8 @@ export async function replaceTaxInvoice(input: ReplaceTaxInvoiceInput): Promise<
           counterpartyTaxId: old.counterpartyTaxId,
           counterpartyName: old.counterpartyName,
           counterpartyNitku: old.counterpartyNitku,
+          buyerAddress: old.buyerAddress,
+          buyerEmail: old.buyerEmail,
           createdBy: input.userId ?? null,
         },
       })

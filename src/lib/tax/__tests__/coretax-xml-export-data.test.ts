@@ -10,15 +10,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => {
   const systemSettingFindFirst = vi.fn()
   const taxInvoiceFindMany = vi.fn()
-  const customerFindMany = vi.fn()
-  const itemFindMany = vi.fn()
   const prisma = {
     systemSetting: { findFirst: systemSettingFindFirst },
     taxInvoice: { findMany: taxInvoiceFindMany },
-    customer: { findMany: customerFindMany },
-    item: { findMany: itemFindMany },
+    customer: { findMany: vi.fn() },
+    item: { findMany: vi.fn() },
   }
-  return { systemSettingFindFirst, taxInvoiceFindMany, customerFindMany, itemFindMany, prisma }
+  return { systemSettingFindFirst, taxInvoiceFindMany, prisma }
 })
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prisma }))
@@ -28,8 +26,6 @@ import { loadCoretaxOutputExport } from "@/lib/tax/coretax-xml-export-data"
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.systemSettingFindFirst.mockResolvedValue({ companyTaxId: "1090000000002325" })
-  mocks.customerFindMany.mockResolvedValue([{ id: 3, address: "Jalan Jakarta", email: "a2@some.com" }])
-  mocks.itemFindMany.mockResolvedValue([{ id: 8, name: "Barang ABC", unitOfMeasure: "PCS", isService: false }])
   mocks.taxInvoiceFindMany.mockImplementation(({ where }: { where: { id: { in: number[] } } }) => {
     if (where.id.in.includes(10)) {
       return Promise.resolve([{ id: 10, taxInvoiceNumber: "040.001-26.00000001" }])
@@ -49,10 +45,11 @@ beforeEach(() => {
         counterpartyTaxId: "3174061502560010",
         counterpartyName: "Kongsi PPN",
         counterpartyNitku: "1090000000002325000000",
+        buyerAddress: "Jalan Jakarta",
+        buyerEmail: "a2@some.com",
         salesInvoiceId: 5,
         salesInvoice: {
           status: "posted",
-          customerId: 3,
           items: [
             {
               description: "Barang ABC",
@@ -62,6 +59,7 @@ beforeEach(() => {
               discount: { toNumber: () => 0 },
               total: { toNumber: () => 12_000_000 },
               itemId: 8,
+              isService: false,
             },
           ],
         },
@@ -96,5 +94,81 @@ describe("loadCoretaxOutputExport", () => {
     const r = await loadCoretaxOutputExport([])
     expect(r.xml).toBeNull()
     expect(r.exportedIds).toEqual([])
+  })
+
+  it("R6IE-07: master berjalan tidak dibaca — loader memakai snapshot beku persis", async () => {
+    mocks.systemSettingFindFirst.mockResolvedValue({
+      companyTaxId: "1090000000002325",
+      companyNitku: "1090000000002325000000",
+    })
+    const r = await loadCoretaxOutputExport([1])
+    expect(mocks.prisma.customer.findMany).not.toHaveBeenCalled()
+    expect(mocks.prisma.item.findMany).not.toHaveBeenCalled()
+    expect(r.xml).toContain("<BuyerAdress>Jalan Jakarta</BuyerAdress>")
+    expect(r.xml).toContain("<BuyerEmail>a2@some.com</BuyerEmail>")
+
+    const invoiceCall = mocks.taxInvoiceFindMany.mock.calls.find((call) =>
+      JSON.stringify(call[0]).includes("buyerAddress"),
+    )
+    expect(invoiceCall).toBeDefined()
+    const select = (invoiceCall?.[0] as { select: Record<string, unknown> }).select
+    expect(select).toMatchObject({ buyerAddress: true, buyerEmail: true })
+    expect(JSON.stringify(select)).toContain('"isService":true')
+  })
+
+  it("R6IE-07: snapshot baris lama tanpa isService ditolak bernama, tidak ditebak false", async () => {
+    mocks.systemSettingFindFirst.mockResolvedValue({
+      companyTaxId: "1090000000002325",
+      companyNitku: "1090000000002325000000",
+    })
+    mocks.taxInvoiceFindMany.mockImplementation(({ where }: { where: { id: { in: number[] } } }) => {
+      if (where.id.in.includes(10)) {
+        return Promise.resolve([{ id: 10, taxInvoiceNumber: "040.001-26.00000001" }])
+      }
+      return Promise.resolve([
+        {
+          id: 1,
+          direction: "out",
+          transactionCode: "04",
+          taxInvoiceNumber: "040.001-26.00000001",
+          taxInvoiceDate: new Date(2026, 0, 15),
+          dpp: { toNumber: () => 11_000_000 },
+          taxRate: { toNumber: () => 12 },
+          taxAmount: { toNumber: () => 1_320_000 },
+          djpStatus: "draft",
+          replacesId: null,
+          counterpartyTaxId: "3174061502560010",
+          counterpartyName: "Kongsi PPN",
+          counterpartyNitku: "1090000000002325000000",
+          buyerAddress: "Jalan Jakarta",
+          buyerEmail: "a2@some.com",
+          salesInvoiceId: 5,
+          salesInvoice: {
+            status: "posted",
+            items: [
+              {
+                description: "Barang ABC",
+                qty: { toNumber: () => 1 },
+                uom: "PCS",
+                unitPrice: { toNumber: () => 12_000_000 },
+                discount: { toNumber: () => 0 },
+                total: { toNumber: () => 12_000_000 },
+                itemId: 8,
+                isService: null,
+              },
+            ],
+          },
+        },
+      ])
+    })
+
+    const r = await loadCoretaxOutputExport([1])
+    expect(r.xml).toBeNull()
+    expect(r.rejections).toEqual([
+      expect.objectContaining({
+        code: "UNMAPPED_REQUIRED_ELEMENT",
+        reason: expect.stringContaining("Opt (jenis barang/jasa)"),
+      }),
+    ])
   })
 })

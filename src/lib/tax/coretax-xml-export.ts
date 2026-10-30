@@ -62,8 +62,8 @@ export interface CoretaxExportLineSnapshot {
   discount: number
   /** Total baris sumber (price × qty − discount) persis tersimpan. */
   total: number
-  /** true = jasa (Opt B), false = barang (Opt A). Dari Item.isService sumber. */
-  isService: boolean
+  /** true = jasa (Opt B), false = barang (Opt A), null = snapshot lama tak diketahui. */
+  isService: boolean | null
 }
 
 export interface CoretaxExportInvoiceSnapshot {
@@ -312,6 +312,14 @@ function passesGate(
   for (const [i, line] of inv.lines.entries()) {
     if (!line.description?.trim()) {
       reject(rejections, id, "UNMAPPED_REQUIRED_ELEMENT", `Faktur #${id} baris ${i + 1}: elemen wajib Name (nama barang/jasa) kosong pada snapshot`)
+    }
+    if (line.isService == null) {
+      reject(
+        rejections,
+        id,
+        "UNMAPPED_REQUIRED_ELEMENT",
+        `Faktur #${id} baris ${i + 1}: elemen wajib Opt (jenis barang/jasa) belum terpetakan — snapshot baris lama tidak mencatat isService, ekspor ditolak bernama`,
+      )
     }
     const unit = line.uom?.trim().toUpperCase()
     if (!unit || !CORETAX_UNIT_CODES[unit]) {

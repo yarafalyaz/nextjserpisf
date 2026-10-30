@@ -1341,6 +1341,10 @@ model TaxInvoice {
   counterpartyTaxId    String?      @map("counterparty_tax_id")
   counterpartyName     String?      @map("counterparty_name")
   counterpartyNitku    String?      @map("counterparty_nitku")
+  // R6IE-07: alamat + email pembeli dibekukan saat terbit (ekspor Coretax
+  // tidak boleh membaca master pelanggan berjalan). Null = terbit lama.
+  buyerAddress         String?      @map("buyer_address") @db.Text
+  buyerEmail           String?      @map("buyer_email")
   /**
    * Masa pengkreditan dipilih (arah in saja), "YYYY-MM".
    */
@@ -2007,6 +2011,9 @@ model SalesInvoiceItem {
   unitPrice      Decimal      @default(0.00) @map("unit_price") @db.Decimal(15, 2)
   discount       Decimal      @default(0.00) @db.Decimal(15, 2)
   total          Decimal      @default(0.00) @db.Decimal(15, 2)
+  // R6IE-07: snapshot jasa/barang saat baris dibuat (ekspor Coretax tidak
+  // boleh membaca Item.isService berjalan). Null = baris lama tak diketahui.
+  isService      Boolean?     @map("is_service")
   // F-2026-10-21-018 BR-TIER-09: sumber harga satuan saat baris dibuat
   // (price_list_tier | price_list_base | item_master). Null = baris lama /
   // konversi / edit — BUKAN klaim historis, jangan ditampilkan sebagai sumber.

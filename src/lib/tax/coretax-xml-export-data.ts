@@ -6,6 +6,11 @@
  * berjalan), lalu memanggil builder murni `buildCoretaxOutputXml`.
  * Satu query massal per sumber (hindari N+1).
  *
+ * R6IE-07: alamat/email pembeli dan jenis jasa/barang dibaca dari snapshot
+ * TaxInvoice/SalesInvoiceItem terbekukan. Tidak ada fallback ke master
+ * pelanggan atau item berjalan — snapshot lama yang belum lengkap tetap null
+ * lalu ditolak bernama oleh builder.
+ *
  * SellerIDTKU dibaca dari `SystemSetting.companyNitku` (TASK-020 B5) —
  * kolom sumber khusus NITKU penjual 22 digit, diisi lewat Pengaturan
  * Perusahaan. Kosong/format salah tetap diteruskan apa adanya: builder
@@ -63,11 +68,12 @@ export async function loadCoretaxOutputExport(taxInvoiceIds: number[]): Promise<
             counterpartyTaxId: true,
             counterpartyName: true,
             counterpartyNitku: true,
+            buyerAddress: true,
+            buyerEmail: true,
             salesInvoiceId: true,
             salesInvoice: {
               select: {
                 status: true,
-                customerId: true,
                 items: {
                   select: {
                     description: true,
@@ -77,6 +83,7 @@ export async function loadCoretaxOutputExport(taxInvoiceIds: number[]): Promise<
                     discount: true,
                     total: true,
                     itemId: true,
+                    isService: true,
                   },
                 },
               },
@@ -91,42 +98,17 @@ export async function loadCoretaxOutputExport(taxInvoiceIds: number[]): Promise<
     sellerIdtku: settings?.companyNitku ?? null,
   }
 
-  const customerIds = [
-    ...new Set(invoices.map((i) => i.salesInvoice?.customerId).filter((v): v is number => v != null)),
-  ]
-  const itemIds = [
-    ...new Set(
-      invoices.flatMap((i) => (i.salesInvoice?.items ?? []).map((l) => l.itemId)).filter((v): v is number => v != null),
-    ),
-  ]
   const replacedIds = [...new Set(invoices.map((i) => i.replacesId).filter((v): v is number => v != null))]
-
-  const [customers, items, replaced] = await Promise.all([
-    customerIds.length === 0
-      ? Promise.resolve([])
-      : prisma.customer.findMany({
-          where: { id: { in: customerIds } },
-          select: { id: true, address: true, email: true },
-        }),
-    itemIds.length === 0
-      ? Promise.resolve([])
-      : prisma.item.findMany({
-          where: { id: { in: itemIds } },
-          select: { id: true, name: true, unitOfMeasure: true, isService: true },
-        }),
+  const replaced =
     replacedIds.length === 0
-      ? Promise.resolve([])
-      : prisma.taxInvoice.findMany({
+      ? []
+      : await prisma.taxInvoice.findMany({
           where: { id: { in: replacedIds } },
           select: { id: true, taxInvoiceNumber: true },
-        }),
-  ])
-  const customerById = new Map(customers.map((c) => [c.id, c]))
-  const itemById = new Map(items.map((i) => [i.id, i]))
+        })
   const replacedById = new Map(replaced.map((r) => [r.id, r]))
 
   const snapshots: CoretaxExportInvoiceSnapshot[] = invoices.map((inv) => {
-    const customer = inv.salesInvoice ? customerById.get(inv.salesInvoice.customerId) : undefined
     return {
       taxInvoiceId: inv.id,
       direction: inv.direction,
@@ -142,21 +124,18 @@ export async function loadCoretaxOutputExport(taxInvoiceIds: number[]): Promise<
       counterpartyTaxId: inv.counterpartyTaxId,
       counterpartyName: inv.counterpartyName,
       counterpartyNitku: inv.counterpartyNitku,
-      buyerAddress: customer?.address ?? null,
-      buyerEmail: customer?.email ?? null,
+      buyerAddress: inv.buyerAddress ?? null,
+      buyerEmail: inv.buyerEmail ?? null,
       sourceStatus: inv.salesInvoice ? String(inv.salesInvoice.status) : null,
-      lines: (inv.salesInvoice?.items ?? []).map((line) => {
-        const item = line.itemId != null ? itemById.get(line.itemId) : undefined
-        return {
-          description: line.description ?? item?.name ?? null,
-          qty: num(line.qty),
-          uom: line.uom ?? item?.unitOfMeasure ?? null,
-          unitPrice: num(line.unitPrice),
-          discount: num(line.discount),
-          total: num(line.total),
-          isService: item?.isService ?? false,
-        }
-      }),
+      lines: (inv.salesInvoice?.items ?? []).map((line) => ({
+        description: line.description,
+        qty: num(line.qty),
+        uom: line.uom,
+        unitPrice: num(line.unitPrice),
+        discount: num(line.discount),
+        total: num(line.total),
+        isService: line.isService,
+      })),
     }
   })
 
