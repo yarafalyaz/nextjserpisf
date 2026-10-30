@@ -2177,6 +2177,22 @@ export async function completeSalesReturn(returnId: number) {
 
   // Atomically process stock adjustment and post GL journal in a single transaction.
   await prisma.$transaction(async (tx) => {
+    // STOK-03/STOK-10: klaim atomik draft->(diproses hook) + guard faktur.
+    // Baris retur dikunci FOR UPDATE oleh hook stok; di sini status dibaca
+    // ulang dari baris terkunci SEBELUM mutasi apa pun, dan faktur asal
+    // yang sudah cancelled menolak completion (restock/kredit dobel).
+    if (salesReturn.salesInvoiceId != null) {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${salesReturn.salesInvoiceId} FOR UPDATE`
+      }
+      const invoice = await tx.salesInvoice.findUnique({
+        where: { id: salesReturn.salesInvoiceId },
+        select: { status: true },
+      })
+      if (!invoice || invoice.status === "cancelled") {
+        throw new Error("Faktur asal retur sudah dibatalkan — retur tidak bisa diselesaikan.")
+      }
+    }
     // Stock Move IN — the stock hook sets status to "completed" at the end. Do NOT
     // set it here first, otherwise the hook's "already completed" guard aborts and
     // stock is never returned while the accounting leg still posts (GL/stock drift).
@@ -4038,6 +4054,15 @@ export async function voidSalesInvoice(id: number) {
     const activePayments = invoice.payments.filter((p) => !isReversedPayment(p))
     if (activePayments.length > 0) {
       throw new Error("Reversal pembayaran aktif faktur ini terlebih dahulu sebelum membatalkan.")
+    }
+    // STOK-03: retur draft/completed atas faktur ini memblokir void —
+    // reversal faktur sendiri memulihkan stok; retur yang kemudian
+    // diselesaikan akan memulihkan stok + kredit AR kedua kali.
+    const blockingReturns = await tx.salesReturn.count({
+      where: { salesInvoiceId: id, status: { in: ["draft", "completed"] } },
+    })
+    if (blockingReturns > 0) {
+      throw new Error("Faktur memiliki retur penjualan draft/selesai — selesaikan atau batalkan retur terlebih dahulu sebelum membatalkan faktur.")
     }
 
     await reverseSalesInvoicePostingTx(tx, id)

@@ -850,6 +850,16 @@ describe("Sales Invoice Actions", () => {
     expect(vi.mocked(posting.reverseSalesInvoicePostingTx)).toHaveBeenCalled()
   })
 
+  it("STOK-03: voidSalesInvoice ditolak bila ada retur draft atas faktur", async () => {
+    const posting = await import("@/lib/services/sales-invoice-posting.service")
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", customerId: 1, grandTotal: 100, paidAmount: 0, payments: [] })
+    mocks.prismaMock.salesReturn.count.mockResolvedValueOnce(1)
+    const res = await actions.voidSalesInvoice(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("retur penjualan")
+    expect(vi.mocked(posting.reverseSalesInvoicePostingTx)).not.toHaveBeenCalled()
+  })
+
   // === reverseSalesInvoicePostingTx delegation ===
   it("deleteSalesInvoice delegates stock/GL reversal to the posting service", async () => {
     const posting = await import("@/lib/services/sales-invoice-posting.service")
@@ -859,6 +869,34 @@ describe("Sales Invoice Actions", () => {
     // The reversal (stock restore + journal delete) now lives in the shared
     // service so the invoice-edit flow can reuse it; assert the delegation.
     expect(vi.mocked(posting.reverseSalesInvoicePostingTx)).toHaveBeenCalled()
+  })
+})
+
+describe("completeSalesReturn STOK-03", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.requirePermissionMock.mockResolvedValue({ id: 2 })
+  })
+
+  it("faktur asal cancelled -> complete ditolak sebelum hook stok", async () => {
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({
+      id: 7, status: "draft", reason: "Barang cacat", createdBy: 3, salesInvoiceId: 9, items: [],
+    })
+    mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "cancelled" })
+    const res = await actions.completeSalesReturn(7)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("dibatalkan")
+    expect(mocks.prismaMock.stockMove.findFirst).not.toHaveBeenCalled()
+  })
+
+  it("faktur asal aktif -> complete lolos guard", async () => {
+    mocks.prismaMock.salesReturn.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 7, status: "draft", reason: "Barang cacat", createdBy: 3, salesInvoiceId: 9, items: [] })
+      .mockResolvedValue({ id: 7, status: "draft", items: [] })
+    mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "posted" })
+    mocks.prismaMock.stockMove.findFirst.mockResolvedValue({ id: 1 })
+    const res = await actions.completeSalesReturn(7)
+    expect(res?.success).toBe(true)
   })
 })
 
