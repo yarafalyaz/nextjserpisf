@@ -165,6 +165,32 @@ it("rejects a non-integer userId with 400 and never queries", async () => {
     const dangerousCell = /,"([=+\-@\t\r])[^"]*",/
     expect(body).not.toMatch(dangerousCell)
   })
+
+  it("R7PR-05: pemicu `|` dan `%` di awal sel ikut dineutralkan (pola baku repo)", async () => {
+    mocks.authFn.mockResolvedValue({
+      user: { id: 1, roles: ["admin"], permissions: ["manage_settings"] },
+    })
+    mocks.findManyLogs.mockResolvedValue([
+      {
+        createdAt: new Date("2026-06-15T08:00:00Z"),
+        userId: 99,
+        action: "create",
+        modelType: "SalesInvoice",
+        modelId: 1,
+        description: "|2+3",
+        ipAddress: "%2+3",
+      },
+    ])
+    mocks.findManyUsers.mockResolvedValue([{ id: 99, name: "Admin" }])
+
+    const res = await GET(makeReq("http://localhost/api/activity-logs/export") as any)
+    expect(res.status).toBe(200)
+    const body = await res.text()
+    // Sel diawali `'` sebelum pemicu — tidak boleh ada "| atau "% polos.
+    expect(body).toContain("\"'|2+3\"")
+    expect(body).toContain("\"'%2+3\"")
+    expect(body).not.toMatch(/,"[|%]/)
+  })
 })
 
 describe("GET /api/activity-logs/export — kontrak kolom query", () => {

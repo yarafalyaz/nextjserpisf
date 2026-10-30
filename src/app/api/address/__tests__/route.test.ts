@@ -91,6 +91,16 @@ describe("GET /api/address — kodeInduk validation", () => {
     expect(readFileMock).toHaveBeenCalledWith(expect.stringContaining("villages/11.csv"), "utf-8")
   })
 
+  it("R7API-05: unknown province code for villages returns 404, not 500", async () => {
+    const enoent = new Error("ENOENT: no such file or directory") as Error & { code?: string }
+    enoent.code = "ENOENT"
+    readFileMock.mockRejectedValue(enoent)
+    const res = await GET(req("tipe=villages&kodeInduk=99"))
+    expect(res.status).toBe(404)
+    const body = await res.json()
+    expect(body.error.message).toMatch(/tidak ditemukan/)
+  })
+
   it("returns 500 when filesystem read fails", async () => {
     // Reset module registry so the route's in-memory CSV cache (Map at module
     // level) is wiped — previous tests successfully cached their files, and

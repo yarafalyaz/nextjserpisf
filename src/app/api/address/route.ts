@@ -62,7 +62,17 @@ export async function GET(request: NextRequest) {
     if (type === "villages" && parentCode) {
       const provinceCode = parentCode.substring(0, 2)
       const filePath = join(DATA_DIR, "villages", `${provinceCode}.csv`)
-      const rows = await loadCSV(filePath)
+      // R7API-05: kode provinsi tak dikenal (mis. 99) dulu jatuh ke ENOENT ->
+      // 500 lewat catch umum. Berkas desa tak ada = kode tak ditemukan (404).
+      let rows: string[][]
+      try {
+        rows = await loadCSV(filePath)
+      } catch (err) {
+        if ((err as { code?: string })?.code === "ENOENT") {
+          return apiError("NOT_FOUND", "Kode provinsi tidak ditemukan")
+        }
+        throw err
+      }
       const filtered = rows.filter(r => r[1] === parentCode)
       const data = filtered.map(r => ({ code: r[0], name: toTitleCase(r[2]), postalCode: r[5] || "" }))
       return NextResponse.json(data, { headers: CACHE_HEADERS })

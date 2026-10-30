@@ -77,7 +77,10 @@ export async function GET(req: NextRequest) {
         const esc = (val: unknown) => {
           if (val == null) return "";
           let str = String(val).replace(/"/g, '""');
-          if (/^[=+\-@\t\r]/.test(str)) str = "'" + str;
+          // R7PR-05: samakan dengan guard formula CSV baku repo
+          // /^[=+\-@\t|%]/ (quotation-followup-export) — `|` dan `%`
+          // membuka formula juga di beberapa aplikasi spreadsheet.
+          if (/^[=+\-@\t|%]/.test(str)) str = "'" + str;
           return str;
         };
 
