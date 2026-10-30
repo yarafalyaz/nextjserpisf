@@ -69,7 +69,7 @@ export default async function StockOpnamePage({
           const items = ids.length
             ? await prisma.item.findMany({
                 where: { id: { in: ids } },
-                select: { id: true, sku: true, name: true, unitOfMeasure: true, cost: true },
+                select: { id: true, sku: true, name: true, unitOfMeasure: true, cost: true, trackBatch: true, trackSerial: true },
                 orderBy: { name: "asc" },
               })
             : []
@@ -81,6 +81,8 @@ export default async function StockOpnamePage({
             uom: item.unitOfMeasure,
             systemQty: qtyById.get(item.id) ?? 0,
             unitCost: Number(item.cost),
+            trackBatch: item.trackBatch,
+            trackSerial: item.trackSerial,
           }))
         })()
       : []

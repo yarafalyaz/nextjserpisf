@@ -123,6 +123,15 @@ export interface CountRow {
   systemQty: number
   count1: number | null
   count2: number | null
+  trackBatch?: boolean
+  trackSerial?: boolean
+  batchNumbers?: string[]
+  serialNumbers?: string[]
+}
+
+/** "LOT-A, LOT-B" -> daftar bersih (pola input lot penyesuaian STOK-12). */
+function splitList(v: string): string[] {
+  return v.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)
 }
 
 /** Tabel hitung 1/2 per baris. */
@@ -130,9 +139,14 @@ export function StocktakeLineForm({ sessionId, lines, canCreate }: { sessionId: 
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [counts, setCounts] = useState<Record<number, { count1: string; count2: string }>>({})
+  const [lots, setLots] = useState<Record<number, { batch: string; serial: string }>>({})
 
   function set(lineId: number, field: "count1" | "count2", value: string) {
     setCounts((prev) => ({ ...prev, [lineId]: { ...prev[lineId], [field]: value } }))
+  }
+
+  function setLot(lineId: number, field: "batch" | "serial", value: string) {
+    setLots((prev) => ({ ...prev, [lineId]: { ...prev[lineId], [field]: value } }))
   }
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
@@ -145,6 +159,8 @@ export function StocktakeLineForm({ sessionId, lines, canCreate }: { sessionId: 
       count2: counts[l.id]?.count2 !== undefined && counts[l.id].count2 !== ""
         ? Number(counts[l.id].count2)
         : l.count2,
+      batchNumbers: lots[l.id]?.batch !== undefined ? splitList(lots[l.id].batch) : l.batchNumbers,
+      serialNumbers: lots[l.id]?.serial !== undefined ? splitList(lots[l.id].serial) : l.serialNumbers,
     }))
     startTransition(async () => {
       const fd = new FormData()
@@ -173,6 +189,7 @@ export function StocktakeLineForm({ sessionId, lines, canCreate }: { sessionId: 
             <th>Sistem</th>
             <th>Hitung 1</th>
             <th>Hitung 2</th>
+            <th>Lot / Serial (surplus)</th>
           </tr>
         </thead>
         <tbody>
@@ -203,6 +220,30 @@ export function StocktakeLineForm({ sessionId, lines, canCreate }: { sessionId: 
                   onChange={(e) => set(l.id, "count2", e.target.value)}
                   className="form-input"
                 />
+              </td>
+              <td>
+                {l.trackBatch && (
+                  <input
+                    type="text"
+                    aria-label={`Nomor batch baris ${l.id}`}
+                    defaultValue={(l.batchNumbers ?? []).join(", ")}
+                    placeholder="LOT-A, LOT-B"
+                    disabled={!canCreate}
+                    onChange={(e) => setLot(l.id, "batch", e.target.value)}
+                    className="form-input"
+                  />
+                )}
+                {l.trackSerial && (
+                  <input
+                    type="text"
+                    aria-label={`Nomor serial baris ${l.id}`}
+                    defaultValue={(l.serialNumbers ?? []).join(", ")}
+                    placeholder="SN-1, SN-2"
+                    disabled={!canCreate}
+                    onChange={(e) => setLot(l.id, "serial", e.target.value)}
+                    className="form-input"
+                  />
+                )}
               </td>
             </tr>
           ))}

@@ -2517,6 +2517,13 @@ export async function snapshotStocktakeSession(id: number) {
 }
 
 /** Simpan hitungan 1/2 per baris (JSON: [{lineId,count1?,count2?,note?}]). */
+/** Daftar lot/serial dari payload: string dibersihkan, kosong dibuang. */
+function cleanStringList(v: unknown): string[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out = v.map((s) => String(s).trim()).filter(Boolean);
+  return out.length > 0 ? out : undefined;
+}
+
 export async function saveStocktakeCounts(id: number, formData: FormData) {
   try {
     const user = await requirePermission("create_stock_adjustments");
@@ -2528,13 +2535,19 @@ export async function saveStocktakeCounts(id: number, formData: FormData) {
     if (session.status !== "counting" && session.status !== "recount") {
       throw new Error("Sesi tidak dalam tahap penghitungan");
     }
-    const counts = safeJsonParse<{ lineId: number; count1?: number; count2?: number; note?: string }[]>(
+    const counts = safeJsonParse<{
+      lineId: number; count1?: number; count2?: number; note?: string;
+      batchNumbers?: unknown; serialNumbers?: unknown;
+    }[]>(
       (formData.get("counts") as string | null) ?? null,
     ) ?? [];
     await prisma.$transaction(async (tx) => {
       for (const c of counts) {
         if (!Number.isSafeInteger(c.lineId) || c.lineId <= 0) continue;
-        const data: { count1?: number; count2?: number | null; note?: string | null } = {};
+        const data: {
+          count1?: number; count2?: number | null; note?: string | null;
+          batchNumbers?: string[]; serialNumbers?: string[];
+        } = {};
         if (c.count1 != null && Number.isFinite(Number(c.count1)) && Number(c.count1) >= 0) {
           data.count1 = Number(c.count1);
         }
@@ -2542,6 +2555,11 @@ export async function saveStocktakeCounts(id: number, formData: FormData) {
           data.count2 = Number(c.count2);
         }
         if (c.note !== undefined) data.note = String(c.note).slice(0, 500) || null;
+        // Lot/serial hasil hitung: diteruskan ke item penyesuaian saat posting.
+        const batchNumbers = cleanStringList(c.batchNumbers);
+        if (batchNumbers) data.batchNumbers = batchNumbers;
+        const serialNumbers = cleanStringList(c.serialNumbers);
+        if (serialNumbers) data.serialNumbers = serialNumbers;
         if (Object.keys(data).length === 0) continue;
         await tx.stocktakeLine.updateMany({ where: { id: c.lineId, sessionId: id }, data });
       }
@@ -2621,7 +2639,7 @@ export async function postStocktakeSession(id: number) {
       await tx.$queryRaw`SELECT id FROM stocktake_sessions WHERE id = ${id} FOR UPDATE`;
       const session = await tx.stocktakeSession.findUnique({
         where: { id },
-        include: { lines: { include: { item: { select: { cost: true, trackBatch: true } } } } },
+        include: { lines: { include: { item: { select: { cost: true, trackBatch: true, trackSerial: true } } } } },
       });
       if (!session) throw new Error("Sesi opname tidak ditemukan");
       if (session.status !== "approved") {
@@ -2649,17 +2667,22 @@ export async function postStocktakeSession(id: number) {
       // (memerlukan nomor batch eksplisit) SESUDAH sesi terlanjur posted
       // dan draft adjustment lahir setengah-mati. Tolak di sini, sesi tetap
       // approved sehingga hitungan bisa dikoreksi / lot dilengkapi.
-      const trackBatchByItem = new Map(
-        session.lines.map((l) => [l.itemId, Boolean(l.item.trackBatch)]),
-      );
-      const surplusBatchItems = differing.filter(
-        (f) =>
-          trackBatchByItem.get(f.itemId) &&
-          f.finalCount - (live.get(f.itemId) ?? 0) > 0,
-      );
+      // Surplus item trackBatch/trackSerial wajib membawa lot/serial hasil
+      // hitung (hook penyesuaian menolak penambahan tanpa identitas itu).
+      // Baris opname kini bisa mencatatnya; yang masih kosong ditolak di
+      // sini — sesi tetap approved, bukan gugur belakangan di hook.
+      const lineByItem = new Map(session.lines.map((l) => [l.itemId, l]));
+      const surplusBatchItems = differing.filter((f) => {
+        if (f.finalCount - (live.get(f.itemId) ?? 0) <= 0) return false;
+        const line = lineByItem.get(f.itemId);
+        if (!line) return false;
+        const needsBatch = Boolean(line.item.trackBatch) && cleanStringList(line.batchNumbers) === undefined;
+        const needsSerial = Boolean(line.item.trackSerial) && cleanStringList(line.serialNumbers) === undefined;
+        return needsBatch || needsSerial;
+      });
       if (surplusBatchItems.length > 0) {
         throw new Error(
-          `Item batch-tracked surplus belum bisa diposting dari opname (nomor lot belum tercatat): item ${surplusBatchItems.map((f) => `#${f.itemId}`).join(", ")}. Catat selisih lewat Penyesuaian stok dengan nomor batch eksplisit.`,
+          `Item surplus belum bisa diposting dari opname (nomor lot/serial belum tercatat): item ${surplusBatchItems.map((f) => `#${f.itemId}`).join(", ")}. Lengkapi lot/serial pada hitungan sesi, atau catat selisih lewat Penyesuaian stok.`,
         );
       }
       const snapByItem = new Map(finals.map((f) => [f.itemId, f.systemQty]));
@@ -2694,6 +2717,8 @@ export async function postStocktakeSession(id: number) {
                 unitCost: Number(line.item.cost ?? 0),
                 totalCost: 0,
                 notes: `Opname ${session.documentNo}`,
+                batchNumbers: cleanStringList(line.batchNumbers),
+                serialNumbers: cleanStringList(line.serialNumbers),
               };
             }),
           },

@@ -4135,6 +4135,10 @@ model StocktakeLine {
   finalCount Decimal?         @map("final_count") @db.Decimal(15, 2)
   variance   Decimal?         @map("variance") @db.Decimal(15, 2)
   note       String?          @db.VarChar(500)
+  // Lot/serial hasil hitung fisik (sesi 3): diteruskan ke StockAdjustmentItem
+  // saat posting agar surplus item trackBatch/trackSerial tidak gugur di hook.
+  batchNumbers  Json?         @map("batch_numbers")
+  serialNumbers Json?         @map("serial_numbers")
   session    StocktakeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   item       Item             @relation(fields: [itemId], references: [id])
 

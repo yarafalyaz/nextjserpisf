@@ -1404,8 +1404,27 @@ describe("stocktake session (P1-5)", () => {
     });
     const res = await actions.postStocktakeSession(1);
     expect(res.success).toBe(false);
-    expect(res.error).toContain("batch");
+    expect(res.error).toContain("lot/serial");
     expect(mocks.prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+  });
+
+  it("postStocktakeSession meneruskan lot tercatat ke item penyesuaian", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({ warehouseId: 1 });
+    mocks.prismaMock.$queryRaw.mockResolvedValue([{ item_id: 10, qty: 10 }]);
+    mocks.prismaMock.stocktakeSession.findUnique.mockResolvedValue({
+      id: 1,
+      warehouseId: 1,
+      status: "approved",
+      documentNo: "STK-1",
+      lines: [
+        { itemId: 10, systemQty: 10, count1: 14, count2: null, batchNumbers: [" LOT-A ", "", "LOT-B"], item: { cost: 5, trackBatch: true, trackSerial: false } },
+      ],
+    });
+    mocks.prismaMock.stockAdjustment.create.mockResolvedValue({ id: 99 });
+    const res = await actions.postStocktakeSession(1);
+    expect(res).toEqual({ success: true, adjustmentId: 99 });
+    const createArg = mocks.prismaMock.stockAdjustment.create.mock.calls[0][0];
+    expect(createArg.data.items.create[0].batchNumbers).toEqual(["LOT-A", "LOT-B"]);
   });
 
   it("postStocktakeSession menolak sesi yang sudah posted (kalah klaim)", async () => {

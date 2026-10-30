@@ -37,7 +37,7 @@ export default async function StocktakeSessionDetailPage({
           include: {
             warehouse: { select: { code: true, name: true } },
             lines: {
-              include: { item: { select: { sku: true, name: true, unitOfMeasure: true } } },
+              include: { item: { select: { sku: true, name: true, unitOfMeasure: true, trackBatch: true, trackSerial: true } } },
               orderBy: { id: "asc" },
               take: 500,
             },
@@ -49,7 +49,7 @@ export default async function StocktakeSessionDetailPage({
           include: {
             warehouse: { select: { code: true, name: true } },
             lines: {
-              include: { item: { select: { sku: true, name: true, unitOfMeasure: true } } },
+              include: { item: { select: { sku: true, name: true, unitOfMeasure: true, trackBatch: true, trackSerial: true } } },
               orderBy: { id: "asc" },
               take: 500,
             },
@@ -97,6 +97,10 @@ export default async function StocktakeSessionDetailPage({
             systemQty: Number(l.systemQty),
             count1: l.count1 == null ? null : Number(l.count1),
             count2: l.count2 == null ? null : Number(l.count2),
+            trackBatch: l.item.trackBatch,
+            trackSerial: l.item.trackSerial,
+            batchNumbers: Array.isArray(l.batchNumbers) ? l.batchNumbers.map(String) : undefined,
+            serialNumbers: Array.isArray(l.serialNumbers) ? l.serialNumbers.map(String) : undefined,
           }))} />
         </div>
       </div>

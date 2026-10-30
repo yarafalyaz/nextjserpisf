@@ -20,6 +20,12 @@ interface OpnameRow {
   uom: string
   systemQty: number
   unitCost: number
+  trackBatch?: boolean
+  trackSerial?: boolean
+}
+
+function splitList(v: string): string[] {
+  return v.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)
 }
 
 interface OpnameFormProps {
@@ -41,6 +47,7 @@ export function OpnameForm({ warehouseId, date, rows, canCreate }: OpnameFormPro
   const [counted, setCounted] = useState<Record<number, string>>(
     Object.fromEntries(rows.map((row) => [row.id, String(row.systemQty)])),
   )
+  const [lots, setLots] = useState<Record<number, { batch: string; serial: string }>>({})
   const [notes, setNotes] = useState("")
 
   const differing = rows.filter((row) => {
@@ -61,6 +68,8 @@ export function OpnameForm({ warehouseId, date, rows, canCreate }: OpnameFormPro
       newQty: Number(counted[row.id]),
       unitCost: row.unitCost,
       reason: "Hasil stok opname",
+      batchNumbers: lots[row.id]?.batch ? splitList(lots[row.id].batch) : undefined,
+      serialNumbers: lots[row.id]?.serial ? splitList(lots[row.id].serial) : undefined,
     }))
 
     const formData = new FormData()
@@ -97,6 +106,7 @@ export function OpnameForm({ warehouseId, date, rows, canCreate }: OpnameFormPro
             <DetailTableTh align="right">Stok Sistem</DetailTableTh>
             <DetailTableTh align="right">Hasil Hitung</DetailTableTh>
             <DetailTableTh align="right">Selisih</DetailTableTh>
+            <DetailTableTh>Lot / Serial (surplus)</DetailTableTh>
           </DetailTableHead>
           <DetailTableBody>
             {rows.map((row) => {
@@ -123,6 +133,30 @@ export function OpnameForm({ warehouseId, date, rows, canCreate }: OpnameFormPro
                   </DetailTableTd>
                   <DetailTableTd align="right" className={variance === null || variance === 0 ? "" : variance > 0 ? "text-success font-semibold" : "text-danger font-semibold"}>
                     {variance === null ? "–" : formatAccounting(variance, { zeroDash: false })}
+                  </DetailTableTd>
+                  <DetailTableTd>
+                    <div className="flex flex-col gap-1">
+                      {row.trackBatch && (
+                        <Input
+                          value={lots[row.id]?.batch ?? ""}
+                          disabled={!canCreate}
+                          onChange={(e) => setLots((prev) => ({ ...prev, [row.id]: { ...prev[row.id], batch: e.target.value, serial: prev[row.id]?.serial ?? "" } }))}
+                          placeholder="LOT-A, LOT-B"
+                          aria-label={`Nomor batch ${row.name}`}
+                          className="w-[150px]"
+                        />
+                      )}
+                      {row.trackSerial && (
+                        <Input
+                          value={lots[row.id]?.serial ?? ""}
+                          disabled={!canCreate}
+                          onChange={(e) => setLots((prev) => ({ ...prev, [row.id]: { ...prev[row.id], serial: e.target.value, batch: prev[row.id]?.batch ?? "" } }))}
+                          placeholder="SN-1, SN-2"
+                          aria-label={`Nomor serial ${row.name}`}
+                          className="w-[150px]"
+                        />
+                      )}
+                    </div>
                   </DetailTableTd>
                 </DetailTableRow>
               )
