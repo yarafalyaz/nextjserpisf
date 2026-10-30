@@ -13,6 +13,16 @@ const mocks = vi.hoisted(() => ({
   loadTrialBalanceReport: vi.fn(),
   loadIncomeStatementByCostCenter: vi.fn(),
   loadPayrollRows: vi.fn(),
+  loadLaborRecapReport: vi.fn(async () => ({
+    report: {
+      technicians: [],
+      unattributed: { lineCount: 0, laborHours: 0, totalAmount: 0 },
+      undated: { lineCount: 0, laborHours: 0, totalAmount: 0 },
+      totalLineCount: 0,
+      totalLaborHours: 0,
+      totalAmount: 0,
+    },
+  })),
   loadWithholdingSummary: vi.fn(),
   getSystemSettings: vi.fn(),
 }))
@@ -26,6 +36,13 @@ vi.mock("@/lib/auth/permissions", () => ({
 vi.mock("@/lib/reports/payroll-reports-data", () => ({
   loadPayrollRows: (...args: unknown[]) => mocks.loadPayrollRows(...args),
 }))
+vi.mock("@/lib/reports/labor-recap-export", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/reports/labor-recap-export")>()
+  return {
+    ...actual,
+    loadLaborRecapReport: (...args: unknown[]) => mocks.loadLaborRecapReport(...args),
+  }
+})
 vi.mock("@/lib/reports/tax-summary-data", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/reports/tax-summary-data")>()
   return {
@@ -164,7 +181,8 @@ beforeEach(() => {
 
 describe("GET /api/pdf", () => {
   describe("gerbang payroll fail-closed (view_payroll_reports saja)", () => {
-    const PAYROLL_KEYS = ["gaji-karyawan", "pph-21", "porsi-gaji"]
+    // R6PA-03: rekap-borongan ikut gerbang payroll (upah per teknisi).
+    const PAYROLL_KEYS = ["gaji-karyawan", "pph-21", "porsi-gaji", "rekap-borongan"]
 
     it.each(PAYROLL_KEYS)("menolak %s untuk sesi hanya-view_reports (tanpa menyentuh loader)", async (key) => {
       mocks.grants = new Set(["view_reports"])

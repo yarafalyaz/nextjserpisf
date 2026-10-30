@@ -48,7 +48,9 @@ export async function GET(request: Request) {
   // (loadWithholdingSummary), nol data karyawan — tetap gerbang laporan pajak
   // umum view_reports (vonis BOT 4 F-2026-10-21-034 + putusan Lead opsi (a)
   // atas sanggahan PR #316). Jangan masukkan kembali ke himpunan ini.
-  const PAYROLL_PDF_KEYS = new Set(["gaji-karyawan", "pph-21", "porsi-gaji"])
+  // R6PA-03: rekap-borongan memuat upah PER TEKNISI (nama + amount baris
+  // labor) — data upah personal, gerbang payroll sama, bukan view_reports.
+  const PAYROLL_PDF_KEYS = new Set(["gaji-karyawan", "pph-21", "porsi-gaji", "rekap-borongan"])
   if (PAYROLL_PDF_KEYS.has(report)) {
     if (!(await hasPermission("view_payroll_reports"))) {
       return apiError("FORBIDDEN", "Akses ditolak")
