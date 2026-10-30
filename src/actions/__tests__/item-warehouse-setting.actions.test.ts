@@ -18,10 +18,13 @@ const mocks = vi.hoisted(() => {
     // aksi pengaturan menyentuh stok/jurnal = tes meledak (BR-MS-09).
   }
   const requirePermissionMock = vi.fn().mockResolvedValue({ id: 7 })
-  return { prismaMock, requirePermissionMock }
+  const userWarehouseFindMany = vi.fn().mockResolvedValue([])
+  return { prismaMock, requirePermissionMock, userWarehouseFindMany }
 })
 
-vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: { ...mocks.prismaMock, userWarehouse: { findMany: mocks.userWarehouseFindMany } },
+}))
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: mocks.requirePermissionMock }))
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 
@@ -35,7 +38,9 @@ import {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
+  // Default: super_admin = akses semua gudang (perilaku lama tes).
+  mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["super_admin"] })
+  mocks.userWarehouseFindMany.mockResolvedValue([])
   mocks.prismaMock.activityLog.create.mockResolvedValue({ id: 1 })
   mocks.prismaMock.item.findUnique.mockResolvedValue({
     id: 1, sku: "BRG-1", name: "Busi", isActive: true, isService: false, deletedAt: null, minStock: 5,
@@ -47,6 +52,31 @@ beforeEach(() => {
   mocks.prismaMock.itemWarehouseSetting.upsert.mockImplementation(
     async (args: { create: Record<string, unknown> }) => ({ id: 9, ...args.create }),
   )
+})
+
+describe("ROUND5-SCOPE cakupan gudang", () => {
+  it("user ter-assign gudang lain tidak bisa menulis pasangan gudang ini", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 8, roles: ["warehouse"] })
+    mocks.userWarehouseFindMany.mockResolvedValue([{ warehouseId: 99 }])
+    const res = await setItemWarehouseMinStock(1, 2, 2)
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toContain("tidak memiliki akses ke gudang")
+    expect(mocks.prismaMock.itemWarehouseSetting.upsert).not.toHaveBeenCalled()
+  })
+
+  it("list hanya mengembalikan gudang dalam cakupan user", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 8, roles: ["warehouse"] })
+    mocks.userWarehouseFindMany.mockResolvedValue([{ warehouseId: 2 }])
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([
+      { id: 2, name: "Gudang Bengkel", code: "GB" },
+      { id: 3, name: "Gudang Lain", code: "GL" },
+    ])
+    mocks.prismaMock.itemWarehouseSetting.findMany.mockResolvedValue([])
+    mocks.prismaMock.inventoryLayer.findMany.mockResolvedValue([])
+    const res = await listItemWarehouseSettings(1)
+    expect(res.success).toBe(true)
+    if (res.success) expect(res.rows.map((r) => r.warehouseId)).toEqual([2])
+  })
 })
 
 describe("setItemWarehouseMinStock", () => {

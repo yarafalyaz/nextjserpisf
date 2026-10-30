@@ -22,6 +22,7 @@
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { assertWarehouseAccess, getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 
 type Result<T extends object = object> =
@@ -99,6 +100,13 @@ async function writeSettingLog(args: {
   }
 }
 
+/** ROUND5-SCOPE: pasangan (item, gudang) hanya boleh diatur/dibaca oleh
+ * user yang memang ter-assign ke gudang itu. */
+async function assertWarehouseScopeFor(user: { id: string; roles: string[]; permissions?: string[] }, warehouseId: number) {
+  const scope = await getWarehouseScope(user)
+  assertWarehouseAccess(scope, warehouseId)
+}
+
 async function assertItemAndWarehouse(itemId: number, warehouseId: number) {
   const [item, warehouse] = await Promise.all([
     prisma.item.findUnique({
@@ -129,6 +137,7 @@ export async function setItemWarehouseMinStock(
     const warehouseId = positiveId(warehouseIdInput, "Gudang")
     const minStock = parseMinStock(minStockInput)
     const { item, warehouse } = await assertItemAndWarehouse(itemId, warehouseId)
+    await assertWarehouseScopeFor(user, warehouseId)
 
     const existing = await prisma.itemWarehouseSetting.findUnique({
       where: { itemId_warehouseId: { itemId, warehouseId } },
@@ -186,6 +195,7 @@ export async function setItemWarehouseLeadTime(
     const warehouseId = positiveId(warehouseIdInput, "Gudang")
     const leadTimeDays = parseLeadTimeDays(leadTimeInput)
     const { item, warehouse } = await assertItemAndWarehouse(itemId, warehouseId)
+    await assertWarehouseScopeFor(user, warehouseId)
 
     const existing = await prisma.itemWarehouseSetting.findUnique({
       where: { itemId_warehouseId: { itemId, warehouseId } },
@@ -238,6 +248,7 @@ export async function removeItemWarehouseLeadTime(
     const itemId = positiveId(itemIdInput, "Barang")
     const warehouseId = positiveId(warehouseIdInput, "Gudang")
     const { item, warehouse } = await assertItemAndWarehouse(itemId, warehouseId)
+    await assertWarehouseScopeFor(user, warehouseId)
 
     const existing = await prisma.itemWarehouseSetting.findUnique({
       where: { itemId_warehouseId: { itemId, warehouseId } },
@@ -280,6 +291,7 @@ export async function removeItemWarehouseMinStock(
     const itemId = positiveId(itemIdInput, "Barang")
     const warehouseId = positiveId(warehouseIdInput, "Gudang")
     const { item, warehouse } = await assertItemAndWarehouse(itemId, warehouseId)
+    await assertWarehouseScopeFor(user, warehouseId)
 
     const existing = await prisma.itemWarehouseSetting.findUnique({
       where: { itemId_warehouseId: { itemId, warehouseId } },
@@ -329,7 +341,7 @@ export async function listItemWarehouseSettings(
   itemIdInput: unknown,
 ): Promise<Result<{ rows: ItemWarehouseSettingRow[]; globalMinStock: number }>> {
   try {
-    await requirePermission("view_items")
+    const listUser = await requirePermission("view_items")
     const itemId = positiveId(itemIdInput, "Barang")
     const item = await prisma.item.findUnique({
       where: { id: itemId },
@@ -361,10 +373,17 @@ export async function listItemWarehouseSettings(
     }
     const globalMinStock = Number(item.minStock)
 
+    const listScope = await getWarehouseScope(listUser)
+    const scopedWarehouses = listScope.kind === "assigned"
+      ? warehouses.filter((w) => listScope.warehouseIds.includes(w.id))
+      : listScope.kind === "none"
+        ? []
+        : warehouses
+
     return {
       success: true,
       globalMinStock,
-      rows: warehouses.map((w) => {
+      rows: scopedWarehouses.map((w) => {
         const setting = settingByWarehouse.get(w.id)
         const override = setting?.minStock != null ? Number(setting.minStock) : null
         return {
