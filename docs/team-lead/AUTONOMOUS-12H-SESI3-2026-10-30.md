@@ -81,13 +81,19 @@ ci:quick penuh; update checkpoint akhir; commit docs lokal.
   permission approve baru; sebelum deploy audit
   `approval_workflows.model_type` di luar enum baru dan
   `approval_workflow_steps` dengan `role_id IS NULL AND user_id IS NULL`.
-- S3-D: verifikasi migrasi penuh (`db:check-migrations`) masih terbuka —
-  butuh scratch DB dengan user ber-hak `CREATE DATABASE`; `silengkap_user`
-  di DB dev ditolak (ERROR 1044) dan privilese tidak dinaikkan hanya demi
-  cek ini. Migrasi baru sesi 3 (`20261030110000_stocktake_line_lot_serial`,
+- ~~S3-D: verifikasi migrasi penuh (`db:check-migrations`) masih terbuka —
+  butuh scratch DB dengan user ber-hak `CREATE DATABASE` ...~~ **SELESAI
+  2026-10-31**: kontainer scratch MySQL 8 buang-pakai + `MIGRATION_CHECK_URL`
+  lokal (`root` scratch) — tidak menyentuh DB dev. Run pertama menemukan
+  1 drift: indeks `department_holidays_department_id_fkey` dideklarasikan
+  di skema tapi tak pernah dibuat. Ditutup migrasi
+  `20261031093000_department_holiday_department_index`; run kedua drift 0.
+  Semua migrasi sesi 3 (`20261030110000_stocktake_line_lot_serial`,
   `20261030120000_purchase_return_gr_item_link`,
   `20261030130000_coretax_snapshot_fields`,
-  `20261031090000_employee_user_id_unique`) ikut menunggu verifikasi itu.
+  `20261031090000_employee_user_id_unique`) ikut terverifikasi di rantai
+  yang hijau itu. Kontainer scratch dihapus sesudahnya. (Detail drift:
+  `docs/AUDIT-SCHEMA.md` §0.)
 - S3-D: sweep DOM terautentikasi masih terblokir sesi browser sah
   (cookie tidak boleh dimaterialisasi). S3-F (`ci:quick` penuh +
   checkpoint akhir) berjalan sesudah log ini ditulis.

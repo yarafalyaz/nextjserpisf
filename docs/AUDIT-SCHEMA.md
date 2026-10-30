@@ -33,6 +33,7 @@ rujukan" sungguh berarti tak terjangkau).
 | **7 `.catch()` menyesatkan** (fetch gagal tampak seperti "tidak ada data") | menampilkan pesan; guard diperluas ke promise-senyap | typecheck, suite unit, E2E penuh hijau |
 | Rantai migrasi gagal dari DB kosong | 8 tabel yang tak pernah dibuat ditambahkan + rekonsiliasi | `migrate deploy` dari nol ✓, drift 0 |
 | `<h1>` hilang di semua halaman laporan | `ReportSheet`/`ReportLetterhead` merender `<h1>` | diverifikasi di browser |
+| **Drift migrasi sesi 3 (2026-10-31)** — rantai tidak mereproduksi skema: indeks `department_holidays_department_id_fkey` dideklarasikan di skema tapi tak pernah dibuat | migrasi `20261031093000_department_holiday_department_index` | `db:check-migrations` terhadap scratch MySQL buang-pakai: drift 0 (sebelumnya 1 pernyataan) |
 
 ## 1. Model tanpa pemakaian kode — **DITARIK: tidak ada**
 
