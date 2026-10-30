@@ -46,6 +46,7 @@ Checkpoint file ini diperbarui tiap batch selesai.
 - [x] verifikasi penutup: ci:quick LULUS di 19fe295ff (250s; 10485 test lulus, 18 skip — 1072 file). E2E subset terdampak (7 spec, chromium): 123/126; 2 gagal = fixture/demo-data DB dev (trial balance tanpa jurnal posted; E2E-PO-CHAIN tak ditanam, dilarang seed ke DB hand-kept); 1 selector spec diperbaiki (0690fec37, combobox Pusat Biaya)
 - [x] gerbang izin UI Pola 2 batch 2: SDM (f1b809821), CRM/proyek (8b37cb52b), tombol proses/batal 10 halaman detail (d029c242e); 224/224 test gabungan, tsc+eslint bersih
 - [x] DataTable bulk-delete (20a205db8): peta bersama `bulk-delete-models.ts`; 10 tabel model boleh digerbang izin delete, 46 tabel individual-only dicabut `onBulkDelete`; test baru 8 (4 gagal pra-fix), UI suite 166/166, tsc+eslint bersih
+- [x] sisa sadar MED-5 ditutup (0fa2f3d3): notifikasi dokumen-siap DP ditahan sampai commit transaksi pemanggil lewat `onCommitted`; hook tidak mengirim dari dalam tx asing, `confirmDownPayment` menjalankan antrean sesudah `$transaction` commit; test hook + wiring action (2 gagal pra-fix)
 
 ## Log
 - 2026-10-30 mulai: batch 1 dikerahkan (6 agen).
@@ -96,3 +97,13 @@ Checkpoint file ini diperbarui tiap batch selesai.
   provider), 46 model individual-only dicabut onBulkDelete. Server
   tak berubah semantik; hapus massal tetap jalan bagi pemegang izin.
   81 commit lokal di atas origin/main sesudah checkpoint ini, belum push.
+- MED-5 committed: 0fa2f3d3 — notifikasi DP menunggu commit transaksi
+  pemanggil. 82 commit lokal di atas origin/main, belum push.
+- Sisa sadar cron GET diproses: 6 route cron bemutasi masih bisa dipicu
+  GET (auth Bearer utuh). Putusan diambil sendiri (mode otonom): POST
+  saja untuk semua route — pemicu manual sudah POST; curl holiday-sync
+  di docker-compose*.yml wajib ikut jadi POST; vercel.json mati
+  (produksi Docker) tak disentuh. Agen migrasi + guard method berjalan.
+- Instruksi user: tidak bertanya putusan lagi selama perjalanan (~3 jam);
+  semua pilihan teknis diambil sendiri dari opsi yang direkomendasikan,
+  pekerjaan otonom dilanjutkan sampai antrean habis terverifikasi.
