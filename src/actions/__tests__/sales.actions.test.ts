@@ -519,6 +519,19 @@ describe("Down Payment Actions", () => {
     const res = await actions.createDownPayment(fdMap({ quotationId: 1, amount: 100, paymentDate: "2026-06-12", proofImage: file }))
     expect(res?.success).toBe(true)
   })
+  it("R7PR-01: createDownPayment stores a private filename, not a public /uploads URL", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "accepted", grandTotal: 1000 })
+    mocks.prismaMock.downPayment.aggregate.mockResolvedValue({ _sum: { amount: 0 } })
+    const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], "proof.jpg", { type: "image/jpeg" })
+    const res = await actions.createDownPayment(fdMap({ quotationId: 1, amount: 100, paymentDate: "2026-06-12", proofImage: file }))
+    expect(res?.success).toBe(true)
+    const createCall = mocks.prismaMock.downPayment.create.mock.calls[0][0].data
+    expect(createCall.proofImage).not.toContain("/uploads/proofs/")
+    expect(createCall.proofImage).not.toContain("public")
+    // Nama privat UUID (bukan timestamp) — tidak bisa ditebak dari waktu transaksi.
+    expect(createCall.proofImage).toMatch(/^proof-dp-[0-9a-f-]{36}\.jpg$/)
+    expect(createCall.proofImage).not.toMatch(/proof-dp-\d{10,}/)
+  })
   it("createDownPayment rejects proofImage whose bytes mismatch the claimed type", async () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "accepted", grandTotal: 1000 })
     mocks.prismaMock.downPayment.aggregate.mockResolvedValue({ _sum: { amount: 0 } })

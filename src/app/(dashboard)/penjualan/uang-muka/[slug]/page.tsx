@@ -171,14 +171,16 @@ export default async function DownPaymentDetailPage({
         <DetailField label="Dibuat" value={formatDate(dp.createdAt)} />
       </DetailCard>
 
-      {/* Proof Image */}
+      {/* Proof Image. R7PR-01: nilai privat (nama berkas, bukan URL) disajikan
+          lewat route terotentikasi; nilai warisan `/uploads/proofs/...`
+          (sebelum fix) tetap apa adanya sampai berkas lama dimigrasikan. */}
       {dp.proofImage && (
         <DetailCard>
           <DetailField
             label="Bukti Pembayaran"
             value={
               <Image
-                src={dp.proofImage}
+                src={dp.proofImage.startsWith("/") ? dp.proofImage : `/api/down-payment-proof/${dp.id}`}
                 alt="Bukti pembayaran"
                 width={400}
                 height={300}

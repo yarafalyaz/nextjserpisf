@@ -873,17 +873,25 @@ async function saveDownPaymentProof(formData: FormData): Promise<string | null> 
   const ext = allowedExts.has(rawExt.toLowerCase()) ? rawExt.toLowerCase() : "jpg"
 
   const { writeFile, mkdir } = await import("fs/promises")
+  const { randomUUID } = await import("crypto")
   const path = await import("path")
-  const uploadDir = path.join(process.cwd(), "public", "uploads", "proofs")
+  // R7PR-01: bukti bayar BUKTI finansial (norek/nominal) — JANGAN di public/.
+  // Dulu `public/uploads/proofs/proof-dp-<Date.now()>` bisa ditebak timestamp;
+  // kini privat (di luar public/) nama UUID, disajikan HANYA lewat
+  // /api/down-payment-proof/[id] (sesi + view_down_payments). Nilai
+  // `proofImage` kini nama berkas privat, bukan URL publik — nilai warisan
+  // `/uploads/proofs/...` tetap dirender apa adanya di halaman detail
+  // (berkas lama perlu migrasi/pencabutan di deploy, lihat catatan tim-lead).
+  const uploadDir = path.join(process.cwd(), "private", "uploads", "proofs")
   await mkdir(uploadDir, { recursive: true })
-  const filename = `proof-dp-${Date.now()}.${ext}`
+  const filename = `proof-dp-${randomUUID()}.${ext}`
   const filepath = path.join(uploadDir, filename)
   const bytes = await proofFile.arrayBuffer()
   const buffer = Buffer.from(bytes)
   // Tolak isi tak cocok ekstensi SEBELUM tulis (File.type/nama bisa dipalsukan).
   assertMagicBytes(buffer, ext === "pdf" ? "application/pdf" : `image/${ext === "jpg" ? "jpeg" : ext}`)
   await writeFile(filepath, buffer)
-  return `/uploads/proofs/${filename}`
+  return filename
 }
 
 export async function allocateCustomerCredit(creditId: number, salesInvoiceId: number, amount: number, idempotencyKey?: string) {
