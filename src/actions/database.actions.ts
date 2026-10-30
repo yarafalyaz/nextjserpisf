@@ -58,14 +58,12 @@ export async function restoreDatabaseBackup(
     const safeFilename = sanitizeFilename(filename)
     let safetyNet = ""
     if (withSnapshot) {
-      try {
-        // Keep only the latest auto-snapshot so the list doesn't pile up.
-        await pruneAutoSnapshots()
-        const snap = await createBackup("autosnap")
-        safetyNet = ` Snapshot otomatis: ${snap.filename}.`
-      } catch {
-        safetyNet = " (Snapshot otomatis gagal dibuat.)"
-      }
+      // R6IE-02: prune hanya SESUDAH snapshot baru terbukti berhasil, dan
+      // snapshot gagal = restore destruktif DIBATALKAN (bukan sekadar pesan).
+      // Urutan lama menghapus jaring pengaman terakhir lalu tetap restore.
+      const snap = await createBackup("autosnap")
+      await pruneAutoSnapshots()
+      safetyNet = ` Snapshot otomatis: ${snap.filename}.`
     }
     await restoreBackup(safeFilename)
     await logActivity("update", "DatabaseBackup", 0, `Restore database dari: ${safeFilename}`)

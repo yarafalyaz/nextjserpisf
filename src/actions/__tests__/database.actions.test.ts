@@ -51,11 +51,23 @@ describe("Database Actions", () => {
     const res = await actions.restoreDatabaseBackup("test.sql.gz", true)
     expect(res.success).toBe(true)
   })
-  it("restoreDatabaseBackup handles snapshot failure", async () => {
+  it("R6IE-02: snapshot gagal membatalkan restore destruktif (bukan lanjut tanpa jaring pengaman)", async () => {
     mocks.createBackupMock.mockRejectedValueOnce(new Error("Snap fail"))
     const res = await actions.restoreDatabaseBackup("test.sql.gz", true)
+    expect(res.success).toBe(false)
+    expect(res.message).toContain("Snap fail")
+    expect(mocks.restoreBackupMock).not.toHaveBeenCalled()
+    // Snapshot lama tidak di-prune sebelum snapshot baru terbukti berhasil.
+    expect(mocks.pruneAutoSnapshotsMock).not.toHaveBeenCalled()
+  })
+
+  it("R6IE-02: prune hanya berjalan sesudah snapshot baru berhasil", async () => {
+    const res = await actions.restoreDatabaseBackup("test.sql.gz", true)
     expect(res.success).toBe(true)
-    expect(res.message).toContain("gagal dibuat")
+    expect(mocks.createBackupMock.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.pruneAutoSnapshotsMock.mock.invocationCallOrder[0])
+    expect(mocks.pruneAutoSnapshotsMock.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.restoreBackupMock.mock.invocationCallOrder[0])
   })
   it("deleteDatabaseBackup succeeds", async () => {
     const res = await actions.deleteDatabaseBackup("test.sql.gz")
