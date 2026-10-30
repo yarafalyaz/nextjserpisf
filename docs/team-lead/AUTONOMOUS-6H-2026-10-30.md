@@ -44,6 +44,7 @@ Checkpoint file ini diperbarui tiap batch selesai.
 - [x] audit race API non-workflow: sweep (969e7372f), libur (25af525b7), depresiasi (1a31cbda0), recurring (e5d1314d2); audit optimistik client nihil terbukti; registry B-1 overdue period.end (3ba5a1578), B-2 gugur (halaman snapshot kini)
 - [x] runtime: compile bersih, 4 halaman laporan stok 200 pasca scope, console/log 0 error (akun admin all-scope; penolakan scoped dibuktikan test unit)
 - [x] verifikasi penutup: ci:quick LULUS di 19fe295ff (250s; 10485 test lulus, 18 skip — 1072 file). E2E subset terdampak (7 spec, chromium): 123/126; 2 gagal = fixture/demo-data DB dev (trial balance tanpa jurnal posted; E2E-PO-CHAIN tak ditanam, dilarang seed ke DB hand-kept); 1 selector spec diperbaiki (0690fec37, combobox Pusat Biaya)
+- [x] gerbang izin UI Pola 2 batch 2: SDM (f1b809821), CRM/proyek (8b37cb52b), tombol proses/batal 10 halaman detail (d029c242e); 224/224 test gabungan, tsc+eslint bersih. Catatan DataTable bulk-delete masih terbuka untuk apresiasi/leads dan kontrol selalu-gagal model individual-only
 
 ## Log
 - 2026-10-30 mulai: batch 1 dikerahkan (6 agen).
@@ -84,5 +85,9 @@ Checkpoint file ini diperbarui tiap batch selesai.
   MED-1 parity flip status workflow (posting berikutnya period-gated).
 - Verifikasi penutup tree stabil: ci:quick LULUS di 19fe295ff (250s);
   E2E subset 123/126 (2 fixture/demo-data DB dev, 1 selector diperbaiki
-  0690fec37 dan lulus rerun). 74 commit lokal di atas origin/main,
-  belum push.
+  0690fec37 dan lulus rerun).
+- Pola 2 batch 2 committed: f1b809821 SDM, 8b37cb52b CRM/proyek,
+  d029c242e proses/batal. Verifikasi gabungan 224/224, tsc+eslint
+  bersih. Sisa sadar: DataTable bulk-delete apresiasi/leads belum
+  digerbang izin delete; model individual-only selalu ditolak server.
+  78 commit lokal di atas origin/main, belum push.
