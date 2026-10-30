@@ -176,12 +176,43 @@ export async function applyDisciplinaryDeduction(
   await assertPeriodOpen(input.transactionDate, client as TxClient)
 
   const run = async (tx: TxClient): Promise<ApplyDisciplinaryDeductionResult> => {
+    // Serialkan per karyawan: kunci baris karyawan supaya dua keputusan
+    // berbeda periode yang sama tidak membaca aggregate "sudah diterapkan"
+    // yang sama lalu sama-sama lolos plafon. Lock lain menahan sampai
+    // penerapan pertama commit, aggregate di bawah membaca hasil finalnya.
+    // Guard sama seperti holiday-sync: stub client tanpa $queryRaw tidak
+    // pecah; pada tx Prisma nyata lock selalu diambil.
+    if (typeof tx.$queryRaw === "function") {
+      await tx.$queryRaw`SELECT id FROM employees WHERE id = ${decision.employeeId} FOR UPDATE`
+    }
+
     // Cek ulang di dalam tx: balapan dua proses -> unik DB + cek ini.
     const inTx = await tx.disciplinaryDeductionApplication.findUnique({
       where: { idempotencyKey: key },
       select: { id: true, journalId: true, amount: true },
     })
     if (inTx) return { applicationId: inTx.id, journalId: inTx.journalId, amount: Number(inTx.amount), replayed: true }
+
+    // Plafon 50% dihitung ULANG dalam tx terhadap aggregate terbaru.
+    const appliedInTx = await tx.disciplinaryDeductionApplication.aggregate({
+      where: { decision: { employeeId: decision.employeeId }, period: input.period },
+      _sum: { amount: true },
+    })
+    const fresh = disciplinaryDeductionForPeriod({
+      decision: {
+        id: decision.id,
+        documentNo: decision.documentNo,
+        decidedAt: decision.decidedAt,
+        signedByEmployeeId: decision.signedBy,
+        kind,
+        amount: Number(decision.amount),
+      },
+      periodPay: input.periodPay,
+      alreadyApplied: Number(appliedInTx._sum.amount ?? 0),
+    })
+    if (!fresh.guard.allowed) throw new Error(fresh.guard.message)
+    if (fresh.amount <= 0) throw new Error("Nominal potongan disiplin periode ini nol — tidak ada jurnal dibuat.")
+    const freshAmount = fresh.amount
 
     const journal = await new JournalService(tx).createJournal({
       journalNumber: `DISC09-${decision.id}-${input.period}-${kind}`,
@@ -192,8 +223,8 @@ export async function applyDisciplinaryDeduction(
       type: "GENERAL",
       createdBy: input.createdBy ?? undefined,
       entries: [
-        { accountId: debitAccountId, debit: amount, credit: 0, memo: "Potongan disiplin dari hutang gaji" },
-        { accountId: creditAccountId, debit: 0, credit: amount, memo: kind === "denda" ? "Pendapatan Denda Karyawan" : "Ganti rugi disiplin" },
+        { accountId: debitAccountId, debit: freshAmount, credit: 0, memo: "Potongan disiplin dari hutang gaji" },
+        { accountId: creditAccountId, debit: 0, credit: freshAmount, memo: kind === "denda" ? "Pendapatan Denda Karyawan" : "Ganti rugi disiplin" },
       ],
     })
     const application = await tx.disciplinaryDeductionApplication.create({
@@ -202,13 +233,13 @@ export async function applyDisciplinaryDeduction(
         payrollId: input.payrollId ?? null,
         period: input.period,
         kind,
-        amount,
+        amount: freshAmount,
         idempotencyKey: key,
         journalId: journal.id,
         createdBy: input.createdBy ?? null,
       },
     })
-    return { applicationId: application.id, journalId: journal.id, amount, replayed: false }
+    return { applicationId: application.id, journalId: journal.id, amount: freshAmount, replayed: false }
   }
 
   const asTx = client as TxClient & { $transaction?: typeof prisma.$transaction }

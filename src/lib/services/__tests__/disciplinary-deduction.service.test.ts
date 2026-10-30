@@ -97,6 +97,29 @@ describe("applyDisciplinaryDeduction", () => {
     expect(apps[0].idempotencyKey).toBe("disc09:7:2026-10:denda")
   })
 
+  it("plafon 50% dihitung ulang di dalam tx, bukan snapshot luar tx (race antar-keputusan)", async () => {
+    const { client, apps } = makeClient({
+      decision: {
+        id: 7, documentNo: "KEP-HR/2026/010", decidedAt: new Date("2026-10-20T00:00:00+07:00"),
+        employeeId: 42, kind: "denda", amount: 2_000_000,
+        compensationAccountId: null, signedBy: 3, deletedAt: null,
+      },
+    })
+    // Snapshot luar tx membaca 0 (dua apply konkuren melihat hal yang sama),
+    // tetapi saat tx berjalan sudah ada penerapan Rp4.000.000 dari keputusan
+    // lain — plafon periode Rp5.000.000 hanya menyisakan Rp1.000.000.
+    ;(client as any).disciplinaryDeductionApplication.aggregate
+      .mockResolvedValueOnce({ _sum: { amount: 0 } })
+      .mockResolvedValue({ _sum: { amount: 4_000_000 } })
+    const r = await applyDisciplinaryDeduction(client, {
+      ...input,
+      periodPay: 10_000_000,
+    })
+    expect(r.amount).toBe(1_000_000)
+    expect(apps).toHaveLength(1)
+    expect(apps[0].amount + 4_000_000).toBeLessThanOrEqual(5_000_000)
+  })
+
   it("QA-DISC09-5: replay keputusan+periode+jenis sama = nol jurnal baru", async () => {
     const { client } = makeClient()
     await applyDisciplinaryDeduction(client, input)

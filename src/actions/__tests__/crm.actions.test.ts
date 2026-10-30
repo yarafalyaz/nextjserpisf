@@ -207,6 +207,26 @@ describe("CRM Actions - Next redirect errors are re-thrown", () => {
 
     expect(res.success).toBe(true)
   })
+
+  it("convertLead menolak bila status berubah ke lost di dalam tx terkunci", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce({ id: 3, permissions: ["edit_leads", "manage_leads"], roles: ["admin"] })
+    mocks.prismaMock.lead.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "qualified", assignedTo: 7, customerId: null })
+      .mockResolvedValueOnce({ id: 1, status: "lost", customerId: null, deletedAt: null })
+    const res = await actions.convertLead(1)
+    expect(res.success).toBe(false)
+    expect(mocks.prismaMock.customer.create).not.toHaveBeenCalled()
+  })
+
+  it("convertLead menolak lead terhapus-lembut di dalam tx terkunci", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce({ id: 3, permissions: ["edit_leads", "manage_leads"], roles: ["admin"] })
+    mocks.prismaMock.lead.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "qualified", assignedTo: 7, customerId: null })
+      .mockResolvedValueOnce({ id: 1, status: "qualified", customerId: null, deletedAt: new Date() })
+    const res = await actions.convertLead(1)
+    expect(res.success).toBe(false)
+    expect(mocks.prismaMock.customer.create).not.toHaveBeenCalled()
+  })
 })
 
 describe("addLeadActivity guard + scheduledAt (round4 #5)", () => {

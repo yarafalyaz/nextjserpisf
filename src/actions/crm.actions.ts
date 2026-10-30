@@ -242,10 +242,19 @@ export async function convertLead(leadId: number) {
       await tx.$queryRaw`SELECT id FROM leads WHERE id = ${leadId} FOR UPDATE`
       const fresh = await tx.lead.findUniqueOrThrow({
         where: { id: leadId },
-        select: { customerId: true },
+        select: { customerId: true, status: true, deletedAt: true },
       })
       if (fresh.customerId) {
         throw new Error("Lead sudah dikonversi menjadi pelanggan.")
+      }
+      // Recheck penuh sesudah lock: transisi status (mis. ke lost) atau
+      // soft-delete yang commit sebelum lock terambil tidak boleh melahirkan
+      // customer dari lead non-convertible/terhapus.
+      if (fresh.deletedAt) {
+        throw new Error("Lead tidak ditemukan")
+      }
+      if (!(CONVERTIBLE_STATUSES as readonly string[]).includes(fresh.status)) {
+        throw new Error("Lead belum dapat dikonversi. Status minimal harus 'qualified'.")
       }
       const created = await tx.customer.create({
         data: {
