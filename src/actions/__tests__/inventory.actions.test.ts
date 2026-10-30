@@ -322,6 +322,48 @@ describe("Inventory Transfer Actions", () => {
     expect(res?.success).toBe(true);
     expect(mocks.prismaMock.inventoryTransfer.delete).toHaveBeenCalled();
   });
+
+  it("STOK-19: closeInventoryTransferShortage menolak bila draf aktif sudah ada di dalam tx", async () => {
+    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({
+      id: 5,
+      documentNo: "TRF-005",
+      status: "processed",
+      destinationWarehouseId: 2,
+      items: [{ id: 11, itemId: 1, qty: 10, receivedQty: 7, serialNumbers: null }],
+    });
+    mocks.prismaMock.inventoryTransferReceiptItem = { findMany: vi.fn().mockResolvedValue([]) };
+    mocks.prismaMock.stockAdjustment.findFirst.mockResolvedValue({
+      id: 9,
+      documentNo: "ADJ-009",
+      status: "draft",
+    });
+    const res = await actions.closeInventoryTransferShortage(5);
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("sudah ada");
+    expect(mocks.prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+  });
+
+  it("STOK-19: tanpa draf aktif -> satu draf penutupan lahir di dalam tx", async () => {
+    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({
+      id: 5,
+      documentNo: "TRF-005",
+      status: "processed",
+      destinationWarehouseId: 2,
+      items: [{ id: 11, itemId: 1, qty: 10, receivedQty: 7, serialNumbers: null }],
+    });
+    mocks.prismaMock.inventoryTransferReceiptItem = { findMany: vi.fn().mockResolvedValue([]) };
+    mocks.prismaMock.stockAdjustment.findFirst.mockResolvedValue(null);
+    mocks.prismaMock.stockAdjustment.create.mockResolvedValue({ id: 3, slug: "adj-3" });
+    const res = await actions.closeInventoryTransferShortage(5);
+    expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.stockAdjustment.create).toHaveBeenCalledTimes(1);
+    const arg = mocks.prismaMock.stockAdjustment.create.mock.calls.at(-1)![0];
+    expect(arg.data).toEqual(
+      expect.objectContaining({ inventoryTransferId: 5, warehouseId: 2, status: "draft" }),
+    );
+    // Lock baris transfer diambil di dalam tx sebelum cek/create.
+    expect(mocks.prismaMock.$executeRaw).toHaveBeenCalled();
+  });
 });
 
 describe("Material Issue Actions", () => {

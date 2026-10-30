@@ -913,20 +913,6 @@ export async function closeInventoryTransferShortage(transferId: number) {
       throw new Error("Transfer ini tidak memiliki sisa belum diterima untuk ditutup.");
     }
 
-    const activeClosure = await prisma.stockAdjustment.findFirst({
-      where: {
-        inventoryTransferId: transferId,
-        status: { in: ["draft", "processing", "processed"] },
-        deletedAt: null,
-      },
-      select: { id: true, documentNo: true, status: true },
-    });
-    if (activeClosure) {
-      throw new Error(
-        `Penutupan selisih untuk transfer ini sudah ada (${activeClosure.documentNo}, status ${activeClosure.status}).`,
-      );
-    }
-
     const date = new Date();
     await assertPeriodOpen(date);
 
@@ -946,35 +932,59 @@ export async function closeInventoryTransferShortage(transferId: number) {
       sentByItem.set(it.itemId, agg);
     }
 
-    const documentNo = await generateDocumentNumber("ADJ");
-    const adjustment = await prisma.stockAdjustment.create({
-      data: {
-        documentNo,
-        slug: await nextSlug("stockAdjustment", documentNo),
-        warehouseId: transfer.destinationWarehouseId,
-        date,
-        reason: TRANSFER_SHORTAGE_REASON,
-        type: "decrease",
-        notes: `Penutupan selisih transfer ${transfer.documentNo}`,
-        status: "draft",
-        createdBy: Number(user.id),
-        inventoryTransferId: transferId,
-        items: {
-          create: Array.from(byItem.entries()).map(([itemId, agg]) => {
-            const sent = sentByItem.get(itemId) ?? { qty: agg.qty, receivedQty: 0 };
-            return {
-              itemId,
-              systemQty: sent.qty,
-              actualQty: sent.receivedQty,
-              difference: -agg.qty,
-              unitCost: agg.unitCost,
-              totalCost: -agg.qty * agg.unitCost,
-              serialNumbers: agg.serials.length > 0 ? agg.serials : undefined,
-              notes: TRANSFER_SHORTAGE_REASON,
-            };
-          }),
+    // STOK-19: cek draf aktif + create wajib atomik. Tanpa ini dua
+    // permintaan bersamaan sama-sama lolos cek lalu melahirkan dua draf
+    // penutupan; proses keduanya menutup sisa dua kali (stok/jurnal
+    // dobel). Lock baris transfer (statement pertama tx) menserialkan
+    // penutupan per transfer; semua read sesudahnya melihat hasil
+    // pemenang yang sudah commit.
+    const adjustment = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM inventory_transfers WHERE id = ${transferId} FOR UPDATE`;
+      }
+      const activeClosure = await tx.stockAdjustment.findFirst({
+        where: {
+          inventoryTransferId: transferId,
+          status: { in: ["draft", "processing", "processed"] },
+          deletedAt: null,
         },
-      },
+        select: { id: true, documentNo: true, status: true },
+      });
+      if (activeClosure) {
+        throw new Error(
+          `Penutupan selisih untuk transfer ini sudah ada (${activeClosure.documentNo}, status ${activeClosure.status}).`,
+        );
+      }
+      const documentNo = await generateDocumentNumber("ADJ");
+      return tx.stockAdjustment.create({
+        data: {
+          documentNo,
+          slug: await nextSlug("stockAdjustment", documentNo),
+          warehouseId: transfer.destinationWarehouseId,
+          date,
+          reason: TRANSFER_SHORTAGE_REASON,
+          type: "decrease",
+          notes: `Penutupan selisih transfer ${transfer.documentNo}`,
+          status: "draft",
+          createdBy: Number(user.id),
+          inventoryTransferId: transferId,
+          items: {
+            create: Array.from(byItem.entries()).map(([itemId, agg]) => {
+              const sent = sentByItem.get(itemId) ?? { qty: agg.qty, receivedQty: 0 };
+              return {
+                itemId,
+                systemQty: sent.qty,
+                actualQty: sent.receivedQty,
+                difference: -agg.qty,
+                unitCost: agg.unitCost,
+                totalCost: -agg.qty * agg.unitCost,
+                serialNumbers: agg.serials.length > 0 ? agg.serials : undefined,
+                notes: TRANSFER_SHORTAGE_REASON,
+              };
+            }),
+          },
+        },
+      });
     });
 
     await requestApprovalIfConfigured("StockAdjustment", adjustment.id, Number(user.id));
