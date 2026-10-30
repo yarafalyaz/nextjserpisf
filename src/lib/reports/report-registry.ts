@@ -907,28 +907,28 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
   "stok-tidak-bergerak": {
     title: "Stok Tidak Bergerak",
     subtitle: "Pemeriksaan Persediaan",
-    async load({ search }) {
+    async load({ search, warehouseScope }) {
       const parsed =
         search.ambang && /^\d+$/.test(search.ambang) ? Number(search.ambang) : null
       const thresholdDays =
         parsed !== null && parsed >= 1 && parsed <= 3650 ? parsed : undefined
-      const report = await loadSlowMovingStock({ thresholdDays })
+      const report = await loadSlowMovingStock({ thresholdDays, scopeWarehouseIds: warehouseScope })
       return { kind: "table", table: report.report.table, periodCaption: report.periodCaption, landscape: true }
     },
   },
   "ringkasan-stok": {
     title: "Ringkasan Persediaan",
     subtitle: "Posisi per Gudang",
-    async load() {
-      const report = await loadStockSummary()
+    async load({ warehouseScope }) {
+      const report = await loadStockSummary(warehouseScope)
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
     },
   },
   "rekonsiliasi-stok": {
     title: "Rekonsiliasi Stok",
     subtitle: "Rekonsiliasi Persediaan",
-    async load() {
-      const report = await loadStockReconciliation()
+    async load({ warehouseScope }) {
+      const report = await loadStockReconciliation(warehouseScope)
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
     },
   },

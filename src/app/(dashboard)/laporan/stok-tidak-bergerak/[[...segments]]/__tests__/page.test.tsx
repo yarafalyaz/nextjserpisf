@@ -10,11 +10,16 @@ import { act } from "react"
 
 const mocks = vi.hoisted(() => ({
   requirePermission: vi.fn(),
+  getWarehouseScope: vi.fn(),
   loadSlowMovingStock: vi.fn(),
 }))
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: mocks.requirePermission,
+}))
+
+vi.mock("@/lib/auth/warehouse-scope", () => ({
+  getWarehouseScope: mocks.getWarehouseScope,
 }))
 
 vi.mock("@/lib/reports/slow-moving-stock-data", () => ({
@@ -119,7 +124,8 @@ async function renderPage(search: { ambang?: string } = {}, segments: string[] =
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.requirePermission.mockResolvedValue({ name: "Uji", email: "uji@contoh.id" })
+  mocks.requirePermission.mockResolvedValue({ id: "1", name: "Uji", email: "uji@contoh.id", roles: [] })
+  mocks.getWarehouseScope.mockResolvedValue({ kind: "all" })
   mocks.loadSlowMovingStock.mockResolvedValue(fixtureReport())
 })
 
@@ -192,6 +198,15 @@ describe("halaman stok tidak bergerak (pasangan UI PR #462)", () => {
       expect.objectContaining({ thresholdDays: undefined }),
     )
     act(() => root2.unmount())
+  })
+
+  it("R6PA-04: scope gudang assigned diteruskan ke loader", async () => {
+    mocks.getWarehouseScope.mockResolvedValue({ kind: "assigned", warehouseIds: [2] })
+    const { root } = await renderPage()
+    expect(mocks.loadSlowMovingStock).toHaveBeenCalledWith(
+      expect.objectContaining({ scopeWarehouseIds: [2] }),
+    )
+    act(() => root.unmount())
   })
 
   it("kontrak statis: page pakai loader kanonis, tanpa prisma/hitung ulang", () => {

@@ -40,7 +40,7 @@ vi.mock("@/lib/reports/labor-recap-export", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/reports/labor-recap-export")>()
   return {
     ...actual,
-    loadLaborRecapReport: (...args: unknown[]) => mocks.loadLaborRecapReport(...args),
+    loadLaborRecapReport: () => mocks.loadLaborRecapReport(),
   }
 })
 vi.mock("@/lib/reports/tax-summary-data", async (importOriginal) => {

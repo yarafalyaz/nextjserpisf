@@ -81,6 +81,9 @@ export async function GET(request: Request) {
       "transfer-terkirim",
       "stok-minimum",
       "umur-stok",
+      "stok-tidak-bergerak",
+      "ringkasan-stok",
+      "rekonsiliasi-stok",
     ])
     let warehouseScope: number[] | undefined
     if (STOCK_PDF_KEYS.has(report)) {

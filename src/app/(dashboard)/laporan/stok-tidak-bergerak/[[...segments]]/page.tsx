@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -42,9 +43,13 @@ export default async function SlowMovingStockPage({
       ? parsedThreshold
       : undefined
 
+  const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
+  const scopeWarehouseIds =
+    scope.kind === "all" ? undefined : scope.kind === "assigned" ? scope.warehouseIds : []
+
   const asOf = new Date()
   const { report, periodLabel, thresholdDays: appliedThreshold } =
-    await loadSlowMovingStock({ asOf, thresholdDays })
+    await loadSlowMovingStock({ asOf, thresholdDays, scopeWarehouseIds })
 
   return (
     <ReportPageShell

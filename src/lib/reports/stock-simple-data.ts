@@ -20,6 +20,10 @@ export interface StockSimpleReport {
   periodCaption: string
 }
 
+export interface StockReconciliationReport extends StockSimpleReport {
+  summary: ReturnType<typeof reconcileInventory>
+}
+
 /** Agregasi lapisan FIFO per gudang, nilai persis sen per lapisan. */
 export function aggregateLayersByWarehouse(
   layers: { itemId: number; warehouseId: number | null; remaining: unknown; unitCost: unknown }[],
@@ -130,11 +134,25 @@ const SUMMARY_COLUMNS: TableColumn[] = [
   { header: "Total Nilai", align: "right", width: 44 },
 ]
 
-export async function loadStockSummary(): Promise<StockSimpleReport> {
+export async function loadStockSummary(
+  // R6PA-04/R6IE-08: undefined = tanpa penegakan; array (termasuk kosong) ditegakkan.
+  scopeWarehouseIds?: number[] | null,
+): Promise<StockSimpleReport> {
+  const scoped = scopeWarehouseIds != null
   const [warehouses, layers] = await Promise.all([
-    prisma.warehouse.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { code: "asc" } }),
+    prisma.warehouse.findMany({
+      where: {
+        isActive: true,
+        deletedAt: null,
+        ...(scoped ? { id: { in: scopeWarehouseIds } } : {}),
+      },
+      orderBy: { code: "asc" },
+    }),
     prisma.inventoryLayer.findMany({
-      where: { remaining: { gt: 0 } },
+      where: {
+        remaining: { gt: 0 },
+        ...(scoped ? { warehouseId: { in: scopeWarehouseIds } } : {}),
+      },
       select: { itemId: true, warehouseId: true, remaining: true, unitCost: true },
     }),
   ])
@@ -152,6 +170,29 @@ export async function loadStockSummary(): Promise<StockSimpleReport> {
       cells: [`${wh.code} - ${wh.name}`, String(agg.items.size), qty(agg.qty), money(agg.value)],
     })
   }
+  if (!scoped) {
+    // R6IE-08: layer yatim (warehouseId null/gudang nonaktif/terhapus) tetap
+    // masuk total saat laporan global. Saat scope ditegakkan layer itu sudah
+    // tersaring di query dan tidak boleh bocor melalui baris ini.
+    const listedIds = new Set(warehouses.map((wh) => wh.id))
+    let orphanQty = 0
+    let orphanValue = 0
+    const orphanItems = new Set<number>()
+    for (const [warehouseId, agg] of byWarehouse) {
+      if (listedIds.has(warehouseId)) continue
+      orphanQty = safeAdd(orphanQty, agg.qty, 2)
+      orphanValue = safeAdd(orphanValue, agg.value, 2)
+      for (const itemId of agg.items) orphanItems.add(itemId)
+    }
+    if (orphanQty > 0 || orphanValue > 0) {
+      totalQty = safeAdd(totalQty, orphanQty, 2)
+      totalValue = safeAdd(totalValue, orphanValue, 2)
+      rows.push({
+        kind: "data",
+        cells: ["Tanpa Gudang / Lainnya", String(orphanItems.size), qty(orphanQty), money(orphanValue)],
+      })
+    }
+  }
   if (rows.length === 0) rows.push({ kind: "notice", text: "Tidak ada stok." })
   else rows.push({ kind: "total", grand: true, label: "Jumlah", cells: [qty(totalQty), money(totalValue)] })
   return { table: { columns: SUMMARY_COLUMNS, rows }, ...nowLabels() }
@@ -166,7 +207,14 @@ const RECON_COLUMNS: TableColumn[] = [
   { header: "Nilai FIFO", align: "right", width: 40 },
 ]
 
-export async function loadStockReconciliation(): Promise<StockSimpleReport> {
+export async function loadStockReconciliation(
+  // Item.qtyOnHand adalah total global semua gudang, jadi scope hanya
+  // membatasi item yang tampil (punya layer tersisa di gudang cakupan).
+  // Selisih tetap master global vs FIFO global agar tidak menjadi klaim
+  // integritas palsu untuk item multi-gudang.
+  scopeWarehouseIds?: number[] | null,
+): Promise<StockReconciliationReport> {
+  const scoped = scopeWarehouseIds != null
   const [items, layers] = await Promise.all([
     prisma.item.findMany({
       where: { deletedAt: null },
@@ -175,12 +223,38 @@ export async function loadStockReconciliation(): Promise<StockSimpleReport> {
     }),
     prisma.inventoryLayer.findMany({
       where: { remaining: { gt: 0 } },
-      select: { itemId: true, remaining: true, unitCost: true },
+      select: { itemId: true, warehouseId: true, remaining: true, unitCost: true },
     }),
   ])
+
+  const visibleItemIds = scoped
+    ? new Set(
+        layers
+          .filter((layer) => layer.warehouseId != null && scopeWarehouseIds.includes(layer.warehouseId))
+          .map((layer) => layer.itemId),
+      )
+    : null
+
+  // Item terhapus dengan layer tersisa tetap direkonsiliasi pada laporan
+  // global/scoped yang mencakup gudangnya; layer yatim tidak membuka
+  // visibilitas untuk user scoped.
+  const itemById = new Map(items.map((item) => [item.id, item]))
+  const orphanLayerItemIds = [...new Set(layers.map((layer) => layer.itemId))].filter(
+    (id) => !itemById.has(id) && (!visibleItemIds || visibleItemIds.has(id)),
+  )
+  const orphanItems = orphanLayerItemIds.length
+    ? await prisma.item.findMany({
+        where: { id: { in: orphanLayerItemIds } },
+        select: { id: true, sku: true, name: true, qtyOnHand: true },
+      })
+    : []
+
+  const candidateItems = [...items, ...orphanItems].filter(
+    (item) => !visibleItemIds || visibleItemIds.has(item.id),
+  )
   const layerTotals = aggregateLayersByItem(layers)
   const summary = reconcileInventory(
-    items.map((i) => ({ itemId: i.id, sku: i.sku, name: i.name, masterQty: Number(i.qtyOnHand) })),
+    candidateItems.map((i) => ({ itemId: i.id, sku: i.sku, name: i.name, masterQty: Number(i.qtyOnHand) })),
     layerTotals,
   )
   const rows: TableRow[] = summary.mismatches.map((row) => ({
@@ -195,7 +269,20 @@ export async function loadStockReconciliation(): Promise<StockSimpleReport> {
     ],
   }))
   if (rows.length === 0) {
-    rows.push({ kind: "notice", text: "Semua item seimbang — jumlah induk sama dengan total lapisan FIFO." })
+    rows.push({
+      kind: "notice",
+      text: scoped
+        ? "Tidak ada selisih pada item yang tampil dalam cakupan gudang."
+        : "Semua item seimbang — jumlah induk sama dengan total lapisan FIFO.",
+    })
   }
-  return { table: { columns: RECON_COLUMNS, rows }, ...nowLabels() }
+  if (scoped) {
+    rows.unshift({
+      kind: "notice",
+      text:
+        "Cakupan gudang: item hanya tampil bila punya lapisan FIFO di gudang Anda. " +
+        "Kuantitas Induk, Kuantitas FIFO, Selisih, dan Nilai FIFO adalah total global semua gudang.",
+    })
+  }
+  return { table: { columns: RECON_COLUMNS, rows }, summary, ...nowLabels() }
 }

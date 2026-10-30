@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
+import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { formatAccounting, formatCurrency, formatDate, formatNumber } from '@/lib/utils/format'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -17,11 +18,21 @@ import { ReportPageShell } from "@/components/reports/report-page-shell"
 export const metadata: Metadata = { title: "Ringkasan Stok" }
 
 export default async function InventorySummaryPage() {
-  await requirePermission('view_reports')
+  const user = await requirePermission('view_reports')
+  const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
+  const scopeWhere = scope.kind === 'assigned'
+    ? { warehouseId: { in: scope.warehouseIds } }
+    : scope.kind === 'none'
+      ? { warehouseId: { in: [] as number[] } }
+      : {}
 
   const [warehouses, items, layers] = await Promise.all([
     prisma.warehouse.findMany({
-      where: { isActive: true, deletedAt: null },
+      where: {
+        isActive: true,
+        deletedAt: null,
+        ...(scope.kind === 'assigned' ? { id: { in: scope.warehouseIds } } : scope.kind === 'none' ? { id: { in: [] as number[] } } : {}),
+      },
       orderBy: { code: 'asc' },
     }),
     prisma.item.findMany({
@@ -30,7 +41,7 @@ export default async function InventorySummaryPage() {
       orderBy: { name: 'asc' },
     }),
     prisma.inventoryLayer.findMany({
-      where: { remaining: { gt: 0 } },
+      where: { remaining: { gt: 0 }, ...scopeWhere },
       select: { itemId: true, warehouseId: true, remaining: true, unitCost: true },
     }),
   ])
@@ -57,7 +68,7 @@ export default async function InventorySummaryPage() {
     if (listedIds.has(whId)) continue
     orphan.qty += agg.qty; orphan.value += agg.value; for (const id of agg.items) orphan.items.add(id)
   }
-  if (orphan.qty > 0 || orphan.value > 0) {
+  if (scope.kind === 'all' && (orphan.qty > 0 || orphan.value > 0)) {
     warehouseRows.push({ code: '-', name: 'Tanpa Gudang / Lainnya', items: orphan.items.size, qty: orphan.qty, value: orphan.value })
   }
 

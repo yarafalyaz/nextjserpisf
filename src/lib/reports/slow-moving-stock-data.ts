@@ -41,15 +41,19 @@ export function effectiveOutDate(move: { date: Date | null; createdAt: Date }): 
 export async function loadSlowMovingStock(input?: {
   asOf?: Date
   thresholdDays?: number
+  // R6PA-04: undefined = tanpa penegakan; array (termasuk kosong) ditegakkan.
+  scopeWarehouseIds?: number[] | null
 }): Promise<SlowMovingReport> {
   const asOf = input?.asOf ?? new Date()
   const thresholdDays = input?.thresholdDays ?? SLOW_MOVING_DEFAULT_THRESHOLD_DAYS
+  const scopeWarehouseIds = input?.scopeWarehouseIds
 
   const settings = await getSystemSettings()
 
   const rawLayers = await prisma.inventoryLayer.findMany({
     where: {
       remaining: { gt: 0 },
+      ...(scopeWarehouseIds != null ? { warehouseId: { in: scopeWarehouseIds } } : {}),
       item: { isActive: true, deletedAt: null, isService: false },
     },
     select: {
@@ -73,7 +77,12 @@ export async function loadSlowMovingStock(input?: {
   const itemIds = [...new Set(rawLayers.map((layer) => layer.itemId))]
   const lastOutMoves = itemIds.length
     ? await prisma.stockMove.findMany({
-        where: { itemId: { in: itemIds }, impact: "OUT", status: "posted" },
+        where: {
+          itemId: { in: itemIds },
+          impact: "OUT",
+          status: "posted",
+          ...(scopeWarehouseIds != null ? { warehouseId: { in: scopeWarehouseIds } } : {}),
+        },
         select: { itemId: true, date: true, createdAt: true },
       })
     : []

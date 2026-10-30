@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic'
 
-import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
+import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
+import { loadStockReconciliation } from "@/lib/reports/stock-simple-data"
 import { formatAccounting, formatCurrency, formatDate, formatNumber } from '@/lib/utils/format'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -10,67 +11,20 @@ import { buildReportPeriodSlug } from "@/lib/reports/report-period"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
-import {
-  reconcileInventory,
-  type ItemLayerTotals,
-} from "@/lib/inventory/stock-reconciliation"
-
 import type { Metadata } from "next"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 
 export const metadata: Metadata = { title: "Rekonsiliasi Stok" }
 
 export default async function StockReconciliationPage() {
-  await requirePermission('view_reports')
-
-  // Load the master counter and the FIFO layer ledger, then compare them.
-  //
-  // Include items whose layers exist but master counter is zero (and vice
-  // versa). We deliberately do NOT filter `qtyOnHand > 0`: an item whose master
-  // counter drifted to 0 while layers remain is exactly the corruption this
-  // report exists to surface, so it must not be filtered out.
-  const [items, layers] = await Promise.all([
-    prisma.item.findMany({
-      where: { deletedAt: null },
-      select: { id: true, sku: true, name: true, qtyOnHand: true },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.inventoryLayer.findMany({
-      where: { remaining: { gt: 0 } },
-      select: { itemId: true, remaining: true, unitCost: true },
-    }),
-  ])
-
-  // Roll up layers per item (Σ remaining, Σ remaining × unitCost).
-  const layerTotals = new Map<number, ItemLayerTotals>()
-  for (const layer of layers) {
-    const agg = layerTotals.get(layer.itemId) || { layerQty: 0, layerValue: 0 }
-    const remaining = Number(layer.remaining)
-    agg.layerQty += remaining
-    agg.layerValue += remaining * Number(layer.unitCost)
-    layerTotals.set(layer.itemId, agg)
-  }
-
-  // Items that have layers but are missing from the master list (soft-deleted
-  // or hard-removed) must still be reconciled, else their orphaned layers hide.
-  const itemById = new Map(items.map((i) => [i.id, i]))
-  const orphanLayerItemIds = [...layerTotals.keys()].filter((id) => !itemById.has(id))
-  const orphanItems = orphanLayerItemIds.length
-    ? await prisma.item.findMany({
-        where: { id: { in: orphanLayerItemIds } },
-        select: { id: true, sku: true, name: true, qtyOnHand: true },
-      })
-    : []
-
-  const summary = reconcileInventory(
-    [...items, ...orphanItems].map((i) => ({
-      itemId: i.id,
-      sku: i.sku,
-      name: i.name,
-      masterQty: Number(i.qtyOnHand),
-    })),
-    layerTotals,
-  )
+  const user = await requirePermission('view_reports')
+  const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
+  const scopeWarehouseIds = scope.kind === 'all'
+    ? undefined
+    : scope.kind === 'assigned'
+      ? scope.warehouseIds
+      : []
+  const { summary } = await loadStockReconciliation(scopeWarehouseIds)
 
   const periodLabel = `Per ${formatDate(new Date())}`
 
@@ -86,6 +40,12 @@ export default async function StockReconciliationPage() {
 
       <ReportLetterhead title="Rekonsiliasi Stok" subtitle="Rekonsiliasi Persediaan" periodLabel={periodLabel} />
       <ReportNarration text="Laporan Rekonsiliasi Stok membandingkan jumlah stok pada data induk barang (qty on-hand) dengan jumlah pada lapisan FIFO (lot per gudang). Keduanya seharusnya selalu sama; selisih menandakan ada mutasi yang memperbarui salah satu saja, sehingga angka stok bisa menyesatkan. Gunakan laporan ini sebagai alat kontrol integritas persediaan." />
+      {scopeWarehouseIds !== undefined && (
+        <p className="doc-lines">
+          Cakupan gudang: item hanya tampil bila punya lapisan FIFO di gudang Anda. Kuantitas Induk,
+          Kuantitas FIFO, Selisih, dan Nilai FIFO adalah total global semua gudang.
+        </p>
+      )}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Total Item" value={formatNumber(summary.totalItems)} />
@@ -128,7 +88,9 @@ export default async function StockReconciliationPage() {
             {summary.mismatches.length === 0 && (
               <DetailTableRow>
                 <DetailTableTd colSpan={6} className="text-center text-success py-8">
-                  Semua item seimbang — jumlah induk sama dengan total lapisan FIFO.
+                  {scopeWarehouseIds !== undefined
+                    ? "Tidak ada selisih pada item yang tampil dalam cakupan gudang."
+                    : "Semua item seimbang — jumlah induk sama dengan total lapisan FIFO."}
                 </DetailTableTd>
               </DetailTableRow>
             )}
