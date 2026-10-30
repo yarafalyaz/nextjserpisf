@@ -4614,7 +4614,14 @@ export async function approveAttendanceCorrection(id: number) {
       if (current) {
         // Update hanya kolom semantik buildAttendanceData: koordinat rekod
         // berjalan TIDAK ditulis ulang (BR-AC-06).
-        await tx.attendance.update({ where: { id: current.id }, data });
+        const {
+          checkInLatitude: _unused1,
+          checkInLongitude: _unused2,
+          checkOutLatitude: _unused3,
+          checkOutLongitude: _unused4,
+          ...updateData
+        } = data;
+        await tx.attendance.update({ where: { id: current.id }, data: updateData });
       } else {
         await tx.attendance.create({
           data: { employeeId: loaded.employeeId, ...data },
