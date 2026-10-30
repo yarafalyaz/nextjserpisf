@@ -122,7 +122,9 @@ function buildTx() {
       findFirst: mocks.paymentFindFirst,
       findMany: mocks.paymentFindMany,
     },
-    journal: { create: mocks.journalCreate, findFirst: vi.fn().mockResolvedValue(null) },
+    journal: { create: mocks.journalCreate, findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
+    // STOK-02: recalc membaca kredit retur completed; tanpa retur -> 0.
+    salesReturn: { findMany: vi.fn().mockResolvedValue([]) },
     // accrueTx komisi tahap 3: invoice fixture tanpa penjual/snapshot → no-op.
     commissionPayable: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn(), update: vi.fn() },
     downPayment: { findUnique: mocks.dpFindUnique, findMany: mocks.dpFindMany },

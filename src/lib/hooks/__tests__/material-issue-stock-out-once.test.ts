@@ -56,7 +56,8 @@ function wireTx() {
     materialIssueItem: { update: spies.issueItemUpdate },
     stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
     workOrderItem: { findMany: vi.fn().mockResolvedValue([]) },
-    stockReservation: { findFirst: vi.fn().mockResolvedValue(null), update: vi.fn().mockResolvedValue({}) },
+    // STOK-07: konsumsi membaca semua reservasi aktif (findMany).
+    stockReservation: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]), update: vi.fn().mockResolvedValue({}) },
     item: { update: vi.fn().mockResolvedValue({}) },
   }
   mocks.transaction.mockImplementation((fn: (t: typeof tx) => Promise<unknown>) => fn(tx))

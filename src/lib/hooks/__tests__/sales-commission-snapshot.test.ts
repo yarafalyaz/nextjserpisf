@@ -17,6 +17,9 @@ const mocks = vi.hoisted(() => ({
     // accrueTx komisi (tahap 3): no-op default — snapshot tetap milik hook lama.
     commissionPayable: { findFirst: vi.fn(async () => null), create: vi.fn(), update: vi.fn() },
     systemSetting: { findFirst: vi.fn(async () => null) },
+    // STOK-02: tanpa retur completed -> returnCredit 0 (perilaku lama).
+    salesReturn: { findMany: vi.fn(async () => []) },
+    journal: { findMany: vi.fn(async () => []) },
   },
 }))
 

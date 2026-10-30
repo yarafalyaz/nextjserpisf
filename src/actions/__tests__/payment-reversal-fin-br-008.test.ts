@@ -33,6 +33,8 @@ const mocks = vi.hoisted(() => ({
     "financialIdempotencyKey",
     "transactionAttachment",
     "systemSetting",
+    // STOK-02: recalc membaca retur completed via loadReturnCredit.
+    "salesReturn",
   ],
 }))
 

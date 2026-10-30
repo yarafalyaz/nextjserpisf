@@ -51,6 +51,13 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     salesReturnItem: {
       findMany: vi.fn().mockResolvedValue([])
+    },
+    // STOK-01: biaya restock dari layer terkonsumsi OUT move faktur.
+    stockMove: {
+      findMany: vi.fn().mockResolvedValue([])
+    },
+    inventoryLayer: {
+      findMany: vi.fn().mockResolvedValue([])
     }
   }
 }))

@@ -34,6 +34,10 @@ vi.mock("@/lib/db/prisma", () => {
     },
     // No real (non-DP) payment by default → invoice remains editable.
     salesPayment: { count: vi.fn().mockResolvedValue(0) },
+    // STOK-02: derivasi status membaca kredit retur; tanpa retur -> 0.
+    salesReturn: { findMany: vi.fn().mockResolvedValue([]) },
+    systemSetting: { findFirst: vi.fn().mockResolvedValue(null) },
+    journal: { findMany: vi.fn().mockResolvedValue([]) },
   }
   return { prisma: mockPrisma }
 })
