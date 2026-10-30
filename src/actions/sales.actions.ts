@@ -3396,6 +3396,9 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
     return invoice
   })
 
+  // R6WN-01: edit sesudah approval final membuka pengajuan ulang (service
+  // menilai kebasian dari updatedAt); tanpa workflow ini no-op.
+  await requestApprovalIfConfigured("SalesInvoice", result.id, Number(user.id))
   await logActivity("update", "SalesInvoice", result.id, `Memperbarui faktur penjualan #${result.id}`)
   revalidatePath("/penjualan/faktur")
   return { success: true, id: result.id, slug }

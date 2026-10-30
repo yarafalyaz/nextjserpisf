@@ -5,28 +5,40 @@ const mocks = vi.hoisted(() => ({
   findFirstApproval: vi.fn(),
   createApproval: vi.fn(),
   queryRaw: vi.fn().mockResolvedValue([]),
+  docFindUnique: vi.fn(),
 }));
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    approvalWorkflow: {
-      findFirst: mocks.findFirstWorkflow,
-    },
-    approval: {
-      findFirst: mocks.findFirstApproval,
-      create: mocks.createApproval,
-    },
-    $queryRaw: (...args: unknown[]) => mocks.queryRaw(...args),
-    $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
-      approvalWorkflow: { findFirst: (...args: unknown[]) => mocks.findFirstWorkflow(...args) },
-      approval: {
-        findFirst: (...args: unknown[]) => mocks.findFirstApproval(...args),
-        create: (...args: unknown[]) => mocks.createApproval(...args),
+vi.mock("@/lib/db/prisma", () => {
+  const docModelMock = { findUnique: mocks.docFindUnique };
+  return {
+    prisma: {
+      approvalWorkflow: {
+        findFirst: mocks.findFirstWorkflow,
       },
+      approval: {
+        findFirst: mocks.findFirstApproval,
+        create: mocks.createApproval,
+      },
+      journal: docModelMock,
+      vendorPayment: docModelMock,
+      stockAdjustment: docModelMock,
+      salesInvoice: docModelMock,
       $queryRaw: (...args: unknown[]) => mocks.queryRaw(...args),
-    })),
-  },
-}));
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        approvalWorkflow: { findFirst: (...args: unknown[]) => mocks.findFirstWorkflow(...args) },
+        approval: {
+          findFirst: (...args: unknown[]) => mocks.findFirstApproval(...args),
+          create: (...args: unknown[]) => mocks.createApproval(...args),
+        },
+        journal: docModelMock,
+        vendorPayment: docModelMock,
+        stockAdjustment: docModelMock,
+        salesInvoice: docModelMock,
+        $queryRaw: (...args: unknown[]) => mocks.queryRaw(...args),
+      })),
+    },
+  };
+});
 
 import {
   requestApprovalIfConfigured,
@@ -37,6 +49,7 @@ describe("approval-workflow.service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.queryRaw.mockResolvedValue([{ id: 10 }]);
+    mocks.docFindUnique.mockResolvedValue(null);
   });
 
   describe("requestApprovalIfConfigured", () => {
@@ -109,6 +122,48 @@ describe("approval-workflow.service", () => {
       });
     });
 
+    it("R6WN-01: dokumen gate-only yang diedit sesudah approval final membuka pengajuan baru", async () => {
+      mocks.findFirstWorkflow.mockResolvedValue({ id: 10 });
+      mocks.findFirstApproval.mockResolvedValue({
+        id: 1, status: "approved", completedAt: new Date("2026-10-01T00:00:00Z"),
+      });
+      mocks.docFindUnique.mockResolvedValue({ updatedAt: new Date("2026-10-02T00:00:00Z") });
+      mocks.createApproval.mockResolvedValue({ id: 2, status: "pending" });
+
+      const result = await requestApprovalIfConfigured("Journal", 5);
+
+      expect(result).toBe(true);
+      expect(mocks.createApproval).toHaveBeenCalledWith({
+        data: expect.objectContaining({ referenceType: "Journal", referenceId: 5, status: "pending" }),
+      });
+    });
+
+    it("R6WN-01: approval final tanpa edit sesudahnya tidak membuka pengajuan baru", async () => {
+      mocks.findFirstWorkflow.mockResolvedValue({ id: 10 });
+      mocks.findFirstApproval.mockResolvedValue({
+        id: 1, status: "approved", completedAt: new Date("2026-10-02T00:00:00Z"),
+      });
+      mocks.docFindUnique.mockResolvedValue({ updatedAt: new Date("2026-10-01T00:00:00Z") });
+
+      const result = await requestApprovalIfConfigured("Journal", 5);
+
+      expect(result).toBe(false);
+      expect(mocks.createApproval).not.toHaveBeenCalled();
+    });
+
+    it("R6WN-01: tipe non-basi (Quotation) tidak dicek updatedAt-nya", async () => {
+      mocks.findFirstWorkflow.mockResolvedValue({ id: 10 });
+      mocks.findFirstApproval.mockResolvedValue({
+        id: 1, status: "approved", completedAt: new Date("2026-10-01T00:00:00Z"),
+      });
+
+      const result = await requestApprovalIfConfigured("Quotation", 5);
+
+      expect(result).toBe(false);
+      expect(mocks.docFindUnique).not.toHaveBeenCalled();
+      expect(mocks.createApproval).not.toHaveBeenCalled();
+    });
+
     it("sets requestedBy to null when not provided", async () => {
       mocks.findFirstWorkflow.mockResolvedValue({ id: 10 });
       mocks.findFirstApproval.mockResolvedValue(null);
@@ -135,6 +190,26 @@ describe("approval-workflow.service", () => {
       mocks.findFirstApproval.mockResolvedValue({ id: 1, status: "approved" });
 
       await expect(assertApproved("Invoice", 1)).resolves.toBeUndefined();
+    });
+
+    it("R6WN-01: menolak approval final yang lebih tua dari edit terakhir dokumen", async () => {
+      mocks.findFirstApproval.mockResolvedValue({
+        id: 1, status: "approved", completedAt: new Date("2026-10-01T00:00:00Z"),
+      });
+      mocks.docFindUnique.mockResolvedValue({ updatedAt: new Date("2026-10-02T00:00:00Z") });
+
+      await expect(assertApproved("VendorPayment", 1)).rejects.toThrow(
+        "berubah sesudah persetujuan final"
+      );
+    });
+
+    it("R6WN-01: approval final segar (tanpa edit sesudahnya) tetap lolos", async () => {
+      mocks.findFirstApproval.mockResolvedValue({
+        id: 1, status: "approved", completedAt: new Date("2026-10-02T00:00:00Z"),
+      });
+      mocks.docFindUnique.mockResolvedValue({ updatedAt: new Date("2026-10-01T00:00:00Z") });
+
+      await expect(assertApproved("VendorPayment", 1)).resolves.toBeUndefined();
     });
 
     it("throws when approval status is rejected", async () => {

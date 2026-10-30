@@ -2104,6 +2104,9 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
       });
     });
 
+    // R6WN-01: edit sesudah approval final membuka pengajuan ulang (service
+    // menilai kebasian dari updatedAt); tanpa workflow ini no-op.
+    await requestApprovalIfConfigured("StockAdjustment", adjustment.id, Number(user.id));
     await logActivity(
       "update",
       "StockAdjustment",
