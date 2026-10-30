@@ -2621,7 +2621,7 @@ export async function postStocktakeSession(id: number) {
       await tx.$queryRaw`SELECT id FROM stocktake_sessions WHERE id = ${id} FOR UPDATE`;
       const session = await tx.stocktakeSession.findUnique({
         where: { id },
-        include: { lines: { include: { item: { select: { cost: true } } } } },
+        include: { lines: { include: { item: { select: { cost: true, trackBatch: true } } } } },
       });
       if (!session) throw new Error("Sesi opname tidak ditemukan");
       if (session.status !== "approved") {
@@ -2644,6 +2644,24 @@ export async function postStocktakeSession(id: number) {
       }
 
       const live = await liveQtyByItem(session.warehouseId, tx);
+      // Opname belum mencatat lot per baris (StocktakeLine tanpa kolom lot):
+      // surplus item batch-tracked pasti gugur di hook penyesuaian
+      // (memerlukan nomor batch eksplisit) SESUDAH sesi terlanjur posted
+      // dan draft adjustment lahir setengah-mati. Tolak di sini, sesi tetap
+      // approved sehingga hitungan bisa dikoreksi / lot dilengkapi.
+      const trackBatchByItem = new Map(
+        session.lines.map((l) => [l.itemId, Boolean(l.item.trackBatch)]),
+      );
+      const surplusBatchItems = differing.filter(
+        (f) =>
+          trackBatchByItem.get(f.itemId) &&
+          f.finalCount - (live.get(f.itemId) ?? 0) > 0,
+      );
+      if (surplusBatchItems.length > 0) {
+        throw new Error(
+          `Item batch-tracked surplus belum bisa diposting dari opname (nomor lot belum tercatat): item ${surplusBatchItems.map((f) => `#${f.itemId}`).join(", ")}. Catat selisih lewat Penyesuaian stok dengan nomor batch eksplisit.`,
+        );
+      }
       const snapByItem = new Map(finals.map((f) => [f.itemId, f.systemQty]));
       const deltas = differing.map((f) => {
         const liveQty = live.get(f.itemId) ?? 0;

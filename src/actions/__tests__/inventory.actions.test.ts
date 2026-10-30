@@ -1389,6 +1389,25 @@ describe("stocktake session (P1-5)", () => {
     );
   });
 
+  it("postStocktakeSession menolak surplus item batch-tracked (lot opname belum tercatat)", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({ warehouseId: 1 });
+    // Hidup 10, hitung final 14 -> surplus 4 atas item batch-tracked.
+    mocks.prismaMock.$queryRaw.mockResolvedValue([{ item_id: 10, qty: 10 }]);
+    mocks.prismaMock.stocktakeSession.findUnique.mockResolvedValue({
+      id: 1,
+      warehouseId: 1,
+      status: "approved",
+      documentNo: "STK-1",
+      lines: [
+        { itemId: 10, systemQty: 10, count1: 14, count2: null, item: { cost: 5, trackBatch: true } },
+      ],
+    });
+    const res = await actions.postStocktakeSession(1);
+    expect(res.success).toBe(false);
+    expect(res.error).toContain("batch");
+    expect(mocks.prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+  });
+
   it("postStocktakeSession menolak sesi yang sudah posted (kalah klaim)", async () => {
     mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({ warehouseId: 1 });
     mocks.prismaMock.stocktakeSession.findUnique.mockResolvedValue({
