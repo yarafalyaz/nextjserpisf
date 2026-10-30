@@ -478,5 +478,40 @@ describe("POST /api/workflow/[...path]", () => {
       expect(mocks.rejectStepMock).toHaveBeenCalledWith(10, expect.any(FormData))
       expect(mocks.update).not.toHaveBeenCalled()
     })
+
+    it("R7API-03: reopen dokumen ditolak balas pending jujur, requestedBy = pengaju asal, nol approveStep", async () => {
+      // Aktor BUKAN super_admin (user 2) — dulu reopen menulis requestedBy=2
+      // lalu approveStep langsung kena maker-checker (aktor memproses
+      // pengajuannya sendiri) sesudah reset+approval baru sudah commit.
+      mocks.authFn.mockResolvedValue({ user: { id: 2, roles: ["manager"], permissions: ["approve_sales_orders"] } })
+      mocks.findUnique.mockResolvedValue({ createdBy: 7 })
+      mocks.updateMany.mockResolvedValue({ count: 1 })
+      mocks.findFirstApproval.mockResolvedValueOnce({ id: 10, status: "rejected", requestedBy: 7 })
+      mocks.findFirstApproval.mockResolvedValueOnce({ id: 11, status: "pending", requestedBy: 7 })
+
+      const res = await POST(makeReq(), makeParams(["penjualan", "pesanan", "5", "approve"]))
+      expect(res.status).toBe(200)
+      const json = await res.json()
+      expect(json).toEqual({ success: true, status: "pending", reopened: true })
+      // Pengajuan baru memakai requestedBy approval lama (7), BUKAN aktor (2).
+      expect(mocks.requestApprovalMock).toHaveBeenCalledWith("SalesOrder", 5, 7)
+      // Langkah persetujuan TIDAK diproses dalam request reopen yang sama.
+      expect(mocks.approveStepMock).not.toHaveBeenCalled()
+      expect(mocks.rejectStepMock).not.toHaveBeenCalled()
+    })
+
+    it("R7API-04: fault bercode dari langkah dibalas 500 generik tanpa pesan mentah", async () => {
+      mocks.authFn.mockResolvedValue(adminSession)
+      mocks.findFirstApproval.mockResolvedValueOnce({ id: 10, status: "pending" })
+      const fault = new Error("Unique constraint failed on the fields: (`slug`)") as Error & { code?: string }
+      fault.code = "P2002"
+      mocks.approveStepMock.mockRejectedValue(fault)
+
+      const res = await POST(makeReq(), makeParams(["penjualan", "pesanan", "5", "approve"]))
+      expect(res.status).toBe(500)
+      const json = await res.json()
+      expect(JSON.stringify(json)).not.toContain("Unique constraint")
+      expect(json.error.message).toBe("Gagal memproses langkah persetujuan")
+    })
   })
 })

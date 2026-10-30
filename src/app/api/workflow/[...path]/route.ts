@@ -154,19 +154,30 @@ export async function POST(
           orderBy: { id: "desc" },
         })
 
+        // R7API-03: pencetus approval — dipakai jalur inisiasi di bawah DAN
+        // reopen. JANGAN aktor yang menekan tombol: maker-checker di
+        // approveStep/rejectStep akan menolak aktor menyetujui buatannya
+        // sendiri, tapi mutasi reset+approval baru sudah terlanjur commit.
+        let docCreator: number | null = null
+        if (config.hasCreatedBy === false) {
+          // Model HR tak punya createdBy: pemilik dokumen = employee.userId.
+          const delegateCreator = prisma[config.model as keyof typeof prisma] as any
+          const hrDoc = await delegateCreator
+            .findUnique({ where: { id }, select: { employee: { select: { userId: true } } } })
+            .catch((): null => null)
+          docCreator = hrDoc?.employee?.userId != null ? Number(hrDoc.employee.userId) : null
+        } else {
+          const delegateCreator = prisma[config.model as keyof typeof prisma] as any
+          const doc = await delegateCreator
+            .findUnique({ where: { id }, select: { createdBy: true } })
+            .catch((): null => null)
+          docCreator = doc?.createdBy != null ? Number(doc.createdBy) : null
+        }
+
         if (!approval) {
-          const delegate = prisma[config.model as keyof typeof prisma] as any
-          // Kolom `createdBy` hanya ditanyakan pada model yang punya; model lain
-          // memakai pemanggil sebagai inisiator (lihat MODULE_MAP).
-          const docCreatedBy =
-            config.hasCreatedBy === false
-              ? Number(session.user.id)
-              : await delegate
-                  .findUnique({ where: { id }, select: { createdBy: true } })
-                  .then((doc: { createdBy?: number | null } | null) =>
-                    doc?.createdBy ? Number(doc.createdBy) : Number(session.user.id),
-                  )
-          await requestApprovalIfConfigured(modelType, id, docCreatedBy)
+          // Inisiator = pembuat dokumen (docCreator di atas); kolom
+          // `createdBy` hanya ditanyakan pada model yang punya (MODULE_MAP).
+          await requestApprovalIfConfigured(modelType, id, docCreator ?? Number(session.user.id))
           approval = await prisma.approval.findFirst({
             where: { referenceType: modelType, referenceId: id },
             orderBy: { id: "desc" },
@@ -191,7 +202,15 @@ export async function POST(
           } catch (err) {
             console.error(`[workflow] reset status ${config.model} #${id} gagal:`, err)
           }
-          await requestApprovalIfConfigured(modelType, id, Number(session.user.id))
+          // R7API-03: pencetus approval baru = requestedBy approval yang
+          // ditolak (pengaju asal); fallback pembuat dokumen, lalu aktor.
+          // Menulis aktor di sini membuat klik Setujui/Tolak berikutnya
+          // selalu kena maker-checker (409) sesudah mutasi commit.
+          await requestApprovalIfConfigured(
+            modelType,
+            id,
+            approval.requestedBy ?? docCreator ?? Number(session.user.id),
+          )
           const fresh = await prisma.approval.findFirst({
             where: { referenceType: modelType, referenceId: id },
             orderBy: { id: "desc" },
@@ -199,8 +218,14 @@ export async function POST(
           if (!fresh || fresh.status !== "pending") {
             return apiError("CONFLICT", `Alur persetujuan ditolak — gagal membuka ulang`)
           }
-          approval = fresh
-          // continue to approve/reject below as new flow
+          // Dokumen sudah dibuka ulang (draft + approval pending baru) —
+          // JANGAN lanjut approve/reject dalam request yang sama: aksi
+          // aktor atas pengajuan yang baru lahir bukan persetujuan atas
+          // dokumen yang ia klik, dan requestedBy yang tidak ter-resolve
+          // tetap bisa menyentuh aktor. Balas jujur; klik kedua memproses
+          // langkah pertama dari halaman yang sudah termuat ulang.
+          revalidatePath(config.revalidate)
+          return NextResponse.json({ success: true, status: "pending", reopened: true })
         }
 
         if (approval.status === "approved") {
@@ -228,11 +253,21 @@ export async function POST(
           ) {
             throw stepError
           }
+          // R7API-04: error domain adalah `throw new Error(...)` polos dari
+          // approval.actions (tanpa code Prisma/driver). Error bercode
+          // (P2002, driver adapter, dst.) adalah fault server — JANGAN
+          // kirim .message mentahnya sebagai 409; catat + balas generik.
+          // ponytail: domain-error type khusus akan menggantikan heuristik
+          // code bila approval.actions mengadopsi kelas error sendiri.
+          const hasErrorCode =
+            stepError instanceof Error &&
+            "code" in stepError &&
+            typeof (stepError as { code?: unknown }).code === "string"
           console.error("[api/workflow] langkah persetujuan gagal:", stepError)
-          return apiError(
-            "CONFLICT",
-            stepError instanceof Error ? stepError.message : "Gagal memproses langkah persetujuan",
-          )
+          if (hasErrorCode || !(stepError instanceof Error)) {
+            return apiError("INTERNAL_ERROR", "Gagal memproses langkah persetujuan")
+          }
+          return apiError("CONFLICT", stepError.message)
         }
 
         const updatedApproval = await prisma.approval.findUnique({
