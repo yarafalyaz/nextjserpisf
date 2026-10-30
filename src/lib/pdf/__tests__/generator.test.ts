@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import autoTable from "jspdf-autotable"
-import { generateTransactionPDF, generateQuotationPDF } from "../generator"
+import { generateTransactionPDF, generateQuotationPDF, generateWorkOrderPDF } from "../generator"
 
 // Mock jspdf and jspdf-autotable
 const { mockDoc } = vi.hoisted(() => ({
@@ -123,6 +123,34 @@ describe("PDF Generator Flows", () => {
     await generateQuotationPDF(mockCompany, { ...mockDocInfo, status: "pending_approval" }, mockItems, mockSummary)
     const texts = mockDoc.text.mock.calls.map((call) => String(call[0]))
     expect(texts).toContain("MENUNGGU PERSETUJUAN")
+  })
+
+  it("R7PR-02: watermark transaksi diulang di setiap halaman (loop footer)", async () => {
+    const pages = vi.fn(() => 3)
+    mockDoc.getNumberOfPages = pages as any
+    await generateTransactionPDF(mockCompany, { ...mockDocInfo, status: "draft" }, mockItems, mockSummary)
+    const watermarkCalls = mockDoc.text.mock.calls.filter((call) => String(call[0]) === "KONSEP")
+    // 1 di awal dokumen + 1 per halaman (3) dari loop footer.
+    expect(watermarkCalls.length).toBe(4)
+    mockDoc.getNumberOfPages = vi.fn(() => 1) as any
+  })
+
+  it("R7PR-02: work order draft ikut watermark KONSEP, selesai tidak", () => {
+    const woInfo = {
+      title: "Perintah Kerja",
+      documentNo: "WO/2026/0001",
+      date: "2026-06-12",
+      status: "draft",
+      customerName: "CV Maju Jaya",
+    }
+    generateWorkOrderPDF(mockCompany, woInfo, [])
+    const texts = mockDoc.text.mock.calls.map((call) => String(call[0]))
+    expect(texts).toContain("KONSEP")
+
+    vi.clearAllMocks()
+    generateWorkOrderPDF(mockCompany, { ...woInfo, status: "completed" }, [])
+    const finalTexts = mockDoc.text.mock.calls.map((call) => String(call[0]))
+    expect(finalTexts).not.toContain("KONSEP")
   })
 
   it("menulis baris Terbilang berisi kata-kata nominal total", async () => {

@@ -396,9 +396,12 @@ export function buildTransactionPdf(
   doc.line(145, y + 20, 190, y + 20)
 
   // 8. Footer setiap halaman: waktu cetak + nomor halaman.
+  // R7PR-02: watermark non-final ikut diulang per halaman — sebelumnya
+  // hanya halaman 1, jadi halaman 2+ dokumen konsep tampil bersih.
   const pageCount = doc.getNumberOfPages()
   for (let page = 1; page <= pageCount; page += 1) {
     doc.setPage(page)
+    drawNonFinalWatermark(doc, docInfo.status)
     doc.setFont("Helvetica", "normal")
     doc.setFontSize(7.5)
     doc.setTextColor(midGray)
@@ -831,6 +834,9 @@ export function generateWorkOrderPDF(
   items: WorkOrderPDFItem[]
 ) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
+  // R7PR-02: WO draft/pending dulu hanya badge status 10pt — kini watermark
+  // diagonal yang sama seperti dokumen transaksi lain.
+  drawNonFinalWatermark(doc, docInfo.status)
 
   const darkGray = "#1f2937"
   const midGray = "#4b5563"
