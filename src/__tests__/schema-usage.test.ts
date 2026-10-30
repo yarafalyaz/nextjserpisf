@@ -408,6 +408,19 @@ const KNOWN_UNUSED_FK: string[] = [
 const KNOWN_UNUSED_ENUM_FIELDS: string[] = [].sort()
 
 describe("skema: setiap kolom skalar dipakai kode", () => {
+  it("R6PA-06: Employee.userId unik (@unique) supaya satu akun tak tertaut ke 2 karyawan", () => {
+    const schema = fs.readFileSync(path.join(ROOT, "prisma/schema.prisma"), "utf8")
+    const body = /^model Employee \{([\s\S]*?)^\}/m.exec(schema)?.[1] ?? ""
+    const line = body.split("\n").find((l) => /\buserId\b/.test(l)) ?? ""
+    // findFirst({ where: { userId } }) di permukaan self-service (slip gaji
+    // saya, pinjaman mandiri, getHrScope) tak punya urutan tentu — tanpa
+    // constraint unik, baris ganda membuat data karyawan lain tampil
+    // sebagai "milik saya". Audit duplikat DB dev saat fix: 0 baris.
+    expect(line).toContain("@unique")
+    expect(line).toContain('@map("user_id")')
+    expect(/@relation/.test(line)).toBe(false)
+  })
+
   it(
     "tidak ada kolom mati di luar daftar-beku",
     () => {

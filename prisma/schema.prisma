@@ -1056,7 +1056,9 @@ model Position {
 model Employee {
   slug                String?           @unique
   id                  Int               @id @default(autoincrement())
-  userId              Int?              @map("user_id")
+  // R6PA-06: unik supaya satu akun login tidak bisa tertaut ke 2 karyawan
+  // (temuan audit di dev DB: 0 baris duplikat); NULL boleh banyak (belum tertaut).
+  userId              Int?              @unique @map("user_id")
   idNumber            String?           @map("id_number")
   bankName            String?           @map("bank_name")
   bankAccountNumber   String?           @map("bank_account_number")
@@ -1163,7 +1165,6 @@ model Employee {
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([positionId], map: "employees_position_id_fkey")
   @@index([isActive, deletedAt])
-  @@index([userId])
   @@index([createdAt])
   @@map("employees")
 }
