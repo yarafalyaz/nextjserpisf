@@ -173,6 +173,19 @@ describe("onTransferProcessed item aggregation", () => {
     expect(spies.moveCreate).not.toHaveBeenCalled()
   })
 
+  it("STOK-08: process menangkap sourceAgeAt ke baris transfer", async () => {
+    const { spies } = wireTx([{ id: 41, itemId: 7, qty: 3 }])
+    const srcAge = new Date("2026-01-01T00:00:00Z")
+    mocks.consumeFifoLayers.mockResolvedValueOnce({
+      consumedCost: 500, shortfall: 0, consumedSerials: [], consumedBatches: [], sourceAgeAt: srcAge,
+    })
+    await onTransferProcessed(100, 1)
+    expect(spies.transferItemUpdate).toHaveBeenCalledWith({
+      where: { id: 41 },
+      data: { sourceLayerCreatedAt: srcAge },
+    })
+  })
+
   it("bypasses $transaction when txClient is provided", async () => {
     const { spies, tx } = wireTx([{ itemId: 7, qty: 3 }])
     mocks.transaction.mockClear()
@@ -211,6 +224,23 @@ describe("onTransferReceived", () => {
     await expect(onTransferReceived(100, 1)).resolves.not.toThrow()
     expect(spies.moveCreate).toHaveBeenCalledTimes(1)
     expect((spies.moveCreate.mock.calls[0]![0] as { data: { impact: string } }).data.impact).toBe("IN")
+  })
+
+  it("STOK-08: receive meneruskan umur sumber ke createInLayer tujuan", async () => {
+    const srcAge = new Date("2026-01-01T00:00:00Z")
+    const { spies } = wireTx([
+      { itemId: 7, qty: 3, sourceLayerCreatedAt: srcAge } as never,
+    ], "processed")
+    spies.moveFindFirst.mockResolvedValueOnce(null)
+    spies.moveFindMany.mockResolvedValueOnce([{ itemId: 7, cost: 15 }])
+    spies.moveCreate.mockResolvedValueOnce({ id: 900 })
+
+    await onTransferReceived(100, 1)
+
+    expect(mocks.createInLayer).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ itemId: 7, sourceCreatedAt: srcAge }),
+    )
   })
 
   it("aggregates items and preserves exact cost basis from OUT moves", async () => {
@@ -300,6 +330,7 @@ describe("onTransferReceived", () => {
       stockMoveId: 900,
       qty: 2,
       unitCost: 15,
+      sourceCreatedAt: null,
     })
     expect(mocks.createInLayer).toHaveBeenCalledWith(expect.anything(), {
       itemId: 7,
@@ -307,6 +338,7 @@ describe("onTransferReceived", () => {
       stockMoveId: 900,
       qty: 1,
       unitCost: 15,
+      sourceCreatedAt: null,
     })
   })
 

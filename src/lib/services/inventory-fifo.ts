@@ -26,6 +26,12 @@ export type FifoConsumption = {
    * and expiry reporting correct.
    */
   consumedBatches: ConsumedBatch[]
+  /**
+   * STOK-08/CST-02: umur FIFO tertua (COALESCE(sourceCreatedAt, createdAt))
+   * di antara lapisan yang dikonsumsi. Pemindah stok (transfer) meneruskan
+   * ini sebagai sourceCreatedAt lapisan tujuan; penjualan mengabaikannya.
+   */
+  sourceAgeAt: Date | null
 }
 
 /**
@@ -148,7 +154,7 @@ export async function consumeFifoLayers(
 ): Promise<FifoConsumption> {
   const { itemId, warehouseId, qty, label, allowShortfall = false, serialNumbers, documentDate } = opts
   if (qty <= 0) {
-    return { consumedCost: 0, shortfall: 0, consumedSerials: [], consumedBatches: [] }
+    return { consumedCost: 0, shortfall: 0, consumedSerials: [], consumedBatches: [], sourceAgeAt: null }
   }
 
   // Locking read: fetch + lock candidate FIFO layers with FOR UPDATE so concurrent
@@ -157,11 +163,11 @@ export async function consumeFifoLayers(
   // driving layer.remaining negative). Reading the columns from this locked query
   // also avoids the snapshot issue a subsequent plain read would hit.
   const whCond = warehouseId != null ? Prisma.sql`AND warehouse_id = ${warehouseId}` : Prisma.empty
-  const layers = await tx.$queryRaw<{ id: number; remaining: unknown; unitCost: unknown; batchNumber: string | null; warehouseId: number | null }[]>(
-    Prisma.sql`SELECT id, remaining, unit_cost AS unitCost, batch_number AS batchNumber, warehouse_id AS warehouseId
+  const layers = await tx.$queryRaw<{ id: number; remaining: unknown; unitCost: unknown; batchNumber: string | null; warehouseId: number | null; createdAt: Date; sourceCreatedAt: Date | null }[]>(
+    Prisma.sql`SELECT id, remaining, unit_cost AS unitCost, batch_number AS batchNumber, warehouse_id AS warehouseId, created_at AS createdAt, source_created_at AS sourceCreatedAt
                FROM inventory_layers
                WHERE item_id = ${itemId} AND remaining > 0 ${whCond}
-               ORDER BY created_at ASC, id ASC
+               ORDER BY COALESCE(source_created_at, created_at) ASC, id ASC
                FOR UPDATE`
   )
 
@@ -489,18 +495,38 @@ export async function consumeFifoLayers(
     }
   }
 
+  // Umur FIFO tertua yang benar-benar ikut terambil (untuk transfer).
+  let sourceAgeAt: Date | null = null
+  for (const { layer, consume } of consumptions) {
+    if (consume <= 0) continue
+    const age = layer.sourceCreatedAt ?? layer.createdAt
+    if (age && (sourceAgeAt === null || age.getTime() < sourceAgeAt.getTime())) {
+      sourceAgeAt = age
+    }
+  }
+
   return {
     consumedCost,
     shortfall: Math.max(0, toConsume),
     consumedSerials,
     consumedBatches,
+    sourceAgeAt,
   }
 }
 
 /** Create an inbound FIFO layer scoped to a warehouse (and optional batch). */
 export async function createInLayer(
   tx: Tx,
-  opts: { itemId: number; warehouseId?: number | null; batchNumber?: string | null; stockMoveId: number; qty: number; unitCost: number }
+  opts: {
+    itemId: number
+    warehouseId?: number | null
+    batchNumber?: string | null
+    stockMoveId: number
+    qty: number
+    unitCost: number
+    /** STOK-08: umur FIFO lapisan sumber (transfer); null = layer baru biasa. */
+    sourceCreatedAt?: Date | null
+  }
 ): Promise<void> {
   await tx.inventoryLayer.create({
     data: {
@@ -512,6 +538,7 @@ export async function createInLayer(
       qtyOut: 0,
       remaining: opts.qty,
       unitCost: opts.unitCost,
+      sourceCreatedAt: opts.sourceCreatedAt ?? null,
     },
   })
 }

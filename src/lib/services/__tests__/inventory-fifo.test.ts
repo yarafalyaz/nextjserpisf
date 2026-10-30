@@ -229,8 +229,25 @@ describe("inventory-fifo", () => {
     it("returns zero when qty <= 0", async () => {
       const tx = mockTx({});
       const result = await consumeFifoLayers(tx, { itemId: 1, qty: 0 });
-      expect(result).toEqual({ consumedCost: 0, shortfall: 0, consumedSerials: [], consumedBatches: [] });
+      expect(result).toEqual({ consumedCost: 0, shortfall: 0, consumedSerials: [], consumedBatches: [], sourceAgeAt: null });
       expect(tx.$queryRaw).not.toHaveBeenCalled();
+    });
+
+    it("STOK-08: sourceAgeAt = umur efektif tertua lapisan terkonsumsi (sourceCreatedAt menang atas createdAt)", async () => {
+      const old = new Date("2026-01-01T00:00:00Z");
+      const newer = new Date("2026-06-01T00:00:00Z");
+      const tx = mockTx({
+        layers: [
+          { id: 1, remaining: 5, unitCost: 80, batchNumber: null, createdAt: newer, sourceCreatedAt: old } as never,
+          { id: 2, remaining: 5, unitCost: 120, batchNumber: null, createdAt: newer, sourceCreatedAt: null } as never,
+        ],
+      });
+      const result = await consumeFifoLayers(tx, { itemId: 1, qty: 3 });
+      expect(result.sourceAgeAt).toEqual(old);
+      // Urutan FIFO memakai umur efektif sumber, bukan created_at lahir.
+      const sqlArg = tx.$queryRaw.mock.calls[0][0] as { strings?: string[] };
+      const sqlText = (sqlArg.strings ?? []).join(" ");
+      expect(sqlText).toContain("COALESCE(source_created_at, created_at)");
     });
 
     it("consumes from a single layer (oldest first)", async () => {
@@ -669,7 +686,19 @@ describe("inventory-fifo", () => {
           qtyOut: 0,
           remaining: 100,
           unitCost: 7.5,
+          sourceCreatedAt: null,
         },
+      });
+    });
+
+    it("STOK-08: createInLayer meneruskan sourceCreatedAt lapisan sumber", async () => {
+      const tx = mockTx({});
+      const src = new Date("2026-01-01T00:00:00Z");
+      await createInLayer(tx, {
+        itemId: 1, warehouseId: 2, stockMoveId: 50, qty: 10, unitCost: 3, sourceCreatedAt: src,
+      });
+      expect(tx._spies.layerCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ sourceCreatedAt: src }),
       });
     });
 

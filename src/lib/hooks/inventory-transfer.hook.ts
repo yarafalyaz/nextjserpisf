@@ -108,7 +108,7 @@ export async function onTransferProcessed(
 
         // Consume FIFO from the SOURCE warehouse — track cost so the destination
         // layer can preserve the cost basis (avoids transfers zeroing out COGS).
-        const { consumedCost, consumedSerials, consumedBatches } = await consumeFifoLayers(tx, {
+        const { consumedCost, consumedSerials, consumedBatches, sourceAgeAt } = await consumeFifoLayers(tx, {
           itemId: itemId,
           warehouseId: transfer.sourceWarehouseId,
           qty: qty,
@@ -123,7 +123,7 @@ export async function onTransferProcessed(
         // source lots are decremented and the serials remain "used" forever while
         // the destination shows qty with no lot/serial behind it.
         const allocationRowId = allocationRowByItem.get(itemId);
-        if (allocationRowId != null && (consumedSerials.length > 0 || consumedBatches.length > 0)) {
+        if (allocationRowId != null && (consumedSerials.length > 0 || consumedBatches.length > 0 || sourceAgeAt != null)) {
           await tx.inventoryTransferItem.update({
             where: { id: allocationRowId },
             data: {
@@ -131,6 +131,8 @@ export async function onTransferProcessed(
               ...(consumedBatches.length > 0
                 ? { batchAllocations: consumedBatches as unknown as Prisma.InputJsonValue }
                 : {}),
+              // STOK-08: umur lapisan sumber tertua untuk lapisan tujuan.
+              ...(sourceAgeAt != null ? { sourceLayerCreatedAt: sourceAgeAt } : {}),
             },
           });
         }
@@ -185,6 +187,8 @@ interface InboundEntry {
   qty: number;
   serials: string[];
   batches: ConsumedBatch[];
+  /** STOK-08: umur FIFO lapisan sumber (dari InventoryTransferItem). */
+  sourceCreatedAt?: Date | null;
 }
 
 async function carriedCostByItem(tx: TxClient, transferId: number, itemIds: number[]): Promise<Map<number, number>> {
@@ -350,6 +354,7 @@ async function createInboundMoves(
         stockMoveId: createdMove.id,
         qty: batchQty,
         unitCost: carriedUnitCost,
+        sourceCreatedAt: entry.sourceCreatedAt ?? null,
       });
     }
 
@@ -361,6 +366,7 @@ async function createInboundMoves(
         stockMoveId: createdMove.id,
         qty: batchQtyByNumber.size === 0 ? entry.qty : unbatchedQty,
         unitCost: carriedUnitCost,
+        sourceCreatedAt: entry.sourceCreatedAt ?? null,
       });
     }
   }
@@ -443,6 +449,10 @@ export async function onTransferReceived(
       for (const line of lines) {
         const state = lineById.get(line.transferItemId)!;
         const entry = entriesByItem.get(state.itemId) ?? { itemId: state.itemId, qty: 0, serials: [], batches: [] };
+        const srcAge = (state as { sourceLayerCreatedAt?: Date | null }).sourceLayerCreatedAt ?? null;
+        if (srcAge && (!entry.sourceCreatedAt || srcAge.getTime() < entry.sourceCreatedAt.getTime())) {
+          entry.sourceCreatedAt = srcAge;
+        }
         entry.qty = safeAdd(entry.qty, line.qty, 2);
         entry.serials.push(...(line.serialNumbers ?? []));
         entry.batches.push(
@@ -528,6 +538,10 @@ export async function onTransferReceived(
       const q = Number(it.qty);
       if (q <= 0) continue;
       const entry = entriesByItem.get(it.itemId) ?? { itemId: it.itemId, qty: 0, serials: [], batches: [] };
+      const srcAge = (it as { sourceLayerCreatedAt?: Date | null }).sourceLayerCreatedAt ?? null;
+      if (srcAge && (!entry.sourceCreatedAt || srcAge.getTime() < entry.sourceCreatedAt.getTime())) {
+        entry.sourceCreatedAt = srcAge;
+      }
       entry.qty = safeAdd(entry.qty, q, 2);
       entry.serials.push(...parseStoredSerials(it.serialNumbers));
       entry.batches.push(...parseStoredBatches(it.batchAllocations, transfer.sourceWarehouseId));

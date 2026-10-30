@@ -2696,6 +2696,10 @@ model InventoryLayer {
   id          Int       @id @default(autoincrement())
   itemId      Int       @map("item_id")
   warehouseId Int?      @map("warehouse_id")
+  // STOK-08/CST-02: umur FIFO asal saat layer lahir dari transfer antar
+  // gudang. FIFO mengurut COALESCE(sourceCreatedAt, createdAt) supaya stok
+  // pindahan tidak terlihat lebih muda daripada stok lokal tujuan.
+  sourceCreatedAt DateTime? @map("source_created_at")
   batchNumber String?   @map("batch_number")
   stockMoveId Int       @map("stock_move_id")
   qtyIn       Decimal   @map("qty_in") @db.Decimal(15, 2)
@@ -2875,6 +2879,10 @@ model InventoryTransferItem {
   // while the destination shows qty on hand with no lot/serial behind it.
   serialNumbers       Json?             @map("serial_numbers")
   batchAllocations    Json?             @map("batch_allocations")
+  // STOK-08/CST-02: umur FIFO tertua lapisan sumber yang dikonsumsi OUT
+  // transfer ini; ditulis saat process, dibaca saat receive untuk
+  // InventoryLayer.sourceCreatedAt di gudang tujuan.
+  sourceLayerCreatedAt DateTime?        @map("source_layer_created_at")
   inventoryTransfer   InventoryTransfer @relation(fields: [inventoryTransferId], references: [id], onDelete: Cascade)
   item                Item              @relation(fields: [itemId], references: [id], onDelete: Restrict)
   receiptItems        InventoryTransferReceiptItem[]
