@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { GET } from "../route"
+import { POST } from "../route"
 import { SalesStatus, Status } from "@/lib/constants"
 
 const mocks = vi.hoisted(() => ({
@@ -49,7 +49,7 @@ function makeReq(): Request {
   })
 }
 
-describe("GET /api/cron/auto-reject-quotations", () => {
+describe("POST /api/cron/auto-reject-quotations", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.isValidCron.mockReturnValue(true)
@@ -79,13 +79,13 @@ describe("GET /api/cron/auto-reject-quotations", () => {
 
   it("returns 401 when cron auth invalid", async () => {
     mocks.isValidCron.mockReturnValue(false)
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     expect(res.status).toBe(401)
   })
 
   it("returns 0 rejected when no stale quotations", async () => {
     mocks.quotationFindMany.mockResolvedValue([])
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.rejected).toBe(0)
     expect(json.message).toBe("Tidak ada penawaran kedaluwarsa.")
@@ -93,7 +93,7 @@ describe("GET /api/cron/auto-reject-quotations", () => {
 
   it("returns 500 on internal error", async () => {
     mocks.quotationFindMany.mockRejectedValue(new Error("db down"))
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     expect(res.status).toBe(500)
     const json = await res.json()
     expect(json.error).toEqual({ code: "INTERNAL_ERROR", message: "Tugas cron gagal dijalankan" })
@@ -110,7 +110,7 @@ describe("GET /api/cron/auto-reject-quotations", () => {
     // Bulk update flips both rows.
     mocks.flippedIds = new Set([1, 2])
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.rejected).toBe(2)
     expect(json.rejectedIds).toEqual([1, 2])
@@ -136,7 +136,7 @@ describe("GET /api/cron/auto-reject-quotations", () => {
     // status guard trims nothing further here.
     mocks.flippedIds = new Set([1])
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.rejected).toBe(1)
     // The update was scoped to the in-tx candidate set, not the outer scan set.
@@ -163,7 +163,7 @@ describe("GET /api/cron/auto-reject-quotations", () => {
     // yang ter-flip, bukan daftar kandidat.
     mocks.flippedIds = new Set([1])
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.rejected).toBe(1)
     expect(json.rejectedIds).toEqual([1])
@@ -176,7 +176,7 @@ describe("GET /api/cron/auto-reject-quotations", () => {
     mocks.quotationFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
     mocks.txQuotationFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
     // Every row flipped to non-SENT between the in-tx read and the update.
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.rejected).toBe(0)
     expect(json.message).toBe(
@@ -190,7 +190,7 @@ describe("GET /api/cron/auto-reject-quotations", () => {
     // Both flipped to non-SENT before our in-tx re-read.
     mocks.txQuotationFindMany.mockResolvedValue([])
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.rejected).toBe(0)
     expect(mocks.txQuotationUpdateMany).not.toHaveBeenCalled()
@@ -202,7 +202,7 @@ describe("GET /api/cron/auto-reject-quotations", () => {
     mocks.txQuotationFindMany.mockResolvedValue([{ id: 7, revisionNumber: 1 }])
     mocks.flippedIds = new Set([7])
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     expect(res.status).toBe(200)
     expect(mocks.quotationFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ select: { id: true } }),
@@ -212,7 +212,7 @@ describe("GET /api/cron/auto-reject-quotations", () => {
   it("passes correct cutoff date (14 days ago)", async () => {
     mocks.quotationFindMany.mockResolvedValue([])
 
-    await GET(makeReq())
+    await POST(makeReq())
     expect(mocks.quotationFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
         status: SalesStatus.SENT,
@@ -236,7 +236,7 @@ describe("GET /api/cron/auto-reject-quotations", () => {
     // Query OR adalah satu-satunya gerbang kandidat: baris validUntil masa depan
     // tidak cocok cabang mana pun (cabang 1 validUntil<now gagal, cabang 2 butuh null).
     mocks.quotationFindMany.mockResolvedValue([])
-    await GET(makeReq())
+    await POST(makeReq())
     const where = (mocks.quotationFindMany.mock.calls[0][0] as any).where
     expect(where.updatedAt).toBeUndefined()
     expect(where.OR[0]).toEqual({ validUntil: { lt: expect.any(Date) } })

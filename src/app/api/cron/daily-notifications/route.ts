@@ -20,7 +20,7 @@ import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
  * - Late attendance today
  * - Absent employees after 10:00
  */
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   try {
   if (!isValidCronRequest(request)) {
     return apiError("UNAUTHORIZED", "Tidak terotorisasi")

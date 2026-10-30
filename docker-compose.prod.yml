@@ -63,11 +63,11 @@ services:
       - -c
       - |
         for i in $(seq 1 12); do
-          curl -fsS -H "Authorization: Bearer $$CRON_SECRET" http://app:3000/api/cron/sync-holidays && break || sleep 10
+          curl -fsS -X POST -H "Authorization: Bearer $$CRON_SECRET" http://app:3000/api/cron/sync-holidays && break || sleep 10
         done
         while true; do
           sleep 2592000
-          curl -fsS -H "Authorization: Bearer $$CRON_SECRET" http://app:3000/api/cron/sync-holidays || echo "holiday-sync: panggilan gagal, dicoba lagi siklus berikutnya"
+          curl -fsS -X POST -H "Authorization: Bearer $$CRON_SECRET" http://app:3000/api/cron/sync-holidays || echo "holiday-sync: panggilan gagal, dicoba lagi siklus berikutnya"
         done
 
   db:

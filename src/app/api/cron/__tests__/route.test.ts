@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { GET, POST } from "../route"
+import { POST } from "../route"
 
 // Cron auto-lock (R-09) mengunci baris setting FOR UPDATE lewat tx.$queryRaw,
 // sama seperti period-close. SystemSetting findFirst/update non-tx tetap
@@ -105,7 +105,7 @@ function makeCronRequest(url: string): Request {
   })
 }
 
-describe("GET /api/cron", () => {
+describe("POST /api/cron", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.CRON_SECRET = "test-secret"
@@ -137,19 +137,19 @@ describe("GET /api/cron", () => {
 
   it("rejects request without valid auth", async () => {
     delete process.env.CRON_SECRET
-    const res = await GET(new Request("http://localhost/api/cron"))
+    const res = await POST(new Request("http://localhost/api/cron"))
     expect(res.status).toBe(401)
   })
 
   it("rejects request with wrong bearer token", async () => {
-    const res = await GET(new Request("http://localhost/api/cron", {
+    const res = await POST(new Request("http://localhost/api/cron", {
       headers: { authorization: "Bearer wrong-token" },
     }))
     expect(res.status).toBe(401)
   })
 
   it("runs all tasks when no task param provided", async () => {
-    const res = await GET(makeCronRequest("http://localhost/api/cron"))
+    const res = await POST(makeCronRequest("http://localhost/api/cron"))
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.results["lock-period"]).toBeDefined()
@@ -160,21 +160,21 @@ describe("GET /api/cron", () => {
   })
 
   it("runs only the specified task when task param valid", async () => {
-    const res = await GET(makeCronRequest("http://localhost/api/cron?task=cleanup"))
+    const res = await POST(makeCronRequest("http://localhost/api/cron?task=cleanup"))
     const json = await res.json()
     expect(json.results["cleanup"]).toBeDefined()
     expect(json.results["low-stock"]).toBeUndefined()
   })
 
   it("rejects an invalid task param without running any task", async () => {
-    const res = await GET(makeCronRequest("http://localhost/api/cron?task=hacker"))
+    const res = await POST(makeCronRequest("http://localhost/api/cron?task=hacker"))
     const json = await res.json()
     expect(res.status).toBe(400)
     expect(json.error.code).toBe("BAD_REQUEST")
     expect(mocks.cronLogCreate).not.toHaveBeenCalled()
   })
 
-  it("handles POST the same as GET", async () => {
+  it("handles POST request", async () => {
     const res = await POST(makeCronRequest("http://localhost/api/cron"))
     expect(res.status).toBe(200)
   })
@@ -203,7 +203,7 @@ describe("GET /api/cron", () => {
     it("locks period when no transactions in next month", async () => {
       mocks.salesInvoiceFindFirst.mockResolvedValue(null)
 
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=lock-period"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=lock-period"))
       const json = await res.json()
       expect(json.results["lock-period"].status).toBe("success")
       expectLockBeforeTxUpdate()
@@ -222,7 +222,7 @@ describe("GET /api/cron", () => {
       // the auto-lock cron never run in production. See fix(cron): auto-lock period guard skipped lock in normal operation.
       mocks.salesInvoiceFindFirst.mockResolvedValue({ id: 99 })
 
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=lock-period"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=lock-period"))
       const json = await res.json()
       expect(json.results["lock-period"].status).toBe("success")
       expect(mocks.txSystemSettingUpdate).toHaveBeenCalled()
@@ -237,7 +237,7 @@ describe("GET /api/cron", () => {
       // Baca luar-tx sengaja beda: bila guard memakai ini, kunci akan mundur.
       mocks.systemSettingFindFirst.mockResolvedValue({ id: 1, periodLockDate: null })
 
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=lock-period"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=lock-period"))
       const json = await res.json()
       expect(json.results["lock-period"].status).toBe("success")
       expect(json.results["lock-period"].message).toContain("auto-lock tidak memundurkan kunci")
@@ -250,7 +250,7 @@ describe("GET /api/cron", () => {
         mocks.order.push("lock")
         return []
       })
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=lock-period"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=lock-period"))
       const json = await res.json()
       expect(json.results["lock-period"].status).toBe("error")
       expect(mocks.txSystemSettingUpdate).not.toHaveBeenCalled()
@@ -260,7 +260,7 @@ describe("GET /api/cron", () => {
   describe("low-stock task", () => {
     it("returns 'all stock safe' when no low items", async () => {
       mocks.queryRaw.mockResolvedValue([])
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=low-stock"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=low-stock"))
       const json = await res.json()
       expect(json.results["low-stock"].message).toBe("Semua stok aman")
     })
@@ -269,7 +269,7 @@ describe("GET /api/cron", () => {
       mocks.queryRaw.mockResolvedValue([
         { id: 1, name: "Item A", sku: "A1", qty_on_hand: 2, min_stock: 10 },
       ])
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=low-stock"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=low-stock"))
       const json = await res.json()
       expect(json.results["low-stock"].message).toContain("1 item")
       expect(mocks.notificationLowStock).toHaveBeenCalled()
@@ -279,7 +279,7 @@ describe("GET /api/cron", () => {
   describe("overdue-invoice task", () => {
     it("returns 'no overdue' when empty list", async () => {
       mocks.salesInvoiceFindMany.mockResolvedValue([])
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=overdue-invoice"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=overdue-invoice"))
       const json = await res.json()
       expect(json.results["overdue-invoice"].message).toBe("Tidak ada invoice overdue")
     })
@@ -290,7 +290,7 @@ describe("GET /api/cron", () => {
         { documentNo: "INV-1", customer: { name: "PT A" }, grandTotal: 1000, paidAmount: 0 },
         { documentNo: "INV-2", customer: { name: "PT B" }, grandTotal: 2000, paidAmount: 500 },
       ])
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=overdue-invoice"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=overdue-invoice"))
       const json = await res.json()
       expect(json.results["overdue-invoice"].message).toContain("2 invoice")
       expect(mocks.notificationNotifyAdmins).toHaveBeenCalled()
@@ -305,7 +305,7 @@ describe("GET /api/cron", () => {
         paidAmount: 0,
       }))
       mocks.salesInvoiceFindMany.mockResolvedValue(invs)
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=overdue-invoice"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=overdue-invoice"))
       const json = await res.json()
       expect(json.results["overdue-invoice"].status).toBe("success")
       // "dan N lainnya" suffix is in the admin notification body, not the return string
@@ -322,7 +322,7 @@ describe("GET /api/cron", () => {
         paidAmount: 0,
       })))
 
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=overdue-invoice"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=overdue-invoice"))
       const json = await res.json()
       expect(json.results["overdue-invoice"].message).toContain("23 invoice")
       const notifyBody = mocks.notificationNotifyAdmins.mock.calls[0][1]
@@ -335,7 +335,7 @@ describe("GET /api/cron", () => {
       mocks.salesInvoiceFindMany.mockResolvedValue([
         { documentNo: "INV-1", customer: null, grandTotal: 100, paidAmount: 0 },
       ])
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=overdue-invoice"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=overdue-invoice"))
       const json = await res.json()
       expect(json.results["overdue-invoice"].status).toBe("success")
     })
@@ -344,7 +344,7 @@ describe("GET /api/cron", () => {
   describe("late-checkin task", () => {
     it("returns 'no late checkin' when empty", async () => {
       mocks.attendanceFindMany.mockResolvedValue([])
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=late-checkin"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=late-checkin"))
       const json = await res.json()
       expect(json.results["late-checkin"].message).toBe("Tidak ada keterlambatan check-in hari ini")
     })
@@ -356,7 +356,7 @@ describe("GET /api/cron", () => {
           employee: { id: 1, name: "John", department: { name: "IT" } },
         },
       ])
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=late-checkin"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=late-checkin"))
       const json = await res.json()
       expect(json.results["late-checkin"].message).toContain("1 karyawan")
       expect(mocks.notificationLateCheckInBatch).toHaveBeenCalled()
@@ -368,7 +368,7 @@ describe("GET /api/cron", () => {
       mocks.attendanceFindMany.mockResolvedValue([
         { checkIn: new Date(), employee: null },
       ])
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=late-checkin"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=late-checkin"))
       const json = await res.json()
       expect(json.results["late-checkin"].status).toBe("success")
       // All employees were null → empty entries → batch helper not called.
@@ -380,7 +380,7 @@ describe("GET /api/cron", () => {
       mocks.attendanceFindMany.mockResolvedValue([
         { checkIn: null, employee: { id: 1, name: "John", department: null } },
       ])
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=late-checkin"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=late-checkin"))
       const json = await res.json()
       expect(json.results["late-checkin"].status).toBe("success")
       expect(mocks.notificationLateCheckInBatch).toHaveBeenCalled()
@@ -392,7 +392,7 @@ describe("GET /api/cron", () => {
         { checkIn: new Date(), employee: { id: 2, name: "Bob",   department: { name: "HR" } } },
         { checkIn: new Date(), employee: { id: 3, name: "Carol", department: null } },
       ])
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=late-checkin"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=late-checkin"))
       const json = await res.json()
       expect(json.results["late-checkin"].message).toContain("3 karyawan")
       expect(mocks.notificationLateCheckInBatch).toHaveBeenCalledTimes(1)
@@ -405,7 +405,7 @@ describe("GET /api/cron", () => {
   describe("cleanup task", () => {
     it("prunes old activity logs within the retention window, sparing purge records", async () => {
       mocks.activityLogDeleteMany.mockResolvedValue({ count: 5 })
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=cleanup"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=cleanup"))
       const json = await res.json()
       expect(json.results["cleanup"].message).toContain("5 log activity")
       // Retention is well beyond the old 90 days, and the append-only "purge"
@@ -421,7 +421,7 @@ describe("GET /api/cron", () => {
     it("captures thrown errors per task: respons generik + status 500, detail hanya di cronLog", async () => {
       // Force low-stock to throw via invalid $queryRaw return that breaks .map
       mocks.queryRaw.mockRejectedValue(new Error("DB down"))
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=low-stock"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=low-stock"))
       const json = await res.json()
       expect(res.status).toBe(500)
       expect(json.results["low-stock"].status).toBe("error")
@@ -436,7 +436,7 @@ describe("GET /api/cron", () => {
       mocks.queryRaw.mockImplementation(() => {
         throw "weird string error"
       })
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=low-stock"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=low-stock"))
       const json = await res.json()
       expect(res.status).toBe(500)
       expect(json.results["low-stock"].status).toBe("error")
@@ -446,13 +446,13 @@ describe("GET /api/cron", () => {
 
   describe("cronLog", () => {
     it("writes a cronLog entry per task", async () => {
-      await GET(makeCronRequest("http://localhost/api/cron?task=cleanup"))
+      await POST(makeCronRequest("http://localhost/api/cron?task=cleanup"))
       expect(mocks.cronLogCreate).toHaveBeenCalled()
     })
 
     it("continues when cronLog write fails", async () => {
       mocks.cronLogCreate.mockRejectedValue(new Error("log write fail"))
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=cleanup"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=cleanup"))
       // Task itself still succeeds even if logging fails
       const json = await res.json()
       expect(json.results["cleanup"].status).toBe("success")
@@ -463,7 +463,7 @@ describe("GET /api/cron", () => {
     it("returns only stale REVERSING journals to POSTED", async () => {
       mocks.journalUpdateMany.mockResolvedValue({ count: 3 })
 
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=recover-stuck-reversals"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=recover-stuck-reversals"))
       const json = await res.json()
 
       expect(json.results["recover-stuck-reversals"].status).toBe("success")
@@ -486,7 +486,7 @@ describe("GET /api/cron", () => {
     it("reports success when nothing is stuck", async () => {
       mocks.journalUpdateMany.mockResolvedValue({ count: 0 })
 
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=recover-stuck-reversals"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=recover-stuck-reversals"))
       const json = await res.json()
 
       expect(json.results["recover-stuck-reversals"].status).toBe("success")
@@ -494,7 +494,7 @@ describe("GET /api/cron", () => {
     })
 
     it("is part of the default task set", async () => {
-      const res = await GET(makeCronRequest("http://localhost/api/cron"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron"))
       const json = await res.json()
       expect(json.results["recover-stuck-reversals"]).toBeDefined()
     })
@@ -507,7 +507,7 @@ describe("GET /api/cron", () => {
       ])
       mocks.attachmentDeleteMany.mockResolvedValue({ count: 1 })
 
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=sweep-orphan-attachments"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=sweep-orphan-attachments"))
       const json = await res.json()
 
       expect(json.results["sweep-orphan-attachments"].status).toBe("success")
@@ -543,7 +543,7 @@ describe("GET /api/cron", () => {
         .mockResolvedValueOnce({ count: 0 }) // id 7 sudah diklaim
         .mockResolvedValueOnce({ count: 1 }) // id 8 benar-benar yatim
 
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=sweep-orphan-attachments"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=sweep-orphan-attachments"))
       const json = await res.json()
 
       expect(json.results["sweep-orphan-attachments"].status).toBe("success")
@@ -555,7 +555,7 @@ describe("GET /api/cron", () => {
     it("reports success when nothing is orphaned", async () => {
       mocks.attachmentFindMany.mockResolvedValue([])
 
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=sweep-orphan-attachments"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=sweep-orphan-attachments"))
       const json = await res.json()
 
       expect(json.results["sweep-orphan-attachments"].status).toBe("success")
@@ -564,7 +564,7 @@ describe("GET /api/cron", () => {
     })
 
     it("is part of the default task set", async () => {
-      const res = await GET(makeCronRequest("http://localhost/api/cron"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron"))
       const json = await res.json()
       expect(json.results["sweep-orphan-attachments"]).toBeDefined()
     })
@@ -575,7 +575,7 @@ describe("GET /api/cron", () => {
       mocks.activityLogDeleteMany.mockResolvedValue({ count: 5 })
       mocks.idempotencyKeyDeleteMany.mockResolvedValue({ count: 7 })
 
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=cleanup"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=cleanup"))
       const json = await res.json()
 
       expect(json.results["cleanup"].status).toBe("success")
@@ -591,7 +591,7 @@ describe("GET /api/cron", () => {
     it("still succeeds when the idempotency prune fails", async () => {
       mocks.idempotencyKeyDeleteMany.mockRejectedValue(new Error("db down"))
 
-      const res = await GET(makeCronRequest("http://localhost/api/cron?task=cleanup"))
+      const res = await POST(makeCronRequest("http://localhost/api/cron?task=cleanup"))
       const json = await res.json()
       expect(json.results["cleanup"].status).toBe("success")
     })

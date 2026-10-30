@@ -29,7 +29,7 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prisma }))
 vi.mock("@/lib/services/notification.service", () => ({ notificationService: mocks.notificationService }))
 vi.mock("@/lib/security/cron", () => ({ isValidCronRequest: mocks.isValidCronRequest }))
 
-import { GET } from "../daily-notifications/route"
+import { POST } from "../daily-notifications/route"
 
 describe("daily-notifications cron", () => {
   const originalTz = process.env.TZ
@@ -51,7 +51,7 @@ describe("daily-notifications cron", () => {
     vi.setSystemTime(nowLocal)
 
     const req = new NextRequest("http://localhost/api/cron/daily-notifications")
-    await GET(req as unknown as Request)
+    await POST(req as unknown as Request)
 
     // Find the attendance query
     expect(mocks.prisma.attendance.findMany).toHaveBeenCalled()
@@ -69,7 +69,7 @@ describe("daily-notifications cron", () => {
     vi.setSystemTime(nowLocal)
 
     const req = new NextRequest("http://localhost/api/cron/daily-notifications")
-    await GET(req as unknown as Request)
+    await POST(req as unknown as Request)
 
     expect(mocks.prisma.attendance.findMany).toHaveBeenCalled()
     const callArgs = mocks.prisma.attendance.findMany.mock.calls[0][0]

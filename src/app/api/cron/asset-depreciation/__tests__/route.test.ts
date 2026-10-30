@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { Prisma } from "@prisma/client"
-import { GET } from "../route"
+import { POST } from "../route"
 
 const mocks = vi.hoisted(() => ({
   isValidCron: vi.fn(),
@@ -113,7 +113,7 @@ function acquisitionJournals() {
   ]
 }
 
-describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => {
+describe("POST /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     delete process.env.DEPRECIATION_EXPENSE_ACCOUNT_ID
@@ -156,18 +156,18 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
 
   it("returns 401 when cron auth invalid", async () => {
     mocks.isValidCron.mockReturnValue(false)
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     expect(res.status).toBe(401)
   })
 
   it("returns 500 on top-level error", async () => {
     mocks.assetFindMany.mockRejectedValue(new Error("db down"))
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     expect(res.status).toBe(500)
   })
 
   it("returns 0 processed when no active assets", async () => {
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.processed).toBe(0)
     expect(json.totalAssets).toBe(0)
@@ -179,7 +179,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
       .mockResolvedValueOnce([{ referenceId: 1 }]) // sudah ada jurnal masa ini
       .mockResolvedValueOnce(acquisitionJournals())
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.skipped).toBe(1)
     expect(json.processed).toBe(0)
@@ -193,7 +193,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(acquisitionJournals())
 
-    await GET(makeReq())
+    await POST(makeReq())
 
     // Falsifikasi kartu t_d34601a0: mock tidak memeriksa argumen where,
     // jadi sabotase POSTED->DRAFT dulu tetap hijau. Assert argumen langsung.
@@ -223,7 +223,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
     mocks.assetFindMany.mockResolvedValue([assetRow()])
     mocks.journalFindMany.mockResolvedValue([]) // tidak ada jurnal sama sekali
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.processed).toBe(0)
     expect(json.notJournaled).toBe(1)
@@ -239,7 +239,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(acquisitionJournals())
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.processed).toBe(0)
     expect(json.rejectedMethods).toBe(1)
@@ -255,7 +255,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
       assetRow({ depreciationMethod: "metode_ngawur" }),
     ])
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.rejectedMethods).toBe(1)
     expect(json.errorDetails[0]).toContain("tidak terdaftar")
@@ -267,7 +267,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(acquisitionJournals())
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.processed).toBe(1)
     expect(mocks.docSeqNextBatch).toHaveBeenCalledWith("JOURNAL", 1)
@@ -298,7 +298,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error("Periode sudah ditutup"))
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.processed).toBe(0)
     expect(json.errors).toBe(1)
@@ -318,7 +318,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(acquisitionJournals())
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.processed).toBe(1)
     expect(mocks.txQueryRaw).toHaveBeenCalledTimes(1)
@@ -343,7 +343,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
       .mockResolvedValueOnce(acquisitionJournals())
     mocks.journalFindFirst.mockResolvedValue({ id: 42 })
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.skipped).toBe(1)
     expect(json.processed).toBe(0)
@@ -362,7 +362,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
     const p2002 = Object.assign(new Error("Unique constraint failed"), { code: "P2002" })
     mocks.journalCreate.mockRejectedValue(p2002)
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.skipped).toBe(1)
     expect(json.processed).toBe(0)
@@ -377,7 +377,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
       .mockResolvedValueOnce(acquisitionJournals())
     mocks.journalCreate.mockRejectedValue(new Error("P2021 tabel journals_internal_secret hilang"))
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.errors).toBe(1)
     expect(json.processed).toBe(0)
@@ -401,7 +401,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(acquisitionJournals())
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.missingAccounts).toBe(1)
     expect(json.processed).toBe(0)
@@ -414,7 +414,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
     )
     mocks.assetFindMany.mockResolvedValue(assets)
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.errorDetails.length).toBe(10)
   })
@@ -438,7 +438,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(acquisitionJournals())
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.processed).toBe(1)
     expect(json.rejectedMethods).toBe(0)
@@ -464,7 +464,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(acquisitionJournals())
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.analyticalSkipped).toBe(1)
     expect(json.processed).toBe(0)
@@ -487,7 +487,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(acquisitionJournals())
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.processed).toBe(0)
     expect(json.rejectedMethods).toBe(1)
@@ -509,7 +509,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(acquisitionJournals())
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.processed).toBe(0)
     expect(json.missingAccounts).toBe(1)

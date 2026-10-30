@@ -12,7 +12,7 @@ import { syncNationalHolidays } from "@/lib/services/holiday-sync.service"
  * begitu SKB 3 Menteri terbit, HR mengoreksi tanggalnya di Kalender
  * Kerja dan sinkronisasi berikutnya tidak akan mengembalikannya.
  */
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   try {
     if (!isValidCronRequest(request)) {
       return apiError("UNAUTHORIZED", "Tidak terotorisasi")

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { GET } from "../route"
+import { POST } from "../route"
 
 const mocks = vi.hoisted(() => ({
   isValidCron: vi.fn(),
@@ -77,7 +77,7 @@ function makeReq(): Request {
   })
 }
 
-describe("GET /api/cron/daily-notifications", () => {
+describe("POST /api/cron/daily-notifications", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.isValidCron.mockReturnValue(true)
@@ -114,20 +114,20 @@ describe("GET /api/cron/daily-notifications", () => {
 
   it("returns 401 when cron auth invalid", async () => {
     mocks.isValidCron.mockReturnValue(false)
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     expect(res.status).toBe(401)
   })
 
   it("returns early when no active admins", async () => {
     mocks.userFindMany.mockResolvedValue([])
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.message).toBe("Tidak ada admin aktif.")
   })
 
   it("returns 500 on internal error", async () => {
     mocks.userFindMany.mockRejectedValue(new Error("db down"))
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     expect(res.status).toBe(500)
   })
 
@@ -139,7 +139,7 @@ describe("GET /api/cron/daily-notifications", () => {
       const sample = Array.from({ length: 7 }, (_, i) => ({ id: i, name: `Item${i}`, qty_on_hand: 1, min_stock: 10 }))
       return Promise.resolve(sql.includes("COUNT(") ? [{ count: BigInt(7) }] : sample)
     })
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.results.lowStock).toBe(7)
     expect(mocks.notifyUsersIfNew).toHaveBeenCalledWith(
@@ -159,7 +159,7 @@ describe("GET /api/cron/daily-notifications", () => {
       { grandTotal: 500, paidAmount: 0 },
     ])
     mocks.salesInvoiceCount.mockResolvedValue(2)
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.results.overdueInvoices).toBe(2)
   })
@@ -175,7 +175,7 @@ describe("GET /api/cron/daily-notifications", () => {
     ])
     mocks.salesInvoiceCount.mockResolvedValue(25)
     mocks.salesInvoiceAggregate.mockResolvedValue({ _sum: { grandTotal: 100000, paidAmount: 25000 } })
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.results.overdueInvoices).toBe(25)
     const call = mocks.notifyUsersIfNew.mock.calls.find((c) => String(c[1]).includes("Invoice Jatuh Tempo"))
@@ -187,7 +187,7 @@ describe("GET /api/cron/daily-notifications", () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-06-12T08:00:00"))
     mocks.purchaseOrderCount.mockResolvedValue(2)
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.results.stalePOs).toBe(2)
   })
@@ -200,7 +200,7 @@ describe("GET /api/cron/daily-notifications", () => {
     mocks.purchaseOrderFindMany.mockResolvedValue(
       Array.from({ length: 20 }, (_, i) => ({ id: i + 1 })),
     )
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.results.stalePOs).toBe(47)
     const call = mocks.notifyUsersIfNew.mock.calls.find((c) => String(c[1]).includes("PO Belum Diterima"))
@@ -215,7 +215,7 @@ describe("GET /api/cron/daily-notifications", () => {
     mocks.attendanceFindMany.mockResolvedValue(
       Array.from({ length: 6 }, (_, i) => ({ employeeId: i + 1, status: "late", lateMinutes: 1, employee: i === 0 ? null : { name: `Emp${i}` } }))
     )
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.results.lateAttendance).toBe(6)
   })
@@ -228,7 +228,7 @@ describe("GET /api/cron/daily-notifications", () => {
     mocks.attendanceFindMany.mockResolvedValue(
       Array.from({ length: 20 }, (_, i) => ({ employeeId: i + 1, status: "late", lateMinutes: 1, employee: { name: `Emp${i}` } }))
     )
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.results.lateAttendance).toBe(35)
     const call = mocks.notifyUsersIfNew.mock.calls.find((c) => String(c[1]).includes("Karyawan Telat"))
@@ -248,7 +248,7 @@ describe("GET /api/cron/daily-notifications", () => {
     mocks.attendanceFindMany.mockResolvedValue([{ employeeId: 1, status: "present", lateMinutes: 0 }]) // emp 1 present
     mocks.leaveRequestFindMany.mockResolvedValue([{ employeeId: 2 }]) // emp 2 on leave
     // emp 3 absent
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.results.absentEmployees).toBe(1)
   })
@@ -258,7 +258,7 @@ describe("GET /api/cron/daily-notifications", () => {
     vi.setSystemTime(new Date("2026-06-12T12:00:00"))
     mocks.holidayFindMany.mockResolvedValue([{ date: new Date("2026-06-12T00:00:00") }])
     mocks.employeeFindMany.mockResolvedValue([{ id: 1, name: "A", departmentId: null, workSchedules: [], department: null }])
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.results.absentEmployees).toBeUndefined()
   })
@@ -267,7 +267,7 @@ describe("GET /api/cron/daily-notifications", () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-06-12T08:00:00"))
     mocks.userFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.message).toBe("Notifikasi harian terkirim.")
     expect(json.adminsNotified).toBe(2)
@@ -279,7 +279,7 @@ describe("GET /api/cron/daily-notifications", () => {
     mocks.employeeFindMany.mockResolvedValue(
       Array.from({ length: 7 }, (_, i) => ({ id: i, name: `E${i}`, departmentId: null, workSchedules: [], department: null }))
     )
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.results.absentEmployees).toBe(7)
     expect(mocks.notifyUsersIfNew).toHaveBeenCalledWith(
@@ -317,7 +317,7 @@ describe("GET /api/cron/daily-notifications", () => {
     mocks.holidayFindFirst.mockResolvedValue(null)
     mocks.employeeFindMany.mockResolvedValue([{ id: 99, name: "Absent", departmentId: null, workSchedules: [], department: null }])
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.results.lowStock).toBe(1)
     expect(json.results.overdueInvoices).toBe(1)
@@ -348,7 +348,7 @@ describe("GET /api/cron/daily-notifications", () => {
       { id: 1, name: "Gudang Pusat" },
       { id: 2, name: "Gudang Bengkel" },
     ])
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     const json = await res.json()
     expect(json.results.lowStockWarehouse).toBe(1)
     // Batch: satu panggilan berisi semua judul per gudang (bukan loop per baris).
@@ -372,7 +372,7 @@ describe("GET /api/cron/daily-notifications", () => {
     mocks.salesInvoiceCount.mockResolvedValue(1)
     mocks.salesInvoiceFindMany.mockResolvedValue([{ grandTotal: 100, paidAmount: 0 }])
 
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     expect(res.status).toBe(200)
     // Route still delegates dedupe to service; service returns 0 rows.
     // Here notifyUsersIfNew is mocked, so assert route passes dayStart window.

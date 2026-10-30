@@ -13,7 +13,7 @@ import { apiError } from "@/lib/api-response"
  * the schedule (Journal > Jurnal menampilkan asalnya) and are refused inside a
  * closed accounting period; the schedule stays due so it retries after reopening.
  */
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   if (!isValidCronRequest(request)) {
     return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }

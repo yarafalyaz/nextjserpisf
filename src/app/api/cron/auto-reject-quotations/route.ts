@@ -14,7 +14,7 @@ import { SalesStatus, Status } from "@/lib/constants"
  *
  * Mirrors Laravel: AutoRejectQuotations command
  */
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   // Verify cron secret
   if (!isValidCronRequest(request)) {
     return apiError("UNAUTHORIZED", "Tidak terotorisasi")

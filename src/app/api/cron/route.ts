@@ -22,10 +22,6 @@ const TASKS = [
 
 type Task = (typeof TASKS)[number]
 
-export async function GET(request: Request) {
-  return handleCron(request)
-}
-
 export async function POST(request: Request) {
   return handleCron(request)
 }

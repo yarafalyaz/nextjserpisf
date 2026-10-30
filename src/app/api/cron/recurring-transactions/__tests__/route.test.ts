@@ -13,7 +13,7 @@ vi.mock("@/lib/services/recurring.service", () => ({
   runDueRecurring: (...a: unknown[]) => mocks.runDueRecurring(...a),
 }))
 
-import { GET } from "../route"
+import { POST } from "../route"
 
 function makeReq(): Request {
   return new Request("http://localhost/api/cron/recurring-transactions", {
@@ -21,7 +21,7 @@ function makeReq(): Request {
   })
 }
 
-describe("GET /api/cron/recurring-transactions", () => {
+describe("POST /api/cron/recurring-transactions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.isValidCron.mockReturnValue(true)
@@ -30,7 +30,7 @@ describe("GET /api/cron/recurring-transactions", () => {
 
   it("returns 401 and does not run service when cron auth invalid", async () => {
     mocks.isValidCron.mockReturnValue(false)
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     expect(res.status).toBe(401)
     const body = await res.json()
     expect(body.error).toMatchObject({ code: "UNAUTHORIZED" })
@@ -38,7 +38,7 @@ describe("GET /api/cron/recurring-transactions", () => {
   })
 
   it("returns processed/generated/errors on success", async () => {
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body).toMatchObject({
@@ -58,7 +58,7 @@ describe("GET /api/cron/recurring-transactions", () => {
       generated: ["A \u2192 Beban X"],
       errors: ["B: template tidak valid"],
     })
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.processed).toBe(3)
@@ -67,7 +67,7 @@ describe("GET /api/cron/recurring-transactions", () => {
 
   it("returns 500 with apiError shape when service throws", async () => {
     mocks.runDueRecurring.mockRejectedValue(new Error("db down"))
-    const res = await GET(makeReq())
+    const res = await POST(makeReq())
     expect(res.status).toBe(500)
     const body = await res.json()
     expect(body.error).toMatchObject({ code: "INTERNAL_ERROR" })

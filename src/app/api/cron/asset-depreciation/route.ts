@@ -44,7 +44,7 @@ import { DocumentSequenceService } from "@/lib/services/document-sequence.servic
  * `status` tak terdaftar di query top-level dibatalkan berisik di
  * `resolveAnalyticalAssetStatus`.
  */
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   if (!isValidCronRequest(request)) {
     return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
