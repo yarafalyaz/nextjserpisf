@@ -194,4 +194,27 @@ describe("wiring gerbang kredit di sales.actions (035-B)", () => {
     expect(res.success).toBe(true)
     expect(mocks.assess).not.toHaveBeenCalled()
   })
+
+  it("DP: notifikasi hook ditahan sampai sesudah tx — callback onCommitted baru jalan pasca-commit", async () => {
+    mocks.dpFindUnique.mockResolvedValue({
+      status: "confirmed",
+      customerId: 3,
+      quotationId: 5,
+      quotation: { grandTotal: 600000 },
+    })
+    const notify = vi.fn(async () => undefined)
+    let captured: ((n: () => Promise<void>) => void) | undefined
+    mocks.onConfirmed.mockImplementation(async (...a: unknown[]) => {
+      captured = (a[3] as { onCommitted: (n: () => Promise<void>) => void }).onCommitted
+      captured(notify)
+      // Di dalam tx: callback terdaftar tapi notifikasi belum boleh terkirim.
+      expect(notify).not.toHaveBeenCalled()
+    })
+    const res = await confirmDownPayment(11)
+    expect(res.success).toBe(true)
+    expect(captured).toBeTypeOf("function")
+    // $transaction mock menyelesaikan fn lalu kembali = commit: sesudah itu
+    // action menjalankan antrean, notifikasi terkirim tepat sekali.
+    expect(notify).toHaveBeenCalledTimes(1)
+  })
 })

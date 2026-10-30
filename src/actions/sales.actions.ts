@@ -946,6 +946,11 @@ export async function confirmDownPayment(dpId: number) {
   // (1) terima: jurnal kas/bank vs uang muka (idempoten, gagal = rollback);
   // (2) konfirmasi: WO/SO/Project + invoice bila kumulatif terverifikasi
   // mencapai 50% nilai quotation.
+  // Notifikasi dokumen-siap dari hook konfirmasi ditahan di sini dan hanya
+  // dikirim sesudah $transaction commit — hook berjalan di dalam tx ini,
+  // jadi pengiriman langsung darinya bisa mengumumkan WO/SO/Invoice yang
+  // kemudian ikut rollback.
+  const afterCommit: Array<() => Promise<unknown>> = []
   await prisma.$transaction(async (tx) => {
     // F-2026-10-25-035-B titik tahan Q-CL2-4 butir 4: nilai SEKALI di hulu
     // sebelum rantai DP. Hasil idempoten (DP sudah confirmed / invoice
@@ -985,8 +990,15 @@ export async function confirmDownPayment(dpId: number) {
       }
     }
     await onDownPaymentReceived(dpId, Number(user.id), tx)
-    await onDownPaymentConfirmed(dpId, Number(user.id), tx)
+    await onDownPaymentConfirmed(dpId, Number(user.id), tx, {
+      onCommitted: (notify) => {
+        afterCommit.push(notify)
+      },
+    })
   })
+  for (const notify of afterCommit) {
+    await notify()
+  }
 
   await logActivity("confirm", "DownPayment", dpId, `Konfirmasi uang muka #${dpId}`)
   revalidatePath("/penjualan/uang-muka")

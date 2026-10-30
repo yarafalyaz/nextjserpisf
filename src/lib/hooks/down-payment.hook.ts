@@ -47,17 +47,30 @@ interface FlatItem {
 export async function onDownPaymentConfirmed(
   dpId: number,
   userId?: number,
-  txClient?: TxClient
+  txClient?: TxClient,
+  opts?: {
+    /**
+     * Dipanggil dengan callback pengiriman notifikasi dokumen-siap BILA
+     * hook berjalan di dalam transaksi pemanggil. Pemanggil WAJIB hanya
+     * menjalankannya sesudah transaksinya commit: hook tidak bisa tahu
+     * kapan tx pemanggil commit, dan mengirim dari sini berarti notifikasi
+     * "dokumen dibuat" bisa terkirim untuk WO/SO/Invoice yang kemudian
+     * ikut rollback. Tanpa opts ini (hook punya tx sendiri), notifikasi
+     * dikirim hook sesudah tx-nya commit, seperti sebelumnya.
+     */
+    onCommitted?: (notify: () => Promise<unknown>) => void
+  }
 ): Promise<void> {
   // F-2026-10-25-035-B titik tahan Q-CL2-4 butir 4: gerbang dinilai SEKALI
   // di confirmDownPayment (hulu, atomik) — hook ini tidak menilai ulang.
-  return onDownPaymentConfirmedInner(dpId, userId, txClient)
+  return onDownPaymentConfirmedInner(dpId, userId, txClient, opts?.onCommitted)
 }
 
 async function onDownPaymentConfirmedInner(
   dpId: number,
   userId?: number,
-  txClient?: TxClient
+  txClient?: TxClient,
+  onCommitted?: (notify: () => Promise<unknown>) => void
 ): Promise<void> {
   const readyDocuments: Array<{ type: "WorkOrder" | "SalesOrder" | "SalesInvoice"; documentNo: string; context: string }> = []
 
@@ -894,7 +907,14 @@ async function onDownPaymentConfirmedInner(
   // createMany, instead of one (admin findMany + notification createMany) per
   // document. readyDocuments holds up to 3 entries (WO/SO/Invoice).
   if (readyDocuments.length > 0) {
-    await notificationService.notifyDocumentsReadyBatch(readyDocuments)
+    const notify = () => notificationService.notifyDocumentsReadyBatch(readyDocuments)
+    if (txClient && onCommitted) {
+      // Tx milik pemanggil: tunda sampai pemanggil menyatakan commit.
+      // Kirim sekarang = notifikasi phantom bila tx itu rollback.
+      onCommitted(notify)
+    } else {
+      await notify()
+    }
   }
 
 }

@@ -208,4 +208,42 @@ describe("onDownPaymentConfirmed — ready-document notification batching", () =
 
     expect(mocks.notifyDocumentsReadyBatch).not.toHaveBeenCalled()
   })
+
+  it("di dalam tx pemanggil: notifikasi ditunda lewat onCommitted, tidak dikirim hook", async () => {
+    const dp = buildDp({ id: 1, amount: 600, status: "draft", docNo: "DP-1" })
+    const tx = buildTx(dp, 100) as any
+    tx.salesInvoice.findFirst = vi.fn().mockResolvedValue(null)
+    tx.workOrder.findFirst = mocks.workOrderFindFirst.mockResolvedValue(null)
+    tx.salesOrder.findFirst = mocks.salesOrderFindFirst.mockResolvedValue(null)
+    tx.downPayment.findMany = vi.fn().mockResolvedValue([{ amount: 600 }])
+    tx.product = { findMany: vi.fn().mockResolvedValue([]) }
+    tx.item = { findMany: vi.fn().mockResolvedValue([]) }
+    tx.workOrder.create = vi.fn().mockResolvedValue({ id: 1, documentNo: "WO-X" })
+    tx.project = { create: vi.fn().mockResolvedValue({ id: 1 }) }
+    tx.projectStage = { createMany: vi.fn().mockResolvedValue({ count: 0 }) }
+    tx.salesOrder.create = vi.fn().mockResolvedValue({ id: 2, documentNo: "SO-X" })
+    tx.salesInvoice.create = vi.fn().mockResolvedValue({ id: 3, documentNo: "INV-X" })
+    tx.quotation = { update: vi.fn() }
+
+    const deferred: Array<() => Promise<unknown>> = []
+    await onDownPaymentConfirmed(1, 1, tx, {
+      onCommitted: (notify) => {
+        deferred.push(notify)
+      },
+    })
+
+    // Hook selesai di dalam tx: belum ada notifikasi terkirim. Pemanggil
+    // yang rollback tidak menjalankan callback ini sama sekali.
+    expect(mocks.notifyDocumentsReadyBatch).not.toHaveBeenCalled()
+    expect(deferred).toHaveLength(1)
+
+    // Sesudah commit pemanggil menjalankan callback-nya: satu batch terkirim.
+    await deferred[0]()
+    expect(mocks.notifyDocumentsReadyBatch).toHaveBeenCalledTimes(1)
+    expect(mocks.notifyDocumentsReadyBatch).toHaveBeenCalledWith([
+      { type: "WorkOrder", documentNo: "WO-X", context: "Dari DP DP-1" },
+      { type: "SalesOrder", documentNo: "SO-X", context: "Dari DP DP-1" },
+      { type: "SalesInvoice", documentNo: "INV-X", context: "Dari DP DP-1" },
+    ])
+  })
 })
