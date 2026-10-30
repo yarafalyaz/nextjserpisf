@@ -41,6 +41,8 @@ Checkpoint file ini diperbarui tiap batch selesai.
 - [x] validasi angka server: clamp PO (469721738), CO after negatif (7d50c7f15); klaim faktur qty 0 terbukti tidak berlaku
 - [x] scope gudang laporan stok layar+PDF ditegakkan (a2f8eda51) — putusan user: tutup celah
 - [x] gerbang izin UI Pola 2 batch 1: keuangan (b00fbd0eb), uang-muka (941f2fa5f), opname/remnant (06754d77b)
+- [x] audit race API non-workflow: sweep (969e7372f), libur (25af525b7), depresiasi (1a31cbda0), recurring (e5d1314d2); audit optimistik client nihil terbukti; registry B-1 overdue period.end (3ba5a1578), B-2 gugur (halaman snapshot kini)
+- [x] runtime: compile bersih, 4 halaman laporan stok 200 pasca scope, console/log 0 error (akun admin all-scope; penolakan scoped dibuktikan test unit)
 
 ## Log
 - 2026-10-30 mulai: batch 1 dikerahkan (6 agen).
@@ -73,3 +75,9 @@ Checkpoint file ini diperbarui tiap batch selesai.
   ditutup atas putusan user (a2f8eda51, 12 test baru). Pola 2 batch 1
   committed (b00fbd0eb, 941f2fa5f, 06754d77b; 20/20 test, 10 gagal
   pra-fix). Semua lokal, belum push.
+- Lanjutan: audit race API non-workflow + optimistik/registry —
+  969e7372f sweep, 25af525b7 libur, 1a31cbda0 depresiasi, e5d1314d2
+  recurring, 3ba5a1578 overdue. Verifikasi mandiri: cron 74/74,
+  exposure 9/9. Sisa sadar: unique Holiday (migrasi terpisah),
+  MED-5 notifikasi DP phantom (perlu outbox/after-commit),
+  MED-1 parity flip status workflow (posting berikutnya period-gated).
