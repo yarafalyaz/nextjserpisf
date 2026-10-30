@@ -65,6 +65,7 @@ const mocks = vi.hoisted(() => {
     prismaMock,
     revalidateMock: vi.fn(),
     logActivityMock: vi.fn(),
+    notifyAdminsMock: vi.fn().mockResolvedValue({}),
     generateDocNumMock: vi.fn(),
     createGlJournalMock: vi.fn(),
     deleteJournalByReferenceTxMock: vi.fn().mockResolvedValue({}),
@@ -83,7 +84,7 @@ vi.mock("@/lib/services/inventory.service", () => ({
   inventoryService: { receivePurchase: vi.fn().mockResolvedValue({}), processPurchaseReturn: vi.fn().mockResolvedValue({}) }
 }))
 vi.mock("@/lib/services/notification.service", () => ({
-  notificationService: { notifyAdmins: vi.fn().mockResolvedValue({}) }
+  notificationService: { notifyAdmins: (...a: any) => mocks.notifyAdminsMock(...a) }
 }))
 vi.mock("@/lib/services/approval-workflow.service", () => ({
   requestApprovalIfConfigured: vi.fn().mockResolvedValue({}),
@@ -475,6 +476,27 @@ describe("Purchase Order Actions", () => {
     }))
     expect(res?.success).toBe(true)
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_purchase_orders")
+  })
+
+  it("R6WN-11: update PO notifikasi 'diperbarui' dan gagal notif tidak menggagalkan update", async () => {
+    const res = await actions.updatePurchaseOrder(1, fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 5, unitPrice: 1200, discount: 0 }])
+    }))
+    expect(res?.success).toBe(true)
+    expect(mocks.notifyAdminsMock).toHaveBeenCalledWith(
+      "Pesanan Pembelian diperbarui",
+      expect.any(String),
+    )
+
+    mocks.notifyAdminsMock.mockRejectedValueOnce(new Error("notif down"))
+    const res2 = await actions.updatePurchaseOrder(1, fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 5, unitPrice: 1200, discount: 0 }])
+    }))
+    expect(res2?.success).toBe(true)
   })
 
   // Regresi: diskon baris > bruto baris dulu tersimpan sebagai total baris

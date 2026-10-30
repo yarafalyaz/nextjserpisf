@@ -3186,11 +3186,16 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
       await onPurchaseOrderCreated(po.id);
     }
 
-    // Notify admins — external side-effect, must stay outside the tx.
-    await notificationService.notifyAdmins(
-      "Pesanan Pembelian baru dibuat",
-      `/pembelian/pesanan/${slug ?? po.id}`,
-    );
+    // R6WN-11: update bukan PO baru — judul diperbarui + kegagalan notifikasi
+    // tidak boleh melaporkan update yang sudah commit sebagai gagal.
+    try {
+      await notificationService.notifyAdmins(
+        "Pesanan Pembelian diperbarui",
+        `/pembelian/pesanan/${slug ?? po.id}`,
+      );
+    } catch (err) {
+      console.error("Gagal mengirim notifikasi admin:", err);
+    }
 
     await logActivity(
       "update",
