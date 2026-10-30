@@ -105,21 +105,33 @@ describe("notification.service", () => {
   describe("notifyUsersIfNew", () => {
     const since = new Date("2026-06-12T00:00:00");
 
-    it("skips write when same title already sent to any recipient since window start", async () => {
-      mocks.findFirstNotif.mockResolvedValue({ id: 9 });
+    it("R6WN-09: judul sudah diterima user 1 tidak menahan user 2", async () => {
+      mocks.findManyNotif.mockResolvedValue([{ userId: 1 }]);
+      mocks.createManyNotif.mockResolvedValue({ count: 1 });
+
+      const sent = await notificationService.notifyUsersIfNew([1, 2], "3 Invoice Jatuh Tempo", "body", "danger", since);
+
+      expect(sent).toBe(1);
+      expect(mocks.findManyNotif).toHaveBeenCalledWith({
+        where: { userId: { in: [1, 2] }, title: "3 Invoice Jatuh Tempo", createdAt: { gte: since } },
+        select: { userId: true },
+      });
+      expect(mocks.createManyNotif).toHaveBeenCalledWith({
+        data: [{ userId: 2, title: "3 Invoice Jatuh Tempo", body: "body", type: "danger", readAt: null }],
+      });
+    });
+
+    it("skips write when all recipients already have same title in window", async () => {
+      mocks.findManyNotif.mockResolvedValue([{ userId: 1 }, { userId: 2 }]);
 
       const sent = await notificationService.notifyUsersIfNew([1, 2], "3 Invoice Jatuh Tempo", "body", "danger", since);
 
       expect(sent).toBe(0);
-      expect(mocks.findFirstNotif).toHaveBeenCalledWith({
-        where: { userId: { in: [1, 2] }, title: "3 Invoice Jatuh Tempo", createdAt: { gte: since } },
-        select: { id: true },
-      });
       expect(mocks.createManyNotif).not.toHaveBeenCalled();
     });
 
     it("writes once when no same-title notification in window", async () => {
-      mocks.findFirstNotif.mockResolvedValue(null);
+      mocks.findManyNotif.mockResolvedValue([]);
       mocks.createManyNotif.mockResolvedValue({ count: 2 });
 
       const sent = await notificationService.notifyUsersIfNew([1, 2], "Baru", "body", "warning", since);
@@ -131,7 +143,7 @@ describe("notification.service", () => {
     it("does nothing for empty recipients without DB calls", async () => {
       const sent = await notificationService.notifyUsersIfNew([], "Baru", "body", "info", since);
       expect(sent).toBe(0);
-      expect(mocks.findFirstNotif).not.toHaveBeenCalled();
+      expect(mocks.findManyNotif).not.toHaveBeenCalled();
       expect(mocks.createManyNotif).not.toHaveBeenCalled();
     });
   });
@@ -139,9 +151,9 @@ describe("notification.service", () => {
   describe("notifyUsersIfNewBatch", () => {
     const since = new Date("2026-06-12T00:00:00");
 
-    it("dedupes per title in one findMany + writes fresh titles in one createMany", async () => {
-      mocks.findManyNotif.mockResolvedValue([{ title: "Sudah Ada" }]);
-      mocks.createManyNotif.mockResolvedValue({ count: 4 });
+    it("R6WN-09: dedupe per (user, judul) — judul user 1 tidak menahan user 2", async () => {
+      mocks.findManyNotif.mockResolvedValue([{ title: "Sudah Ada", userId: 1 }]);
+      mocks.createManyNotif.mockResolvedValue({ count: 5 });
 
       const sent = await notificationService.notifyUsersIfNewBatch(
         [1, 2],
@@ -153,7 +165,7 @@ describe("notification.service", () => {
         since,
       );
 
-      expect(sent).toBe(4); // 2 user × 2 judul baru
+      expect(sent).toBe(5); // user1: 2 baru; user2: 3 (termasuk "Sudah Ada")
       expect(mocks.findManyNotif).toHaveBeenCalledTimes(1);
       expect(mocks.findManyNotif).toHaveBeenCalledWith({
         where: {
@@ -161,21 +173,22 @@ describe("notification.service", () => {
           title: { in: ["Sudah Ada", "Baru A", "Baru B"] },
           createdAt: { gte: since },
         },
-        select: { title: true },
+        select: { title: true, userId: true },
       });
       expect(mocks.createManyNotif).toHaveBeenCalledTimes(1);
       expect(mocks.createManyNotif).toHaveBeenCalledWith({
         data: [
           { userId: 1, title: "Baru A", body: "a", type: "warning", readAt: null },
           { userId: 1, title: "Baru B", body: "b", type: "info", readAt: null },
+          { userId: 2, title: "Sudah Ada", body: "lama", type: "warning", readAt: null },
           { userId: 2, title: "Baru A", body: "a", type: "warning", readAt: null },
           { userId: 2, title: "Baru B", body: "b", type: "info", readAt: null },
         ],
       });
     });
 
-    it("writes nothing when all titles already exist", async () => {
-      mocks.findManyNotif.mockResolvedValue([{ title: "A" }]);
+    it("writes nothing when all (user, title) pairs already exist", async () => {
+      mocks.findManyNotif.mockResolvedValue([{ title: "A", userId: 1 }]);
 
       const sent = await notificationService.notifyUsersIfNewBatch([1], [{ title: "A", body: "x" }], since);
 

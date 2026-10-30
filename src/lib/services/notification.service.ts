@@ -103,10 +103,10 @@ export const notificationService = {
 
   /**
    * Idempotent variant of notifyUsers for re-runnable callers (cron):
-   * skip when a notification with same title already exists for any
-   * recipient since `since`. Returns rows written (0 when skipped).
-   * ponytail: title-keyed dedupe, race window = two concurrent runs same
-   * title; upgrade to unique dedupe-key column if cron runs parallel.
+   * skip per recipient when that recipient already has same title since
+   * `since`. Returns rows written (0 when all recipients already served).
+   * ponytail: (user,title)-keyed dedupe, race window = two concurrent runs;
+   * upgrade to unique dedupe-key column if cron runs parallel.
    */
   async notifyUsersIfNew(
     userIds: number[],
@@ -117,14 +117,18 @@ export const notificationService = {
   ): Promise<number> {
     if (userIds.length === 0) return 0
 
-    const existing = await prisma.notification.findFirst({
+    // R6WN-09: dedupe per penerima — judul yang sudah diterima user A tidak
+    // boleh menahan pengiriman ke user B yang baru aktif.
+    const existing = await prisma.notification.findMany({
       where: { userId: { in: userIds }, title, createdAt: { gte: since } },
-      select: { id: true },
+      select: { userId: true },
     })
-    if (existing) return 0
+    const sentTo = new Set(existing.map((n) => n.userId))
+    const freshIds = userIds.filter((userId) => !sentTo.has(userId))
+    if (freshIds.length === 0) return 0
 
     await prisma.notification.createMany({
-      data: userIds.map((userId) => ({
+      data: freshIds.map((userId) => ({
         userId,
         title,
         body,
@@ -132,15 +136,14 @@ export const notificationService = {
         readAt: null,
       })),
     })
-    return userIds.length
+    return freshIds.length
   },
 
   /**
-   * Batched variant of notifyUsersIfNew: dedupe per title in ONE findMany
-   * (titles already sent to any recipient since `since` are skipped), then
-   * ONE createMany for the rest. Semantics identical to looping
-   * notifyUsersIfNew per entry — each title independent — without N×2
-   * round-trips. Returns rows written.
+   * Batched variant of notifyUsersIfNew: dedupe per (recipient, title) in
+   * ONE findMany, then ONE createMany for the rest. Semantics identical to
+   * looping notifyUsersIfNew per entry without N×2 round-trips.
+   * Returns rows written.
    */
   async notifyUsersIfNewBatch(
     userIds: number[],
@@ -155,24 +158,25 @@ export const notificationService = {
         title: { in: entries.map((e) => e.title) },
         createdAt: { gte: since },
       },
-      select: { title: true },
+      select: { title: true, userId: true },
     })
-    const existingTitles = new Set(existing.map((n) => n.title))
-    const fresh = entries.filter((e) => !existingTitles.has(e.title))
-    if (fresh.length === 0) return 0
-
-    await prisma.notification.createMany({
-      data: userIds.flatMap((userId) =>
-        fresh.map((e) => ({
+    // R6WN-09: pasangan (user, judul) — bukan judul global.
+    const sentPairs = new Set(existing.map((n) => `${n.userId}:${n.title}`))
+    const freshData = userIds.flatMap((userId) =>
+      entries
+        .filter((e) => !sentPairs.has(`${userId}:${e.title}`))
+        .map((e) => ({
           userId,
           title: e.title,
           body: e.body,
           type: e.type ?? 'info',
-          readAt: null,
+          readAt: null as null,
         })),
-      ),
-    })
-    return userIds.length * fresh.length
+    )
+    if (freshData.length === 0) return 0
+
+    await prisma.notification.createMany({ data: freshData })
+    return freshData.length
   },
 
   /**
