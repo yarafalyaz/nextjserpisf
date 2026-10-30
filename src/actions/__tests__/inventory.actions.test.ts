@@ -145,6 +145,28 @@ describe("Stock Adjustment Actions", () => {
     expect(res.error).toContain("hanya boleh dicantumkan satu kali");
     expect(mocks.prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
   });
+  it("STOK-12: createStockAdjustment menyimpan batchNumbers (dulu hilang, hook menolak trackBatch)", async () => {
+    const res = await actions.createStockAdjustment(
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 5, unitCost: 100, batchNumbers: [" LOT-A ", "", "LOT-B"] }]) }),
+    );
+    expectSuccess(res);
+    const arg = mocks.prismaMock.stockAdjustment.create.mock.calls.at(-1)![0];
+    expect(arg.data.items.create[0]).toEqual(
+      expect.objectContaining({ batchNumbers: ["LOT-A", "LOT-B"] }),
+    );
+  });
+  it("STOK-12: updateStockAdjustment menyimpan batchNumbers", async () => {
+    seedDraft(mocks.prismaMock.stockAdjustment);
+    const res = await actions.updateStockAdjustment(
+      1,
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 5, unitCost: 100, batchNumbers: ["LOT-C"] }]) }),
+    );
+    expectSuccess(res);
+    const arg = mocks.prismaMock.stockAdjustment.update.mock.calls.at(-1)![0];
+    expect(arg.data.items.create[0]).toEqual(
+      expect.objectContaining({ batchNumbers: ["LOT-C"] }),
+    );
+  });
   it("createStockAdjustment computes systemQty as IN - OUT (not gross sum)", async () => {
     // Simulate historical posted moves: 15 IN + 5 OUT in this warehouse => real stock = 10.
     // The OLD bug summed IN and OUT together, so systemQty was reported as 20 instead of 10.

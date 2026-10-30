@@ -36,6 +36,7 @@ interface AdjustmentFormProps {
       unitCost: number;
       reason: string;
       serialNumbers?: string[] | null;
+      batchNumbers?: string[] | null;
     }>;
   };
   items: {
@@ -45,6 +46,7 @@ interface AdjustmentFormProps {
     qtyOnHand: string;
     cost: string;
     trackSerial: boolean;
+    trackBatch?: boolean;
   }[];
 }
 
@@ -55,6 +57,7 @@ interface AdjItem {
   unitCost: number;
   reason: string;
   serialNumbers: string;
+  batchNumbers: string;
 }
 
 export function StockAdjustmentForm({
@@ -78,14 +81,15 @@ export function StockAdjustmentForm({
           unitCost: it.unitCost,
           reason: it.reason ?? "",
           serialNumbers: (it.serialNumbers ?? []).join("\n"),
+          batchNumbers: (it.batchNumbers ?? []).join("\n"),
         }))
-      : [{ itemId: 0, currentQty: 0, newQty: 0, unitCost: 0, reason: "", serialNumbers: "" }],
+      : [{ itemId: 0, currentQty: 0, newQty: 0, unitCost: 0, reason: "", serialNumbers: "", batchNumbers: "" }],
   );
 
   function addItem() {
     setAdjItems([
       ...adjItems,
-      { itemId: 0, currentQty: 0, newQty: 0, unitCost: 0, reason: "", serialNumbers: "" },
+      { itemId: 0, currentQty: 0, newQty: 0, unitCost: 0, reason: "", serialNumbers: "", batchNumbers: "" },
     ]);
   }
 
@@ -120,6 +124,7 @@ export function StockAdjustmentForm({
         formData.append("items", JSON.stringify(adjItems.map((item) => ({
           ...item,
           serialNumbers: item.serialNumbers.split(/[\n,]/).map((value) => value.trim()).filter(Boolean),
+          batchNumbers: item.batchNumbers.split(/[\n,]/).map((value) => value.trim()).filter(Boolean),
         }))));
         formData.append("type", type);
         const notesValue =
@@ -265,6 +270,7 @@ export function StockAdjustmentForm({
                       Alasan
                     </th>
                     <th className="text-left py-2 px-2 font-medium text-secondary">Nomor Seri</th>
+                    <th className="text-left py-2 px-2 font-medium text-secondary">Nomor Batch</th>
                     <th style={{ width: "40px" }}></th>
                   </tr>
                 </thead>
@@ -327,6 +333,17 @@ export function StockAdjustmentForm({
                             onChange={(e) => updateItem(i, "serialNumbers", e.target.value)}
                             aria-label={`Nomor seri baris ${i + 1}`}
                             placeholder="Satu nomor seri per baris"
+                            rows={2}
+                          />
+                        ) : null}
+                      </td>
+                      <td className="py-2 px-2">
+                        {items.find((it) => it.id === item.itemId)?.trackBatch ? (
+                          <Textarea
+                            value={item.batchNumbers}
+                            onChange={(e) => updateItem(i, "batchNumbers", e.target.value)}
+                            aria-label={`Nomor batch baris ${i + 1}`}
+                            placeholder="Satu nomor batch per baris"
                             rows={2}
                           />
                         ) : null}

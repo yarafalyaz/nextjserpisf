@@ -37,6 +37,7 @@ export default async function EditPage({
                 unitCost: true,
                 notes: true,
                 serialNumbers: true,
+                batchNumbers: true,
               },
             },
           },
@@ -53,6 +54,7 @@ export default async function EditPage({
                 unitCost: true,
                 notes: true,
                 serialNumbers: true,
+                batchNumbers: true,
               },
             },
           },
@@ -78,6 +80,7 @@ export default async function EditPage({
       unitCost: Number(it.unitCost),
       reason: it.notes ?? "",
       serialNumbers: Array.isArray(it.serialNumbers) ? it.serialNumbers.map(String) : [],
+      batchNumbers: Array.isArray(it.batchNumbers) ? it.batchNumbers.map(String) : [],
     })),
   };
 
@@ -94,6 +97,7 @@ export default async function EditPage({
           qtyOnHand: true,
           cost: true,
           trackSerial: true,
+          trackBatch: true,
         },
       })
       .then((items) =>

@@ -209,6 +209,9 @@ type AdjustmentItemInput = {
   unitCost?: number | string;
   reason?: string;
   serialNumbers?: string[];
+  // STOK-12: lot untuk item trackBatch — hook wajibkan lot pada
+  // penambahan, jadi harus diteruskan end-to-end dari form.
+  batchNumbers?: string[];
 };
 
 /**
@@ -225,6 +228,7 @@ function normalizeAdjustmentItem(it: AdjustmentItemInput): {
   unitCost: number;
   reason?: string;
   serialNumbers?: string[];
+  batchNumbers?: string[];
 } {
   // Baris tanpa newQty (fixture/klien lama qty/cost) berperilaku lama: 0.
   const actualQty =
@@ -247,6 +251,9 @@ function normalizeAdjustmentItem(it: AdjustmentItemInput): {
     unitCost,
     reason: it.reason,
     serialNumbers: it.serialNumbers,
+    batchNumbers: Array.isArray(it.batchNumbers)
+      ? it.batchNumbers.map((b) => String(b).trim()).filter(Boolean)
+      : undefined,
   };
 }
 
@@ -315,6 +322,7 @@ export async function createStockAdjustment(formData: FormData) {
             return {
               itemId: it.itemId,
               serialNumbers: Array.isArray(it.serialNumbers) ? it.serialNumbers : undefined,
+              batchNumbers: it.batchNumbers,
               systemQty,
               actualQty: it.actualQty,
               difference,
@@ -2071,6 +2079,7 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
                 difference,
                 unitCost: it.unitCost,
                 serialNumbers: Array.isArray(it.serialNumbers) ? it.serialNumbers : undefined,
+                batchNumbers: it.batchNumbers,
                 totalCost: safeMultiply(difference, it.unitCost, 0),
                 notes: it.reason || null,
               };
