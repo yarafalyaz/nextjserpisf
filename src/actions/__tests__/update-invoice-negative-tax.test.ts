@@ -38,6 +38,8 @@ vi.mock("@/lib/db/prisma", () => {
     salesReturn: { findMany: vi.fn().mockResolvedValue([]) },
     systemSetting: { findFirst: vi.fn().mockResolvedValue(null) },
     journal: { findMany: vi.fn().mockResolvedValue([]) },
+    // R6IE-07: update invoice memuat snapshot master (uom/isService) per baris.
+    item: { findMany: vi.fn().mockResolvedValue([]) },
   }
   return { prisma: mockPrisma }
 })

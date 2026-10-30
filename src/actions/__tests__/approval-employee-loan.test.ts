@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => {
       findUnique: vi.fn().mockResolvedValue({ departmentId: 3 }),
       findMany: vi.fn().mockResolvedValue([]),
     },
-    role: buildModelMock(),
+    role: { ...buildModelMock(), findUnique: vi.fn().mockResolvedValue({ name: "hr" }) },
     $transaction: vi.fn(async (ops: unknown) => {
       if (typeof ops === "function") {
         return (ops as (tx: unknown) => unknown)(prismaMock)
@@ -91,7 +91,10 @@ function seedLoanApproval(over: Record<string, unknown> = {}) {
     referenceId: 77,
     requestedBy: 42,
     workflow: {
-      steps: [{ stepOrder: 1, roleId: null, userId: null, approverType: "any" }],
+      // R6WN-07: langkah warisan tanpa approver ditolak fail-closed untuk
+      // non-super_admin; fixture diberi roleId agar mencapai gerbang domain
+      // pinjaman (klaim/maker-checker/HR scope) yang diuji file ini.
+      steps: [{ stepOrder: 1, roleId: 3, userId: null, approverType: "any" }],
     },
     ...over,
   })

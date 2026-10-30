@@ -29,7 +29,10 @@ const mocks = vi.hoisted(() => {
     workOrderItem: buildModelMock(),
     materialIssue: buildModelMock(),
     approvalWorkflow: buildModelMock(),
+    approvalWorkflowStep: buildModelMock(),
     approval: buildModelMock(),
+    user: buildModelMock(),
+    notification: buildModelMock(),
     projectItem: buildModelMock(),
     quotation: buildModelMock(),
 

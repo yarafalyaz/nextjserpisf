@@ -383,7 +383,7 @@ const ALLOWED_COMMENT_ONLY_COUNTS: Record<string, number> = {
 const ALLOWED_CONSOLE_ONLY_COUNTS: Record<string, number> = {
   "scripts/clear-all-data.ts": 1,
   "scripts/verify-migrations.mjs": 1,
-  "src/actions/purchase.actions.ts": 2,
+  "src/actions/purchase.actions.ts": 3,
   "src/actions/sales.actions.ts": 1,
   "src/app/(dashboard)/crm/tickets/[slug]/page.tsx": 1,
   "src/app/(dashboard)/inventaris/rak/_components/rack-create-form.tsx": 1,
@@ -398,6 +398,7 @@ const ALLOWED_CONSOLE_ONLY_COUNTS: Record<string, number> = {
   "src/lib/reports/work-order-reservations-data.ts": 1,
   "src/lib/services/activity-log.service.ts": 1,
   "src/lib/services/activity-reference.service.ts": 2,
+  "src/lib/services/approval-workflow.service.ts": 1,
   "src/lib/services/transaction-attachment.service.ts": 1,
   "src/lib/services/vehicle-fitment.service.ts": 2,
 }
@@ -432,6 +433,7 @@ const ALLOWED_CONSOLE_ONLY: Record<string, string> = {
   "src/components/ui/quick-add-select.tsx": "gagal memuat pilihan dinamis cukup dicatat; form tetap bisa diisi manual (degradasi disengaja, alasannya tertulis di blok)",
   "src/lib/db/backup.ts": "unggah cloud best-effort; kegagalan cukup dilaporkan sebagai peringatan",
   "src/lib/services/activity-log.service.ts": "logging tidak boleh memutus alur utama (niatnya tertulis di blok)",
+  "src/lib/services/approval-workflow.service.ts": "R6WN-03: notifikasi approver langkah berjalan best-effort — dokumen/approval tidak boleh gagal karena pengiriman notifikasi; kegagalan dicatat console.error berkonteks (bukan ditelan), pengajuan tetap sah",
   "src/lib/services/activity-reference.service.ts": "label referensi yang hilang tak boleh menggagalkan seluruh halaman log; sengaja dicatat agar ada jejak (niatnya tertulis di blok)",
   "src/lib/services/transaction-attachment.service.ts": "hapus berkas disk best-effort (R-10); kegagalan dicatat berkonteks dengan path, baris DB tetap terhapus agar referensi tak menggantung",
   "src/lib/reports/work-order-material-needs-data.ts": "lazy-expire reservasi (F-2026-10-21-012 BR-RES-06) best-effort saat baca: kegagalan dicatat berkonteks, kartu kebutuhan tetap tampil dan expire dicoba lagi pada baca berikutnya — bukan angka yang ditelan",

@@ -21,7 +21,9 @@ const mocks = vi.hoisted(() => ({
     salesPayment: { findMany: vi.fn() },
     salesReturn: { findMany: vi.fn() },
     account: { findMany: vi.fn(), findFirst: vi.fn() },
-    journalEntry: { findMany: vi.fn(), groupBy: vi.fn() },
+    // Perf S3-A: saldo awal buku besar kini sumNetForAccount (aggregate),
+    // bukan groupBy semua akun.
+    journalEntry: { findMany: vi.fn(), groupBy: vi.fn(), aggregate: vi.fn(async () => ({ _sum: { debit: 0, credit: 0 }, _count: 0 })) },
     item: { findMany: vi.fn(), findFirst: vi.fn() },
     warehouse: { findMany: vi.fn(), findFirst: vi.fn() },
     stockMove: { findMany: vi.fn() },
@@ -86,6 +88,9 @@ beforeEach(() => {
     }
     for (const fn of Object.values(model as Record<string, ReturnType<typeof vi.fn>>)) fn.mockResolvedValue([])
   }
+  // Perf S3-A: aggregate untuk saldo awal buku besar mengembalikan bentuk
+  // Prisma lengkap (beforeEach di atas menimpa mockResolvedValue-mu).
+  mocks.prismaMock.journalEntry.aggregate.mockResolvedValue({ _sum: { debit: 0, credit: 0 }, _count: 0 })
 })
 
 describe("total trailing: aging & AR/AP", () => {
