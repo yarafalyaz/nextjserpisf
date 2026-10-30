@@ -2056,11 +2056,13 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
     }
 
     const adjustment = await prisma.$transaction(async (tx) => {
-      await tx.stockAdjustmentItem.deleteMany({
-        where: { stockAdjustmentId: id },
-      });
-
-      // Re-check status inside transaction (TOCTOU guard)
+      // STOK-20: kunci baris dokumen SEBELUM menghapus item. Klaim
+      // proses (updateMany draft->processing) menahan di lock ini
+      // sampai update selesai, atau update membaca status terminal
+      // pemenang proses — dokumen tidak pernah terlihat setengah jadi.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM stock_adjustments WHERE id = ${id} FOR UPDATE`;
+      }
       const latest = await tx.stockAdjustment.findUnique({
         where: { id },
         select: { status: true },
@@ -2068,6 +2070,9 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
       if (latest && latest.status !== "draft") {
         throw new Error("Hanya stock adjustment draft yang dapat diedit");
       }
+      await tx.stockAdjustmentItem.deleteMany({
+        where: { stockAdjustmentId: id },
+      });
 
       return tx.stockAdjustment.update({
         where: { id },
@@ -2227,11 +2232,13 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
     const transferItems = normalizeQtyItems(v.items);
 
     const transfer = await prisma.$transaction(async (tx) => {
-      await tx.inventoryTransferItem.deleteMany({
-        where: { inventoryTransferId: id },
-      });
-
-      // Re-check status inside transaction (TOCTOU guard)
+      // STOK-20: kunci baris dokumen SEBELUM menghapus item (pola sama
+      // updateStockAdjustment) — klaim proses menahan di lock ini;
+      // update tidak pernah menghapus item dokumen yang sedang/sudah
+      // diproses.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM inventory_transfers WHERE id = ${id} FOR UPDATE`;
+      }
       const latest = await tx.inventoryTransfer.findUnique({
         where: { id },
         select: { status: true },
@@ -2239,6 +2246,9 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
       if (latest && latest.status !== "draft") {
         throw new Error("Hanya transfer draft yang dapat diedit");
       }
+      await tx.inventoryTransferItem.deleteMany({
+        where: { inventoryTransferId: id },
+      });
 
       return tx.inventoryTransfer.update({
         where: { id },

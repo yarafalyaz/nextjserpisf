@@ -167,6 +167,17 @@ describe("Stock Adjustment Actions", () => {
       expect.objectContaining({ batchNumbers: ["LOT-C"] }),
     );
   });
+  it("STOK-20: status berubah processing di dalam tx -> update gagal, item tidak dihapus", async () => {
+    seedDraft(mocks.prismaMock.stockAdjustment);
+    mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValueOnce({ status: "processing" });
+    const res = await actions.updateStockAdjustment(
+      1,
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 5, unitCost: 100 }]) }),
+    );
+    expect(res?.success).toBe(false);
+    expect(mocks.prismaMock.stockAdjustmentItem.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.stockAdjustment.update).not.toHaveBeenCalled();
+  });
   it("createStockAdjustment computes systemQty as IN - OUT (not gross sum)", async () => {
     // Simulate historical posted moves: 15 IN + 5 OUT in this warehouse => real stock = 10.
     // The OLD bug summed IN and OUT together, so systemQty was reported as 20 instead of 10.
@@ -303,6 +314,14 @@ describe("Inventory Transfer Actions", () => {
     const res = await actions.updateInventoryTransfer(1, transferFd());
     expect(res?.success).toBe(true);
     expect(mocks.prismaMock.inventoryTransfer.update).toHaveBeenCalledTimes(1);
+  });
+  it("STOK-20: status berubah processed di dalam tx -> update gagal, item tidak dihapus", async () => {
+    seedDraft(mocks.prismaMock.inventoryTransfer);
+    mocks.prismaMock.inventoryTransfer.findUnique.mockResolvedValueOnce({ status: "processed" });
+    const res = await actions.updateInventoryTransfer(1, transferFd());
+    expect(res?.success).toBe(false);
+    expect(mocks.prismaMock.inventoryTransferItem.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.inventoryTransfer.update).not.toHaveBeenCalled();
   });
   it("processInventoryTransfer succeeds", async () => {
     seedDraft(mocks.prismaMock.inventoryTransfer, { items: [] });
