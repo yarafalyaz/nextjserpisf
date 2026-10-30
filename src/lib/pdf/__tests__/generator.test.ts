@@ -234,10 +234,33 @@ describe("PDF Generator Flows", () => {
   it("quotation PDF uses default signatureName when omitted (line 469 default)", async () => {
     const qDocInfo = {
       ...mockDocInfo,
-      // signatureName omitted -> "Wahid Achmad Fauzi"
+      // signatureName omitted -> tanpa nama penanda tangan (R6IE-01)
     }
     await generateQuotationPDF(mockCompany, qDocInfo, mockItems, mockSummary)
     expect(mockDoc.text).toHaveBeenCalled()
+  })
+
+  it("R6IE-01: tanpa setting, PDF penawaran tidak mencetak rekening/identitas pihak lain", async () => {
+    await generateQuotationPDF(mockCompany, mockDocInfo, mockItems, mockSummary)
+    const texts = mockDoc.text.mock.calls.map((call) => String(call[0])).join("\n")
+    expect(texts).not.toContain("4890310457")
+    expect(texts).not.toContain("Rosemety")
+    expect(texts).not.toContain("IRONSMITH")
+    expect(texts).not.toContain("Wahid Achmad Fauzi")
+    // Kepala tanda tangan memakai nama perusahaan dari CompanyInfo.
+    expect(texts).toContain("PT Solusi Sukses")
+  })
+
+  it("R6IE-01: footer + nama penanda tangan dari setting tetap tercetak", async () => {
+    const qDocInfo = {
+      ...mockDocInfo,
+      footerNotes: "Transfer ke BCA 1234567890 a.n. PT Solusi",
+      signatureName: "Budi Santoso",
+    }
+    await generateQuotationPDF(mockCompany, qDocInfo, mockItems, mockSummary)
+    const texts = mockDoc.text.mock.calls.map((call) => String(call[0])).join("\n")
+    expect(texts).toContain("Transfer ke BCA 1234567890 a.n. PT Solusi")
+    expect(texts).toContain("Budi Santoso")
   })
 
   it("quotation PDF handles missing signatureImage gracefully (line 451 falsy)", async () => {

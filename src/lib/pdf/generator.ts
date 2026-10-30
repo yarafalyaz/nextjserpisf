@@ -715,13 +715,9 @@ export async function generateQuotationPDF(
 
   doc.setFont("Helvetica", "normal")
   doc.setFontSize(7.5)
-  const footerText = docInfo.footerNotes || [
-    "- Untuk pembayaran dapat di transfer ke",
-    "Bank Central Asia (BCA)",
-    "No Rekening : 4890310457",
-    "Atas Nama : Rosemety Cartariandini",
-    "Untuk konfirmasi Pembayaran : WA 0817-6415-303",
-  ].join("\n")
+  // R6IE-01: tanpa setting footer, JANGAN cetak rekening/identitas pihak lain
+  // (hardcoded vendor lama). Kosong = kotak keterangan tidak memuat teks.
+  const footerText = docInfo.footerNotes || ""
   const splitFooter = doc.splitTextToSize(footerText, 90)
 
   const boxY = y + 2
@@ -742,7 +738,7 @@ export async function generateQuotationPDF(
   doc.setFont("Helvetica", "bold")
   doc.setFontSize(8.5)
   doc.setTextColor(black)
-  doc.text("IRONSMITH FABRICATION", sigCenterX, y + 2, { align: "center" })
+  doc.text(company.name, sigCenterX, y + 2, { align: "center" })
 
   let sigNameY = y + 24
   if (docInfo.signatureImage) {
@@ -765,13 +761,16 @@ export async function generateQuotationPDF(
   doc.setFont("Helvetica", "bold")
   doc.setFontSize(8.5)
   doc.setTextColor(black)
-  const sigName = docInfo.signatureName || "Wahid Achmad Fauzi"
-  doc.text(sigName, sigCenterX, sigNameY, { align: "center" })
+  // R6IE-01: nama penanda tangan hanya dari setting; kosong = tanpa nama.
+  const sigName = docInfo.signatureName || ""
+  if (sigName) {
+    doc.text(sigName, sigCenterX, sigNameY, { align: "center" })
 
-  const nameW = doc.getTextWidth(sigName)
-  doc.setDrawColor(17, 24, 39)
-  doc.setLineWidth(0.3)
-  doc.line(sigCenterX - nameW / 2, sigNameY + 0.8, sigCenterX + nameW / 2, sigNameY + 0.8)
+    const nameW = doc.getTextWidth(sigName)
+    doc.setDrawColor(17, 24, 39)
+    doc.setLineWidth(0.3)
+    doc.line(sigCenterX - nameW / 2, sigNameY + 0.8, sigCenterX + nameW / 2, sigNameY + 0.8)
+  }
 
   const pdfData = doc.output("bloburl")
   window.open(pdfData, "_blank")
