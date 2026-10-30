@@ -46,9 +46,10 @@ const mocks = vi.hoisted(() => {
     attachmentDeleteMany: vi.fn(),
     unlink: vi.fn(),
     notificationLowStock: vi.fn(),
-    notificationNotifyAdmins: vi.fn(),
+    notificationNotifyUsersIfNew: vi.fn(),
     notificationLateCheckIn: vi.fn(),
     notificationLateCheckInBatch: vi.fn(),
+    userFindMany: vi.fn(),
   }
 })
 
@@ -74,16 +75,17 @@ vi.mock("@/lib/db/prisma", () => ({
       findMany: (...a: unknown[]) => mocks.attachmentFindMany(...a),
       deleteMany: (...a: unknown[]) => mocks.attachmentDeleteMany(...a),
     },
+    user: { findMany: (...a: unknown[]) => mocks.userFindMany(...a) },
   },
 }))
 
 vi.mock("@/lib/services/notification.service", () => ({
   notificationService: {
-    checkAndNotifyLowStockBatch: (...a: unknown[]) => mocks.notificationLowStock(...a),
-    checkAndNotifyWarehouseLowStockBatch: vi.fn(async () => 0),
-    notifyAdmins: (...a: unknown[]) => mocks.notificationNotifyAdmins(...a),
+    checkAndNotifyLowStockBatchIfNew: (...a: unknown[]) => mocks.notificationLowStock(...a),
+    checkAndNotifyWarehouseLowStockBatchIfNew: vi.fn(async () => 0),
+    notifyUsersIfNew: (...a: unknown[]) => mocks.notificationNotifyUsersIfNew(...a),
     notifyLateCheckIn: (...a: unknown[]) => mocks.notificationLateCheckIn(...a),
-    notifyLateCheckInBatch: (...a: unknown[]) => mocks.notificationLateCheckInBatch(...a),
+    notifyLateCheckInBatchIfNew: (...a: unknown[]) => mocks.notificationLateCheckInBatch(...a),
   },
 }))
 
@@ -133,6 +135,7 @@ describe("POST /api/cron", () => {
     mocks.attachmentFindMany.mockResolvedValue([])
     mocks.attachmentDeleteMany.mockResolvedValue({ count: 0 })
     mocks.unlink.mockResolvedValue(undefined)
+    mocks.userFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
   })
 
   it("rejects request without valid auth", async () => {
@@ -274,6 +277,32 @@ describe("POST /api/cron", () => {
       expect(json.results["low-stock"].message).toContain("1 item")
       expect(mocks.notificationLowStock).toHaveBeenCalled()
     })
+
+    // R6WN-09: rerun hari sama tak boleh spam — route wajib lewat varian
+    // IfNew dengan admin ter-resolve + jendela awal hari, bukan batch biasa.
+    it("low-stock alert dedupe: IfNew dengan adminIds + dayStart", async () => {
+      mocks.queryRaw.mockResolvedValue([
+        { id: 1, name: "Item A", sku: "A1", qty_on_hand: 2, min_stock: 10 },
+      ])
+      await POST(makeCronRequest("http://localhost/api/cron?task=low-stock"))
+      const [items, adminIds, since] = mocks.notificationLowStock.mock.calls[0]
+      expect(items).toEqual([{ id: 1, name: "Item A", qtyOnHand: 2, minStock: 10 }])
+      expect(adminIds).toEqual([1, 2])
+      expect((since as Date).getHours()).toBe(0)
+      expect((since as Date).getMinutes()).toBe(0)
+    })
+
+    it("overdue alert dedupe: IfNew dengan adminIds + dayStart, bukan notifyAdmins", async () => {
+      mocks.salesInvoiceAggregate.mockResolvedValue({ _count: { _all: 1 }, _sum: { grandTotal: 100, paidAmount: 0 } })
+      mocks.salesInvoiceFindMany.mockResolvedValue([
+        { documentNo: "INV-1", customer: { name: "PT A" }, grandTotal: 100, paidAmount: 0 },
+      ])
+      await POST(makeCronRequest("http://localhost/api/cron?task=overdue-invoice"))
+      const [adminIds, title, , , since] = mocks.notificationNotifyUsersIfNew.mock.calls[0]
+      expect(adminIds).toEqual([1, 2])
+      expect(title).toContain("1 Invoice Jatuh Tempo")
+      expect((since as Date).getHours()).toBe(0)
+    })
   })
 
   describe("overdue-invoice task", () => {
@@ -293,7 +322,7 @@ describe("POST /api/cron", () => {
       const res = await POST(makeCronRequest("http://localhost/api/cron?task=overdue-invoice"))
       const json = await res.json()
       expect(json.results["overdue-invoice"].message).toContain("2 invoice")
-      expect(mocks.notificationNotifyAdmins).toHaveBeenCalled()
+      expect(mocks.notificationNotifyUsersIfNew).toHaveBeenCalled()
     })
 
     it("truncates long list with 'and N more' suffix", async () => {
@@ -309,7 +338,7 @@ describe("POST /api/cron", () => {
       const json = await res.json()
       expect(json.results["overdue-invoice"].status).toBe("success")
       // "dan N lainnya" suffix is in the admin notification body, not the return string
-      const notifyBody = mocks.notificationNotifyAdmins.mock.calls[0][1]
+      const notifyBody = mocks.notificationNotifyUsersIfNew.mock.calls[0][2]
       expect(notifyBody).toContain("lainnya")
     })
 
@@ -325,7 +354,7 @@ describe("POST /api/cron", () => {
       const res = await POST(makeCronRequest("http://localhost/api/cron?task=overdue-invoice"))
       const json = await res.json()
       expect(json.results["overdue-invoice"].message).toContain("23 invoice")
-      const notifyBody = mocks.notificationNotifyAdmins.mock.calls[0][1]
+      const notifyBody = mocks.notificationNotifyUsersIfNew.mock.calls[0][2]
       expect(notifyBody).toContain("18 lainnya")
       expect(notifyBody).toContain("Rp 20.000")
     })
@@ -399,6 +428,9 @@ describe("POST /api/cron", () => {
       const entries = mocks.notificationLateCheckInBatch.mock.calls[0][0]
       expect(entries).toHaveLength(3)
       expect(entries.map((e: { employee: { id: number } }) => e.employee.id)).toEqual([1, 2, 3])
+      // R6WN-09: dedupe per (admin, judul) — adminIds + dayStart ikut.
+      expect(mocks.notificationLateCheckInBatch.mock.calls[0][1]).toEqual([1, 2])
+      expect((mocks.notificationLateCheckInBatch.mock.calls[0][2] as Date).getHours()).toBe(0)
     })
   })
 

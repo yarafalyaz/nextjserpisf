@@ -219,6 +219,67 @@ describe("notification.service", () => {
     });
   });
 
+  describe("IfNew wrappers (R6WN-09: cron generik rerunnable)", () => {
+    const since = new Date("2026-06-12T00:00:00");
+
+    it("low-stock: entri low saja, dedupe per (admin, judul)", async () => {
+      mocks.findManyNotif.mockResolvedValue([{ title: "Stok A Menipis", userId: 1 }]);
+      mocks.createManyNotif.mockResolvedValue({ count: 1 });
+
+      const sent = await notificationService.checkAndNotifyLowStockBatchIfNew(
+        [
+          { id: 1, name: "A", qtyOnHand: 2, minStock: 10 },
+          { id: 2, name: "B", qtyOnHand: 50, minStock: 10 },
+          { id: 3, name: "C", qtyOnHand: 0, minStock: 0 },
+        ],
+        [1, 2],
+        since,
+      );
+
+      expect(sent).toBe(1); // hanya user 2 untuk "Stok A Menipis"
+      expect(mocks.createManyNotif).toHaveBeenCalledWith({
+        data: [{ userId: 2, title: "Stok A Menipis", body: expect.stringContaining("Stok saat ini: 2"), type: "warning", readAt: null }],
+      });
+    });
+
+    it("warehouse low-stock: judul menyebut gudang, dedupe per (admin, judul)", async () => {
+      mocks.findManyNotif.mockResolvedValue([]);
+      mocks.createManyNotif.mockResolvedValue({ count: 1 });
+
+      const sent = await notificationService.checkAndNotifyWarehouseLowStockBatchIfNew(
+        [{ itemId: 1, itemName: "Oli", warehouseId: 9, warehouseName: "Bengkel", qtyAtWarehouse: 1, minStock: 5 }],
+        [2],
+        since,
+      );
+
+      expect(sent).toBe(1);
+      expect(mocks.createManyNotif).toHaveBeenCalledWith({
+        data: [{ userId: 2, title: "Stok Oli Menipis di Bengkel", body: expect.stringContaining("Stok di Bengkel: 1"), type: "warning", readAt: null }],
+      });
+    });
+
+    it("late-checkin: satu entri per karyawan ke tiap admin yang belum menerima", async () => {
+      mocks.findManyNotif.mockResolvedValue([{ title: "Ani (IT) Telat Masuk", userId: 1 }]);
+      mocks.createManyNotif.mockResolvedValue({ count: 1 });
+
+      const sent = await notificationService.notifyLateCheckInBatchIfNew(
+        [{ employee: { id: 5, name: "Ani", departmentName: "IT" }, checkInTime: "08:15" }],
+        [1, 2],
+        since,
+      );
+
+      expect(sent).toBe(1);
+      expect(mocks.createManyNotif).toHaveBeenCalledWith({
+        data: [{ userId: 2, title: "Ani (IT) Telat Masuk", body: "Check-in: 08:15", type: "warning", readAt: null }],
+      });
+    });
+
+    it("tak ada entri low → tak menulis", async () => {
+      expect(await notificationService.checkAndNotifyLowStockBatchIfNew([], [1], since)).toBe(0);
+      expect(mocks.createManyNotif).not.toHaveBeenCalled();
+    });
+  });
+
   describe("checkAndNotifyLowStock", () => {
     it("notifies when stock is below minimum", async () => {
       mocks.findManyUsers.mockResolvedValue([{ id: 1 }]);

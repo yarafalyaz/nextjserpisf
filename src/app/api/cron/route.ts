@@ -152,6 +152,24 @@ async function taskLockPeriod(): Promise<string> {
   })
 }
 
+// R6WN-09: cron generik bisa dipanggil berulang dalam sehari (scheduler
+// eksternal/manual) — alert admin wajib dedupe per (admin, judul) sejak
+// awal hari, cermin harian terjadwal (daily-notifications/route.ts).
+// ponytail: race dua run paralel tetap ada (service menulis per (user,judul));
+// naikkan ke unique dedupe-key bila cron diparalelkan.
+async function startOfToday(): Promise<{ adminIds: number[]; dayStart: Date }> {
+  const dayStart = new Date()
+  dayStart.setHours(0, 0, 0, 0)
+  const admins = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      roles: { some: { name: { in: ["super_admin", "admin"] } } },
+    },
+    select: { id: true },
+  })
+  return { adminIds: admins.map((a) => a.id), dayStart }
+}
+
 // 2. Low Stock Alert
 async function taskLowStockAlert(): Promise<string> {
   const items = await prisma.$queryRaw<
@@ -180,18 +198,25 @@ async function taskLowStockAlert(): Promise<string> {
     return "Semua stok aman"
   }
 
+  const { adminIds, dayStart } = await startOfToday()
   if (items.length > 0) {
-    await notificationService.checkAndNotifyLowStockBatch(
+    await notificationService.checkAndNotifyLowStockBatchIfNew(
       items.map((item) => ({
         id: item.id,
         name: item.name,
         qtyOnHand: Number(item.qty_on_hand),
         minStock: Number(item.min_stock),
       })),
+      adminIds,
+      dayStart
     )
   }
   if (warehouseLow.length > 0) {
-    await notificationService.checkAndNotifyWarehouseLowStockBatch(warehouseLow)
+    await notificationService.checkAndNotifyWarehouseLowStockBatchIfNew(
+      warehouseLow,
+      adminIds,
+      dayStart
+    )
   }
 
   const parts: string[] = []
@@ -245,10 +270,13 @@ async function taskOverdueInvoiceAlert(): Promise<string> {
     : ""
   const totalOverdue = Number(summary._sum.grandTotal ?? 0) - Number(summary._sum.paidAmount ?? 0)
 
-  await notificationService.notifyAdmins(
+  const { adminIds, dayStart } = await startOfToday()
+  await notificationService.notifyUsersIfNew(
+    adminIds,
     `${overdueCount} Invoice Jatuh Tempo`,
     `Total piutang overdue: Rp ${totalOverdue.toLocaleString("id-ID")}. Invoice: ${invoiceList}${suffix}`,
-    "danger"
+    "danger",
+    dayStart
   )
 
   return `${overdueCount} invoice overdue — notifikasi dikirim ke admin`
@@ -304,7 +332,8 @@ async function taskLateCheckInAlert(): Promise<string> {
   })
 
   if (entries.length > 0) {
-    await notificationService.notifyLateCheckInBatch(entries)
+    const { adminIds, dayStart } = await startOfToday()
+    await notificationService.notifyLateCheckInBatchIfNew(entries, adminIds, dayStart)
   }
 
   return `${lateAttendances.length} karyawan telat — notifikasi dikirim ke admin`

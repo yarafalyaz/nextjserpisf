@@ -184,6 +184,66 @@ export const notificationService = {
   },
 
   /**
+   * Idempotent batched variants of the admin alerts below, for rerunnable
+   * callers (cron). Dedupe per (admin, title) since `since`, delegating to
+   * notifyUsersIfNewBatch so semantics match the daily-notifications cron:
+   * rerunning within the window writes 0 rows for already-told admins.
+   * `adminIds` pre-resolved by caller (per prefetch pattern).
+   */
+  async checkAndNotifyLowStockBatchIfNew(
+    items: LowStockItem[],
+    adminIds: number[],
+    since: Date
+  ): Promise<number> {
+    const low = items.filter((i) => i.minStock > 0 && i.qtyOnHand <= i.minStock)
+    return this.notifyUsersIfNewBatch(
+      adminIds,
+      low.map((i) => ({
+        title: `Stok ${i.name} Menipis`,
+        body: `Stok saat ini: ${i.qtyOnHand} (Minimum: ${i.minStock}). Segera lakukan pembelian.`,
+        type: 'warning' as const,
+      })),
+      since
+    )
+  },
+
+  async checkAndNotifyWarehouseLowStockBatchIfNew(
+    items: WarehouseLowStockItem[],
+    adminIds: number[],
+    since: Date
+  ): Promise<number> {
+    const low = items.filter((i) => i.minStock > 0 && i.qtyAtWarehouse <= i.minStock)
+    return this.notifyUsersIfNewBatch(
+      adminIds,
+      low.map((i) => ({
+        title: `Stok ${i.itemName} Menipis di ${i.warehouseName}`,
+        body: `Stok di ${i.warehouseName}: ${i.qtyAtWarehouse} (Minimum: ${i.minStock}). Segera lakukan pembelian atau transfer antar gudang.`,
+        type: 'warning' as const,
+      })),
+      since
+    )
+  },
+
+  async notifyLateCheckInBatchIfNew(
+    entries: { employee: LateCheckIn; checkInTime: string; scheduledTime?: string }[],
+    adminIds: number[],
+    since: Date
+  ): Promise<number> {
+    return this.notifyUsersIfNewBatch(
+      adminIds,
+      entries.map((e) => {
+        const dept = e.employee.departmentName ? ` (${e.employee.departmentName})` : ''
+        return {
+          title: `${e.employee.name}${dept} Telat Masuk`,
+          body: `Check-in: ${e.checkInTime}${e.scheduledTime ? ` (Jadwal: ${e.scheduledTime})` : ''}`,
+          type: 'warning' as const,
+        }
+      }),
+      since
+    )
+  },
+
+  /**
    * Check if an item's stock is below minimum threshold and notify admins.
    * NOTE: not idempotent — each call creates fresh notifications. Callers that
    * may run repeatedly for the same item/period must dedupe themselves (see the
