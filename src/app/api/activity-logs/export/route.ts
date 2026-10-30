@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
     if (!parsed.ok) return apiError("BAD_REQUEST", parsed.message);
     const where = parsed.where;
 
+    const totalMatching = await prisma.activityLog.count({ where })
+
     const logs = await prisma.activityLog.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -60,6 +62,11 @@ export async function GET(req: NextRequest) {
       login: "Login",
     };
 
+    const truncated = totalMatching > logs.length
+    const truncationNotice = truncated
+      ? `"TERPOTONG: menampilkan ${logs.length} dari ${totalMatching} log terbaru. Persempit filter tanggal/pengguna untuk hasil lengkap."\n`
+      : ""
+
     const header = "Waktu,Pengguna,Aksi,Model,ID,Deskripsi,IP\n";
     const rows = logs
       .map((l) => {
@@ -78,7 +85,7 @@ export async function GET(req: NextRequest) {
       })
       .join("\n");
 
-    return new Response(header + rows, {
+    return new Response(truncationNotice + header + rows, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename=log-aktivitas-${Date.now()}.csv`,

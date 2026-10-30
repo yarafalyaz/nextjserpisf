@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   authFn: vi.fn(),
   hasPermissionFn: vi.fn(),
   findManyLogs: vi.fn(),
+  countLogs: vi.fn(),
   findManyUsers: vi.fn(),
 }))
 
@@ -21,6 +22,7 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     activityLog: {
       findMany: (...a: unknown[]) => mocks.findManyLogs(...a),
+      count: (...a: unknown[]) => mocks.countLogs(...a),
     },
     user: { findMany: (...a: unknown[]) => mocks.findManyUsers(...a) },
   },
@@ -35,6 +37,7 @@ describe("GET /api/activity-logs/export", () => {
     vi.clearAllMocks()
     // Default: caller has the required permission. Individual tests override.
     mocks.hasPermissionFn.mockResolvedValue(true)
+    mocks.countLogs.mockResolvedValue(0)
   })
 
   it("returns 401 when not authenticated", async () => {
@@ -58,6 +61,7 @@ describe("GET /api/activity-logs/export", () => {
     })
     // Crucial: must NOT dump the activity log to unauthorized callers.
     expect(mocks.findManyLogs).not.toHaveBeenCalled()
+    expect(mocks.countLogs).not.toHaveBeenCalled()
   })
 
   it("returns structured 500 when export query fails", async () => {
@@ -168,6 +172,7 @@ describe("GET /api/activity-logs/export — kontrak kolom query", () => {
     vi.clearAllMocks()
     mocks.hasPermissionFn.mockResolvedValue(true)
     mocks.findManyLogs.mockResolvedValue([])
+    mocks.countLogs.mockResolvedValue(0)
   })
 
   it("queries only the CSV columns (oldValues/newValues/metadata tidak ikut dimuat)", async () => {
@@ -194,5 +199,39 @@ describe("GET /api/activity-logs/export — kontrak kolom query", () => {
     const call = mocks.findManyLogs.mock.calls[0][0] as Record<string, unknown>
     expect(call.select).not.toHaveProperty("oldValues")
     expect(call.select).not.toHaveProperty("metadata")
+  })
+
+  it("R6IE-06: memberi penanda terpotong bila total melebihi baris ekspor", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 1 } })
+    mocks.countLogs.mockResolvedValue(10001)
+    mocks.findManyLogs.mockResolvedValue([
+      {
+        id: 1,
+        createdAt: new Date("2026-06-15T08:00:00Z"),
+        userId: null,
+        action: "CREATE",
+        modelType: "Item",
+        modelId: 1,
+        description: "dibuat",
+        ipAddress: null,
+      },
+    ])
+
+    const res = await GET(makeReq("http://localhost/api/activity-logs/export") as any)
+    expect(res.status).toBe(200)
+    const body = await res.text()
+    expect(body).toContain("TERPOTONG: menampilkan 1 dari 10001 log terbaru")
+    expect(body).toContain("Waktu,Pengguna,Aksi,Model,ID,Deskripsi,IP")
+    expect(mocks.countLogs).toHaveBeenCalledWith({ where: {} })
+  })
+
+  it("R6IE-06: tanpa penanda bila semua log termuat", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 1 } })
+    mocks.countLogs.mockResolvedValue(0)
+
+    const res = await GET(makeReq("http://localhost/api/activity-logs/export") as any)
+    const body = await res.text()
+    expect(body.startsWith("Waktu,Pengguna,Aksi,Model,ID,Deskripsi,IP")).toBe(true)
+    expect(body).not.toContain("TERPOTONG")
   })
 })
