@@ -98,3 +98,19 @@ ci:quick penuh; update checkpoint akhir; commit docs lokal.
 - S3-D: sweep DOM terautentikasi masih terblokir sesi browser sah
   (cookie tidak boleh dimaterialisasi). S3-F (`ci:quick` penuh +
   checkpoint akhir) berjalan sesudah log ini ditulis.
+- S3-F SELESAI: `TZ=Asia/Jakarta npm run ci:quick` **Pipeline PASSED**
+  (ESLint bersih, tsc bersih, unit 1099 file / 10721 test hijau +
+  21 skipped, production build sukses). Run pertama gagal 11 test —
+  semua regression-mock dari commit sesi ini (fail-closed R6WN-07
+  langkah tanpa approver, permission per-tipe R6WN-06, notifikasi
+  R6WN-03 yang membuat ketinggalan mock console-only PurchaseOrder
+  R6WN-11, snapshot item R6IE-07, perf `sumNetForAccount` S3-A) —
+  ditutup `f77b31d32` + `2184d4162` (mock diselaraskan, nol logika
+  produksi berubah, nol assertion izin dilonggarkan). MCP
+  `get_compilation_issues`: 0 issue untuk semua route. Halaman
+  buku-bank/buku-besar compile (307 → login; render terautentikasi
+  tetap terblokir sesi browser sah). Deploy-note: jalankan
+  `npm run db:seed` untuk 5 permission approve baru R6WN-06; audit
+  `approval_workflows.model_type` di luar enum + langkah
+  `role_id IS NULL AND user_id IS NULL` sebelum deploy. Tree bersih
+  di `2184d4162`; tidak ada push.
