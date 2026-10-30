@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 // tiket merender daftar komentar beserta keadaan kosongnya, tetapi tidak ada cara
 // menambahkan komentar sama sekali: tabel `crm_ticket_comments` tidak punya penulis.
 
-export function TicketCommentForm({ ticketId }: { ticketId: number }) {
+export function TicketCommentForm({ ticketId, canCreate = true }: { ticketId: number; canCreate?: boolean }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -30,6 +30,8 @@ export function TicketCommentForm({ ticketId }: { ticketId: number }) {
       router.refresh()
     })
   }
+
+  if (!canCreate) return null
 
   return (
     <form

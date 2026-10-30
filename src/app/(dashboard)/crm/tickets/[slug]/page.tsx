@@ -202,7 +202,9 @@ export default async function CrmTicketDetailPage({
             Komentar
           </h2>
         </div>
-        <TicketCommentForm ticketId={ticket.id} />
+        <CanCreate permission="edit_tickets">
+          <TicketCommentForm ticketId={ticket.id} canCreate />
+        </CanCreate>
         <div className="p-4 px-5">
           {ticket.comments.length === 0 ? (
             <EmptyState title="Belum ada komentar" />

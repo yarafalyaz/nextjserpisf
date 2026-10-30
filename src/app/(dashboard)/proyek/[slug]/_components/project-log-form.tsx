@@ -21,7 +21,7 @@ const ACTION_OPTIONS = [
   { value: "Catatan", label: "Catatan" },
 ]
 
-export function ProjectLogForm({ projectId }: { projectId: number }) {
+export function ProjectLogForm({ projectId, canCreate = true }: { projectId: number; canCreate?: boolean }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [action, setAction] = useState("Progres")
@@ -43,6 +43,8 @@ export function ProjectLogForm({ projectId }: { projectId: number }) {
       router.refresh()
     })
   }
+
+  if (!canCreate) return null
 
   return (
     <form

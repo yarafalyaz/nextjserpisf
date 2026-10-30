@@ -476,7 +476,7 @@ export default async function ProjectDetailPage({
                 <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Log Aktivitas</h2>
                 </div>
-                <ProjectLogForm projectId={project.id} />
+                <ProjectLogForm projectId={project.id} canCreate={canEdit} />
                 <div className="p-4 px-5">
                   {project.logs.length === 0 ? (
                     <EmptyState title="Belum ada log" />

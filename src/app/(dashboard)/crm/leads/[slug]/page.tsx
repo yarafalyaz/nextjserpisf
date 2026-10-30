@@ -165,7 +165,7 @@ export default async function LeadDetailPage({
                 <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Aktivitas Terbaru</h2>
                 </div>
-                <AddLeadActivityForm leadId={lead.id} />
+                <AddLeadActivityForm leadId={lead.id} canCreate={canActOnLeadActivities} />
                 <div className="p-4 px-5">
                   {lead.activities.length === 0 ? (
                     <EmptyState title="Belum ada aktivitas" />

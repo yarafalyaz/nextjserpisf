@@ -56,7 +56,7 @@ export function ConvertLeadButton({ leadId, canConvert }: { leadId: number; canC
 }
 
 /** Inline form to log a lead activity (note/call/email/meeting/task). */
-export function AddLeadActivityForm({ leadId }: { leadId: number }) {
+export function AddLeadActivityForm({ leadId, canCreate = true }: { leadId: number; canCreate?: boolean }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [type, setType] = useState("note")
@@ -78,6 +78,8 @@ export function AddLeadActivityForm({ leadId }: { leadId: number }) {
       router.refresh()
     })
   }
+
+  if (!canCreate) return null
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-2 p-4 px-5 border-b border-default">
