@@ -204,6 +204,54 @@ describe("GET /api/print", () => {
       )
     })
 
+    it("R6IE-05: invoice draft lolos dengan status terkirim ke generator", async () => {
+      mocks.salesInvoiceFindFirst.mockResolvedValue({
+        documentNo: "INV-D", date: new Date(), dueDate: null, status: "draft",
+        subtotal: 0, grandTotal: 0, customer: { name: "X", address: null, street: null, phone: null },
+        items: [],
+      })
+      const res = await GET(makeReq("http://localhost/api/print?tipe=invoice&id=1"))
+      expect(res.status).toBe(200)
+      const json = await res.json()
+      expect(json.docInfo.status).toBe("draft")
+    })
+
+    it("R6IE-05: invoice cancelled ditolak 409", async () => {
+      mocks.salesInvoiceFindFirst.mockResolvedValue({
+        documentNo: "INV-C", date: new Date(), dueDate: null, status: "cancelled",
+        subtotal: 0, grandTotal: 0, customer: { name: "X", address: null, street: null, phone: null },
+        items: [],
+      })
+      const res = await GET(makeReq("http://localhost/api/print?tipe=invoice&id=1"))
+      expect(res.status).toBe(409)
+      const json = await res.json()
+      expect(json.error.code).toBe("CONFLICT")
+    })
+
+    it("R6IE-05: quotation rejected ditolak 409, final lolos tanpa blok", async () => {
+      mocks.quotationFindFirst.mockResolvedValue({
+        documentNo: "Q-1", date: new Date(), validUntil: null, status: "rejected",
+        paymentMethod: null, shippingMethod: null,
+        subtotal: 0, discount: 0, tax: 0, grandTotal: 0,
+        customer: { name: "X", address: "a", street: null, phone: "", email: "c@x.id" },
+        customerVehicle: null, sections: [],
+      })
+      const blocked = await GET(makeReq("http://localhost/api/print?tipe=quotation&id=1"))
+      expect(blocked.status).toBe(409)
+
+      mocks.quotationFindFirst.mockResolvedValue({
+        documentNo: "Q-1", date: new Date(), validUntil: null, status: "accepted",
+        paymentMethod: null, shippingMethod: null,
+        subtotal: 0, discount: 0, tax: 0, grandTotal: 0,
+        customer: { name: "X", address: "a", street: null, phone: "", email: "c@x.id" },
+        customerVehicle: null, sections: [],
+      })
+      const ok = await GET(makeReq("http://localhost/api/print?tipe=quotation&id=1"))
+      expect(ok.status).toBe(200)
+      const json = await ok.json()
+      expect(json.docInfo.status).toBe("accepted")
+    })
+
     it("uses street when address is null", async () => {
       mocks.salesInvoiceFindFirst.mockResolvedValue({
         documentNo: "INV-1", date: new Date(), dueDate: null,

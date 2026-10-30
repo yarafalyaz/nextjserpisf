@@ -3,6 +3,20 @@ import { jsPDF } from "jspdf"
 import autoTable from "jspdf-autotable"
 import { formatCurrency } from "@/lib/utils/format"
 import { terbilangLabel } from "@/lib/utils/terbilang"
+import { statusLabel } from "@/lib/utils/status-labels"
+
+const NON_FINAL_STATUSES = new Set(["draft", "pending", "pending_approval"])
+
+// R6IE-05: draft/menunggu bukan dokumen final — watermark diagonal besar.
+function drawNonFinalWatermark(doc: InstanceType<typeof jsPDF>, status?: string | null) {
+  const normalized = typeof status === "string" ? status.toLowerCase() : ""
+  if (!NON_FINAL_STATUSES.has(normalized)) return
+  const label = statusLabel(normalized).toUpperCase()
+  doc.setFont("Helvetica", "bold")
+  doc.setFontSize(60)
+  doc.setTextColor("#e5e7eb")
+  doc.text(label, 105, 160, { align: "center", angle: 45 })
+}
 
 export interface CompanyInfo {
   name: string
@@ -15,6 +29,7 @@ export interface CompanyInfo {
 
 export interface DocumentInfo {
   title: string
+  status?: string | null
   documentNo: string
   date: string
   dueDate?: string | null
@@ -95,6 +110,7 @@ export function buildTransactionPdf(
     unit: "mm",
     format: "a4",
   })
+  drawNonFinalWatermark(doc, docInfo.status)
 
   // Colors
   const darkGray = "#1f2937"
@@ -481,6 +497,7 @@ export async function generateQuotationPDF(
   sections?: { name: string; items: QuotationPDFItem[] }[]
 ) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
+  drawNonFinalWatermark(doc, docInfo.status)
   const ml = 14
   const pageW = 210
   const black = "#111827"

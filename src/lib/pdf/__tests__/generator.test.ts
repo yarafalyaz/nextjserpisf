@@ -107,6 +107,24 @@ describe("PDF Generator Flows", () => {
     expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
   })
 
+  it("R6IE-05: status draft menggambar watermark KONSEP, final tidak", async () => {
+    await generateTransactionPDF(mockCompany, { ...mockDocInfo, status: "draft" }, mockItems, mockSummary)
+    const texts = mockDoc.text.mock.calls.map((call) => String(call[0]))
+    expect(texts).toContain("KONSEP")
+
+    vi.clearAllMocks()
+    await generateTransactionPDF(mockCompany, { ...mockDocInfo, status: "posted" }, mockItems, mockSummary)
+    const finalTexts = mockDoc.text.mock.calls.map((call) => String(call[0]))
+    expect(finalTexts).not.toContain("KONSEP")
+    expect(finalTexts).not.toContain("MENUNGGU")
+  })
+
+  it("R6IE-05: penawaran pending_approval menggambar watermark MENUNGGU PERSETUJUAN", async () => {
+    await generateQuotationPDF(mockCompany, { ...mockDocInfo, status: "pending_approval" }, mockItems, mockSummary)
+    const texts = mockDoc.text.mock.calls.map((call) => String(call[0]))
+    expect(texts).toContain("MENUNGGU PERSETUJUAN")
+  })
+
   it("menulis baris Terbilang berisi kata-kata nominal total", async () => {
     await generateTransactionPDF(mockCompany, mockDocInfo, mockItems, mockSummary)
     const texts = mockDoc.text.mock.calls.map((call) => String(call[0]))

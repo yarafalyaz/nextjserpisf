@@ -9,6 +9,27 @@ import { paymentMethodLabel, shippingMethodLabel } from "@/lib/utils/method-labe
 import { formatDate } from "@/lib/utils/format"
 import { companyAddressLines } from "@/lib/utils/company-address"
 import { canAccessWarehouseScopedDocument } from "@/lib/auth/document-scope"
+import { statusLabel } from "@/lib/utils/status-labels"
+
+// R6IE-05: dokumen batal/tolak/reversed tidak boleh terbit sebagai cetakan
+// final. Draft/pending tetap boleh dicetak, generator menandainya watermark.
+const PRINT_BLOCKED_STATUSES = new Set([
+  "cancelled",
+  "canceled",
+  "void",
+  "voided",
+  "rejected",
+  "reversed",
+])
+
+function blockedStatusResponse(status: unknown) {
+  const normalized = typeof status === "string" ? status.toLowerCase() : ""
+  if (!PRINT_BLOCKED_STATUSES.has(normalized)) return null
+  return apiError(
+    "CONFLICT",
+    `Dokumen berstatus ${statusLabel(normalized)} tidak dapat dicetak.`,
+  )
+}
 
 const PRINT_PERMISSION: Record<string, PermissionName> = {
   invoice: "view_sales_invoices",
@@ -136,6 +157,8 @@ export async function GET(request: Request) {
         include: { customer: { select: PRINT_CUSTOMER_SELECT }, items: true },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
+      const blocked = blockedStatusResponse((doc as { status?: unknown }).status)
+      if (blocked) return blocked
 
       const itemsMap = await loadItemNames(doc.items.map((it) => it.itemId))
 
@@ -143,6 +166,7 @@ export async function GET(request: Request) {
         company: companyInfo,
         docInfo: {
           title: "FAKTUR PENJUALAN",
+          status: (doc as { status?: unknown }).status ?? null,
           documentNo: doc.documentNo,
           date: formatDate(doc.date),
           dueDate: doc.dueDate ? formatDate(doc.dueDate) : null,
@@ -190,6 +214,8 @@ export async function GET(request: Request) {
         },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
+      const blocked = blockedStatusResponse((doc as { status?: unknown }).status)
+      if (blocked) return blocked
 
       // Flatten items from all sections for backward compatibility
       const allItems = doc.sections.flatMap((sec) => sec.items)
@@ -210,6 +236,7 @@ export async function GET(request: Request) {
         company: companyInfo,
         docInfo: {
           title: "PENAWARAN HARGA",
+          status: (doc as { status?: unknown }).status ?? null,
           documentNo: doc.documentNo,
           date: formatDate(doc.date),
           dueDate: doc.validUntil ? formatDate(doc.validUntil) : null,
@@ -262,6 +289,8 @@ export async function GET(request: Request) {
         include: { customer: { select: PRINT_CUSTOMER_SELECT }, items: true },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
+      const blocked = blockedStatusResponse((doc as { status?: unknown }).status)
+      if (blocked) return blocked
 
       const itemsMap = await loadItemNames(doc.items.map((it) => it.itemId))
 
@@ -269,6 +298,7 @@ export async function GET(request: Request) {
         company: companyInfo,
         docInfo: {
           title: "PESANAN PENJUALAN",
+          status: (doc as { status?: unknown }).status ?? null,
           documentNo: doc.documentNo,
           date: formatDate(doc.date),
           dueDate: doc.deliveryDate ? formatDate(doc.deliveryDate) : null,
@@ -305,6 +335,8 @@ export async function GET(request: Request) {
         },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
+      const blocked = blockedStatusResponse((doc as { status?: unknown }).status)
+      if (blocked) return blocked
 
       // Resolve item names from items table
       const itemIds = doc.items.map((it) => it.itemId).filter((id) => id > 0)
@@ -323,11 +355,11 @@ export async function GET(request: Request) {
         company: companyInfo,
         docInfo: {
           title: "PERINTAH KERJA",
+          status: (doc as { status?: unknown }).status ?? null,
           documentNo: doc.documentNo,
           date: formatDate(doc.date),
           startDate: doc.startDate ? formatDate(doc.startDate) : null,
           endDate: doc.endDate ? formatDate(doc.endDate) : null,
-          status: doc.status,
           customerName: doc.customer.name,
           customerAddress: doc.customer.address || doc.customer.street || "",
           customerPhone: doc.customer.phone || "",
@@ -350,6 +382,8 @@ export async function GET(request: Request) {
         include: { vendor: { select: PRINT_VENDOR_SELECT }, items: true },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
+      const blocked = blockedStatusResponse((doc as { status?: unknown }).status)
+      if (blocked) return blocked
 
       const itemIds = doc.items.map((it) => it.itemId)
       const poItemsMap = new Map<number, { name: string; unit: string | null }>()
@@ -365,6 +399,7 @@ export async function GET(request: Request) {
         company: companyInfo,
         docInfo: {
           title: "PESANAN PEMBELIAN",
+          status: (doc as { status?: unknown }).status ?? null,
           documentNo: doc.documentNo,
           date: formatDate(doc.date),
           // Tanggal perkiraan terima dipakai sebagai baris "Jatuh Tempo".
@@ -401,6 +436,8 @@ export async function GET(request: Request) {
         },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
+      const blocked = blockedStatusResponse((doc as { status?: unknown }).status)
+      if (blocked) return blocked
 
       const customer = doc.salesOrder.customer
 
@@ -408,6 +445,7 @@ export async function GET(request: Request) {
         company: companyInfo,
         docInfo: {
           title: "SURAT JALAN",
+          status: (doc as { status?: unknown }).status ?? null,
           documentNo: doc.documentNo,
           date: formatDate(doc.date),
           dueDate: doc.deliveryDate ? formatDate(doc.deliveryDate) : null,
@@ -434,12 +472,15 @@ export async function GET(request: Request) {
     if (type === "down-payment") {
       const doc = await prisma.downPayment.findUnique({ where: { id }, include: { customer: { select: PRINT_CUSTOMER_SELECT } } })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
+      const blocked = blockedStatusResponse((doc as { status?: unknown }).status)
+      if (blocked) return blocked
 
       const amount = Number(doc.amount)
       return NextResponse.json({
         company: companyInfo,
         docInfo: {
           title: "KUITANSI UANG MUKA",
+          status: (doc as { status?: unknown }).status ?? null,
           documentNo: doc.documentNo,
           date: formatDate(doc.paymentDate),
           dueDate: null,
@@ -469,6 +510,8 @@ export async function GET(request: Request) {
         include: { salesInvoice: { include: { customer: { select: PRINT_CUSTOMER_SELECT } } } },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
+      const blocked = blockedStatusResponse((doc as { status?: unknown }).status)
+      if (blocked) return blocked
 
       const amount = Number(doc.amount)
       const customer = doc.salesInvoice.customer
@@ -476,6 +519,7 @@ export async function GET(request: Request) {
         company: companyInfo,
         docInfo: {
           title: "KUITANSI PEMBAYARAN",
+          status: (doc as { status?: unknown }).status ?? null,
           documentNo: doc.documentNo,
           date: formatDate(doc.paymentDate),
           dueDate: null,
@@ -516,6 +560,8 @@ export async function GET(request: Request) {
         },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
+      const blocked = blockedStatusResponse((doc as { status?: unknown }).status)
+      if (blocked) return blocked
 
       const amount = Number(doc.amount)
       // Bila pembayaran dialokasikan ke beberapa tagihan, rinciannya ditampilkan
@@ -544,6 +590,7 @@ export async function GET(request: Request) {
         company: companyInfo,
         docInfo: {
           title: "BUKTI PEMBAYARAN VENDOR",
+          status: (doc as { status?: unknown }).status ?? null,
           documentNo: doc.documentNo,
           date: formatDate(doc.paymentDate),
           dueDate: null,
@@ -567,6 +614,8 @@ export async function GET(request: Request) {
         },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
+      const blocked = blockedStatusResponse((doc as { status?: unknown }).status)
+      if (blocked) return blocked
 
       const info = await loadItemInfo(doc.items.map((it) => it.itemId))
       const items = doc.items.map((it, idx) => ({
@@ -584,6 +633,7 @@ export async function GET(request: Request) {
         company: companyInfo,
         docInfo: {
           title: "RETUR PENJUALAN",
+          status: (doc as { status?: unknown }).status ?? null,
           documentNo: doc.documentNo,
           date: formatDate(doc.date),
           dueDate: null,
@@ -611,6 +661,8 @@ export async function GET(request: Request) {
         },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
+      const blocked = blockedStatusResponse((doc as { status?: unknown }).status)
+      if (blocked) return blocked
 
       const info = await loadItemInfo(doc.items.map((it) => it.itemId))
       const items = doc.items.map((it, idx) => ({
@@ -629,6 +681,7 @@ export async function GET(request: Request) {
         company: companyInfo,
         docInfo: {
           title: "RETUR PEMBELIAN",
+          status: (doc as { status?: unknown }).status ?? null,
           documentNo: doc.documentNo,
           date: formatDate(doc.date),
           dueDate: null,
@@ -652,6 +705,8 @@ export async function GET(request: Request) {
         },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
+      const blocked = blockedStatusResponse((doc as { status?: unknown }).status)
+      if (blocked) return blocked
 
       const info = await loadItemInfo(doc.items.map((it) => it.itemId))
       const items = doc.items.map((it, idx) => ({
@@ -670,6 +725,7 @@ export async function GET(request: Request) {
         company: companyInfo,
         docInfo: {
           title: "PENERIMAAN BARANG",
+          status: (doc as { status?: unknown }).status ?? null,
           documentNo: doc.documentNo,
           date: formatDate(doc.date),
           dueDate: null,
@@ -695,6 +751,8 @@ export async function GET(request: Request) {
         include: { vendor: { select: PRINT_VENDOR_SELECT }, items: true },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
+      const blocked = blockedStatusResponse((doc as { status?: unknown }).status)
+      if (blocked) return blocked
 
       const info = await loadItemInfo(doc.items.map((it) => it.itemId))
 
@@ -702,6 +760,7 @@ export async function GET(request: Request) {
         company: companyInfo,
         docInfo: {
           title: "PERMINTAAN PEMBELIAN",
+          status: (doc as { status?: unknown }).status ?? null,
           documentNo: doc.documentNo,
           date: formatDate(doc.requestDate || doc.date),
           dueDate: null,
@@ -731,6 +790,8 @@ export async function GET(request: Request) {
         include: { vendor: { select: PRINT_VENDOR_SELECT }, items: true, withholdingType: { select: { name: true, rate: true } } },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
+      const blocked = blockedStatusResponse((doc as { status?: unknown }).status)
+      if (blocked) return blocked
 
       const info = await loadItemInfo(doc.items.map((it) => it.itemId ?? 0))
       const items = doc.items.map((it, idx) => ({
@@ -752,6 +813,7 @@ export async function GET(request: Request) {
         company: companyInfo,
         docInfo: {
           title: "TAGIHAN VENDOR",
+          status: (doc as { status?: unknown }).status ?? null,
           documentNo: doc.documentNo,
           date: formatDate(doc.date),
           dueDate: doc.dueDate ? formatDate(doc.dueDate) : null,
@@ -785,12 +847,15 @@ export async function GET(request: Request) {
         include: { vendor: { select: PRINT_VENDOR_SELECT }, category: { select: { label: true } } },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
+      const blocked = blockedStatusResponse((doc as { status?: unknown }).status)
+      if (blocked) return blocked
 
       const amount = Number(doc.amount)
       return NextResponse.json({
         company: companyInfo,
         docInfo: {
           title: "BUKTI PENGELUARAN",
+          status: (doc as { status?: unknown }).status ?? null,
           documentNo: doc.documentNo,
           date: formatDate(doc.date),
           dueDate: null,
