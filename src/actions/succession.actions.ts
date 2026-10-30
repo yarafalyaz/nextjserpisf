@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
-import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope";
+import { assertHrEmployeeAccess, getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope";
 import { parseFormData } from "@/lib/validations/parse-form";
 import { successionCandidateSchema } from "@/lib/validations/development.schemas";
 import { logActivity } from "@/lib/services/activity-log.service";
@@ -110,19 +110,36 @@ export async function removeSuccessorCandidate(id: number) {
   }
 }
 
-/** Ringkasan cakupan untuk seluruh jabatan kritis. */
+/**
+ * Ringkasan cakupan jabatan kritis DALAM cakupan HR pemanggil
+ * (preseden competency-gap-queue: populasi disaring dulu, coverage
+ * dihitung dari populasi tersaring; scope "all" identik perilaku lama).
+ * Pemegang view_succession non-global (mis. kepala_bengkel) tidak lagi
+ * melihat incumbent/kandidat/readiness departemen lain.
+ */
 export async function getSuccessionOverview() {
-  await requirePermission("view_succession");
+  const actor = await requirePermission("view_succession");
+  const scope = await getHrScope(actor);
+  const employeeWhere = hrEmployeeScopeWhere(scope);
   const positions = await prisma.position.findMany({
-    where: { isCritical: true },
+    where: {
+      isCritical: true,
+      // Scope departemen: jabatan di luar departemen tidak tampil sama
+      // sekali. Team/self: populasi incumbent/kandidat tersaring di
+      // bawah yang menentukan isi (preseden gap-queue).
+      ...(scope.kind === "department"
+        ? { departmentId: scope.departmentId ?? -1 }
+        : {}),
+    },
     orderBy: { name: "asc" },
     include: {
       department: { select: { name: true } },
       employees: {
-        where: { deletedAt: null, isActive: true },
+        where: { deletedAt: null, isActive: true, ...employeeWhere },
         select: { id: true, name: true },
       },
       successionCandidates: {
+        where: { candidate: employeeWhere },
         orderBy: [{ rank: "asc" }, { createdAt: "asc" }],
         include: { candidate: { select: { id: true, name: true } } },
       },

@@ -6,11 +6,12 @@ const candidateFindUnique = vi.fn()
 const candidateDelete = vi.fn()
 const employeeFindFirst = vi.fn()
 const employeeFindUnique = vi.fn()
+const positionFindMany = vi.fn()
 const getHrScope = vi.fn()
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    position: { update: (...a: unknown[]) => positionUpdate(...a) },
+    position: { update: (...a: unknown[]) => positionUpdate(...a), findMany: (...a: unknown[]) => positionFindMany(...a) },
     successionCandidate: {
       upsert: (...a: unknown[]) => candidateUpsert(...a),
       findUnique: (...a: unknown[]) => candidateFindUnique(...a),
@@ -37,6 +38,7 @@ vi.mock("next/cache", () => ({ revalidatePath: () => {} }))
 
 import { computeSuccessionCoverage } from "@/lib/hr/hcms-scoring"
 import {
+  getSuccessionOverview,
   removeSuccessorCandidate,
   setPositionCritical,
   upsertSuccessorCandidate,
@@ -110,6 +112,24 @@ describe("successor candidates", () => {
     const res = await upsertSuccessorCandidate(fd)
     expect(res.success).toBe(false)
     expect(candidateUpsert).not.toHaveBeenCalled()
+  })
+
+  it("overview: scope department menyaring jabatan + kandidat per scope", async () => {
+    getHrScope.mockResolvedValue({ kind: "department", departmentId: 3, employeeId: 30 })
+    positionFindMany.mockResolvedValue([])
+    await getSuccessionOverview()
+    const arg = positionFindMany.mock.calls[0][0]
+    expect(arg.where).toMatchObject({ isCritical: true, departmentId: 3 })
+    expect(arg.include.employees.where).toMatchObject({ departmentId: 3 })
+    expect(arg.include.successionCandidates.where).toEqual({ candidate: { departmentId: 3 } })
+  })
+
+  it("overview: scope all tanpa saringan (perilaku lama)", async () => {
+    positionFindMany.mockResolvedValue([])
+    await getSuccessionOverview()
+    const arg = positionFindMany.mock.calls[0][0]
+    expect(arg.where).toEqual({ isCritical: true })
+    expect(arg.include.successionCandidates.where).toEqual({ candidate: {} })
   })
 
   it("remove: scope department menolak kandidat luar departemen, delete tidak dipanggil", async () => {
