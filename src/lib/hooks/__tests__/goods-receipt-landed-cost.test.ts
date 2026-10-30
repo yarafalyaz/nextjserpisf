@@ -181,6 +181,26 @@ describe("onGoodsReceiptVerified landed cost → FIFO layer + journal", () => {
     expect(lastJournalLines()).toEqual([{ qty: 10, cost: 900 }])
   })
 
+  it("STOK-09: duplicate PO lines aggregate Σtotal/Σqty for landed-cost weighting", async () => {
+    // PO repeats item 7 on two rows: 5×1000 + 5×2000. Correct aggregate net unit price = 15000/10 = 1500.
+    // A Map keyed by itemId would keep only the last row (2000), so a 5-unit GR would be treated as
+    // 10,000 of the PO value rather than 7,500 and absorb too much cost pool.
+    wireTx({
+      grItems: [{ itemId: 7, qty: 5, unitCost: 1000 }],
+      poItems: [
+        { itemId: 7, qty: 5, total: 5000 },
+        { itemId: 7, qty: 5, total: 10000 },
+      ],
+      poHeader: { shippingCost: 1500 },
+    })
+
+    await onGoodsReceiptVerified(100, 1)
+
+    // This GR represents 7,500 of 15,000 PO value, so absorbs 750/1500 pool = 150/unit.
+    expect(lastLayerArg().unitCost).toBe(1150)
+    expect(lastJournalLines()).toEqual([{ qty: 5, cost: 1150 }])
+  })
+
   it("absorbs no freight when the PO carries none", async () => {
     wireTx({
       grItems: [{ itemId: 7, qty: 5, unitCost: 2000 }],

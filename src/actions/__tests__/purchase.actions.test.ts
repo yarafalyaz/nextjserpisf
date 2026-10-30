@@ -553,6 +553,29 @@ describe("Goods Receipt Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("STOK-18: duplicate PO lines aggregate into GR qtyOrdered snapshot", async () => {
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1,
+      status: "ordered",
+      items: [
+        { itemId: 1, qty: 5 },
+        { itemId: 1, qty: 5 },
+      ],
+    })
+    mocks.prismaMock.goodsReceipt.create.mockResolvedValueOnce({ id: 99, purchaseOrderId: 1 })
+
+    const res = await actions.createGoodsReceipt(fdMap({
+      purchaseOrderId: "1",
+      warehouseId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 5, unitCost: 1000 }])
+    }))
+
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.goodsReceipt.create.mock.calls.at(-1)![0]
+    expect(arg.data.items.create[0]).toEqual(expect.objectContaining({ itemId: 1, qtyOrdered: 10 }))
+  })
+
   it("updateGoodsReceipt succeeds", async () => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "ordered", items: [{ itemId: 1, qty: 10 }] })
     const res = await actions.updateGoodsReceipt(1, fdMap({
