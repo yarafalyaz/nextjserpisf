@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   isValidCron: vi.fn(),
   assetFindMany: vi.fn(),
   journalFindMany: vi.fn(),
+  journalFindFirst: vi.fn(),
+  txQueryRaw: vi.fn(),
   assetUpdate: vi.fn(),
   assetHistoryCreate: vi.fn(),
   journalCreate: vi.fn(),
@@ -138,12 +140,16 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
     mocks.docSeqNextBatch.mockImplementation(async (_key: string, count: number) =>
       Array.from({ length: count }, (_, i) => i + 1),
     )
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.journalCreate.mockResolvedValue({})
+    mocks.txQueryRaw.mockResolvedValue([{ id: 1 }])
     // Callback tx: jalankan dengan klien palsu yang merekam pemanggilnya.
     mocks.transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
+        $queryRaw: mocks.txQueryRaw,
         asset: { update: mocks.assetUpdate },
         assetHistory: { create: mocks.assetHistoryCreate },
-        journal: { create: mocks.journalCreate },
+        journal: { create: mocks.journalCreate, findFirst: mocks.journalFindFirst },
       }),
     )
   })
@@ -237,6 +243,9 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
     const json = await res.json()
     expect(json.processed).toBe(0)
     expect(json.rejectedMethods).toBe(1)
+    // Isi penolakan analitis (termasuk "totalEstimatedUnits") hanya untuk
+    // rejectedMethods pra-tx; r.reason mentah tak lagi disalin ke respons
+    // untuk kegagalan DI DALAM tx (lihat kasus periode tertutup di bawah).
     expect(json.errorDetails[0]).toContain("totalEstimatedUnits")
     expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
@@ -293,10 +302,87 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
     const json = await res.json()
     expect(json.processed).toBe(0)
     expect(json.errors).toBe(1)
-    expect(json.errorDetails[0]).toContain("Periode sudah ditutup")
+    // Konsistensi error: pesan internal mentah ("Periode sudah ditutup")
+    // TIDAK lagi dikirim ke respons; hanya label generik per aset. Detail
+    // asli hanya console.error (di-mock senyap di file ini).
+    expect(json.errorDetails[0]).toBe("Asset 1 (Machine): gagal diproses")
+    expect(json.errorDetails[0]).not.toContain("Periode sudah ditutup")
     expect(mocks.journalCreate).not.toHaveBeenCalled()
     expect(mocks.assetHistoryCreate).not.toHaveBeenCalled()
     expect(mocks.assetUpdate).not.toHaveBeenCalled()
+  })
+
+  it("kunci baris aset FOR UPDATE di dalam tx sebelum cek ulang jurnal masa ini", async () => {
+    mocks.assetFindMany.mockResolvedValue([assetRow()])
+    mocks.journalFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(acquisitionJournals())
+
+    const res = await GET(makeReq())
+    const json = await res.json()
+    expect(json.processed).toBe(1)
+    expect(mocks.txQueryRaw).toHaveBeenCalledTimes(1)
+    const strings = mocks.txQueryRaw.mock.calls[0][0] as unknown as string[]
+    expect(strings.join(" ")).toContain("FROM assets")
+    expect(strings.join(" ")).toContain("FOR UPDATE")
+    expect(mocks.txQueryRaw.mock.calls[0][1]).toBe(1)
+    // Cek ulang memakai klien tx (bukan baca pra-tx) + filter POSTED.
+    expect(mocks.journalFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ referenceId: 1, status: "POSTED", deletedAt: null }),
+      }),
+    )
+  })
+
+  it("jurnal masa ini sudah POSTED saat tx berjalan -> skipped, bukan processed/errors", async () => {
+    mocks.assetFindMany.mockResolvedValue([assetRow()])
+    // Pra-cek belum melihat jurnal (run lain menang di antara baca & tx),
+    // cek ulang di dalam tx (sesudah FOR UPDATE) melihatnya.
+    mocks.journalFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(acquisitionJournals())
+    mocks.journalFindFirst.mockResolvedValue({ id: 42 })
+
+    const res = await GET(makeReq())
+    const json = await res.json()
+    expect(json.skipped).toBe(1)
+    expect(json.processed).toBe(0)
+    expect(json.errors).toBe(0)
+    expect(json.errorDetails).toEqual([])
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.assetUpdate).not.toHaveBeenCalled()
+    expect(mocks.assetHistoryCreate).not.toHaveBeenCalled()
+  })
+
+  it("P2002 dari journal.create diperlakukan skip idempoten, bukan error", async () => {
+    mocks.assetFindMany.mockResolvedValue([assetRow()])
+    mocks.journalFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(acquisitionJournals())
+    const p2002 = Object.assign(new Error("Unique constraint failed"), { code: "P2002" })
+    mocks.journalCreate.mockRejectedValue(p2002)
+
+    const res = await GET(makeReq())
+    const json = await res.json()
+    expect(json.skipped).toBe(1)
+    expect(json.processed).toBe(0)
+    expect(json.errors).toBe(0)
+    expect(JSON.stringify(json.errorDetails)).not.toContain("Unique constraint")
+  })
+
+  it("errorDetails respons tidak memuat pesan internal mentah dari kegagalan tx", async () => {
+    mocks.assetFindMany.mockResolvedValue([assetRow()])
+    mocks.journalFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(acquisitionJournals())
+    mocks.journalCreate.mockRejectedValue(new Error("P2021 tabel journals_internal_secret hilang"))
+
+    const res = await GET(makeReq())
+    const json = await res.json()
+    expect(json.errors).toBe(1)
+    expect(json.processed).toBe(0)
+    expect(json.errorDetails).toEqual(["Asset 1 (Machine): gagal diproses"])
+    expect(JSON.stringify(json)).not.toContain("journals_internal_secret")
   })
 
   it("missingAccounts berisik bila akun beban/akumulasi tak terpetakan di mana pun", async () => {

@@ -285,6 +285,21 @@ export async function GET(request: Request) {
       toProcess.map(({ asset, monthlyDepreciation, newBookValue, expenseAccountId, accumulatedAccountId }, i) => {
         const journalNumber = `JRN-${year}${String(month).padStart(2, "0")}-${String(journalSeqs[i]).padStart(5, "0")}`
         return prisma.$transaction(async (tx) => {
+          // Serialisasi per aset SEBELUM menulis: dua run konkuren untuk
+          // aset sama antre di baris ini, lalu cek ulang jurnal masa ini di
+          // bawah melihat jurnal pemenang. Tanpa kunci, yang kalah menabrak
+          // unique journals_active_reference_unique (P2002) dan terhitung
+          // error berisik padahal hasil akhirnya idempoten. Guard typeof:
+          // tx stub tanpa $queryRaw tidak pecah (pola hooks repo).
+          if (typeof tx.$queryRaw === "function") {
+            await tx.$queryRaw`SELECT id FROM assets WHERE id = ${asset.id} FOR UPDATE`
+          }
+          const alreadyPosted = await tx.journal.findFirst({
+            where: { referenceType, referenceId: asset.id, status: "POSTED", deletedAt: null },
+            select: { id: true },
+          })
+          if (alreadyPosted) return "skipped-posted" as const
+
           // Penjaga periode otoritatif di DALAM tx (Putusan 4): penolakan
           // periode tertutup menggagalkan tx aset ini dan tercatat sebagai
           // error, bukan skip senyap; currentValue/history tidak berubah.
@@ -331,19 +346,31 @@ export async function GET(request: Request) {
               },
             },
           })
+          return "ok" as const
         })
       }),
     )
 
     results.forEach((r, i) => {
+      const { asset } = toProcess[i]
       if (r.status === "fulfilled") {
-        processed++
-      } else {
-        errors++
-        const message = r.reason instanceof Error ? r.reason.message : "Terjadi kesalahan"
-        const { asset } = toProcess[i]
-        errorDetails.push(`Asset ${asset.id} (${asset.name}): ${message}`)
+        // Tabrakan idempoten yang dideteksi di dalam tx: bukan error.
+        if (r.value === "skipped-posted") skipped++
+        else processed++
+        return
       }
+      // Pertahanan lapis dua: P2002 dari journal.create = run lain sudah
+      // memposting masa ini untuk aset yang sama; perlakukan skip idempoten.
+      const code = (r.reason as { code?: unknown } | null)?.code
+      if (code === "P2002") {
+        skipped++
+        return
+      }
+      errors++
+      // Detail asli (pesan Prisma/internal) hanya ke log server; respons
+      // hanya label generik per aset.
+      console.error(`[cron/asset-depreciation] Asset ${asset.id} (${asset.name}) gagal diproses:`, r.reason)
+      errorDetails.push(`Asset ${asset.id} (${asset.name}): gagal diproses`)
     })
 
     return NextResponse.json({
