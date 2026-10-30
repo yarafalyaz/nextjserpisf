@@ -1105,6 +1105,22 @@ describe("RAB proyek F-2026-10-21-030", () => {
     expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
   })
 
+  it("writer RAB mengambil lock baris proyek sebelum membaca status kunci", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(unlockedProject())
+    mocks.prismaMock.projectStage.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.projectItem.create.mockResolvedValue({ id: 77 })
+    const res = await actions.createProjectBudgetItem(
+      10,
+      fdMap({ description: "Plat", qty: 1, cost: 5000, sortOrder: 0 }),
+    )
+    expect(res?.success).toBe(true)
+    const lockOrder = mocks.prismaMock.$queryRaw.mock.invocationCallOrder[0]
+    const readOrder = mocks.prismaMock.project.findUnique.mock.invocationCallOrder[0]
+    const writeOrder = mocks.prismaMock.projectItem.create.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(readOrder)
+    expect(readOrder).toBeLessThan(writeOrder)
+  })
+
   it("BR-03: anggaran terkunci -> edit baris langsung ditolak server, tidak menulis", async () => {
     mocks.prismaMock.projectItem.findUnique.mockResolvedValue({ id: 5, projectId: 10 })
     mocks.prismaMock.project.findUnique.mockResolvedValue(

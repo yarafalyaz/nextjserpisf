@@ -1071,7 +1071,7 @@ async function recalcPettyCashChain(
   tx: PettyCashTx,
   opts?: { guardNegative?: boolean; excludeVoid?: boolean },
 ): Promise<void> {
-  const where = opts?.excludeVoid ? { deletedAt: null } : {}
+  const where = opts?.excludeVoid ? { status: "posted", deletedAt: null } : {}
   const all = await tx.pettyCash.findMany({
     where,
     orderBy: [{ date: "asc" }, { id: "asc" }],
@@ -1254,7 +1254,9 @@ export async function createPettyCash(formData: FormData) {
         },
       });
       // Keep the running-balance chain correct regardless of insertion order.
-      await recalcPettyCashChain(tx, { guardNegative: true });
+      // excludeVoid: record void/deleted dibekukan sebagai snapshot historis
+      // (GL-BR-003) — recalc tanpa filter menulis ulang saldo beku mereka.
+      await recalcPettyCashChain(tx, { guardNegative: true, excludeVoid: true });
       // Post the GL journal INSIDE the same tx so a posting failure (closed
       // period, unconfigured account) rolls back the subledger row instead of
       // leaving a committed petty-cash row with no journal (subledger/GL drift).
@@ -1911,9 +1913,18 @@ export async function deleteJournal(id: number) {
       throw new Error("Tidak bisa menghapus journal yang sudah POSTED");
     }
 
-    // Laravel parity: cascade delete entries then journal
+    // Laravel parity: cascade delete entries then journal.
+    // F-01 selaras postJournal: pratinjau di atas hanya fast-fail. Status
+    // diputus ulang di dalam tx SESUDAH baris jurnal dikunci FOR UPDATE —
+    // tanpa ini postJournal yang commit di antara pratinjau dan hapus
+    // membuat jurnal POSTED ikut terhapus permanen.
     let removedFiles: { fileUrl: string; referenceType: string }[] = [];
     await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM journals WHERE id = ${id} FOR UPDATE`;
+      const locked = await tx.journal.findUniqueOrThrow({ where: { id } });
+      if (locked.status === "POSTED") {
+        throw new Error("Tidak bisa menghapus journal yang sudah POSTED");
+      }
       await tx.journalEntry.deleteMany({ where: { journalId: id } });
       removedFiles = await deleteTransactionAttachmentsTx(tx, {
         referenceType: "Journal", referenceId: id,
@@ -2493,7 +2504,8 @@ export async function updatePettyCash(id: number, formData: FormData) {
       });
 
       // Recompute running balances for the whole chain (this + subsequent records).
-      await recalcPettyCashChain(tx, { guardNegative: true });
+      // excludeVoid sama seperti create: void/deleted beku, tak ditulis ulang.
+      await recalcPettyCashChain(tx, { guardNegative: true, excludeVoid: true });
 
       // Rebuild the journal INSIDE the same tx. Critical: the delete above is
       // already in-tx, so re-posting here keeps delete+recreate atomic — a

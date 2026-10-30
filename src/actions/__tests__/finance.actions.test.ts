@@ -651,6 +651,15 @@ describe("Journal Actions", () => {
     const res = await (actions as any).deleteJournal(1)
     expect(res?.success).toBe(true)
   })
+  it("deleteJournal menolak bila status berubah jadi POSTED sesudah pratinjau (race)", async () => {
+    mocks.prismaMock.journal.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "DRAFT" })
+      .mockResolvedValueOnce({ id: 1, status: "POSTED" })
+    const res = await (actions as any).deleteJournal(1)
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.journalEntry.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.journal.delete).not.toHaveBeenCalled()
+  })
 })
 
 describe("Expense Actions", () => {
@@ -816,6 +825,23 @@ describe("Petty Cash Actions", () => {
     expect(lockOrder).toBeLessThan(readOrder)
     expect(readOrder).toBeLessThan(createOrder)
   })
+  it("recalcPettyCashChain create tidak menulis ulang record void/terhapus", async () => {
+    mocks.prismaMock.pettyCash.findFirst.mockResolvedValue({ id: 1, balanceAfter: 100000 })
+    mocks.prismaMock.pettyCash.findMany.mockResolvedValue([
+      { id: 1, documentNo: "PC-01", type: "IN", amount: 100000, balanceBefore: 0, balanceAfter: 100000 },
+      { id: 2, documentNo: "PC-02", type: "OUT", amount: 30000, balanceBefore: 100000, balanceAfter: 70000 },
+    ])
+    const res = await (actions as any).createPettyCash(fdMap({
+      type: "OUT",
+      amount: 80000,
+      date: "2026-06-13",
+    }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.pettyCash.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { status: "posted", deletedAt: null } }),
+    )
+  })
+
   it("createPettyCash persists Nama Project + Vendor + Kategori", async () => {
     // The create runs inside a tx; the model mock's create is the same fn.
     const res = await (actions as any).createPettyCash(fdMap({

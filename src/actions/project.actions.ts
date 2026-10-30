@@ -810,6 +810,14 @@ async function assertBudgetStageBelongsToProject(
 }
 
 async function loadBudgetProject(tx: TxClient, projectId: number) {
+  // Semua writer RAB/kontrak harus menserialkan terhadap lockProjectBudget:
+  // tanpa baris FOR UPDATE yang sama, writer membaca budgetLockedAt=null dari
+  // snapshot lalu commit SESUDAH lock anggaran commit — item masuk ke RAB
+  // yang sudah final tanpa revisi. Lock dulu, baru baca status.
+  const rows = await tx.$queryRaw<Array<{ id: number }>>`
+    SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE
+  `
+  if (rows.length === 0) throw new Error("Proyek tidak ditemukan")
   const project = await tx.project.findUnique({
     where: { id: projectId },
     select: {
