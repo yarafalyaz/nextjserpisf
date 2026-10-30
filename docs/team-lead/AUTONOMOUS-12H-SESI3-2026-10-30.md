@@ -58,8 +58,9 @@ ci:quick penuh; update checkpoint akhir; commit docs lokal.
 - S3-A selesai: lot opname `b30f2e90`, succession overview `5bb43f4d`,
   STOK-16 `73a03510d`. STOK-14 divonis panel agen **BUTUH-SPEC-BISNIS**
   — bukan bug terhadap pola akuntansi repo, tidak difix paksa; menunggu
-  spec dari user. Buku-bank perf tetap tertunda (harness source-assertion
-  dulu sebelum refactor).
+  spec dari user. Buku-bank perf **SELESAI** `44f5aaca` (saldo awal scoped
+  satu akun + paralel + select sempit; harness source-assertion +
+  equivalence DB baseline manual SQL, 3/3 di scratch).
 - S3-C Round 6 — IMPORT-EXPORT selesai: R6IE-01 `eb7b2ecfb`,
   R6IE-02 `f97d0a480`, R6IE-03 `0e6a348e8`, R6IE-05 `6055bb37`,
   R6IE-06 `da1ba4f24`, R6IE-07 `39593fd2` (snapshot pembeli/baris
