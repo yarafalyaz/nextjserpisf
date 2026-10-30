@@ -27,6 +27,7 @@ import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-dif
 import { computeProgressInvoiceCandidate, computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
 import { commissionSnapshotForPaid } from "@/lib/services/commission-snapshot"
+import { loadReturnCreditByInvoiceIdWithClient } from "@/lib/reports/return-credit"
 import { stampQuotationFitmentSnapshot } from "@/lib/services/vehicle-fitment.service"
 import { buildInvoiceThresholdInfo } from "@/lib/sales/invoice-threshold"
 import { assertInvoiceAllowedForWorkOrderBridges } from "@/lib/services/warranty-journal.service"
@@ -2040,7 +2041,15 @@ export async function createSalesPayment(formData: FormData) {
     if (!["posted", "partial"].includes(invoice.status)) {
       throw new Error("Pembayaran hanya bisa dibuat untuk invoice posted/partial")
     }
-    const remaining = safeSubtract(invoice.grandTotal, invoice.paidAmount, 2)
+    // BR-RET-02/STOK-02: sisa kewajiban dikurangi kredit retur completed.
+    // Tanpa ini faktur yang sudah dilunasi retur masih menerima pembayaran
+    // sampai grandTotal penuh (kas + kredit retur > kewajiban).
+    const returnCreditMap = await loadReturnCreditByInvoiceIdWithClient(tx, [salesInvoiceId])
+    const remaining = safeSubtract(
+      safeSubtract(invoice.grandTotal, invoice.paidAmount, 2),
+      returnCreditMap.get(salesInvoiceId) ?? 0,
+      2,
+    )
     // F-2026-10-28-155-S P4: presisi sen — varian `, 0` lama membulatkan sisa
     // ke rupiah penuh sebelum guard toleransi Rp1 dinilai.
     // Faktur lunas bila kas diterima + PPh dipotong pelanggan menutup sisanya.
@@ -3254,10 +3263,14 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
       // Get current paidAmount to determine payment status
       const current = await tx.salesInvoice.findUniqueOrThrow({ where: { id }, select: { paidAmount: true } })
       const paidAmount = Number(current.paidAmount ?? 0)
+      // BR-RET-02/STOK-02: kredit retur ikut melunasi — edit item tidak
+      // boleh menurunkan faktur lunas-oleh-retur menjadi partial.
+      const returnCreditMap = await loadReturnCreditByInvoiceIdWithClient(tx, [id])
+      const settledBasis = safeAdd(paidAmount, returnCreditMap.get(id) ?? 0, 2)
 
       // FIN-BR-006: lunas dari outstanding valid dalam toleransi Rp1.
       let paymentStatus: string = "unpaid"
-      if (isSettled(grandTotal, paidAmount)) {
+      if (isSettled(grandTotal, settledBasis)) {
         paymentStatus = "paid"
       } else if (paidAmount > 0) {
         paymentStatus = "partial"

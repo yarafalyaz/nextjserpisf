@@ -897,6 +897,17 @@ describe("Sales Payment Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("melebihi sisa tagihan")
   })
+  it("STOK-02: createSalesPayment menolak bayar di atas sisa sesudah kredit retur", async () => {
+    // Faktur 1000, kas 600, kredit retur completed 400 -> sisa 0.
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", grandTotal: 1000, paidAmount: 600, customerId: 3 })
+    mocks.prismaMock.salesReturn.findMany.mockResolvedValueOnce([{ id: 5, salesInvoiceId: 1 }])
+    mocks.prismaMock.systemSetting.findFirst.mockResolvedValueOnce({ salesReceivableAccountId: 11 })
+    mocks.prismaMock.journal.findMany.mockResolvedValueOnce([{ referenceId: 5, entries: [{ credit: 400 }] }])
+    const res = await actions.createSalesPayment(fdMap({ salesInvoiceId: 1, amount: 100, paymentDate: "2026-06-12", paymentMethod: "cash" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("melebihi sisa tagihan")
+    expect(mocks.prismaMock.salesPayment.create).not.toHaveBeenCalled()
+  })
   it("createSalesPayment updates attachments", async () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", grandTotal: 100, paidAmount: 0 })
     const res = await actions.createSalesPayment(fdMap({ salesInvoiceId: 1, amount: 100, paymentDate: "2026-06-12", paymentMethod: "cash", attachmentIds: "[1,2]" }))

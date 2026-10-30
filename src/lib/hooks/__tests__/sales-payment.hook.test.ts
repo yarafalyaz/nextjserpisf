@@ -58,6 +58,9 @@ function makeTx() {
     // accrueTx komisi: invoice fixture tanpa snapshot/penjual -> no-op jujur.
     commissionPayable: { findFirst: async () => null, create: async () => ({}), update: async () => ({}) },
     systemSetting: { findFirst: async () => null },
+    // STOK-02: tanpa retur completed -> returnCredit 0 (perilaku lama).
+    salesReturn: { findMany: async () => [] },
+    journal: { findMany: async () => [] },
   }
 }
 
@@ -287,5 +290,47 @@ describe("sales-payment recalc — un-accrue komisi", () => {
     )
     expect(errSpy).toHaveBeenCalled()
     errSpy.mockRestore()
+  })
+})
+
+describe("sales-payment recalc — returnCredit (STOK-02)", () => {
+  function setupReturnCredit() {
+    const tx = makeTx() as any
+    tx.salesReturn = { findMany: vi.fn().mockResolvedValue([{ id: 5, salesInvoiceId: 60 }]) }
+    tx.journal = {
+      findMany: vi.fn().mockResolvedValue([
+        { referenceId: 5, entries: [{ credit: 400_000 }] },
+      ]),
+    }
+    tx.systemSetting = { findFirst: vi.fn().mockResolvedValue({ salesReceivableAccountId: 11 }) }
+    return tx
+  }
+
+  it("faktur lunas oleh kas 600rb + kredit retur 400rb tetap paid walau recalc berjalan", async () => {
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({
+      id: 60, grandTotal: 1_000_000, status: "partial",
+    })
+    mocks.paymentFindMany.mockResolvedValue([{ amount: 600_000, withholdingAmount: 0 }])
+    const tx = setupReturnCredit()
+    await onSalesPaymentUpdated(60, tx as never)
+    expect(mocks.invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ paidAmount: 600_000, status: "paid", paymentStatus: "paid" }),
+      }),
+    )
+  })
+
+  it("kredit retur saja (tanpa kas) menandai partial-bayar, bukan posted", async () => {
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({
+      id: 60, grandTotal: 1_000_000, status: "posted",
+    })
+    mocks.paymentFindMany.mockResolvedValue([])
+    const tx = setupReturnCredit()
+    await onSalesPaymentUpdated(60, tx as never)
+    expect(mocks.invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ paidAmount: 0, status: "partial" }),
+      }),
+    )
   })
 })

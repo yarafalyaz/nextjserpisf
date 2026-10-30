@@ -5,6 +5,7 @@ import { SalesInvoiceStatus, Prisma } from "@prisma/client";
 import { commissionSnapshotForPaid } from "@/lib/services/commission-snapshot";
 import { accrueTx as accrueCommissionPayableTx, cancelAccrualTx } from "@/lib/services/commission-payable.service";
 import { derivePaymentStatus } from "@/lib/finance/settlement-status";
+import { loadReturnCreditByInvoiceIdWithClient } from "@/lib/reports/return-credit";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -58,7 +59,14 @@ async function recalcCore(db: Db, invoiceId: number): Promise<void> {
   // ditambah kelak, filter hanya baris terposting di query ini.
   // FIN-BR-006: lunas diturunkan dari outstanding valid dalam toleransi
   // SETTLEMENT_TOLERANCE_IDR (Rp1), bukan flag manual.
-  const derived = derivePaymentStatus(grandTotal, totalPaid);
+  // BR-RET-02: kredit retur completed ikut melunasi kewajiban. Tanpa ini
+  // recalc sesudah reversal/update pembayaran menimpa status faktur yang
+  // sudah lunas oleh retur menjadi partial/posted, membuka pembayaran baru
+  // melebihi kewajiban (kas + kredit retur > grandTotal). paidAmount tetap
+  // murni kas+PPh (definisi pembayaran), hanya STATUS yang memasukkan kredit.
+  const returnCreditByInvoice = await loadReturnCreditByInvoiceIdWithClient(db, [invoiceId]);
+  const returnCredit = returnCreditByInvoice.get(invoiceId) ?? 0;
+  const derived = derivePaymentStatus(grandTotal, totalPaid + returnCredit);
   const status: SalesInvoiceStatus = derived;
   const paymentStatus: string = derived;
 
