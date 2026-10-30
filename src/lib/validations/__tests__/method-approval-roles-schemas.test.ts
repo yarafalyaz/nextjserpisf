@@ -83,8 +83,10 @@ describe("validations/approval.schemas", () => {
   it("workflowStepSchema accepts userId step (per-user approver)", () => {
     expect(workflowStepSchema.safeParse({ name: "Boss", userId: 7 }).success).toBe(true);
   });
-  it("workflowStepSchema accepts null roleId/userId", () => {
-    expect(workflowStepSchema.safeParse({ roleId: null, userId: null }).success).toBe(true);
+  it("R6WN-07: workflowStepSchema rejects step without roleId and userId", () => {
+    expect(workflowStepSchema.safeParse({ roleId: null, userId: null }).success).toBe(false);
+    expect(workflowStepSchema.safeParse({ name: "Tanpa Approver" }).success).toBe(false);
+    expect(workflowStepSchema.safeParse({ approverType: "manager" }).success).toBe(false);
   });
   it("workflowStepSchema rejects non-positive roleId", () => {
     expect(workflowStepSchema.safeParse({ roleId: 0 }).success).toBe(false);
@@ -97,16 +99,16 @@ describe("validations/approval.schemas", () => {
     expect(workflowStepSchema.safeParse({ roleId: "abc" }).success).toBe(false);
   });
   it("workflowStepSchema rejects name over 255 chars", () => {
-    expect(workflowStepSchema.safeParse({ name: "a".repeat(256) }).success).toBe(false);
+    expect(workflowStepSchema.safeParse({ name: "a".repeat(256), roleId: 1 }).success).toBe(false);
   });
   it("workflowStepSchema rejects approverType over 100 chars", () => {
-    expect(workflowStepSchema.safeParse({ approverType: "x".repeat(101) }).success).toBe(false);
+    expect(workflowStepSchema.safeParse({ approverType: "x".repeat(101), roleId: 1 }).success).toBe(false);
   });
   it("workflowStepsSchema rejects non-array input", () => {
     expect(workflowStepsSchema.safeParse({ name: "x" }).success).toBe(false);
   });
   it("workflowStepsSchema rejects more than 50 steps", () => {
-    const many = Array.from({ length: 51 }, () => ({ name: "S" }));
+    const many = Array.from({ length: 51 }, (_, i) => ({ name: `S${i}`, roleId: i + 1 }));
     expect(workflowStepsSchema.safeParse(many).success).toBe(false);
   });
   it("workflowStepsSchema accepts up to 50 valid steps", () => {

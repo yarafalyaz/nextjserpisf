@@ -39,20 +39,24 @@ export const updateWorkflowSchema = z.object({
 //   - roleId / userId: positive integer (1..2_147_483_647) or null
 //   - name: optional, 1..255 chars
 //   - approverType: optional, 1..100 chars
-// Each step must satisfy at least one of roleId / userId / approverType / name —
-// otherwise the entire filter drops it, but we still want a real validation
-// signal when EVERY step is empty (a workflow with zero effective approvers
-// would bypass any approval flow silently).
+// R6WN-07: setiap langkah WAJIB menunjuk approver (roleId atau userId).
+// Langkah name-only/approverType-only lolos filter hitungan lama tetapi
+// assertStepApprover selesai tanpa cek — siapa pun ber-permission bisa
+// menyetujui. approverType hanya metadata tampilan, bukan penunjuk approver.
 const optionalStepId = z
   .union([z.coerce.number().int().positive(), z.null()])
   .optional()
 
-export const workflowStepSchema = z.object({
-  name: z.string().max(255).optional(),
-  roleId: optionalStepId,
-  userId: optionalStepId,
-  approverType: z.string().max(100).optional(),
-})
+export const workflowStepSchema = z
+  .object({
+    name: z.string().max(255).optional(),
+    roleId: optionalStepId,
+    userId: optionalStepId,
+    approverType: z.string().max(100).optional(),
+  })
+  .refine((s) => s.roleId != null || s.userId != null, {
+    message: "Setiap langkah wajib memilih peran atau pengguna approver",
+  })
 
 export const workflowStepsSchema = z
   .array(workflowStepSchema)

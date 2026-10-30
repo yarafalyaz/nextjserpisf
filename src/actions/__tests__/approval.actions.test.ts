@@ -202,7 +202,7 @@ describe("Approval Progression Actions", () => {
 
 describe("Approval Workflow CRUD", () => {
   it("createApprovalWorkflow succeeds", async () => {
-    const res = await actions.createApprovalWorkflow(wfFd([{ name: "Step1" }]));
+    const res = await actions.createApprovalWorkflow(wfFd([{ name: "Step1", roleId: 1 }]));
     expect(res?.success).toBe(true);
   });
   it("createApprovalWorkflow fails validation", async () => {
@@ -210,15 +210,32 @@ describe("Approval Workflow CRUD", () => {
     expect(res?.success).toBe(false);
   });
   it("does not create an active workflow without effective approval steps", async () => {
-    const res = await actions.createApprovalWorkflow(wfFd([{}], { name: "WF tanpa langkah" }));
+    const res = await actions.createApprovalWorkflow(wfFd([], { name: "WF tanpa langkah" }));
     expect(res?.success).toBe(false);
-    expect(res?.error).toContain("minimal harus memiliki satu langkah");
+    expect(res?.error).toContain("satu langkah persetujuan");
     expect(mocks.prismaMock.approvalWorkflow.create).not.toHaveBeenCalled();
+    expect(mocks.logActivityMock).not.toHaveBeenCalledWith(
+      "create",
+      "ApprovalWorkflow",
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+  it("R6WN-07: menolak workflow dengan langkah name-only tanpa approver", async () => {
+    const res = await expectValidationFail(
+      actions.createApprovalWorkflow(wfFd([{ name: "Hanya Nama" }], { name: "WF name-only" })),
+    );
+    expect(res?.error).toContain("wajib memilih peran atau pengguna approver");
+    expect(mocks.prismaMock.approvalWorkflow.create).not.toHaveBeenCalled();
+    await expectValidationFail(
+      actions.updateApprovalWorkflow(1, wfFd([{ name: "Hanya Nama" }], { name: "WF name-only" })),
+    );
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled();
   });
   it("createApprovalWorkflow handles error", async () => {
     silenceConsole();
     mocks.prismaMock.approvalWorkflow.create.mockRejectedValue(new Error("db err"));
-    const res = await actions.createApprovalWorkflow(wfFd([{ name: "Step1" }]));
+    const res = await actions.createApprovalWorkflow(wfFd([{ name: "Step1", roleId: 1 }]));
     expect(res?.success).toBe(false);
     expect(res?.error).toBe("db err");
   });
@@ -256,7 +273,7 @@ describe("Approval Workflow CRUD", () => {
   });
 
   it("updateApprovalWorkflow succeeds", async () => {
-    const res = await actions.updateApprovalWorkflow(1, wfFd([{ name: "Step1" }]));
+    const res = await actions.updateApprovalWorkflow(1, wfFd([{ name: "Step1", roleId: 1 }]));
     expect(res?.success).toBe(true);
   });
   it("updateApprovalWorkflow fails validation", async () => {
@@ -266,7 +283,7 @@ describe("Approval Workflow CRUD", () => {
   it("updateApprovalWorkflow handles error", async () => {
     silenceConsole();
     mocks.prismaMock.$transaction.mockRejectedValueOnce(new Error("db err"));
-    const res = await actions.updateApprovalWorkflow(1, wfFd([{ name: "Step1" }]));
+    const res = await actions.updateApprovalWorkflow(1, wfFd([{ name: "Step1", roleId: 1 }]));
     expect(res?.success).toBe(false);
     expect(res?.error).toBe("db err");
   });
@@ -399,7 +416,7 @@ describe("Approval Workflow CRUD", () => {
     });
     const res = await actions.updateApprovalWorkflow(
       5,
-      wfFd([{ name: "Step1" }], { modelType: "VendorPayment", isActive: "false" }),
+      wfFd([{ name: "Step1", roleId: 1 }], { modelType: "VendorPayment", isActive: "false" }),
     );
     expect(res?.success).toBe(true);
     expect(mocks.logActivityMock).toHaveBeenCalledWith(
@@ -417,7 +434,7 @@ describe("Approval Workflow CRUD", () => {
     });
     const res = await actions.updateApprovalWorkflow(
       6,
-      wfFd([{ name: "Step1" }], { modelType: "Journal" }),
+      wfFd([{ name: "Step1", roleId: 1 }], { modelType: "Journal" }),
     );
     expect(res?.success).toBe(true);
     const moneyLogs = mocks.logActivityMock.mock.calls.filter(
@@ -432,7 +449,7 @@ describe("Approval Workflow CRUD", () => {
     });
     const res = await actions.updateApprovalWorkflow(
       7,
-      wfFd([{ name: "Step1" }], { modelType: "Expense" }),
+      wfFd([{ name: "Step1", roleId: 1 }], { modelType: "Expense" }),
     );
     expect(res?.success).toBe(true);
     expect(mocks.logActivityMock).toHaveBeenCalledWith(
@@ -450,7 +467,7 @@ describe("Approval Workflow CRUD", () => {
     });
     const res = await actions.updateApprovalWorkflow(
       8,
-      wfFd([{ name: "Step1" }], { modelType: "Expense" }),
+      wfFd([{ name: "Step1", roleId: 1 }], { modelType: "Expense" }),
     );
     expect(res?.success).toBe(true);
     const retypeLogs = mocks.logActivityMock.mock.calls.filter(
@@ -616,16 +633,13 @@ describe("approveStep / rejectStep branches", () => {
     );
   });
 
-  it("approveStep succeeds when stepDef not found (assertStepApprover)", async () => {
+  it("R6WN-07: approveStep pada langkah tanpa approver (legacy) ditolak fail-closed untuk non-super_admin", async () => {
     asUser(7, ["user"], ["approve_workflows"]);
     seedApprovalObj();
-    await actions.approveStep(1, fdMap({ notes: "OK" }));
-    expect(mocks.prismaMock.approval.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 1 }, data: expect.objectContaining({ status: "approved" }) }),
-    );
-    expect(mocks.prismaMock.approvalHistory.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ approvalId: 1, action: "approve" }) }),
-    );
+    await expect(
+      actions.approveStep(1, fdMap({ notes: "OK" })),
+    ).rejects.toThrow("Langkah approval tidak memiliki approver yang ditentukan.");
+    expect(mocks.prismaMock.approval.update).not.toHaveBeenCalled();
   });
 
   it("approveStep fails real validation when notes > 2000 chars", async () => {
@@ -741,7 +755,13 @@ describe("HR scope jalur approval generik (round2 temuan 2)", () => {
     mocks.authMock.mockResolvedValue({
       user: { id: "11", roles: ["staff"], permissions: ["approve_workflows", "view_subordinate_data"] },
     });
-    seedApproval({ referenceType: "LeaveRequest", referenceId: 5, requestedBy: 2 });
+    seedApproval({
+      referenceType: "LeaveRequest",
+      referenceId: 5,
+      requestedBy: 2,
+      workflow: { steps: [{ stepOrder: 1, roleId: 1, userId: null }] },
+    });
+    mocks.prismaMock.role.findUnique.mockResolvedValue({ name: "staff" });
     await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow("tidak memiliki akses");
     expect(mocks.prismaMock.leaveRequest.update).not.toHaveBeenCalled();
     expect(mocks.prismaMock.approval.update).not.toHaveBeenCalled();
@@ -751,7 +771,13 @@ describe("HR scope jalur approval generik (round2 temuan 2)", () => {
     mocks.authMock.mockResolvedValue({
       user: { id: "11", roles: ["staff"], permissions: ["approve_workflows", "view_subordinate_data"] },
     });
-    seedApproval({ referenceType: "LeaveRequest", referenceId: 5, requestedBy: 2 });
+    seedApproval({
+      referenceType: "LeaveRequest",
+      referenceId: 5,
+      requestedBy: 2,
+      workflow: { steps: [{ stepOrder: 1, roleId: 1, userId: null }] },
+    });
+    mocks.prismaMock.role.findUnique.mockResolvedValue({ name: "staff" });
     await expect(actions.rejectStep(1, fdMap({ notes: "NO" }))).rejects.toThrow("tidak memiliki akses");
     expect(mocks.prismaMock.leaveRequest.update).not.toHaveBeenCalled();
   });

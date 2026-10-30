@@ -28,6 +28,7 @@ import {
 export interface WorkflowFormStep {
   name?: string | null
   roleId?: number | null
+  userId?: number | null
   approverType?: string | null
 }
 
@@ -49,6 +50,7 @@ interface StepState {
   key: string
   name: string
   roleId: string
+  userId: string
   approverType: string
 }
 
@@ -59,6 +61,7 @@ function newStep(partial?: Partial<StepState>): StepState {
     key: `step-${stepCounter}`,
     name: partial?.name ?? "",
     roleId: partial?.roleId ?? "",
+    userId: partial?.userId ?? "",
     approverType: partial?.approverType ?? "",
   }
 }
@@ -88,6 +91,7 @@ export function WorkflowForm({
           newStep({
             name: s.name ?? "",
             roleId: s.roleId ? String(s.roleId) : "",
+            userId: s.userId ? String(s.userId) : "",
             approverType: s.approverType ?? "",
           })
         )
@@ -148,13 +152,18 @@ export function WorkflowForm({
       return
     }
 
-    const stepsPayload = steps
-      .map((s) => ({
-        name: s.name.trim() || undefined,
-        roleId: s.roleId ? Number(s.roleId) : null,
-        approverType: s.approverType.trim() || null,
-      }))
-      .filter((s) => s.roleId || s.approverType || s.name)
+    // R6WN-07: langkah tanpa approver (peran/pengguna) tidak boleh lahir —
+    // langkah seperti itu tidak bisa ditegakkan ke siapa pun.
+    if (steps.some((s) => !s.roleId && !s.userId)) {
+      showError("Setiap langkah wajib memilih peran approver")
+      return
+    }
+
+    const stepsPayload = steps.map((s) => ({
+      name: s.name.trim() || undefined,
+      roleId: s.roleId ? Number(s.roleId) : null,
+      userId: s.userId ? Number(s.userId) : null,
+    }))
 
     const formData = new FormData()
     formData.set("name", name.trim())
@@ -302,7 +311,7 @@ export function WorkflowForm({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`${step.key}-name`}>Nama Langkah</Label>
                   <Input
@@ -313,7 +322,7 @@ export function WorkflowForm({
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`${step.key}-role`}>Peran</Label>
+                  <Label htmlFor={`${step.key}-role`}>Peran *</Label>
                   <Combobox
                     id={`${step.key}-role`}
                     options={roleOptions}
@@ -321,15 +330,6 @@ export function WorkflowForm({
                     onChange={(v) => updateStep(step.key, { roleId: v ?? "" })}
                     placeholder="Cari peran..."
                     emptyText="Tidak ada peran"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`${step.key}-approver-type`}>Tipe Penyetuju</Label>
-                  <Input
-                    id={`${step.key}-approver-type`}
-                    value={step.approverType}
-                    onChange={(e) => updateStep(step.key, { approverType: e.target.value })}
-                    placeholder="Opsional, mis. manager"
                   />
                 </div>
               </div>

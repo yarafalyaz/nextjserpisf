@@ -185,9 +185,9 @@ function parseWorkflowSteps(
 // approval's current step. requirePermission("approve_workflows") only gates
 // the *capability*; without this, anyone holding it could approve/reject ANY
 // step of ANY approval, defeating role/user-scoped multi-level approval.
-// super_admin bypasses (consistent with requirePermission). A step with neither
-// userId nor roleId (e.g. approverType-only / unrestricted) falls back to the
-// permission gate already passed by the caller.
+// super_admin bypasses (consistent with requirePermission). R6WN-07: langkah
+// tanpa userId DAN roleId (warisan data lama, sebelum schema menuntut
+// approver) fail-closed — bukan fallback ke permission gate saja.
 async function assertStepApprover(
   approval: {
     currentStep: number;
@@ -205,7 +205,9 @@ async function assertStepApprover(
   const stepDef = approval.workflow.steps.find(
     (s) => s.stepOrder === approval.currentStep,
   );
-  if (!stepDef) return;
+  if (!stepDef || (stepDef.userId == null && stepDef.roleId == null)) {
+    throw new Error("Langkah approval tidak memiliki approver yang ditentukan.");
+  }
   if (stepDef.userId != null) {
     if (Number(user.id) !== stepDef.userId) {
       throw new Error("Anda bukan approver untuk langkah ini.");
@@ -630,9 +632,9 @@ export async function createApprovalWorkflow(formData: FormData) {
 
     const stepsResult = parseWorkflowSteps(stepsJson ?? null);
     if (!stepsResult.ok) return { success: false, error: stepsResult.error };
-    const steps = stepsResult.steps.filter(
-      (s) => s.roleId || s.userId || s.approverType || s.name,
-    );
+    // R6WN-07: hanya langkah ber-approver yang efektif (schema sudah menolak
+    // name-only, filter ini pelindung lapis dua untuk alur lama).
+    const steps = stepsResult.steps.filter((s) => s.roleId || s.userId);
     if (isActive !== false && steps.length === 0) {
       return {
         success: false,
@@ -684,9 +686,7 @@ export async function updateApprovalWorkflow(id: number, formData: FormData) {
 
     const stepsResult = parseWorkflowSteps(stepsJson ?? null);
     if (!stepsResult.ok) return { success: false, error: stepsResult.error };
-    const steps = stepsResult.steps.filter(
-      (s) => s.roleId || s.userId || s.approverType || s.name,
-    );
+    const steps = stepsResult.steps.filter((s) => s.roleId || s.userId);
     if (isActive !== false && steps.length === 0) {
       return {
         success: false,

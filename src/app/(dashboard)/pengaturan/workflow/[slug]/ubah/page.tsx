@@ -65,6 +65,7 @@ export default async function EditWorkflowPage({
           steps: workflow.steps.map((s) => ({
             name: s.name,
             roleId: s.roleId,
+            userId: s.userId,
             approverType: s.approverType,
           })),
         }}

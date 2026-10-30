@@ -12,6 +12,7 @@ import { WorkflowForm, type WorkflowFormData } from "../workflow-form"
 
 const updateMock = vi.fn(async (_id: number, _formData: FormData) => ({ success: true }))
 const createMock = vi.fn(async (_formData: FormData) => ({ success: true }))
+const showErrorMock = vi.fn()
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
@@ -20,7 +21,10 @@ vi.mock("@/actions/approval.actions", () => ({
   createApprovalWorkflow: (formData: FormData) => createMock(formData),
   updateApprovalWorkflow: (id: number, formData: FormData) => updateMock(id, formData),
 }))
-vi.mock("@/lib/utils/toast", () => ({ showSuccess: vi.fn(), showError: vi.fn() }))
+vi.mock("@/lib/utils/toast", () => ({
+  showSuccess: vi.fn(),
+  showError: (...args: unknown[]) => showErrorMock(...args),
+}))
 
 const roles = [{ id: 1, name: "Finance" }]
 
@@ -198,6 +202,16 @@ describe("WorkflowForm gerbang uang (K4-S2b)", () => {
     await submitForm(container)
     expect(updateMock).toHaveBeenCalledTimes(1)
     expect(dialogText()).not.toContain("gerbang uang mati")
+    unmount(root, container)
+  })
+
+  it("R6WN-07: langkah tanpa peran approver diblokir di form, tidak memanggil create/update", async () => {
+    const noApprover = { ...workflow("Journal"), steps: [{ name: "L1", roleId: null, approverType: null }] }
+    const { root, container } = mount(<WorkflowForm workflow={noApprover} roles={roles} />)
+    await submitForm(container)
+    expect(updateMock).not.toHaveBeenCalled()
+    expect(createMock).not.toHaveBeenCalled()
+    expect(showErrorMock).toHaveBeenCalledWith("Setiap langkah wajib memilih peran approver")
     unmount(root, container)
   })
 })
