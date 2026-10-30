@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const mocks = vi.hoisted(() => ({
   requirePermission: vi.fn(),
   issueTaxInvoice: vi.fn(),
+  issueDownPaymentTaxInvoice: vi.fn(),
+  logActivity: vi.fn(),
   replaceTaxInvoice: vi.fn(),
   cancelTaxInvoice: vi.fn(),
   creditInputInvoice: vi.fn(),
@@ -16,6 +18,7 @@ vi.mock("@/lib/auth/permissions", () => ({
 }))
 vi.mock("@/lib/services/tax-invoice.service", () => ({
   issueTaxInvoice: mocks.issueTaxInvoice,
+  issueDownPaymentTaxInvoice: mocks.issueDownPaymentTaxInvoice,
   replaceTaxInvoice: mocks.replaceTaxInvoice,
   cancelTaxInvoice: mocks.cancelTaxInvoice,
   creditInputInvoice: mocks.creditInputInvoice,
@@ -24,6 +27,19 @@ vi.mock("@/lib/services/withholding-certificate.service", () => ({
   issueWithholdingCertificate: mocks.issueWithholdingCertificate,
   revokeWithholdingCertificate: mocks.revokeWithholdingCertificate,
   settleWithholdingTax: mocks.settleWithholdingTax,
+}))
+// R6WN-03/R6IE-07 susulan: tax-documents.actions kini juga mengimpor
+// loadCoretaxOutputExport + logActivity. Tanpa mock ini, activity-log.service
+// ASLI termuat dan menarik next-auth (ERR_MODULE_NOT_FOUND next/server di
+// Vitest) — suite gagal di import, bukan di assertion izin.
+vi.mock("@/lib/tax/coretax-xml-export-data", () => ({
+  loadCoretaxOutputExport: vi.fn(),
+}))
+vi.mock("@/lib/services/activity-log.service", () => ({
+  logActivity: vi.fn(),
+}))
+vi.mock("@/lib/services/activity-log.service", () => ({
+  logActivity: mocks.logActivity,
 }))
 
 import {
