@@ -66,7 +66,7 @@ import {
   wibTimeToUtcInstant,
 } from "@/lib/utils/attendance-time";
 import { calculateLatePenalty } from "@/lib/services/late-penalty.service";
-import { calculateAttendanceSummary } from "@/lib/services/attendance-summary.service";
+import { calculateAttendanceSummary, employmentDayWindow, isEmploymentDay } from "@/lib/services/attendance-summary.service";
 import {
   getLeaveQuota,
   countLeaveWorkingDays,
@@ -2212,9 +2212,13 @@ async function computeBulkPayrollEstimations(
     let leaveDays = 0;
     let holidayDays = 0;
     let absentDays = 0;
+    // Hari di luar masa kerja BUKAN absent: gaji pokok sudah diprorate ke
+    // [joinDate, employmentEndedAt] — menghitungnya lagi memotong dua kali.
+    const employmentWindow = employmentDayWindow(employee.joinDate, employee.employmentEndedAt);
     for (let day = new Date(rangeStart); day <= rangeEnd; day.setDate(day.getDate() + 1)) {
       if (!workingWeekdays.has(day.getDay())) continue;
       const key = dateKey(day);
+      if (!isEmploymentDay(key, employmentWindow)) continue;
       if (publicHolidaySet.has(key) || employeeDepartmentHolidays.has(key)) {
         if (day <= evalEnd) holidayDays++;
         continue;

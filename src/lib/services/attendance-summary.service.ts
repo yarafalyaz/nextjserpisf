@@ -13,6 +13,34 @@ export interface AttendanceSummary {
 }
 
 
+/**
+ * Kunci hari (date-only lokal) pertama & terakhir masa kerja dalam periode,
+ * atau null bila karyawan tidak bekerja sama sekali pada periode itu.
+ * Hari sebelum joinDate / sesudah employmentEndedAt (hari terakhir
+ * bekerja, inklusif) BUKAN hari kerja karyawan: menghitungnya sebagai
+ * absent memotong gaji dua kali — gaji pokok sudah diprorate ke masa
+ * kerja oleh payroll-prorate.service.
+ */
+export function employmentDayWindow(
+  joinDate: Date | null | undefined,
+  employmentEndedAt: Date | null | undefined,
+): { firstKey: string | null; lastKey: string | null } {
+  return {
+    firstKey: joinDate ? toLocalDateOnly(joinDate) : null,
+    lastKey: employmentEndedAt ? toLocalDateOnly(employmentEndedAt) : null,
+  }
+}
+
+/** True bila kunci hari berada di dalam jendela masa kerja. */
+export function isEmploymentDay(
+  dayKey: string,
+  window: { firstKey: string | null; lastKey: string | null },
+): boolean {
+  if (window.firstKey && dayKey < window.firstKey) return false
+  if (window.lastKey && dayKey > window.lastKey) return false
+  return true
+}
+
 export async function calculateAttendanceSummary(
   employeeId: number,
   startDate: Date,
@@ -31,9 +59,10 @@ export async function calculateAttendanceSummary(
 
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId },
-    select: { id: true, departmentId: true, baseSalary: true },
+    select: { id: true, departmentId: true, baseSalary: true, joinDate: true, employmentEndedAt: true },
   })
   if (!employee) return empty
+  const employmentWindow = employmentDayWindow(employee.joinDate, employee.employmentEndedAt)
 
   const candidates = await prisma.workSchedule.findMany({
     where: {
@@ -73,7 +102,12 @@ export async function calculateAttendanceSummary(
   let weekdays = new Set(
     (schedule?.workDays ?? "")
       .split(",")
-      .map((day) => Number(day.trim()))
+      .map((day) => day.trim())
+      // String kosong WAJIB dibuang sebelum Number: Number("") === 0
+      // (Minggu), sehingga fallback Senin–Jumat di bawah tak pernah hidup
+      // dan ringkasan tanpa jadwal hanya menghitung hari Minggu.
+      .filter((day) => day.length > 0)
+      .map((day) => Number(day))
       .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6),
   )
   if (weekdays.size === 0) weekdays = new Set([1, 2, 3, 4, 5])
@@ -139,6 +173,8 @@ export async function calculateAttendanceSummary(
   for (const day = new Date(rangeStart); day <= rangeEnd; day.setDate(day.getDate() + 1)) {
     if (!weekdays.has(day.getDay())) continue
     const key = toLocalDateOnly(day)
+    // Di luar masa kerja: bukan absent, bukan hari kerja — lewati total.
+    if (!isEmploymentDay(key, employmentWindow)) continue
     if (holidaySet.has(key)) {
       if (day <= evalEnd) holidayDays++
       continue
