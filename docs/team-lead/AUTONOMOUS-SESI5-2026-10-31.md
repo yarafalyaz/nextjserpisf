@@ -169,6 +169,24 @@ Sesudah fix: 4 file 39/39; full suite 1119 file — 10898 passed /
   yang sudah publik; deploy produksi (`migrate deploy` + pindah
   `public/uploads` lama ke `private/uploads`).
 
+## Lanjutan 2026-11-01 — eksekusi dua sisa + branch hermes
+
+User: "Ya jalan lalu perbaiki juga yang branch hermes tadi" =
+konfirmasi eksplisit Task #8, deploy produksi, dan penanganan
+`hermes/backend-1360-verify-board`.
+
+- Branch hermes SELESAI tanpa hapus paksa: konflik
+  `UU docs/autonomous-board.md` dianalisis per-baris — 8 dari 10
+  baris blok konflik sudah ada di board main; 2 baris unik
+  (`STATUS Backend t_1360verify` 2026-10-28 20:15 +
+  `HANDOFF Backend -> Lead` PR #1360) ditambahkan ke board main
+  (append, aditif). Sesudah itu worktree Hermes boleh dibuang:
+  tidak ada isi yang hilang.
+- Task #8: (catatan eksekusi menyusul di bawah sesudah selesai)
+- Deploy produksi: (catatan eksekusi menyusul di bawah sesudah
+  selesai — env produksi, migrate deploy, pindah uploads lama,
+  smoke test)
+
 ## Bukti penutup
 
 - Unit: 10920 test — 10898 passed, 22 skipped, 0 failed.
