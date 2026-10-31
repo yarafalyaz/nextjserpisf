@@ -906,6 +906,40 @@ describe("Vendor Bill Actions", () => {
     expect(mocks.prismaMock.vendorBill.create).not.toHaveBeenCalled()
   })
 
+  it("createVendorBill menautkan baris ke baris GR yang qty-nya menampung (best-fit)", async () => {
+    // Dua penerimaan item sama: 2 unit (501) lalu 8 unit (502). Tagihan
+    // mengirim qty 8 dulu — tautan urutan mentah (shift) menempelkannya ke
+    // baris 2 unit sehingga sisa GR/IR per baris tertukar.
+    mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValue({
+      id: 77, documentNo: "GR-077", status: "verified",
+      purchaseOrder: { vendorId: 1 },
+    })
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValue([
+      { id: 501, itemId: 7, qty: 2, unitCost: 100 },
+      { id: 502, itemId: 7, qty: 8, unitCost: 100 },
+    ])
+    mocks.prismaMock.vendorBillItem.aggregate.mockResolvedValue({ _sum: { subtotal: 0 } })
+    mocks.prismaMock.vendorBill.create.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.item.findMany.mockResolvedValue([
+      { id: 7, sku: "BRG-01", name: "Baut", unitOfMeasure: "PCS" },
+    ])
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      goodsReceiptId: "77",
+      date: "2026-06-12",
+      subtotal: "1000",
+      tax: "0",
+      grandTotal: "1000",
+      items: JSON.stringify([
+        { itemId: 7, qty: 8, unitPrice: 100 },
+        { itemId: 7, qty: 2, unitPrice: 100 },
+      ]),
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.vendorBillItem.createMany.mock.calls.at(-1)![0]
+    expect(arg.data.map((r: { goodsReceiptItemId: number }) => r.goodsReceiptItemId)).toEqual([502, 501])
+  })
+
   it("createVendorBill menerima tagihan kedua yang tepat menghabiskan nilai GR (BUG-09)", async () => {
     setupGrBill(60)
     const res = await actions.createVendorBill(fdMap({

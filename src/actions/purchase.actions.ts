@@ -1433,12 +1433,16 @@ function assertTermsReference(terms: string | null | undefined): void {
 type ItemMeta = { sku: string; name: string; unitOfMeasure: string | null };
 
 /**
- * Baris penerimaan (`GoodsReceiptItem.id`) yang masih tersedia untuk ditautkan,
- * dikelompokkan per `itemId` dan berurut id menaik. Satu baris tagihan mengonsumsi
- * satu entri (`shift`), sehingga dua baris tagihan untuk item yang sama tertaut ke
- * DUA baris penerimaan yang berbeda — bukan dua kali ke baris pertama.
+ * Baris penerimaan (`GoodsReceiptItem.id` + qty-nya) yang masih tersedia untuk
+ * ditautkan, dikelompokkan per `itemId` dan berurut id menaik. Satu baris
+ * tagihan mengonsumsi satu entri, sehingga dua baris tagihan untuk item yang
+ * sama tertaut ke DUA baris penerimaan yang berbeda — bukan dua kali ke baris
+ * pertama. Konsumsi memilih baris penerimaan pertama yang qty-nya menampung
+ * qty baris tagihan (best-fit longgar): menautkan baris tagihan qty 8 ke baris
+ * penerimaan qty 2 (dan sisanya ke baris qty 8) membuat laporan GR/IR per
+ * baris menunjukkan sisa yang salah walau total per penerimaan benar.
  */
-type GrLineQueues = Map<number, number[]>;
+type GrLineQueues = Map<number, { id: number; qty: number }[]>;
 
 /**
  * Tautkan tagihan ke penerimaannya (`VendorBill.goodsReceiptId` +
@@ -1457,14 +1461,14 @@ async function loadGrLineQueues(
 ): Promise<GrLineQueues> {
   const lines = await tx.goodsReceiptItem.findMany({
     where: { goodsReceiptId },
-    select: { id: true, itemId: true },
+    select: { id: true, itemId: true, qty: true },
     orderBy: { id: "asc" },
   });
   const queues: GrLineQueues = new Map();
   for (const line of lines) {
     const bucket = queues.get(line.itemId);
-    if (bucket) bucket.push(line.id);
-    else queues.set(line.itemId, [line.id]);
+    if (bucket) bucket.push({ id: line.id, qty: Number(line.qty) });
+    else queues.set(line.itemId, [{ id: line.id, qty: Number(line.qty) }]);
   }
   return queues;
 }
@@ -1491,8 +1495,15 @@ function mapVendorBillItems(
         taxAmount,
         total,
       } = computeBillLineAmounts(r)
-      const goodsReceiptItemId =
-        itemId != null ? (grLineQueues?.get(itemId)?.shift() ?? null) : null
+      // Best-fit longgar: baris penerimaan pertama yang qty-nya menampung
+      // qty baris ini; tak ada yang cukup → baris pertama tersisa (perilaku
+      // lama untuk baris gabungan melebihi satu baris penerimaan).
+      const queue = itemId != null ? grLineQueues?.get(itemId) : undefined
+      let goodsReceiptItemId: number | null = null
+      if (queue && queue.length > 0) {
+        const fitIdx = queue.findIndex((l) => l.qty >= qty)
+        goodsReceiptItemId = queue.splice(fitIdx >= 0 ? fitIdx : 0, 1)[0].id
+      }
       return {
         itemId,
         goodsReceiptItemId,
