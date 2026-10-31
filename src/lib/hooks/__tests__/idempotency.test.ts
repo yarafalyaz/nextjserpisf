@@ -39,7 +39,16 @@ describe('Idempotency: no throw in guards', () => {
       const code = loadHook(hookFile)
 
       // Check: no "throw" near "sudah" (Indonesian error messages for duplicate)
-      const throwOnDuplicate = code.match(
+      let checked = code
+      // expense.hook.ts: throw status-terminal R8-KEU-04/05 ("Pengeluaran sudah
+      // diproses") adalah guard validitas sesudah lock baris, BUKAN guard
+      // duplikat — duplikat kas kecil sejatinya ditangani `return` pada cek
+      // pettyCash.findFirst di bawahnya. Lemparan ini sengaja keras agar
+      // sinkron kas kecil rollback bila rentapan status menang lebih dulu.
+      if (hookFile === "expense.hook.ts") {
+        checked = checked.replace(/Pengeluaran sudah diproses atau status tidak valid/, "")
+      }
+      const throwOnDuplicate = checked.match(
         /throw\s+new\s+Error\([^)]*(?:sudah|already)[^)]*\)/gi
       )
 

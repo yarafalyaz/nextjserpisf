@@ -37,6 +37,10 @@ const mocks = vi.hoisted(() => {
         { id: 8, sku: "SKU-8", name: "Barang 8", unitOfMeasure: "PCS" },
       ]),
     },
+    // R8-JB-09: create/update menoleh termin vendor saat menghitung dueDate.
+    vendor: {
+      findUnique: vi.fn().mockResolvedValue({ paymentTerm: null }),
+    },
   };
 
   const prismaMock: any = {

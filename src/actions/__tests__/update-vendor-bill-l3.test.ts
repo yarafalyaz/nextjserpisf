@@ -32,6 +32,8 @@ const h = vi.hoisted(() => {
     workOrder: model(),
     activityLog: model(),
     journal: model(),
+    // R8-JB-09: update menoleh termin vendor saat menghitung dueDate.
+    vendor: model(),
   };
   const prisma: Record<string, any> = {
     vendorBill: model(),
@@ -102,6 +104,7 @@ beforeEach(() => {
   h.tx.vendorBill.aggregate.mockResolvedValue({ _sum: { subtotal: 0, grandTotal: 0 } });
   h.tx.workOrder.findUnique.mockResolvedValue({ id: 7, documentNo: "WO-0007", status: "closed" });
   h.tx.activityLog.findMany.mockResolvedValue([]);
+  h.tx.vendor.findUnique.mockResolvedValue({ paymentTerm: null });
   h.tx.activityLog.create.mockResolvedValue({});
   h.tx.journal.findFirst.mockResolvedValue(null);
 });
