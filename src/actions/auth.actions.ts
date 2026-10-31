@@ -375,21 +375,32 @@ export async function toggleUserActive(userId: number) {
       return { error: targetErr }
     }
 
-    // Toggle atomik: kunci baris user (FOR UPDATE, pola repo), baca isActive
-    // segar di dalam tx, tulis kebalikannya. Tanpa ini dua toggle konkuren
-    // membaca nilai sama dan menulis nilai sama (perubahan hilang).
-    const wasActive = await prisma.$transaction(async (tx) => {
+    // Toggle atomik: kunci baris user (FOR UPDATE, pola repo), lalu nilai
+    // ulang peran target dan isActive dari bacaan terkunci sebelum menulis
+    // kebalikannya. Peran dari guard snapshot bisa basi bila target baru
+    // dipromosikan menjadi super_admin.
+    const toggleResult = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`
       const fresh = await tx.user.findUniqueOrThrow({
         where: { id: userId },
-        select: { isActive: true },
+        select: { isActive: true, roles: { select: { name: true } } },
       })
+      if (
+        !actor.roles.includes("super_admin") &&
+        fresh.roles.some((r) => r.name === "super_admin")
+      ) {
+        return {
+          error: "Hanya super admin yang dapat mengubah atau menonaktifkan akun super admin",
+        }
+      }
       await tx.user.update({
         where: { id: userId },
         data: { isActive: !fresh.isActive },
       })
-      return fresh.isActive
+      return { wasActive: fresh.isActive }
     })
+    if ("error" in toggleResult) return { error: toggleResult.error }
+    const wasActive = toggleResult.wasActive
 
     // Security-relevant: enabling/disabling an account. Log who toggled whom and
     // to which state so a denial-of-access is auditable.

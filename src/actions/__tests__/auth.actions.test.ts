@@ -418,6 +418,21 @@ describe("updateUserRoles", () => {
     expect(userUpdateMock).toHaveBeenCalled()
   })
 
+  it("menolak nonaktifkan target yang dipromosikan menjadi super_admin sesudah guard snapshot", async () => {
+    userFindMock.mockResolvedValue({ isActive: true, roles: [{ name: "super_admin" }] })
+    // Guard luar memakai findUnique, bacaan terkunci memakai
+    // findUniqueOrThrow (userFindMock bersama tx mock).
+    userFindUniqueMock.mockResolvedValue({ id: 3, roles: [] })
+
+    const res = await toggleUserActive(3)
+
+    expect(res).toEqual({
+      error: "Hanya super admin yang dapat mengubah atau menonaktifkan akun super admin",
+    })
+    expect(queryRawMock).toHaveBeenCalledTimes(1)
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
   it("blocks deactivating your own account", async () => {
     requirePermissionMock.mockResolvedValue({ id: "3", roles: ["admin"], permissions: ["manage_users"] })
     userFindUniqueMock.mockResolvedValue({ id: 3, roles: [] })
@@ -564,8 +579,13 @@ describe("user-to-role subset guard (TASK-013 regression)", () => {
 })
 
 describe("toggleUserActive", () => {
+  beforeEach(() => {
+    // Bacaan terkunci kini memuat roles untuk menilai ulang guard target.
+    userFindMock.mockResolvedValue({ id: 4, isActive: true, roles: [] })
+  })
+
   it("flips the active flag", async () => {
-    userFindMock.mockResolvedValue({ id: 4, isActive: true })
+    userFindMock.mockResolvedValue({ id: 4, isActive: true, roles: [] })
     userUpdateMock.mockResolvedValue({ id: 4 })
     userFindUniqueMock.mockResolvedValue({ id: 4, roles: [] })
     const res = await toggleUserActive(4)
@@ -579,7 +599,7 @@ describe("toggleUserActive", () => {
     // Toggle wajib membaca di dalam tx setelah kunci, lalu membalik nilai
     // segar itu. Mock: baca pertama (dalam tx) = true -> tulis false.
     // Kode lama membaca di luar tx tanpa kunci sama sekali.
-    userFindMock.mockResolvedValue({ id: 4, isActive: true })
+    userFindMock.mockResolvedValue({ id: 4, isActive: true, roles: [] })
     userUpdateMock.mockResolvedValue({ id: 4 })
     userFindUniqueMock.mockResolvedValue({ id: 4, roles: [] })
     const res = await toggleUserActive(4)
@@ -601,7 +621,7 @@ describe("toggleUserActive", () => {
   })
 
   it("records an audit-trail entry for the activation toggle", async () => {
-    userFindMock.mockResolvedValue({ id: 4, isActive: true })
+    userFindMock.mockResolvedValue({ id: 4, isActive: true, roles: [] })
     userUpdateMock.mockResolvedValue({ id: 4 })
     userFindUniqueMock.mockResolvedValue({ id: 4, roles: [] })
     await toggleUserActive(4)
