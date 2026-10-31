@@ -1768,6 +1768,18 @@ describe("F-076-S pisah run payroll mingguan/bulanan", () => {
     expect(rows.map((x) => x.employeeId)).toEqual([1])
   })
 
+  it("R8-SDM-05: bulk MONTHLY karyawan gabung 16 Mei dibayar 16/31 gaji, bukan penuh", async () => {
+    const joined = { ...empRow(1, "MONTHLY"), joinDate: new Date("2026-05-16"), employmentEndedAt: null }
+    prismaMock.employee.findMany.mockResolvedValueOnce([joined]).mockResolvedValue([joined])
+    const r = await actions.generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
+    expect(r?.success).toBe(true)
+    if (r?.success) expect(r.count).toBe(1)
+    const rows = prismaMock.payroll.createMany.mock.calls.at(-1)?.[0].data as Array<{ baseSalary: number; statutorySnapshot: Record<string, any> }>
+    expect(rows[0].baseSalary).toBe(Math.round((16 * 5000000) / 31))
+    expect(rows[0].statutorySnapshot?.prorate?.paidDays).toBe(16)
+    expect(rows[0].statutorySnapshot?.prorate?.isFull).toBe(false)
+  })
+
   it("turunan F-076-S: run WEEKLY tidak menarik MONTHLY (frekuensiLain); WEEKLY tanpa pinjaman LOLOS agregator BPJS se-masa", async () => {
     prismaMock.employee.findMany
       .mockResolvedValueOnce([empRow(1, "MONTHLY"), empRow(2, "WEEKLY")])

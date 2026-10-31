@@ -26,6 +26,11 @@ import {
   runPkwtMonthlyAccrual,
 } from "@/lib/services/pkwt-compensation.service";
 import { applyDueSalaryAdjustments } from "@/lib/services/salary-adjustment.service";
+import {
+  loadSalaryHistoryAsOf,
+  prorateBaseSalaryForPeriod,
+  type ProratedBaseSalary,
+} from "@/lib/services/payroll-prorate.service";
 import { Prisma } from "@prisma/client";
 import type { Prisma as PrismaTypes } from "@prisma/client";
 import {
@@ -888,6 +893,8 @@ async function buildPayrollWrite(o: {
   endDate: Date;
   fallbackLabel: "pembuatan slip" | "update slip";
   componentLines?: readonly { kindSnapshot: string; amount: unknown }[];
+  /** R8-SDM-05: hasil prorate gaji pokok periode ini (audit + basis BPJS). */
+  prorate?: ProratedBaseSalary;
   v: {
     baseSalary?: number;
     allowances?: number;
@@ -965,6 +972,17 @@ async function buildPayrollWrite(o: {
   const snapshot = {
     ...buildStatutorySnapshot(ruleset, taxProfile?.maritalStatus, taxProfile?.dependents ?? 0, pphResult.ter),
     ...buildBpjsAggregateSnapshot(bpjsAggregate),
+    ...(o.prorate
+      ? {
+          prorate: {
+            method: o.prorate.audit.method,
+            isFull: o.prorate.isFull,
+            periodDays: o.prorate.periodDays,
+            paidDays: o.prorate.paidDays,
+            segments: o.prorate.audit.segments,
+          },
+        }
+      : {}),
     ...(o.componentLines
       ? { payrollComponents: payrollComponentsSnapshotValue(o.componentLines, gross) }
       : {}),
@@ -1388,6 +1406,8 @@ async function computePayrollEstimation(
           maritalStatus: true,
           dependents: true,
           paymentFrequency: true,
+          joinDate: true,
+          employmentEndedAt: true,
           employeeLoans: {
             where: { status: "active" },
           },
@@ -1416,7 +1436,22 @@ async function computePayrollEstimation(
 
   if (!employee) throw new Error("Karyawan tidak ditemukan");
 
-  const baseSalary = Number(employee.baseSalary);
+  // R8-SDM-05: gaji pokok slip adalah nilai TERPRORATE untuk periode ini
+  // (hari kalender; batas gabung/berhenti + blend kenaikan dalam periode),
+  // bukan master penuh. Preview = basis yang sama dengan jalur tulis.
+  const masterBase = Number(employee.baseSalary);
+  const prorateHistory = await loadSalaryHistoryAsOf(prisma, employeeId, masterBase, endDate);
+  const prorate = prorateBaseSalaryForPeriod({
+    periodStart: startDate,
+    periodEnd: endDate,
+    monthlyBaseSalary: masterBase,
+    frequency: employee.paymentFrequency === "WEEKLY" ? "WEEKLY" : "MONTHLY",
+    joinDate: employee.joinDate,
+    employmentEndedAt: employee.employmentEndedAt,
+    salaryBefore: prorateHistory.salaryBefore,
+    adjustments: prorateHistory.adjustments,
+  });
+  const baseSalary = prorate.amount;
   // F-105-V: nominal per frekuensi karyawan dari SATU helper — WEEKLY
   // hanya weeklyInstallment tersimpan; tanpa nominal = 0 di preview ini
   // (gerbang tulis/run menahan karyawan itu alasan pinjaman).
@@ -1515,6 +1550,13 @@ async function computePayrollEstimation(
       }),
       ),
       ...buildBpjsAggregateSnapshot(bpjsComputed.aggregate),
+      prorate: {
+        method: prorate.audit.method,
+        isFull: prorate.isFull,
+        periodDays: prorate.periodDays,
+        paidDays: prorate.paidDays,
+        segments: prorate.audit.segments,
+      },
       ...(ceilingFinding ? { deductionCeilingFinding: ceilingFinding } : {}),
     },
   };
@@ -1926,6 +1968,8 @@ async function computeBulkPayrollEstimations(
         dependents: true,
         departmentId: true,
         paymentFrequency: true,
+        joinDate: true,
+        employmentEndedAt: true,
         employeeLoans: { where: { status: "active" } },
       },
     }),
@@ -2053,9 +2097,40 @@ async function computeBulkPayrollEstimations(
     bulkTerByEmployee.set(row.employeeId, acc);
   }
 
+  // R8-SDM-05: riwayat gaji terapan seluruh populasi dalam SATU query
+  // (bukan per karyawan), dipakai prorate basis slip bulk.
+  const bulkAdjustments = employeeIds.length === 0
+    ? []
+    : await prisma.salaryAdjustment.findMany({
+        where: { employeeId: { in: employeeIds }, status: "applied", effectiveDate: { lte: endDate } },
+        orderBy: [{ employeeId: "asc" }, { effectiveDate: "asc" }, { id: "asc" }],
+        select: { employeeId: true, effectiveDate: true, previousBaseSalary: true, newBaseSalary: true },
+      });
+  const adjustmentsByEmployee = new Map<number, { salaryBefore: number; adjustments: { effectiveDate: Date; newBaseSalary: number }[] }>();
+  for (const adj of bulkAdjustments) {
+    const entry = adjustmentsByEmployee.get(adj.employeeId) ?? {
+      salaryBefore: Number(adj.previousBaseSalary),
+      adjustments: [],
+    };
+    entry.adjustments.push({ effectiveDate: adj.effectiveDate, newBaseSalary: Number(adj.newBaseSalary) });
+    adjustmentsByEmployee.set(adj.employeeId, entry);
+  }
+
   for (const employee of employees) {
-    // 1. Base salary + loan deduction (capped at remaining balance).
-    const baseSalary = Number(employee.baseSalary);
+    // 1. Base salary terprorate (R8-SDM-05) + loan deduction (capped).
+    const masterBase = Number(employee.baseSalary);
+    const history = adjustmentsByEmployee.get(employee.id);
+    const prorate = prorateBaseSalaryForPeriod({
+      periodStart: startDate,
+      periodEnd: endDate,
+      monthlyBaseSalary: masterBase,
+      frequency: employee.paymentFrequency === "WEEKLY" ? "WEEKLY" : "MONTHLY",
+      joinDate: employee.joinDate,
+      employmentEndedAt: employee.employmentEndedAt,
+      salaryBefore: history?.salaryBefore,
+      adjustments: history?.adjustments,
+    });
+    const baseSalary = prorate.amount;
     // F-105-V: nominal per frekuensi karyawan (helper bersama).
     const loanDeduction = sumLoanDeductionForFrequency(
       employee.employeeLoans.map((loan) => ({
@@ -2234,6 +2309,13 @@ async function computeBulkPayrollEstimations(
         ),
         payrollComponents: payrollComponentsSnapshotValue(componentLines, grossSalary),
         ...buildBpjsAggregateSnapshot(bpjsAllocated.aggregate),
+        prorate: {
+          method: prorate.audit.method,
+          isFull: prorate.isFull,
+          periodDays: prorate.periodDays,
+          paidDays: prorate.paidDays,
+          segments: prorate.audit.segments,
+        },
       },
     });
   }
@@ -2885,6 +2967,25 @@ export async function processPayroll(formData: FormData) {
       endDate,
     );
     const componentSummary = summarizePayrollComponentLines(componentLines);
+    // R8-SDM-05: prorate gaji pokok periode ini. Bila client mengirim
+    // baseSalary eksplisit (override manual), nilai client yang menang
+    // sebagai fakta dokumen; kosong → nilai terprorate server.
+    const lifecycleForProrate = await prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { baseSalary: true, joinDate: true, employmentEndedAt: true },
+    });
+    const masterBase = Number(lifecycleForProrate?.baseSalary ?? 0);
+    const prorateHistory = await loadSalaryHistoryAsOf(prisma, employeeId, masterBase, endDate);
+    const prorate = prorateBaseSalaryForPeriod({
+      periodStart: startDate,
+      periodEnd: endDate,
+      monthlyBaseSalary: masterBase,
+      frequency: employeeLifecycle?.paymentFrequency === "WEEKLY" ? "WEEKLY" : "MONTHLY",
+      joinDate: lifecycleForProrate?.joinDate ?? null,
+      employmentEndedAt: lifecycleForProrate?.employmentEndedAt ?? null,
+      salaryBefore: prorateHistory.salaryBefore,
+      adjustments: prorateHistory.adjustments,
+    });
     const w = await buildPayrollWrite({
       employeeId,
       period,
@@ -2892,8 +2993,10 @@ export async function processPayroll(formData: FormData) {
       resignationFinal: wantsFinal,
       fallbackLabel: "pembuatan slip",
       componentLines,
+      prorate,
       v: {
         ...v,
+        baseSalary: v.baseSalary ?? prorate.amount,
         allowances: componentLines.length > 0 ? componentSummary.allowances : (v.allowances ?? 0),
         deductions: componentLines.length > 0 ? componentSummary.deductions : (v.deductions ?? 0),
         lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction,
@@ -3103,6 +3206,29 @@ export async function updatePayroll(id: number, formData: FormData) {
       orderBy: { componentId: "asc" },
     });
     const lineSummary = summarizePayrollComponentLines(existingLines);
+    // R8-SDM-05: prorate ulang untuk rentang hasil edit (client baseSalary
+    // eksplisit tetap menang sebagai override manual dokumen).
+    const updateProrateEmployeeId = employeeId ?? updateEmployeeId;
+    const updateLifecycleRow = updateProrateEmployeeId
+      ? await prisma.employee.findUnique({
+          where: { id: updateProrateEmployeeId },
+          select: { baseSalary: true, joinDate: true, employmentEndedAt: true },
+        })
+      : null;
+    const updateMasterBase = Number(updateLifecycleRow?.baseSalary ?? 0);
+    const updateHistory = updateProrateEmployeeId
+      ? await loadSalaryHistoryAsOf(prisma, updateProrateEmployeeId, updateMasterBase, endDate)
+      : { salaryBefore: updateMasterBase, adjustments: [] };
+    const updateProrate = prorateBaseSalaryForPeriod({
+      periodStart: startDate,
+      periodEnd: endDate,
+      monthlyBaseSalary: updateMasterBase,
+      frequency: updateLifecycle?.paymentFrequency === "WEEKLY" ? "WEEKLY" : "MONTHLY",
+      joinDate: updateLifecycleRow?.joinDate ?? null,
+      employmentEndedAt: updateLifecycleRow?.employmentEndedAt ?? null,
+      salaryBefore: updateHistory.salaryBefore,
+      adjustments: updateHistory.adjustments,
+    });
     const w = await buildPayrollWrite({
       employeeId,
       period: v.period,
@@ -3111,8 +3237,10 @@ export async function updatePayroll(id: number, formData: FormData) {
       endDate,
       fallbackLabel: "update slip",
       componentLines: existingLines.length > 0 ? existingLines : undefined,
+      prorate: updateProrate,
       v: {
         ...v,
+        baseSalary: v.baseSalary ?? updateProrate.amount,
         allowances: existingLines.length > 0 ? lineSummary.allowances : (v.allowances ?? 0),
         deductions: existingLines.length > 0 ? lineSummary.deductions : (v.deductions ?? 0),
         lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction,

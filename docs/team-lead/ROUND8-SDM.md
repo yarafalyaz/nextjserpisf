@@ -87,15 +87,25 @@ tetap `approved`, angka tersimpan Rp8jt → dibayar Rp8jt tanpa pernah
 disetujui.
 
 ### R8-SDM-05 — MEDIUM, CONFIRMED — Tidak ada prorate gaji pokok
-**Status: DITANGGUHI — butuh vonis bisnis** — terverifikasi: tidak
-ada logika prorate; slip memakai `baseSalary` master penuh.
-Keputusan menunda BUKAN kelalaian: denominator prorate (hari
-kalender vs hari kerja vs /30 statutori) dan interaksi dengan basis
-BPJS/PPh21/TER adalah keputusan kebijakan upah yang tidak boleh
-diciptakan dari kode. Perlu vonis tertulis: (a) prorate join/resign
-ya/tidak; (b) kenaikan gaji tengah periode: slip dibelah atau nilai
-baru sebulan penuh; (c) slip mingguan berbeda rumus ya/tidak. Tanpa
-itu, perilaku kini (sebulan penuh) minimal konsisten di semua slip.
+**Status: SELESAI (2026-10-31)** — vonis diambil di sesi lanjutan
+(perintah user "ya kerjakan semua"): (a) prorate join/resign YA,
+per HARI KALENDER inklusif; (b) kenaikan tengah periode DIBLEND
+dalam slip yang sama (invarian satu slip per karyawan per periode),
+tidak dibelah; (c) denominator mengikuti satuan nominal master —
+MONTHLY dibagi hari kalender bulan periodEnd, WEEKLY dibagi 7
+karena master WEEKLY adalah nominal per minggu (label form
+karyawan "Per Minggu"); minggu/bulan utuh selalu nominal persis.
+Basis BPJS/PPh21/TER mengikuti otomatis karena dihitung dari base/
+gross terprorate yang sama di semua jalur. Implementasi:
+`payroll-prorate.service.ts` (`prorateBaseSalaryForPeriod` +
+`loadSalaryHistoryAsOf` dari rantai SalaryAdjustment terapan),
+diwire di preview single, estimator bulk, create, dan update;
+blok `prorate` (method/segments/paidDays) disimpan ke
+statutorySnapshot sebagai jejak audit. Override baseSalary
+eksplisit dari client tetap menang sebagai fakta dokumen; recalc
+baris komponen dan slip koreksi memakai angka tersimpan (tidak
+memprorate ulang). Bukti: 11 test service + regression bulk
+gabung-tengah-bulan; batch HRM 344/344 hijau, tsc+lint bersih.
 Nol logika prorate di jalur payroll (grep `prorat*`: hanya laporan
 target penjualan). `src/lib/services/salary-adjustment.service.ts:22-58`
 menetapkan `baseSalary` master penuh; pemanggil `hrm.actions.ts:2356,2712`
