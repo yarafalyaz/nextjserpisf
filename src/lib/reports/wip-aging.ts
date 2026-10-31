@@ -22,7 +22,7 @@
  * Pure (tanpa Prisma/DOM); loader massalnya ada di `wip-aging-data.ts`.
  */
 
-import { safeRound, safeSubtract } from "@/lib/utils/math"
+import { safeRound } from "@/lib/utils/math"
 
 export const WIP_AGING_RUNNING_STATUSES = ["draft", "pending", "in_progress"] as const
 
@@ -110,7 +110,13 @@ export function buildWipAging(input: {
     if (!(WIP_AGING_RUNNING_STATUSES as readonly string[]).includes(order.status)) continue
     const ageStart = order.startDate ?? order.createdAt
     const ageDays = wipAgeDays(ageStart, input.asOf)
-    const wipAmount = Math.max(0, safeSubtract(order.totalActualCost, order.releasedCost, 2))
+    // totalActualCost TERSIMPAN sudah sisa pool WIP: penulis rilis
+    // (completeProductionOrder) menurunkannya per rilis parsial dan
+    // mengakumulasi releasedCost terpisah sebagai genealogi. Mengurangi
+    // releasedCost sekali lagi di sini meng-understate WIP persis sebesar
+    // biaya yang sudah dirilis. Konsisten production-variance: aktual
+    // penuh = totalActualCost + releasedCost.
+    const wipAmount = Math.max(0, safeRound(order.totalActualCost, 2))
     const completionPercent =
       order.qty > 0 ? safeRound(Math.min(100, Math.max(0, (order.completedQty / order.qty) * 100)), 2) : 0
     orders.push({

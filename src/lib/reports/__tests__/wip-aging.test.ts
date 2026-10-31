@@ -3,9 +3,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 /**
  * Umur WIP (F-2026-10-20-72, read-model aman tanpa migrasi).
  * Yang dijaga: hanya order berjalan dihitung, sisa WIP =
- * totalActualCost − releasedCost dijepit >= 0, umur dari startDate
- * (jatuh ke createdAt) masuk ember 0-30/31-60/61-90/>90, dan loader
- * hanya satu query massal status berjalan.
+ * totalActualCost TERSIMPAN (penulis rilis sudah menurunkannya ke sisa
+ * pool; releasedCost akumulasi genealogi terpisah, BUKAN pengurang
+ * kedua), umur dari startDate (jatuh ke createdAt) masuk ember
+ * 0-30/31-60/61-90/>90, dan loader hanya satu query massal status
+ * berjalan.
  */
 
 const mocks = vi.hoisted(() => ({
@@ -55,16 +57,22 @@ describe("buildWipAging", () => {
     })
     expect(r.totalOrders).toBe(1)
     expect(r.orders.map((o) => o.id)).toEqual([3])
-    expect(r.totalWipAmount).toBe(600_000)
+    expect(r.totalWipAmount).toBe(1_000_000)
   })
 
-  it("sisa WIP = aktual − dirilis, negatif dijepit nol", () => {
+  it("regresi: rilis parsial tidak mengurangi WIP dua kali (totalActualCost sudah sisa pool)", () => {
+    // Penulis rilis (completeProductionOrder): aktual penuh 100, rilis 40%
+    // → totalActualCost tersimpan 60, releasedCost 40. Sisa WIP benar 60;
+    // rumus lama total−released menghasilkan 20 (kurang saji persis
+    // sebesar biaya yang sudah dirilis).
     const r = buildWipAging({
       asOf: AS_OF,
-      orders: [order({ id: 1, totalActualCost: 100, releasedCost: 250 })],
+      orders: [order({ id: 1, totalActualCost: 60, releasedCost: 40 })],
     })
-    expect(r.orders[0].wipAmount).toBe(0)
-    expect(r.totalWipAmount).toBe(0)
+    expect(r.orders[0].wipAmount).toBe(60)
+    expect(r.totalWipAmount).toBe(60)
+    // Kolom releasedCost tetap ditampilkan sebagai info genealogi.
+    expect(r.orders[0].releasedCost).toBe(40)
   })
 
   it("umur dari startDate masuk ember yang benar; tanpa startDate jatuh ke createdAt", () => {
@@ -158,7 +166,7 @@ describe("getWipAging", () => {
       id: 7,
       ageDays: 40,
       bucket: "d31_60",
-      wipAmount: 1_500_000,
+      wipAmount: 2_000_000,
       completionPercent: 50,
       productName: "Bumper",
       workOrderDocumentNo: "WO-7",
