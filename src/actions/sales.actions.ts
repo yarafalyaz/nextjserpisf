@@ -161,6 +161,19 @@ async function decideQuotation(
   revisionNumber: number,
 ) {
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    // Kunci baris penawaran lalu putuskan atas status+revisi TERKUNCI: cek
+    // caller di luar tx tak cukup — accept vs reject/revise konkuren
+    // sebelumnya menulis dua riwayat kontradiktif dan pemenang terakhir
+    // menentukan status (revisi yang tak pernah terkirim bisa ter-accept).
+    await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+    const locked = await tx.quotation.findUnique({
+      where: { id: quotationId },
+      select: { status: true, revisionNumber: true },
+    })
+    if (!locked || locked.status !== "sent") {
+      throw new Error("Status penawaran sudah berubah; muat ulang halaman sebelum memutuskan.")
+    }
+    const lockedRevision = locked.revisionNumber ?? revisionNumber
     await tx.quotation.update({
       where: { id: quotationId },
       data: { status: decision.status },
@@ -171,8 +184,8 @@ async function decideQuotation(
         data: {
           quotationId,
           action: decision.action,
-          revisionNumber,
-          description: decision.description ?? `Penawaran ${decision.verb} oleh pelanggan (revisi v${revisionNumber})`,
+          revisionNumber: lockedRevision,
+          description: decision.description ?? `Penawaran ${decision.verb} oleh pelanggan (revisi v${lockedRevision})`,
           userId,
         },
       })
@@ -484,15 +497,26 @@ export async function reviseQuotation(quotationId: number, changeReason: string)
   }
 
   await prisma.$transaction(async (tx) => {
+    // Kunci baris penawaran lalu revisi atas status TERKUNCI: cek caller di
+    // luar tx tak cukup — accept konkuren bisa ter-commit antaranya dan
+    // revisi menurunkan lagi penawaran yang sudah diterima ke draft.
+    await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+    const locked = await tx.quotation.findUnique({
+      where: { id: quotationId },
+      select: { status: true, revisionNumber: true },
+    })
+    if (!locked || locked.status !== "sent") {
+      throw new Error("Status penawaran sudah berubah; muat ulang halaman sebelum merevisi.")
+    }
     await tx.quotationHistory.create({
       data: {
         quotationId,
-        revisionNumber: quotation.revisionNumber,
-        statusAtSnapshot: quotation.status,
+        revisionNumber: locked.revisionNumber ?? quotation.revisionNumber,
+        statusAtSnapshot: locked.status,
         dataSnapshot: snapshot,
         changeReason: cleanReason,
         action: "revised",
-        description: `Revisi #${quotation.revisionNumber} — ${cleanReason}`,
+        description: `Revisi #${locked.revisionNumber ?? quotation.revisionNumber} — ${cleanReason}`,
         userId: Number(user.id),
       },
     })

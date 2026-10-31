@@ -282,9 +282,11 @@ describe("Quotation Actions", () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.generateDocNumMock.mockResolvedValue("Q-001")
     mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue({ id: 1 })
-    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ 
-      id: 1, status: "draft", sections: [{ items: [{ id: 1 }] }] 
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", sections: [{ items: [{ id: 1 }] }]
     })
+    // Baca ulang TERKUNCI di decideQuotation/reviseQuotation: status terkirim sah.
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ id: 1, status: "sent", revisionNumber: 3 })
     mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
   })
 
@@ -1341,6 +1343,25 @@ describe("Quotation Actions (legacy happy paths)", () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "sent" })
     const res = await actions.reviseQuotation(1, "reason")
     expect(res?.success).toBe(true)
+  })
+  it("acceptQuotation refuses when the locked re-read is already accepted (lost race)", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "sent", revisionNumber: 3 })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValueOnce({ id: 1, status: "accepted", revisionNumber: 3 })
+    const res = await actions.acceptQuotation(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/sent|berubah/)
+    expect(mocks.prismaMock.quotation.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.quotationHistory.create).not.toHaveBeenCalled()
+  })
+  it("reviseQuotation refuses when the locked re-read is already accepted (lost race)", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "sent", revisionNumber: 3, grandTotal: 100, subtotal: 100, discount: 0, tax: 0, sections: [] })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValueOnce({ id: 1, status: "accepted", revisionNumber: 3 })
+    const res = await actions.reviseQuotation(1, "reason")
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/terkirim|berubah/)
+    expect(mocks.prismaMock.quotation.update).not.toHaveBeenCalled()
   })
   it("deleteQuotation succeeds", async () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
