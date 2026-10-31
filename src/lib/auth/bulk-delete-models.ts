@@ -175,6 +175,10 @@ export const BULK_DELETE_REQUIRES_INDIVIDUAL = new Set<BulkDeleteModel>([
   "workOrder",
   "project",
   "loan",
+  // Produk: delete tunggal menolak selama dirujuk ProductionOrder/BOM/QC.
+  // Product tanpa deletedAt → bulk deleteMany = hard delete + cascade
+  // BomRevision diam-diam, melewati guard itu.
+  "product",
   // Catatan SDM — menjaga cakupan karyawan, pembersihan approval, guard status
   "leave",
   "overtime",

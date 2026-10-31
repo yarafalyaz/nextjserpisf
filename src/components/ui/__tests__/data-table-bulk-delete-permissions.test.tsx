@@ -153,14 +153,13 @@ describe("kontrak bulk delete bersama server/client", () => {
     expect(src).not.toContain("const modelPermissionMap: Record<ModelName, PermissionName>")
   })
 
-  it("9 tabel model boleh: BULK_MODEL tak masuk daftar individual + izin diteruskan", () => {
+  it("8 tabel model boleh: BULK_MODEL tak masuk daftar individual + izin diteruskan", () => {
     const expected: Array<{ file: string; model: BulkDeleteModel; permission: string }> = [
       { file: "src/app/(dashboard)/crm/leads/_components/lead-table.tsx", model: "lead", permission: "delete_leads" },
       { file: "src/app/(dashboard)/master/pelanggan/_components/customer-table.tsx", model: "customer", permission: "delete_customers" },
       { file: "src/app/(dashboard)/master/barang/_components/item-table.tsx", model: "item", permission: "delete_items" },
       { file: "src/app/(dashboard)/master/metode-pembayaran/_components/payment-method-table.tsx", model: "paymentMethod", permission: "delete_payment_methods" },
       { file: "src/app/(dashboard)/master/metode-pengiriman/_components/shipping-method-table.tsx", model: "shippingMethod", permission: "delete_shipping_methods" },
-      { file: "src/app/(dashboard)/produksi/products/_components/product-table.tsx", model: "product", permission: "delete_products" },
       { file: "src/app/(dashboard)/kendaraan/fitment/_components/vehicle-fitment-table.tsx", model: "vehicleFitmentRule", permission: "delete_vehicle_fitments" },
       { file: "src/app/(dashboard)/master/vendor/_components/vendor-table.tsx", model: "vendor", permission: "delete_vendors" },
       { file: "src/app/(dashboard)/master/gudang/_components/warehouse-table.tsx", model: "warehouse", permission: "delete_warehouses" },
@@ -189,6 +188,8 @@ describe("kontrak bulk delete bersama server/client", () => {
       ["src/app/(dashboard)/aset/_components/asset-table.tsx", "asset"],
       // ROUND5-SCOPE: apresiasi terikat cakupan HR per karyawan.
       ["src/app/(dashboard)/sdm/apresiasi/_components/appreciation-table.tsx", "appreciation"],
+      // Produk: delete tunggal menjaga referensi ProductionOrder/BOM/QC.
+      ["src/app/(dashboard)/produksi/products/_components/product-table.tsx", "product"],
     ]
     for (const [file, model] of dead) {
       expect(BULK_DELETE_REQUIRES_INDIVIDUAL.has(model), model).toBe(true)
