@@ -96,6 +96,10 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
           throw new Error((result as { error?: string } | undefined)?.error || "Gagal menghapus data")
         }
         showSuccess("Data berhasil dihapus")
+        // Tanpa refresh, payload RSC daftar tetap memuat baris yang barusan
+        // terhapus — list "sudah dihapus" tapi masih tampil sampai reload.
+        // HandleProcess + DeleteButton sudah memanggil router.refresh().
+        router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menghapus data")
       }
