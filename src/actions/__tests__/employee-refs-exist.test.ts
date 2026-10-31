@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => {
       update: vi.fn().mockResolvedValue({ id: 3 }),
     },
     $transaction: vi.fn(async (fn: any) => fn(prismaMock)),
+    $executeRaw: vi.fn().mockResolvedValue(1),
   }
   return {
     requirePermissionMock: vi.fn(),

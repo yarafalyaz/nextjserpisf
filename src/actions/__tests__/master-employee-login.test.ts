@@ -101,7 +101,11 @@ beforeEach(() => {
       employee: {
         create: (...a: unknown[]) => txEmployeeCreateMock(...a),
         update: (...a: unknown[]) => txEmployeeUpdateMock(...a),
+        // Kunci baris + cek ulang login di updateEmployee membaca employee
+        // lewat tx — delegasikan ke mock findUnique yang sama.
+        findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a),
       },
+      $executeRaw: vi.fn().mockResolvedValue(1),
     })
   )
 })
