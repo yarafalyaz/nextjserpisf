@@ -1391,6 +1391,26 @@ describe("Quotation Actions (legacy happy paths)", () => {
     mocks.prismaMock.quotationItem.count.mockResolvedValue(1)
     const res = await actions.sendQuotation(1)
     expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.quotation.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1, status: "draft" }, data: { status: "sent" } }),
+    )
+  })
+  it("sendQuotation ditolak bila item kosong DI BAWAH kunci (dikuras penulis lain sesudah cek luar)", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.quotationItem.count
+      .mockResolvedValueOnce(1) // cek luar: masih ada item
+      .mockResolvedValueOnce(0) // di bawah kunci: sudah dikosongkan
+    const res = await actions.sendQuotation(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("harus memiliki minimal 1 item")
+  })
+  it("sendQuotation ditolak bila klaim draft kalah (status berubah sesudah cek luar)", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.quotationItem.count.mockResolvedValue(1)
+    mocks.prismaMock.quotation.updateMany.mockResolvedValueOnce({ count: 0 })
+    const res = await actions.sendQuotation(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("hanya bisa dikirim dari status draft")
   })
   it("acceptQuotation succeeds", async () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "sent", revisionNumber: 3 })

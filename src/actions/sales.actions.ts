@@ -352,10 +352,25 @@ export async function sendQuotation(quotationId: number) {
   }
 
   await prisma.$transaction(async (tx) => {
-    await tx.quotation.update({
-      where: { id: quotationId },
+    // Klaim kondisional: cek status + item di atas adalah snapshot —
+    // updateQuotation konkuren bisa mengosongkan item di antaranya dan
+    // penawaran kosong tetap terkirim. Menang klaim draft->sent lebih
+    // dulu, lalu nilai ulang jumlah item dari baris terkunci; klaim
+    // kalah atau item kosong = rollback seluruh tx.
+    await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+    const claim = await tx.quotation.updateMany({
+      where: { id: quotationId, status: "draft" },
       data: { status: "sent" },
     })
+    if (claim.count === 0) {
+      throw new Error("Quotation hanya bisa dikirim dari status draft")
+    }
+    const lockedItemCount = await tx.quotationItem.count({
+      where: { section: { quotationId } },
+    })
+    if (lockedItemCount === 0) {
+      throw new Error("Quotation harus memiliki minimal 1 item sebelum dikirim")
+    }
 
     if (tx.quotationHistory) {
       await tx.quotationHistory.create({
