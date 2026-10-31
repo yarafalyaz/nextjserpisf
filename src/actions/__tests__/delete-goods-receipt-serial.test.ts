@@ -34,6 +34,9 @@ const mocks = vi.hoisted(() => {
     goodsReceipt: {
       delete: vi.fn(),
       count: vi.fn().mockResolvedValue(0),
+      // Recheck sesudah lock (c8205900a): bacaan dalam tx wajib draft, sama
+      // seperti fixture luar; test balapan menimpanya per kasus.
+      findUnique: vi.fn().mockResolvedValue({ status: "draft" }),
     },
     purchaseOrder: {
       update: vi.fn(),
