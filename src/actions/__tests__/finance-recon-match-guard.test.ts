@@ -122,7 +122,12 @@ describe("R-03 matchReconciliationLine guards", () => {
     wireMatchOk(mocks.guards.prismaMock, baseLine, baseEntry)
     const res = await matchReconciliationLine(9, 11, 77)
     expect(res.success).toBe(true)
-    const reuseWhere = mocks.guards.prismaMock.bankReconciliationItem.findFirst.mock.calls[0][0].where
+    // R8-KEU-06 menambah cek global completed sebagai panggilan pertama;
+    // query reuse per-recon adalah panggilan dengan bankReconciliationId.
+    const reuseCall = mocks.guards.prismaMock.bankReconciliationItem.findFirst.mock.calls.find(
+      (c: any[]) => c[0]?.where?.bankReconciliationId === 9,
+    )
+    const reuseWhere = reuseCall?.[0].where
     expect(reuseWhere).toMatchObject({
       bankReconciliationId: 9,
       journalEntryId: 77,

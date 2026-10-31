@@ -125,3 +125,7 @@ sebelum fix (klaim agen bukan vonis).
   mengurangkan kredit retur completed dari sisa tagihan (loader kanonis,
   sama seperti create). Sales suites 218/218 hijau. Berikutnya
   R8-KEU-07 (PLAUSIBLE), R8-JB-03..10, R8-SDM-01..06.
+- R8-KEU-07 selesai: complete rekonsiliasi kini tie-out saldo buku
+  tersimpan ke GL akun s/d cutoff dan mewajibkan seluruh baris koran
+  dalam cakupan tercocok/dikonsumsi completed lain. Domain keuangan
+  Round 8 tuntas. Berikutnya R8-JB-03..10, R8-SDM-01..06.

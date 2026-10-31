@@ -954,13 +954,45 @@ describe("Bank Reconciliation Actions", () => {
     expect(res?.success).toBe(true)
   })
   it("completeReconciliation succeeds", async () => {
-    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", bookBalance: 1000, statementBalance: 1000, items: [{ matched: true, cleared: true, bankStatementLineId: 1, journalEntryId: 1, type: null, amount: 0 }] })
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", accountId: 10, statementDate: new Date("2026-06-30"), periodStart: null, periodEnd: null, bookBalance: 1000, statementBalance: 1000, items: [{ matched: true, cleared: true, bankStatementLineId: 1, journalEntryId: 1, type: null, amount: 0 }] })
+    mocks.prismaMock.journalEntry.aggregate.mockResolvedValue({ _sum: { debit: 1000, credit: 0 } })
+    mocks.prismaMock.bankStatementLine.findMany.mockResolvedValue([{ id: 1 }])
+    const res = await (actions as any).completeReconciliation(1)
+    expect(res?.success).toBe(true)
+  })
+
+  it("R8-KEU-07: complete ditolak bila saldo buku tersimpan tidak tie-out ke buku besar", async () => {
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", accountId: 10, statementDate: new Date("2026-06-30"), periodStart: null, periodEnd: null, bookBalance: 1000, statementBalance: 1000, items: [{ matched: true, cleared: true, bankStatementLineId: 1, journalEntryId: 1, type: null, amount: 0 }] })
+    mocks.prismaMock.journalEntry.aggregate.mockResolvedValue({ _sum: { debit: 1250, credit: 0 } })
+    const res = await (actions as any).completeReconciliation(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("tidak sama dengan saldo buku besar")
+    expect(mocks.prismaMock.bankReconciliation.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("R8-KEU-07: complete ditolak bila masih ada baris koran cakupan yang belum dicocokkan", async () => {
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", accountId: 10, statementDate: new Date("2026-06-30"), periodStart: null, periodEnd: null, bookBalance: 1000, statementBalance: 1000, items: [{ matched: true, cleared: true, bankStatementLineId: 1, journalEntryId: 1, type: null, amount: 0 }] })
+    mocks.prismaMock.journalEntry.aggregate.mockResolvedValue({ _sum: { debit: 1000, credit: 0 } })
+    mocks.prismaMock.bankStatementLine.findMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
+    const res = await (actions as any).completeReconciliation(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("belum dicocokkan")
+    expect(mocks.prismaMock.bankReconciliation.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("R8-KEU-07: baris yang sudah dikonsumsi rekonsiliasi completed lain tidak menghalangi complete", async () => {
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", accountId: 10, statementDate: new Date("2026-06-30"), periodStart: null, periodEnd: null, bookBalance: 1000, statementBalance: 1000, items: [{ matched: true, cleared: true, bankStatementLineId: 1, journalEntryId: 1, type: null, amount: 0 }] })
+    mocks.prismaMock.journalEntry.aggregate.mockResolvedValue({ _sum: { debit: 1000, credit: 0 } })
+    mocks.prismaMock.bankStatementLine.findMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
+    mocks.prismaMock.bankReconciliationItem.findMany.mockResolvedValue([{ bankStatementLineId: 2 }])
     const res = await (actions as any).completeReconciliation(1)
     expect(res?.success).toBe(true)
   })
 
   it("R8-KEU-06: complete ditolak bila item sudah dipakai rekonsiliasi yang selesai", async () => {
-    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", bookBalance: 1000, statementBalance: 1000, items: [{ matched: true, cleared: true, bankStatementLineId: 1, journalEntryId: 1, type: null, amount: 0 }] })
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", accountId: 10, statementDate: new Date("2026-06-30"), periodStart: null, periodEnd: null, bookBalance: 1000, statementBalance: 1000, items: [{ matched: true, cleared: true, bankStatementLineId: 1, journalEntryId: 1, type: null, amount: 0 }] })
+    mocks.prismaMock.journalEntry.aggregate.mockResolvedValue({ _sum: { debit: 1000, credit: 0 } })
+    mocks.prismaMock.bankStatementLine.findMany.mockResolvedValue([{ id: 1 }])
     mocks.prismaMock.bankReconciliationItem.findFirst.mockResolvedValue({ id: 77 })
     const res = await (actions as any).completeReconciliation(1)
     expect(res?.success).toBe(false)
@@ -1554,12 +1586,14 @@ describe("More Action Branches", () => {
   it("completeReconciliation lolos dengan matched + adjustment valid (R-01)", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({
-      id: 1, status: "draft", bookBalance: 1000, statementBalance: 900,
+      id: 1, status: "draft", accountId: 10, statementDate: new Date("2026-06-30"), periodStart: null, periodEnd: null, bookBalance: 1000, statementBalance: 900,
       items: [
         { matched: true, cleared: true, bankStatementLineId: 5, journalEntryId: 6, type: null, amount: 0 },
         { matched: false, cleared: false, bankStatementLineId: null, journalEntryId: null, type: "outstanding_deposit", amount: 100 },
       ],
     })
+    mocks.prismaMock.journalEntry.aggregate.mockResolvedValue({ _sum: { debit: 1000, credit: 0 } })
+    mocks.prismaMock.bankStatementLine.findMany.mockResolvedValue([{ id: 5 }])
     mocks.prismaMock.bankReconciliation.updateMany.mockResolvedValue({ count: 1 })
     const res = await actions.completeReconciliation(1)
     expect(res.success).toBe(true)
@@ -1574,12 +1608,14 @@ describe("More Action Branches", () => {
     // buku 1000, bank 900, deposit 100 → adjusted 1000, difference 0.
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({
-      id: 1, status: "draft", bookBalance: 1000, statementBalance: 900,
+      id: 1, status: "draft", accountId: 10, statementDate: new Date("2026-06-30"), periodStart: null, periodEnd: null, bookBalance: 1000, statementBalance: 900,
       items: [
         { matched: true, cleared: true, bankStatementLineId: 5, journalEntryId: 6, type: null, amount: 500 },
         { matched: false, cleared: false, bankStatementLineId: null, journalEntryId: null, type: "outstanding_deposit", amount: 100 },
       ],
     })
+    mocks.prismaMock.journalEntry.aggregate.mockResolvedValue({ _sum: { debit: 1000, credit: 0 } })
+    mocks.prismaMock.bankStatementLine.findMany.mockResolvedValue([{ id: 5 }])
     mocks.prismaMock.bankReconciliation.updateMany.mockResolvedValue({ count: 1 })
     const res = await actions.completeReconciliation(1)
     expect(res.success).toBe(true)

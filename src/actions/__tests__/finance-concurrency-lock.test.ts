@@ -101,6 +101,16 @@ function wireReconTx(order: string[]) {
     modelName: "bankReconciliation",
     findUniqueOrThrow: reconFindUniqueOrThrowMock,
     updateMany: reconUpdateManyMock,
+    extra: {
+      // R8-KEU-07: GL tie-out (1000 cocok bookBalance) + cakupan koran
+      // hanya baris 1 yang sudah menjadi item recon ini.
+      journalEntry: { aggregate: vi.fn().mockResolvedValue({ _sum: { debit: 1000, credit: 0 } }) },
+      bankStatementLine: { findMany: vi.fn().mockResolvedValue([{ id: 1 }]) },
+      bankReconciliationItem: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+    },
   })
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
 }
@@ -140,7 +150,9 @@ describe("F-02 completeReconciliation concurrency guard", () => {
     const result = await completeReconciliation(9)
 
     expect(result.success).toBe(true)
-    expectLockOrder(order, ["lock", "reread", "claim"], executeRawMock)
+    // R8-KEU-06/07 menambah lock baris jurnal + koran sebelum klaim;
+    // urutan induk tetap lock → reread → … → claim terakhir.
+    expectLockOrder(order, ["lock", "reread", "lock", "lock", "claim"], executeRawMock)
   })
 
   it("rejects when the re-read status is no longer draft (lost the race)", async () => {

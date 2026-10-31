@@ -413,6 +413,11 @@ export function reconDraftFixture(overrides: Record<string, any> = {}) {
   return {
     id: 9,
     status: "draft",
+    // R8-KEU-07: complete kini tie-out GL + cakupan baris koran.
+    accountId: 10,
+    statementDate: new Date("2026-06-30"),
+    periodStart: null,
+    periodEnd: null,
     bookBalance: 1000,
     statementBalance: 1000,
     items: balancedReconItemsFixture(),

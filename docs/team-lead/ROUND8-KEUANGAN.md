@@ -124,13 +124,26 @@ perlu migrasi: unique komposit tetap menjadi penegak per-recon, cek
 global dari query terindeks. Regression: dua test di
 `finance.actions.test.ts` (match + complete ditolak).
 
-### R8-KEU-07 — MEDIUM, PLAUSIBLE — completeReconciliation percaya saldo input
+### R8-KEU-07 — SELESAI 2026-10-31 — completeReconciliation percaya saldo input
 `src/actions/finance.actions.ts:1313-1327` —
 `statementBalance`/`bookBalance` disimpan apa adanya;
 `:1682-1703` — formula closing hanya dari saldo tersimpan, tanpa
 recompute GL, tanpa cek cakupan semua baris statement. Skenario:
 buat recon saldo 0/0 + satu match kecil → status completed walau GL
 bank beda jauh. Sertifikasi palsu.
+Triase main session: CONFIRMED. UI penyelesaian sendiri menjanjikan
+"Semua baris harus tercocok dan selisih harus nol", tetapi server hanya
+memeriksa item yang sudah tersimpan dan saldo ketik bebas. Perbaikan di
+titik sertifikasi `completeReconciliation`, tanpa migrasi:
+(1) saldo buku tersimpan wajib tie-out ke saldo GL akun dari jurnal
+`POSTED`/`REVERSED` non-deleted s/d akhir hari `periodEnd` (fallback
+`statementDate`) — semantik agregasi yang sama dengan laporan buku
+besar; dan (2) seluruh baris rekening koran akun dalam cakupan wajib
+sudah dicocokkan di recon ini atau dikonsumsi recon completed lain.
+Saldo koran tetap fakta eksternal dari rekening koran pengguna, bukan
+dihitung dari GL. Regression: tie-out ditolak, cakupan belum cocok
+ditolak, baris milik completed lain tidak menghalangi; fixture lama
+diberi GL/cakupan yang konsisten.
 
 ### R8-KEU-08 — SELESAI 2026-10-31 — updatePettyCash hard-delete jurnal
 `src/actions/finance.actions.ts:1144-1158` — `deletePettyCashJournal`

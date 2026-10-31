@@ -1725,6 +1725,79 @@ export async function completeReconciliation(reconciliationId: number) {
         );
       }
 
+      // R8-KEU-07: saldo buku yang diketik bebas tidak boleh menjadi
+      // sertifikasi. Buku besar adalah sumber saldo buku di aplikasi ini,
+      // jadi saldo tersimpan wajib tie-out ke jurnal POSTED/REVERSED
+      // (semantik agregasi laporan) s/d akhir hari tanggal koran/periode.
+      const cutoffDate = reconciliation.periodEnd ?? reconciliation.statementDate;
+      const cutoffExclusive = new Date(cutoffDate);
+      cutoffExclusive.setUTCDate(cutoffExclusive.getUTCDate() + 1);
+      const glTotals = await tx.journalEntry.aggregate({
+        where: {
+          accountId: reconciliation.accountId,
+          journal: {
+            status: { in: ["POSTED", "REVERSED"] },
+            deletedAt: null,
+            transactionDate: { lt: cutoffExclusive },
+          },
+        },
+        _sum: { debit: true, credit: true },
+      });
+      const glBookBalance = safeSubtract(
+        Number(glTotals._sum.debit ?? 0),
+        Number(glTotals._sum.credit ?? 0),
+        2,
+      );
+      const storedBookBalance = Number(reconciliation.bookBalance);
+      if (Math.abs(safeSubtract(storedBookBalance, glBookBalance, 2)) >= 0.01) {
+        throw new Error(
+          `Saldo buku tersimpan ${storedBookBalance.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} tidak sama dengan saldo buku besar ${glBookBalance.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. Periksa jurnal akun ini sebelum menyelesaikan rekonsiliasi.`,
+        );
+      }
+
+      // R8-KEU-07: janji UI "semua baris harus tercocok" berlaku untuk
+      // seluruh baris koran akun dalam cakupan, bukan hanya baris yang
+      // kebetulan sudah menjadi item rekonsiliasi ini. Baris yang sudah
+      // dikonsumsi rekonsiliasi completed lain tidak dihitung ulang.
+      const matchedLineIds = new Set(
+        reconciliation.items
+          .map((i) => i.bankStatementLineId)
+          .filter((v): v is number => v != null),
+      );
+      const scopedLines = await tx.bankStatementLine.findMany({
+        where: {
+          bankStatement: { accountId: reconciliation.accountId },
+          date: {
+            ...(reconciliation.periodStart ? { gte: reconciliation.periodStart } : {}),
+            lt: cutoffExclusive,
+          },
+        },
+        select: { id: true },
+      });
+      const scopedLineIds = scopedLines.map((l) => l.id);
+      const completedItems = scopedLineIds.length > 0
+        ? await tx.bankReconciliationItem.findMany({
+            where: {
+              bankReconciliation: { status: "completed" },
+              bankStatementLineId: { in: scopedLineIds },
+            },
+            select: { bankStatementLineId: true },
+          })
+        : [];
+      const completedLineIds = new Set(
+        completedItems
+          .map((i) => i.bankStatementLineId)
+          .filter((v): v is number => v != null),
+      );
+      const uncoveredLineIds = scopedLineIds.filter(
+        (id) => !matchedLineIds.has(id) && !completedLineIds.has(id),
+      );
+      if (uncoveredLineIds.length > 0) {
+        throw new Error(
+          `${uncoveredLineIds.length} baris rekening koran dalam cakupan rekonsiliasi belum dicocokkan. Cocokkan semua baris sebelum menyelesaikan rekonsiliasi.`,
+        );
+      }
+
       // R8-KEU-06: complete harus memenangkan kunci global (journalEntryId,
       // bankStatementLineId) yang di-cek saat match. Lock baris jurnal lalu
       // baris koran (urutan global konsisten: jurnal dulu baru koran) di dalam
