@@ -27,7 +27,11 @@ vi.mock("@/lib/auth/permissions", () => ({
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     asset: { findUniqueOrThrow: (...a: unknown[]) => assetFindUniqueOrThrowMock(...a) },
-    assetCategory: { findUnique: vi.fn().mockResolvedValue(null) },
+    assetCategory: {
+      findUnique: vi.fn().mockResolvedValue({
+        assetAccountId: 11, accumulatedDepreciationAccountId: 12, gainLossAccountId: 14,
+      }),
+    },
     systemSetting: { findFirst: vi.fn().mockResolvedValue(null) },
     journal: { findMany: (...a: unknown[]) => journalFindManyMock(...a) },
     $transaction: (...a: unknown[]) => transactionMock(...a),
@@ -47,7 +51,13 @@ import { disposeAsset } from "../asset.actions"
 
 function wireTransaction() {
   const tx = {
-    asset: { updateMany: assetUpdateManyMock },
+    $executeRaw: vi.fn().mockResolvedValue(1),
+    $queryRaw: vi.fn().mockResolvedValue([{ id: 1, period_lock_date: null }]),
+    documentSequence: { upsert: vi.fn().mockResolvedValue({ currentValue: 1 }) },
+    asset: {
+      updateMany: assetUpdateManyMock,
+      findUniqueOrThrow: (...a: unknown[]) => assetFindUniqueOrThrowMock(...a),
+    },
     assetHistory: { create: assetHistoryCreateMock },
     journal: { findFirst: journalFindFirstMock, findMany: journalFindManyMock, create: journalCreateMock },
   }
@@ -66,7 +76,7 @@ beforeEach(() => {
     data: { assetId: 7, proceeds: 0, disposalDate: "2026-01-15", reason: "scrap" },
   })
   assetFindUniqueOrThrowMock.mockResolvedValue({
-    id: 7, code: "AST-001", name: "Mesin", status: "active",
+    id: 7, code: "AST-001", name: "Mesin", status: "active", categoryId: 1,
     purchaseCost: 1000, currentValue: 400,
   })
   assetUpdateManyMock.mockResolvedValue({ count: 1 })
@@ -99,6 +109,35 @@ describe("disposeAsset concurrency guard", () => {
     expect(journalCreateMock).not.toHaveBeenCalled()
   })
 
+  it("riwayat disposal memakai nilai buku TERKUNCI dalam tx, bukan snapshot luar", async () => {
+    // Snapshot luar: tanpa jurnal → dasar legacy currentValue 400.
+    // Bacaan dalam tx (sesudah kunci aset): jurnal perolehan POSTED
+    // gross 1000 − akumulasi 100 = nilai buku 900. proceeds 0 → rugi 900
+    // tertulis di riwayat. buildAssetDisposalEntries di-mock [] sehingga
+    // jurnal dibuat tanpa entri dan tanpa butuh akun GL.
+    const { Prisma } = await import("@prisma/client")
+    const D = (n: number) => new Prisma.Decimal(n)
+    journalFindManyMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([
+        { referenceType: "ASSET_ACQUISITION", entries: [{ accountId: 11, debit: D(1000), credit: D(0) }] },
+        { referenceType: "ASSET_DEPRECIATION_202601", entries: [{ accountId: 12, debit: D(0), credit: D(100) }] },
+      ])
+    // documentSequence tidak di-mock global: nextAssetJournalNumber memakai
+    // tx.documentSequence — tambahkan lewat wireTransaction default tidak ada;
+    // jalur ini hanya sampai riwayat karena acquisitionJournal (findFirst)
+    // null → cabang GL dilewati.
+    journalFindFirstMock.mockResolvedValue(null)
+
+    const res = await disposeAsset(new FormData())
+
+    expect(res.success).toBe(true)
+    expect(res.gainLoss).toBe(-900)
+    const historyArg = assetHistoryCreateMock.mock.calls[0][0]
+    expect(historyArg.data.description).toContain("Nilai buku: 900")
+    expect(historyArg.data.description).toContain("rugi: 900")
+  })
+
   it("refuses disposing an asset already marked disposed (outer guard)", async () => {
     assetFindUniqueOrThrowMock.mockResolvedValue({
       id: 7, code: "AST-001", name: "Mesin", status: "disposed",
@@ -116,7 +155,9 @@ describe("disposeAsset concurrency guard", () => {
     // are mapped. Previously the journal was silently skipped while the asset was
     // already zeroed — GL kept the asset forever. Must now throw and roll back.
     journalFindFirstMock.mockResolvedValue({ id: 1 }) // acquisition journal exists
-    // assetCategory/systemSetting mocks resolve null → all GL accounts unmapped.
+    // Override kategori tes ini: tanpa akun terpetakan.
+    const prismaMod = await import("@/lib/db/prisma")
+    ;(prismaMod.prisma.assetCategory.findUnique as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null)
 
     const result = await disposeAsset(new FormData())
 

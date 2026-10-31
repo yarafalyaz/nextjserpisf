@@ -94,6 +94,8 @@ const mocks = vi.hoisted(() => {
       }
       return Promise.all(ops)
     }),
+    $executeRaw: vi.fn().mockResolvedValue(1),
+    $queryRaw: vi.fn().mockResolvedValue([{ id: 1, period_lock_date: null }]),
   }
   return {
     requirePermissionMock,

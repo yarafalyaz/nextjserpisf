@@ -1096,7 +1096,50 @@ export async function disposeAsset(formData: FormData) {
       : Number(asset.currentValue);
     const gainLoss = safeSubtract(proceeds, bookValue, 0); // positive = gain, negative = loss
 
-    await prisma.$transaction(async (tx) => {
+    const disposalResult = await prisma.$transaction(async (tx) => {
+      // Kunci baris aset lalu baca ulang fakta POSTED di DALAM tx: snapshot
+      // nilai buku di luar tx basi bila penyusutan/peristiwa perubahan
+      // terposting sesudah bacaan luar tetapi sebelum klaim disposal —
+      // klaim hanya mencegah disposal ganda, bukan menggeser dasar hitung.
+      await tx.$executeRaw`SELECT id FROM assets WHERE id = ${data.assetId} FOR UPDATE`;
+      const lockedAsset = await tx.asset.findUniqueOrThrow({ where: { id: data.assetId } });
+      if (lockedAsset.status === "disposed") {
+        throw new Error("Aset sudah dilepas (disposed) atau sedang diproses.");
+      }
+      const lockedJournals = await tx.journal.findMany({
+        where: {
+          referenceId: data.assetId,
+          status: "POSTED",
+          deletedAt: null,
+          OR: [
+            { referenceType: "ASSET_ACQUISITION" },
+            { referenceType: "ASSET_DISPOSAL" },
+            { referenceType: { startsWith: "ASSET_DEPRECIATION_" } },
+          ],
+        },
+        select: {
+          referenceType: true,
+          entries: { select: { accountId: true, debit: true, credit: true } },
+        },
+      });
+      const lockedPosted = journalBookValue(
+        lockedJournals.map((j) => ({
+          referenceType: j.referenceType ?? "",
+          lines: j.entries.map((e) => ({ accountId: e.accountId, debit: e.debit, credit: e.credit })),
+        })),
+        {
+          fixedAssetAccountId: gl.fixedAsset || null,
+          accumulatedDepreciationAccountId: gl.accumDep || null,
+        },
+      );
+      const grossCostTx = lockedPosted.hasAcquisitionJournal
+        ? lockedPosted.grossCostPosted.toNumber()
+        : Number(lockedAsset.purchaseCost);
+      const bookValueTx = lockedPosted.hasAcquisitionJournal
+        ? lockedPosted.bookValue.toNumber()
+        : Number(lockedAsset.currentValue);
+      const gainLossTx = safeSubtract(proceeds, bookValueTx, 0);
+
       // Atomically claim the disposal: only the request that flips status away
       // from "disposed" wins. The previous status check ran OUTSIDE the tx and the
       // update was unconditional, so two concurrent disposals could both pass the
@@ -1113,9 +1156,9 @@ export async function disposeAsset(formData: FormData) {
           assetId: data.assetId,
           type: "disposal",
           description:
-            `Pelepasan aset ${asset.code}. Nilai buku: ${bookValue.toLocaleString("id-ID")}, ` +
+            `Pelepasan aset ${lockedAsset.code}. Nilai buku: ${bookValueTx.toLocaleString("id-ID")}, ` +
             `hasil: ${proceeds.toLocaleString("id-ID")}, ` +
-            `${gainLoss >= 0 ? "laba" : "rugi"}: ${Math.abs(gainLoss).toLocaleString("id-ID")}` +
+            `${gainLossTx >= 0 ? "laba" : "rugi"}: ${Math.abs(gainLossTx).toLocaleString("id-ID")}` +
             (reason ? ` — ${reason}` : ""),
           amount: proceeds,
           date: disposalDate,
@@ -1155,10 +1198,10 @@ export async function disposeAsset(formData: FormData) {
         // Pure helper builds the balanced double-entry set (unit-tested across
         // gain/loss/break-even/write-off branches) and asserts balance itself.
         const built = buildAssetDisposalEntries({
-          grossCost,
-          bookValue,
+          grossCost: grossCostTx,
+          bookValue: bookValueTx,
           proceeds,
-          assetName: asset.name,
+          assetName: lockedAsset.name,
           accounts: gl,
         });
 
@@ -1175,7 +1218,7 @@ export async function disposeAsset(formData: FormData) {
             transactionDate: disposalDate,
             referenceType: "ASSET_DISPOSAL",
             referenceId: data.assetId,
-            description: `Pelepasan aset: ${asset.name} (${asset.code})`,
+            description: `Pelepasan aset: ${lockedAsset.name} (${lockedAsset.code})`,
             type: "ASSET_DISPOSAL",
             status: "POSTED",
             totalDebit: new Prisma.Decimal(totalDebit.toFixed(2)),
@@ -1191,17 +1234,18 @@ export async function disposeAsset(formData: FormData) {
           },
         });
       }
+      return { gainLossTx };
     });
 
     await logActivity(
       "dispose",
       "Asset",
       data.assetId,
-      `Melepas aset ${asset.code} (${gainLoss >= 0 ? "laba" : "rugi"} ${Math.abs(gainLoss)})`,
+      `Melepas aset ${asset.code} (${disposalResult.gainLossTx >= 0 ? "laba" : "rugi"} ${Math.abs(disposalResult.gainLossTx)})`,
     );
     revalidatePath("/aset");
     revalidatePath(`/aset/${data.assetId}`);
-    return { success: true, gainLoss };
+    return { success: true, gainLoss: disposalResult.gainLossTx };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[disposeAsset]", getErrorMessage(e) || e);
