@@ -216,6 +216,17 @@ describe("penjaga non-angka vonis §6", () => {
     await expect(getTerBrackets(down as never, "A", new Date("2026-01-01"))).rejects.toThrow("db down")
   })
 
+  it("getTerBrackets memakai effectiveTo INKLUSIF (seperti jendela statutori)", async () => {
+    const findMany = vi.fn().mockImplementation(async () => [])
+    const db = { payrollTerBracket: { findMany } }
+    await expect(getTerBrackets(db as never, "A", new Date("2026-02-28"))).resolves.toBeNull()
+    const observedWhere = ((findMany.mock.calls as unknown as Array<[{ where?: { OR?: unknown } }]>)[0])[0].where
+    expect(observedWhere?.OR).toEqual([
+      { effectiveTo: null },
+      { effectiveTo: { gte: new Date("2026-02-28") } },
+    ])
+  })
+
   it("regresi slip lama: fungsi disetahunkan legacy tidak berubah hasil", () => {
     // Karakterisasi pra-F-026 (payroll-statutory.service.test.ts): kunci beku.
     expect(computePph21Monthly(10_000_000, "TK/0", 400_000)).toBe(230_000)

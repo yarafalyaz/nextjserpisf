@@ -361,7 +361,11 @@ export async function getTerBrackets(db: TerDb, category: TerCategory, asOf: Dat
     where: {
       category,
       effectiveFrom: { lte: asOf },
-      OR: [{ effectiveTo: null } as never, { effectiveTo: { gt: asOf } } as never],
+      // Seed menulis effectiveTo INKLUSIF (seperti jendela statutori di atas):
+      // asOf persis di hari terakhir tetap memakai tabel ini. `gt` lama
+      // mengecualikan hari terakhir lalu lolos filter effectiveFrom-lerbesar,
+      // meninggalkan versi lama / kosong → pajak tanpa tabel sah.
+      OR: [{ effectiveTo: null } as never, { effectiveTo: { gte: asOf } } as never],
     },
     orderBy: { lowerBound: "asc" },
   })
