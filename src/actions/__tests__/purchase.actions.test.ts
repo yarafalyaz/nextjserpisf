@@ -922,12 +922,42 @@ describe("Vendor Bill Actions", () => {
     expect(mocks.prismaMock.vendorBill.create).toHaveBeenCalled()
   })
 
+  it("R8-JB-08: createVendorBill menolak kop manual inkonsisten (grandTotal != subtotal + tax)", async () => {
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "1000",
+      tax: "110",
+      grandTotal: "1500",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/grand total tidak sama/i)
+    expect(mocks.prismaMock.vendorBill.create).not.toHaveBeenCalled()
+  })
+
+  it("R8-JB-08: confirmVendorBill menolak draft manual tersimpan dengan kop inkonsisten", async () => {
+    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
+    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", purchaseOrderId: null, vendorId: 3,
+      subtotal: 1000, tax: 110, grandTotal: 1500, withholdingAmount: 0,
+    })
+    const hook = (await import("@/lib/hooks/accounting.hook")).onVendorBillPosted as any
+    hook.mockClear()
+    const res = await actions.confirmVendorBill(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/tersimpan tidak sama|grand total/i)
+    expect(hook).not.toHaveBeenCalled()
+  })
+
   it("confirmVendorBill isi balanceDue NETO (grandTotal − withholding, P0-2)", async () => {
     mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
     mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })
     mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
       id: 1, status: "draft", purchaseOrderId: null, vendorId: 3,
       grandTotal: 1000000, withholdingAmount: 100000,
+      // Kop manual konsisten (By-design R8-JB-08: grandTotal = subtotal + tax).
+      subtotal: 1000000, tax: 0,
     })
     const res = await actions.confirmVendorBill(1)
     expect(res?.success).toBe(true)
@@ -940,15 +970,18 @@ describe("Vendor Bill Actions", () => {
     mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
     mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
       id: 1, status: "draft", purchaseOrderId: 42, vendorId: 3, grandTotal: 500000,
+      subtotal: 500000, tax: 0,
     })
     mocks.prismaMock.vendorBill.findUnique.mockResolvedValue({
       id: 1, status: "draft", purchaseOrderId: 42, vendorId: 3, grandTotal: 500000,
+      subtotal: 500000, tax: 0,
     })
     mocks.prismaMock.vendorBill.aggregate
       .mockResolvedValueOnce({ _sum: { grandTotal: 0 } })
       .mockResolvedValue({ _sum: { grandTotal: 500000 } })
     mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue({
-      isService: true, workOrderId: 9, vendorId: 3, documentNo: "PO-0042",
+      // grandTotal WAJIB: assertThreeWayMatch jasa membaca plafon dari PO.
+      isService: true, workOrderId: 9, vendorId: 3, documentNo: "PO-0042", grandTotal: 500000,
     })
     mocks.prismaMock.productionOrder.findMany.mockResolvedValue(orders)
     mocks.prismaMock.productionCost.findMany.mockResolvedValue([])
@@ -988,16 +1021,19 @@ describe("Vendor Bill Actions", () => {
   })
 
   it("confirmVendorBill does not touch HPP for a non-service PO", async () => {
-    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
+    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 500000 }] }])
     mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })
     mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
       id: 1, status: "draft", purchaseOrderId: 42, vendorId: 3, grandTotal: 500000,
+      subtotal: 500000, tax: 0,
     })
     mocks.prismaMock.vendorBill.findUnique.mockResolvedValue({
       id: 1, status: "draft", purchaseOrderId: 42, vendorId: 3, grandTotal: 500000,
+      subtotal: 500000, tax: 0,
     })
     mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue({
-      isService: false, workOrderId: null, vendorId: 3, documentNo: "PO-0042",
+      // Non-jasa: plafon dari nilai GR (fixture 500000 di atas).
+      isService: false, workOrderId: null, vendorId: 3, documentNo: "PO-0042", grandTotal: 500000,
     })
 
     const res = await actions.confirmVendorBill(1)

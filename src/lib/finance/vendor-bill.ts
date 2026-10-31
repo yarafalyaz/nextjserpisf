@@ -101,6 +101,24 @@ export function summarizeBillItems(
 }
 
 /**
+ * R8-JB-08: nilai kupasan kop MANUAL (bill tanpa baris): `subtotal` =
+ * DPP bruto tanpa diskon dokumen (diskon by-design 0, ia hanya ada di
+ * baris), jadi identitas sahnya `grandTotal = subtotal + tax`.
+ * `expectedGrandTotal` = angka yang konsisten; caller menolak bila
+ * selisih dari `grandTotal` melebihi toleransi 2 sen (pembulatan tampilan uang).
+ */
+export function manualBillHeader(
+  kop: { subtotal: number; tax: number; grandTotal: number },
+): VendorBillHeaderTotals & { expectedGrandTotal: number } {
+  return {
+    subtotal: kop.subtotal,
+    discountAmount: 0,
+    tax: kop.tax,
+    grandTotal: kop.grandTotal,
+    expectedGrandTotal: safeAdd(kop.subtotal, kop.tax, 2),
+  }
+}
+/**
  * Σ diskon baris dari JSON `items` form — persis jumlah `VendorBillItem.discountAmount`
  * yang akan ditulis `mapVendorBillItems` (baris ber-qty 0 diabaikan di kedua sisi),
  * sehingga diskon level dokumen tidak bisa berselisih dengan jumlah barisnya.

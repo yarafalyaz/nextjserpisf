@@ -95,6 +95,22 @@ describe("kop tagihan dihitung ulang dari baris (summarizeBillItems)", () => {
   })
 })
 
+describe("kop manual tanpa baris (R8-JB-08)", () => {
+  it("manualBillHeader menandai kop inkonsisten lewat expectedGrandTotal", async () => {
+    const { manualBillHeader } = await import("@/lib/finance/vendor-bill")
+    const ok = manualBillHeader({ subtotal: 100_000, tax: 11_000, grandTotal: 111_000 })
+    expect(ok.discountAmount).toBe(0)
+    expect(ok.expectedGrandTotal).toBe(111_000)
+    expect(ok.grandTotal).toBe(ok.expectedGrandTotal)
+
+    const bad = manualBillHeader({ subtotal: 100_000, tax: 11_000, grandTotal: 150_000 })
+    expect(Math.abs(bad.grandTotal - bad.expectedGrandTotal)).toBeGreaterThan(0.02)
+
+    const rounding = manualBillHeader({ subtotal: 33_333.33, tax: 3_666.67, grandTotal: 37_000 })
+    expect(Math.abs(rounding.grandTotal - rounding.expectedGrandTotal)).toBeLessThanOrEqual(0.02)
+  })
+})
+
 describe("string format Indonesia di JSON items (parser repo)", () => {
   it("computeBillLineAmounts membaca qty/unitPrice/persen string id-ID penuh", () => {
     const a = computeBillLineAmounts({ qty: "2", unitPrice: "2.000.000", discountPercent: "10", taxPercent: "11" })

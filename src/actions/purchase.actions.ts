@@ -41,7 +41,7 @@ import { nextSlug } from "@/lib/utils/slug-db";
 import { revalidatePath } from "next/cache";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { findOverReturn } from "@/lib/sales/return-validation";
-import { computeBillLineAmounts, isValidTermsReference, summarizeBillItems, VENDOR_BILL_TERMS_REF_ERROR } from "@/lib/finance/vendor-bill";
+import { computeBillLineAmounts, isValidTermsReference, manualBillHeader, summarizeBillItems, VENDOR_BILL_TERMS_REF_ERROR } from "@/lib/finance/vendor-bill";
 import { allocatePaymentToBills } from "@/lib/finance/payment-allocation";
 import { SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status";
 import { syncServicePurchaseOrderCost } from "@/lib/services/production-cost.service";
@@ -1577,12 +1577,16 @@ export async function createVendorBill(formData: FormData) {
     // Bila form mengirim baris, kop (subtotal bruto/diskon/pajak/total)
     // dihitung ulang dari baris yang sama dengan yang ditulis ke
     // vendor_bill_items; tanpa baris, kop manual form dipertahankan.
-    const billHeader = summarizeBillItems(v.items) ?? {
-      subtotal: v.subtotal,
-      discountAmount: 0,
-      tax: v.tax,
-      grandTotal: v.grandTotal,
-    };
+    const billHeader = summarizeBillItems(v.items) ?? manualBillHeader({ subtotal: v.subtotal, tax: v.tax, grandTotal: v.grandTotal });
+    // R8-JB-08: kop manual (tanpa baris) wajib konsisten internalnya —
+    // grandTotal = subtotal + tax (diskon dokumen by-design 0). Tanpa
+    // ini jurnal AP lahir dari angka ketik bebas yang inkonsisten.
+    if (
+      "expectedGrandTotal" in billHeader &&
+      Math.abs(safeSubtract(Number(billHeader.grandTotal), Number(billHeader.expectedGrandTotal), 2)) > 0.02
+    ) {
+      throw new Error("Grand total tidak sama dengan subtotal + pajak. Periksa angka kop.");
+    }
 
     const bill = await prisma.$transaction(async (tx) => {
       // F-2026-10-24-133-V Putusan 2/4: penanda L3 pada notes menjadikan
@@ -1953,6 +1957,24 @@ export async function confirmVendorBill(billId: number) {
             })),
           ),
         );
+      }
+
+      // R8-JB-08: nilai tersimpan (bukan input form) divalidasi di
+      // titik pengakuan — draft manual lama dengan kop inkonsisten
+      // tidak boleh jadi jurnal AP. Bill berbaris konsisten by
+      // konstruksi (kop dihitung server dari baris).
+      const savedLineCount = await tx.vendorBillItem.count({ where: { vendorBillId: billId } });
+      if (savedLineCount === 0) {
+        const manualStored = manualBillHeader({
+          subtotal: Number(fresh.subtotal),
+          tax: Number(fresh.tax),
+          grandTotal: Number(fresh.grandTotal),
+        });
+        if (
+          Math.abs(safeSubtract(manualStored.grandTotal, manualStored.expectedGrandTotal, 2)) > 0.02
+        ) {
+          throw new Error("Grand total tersimpan tidak sama dengan subtotal + pajak. Perbaiki draft sebelum posting.");
+        }
       }
 
       await tx.vendorBill.update({
@@ -3237,12 +3259,14 @@ export async function updateVendorBill(id: number, formData: FormData) {
     // posted at confirm with a value the 3-way match should have rejected
     // — i.e. the over-bill guard was bypassable via edit. assertThreeWayMatch
     // excludes this bill's own id so it doesn't count itself.
-    const billHeader = summarizeBillItems(v.items) ?? {
-      subtotal: v.subtotal,
-      discountAmount: 0,
-      tax: v.tax,
-      grandTotal: v.grandTotal,
-    };
+    const billHeader = summarizeBillItems(v.items) ?? manualBillHeader({ subtotal: v.subtotal, tax: v.tax, grandTotal: v.grandTotal });
+    // R8-JB-08: sama seperti create — kop manual wajib konsisten.
+    if (
+      "expectedGrandTotal" in billHeader &&
+      Math.abs(safeSubtract(Number(billHeader.grandTotal), Number(billHeader.expectedGrandTotal), 2)) > 0.02
+    ) {
+      throw new Error("Grand total tidak sama dengan subtotal + pajak. Periksa angka kop.");
+    }
 
     const bill = await prisma.$transaction(async (tx) => {
       // Kunci baris bill lebih dulu, lalu nilai status dari baca ulang di

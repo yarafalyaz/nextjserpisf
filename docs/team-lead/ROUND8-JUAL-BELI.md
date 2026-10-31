@@ -98,6 +98,16 @@ menghasilkan subtotal baris negatif; reachable penuh untuk bill
 tanpa PO/kop manual (`createVendorBill:1580-1585`, confirm `:1918`).
 
 ### R8-JB-08 — LOW, CONFIRMED — Bill manual tanpa baris: kop dipercaya penuh
+**Status: SELESAI 2026-10-31** — keputusan main session: kop manual
+(bill tanpa baris) wajib memenuhi identitas `grandTotal = subtotal +
+tax` (diskon dokumen by-design 0; ia hanya ada di baris). Penegakan
+di tiga titik: create dan update menolak kop inkonsisten dari form
+(toleransi 2 sen pembulatan), dan confirm memvalidasi nilai
+TERSIMPAN bila draft tidak punya baris — draft manual lama dengan kop
+inkonsisten tidak bisa jadi jurnal AP. Helper `manualBillHeader` di
+`vendor-bill.ts` menghitung `expectedGrandTotal`. Bill berbaris tidak
+tersentuh (kop dihitung server dari baris). Fixture test lama yang
+tidak menyediakan grandTotal PO/GR diperbaiki sadar (bukan kode).
 Kop form dipercaya penuh di create DAN confirm
 (`purchase.actions.ts:1580-1585,1918-1923`); tanpa verifikasi
 `grandTotal = subtotal − discount + tax` → jurnal AP dari angka

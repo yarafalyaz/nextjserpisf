@@ -138,3 +138,4 @@ sebelum fix (klaim agen bukan vonis).
   lint bersih. Berikutnya verifikasi JB-05..10, SDM-01..06 dari kode
   nyata, lalu triase integrasi jurnal.
 - R8-JB-05..07 + R8-JB-10 selesai: baris DP konversi awal sebesar porsi teralokasi (kelebihan tetap kredit pelanggan, baris Rp0 = marker idempotency); postInvoice kini memanggil recalc kanonis dalam tx yang sama (akrual komisi faktur konversi DP); persen diskon/pajak bill di-clamp [0,100] di satu sumber hitung; komentar confirmVendorBill diperbaiki. 442 test batch + 223 tetangga hijau, tsc bersih, lint bersih. Berikutnya JB-08 (keputusan), triase SDM-01..06 dari kode nyata, triase integrasi jurnal.
+- R8-JB-08 selesai: kop manual bill tanpa baris wajib grandTotal = subtotal + tax; ditolak di create, update, dan confirm (nilai tersimpan, bila tanpa baris). 250 test hijau, tsc bersih, lint bersih. Sisa Round 8: SDM-01..06 (verifikasi dari kode nyata), triase integrasi jurnal, penutup sesi.
