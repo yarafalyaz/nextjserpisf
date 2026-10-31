@@ -864,6 +864,31 @@ describe("Vendor Bill Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("confirmVendorBill bill tanpa PO mengunci baris bill sebelum baca ulang draft", async () => {
+    // Bill tanpa PO: selama ini tidak ada kunci sama sekali, bacaan ulang
+    // dalam tx adalah snapshot — updateVendorBill (mengunci baris bill)
+    // bisa commit di antaranya dan posting menulis status/balanceDue dari
+    // nominal basi.
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", purchaseOrderId: null, vendorId: 9,
+      subtotal: 100, tax: 0, grandTotal: 100, withholdingAmount: 0, withholdingTypeId: null,
+    })
+    const sqlSeen: string[] = []
+    mocks.prismaMock.$executeRaw.mockImplementation((...a: any[]) => {
+      const first = a[0]
+      sqlSeen.push(Array.isArray(first) ? first.join("?") : ((first as any)?.strings?.join("?") ?? String(first ?? "")))
+      return Promise.resolve(1)
+    })
+    const res = await actions.confirmVendorBill(1)
+    expect(res?.success).toBe(true)
+    const billLockIdx = sqlSeen.findIndex((s) => /vendor_bills/i.test(s) && /for update/i.test(s))
+    expect(billLockIdx).toBeGreaterThanOrEqual(0)
+    // Kunci mendahului bacaan ulang fresh dalam tx (findUniqueOrThrow ke-2;
+    // panggilan pertama adalah pre-check luar tx).
+    const secondRead = mocks.prismaMock.vendorBill.findUniqueOrThrow.mock.invocationCallOrder[1]
+    expect(mocks.prismaMock.$executeRaw.mock.invocationCallOrder[billLockIdx]).toBeLessThan(secondRead)
+  })
+
   it("createVendorBill tidak mem-posting jurnal (draft murni, P0-2)", async () => {
     const hook = (await import("@/lib/hooks/accounting.hook")).onVendorBillPosted as any
     hook.mockClear()

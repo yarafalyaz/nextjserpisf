@@ -1931,6 +1931,11 @@ export async function confirmVendorBill(billId: number) {
     let completedOrderNotice: string | undefined;
     let taxInvoiceWarning: string | undefined;
     await prisma.$transaction(async (tx) => {
+      // Kunci baris bill TANPA SYARAT: bill tanpa PO selama ini tidak dikunci
+      // sama sekali sehingga bacaan ulang di bawah hanya snapshot —
+      // updateVendorBill (yang mengunci baris ini) bisa commit di antaranya
+      // dan posting menulis status/balanceDue + jurnal dari nominal basi.
+      await tx.$executeRaw`SELECT id FROM vendor_bills WHERE id = ${billId} FOR UPDATE`;
       if (bill.purchaseOrderId) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${bill.purchaseOrderId} FOR UPDATE`;
       }
