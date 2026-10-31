@@ -189,10 +189,16 @@ export async function onSalesReturnCompleted(
           );
         }
         const rowSerials = toCleanStrings(item.serialNumbers);
-        if (trackSerialByItem.get(item.itemId) && rowSerials.length === 0) {
-          throw new Error(
-            `Item #${item.itemId} memakai pelacakan serial — sebutkan nomor seri yang benar-benar kembali.`,
-          );
+        if (trackSerialByItem.get(item.itemId)) {
+          // Jumlah serial WAJIB persis qty dasar yang kembali (pola
+          // goods-receipt): 1 serial untuk retur 5 unit menghidupkan stok
+          // kuantitas tanpa identitas — 4 unit hantu tak berserial.
+          const expectedSerials = Math.round(baseQty);
+          if (rowSerials.length !== expectedSerials) {
+            throw new Error(
+              `Item #${item.itemId} melacak nomor seri: jumlah nomor seri (${rowSerials.length}) tidak sama dengan qty retur (${expectedSerials}).`,
+            );
+          }
         }
         // Satu layer per lot: layer gabungan "LOT-A, LOT-B" tak pernah
         // ditemukan konsumsi FIFO sehingga ItemBatch tak berkurang. Qty

@@ -162,6 +162,41 @@ describe("sales return UoM", () => {
     await expect(onSalesReturnCompleted(7, 9)).rejects.toThrow(/nomor seri/)
   })
 
+  it("rejects fewer serials than qty returned (unit hantu tanpa serial)", async () => {
+    mocks.toBaseFactor.mockResolvedValue(1)
+    wireTx({
+      items: [{ itemId: 3, qty: 5, cost: 100, serialNumbers: ["SN-A"] }],
+      itemRows: [{ id: 3, defaultWarehouseId: 5, trackSerial: true }],
+      invoiceItemRows: [{ itemId: 3, uom: "PCS" }],
+      serialFindMany: vi.fn().mockResolvedValue([
+        { id: 91, serialNumber: "SN-A", status: "used" },
+      ]),
+    })
+
+    await expect(onSalesReturnCompleted(7, 9)).rejects.toThrow(/tidak sama dengan qty retur \(5\)/)
+  })
+
+  it("rejects duplicated serials on one return line (dedupe -> jumlah kurang)", async () => {
+    mocks.toBaseFactor.mockResolvedValue(1)
+    wireTx({
+      items: [{ itemId: 3, qty: 2, cost: 100, serialNumbers: ["SN-A", "SN-A"] }],
+      itemRows: [{ id: 3, defaultWarehouseId: 5, trackSerial: true }],
+      invoiceItemRows: [{ itemId: 3, uom: "PCS" }],
+      serialFindMany: vi.fn().mockResolvedValue([
+        { id: 91, serialNumber: "SN-A", status: "used" },
+      ]),
+    })
+
+    // toCleanStrings men-dedupe menjadi 1 serial unik untuk qty 2 -> tolak.
+    await expect(onSalesReturnCompleted(7, 9)).rejects.toThrow(/tidak sama dengan qty retur \(2\)/)
+  })
+
+  it("guard statis: pre-check aksi menolak jumlah serial tak sama qty", async () => {
+    const { readFileSync } = await import("node:fs")
+    const actions = readFileSync("src/actions/sales.actions.ts", "utf8")
+    expect(actions).toContain("serials !== Math.round(Number(it.qty))")
+  })
+
   it("records the named batch on the layer and rebuilds the lot (P1-1)", async () => {
     mocks.toBaseFactor.mockResolvedValue(1)
     const { spies, tx } = wireTx({

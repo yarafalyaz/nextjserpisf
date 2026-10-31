@@ -2246,8 +2246,10 @@ export async function completeSalesReturn(returnId: number) {
       if (!t) continue
       const serials = Array.isArray(it.serialNumbers) ? (it.serialNumbers as unknown[]).filter((v) => String(v ?? "").trim()).length : 0
       const batches = Array.isArray(it.batchNumbers) ? (it.batchNumbers as unknown[]).filter((v) => String(v ?? "").trim()).length : 0
-      if (t.trackSerial && serials === 0) {
-        throw new Error(`Item #${it.itemId} memakai pelacakan serial — sebutkan nomor seri yang benar-benar kembali.`)
+      if (t.trackSerial && serials !== Math.round(Number(it.qty))) {
+        // Jumlah serial harus persis qty retur: kurang dari itu
+        // menghidupkan stok tanpa identitas serial (unit hantu).
+        throw new Error(`Item #${it.itemId} melacak nomor seri: jumlah nomor seri (${serials}) tidak sama dengan qty retur (${Math.round(Number(it.qty))}).`)
       }
       if (t.trackBatch && batches === 0) {
         throw new Error(`Item #${it.itemId} memakai pelacakan batch — sebutkan nomor batch yang benar-benar kembali.`)
