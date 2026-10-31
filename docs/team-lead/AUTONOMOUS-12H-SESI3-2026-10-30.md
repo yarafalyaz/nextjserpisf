@@ -129,6 +129,36 @@ ci:quick penuh; update checkpoint akhir; commit docs lokal.
   menganggap rekap-borongan `view_reports`; diselaraskan ke daftar
   fail-closed payroll R7PR-03 (`249e93555`, nol assertion dilonggarkan,
   nol logika produksi berubah). Tree bersih; tidak ada push.
+- Sisa bersyarat DITUTUP 2026-10-31 (perintah user "kerjakan dong sisa
+  bersyarat"):
+  - STOK-14 SELESAI `f88f46dc9` — biaya non-material dibekukan sesudah
+    release parsial pertama (tambah/ubah/hapus + overhead ditolak,
+    re-cek dalam transaksi berkunci baris order; sync jasa subkontrak +
+    rework NCR melewati order parsial seperti completed). Keputusan +
+    alasan di `ROUND5-STOCK.md` §STOK-14. Catatan operasional: order
+    yang sudah terlanjur parsial tidak bisa ditambah biayanya sampai
+    selesai penuh — memang maksud fix.
+  - R7PB-05 sisa SELESAI `87621bdb7` — `provisionSetupSchema` ikut
+    men-strip `tableCount` lewat `toPublicChecks`.
+  - Audit pra-deploy di DB dev (read-only): `approval_workflows`
+    hanya Journal/VendorPayment (di dalam enum R6WN-06); 0 langkah
+    tanpa approver; 0 duplikat `employees.user_id`. Sesudah persetujuan
+    eksplisit user untuk DB dev (bukan produksi): `prisma db push`
+    menerapkan drift schema (7 kolom nullable, 3 unique, 3 FK,
+    3 drop index non-unique) → diff schema-vs-DB kosong;
+    `npm run db:seed` membuat 5 permission approve R6WN-06.
+    Rantai migrasi diverifikasi ulang di kontainer MySQL scratch
+    buang-pakai: `db:check-migrations` drift 0.
+  - S3-D sweep DOM terautentikasi tertutup: build segar + Playwright
+    chromium (`system-smoke` semua halaman dashboard + `dashboard` +
+    `auth`, sesi sah `e2e/.auth`) **371/371 hijau**. Empat spec pembaca
+    demo data tetap tidak dijalankan di DB dev (aturan tetap).
+  - `ci:quick` final sesudah semua itu: **Pipeline PASSED** (unit
+    1103 file / 10783 test hijau + 21 skipped, build sukses) di
+    `87621bdb7`. Tree bersih; tidak ada push.
+  - Yang tetap di luar jangkauan sesi: deploy produksi (migrate
+    deploy + pindah berkas `public/uploads/{proofs,avatars,signatures}`
+    lama ke `private/uploads/`) — menunggu perintah eksplisit.
 - S3-F SELESAI: `TZ=Asia/Jakarta npm run ci:quick` **Pipeline PASSED**
   (ESLint bersih, tsc bersih, unit 1099 file / 10721 test hijau +
   21 skipped, production build sukses). Run pertama gagal 11 test —
