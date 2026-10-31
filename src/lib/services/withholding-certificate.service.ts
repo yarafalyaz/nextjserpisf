@@ -67,6 +67,27 @@ export type WithholdingResult = {
   id?: number
 }
 
+function isCertificateNumberConflict(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false
+  const rec = error as Record<string, unknown>
+  if (rec.code !== "P2002") return false
+  const meta = rec.meta as Record<string, unknown> | undefined
+  const target = meta ? String(meta.target ?? "") : ""
+  const message = error instanceof Error ? error.message : ""
+  return /uq_withholding_certificates_number|certificate_number/i.test(target)
+    || /uq_withholding_certificates_number|certificate_number/i.test(message)
+}
+
+function withholdingError(error: unknown, number?: string): WithholdingResult {
+  // Terbit konkuren: cek findFirst lolos di kedua tx, yang kalah menabrak
+  // unique nomor di create. Tx rollback atomik (klaim idempotency ikut
+  // rollback), jadi hasilnya pasti — BUKAN ambigu pola tax-invoice.service.
+  if (number && isCertificateNumberConflict(error)) {
+    return { success: false, error: `Nomor bupot "${number}" sudah terbit`, ambiguous: false }
+  }
+  return { success: false, error: getErrorMessage(error), ambiguous: !isDefinitiveError(error) }
+}
+
 function toMoney(value: number): Prisma.Decimal {
   return new Prisma.Decimal(value.toFixed(2))
 }
@@ -118,8 +139,8 @@ export interface IssueWithholdingInput {
  * wajib receivableAccountId (jurnal pola berjalan butuh keduanya).
  */
 export async function issueWithholdingCertificate(input: IssueWithholdingInput): Promise<WithholdingResult> {
+  const number = input.certificateNumber.trim()
   try {
-    const number = input.certificateNumber.trim()
     if (!number) return { success: false, error: "Nomor bupot DJP wajib diisi" }
     if (!input.counterpartyName.trim()) return { success: false, error: "Nama pihak dipotong wajib diisi" }
     if (!(input.dpp > 0)) return { success: false, error: "DPP bruto harus > 0" }
@@ -278,7 +299,7 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
     })
     return { success: true, replayed: isReplay, id: createdId }
   } catch (e) {
-    return { success: false, error: getErrorMessage(e), ambiguous: !isDefinitiveError(e) }
+    return withholdingError(e, number)
   }
 }
 

@@ -273,6 +273,39 @@ describe("issueWithholdingCertificate guards", () => {
     expect(mocks.certCreate).not.toHaveBeenCalled()
   })
 
+  it("race nomor bupot: P2002 uq_withholding_certificates_number diterjemahkan definitif", async () => {
+    mocks.certCreate.mockRejectedValue(
+      Object.assign(new Error("Unique constraint failed"), {
+        code: "P2002",
+        meta: { target: "uq_withholding_certificates_number" },
+      }),
+    )
+    const r = await issueWithholdingCertificate({
+      direction: "we_withhold", certificateNumber: "BP-001",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Maklon",
+      withholdingTypeId: 3, dpp: 10_000_000, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(r.ambiguous).toBe(false)
+    expect(String(r.error)).toMatch(/Nomor bupot "BP-001" sudah terbit/)
+  })
+
+  it("P2002 constraint lain (slug) tetap ambiguous", async () => {
+    mocks.certCreate.mockRejectedValue(
+      Object.assign(new Error("Unique constraint failed"), {
+        code: "P2002",
+        meta: { target: "withholding_certificates_slug_unique" },
+      }),
+    )
+    const r = await issueWithholdingCertificate({
+      direction: "we_withhold", certificateNumber: "BP-001",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Maklon",
+      withholdingTypeId: 3, dpp: 10_000_000, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(r.ambiguous).toBe(true)
+  })
+
   it("jenis tanpa pasal snapshot ditolak (jangan tebak pasal)", async () => {
     mocks.typeFindUniqueOrThrow.mockResolvedValue({
       id: 3, code: "LAMA", article: null, objectCode: null,
