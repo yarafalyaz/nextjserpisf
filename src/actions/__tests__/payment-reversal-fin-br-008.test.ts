@@ -108,8 +108,8 @@ describe("FIN-BR-008 reverseVendorPayment", () => {
       { id: 12, vendorPaymentId: 1, vendorBillId: 22, amount: 200 },
     ])
     mocks.prismaMock.vendorBill.findMany.mockResolvedValue([
-      { id: 21, grandTotal: 1000, withholdingAmount: 0, paidAmount: 400 },
-      { id: 22, grandTotal: 200, withholdingAmount: 0, paidAmount: 200 },
+      { id: 21, grandTotal: 1000, withholdingAmount: 0, paidAmount: 400, balanceDue: 600 },
+      { id: 22, grandTotal: 200, withholdingAmount: 0, paidAmount: 200, balanceDue: 0 },
     ])
     // Jurnal asal POSTED; belum ada jurnal lawan (findFirst reversal = null).
     mocks.prismaMock.journal.findMany.mockResolvedValue([
@@ -180,6 +180,28 @@ describe("FIN-BR-008 reverseVendorPayment", () => {
     expect(mocks.logActivityMock).toHaveBeenCalledWith(
       "reverse", "VendorPayment", 1, expect.stringContaining(REASON),
     )
+  })
+
+  it("R8-JB-04: reversal sesudah relief retur TIDAK menghidupkan saldo yang sudah diretur", async () => {
+    arrangeCompleted()
+    // Bill 21: grandTotal 1000, dibayar 600, lalu retur melegakan 400 →
+    // balanceDue 0 (lunas). Alokasi pembayaran yang dibalik hanya 400 dari
+    // payment ini; sesudah reversal sisa yang sah = 400 (bukan 1000).
+    mocks.prismaMock.vendorPaymentAllocation.findMany.mockResolvedValue([
+      { id: 11, vendorPaymentId: 1, vendorBillId: 21, amount: 400 },
+    ])
+    mocks.prismaMock.vendorBill.findMany.mockResolvedValue([
+      { id: 21, grandTotal: 1000, withholdingAmount: 0, paidAmount: 600, balanceDue: 0 },
+    ])
+    const res = await purchaseActions.reverseVendorPayment(1, REASON)
+    expect(res.success).toBe(true)
+    const billUpdates = mocks.prismaMock.vendorBill.update.mock.calls.map((c: any) => c[0])
+    const bill21 = billUpdates.find((c: any) => c.where.id === 21)
+    expect(Number(bill21.data.paidAmount)).toBe(200)
+    // 0 (sesudah relief) + 400 (alokasi dibalik) = 400 — relief retur 400
+    // tetap gugur, vendor tidak bisa ditagih ulang atas barang diretur.
+    expect(Number(bill21.data.balanceDue)).toBe(400)
+    expect(bill21.data.status).toBe("partial")
   })
 
   it("periode jurnal asal terkunci: ditolak, nol mutasi saldo/dokumen", async () => {

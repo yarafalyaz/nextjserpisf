@@ -43,7 +43,7 @@ import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { findOverReturn } from "@/lib/sales/return-validation";
 import { computeBillLineAmounts, isValidTermsReference, summarizeBillItems, VENDOR_BILL_TERMS_REF_ERROR } from "@/lib/finance/vendor-bill";
 import { allocatePaymentToBills } from "@/lib/finance/payment-allocation";
-import { isSettled, SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status";
+import { SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status";
 import { syncServicePurchaseOrderCost } from "@/lib/services/production-cost.service";
 import {
   GOODS_RECEIPT_JOURNAL_REF_TYPE,
@@ -2061,8 +2061,12 @@ export async function reverseVendorPayment(
         userId,
       );
 
-      // Saldo kembali per alokasi: paidAmount turun, balanceDue naik,
-      // status dihitung ulang neto (pola sama confirmVendorPayment).
+      // Saldo kembali per alokasi: paidAmount turun dan balanceDue naik
+      // PERSIS sebesar alokasi yang dibalik. R8-JB-04: jangan hitung ulang
+      // balanceDue dari kop (grandTotal − withholding − paidAmount) —
+      // formula itu tidak tahu relief retur yang sudah menurunkan
+      // balanceDue, jadi reversal akan menghidupkan lagi saldo yang sudah
+      // diretur dan vendor bisa ditagih ulang.
       const allocations = await tx.vendorPaymentAllocation.findMany({
         where: { vendorPaymentId: id },
       });
@@ -2075,21 +2079,17 @@ export async function reverseVendorPayment(
       for (const alloc of allocations) {
         const bill = billMap.get(alloc.vendorBillId);
         if (!bill) continue;
-        const netPayable = safeSubtract(
-          bill.grandTotal,
-          bill.withholdingAmount ?? 0,
-          2,
-        );
         // F-2026-10-28-155-S P4: presisi sen (sama dengan confirm di bawah).
         const nextPaid = safeSubtract(bill.paidAmount, alloc.amount, 2);
-        const nextBalance = safeSubtract(netPayable, nextPaid, 2);
+        const nextBalance = safeAdd(bill.balanceDue, alloc.amount, 2);
         await tx.vendorBill.update({
           where: { id: bill.id },
           data: {
             paidAmount: nextPaid,
             balanceDue: nextBalance,
-            // FIN-BR-006/007: status dari outstanding valid + toleransi Rp1.
-            status: isSettled(netPayable, nextPaid)
+            // Status dari sisa operasional balanceDue (kanonis 155-S) +
+            // toleransi Rp1; paidAmount hanya membedakan partial/posted.
+            status: nextBalance <= SETTLEMENT_TOLERANCE_IDR
               ? "paid"
               : nextPaid > 0
                 ? "partial"
@@ -2242,12 +2242,11 @@ export async function confirmVendorPayment(paymentId: number) {
             `Vendor bill #${alloc.vendorBillId} tidak ditemukan dalam tagihan terkunci`,
           );
         }
-        // P0-2: batas alokasi = NETO (bukan grandTotal) — konsisten dengan sisa.
-        // Presisi sen (`, 2`): varian `, 0` di sini lama membulatkan sen ke
-        // rupiah penuh dan menghancurkan sisa 0,50 sebelum status dinilai.
-        const netPayable = safeSubtract(bill.grandTotal, bill.withholdingAmount ?? 0, 2);
-        const nextPaid = safeAdd(bill.paidAmount, alloc.amount, 2);
-        if (nextPaid > netPayable) {
+        // R8-JB-04: batas alokasi = sisa operasional balanceDue kanonis,
+        // bukan grandTotal − withholding. Bill yang sudah diretur sebagian
+        // punya balanceDue lebih kecil dari formula kop; memakai formula
+        // kop di sini akan menimpa relief retur saat update di bawah.
+        if (Number(alloc.amount) > Number(bill.balanceDue) + SETTLEMENT_TOLERANCE_IDR) {
           throw new Error(
             `Alokasi melebihi sisa tagihan vendor bill #${bill.id}`,
           );
@@ -2270,27 +2269,25 @@ export async function confirmVendorPayment(paymentId: number) {
       //    there are no write-write conflicts between these updates. Mirrors the
       //    parallel-update pattern used in onExpenseApprovedSyncPettyCash and the
       //    inventory-fifo batch-update refactors.
-      // P0-2: sisa = NETO (grandTotal − withholding) − terbayar, konsisten
-      // dengan jurnal (Cr AP neto) dan balanceDue saat confirm. Sebelumnya
-      // memakai grandTotal sehingga tagihan ber-PPh tak pernah lunas sekali
-      // bayar (sisa palsu sebesar withholding selamanya).
+      // R8-JB-04: kurangi balanceDue tersimpan PERSIS sebesar alokasi.
+      // Menghitung ulang dari kop (grandTotal − withholding − paidAmount)
+      // akan menghapus relief retur yang sudah tercatat di balanceDue.
       await Promise.all(
         allocations.map((alloc) => {
           const bill = openBillMap.get(alloc.vendorBillId)!;
-          // Presisi sen (`, 2`) — sama dengan validasi di atas; `, 0` lama
-          // membulatkan paidAmount/balanceDue ke rupiah penuh di DB.
-          const netPayable = safeSubtract(bill.grandTotal, bill.withholdingAmount ?? 0, 2);
+          // Presisi sen (`, 2`) — `, 0` lama membulatkan paidAmount/
+          // balanceDue ke rupiah penuh di DB.
           const nextPaid = safeAdd(bill.paidAmount, alloc.amount, 2);
-          const nextBalance = safeSubtract(netPayable, nextPaid, 2);
+          const nextBalance = safeSubtract(bill.balanceDue, alloc.amount, 2);
 
           return tx.vendorBill.update({
             where: { id: bill.id },
             data: {
               paidAmount: nextPaid,
               balanceDue: nextBalance,
-              // FIN-BR-006/007: status dari alokasi pembayaran completed
-              // saja (draft tidak pernah sampai sini) + toleransi Rp1.
-              status: isSettled(netPayable, nextPaid)
+              // FIN-BR-006/007: status dari sisa operasional + toleransi
+              // Rp1; alokasi hanya lahir dari pembayaran completed.
+              status: nextBalance <= SETTLEMENT_TOLERANCE_IDR
                 ? "paid"
                 : nextPaid > 0
                   ? "partial"

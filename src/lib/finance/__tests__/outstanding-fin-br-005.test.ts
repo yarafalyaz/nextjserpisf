@@ -58,8 +58,10 @@ describe("155-S M2 — hutang per tagihan NETO", () => {
   it("E155-5 sisi beli: overpay >Rp1 ditolak + guard presisi sen", () => {
     const actions = root("src/actions/purchase.actions.ts")
     expect(actions).toContain("allocatedTotal + SETTLEMENT_TOLERANCE_IDR")
+    // R8-JB-04: cap per-bill kini dari sisa operasional balanceDue (yang
+    // sudah neto withholding + relief retur), bukan formula kop ulang.
     expect(actions).toContain(
-      "safeSubtract(bill.grandTotal, bill.withholdingAmount ?? 0, 2)",
+      "Number(alloc.amount) > Number(bill.balanceDue) + SETTLEMENT_TOLERANCE_IDR",
     )
   })
 
@@ -69,9 +71,14 @@ describe("155-S M2 — hutang per tagihan NETO", () => {
     expect(isSettled(1078000, 1078000)).toBe(true)
   })
 
-  it("reversal beli: status dari outstanding valid + toleransi Rp1 (bukan balanceDue <= 0)", () => {
+  it("reversal beli: status dari sisa operasional balanceDue + toleransi Rp1 (R8-JB-04)", () => {
     const actions = root("src/actions/purchase.actions.ts")
-    expect(actions).toContain("isSettled(netPayable, nextPaid)")
+    // R8-JB-04: reversal/confirm TIDAK boleh hitung ulang balanceDue dari
+    // kop — formula kop menghapus relief retur. Keduanya menggeser
+    // balanceDue tersimpan persis sebesar alokasi.
+    expect(actions).toContain("safeAdd(bill.balanceDue, alloc.amount, 2)")
+    expect(actions).toContain("safeSubtract(bill.balanceDue, alloc.amount, 2)")
+    expect(actions).toContain("nextBalance <= SETTLEMENT_TOLERANCE_IDR")
   })
 })
 

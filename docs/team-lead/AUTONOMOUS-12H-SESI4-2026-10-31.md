@@ -129,3 +129,11 @@ sebelum fix (klaim agen bukan vonis).
   tersimpan ke GL akun s/d cutoff dan mewajibkan seluruh baris koran
   dalam cakupan tercocok/dikonsumsi completed lain. Domain keuangan
   Round 8 tuntas. Berikutnya R8-JB-03..10, R8-SDM-01..06.
+- R8-JB-03 + R8-JB-04 selesai: relief retur beli menyebar ke bill
+  terbuka PO tertua (prioritas tautan GR), bill lunas tidak menelan
+  relief; reversal + confirm pembayaran vendor menggeser balanceDue
+  tersimpan persis sebesar alokasi (relief retur tak terhapus).
+  Keputusan: tanpa migrasi/model VendorCredit; balanceDue tetap
+  kanonis 155-S. 238 test batch + 124 tetangga hijau, tsc bersih,
+  lint bersih. Berikutnya verifikasi JB-05..10, SDM-01..06 dari kode
+  nyata, lalu triase integrasi jurnal.

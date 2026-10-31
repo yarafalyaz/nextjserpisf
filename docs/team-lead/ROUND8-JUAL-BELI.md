@@ -23,6 +23,16 @@ draft tidak mengembalikan `CustomerCredit.allocatedAmount` → kredit
 hangus permanen. Pasangan keuangan inti R8-KEU-02.
 
 ### R8-JB-03 — MEDIUM, CONFIRMED — Relief AP: GL penuh vs subledger capped
+**Status: SELESAI 2026-10-31** — tanpa migrasi, tanpa model/akun baru.
+Keputusan main session (konsisten vonis 155-S: `balanceDue` kanonis
+sisi beli): relief retur kini disebar ke SEMUA bill terbuka PO
+(`posted`/`partial`, `balanceDue > 0`), tertua dulu, dengan prioritas
+bill yang terhubung ke GR/GR-line baris retur bila tautan
+`goodsReceiptItemId` ada; bill lunas tidak lagi menelan relief.
+GL tetap Dr Hutang penuh (retur memang menggugurkan kewajiban);
+kelebihan relief di atas total bill terbuka tidak dibuatkan
+VendorCredit — tidak ada model/akun kredit vendor di repo dan akun
+klaim supplier `110508` khusus garansi, jadi tidak dipakai.
 `accounting.hook.ts:2349-2355` Dr Hutang `totalAmount` penuh vs
 `:2470` `reliefSen = min(totalAmount, balanceDue)`; bill sumber
 dipilih latest-by-id non-cancelled (`:2449-2462`), bukan bill dari GR
@@ -31,6 +41,15 @@ bayar vs bill B lunas: relief 0, GL turun Rp100jt, aging A tetap
 Rp100jt).
 
 ### R8-JB-04 — MEDIUM, CONFIRMED — Reversal bayar vendor hapus relief retur
+**Status: SELESAI 2026-10-31** — `reverseVendorPayment` dan
+`confirmVendorPayment` tidak lagi menghitung ulang `balanceDue` dari
+kop (`grandTotal − withholding − paidAmount`); keduanya menggeser
+`balanceDue` tersimpan PERSIS sebesar alokasi (reverse: tambah,
+confirm: kurang), status dari sisa operasional + toleransi Rp1.
+Guard statis 155-S yang mengunci formula kop diperbarui sadar ke
+aturan baru. Batas tercatat: laporan aging/AP-summary masih memakai
+formula kop per kontrak 155-S (bukan `balanceDue`) — perubahan basis
+laporan butuh vonis tersendiri, tidak dicampur ke fix ini.
 `purchase.actions.ts:2078-2098` `nextBalance = netPayable − nextPaid`
 dari grandTotal, mengabaikan relief; bill Rp100jt lunas → retur
 relief Rp40jt → reverse bayar → balanceDue kembali Rp100jt penuh,

@@ -2076,7 +2076,8 @@ describe("Purchase Actions Additional Branch Coverage", () => {
       id: 1, status: "draft", vendorId: 1, amount, vendorBillId: 10,
     })
     mocks.prismaMock.vendorBill.findMany.mockResolvedValueOnce([
-      { id: 10, balanceDue: amount, paidAmount: 0, grandTotal: 1000 },
+      // R8-JB-04: sisa dihitung dari balanceDue tersimpan (1000), bukan kop.
+      { id: 10, balanceDue: 1000, paidAmount: 0, grandTotal: 1000 },
     ])
     const { allocatePaymentToBills } = await import("@/lib/finance/payment-allocation")
     vi.mocked(allocatePaymentToBills).mockReset()
@@ -2104,6 +2105,29 @@ describe("Purchase Actions Additional Branch Coverage", () => {
       expect.objectContaining({
         where: { id: 10 },
         data: expect.objectContaining({ status: "partial", balanceDue: 1.01 }),
+      }),
+    )
+  })
+
+  it("R8-JB-04: konfirmasi pembayaran atas bill ber-relief retur mengurangi balanceDue tersimpan, bukan hitung ulang kop", async () => {
+    mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", vendorId: 1, amount: 600, vendorBillId: 10,
+    })
+    // Bill 1000 sudah diretur 400 → balanceDue operasional 600.
+    mocks.prismaMock.vendorBill.findMany.mockResolvedValueOnce([
+      { id: 10, balanceDue: 600, paidAmount: 0, grandTotal: 1000, withholdingAmount: 0 },
+    ])
+    const { allocatePaymentToBills } = await import("@/lib/finance/payment-allocation")
+    vi.mocked(allocatePaymentToBills).mockReset()
+    vi.mocked(allocatePaymentToBills).mockReturnValueOnce([
+      { vendorBillId: 10, amount: 600 },
+    ])
+    const res = await actions.confirmVendorPayment(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vendorBill.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 10 },
+        data: expect.objectContaining({ paidAmount: 600, balanceDue: 0, status: "paid" }),
       }),
     )
   })

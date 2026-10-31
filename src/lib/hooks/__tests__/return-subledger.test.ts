@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   creditFindFirst: vi.fn(),
   creditCreate: vi.fn(),
   billFindFirst: vi.fn(),
+  billFindMany: vi.fn(),
   billUpdate: vi.fn(),
   generateDocumentNumber: vi.fn(),
 }))
@@ -90,22 +91,21 @@ function purchaseTx(_bill: Record<string, unknown> | null) {
     stockMove: { findMany: mocks.stockMoveFindMany },
     journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
     journalEntry: { createMany: vi.fn().mockResolvedValue({ count: 2 }) },
-    vendorBill: { findFirst: mocks.billFindFirst, update: mocks.billUpdate },
+    vendorBill: { findFirst: mocks.billFindFirst, findMany: mocks.billFindMany, update: mocks.billUpdate },
   }
 }
 
 function purchaseTxWithLock() {
   const queryRaw = vi.fn().mockResolvedValue([])
-  const billFindMany = vi.fn().mockResolvedValue([{ id: 5 }])
   return {
     $queryRaw: queryRaw,
     systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.settings) },
     stockMove: { findMany: mocks.stockMoveFindMany },
     journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
     journalEntry: { createMany: vi.fn().mockResolvedValue({ count: 2 }) },
-    vendorBill: { findFirst: mocks.billFindFirst, findMany: billFindMany, update: mocks.billUpdate },
+    vendorBill: { findFirst: mocks.billFindFirst, findMany: mocks.billFindMany, update: mocks.billUpdate },
     __queryRaw: queryRaw,
-    __billFindMany: billFindMany,
+    __billFindMany: mocks.billFindMany,
   }
 }
 
@@ -117,6 +117,7 @@ describe("TASK-011 BUG-04 — subledger retur selaras GL", () => {
     mocks.invoiceUpdate.mockResolvedValue({})
     mocks.creditFindFirst.mockResolvedValue(null)
     mocks.creditCreate.mockResolvedValue({ id: 31 })
+    mocks.billFindMany.mockResolvedValue([])
     mocks.billUpdate.mockResolvedValue({})
     mocks.generateDocumentNumber.mockResolvedValue("CC-900")
     mocks.itemFindMany.mockResolvedValue([{ id: 60, isScrapSaleItem: false }])
@@ -189,9 +190,9 @@ describe("TASK-011 BUG-04 — subledger retur selaras GL", () => {
       date: new Date("2026-10-02T00:00:00Z"),
       items: [{ qty: 2, cost: 100 }],
     })
-    mocks.billFindFirst.mockResolvedValue({
-      id: 5, grandTotal: 1000, paidAmount: 200, withholdingAmount: 0, balanceDue: 800,
-    })
+    mocks.billFindMany.mockResolvedValue([
+      { id: 5, goodsReceiptId: null, paidAmount: 200, balanceDue: 800, items: [] },
+    ])
     mocks.transaction.mockImplementation(async (fn: any) => fn(purchaseTx(null)))
 
     await onPurchaseReturnProcessed(3, 7)
@@ -207,7 +208,7 @@ describe("TASK-011 BUG-04 — subledger retur selaras GL", () => {
     expect(writtenBill).not.toHaveProperty("grandTotal")
   })
 
-  it("retur beli: lock baris vendor_bills FOR UPDATE sebelum relief findFirst (race balanceDue)", async () => {
+  it("retur beli: lock baris vendor_bills FOR UPDATE sebelum relief dibaca (race balanceDue)", async () => {
     mocks.purchaseReturnFind.mockResolvedValue({
       id: 3,
       documentNo: "PR-1",
@@ -215,24 +216,94 @@ describe("TASK-011 BUG-04 — subledger retur selaras GL", () => {
       date: new Date("2026-10-02T00:00:00Z"),
       items: [{ qty: 2, cost: 100 }],
     })
-    mocks.billFindFirst.mockResolvedValue({
-      id: 5, grandTotal: 1000, paidAmount: 200, withholdingAmount: 0, balanceDue: 800,
-    })
+    mocks.billFindMany.mockResolvedValue([
+      { id: 5, goodsReceiptId: null, paidAmount: 200, balanceDue: 800, items: [] },
+    ])
     const tx = purchaseTxWithLock()
     mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
 
     await onPurchaseReturnProcessed(3, 7)
 
     expect(tx.__billFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { purchaseOrderId: 7 }, orderBy: { id: "asc" } }),
+      expect.objectContaining({
+        where: expect.objectContaining({ purchaseOrderId: 7, balanceDue: { gt: 0 } }),
+      }),
     )
     expect(tx.__queryRaw).toHaveBeenCalled()
     const sql = tx.__queryRaw.mock.calls.map((c: unknown[]) => Array.from(c[0] as TemplateStringsArray).join("?")).join(" ")
     expect(sql).toContain("vendor_bills")
     expect(sql).toContain("FOR UPDATE")
-    expect(tx.__queryRaw.mock.invocationCallOrder[0]).toBeLessThan(mocks.billFindFirst.mock.invocationCallOrder[0])
+    // findMany pertama = daftar id untuk lock; query relief adalah yang kedua.
+    expect(tx.__queryRaw.mock.invocationCallOrder[0]).toBeLessThan(mocks.billFindMany.mock.invocationCallOrder[1])
     expect(mocks.billUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 5 }, data: expect.objectContaining({ balanceDue: 600 }) }),
+    )
+  })
+
+  it("R8-JB-03: retur multi-bill melegakan bill terbuka tertua, bukan bill lunas terbaru", async () => {
+    mocks.purchaseReturnFind.mockResolvedValue({
+      id: 4,
+      documentNo: "PR-2",
+      purchaseOrderId: 7,
+      date: new Date("2026-10-03T00:00:00Z"),
+      items: [{ qty: 3, cost: 100 }],
+    })
+    // findMany hanya mengembalikan bill TERBUKA (where balanceDue > 0):
+    // bill B terbaru yang sudah lunas tidak pernah masuk daftar ini.
+    mocks.billFindMany.mockResolvedValue([
+      { id: 5, goodsReceiptId: null, paidAmount: 200, balanceDue: 800, items: [] },
+    ])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(purchaseTx(null)))
+
+    await onPurchaseReturnProcessed(4, 7)
+
+    // Retur 300 → A 800−300=500. Bill lunas tidak disentuh sama sekali.
+    expect(mocks.billUpdate).toHaveBeenCalledTimes(1)
+    expect(mocks.billUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 5 },
+        data: expect.objectContaining({ balanceDue: 500, status: "partial" }),
+      }),
+    )
+    // Query relief wajib menyaring bill terbuka saja.
+    const reliefQuery = mocks.billFindMany.mock.calls
+      .map((c: any[]) => c[0])
+      .find((a: any) => a?.where?.balanceDue?.gt === 0)
+    expect(reliefQuery).toBeDefined()
+    expect(reliefQuery.where.status).toEqual({ in: ["posted", "partial"] })
+  })
+
+  it("R8-JB-03: relief menyebar ke bill terbuka berikutnya bila satu bill tidak cukup", async () => {
+    mocks.purchaseReturnFind.mockResolvedValue({
+      id: 5,
+      documentNo: "PR-3",
+      purchaseOrderId: 7,
+      date: new Date("2026-10-04T00:00:00Z"),
+      items: [{ qty: 10, cost: 100 }],
+    })
+    mocks.billFindMany.mockResolvedValue([
+      { id: 5, goodsReceiptId: null, paidAmount: 200, balanceDue: 800, items: [] },
+      { id: 6, goodsReceiptId: null, paidAmount: 0, balanceDue: 300, items: [] },
+    ])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(purchaseTx(null)))
+
+    await onPurchaseReturnProcessed(5, 7)
+
+    // Retur 1000: A habis 800 → 0/paid, sisa 200 ke B → 100/partial.
+    expect(mocks.billUpdate).toHaveBeenCalledTimes(2)
+    expect(mocks.billUpdate).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: { id: 5 },
+        data: expect.objectContaining({ balanceDue: 0, status: "paid" }),
+      }),
+    )
+    expect(mocks.billUpdate).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { id: 6 },
+        data: expect.objectContaining({ balanceDue: 100, status: "partial" }),
+      }),
     )
   })
 })

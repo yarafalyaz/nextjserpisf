@@ -2446,53 +2446,69 @@ export async function onPurchaseReturnProcessed(
           await tx.$queryRaw`SELECT id FROM vendor_bills WHERE id IN (${Prisma.join(billIds.map((b: { id: number }) => b.id))}) FOR UPDATE`;
         }
       }
-      const bill = await tx.vendorBill.findFirst({
-        where: {
-          purchaseOrderId: purchaseReturn.purchaseOrderId,
-          status: { in: ["posted", "partial", "paid"] },
-        },
-        orderBy: { id: "desc" },
-        select: {
-          id: true,
-          grandTotal: true,
-          paidAmount: true,
-          withholdingAmount: true,
-          balanceDue: true,
-        },
-      });
-      if (bill) {
-        const paidSen = Math.round(Number(bill.paidAmount) * 100);
-        const balanceSen = Math.round(Number(bill.balanceDue) * 100);
-        if (
-          Number.isFinite(paidSen) &&
-          Number.isFinite(balanceSen)
-        ) {
-          const reliefSen = Math.min(Math.round(totalAmount * 100), Math.max(balanceSen, 0));
-          if (reliefSen > 0) {
-            const newBalanceSen = Math.max(balanceSen - reliefSen, 0);
-            // FIN-BR-006: lunas dari outstanding NETO valid dalam toleransi
-            // Rp1 (100 sen) — konsisten dengan confirmVendorPayment.
-            const billStatus: "posted" | "partial" | "paid" =
-              isSettled(
-                safeSubtract(
-                  safeSubtract(Number(bill.grandTotal), Number(bill.withholdingAmount ?? 0), 2),
-                  (Number(bill.paidAmount) * 100 + (balanceSen - newBalanceSen)) / 100,
-                  2,
-                ),
-                0,
-              )
-                ? "paid"
-                : paidSen > 0 || reliefSen > 0
-                  ? "partial"
-                  : "posted";
-            await tx.vendorBill.update({
-              where: { id: bill.id },
-              data: {
-                balanceDue: newBalanceSen / 100,
-                status: billStatus,
-              },
-            });
-          }
+      // R8-JB-03: relief tidak boleh berhenti di bill TERBARU. Retur atas
+      // PO multi-bill harus mengurangi bill yang masih terbuka, tertua
+      // dulu; bill lunas tidak punya sisa operasional untuk dilegakan.
+      // Bila baris retur tertaut ke baris GR, bill yang memuat GR/GR-line
+      // itu didahulukan; tanpa tautan (legacy) fallback tetap tertua dulu.
+      const openBills = typeof tx.vendorBill?.findMany === "function"
+        ? await tx.vendorBill.findMany({
+            where: {
+              purchaseOrderId: purchaseReturn.purchaseOrderId,
+              status: { in: ["posted", "partial"] },
+              balanceDue: { gt: 0 },
+              deletedAt: null,
+            },
+            orderBy: [{ date: "asc" }, { id: "asc" }],
+            select: {
+              id: true,
+              goodsReceiptId: true,
+              paidAmount: true,
+              balanceDue: true,
+              items: { select: { goodsReceiptItemId: true } },
+            },
+          })
+        : [];
+      let remainingReliefSen = Math.round(totalAmount * 100);
+      if (remainingReliefSen > 0 && openBills.length > 0) {
+        const returnedGrItemIds = new Set(
+          purchaseReturn.items
+            .map((item) => item.goodsReceiptItemId)
+            .filter((id): id is number => id != null),
+        );
+        const returnedGrIds = new Set<number>();
+        if (returnedGrItemIds.size > 0 && typeof tx.goodsReceiptItem?.findMany === "function") {
+          const grItems = await tx.goodsReceiptItem.findMany({
+            where: { id: { in: [...returnedGrItemIds] } },
+            select: { goodsReceiptId: true },
+          });
+          for (const grItem of grItems) returnedGrIds.add(grItem.goodsReceiptId);
+        }
+        const linkedBills = openBills.filter((bill) =>
+          (bill.goodsReceiptId != null && returnedGrIds.has(bill.goodsReceiptId)) ||
+          bill.items.some((item) => item.goodsReceiptItemId != null && returnedGrItemIds.has(item.goodsReceiptItemId)),
+        );
+        const orderedBills = [
+          ...linkedBills,
+          ...openBills.filter((bill) => !linkedBills.includes(bill)),
+        ];
+        for (const bill of orderedBills) {
+          if (remainingReliefSen <= 0) break;
+          const balanceSen = Math.round(Number(bill.balanceDue) * 100);
+          if (!Number.isFinite(balanceSen) || balanceSen <= 0) continue;
+          const reliefSen = Math.min(remainingReliefSen, balanceSen);
+          const newBalanceSen = balanceSen - reliefSen;
+          remainingReliefSen -= reliefSen;
+          await tx.vendorBill.update({
+            where: { id: bill.id },
+            data: {
+              balanceDue: newBalanceSen / 100,
+              // Status operasional mengikuti sisa balanceDue kanonis.
+              // Relief parsial membuat bill tidak lagi "posted" murni:
+              // sebagian kewajiban sudah gugur lewat retur.
+              status: newBalanceSen <= 100 ? "paid" : "partial",
+            },
+          });
         }
       }
     }
