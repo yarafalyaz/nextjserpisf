@@ -16,9 +16,16 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 //
 //   E127-8 fisik : jurnal POSTED -> REVERSED -> jurnal aktif baru
 //                  se-reference DIBUAT tanpa P2002 (re-post sah).
-//   Pendamping   : dua jurnal AKTIF se-reference tetap P2002 (anti-dobel
-//                  tidak dilonggarkan), DRAFT ikut mengikat, baris REVERSED
-//                  dan soft-deleted boleh menumpuk, reference NULL bebas.
+//   Pendamping   : DRAFT ikut mengikat, baris REVERSED dan soft-deleted
+//                  boleh menumpuk, reference NULL bebas.
+//
+// Revisi 2026-11-01 (migrasi 20261101110000_journal_active_reference_key_
+// expression): kunci generated kini (reference_type, reference_id,
+// journal_number). Dua jurnal aktif se-reference DENGAN NOMOR BERBEDA sah
+// — jurnal peristiwa aset per aset membutuhkannya (satu aset banyak
+// peristiwa). Anti-replay dokumen tegak di lapis aplikasi
+// (sourceDocumentKey @unique + assertSourceDocumentUnused). Yang tersisa
+// terikat DB: nomor jurnal yang sama persis tidak boleh aktif dua kali.
 //
 // Env: INTEGRATION_DB_URL wajib diset eksplisit ke DB tes yang SUDAH
 // termigrasi (migrate deploy). Tanpa env itu suite SKIP — skip bukan lulus;
@@ -110,16 +117,17 @@ describeIntegration("E127 fisik MySQL 8: unik jurnal aktif-saja (F-127-V)", () =
     expect(rows.map((r) => r.status)).toEqual(["REVERSED", "POSTED"])
   })
 
-  it("anti-dobel tetap: jurnal AKTIF kedua se-reference ditolak unik DB (P2002)", async () => {
+  it("nomor jurnal ganda aktif se-reference ditolak unik DB (P2002)", async () => {
     const ref = stamp + 2
     await createJournal(ref, "POSTED", "b1")
-    await expect(createJournal(ref, "POSTED", "b2")).rejects.toSatisfy(isUniqueViolation)
+    await expect(createJournal(ref, "POSTED", "b1")).rejects.toSatisfy(isUniqueViolation)
   })
 
-  it("DRAFT ikut mengikat: POSTED sesudah DRAFT aktif se-reference ditolak (P2002)", async () => {
+  it("se-reference nomor berbeda BISA aktif bersamaan (jurnal peristiwa aset)", async () => {
     const ref = stamp + 3
-    await createJournal(ref, "DRAFT", "c1")
-    await expect(createJournal(ref, "POSTED", "c2")).rejects.toSatisfy(isUniqueViolation)
+    const firstId = await createJournal(ref, "DRAFT", "c1")
+    const secondId = await createJournal(ref, "POSTED", "c2")
+    expect(secondId).not.toBe(firstId)
   })
 
   it("histori bebas menumpuk: REVERSED + soft-deleted se-reference tidak P2002", async () => {
