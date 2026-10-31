@@ -287,6 +287,20 @@ export interface CustomerNpwpConflict {
  * ke digit yang sama; master tua pra-normalisasi ikut tertangkap lewat
  * normalisasi di memori sesudah scan.
  */
+/**
+ * Kunci serialisasi gerbang NPWP: `pg_advisory_xact_lock` tidak ada di
+ * MariaDB, jadi kunci baris seed khusus di tabel satu-baris
+ * `customer_npwp_gate` (id=1, dibuat migrasi pendamping). Dua transaksi
+ * penulis NPWP yang memegang kunci ini tidak bisa saling mendahului —
+ * scan konflik + tulis di dalamnya menjadi atomik terhadap penulis lain.
+ * Pemanggil WAJIB sudah berada dalam transaksi dan memanggil ini SEBELUM
+ * scan + create/update; tanpa itu gerbang hanya sekuensial (race dua
+ * request konkuren sama-sama lolos scan kosong).
+ */
+export async function lockCustomerNpwpGate(db: TxClient): Promise<void> {
+  await db.$executeRaw`SELECT id FROM customer_npwp_gate WHERE id = 1 FOR UPDATE`;
+}
+
 export async function findCustomerNpwpConflict(
   input: {
     taxId?: string | null;

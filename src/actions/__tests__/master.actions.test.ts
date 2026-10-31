@@ -19,6 +19,10 @@ const mocks = vi.hoisted(() => {
 
   const prismaMock: any = {
     customer: buildModelMock(),
+    customerNpwpGate: {
+      ...buildModelMock(),
+      findUnique: vi.fn().mockResolvedValue({ id: 1 }),
+    },
     customerVehicle: buildModelMock(),
     vendor: buildModelMock(),
     item: buildModelMock(),
@@ -120,6 +124,28 @@ describe("FK fiktif customerCategoryId/paymentTermId (repro)", () => {
     expect(res?.success).toBe(true)
     const arg = mocks.prismaMock.customer.create.mock.calls.at(-1)![0] as any
     expect(arg.data.paymentTermId).toBe(3)
+  })
+  it("createCustomer ber-NPWP: scan konflik diulang di dalam tx (balapan NPWP sama)", async () => {
+    // Bacaan luar bersih; baris NPWP sama muncul di scan dalam tx → BLOKIR,
+    // create tidak terjadi. NPWP 16 digit lolos validasi identitas pajak.
+    const holder = { id: 8, slug: "pt-lain", name: "PT Lain", code: "CUST-0008", taxId: "0123456789012345" }
+    mocks.prismaMock.customer.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([holder])
+    const res = await actions.createCustomer(fdMap({ name: "X", taxId: "0123456789012345" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.customer.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+  })
+  it("updateCustomer ber-NPWP: scan konflik diulang di dalam tx", async () => {
+    const holder = { id: 8, slug: "pt-lain", name: "PT Lain", code: "CUST-0008", taxId: "0123456789012345" }
+    mocks.prismaMock.customer.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([holder])
+    const res = await actions.updateCustomer(1, fdMap({ name: "X", taxId: "0123456789012345" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.customer.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
   })
   it("createVendor tolak paymentTermId fiktif", async () => {
     const res = await actions.createVendor(fdMap({ name: "V", paymentTermId: "999999" }))

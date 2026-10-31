@@ -52,6 +52,7 @@ import {
 import {
   findCustomerDuplicateCandidates,
   findCustomerNpwpConflict,
+  lockCustomerNpwpGate,
   buildCustomerDuplicateWarning,
   buildCustomerNpwpBlockedMessage,
   loadCustomerDuplicateGroups,
@@ -298,29 +299,46 @@ export async function createCustomer(formData: FormData) {
       code = await generateDocumentNumber("CUST", "simple");
     }
 
-    const customer = await prisma.customer.create({
-      data: {
-        name: v.name,
-        slug: await nextSlug("customer", v.name),
-        email: v.email ?? null,
-        phone: v.phone ?? null,
-        address: v.address ?? null,
-        city: v.city ?? null,
-        contactPerson: v.contactPerson ?? null,
-        createdBy: Number(user.id),
-        gender: v.gender ?? null,
-        code,
-        street: v.street ?? null,
-        province: v.province ?? null,
-        district: v.district ?? null,
-        village: v.village ?? null,
-        postalCode: v.postalCode ?? null,
-        isActive: true,
-        ...taxIdentity.data,
-        customerCategoryId: v.customerCategoryId ?? null,
-        paymentTermId: v.paymentTermId ?? null,
-      },
+    const customerData = {
+      name: v.name,
+      slug: await nextSlug("customer", v.name),
+      email: v.email ?? null,
+      phone: v.phone ?? null,
+      address: v.address ?? null,
+      city: v.city ?? null,
+      contactPerson: v.contactPerson ?? null,
+      createdBy: Number(user.id),
+      gender: v.gender ?? null,
+      code,
+      street: v.street ?? null,
+      province: v.province ?? null,
+      district: v.district ?? null,
+      village: v.village ?? null,
+      postalCode: v.postalCode ?? null,
+      isActive: true,
+      ...taxIdentity.data,
+      customerCategoryId: v.customerCategoryId ?? null,
+      paymentTermId: v.paymentTermId ?? null,
+    };
+    // Scan konflik NPWP di atas membaca snapshot global: dua request
+    // konkuren ber-NPWP sama sama-sama lolos lalu sama-sama create.
+    // Kunci baris gerbang (model CustomerNpwpGate, baris id=1) lalu
+    // ulangi scan di dalam tx sesaat sebelum create; konflik dari dalam
+    // tx dipetakan ke respons blokir yang sama di luar tx.
+    let npwpConflictInTx: CustomerNpwpConflict | null = null;
+    const customer = await prisma.$transaction(async (tx) => {
+      if (v.taxId) {
+        const gate = await tx.customerNpwpGate.findUnique({ where: { id: 1 }, select: { id: true } });
+        if (gate) {
+          await lockCustomerNpwpGate(tx as never);
+          npwpConflictInTx = await findCustomerNpwpConflict({ taxId: v.taxId }, tx as never);
+          if (npwpConflictInTx) return null;
+        }
+      }
+      return tx.customer.create({ data: customerData });
     });
+    if (npwpConflictInTx) return buildCustomerNpwpBlockedResult(npwpConflictInTx);
+    if (!customer) throw new Error("Pelanggan gagal dibuat");
 
     revalidatePath("/master/pelanggan");
     await logActivity("create", "Customer", customer.id, "Membuat pelanggan");
@@ -375,29 +393,44 @@ export async function updateCustomer(customerId: number, formData: FormData) {
       if (!term) return { success: false, error: "Syarat pembayaran tidak ditemukan" };
     }
 
-    await prisma.customer.update({
-      where: { id: customerId },
-      data: {
-        updatedBy: Number(user.id),
-        name: v.name,
-        slug: await nextSlug("customer", v.name, { excludeId: customerId }),
-        email: v.email ?? null,
-        phone: v.phone ?? null,
-        address: v.address ?? null,
-        city: v.city ?? null,
-        contactPerson: v.contactPerson ?? null,
-        gender: v.gender ?? null,
-        code: v.code ?? null,
-        street: v.street ?? null,
-        province: v.province ?? null,
-        district: v.district ?? null,
-        village: v.village ?? null,
-        postalCode: v.postalCode ?? null,
-        ...taxIdentity.data,
-        customerCategoryId: v.customerCategoryId ?? null,
-        paymentTermId: v.paymentTermId ?? null,
-      },
+    const updateData = {
+      updatedBy: Number(user.id),
+      name: v.name,
+      slug: await nextSlug("customer", v.name, { excludeId: customerId }),
+      email: v.email ?? null,
+      phone: v.phone ?? null,
+      address: v.address ?? null,
+      city: v.city ?? null,
+      contactPerson: v.contactPerson ?? null,
+      gender: v.gender ?? null,
+      code: v.code ?? null,
+      street: v.street ?? null,
+      province: v.province ?? null,
+      district: v.district ?? null,
+      village: v.village ?? null,
+      postalCode: v.postalCode ?? null,
+      ...taxIdentity.data,
+      customerCategoryId: v.customerCategoryId ?? null,
+      paymentTermId: v.paymentTermId ?? null,
+    };
+    // Cermin createCustomer: kunci gerbang CustomerNpwpGate lalu scan
+    // NPWP diulang dalam tx yang sama dengan update.
+    let npwpConflictInTx: CustomerNpwpConflict | null = null;
+    await prisma.$transaction(async (tx) => {
+      if (v.taxId) {
+        const gate = await tx.customerNpwpGate.findUnique({ where: { id: 1 }, select: { id: true } });
+        if (gate) {
+          await lockCustomerNpwpGate(tx as never);
+          npwpConflictInTx = await findCustomerNpwpConflict(
+            { taxId: v.taxId, excludeCustomerId: customerId },
+            tx as never,
+          );
+          if (npwpConflictInTx) return;
+        }
+      }
+      await tx.customer.update({ where: { id: customerId }, data: updateData });
     });
+    if (npwpConflictInTx) return buildCustomerNpwpBlockedResult(npwpConflictInTx);
 
     revalidatePath("/master/pelanggan");
     await logActivity(

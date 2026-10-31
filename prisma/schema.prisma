@@ -472,6 +472,16 @@ model Customer {
   @@map("customers")
 }
 
+// Baris kunci tunggal gerbang NPWP: penulis NPWP pelanggan mengunci baris
+// id=1 (FOR UPDATE) dalam transaksinya supaya scan konflik + tulis atomik.
+// ponytail: kunci global satu baris cukup untuk volume tulis master
+// pelanggan; naikkan ke kunci per-kunci-NPWP bila tulis konkuren terasa.
+model CustomerNpwpGate {
+  id Int @id
+
+  @@map("customer_npwp_gate")
+}
+
 // AUD-FIN-02 (putusan akuntan): KREDIT PELANGGAN terstruktur. Kelebihan DP di
 // atas grandTotal BUKAN pelunasan — dicatat di sini sebagai saldo yang bisa
 // dipakai ulang / di-refund, bukan catatan teks di notes. Satu baris = satu

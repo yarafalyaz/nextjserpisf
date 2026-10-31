@@ -146,6 +146,11 @@ const SEED_ONLY_COLUMNS: string[] = [
  * yang sudah punya jalur tulis produk (atau modelnya dibuang) juga memerahkan.
  */
 const SEED_ONLY_MODELS: string[] = [
+  // Baris kunci serialisasi gerbang NPWP pelanggan: satu baris id=1 diisi
+  // migrasi 20261101100000_customer_npwp_gate; produk hanya membaca
+  // (findUnique) + mengunci FOR UPDATE lewat raw SQL. Tidak ada jalur
+  // tulis produk karena barisnya infrastruktur, bukan data operasional.
+  "CustomerNpwpGate",
   // (EmployeeRoster PERNAH di sini — ditutup: halaman `/sdm/roster` +
   // aksi create/approve/reject/deleteEmployeeRoster menulisnya; guard
   // berarah dua memerah saat entri basi ini dibiarkan.)
