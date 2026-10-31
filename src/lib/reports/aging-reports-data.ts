@@ -105,6 +105,9 @@ export async function loadReceivablesAging(asOf: Date = new Date()): Promise<Agi
       status: { in: [...RECOGNISED_AR_STATUSES] },
       deletedAt: null,
       dueDate: { not: null },
+      // Posisi per asOf: faktur bertanggal sesudah asOf belum ada pada
+      // tanggal acuan, walau sisanya dibaca dari kolom berjalan kini.
+      date: { lte: asOf },
     },
     include: { customer: { select: { name: true } } },
     orderBy: { dueDate: "asc" },
@@ -146,6 +149,9 @@ export async function loadPayablesAging(asOf: Date = new Date()): Promise<AgingR
       status: { in: [...RECOGNISED_AP_STATUSES] },
       deletedAt: null,
       dueDate: { not: null },
+      // Posisi per asOf: tagihan bertanggal sesudah asOf belum ada pada
+      // tanggal acuan, walau sisanya dibaca dari kolom berjalan kini.
+      date: { lte: asOf },
     },
     include: { vendor: { select: { name: true } } },
     orderBy: { dueDate: "asc" },
@@ -186,7 +192,12 @@ const TOTAL_COLUMNS: TableColumn[] = [
  */
 export async function loadPayablesTotal(asOf: Date = new Date()): Promise<AgingReportView> {
   const bills = await prisma.vendorBill.findMany({
-    where: { status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null },
+    where: {
+      status: { in: [...RECOGNISED_AP_STATUSES] },
+      deletedAt: null,
+      // Posisi per asOf, sama seperti laporan umur.
+      date: { lte: asOf },
+    },
     include: { vendor: { select: { name: true } } },
     orderBy: { dueDate: "asc" },
   })

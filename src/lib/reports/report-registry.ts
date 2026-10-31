@@ -863,8 +863,9 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     title: "Piutang Jatuh Tempo",
     subtitle: "Umur Piutang",
     // Aging posisi per akhir periode (BUGHUNT round3): PDF periode lampau
-    // mengelompokkan umur per period.end. Sisa tetap saldo kini (paidAmount
-    // kolom berjalan, tanpa rekonstruksi pembayaran per tanggal) — sama
+    // mengelompokkan umur per period.end dan hanya memuat dokumen
+    // bertanggal ≤ period.end. Sisa tetap saldo kini (paidAmount kolom
+    // berjalan, tanpa rekonstruksi pembayaran per tanggal) — sama
     // dengan batas loader; jangan klaim rekonstruksi historis di sini.
     async load({ period }) {
       const report = await loadReceivablesAging(new Date(period.end))
