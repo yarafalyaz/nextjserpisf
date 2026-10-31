@@ -3,7 +3,7 @@
 import { Prisma } from "@prisma/client"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
-import { prisma } from "@/lib/db/prisma"
+import { prisma, type TxClient } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
@@ -22,7 +22,7 @@ import { safeMultiply, safeRound } from "@/lib/utils/math"
 
 /** Production orders keep their cost locked once completed/cancelled. */
 function mutableOrderError(
-  order: { status: string } | null,
+  order: { status: string; completedQty?: unknown } | null,
   verb: "ditambahkan" | "diubah" | "dihapus",
 ): { success: false; error: string } | null {
   if (!order) return { success: false, error: "Perintah produksi tidak ditemukan" }
@@ -38,7 +38,40 @@ function mutableOrderError(
       error: `Biaya tidak dapat ${verb} pada perintah berstatus '${order.status}'.`,
     }
   }
+  // STOK-14: sesudah release parsial pertama, pool WIP dibagi per release
+  // atas qty SISA — biaya baru mengubah unit cost release berikutnya saja
+  // dan batch produk sama berakhir dengan biaya beda. Bekukan mutasi biaya
+  // non-material di sini (pola yang sama: HPP completed final di
+  // syncServicePurchaseOrderCost F-71). Baris existing tetap bisa dibaca;
+  // penambahan/koreksi nilai diblokir sampai order selesai penuh, sesudah
+  // itu gerbang completed di atas yang menolak.
+  if (Number(order.completedQty ?? 0) > 0) {
+    return {
+      success: false,
+      error: `Biaya tidak dapat ${verb} sesudah sebagian hasil produksi dirilis (release parsial). Biaya tambahan hanya boleh dicatat sebelum release pertama atau sesudah order selesai.`,
+    }
+  }
   return null
+}
+
+/**
+ * STOK-14 in-transaction re-check: kunci baris order (pola yang sama dengan
+ * applyProductionCostDelta + completeProductionOrder) lalu baca ulang
+ * status/completedQty, supaya release parsial yang commit bersamaan dengan
+ * mutasi biaya tidak lolos dari cek luar transaksi.
+ */
+async function assertNoPartialRelease(
+  tx: TxClient,
+  productionOrderId: number,
+  verb: "ditambahkan" | "diubah" | "dihapus",
+): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM production_orders WHERE id = ${productionOrderId} FOR UPDATE`
+  const fresh = await tx.productionOrder.findUnique({
+    where: { id: productionOrderId },
+    select: { status: true, completedQty: true },
+  })
+  const invalid = mutableOrderError(fresh, verb)
+  if (invalid) throw new Error(invalid.error)
 }
 
 /**
@@ -67,7 +100,7 @@ export async function createProductionCost(formData: FormData) {
     if (v.productionOrderId) {
       const order = await prisma.productionOrder.findUnique({
         where: { id: v.productionOrderId },
-        select: { id: true, status: true, documentNo: true },
+        select: { id: true, status: true, documentNo: true, completedQty: true },
       })
       const invalid = mutableOrderError(order, "ditambahkan")
       if (invalid) return invalid
@@ -91,6 +124,7 @@ export async function createProductionCost(formData: FormData) {
         "ditambahkan",
         tx,
       )
+      if (v.productionOrderId) await assertNoPartialRelease(tx, v.productionOrderId, "ditambahkan")
       const created = await tx.productionCost.create({
         data: {
           productionOrderId: v.productionOrderId ?? null,
@@ -159,7 +193,7 @@ export async function updateProductionCost(id: number, formData: FormData) {
     if (existing.productionOrderId) {
       const order = await prisma.productionOrder.findUnique({
         where: { id: existing.productionOrderId },
-        select: { id: true, status: true },
+        select: { id: true, status: true, completedQty: true },
       })
       const invalid = mutableOrderError(order, "diubah")
       if (invalid) return invalid
@@ -171,6 +205,7 @@ export async function updateProductionCost(id: number, formData: FormData) {
         "diubah",
         tx,
       )
+      if (existing.productionOrderId) await assertNoPartialRelease(tx, existing.productionOrderId, "diubah")
       await tx.productionCost.update({
         where: { id },
         data: {
@@ -218,7 +253,7 @@ export async function deleteProductionCost(id: number) {
     if (existing.productionOrderId) {
       const order = await prisma.productionOrder.findUnique({
         where: { id: existing.productionOrderId },
-        select: { id: true, status: true },
+        select: { id: true, status: true, completedQty: true },
       })
       const invalid = mutableOrderError(order, "dihapus")
       if (invalid) return invalid
@@ -230,6 +265,7 @@ export async function deleteProductionCost(id: number) {
         "dihapus",
         tx,
       )
+      if (existing.productionOrderId) await assertNoPartialRelease(tx, existing.productionOrderId, "dihapus")
       await tx.productionCost.delete({ where: { id } })
       if (existing.productionOrderId) {
         await applyProductionCostDelta(existing.productionOrderId, -Number(existing.amount), tx, {
@@ -282,7 +318,7 @@ export async function pullLaborCostFromTimesheets(
     }
     const order = await prisma.productionOrder.findUnique({
       where: { id: productionOrderId },
-      select: { id: true, status: true, workOrderId: true },
+      select: { id: true, status: true, workOrderId: true, completedQty: true },
     })
     const invalid = mutableOrderError(order, "ditambahkan")
     if (invalid) return invalid
@@ -321,6 +357,7 @@ export async function pullLaborCostFromTimesheets(
     let createdCount = 0
     await prisma.$transaction(async (tx) => {
       await assertJobCostMutable({ productionOrderId, workOrderId }, "ditambahkan", tx)
+      await assertNoPartialRelease(tx, productionOrderId, "ditambahkan")
       // Kunci baris timesheet kandidat (urutan id global = bebas deadlock
       // antar penarik), lalu dedupe dibaca ulang di dalam tx — pola jalur WO
       // (pullLaborCostFromWorkOrderTimesheets) + kunci baris.
@@ -481,7 +518,7 @@ export async function applyOverheadToProductionOrder(formData: FormData) {
 
     const order = await prisma.productionOrder.findUnique({
       where: { id: v.productionOrderId },
-      select: { id: true, status: true, documentNo: true },
+      select: { id: true, status: true, documentNo: true, completedQty: true },
     })
     if (!order) return { success: false, error: "Perintah produksi tidak ditemukan" }
     if (order.status === "closed") {
@@ -490,11 +527,17 @@ export async function applyOverheadToProductionOrder(formData: FormData) {
     if (order.status === "completed" || order.status === "cancelled") {
       return { success: false, error: `Overhead tidak dapat diterapkan ke perintah berstatus '${order.status}'.` }
     }
+    // STOK-14: overhead susulan sesudah release parsial dibekukan sama
+    // seperti jalur biaya manual (mutableOrderError).
+    if (Number(order.completedQty ?? 0) > 0) {
+      return { success: false, error: "Overhead tidak dapat diterapkan sesudah sebagian hasil produksi dirilis (release parsial)." }
+    }
 
     const driverLabel = OVERHEAD_DRIVER_LABELS[v.driverType]
 
     const cost = await prisma.$transaction(async (tx) => {
       await assertJobCostMutable({ productionOrderId: v.productionOrderId }, "ditambahkan", tx)
+      await assertNoPartialRelease(tx, v.productionOrderId, "ditambahkan")
       const created = await tx.productionCost.create({
         data: {
           productionOrderId: v.productionOrderId,

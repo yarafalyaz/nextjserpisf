@@ -88,7 +88,7 @@ export async function syncServicePurchaseOrderCost(
 
   const allProductionOrders = await client.productionOrder.findMany({
     where: { workOrderId: po.workOrderId },
-    select: { id: true, status: true, qty: true },
+    select: { id: true, status: true, qty: true, completedQty: true },
   })
   // F-2026-10-21-009-V: WO closed membekukan semua PO anak — sync jasa
   // dilewati seluruhnya dan dilaporkan skipped (pola F-71 completed).
@@ -111,8 +111,13 @@ export async function syncServicePurchaseOrderCost(
   // are skipped entirely — existing subcontract lines on them stay as history —
   // and reported so the caller can log it and surface a warning. The vendor
   // bill itself still posts to AP normally; only the HPP mirror is refused.
+  // STOK-14: order parsial (completedQty > 0) ikut dibekukan — biaya susulan
+  // di sini mengubah unit cost release berikutnya saja, sama seperti jalur
+  // manual di production-cost.actions (mutableOrderError).
   const completedIds = new Set(
-    allProductionOrders.filter((o) => o.status === "completed" || o.status === "closed").map((o) => o.id),
+    allProductionOrders
+      .filter((o) => o.status === "completed" || o.status === "closed" || Number(o.completedQty ?? 0) > 0)
+      .map((o) => o.id),
   )
   const productionOrders = allProductionOrders.filter((o) => !completedIds.has(o.id))
   const skippedProductionOrderIds = allProductionOrders
@@ -276,9 +281,11 @@ export async function syncReworkCostToOrder(
   // biaya dibersihkan tetap konsisten.
   const orderStatus = await client.productionOrder.findUnique({
     where: { id: productionOrderId },
-    select: { status: true },
+    select: { status: true, completedQty: true },
   })
-  if (orderStatus?.status === "completed") {
+  // STOK-14: parsial juga dibekukan (completedQty > 0), alasan sama seperti
+  // completed di atas — biaya rework susulan hanya membebani release akhir.
+  if (orderStatus?.status === "completed" || Number(orderStatus?.completedQty ?? 0) > 0) {
     return { posted: 0, productionOrderId, skipped: true }
   }
 

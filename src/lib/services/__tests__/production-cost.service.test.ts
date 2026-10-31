@@ -272,6 +272,20 @@ describe("syncReworkCostToOrder", () => {
     expect(absorbedMock).not.toHaveBeenCalled()
   })
 
+  it("STOK-14: PO parsial (completedQty > 0) dilewati seperti completed", async () => {
+    orderFindUniqueMock
+      .mockResolvedValueOnce({ status: "in_progress", workOrderId: null, totalActualCost: 0 })
+      .mockResolvedValue({ status: "in_progress", completedQty: 5 })
+
+    const res = await syncReworkCostToOrder(base, client as never)
+
+    expect(res).toEqual({ posted: 0, productionOrderId: 55, skipped: true })
+    expect(costFindUniqueMock).not.toHaveBeenCalled()
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(orderUpdateMock).not.toHaveBeenCalled()
+    expect(absorbedMock).not.toHaveBeenCalled()
+  })
+
   it("BUGHUNT round3 #12: PO cancelled tidak dilewati — sync tetap jalan", async () => {
     orderFindUniqueMock
       .mockResolvedValueOnce({ status: "cancelled", workOrderId: null })
@@ -511,6 +525,20 @@ describe("syncServicePurchaseOrderCost", () => {
   it("F-009-V: PO closed dilewati seperti completed (skipped, tanpa tulis)", async () => {
     poFindUniqueMock.mockResolvedValue({ isService: true, workOrderId: 9, vendorId: 3 })
     orderFindManyMock.mockResolvedValue([{ id: 55, status: "closed" }])
+    costFindManyMock.mockResolvedValue([])
+
+    const res = await syncServicePurchaseOrderCost(input, client as never)
+
+    expect(res).toEqual({ posted: 0, productionOrderIds: [], skippedProductionOrderIds: [55] })
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(orderUpdateMock).not.toHaveBeenCalled()
+    expect(absorbedMock).not.toHaveBeenCalled()
+  })
+
+  it("STOK-14: PO parsial (completedQty > 0) dilewati sync jasa seperti completed", async () => {
+    poFindUniqueMock.mockResolvedValue({ isService: true, workOrderId: 9, vendorId: 3 })
+    woFindUniqueMock.mockResolvedValue({ status: "in_progress" })
+    orderFindManyMock.mockResolvedValue([{ id: 55, status: "in_progress", qty: 10, completedQty: 5 }])
     costFindManyMock.mockResolvedValue([])
 
     const res = await syncServicePurchaseOrderCost(input, client as never)

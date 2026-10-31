@@ -647,7 +647,7 @@ Test regresi:
 
 ---
 
-## STOK-14 — MEDIUM — PLAUSIBLE
+## STOK-14 — MEDIUM — PLAUSIBLE — SELESAI 2026-10-31 (oleh user: "kerjakan sisa bersyarat")
 ### Biaya non-material sesudah release parsial mengubah valuasi release berikutnya
 
 Lokasi:
@@ -691,6 +691,27 @@ Test regresi:
 - Tambah labor.
 - Tentukan assert sesuai keputusan bisnis.
 - Assert valuasi dua release konsisten dengan spec.
+
+### Keputusan + fix (2026-10-31)
+
+Pilihan dari dua fix terkecil di atas: **batasi biaya baru sesudah release
+parsial pertama** — pola repo yang konsisten (HPP `completed` final F-71,
+job `closed` beku). Opsi realokasi retroaktif ditolak: batch yang sudah
+masuk stok tidak punya jalur revaluasi.
+
+- `mutableOrderError` (`production-cost.actions.ts`) menolak tambah/ubah/
+  hapus bila `completedQty > 0`; overhead path menolak dengan pesan sama.
+- Re-cek di dalam transaksi sesudah `SELECT ... FOR UPDATE` baris order
+  (`assertNoPartialRelease`) menutup race dengan `completeProductionOrder`
+  yang mengambil kunci yang sama.
+- Jalur sistem ikut: `syncServicePurchaseOrderCost` +
+  `syncReworkCostToOrder` melewati (skip + lapor) order parsial seperti
+  completed — tagihan vendor/NCR sendiri tetap sah, hanya cermin HPP
+  ditolak sampai order selesai.
+- Material issue TIDAK dibatasi: stok terbit adalah kejadian fisik, di
+  luar cakupan temuan ini.
+- Test: 5 regresi actions + 2 regresi service STOK-14; assertion kunci
+  timesheet lama diselaraskan ke urutan lock order→timesheet.
 
 ---
 

@@ -333,6 +333,68 @@ describe("F-2026-10-21-009-V: guard job closed (production-cost actions)", () =>
   })
 })
 
+describe("STOK-14: biaya dibekukan sesudah release parsial", () => {
+  const PARTIAL = { id: 1, status: "in_progress", completedQty: 5 }
+
+  it("create ditolak bila sebagian qty sudah dirilis", async () => {
+    orderFindUniqueMock.mockResolvedValue(PARTIAL)
+
+    const res = await createProductionCost(fd({ productionOrderId: 1, category: "labor", amount: 200000 }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("release parsial")
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
+
+  it("update ditolak bila sebagian qty sudah dirilis", async () => {
+    costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: 1, amount: 100 })
+    orderFindUniqueMock.mockResolvedValue(PARTIAL)
+
+    const res = await updateProductionCost(5, fd({ category: "labor", amount: 300 }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("release parsial")
+    expect(costUpdateMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
+
+  it("delete ditolak bila sebagian qty sudah dirilis", async () => {
+    costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: 1, amount: 400 })
+    orderFindUniqueMock.mockResolvedValue(PARTIAL)
+
+    const res = await deleteProductionCost(5)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("release parsial")
+    expect(costDeleteMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
+
+  it("overhead ditolak bila sebagian qty sudah dirilis", async () => {
+    orderFindUniqueMock.mockResolvedValue({ ...PARTIAL, documentNo: "MO-001" })
+
+    const res = await applyOverheadToProductionOrder(
+      fd({ productionOrderId: 1, driverType: "machine_hours", driverQty: 2, rate: 1000 }),
+    )
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("release parsial")
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
+
+  it("create tetap lolos bila belum ada release (completedQty 0)", async () => {
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress", completedQty: 0 })
+    costCreateMock.mockResolvedValue({ id: 99 })
+
+    const res = await createProductionCost(fd({ productionOrderId: 1, category: "labor", amount: 1000 }))
+
+    expect(res.success).toBe(true)
+    expect(applyDeltaMock).toHaveBeenCalled()
+  })
+})
+
 describe("pullLaborCostFromTimesheets", () => {
   it("refuses to pull timesheets into a completed production order", async () => {
     woFindUniqueMock.mockResolvedValue({ id: 7, projectId: 3 })
@@ -421,9 +483,15 @@ describe("pullLaborCostFromTimesheets", () => {
     expect(costCreateMock.mock.calls[0][0].data.sourceTimesheetId).toBe(12)
     expect(applyDeltaMock).toHaveBeenCalledWith(1, 150000, expect.anything(), expect.anything())
     // Kunci baris timesheet kandidat FOR UPDATE mendahului baca ulang dedupe:
-    // urutan invocation lock < findMany dalam tx < create.
-    const lockOrder = queryRawMock.mock.invocationCallOrder[0]
-    const sql = (queryRawMock.mock.calls[0][0] as TemplateStringsArray).join("?")
+    // urutan invocation lock < findMany dalam tx < create. STOK-14 menambah
+    // kunci baris order sebelum kunci timesheet (urutan lock global
+    // order→timesheet mencegah deadlock dengan completeProductionOrder).
+    const tsCall = queryRawMock.mock.calls.findIndex(
+      (c) => ((c[0] as TemplateStringsArray).join("?") ?? "").includes("FROM timesheets"),
+    )
+    expect(tsCall).toBeGreaterThanOrEqual(0)
+    const lockOrder = queryRawMock.mock.invocationCallOrder[tsCall]
+    const sql = (queryRawMock.mock.calls[tsCall][0] as TemplateStringsArray).join("?")
     expect(sql).toContain("FROM timesheets")
     expect(sql).toContain("FOR UPDATE")
     expect(lockOrder).toBeLessThan(costFindManyMock.mock.invocationCallOrder[1])
