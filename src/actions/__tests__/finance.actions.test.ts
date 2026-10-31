@@ -326,6 +326,49 @@ describe("Bank Statement Line Actions", () => {
     expect(lastCreateData().date.toISOString()).toBe("2026-12-31T00:00:00.000Z")
   })
 
+  it("importBankStatementLines menulis semua baris + recalc + assertPeriodOpen dalam tx", async () => {
+    mocks.prismaMock.bankStatement.findUnique.mockResolvedValue({ status: "draft", deletedAt: null })
+    const fd = new FormData()
+    fd.append("bankStatementId", "42")
+    fd.append("csvText", "Tanggal;Keterangan;Debit;Kredit\n2026-10-01;Masuk;1500;0\n2026-10-02;Keluar;0;500")
+
+    const res = await (actions as any).importBankStatementLines(fd)
+
+    expect(res).toEqual({ success: true, imported: 2 })
+    const createManyArg = mocks.prismaMock.bankStatementLine.createMany.mock.calls[0]?.[0]
+    expect(createManyArg.data).toHaveLength(2)
+    expect(createManyArg.data[0]).toMatchObject({ bankStatementId: 42, debit: 1500, credit: 0, type: "debit", status: "unmatched" })
+    expect(createManyArg.data[0].date.toISOString()).toBe("2026-10-01T00:00:00.000Z")
+    expect(createManyArg.data[1]).toMatchObject({ debit: 0, credit: 500, type: "credit" })
+    expect(mocks.assertPeriodOpenMock).toHaveBeenCalled()
+    expect(mocks.prismaMock.bankStatement.update).toHaveBeenCalled()
+  })
+
+  it("importBankStatementLines atomik: satu baris rusak -> tidak ada createMany, error per baris kembali", async () => {
+    const fd = new FormData()
+    fd.append("bankStatementId", "42")
+    fd.append("csvText", "Tanggal;Keterangan;Debit;Kredit\n2026-10-01;Sah;1500;0\nsalah;Rusak;100;0")
+
+    const res = await (actions as any).importBankStatementLines(fd)
+
+    expect(res.success).toBe(false)
+    expect(res.rowErrors).toEqual([{ row: 3, message: expect.stringMatching(/tanggal/i) }])
+    expect(mocks.prismaMock.bankStatementLine.createMany).not.toHaveBeenCalled()
+  })
+
+  it("importBankStatementLines menolak header non-draft", async () => {
+    mocks.prismaMock.bankStatement.findUnique.mockResolvedValue({ status: "final", deletedAt: null })
+    const fd = new FormData()
+    fd.append("bankStatementId", "42")
+    fd.append("csvText", "Tanggal;Keterangan;Debit;Kredit\n2026-10-01;Masuk;1500;0")
+
+    const res = await (actions as any).importBankStatementLines(fd)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/draft/)
+    expect(mocks.prismaMock.bankStatementLine.createMany).not.toHaveBeenCalled()
+  })
+
   it("createBankStatementLine menghitung ulang totalDebits/totalCredits header dari barisnya", async () => {
     mocks.prismaMock.bankStatementLine.aggregate.mockResolvedValue({
       _sum: { debit: 1500.5, credit: 250.25 },

@@ -60,6 +60,7 @@ import {
 import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service";
 import { nextSlug } from "@/lib/utils/slug-db";
 import { parseMoneyAmount } from "@/lib/utils/parse-money";
+import { parseBankStatementCsv } from "@/lib/finance/bank-statement-csv";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 
 // ==================== BANK STATEMENT ACTIONS ====================
@@ -284,6 +285,100 @@ export async function createBankStatementLine(formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createBankStatementLine]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Import baris rekening koran dari CSV. Atomik: satu baris rusak menolak
+ * SELURUH import dan daftar error per nomor baris dikembalikan ke form —
+ * tidak ada baris yang tertulis separuh dan tidak ada baris rusak yang
+ * dibuang senyap. Header wajib draft (baris tidak ditambahkan ke rekening
+ * koran yang sudah difinalkan) dan setiap tanggal baris wajib lolos
+ * `assertPeriodOpen` di dalam transaksi yang sama, sesudah kunci header.
+ */
+export async function importBankStatementLines(formData: FormData) {
+  try {
+    await requirePermission("create_journals");
+
+    const bankStatementId = Number(formData.get("bankStatementId"));
+    const fileEntry = formData.get("file");
+    const csvTextRaw = formData.get("csvText");
+    if (!Number.isInteger(bankStatementId) || bankStatementId <= 0)
+      return { success: false as const, error: "bankStatementId tidak valid" };
+
+    let csvText: string;
+    if (fileEntry instanceof File && fileEntry.size > 0) {
+      // ponytail: 1 MB / 5000 baris cukup untuk rekening koran bulanan;
+      // naikkan bila ada berkas bank yang sah lebih besar.
+      if (fileEntry.size > 1_000_000)
+        return { success: false as const, error: "Berkas CSV melebihi 1 MB" };
+      csvText = await fileEntry.text();
+    } else if (typeof csvTextRaw === "string" && csvTextRaw.trim() !== "") {
+      csvText = csvTextRaw;
+    } else {
+      return { success: false as const, error: "Pilih berkas CSV atau tempel isi CSV terlebih dahulu" };
+    }
+
+    const parsed = parseBankStatementCsv(csvText);
+    if (parsed.errors.length > 0)
+      return {
+        success: false as const,
+        error: `Import ditolak: ${parsed.errors.length} baris bermasalah, tidak ada baris yang ditulis. Perbaiki berkas lalu coba lagi.`,
+        rowErrors: parsed.errors,
+      };
+    if (parsed.lines.length === 0)
+      return { success: false as const, error: "Tidak ada baris data pada CSV" };
+    if (parsed.lines.length > 5000)
+      return { success: false as const, error: "Maksimal 5000 baris per import" };
+
+    const imported = await prisma.$transaction(async (tx) => {
+      await lockBankStatementHeaders(tx, [bankStatementId]);
+      const header = await tx.bankStatement.findUnique({
+        where: { id: bankStatementId },
+        select: { status: true, deletedAt: true },
+      });
+      if (!header || header.deletedAt)
+        throw new Error("Rekening koran tidak ditemukan");
+      if (header.status !== "draft")
+        throw new Error("Import hanya untuk rekening koran berstatus draft");
+
+      const data = parsed.lines.map((line) => {
+        const date = wibDateToUtcMidnight(line.date);
+        return {
+          bankStatementId,
+          date,
+          description: line.description,
+          amount: line.amount,
+          debit: line.type === "debit" ? line.amount : 0,
+          credit: line.type === "credit" ? line.amount : 0,
+          type: line.type,
+          reference: line.reference,
+          status: "unmatched",
+        };
+      });
+      // assertPeriodOpen mengunci setting; panggil sekali per tanggal unik
+      // (umumnya satu bulan yang sama) sesudah kunci header — urutan lock
+      // header -> setting sama dengan penulis baris lain.
+      for (const date of [...new Set(data.map((d) => d.date.getTime()))].sort((a, b) => a - b)) {
+        await assertPeriodOpen(new Date(date), tx);
+      }
+      await tx.bankStatementLine.createMany({ data });
+      await recalcBankStatementTotals(tx, bankStatementId);
+      return data.length;
+    });
+
+    await logActivity(
+      "create",
+      "BankStatement",
+      bankStatementId,
+      `Import ${imported} baris rekening koran dari CSV`,
+    );
+    revalidatePath("/keuangan/laporan-bank");
+    return { success: true as const, imported };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[importBankStatementLines]", getErrorMessage(e) || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
