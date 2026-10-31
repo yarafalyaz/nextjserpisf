@@ -45,8 +45,11 @@ export type VendorBillLineAmounts = {
  * String tak terbaca → 0 (perilaku lama `?? 0` untuk input tak sah).
  */
 export function computeBillLineAmounts(line: VendorBillLineInput): VendorBillLineAmounts {
-  const qty = safeRound(parseLocaleNumber(line.qty) ?? 0, 2)
-  const unitPrice = safeRound(parseMoneyAmount(line.unitPrice) ?? 0, 2)
+  // Harga/qty negatif bukan fakta komersial: tanpa clamp, gross/subtotal/
+  // total negatif lolos ke kop tagihan dan jurnal AP. Clamp di SATU sumber
+  // hitung ini (pola persen di bawah), bukan menolak.
+  const qty = Math.max(0, safeRound(parseLocaleNumber(line.qty) ?? 0, 2))
+  const unitPrice = Math.max(0, safeRound(parseMoneyAmount(line.unitPrice) ?? 0, 2))
   // R8-JB-07: persen di luar [0,100] menghasilkan subtotal/total negatif
   // yang lolos ke kop + jurnal AP (bill tanpa PO/kop manual). Clamp di
   // SATU sumber hitung ini (pola tax-invoice.ts creditablePercent),

@@ -25,6 +25,24 @@ describe("matematika baris tagihan vendor", () => {
     expect(a.total).toBe(0)
   })
 
+  it("harga satuan / qty negatif di-clamp 0 — baris tak pernah bernilai negatif", async () => {
+    const { summarizeBillItems } = await import("@/lib/finance/vendor-bill")
+    const a = computeBillLineAmounts({ qty: 2, unitPrice: -50_000, taxPercent: 11 })
+    expect(a.unitPrice).toBe(0)
+    expect(a.gross).toBe(0)
+    expect(a.subtotal).toBe(0)
+    expect(a.total).toBe(0)
+
+    const b = computeBillLineAmounts({ qty: -3, unitPrice: 10_000 })
+    expect(b.qty).toBe(0)
+    expect(b.total).toBe(0)
+
+    const s = summarizeBillItems(
+      JSON.stringify([{ itemId: 1, qty: 1, unitPrice: -100_000 }]),
+    )
+    expect(s?.grandTotal).toBe(0)
+  })
+
   it("R8-JB-07: persen di luar [0,100] di-clamp — subtotal/total tak pernah negatif", () => {
     const a = computeBillLineAmounts({ qty: 1, unitPrice: 100_000, discountPercent: 150, taxPercent: -11 })
     expect(a.discountPercent).toBe(100)
