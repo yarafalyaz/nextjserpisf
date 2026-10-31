@@ -75,6 +75,16 @@ vi.mock("@/lib/db/prisma", () => {
           totalCredit: args.data.totalCredit as Prisma.Decimal,
           entries: args.data.entries.create,
         }
+        // Emulasi `journals_active_reference_unique` (generated
+        // journals_active_reference_key_expression): jurnal aktif dengan
+        // (referenceType, referenceId, journalNumber) sama = P2002.
+        const clash = store.journals.some(
+          (j) => j.status !== "REVERSED" && j.deletedAt == null &&
+            j.referenceType === row.referenceType && j.referenceId === row.referenceId &&
+            (j as unknown as { journalNumber?: string }).journalNumber === (args.data.journalNumber as string),
+        )
+        if (clash) throw new Prisma.PrismaClientKnownRequestError("Unique constraint failed", { code: "P2002", clientVersion: "test" })
+        ;(row as unknown as { journalNumber: string }).journalNumber = args.data.journalNumber as string
         store.journals.push(row)
         return { id: row.id }
       }),
@@ -140,6 +150,19 @@ const impairmentReq = (key: string, recoverable: number) => ({
 })
 
 describe("asset-change-event.service", () => {
+  it("E111-S0: dua impairment berurutan aset sama sama-sama terposting (tanpa tabrakan kunci aktif)", async () => {
+    // Jurnal aktif peristiwa dibedakan nomor jurnal di kunci generated
+    // (migrasi 20261101110000); referensi aset sama BUKAN replay.
+    const first = await postAssetChangeEvent({ assetId: 1, request: impairmentReq("DOC-1", 700) })
+    const second = await postAssetChangeEvent({ assetId: 1, request: impairmentReq("DOC-2", 500) })
+    expect(second.journalId).not.toBeNull()
+    expect(second.journalId).not.toBe(first.journalId)
+    const activeEventJournals = store.journals.filter(
+      (j) => j.referenceType === "ASSET_CHANGE_EVENT" && j.referenceId === 1 && j.status === "POSTED",
+    )
+    expect(activeEventJournals).toHaveLength(2)
+  })
+
   it("E111-S1: peristiwa ke-2 membaca jurnal peristiwa ke-1 lewat join journalId", async () => {
     const first = await postAssetChangeEvent({ assetId: 1, request: impairmentReq("DOC-1", 700) })
     expect(first.journalId).not.toBeNull()
