@@ -141,6 +141,7 @@ export async function onTransferProcessed(
           data: {
             documentNo: smDocNo,
             slug: slugify(smDocNo),
+            date: transfer.date,
             itemId: itemId,
             warehouseId: transfer.sourceWarehouseId,
             qty: qty,
@@ -213,6 +214,9 @@ async function createInboundMoves(
   entries: InboundEntry[],
   userId?: number,
   prefetchedItemMetas?: readonly { id: number; trackBatch?: boolean; trackSerial?: boolean }[],
+  // Tanggal kejadian terima (receipt.receivedDate), fallback tanggal kirim
+  // untuk jalur terima lama tanpa dokumen receipt.
+  moveDate?: Date,
 ): Promise<void> {
   if (entries.length === 0) return;
   const costs = await carriedCostByItem(tx, transfer.id, entries.map((e) => e.itemId));
@@ -279,6 +283,7 @@ async function createInboundMoves(
       data: {
         documentNo: smDocNo,
         slug: slugify(smDocNo),
+        date: moveDate ?? new Date(),
         itemId: entry.itemId,
         warehouseId: transfer.destinationWarehouseId,
         qty: entry.qty,
@@ -466,7 +471,7 @@ export async function onTransferReceived(
       }
       // Batch-tracked tanpa alokasi lot pada KEJADIAN ini ditolak walau
       // transfer membawa alokasi kirim: penerima wajib menyebut lot tiba.
-      await createInboundMoves(tx, transfer, Array.from(entriesByItem.values()), userId, itemMetas);
+      await createInboundMoves(tx, transfer, Array.from(entriesByItem.values()), userId, itemMetas, receipt.receivedDate);
 
       await tx.inventoryTransferReceipt.create({
         data: {
@@ -547,7 +552,7 @@ export async function onTransferReceived(
       entry.batches.push(...parseStoredBatches(it.batchAllocations, transfer.sourceWarehouseId));
       entriesByItem.set(it.itemId, entry);
     }
-    await createInboundMoves(tx, transfer, Array.from(entriesByItem.values()), userId);
+    await createInboundMoves(tx, transfer, Array.from(entriesByItem.values()), userId, undefined, transfer.date);
     nextStatus = "received";
   });
   return nextStatus;

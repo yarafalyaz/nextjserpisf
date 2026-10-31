@@ -463,6 +463,7 @@ export async function onGoodsReceiptVerified(
         data: {
           documentNo: smDocNo,
           slug: slugify(smDocNo),
+          date: goodsReceipt.date,
           itemId: item.itemId,
           warehouseId: lineWarehouseId,
           // Destination rack/row picked on the receipt line (nullable — an

@@ -886,6 +886,7 @@ export async function onSalesInvoicePosted(
         data: {
           documentNo: smDocNo,
           slug: slugify(smDocNo),
+          date: invoice.date,
           itemId: line.itemId,
           warehouseId: info.defaultWarehouseId ?? null,
           qty,

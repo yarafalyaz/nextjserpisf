@@ -1118,6 +1118,7 @@ export async function issueMaterial(
           data: {
             documentNo: stockMoveDocumentNos[index],
             slug: slugify(stockMoveDocumentNos[index]),
+            date: new Date(),
             itemId: line.itemId,
             warehouseId: line.warehouseId,
             qty: line.qty,
@@ -1341,6 +1342,7 @@ export async function completeProductionOrder(
         data: {
           documentNo: moveNo,
           slug: slugify(moveNo),
+          date: new Date(),
           itemId: outputItem.id,
           warehouseId,
           qty,

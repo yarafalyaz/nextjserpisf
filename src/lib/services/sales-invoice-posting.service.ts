@@ -71,9 +71,13 @@ export async function reverseSalesInvoicePostingTx(
     }
   }
   const qtyUpdates: Promise<unknown>[] = []
+  // Tanggal pembalikan = tanggal void/edit berjalan (jurnal lawan pun
+  // bertanggal kini); move asal tak membawa tanggal yang bisa diwarisi.
+  const reversalDate = new Date()
   const moveInserts: Array<{
     documentNo: string
     slug: string
+    date: Date
     itemId: number
     warehouseId: number | null
     qty: number
@@ -98,6 +102,7 @@ export async function reverseSalesInvoicePostingTx(
     moveInserts.push({
       documentNo: `SM-REV-INV-${invoiceId}-${m.id}`,
       slug: slugify(`SM-REV-INV-${invoiceId}-${m.id}`),
+      date: reversalDate,
       itemId: m.itemId,
       warehouseId: m.warehouseId,
       qty,

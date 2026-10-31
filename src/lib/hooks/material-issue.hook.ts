@@ -247,6 +247,7 @@ export async function onMaterialIssueCompleted(
           data: {
             documentNo: smDocNo,
             slug: slugify(smDocNo),
+            date: issue.date,
             itemId: item.itemId,
             warehouseId: issue.warehouseId,
             qty: item.qty,

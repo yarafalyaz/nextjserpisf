@@ -160,6 +160,7 @@ export async function onSalesReturnCompleted(
           data: {
             documentNo: smDocNo,
             slug: slugify(smDocNo),
+            date: salesReturn.date,
             itemId: item.itemId,
             warehouseId: resolvedWarehouseId,
             qty: baseQty,

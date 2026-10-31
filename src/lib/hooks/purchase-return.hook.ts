@@ -197,6 +197,7 @@ export async function onPurchaseReturnProcessed(
           data: {
             documentNo: smDocNo,
             slug: slugify(smDocNo),
+            date: purchaseReturn.date,
             itemId: item.itemId,
             warehouseId,
             qty: baseQty,

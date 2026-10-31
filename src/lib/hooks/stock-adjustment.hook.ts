@@ -146,6 +146,7 @@ export async function onStockAdjustmentProcessed(
           data: {
             documentNo: smDocNo,
             slug: slugify(smDocNo),
+            date: adjustment.date,
             itemId: item.itemId,
             warehouseId: adjustment.warehouseId,
             qty,
