@@ -290,6 +290,16 @@ describe("onGoodsReceiptVerified stock tracking modules", () => {
     await expect(onGoodsReceiptVerified(100, 1)).rejects.toThrow(/tidak sama dengan qty diterima/)
   })
 
+  it("throws when trackSerial received qty is fractional (1.5 unit, 2 serial)", async () => {
+    const { spies } = wireTx({
+      poId: 50, poItems: [{ itemId: 7, qty: 2 }], priorGrItems: [],
+      grItems: [{ itemId: 7, qty: 1.5, serialNumbers: ["S1", "S2"] }],
+      itemMeta: { trackSerial: true },
+    })
+    await expect(onGoodsReceiptVerified(100, 1)).rejects.toThrow(/bilangan bulat/)
+    expect(spies.itemSerialCreateMany).not.toHaveBeenCalled()
+  })
+
   // Regression: a trackSerial item whose serial field is null/undefined/empty
   // used to skip the guard entirely (the block was gated behind
   // Array.isArray(item.serialNumbers)), letting it verify stock-in with zero

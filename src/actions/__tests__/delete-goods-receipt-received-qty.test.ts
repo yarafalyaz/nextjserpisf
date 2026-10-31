@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => {
     goodsReceipt: {
       delete: vi.fn(),
       count: vi.fn().mockResolvedValue(0),
+      findUnique: vi.fn().mockResolvedValue({ status: "draft" }),
     },
     purchaseOrder: {
       update: vi.fn(),
@@ -104,7 +105,22 @@ describe("deleteGoodsReceipt menghitung ulang receivedQty PO", () => {
     });
     mocks.prismaMock.vendorBill.count.mockResolvedValue(0);
     mocks.txMock.goodsReceipt.count.mockResolvedValue(0);
+    mocks.txMock.goodsReceipt.findUnique.mockResolvedValue({ status: "draft" });
     mocks.txMock.goodsReceiptItem.findMany.mockResolvedValue([]);
+  });
+
+  it("menolak bila GR terverifikasi sesudah cek draft di luar tx (balapan verify)", async () => {
+    // Bacaan luar draft, tetapi verify konkuren commit lebih dulu: bacaan
+    // ulang di dalam tx (sesudah lock) melihat verified -> hapus ditolak,
+    // tidak ada StockMove/jurnal yang dibalik oleh jalur hapus draft.
+    mocks.txMock.goodsReceipt.findUnique.mockResolvedValue({ status: "verified" });
+
+    const res = await deleteGoodsReceipt(1);
+
+    expect(res?.success).toBe(false);
+    expect(String((res as any)?.error)).toMatch(/draft/);
+    expect(mocks.txMock.goodsReceipt.delete).not.toHaveBeenCalled();
+    expect(mocks.txMock.stockMove.deleteMany).not.toHaveBeenCalled();
   });
 
   it("menjalankan rekomputasi dari penerimaan yang tersisa, per PO", async () => {

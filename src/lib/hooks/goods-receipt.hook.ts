@@ -576,7 +576,15 @@ export async function onGoodsReceiptVerified(
         const serials = rawSerials
           .map((s) => String(s).trim())
           .filter((s) => s.length > 0);
-        const expected = Math.round(baseQty);
+        // Qty pecahan tak pernah cocok dengan jumlah serial bulat:
+        // Math.round(1.5)=2 sempat meloloskan 2 serial untuk stok 1,5.
+        // Tolak persis seperti consumeFifoLayers.
+        if (!Number.isInteger(baseQty)) {
+          throw new Error(
+            `Item #${item.itemId} melacak nomor seri: qty diterima wajib bilangan bulat (diminta ${baseQty}).`,
+          );
+        }
+        const expected = baseQty;
         if (serials.length !== expected) {
           throw new Error(
             `Item #${item.itemId} melacak nomor seri: jumlah nomor seri (${serials.length}) tidak sama dengan qty diterima (${expected}).`,

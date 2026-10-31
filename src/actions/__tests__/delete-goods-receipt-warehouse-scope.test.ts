@@ -13,7 +13,11 @@ const mocks = vi.hoisted(() => {
     item: { findMany: vi.fn().mockResolvedValue([]) },
     uomConversion: { findMany: vi.fn().mockResolvedValue([]) },
     goodsReceiptItem: { deleteMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
-    goodsReceipt: { delete: vi.fn(), count: vi.fn().mockResolvedValue(0) },
+    goodsReceipt: {
+      delete: vi.fn(),
+      count: vi.fn().mockResolvedValue(0),
+      findUnique: vi.fn().mockResolvedValue({ status: "draft" }),
+    },
     purchaseOrder: { update: vi.fn() },
     itemSerial: { deleteMany: vi.fn() },
     $executeRaw: vi.fn(),

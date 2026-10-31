@@ -2806,6 +2806,20 @@ export async function deleteGoodsReceipt(id: number) {
     }
 
     await prisma.$transaction(async (tx) => {
+      // Kunci baris GR lalu baca ulang status: cek draft di atas berjalan di
+      // luar tx, jadi verify konkuren bisa commit (StockMove + jurnal +
+      // status verified) di antara cek dan transaksi ini. Tanpa baca-ulang,
+      // GR terverifikasi ikut terhapus lewat jalur draft — melanggar
+      // PUR-BR-010 yang komentar di atas nyatakan.
+      await tx.$executeRaw`SELECT id FROM goods_receipts WHERE id = ${id} FOR UPDATE`;
+      const locked = await tx.goodsReceipt.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+      if (!locked || locked.status !== "draft") {
+        throw new Error("Hanya penerimaan barang draft yang dapat dihapus");
+      }
+
       // 1. Reverse all stock moves + inventory layers + qty_on_hand created by this GR
       const stockMoves = await tx.stockMove.findMany({
         where: { referenceType: "GoodsReceipt", referenceId: id },
