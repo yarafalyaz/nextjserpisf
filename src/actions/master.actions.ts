@@ -1290,6 +1290,7 @@ function stripBaseSalary<T extends Record<string, unknown>>(data: T): T {
 async function assertManagerChainAcyclic(
   employeeId: number | null,
   managerId: number | null,
+  client: Pick<typeof prisma, "employee"> = prisma,
 ): Promise<string | null> {
   if (managerId == null) return null;
   if (employeeId != null && managerId === employeeId) {
@@ -1304,7 +1305,7 @@ async function assertManagerChainAcyclic(
     if (seen.has(cursor)) break;
     seen.add(cursor);
     const row: { managerId: number | null } | null =
-      await prisma.employee.findUnique({
+      await client.employee.findUnique({
         where: { id: cursor },
         select: { managerId: true },
       });
@@ -1606,6 +1607,21 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       : stripBaseSalary(updateDataSensitive);
 
     await prisma.$transaction(async (tx) => {
+      // Serialisasi per karyawan: cek "belum punya login" dan rantai atasan
+      // di atas membaca snapshot — dua update konkuren karyawan yang sama
+      // bisa sama-sama lolos dan meninggalkan User yatim aktif (userId
+      // @unique menahan tautan kedua, bukan pembuatan user-nya) atau siklus
+      // atasan timbal-balik. Nilai ulang keduanya dari baris terkunci.
+      await tx.$executeRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
+      const lockedCurrent = await tx.employee.findUnique({
+        where: { id: employeeId },
+        select: { userId: true },
+      });
+      if (wantsLogin && lockedCurrent?.userId) {
+        throw new Error("Karyawan ini sudah memiliki akun login");
+      }
+      const lockedManagerErr = await assertManagerChainAcyclic(employeeId, employeeFields.managerId, tx);
+      if (lockedManagerErr) throw new Error(lockedManagerErr);
       if (wantsLogin && email && loginPass) {
         const hashedPassword = await bcrypt.hash(loginPass, 12);
         const user = await tx.user.create({

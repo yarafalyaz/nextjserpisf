@@ -1748,6 +1748,27 @@ describe('Coverage Hardening Edge Cases', () => {
     expect(res?.success).toBe(true)
   })
 
+  it('updateEmployee - karyawan terkunci lalu ditolak (login sudah dibuat penulis lain)', async () => {
+    // Snapshot luar: belum punya login. Di bawah kunci: sudah tertaut —
+    // penulis kedua wajib berhenti SEBELUM membuat User yatim aktif.
+    mocks.prismaMock.employee.findUnique.mockReset()
+    mocks.prismaMock.employee.findUnique
+      .mockResolvedValueOnce({ userId: null }) // bacaan luar
+      .mockResolvedValueOnce({ userId: 9 }) // bacaan terkunci
+    mocks.prismaMock.user.findUnique.mockResolvedValueOnce(null)
+    const fd = fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "kata-sandi-pegawai-kuat" })
+    const res = await actions.updateEmployee(1, fd)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("sudah memiliki akun login")
+    expect(mocks.prismaMock.user.create).not.toHaveBeenCalled()
+    const lockSqls = (mocks.prismaMock.$executeRaw.mock.calls as unknown[][]).map((c) => {
+      const first = c[0] as { strings?: string[] } | string[] | undefined
+      if (Array.isArray(first)) return first.join("?")
+      return (first as { strings?: string[] } | undefined)?.strings?.join("?") ?? ""
+    })
+    expect(lockSqls.some((s: string) => s.includes("employees") && s.includes("FOR UPDATE"))).toBe(true)
+  })
+
   it('updateEmployee - update synced user success', async () => {
     mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: 1 })
     mocks.prismaMock.user.findUnique.mockResolvedValueOnce(null) // no clash
