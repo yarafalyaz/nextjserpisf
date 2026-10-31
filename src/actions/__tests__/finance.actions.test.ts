@@ -1258,6 +1258,23 @@ describe("Cost Center Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("deleteCostCenter mengunci baris cost_centers dan memakai tx untuk hitung + hapus", async () => {
+    const res = await (actions as any).deleteCostCenter(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+    const lockIdx = (mocks.prismaMock.$executeRaw.mock.calls as unknown[][]).findIndex((call) => {
+      const first = call[0] as unknown
+      const sql = Array.isArray(first)
+        ? (first as string[]).join("")
+        : String((first as { strings?: string[] } | undefined)?.strings?.join("") ?? first)
+      return sql.includes("cost_centers") && sql.includes("FOR UPDATE")
+    })
+    expect(lockIdx).toBeGreaterThanOrEqual(0)
+    const countIdx = mocks.prismaMock.costCenter.count.mock.invocationCallOrder[0]
+    expect(mocks.prismaMock.$executeRaw.mock.invocationCallOrder[lockIdx]).toBeLessThan(countIdx)
+    expect(mocks.prismaMock.costCenter.delete).toHaveBeenCalledWith({ where: { id: 1 } })
+  })
+
   it("deleteCostCenter menolak bila ada pusat biaya anak tanpa menghapus", async () => {
     mocks.prismaMock.costCenter.count.mockResolvedValueOnce(2)
     const res = await (actions as any).deleteCostCenter(1)
