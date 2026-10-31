@@ -1132,6 +1132,43 @@ describe("Payroll Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("R8-SDM-04: updatePayroll menulis lewat klaim atomik berpredikat draft", async () => {
+    const res = await actions.updatePayroll(1, fd({
+      period: "2026-05",
+      startDate: "2026-05-01",
+      endDate: "2026-05-31",
+      basicSalary: "6000000",
+      totalAllowances: "0",
+      totalDeductions: "0",
+      netPay: "6000000",
+    }))
+    expect(res?.success).toBe(true)
+    // Penulis akhir = updateMany WHERE status:"draft" (bukan update
+    // tanpa predikat) -- approver paralel yang menang lebih dulu
+    // membuat klaim ini count 0 dan edit ditolak.
+    expect(prismaMock.payroll.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1, status: "draft" } }),
+    )
+    expect((prismaMock.payroll.update as any).mock.calls.some(
+      (c: any) => c[0]?.where?.id === 1 && c[0]?.data && !("status" in (c[0].data ?? {})),
+    )).toBe(false)
+  })
+
+  it("R8-SDM-04: klaim kalah (slip direbut approve paralel) menolak edit", async () => {
+    prismaMock.payroll.updateMany.mockResolvedValueOnce({ count: 0 })
+    const res = await actions.updatePayroll(1, fd({
+      period: "2026-05",
+      startDate: "2026-05-01",
+      endDate: "2026-05-31",
+      basicSalary: "9000000",
+      totalAllowances: "0",
+      totalDeductions: "0",
+      netPay: "9000000",
+    }))
+    expect(res?.success).toBe(false)
+    expect(String((res as any)?.error ?? "")).toMatch(/draft/i)
+  })
+
   it("approvePayroll updates status", async () => {
     const res = await actions.approvePayroll(1)
     expect(res?.success).toBe(true)
@@ -2769,7 +2806,10 @@ describe("TASK-018 regresi payroll (bulk TER, gerbang, final, plafon, pinjaman)"
     f.set("endDate", "2026-05-31")
     const r = await actions.updatePayroll(1, f)
     expect(r?.success).toBe(true)
-    const updateArg = prismaMock.payroll.update.mock.calls.at(-1)?.[0] as { data: { statutorySnapshot: { pph21Ter: { periodKind: string } } } }
+    // R8-SDM-04: penulis akhir kini klaim updateMany berpredikat
+    // draft -- baca payload dari sana (bukan update polos).
+    const updateArg = prismaMock.payroll.updateMany.mock.calls.at(-1)?.[0] as { where: unknown; data: { statutorySnapshot: { pph21Ter: { periodKind: string } } } }
+    expect(updateArg.where).toEqual({ id: 1, status: "draft" })
     expect(updateArg.data.statutorySnapshot.pph21Ter.periodKind).toBe("final-resignation")
   })
 

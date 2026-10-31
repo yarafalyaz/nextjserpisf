@@ -407,9 +407,26 @@ describe("F-027 baris draft", () => {
     prismaMock.payrollComponentLine.findMany.mockResolvedValue([{ id: 31, payrollId: 55, componentId: 9, componentNameSnapshot: "Bonus", kindSnapshot: "earning", recurrenceSnapshot: "variable", isTaxableSnapshot: true, source: "manual", assignmentId: null, accountIdSnapshot: null, amount: 250000 }])
     const res = await actions.addPayrollComponentLine(55, fd({ componentId: "9", amount: "250000" }))
     expect(res.success).toBe(true)
-    const upd = prismaMock.payroll.update.mock.calls.at(-1)[0]
+    // R8-SDM-03/SDM-04: penulis akhir kini klaim updateMany berpredikat draft.
+    const upd = prismaMock.payroll.updateMany.mock.calls.at(-1)[0]
     expect(upd.data.allowances).toBe(250000)
     expect(upd.data.grossSalary).toBe(5250000)
+  })
+
+  it("R8-SDM-03: recalc menolak bila klaim draft kalah (slip direbut approve paralel)", async () => {
+    // Baca luar-tx melihat draft; saat recalc menulis, slip sudah
+    // approved oleh request lain -> klaim berpredikat draft count 0.
+    prismaMock.payroll.updateMany.mockResolvedValueOnce({ count: 0 })
+    prismaMock.payrollComponent.findUnique.mockResolvedValue({
+      id: 9, name: "Bonus", kind: "earning", recurrence: "variable", isTaxable: true, isActive: true, accountId: null,
+    })
+    prismaMock.payrollComponentLine.findMany.mockResolvedValue([{ id: 31, payrollId: 55, componentId: 9, componentNameSnapshot: "Bonus", kindSnapshot: "earning", recurrenceSnapshot: "variable", isTaxableSnapshot: true, source: "manual", assignmentId: null, accountIdSnapshot: null, amount: 250000 }])
+    const res = await actions.addPayrollComponentLine(55, fd({ componentId: "9", amount: "250000" }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("draft")
+    expect(prismaMock.payroll.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 55, status: "draft" } }),
+    )
   })
 
   it("AC-5: slip paid tambah baris ditolak", async () => {
@@ -451,7 +468,8 @@ describe("F-027 baris draft", () => {
       baseSalary: "5000000", allowances: "1", deductions: "0",
     }))
     expect(res.success).toBe(true)
-    const upd = prismaMock.payroll.update.mock.calls.at(-1)[0]
+    // R8-SDM-03/SDM-04: penulis akhir kini klaim updateMany berpredikat draft.
+    const upd = prismaMock.payroll.updateMany.mock.calls.at(-1)[0]
     expect(upd.data.allowances).toBe(800000)
     expect(upd.data.grossSalary).toBe(5800000)
   })

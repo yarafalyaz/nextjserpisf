@@ -258,8 +258,12 @@ describe("correctPaidPayroll E-HRCR (HR-BR-005 133-S/135-V)", () => {
     expect(reverseJournalsMock.mock.calls[0].slice(1, 3)).toEqual(["Payroll", 1])
     expect(onPayrollPaidMock).toHaveBeenCalledTimes(1)
     expect(onPayrollPaidMock.mock.calls[0][0]).toBe(2)
-    // Amortisasi dibalikkan: sisa pinjaman naik sebesar porsi slip ini.
-    expect(loansByEmployee.get(9)![0].remainingAmount).toBe(1500000)
+    // Amortisasi dibalikkan lalu DITERAPKAN ULANG atas slip koreksi
+    // yang langsung `paid` (R8-SDM-01): saldo akhir = saldo
+    // pasca-slip-asal (1.500.000 dipulihkan, lalu dipotong lagi
+    // 500.000 oleh koreksi). Tanpa amortisasi ulang GL piutang
+    // terpotong dua kali tetapi subledger naik — karyawan bayar ganda.
+    expect(loansByEmployee.get(9)![0].remainingAmount).toBe(1000000)
     // Jejak audit memuat asal + alasan + aktor, tanpa nominal gaji.
     expect(logActivityMock).toHaveBeenCalledWith(
       "correct",
@@ -299,9 +303,12 @@ describe("correctPaidPayroll E-HRCR (HR-BR-005 133-S/135-V)", () => {
     expect(payrollById.size).toBe(1)
   })
 
-  it("E-HRCR-2b: restorasi amortisasi cermin alokasi tertua-dulu, dicap sisa per pinjaman", async () => {
-    // markPayrollPaid mengalokasi min(sisa,budget) tertua-dulu; slip ini
-    // memotong 500rb dari dua pinjaman -> pulihkan porsi yang sama, total 500rb.
+  it("E-HRCR-2b: restorasi + amortisasi ulang invers persis (neto nol per bucket)", async () => {
+    // Fixture mencatat saldo SESUDAH slip asal: dari utang total
+    // 1.400.000 slip ini memotong 500rb tertua-dulu (bucket tertua
+    // turun ke 100rb, kedua turun ke 800rb -- distribusi asal
+    // 300rb/200rb). Koreksi memulihkan lalu memotong ulang PERSIS
+    // inversnya: saldo akhir kembali ke saldo tercatat kini.
     loansByEmployee = new Map([
       [9, [
         { id: 11, remainingAmount: 100000, status: "active", loanDate: new Date("2026-09-01T00:00:00Z") },
@@ -311,9 +318,8 @@ describe("correctPaidPayroll E-HRCR (HR-BR-005 133-S/135-V)", () => {
     const res = await correctPaidPayroll(1, fd("koreksi multi pinjaman"))
     expect(res.success).toBe(true)
     const rows = loansByEmployee.get(9)!
-    // Pinjaman tertua pulih penuh 100rb (sisa cap), sisanya ke pinjaman kedua.
-    expect(rows.find((r) => r.id === 11)!.remainingAmount).toBe(200000)
-    expect(rows.find((r) => r.id === 12)!.remainingAmount).toBe(1200000)
+    expect(rows.find((r) => r.id === 11)!.remainingAmount).toBe(100000)
+    expect(rows.find((r) => r.id === 12)!.remainingAmount).toBe(800000)
   })
 
   it("E-HRCR-2c: P2002 rentang periode koreksi ditolak berisik tanpa nominal gaji", async () => {
@@ -327,6 +333,44 @@ describe("correctPaidPayroll E-HRCR (HR-BR-005 133-S/135-V)", () => {
     expect(res.error).not.toMatch(/[0-9]{7,}/)
     expect(logActivityMock).not.toHaveBeenCalled()
     expect(payrollById.size).toBe(1)
+  })
+
+  it("R8-SDM-01: koreksi slip paid — saldo pinjaman NETO NOL (pulih + potong ulang)", async () => {
+    // Fixture standar: sisa 1.000.000 sesudah slip asal memotong
+    // 500.000 dari utang 1.500.000. Koreksi memulihkan ke 1.500.000
+    // lalu slip koreksi (langsung paid) memotong lagi 500.000 ->
+    // kembali 1.000.000. Jurnal koreksi mengkredit Piutang Karyawan
+    // sekali; subledger tidak boleh terpotong dua kali.
+    const res = await correctPaidPayroll(1, fd("Koreksi potongan pinjaman"))
+    expect(res.success).toBe(true)
+    expect(loansByEmployee.get(9)![0].remainingAmount).toBe(1000000)
+    // Slip koreksi memang membawa loanDeduction yang sama (bukan 0).
+    expect(Number(payrollById.get(2).loanDeduction)).toBe(500000)
+  })
+
+  it("R8-SDM-02: agregator se-masa/tahun menyingkirkan slip asal yang digantikan (static guard)", async () => {
+    // computeBpjsForPeriod/computePph21ForPeriod tidak diekspor
+    // (pembangunan slip lewat action publik membutuhkan harness
+    // employee/ruleset penuh) -- guard statis mengunci filter
+    // penggantian agar asal + koreksi tidak dobel terhitung.
+    const { readFileSync } = await import("node:fs")
+    const src = readFileSync(new URL("../hrm.actions.ts", import.meta.url), "utf8")
+    expect(src).toContain(".filter((r) => !rows.some((c) => c.correctsPayrollId === r.id))")
+    expect(src).toContain("if (all.some((c) => c.correctsPayrollId === r.id)) return false")
+  })
+
+  it("R8-SDM-01: pinjaman yang lunas oleh slip asal hidup lagi lalu lunas kembali oleh koreksi", async () => {
+    // Pinjaman 500rb dilunasi PERSIS oleh potongan slip asal.
+    loansByEmployee = new Map([
+      [9, [{ id: 11, remainingAmount: 0, status: "paid_off", loanDate: new Date("2026-09-01T00:00:00Z") }]],
+    ])
+    const res = await correctPaidPayroll(1, fd("Koreksi slip pelunasan"))
+    expect(res.success).toBe(true)
+    const loan = loansByEmployee.get(9)![0]
+    // Pulih 500rb (revive active) lalu terpotong 500rb lagi oleh
+    // koreksi -> lunas kembali, BUKAN tersisa 500rb.
+    expect(loan.remainingAmount).toBe(0)
+    expect(loan.status).toBe("paid_off")
   })
 
   it("komisi: tautan payable pindah ke slip koreksi + paidAmount dilepas sebelum bayar ulang", async () => {

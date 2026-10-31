@@ -191,7 +191,8 @@ describe("addPayrollCommissionLine", () => {
       accountIdSnapshot: 210212,
       amount: 700000,
     })
-    const upd = prismaMock.payroll.update.mock.calls.at(-1)[0]
+    // R8-SDM-03/SDM-04: penulis akhir kini klaim updateMany berpredikat draft.
+    const upd = prismaMock.payroll.updateMany.mock.calls.at(-1)[0]
     expect(upd.data.allowances).toBe(700000)
   })
 })

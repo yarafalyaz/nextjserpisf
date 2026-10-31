@@ -595,12 +595,13 @@ export async function getPayrollComponentLines(payrollId: number) {
   }
 }
 
-async function recalcDraftPayrollFromLines(payrollId: number): Promise<void> {
-  const payroll = await prisma.payroll.findUniqueOrThrow({ where: { id: payrollId } });
+async function recalcDraftPayrollFromLines(payrollId: number, txClient?: typeof prisma): Promise<void> {
+  const db = txClient ?? prisma;
+  const payroll = await db.payroll.findUniqueOrThrow({ where: { id: payrollId } });
   if (payroll.status !== "draft") {
     throw new Error("Baris komponen gaji hanya dapat diubah pada slip draft");
   }
-  const lines = await prisma.payrollComponentLine.findMany({
+  const lines = await db.payrollComponentLine.findMany({
     where: { payrollId },
     orderBy: { componentId: "asc" },
   });
@@ -634,7 +635,17 @@ async function recalcDraftPayrollFromLines(payrollId: number): Promise<void> {
       absentDeduction: Number(payroll.absentDeduction),
     },
   });
-  await prisma.payroll.update({ where: { id: payrollId }, data: { ...w } });
+  // R8-SDM-03: klaim atomik berpredikat draft di titik tulis. Cek draft
+  // di awal fungsi ini basi begitu approver paralel menang di antara
+  // baca baris dan tulis ini -- tanpa predikat, recalc menulis angka
+  // baris baru ke slip yang sudah approved/paid.
+  const claim = await db.payroll.updateMany({
+    where: { id: payrollId, status: "draft" },
+    data: { ...w },
+  });
+  if (claim.count === 0) {
+    throw new Error("Baris komponen gaji hanya dapat diubah pada slip draft");
+  }
 }
 
 async function assertDraftPayrollLineAccess(payrollId: number, authenticatedUser?: { id: unknown; roles?: unknown }): Promise<void> {
@@ -672,21 +683,34 @@ export async function addPayrollComponentLine(payrollId: number, formData: FormD
       select: { id: true },
     });
     if (dup) throw new Error("Komponen gaji yang sama sudah ada pada slip ini");
-    const created = await prisma.payrollComponentLine.create({
-      data: {
-        payrollId,
-        componentId,
-        componentNameSnapshot: component.name,
-        kindSnapshot: component.kind,
-        recurrenceSnapshot: component.recurrence,
-        isTaxableSnapshot: component.isTaxable,
-        source: "manual",
-        assignmentId: null,
-        accountIdSnapshot: component.accountId ?? null,
-        amount,
-      },
+    // R8-SDM-03: mutasi baris + recalc SATU transaksi berpredikat
+    // draft (pola jalur komisi): approve paralel tidak bisa menyelip
+    // di antara tulis baris dan tulis total.
+    const created = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM payrolls WHERE id = ${payrollId} FOR UPDATE`;
+      }
+      const locked = await tx.payroll.findUniqueOrThrow({ where: { id: payrollId } });
+      if (locked.status !== "draft") {
+        throw new Error("Baris komponen gaji hanya dapat diubah pada slip draft");
+      }
+      const row = await tx.payrollComponentLine.create({
+        data: {
+          payrollId,
+          componentId,
+          componentNameSnapshot: component.name,
+          kindSnapshot: component.kind,
+          recurrenceSnapshot: component.recurrence,
+          isTaxableSnapshot: component.isTaxable,
+          source: "manual",
+          assignmentId: null,
+          accountIdSnapshot: component.accountId ?? null,
+          amount,
+        },
+      });
+      await recalcDraftPayrollFromLines(payrollId, tx as never);
+      return row;
     });
-    await recalcDraftPayrollFromLines(payrollId);
     revalidatePath("/sdm/penggajian");
     return { success: true, id: created.id };
   } catch (e: unknown) {
@@ -710,8 +734,18 @@ export async function updatePayrollComponentLineAmount(lineId: number, formData:
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new Error("Nominal baris komponen gaji harus lebih dari nol");
     }
-    await prisma.payrollComponentLine.update({ where: { id: lineId }, data: { amount } });
-    await recalcDraftPayrollFromLines(line.payrollId);
+    // R8-SDM-03: satu transaksi berpredikat draft (lihat addPayrollComponentLine).
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM payrolls WHERE id = ${line.payrollId} FOR UPDATE`;
+      }
+      const locked = await tx.payroll.findUniqueOrThrow({ where: { id: line.payrollId } });
+      if (locked.status !== "draft") {
+        throw new Error("Baris komponen gaji hanya dapat diubah pada slip draft");
+      }
+      await tx.payrollComponentLine.update({ where: { id: lineId }, data: { amount } });
+      await recalcDraftPayrollFromLines(line.payrollId, tx as never);
+    });
     revalidatePath("/sdm/penggajian");
     return { success: true, id: lineId };
   } catch (e: unknown) {
@@ -728,8 +762,18 @@ export async function removePayrollComponentLine(lineId: number) {
     const line = await prisma.payrollComponentLine.findUnique({ where: { id: lineId } });
     if (!line) throw new Error("Baris komponen gaji tidak ditemukan");
     await assertDraftPayrollLineAccess(line.payrollId, user);
-    await prisma.payrollComponentLine.delete({ where: { id: lineId } });
-    await recalcDraftPayrollFromLines(line.payrollId);
+    // R8-SDM-03: satu transaksi berpredikat draft (lihat addPayrollComponentLine).
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM payrolls WHERE id = ${line.payrollId} FOR UPDATE`;
+      }
+      const locked = await tx.payroll.findUniqueOrThrow({ where: { id: line.payrollId } });
+      if (locked.status !== "draft") {
+        throw new Error("Baris komponen gaji hanya dapat diubah pada slip draft");
+      }
+      await tx.payrollComponentLine.delete({ where: { id: lineId } });
+      await recalcDraftPayrollFromLines(line.payrollId, tx as never);
+    });
     revalidatePath("/sdm/penggajian");
     return { success: true, id: lineId };
   } catch (e: unknown) {
@@ -783,7 +827,7 @@ export async function addPayrollCommissionLine(payrollId: number, formData: Form
       }
       const dup = await tx.payrollComponentLine.findUnique({ where: { commissionPayableId } });
       if (dup) throw new Error("Utang komisi ini sudah dibayar lewat slip lain");
-      return tx.payrollComponentLine.create({
+      const row = await tx.payrollComponentLine.create({
         data: {
           payrollId,
           componentId: component.id,
@@ -799,8 +843,11 @@ export async function addPayrollCommissionLine(payrollId: number, formData: Form
           amount,
         },
       });
+      await recalcDraftPayrollFromLines(payrollId, tx as never);
+      return row;
     });
-    await recalcDraftPayrollFromLines(payrollId);
+    // R8-SDM-03: recalc sudah jalan DI DALAM transaksi terkunci di
+    // atas (lewat varian tx) -- tidak ada jendela basi di sini.
     revalidatePath("/sdm/penggajian");
     return { success: true, id: created.id };
   } catch (e: unknown) {
@@ -1580,11 +1627,17 @@ async function computeBpjsForPeriod(o: {
       select: {
         id: true, baseSalary: true, bpjsHealthEmployee: true,
         bpjsEmploymentEmployee: true, status: true, statutorySnapshot: true,
+        correctsPayrollId: true,
       },
     });
     others = rows
       .filter((r) => !(o.excludePayrollId && r.id === o.excludePayrollId))
       .filter((r) => r.status !== "cancelled" && r.status !== "canceled")
+      // R8-SDM-02: slip asal yang sudah digantikan koreksi (slip lain
+      // menunjuk correctsPayrollId = asal) TIDAK ikut agregat -- slip
+      // koreksilah (periode terbitnya) yang mengemban angka penuh yang
+      // benar. Tanpa ini asal + koreksi dobel di basis se-masa.
+      .filter((r) => !rows.some((c) => c.correctsPayrollId === r.id))
       .map((r) => ({
         baseSalary: Number(r.baseSalary),
         bpjsHealthEmployee: Number(r.bpjsHealthEmployee),
@@ -1640,11 +1693,15 @@ async function computePph21ForPeriod(o: {
       select: {
         id: true, period: true, type: true, status: true, grossSalary: true,
         pph21: true, bpjsEmploymentEmployee: true, statutorySnapshot: true,
+        correctsPayrollId: true,
       },
     })
     yearSlips = all.filter((r) => {
       if (o.excludePayrollId && r.id === o.excludePayrollId) return false
       if (r.status === "cancelled" || r.status === "canceled") return false
+      // R8-SDM-02: slip asal yang digantikan koreksi keluar dari agregat
+      // tahun/masa -- angka koreksi (period terbitnya) yang berlaku.
+      if (all.some((c) => c.correctsPayrollId === r.id)) return false
       return periodYearMonth(r.period, o.endDate).year === year
     })
   }
@@ -3081,8 +3138,13 @@ export async function updatePayroll(id: number, formData: FormData) {
           );
         }
       }
-      return tx.payroll.update({
-        where: { id },
+      // R8-SDM-04: klaim atomik berpredikat draft. Cek draft di awal
+      // fungsi ini terjadi jauh sebelum transaksi -- approver paralel
+      // bisa menang di antaranya, dan update tanpa predikat akan
+      // menulis angka baru ke slip `approved` tanpa pernah disetujui.
+      // Pola sama dengan approvePayroll: updateMany + cek count.
+      const claim = await tx.payroll.updateMany({
+        where: { id, status: "draft" },
         data: {
           slug: await nextSlug("payroll", existing.documentNo, { excludeId: id }),
           employeeId,
@@ -3093,6 +3155,10 @@ export async function updatePayroll(id: number, formData: FormData) {
           ...w,
         },
       });
+      if (claim.count === 0) {
+        throw new Error("Hanya penggajian status draft yang dapat diubah");
+      }
+      return tx.payroll.findUniqueOrThrow({ where: { id } });
     });
 
     await logActivity(
@@ -3400,13 +3466,17 @@ export async function correctPaidPayroll(
       // dalam helper; periode terkunci = throw = rollback nol mutasi).
       await reverseJournalsByReferenceTx(tx, "Payroll", payrollId, cleanReason, userId);
 
-      // (2) Amortisasi pinjaman DIBALIKKAN lewat dokumen (135-V §2a pola T7,
-      // bukan update manual): kembalikan remainingAmount sebesar porsi yang
-      // dulu diamortisasi slip ini. SATU helper urutan F-2026-10-29-162-V
-      // (E162-6, PUT-LOAN-5): SATU helper urutan dengan markPayrollPaid —
-      // allocateLoanRepayment atas sisa tercatat kini + budget slip, tertua-dulu,
-      // cap sisa, Rp1 lunas. Pinjaman yang jadi paid_off oleh amortisasi ini
-      // kembali active bila pulihan > Rp1 (toleransi FIN-BR-006).
+      // (2) Pulihkan sisa pinjaman sebesar porsi yang dulu diamortisasi
+      // slip ini (loanDeduction), lalu AMORTISASI ULANG atas slip koreksi
+      // yang langsung `paid` di (3) dan tidak pernah lewat markPayrollPaid.
+      // Jurnal asal di-reverse di (1) dan jurnal koreksi di (4) mengkredit
+      // Piutang Karyawan sekali, jadi subledger wajib neto nol per pinjaman:
+      // tanpa amortisasi ulang sisa naik 500rb tetapi GL terpotong dua kali
+      // dan karyawan membayar ganda (R8-SDM-01).
+      // Amortisasi ulang = invers PERSIS alokasi pemulihan, bukan alokasi
+      // segar: allocator segar atas saldo yang baru dipulihkan bisa
+      // memilih bucket lain (cap sisa bucket tertua meluap ke bucket
+      // berikutnya) dan saldo akhir menyimpang dari pasca-slip-asal.
       const amortized = Number(fresh.loanDeduction) || 0;
       let restored = 0;
       if (fresh.employeeId != null && amortized > 0) {
@@ -3415,6 +3485,8 @@ export async function correctPaidPayroll(
           orderBy: [{ loanDate: "asc" }, { id: "asc" }],
           select: { id: true, loanDate: true, remainingAmount: true, status: true },
         });
+        // PULIHKAN: terapkan alokasi maju atas sisa tercatat kini
+        // (cermin distribusi potongan asal), lalu TAMBAHkan kembali.
         const forward = allocateLoanRepayment(
           loans.map((loan) => ({
             id: loan.id,
@@ -3423,19 +3495,38 @@ export async function correctPaidPayroll(
           })),
           amortized,
         );
+        const restoredByLoan = new Map<number, number>();
         for (const alloc of forward) {
           const current = loans.find((l) => l.id === alloc.loanId);
           if (!current) continue;
           const priorRemaining = safeAdd(Number(current.remainingAmount), alloc.applied, 2);
           const paidOffByThisPayroll = current.status === "paid_off" && alloc.nextStatus === "paid_off";
+          const revived = paidOffByThisPayroll && priorRemaining > SETTLEMENT_TOLERANCE_IDR;
           await tx.employeeLoan.update({
             where: { id: alloc.loanId },
             data: {
               remainingAmount: priorRemaining,
-              status: paidOffByThisPayroll && priorRemaining > SETTLEMENT_TOLERANCE_IDR ? "active" : current.status,
+              status: revived ? "active" : current.status,
             },
           });
+          restoredByLoan.set(alloc.loanId, priorRemaining);
           restored = safeAdd(restored, alloc.applied, 2);
+        }
+
+        // AMORTISASI ULANG: kurangi kembali PERSIS alokasi yang baru
+        // dipulihkan di atas (alloc.applied per pinjaman yang sama).
+        for (const alloc of forward) {
+          const restoredRemaining = restoredByLoan.get(alloc.loanId);
+          if (restoredRemaining == null) continue;
+          const nextRemaining = safeSubtract(restoredRemaining, alloc.applied, 2);
+          const settled = nextRemaining <= SETTLEMENT_TOLERANCE_IDR;
+          await tx.employeeLoan.update({
+            where: { id: alloc.loanId },
+            data: {
+              remainingAmount: settled ? 0 : nextRemaining,
+              status: settled ? "paid_off" : "active",
+            },
+          });
         }
       }
 
@@ -5927,10 +6018,21 @@ export async function attachPkwtEventToPayroll(payrollId: number, formData: Form
       eventId,
       payrollEmployeeId: payroll.employeeId,
     });
-    const created = await prisma.payrollComponentLine.create({
-      data: { payrollId, ...lineData },
+    // R8-SDM-03: satu transaksi berpredikat draft (lihat addPayrollComponentLine).
+    const created = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM payrolls WHERE id = ${payrollId} FOR UPDATE`;
+      }
+      const locked = await tx.payroll.findUniqueOrThrow({ where: { id: payrollId } });
+      if (locked.status !== "draft") {
+        throw new Error("Baris komponen gaji hanya dapat diubah pada slip draft");
+      }
+      const row = await tx.payrollComponentLine.create({
+        data: { payrollId, ...lineData },
+      });
+      await recalcDraftPayrollFromLines(payrollId, tx as never);
+      return row;
     });
-    await recalcDraftPayrollFromLines(payrollId);
     await logActivity("create", "PayrollComponentLine", created.id, "Menarik kompensasi PKWT ke slip gaji");
     revalidatePath("/sdm/penggajian");
     return { success: true, id: created.id };
