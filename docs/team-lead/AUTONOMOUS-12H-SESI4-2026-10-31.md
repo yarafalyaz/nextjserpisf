@@ -112,3 +112,7 @@ sebelum fix (klaim agen bukan vonis).
   + guard status. 276 test terkait hijau, tsc bersih, lint 0 error,
   diff bersih. Berikutnya R8-KEU-06..10, R8-JB-03..10,
   R8-SDM-01..06.
+- R8-KEU-06 selesai: match + complete rekonsiliasi bank kini menolak
+  jurnal/baris yang sudah dipakai recon completed (cek global + lock
+  jurnal/kronon dalam complete). Finance suite 163/163. Berikutnya
+  R8-KEU-07..10, R8-JB-03..10, R8-SDM-01..06.

@@ -107,7 +107,7 @@ menulis kas kecil. Workflow path sesudah commit tetap memakai hook
 satu-argumen — guard status yang sama melindungi sinkron tertunda dari
 expense terminal. Regression: order test + hook status test.
 
-### R8-KEU-06 — MEDIUM, CONFIRMED — Item rekonsiliasi dipakai ulang lintas draft
+### R8-KEU-06 — SELESAI 2026-10-31 — Item rekonsiliasi dipakai ulang lintas draft
 `src/actions/finance.actions.ts:1447-1457` — reuse check hanya dalam
 recon yang sama. `prisma/schema.prisma:4915` —
 `@@unique([bankReconciliationId, journalEntryId])` hanya komposit
@@ -115,6 +115,14 @@ per-recon, tidak global. Skenario: journalEntryId +
 bankStatementLineId sama di-match di dua draft rekonsiliasi berbeda
 → keduanya `completeReconciliation` lolos. Dampak kontrol/state,
 bukan double-post GL.
+Perbaikan: pemakaian didefinisikan terhadap rekonsiliasi **completed**
+(bukan kepemilikan draft): match menolak jurnal/baris yang sudah ada di
+recon selesai; complete mengunci baris jurnal lalu baris koran (urutan
+global konsisten) dan memeriksa ulang klaim global sebelum klaim
+draft→completed. Item penyesuaian (kedua id null) tak tersentuh. Tidak
+perlu migrasi: unique komposit tetap menjadi penegak per-recon, cek
+global dari query terindeks. Regression: dua test di
+`finance.actions.test.ts` (match + complete ditolak).
 
 ### R8-KEU-07 — MEDIUM, PLAUSIBLE — completeReconciliation percaya saldo input
 `src/actions/finance.actions.ts:1313-1327` —

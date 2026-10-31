@@ -1433,6 +1433,22 @@ export async function matchReconciliationLine(
         throw new Error("Arah tidak sama: baris debit hanya dapat cocok dengan entri debit (dan sebaliknya)");
       }
 
+      // R8-KEU-06: satu baris jurnal / rekening koran hanya boleh menutup satu
+      // rekonsiliasi yang selesai. UNIQUE lama hanya komposit per-recon, jadi
+      // cek ini harus global terhadap completed — bukan hanya recon ini.
+      // Item pada draft lain tetap boleh ada lebih dulu (draft dapat dihapus
+      // atau di-unmatch); completed yang menang, bukan order pembuatan draft.
+      const occupied = await tx.bankReconciliationItem.findFirst({
+        where: {
+          bankReconciliation: { status: "completed" },
+          OR: [{ journalEntryId }, { bankStatementLineId: lineId }],
+        },
+        select: { id: true },
+      });
+      if (occupied) {
+        throw new Error("Entri jurnal atau baris rekening koran sudah pernah dipakai di rekonsiliasi yang selesai");
+      }
+
       // R-03: satu entri jurnal hanya boleh dipakai sekali per rekonsiliasi.
       // Tanpa ini, satu jurnal Rp1 jt bisa "menutup" banyak baris sekaligus.
       // findFirst dikecualikan baris ini sendiri agar match ulang yang sama
@@ -1694,6 +1710,34 @@ export async function completeReconciliation(reconciliationId: number) {
           `Rekonsiliasi belum seimbang. Selisih: ${difference.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. ` +
             `Tambahkan item penyesuaian (setoran/cek beredar) atau periksa saldo sebelum menyelesaikan.`,
         );
+      }
+
+      // R8-KEU-06: complete harus memenangkan kunci global (journalEntryId,
+      // bankStatementLineId) yang di-cek saat match. Lock baris jurnal lalu
+      // baris koran (urutan global konsisten: jurnal dulu baru koran) di dalam
+      // tx yang memegang lock induk — tanpa ini, dua draft lengkap yang
+      // mengklaim baris yang sama bisa sama-sama completed.
+      const lockEntryIds = [...new Set(reconciliation.items.map((i) => i.journalEntryId).filter((v): v is number => v != null))].sort((a, b) => a - b);
+      const lockLineIds = [...new Set(reconciliation.items.map((i) => i.bankStatementLineId).filter((v): v is number => v != null))].sort((a, b) => a - b);
+      for (const entryId of lockEntryIds) {
+        await tx.$executeRaw`SELECT id FROM journal_entries WHERE id = ${entryId} FOR UPDATE`;
+      }
+      for (const lineId of lockLineIds) {
+        await tx.$executeRaw`SELECT id FROM bank_statement_lines WHERE id = ${lineId} FOR UPDATE`;
+      }
+      const alreadyUsed = await tx.bankReconciliationItem.findFirst({
+        where: {
+          bankReconciliationId: { not: reconciliationId },
+          bankReconciliation: { status: "completed" },
+          OR: [
+            ...(lockEntryIds.length > 0 ? [{ journalEntryId: { in: lockEntryIds } }] : []),
+            ...(lockLineIds.length > 0 ? [{ bankStatementLineId: { in: lockLineIds } }] : []),
+          ],
+        },
+        select: { id: true },
+      });
+      if (alreadyUsed) {
+        throw new Error("Sebagian baris sudah pernah dipakai di rekonsiliasi yang selesai");
       }
 
       // Klaim bersyarat draft→completed di dalam transaksi yang sama:

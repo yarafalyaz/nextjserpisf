@@ -942,6 +942,26 @@ describe("Bank Reconciliation Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("R8-KEU-06: complete ditolak bila item sudah dipakai rekonsiliasi yang selesai", async () => {
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", bookBalance: 1000, statementBalance: 1000, items: [{ matched: true, cleared: true, bankStatementLineId: 1, journalEntryId: 1, type: null, amount: 0 }] })
+    mocks.prismaMock.bankReconciliationItem.findFirst.mockResolvedValue({ id: 77 })
+    const res = await (actions as any).completeReconciliation(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("sudah pernah dipakai")
+    expect(mocks.prismaMock.bankReconciliation.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("R8-KEU-06: match ditolak bila jurnal sudah dipakai rekonsiliasi yang selesai", async () => {
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", accountId: 10, periodStart: null, periodEnd: null })
+    mocks.prismaMock.bankStatementLine.findUniqueOrThrow.mockResolvedValue({ date: new Date("2026-06-13"), amount: 1000, type: "debit", debit: 1000, credit: 0, bankStatement: { accountId: 10 } })
+    mocks.prismaMock.journalEntry.findUniqueOrThrow.mockResolvedValue({ accountId: 10, debit: 1000, credit: 0, journal: { status: "POSTED", deletedAt: null, transactionDate: new Date("2026-06-13") } })
+    mocks.prismaMock.bankReconciliationItem.findFirst.mockResolvedValueOnce({ id: 55 })
+    const res = await (actions.matchReconciliationLine as any)(1, 1, 1)
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("sudah pernah dipakai")
+    expect(mocks.prismaMock.bankReconciliationItem.create).not.toHaveBeenCalled()
+  })
+
   it("rejects a statement line from another account", async () => {
     mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", accountId: 10, periodStart: null, periodEnd: null })
     mocks.prismaMock.bankStatementLine.findUniqueOrThrow.mockResolvedValue({ date: new Date("2026-06-13"), bankStatement: { accountId: 99 } })
@@ -1491,11 +1511,13 @@ describe("More Action Branches", () => {
       credit: 0,
       journal: { status: "POSTED", deletedAt: null, transactionDate: new Date("2026-06-13") },
     })
-    mocks.prismaMock.bankReconciliationItem.findFirst.mockImplementation(async (args: any) =>
+    mocks.prismaMock.bankReconciliationItem.findFirst.mockImplementation(async (args: any) => {
+      // R8-KEU-06 global completed-check → belum pernah selesai dipakai;
       // R-03 reuse-check (where ada journalEntryId) → belum dipakai;
       // dedupe-check baris (hanya bankStatementLineId) → item lama ada.
-      args?.where?.journalEntryId != null ? null : { id: 1 },
-    )
+      if (args?.where?.bankReconciliation?.status === "completed") return null
+      return args?.where?.journalEntryId != null ? null : { id: 1 }
+    })
     mocks.prismaMock.bankReconciliationItem.update.mockResolvedValue({ id: 1 })
     const res = await actions.matchReconciliationLine(1, 1, 1)
     expect(res.success).toBe(true)
