@@ -385,8 +385,11 @@ describe("updateUserRoles", () => {
     userUpdateMock.mockResolvedValue({ id: 3 })
     const res = await updateUserRoles(3, [9])
     expect(res).toEqual({ success: true })
-    // super_admin bypass: no role lookup needed.
-    expect(roleFindManyMock).not.toHaveBeenCalled()
+    // Grant-guard actor dilewati untuk super_admin; lookup di dalam tx adalah
+    // bacaan role TARGET untuk guard super-admin terakhir, bukan lookup izin.
+    expect(roleFindManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { users: { some: { id: 3 } } } }),
+    )
     expect(userUpdateMock).toHaveBeenCalled()
   })
 
@@ -430,6 +433,23 @@ describe("updateUserRoles", () => {
     userCountMock.mockResolvedValue(0)
     const res = await updateUserRoles(1, [5])
     expect(res).toEqual({ error: "Tidak dapat mencabut role super admin terakhir" })
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("race regresi: demote target super_admin lain mengunci semua super_admin lalu hitung ulang sisa", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    // Bacaan target dalam tx (pra + pasca kunci): target masih super_admin,
+    // hasil akhir [5] mencabutnya. Count sisa super_admin lain = 0.
+    roleFindManyMock.mockResolvedValue([{ id: 1, name: "super_admin" }])
+    userCountMock.mockResolvedValue(0)
+    const res = await updateUserRoles(3, [5])
+    expect(res).toEqual({ error: "Tidak dapat mencabut role super admin terakhir" })
+    expect(transactionMock).toHaveBeenCalledTimes(1)
+    expect(queryRawMock).toHaveBeenCalledTimes(1)
+    const sql = (queryRawMock.mock.calls[0][0] as string[]).join("?")
+    expect(sql).toContain("_UserRoles")
+    expect(sql).toContain("FOR UPDATE")
+    expect(queryRawMock.mock.invocationCallOrder[0]).toBeLessThan(userCountMock.mock.invocationCallOrder[0])
     expect(userUpdateMock).not.toHaveBeenCalled()
   })
 
@@ -506,7 +526,11 @@ describe("user-to-role subset guard (TASK-013 regression)", () => {
     userUpdateMock.mockResolvedValue({ id: 3 })
     const res = await updateUserRoles(3, [2])
     expect(res).toEqual({ success: true })
-    expect(roleFindManyMock).not.toHaveBeenCalled()
+    // Lookup satu-satunya adalah bacaan role target dalam tx untuk guard
+    // super-admin terakhir; guard pemberian izin actor tetap dilewati.
+    expect(roleFindManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { users: { some: { id: 3 } } } }),
+    )
     expect(userUpdateMock).toHaveBeenCalled()
   })
 

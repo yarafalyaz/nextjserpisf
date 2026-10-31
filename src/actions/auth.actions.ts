@@ -236,20 +236,28 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
       return { error: grantErr }
     }
 
-    // Self-guard (super-admin terakhir) + set role dalam SATU tx terkunci:
-    // kunci semua baris user ber-role super_admin (FOR UPDATE, pola repo),
-    // lalu hitung ulang di dalam tx. Dua penurunan konkuren terserialisasi
-    // pada kunci yang sama — yang kalah melihat sisa 0 dan ditolak.
+    // Guard super-admin terakhir + set role dalam SATU tx terkunci: kunci
+    // semua baris user ber-role super_admin (FOR UPDATE, pola repo), lalu
+    // nilai target dari bacaan sesudah kunci. Guard berlaku untuk target
+    // mana pun — membatasinya ke demote-diri-sendiri membiarkan dua
+    // super_admin terakhir saling menurunkan dan mengunci semua akses admin.
     const roleError = await prisma.$transaction(async (tx) => {
-      if (Number(actor.id) === userId) {
-        const selfRoles = await tx.role.findMany({
+      const targetRoles = await tx.role.findMany({
+        where: { users: { some: { id: userId } } },
+        select: { id: true, name: true },
+      })
+      const wasSuperAdmin = targetRoles.some((r) => r.name === "super_admin")
+      const stillSuperAdmin = targetRoles.some((r) => r.name === "super_admin" && cleanRoleIds.includes(r.id))
+      if (wasSuperAdmin && !stillSuperAdmin) {
+        await tx.$queryRaw`SELECT u.id FROM users u INNER JOIN _UserRoles ur ON ur.B = u.id INNER JOIN roles r ON r.id = ur.A WHERE r.name = 'super_admin' ORDER BY u.id FOR UPDATE`
+        const freshTargetRoles = await tx.role.findMany({
           where: { users: { some: { id: userId } } },
           select: { id: true, name: true },
         })
-        const wasSuperAdmin = selfRoles.some((r) => r.name === "super_admin")
-        const stillSuperAdmin = selfRoles.some((r) => r.name === "super_admin" && cleanRoleIds.includes(r.id))
-        if (wasSuperAdmin && !stillSuperAdmin) {
-          await tx.$queryRaw`SELECT u.id FROM users u INNER JOIN _UserRoles ur ON ur.B = u.id INNER JOIN roles r ON r.id = ur.A WHERE r.name = 'super_admin' ORDER BY u.id FOR UPDATE`
+        const freshStillSuperAdmin = freshTargetRoles.some(
+          (r) => r.name === "super_admin" && cleanRoleIds.includes(r.id),
+        )
+        if (freshTargetRoles.some((r) => r.name === "super_admin") && !freshStillSuperAdmin) {
           const others = await tx.user.count({
             where: { id: { not: userId }, roles: { some: { name: "super_admin" } } },
           })
