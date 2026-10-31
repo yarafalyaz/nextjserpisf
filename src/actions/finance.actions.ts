@@ -1142,6 +1142,10 @@ async function recalcPettyCashChain(
  * jurnal POSTED di luar tx, tapi cek itu balapan dengan posting/void/recon —
  * guard otoritatif harus di dalam tx, di titik tulis bersama ini: jurnal
  * POSTED tidak pernah di-hard-delete (koreksi sah = reversal lewat void).
+ * Fail-closed untuk SEMUA status non-DRAFT: jurnal REVERSED yang dihapus
+ * menyisakan lawan POSTED yatim dan memutus rantai reversal (patokan
+ * accounting.hook — REVERSED tak boleh dihapus), REVERSING sedang dalam
+ * pemulihan cron ke POSTED.
  */
 async function deletePettyCashJournal(
   tx: PettyCashTx,
@@ -1152,7 +1156,7 @@ async function deletePettyCashJournal(
     select: { id: true, status: true, deletedAt: true },
   });
   if (journals.length === 0) return;
-  if (journals.some((j) => j.status === "POSTED" && !j.deletedAt)) {
+  if (journals.some((j) => j.status !== "DRAFT" && !j.deletedAt)) {
     throw new Error(
       "Transaksi kas kecil yang sudah terposting tidak dapat diubah. Batalkan lewat pembatalan beralasan lalu buat transaksi baru.",
     );
@@ -2054,7 +2058,9 @@ export async function deleteJournal(id: number) {
     await requirePermission("delete_journals");
 
     const journal = await prisma.journal.findUniqueOrThrow({ where: { id } });
-    if (journal.status === "POSTED") {
+    // Allowlist DRAFT saja: REVERSED yang terhapus menyisakan lawan POSTED
+    // yatim (GL timpang nominal penuh), REVERSING sedang dipulihkan cron.
+    if (journal.status !== "DRAFT") {
       throw new Error("Tidak bisa menghapus journal yang sudah POSTED");
     }
 
@@ -2067,7 +2073,7 @@ export async function deleteJournal(id: number) {
     await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT id FROM journals WHERE id = ${id} FOR UPDATE`;
       const locked = await tx.journal.findUniqueOrThrow({ where: { id } });
-      if (locked.status === "POSTED") {
+      if (locked.status !== "DRAFT") {
         throw new Error("Tidak bisa menghapus journal yang sudah POSTED");
       }
       await tx.journalEntry.deleteMany({ where: { journalId: id } });

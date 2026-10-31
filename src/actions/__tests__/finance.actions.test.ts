@@ -660,6 +660,21 @@ describe("Journal Actions", () => {
     expect(mocks.prismaMock.journalEntry.deleteMany).not.toHaveBeenCalled()
     expect(mocks.prismaMock.journal.delete).not.toHaveBeenCalled()
   })
+  it("deleteJournal menolak jurnal REVERSED — hapus asal menyisakan lawan POSTED yatim di GL", async () => {
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "REVERSED" })
+    const res = await (actions as any).deleteJournal(1)
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.journal.delete).not.toHaveBeenCalled()
+  })
+  it("deleteJournal menolak jurnal REVERSING walau muncul sesudah pratinjau DRAFT", async () => {
+    mocks.prismaMock.journal.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "DRAFT" })
+      .mockResolvedValueOnce({ id: 1, status: "REVERSING" })
+    const res = await (actions as any).deleteJournal(1)
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.journalEntry.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.journal.delete).not.toHaveBeenCalled()
+  })
 })
 
 describe("Expense Actions", () => {
@@ -945,6 +960,22 @@ describe("Petty Cash Actions", () => {
     expect(mocks.prismaMock.journalEntry.deleteMany).not.toHaveBeenCalled()
     expect(mocks.prismaMock.journal.deleteMany).not.toHaveBeenCalled()
     expect(mocks.prismaMock.pettyCash.update).not.toHaveBeenCalled()
+  })
+  it("R8-KEU-08: updatePettyCash menolak jurnal REVERSED/REVERSING di dalam tx (rantai reversal tak boleh putus)", async () => {
+    for (const status of ["REVERSED", "REVERSING"]) {
+      vi.clearAllMocks()
+      mocks.prismaMock.journal.findFirst.mockResolvedValue(null)
+      mocks.prismaMock.journal.findMany.mockResolvedValue([
+        { id: 77, status, deletedAt: null },
+      ])
+      const res = await (actions as any).updatePettyCash(1, fdMap({
+        type: "OUT", amount: 500, date: "2026-06-13",
+      }))
+      expect(res?.success).toBe(false)
+      expect(mocks.prismaMock.journalEntry.deleteMany).not.toHaveBeenCalled()
+      expect(mocks.prismaMock.journal.deleteMany).not.toHaveBeenCalled()
+      expect(mocks.prismaMock.pettyCash.update).not.toHaveBeenCalled()
+    }
   })
   it("updatePettyCash rejects invalid type and non-positive amount (Zod parity)", async () => {
     const res = await (actions as any).updatePettyCash(1, fdMap({
