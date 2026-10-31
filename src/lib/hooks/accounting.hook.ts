@@ -2185,15 +2185,14 @@ export async function onSalesReturnCompleted(
       });
       const returnCreditSen = Math.round(priceTotal * 100);
       // FIN-BR-006: lunas dari outstanding valid (grandTotalAsal − paid −
-      // returnCredit jurnal ini) dalam toleransi Rp1.
+      // returnCredit jurnal ini) dalam toleransi Rp1. isSettled menerima
+      // total kewajiban + total terbayar valid (kas + kredit retur), bukan
+      // sisa outstanding sebagai grandTotal — sisa <= Rp1 saja akan selalu
+      // salah terklasifikasi partial (grandTotal <= 0 tak pernah lunas).
       const invStatus: "posted" | "partial" | "paid" =
         isSettled(
-          safeSubtract(
-            safeSubtract(Number(inv.grandTotal), Number(inv.paidAmount), 2),
-            returnCreditSen / 100,
-            2,
-          ),
-          0,
+          Number(inv.grandTotal),
+          safeAdd(Number(inv.paidAmount), returnCreditSen / 100, 2),
         )
           ? "paid"
           : Number(inv.paidAmount) > 0 ||

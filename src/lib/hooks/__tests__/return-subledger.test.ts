@@ -188,6 +188,42 @@ describe("TASK-011 BUG-04 — subledger retur selaras GL", () => {
     )
   })
 
+  it("retur jual atas faktur lunas penuh oleh kas: status tetap paid (bukan partial), kelebihan menjadi kredit", async () => {
+    mocks.salesReturnFind.mockResolvedValue({
+      id: 4,
+      documentNo: "SR-4",
+      salesInvoiceId: 57,
+      date: new Date("2026-10-02T00:00:00Z"),
+      items: [{ id: 902, itemId: 60, qty: 1, price: 100, cost: 60 }],
+    })
+    mocks.invoiceFindUnique.mockResolvedValue({ id: 57, items: [{ itemId: 60, qty: 2 }] })
+    const invoice = {
+      subtotal: 1000, discount: 0, taxAmount: 0,
+      grandTotal: 1000, paidAmount: 1000, customerId: 99, documentNo: "INV-4",
+    }
+    mocks.transaction.mockImplementation(async (fn: any) => fn(salesTx(invoice)))
+
+    await onSalesReturnCompleted(4, 7)
+
+    // Regression: outstanding sesudah retur = 1000 − 1000 − 100 = −100
+    // (lunas + kelebihan). isSettled harus menerima TOTAL terbayar valid
+    // (kas 1000 + kredit retur 100), bukan sisa outstanding sebagai
+    // grandTotal — sisa −100/0 membuat isSettled selalu false → partial.
+    expect(mocks.invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 57 },
+        data: expect.objectContaining({ paidAmount: 1000, status: "paid", paymentStatus: "paid" }),
+      }),
+    )
+    expect(mocks.creditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          customerId: 99, sourceType: "SalesReturn", sourceId: 4, receivedAmount: 100,
+        }),
+      }),
+    )
+  })
+
   it("retur beli: hanya balanceDue tagihan turun sebesar retur (grandTotal beku, sisa neto)", async () => {
     mocks.purchaseReturnFind.mockResolvedValue({
       id: 3,
