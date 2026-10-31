@@ -192,10 +192,17 @@ export async function approvePkwtCompensationEvent(
   }
   // Peristiwa berharga wajib mapping siap sebelum dibekukan untuk dibayar.
   await resolvePkwtMapping(client)
-  return client.pkwtCompensationEvent.update({
-    where: { id: eventId },
+  // Klaim atomik dari draft: bacaan di atas bisa basi — pembayaran konkuren
+  // yang lebih dulu mengklaim paid tidak boleh diturunkan kembali ke
+  // approved oleh update tanpa syarat.
+  const claim = await client.pkwtCompensationEvent.updateMany({
+    where: { id: eventId, status: "draft" },
     data: { status: "approved", approvedBy: userId, approvedAt: new Date() },
   })
+  if (claim.count === 0) {
+    throw new Error("Status peristiwa kompensasi PKWT sudah berubah — hanya draft yang dapat disetujui.")
+  }
+  return client.pkwtCompensationEvent.findUnique({ where: { id: eventId } })
 }
 
 /**

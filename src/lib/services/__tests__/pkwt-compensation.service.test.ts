@@ -51,6 +51,7 @@ function baseClient(over: Record<string, unknown> = {}) {
       findUnique: vi.fn(),
       create: vi.fn().mockImplementation(async ({ data }: any) => ({ id: 7, ...data })),
       update: vi.fn().mockImplementation(async ({ data }: any) => ({ id: 7, ...data })),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     pkwtCompensationAccrual: {
       findFirst: vi.fn().mockResolvedValue(null),
@@ -157,6 +158,14 @@ describe("E132-2/4 mapping fail-closed + persetujuan", () => {
       pkwtCompensationExpenseAccountId: 631, pkwtCompensationPayableAccountId: 230,
     })
     await expect(resolvePkwtMapping(client)).rejects.toThrow("dilarang untuk kompensasi PKWT")
+  })
+
+  it("klaim approve kalah (peristiwa sudah paid): ditolak, update polos tidak dipanggil", async () => {
+    const client = baseClient()
+    client.pkwtCompensationEvent.findUnique.mockResolvedValue({ id: 7, status: "draft" })
+    client.pkwtCompensationEvent.updateMany.mockResolvedValue({ count: 0 })
+    await expect(approvePkwtCompensationEvent(client, 7, 1)).rejects.toThrow(/berstatus|disetujui/)
+    expect(client.pkwtCompensationEvent.update).not.toHaveBeenCalled()
   })
 })
 
