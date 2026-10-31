@@ -1218,7 +1218,9 @@ describe("createAsset / updateAsset", () => {
   })
 
   it("updates asset and skips GL check when cost unchanged", async () => {
-    prismaMock.asset.findUniqueOrThrow.mockResolvedValue({ purchaseCost: 1000 })
+    prismaMock.asset.findUniqueOrThrow.mockResolvedValue({ purchaseCost: 1000, status: "active" })
+    // Bacaan terkunci di dalam tx melihat harga yang sama.
+    prismaMock.asset.findUnique.mockResolvedValue({ purchaseCost: 1000, status: "active" })
     const res = await updateAsset(100, fd({
       name: "Laptop V2",
       purchasePrice: "1000",
@@ -1268,6 +1270,37 @@ describe("createAsset / updateAsset", () => {
       name: "X",
       purchasePrice: "1000",
     }))).rejects.toThrow(redirectErr)
+  })
+
+  it("updateAsset menolak bila status TERKUNCI sudah disposed (kalah race dispose)", async () => {
+    // Bacaan luar: aset active. Di bawah kunci: disposeAsset sudah commit
+    // (status disposed + jurnal pelepasan POSTED). Update tanpa cek ulang
+    // akan membangkitkan aset dengan status active dari form.
+    prismaMock.asset.findUniqueOrThrow.mockResolvedValue({
+      id: 100,
+      purchaseCost: 1000,
+      status: "active",
+    })
+    prismaMock.asset.findUnique.mockResolvedValue({
+      id: 100,
+      purchaseCost: 1000,
+      status: "disposed",
+    })
+
+    const res = await updateAsset(100, fd({
+      name: "Laptop Ubah",
+      purchasePrice: "1000",
+    }))
+
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("sudah dilepas")
+    expect(prismaMock.asset.update).not.toHaveBeenCalled()
+    const lockSqls = prismaMock.$executeRaw.mock.calls.map((c: unknown[]) => {
+      const first = c[0] as { strings?: string[] } | string[] | undefined
+      if (Array.isArray(first)) return first.join("?")
+      return (first as { strings?: string[] } | undefined)?.strings?.join("?") ?? ""
+    })
+    expect(lockSqls.some((s: string) => s.includes("assets") && s.includes("FOR UPDATE"))).toBe(true)
   })
 })
 

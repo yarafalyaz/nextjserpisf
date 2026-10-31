@@ -974,10 +974,39 @@ export async function updateAsset(id: number, formData: FormData) {
       };
     }
 
-    await prisma.asset.update({
+    // Serialkan terhadap disposeAsset/penyusutan/peristiwa aset yang
+    // semua mengunci baris aset: status + jurnal perolehan dibaca ulang
+    // di bawah kunci. Tanpa ini, edit yang dimulai saat aset active
+    // membangkitkan aset yang sudah dilepas (jurnal pelepasan POSTED)
+    // kembali ke active, dan guard harga perolehan menilai jurnal basi.
+    const slug = await nextSlug("asset", data.name, { excludeId: id });
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM assets WHERE id = ${id} FOR UPDATE`;
+      const lockedAsset = await tx.asset.findUnique({
+        where: { id },
+        select: { purchaseCost: true, status: true },
+      });
+      if (!lockedAsset) throw new Error("Aset tidak ditemukan.");
+      if (lockedAsset.status === "disposed" && nextStatus !== "disposed") {
+        throw new Error(
+          "Aset sudah dilepas (disposed) dan tidak dapat diubah lagi.",
+        );
+      }
+      if (Number(lockedAsset.purchaseCost) !== purchaseCost) {
+        const lockedAcquisitionJournal = await tx.journal.findFirst({
+          where: { referenceType: "ASSET_ACQUISITION", referenceId: id },
+          select: { id: true },
+        });
+        if (lockedAcquisitionJournal) {
+          throw new Error(
+            "Harga perolehan tidak dapat diubah karena akuisisi aset sudah tercatat di GL. Gunakan pelepasan (disposal) atau jurnal koreksi.",
+          );
+        }
+      }
+      await tx.asset.update({
       where: { id },
       data: {
-        slug: await nextSlug("asset", data.name, { excludeId: id }),
+        slug,
         name: data.name,
         assetBrandId: data.assetBrandId ?? null,
         assetBrandModelId: data.assetBrandModelId ?? null,
@@ -999,6 +1028,7 @@ export async function updateAsset(id: number, formData: FormData) {
         status: nextStatus,
         notes: data.description || null,
       },
+      });
     });
 
     await logActivity("update", "Asset", id, "Memperbarui aset");
