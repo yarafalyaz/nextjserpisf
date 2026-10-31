@@ -255,6 +255,85 @@ eksposur piutang "posisi per akhir periode" yang K1-nya memakai
 paidAmount/returnCredit berjalan-kini — rekonstruksi historis penuh
 perlu pembayaran per faktur per tanggal, bukan filter tanggal.
 
+## Lanjutan sesi autonomous (sesudah FEFO + import CSV)
+
+Fitur:
+`dfc2757f7` antrean aksi kadaluarsa FEFO di laporan nomor seri/batch
+— hanya batch (serial tanpa tanggal kedaluwarsa di schema), urut sisa
+hari kedaluwarsa terkecil dulu, nilai antrean = qty × Item.cost kini
+**dilabeli estimasi, bukan nilai buku FIFO**.
+`03636f4a3` import CSV rekening koran bank — parser murni (header
+sinonim ID/EN, delimiter `;`/`,`, tanggal `YYYY-MM-DD` atau
+`DD/MM/YYYY`, nominal lokal/bertanda), atomik per import: satu baris
+rusak menolak seluruh import dengan daftar error per nomor baris
+file, tanpa skip senyap dan tanpa tulis separuh.
+
+Audit putaran 3 (agent read-only dulu, verifikasi sesi utama, bukti
+merah → hijau per temuan):
+`c8205900a` deleteGoodsReceipt kunci baris GR + baca ulang status
+dalam tx (klaim draft luar tx saja membuat GR terverifikasi terhapus)
++ qty pecahan ditolak item berseri di penerimaan GR;
+`502a42179` updateExpense kunci baris expense + baca ulang status
+(draft luar tx saja membuat expense approved/paid hidup lagi);
+`ee73805dc` agregator bulk payroll mengeluarkan slip asal yang sudah
+dikoreksi (jalan single sudah menyaring, bulk hanya cancelled —
+asal + koreksi dobel di basis BPJS dan gross/PPh21 TER);
+`503e9d080` klaim kondisional `deleteMany({ id, status: "draft" })`
+untuk lima aksi hapus dokumen (selesai / ditolak audit).
+
+Klarifikasi commit di atas: fix mock test lokal di 503e9d080 hanya
+menyentuh `purchase.actions.test.ts`; file terpisah
+`delete-goods-receipt-serial.test.ts` masih tanpa
+`goodsReceipt.findUnique` pada mock tx, sehingga run CI
+`41233156413`, `41233220816`, `41233488000` merah — diperbaiki di
+`59146bdd1`. Run head `59146bdd1`, `0c2cb4441`, `4cb77f2cd` SUCCESS;
+run antara yang lebih tua dianggap tersuperseded, bukan diarsipkan
+sebagai bukti fix terpisah.
+
+Audit lanjutan:
+`a3515bca0` updatePurchaseReturn kunci baris retur sebelum baca
+ulang status (recheck sudah ada, lock baris retur belum — hook proses
+retur bisa commit "returned" tepat sesudah recheck);
+`e334cd426` saveStocktakeCounts kunci sesi stocktake + baca ulang
+status dalam tx (simpan yang mulai saat counting bisa menurunkan
+lagi sesi yang sudah approved/posted ke recount/review);
+`7a14c6b66` createDeliveryOrder validasi ulang status pesanan
+sesudah kunci baris sales_orders;
+`0c2cb4441` masa SPT/retur dari komponen UTC (`utcPeriodOf`
+diselaraskan taxPeriodFromDate; fixture tengah malam UTC);
+`4cb77f2cd` getTerBrackets memakai `effectiveTo: { gte: asOf }`
+(inklusif, selaras pembaca jendela statutori).
+
+Vonis kandidat sisa sesi ini:
+approvePayroll — GUGUR. Gate statutori membaca snapshot slip
+tersimpan, bukan menyebut layanan statutori; ditambah klaim status
+atomik `updateMany({ id, status: "draft" })`, jadi balapan konkuren
+tidak bisa menyetujui dua kali. markPayrollPaid menegakkan gate yang
+sama atas snapshot tersimpan.
+buildPayrollWrite — GUGUR sebagai bug race yang terbukti dampaknya.
+Komputasi statutori memang berjalan di luar tx tulis, tetapi
+`processPayroll` memeriksa irisan rentang di dalam tx yang sama
+dengan insert dan `createPayroll` lini 2985 mengunci baris karyawan
+(`employees FOR UPDATE`) lalu memeriksa ulang konflik rentang
+(`findActivePayrollRangeConflict`). Efek konkuren yang tersisa
+adalah angka slip draft yang bisa basi sesaat, bukan dokumen final
+yang salah commit — jangan diangkat lagi tanpa bukti perilaku yang
+berbeda.
+
+Blocker sesi autonomous saat ini (harus diselesaikan sesi lanjutan
+sebelum backlog audit/fitur dianggap tuntas):
+- `deleteCostCenter` belum diverifikasi sesi utama (kandidat conf 4,
+  dinilai lemah).
+- Pesan P2002 serial duplikat generik di verify GR belum
+  diverifikasi sesi utama (kandidat conf 4, UX).
+- Fitur MRP-Lite report-only belum diimplementasikan
+  (`src/lib/reports/material-planning.ts`,
+  `material-planning-data.ts`, page
+  `laporan/perencanaan-material/[[...segments]]` path-based).
+- Deploy produksi belum bisa dieksekusi dari mesin sesi (host tak
+  terjangkau); langkah host tersisa tercatat §3B ringkasan sesi —
+  jangan pernah pakai image usang `20261101-97171c636`.
+
 ## Bukti penutup
 
 - Unit: 10920 test — 10898 passed, 22 skipped, 0 failed.
