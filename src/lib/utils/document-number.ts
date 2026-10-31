@@ -39,6 +39,7 @@ const PREFIX_FIELD_MAP: Record<string, string | undefined> = {
   MO: 'manufacturingOrderPrefix',
   SM: 'stockMovementPrefix',
   CC: undefined as string | undefined, // Customer credit number (auto, not configurable)
+  VC: undefined as string | undefined, // Vendor credit number (auto, not configurable)
   CO: undefined as string | undefined, // Change order WO (auto, penomoran urut per WO di service)
   QCL: undefined as string | undefined, // QC checklist code (auto, not configurable)
   QCI: undefined as string | undefined, // QC inspection document number

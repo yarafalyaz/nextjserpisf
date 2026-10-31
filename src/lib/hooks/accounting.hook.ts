@@ -2511,6 +2511,36 @@ export async function onPurchaseReturnProcessed(
           });
         }
       }
+      // Lanjutan R8-JB-03: kelebihan relief di atas total bill terbuka
+      // TIDAK boleh hilang diam-diam. Jurnal di atas sudah Dr Hutang
+      // Usaha penuh, jadi kelebihan itu kredit vendor nyata — catat
+      // sebagai VendorCredit (subledger akun AP yang sama, tanpa jurnal
+      // baru) untuk diterapkan ke bill vendor berikutnya saat confirm.
+      // Guard typeof mengikuti pola tx stub lama di hook ini.
+      if (
+        remainingReliefSen > 0 &&
+        typeof tx.vendorCredit?.create === "function" &&
+        typeof tx.purchaseOrder?.findUnique === "function"
+      ) {
+        const po = await tx.purchaseOrder.findUnique({
+          where: { id: purchaseReturn.purchaseOrderId },
+          select: { vendorId: true },
+        });
+        if (po?.vendorId) {
+          const documentNo = await generateDocumentNumber("VC");
+          await tx.vendorCredit.create({
+            data: {
+              documentNo,
+              vendorId: po.vendorId,
+              sourceType: "PurchaseReturn",
+              sourceId: purchaseReturn.id,
+              receivedAmount: remainingReliefSen / 100,
+              notes: `Kelebihan relief retur pembelian ${purchaseReturn.documentNo}`,
+              createdBy: userId ?? null,
+            },
+          });
+        }
+      }
     }
   });
 }

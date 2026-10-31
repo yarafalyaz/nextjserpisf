@@ -32,6 +32,8 @@ const mocks = vi.hoisted(() => ({
   billFindFirst: vi.fn(),
   billFindMany: vi.fn(),
   billUpdate: vi.fn(),
+  vendorCreditCreate: vi.fn(),
+  poFindUnique: vi.fn(),
   generateDocumentNumber: vi.fn(),
 }))
 
@@ -92,6 +94,8 @@ function purchaseTx(_bill: Record<string, unknown> | null) {
     journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
     journalEntry: { createMany: vi.fn().mockResolvedValue({ count: 2 }) },
     vendorBill: { findFirst: mocks.billFindFirst, findMany: mocks.billFindMany, update: mocks.billUpdate },
+    vendorCredit: { create: mocks.vendorCreditCreate },
+    purchaseOrder: { findUnique: mocks.poFindUnique },
   }
 }
 
@@ -119,6 +123,8 @@ describe("TASK-011 BUG-04 — subledger retur selaras GL", () => {
     mocks.creditCreate.mockResolvedValue({ id: 31 })
     mocks.billFindMany.mockResolvedValue([])
     mocks.billUpdate.mockResolvedValue({})
+    mocks.vendorCreditCreate.mockResolvedValue({ id: 41 })
+    mocks.poFindUnique.mockResolvedValue({ vendorId: 9 })
     mocks.generateDocumentNumber.mockResolvedValue("CC-900")
     mocks.itemFindMany.mockResolvedValue([{ id: 60, isScrapSaleItem: false }])
     mocks.stockMoveFindMany.mockResolvedValue([])
@@ -303,6 +309,63 @@ describe("TASK-011 BUG-04 — subledger retur selaras GL", () => {
       expect.objectContaining({
         where: { id: 6 },
         data: expect.objectContaining({ balanceDue: 100, status: "partial" }),
+      }),
+    )
+    // Tertelan penuh oleh bill terbuka → tidak ada kelebihan → tanpa kredit.
+    expect(mocks.vendorCreditCreate).not.toHaveBeenCalled()
+  })
+
+  it("lanjutan R8-JB-03: kelebihan relief di atas bill terbuka menjadi VendorCredit", async () => {
+    mocks.purchaseReturnFind.mockResolvedValue({
+      id: 6,
+      documentNo: "PR-4",
+      purchaseOrderId: 7,
+      date: new Date("2026-10-05T00:00:00Z"),
+      items: [{ qty: 10, cost: 100 }],
+    })
+    // Bill terbuka hanya 800; retur 1000 → 800 relief + 200 kelebihan.
+    mocks.billFindMany.mockResolvedValue([
+      { id: 5, goodsReceiptId: null, paidAmount: 200, balanceDue: 800, items: [] },
+    ])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(purchaseTx(null)))
+
+    await onPurchaseReturnProcessed(6, 7)
+
+    expect(mocks.billUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 5 },
+        data: expect.objectContaining({ balanceDue: 0, status: "paid" }),
+      }),
+    )
+    expect(mocks.vendorCreditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          vendorId: 9,
+          sourceType: "PurchaseReturn",
+          sourceId: 6,
+          receivedAmount: 200,
+        }),
+      }),
+    )
+  })
+
+  it("lanjutan R8-JB-03: tanpa bill terbuka sama sekali, seluruh relief menjadi VendorCredit", async () => {
+    mocks.purchaseReturnFind.mockResolvedValue({
+      id: 7,
+      documentNo: "PR-5",
+      purchaseOrderId: 7,
+      date: new Date("2026-10-06T00:00:00Z"),
+      items: [{ qty: 3, cost: 100 }],
+    })
+    mocks.billFindMany.mockResolvedValue([])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(purchaseTx(null)))
+
+    await onPurchaseReturnProcessed(7, 7)
+
+    expect(mocks.billUpdate).not.toHaveBeenCalled()
+    expect(mocks.vendorCreditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ vendorId: 9, sourceId: 7, receivedAmount: 300 }),
       }),
     )
   })

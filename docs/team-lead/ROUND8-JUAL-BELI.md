@@ -33,6 +33,16 @@ GL tetap Dr Hutang penuh (retur memang menggugurkan kewajiban);
 kelebihan relief di atas total bill terbuka tidak dibuatkan
 VendorCredit — tidak ada model/akun kredit vendor di repo dan akun
 klaim supplier `110508` khusus garansi, jadi tidak dipakai.
+**Lanjutan (2026-10-31): VendorCredit resmi dibuat** — perintah sesi
+"kerjakan semua" membalik batas itu. Model `VendorCredit` (cermin
+`CustomerCredit` tanpa refundedAmount; migrasi `20261031120000`,
+drift 0) mencatat kelebihan relief dari retur; jurnal retur sudah Dr
+Hutang Usaha penuh pada akun AP yang sama, jadi kredit ini murni
+subledger — TIDAK ada jurnal lahir/alokasi (Dr AP/Cr AP nol-net),
+beda dari sisi jual yang akun UMP-nya terpisah. `confirmVendorBill`
+menerapkan kredit open vendor yang sama FIFO tertua
+(`applyOpenVendorCreditsToBill`) begitu balanceDue lahir: sisa ≤
+toleransi Rp1 → paid, selain itu partial; paidAmount tak disentuh.
 `accounting.hook.ts:2349-2355` Dr Hutang `totalAmount` penuh vs
 `:2470` `reliefSen = min(totalAmount, balanceDue)`; bill sumber
 dipilih latest-by-id non-cancelled (`:2449-2462`), bukan bill dari GR

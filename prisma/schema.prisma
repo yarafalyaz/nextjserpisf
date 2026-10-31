@@ -501,6 +501,32 @@ model CustomerCredit {
   @@map("customer_credits")
 }
 
+/// Lanjutan R8-JB-03: kredit vendor dari kelebihan relief retur beli di
+/// atas total bill terbuka PO. Cermin CustomerCredit sisi jual, tanpa
+/// refundedAmount (kredit ini bukan kas — hanya offset tagihan berikut).
+/// Bukan akun GL terpisah: jurnal retur sudah Dr Hutang Usaha penuh pada
+/// akun yang sama, jadi kredit ini murni subledger; alokasi ke bill
+/// berikut tidak menulis jurnal (Dr AP / Cr AP akan nol-net).
+model VendorCredit {
+  id              Int      @id @default(autoincrement())
+  documentNo      String   @unique @map("document_no")
+  vendorId        Int      @map("vendor_id")
+  sourceType      String   @map("source_type")
+  sourceId        Int      @map("source_id")
+  receivedAmount  Decimal  @map("received_amount") @db.Decimal(15, 2)
+  allocatedAmount Decimal  @default(0.00) @map("allocated_amount") @db.Decimal(15, 2)
+  status          String   @default("open")
+  notes           String?  @db.Text
+  createdBy       Int?     @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  vendor          Vendor   @relation(fields: [vendorId], references: [id])
+
+  @@index([vendorId, status], map: "idx_vendor_credits_vendor_status")
+  @@index([sourceType, sourceId], map: "idx_vendor_credits_source")
+  @@map("vendor_credits")
+}
+
 /// F-2026-10-25-035-B (PUTUSAN LEAD Q-CL2-3): rekod permintaan override
 /// gerbang kredit PRA-LAHIR — satu dokumen percobaan-simpan. Bukan
 /// logActivity (menelan gagal) dan bukan Approval generik (terikat dokumen
@@ -650,6 +676,7 @@ model Vendor {
   purchaseOrders    PurchaseOrder[]
   purchaseRequests  PurchaseRequest[]
   vendorBills       VendorBill[]
+  vendorCredits     VendorCredit[]
   vendorPayments    VendorPayment[]
   productionCosts   ProductionCost[]
   expenses          Expense[]

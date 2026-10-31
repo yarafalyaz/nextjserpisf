@@ -44,6 +44,7 @@ import { findOverReturn } from "@/lib/sales/return-validation";
 import { computeBillLineAmounts, isValidTermsReference, manualBillHeader, resolveDueDate, summarizeBillItems, VENDOR_BILL_TERMS_REF_ERROR } from "@/lib/finance/vendor-bill";
 import { allocatePaymentToBills } from "@/lib/finance/payment-allocation";
 import { SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status";
+import { applyOpenVendorCreditsToBill } from "@/lib/services/vendor-credit.service";
 import { syncServicePurchaseOrderCost } from "@/lib/services/production-cost.service";
 import {
   GOODS_RECEIPT_JOURNAL_REF_TYPE,
@@ -2001,6 +2002,18 @@ export async function confirmVendorBill(billId: number) {
 
       // Trigger GL hook inside transaction
       await onVendorBillPosted(billId, Number(user.id), tx);
+
+      // Lanjutan R8-JB-03: kredit vendor open (kelebihan relief retur
+      // beli) diterapkan FIFO tertua ke bill ini begitu balanceDue
+      // lahir. Subledger akun AP yang sama — jurnal retur sudah Dr AP
+      // penuh, jadi tanpa jurnal alokasi. Guard typeof: tx stub lama.
+      if (typeof tx.vendorCredit?.findMany === "function") {
+        await applyOpenVendorCreditsToBill(tx, {
+          vendorId: Number(fresh.vendorId),
+          billId,
+          balanceDue: Number(fresh.grandTotal) - Number(fresh.withholdingAmount ?? 0),
+        });
+      }
 
       // F-2026-10-28-157-V Putusan 2: tax>0 tanpa nomor valid = confirm TETAP
       // LULUS + warning pola completedOrderNotice (bukan tolak, bukan fail
