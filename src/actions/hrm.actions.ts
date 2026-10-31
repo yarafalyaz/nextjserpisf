@@ -5869,21 +5869,23 @@ export async function createPkwtEvent(formData: FormData) {
     if (agreementAmount != null && !Number.isFinite(agreementAmount)) {
       throw new Error("Nominal kesepakatan PKWT tidak valid");
     }
-    const event = await createPkwtCompensationEvent(prisma, {
-      employeeId,
-      segmentStart,
-      segmentEnd,
-      agreementAmount,
-      agreementDocumentRef:
-        typeof formData.get("agreementDocumentRef") === "string"
-          ? String(formData.get("agreementDocumentRef"))
+    const event = await prisma.$transaction((tx) =>
+      createPkwtCompensationEvent(tx, {
+        employeeId,
+        segmentStart,
+        segmentEnd,
+        agreementAmount,
+        agreementDocumentRef:
+          typeof formData.get("agreementDocumentRef") === "string"
+            ? String(formData.get("agreementDocumentRef"))
+            : null,
+        isLegacy: formData.get("isLegacy") === "1" || formData.get("isLegacy") === "true",
+        correctsEventId: formData.get("correctsEventId")
+          ? Number(formData.get("correctsEventId"))
           : null,
-      isLegacy: formData.get("isLegacy") === "1" || formData.get("isLegacy") === "true",
-      correctsEventId: formData.get("correctsEventId")
-        ? Number(formData.get("correctsEventId"))
-        : null,
-      createdBy: Number((user as { id: unknown }).id) || null,
-    });
+        createdBy: Number((user as { id: unknown }).id) || null,
+      }),
+    );
     await logActivity("create", "PkwtCompensationEvent", event.id, "Membuat peristiwa kompensasi PKWT");
     revalidatePath("/sdm/penggajian");
     return { success: true, id: event.id };

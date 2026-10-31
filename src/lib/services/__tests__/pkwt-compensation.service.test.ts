@@ -118,6 +118,18 @@ describe("E132-1 peristiwa terbekukan", () => {
     ).rejects.toThrow("beririsan")
   })
 
+  it("dengan txClient: kunci baris karyawan mendahului cek irisan dan create", async () => {
+    const client = baseClient()
+    client.$executeRaw = vi.fn().mockResolvedValue(1)
+    await createPkwtCompensationEvent(client, {
+      employeeId: 1, segmentStart: d("2026-01-01"), segmentEnd: d("2026-12-31"),
+    })
+    expect(client.$executeRaw).toHaveBeenCalled()
+    const lockOrder = client.$executeRaw.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(client.pkwtCompensationEvent.findFirst.mock.invocationCallOrder[0])
+    expect(lockOrder).toBeLessThan(client.pkwtCompensationEvent.create.mock.invocationCallOrder[0])
+  })
+
   it("nominal kesepakatan mikro/kecil wajib dokumen tertulis", async () => {
     const client = baseClient()
     await expect(

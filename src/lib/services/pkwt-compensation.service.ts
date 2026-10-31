@@ -99,6 +99,13 @@ export async function createPkwtCompensationEvent(
   if (!employee || employee.deletedAt) {
     throw new Error("Karyawan tidak ditemukan untuk peristiwa kompensasi PKWT.")
   }
+  // Di dalam transaksi pemanggil: kunci baris karyawan SEBELUM cek irisan.
+  // Tanpa kunci, dua submit konkuren membaca snapshot yang sama-sama kosong
+  // lalu sama-sama create — peristiwa dobel menutup akrual ke nominal penuh
+  // dua kali. Client root (bukan tx) tidak bisa dikunci per baris di sini.
+  if ("$executeRaw" in client) {
+    await (client as TxClient).$executeRaw`SELECT id FROM employees WHERE id = ${input.employeeId} FOR UPDATE`
+  }
   if (employee.employmentStatus !== "PKWT") {
     throw new Error(PKWT_MSG.notPkwt(employee.employmentStatus))
   }
