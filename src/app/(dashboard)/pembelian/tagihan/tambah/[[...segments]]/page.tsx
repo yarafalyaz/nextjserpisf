@@ -54,8 +54,16 @@ export default async function CreateVendorBillPage({
     prisma.vendor.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    }),
+      select: {
+        id: true,
+        name: true,
+        paymentTerm: { select: { days: true, isActive: true } },
+      },
+    }).then((rows) => rows.map((v) => ({
+      id: v.id,
+      name: v.name,
+      paymentTermDays: v.paymentTerm?.isActive ? v.paymentTerm.days : null,
+    }))),
     prisma.item.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },

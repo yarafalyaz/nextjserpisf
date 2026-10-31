@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
-import { useRef, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -42,8 +42,7 @@ const salesInvoiceSchema = z.object({
 type SalesInvoiceInput = z.infer<typeof salesInvoiceSchema>
 
 interface SalesInvoiceFormProps {
-  customers: { id: number; name: string
-}[]
+  customers: { id: number; name: string; paymentTermDays?: number | null }[]
   invoice?: { id: number; customerId: number; salesOrderId?: number | null; date: string; dueDate?: string | null; taxInvoiceNumber?: string | null; notes?: string | null; items?: Array<{ itemId: number; qty: number; unitPrice: number; discount?: number }> }
   salesOrders: { id: number; documentNo: string }[]
   /** Sumber dari tautan "buat dari" (mis. dari Perintah Kerja/penawaran lewat
@@ -146,6 +145,28 @@ export function SalesInvoiceForm({
       notes: invoice?.notes ?? "",
     },
   })
+
+  const customerId = watch("customerId")
+  const invoiceDate = watch("date")
+  // Mode ubah dengan dueDate tersimpan: nilai tersimpan adalah fakta dokumen,
+  // pratinjau termin tidak boleh menimpanya hanya karena form dibuka.
+  const dueDateTouchedRef = useRef(Boolean(invoice?.dueDate))
+
+  // R8-JB-09: pratinjau jatuh tempo = tanggal faktur + hari termin pelanggan.
+  // Server tetap menghitung snapshot final; nilai manual operator menang.
+  useEffect(() => {
+    if (dueDateTouchedRef.current || !invoiceDate) return
+    const customer = customerOptions.find((c) => c.id === Number(customerId))
+    if (customer?.paymentTermDays == null || customer.paymentTermDays < 0) {
+      setValue("dueDate", "")
+      return
+    }
+
+    const [year, month, day] = invoiceDate.split("-").map(Number)
+    const due = new Date(year, month - 1, day)
+    due.setDate(due.getDate() + customer.paymentTermDays)
+    setValue("dueDate", toLocalDateOnly(due))
+  }, [customerId, customerOptions, invoiceDate, setValue])
 
   const subtotal = rows.reduce((sum, row) => sum + lineTotal(row), 0)
   // F-135-V: peringatan tampilan saja dari flag master server — server tetap
@@ -379,7 +400,10 @@ export function SalesInvoiceForm({
             label="Jatuh Tempo"
             name="dueDate"
             value={watch("dueDate")}
-            onChange={(val) => setValue("dueDate", val)}
+            onChange={(val) => {
+              dueDateTouchedRef.current = true
+              setValue("dueDate", val)
+            }}
           />
         </div>
 

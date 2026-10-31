@@ -45,6 +45,23 @@ describe("createDifferenceInvoice (F-2026-10-20-10)", () => {
     expect(data.items.create[0].total).toBe(500000)
   })
 
+  it("R8-JB-09: dueDate diturunkan dari termin pelanggan; tanggal dokumen tengah malam UTC", async () => {
+    mocks.prismaMock.customer.findUnique.mockResolvedValue({ paymentTerm: { days: 30, isActive: true } })
+    const res = await createDifferenceInvoice(5)
+    expect(res.success).toBe(true)
+    const data = mocks.prismaMock.salesInvoice.create.mock.calls[0][0].data
+    expect(data.date.getUTCHours()).toBe(0)
+    expect(data.dueDate.getTime() - data.date.getTime()).toBe(30 * 86_400_000)
+  })
+
+  it("R8-JB-09: pelanggan tanpa termin → dueDate null", async () => {
+    mocks.prismaMock.customer.findUnique.mockResolvedValue(null)
+    const res = await createDifferenceInvoice(5)
+    expect(res.success).toBe(true)
+    const data = mocks.prismaMock.salesInvoice.create.mock.calls[0][0].data
+    expect(data.dueDate).toBeNull()
+  })
+
   it("menolak penawaran yang belum pernah direvisi", async () => {
     mocks.prismaMock.quotation.findFirst.mockResolvedValue({ ...helpers.REVISION_CONTRACT_QUOTATION, revisionNumber: 0 })
     const res = await createDifferenceInvoice(5)

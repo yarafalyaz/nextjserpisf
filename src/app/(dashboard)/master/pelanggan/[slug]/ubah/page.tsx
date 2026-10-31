@@ -35,6 +35,12 @@ export default async function EditCustomerPage({
     orderBy: { name: "asc" },
   })
 
+  const paymentTerms = await prisma.paymentTerm.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
@@ -69,8 +75,10 @@ export default async function EditCustomerPage({
           pkpEffectiveFrom: customer.pkpEffectiveFrom ? customer.pkpEffectiveFrom.toISOString().slice(0, 10) : null,
           pkpSource: customer.pkpSource,
           customerCategoryId: customer.customerCategoryId,
+          paymentTermId: customer.paymentTermId,
         }}
         categories={categories}
+        paymentTerms={paymentTerms}
       />
     </div>
   )

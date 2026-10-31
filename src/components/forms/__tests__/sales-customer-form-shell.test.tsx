@@ -64,6 +64,24 @@ describe("SalesCustomerFormShell — a11y wiring", () => {
     })
   })
 
+  it("R8-JB-09: pratinjau jatuh tempo faktur = tanggal + termin pelanggan; nilai tersimpan mode ubah tak ditimpa", () => {
+    const customers = [{ id: 2, name: "Pelanggan A", paymentTermDays: 30 }]
+    withContainer((container) => {
+      const root = mountInto(container, <SalesInvoiceForm customers={customers} salesOrders={[]} defaultCustomerId={2} invoice={undefined} />)
+      const hidden = container.querySelector<HTMLInputElement>('input[name="dueDate"]')!
+      // Tanggal default hari ini + 30 hari; cukup buktikan terisi + sesudah tanggal dokumen.
+      const dateHidden = container.querySelector<HTMLInputElement>('input[name="date"]')!
+      expect(hidden.value > dateHidden.value).toBe(true)
+      unmount(root, container)
+    })
+    withContainer((container) => {
+      const root = mountInto(container, <SalesInvoiceForm customers={customers} salesOrders={[]} invoice={{ id: 7, customerId: 2, date: "2026-10-21", dueDate: "2026-10-25" }} />)
+      const hidden = container.querySelector<HTMLInputElement>('input[name="dueDate"]')!
+      expect(hidden.value).toBe("2026-10-25")
+      unmount(root, container)
+    })
+  })
+
   it("pesanan: aria-label tambah/ubah", () => {
     withContainer((container) => {
       const root = mountInto(container, <SalesOrderForm customers={[]} />)

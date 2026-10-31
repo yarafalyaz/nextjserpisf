@@ -87,7 +87,16 @@ export default async function EditPage({
     prisma.customer.findMany({
       where: { deletedAt: null },
       orderBy: { name: "asc" },
-    }),
+      select: {
+        id: true,
+        name: true,
+        paymentTerm: { select: { days: true, isActive: true } },
+      },
+    }).then((rows) => rows.map((c) => ({
+      id: c.id,
+      name: c.name,
+      paymentTermDays: c.paymentTerm?.isActive ? c.paymentTerm.days : null,
+    }))),
     prisma.salesOrder.findMany({
       where: { status: { in: ["draft", "confirmed"] } },
       orderBy: { createdAt: "desc" },

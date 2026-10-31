@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { AppDatePicker } from "@/components/ui/date-picker";
 import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload";
 import { Plus, Trash2 } from "lucide-react";
@@ -39,7 +39,7 @@ interface BillItem {
 }
 
 interface VendorBillFormProps {
-  vendors: { id: number; name: string }[];
+  vendors: { id: number; name: string; paymentTermDays?: number | null }[];
   projects?: { id: number; name: string; documentNo: string | null }[];
   /** Purchase orders selectable to settle. Service POs are tagged "Jasa". */
   purchaseOrders?: {
@@ -85,13 +85,40 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [vendorOptions, setVendorOptions] = useState(vendors);
-  const [date, setDate] = useState(
-    bill?.date || toLocalDateOnly(new Date()),
-  );
-  const [dueDate, setDueDate] = useState(bill?.dueDate ?? "");
-  const [vendorId, setVendorId] = useState<string | null>(
+  const initialDate = bill?.date || toLocalDateOnly(new Date());
+  const [date, setDateState] = useState(initialDate);
+  const [vendorId, setVendorIdState] = useState<string | null>(
     bill?.vendorId ? String(bill.vendorId) : null,
   );
+  // R8-JB-09: pratinjau jatuh tempo = tanggal bill + hari termin vendor,
+  // dihitung dalam handler ubah (bukan effect). Mode ubah dengan dueDate
+  // tersimpan mulai "tersentuh": nilai tersimpan adalah fakta dokumen dan
+  // tidak ditimpa hanya karena form dibuka. Server tetap snapshot final.
+  const previewDueDate = (nextDate: string, nextVendorId: string | null, options: typeof vendorOptions) => {
+    const vendor = options.find((v) => String(v.id) === nextVendorId);
+    if (!nextDate || vendor?.paymentTermDays == null || vendor.paymentTermDays < 0) return "";
+    const [year, month, day] = nextDate.split("-").map(Number);
+    const due = new Date(year, month - 1, day);
+    due.setDate(due.getDate() + vendor.paymentTermDays);
+    return toLocalDateOnly(due);
+  };
+  const [dueDate, setDueDate] = useState(
+    bill?.dueDate ?? previewDueDate(initialDate, bill?.vendorId ? String(bill.vendorId) : null, vendors),
+  );
+  const dueDateTouchedRef = useRef(Boolean(bill?.dueDate));
+
+  const refreshDueDatePreview = (nextDate: string, nextVendorId: string | null, options: typeof vendorOptions = vendorOptions) => {
+    if (dueDateTouchedRef.current) return;
+    setDueDate(previewDueDate(nextDate, nextVendorId, options));
+  };
+  const setDate = (value: string) => {
+    setDateState(value);
+    refreshDueDatePreview(value, vendorId);
+  };
+  const setVendorId = (value: string | null) => {
+    setVendorIdState(value);
+    refreshDueDatePreview(date, value);
+  };
   const [purchaseOrderId, setPurchaseOrderId] = useState<string | null>(
     bill?.purchaseOrderId ? String(bill.purchaseOrderId) : null,
   );
@@ -276,9 +303,11 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
               fields={QUICK_ADD.vendor.fields}
               action={QUICK_ADD.vendor.action}
               onCreated={(created) => {
-                setVendorOptions((prev) => [...prev, { id: created.id, name: created.label }]);
+                const nextOptions = [...vendorOptions, { id: created.id, name: created.label }];
+                setVendorOptions(nextOptions);
                 const value = String(created.id);
-                setVendorId(value);
+                setVendorIdState(value);
+                refreshDueDatePreview(date, value, nextOptions);
                 setPurchaseOrderId(null);
               }}
             />
@@ -329,7 +358,10 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
               label="Jatuh Tempo"
               name="dueDate"
               value={dueDate}
-              onChange={setDueDate}
+              onChange={(value) => {
+                dueDateTouchedRef.current = true;
+                setDueDate(value);
+              }}
             />
           </div>
           <div className="flex flex-col gap-1.5">

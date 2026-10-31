@@ -81,7 +81,19 @@ export default async function EditPage({
   };
 
   const [vendors, withholdingTypes, items, projects] = await Promise.all([
-    prisma.vendor.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }),
+    prisma.vendor.findMany({
+      where: { deletedAt: null },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        paymentTerm: { select: { days: true, isActive: true } },
+      },
+    }).then((rows) => rows.map((v) => ({
+      id: v.id,
+      name: v.name,
+      paymentTermDays: v.paymentTerm?.isActive ? v.paymentTerm.days : null,
+    }))),
     prisma.withholdingTaxType.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { code: "asc" },

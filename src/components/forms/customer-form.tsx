@@ -10,6 +10,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
+import { FormSelect } from "@/components/ui/form-select"
 import { AlertTriangle } from "lucide-react"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 import { GENDER_CHOICES, OptionGroup } from "@/components/ui/option-group"
@@ -48,13 +49,15 @@ interface CustomerFormProps {
     pkpEffectiveFrom?: string | null
     pkpSource?: string | null
     customerCategoryId?: number | null
+    paymentTermId?: number | null
   }
   generatedCode?: string
   enableAutoCode?: boolean
   categories?: { id: number; name: string }[]
+  paymentTerms?: { id: number; name: string }[]
 }
 
-export function CustomerForm({ customer, generatedCode, enableAutoCode = true, categories = [] }: CustomerFormProps) {
+export function CustomerForm({ customer, generatedCode, enableAutoCode = true, categories = [], paymentTerms = [] }: CustomerFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!customer
@@ -97,6 +100,7 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
       pkpEffectiveFrom: customer?.pkpEffectiveFrom || "",
       pkpSource: customer?.pkpSource || "",
       customerCategoryId: customer?.customerCategoryId ?? null,
+      paymentTermId: customer?.paymentTermId ?? null,
     },
   })
 
@@ -227,6 +231,24 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
                 )}
               />
               {errors.customerCategoryId && <span className="text-xs text-danger mt-1">{errors.customerCategoryId.message}</span>}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Controller
+                name="paymentTermId"
+                control={control}
+                render={({ field }) => (
+                  <>
+                    <Label htmlFor="paymentTermId">Termin Pembayaran</Label>
+                    <FormSelect
+                      id="paymentTermId"
+                      value={field.value ? String(field.value) : ""}
+                      onValueChange={(value) => field.onChange(value ? Number(value) : null)}
+                      placeholder="Pilih termin"
+                      options={paymentTerms.map((pt) => ({ value: String(pt.id), label: pt.name }))}
+                    />
+                  </>
+                )}
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="name">Nama Pelanggan <span className="text-destructive" aria-hidden="true">*</span></Label>

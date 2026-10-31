@@ -456,9 +456,15 @@ model Customer {
   workOrders         WorkOrder[]
   customerCategoryId Int?              @map("customer_category_id")
   customerCategory   CustomerCategory? @relation(fields: [customerCategoryId], references: [id])
+  // R8-JB-09: termin master pelanggan, cermin Vendor.paymentTermId. Faktur
+  // yang lahir tanpa dueDate eksplisit menurunkannya dari sini (snapshot
+  // tanggal di dokumen; master berubah tidak menggeser dokumen lama).
+  paymentTermId      Int?              @map("payment_term_id")
+  paymentTerm        PaymentTerm?      @relation(fields: [paymentTermId], references: [id])
   lateFeeTerms       CustomerLateFeeTerm[]
   salesLateFees      SalesLateFee[]
 
+  @@index([paymentTermId], map: "customers_payment_term_id_fkey")
   @@index([isActive, deletedAt], map: "idx_customers_active_deleted")
   @@index([name], map: "idx_customers_name")
   @@index([code], map: "idx_customers_code")
@@ -1211,6 +1217,7 @@ model PaymentTerm {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   vendors   Vendor[]
+  customers Customer[]
 
   @@index([createdAt])
   @@map("payment_terms")

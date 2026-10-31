@@ -285,6 +285,13 @@ export async function createCustomer(formData: FormData) {
       if (!cat) return { success: false, error: "Kategori pelanggan tidak ditemukan" };
     }
 
+    // R8-JB-09: pola penjaga FK vendor — termin fiktif/nonaktif ditolak
+    // di sini, bukan P2003 mentah dari Prisma.
+    if (v.paymentTermId != null) {
+      const term = await prisma.paymentTerm.findFirst({ where: { id: v.paymentTermId, isActive: true }, select: { id: true } });
+      if (!term) return { success: false, error: "Syarat pembayaran tidak ditemukan" };
+    }
+
     const settings = await getSystemSettings();
     let code = v.code || null;
     if (settings.enableAutoCustomerCode !== false || !code) {
@@ -311,6 +318,7 @@ export async function createCustomer(formData: FormData) {
         isActive: true,
         ...taxIdentity.data,
         customerCategoryId: v.customerCategoryId ?? null,
+        paymentTermId: v.paymentTermId ?? null,
       },
     });
 
@@ -361,6 +369,12 @@ export async function updateCustomer(customerId: number, formData: FormData) {
       if (!cat) return { success: false, error: "Kategori pelanggan tidak ditemukan" };
     }
 
+    // R8-JB-09: pola penjaga FK vendor (lihat createCustomer).
+    if (v.paymentTermId != null) {
+      const term = await prisma.paymentTerm.findFirst({ where: { id: v.paymentTermId, isActive: true }, select: { id: true } });
+      if (!term) return { success: false, error: "Syarat pembayaran tidak ditemukan" };
+    }
+
     await prisma.customer.update({
       where: { id: customerId },
       data: {
@@ -381,6 +395,7 @@ export async function updateCustomer(customerId: number, formData: FormData) {
         postalCode: v.postalCode ?? null,
         ...taxIdentity.data,
         customerCategoryId: v.customerCategoryId ?? null,
+        paymentTermId: v.paymentTermId ?? null,
       },
     });
 

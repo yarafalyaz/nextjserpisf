@@ -35,6 +35,8 @@ export const customerSchema = z.object({
   pkpEffectiveFrom: optionalString(10),
   pkpSource: optionalString(200),
   customerCategoryId: optionalNumber(),
+  // R8-JB-09: termin master pelanggan (sumber dueDate faktur), pola vendor.
+  paymentTermId: optionalNumber(),
 })
 
 export const customerCategorySchema = z.object({

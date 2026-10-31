@@ -71,6 +71,7 @@ async function creditGateBlockedResult(e: unknown) {
 }
 import { findOverReturn } from "@/lib/sales/return-validation"
 import { isSettled, SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status"
+import { resolveDueDate } from "@/lib/finance/vendor-bill"
 import { findCumulativeQtyExcess, cumulativeValueExcess } from "@/lib/sales/cumulative-cap"
 import { logActivity, reportPostCommitAuditFailure } from "@/lib/services/activity-log.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
@@ -1515,6 +1516,9 @@ function draftDerivedInvoiceData(input: {
   customerVehicleId: number | null
   quotationId: number
   date: Date
+  // R8-JB-09: snapshot jatuh tempo dari termin pelanggan saat faktur turunan
+  // lahir (selisih/progres tak punya form, jadi tak ada override manual).
+  dueDate?: Date | null
   amount: number
   description: string
   createdBy: number
@@ -1528,6 +1532,7 @@ function draftDerivedInvoiceData(input: {
     customerVehicleId: input.customerVehicleId,
     quotationId: input.quotationId,
     date: input.date,
+    dueDate: input.dueDate ?? null,
     subtotal: input.amount,
     discount: 0,
     tax: 0,
@@ -1573,7 +1578,9 @@ export async function createDifferenceInvoice(quotationId: number) {
       return { success: false, error: "Penawaran belum pernah direvisi; tidak ada selisih revisi" }
     }
 
-    const today = new Date()
+    // R8-JB-09: tanggal dokumen disimpan tengah malam UTC, supaya snapshot
+    // dueDate dari termin sama hari kalendernya dengan faktur dari form.
+    const today = getWibTodayUtcDate()
     await assertPeriodOpen(today)
 
     const differenceDescription = `Faktur selisih revisi v${quotation.revisionNumber} penawaran ${quotation.documentNo}`
@@ -1607,12 +1614,23 @@ export async function createDifferenceInvoice(quotationId: number) {
       const diffOverrideId = assertCreditGatePassed(
         await assessCreditGateInTx(tx, diffAttempt),
       )
+      // R8-JB-09: termin dibaca dalam tx yang mengunci quotation, supaya
+      // snapshot dueDate konsisten dengan dokumen yang lahir.
+      const customer = await tx.customer.findUnique({
+        where: { id: quotation.customerId },
+        select: { paymentTerm: { select: { days: true, isActive: true } } },
+      })
       const created = await tx.salesInvoice.create({
         data: draftDerivedInvoiceData({
           customerId: quotation.customerId,
           customerVehicleId: quotation.customerVehicleId,
           quotationId: quotation.id,
           date: today,
+          dueDate: resolveDueDate({
+            explicit: null,
+            documentDate: today,
+            termDays: customer?.paymentTerm?.isActive ? customer.paymentTerm.days : null,
+          }),
           amount: candidate.differenceAmount,
           description: differenceDescription,
           createdBy: Number(user.id),
@@ -1670,7 +1688,8 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
     })
     if (!quotation) return { success: false, error: "Penawaran tidak ditemukan" }
 
-    const today = new Date()
+    // R8-JB-09: pola tanggal tengah malam UTC sama seperti faktur selisih.
+    const today = getWibTodayUtcDate()
     await assertPeriodOpen(today)
 
     const progressDescription = `Faktur progres ${targetPercent}% penawaran ${quotation.documentNo}`
@@ -1701,12 +1720,22 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
       const progOverrideId = assertCreditGatePassed(
         await assessCreditGateInTx(tx, progAttempt),
       )
+      // R8-JB-09: pola sama seperti faktur selisih (termin dalam tx).
+      const customer = await tx.customer.findUnique({
+        where: { id: quotation.customerId },
+        select: { paymentTerm: { select: { days: true, isActive: true } } },
+      })
       const created = await tx.salesInvoice.create({
         data: draftDerivedInvoiceData({
           customerId: quotation.customerId,
           customerVehicleId: quotation.customerVehicleId,
           quotationId: quotation.id,
           date: today,
+          dueDate: resolveDueDate({
+            explicit: null,
+            documentDate: today,
+            termDays: customer?.paymentTerm?.isActive ? customer.paymentTerm.days : null,
+          }),
           amount: candidate.progressAmount,
           description: progressDescription,
           createdBy: Number(user.id),
@@ -1969,6 +1998,12 @@ export async function createSalesInvoice(formData: FormData) {
       await assessCreditGateInTx(tx, invAttempt),
     )
 
+    // R8-JB-09: dueDate snapshot dari termin master pelanggan bila form
+    // tidak mengisi jatuh tempo eksplisit; termin nonaktif tak berlaku.
+    const customerTerm = await tx.customer.findUnique({
+      where: { id: v.customerId },
+      select: { paymentTerm: { select: { days: true, isActive: true } } },
+    })
     const createdInvoice = await tx.salesInvoice.create({
       data: {
         documentNo: null,
@@ -1978,7 +2013,11 @@ export async function createSalesInvoice(formData: FormData) {
         quotationId: v.quotationId ?? null,
         salesEmployeeId: inheritedSalesEmployeeId,
         date: wibDateToUtcMidnight(v.date),
-        dueDate: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
+        dueDate: resolveDueDate({
+          explicit: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
+          documentDate: wibDateToUtcMidnight(v.date),
+          termDays: customerTerm?.paymentTerm?.isActive ? customerTerm.paymentTerm.days : null,
+        }),
         taxInvoiceNumber: v.taxInvoiceNumber ?? null,
         subtotal,
         discount: discountTotal,
@@ -3259,6 +3298,12 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
     }
     // K1: guard di atas sudah menolak non-draft/non-approved, jadi faktur di
     // sini tidak pernah posted — tidak ada reverse+repost di jalur edit.
+    // R8-JB-09: pola sama seperti createInvoice — dueDate kosong diturunkan
+    // dari termin pelanggan yang berlaku pada faktur hasil edit.
+    const customerTerm = await tx.customer.findUnique({
+      where: { id: v.customerId },
+      select: { paymentTerm: { select: { days: true, isActive: true } } },
+    })
     // Update header
     const invoice = await tx.salesInvoice.update({
       where: { id },
@@ -3272,7 +3317,11 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
         // tidak memuatnya.
         quotationId: v.quotationId ?? existingInvoice.quotationId,
         date: wibDateToUtcMidnight(v.date),
-        dueDate: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
+        dueDate: resolveDueDate({
+          explicit: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
+          documentDate: wibDateToUtcMidnight(v.date),
+          termDays: customerTerm?.paymentTerm?.isActive ? customerTerm.paymentTerm.days : null,
+        }),
         taxInvoiceNumber: v.taxInvoiceNumber ?? null,
         // Persist notes: the sales-invoice form exposes a notes textarea
         // but the previous data block silently dropped the value, so the

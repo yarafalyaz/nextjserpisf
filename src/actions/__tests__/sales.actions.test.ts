@@ -1488,6 +1488,50 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     expect(Number(arg.data.items.create[0].discount)).toBe(0)
   })
 
+  // R8-JB-09: dueDate tak terisi diturunkan dari termin master pelanggan
+  // (snapshot dokumen). Tanpa termin → tetap null. Lookup termin terpisah
+  // dari lookup kategori price-list (field dipilih keduanya).
+  it("R8-JB-09: createSalesInvoice menurunkan dueDate dari termin pelanggan bila form tak mengisi", async () => {
+    mocks.generateDocNumMock.mockResolvedValue("INV-JB09")
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ status: "confirmed" })
+    mocks.prismaMock.customer.findUnique.mockImplementation(async (args: any) =>
+      args.select && "paymentTerm" in args.select ? { paymentTerm: { days: 30, isActive: true } } : { customerCategoryId: null })
+    const res = await actions.createSalesInvoice(fdMap({ customerId: "7", date: "2026-06-12", salesOrderId: "9", items: "[]" }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    expect(arg.data.dueDate?.toISOString()).toBe("2026-07-12T00:00:00.000Z")
+  })
+
+  it("R8-JB-09: dueDate eksplisit dari form menang atas termin", async () => {
+    mocks.generateDocNumMock.mockResolvedValue("INV-JB09")
+    mocks.prismaMock.customer.findUnique.mockImplementation(async (args: any) =>
+      args.select && "paymentTerm" in args.select ? { paymentTerm: { days: 30, isActive: true } } : { customerCategoryId: null })
+    const res = await actions.createSalesInvoice(fdMap({ customerId: "7", date: "2026-06-12", dueDate: "2026-06-20", items: "[]" }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    expect(arg.data.dueDate?.toISOString()).toBe("2026-06-20T00:00:00.000Z")
+  })
+
+  it("R8-JB-09: termin nonaktif/cangkang atau tanpa termin → dueDate tetap null", async () => {
+    mocks.generateDocNumMock.mockResolvedValue("INV-JB09")
+    mocks.prismaMock.customer.findUnique.mockImplementation(async (args: any) =>
+      args.select && "paymentTerm" in args.select ? { paymentTerm: { days: 30, isActive: false } } : { customerCategoryId: null })
+    const res = await actions.createSalesInvoice(fdMap({ customerId: "7", date: "2026-06-12", items: "[]" }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    expect(arg.data.dueDate).toBeNull()
+  })
+
+  it("R8-JB-09: updateSalesInvoice menurun dueDate dari termin pelanggan hasil edit bila form tak mengisi", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", paidAmount: 0, grandTotal: 0 })
+    mocks.prismaMock.customer.findUnique.mockImplementation(async (args: any) =>
+      args.select && "paymentTerm" in args.select ? { paymentTerm: { days: 14, isActive: true } } : { customerCategoryId: null })
+    const res = await actions.updateSalesInvoice(1, fdMap({ customerId: "7", date: "2026-06-12" }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesInvoice.update.mock.calls.at(-1)![0] as any
+    expect(arg.data.dueDate?.toISOString()).toBe("2026-06-26T00:00:00.000Z")
+  })
+
   // F-PRICELIST-01: baris langsung dari form menerima harga price-list
   // kategori pelanggan; baris hasil konversi SO mempertahankan harga SO.
   it("createSalesInvoice menolak pesanan konsep (gerbang DELIVERABLE_ORDER_STATUSES)", async () => {

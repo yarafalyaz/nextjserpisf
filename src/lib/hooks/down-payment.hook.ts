@@ -6,6 +6,8 @@ import { salesInvoiceLabel } from "@/lib/utils/invoice-label";
 import { commissionSnapshotForPaid } from "@/lib/services/commission-snapshot";
 import { isSettled } from "@/lib/finance/settlement-status";
 import { notificationService } from "@/lib/services/notification.service";
+import { getWibTodayUtcDate } from "@/lib/utils/attendance-time";
+import { resolveDueDate } from "@/lib/finance/vendor-bill";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { stampWorkOrderFitmentSnapshot } from "@/lib/services/vehicle-fitment.service";
 import { Status, WorkOrderStatus, SalesStatus } from "@/lib/constants";
@@ -88,7 +90,7 @@ async function onDownPaymentConfirmedInner(
                 items: true,
               },
             },
-            customer: true,
+            customer: { include: { paymentTerm: true } },
             customerVehicle: true,
           },
         },
@@ -664,7 +666,10 @@ async function onDownPaymentConfirmedInner(
     if (totalVerifiedSen >= thresholdSen && salesOrder) {
     // K5: faktur otomatis dari DP lahir draft tanpa nomor; nomor resmi
     // diterbitkan saat posting (postInvoice di sales.actions).
-    const invoiceCreatedAt = new Date()
+    // R8-JB-09: dueDate snapshot dari termin pelanggan; tanggal dokumen
+    // dinormalisasi tengah malam UTC seperti faktur dari form.
+    const paymentTerm = (quotation.customer as { paymentTerm?: { days: number; isActive: boolean } | null }).paymentTerm;
+    const invoiceCreatedAt = getWibTodayUtcDate()
     const created = await tx.salesInvoice.create({
       data: {
         documentNo: null,
@@ -672,6 +677,11 @@ async function onDownPaymentConfirmedInner(
         salesOrderId: salesOrder.id,
         quotationId: quotation.id,
         date: invoiceCreatedAt,
+        dueDate: resolveDueDate({
+          explicit: null,
+          documentDate: invoiceCreatedAt,
+          termDays: paymentTerm?.isActive ? paymentTerm.days : null,
+        }),
         subtotal: quotation.subtotal,
         discount: quotation.discount ?? 0,
         tax: quotation.tax ?? 0,

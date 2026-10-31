@@ -41,6 +41,15 @@ describe("createProgressInvoice (F-2026-10-20-58)", () => {
     expect(data.items.create[0].itemId).toBeNull()
   })
 
+  it("R8-JB-09: dueDate diturunkan dari termin pelanggan", async () => {
+    mocks.prismaMock.customer.findUnique.mockResolvedValue({ paymentTerm: { days: 45, isActive: true } })
+    const res = await createProgressInvoice(5, 100)
+    expect(res.success).toBe(true)
+    const data = mocks.prismaMock.salesInvoice.create.mock.calls[0][0].data
+    expect(data.date.getUTCHours()).toBe(0)
+    expect(data.dueDate.getTime() - data.date.getTime()).toBe(45 * 86_400_000)
+  })
+
   it("target 40% sesudah tertagih 1jt dari 1,5jt ditolak (di bawah tertagih)", async () => {
     const res = await createProgressInvoice(5, 40)
     expect(res.success).toBe(false)

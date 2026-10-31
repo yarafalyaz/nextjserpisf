@@ -100,6 +100,27 @@ describe("FK fiktif customerCategoryId/paymentTermId (repro)", () => {
     expect(res?.success).toBe(false)
     expect(mocks.prismaMock.customer.update).not.toHaveBeenCalled()
   })
+  // R8-JB-09: pola penjaga vendor diterapkan ke pelanggan.
+  it("createCustomer tolak paymentTermId fiktif", async () => {
+    const res = await actions.createCustomer(fdMap({ name: "X", paymentTermId: "999999" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Syarat pembayaran tidak ditemukan")
+    expect(mocks.prismaMock.customer.create).not.toHaveBeenCalled()
+  })
+  it("updateCustomer tolak paymentTermId fiktif", async () => {
+    const res = await actions.updateCustomer(1, fdMap({ name: "X", paymentTermId: "999999" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Syarat pembayaran tidak ditemukan")
+    expect(mocks.prismaMock.customer.update).not.toHaveBeenCalled()
+  })
+  it("createCustomer menyimpan paymentTermId bila termin aktif ada", async () => {
+    mocks.prismaMock.paymentTerm.findFirst.mockImplementation(async (args: any) =>
+      args?.where?.id === 3 ? { id: 3 } : null)
+    const res = await actions.createCustomer(fdMap({ name: "X", paymentTermId: "3" }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.customer.create.mock.calls.at(-1)![0] as any
+    expect(arg.data.paymentTermId).toBe(3)
+  })
   it("createVendor tolak paymentTermId fiktif", async () => {
     const res = await actions.createVendor(fdMap({ name: "V", paymentTermId: "999999" }))
     expect(res?.success).toBe(false)

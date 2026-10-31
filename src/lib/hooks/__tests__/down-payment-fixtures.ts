@@ -16,6 +16,8 @@ export interface DpFixtureOptions {
   quotationStatus?: string
   sectionName?: string
   invoiceThresholdPercent?: number | null
+  /** R8-JB-09: termin master pelanggan (sumber dueDate faktur konversi DP). */
+  customerPaymentTerm?: { days: number; isActive: boolean } | null
 }
 
 export function buildDp(opts: DpFixtureOptions) {
@@ -36,7 +38,7 @@ export function buildDp(opts: DpFixtureOptions) {
       discount: 0,
       tax: 0,
       grandTotal: 1000,
-      customer: { id: 99, name: "Cust" },
+      customer: { id: 99, name: "Cust", paymentTerm: opts.customerPaymentTerm ?? null },
       customerVehicle: null,
       projectId: null,
       invoiceThresholdPercent: opts.invoiceThresholdPercent ?? null,

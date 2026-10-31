@@ -88,6 +88,29 @@ describe("vendor-bill-form — a11y wiring", () => {
     })
   })
 
+  it("R8-JB-09: pratinjau jatuh tempo = tanggal bill + termin vendor; dueDate tersimpan mode ubah tak ditimpa", () => {
+    const vendors30 = [{ id: 1, name: "Pemasok A", paymentTermDays: 30 }]
+    withContainer((container) => {
+      const root = mountInto(container, <VendorBillForm vendors={vendors30} items={items} bill={{ id: 0, vendorId: 1, date: "2026-10-22" }} />)
+      const hidden = container.querySelector<HTMLInputElement>('input[name="dueDate"]')!
+      expect(hidden.value).toBe("2026-11-21")
+      unmount(root, container)
+    })
+    withContainer((container) => {
+      const bill = { id: 9, vendorId: 1, date: "2026-10-22", dueDate: "2026-10-25" }
+      const root = mountInto(container, <VendorBillForm vendors={vendors30} items={items} bill={bill} />)
+      const hidden = container.querySelector<HTMLInputElement>('input[name="dueDate"]')!
+      expect(hidden.value).toBe("2026-10-25")
+      unmount(root, container)
+    })
+    withContainer((container) => {
+      const root = mountInto(container, <VendorBillForm vendors={vendors} items={items} bill={{ id: 0, vendorId: 1, date: "2026-10-22" }} />)
+      const hidden = container.querySelector<HTMLInputElement>('input[name="dueDate"]')!
+      expect(hidden.value).toBe("")
+      unmount(root, container)
+    })
+  })
+
   it("L3: error server tampil verbatim lewat showError saat submit", async () => {
     const serverError = "Jalur L3 hanya untuk biaya telat sesudah perintah kerja ditutup; WO-0007 berstatus 'open' (bukan closed). Biaya untuk WO yang belum ditutup dicatat lewat jalur biaya job biasa."
     createVendorBillMock.mockResolvedValueOnce({ success: false, error: serverError })

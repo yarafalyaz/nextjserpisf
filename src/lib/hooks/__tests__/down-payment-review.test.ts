@@ -139,6 +139,38 @@ describe("review P0-1/P0-2 — alokasi DP penuh + tanpa bypass posting", () => {
     expectInvoiceNotPaid(mocks, { paidAmount: 1200 })
   })
 
+  it("R8-JB-09: faktur konversi DP lahir dengan dueDate dari termin pelanggan (tanggal tengah malam UTC)", async () => {
+    const dp = buildDp({ id: 2, amount: 200, status: "draft", docNo: "DP-2", customerPaymentTerm: { days: 30, isActive: true } })
+    const tx = buildTx(dp)
+    mockConfirmedDps(mocks, [
+      confirmedDpRow("DP-1", 300, "2026-09-01T00:00:00Z"),
+      confirmedDpRow("DP-2", 200, "2026-10-01T00:00:00Z"),
+    ])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(2, 1)
+
+    const arg = mocks.salesInvoiceCreate.mock.calls[0]![0] as any
+    expect(arg.data.date.getUTCHours()).toBe(0)
+    expect(arg.data.date.getUTCMinutes()).toBe(0)
+    expect(arg.data.dueDate.getTime() - arg.data.date.getTime()).toBe(30 * 86_400_000)
+  })
+
+  it("R8-JB-09: pelanggan tanpa termin aktif → dueDate faktur konversi tetap null", async () => {
+    const dp = buildDp({ id: 2, amount: 200, status: "draft", docNo: "DP-2", customerPaymentTerm: { days: 30, isActive: false } })
+    const tx = buildTx(dp)
+    mockConfirmedDps(mocks, [
+      confirmedDpRow("DP-1", 300, "2026-09-01T00:00:00Z"),
+      confirmedDpRow("DP-2", 200, "2026-10-01T00:00:00Z"),
+    ])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(2, 1)
+
+    const arg = mocks.salesInvoiceCreate.mock.calls[0]![0] as any
+    expect(arg.data.dueDate).toBeNull()
+  })
+
   it("R8-JB-05: baris SalesPayment konversi awal hanya sebesar porsi teralokasi (600+400, bukan 600+600)", async () => {
     const dp = buildDp({ id: 2, amount: 600, status: "draft", docNo: "DP-2" })
     const tx = buildTx(dp)

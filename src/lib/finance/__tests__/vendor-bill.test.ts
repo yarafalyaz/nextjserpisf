@@ -111,6 +111,33 @@ describe("kop manual tanpa baris (R8-JB-08)", () => {
   })
 })
 
+describe("R8-JB-09 — jatuh tempo dari termin", () => {
+  const doc = new Date(Date.UTC(2026, 5, 12)) // 2026-06-12 tengah malam UTC
+
+  it("computeDueDate: tanggal + hari termin, murni UTC", async () => {
+    const { computeDueDate } = await import("@/lib/finance/vendor-bill")
+    expect(computeDueDate(doc, 30)?.toISOString()).toBe("2026-07-12T00:00:00.000Z")
+    expect(computeDueDate(doc, 0)?.toISOString()).toBe(doc.toISOString())
+    expect(computeDueDate(doc, null)).toBeNull()
+    expect(computeDueDate(doc, undefined)).toBeNull()
+  })
+
+  it("computeDueDate: termin korup tak menghasilkan jatuh tempo sebelum tanggal dokumen", async () => {
+    const { computeDueDate } = await import("@/lib/finance/vendor-bill")
+    expect(computeDueDate(doc, -5)).toBeNull()
+    expect(computeDueDate(doc, Number.NaN)).toBeNull()
+    expect(computeDueDate(doc, Number.POSITIVE_INFINITY)).toBeNull()
+  })
+
+  it("resolveDueDate: eksplisit menang, kosong diturunkan dari termin, keduanya kosong null", async () => {
+    const { resolveDueDate } = await import("@/lib/finance/vendor-bill")
+    const explicit = new Date(Date.UTC(2026, 5, 20))
+    expect(resolveDueDate({ explicit, documentDate: doc, termDays: 30 })).toBe(explicit)
+    expect(resolveDueDate({ explicit: null, documentDate: doc, termDays: 14 })?.toISOString()).toBe("2026-06-26T00:00:00.000Z")
+    expect(resolveDueDate({ explicit: null, documentDate: doc, termDays: null })).toBeNull()
+  })
+})
+
 describe("string format Indonesia di JSON items (parser repo)", () => {
   it("computeBillLineAmounts membaca qty/unitPrice/persen string id-ID penuh", () => {
     const a = computeBillLineAmounts({ qty: "2", unitPrice: "2.000.000", discountPercent: "10", taxPercent: "11" })

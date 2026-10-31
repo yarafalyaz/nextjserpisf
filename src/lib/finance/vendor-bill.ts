@@ -152,3 +152,35 @@ export function isValidTermsReference(terms: string | null | undefined): boolean
 
 export const VENDOR_BILL_TERMS_REF_ERROR =
   "Termin bill ber-PO wajib format referensi TERMIN n/m — <acuan> (contoh: TERMIN 1/3 — DP 30% PO-2026-001). Kosongkan bila termin tunggal."
+
+const DAY_MS = 86_400_000
+
+/**
+ * R8-JB-09 — jatuh tempo dokumen dari termin master (`PaymentTerm.days`).
+ *
+ * ERP menyimpan `dueDate` sebagai SNAPSHOT pada dokumen: tanggal dokumen +
+ * hari termin lawan saat dokumen lahir/diubah. Perubahan termin master
+ * sesudahnya tidak menggeser dokumen lama, sama seperti harga master tidak
+ * menulis ulang baris dokumen. Tanggal dokumen tersimpan tengah malam UTC
+ * (`wibDateToUtcMidnight`), jadi penambahan hari kalender murni UTC.
+ * Termin negatif/tak berhingga bukan termin sah: abaikan (null), jangan
+ * pernah menghasilkan jatuh tempo sebelum tanggal dokumen dari data korup.
+ */
+export function computeDueDate(documentDate: Date, termDays: number | null | undefined): Date | null {
+  if (termDays == null || !Number.isFinite(termDays) || termDays < 0) return null
+  return new Date(documentDate.getTime() + Math.trunc(termDays) * DAY_MS)
+}
+
+/**
+ * Pilihan jatuh tempo efektif: nilai eksplisit dari form selalu menang
+ * (override manual adalah fakta komersial dokumen itu), kosong baru
+ * diturunkan dari termin lawan. Keduanya kosong → null (tanpa termin,
+ * aging memperlakukan dokumen sebagai jatuh tempo pada tanggalnya).
+ */
+export function resolveDueDate(input: {
+  explicit: Date | null
+  documentDate: Date
+  termDays: number | null | undefined
+}): Date | null {
+  return input.explicit ?? computeDueDate(input.documentDate, input.termDays)
+}

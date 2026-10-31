@@ -922,6 +922,64 @@ describe("Vendor Bill Actions", () => {
     expect(mocks.prismaMock.vendorBill.create).toHaveBeenCalled()
   })
 
+  // R8-JB-09: dueDate tak terisi diturunkan dari termin master vendor.
+  it("R8-JB-09: createVendorBill menurunkan dueDate dari termin vendor bila form tak mengisi", async () => {
+    mocks.prismaMock.vendor.findUnique.mockResolvedValue({ paymentTerm: { days: 14, isActive: true } })
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "500",
+      tax: "0",
+      grandTotal: "500",
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.vendorBill.create.mock.calls.at(-1)![0]
+    expect(arg.data.dueDate?.toISOString()).toBe("2026-06-26T00:00:00.000Z")
+  })
+
+  it("R8-JB-09: dueDate eksplisit bill menang atas termin vendor", async () => {
+    mocks.prismaMock.vendor.findUnique.mockResolvedValue({ paymentTerm: { days: 14, isActive: true } })
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      dueDate: "2026-06-20",
+      subtotal: "500",
+      tax: "0",
+      grandTotal: "500",
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.vendorBill.create.mock.calls.at(-1)![0]
+    expect(arg.data.dueDate?.toISOString()).toBe("2026-06-20T00:00:00.000Z")
+  })
+
+  it("R8-JB-09: updateVendorBill menurun dueDate dari termin vendor hasil edit bila form tak mengisi", async () => {
+    mocks.prismaMock.vendor.findUnique.mockResolvedValue({ paymentTerm: { days: 14, isActive: true } })
+    const res = await actions.updateVendorBill(1, fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "500",
+      tax: "0",
+      grandTotal: "500",
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.vendorBill.update.mock.calls.at(-1)![0]
+    expect(arg.data.dueDate?.toISOString()).toBe("2026-06-26T00:00:00.000Z")
+  })
+
+  it("R8-JB-09: vendor tanpa termin aktif → dueDate tetap null", async () => {
+    mocks.prismaMock.vendor.findUnique.mockResolvedValue({ paymentTerm: null })
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "500",
+      tax: "0",
+      grandTotal: "500",
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.vendorBill.create.mock.calls.at(-1)![0]
+    expect(arg.data.dueDate).toBeNull()
+  })
+
   it("R8-JB-08: createVendorBill menolak kop manual inkonsisten (grandTotal != subtotal + tax)", async () => {
     const res = await actions.createVendorBill(fdMap({
       vendorId: "1",

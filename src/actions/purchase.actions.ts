@@ -41,7 +41,7 @@ import { nextSlug } from "@/lib/utils/slug-db";
 import { revalidatePath } from "next/cache";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { findOverReturn } from "@/lib/sales/return-validation";
-import { computeBillLineAmounts, isValidTermsReference, manualBillHeader, summarizeBillItems, VENDOR_BILL_TERMS_REF_ERROR } from "@/lib/finance/vendor-bill";
+import { computeBillLineAmounts, isValidTermsReference, manualBillHeader, resolveDueDate, summarizeBillItems, VENDOR_BILL_TERMS_REF_ERROR } from "@/lib/finance/vendor-bill";
 import { allocatePaymentToBills } from "@/lib/finance/payment-allocation";
 import { SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status";
 import { syncServicePurchaseOrderCost } from "@/lib/services/production-cost.service";
@@ -1682,6 +1682,12 @@ export async function createVendorBill(formData: FormData) {
         );
       }
 
+      // R8-JB-09: dueDate snapshot dari termin master vendor bila form
+      // tidak mengisi jatuh tempo eksplisit; termin nonaktif tak berlaku.
+      const vendorTerm = await tx.vendor.findUnique({
+        where: { id: v.vendorId },
+        select: { paymentTerm: { select: { days: true, isActive: true } } },
+      });
       const created = await tx.vendorBill.create({
         data: {
           documentNo,
@@ -1693,7 +1699,11 @@ export async function createVendorBill(formData: FormData) {
           withholdingTypeId: v.withholdingTypeId ?? null,
           withholdingAmount: v.withholdingAmount ?? 0,
           date: wibDateToUtcMidnight(v.date),
-          dueDate: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
+          dueDate: resolveDueDate({
+            explicit: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
+            documentDate: wibDateToUtcMidnight(v.date),
+            termDays: vendorTerm?.paymentTerm?.isActive ? vendorTerm.paymentTerm.days : null,
+          }),
           vendorInvoiceNumber: v.vendorInvoiceNumber ?? null,
           taxInvoiceNumber: v.taxInvoiceNumber ?? null,
           terms: v.terms ?? null,
@@ -3338,8 +3348,18 @@ export async function updateVendorBill(id: number, formData: FormData) {
         );
       }
 
+      // R8-JB-09: pola sama seperti createVendorBill — dueDate kosong
+      // diturunkan dari termin vendor yang berlaku pada bill hasil edit.
+      const vendorTerm = await tx.vendor.findUnique({
+        where: { id: v.vendorId },
+        select: { paymentTerm: { select: { days: true, isActive: true } } },
+      });
       const date = wibDateToUtcMidnight(v.date);
-      const dueDate = v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null;
+      const dueDate = resolveDueDate({
+        explicit: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
+        documentDate: date,
+        termDays: vendorTerm?.paymentTerm?.isActive ? vendorTerm.paymentTerm.days : null,
+      });
       const updated = await tx.vendorBill.update({
         where: { id },
         data: {

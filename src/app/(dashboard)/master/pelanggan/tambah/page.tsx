@@ -24,6 +24,12 @@ export default async function CreateCustomerPage() {
     orderBy: { name: "asc" },
   })
 
+  const paymentTerms = await prisma.paymentTerm.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
@@ -35,7 +41,7 @@ export default async function CreateCustomerPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Tambah Pelanggan</h1>
       </div>
-      <CustomerForm generatedCode={generatedCode} enableAutoCode={enableAutoCode} categories={categories} />
+      <CustomerForm generatedCode={generatedCode} enableAutoCode={enableAutoCode} categories={categories} paymentTerms={paymentTerms} />
     </div>
   )
 }

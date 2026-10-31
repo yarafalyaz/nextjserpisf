@@ -61,8 +61,16 @@ export default async function CreateSalesInvoicePage({
     prisma.customer.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    }),
+      select: {
+        id: true,
+        name: true,
+        paymentTerm: { select: { days: true, isActive: true } },
+      },
+    }).then((rows) => rows.map((c) => ({
+      id: c.id,
+      name: c.name,
+      paymentTermDays: c.paymentTerm?.isActive ? c.paymentTerm.days : null,
+    }))),
     prisma.salesOrder.findMany({
       where: { status: { in: [...DELIVERABLE_ORDER_STATUSES] } },
       orderBy: { createdAt: "desc" },
