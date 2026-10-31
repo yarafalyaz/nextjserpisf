@@ -2612,6 +2612,20 @@ export async function updateExpense(id: number, formData: FormData) {
     // berjalan tanpa tx lalu klaim di tx terpisah — klaim gagal = perubahan
     // sudah commit tapi action menjawab gagal.
     const expense = await prisma.$transaction(async (tx) => {
+      // Kunci baris lalu baca ulang status: cek draft di atas berjalan di
+      // luar tx, jadi approveExpense/markExpensePaid konkuren bisa commit
+      // di antaranya — tanpa ini expense yang sudah disetujui (bahkan
+      // jurnalnya POSTED) hidup lagi sebagai draft lewat update ini.
+      await tx.$executeRaw`SELECT id FROM expenses WHERE id = ${id} FOR UPDATE`;
+      const lockedExpense = await tx.expense.findUniqueOrThrow({
+        where: { id },
+        select: { status: true },
+      });
+      if (lockedExpense.status !== "draft") {
+        throw new Error(
+          "Hanya pengeluaran dengan status draft yang dapat diubah",
+        );
+      }
       // F-133-V: edit draft bertanda L3 mengulang penjaga yang sama
       // (akun/WO closed/alasan/duplikat selain dirinya) sebelum tulis.
       const l3 = await resolveL3WorkOrder(tx, v.description, "Pengeluaran");

@@ -779,6 +779,21 @@ describe("Expense Actions", () => {
     // The invalid edit must never reach the DB.
     expect(mocks.prismaMock.expense.update).not.toHaveBeenCalled()
   })
+  it("updateExpense menolak bila status berubah non-draft sesudah cek luar (balapan approve)", async () => {
+    let calls = 0
+    mocks.prismaMock.expense.findUniqueOrThrow.mockImplementation(async () => {
+      calls += 1
+      return calls === 1 ? { id: 1, status: "draft" } : { id: 1, status: "approved" }
+    })
+    const res = await (actions as any).updateExpense(1, fdMap({
+      accountId: 1,
+      amount: 1200,
+      date: "2026-06-13"
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/draft/)
+    expect(mocks.prismaMock.expense.update).not.toHaveBeenCalled()
+  })
   it("approveExpense succeeds", async () => {
     mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await (actions as any).approveExpense(1)
