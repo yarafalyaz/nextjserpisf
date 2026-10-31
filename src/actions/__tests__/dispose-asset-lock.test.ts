@@ -117,12 +117,10 @@ describe("disposeAsset concurrency guard", () => {
     // jurnal dibuat tanpa entri dan tanpa butuh akun GL.
     const { Prisma } = await import("@prisma/client")
     const D = (n: number) => new Prisma.Decimal(n)
-    journalFindManyMock
-      .mockResolvedValueOnce([])
-      .mockResolvedValue([
-        { referenceType: "ASSET_ACQUISITION", entries: [{ accountId: 11, debit: D(1000), credit: D(0) }] },
-        { referenceType: "ASSET_DEPRECIATION_202601", entries: [{ accountId: 12, debit: D(0), credit: D(100) }] },
-      ])
+    journalFindManyMock.mockResolvedValue([
+      { referenceType: "ASSET_ACQUISITION", entries: [{ accountId: 11, debit: D(1000), credit: D(0) }] },
+      { referenceType: "ASSET_DEPRECIATION_202601", entries: [{ accountId: 12, debit: D(0), credit: D(100) }] },
+    ])
     // documentSequence tidak di-mock global: nextAssetJournalNumber memakai
     // tx.documentSequence — tambahkan lewat wireTransaction default tidak ada;
     // jalur ini hanya sampai riwayat karena acquisitionJournal (findFirst)

@@ -1059,42 +1059,9 @@ export async function disposeAsset(formData: FormData) {
     const gl = await getAssetGlAccounts(category);
 
     // Nilai buku dasar disposal = jurnal POSTED (vonis F-2026-10-22-062-V
-    // Putusan 1), BUKAN cache `currentValue`. Aset berjurnal memakai angka
-    // jurnal; aset legacy tanpa jurnal perolehan tetap jalur subledger
-    // existing (currentValue) supaya bukunya tidak rusak.
-    const postedJournals = await prisma.journal.findMany({
-      where: {
-        referenceId: data.assetId,
-        status: "POSTED",
-        deletedAt: null,
-        OR: [
-          { referenceType: "ASSET_ACQUISITION" },
-          { referenceType: "ASSET_DISPOSAL" },
-          { referenceType: { startsWith: "ASSET_DEPRECIATION_" } },
-        ],
-      },
-      select: {
-        referenceType: true,
-        entries: { select: { accountId: true, debit: true, credit: true } },
-      },
-    });
-    const posted = journalBookValue(
-      postedJournals.map((j) => ({
-        referenceType: j.referenceType ?? "",
-        lines: j.entries.map((e) => ({ accountId: e.accountId, debit: e.debit, credit: e.credit })),
-      })),
-      {
-        fixedAssetAccountId: gl.fixedAsset || null,
-        accumulatedDepreciationAccountId: gl.accumDep || null,
-      },
-    );
-    const grossCost = posted.hasAcquisitionJournal
-      ? posted.grossCostPosted.toNumber()
-      : Number(asset.purchaseCost);
-    const bookValue = posted.hasAcquisitionJournal
-      ? posted.bookValue.toNumber()
-      : Number(asset.currentValue);
-    const gainLoss = safeSubtract(proceeds, bookValue, 0); // positive = gain, negative = loss
+    // Putusan 1), BUKAN cache `currentValue`. Angka final dihitung ulang
+    // dari bacaan terkunci di dalam tx di bawah; bacaan luar ini hanya
+    // gerbang cepat keberadaan jurnal perolehan.
 
     const disposalResult = await prisma.$transaction(async (tx) => {
       // Kunci baris aset lalu baca ulang fakta POSTED di DALAM tx: snapshot
