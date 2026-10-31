@@ -1332,6 +1332,36 @@ describe("stocktake session (P1-5)", () => {
     expect(arg.data.notes).toHaveLength(1000);
   });
 
+  it("saveStocktakeCounts menolak bila sesi sudah posted saat baca ulang dalam tx (balapan posting)", async () => {
+    let calls = 0;
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockImplementation(async () => {
+      calls += 1;
+      return { warehouseId: 2, status: calls === 1 ? "counting" : "posted" };
+    });
+    const fd = new FormData();
+    fd.set("counts", JSON.stringify([{ lineId: 1, count1: 5 }]));
+    const res = await actions.saveStocktakeCounts(1, fd);
+    expect(res.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/penghitungan/);
+    expect(mocks.prismaMock.stocktakeSession.update).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.stocktakeLine.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("saveStocktakeCounts sukses saat sesi masih counting dalam tx", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({
+      warehouseId: 2,
+      status: "counting",
+    });
+    mocks.prismaMock.stocktakeSession.findUnique.mockResolvedValue({ status: "counting" });
+    mocks.prismaMock.stocktakeLine.findMany.mockResolvedValue([
+      { systemQty: 5, count1: 5, count2: null },
+    ]);
+    const fd = new FormData();
+    fd.set("counts", JSON.stringify([{ lineId: 1, count1: 5 }]));
+    const res = await actions.saveStocktakeCounts(1, fd);
+    expect(res.success).toBe(true);
+  });
+
   it("approveStocktakeSession refuses self-approval (independence)", async () => {
     mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({
       id: 1,

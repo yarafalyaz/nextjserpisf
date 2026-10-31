@@ -2562,6 +2562,18 @@ export async function saveStocktakeCounts(id: number, formData: FormData) {
       (formData.get("counts") as string | null) ?? null,
     ) ?? [];
     await prisma.$transaction(async (tx) => {
+      // Kunci baris sesi + baca ulang status di dalam tx: simpan yang mulai
+      // saat sesi masih counting bisa commit sesudah sesi approved/posted,
+      // lalu menurunkan status lagi ke recount/review → posting ulang dan
+      // adjustment duplikat.
+      await tx.$executeRaw`SELECT id FROM stocktake_sessions WHERE id = ${id} FOR UPDATE`;
+      const lockedSession = await tx.stocktakeSession.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+      if (!lockedSession || (lockedSession.status !== "counting" && lockedSession.status !== "recount")) {
+        throw new Error("Sesi tidak dalam tahap penghitungan");
+      }
       for (const c of counts) {
         if (!Number.isSafeInteger(c.lineId) || c.lineId <= 0) continue;
         const data: {
