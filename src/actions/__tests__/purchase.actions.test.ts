@@ -92,6 +92,7 @@ vi.mock("@/lib/services/approval-workflow.service", () => ({
   assertApproved: vi.fn().mockResolvedValue({}),
 }))
 vi.mock("@/lib/hooks/accounting.hook", () => ({
+  VENDOR_BILL_TAX_INVOICE_WARNING: "Faktur pajak tidak valid",
   onPurchaseReturnProcessed: vi.fn().mockResolvedValue({}),
   onVendorBillPosted: vi.fn().mockResolvedValue({}),
   onVendorPaymentCreated: vi.fn().mockResolvedValue({}),
@@ -1027,6 +1028,68 @@ describe("Vendor Bill Actions", () => {
     expect(mocks.prismaMock.vendorBill.create).not.toHaveBeenCalled()
   })
 
+  it("confirmVendorBill menolak withholding melebihi grandTotal (balanceDue negatif)", async () => {
+    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
+    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", purchaseOrderId: null, vendorId: 3,
+      subtotal: 1000, tax: 110, grandTotal: 1110, withholdingAmount: 2000,
+      withholdingTypeId: 4,
+    })
+    const hook = (await import("@/lib/hooks/accounting.hook")).onVendorBillPosted as any
+    hook.mockClear()
+    const res = await actions.confirmVendorBill(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/melebihi/i)
+    expect(hook).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled()
+  })
+
+  it("confirmVendorBill menolak withholding tanpa jenis PPh (akun kewajiban tak dikenal)", async () => {
+    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
+    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", purchaseOrderId: null, vendorId: 3,
+      subtotal: 1000, tax: 110, grandTotal: 1110, withholdingAmount: 100,
+      withholdingTypeId: null,
+    })
+    const hook = (await import("@/lib/hooks/accounting.hook")).onVendorBillPosted as any
+    hook.mockClear()
+    const res = await actions.confirmVendorBill(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/jenis PPh/i)
+    expect(hook).not.toHaveBeenCalled()
+  })
+
+  it("createVendorBill menolak withholding melebihi grand total terhitung server", async () => {
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "1000",
+      tax: "110",
+      grandTotal: "1110",
+      withholdingTypeId: "4",
+      withholdingAmount: "2000",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/melebihi/i)
+    expect(mocks.prismaMock.vendorBill.create).not.toHaveBeenCalled()
+  })
+
+  it("createVendorBill menolak withholding tanpa jenis PPh", async () => {
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "1000",
+      tax: "110",
+      grandTotal: "1110",
+      withholdingAmount: "100",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/jenis PPh/i)
+    expect(mocks.prismaMock.vendorBill.create).not.toHaveBeenCalled()
+  })
+
   it("R8-JB-08: confirmVendorBill menolak draft manual tersimpan dengan kop inkonsisten", async () => {
     mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
     mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })
@@ -1047,7 +1110,7 @@ describe("Vendor Bill Actions", () => {
     mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })
     mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
       id: 1, status: "draft", purchaseOrderId: null, vendorId: 3,
-      grandTotal: 1000000, withholdingAmount: 100000,
+      grandTotal: 1000000, withholdingAmount: 100000, withholdingTypeId: 4,
       // Kop manual konsisten (By-design R8-JB-08: grandTotal = subtotal + tax).
       subtotal: 1000000, tax: 0,
     })

@@ -41,7 +41,7 @@ import { nextSlug } from "@/lib/utils/slug-db";
 import { revalidatePath } from "next/cache";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { findOverReturn } from "@/lib/sales/return-validation";
-import { computeBillLineAmounts, isValidTermsReference, manualBillHeader, resolveDueDate, summarizeBillItems, VENDOR_BILL_TERMS_REF_ERROR } from "@/lib/finance/vendor-bill";
+import { computeBillLineAmounts, isValidTermsReference, manualBillHeader, resolveDueDate, summarizeBillItems, VENDOR_BILL_TERMS_REF_ERROR, withholdingGuard } from "@/lib/finance/vendor-bill";
 import { allocatePaymentToBills } from "@/lib/finance/payment-allocation";
 import { SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status";
 import { applyOpenVendorCreditsToBill } from "@/lib/services/vendor-credit.service";
@@ -1599,6 +1599,12 @@ export async function createVendorBill(formData: FormData) {
     ) {
       throw new Error("Grand total tidak sama dengan subtotal + pajak. Periksa angka kop.");
     }
+    const withholdingError = withholdingGuard(
+      Number(v.withholdingAmount ?? 0),
+      v.withholdingTypeId ?? null,
+      Number(billHeader.grandTotal),
+    );
+    if (withholdingError) throw new Error(withholdingError);
 
     const bill = await prisma.$transaction(async (tx) => {
       // F-2026-10-24-133-V Putusan 2/4: penanda L3 pada notes menjadikan
@@ -1998,6 +2004,16 @@ export async function confirmVendorBill(billId: number) {
           throw new Error("Grand total tersimpan tidak sama dengan subtotal + pajak. Perbaiki draft sebelum posting.");
         }
       }
+
+      // Guard PPh atas nilai tersimpan (sama seperti titik pengakuan R8-JB-08):
+      // balanceDue di bawah tidak boleh lahir negatif, dan jurnal hook akan
+      // gagal tanpa jenis PPh — tolak di sini dengan pesan yang sama.
+      const withholdingError = withholdingGuard(
+        Number(fresh.withholdingAmount ?? 0),
+        fresh.withholdingTypeId ?? null,
+        Number(fresh.grandTotal),
+      );
+      if (withholdingError) throw new Error(withholdingError);
 
       await tx.vendorBill.update({
         where: { id: billId },
@@ -3301,6 +3317,12 @@ export async function updateVendorBill(id: number, formData: FormData) {
     ) {
       throw new Error("Grand total tidak sama dengan subtotal + pajak. Periksa angka kop.");
     }
+    const withholdingError = withholdingGuard(
+      Number(v.withholdingAmount ?? 0),
+      v.withholdingTypeId ?? null,
+      Number(billHeader.grandTotal),
+    );
+    if (withholdingError) throw new Error(withholdingError);
 
     const bill = await prisma.$transaction(async (tx) => {
       // Kunci baris bill lebih dulu, lalu nilai status dari baca ulang di

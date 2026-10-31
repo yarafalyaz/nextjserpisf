@@ -121,6 +121,28 @@ export function manualBillHeader(
     expectedGrandTotal: safeAdd(kop.subtotal, kop.tax, 2),
   }
 }
+
+/**
+ * PPh dipotong wajib punya jenis (akun kewajiban diturunkan darinya) dan
+ * tidak boleh melebihi grand total: dipakai create/update atas
+ * billHeader.grandTotal terhitung server, dan confirm atas nilai tersimpan
+ * (draft lama bisa lolos sebelum guard ini ada). Mengembalikan pesan error
+ * definitif atau null.
+ */
+export function withholdingGuard(
+  amount: number,
+  typeId: number | null | undefined,
+  grandTotal: number,
+): string | null {
+  if (!Number.isFinite(amount) || amount <= 0) return null
+  if (typeId == null) {
+    return "Nilai PPh dipotong wajib memilih jenis PPh — tanpa jenis, akun Hutang PPh tidak dapat ditentukan."
+  }
+  if (amount > grandTotal) {
+    return `Pemotongan PPh (${amount}) melebihi total keseluruhan tagihan (${grandTotal}) — periksa data tagihan vendor.`
+  }
+  return null
+}
 /**
  * Σ diskon baris dari JSON `items` form — persis jumlah `VendorBillItem.discountAmount`
  * yang akan ditulis `mapVendorBillItems` (baris ber-qty 0 diabaikan di kedua sisi),
