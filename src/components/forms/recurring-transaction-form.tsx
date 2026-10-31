@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/shadcn/select"
 import { createRecurringTransaction, updateRecurringTransaction } from "@/actions/recurring.actions"
 import { FREQUENCIES, FREQUENCY_LABELS, type RecurrenceFrequency } from "@/lib/reports/recurring-schedule"
+import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 
 interface Option {
   id: number
@@ -52,7 +53,7 @@ export function RecurringTransactionForm({ accounts, expenseCategories, schedule
   const [isPending, startTransition] = useTransition()
   const [type, setType] = useState<string>(schedule?.type ?? "journal")
   const [frequency, setFrequency] = useState<string>(schedule?.frequency ?? "monthly")
-  const [startDate, setStartDate] = useState(schedule?.startDate ?? new Date().toISOString().slice(0, 10))
+  const [startDate, setStartDate] = useState(schedule?.startDate ?? getWibTodayUtcDate().toISOString().slice(0, 10))
   const [endDate, setEndDate] = useState(schedule?.endDate ?? "")
   const [amount, setAmount] = useState<number>(schedule?.amount ?? 0)
   const [isActive, setIsActive] = useState(schedule?.isActive ?? true)

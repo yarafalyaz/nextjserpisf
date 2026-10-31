@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { AppMonthPicker } from "@/components/ui/month-picker"
 import { generateBulkPayroll } from "@/actions/hrm.actions"
+import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { useRouter } from "next/navigation"
 import { Sparkles, Loader2 } from "lucide-react"
@@ -61,11 +62,14 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
   // (boleh sunting manual), period otomatis "YYYY-MM" bulan tanggal selesai,
   // TANPA cutoffDay. ponytail: default dihitung saat mount, bukan server —
   // sekadar praseleksi pemilih; server tetap memvalidasi rentang apa adanya.
+  // Default "hari ini" WAJIB tanggal WIB: toISOString() adalah UTC, jadi
+  // pukul 00.00-06.59 WIB masih tanggal kemarin dan Senin default mundur
+  // seminggu.
   const [weeklyStart, setWeeklyStart] = useState(() =>
-    mondayOnOrBefore(new Date().toISOString().slice(0, 10)),
+    mondayOnOrBefore(getWibTodayUtcDate().toISOString().slice(0, 10)),
   )
   const [weeklyEnd, setWeeklyEnd] = useState(() =>
-    weeklyEndFromStart(mondayOnOrBefore(new Date().toISOString().slice(0, 10))),
+    weeklyEndFromStart(mondayOnOrBefore(getWibTodayUtcDate().toISOString().slice(0, 10))),
   )
 
   const [result, setResult] = useState<PayrollRunResult | null>(null)

@@ -36,6 +36,15 @@ function mount(node: HTMLElement): Root {
   return root
 }
 
+describe("RecurringTransactionForm — default tanggal WIB", () => {
+  it("guard statis: default startDate dari helper WIB, bukan toISOString UTC", async () => {
+    const { readFileSync } = await import("node:fs")
+    const src = readFileSync("src/components/forms/recurring-transaction-form.tsx", "utf8")
+    expect(src).toContain("getWibTodayUtcDate().toISOString().slice(0, 10)")
+    expect(src).not.toContain("new Date().toISOString().slice(0, 10)")
+  })
+})
+
 describe("RecurringTransactionForm — a11y wiring", () => {
   it("form punya aria-label tambah + aria-busy false; select wajib aria-required; combobox wajib aria-required; bintang dekoratif aria-hidden", () => {
     const container = document.createElement("div")

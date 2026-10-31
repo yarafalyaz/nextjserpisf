@@ -180,6 +180,24 @@ describe("BulkGeneratePayrollButton — pemilih run mingguan/bulanan F-076-S", (
     expect(dialogText()).toContain("Tanggal cut-off akan diatur otomatis")
   })
 
+  it("default Senin memakai tanggal WIB, bukan UTC (Senin 05.00 WIB)", () => {
+    // Senin 2026-11-02 05:00 WIB = Minggu 2026-11-01 22:00 UTC.
+    // Default UTC menghasilkan Senin 26 Okt (seminggu mundur).
+    vi.useFakeTimers({ shouldAdvanceTime: false })
+    vi.setSystemTime(new Date("2026-11-01T22:00:00Z"))
+    try {
+      const container = renderButton()
+      openDialog(container)
+      click(radioByText("Mingguan"))
+      const start = document.body.querySelector<HTMLInputElement>("#weeklyStartDate-test")!
+      const end = document.body.querySelector<HTMLInputElement>("#weeklyEndDate-test")!
+      expect(start.value).toBe("2026-11-02")
+      expect(end.value).toBe("2026-11-08")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("pilih Mingguan: pemilih Senin tampil tanpa cut-off, period turunan dari selesai", () => {
     const container = renderButton()
     openDialog(container)
