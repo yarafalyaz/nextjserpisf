@@ -10,13 +10,16 @@
 
 import { prisma } from "@/lib/db/prisma"
 import {
+  buildExpiryActionQueue,
   buildSerialBatchStock,
+  type ExpiryActionQueue,
   type SerialBatchInput,
   type SerialBatchResult,
 } from "@/lib/reports/serial-batch-stock"
 
 export interface SerialBatchReport {
   report: SerialBatchResult
+  expiryQueue: ExpiryActionQueue
   asOf: Date
 }
 
@@ -57,7 +60,7 @@ export async function loadSerialBatchStock(options: {
         qty: true,
         manufacturingDate: true,
         expiryDate: true,
-        item: { select: { sku: true, name: true } },
+        item: { select: { sku: true, name: true, cost: true } },
         warehouse: { select: { name: true } },
       },
       orderBy: { batchNumber: "asc" },
@@ -89,11 +92,13 @@ export async function loadSerialBatchStock(options: {
       qty: Number(batch.qty),
       manufacturingDate: batch.manufacturingDate,
       expiryDate: batch.expiryDate,
+      unitCost: Number(batch.item.cost),
     })),
   ]
 
   return {
     report: buildSerialBatchStock({ records, asOf, trackedItems }),
+    expiryQueue: buildExpiryActionQueue(records, asOf),
     asOf,
   }
 }

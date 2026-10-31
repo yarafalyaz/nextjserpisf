@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  buildExpiryActionQueue,
   buildSerialBatchStock,
   daysUntilExpiry,
   serialBatchSummary,
@@ -101,6 +102,38 @@ describe("buildSerialBatchStock", () => {
     const result = buildSerialBatchStock({ records: [record()], asOf: AS_OF, trackedItems: 1 })
 
     expect(texts(result)).toContain("TIDAK dijumlahkan")
+  })
+
+  it("antrean aksi FEFO: hanya batch kedaluwarsa/segera, urut kedaluwarsa paling awal", () => {
+    const queue = buildExpiryActionQueue(
+      [
+        record({ kind: "batch", code: "AMAN", status: null, qty: 10, unitCost: 1000, expiryDate: new Date(2027, 5, 1) }),
+        record({ kind: "batch", code: "SEGERA", status: null, qty: 5, unitCost: 1000, expiryDate: new Date(2026, 9, 25) }),
+        record({ kind: "batch", code: "LEWAT", status: null, qty: 3, unitCost: 2000, expiryDate: new Date(2026, 8, 1) }),
+        record({ kind: "batch", code: "TANPA", status: null, qty: 7, unitCost: 1000, expiryDate: null }),
+        record({ code: "SN-9", status: "available" }),
+      ],
+      AS_OF,
+    )
+
+    expect(queue.lines.map((line) => line.code)).toEqual(["LEWAT", "SEGERA"])
+    expect(queue.lines[0]).toMatchObject({ bucket: "kedaluwarsa", daysToExpiry: -44, estimatedValue: 6000 })
+    expect(queue.lines[1]).toMatchObject({ bucket: "segera_kedaluwarsa", daysToExpiry: 10, estimatedValue: 5000 })
+    expect(queue.totals).toEqual({
+      expiredLines: 1,
+      expiringSoonLines: 1,
+      expiredEstimatedValue: 6000,
+      expiringSoonEstimatedValue: 5000,
+    })
+  })
+
+  it("antrean aksi FEFO kosong bila tidak ada batch bermasalah", () => {
+    const queue = buildExpiryActionQueue(
+      [record({ kind: "batch", code: "AMAN", status: null, qty: 10, unitCost: 1000, expiryDate: new Date(2027, 5, 1) })],
+      AS_OF,
+    )
+    expect(queue.lines).toEqual([])
+    expect(queue.totals.expiredEstimatedValue).toBe(0)
   })
 
   it("meringkas untuk KPI saat ada nomor seri/batch", () => {

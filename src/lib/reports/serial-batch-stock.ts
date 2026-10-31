@@ -59,6 +59,8 @@ export interface SerialBatchInput {
   qty: number
   manufacturingDate: Date | null
   expiryDate: Date | null
+  /** `Item.cost` kini — hanya untuk estimasi nilai antrean FEFO. */
+  unitCost?: number
 }
 
 export interface SerialBatchTotals {
@@ -217,6 +219,77 @@ export function buildSerialBatchStock(input: {
         `${totals.expiringSoon} segera kedaluwarsa`
 
   return { table: { columns: COLUMNS, rows }, totals, trackedItems, verdict }
+}
+
+export interface ExpiryActionLine {
+  itemSku: string
+  itemName: string
+  warehouseName: string
+  code: string
+  qty: number
+  expiryDate: Date
+  daysToExpiry: number
+  bucket: "kedaluwarsa" | "segera_kedaluwarsa"
+  /** qty × Item.cost kini — estimasi, bukan nilai buku FIFO. */
+  estimatedValue: number
+}
+
+export interface ExpiryActionQueue {
+  lines: ExpiryActionLine[]
+  totals: {
+    expiredLines: number
+    expiringSoonLines: number
+    expiredEstimatedValue: number
+    expiringSoonEstimatedValue: number
+  }
+}
+
+/**
+ * Antrean aksi FEFO: batch yang sudah kedaluwarsa atau kedaluwarsa dalam
+ * ≤30 hari, diurutkan kedaluwarsa paling awal dulu (yang harus keluar /
+ * ditindak lebih dulu). Hanya batch — nomor seri tidak punya tanggal
+ * kedaluwarsa di schema. Nilai per baris = qty × `Item.cost` saat ini dan
+ * WAJIB dilabeli estimasi di tampilan: itu bukan nilai buku lapisan FIFO.
+ */
+export function buildExpiryActionQueue(
+  records: readonly SerialBatchInput[],
+  asOf: Date,
+): ExpiryActionQueue {
+  const lines: ExpiryActionLine[] = []
+  for (const record of records) {
+    if (record.kind !== "batch" || record.expiryDate === null) continue
+    const days = daysUntilExpiry(record.expiryDate, asOf)
+    if (days === null || days > EXPIRING_SOON_DAYS) continue
+    lines.push({
+      itemSku: record.itemSku,
+      itemName: record.itemName,
+      warehouseName: record.warehouseName,
+      code: record.code,
+      qty: record.qty,
+      expiryDate: record.expiryDate,
+      daysToExpiry: days,
+      bucket: days < 0 ? "kedaluwarsa" : "segera_kedaluwarsa",
+      estimatedValue: record.qty * (record.unitCost ?? 0),
+    })
+  }
+  lines.sort(
+    (a, b) =>
+      a.daysToExpiry - b.daysToExpiry ||
+      `${a.itemSku} ${a.itemName}`.localeCompare(`${b.itemSku} ${b.itemName}`, "id-ID"),
+  )
+  return {
+    lines,
+    totals: {
+      expiredLines: lines.filter((line) => line.bucket === "kedaluwarsa").length,
+      expiringSoonLines: lines.filter((line) => line.bucket === "segera_kedaluwarsa").length,
+      expiredEstimatedValue: lines
+        .filter((line) => line.bucket === "kedaluwarsa")
+        .reduce((sum, line) => sum + line.estimatedValue, 0),
+      expiringSoonEstimatedValue: lines
+        .filter((line) => line.bucket === "segera_kedaluwarsa")
+        .reduce((sum, line) => sum + line.estimatedValue, 0),
+    },
+  }
 }
 
 /** Ringkasan satu baris untuk KPI di halaman laporan. */

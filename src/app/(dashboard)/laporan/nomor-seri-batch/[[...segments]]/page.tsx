@@ -13,6 +13,7 @@ import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { splitReportSegments } from "@/lib/reports/report-period"
 import { serialBatchSummary } from "@/lib/reports/serial-batch-stock"
 import { loadSerialBatchStock } from "@/lib/reports/serial-batch-stock-data"
+import { ExpiryActionCard } from "@/components/reports/expiry-action-card"
 import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 
 export const metadata: Metadata = { title: "Stok Nomor Seri/Batch" }
@@ -52,7 +53,7 @@ export default async function SerialBatchStockPage({
   // ROUND5-SCOPE: undefined = all-access; array (termasuk kosong) = ditegakkan.
   const scopeIds: number[] | undefined =
     scope.kind === "all" ? undefined : scope.kind === "assigned" ? scope.warehouseIds : []
-  const { report } = await loadSerialBatchStock({ warehouseId, asOf, scopeWarehouseIds: scopeIds })
+  const { report, expiryQueue } = await loadSerialBatchStock({ warehouseId, asOf, scopeWarehouseIds: scopeIds })
   const periodLabel = `Per ${formatDate(asOf)}`
 
   return (
@@ -95,6 +96,9 @@ export default async function SerialBatchStockPage({
       <p className="doc-lines" style={{ marginTop: 8 }}>
         {serialBatchSummary(report)}
       </p>
+      <div style={{ marginTop: 16 }}>
+        <ExpiryActionCard queue={expiryQueue} />
+      </div>
     </ReportPageShell>
   )
 }
