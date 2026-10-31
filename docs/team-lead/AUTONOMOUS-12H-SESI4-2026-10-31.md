@@ -140,3 +140,57 @@ sebelum fix (klaim agen bukan vonis).
 - R8-JB-05..07 + R8-JB-10 selesai: baris DP konversi awal sebesar porsi teralokasi (kelebihan tetap kredit pelanggan, baris Rp0 = marker idempotency); postInvoice kini memanggil recalc kanonis dalam tx yang sama (akrual komisi faktur konversi DP); persen diskon/pajak bill di-clamp [0,100] di satu sumber hitung; komentar confirmVendorBill diperbaiki. 442 test batch + 223 tetangga hijau, tsc bersih, lint bersih. Berikutnya JB-08 (keputusan), triase SDM-01..06 dari kode nyata, triase integrasi jurnal.
 - R8-JB-08 selesai: kop manual bill tanpa baris wajib grandTotal = subtotal + tax; ditolak di create, update, dan confirm (nilai tersimpan, bila tanpa baris). 250 test hijau, tsc bersih, lint bersih. Sisa Round 8: SDM-01..06 (verifikasi dari kode nyata), triase integrasi jurnal, penutup sesi.
 - R8-SDM-01..04 selesai: koreksi slip paid kini amortisasi ulang persis invers pemulihan (subledger neto nol per pinjaman); agregator BPJS/PPh21 menyingkirkan slip yang digantikan; updatePayroll klaim atomik draft; mutasi baris + recalc satu tx terkunci. SDM-05 (prorate) dan SDM-06 (basis lembur/lantai 75%) DITANGGUHI dengan alasan tertulis di dokumen audit -- butuh vonis bisnis/data historis, bukan patch. 233 test HRM hijau, tsc bersih, lint bersih. Sisa: triase integrasi jurnal, penutup sesi.
+- Triase integrasi jurnal tuntas: dua kegagalan historis (dua createJournal paralel reference sama sama-sama fulfilled; dua reversal paralel 0 fulfilled) TIDAK ter-reproduksi di MySQL 8 nyata dengan seluruh migrasi diterapkan. createJournal paralel: tepat 1 fulfilled (unique aktif memangikat; jalur Serrano txless Serializable dan tx-client keduanya aman). reverseJournal paralel: tepat 1 fulfilled langka (kalah ditolak cek status/reversal sudah ada). Index unique jurnal aktif terbukti ada di fisik DB. Vonis: artefak DB bersama sesi awal (seperti warranty), bukan bug kode; tidak ada perubahan fungsi produk. Scratch dibuang, file test debug dihapus. Sisa Round 8 yang memang butuh vonis: R8-JB-09 (due date dari termin), R8-SDM-05/06 (prorate, basis lembur).
+
+## Penutup sesi 4 (2026-10-31)
+
+### Status domain Round 8
+- Pajak: 12/12 SELESAI.
+- Keuangan: 10/10 SELESAI.
+- Jual-beli: 09/10 SELESAI; sisa R8-JB-09 DITANGGUHI (keputusan desain sumber termin).
+- SDM: 01--04 SELESAI; 05--06 DITANGGUHI dengan alasan tertulis (vonis bisnis/data historis).
+- Triase integrasi jurnal: vonis artefak, tanpa perubahan kode.
+
+### Commit sesi 4 (lokal, branch main, belum push)
+Urutan commit lokal sesi 4 (pajak -> keuangan -> jual-beli -> SDM; log sesi ini menyertai). Politik: jangan push, jangan rewrite history yang sudah ter-push, jangan tanam demo data ke DB dev tangan, jangan tanya ulang hal yang butuh keputusan bisnis -- dokumen audit memiliki status DITANGGUHI yang cukup sebagai checkpoint tertulis.
+Disiplin verifikasi yang berlaku: reviewer code-review terpisah per commit (menemukan tiga blocker finansial yang lolos test lokal), higiene kredensial mutlak, test+lengkap+build sebelum E2E bila suite tersedia.
+
+## R8-JB-09 SELESAI (2026-10-31, lanjutan)
+
+- Vonis: akibat ERP-nya, `dueDate` adalah SNAPSHOT dokumen — `date +
+  PaymentTerm.days` lawan saat dokumen lahir/diubah; master berubah
+  tidak menggeser dokumen lama. Isian eksplisit form menang; tanpa
+  termin aktif → null (semantik aging lama). Dokumen lama tidak
+  di-backfill.
+- Server: `computeDueDate`/`resolveDueDate` di `vendor-bill.ts`;
+  create/update faktur + bill, faktur selisih/progres, faktur
+  konversi DP (tanggal dokumen tengah malam UTC). Pelanggan mendapat
+  `paymentTermId` cermin vendor (migrasi
+  `20261031110000_customer_payment_term`, FK SET NULL) + penjaga
+  termin aktif di create/update pelanggan.
+- Form: pratinjau dueDate dari termin lawan (hari terhitung di
+  handler/initializer, tanpa effect); dueDate tersimpan mode ubah
+  tidak ditimpa. Termin 0 hari = jatuh tempo tanggal dokumen.
+- Bukti: helper + action + hook + form tests 742/742 hijau;
+  guard statis 32/32; tsc bersih; lint tanpa error baru (2 warning
+  e2e lama); `db:check-migrations` drift 0; production build hijau;
+  kolom/index dev DB terverifikasi; dev server CSRF 200 sesudah
+  regenerate Prisma + restart.
+
+## E2E (permintaan: rerun dulu, fix sisa)
+
+- Sweep penuh: 680 pass, 42 fail, 10 skip. Rerun serial atas 19 file
+  gagal: 38 masih gagal. Klasifikasi dari artefak `error-context.md`:
+  dominan duplikat TRANSIEN hidrasi/streaming (snapshot aksesibilitas
+  steady-state hanya 1 elemen; polling DOM standalone `1,2,1,1,...`
+  ~150ms) — locator spec tanpa `.first()`/scope adalah korban, bukan
+  bug produk. Sisa non-transien yang tercatat: 2 kegagalan
+  `crud-surface` (`/produksi/garansi`, `/produksi/qc/inspeksi` — qc
+  diketahui butuh data demo released), kegagalan `purchase-chain`/
+  `sales-chain` tanpa pesan locator (perlu rerun terisolasi untuk
+  vonis), dan beberapa `toBeVisible`/`toHaveCount` halaman modul
+  yang perlu dibedakan beban vs perubahan halaman per kasus.
+- Belum ada edit spec yang dilakukan; tak ada temuan produk dari
+  klasifikasi ini. Perbaikan spec per pola rumah: `.first()`/
+  `:visible` pada locator yang terbukti transien, helper
+  `awaitReady` yang sudah ada.

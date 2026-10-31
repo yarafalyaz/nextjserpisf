@@ -115,6 +115,18 @@ ketik bebas. By-design "kop manual" (komentar `:1342`) tapi tanpa
 rekonsiliasi internal.
 
 ### R8-JB-09 — LOW, PLAUSIBLE — Due date tak diturunkan dari termin
+**Status: SELESAI 2026-10-31** — helper `computeDueDate`/
+`resolveDueDate` di `vendor-bill.ts`; `dueDate` dokumen adalah
+SNAPSHOT `date + PaymentTerm.days` lawan saat dokumen lahir/diubah.
+Isian eksplisit form selalu menang; termin nonaktif/cangkang atau
+tanpa termin → tetap null (aging lama, jatuh tempo pada tanggal
+dokumen). Pelanggan mendapat master termin cermin vendor
+(`Customer.paymentTermId`, migrasi `20261031110000`) + penjaga FK
+aktif di create/update. Diturunkan di create/update faktur & bill,
+faktur selisih/progres, dan faktur konversi DP (tanggal dokumen
+dinormalisasi tengah malam UTC). Form menampilkan pratinjau yang
+sama; dueDate tersimpan mode ubah tidak ditimpa pratinjau. Dokumen
+lama tidak di-backfill (tanggal tersimpan adalah fakta historis).
 Due date tak pernah diturunkan dari payment terms (sales `dueDate`
 input bebas; vendor `terms` divalidasi format tapi dueDate tak
 dihitung) → aging bisa 30 hari lebih awal. Tak ada helper
