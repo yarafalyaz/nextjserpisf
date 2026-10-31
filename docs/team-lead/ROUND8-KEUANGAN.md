@@ -132,13 +132,21 @@ recompute GL, tanpa cek cakupan semua baris statement. Skenario:
 buat recon saldo 0/0 + satu match kecil → status completed walau GL
 bank beda jauh. Sertifikasi palsu.
 
-### R8-KEU-08 — MEDIUM, PLAUSIBLE — updatePettyCash hard-delete jurnal
+### R8-KEU-08 — SELESAI 2026-10-31 — updatePettyCash hard-delete jurnal
 `src/actions/finance.actions.ts:1144-1158` — `deletePettyCashJournal`
 hard-delete semua jurnal+entries ref PettyCash tanpa cek
 status/periode/recon; `:2441-2451` guard POSTED dibaca di luar tx,
 `:2498` delete di dalam tx tanpa recheck. Skenario: race dengan
 posting/void/recon di antara guard dan delete → jurnal POSTED
 terhapus fisik, bukan di-reverse. Jejak audit hilang.
+Triase main session: CONFIRMED sebagai celah race — guard POSTED luar di
+`updatePettyCash` nyata, tapi `deletePettyCashJournal` di dalam tx adalah
+titik tulis bersama yang tidak memeriksa status sama sekali. Perbaikan:
+helper menolak jurnal `POSTED` aktif (non-deleted) sebelum delete apa
+pun, selaras vonis GL-BR-003 bahwa jurnal POSTED beku dan koreksi sah =
+reversal. Guard luar dipertahankan sebagai fast-fail. Regression:
+`finance.actions.test.ts` (jurnal POSTED muncul di dalam tx → update
+ditolak, nol delete).
 
 ### R8-KEU-09 — LOW, PLAUSIBLE — updateSalesPayment abaikan returnCredit (legacy)
 `src/actions/sales.actions.ts:3596` — `remaining = grandTotal -
@@ -147,12 +155,19 @@ otherPaid`, returnCredit tidak dikurangkan; bandingkan
 terpotong retur → edit pembayaran legacy → over-apply lolos → jurnal
 repost terlalu besar. Hanya baris legacy tanpa jurnal.
 
-### R8-KEU-10 — LOW, PLAUSIBLE — Refund PPN uang muka: drift rounding
+### R8-KEU-10 — SELESAI 2026-10-31 — Refund PPN uang muka: drift rounding
 `src/lib/tax/down-payment-vat.ts:285-306` — porsi PPN proporsional
 `safeRound(...,2)` per refund parsial, tanpa residu di refund
 penutup; bandingkan `computeAllocationNet:314-338` yang menyerap
 residu sen saat kumulatif penuh. Skenario: banyak refund parsial →
 total PPN ter-refund menyimpang beberapa sen dari PPN uang muka asal.
+Triase main session: CONFIRMED (fungsi murni). Perbaikan:
+`buildDownPaymentRefundLines` menerima `previouslyRefunded` opsional dan
+memakai pola kumulatif yang sama dengan `computeAllocationNet` — refund
+penutup menyerap residu sen. Pemanggil `refundCredit` mengisi akumulasi
+`refundedAmount` kredit sumber DP yang sama. Regression:
+`down-payment-vat.test.ts` (33.333,33 + 66.666,67 → total PPN persis
+snapshot).
 
 Catatan non-finding: toleransi settlement Rp1
 (`SETTLEMENT_TOLERANCE_IDR`, FIN-BR-006) disengaja terdokumentasi.

@@ -116,3 +116,8 @@ sebelum fix (klaim agen bukan vonis).
   jurnal/baris yang sudah dipakai recon completed (cek global + lock
   jurnal/kronon dalam complete). Finance suite 163/163. Berikutnya
   R8-KEU-07..10, R8-JB-03..10, R8-SDM-01..06.
+- R8-KEU-08 + R8-KEU-10 selesai: helper delete jurnal kas kecil menolak
+  POSTED aktif di dalam tx; refund PPN DP menyerap residu di refund
+  penutup (previouslyRefunded dari akumulasi kredit sumber DP). Finance
+  164/164, DP VAT + customer-credit 62/62. Berikutnya R8-KEU-07,
+  R8-KEU-09, R8-JB-03..10, R8-SDM-01..06.

@@ -893,6 +893,23 @@ describe("Petty Cash Actions", () => {
     }))
     expect(res?.success).toBe(true)
   })
+  it("R8-KEU-08: updatePettyCash menolak jurnal POSTED yang muncul di dalam tx (guard luar basi)", async () => {
+    // Guard luar findFirst POSTED tetap null (belum posting saat cek), tapi di
+    // dalam tx jurnal POSTED sudah ada — deletePettyCashJournal tidak boleh
+    // hard-delete.
+    mocks.prismaMock.journal.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.journal.findMany.mockResolvedValue([
+      { id: 77, status: "POSTED", deletedAt: null },
+    ])
+    const res = await (actions as any).updatePettyCash(1, fdMap({
+      type: "OUT", amount: 500, date: "2026-06-13",
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("sudah terposting")
+    expect(mocks.prismaMock.journalEntry.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.journal.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.pettyCash.update).not.toHaveBeenCalled()
+  })
   it("updatePettyCash rejects invalid type and non-positive amount (Zod parity)", async () => {
     const res = await (actions as any).updatePettyCash(1, fdMap({
       type: "INVALID_TYPE",

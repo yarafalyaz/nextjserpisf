@@ -112,6 +112,8 @@ function buildTx() {
       findMany: mocks.creditFindMany,
       create: mocks.creditCreate,
       update: mocks.creditUpdate,
+      // R8-KEU-10: refund DP membaca akumulasi refund sebelumnya per DP.
+      aggregate: vi.fn().mockResolvedValue({ _sum: { refundedAmount: 0 } }),
     },
     salesInvoice: {
       findUniqueOrThrow: mocks.invoiceFindUnique,

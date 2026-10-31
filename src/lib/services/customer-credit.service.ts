@@ -264,10 +264,18 @@ export async function refundCredit(
             salesTax: taxAccountId,
             receivable: 0,
           } as const;
+          // R8-KEU-10: akumulasi refund sebelumnya adalah jumlah yang sudah
+          // keluar dari kredit ini sendiri yang bersumber DP ini (satu kredit
+          // per DP untuk jalur refund; alokasi lain bukan refund).
+          const priorRefunds = await tx.customerCredit.aggregate({
+            where: { sourceType: "DownPayment", sourceId: dp.id },
+            _sum: { refundedAmount: true },
+          });
           refundLines = buildDownPaymentRefundLines({
             refundAmount: amount,
             dpAmount: Number(dp.amount),
             snapshot: dpSnapshot,
+            previouslyRefunded: Number(priorRefunds._sum.refundedAmount ?? 0),
           }).map((line) => ({
             accountId: accountByKey[line.account],
             debit: line.debit,

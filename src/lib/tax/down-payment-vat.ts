@@ -281,16 +281,31 @@ export function buildDownPaymentReceiptLines(input: {
  * J-RF1: refund DP ber-FP UM sesudah FP batal tercatat.
  * Dr 210102 porsi neto + Dr 210201 porsi PPN / Cr Kas = amount refund.
  * Porsi PPN proporsional terhadap amount DP asal, sen-persis.
+ * R8-KEU-10: `previouslyRefunded` membuat refund penutup menyerap residu
+ * sen (pola `computeAllocationNet`) — refund parsial beruntun tanpa itu
+ * menyimpang beberapa sen dari PPN uang muka asal.
  */
 export function buildDownPaymentRefundLines(input: {
   refundAmount: number
   dpAmount: number
   snapshot: DownPaymentVatSnapshot
+  previouslyRefunded?: number
 }): VatJournalLine[] {
   const refundAmount = safeRound(input.refundAmount, 2)
+  const previouslyRefunded = safeRound(input.previouslyRefunded ?? 0, 2)
   const ppnPortion =
     input.dpAmount > 0 && input.snapshot.ppnUangMuka > 0
-      ? safeRound((input.snapshot.ppnUangMuka * refundAmount) / input.dpAmount, 2)
+      ? safeAdd(previouslyRefunded, refundAmount, 2) >= safeRound(input.dpAmount, 2)
+        ? safeSubtract(
+            input.snapshot.ppnUangMuka,
+            safeRound((input.snapshot.ppnUangMuka * previouslyRefunded) / input.dpAmount, 2),
+            2,
+          )
+        : safeSubtract(
+            safeRound((input.snapshot.ppnUangMuka * safeAdd(previouslyRefunded, refundAmount, 2)) / input.dpAmount, 2),
+            safeRound((input.snapshot.ppnUangMuka * previouslyRefunded) / input.dpAmount, 2),
+            2,
+          )
       : 0
   const lines: VatJournalLine[] = []
   if (ppnPortion > 0) {

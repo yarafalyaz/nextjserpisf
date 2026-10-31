@@ -242,4 +242,13 @@ describe("J-PL2 neto + J-RF1 proporsional sen-persis", () => {
     expect(sum(lines, "credit")).toBe(12_000_000)
     expect(lines.find((l) => l.account === "salesTax")?.debit).toBe(1_320_000)
   })
+
+  it("R8-KEU-10: refund parsial beruntun menjumlah PPN = ppnUangMuka persis (residu di penutup)", () => {
+    const s = snap(100_000)
+    const first = buildDownPaymentRefundLines({ refundAmount: 33_333.33, dpAmount: 100_000, snapshot: s, previouslyRefunded: 0 })
+    const second = buildDownPaymentRefundLines({ refundAmount: 66_666.67, dpAmount: 100_000, snapshot: s, previouslyRefunded: 33_333.33 })
+    const ppn = (lines: ReturnType<typeof buildDownPaymentRefundLines>) =>
+      lines.find((l) => l.account === "salesTax")?.debit ?? 0
+    expect(Math.round((ppn(first) + ppn(second)) * 100) / 100).toBe(s.ppnUangMuka)
+  })
 })

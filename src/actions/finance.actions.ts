@@ -1134,16 +1134,29 @@ async function recalcPettyCashChain(
   }
 }
 
-/** Remove the accounting journal (and its entries) tied to a petty-cash record. */
+/**
+ * Remove the accounting journal (and its entries) tied to a petty-cash record.
+ *
+ * R8-KEU-08: helper ini dulu menghapus SEMUA jurnal referensi PettyCash
+ * termasuk POSTED. Satu-satunya pemanggil (`updatePettyCash`) sudah menolak
+ * jurnal POSTED di luar tx, tapi cek itu balapan dengan posting/void/recon —
+ * guard otoritatif harus di dalam tx, di titik tulis bersama ini: jurnal
+ * POSTED tidak pernah di-hard-delete (koreksi sah = reversal lewat void).
+ */
 async function deletePettyCashJournal(
   tx: PettyCashTx,
   pettyCashId: number,
 ): Promise<void> {
   const journals = await tx.journal.findMany({
     where: { referenceType: "PettyCash", referenceId: pettyCashId },
-    select: { id: true },
+    select: { id: true, status: true, deletedAt: true },
   });
   if (journals.length === 0) return;
+  if (journals.some((j) => j.status === "POSTED" && !j.deletedAt)) {
+    throw new Error(
+      "Transaksi kas kecil yang sudah terposting tidak dapat diubah. Batalkan lewat pembatalan beralasan lalu buat transaksi baru.",
+    );
+  }
   const journalIds = journals.map((j) => j.id);
   await tx.journalEntry.deleteMany({
     where: { journalId: { in: journalIds } },
