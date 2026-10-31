@@ -279,23 +279,37 @@ export async function cancelTaxAssessment(formData: FormData): Promise<TaxDisput
     const reason = String(formData.get("reason") ?? "").trim()
     if (!reason) return { success: false, error: "Alasan pembatalan wajib diisi." }
 
-    const assessment = await prisma.taxAssessment.findFirst({
-      where: { id, deletedAt: null },
-      select: { id: true, status: true, notes: true },
-    })
-    if (!assessment) return { success: false, error: "Ketetapan tidak ditemukan." }
-    if (assessment.status === "BATAL" || assessment.status === "SELESAI") {
-      return { success: false, error: "Ketetapan sudah selesai/batal, tidak dapat dibatalkan." }
-    }
+    // R8-PAJAK-11: klaim atomik dalam tx — baca + FOR UPDATE + updateMany
+    // berpredikat status. Jalur lama membaca status di luar tx lalu update
+    // tanpa syarat: recordTaxDisputeDecision konkuren bisa menutup upaya
+    // di antara cek dan tulis, lalu batal menimpa status akhirnya.
+    const cancelled = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM tax_assessments WHERE id = ${id} FOR UPDATE`
+      }
+      const assessment = await tx.taxAssessment.findFirst({
+        where: { id, deletedAt: null },
+        select: { id: true, status: true, notes: true },
+      })
+      if (!assessment) return { ok: false as const, error: "Ketetapan tidak ditemukan." }
+      if (assessment.status === "BATAL" || assessment.status === "SELESAI") {
+        return { ok: false as const, error: "Ketetapan sudah selesai/batal, tidak dapat dibatalkan." }
+      }
 
-    // Notes asli register tidak ditimpa: alasan batal ditambahkan terpisah
-    // di belakang penanda, supaya riwayat keterangan tetap terbaca.
-    const cancelNote = `[Batal: ${reason}]`
-    const notes = assessment.notes ? `${assessment.notes}\n${cancelNote}` : cancelNote
-    await prisma.taxAssessment.update({
-      where: { id },
-      data: { status: "BATAL", deletedAt: new Date(), notes },
+      // Notes asli register tidak ditimpa: alasan batal ditambahkan terpisah
+      // di belakang penanda, supaya riwayat keterangan tetap terbaca.
+      const cancelNote = `[Batal: ${reason}]`
+      const notes = assessment.notes ? `${assessment.notes}\n${cancelNote}` : cancelNote
+      const claimed = await tx.taxAssessment.updateMany({
+        where: { id, deletedAt: null, status: { notIn: ["BATAL", "SELESAI"] } },
+        data: { status: "BATAL", deletedAt: new Date(), notes },
+      })
+      if (claimed.count === 0) {
+        return { ok: false as const, error: "Ketetapan sudah selesai/batal, tidak dapat dibatalkan." }
+      }
+      return { ok: true as const }
     })
+    if (!cancelled.ok) return { success: false, error: cancelled.error }
     await logActivity("update", "TaxAssessment", id, `Batal ketetapan #${id}: ${reason}`)
     revalidatePath(REVALIDATE)
     return { success: true, id }

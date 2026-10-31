@@ -44,6 +44,7 @@ export async function getTaxDisputeRegisterQueue(): Promise<TaxDisputeRegisterQu
           filedAt: true,
           decidedAt: true,
           decidedAmount: true,
+          result: true,
           lateReason: true,
         },
         orderBy: [{ filedAt: "asc" }, { id: "asc" }],
@@ -72,6 +73,7 @@ export async function getTaxDisputeRegisterQueue(): Promise<TaxDisputeRegisterQu
       filedAt: s.filedAt,
       decidedAt: s.decidedAt,
       decidedAmount: s.decidedAmount == null ? null : Number(s.decidedAmount),
+      result: s.result ?? null,
       lateReason: s.lateReason,
     })),
   }))

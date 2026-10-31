@@ -72,7 +72,9 @@ export default async function CustomerDetailPage({
   const [taxCompletenessRows, taxInvoices] = await Promise.all([
     loadCustomerTaxCompleteness([customer.id]),
     prisma.taxInvoice.findMany({
-      where: { direction: "out", salesInvoice: { customerId: customer.id, deletedAt: null }, djpStatus: { not: "cancelled" } },
+      // R8-PAJAK-12: faktur `replaced` bukan dokumen berjalan — nomor seri
+      // sama dengan penggantinya, tampil keduanya = daftar dobel menyesatkan.
+      where: { direction: "out", salesInvoice: { customerId: customer.id, deletedAt: null }, djpStatus: { notIn: ["cancelled", "replaced"] } },
       orderBy: { taxInvoiceDate: "desc" },
       take: 10,
       select: { id: true, taxInvoiceNumber: true, taxInvoiceDate: true, counterpartyName: true, counterpartyTaxId: true, counterpartyNitku: true },

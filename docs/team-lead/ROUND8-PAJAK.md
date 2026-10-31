@@ -87,6 +87,12 @@ draft selain `cancelled` yang sudah ada. Fixture lama yang memakai
 `replaced`+`credited` tetap bocor walau service diperbaiki.
 
 ### R8-PAJAK-07 — MEDIUM, CONFIRMED — Bupot dari bill dibatalkan ikut laporan
+**Status: SELESAI 2026-10-31.** Dua lapis: (1) loader Laporan Bukti
+Potong menyaring bupot yang bill sumbernya cancelled/terhapus (include
+kini memuat status+deletedAt bill); (2) `voidVendorBill` menolak bila
+ada bupot aktif (status selain revoked) — revoke dulu lewat jalur
+bupot, pola pembayaran penjualan. Regression: test loader bill
+cancelled + test void ditolak.
 Laporan Bukti Potong (`withholding-certificates-data.ts:33-95`): baris
 bupot dari vendor bill yang dibatalkan/di-void tetap dihitung;
 `voidVendorBill` (`purchase.actions.ts:3871-3920`) tanpa guard bupot
@@ -116,6 +122,11 @@ Regression: `slug-db.test.ts` baru + suite tax-payment existing.
 dampak lebih rendah dari R8-PAJAK-02.
 
 ### R8-PAJAK-10 — MEDIUM, CONFIRMED — Sisa sengketa menghitung putusan ditolak
+**Status: SELESAI 2026-10-31.** `TaxDisputeStepInput.result`
+ditambahkan (loader memilih kolom `result`); builder hanya menjumlah
+`decidedAmount` untuk DIKABULKAN/DIKABULKAN_SEBAGIAN, selaras
+`recordTaxDisputeDecision`. Regression: test putusan DITOLAK Rp60jt
+→ sisa tetap 60.
 Register sengketa: `remainingDisputed` menghitung `decidedAmount`
 SEMUA putusan termasuk DITOLAK (`tax-dispute-register-queue.ts:216-220`)
 vs service yang benar hanya `DIKABULKAN*`
@@ -123,11 +134,17 @@ vs service yang benar hanya `DIKABULKAN*`
 antrean; register vs status bertentangan.
 
 ### R8-PAJAK-11 — LOW, CONFIRMED — Batal ketetapan tanpa tx/kunci baris
+**Status: SELESAI 2026-10-31.** `cancelTaxAssessment` kini dalam
+tx: FOR UPDATE + baca ulang + `updateMany` berpredikat status;
+kalah klaim (count 0) ditolak. Regression: test klaim count 0.
 `cancelTaxAssessment` tanpa tx/kunci baris
 (`tax-dispute.actions.ts:282-298`) race lawan
 `recordTaxDisputeDecision` yang memakai FOR UPDATE.
 
 ### R8-PAJAK-12 — LOW, PLAUSIBLE — Daftar faktur pelanggan tampilkan replaced
+**Status: SELESAI 2026-10-31.** Filter halaman pelanggan menjadi
+`notIn: ["cancelled", "replaced"]` — pengganti bernomor seri sama
+tidak lagi tampil dobel.
 Halaman pelanggan menampilkan faktur `replaced` sebagai berjalan
 (`master/pelanggan/[slug]/page.tsx:75` filter hanya
 `djpStatus != cancelled`) → nomor sama tampil dobel di daftar.

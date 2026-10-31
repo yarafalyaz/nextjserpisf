@@ -94,3 +94,9 @@ sebelum fix (klaim agen bukan vonis).
   `--accept-data-loss`; tax_invoices 0 baris), regression integrasi
   DB hijau lawan DB dev (RUN_DB_INTEGRATION). Suite pajak 38 + guard
   schema-usage 53 hijau, tsc+lint bersih.
+- Pajak tuntas 12/12: 02 (slug settle dalam tx), 03 (potongan fasilitas
+  nol), 08 (jenis aktif), 09 (slug tax payment dalam tx), 07 (bupot bill
+  batal disaring + void digerbang), 10 (sisa sengketa hanya
+  DIKABULKAN*), 11 (cancel ketetapan klaim atomik), 12 (daftar pelanggan
+  tanpa replaced). Berikutnya: keuangan R8-KEU-03..10, jual-beli
+  R8-JB-03..10, SDM R8-SDM-01..06.

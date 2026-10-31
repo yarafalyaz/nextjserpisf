@@ -75,7 +75,7 @@ describe("AC-TXD-B1: basis tenggat = tanggal kirim, bukan terima", () => {
       assessment({
         sentAt: SENT,
         steps: [
-          { stepId: 9, kind: "KEBERATAN", article36Subkind: null, status: "DIAJUKAN", filedAt, decidedAt: null, decidedAmount: null, lateReason: null },
+          { stepId: 9, kind: "KEBERATAN", article36Subkind: null, status: "DIAJUKAN", filedAt, decidedAt: null, decidedAmount: null, result: null, lateReason: null },
         ],
       }),
     ])
@@ -147,12 +147,23 @@ describe("AC-TXD-B6: putusan sebagian turunan server; hapus fisik mustahil", () 
     const q = buildTaxDisputeRegisterQueue([
       assessment({
         steps: [
-          { stepId: 1, kind: "KEBERATAN", article36Subkind: null, status: "DIPUTUS", filedAt: SENT, decidedAt: SENT, decidedAmount: 25, lateReason: null },
-          { stepId: 2, kind: "BANDING", article36Subkind: null, status: "DIAJUKAN", filedAt: SENT, decidedAt: null, decidedAmount: null, lateReason: null },
+          { stepId: 1, kind: "KEBERATAN", article36Subkind: null, status: "DIPUTUS", filedAt: SENT, decidedAt: SENT, decidedAmount: 25, result: "DIKABULKAN_SEBAGIAN", lateReason: null },
+          { stepId: 2, kind: "BANDING", article36Subkind: null, status: "DIAJUKAN", filedAt: SENT, decidedAt: null, decidedAmount: null, result: null, lateReason: null },
         ],
       }),
     ])
     expect(q.rows[0].remainingDisputed).toBe(35)
+  })
+
+  it("R8-PAJAK-10: putusan DITOLAK tidak mengurangi sisa disengketakan", () => {
+    const q = buildTaxDisputeRegisterQueue([
+      assessment({
+        steps: [
+          { stepId: 1, kind: "KEBERATAN", article36Subkind: null, status: "DIPUTUS", filedAt: SENT, decidedAt: SENT, decidedAmount: 60, result: "DITOLAK", lateReason: null },
+        ],
+      }),
+    ])
+    expect(q.rows[0].remainingDisputed).toBe(60)
   })
 
   it("baris deletedAt non-null dikecualikan (baca lunak, bukan hapus fisik)", () => {

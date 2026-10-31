@@ -62,23 +62,43 @@ export async function loadWithholdingCertificateInputs(
       },
       include: {
         withholdingType: { select: { code: true, name: true } },
-        vendorBill: { select: { documentNo: true } },
-        salesPayment: { select: { documentNo: true } },
+        // R8-PAJAK-07: bupot yang dokumen sumbernya sudah batal/di-void
+        // tidak boleh ikut laporan Bukti Potong (baca status sumber di sini
+        // untuk menyaring; bill fallback sendiri sudah berstatus posted+).
+        vendorBill: { select: { documentNo: true, status: true, deletedAt: true } },
+        salesPayment: { select: { documentNo: true, deletedAt: true } },
       },
       orderBy: [{ withholdingDate: "asc" }, { certificateNumber: "asc" }],
     }),
   ])
 
+  // R8-PAJAK-07: bupot dari dokumen sumber yang sudah batal/di-void/terhapus
+  // dikeluarkan dari laporan (potongannya sudah dibalik bersama dokumen
+  // sumber). Baris fallback bill sendiri sudah berstatus posted/partial/paid.
+  const liveCertificates = certificates.filter((cert) => {
+    if (cert.vendorBillId != null) {
+      return (
+        cert.vendorBill != null &&
+        cert.vendorBill.deletedAt == null &&
+        cert.vendorBill.status !== "cancelled"
+      )
+    }
+    if (cert.salesPaymentId != null) {
+      return cert.salesPayment != null && cert.salesPayment.deletedAt == null
+    }
+    return true
+  })
+
   // Bupot snapshot menggantikan baris fallback dokumen sumber tertaut.
   const certifiedBillIds = new Set(
-    certificates.map((c) => c.vendorBillId).filter((v): v is number => v != null),
+    liveCertificates.map((c) => c.vendorBillId).filter((v): v is number => v != null),
   )
   const certifiedPaymentIds = new Set(
-    certificates.map((c) => c.salesPaymentId).filter((v): v is number => v != null),
+    liveCertificates.map((c) => c.salesPaymentId).filter((v): v is number => v != null),
   )
 
   const inputs: WithholdingCertificateInput[] = [
-    ...certificates.map((cert): WithholdingCertificateInput => ({
+    ...liveCertificates.map((cert): WithholdingCertificateInput => ({
       side: cert.direction === "we_withhold" ? "purchase" : "sales",
       date: cert.withholdingDate,
       certificateNo: cert.certificateNumber,

@@ -121,6 +121,8 @@ export interface TaxDisputeStepInput {
   filedAt: Date | null
   decidedAt: Date | null
   decidedAmount: number | null
+  /** Hasil putusan (DIKABULKAN* yang mengurangi sisa; R8-PAJAK-10). */
+  result: string | null
   lateReason: string | null
 }
 
@@ -213,7 +215,14 @@ export function buildTaxDisputeRegisterQueue(
         if (dl && (!nearest || dl.getTime() < nearest.getTime())) nearest = dl
         if (s.lateReason) late += 1
       }
-      if (s.status === "DIPUTUS" && s.decidedAmount != null) {
+      // R8-PAJAK-10: hanya putusan yang MENGABULKAN mengurangi sisa
+      // (selaras service recordTaxDisputeDecision) — DITOLAK /
+      // TIDAK_DAPAT_DITERIMA tidak memakan kuota disengketakan.
+      if (
+        s.status === "DIPUTUS" &&
+        s.decidedAmount != null &&
+        (s.result === "DIKABULKAN" || s.result === "DIKABULKAN_SEBAGIAN")
+      ) {
         decidedSum += s.decidedAmount
       }
     }

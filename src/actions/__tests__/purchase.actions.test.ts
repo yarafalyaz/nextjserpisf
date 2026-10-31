@@ -47,6 +47,7 @@ const mocks = vi.hoisted(() => {
     item: buildModelMock(),
     uomConversion: buildModelMock(),
     transactionAttachment: buildModelMock(),
+    withholdingCertificate: buildModelMock(),
     financialIdempotencyKey: buildModelMock(),
     userWarehouse: buildModelMock(),
     approvalWorkflow: buildModelMock(),
@@ -1010,6 +1011,18 @@ describe("Vendor Bill Actions", () => {
     mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", payments: [] })
     const res = await actions.voidVendorBill(1)
     expect(res?.success).toBe(true)
+  })
+
+  it("R8-PAJAK-07: void bill ber-bupot aktif ditolak", async () => {
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", paidAmount: 0, payments: [] })
+    mocks.prismaMock.withholdingCertificate.count.mockResolvedValue(1)
+    try {
+      const res = await actions.voidVendorBill(1)
+      expect(res?.success).toBe(false)
+      expect(String(res?.error)).toMatch(/bukti potong/i)
+    } finally {
+      mocks.prismaMock.withholdingCertificate.count.mockResolvedValue(0)
+    }
   })
 
   it("deleteVendorBill succeeds", async () => {

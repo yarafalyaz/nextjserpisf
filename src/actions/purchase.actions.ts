@@ -3901,6 +3901,18 @@ export async function voidVendorBill(id: number) {
           "Hapus pembayaran tagihan ini terlebih dahulu sebelum membatalkan.",
         );
       }
+      // R8-PAJAK-07: bill ber-bupot aktif tidak bisa di-void diam-diam —
+      // bupot harus di-revoke dulu lewat jalur bupot (pola pembayaran
+      // penjualan yang menolak), bukan ditinggal menghantui laporan
+      // Bukti Potong sesudah tagihannya batal.
+      const activeCertCount = await tx.withholdingCertificate.count({
+        where: { vendorBillId: id, status: { not: "revoked" } },
+      });
+      if (activeCertCount > 0) {
+        throw new Error(
+          "Tagihan ini punya bukti potong aktif. Revoke bukti potongnya terlebih dahulu sebelum membatalkan.",
+        );
+      }
       billSlug = fresh.slug;
 
       await reverseJournalsByReferenceTx(
