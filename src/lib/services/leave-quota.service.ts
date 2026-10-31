@@ -232,6 +232,58 @@ function wibCalendarDate(d: Date): { y: number; m: number; d: number } {
   return { y: get("year"), m: get("month"), d: get("day") }
 }
 
+/**
+ * Gerbang jatah untuk SATU pengajuan cuti tahunan, per tahun yang disentuh.
+ *
+ * Cuti lintas tahun (Des→Jan) memotong DUA jatah: hari dalam tahun mulai
+ * dibebankan ke tahun mulai, hari sesudahnya ke tahun berikutnya — persis
+ * cara `getLeaveQuota.used` meng-clip per tahun. Gerbang lama hanya
+ * memeriksa tahun mulai, sehingga porsi Januari tidak pernah ditolak
+ * walau jatah tahun berikutnya sudah habis; dashboard tahun berikutnya
+ * kemudian menampilkannya sebagai used melebihi entitled.
+ *
+ * Return pesan error (string) bila ditolak, `null` bila lolos.
+ */
+export async function assertAnnualLeaveQuota(
+  employeeId: number,
+  startDate: Date,
+  endDate: Date,
+  opts: { excludeLeaveId?: number; db?: Db } = {},
+): Promise<string | null> {
+  const db = opts.db ?? prisma
+  const firstYear = startDate.getFullYear()
+  const lastYear = endDate.getFullYear()
+  for (let year = firstYear; year <= lastYear; year++) {
+    const quota = await getLeaveQuota(employeeId, {
+      year,
+      now: startDate,
+      excludeLeaveId: opts.excludeLeaveId,
+      db,
+    })
+    if (!quota.eligible) {
+      return "Cuti tahunan hanya untuk karyawan dengan masa kerja minimal 1 tahun."
+    }
+    const yearStart = new Date(year, 0, 1)
+    const yearEnd = new Date(year, 11, 31)
+    const requestedDays = await countLeaveWorkingDays(
+      employeeId,
+      startDate > yearStart ? startDate : yearStart,
+      endDate < yearEnd ? endDate : yearEnd,
+      db,
+    )
+    if (year === firstYear && requestedDays === 0) {
+      return "Rentang cuti tidak mengandung hari kerja (semua tanggal jatuh pada akhir pekan / hari libur)."
+    }
+    if (quota.used + requestedDays > quota.entitled) {
+      return (
+        `Sisa jatah cuti tahunan ${quota.remaining} hari tidak cukup untuk ${requestedDays} hari yang diajukan ` +
+        `(jatah ${quota.entitled} hari/tahun ${year}, sudah terpakai ${quota.used} hari).`
+      )
+    }
+  }
+  return null
+}
+
 export async function getLeaveQuota(
   employeeId: number,
   opts: { year?: number; now?: Date; excludeLeaveId?: number; db?: Db } = {},

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
+  assertAnnualLeaveQuota,
   countLeaveWorkingDays,
   getLeaveQuota,
   ANNUAL_LEAVE_QUOTA,
@@ -260,5 +261,62 @@ describe("getLeaveQuota — rincian approved/pending (F-2026-10-25-013-S BR-LVB-
     const q = await getLeaveQuota(1, { year: 2026 })
     expect(q.usedApproved).toBe(0)
     expect(q.usedPending).toBe(0)
+  })
+})
+
+describe("assertAnnualLeaveQuota — cuti lintas tahun memotong dua jatah", () => {
+  beforeEach(() => {
+    vi.mocked(prisma.employee.findUnique).mockResolvedValue({
+      id: 1,
+      departmentId: null,
+      joinDate: new Date("2020-01-01"),
+      leaveEligibilityStartDate: null,
+      employmentStatus: "PKWTT",
+    } as any)
+  })
+
+  // Pengajuan 28 Des 2026 .. 8 Jan 2027: porsi 2026 = Sen 28..Kam 31 = 4
+  // hari kerja; porsi 2027 = Jum 1 + Sen 4..Jum 8 = 6 hari kerja.
+  const start = new Date("2026-12-28")
+  const end = new Date("2027-01-08")
+
+  function mockUsedByYear(used2027: { startDate: Date; endDate: Date }[]) {
+    vi.mocked(prisma.leaveRequest.findMany).mockImplementation((async (args: any) => {
+      const yearEnd: Date = args.where.startDate.lte
+      return yearEnd.getFullYear() === 2027
+        ? used2027.map((r) => ({ ...r, status: "approved" }))
+        : []
+    }) as any)
+  }
+
+  it("menolak bila porsi Januari melampaui jatah tahun berikutnya", async () => {
+    // Sudah terpakai 10 hari kerja di 2027 (11..22 Jan) + 6 diajukan > 12.
+    mockUsedByYear([{ startDate: new Date("2027-01-11"), endDate: new Date("2027-01-22") }])
+    const err = await assertAnnualLeaveQuota(1, start, end)
+    expect(err).toMatch(/tahun 2027/)
+  })
+
+  it("lolos bila kedua tahun masih cukup", async () => {
+    // Terpakai 5 hari kerja di 2027 (11..15 Jan) + 6 diajukan = 11 ≤ 12.
+    mockUsedByYear([{ startDate: new Date("2027-01-11"), endDate: new Date("2027-01-15") }])
+    await expect(assertAnnualLeaveQuota(1, start, end)).resolves.toBeNull()
+  })
+
+  it("tetap menolak kelebihan di tahun mulai", async () => {
+    vi.mocked(prisma.leaveRequest.findMany).mockImplementation((async (args: any) => {
+      const yearEnd: Date = args.where.startDate.lte
+      return yearEnd.getFullYear() === 2026
+        ? [{ startDate: new Date("2026-06-01"), endDate: new Date("2026-06-14"), status: "approved" }]
+        : []
+    }) as any)
+    // used 2026 = 10 hari kerja (1..12 Jun) + 4 diajukan > 12.
+    const err = await assertAnnualLeaveQuota(1, start, end)
+    expect(err).toMatch(/tahun 2026/)
+  })
+
+  it("guard statis: kedua gate aksi memakai helper lintas tahun", async () => {
+    const { readFileSync } = await import("node:fs")
+    const actions = readFileSync("src/actions/hrm.actions.ts", "utf8")
+    expect(actions.match(/assertAnnualLeaveQuota\(employeeId, startDate, endDate/g)).toHaveLength(2)
   })
 })

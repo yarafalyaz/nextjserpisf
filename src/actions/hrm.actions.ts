@@ -69,7 +69,7 @@ import { calculateLatePenalty } from "@/lib/services/late-penalty.service";
 import { calculateAttendanceSummary, employmentDayWindow, isEmploymentDay } from "@/lib/services/attendance-summary.service";
 import {
   getLeaveQuota,
-  countLeaveWorkingDays,
+  assertAnnualLeaveQuota,
   QUOTA_LEAVE_TYPES,
   SPECIAL_LEAVE_DAY_CAPS,
   resolveDayKind,
@@ -1099,53 +1099,17 @@ export async function createLeaveRequest(formData: FormData) {
       //  1. Tenure: employees with < 1 year of service (from joinDate) are not
       //     entitled to paid annual leave at all (entitled = 0).
       //  2. Balance: (already-used + days requested) must not exceed the 12-day
-      //     entitlement. Working days are counted per the employee's WorkSchedule
-      //     and exclude national/department holidays. pending requests count
-      //     toward "used" so two in-flight requests can't both pass the check.
+      //     entitlement, PER TAHUN yang disentuh — cuti lintas tahun memotong
+      //     jatah kedua tahun (assertAnnualLeaveQuota).
       // Runs inside the same tx as the overlap check + insert so the read used
-      // for the gate and the write are atomic. Quota is keyed on the leave's
-      // START year (a leave straddling Dec→Jan is charged to the year it begins).
+      // for the gate and the write are atomic.
+      // Kelayakan dinilai per TANGGAL MULAI cuti, bukan hari pengajuan:
+      // karyawan yang mengajukan dari sekarang untuk tanggal sesudah
+      // ulang tahun masa kerjanya yang ke-1 memang sudah berhak pada saat
+      // cuti itu berjalan (helper menerima now = startDate).
       if (QUOTA_LEAVE_TYPES.has(v.type)) {
-        const quotaYear = startDate.getFullYear();
-        // Kelayakan dinilai per TANGGAL MULAI cuti, bukan hari pengajuan:
-        // karyawan yang mengajukan dari sekarang untuk tanggal sesudah
-        // ulang tahun masa kerjanya yang ke-1 memang sudah berhak pada
-        // saat cuti itu berjalan.
-        const quota = await getLeaveQuota(employeeId, {
-          year: quotaYear,
-          now: startDate,
-          db: tx,
-        });
-        if (!quota.eligible) {
-          throw new Error(
-            "Cuti tahunan hanya untuk karyawan dengan masa kerja minimal 1 tahun.",
-          );
-        }
-        // Clip the request to the quota year before counting so a leave that
-        // straddles Dec→Jan is charged to the start year only for its days IN
-        // that year — exactly how getLeaveQuota accounts for `used`. Without the
-        // clip the gate charged the WHOLE straddling leave to the start year
-        // while the balance dashboard charged only the start-year portion, so a
-        // valid year-end request was rejected as over-quota.
-        const quotaYearStart = new Date(quotaYear, 0, 1);
-        const quotaYearEnd = new Date(quotaYear, 11, 31);
-        const requestedDays = await countLeaveWorkingDays(
-          employeeId,
-          startDate > quotaYearStart ? startDate : quotaYearStart,
-          endDate < quotaYearEnd ? endDate : quotaYearEnd,
-          tx,
-        );
-        if (requestedDays === 0) {
-          throw new Error(
-            "Rentang cuti tidak mengandung hari kerja (semua tanggal jatuh pada akhir pekan / hari libur).",
-          );
-        }
-        if (quota.used + requestedDays > quota.entitled) {
-          throw new Error(
-            `Sisa jatah cuti tahunan ${quota.remaining} hari tidak cukup untuk ${requestedDays} hari yang diajukan ` +
-              `(jatah ${quota.entitled} hari/tahun ${quotaYear}, sudah terpakai ${quota.used} hari).`,
-          );
-        }
+        const quotaError = await assertAnnualLeaveQuota(employeeId, startDate, endDate, { db: tx });
+        if (quotaError) throw new Error(quotaError);
       }
 
       const created = await tx.leaveRequest.create({
@@ -5207,39 +5171,12 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
       }
 
       if (QUOTA_LEAVE_TYPES.has(v.type)) {
-        const quotaYear = startDate.getFullYear();
-        const quota = await getLeaveQuota(employeeId, {
-          year: quotaYear,
-          now: startDate,
+        // Sama seperti createLeaveRequest: per tahun yang disentuh.
+        const quotaError = await assertAnnualLeaveQuota(employeeId, startDate, endDate, {
           excludeLeaveId: id,
           db: tx,
         });
-        if (!quota.eligible) {
-          throw new Error(
-            "Cuti tahunan hanya untuk karyawan dengan masa kerja minimal 1 tahun.",
-          );
-        }
-        // Clip to the quota year (same reasoning as createLeaveRequest): the gate
-        // must charge only the days within the start year, matching `used`.
-        const quotaYearStart = new Date(quotaYear, 0, 1);
-        const quotaYearEnd = new Date(quotaYear, 11, 31);
-        const requestedDays = await countLeaveWorkingDays(
-          employeeId,
-          startDate > quotaYearStart ? startDate : quotaYearStart,
-          endDate < quotaYearEnd ? endDate : quotaYearEnd,
-          tx,
-        );
-        if (requestedDays === 0) {
-          throw new Error(
-            "Rentang cuti tidak mengandung hari kerja (semua tanggal jatuh pada akhir pekan / hari libur).",
-          );
-        }
-        if (quota.used + requestedDays > quota.entitled) {
-          throw new Error(
-            `Sisa jatah cuti tahunan ${quota.remaining} hari tidak cukup untuk ${requestedDays} hari yang diajukan ` +
-              `(jatah ${quota.entitled} hari/tahun ${quotaYear}, sudah terpakai ${quota.used} hari).`,
-          );
-        }
+        if (quotaError) throw new Error(quotaError);
       }
 
       return await tx.leaveRequest.update({
