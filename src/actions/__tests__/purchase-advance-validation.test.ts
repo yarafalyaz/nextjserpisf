@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
   const advanceCreate = vi.fn()
   const advanceUpdate = vi.fn()
   const journalCreate = vi.fn()
+  const checkIdempotency = vi.fn()
 
   const tx: Record<string, unknown> = {
     purchaseAdvance: { create: advanceCreate, update: advanceUpdate },
@@ -43,6 +44,7 @@ const mocks = vi.hoisted(() => {
     accountFindMany,
     advanceCreate,
     journalCreate,
+    checkIdempotency,
     prismaMock,
     tx,
   }
@@ -60,6 +62,7 @@ vi.mock("@/lib/utils/document-number", async () => (await import("./validation-m
 vi.mock("@/lib/services/document-sequence.service", async () => (await import("./validation-mock-helpers")).docSequenceFactory())
 vi.mock("@/lib/services/period-lock.service", async () => (await import("./validation-mock-helpers")).periodLockFactory(mocks))
 vi.mock("@/lib/utils/slug-db", async () => (await import("./validation-mock-helpers")).slugFixedFactory())
+vi.mock("@/lib/utils/idempotency", () => ({ checkIdempotency: mocks.checkIdempotency }))
 
 import { createPurchaseAdvance } from "../purchase-advance.actions"
 
@@ -78,7 +81,11 @@ beforeEach(() => {
   mocks.generateDocumentNumber.mockResolvedValue("DP-0001")
   mocks.assertPeriodOpen.mockResolvedValue(undefined)
   mocks.vendorFindFirst.mockResolvedValue({ id: 11, name: "Vendor A" })
-  mocks.accountFindMany.mockResolvedValue([{ id: 101 }, { id: 102 }])
+  mocks.accountFindMany.mockResolvedValue([
+    { id: 101, type: "ASSET", reportGroup: "BANK", isActive: true, deletedAt: null },
+    { id: 102, type: "ASSET", reportGroup: "OCAS", isActive: true, deletedAt: null },
+  ])
+  mocks.checkIdempotency.mockResolvedValue(undefined)
   mocks.advanceCreate.mockResolvedValue({ id: 1, slug: "dp-1" })
   mocks.journalCreate.mockResolvedValue({ id: 9 })
 })
@@ -138,6 +145,54 @@ describe("createPurchaseAdvance zod validation", () => {
     )
     expect(mocks.advanceCreate).not.toHaveBeenCalled()
     expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("R8-KEU-03: idempotency key diteruskan dalam tx dan duplikat menggagalkan tanpa create", async () => {
+    await createPurchaseAdvance(form({ ...base, idempotencyKey: "key-advance-1" }))
+    expect(mocks.checkIdempotency).toHaveBeenCalledWith("key-advance-1", mocks.tx, 7)
+    expect(mocks.checkIdempotency.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.journalCreate.mock.invocationCallOrder[0],
+    )
+
+    vi.clearAllMocks()
+    mocks.requirePermission.mockResolvedValue({ id: 7 })
+    mocks.generateDocumentNumber.mockResolvedValue("DP-0001")
+    mocks.assertPeriodOpen.mockResolvedValue(undefined)
+    mocks.vendorFindFirst.mockResolvedValue({ id: 11, name: "Vendor A" })
+    mocks.accountFindMany.mockResolvedValue([
+      { id: 101, type: "ASSET", reportGroup: "BANK", isActive: true, deletedAt: null },
+      { id: 102, type: "ASSET", reportGroup: "OCAS", isActive: true, deletedAt: null },
+    ])
+    mocks.checkIdempotency.mockRejectedValue(new Error("Permintaan duplikat terdeteksi."))
+    const res = await createPurchaseAdvance(form({ ...base, idempotencyKey: "key-advance-1" }))
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toContain("Permintaan duplikat")
+    expect(mocks.advanceCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("R8-KEU-03: akun nonaktif ditolak sebelum tx", async () => {
+    mocks.accountFindMany.mockResolvedValue([
+      { id: 101, type: "ASSET", reportGroup: "BANK", isActive: false, deletedAt: null },
+      { id: 102, type: "ASSET", reportGroup: "OCAS", isActive: true, deletedAt: null },
+    ])
+    const res = await createPurchaseAdvance(form(base))
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toContain("nonaktif atau sudah dihapus")
+    expect(mocks.checkIdempotency).not.toHaveBeenCalled()
+    expect(mocks.advanceCreate).not.toHaveBeenCalled()
+  })
+
+  it("R8-KEU-03: akun pembayaran bukan BANK atau uang muka bukan ASSET ditolak", async () => {
+    mocks.accountFindMany.mockResolvedValue([
+      { id: 101, type: "ASSET", reportGroup: "OCAS", isActive: true, deletedAt: null },
+      { id: 102, type: "LIABILITY", reportGroup: "APAY", isActive: true, deletedAt: null },
+    ])
+    const res = await createPurchaseAdvance(form(base))
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toContain("tidak sesuai")
+    expect(mocks.checkIdempotency).not.toHaveBeenCalled()
+    expect(mocks.advanceCreate).not.toHaveBeenCalled()
   })
 
   it("happy path: cek periode dalam tx mendahului pembuatan jurnal", async () => {

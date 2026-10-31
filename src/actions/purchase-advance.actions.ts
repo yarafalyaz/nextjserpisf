@@ -11,7 +11,8 @@ import { DocumentSequenceService } from "@/lib/services/document-sequence.servic
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
-import { nextSlug } from "@/lib/utils/slug-db"
+import { nextSlugWithClient } from "@/lib/utils/slug-db"
+import { checkIdempotency } from "@/lib/utils/idempotency"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { purchaseAdvanceSchema } from "@/lib/validations/finance.schemas"
@@ -40,6 +41,7 @@ function toMoney(value: number): Prisma.Decimal {
 export async function createPurchaseAdvance(formData: FormData): Promise<PurchaseAdvanceActionResult> {
   try {
     const user = await requirePermission("create_purchase_advances")
+    const idempotencyKey = formData.get("idempotencyKey") as string | null
 
     const parsed = parseFormData(purchaseAdvanceSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
@@ -61,11 +63,22 @@ export async function createPurchaseAdvance(formData: FormData): Promise<Purchas
       prisma.vendor.findFirst({ where: { id: vendorId, deletedAt: null }, select: { id: true, name: true } }),
       prisma.account.findMany({
         where: { id: { in: [paymentAccountId, advanceAccountId] } },
-        select: { id: true },
+        select: { id: true, type: true, reportGroup: true, isActive: true, deletedAt: true },
       }),
     ])
     if (!vendor) return { success: false, error: "Pemasok tidak ditemukan." }
     if (accounts.length !== 2) return { success: false, error: "Akun yang dipilih tidak ditemukan." }
+    // R8-KEU-03: direct call bisa memilih akun nonaktif/terhapus atau bukan
+    // kelompok yang dijanjikan label form; daftar pilihan halaman sudah
+    // menyaring ini, jadi jalurnya tidak jauh lebih mudah disalahgunakan.
+    if (accounts.some((account) => !account.isActive || account.deletedAt)) {
+      return { success: false, error: "Akun yang dipilih nonaktif atau sudah dihapus." }
+    }
+    const paymentAccount = accounts.find((account) => account.id === paymentAccountId)
+    const advanceAccount = accounts.find((account) => account.id === advanceAccountId)
+    if (paymentAccount?.reportGroup !== "BANK" || advanceAccount?.type !== "ASSET") {
+      return { success: false, error: "Akun kas/bank atau akun uang muka tidak sesuai." }
+    }
 
     const documentNo = await generateDocumentNumber("DP", "simple")
     const [sequence] = await DocumentSequenceService.nextBatch("JOURNAL", 1)
@@ -80,13 +93,17 @@ export async function createPurchaseAdvance(formData: FormData): Promise<Purchas
     })
 
     const created = await prisma.$transaction(async (tx) => {
+      // R8-KEU-03: pencipta uang — klaim kunci idempotency di dalam tx agar
+      // rollback melepas kunci dan submit ulang/replay tidak melahirkan jurnal
+      // kedua.
+      await checkIdempotency(idempotencyKey, tx, user.id)
       // Penjaga periode otoritatif di DALAM tx (pola void): cek luar hanya
       // fast-fail; tutup-periode tidak bisa menyelip di antara cek dan tulis.
       await assertPeriodOpen(date, tx)
 
       const advance = await tx.purchaseAdvance.create({
         data: {
-          slug: await nextSlug("purchaseAdvance", documentNo),
+          slug: await nextSlugWithClient(tx as never, "purchaseAdvance", documentNo),
           documentNo,
           date,
           vendorId,
@@ -101,7 +118,7 @@ export async function createPurchaseAdvance(formData: FormData): Promise<Purchas
       const journal = await tx.journal.create({
         data: {
           journalNumber,
-          slug: await nextSlug("journal", journalNumber),
+          slug: await nextSlugWithClient(tx as never, "journal", journalNumber),
           transactionDate: date,
           description: description ?? `Uang muka pembelian ${documentNo} — ${vendor.name}`,
           type: "PURCHASE_ADVANCE",

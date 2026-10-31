@@ -55,7 +55,7 @@ lahir, recalc skip → paidAmount tetap 0 → `postInvoice` posting
 Dr Piutang penuh di atas kredit yang sudah masuk. Kredit terpakai,
 faktur tampil belum terbayar. Pasangan R8-JB-01/R8-JB-02.
 
-### R8-KEU-03 — HIGH, CONFIRMED — Purchase advance tanpa idempotency
+### R8-KEU-03 — SELESAI 2026-10-31 — Purchase advance tanpa idempotency
 `src/actions/purchase-advance.actions.ts:40-138` — tidak ada
 pembacaan `idempotencyKey`; nomor dokumen + sequence selalu segar di
 luar tx. `pembelian/uang-muka/_components/purchase-advance-form.tsx:56-80`
@@ -69,6 +69,13 @@ action hanya cek eksistensi 2 akun (`:60-68`), tanpa tipe/status —
 akun salah tipe/nonaktif lolos lewat direct call. Schema
 `finance.schemas.ts:382-408` hanya tolak advanceAccount ==
 paymentAccount.
+Perbaikan: form create mengirim `idempotencyKey` persisten per sesi form
+dan menggantinya setelah sukses; action memeriksa kunci di awal tx via
+`checkIdempotency`, memeriksa akun aktif/non-deleted `reportGroup BANK`
+untuk pembayaran, dan `type ASSET` untuk uang muka, serta mengecek slug
+dalam tx lewat `nextSlugWithClient`. Regression di
+`purchase-advance-validation.test.ts` (klaim key, throw sebelum create,
+akun nonaktif/wrong-group/wrong-type).
 
 ### R8-KEU-04 — HIGH, CONFIRMED — deleteExpense race: jurnal POSTED yatim
 `src/actions/finance.actions.ts:1960-1966` — status dibaca di luar

@@ -100,3 +100,9 @@ sebelum fix (klaim agen bukan vonis).
   DIKABULKAN*), 11 (cancel ketetapan klaim atomik), 12 (daftar pelanggan
   tanpa replaced). Berikutnya: keuangan R8-KEU-03..10, jual-beli
   R8-JB-03..10, SDM R8-SDM-01..06.
+- R8-KEU-03 selesai: purchase advance tanpa idempotencyKey kini mengklaim
+  key dalam tx, form create mengirim key, akun direct-call dikontrol
+  aktif/non-deleted + reportGroup BANK + type ASSET, slug dibaca dalam tx.
+  Test purchase advance 25/25 lokal, suite purchase terkait 213/213; tsc
+  0 debug, lint 0 error, diff bersih. Berikutnya R8-KEU-04..10,
+  R8-JB-03..10, R8-SDM-01..06.

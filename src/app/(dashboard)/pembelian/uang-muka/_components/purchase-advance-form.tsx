@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { ArrowRight } from "lucide-react"
 
 import { createPurchaseAdvance } from "@/actions/purchase-advance.actions"
@@ -33,6 +33,7 @@ export function PurchaseAdvanceForm({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
 
   const [date, setDate] = useState(toLocalDateOnly(new Date()))
   const [vendorId, setVendorId] = useState("")
@@ -58,6 +59,7 @@ export function PurchaseAdvanceForm({
     startTransition(async () => {
       try {
         const formData = new FormData()
+        formData.set("idempotencyKey", idempotencyKeyRef.current)
         formData.set("date", date)
         formData.set("vendorId", vendorId)
         formData.set("amount", amount === null ? "" : String(amount))
@@ -70,6 +72,7 @@ export function PurchaseAdvanceForm({
           showError(result.error || "Gagal menyimpan uang muka")
           return
         }
+        idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess("Uang muka pembelian tersimpan dan jurnalnya diposting")
         router.push("/pembelian/uang-muka")
         router.refresh()
