@@ -646,6 +646,35 @@ describe("Asset Transfer Actions", () => {
     })
   })
 
+  it("mengunci baris aset sebelum membaca transfer terakhir (serialisasi lawan transfer konkuren)", async () => {
+    const events: string[] = []
+    prismaMock.$executeRaw.mockImplementation((...a: any[]) => {
+      const first = a[0]
+      const sql = Array.isArray(first) ? first.join("?") : ((first as any)?.strings?.join("?") ?? String(first ?? ""))
+      if (/assets/i.test(sql) && /for update/i.test(sql)) events.push("lock")
+      return Promise.resolve(1)
+    })
+    prismaMock.assetTransfer.findFirst.mockImplementation(async (args: any) => {
+      // nextSlug juga memakai findFirst (tanpa orderBy) sebelum transaksi;
+      // hanya bacaan "transfer terakhir" yang dicatat.
+      if (args?.orderBy) events.push("latest")
+      return null
+    })
+    const res = await createAssetTransfer(fd({
+      assetId: "5",
+      toLocation: "HQ",
+      transferDate: "2026-06-12",
+    }))
+    expect(res.success).toBe(true)
+    // Tanpa kunci aset, dua create transfer konkuren sama-sama membaca
+    // himpunan transfer tanpa baris lawan yang belum commit; yang commit
+    // terakhir menang tulis lokasi walau id-nya lebih kecil (tiebreak
+    // (transferDate, id) kalah oleh urutan commit).
+    expect(events.indexOf("lock")).toBeGreaterThanOrEqual(0)
+    expect(events.indexOf("latest")).toBeGreaterThanOrEqual(0)
+    expect(events.indexOf("lock")).toBeLessThan(events.indexOf("latest"))
+  })
+
   it("wraps transfer create + asset location update in $transaction for atomicity", async () => {
     await createAssetTransfer(fd({
       assetId: "5",

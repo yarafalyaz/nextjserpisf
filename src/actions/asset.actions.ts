@@ -307,6 +307,12 @@ export async function createAssetTransfer(formData: FormData) {
     // / vehicle compound writes (commit 7bc5062).
     const transfer = await prisma.$transaction(
       async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
+        // Kunci baris aset dulu: himpunan transfer dibaca ulang di bawah
+        // untuk memilih yang terakhir — tanpa kunci, transfer konkuren
+        // tidak terlihat satu sama lain dan urutan commit (bukan tiebreak
+        // (transferDate, id)) yang menentukan lokasi akhir. Kunci yang
+        // sama dipakai updateAsset/disposeAsset/peristiwa aset.
+        await tx.$executeRaw`SELECT id FROM assets WHERE id = ${data.assetId} FOR UPDATE`;
         const created = await tx.assetTransfer.create({
           data: {
             slug,
@@ -452,6 +458,9 @@ export async function deleteAssetTransfer(id: number) {
     });
 
     await prisma.$transaction(async (tx) => {
+      // Kunci baris aset sebelum delete + hitung ulang lokasi (pasangan
+      // serialisasi create/update transfer dan penulis aset lain).
+      await tx.$executeRaw`SELECT id FROM assets WHERE id = ${transfer.assetId} FOR UPDATE`;
       await tx.assetTransfer.delete({ where: { id } });
 
       // If this transfer is what set the asset's current location, revert it to the
@@ -671,6 +680,12 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
 
     const transfer = await prisma.$transaction(
       async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
+        // Kunci baris aset terkait (urut id; bisa dua aset bila transfer
+        // berpindah aset) sebelum hitung ulang lokasi mana pun.
+        const lockIds = [...new Set([oldTransfer.assetId, data.assetId])].sort((a, b) => a - b);
+        for (const lockId of lockIds) {
+          await tx.$executeRaw`SELECT id FROM assets WHERE id = ${lockId} FOR UPDATE`;
+        }
         // If asset changed, revert old asset location first — but ONLY if this
         // transfer is what currently drives the old asset's location. Without the
         // check, editing a back-dated transfer while the asset has since been
