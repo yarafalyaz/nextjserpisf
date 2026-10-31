@@ -138,6 +138,14 @@ faktur selisih/progres, dan faktur konversi DP (tanggal dokumen
 dinormalisasi tengah malam UTC). Form menampilkan pratinjau yang
 sama; dueDate tersimpan mode ubah tidak ditimpa pratinjau. Dokumen
 lama tidak di-backfill (tanggal tersimpan adalah fakta historis).
+**Lanjutan (2026-10-31): backfill dokumen TERBUKA tersedia** —
+perintah sesi "kerjakan semua" membalik batas itu khusus dokumen
+posted/partial ber-dueDate null (yang tak pernah menua di aging):
+`scripts/backfill-duedate.ts` (dry-run default, `--apply` menulis,
+klaim updateMany bersyarat dueDate null, idempoten) mengisi dari
+termin lawan aktif via `planDueDateBackfill`. Dokumen lunas/batal/
+sudah ber-dueDate tetap fakta historis tak tersentuh. Dry-run DB
+dev: 0 kandidat.
 Due date tak pernah diturunkan dari payment terms (sales `dueDate`
 input bebas; vendor `terms` divalidasi format tapi dueDate tak
 dihitung) → aging bisa 30 hari lebih awal. Tak ada helper
