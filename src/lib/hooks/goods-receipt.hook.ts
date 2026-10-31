@@ -288,6 +288,20 @@ export async function onGoodsReceiptVerified(
     const smDocNos = await generateDocumentNumberBatch("SM", goodsReceipt.items.length);
     await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(grItemIds)}) FOR UPDATE`;
 
+    // Baseline average cost WAJIB segar dari bawah kunci item: meta di
+    // atas dibaca SEBELUM kunci, jadi GR lain untuk item average yang sama
+    // bisa commit lebih dulu — menimpa rata-ratanya dengan baseline basi
+    // merusak Item.cost persisten (jalur average + tampilan). qty_on_hand
+    // sendiri atomik (increment di loop), yang basi hanya pasangan
+    // (qtyOnHand, cost) penyebut/pembilang rata-rata.
+    const freshItemState = grItemIds.length
+      ? await tx.item.findMany({
+          where: { id: { in: grItemIds } },
+          select: { id: true, qtyOnHand: true, cost: true },
+        })
+      : [];
+    const freshStateByItem = new Map(freshItemState.map((it) => [it.id, it]));
+
     // ─── 3a. Landed cost allocation (computed ONCE for the whole receipt) ──
     // The PO's shippingCost/serviceFee is a whole-order estimate; a GR must
     // absorb only the share that matches the goods value it receives, so the
@@ -398,9 +412,10 @@ export async function onGoodsReceiptVerified(
     // Initialize running map of item quantities and costs to handle duplicate item IDs in the GR
     const itemRunningData = new Map<number, { qtyOnHand: number; cost: number }>();
     for (const meta of grItemMetas) {
+      const fresh = freshStateByItem.get(meta.id);
       itemRunningData.set(meta.id, {
-        qtyOnHand: Number(meta.qtyOnHand ?? 0),
-        cost: Number(meta.cost ?? 0),
+        qtyOnHand: Number(fresh?.qtyOnHand ?? meta.qtyOnHand ?? 0),
+        cost: Number(fresh?.cost ?? meta.cost ?? 0),
       });
     }
 
