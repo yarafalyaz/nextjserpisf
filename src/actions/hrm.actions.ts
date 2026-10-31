@@ -1181,6 +1181,13 @@ export async function createOvertimeRequest(formData: FormData) {
     await assertHrEmployeeAccess(scope, v.employeeId);
 
     const overtime = await prisma.$transaction(async (tx) => {
+      // Serialisasi per karyawan: findMany cap di bawah adalah snapshot read
+      // (MariaDB REPEATABLE READ), jadi dua create konkuren untuk karyawan
+      // sama sama-sama membaca total di bawah cap PP 35/2021 dan sama-sama
+      // lolos. Kunci baris employees menserialkan cap+create; update mengunci
+      // baris overtime_requests sendiri sehingga cap-nya menilai baris itu,
+      // bukan penulis create lain.
+      await tx.$executeRaw`SELECT id FROM employees WHERE id = ${v.employeeId} FOR UPDATE`;
       // Batas lembur PP 35/2021 Pasal 26 ayat (1) — gerbang bersama create/
       // update di overtime-pay.service (syarat vonis K2-S1).
       const otDate = wibDateToUtcMidnight(v.date);

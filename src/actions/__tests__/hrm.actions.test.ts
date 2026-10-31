@@ -493,6 +493,27 @@ describe("Overtime Request Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("createOvertimeRequest locks the employee row before the PP 35/2021 cap check", async () => {
+    // findMany dalam tx adalah snapshot read (REPEATABLE READ): dua create
+    // konkuren untuk karyawan sama sama-sama membaca total di bawah cap dan
+    // sama-sama lolos. Kunci baris employees menserialkan cap+create.
+    const res = await actions.createOvertimeRequest(fd({
+      employeeId: "1",
+      date: "2026-06-12",
+      hours: "2",
+    }))
+    expect(res?.success).toBe(true)
+    const lockSqls = (prismaMock as any).$executeRaw.mock.calls.map((c: unknown[]) => {
+      const first = c[0] as { strings?: string[] } | string[] | undefined
+      if (Array.isArray(first)) return first.join("?")
+      return (first as { strings?: string[] } | undefined)?.strings?.join("?") ?? ""
+    })
+    expect(lockSqls.some((s: string) => s.includes("employees") && s.includes("FOR UPDATE"))).toBe(true)
+    const lockOrder = (prismaMock as any).$executeRaw.mock.invocationCallOrder[0]
+    const capOrder = prismaMock.overtimeRequest.findMany.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(capOrder)
+  })
+
   it("approveOvertime updates status", async () => {
     const res = await actions.approveOvertime(1)
     expect(res?.success).toBe(true)
