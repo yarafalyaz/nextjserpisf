@@ -5,6 +5,8 @@ import "@/lib/validations/zod-locale";
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { parseFormData } from "@/lib/validations/parse-form"
+import { dateOnly } from "@/lib/validations/finance.schemas"
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import {
   cancelTaxInvoice,
   creditInputInvoice,
@@ -41,11 +43,16 @@ const optionalId = z.preprocess(
   z.coerce.number().int().positive().optional(),
 )
 
+// z.coerce.date() memutar tanggal mustahil (2026-02-30 → 2 Maret) secara
+// diam-diam; masa pajak dan gerbang periode lalu bergeser sebulan. Pakai
+// dateOnly repo lalu konversi ke tengah malam UTC seperti jalur lain.
+const taxDocDate = dateOnly.transform((value) => wibDateToUtcMidnight(value))
+
 const issueSchema = z.object({
   direction: z.enum(["out", "in"]),
   transactionCode: optionalText,
   taxInvoiceNumber: z.string().trim().min(1, "Nomor faktur pajak wajib diisi").max(50),
-  taxInvoiceDate: z.coerce.date(),
+  taxInvoiceDate: taxDocDate,
   sellingPrice: z.coerce.number().positive("Harga jual/penggantian harus > 0"),
   nominalRate: z.preprocess(
     (v) => (v === "" || v == null ? undefined : v),
@@ -68,7 +75,7 @@ const issueSchema = z.object({
 const replaceSchema = z.object({
   replacesId: z.coerce.number().int().positive(),
   taxInvoiceNumber: z.string().trim().min(1, "Nomor faktur pajak wajib diisi").max(50),
-  taxInvoiceDate: z.coerce.date(),
+  taxInvoiceDate: taxDocDate,
   sellingPrice: z.coerce.number().positive("Harga jual/penggantian harus > 0"),
   replaceReason: z.string().trim().min(1, "Alasan pengganti wajib diisi").max(500),
   idempotencyKey: z.string().trim().min(8, "Idempotency key wajib"),
@@ -144,7 +151,7 @@ export async function creditInputInvoiceAction(formData: FormData) {
 const issueBupotSchema = z.object({
   direction: z.enum(["we_withhold", "withheld_from_us"]),
   certificateNumber: z.string().trim().min(1, "Nomor bupot wajib diisi").max(100),
-  withholdingDate: z.coerce.date(),
+  withholdingDate: taxDocDate,
   counterpartyTaxId: optionalText,
   counterpartyName: z.string().trim().min(1, "Nama pihak wajib diisi").max(200),
   withholdingTypeId: z.coerce.number().int().positive(),
