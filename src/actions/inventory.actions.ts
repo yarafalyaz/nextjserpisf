@@ -2636,9 +2636,26 @@ export async function approveStocktakeSession(id: number) {
     if (session.countedBy != null && Number(session.countedBy) === Number(user.id)) {
       throw new Error("Penyetuju harus independen — pencacah tidak boleh menyetujui sesi sendiri");
     }
-    await prisma.stocktakeSession.update({
-      where: { id },
-      data: { status: "approved", approvedBy: Number(user.id), approvedAt: new Date() },
+    await prisma.$transaction(async (tx) => {
+      // Kunci baris sesi + nilai ulang status/independensi dari bacaan
+      // segar: simpan hitungan konkuren bisa menurunkan sesi review →
+      // recount di jendela baca→approve, dan approver kedua tidak boleh
+      // menimpa stempel penyetuju pertama tanpa error.
+      await tx.$executeRaw`SELECT id FROM stocktake_sessions WHERE id = ${id} FOR UPDATE`;
+      const lockedSession = await tx.stocktakeSession.findUnique({
+        where: { id },
+        select: { status: true, countedBy: true },
+      });
+      if (!lockedSession || lockedSession.status !== "review") {
+        throw new Error("Hanya sesi tahap review yang bisa disetujui");
+      }
+      if (lockedSession.countedBy != null && Number(lockedSession.countedBy) === Number(user.id)) {
+        throw new Error("Penyetuju harus independen — pencacah tidak boleh menyetujui sesi sendiri");
+      }
+      await tx.stocktakeSession.update({
+        where: { id },
+        data: { status: "approved", approvedBy: Number(user.id), approvedAt: new Date() },
+      });
     });
     await logActivity("approve", "StocktakeSession", id, "Sesi opname disetujui");
     revalidatePath(STOCKTAKE_PATH);

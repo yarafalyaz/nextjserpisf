@@ -1390,11 +1390,40 @@ describe("stocktake session (P1-5)", () => {
       status: "review",
       countedBy: 9,
     });
+    mocks.prismaMock.stocktakeSession.findUnique.mockResolvedValue({
+      status: "review",
+      countedBy: 9,
+    });
     const res = await actions.approveStocktakeSession(1);
     expect(res.success).toBe(true);
     expect(mocks.prismaMock.stocktakeSession.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 1 } }),
     );
+  });
+
+  it("approveStocktakeSession menolak bila status terkunci sudah bukan review (kalah race recount)", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      warehouseId: 2,
+      status: "review",
+      countedBy: 9,
+    });
+    mocks.prismaMock.stocktakeSession.findUnique.mockResolvedValue({
+      status: "recount",
+      countedBy: 9,
+    });
+    const res = await actions.approveStocktakeSession(1);
+    expect(res.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/tahap review/);
+    expect(mocks.prismaMock.stocktakeSession.update).not.toHaveBeenCalled();
+    const sqlText = mocks.prismaMock.$executeRaw.mock.calls
+      .map((c: unknown[]) => {
+        const first = c[0] as unknown;
+        if (Array.isArray(first)) return (first as string[]).join("?");
+        return ((first as { strings?: string[] })?.strings ?? []).join("?");
+      })
+      .join(" ");
+    expect(sqlText).toContain("stocktake_sessions");
   });
 
   it("postStocktakeSession refuses unapproved sessions", async () => {
