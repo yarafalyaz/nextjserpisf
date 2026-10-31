@@ -1040,6 +1040,57 @@ describe("Payroll Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("generateBulkPayroll mengeluarkan slip asal yang sudah diganti koreksi dari agregat (R8-SDM-02 paritas single)", async () => {
+    prismaMock.employee.findMany.mockResolvedValue([{
+      id: 1, baseSalary: 5000000, maritalStatus: "single",
+      employeeLoans: [],
+    }])
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
+    // Slip asal LEGACY (snapshot tanpa penanda agregat) + slip koreksi sah
+    // yang menunjuk asal. Jalur single mengeluarkan asal dari agregat;
+    // bila bulk ikut memasukkan asal, run ini melempar error legacy dan
+    // basis BPJS/TER dobel (asal + koreksi).
+    prismaMock.payroll.findMany.mockImplementation(async (arg: any) => {
+      // Hanya query agregat bulk (select memuat correctsPayrollId) yang
+      // menerima slip; query payroll lain tetap kosong seperti default.
+      if (arg?.select?.correctsPayrollId === true) {
+        return [
+          {
+            id: 11, correctsPayrollId: null, employeeId: 1, baseSalary: 5000000,
+            bpjsHealthEmployee: 50000, bpjsEmploymentEmployee: 100000,
+            status: "paid", statutorySnapshot: null, grossSalary: 5000000, pph21: 0,
+          },
+          {
+            id: 12, correctsPayrollId: 11, employeeId: 1, baseSalary: 5000000,
+            bpjsHealthEmployee: 50000, bpjsEmploymentEmployee: 100000,
+            status: "draft", statutorySnapshot: {
+              bpjsAggregate: {
+                basis: 5000000, targetHealth: 50000, targetEmployment: 100000,
+                withheldHealth: 50000, withheldEmployment: 100000,
+              },
+            },
+            grossSalary: 5000000, pph21: 0,
+          },
+        ]
+      }
+      return []
+    })
+
+    try {
+      const res = await actions.generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
+
+      expect(res?.success).toBe(true)
+      const bulkQuery = prismaMock.payroll.findMany.mock.calls.find((call: any) =>
+        call?.[0]?.select?.correctsPayrollId === true,
+      )
+      expect(bulkQuery?.[0]?.select).toMatchObject({ correctsPayrollId: true })
+    } finally {
+      // beforeEach describe ini tidak me-reset findMany payroll — pulihkan
+      // default supaya implementasi di atas tidak bocor ke test berikutnya.
+      prismaMock.payroll.findMany.mockReset().mockResolvedValue([])
+    }
+  })
+
   it("processPayroll succeeds", async () => {
     const res = await actions.processPayroll(fd({
       employeeId: "1",

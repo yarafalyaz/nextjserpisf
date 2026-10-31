@@ -2031,14 +2031,24 @@ async function computeBulkPayrollEstimations(
     : await prisma.payroll.findMany({
         where: { employeeId: { in: employeeIds }, period: bulkPeriod },
         select: {
+          id: true, correctsPayrollId: true,
           employeeId: true, baseSalary: true, bpjsHealthEmployee: true,
           bpjsEmploymentEmployee: true, status: true, statutorySnapshot: true,
           grossSalary: true, pph21: true,
         },
       });
+  // R8-SDM-02 (paritas jalur single): slip asal yang sudah digantikan
+  // koreksi TIDAK ikut agregat — tanpa ini asal + koreksi dobel di basis
+  // BPJS/TER bulk dan plafon/selisih dihitung dari angka ganda.
+  const correctedOriginalIds = new Set(
+    bulkPeriodSlips
+      .map((row) => row.correctsPayrollId)
+      .filter((id): id is number => id != null),
+  );
   const bulkSlipsByEmployee = new Map<number, BpjsPeriodSlip[]>();
   for (const row of bulkPeriodSlips) {
     if (row.employeeId == null || row.status === "cancelled" || row.status === "canceled") continue;
+    if (correctedOriginalIds.has(row.id)) continue;
     const arr = bulkSlipsByEmployee.get(row.employeeId) ?? [];
     arr.push({
       baseSalary: Number(row.baseSalary),
@@ -2055,6 +2065,7 @@ async function computeBulkPayrollEstimations(
   const bulkTerByEmployee = new Map<number, { gross: number; pph21: number }>();
   for (const row of bulkPeriodSlips) {
     if (row.employeeId == null || row.status === "cancelled" || row.status === "canceled") continue;
+    if (correctedOriginalIds.has(row.id)) continue;
     const acc = bulkTerByEmployee.get(row.employeeId) ?? { gross: 0, pph21: 0 };
     acc.gross += Number(row.grossSalary) || 0;
     acc.pph21 += Number(row.pph21) || 0;
