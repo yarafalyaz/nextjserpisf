@@ -97,4 +97,24 @@ describe("createDifferenceInvoice (F-2026-10-20-10)", () => {
     const data = mocks.prismaMock.salesInvoice.create.mock.calls[0][0].data
     expect(data.grandTotal).toBe(1500000)
   })
+
+  it("nominal dihitung dari grandTotal TERKUNCI, bukan snapshot luar tx", async () => {
+    // Luar tx: kontrak 1,5jt (selisih 500rb atas tertagih 1jt). Di bawah
+    // kunci: revisi lain sudah menurunkan kontrak ke 1jt -> selisih habis.
+    mocks.prismaMock.quotation.findFirst
+      .mockResolvedValueOnce(helpers.REVISION_CONTRACT_QUOTATION)
+      .mockResolvedValueOnce({ ...helpers.REVISION_CONTRACT_QUOTATION, grandTotal: 1000000 })
+    const res = await createDifferenceInvoice(5)
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah tertagih penuh")
+    expect(mocks.prismaMock.salesInvoice.create).not.toHaveBeenCalled()
+    const lockSql = mocks.prismaMock.$queryRaw.mock.calls
+      .map((c: unknown[]) => {
+        const first = c[0] as unknown
+        if (Array.isArray(first)) return (first as string[]).join("?")
+        return ((first as { strings?: string[] })?.strings ?? []).join("?")
+      })
+      .join(" ")
+    expect(lockSql).toContain("quotations")
+  })
 })

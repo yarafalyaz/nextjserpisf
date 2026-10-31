@@ -73,6 +73,17 @@ describe("createRevisionDownCredit (F-2026-10-20-59)", () => {
     helpers.expectRevisionDownRejection(mocks, res, "Tidak ada kelebihan")
   })
 
+  it("kredit dihitung dari grandTotal TERKUNCI, bukan snapshot luar tx", async () => {
+    // Luar tx: nilai berjalan 1jt, tertagih 1,5jt (kelebihan 500rb). Di
+    // bawah kunci: revisi lain menaikkan nilai berjalan ke 1,6jt ->
+    // kelebihan hilang, kredit wajib ditolak.
+    mocks.prismaMock.quotation.findFirst
+      .mockResolvedValueOnce(revisedDown)
+      .mockResolvedValueOnce({ ...revisedDown, grandTotal: 1600000 })
+    const res = await createRevisionDownCredit(5)
+    helpers.expectRevisionDownRejection(mocks, res, "Tidak ada kelebihan")
+  })
+
   it("anti dobel: kredit RevisionDown existing mengurangi nominal baru", async () => {
     mocks.prismaMock.customerCredit.findMany
       .mockResolvedValueOnce([{ receivedAmount: 300000, allocatedAmount: 0, refundedAmount: 0 }])

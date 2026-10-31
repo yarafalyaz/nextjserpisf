@@ -1624,19 +1624,37 @@ export async function createDifferenceInvoice(quotationId: number) {
     const today = getWibTodayUtcDate()
     await assertPeriodOpen(today)
 
-    const differenceDescription = `Faktur selisih revisi v${quotation.revisionNumber} penawaran ${quotation.documentNo}`
-
     const invoice = await prisma.$transaction(async (tx) => {
       // Kunci baris quotation: dua klik bersamaan tidak boleh sama-sama
       // membaca total tertagih lama lalu membuat dua draft selisih.
       await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+
+      // Nilai kontrak WAJIB dari baris terkunci: snapshot luar tx bisa
+      // basi terhadap updateQuotation/reviseQuotation konkuren — selisih
+      // dari total lama menagih nilai yang sudah tidak berlaku.
+      const lockedQuotation = await tx.quotation.findFirst({
+        where: { id: quotationId, deletedAt: null },
+        select: {
+          id: true,
+          documentNo: true,
+          customerId: true,
+          customerVehicleId: true,
+          grandTotal: true,
+          revisionNumber: true,
+        },
+      })
+      if (!lockedQuotation) throw new Error("Penawaran tidak ditemukan")
+      if (lockedQuotation.revisionNumber <= 0) {
+        throw new Error("Penawaran belum pernah direvisi; tidak ada selisih revisi")
+      }
+      const lockedDifferenceDescription = `Faktur selisih revisi v${lockedQuotation.revisionNumber} penawaran ${lockedQuotation.documentNo}`
 
       await assertInvoiceAllowedForWorkOrderBridges(tx, { quotationId })
 
       const invoices = await collectQuotationInvoices(tx, quotationId)
 
       const candidate = computeDifferenceInvoiceCandidate({
-        quotationGrandTotal: Number(quotation.grandTotal),
+        quotationGrandTotal: Number(lockedQuotation.grandTotal),
         invoices,
       })
       if (!candidate.eligible) throw new Error(candidate.reason ?? "Tidak ada selisih revisi")
@@ -1644,11 +1662,11 @@ export async function createDifferenceInvoice(quotationId: number) {
       // F-2026-10-25-035-B titik tahan Q-CL2-4 butir 5: faktur turunan
       // menaikkan tertagih ikut dinilai; tertahan = rollback.
       const diffAttempt = {
-        customerId: quotation.customerId,
+        customerId: lockedQuotation.customerId,
         documentType: "sales_invoice" as const,
         attemptedAmount: candidate.differenceAmount,
         requestedBy: Number(user.id),
-        quotationId: quotation.id,
+        quotationId: lockedQuotation.id,
         // Tanpa FormData: tanpa alasan -> tanpa rekod (lihat fase 3).
         requestReason: null,
       }
@@ -1658,14 +1676,14 @@ export async function createDifferenceInvoice(quotationId: number) {
       // R8-JB-09: termin dibaca dalam tx yang mengunci quotation, supaya
       // snapshot dueDate konsisten dengan dokumen yang lahir.
       const customer = await tx.customer.findUnique({
-        where: { id: quotation.customerId },
+        where: { id: lockedQuotation.customerId },
         select: { paymentTerm: { select: { days: true, isActive: true } } },
       })
       const created = await tx.salesInvoice.create({
         data: draftDerivedInvoiceData({
-          customerId: quotation.customerId,
-          customerVehicleId: quotation.customerVehicleId,
-          quotationId: quotation.id,
+          customerId: lockedQuotation.customerId,
+          customerVehicleId: lockedQuotation.customerVehicleId,
+          quotationId: lockedQuotation.id,
           date: today,
           dueDate: resolveDueDate({
             explicit: null,
@@ -1673,7 +1691,7 @@ export async function createDifferenceInvoice(quotationId: number) {
             termDays: customer?.paymentTerm?.isActive ? customer.paymentTerm.days : null,
           }),
           amount: candidate.differenceAmount,
-          description: differenceDescription,
+          description: lockedDifferenceDescription,
           createdBy: Number(user.id),
         }),
       })
@@ -1738,11 +1756,24 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
     const invoice = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
 
+      // Nilai kontrak dari baris terkunci (lihat createDifferenceInvoice).
+      const lockedQuotation = await tx.quotation.findFirst({
+        where: { id: quotationId, deletedAt: null },
+        select: {
+          id: true,
+          documentNo: true,
+          customerId: true,
+          customerVehicleId: true,
+          grandTotal: true,
+        },
+      })
+      if (!lockedQuotation) throw new Error("Penawaran tidak ditemukan")
+
       await assertInvoiceAllowedForWorkOrderBridges(tx, { quotationId })
 
       const invoices = await collectQuotationInvoices(tx, quotationId)
       const candidate = computeProgressInvoiceCandidate({
-        quotationGrandTotal: Number(quotation.grandTotal),
+        quotationGrandTotal: Number(lockedQuotation.grandTotal),
         targetPercent,
         invoices,
       })
@@ -1750,11 +1781,11 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
 
       // F-2026-10-25-035-B titik tahan Q-CL2-4 butir 5.
       const progAttempt = {
-        customerId: quotation.customerId,
+        customerId: lockedQuotation.customerId,
         documentType: "sales_invoice" as const,
         attemptedAmount: candidate.progressAmount,
         requestedBy: Number(user.id),
-        quotationId: quotation.id,
+        quotationId: lockedQuotation.id,
         // Tanpa FormData: tanpa alasan -> tanpa rekod (lihat fase 3).
         requestReason: null,
       }
@@ -1763,14 +1794,14 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
       )
       // R8-JB-09: pola sama seperti faktur selisih (termin dalam tx).
       const customer = await tx.customer.findUnique({
-        where: { id: quotation.customerId },
+        where: { id: lockedQuotation.customerId },
         select: { paymentTerm: { select: { days: true, isActive: true } } },
       })
       const created = await tx.salesInvoice.create({
         data: draftDerivedInvoiceData({
-          customerId: quotation.customerId,
-          customerVehicleId: quotation.customerVehicleId,
-          quotationId: quotation.id,
+          customerId: lockedQuotation.customerId,
+          customerVehicleId: lockedQuotation.customerVehicleId,
+          quotationId: lockedQuotation.id,
           date: today,
           dueDate: resolveDueDate({
             explicit: null,
@@ -1831,6 +1862,16 @@ export async function createRevisionDownCredit(quotationId: number) {
     const credit = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
 
+      // Nilai kontrak dari baris terkunci (lihat createDifferenceInvoice).
+      const lockedQuotation = await tx.quotation.findFirst({
+        where: { id: quotationId, deletedAt: null },
+        select: { id: true, documentNo: true, customerId: true, grandTotal: true, revisionNumber: true },
+      })
+      if (!lockedQuotation) throw new Error("Penawaran tidak ditemukan")
+      if (lockedQuotation.revisionNumber <= 0) {
+        throw new Error("Penawaran belum pernah direvisi; tidak ada revisi-turun")
+      }
+
       const [invoices, confirmedDownPayments, downPayments] = await Promise.all([
         collectQuotationInvoices(tx, quotationId),
         tx.downPayment.findMany({
@@ -1852,7 +1893,7 @@ export async function createRevisionDownCredit(quotationId: number) {
             }),
       ])
       const candidate = computeRevisionDownCreditCandidate({
-        quotationGrandTotal: Number(quotation.grandTotal),
+        quotationGrandTotal: Number(lockedQuotation.grandTotal),
         invoices,
         confirmedDownPayments: confirmedDownPayments.map((d) => ({ amount: Number(d.amount) })),
         existingRevisionDownCredits: existingRevisionDown.map((c) => ({
@@ -1870,11 +1911,11 @@ export async function createRevisionDownCredit(quotationId: number) {
       return tx.customerCredit.create({
         data: {
           documentNo,
-          customerId: quotation.customerId,
+          customerId: lockedQuotation.customerId,
           sourceType: "RevisionDown",
-          sourceId: quotation.id,
+          sourceId: lockedQuotation.id,
           receivedAmount: candidate.creditAmount,
-          notes: `Kredit revisi-turun v${quotation.revisionNumber} penawaran ${quotation.documentNo}: tertagih/DP terikat ${candidate.committedAmount} melebihi nilai berjalan ${candidate.contractValue}. Tanpa jurnal saat lahir; jurnal hanya saat alokasi/refund.`,
+          notes: `Kredit revisi-turun v${lockedQuotation.revisionNumber} penawaran ${lockedQuotation.documentNo}: tertagih/DP terikat ${candidate.committedAmount} melebihi nilai berjalan ${candidate.contractValue}. Tanpa jurnal saat lahir; jurnal hanya saat alokasi/refund.`,
           createdBy: Number(user.id),
         },
       })

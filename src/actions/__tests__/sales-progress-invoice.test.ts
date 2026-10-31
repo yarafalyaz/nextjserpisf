@@ -73,6 +73,19 @@ describe("createProgressInvoice (F-2026-10-20-58)", () => {
     expect(mocks.prismaMock.salesInvoice.create).not.toHaveBeenCalled()
   })
 
+  it("target dihitung dari grandTotal TERKUNCI, bukan snapshot luar tx", async () => {
+    // Luar tx: kontrak 1,5jt -> target 100% masih menyisakan 500rb atas
+    // tertagih 1jt. Di bawah kunci: kontrak sudah turun ke 900rb ->
+    // tertagih melebihi nilai berjalan, progres wajib ditolak.
+    mocks.prismaMock.quotation.findFirst
+      .mockResolvedValueOnce(helpers.REVISION_CONTRACT_QUOTATION)
+      .mockResolvedValueOnce({ ...helpers.REVISION_CONTRACT_QUOTATION, grandTotal: 900000 })
+    const res = await createProgressInvoice(5, 100)
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("kredit revisi-turun")
+    expect(mocks.prismaMock.salesInvoice.create).not.toHaveBeenCalled()
+  })
+
   it("penawaran tidak ditemukan ditolak", async () => {
     mocks.prismaMock.quotation.findFirst.mockResolvedValue(null)
     const res = await createProgressInvoice(404, 50)
