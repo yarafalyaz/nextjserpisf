@@ -439,3 +439,51 @@ inventory_locations akan memblokir semua penulis; PERIKSA historis
 saja"). Vonis: risiko diterima, jangan diangkat lagi tanpa bukti
 jahitan eksploitable konkret (pola vonis P2002 serial putaran 4
 yang akhirnya naik kelas hanya sesudah jahitan konkret ditemukan).
+
+### Lanjutan putaran 7 (2026-11-01) — lane inventory/purchase + sales/finance
+
+Dua agent read-only (lane A inventory/purchase, lane B sales/finance)
+masing-masing menghasilkan 6 kandidat; semua dibaca ulang sesi
+utama. Fix terbukti (merah-hijau, regression test):
+`cb306fb70` createSalesReturn menghitung ulang qty terfaktur +
+status dari baris faktur terkunci dalam tx (cap over-return
+sebelumnya memakai peta snapshot luar tx; updateSalesReturn sudah
+benar); `5a4e361cb` updateQuotation mengecek ulang status cancelled
++ pelunasan dari baris terkunci (gerbang luar + penimpaan sections
+tanpa kunci memungkinkan edit penawaran batal/lunas membuka kembali
+sync turunan); `1cea801c2` faktur selisih/progres/kredit revisi-turun
+menilai kontrak dari grandTotal + revisionNumber TERKUNCI
+(collectQuotationInvoices segar, total kontrak basi);
+`90f9b34da` deletePurchaseOrder membaca ulang status + per-GR +
+bill aktif dari baris PO terkunci (GR terverifikasi penulis lain
+sempat ikut terhapus fisik); `fb02cd518` approveStocktakeSession
+kini tx kunci baris sesi + recheck review/independensi;
+`bd0fcd48c` average cost GR menyegarkan baseline qtyOnHand/cost
+item di bawah kunci item (tulis absolut dari meta beku merusak
+Item.cost persisten) + `9521c7ef6` koreksi tanda panggil hook di
+tes barunya; `7fe3cf652` hook penyesuaian stok mengunci baris item
+sebelum find-or-create lot (komentar lama mengklaim item dikunci);
+`cd656324b` snapshot opname membaca qty live di bawah kunci sesi;
+`474f4920e` complete rekonsiliasi memvalidasi ulang jurnal ter-match
+masih POSTED sebelum sertifikasi (jurnal dibalik sesudah match
+sempat tersertifikasi; tie-out neto nol dan status hidup di tabel
+journals tidak tertangkap kunci baris entri).
+CI: seluruh head putaran 7 SUCCESS — terakhir run `41246683169`
+untuk `474f4920e` (bd0fcd48c failure superseded oleh 9521c7ef6 —
+error tsc tes lama, bukan bug produksi).
+
+Vonis gugur putaran 7: (a) reviseWorkOrderItems — klaim updateMany
+memang tidak mengubah status sehingga revisi kedua juga count 1,
+tetapi baris WO duplikat per item adalah keadaan SAH desain ini
+(preseden STOK-09: item PO duplikat diagregasi), tidak ada unik
+(workOrderId, itemId) yang dilanggar, dan release reservasi
+panggilan kedua no-op; menambah item sama dua kali ekuivalen
+tindakan sekuensial sah user. (b) updateSalesPayment — klaim agent
+basi: baris payment dibaca dalam tx, KEDUA faktur dikunci urut id,
+overpay dihitung dari agregat dalam tx di bawah kunci faktur neto
+kredit retur, lalu repost jurnal + recalc kedua faktur dalam tx
+sama; sisa celah teoretis (baris payment tak dikunci terhadap
+delete konkuren) tidak merusak jumlah karena update absolut
+terakhir-menang. (c) shipDeliveryOrder — klaim agent basi:
+TASK-016 BUG-03 sudah menutupnya (assertDeliveryWithinOrderCap
+dalam tx berkunci SO + klaim atomik status draft).
