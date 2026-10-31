@@ -182,10 +182,78 @@ konfirmasi eksplisit Task #8, deploy produksi, dan penanganan
   `HANDOFF Backend -> Lead` PR #1360) ditambahkan ke board main
   (append, aditif). Sesudah itu worktree Hermes boleh dibuang:
   tidak ada isi yang hilang.
-- Task #8: (catatan eksekusi menyusul di bawah sesudah selesai)
-- Deploy produksi: (catatan eksekusi menyusul di bawah sesudah
-  selesai — env produksi, migrate deploy, pindah uploads lama,
-  smoke test)
+- Task #8: TIDAK dijalankan. Vonis "moot" dari sesi sebelumnya tidak
+  pernah dibuktikan dengan daftar author yang tampil bersih (perintah
+  identifikasi sempat mengembalikan output aneh). Rewrite author +
+  force-push histori publik tetap butuh konfirmasi eksplisit spesifik
+  per operasi; mandat autonomous generik bukan konfirmasi itu.
+- Deploy produksi: image `yekristanto/silengkap:20261101-97171c636`
+  terbangun dan ter-push (digest sha256:2116d648…), TETAPI sudah usang
+  terhadap main (belum memuat seluruh fix audit sesudah 97171c636 s.d.
+  head sesi ini). Rollout host tidak dapat dieksekusi dari mesin sesi:
+  SSH erp.yarasoft.net:22 "No route to host". Langkah host tersisa:
+  tetapkan IMAGE_TAG ke build head terbaru, `docker compose -f
+  docker-compose.prod.yml up migrate`, `up -d app`, pindah
+  `public/uploads/{avatars,signatures}` lama ke `private/uploads/`
+  bila perlu, seed 5 permission approve R6WN-06, audit
+  `approval_workflows.model_type` di luar enum + `approval_workflow_steps`
+  role_id/user_id sama-sama NULL, backfill historis
+  `stock_moves.transaction_date = created_at` untuk baris NULL
+  (fix 9b91cc8c8 hanya menulis baris baru), smoke test
+  https://erp.yarasoft.net.
+
+## Lanjutan 2026-11-01 (sesi autonomous 12 jam, mandat user)
+
+Mandat: kerja autonomous penuh tanpa bertanya; bug difix, fitur ERP
+lain yang layak diimplementasikan; seluruh keputusan di agent. Batas
+keras tetap: tanpa deploy produksi, tanpa force-push, tanpa
+`migrate deploy` ke DB dev, tanpa commit `.env`.
+
+Fix ter-commit (bukti merah → hijau, test + tsc + lint per batch):
+`0fa0cd15e` pajak batch 1 (periode UTC, kredit faktur batal, guard
+bupot, kepala rantai SPT); `d175946ce` reimbursement tanggal dokumen +
+jurnal kas kecil; `14bae4f1` koreksi payroll P2002 unique komisi +
+plafon BPJS gte; `13ffe5b64` PPN retur masuk jurnal + atribusi lot
+FIFO ke baris faktur (kolom `batch_allocations` + migrasi);
+`9b91cc8c8` tanggal StockMove dari dokumen asal (11 creator + guard);
+`7c448511d` subledger layar/PDF AP neto PPh; `a55ca280d` aging AP
+balanceDue; `c007dc6dd` absensi ter-clip masa kerja + fallback jadwal;
+`a65ed5cfb` bulk-delete produk dilarang; `c63c80c3d` serial retur =
+qty dasar; `b1e5e33f6` arah saldo kredit-normal subledger AP;
+`50379eef2` kuota cuti per tahun kalender disentuh; `f9828c609` clamp
+qty/harga negatif tagihan; `5209b41a7` tautan GR best-fit tagihan;
+`5917ffb6c` aging PDF menyaring tanggal ≤ asOf; `6ab67b92d` tarif
+lembur WEEKLY dinormalisasi ×52/12; `558bbd776` default tanggal WIB;
+`5bd4dfa07` P2002 nomor aktif faktur pajak → definitif (bukan
+ambiguous); `07b68ec8d` Total faktur PPN mengikuti kepala rantai;
+`1c65bddca` ekspektasi snapshot lembur; `119c4338d` withholding tagihan
+≤ grandTotal + jenis wajib; `7b96bd7ab` masa kerja PKWT pembagi
+panjang periode jangkar; `8ea800c3e` P2002 nomor bupot → definitif;
+`e16d0f1a2` prune beku schema-usage `TaxInvoice.activeNumberKey`;
+`7976a7b31` gerbang tukar faktur menghitung returnCredit (pre-check +
+recheck tx + halaman); `8f406f431` status jadwal termin dibaca ulang
+sesudah lock quotation; `b15c44c3f` hard-delete jurnal allowlist
+DRAFT; `93a9ad1c6` qty pecahan ditolak item berseri FIFO;
+`0ca6e18d8` mock loader retur di test kandidat.
+
+Fitur: `d2287fd9b` tombol "Buat Permintaan dari Titik Pesan-Ulang"
+di laporan stok minimum — agregasi per barang, PO masuk dikurangkan
+sekali, route prefill PR existing, tanpa schema/permission baru.
+
+Gugur sesudah verifikasi (jangan diangkat lagi tanpa bukti baru):
+assertPeriodOpen rekonsiliasi bank (tak memposting jurnal); bupot atas
+dokumen batal/reversed (sudah disaring loader); diskon kop faktur
+manual tanpa baris (jalur create memang menghitung header dari baris
+saja, nilai nol konsisten); bypass ekstensi statis proxy (page/action
+tetap requirePermission, dampak tak terbukti).
+
+Keputusan desain ditahan (angka berjalan tidak diubah): average
+costing global vs per-gudang (`goods-receipt.hook.ts`,
+`inventory-fifo.ts`, `stock-valuation.ts`); prorate MONTHLY lintas
+bulan (batas `ponytail:` terdokumentasi, jalur nyata satu bulan);
+eksposur piutang "posisi per akhir periode" yang K1-nya memakai
+paidAmount/returnCredit berjalan-kini — rekonstruksi historis penuh
+perlu pembayaran per faktur per tanggal, bukan filter tanggal.
 
 ## Bukti penutup
 
