@@ -1,4 +1,5 @@
 
+import { Prisma } from "@prisma/client";
 import { prisma, TxClient } from "@/lib/db/prisma";
 import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { slugify } from "@/lib/utils/slug";
@@ -61,9 +62,15 @@ export async function onStockAdjustmentProcessed(
       // 1. Lock the item rows first so the qtyOnHand we read is the authoritative,
       // serialized baseline. The stored systemQty/difference were derived from a
       // client-supplied currentQty at create time and can be stale or forged.
+      // Kunci ini juga kunci bersama dengan GR hook: tanpa itu adjustment dan
+      // GR bisa sama-sama melihat lot kosong lalu ItemBatch find-or-create
+      // membuat dua baris lot identik (tidak ada unique di ItemBatch).
       const itemIds = adjustment.items.map((item) => item.itemId);
       if (new Set(itemIds).size !== itemIds.length) {
         throw new Error("Penyesuaian stok berisi item duplikat.");
+      }
+      if (itemIds.length > 0) {
+        await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(itemIds)}) FOR UPDATE`;
       }
       
       // 2. Fetch the LIVE per-warehouse stock for this adjustment's warehouse.

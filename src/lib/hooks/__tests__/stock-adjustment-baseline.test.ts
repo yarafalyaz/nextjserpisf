@@ -142,6 +142,30 @@ describe("onStockAdjustmentProcessed live-qty baseline", () => {
     )
   })
 
+  it("mengunci baris item sebelum find-or-create lot (serial vs GR untuk item sama)", async () => {
+    const spies = wireTx({
+      items: [{ itemId: 9, systemQty: 0, actualQty: 6, difference: 6, unitCost: 50, batchNumbers: ["LOT-A"] }],
+      liveQty: { 9: 0 },
+      trackBatchItemIds: [9],
+    })
+
+    await onStockAdjustmentProcessed(50, 1)
+
+    // Kunci item (pola GR hook) wajib terbit SEBELUM ItemBatch.findFirst:
+    // tanpa kunci bersama, adjustment dan GR bisa sama-sama melihat lot
+    // kosong lalu membuat dua baris lot identik.
+    const sqlTexts = spies.queryRaw.mock.calls.map((c: unknown[]) => {
+      const first = c[0] as unknown
+      if (Array.isArray(first)) return (first as string[]).join("?")
+      return ((first as { strings?: string[] })?.strings ?? []).join("?")
+    })
+    const lockIdx = sqlTexts.findIndex((t: string) => t.includes("items") && t.includes("FOR UPDATE"))
+    expect(lockIdx).toBeGreaterThanOrEqual(0)
+    expect(spies.queryRaw.mock.invocationCallOrder[lockIdx]).toBeLessThan(
+      spies.batchFindFirst.mock.invocationCallOrder[0]
+    )
+  })
+
   it("creates ONE layer per lot for a multi-batch positive adjustment (bukan layer gabungan)", async () => {
     const spies = wireTx({
       items: [{ itemId: 9, systemQty: 0, actualQty: 10, difference: 10, unitCost: 50, batchNumbers: ["LOT-A", "LOT-B"] }],
