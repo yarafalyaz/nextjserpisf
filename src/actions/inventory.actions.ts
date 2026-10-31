@@ -2510,14 +2510,18 @@ export async function snapshotStocktakeSession(id: number) {
     await assertWarehouseIdInScope(user, session.warehouseId);
     if (session.status !== "draft") throw new Error("Hanya sesi draft yang bisa di-snapshot");
 
-    const live = await liveQtyByItem(session.warehouseId);
     await prisma.$transaction(async (tx) => {
+      // Kunci baris sesi dulu, baru baca qty live: snapshot dari bacaan
+      // luar tx bisa kehilangan gerakan stok yang commit di jendela
+      // baca→tulis dan melahirkan variance semu saat review.
+      await tx.$executeRaw`SELECT id FROM stocktake_sessions WHERE id = ${id} FOR UPDATE`;
       const locked = await tx.stocktakeSession.findUnique({ where: { id }, select: { status: true } });
       if (!locked || locked.status !== "draft") throw new Error("Sesi sudah berjalan");
+      const liveInTx = await liveQtyByItem(session.warehouseId, tx);
       await tx.stocktakeLine.deleteMany({ where: { sessionId: id } });
-      if (live.size > 0) {
+      if (liveInTx.size > 0) {
         await tx.stocktakeLine.createMany({
-          data: [...live.entries()].map(([itemId, qty]) => ({
+          data: [...liveInTx.entries()].map(([itemId, qty]) => ({
             sessionId: id,
             itemId,
             systemQty: qty,

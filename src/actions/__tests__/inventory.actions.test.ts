@@ -1426,6 +1426,35 @@ describe("stocktake session (P1-5)", () => {
     expect(sqlText).toContain("stocktake_sessions");
   });
 
+  it("snapshotStocktakeSession memakai qty live yang dibaca di bawah kunci sesi", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      warehouseId: 2,
+      status: "draft",
+      lines: [],
+    });
+    mocks.prismaMock.stocktakeSession.findUnique.mockResolvedValue({ status: "draft" });
+    // Satu-satunya bacaan qty live terjadi di bawah kunci: 42 (keadaan
+    // sesudah gerakan stok konkuren commit). Kode lama membaca di luar tx
+    // (snapshot basi) dan tes ini merah terhadapnya.
+    mocks.prismaMock.inventoryLayer.groupBy.mockResolvedValueOnce([
+      { itemId: 7, _sum: { remaining: 42 } },
+    ]);
+    const res = await actions.snapshotStocktakeSession(1);
+    expect(res.success).toBe(true);
+    expect(mocks.prismaMock.stocktakeLine.createMany).toHaveBeenCalledWith({
+      data: [{ sessionId: 1, itemId: 7, systemQty: 42 }],
+    });
+    const sqlText = mocks.prismaMock.$executeRaw.mock.calls
+      .map((c: unknown[]) => {
+        const first = c[0] as unknown;
+        if (Array.isArray(first)) return (first as string[]).join("?");
+        return ((first as { strings?: string[] })?.strings ?? []).join("?");
+      })
+      .join(" ");
+    expect(sqlText).toContain("stocktake_sessions");
+  });
+
   it("postStocktakeSession refuses unapproved sessions", async () => {
     mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({
       id: 1,
