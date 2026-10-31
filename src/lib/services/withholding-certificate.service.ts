@@ -19,7 +19,7 @@ import { Prisma } from "@prisma/client"
 import { prisma, type TxClient } from "@/lib/db/prisma"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
-import { buildUniqueSlug, slugify } from "@/lib/utils/slug"
+import { buildUniqueSlug } from "@/lib/utils/slug"
 import {
   claimIdempotencyKey,
   bindIdempotencyKey,
@@ -50,29 +50,12 @@ const SCOPE_SETTLE: IdemScope = "withholding_settle"
  */
 async function nextTxSlug(
   tx: TxClient,
-  model: "withholdingCertificate",
+  model: "withholdingCertificate" | "taxPayment" | "journal",
   base: string,
 ): Promise<string> {
   const d = tx[model] as unknown as {
     findFirst: (args: { where: Record<string, unknown>; select: { id: true } }) => Promise<{ id: number } | null>
   }
-  return buildUniqueSlug(base, async (candidate) => (await d.findFirst({ where: { slug: candidate }, select: { id: true } })) !== null)
-}
-
-/**
- * Slug unik luar tx pra-transaksi (setor): nomor dokumen sudah unik dari
- * generateDocumentNumber; suffix diincrement bila slug kebetulan bentrok.
- * ponytail: cek prisma global pra-tx cukup — kolom @unique + constraint DB
- * tetap penjaga akhir; naik ke in-tx builder bila setor makin konkuren.
- */
-async function nextSlugGlobal(
-  model: "taxPayment" | "journal",
-  base: string,
-): Promise<string> {
-  const d = (prisma as never as Record<string, unknown>)[model] as unknown as {
-    findFirst: (args: { where: Record<string, unknown>; select: { id: true } }) => Promise<{ id: number } | null>
-  } | undefined
-  if (!d || typeof d.findFirst !== "function") return slugify(base) || base
   return buildUniqueSlug(base, async (candidate) => (await d.findFirst({ where: { slug: candidate }, select: { id: true } })) !== null)
 }
 
@@ -90,6 +73,12 @@ function toMoney(value: number): Prisma.Decimal {
 
 function toRate(value: number): Prisma.Decimal {
   return new Prisma.Decimal(value.toFixed(2))
+}
+
+/** R8-PAJAK-08: fail-closed untuk jenis PPh nonaktif/soft-deleted. */
+function assertWithholdingTypeActive(type: { code: string; isActive?: boolean | null; deletedAt?: Date | null }) {
+  if (type.deletedAt != null) throw definitive(`Jenis PPh "${type.code}" sudah dihapus — tidak bisa dipakai`)
+  if (type.isActive === false) throw definitive(`Jenis PPh "${type.code}" nonaktif — tidak bisa dipakai`)
 }
 
 function assertArticle(article: string): WithholdingArticle {
@@ -158,7 +147,9 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         select: { id: true },
       })
       if (dupe) throw definitive(`Nomor bupot "${number}" sudah terbit`)
+      // R8-PAJAK-08: jenis nonaktif/terhapus tidak boleh melahirkan bupot.
       const type = await tx.withholdingTaxType.findUniqueOrThrow({ where: { id: input.withholdingTypeId } })
+      assertWithholdingTypeActive(type)
       const article = assertArticle(type.article ?? "")
       // F51-1/2/3/5/6 (vonis BOT 4 F-2026-10-22-051-V): bupot sewa
       // fail-closed terhadap KATALOG master. Katalog dibaca di sini dari
@@ -200,6 +191,16 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
       if (input.direction === "withheld_from_us" && type.receivableAccountId == null) {
         throw definitive(`Jenis PPh "${type.code}" belum punya akun PPh dibayar dimuka — lengkapi di Pengaturan → Pajak Potong`)
       }
+      // R8-PAJAK-03: fasilitas menurunkan potongan di sisi service (kontrak
+      // `computeWithheld` di tax/withholding-certificate.ts). SKB = dibebaskan,
+      // PP23 = final dibayar sendiri penerima penghasilan, DTP = ditanggung
+      // pemerintah — ketiganya berarti lawan TIDAK dipotong, jadi jumlah
+      // potong 0. Tarif snapshot tetap nominal master (ekspor membedakan
+      // lewat facility + facilityNumber; falsifikasi E114-7: SKB sah nol).
+      const facility = input.facility ?? null
+      if (facility !== null && !["SKB", "PP23", "DTP"].includes(facility)) {
+        throw definitive(`Fasilitas "${facility}" tidak dikenal (SKB|PP23|DTP)`)
+      }
       const computed = computeWithheld(input.dpp, tariff)
       const created = await tx.withholdingCertificate.create({
         data: {
@@ -216,8 +217,8 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
           objectName: rentResolution?.objectName ?? null,
           rentObjectEvidence: rentResolution?.rentObjectEvidence ?? null,
           dpp: toMoney(computed.dpp),
-          tariff: toRate(computed.tariff),
-          withheldAmount: toMoney(computed.withheldAmount),
+          tariff: toRate(tariff),
+          withheldAmount: toMoney(facility ? 0 : computed.withheldAmount),
           status: "issued",
           vendorBillId: input.vendorBillId ?? null,
           salesPaymentId: input.salesPaymentId ?? null,
@@ -304,7 +305,7 @@ export async function revokeWithholdingCertificate(input: RevokeWithholdingInput
       await tx.withholdingCertificate.update({ where: { id: cert.id }, data: { status: "revoked" } })
       // Hanya efek potongan yang dibalik; jurnal dokumen sumber utuh.
       const journalNo = await generateDocumentNumber("JRN")
-      const journalSlug = await nextSlugGlobal("journal", journalNo)
+      const journalSlug = await nextTxSlug(tx as never, "journal", journalNo)
       await tx.journal.create({
         data: {
           journalNumber: journalNo,
@@ -387,10 +388,12 @@ export async function settleWithholdingTax(input: SettleWithholdingInput): Promi
     const date = new Date(`${input.period}-01T00:00:00`)
     let createdId: number | undefined
     let isReplay = false
+    // R8-PAJAK-02: nomor dari generateDocumentNumber atomic (tak ikut
+    // rollback — nomor yatim aman, duplikat tidak); slug dicek di dalam tx
+    // lewat tx delegate. Cek prisma global lama tidak melihat baris
+    // tak-tercommit milik transaksi lain → slug sama → P2002 ambiguous.
     const documentNo = await generateDocumentNumber("PAJAK", "simple")
     const journalNo = await generateDocumentNumber("JRN")
-    const paymentSlug = await nextSlugGlobal("taxPayment", documentNo)
-    const journalSlug = await nextSlugGlobal("journal", journalNo)
     await prisma.$transaction(async (tx) => {
       const claim = await claimIdempotencyKey(tx as never, SCOPE_SETTLE, input.idempotencyKey, input.userId, fp)
       if (claim.replayed) {
@@ -399,7 +402,9 @@ export async function settleWithholdingTax(input: SettleWithholdingInput): Promi
         return
       }
       await assertPeriodOpen(date, tx as never)
+      // R8-PAJAK-08: setor untuk jenis nonaktif/terhapus juga ditolak.
       const type = await tx.withholdingTaxType.findUniqueOrThrow({ where: { id: input.withholdingTypeId } })
+      assertWithholdingTypeActive(type)
       // Akun utang fail-closed: input eksplisit else liabilityAccountId jenis.
       const taxAccountId = input.taxAccountId ?? type.liabilityAccountId
       if (taxAccountId == null) {
@@ -413,6 +418,8 @@ export async function settleWithholdingTax(input: SettleWithholdingInput): Promi
         select: { id: true },
       })
       if (accounts.length !== 2) throw definitive("Akun utang pajak / kas-bank tidak ditemukan")
+      const paymentSlug = await nextTxSlug(tx as never, "taxPayment", documentNo)
+      const journalSlug = await nextTxSlug(tx as never, "journal", journalNo)
       const payment = await tx.taxPayment.create({
         data: {
           slug: paymentSlug,

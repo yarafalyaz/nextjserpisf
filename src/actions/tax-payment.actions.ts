@@ -61,10 +61,16 @@ export async function createTaxPayment(formData: FormData): Promise<TaxPaymentAc
 
     const [accounts, taxType] = await Promise.all([
       prisma.account.findMany({ where: { id: { in: [taxAccountId, paymentAccountId] } }, select: { id: true } }),
-      taxTypeId ? prisma.withholdingTaxType.findUnique({ where: { id: taxTypeId }, select: { name: true } }) : Promise.resolve(null),
+      taxTypeId
+        ? prisma.withholdingTaxType.findUnique({ where: { id: taxTypeId }, select: { name: true, isActive: true, deletedAt: true } })
+        : Promise.resolve(null),
     ])
     if (accounts.length !== 2) return { success: false, error: "Akun yang dipilih tidak ditemukan." }
     if (taxTypeId && !taxType) return { success: false, error: "Jenis pemotongan tidak ditemukan." }
+    // R8-PAJAK-08: pembayaran pajak untuk jenis nonaktif/terhapus ditolak.
+    if (taxType && (taxType.deletedAt != null || taxType.isActive === false)) {
+      return { success: false, error: "Jenis pemotongan nonaktif atau sudah dihapus." }
+    }
 
     const label = taxType?.name ?? "pajak"
     const documentNo = await generateDocumentNumber("PAJAK", "simple")

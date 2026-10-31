@@ -33,8 +33,8 @@ const mocks = vi.hoisted(() => {
     },
     withholdingTaxType: { findUniqueOrThrow: typeFindUniqueOrThrow, findMany: typeFindMany },
     account: { findMany: accountFindMany },
-    taxPayment: { create: taxPaymentCreate, update: taxPaymentUpdate },
-    journal: { create: journalCreate },
+    taxPayment: { findFirst: vi.fn(async () => null), create: taxPaymentCreate, update: taxPaymentUpdate },
+    journal: { findFirst: vi.fn(async () => null), create: journalCreate },
     systemSetting: { findFirst: systemSettingFindFirst },
     $queryRaw: queryRaw,
   }
@@ -141,6 +141,80 @@ describe("issueWithholdingCertificate guards", () => {
     expect(r.success).toBe(false)
     expect(String(r.error)).toMatch(/Hutang PPh/)
     expect(mocks.certCreate).not.toHaveBeenCalled()
+  })
+
+  it("R8-PAJAK-03: fasilitas SKB/PP23/DTP → potong 0, tarif snapshot tetap nominal", async () => {
+    for (const facility of ["SKB", "PP23", "DTP"] as const) {
+      vi.clearAllMocks()
+      mocks.claimIdempotencyKey.mockResolvedValue({ replayed: false })
+      mocks.bindIdempotencyKey.mockResolvedValue(undefined)
+      mocks.assertPeriodOpen.mockResolvedValue(undefined)
+      mocks.queryRaw.mockResolvedValue([{ id: 1 }])
+      mocks.certFindFirst.mockResolvedValue(null)
+      mocks.typeFindUniqueOrThrow.mockResolvedValue({
+        id: 3, code: "PPh23-JASA", article: "PPh23", objectCode: "24-104-01",
+        rate: 2, liabilityAccountId: 501, receivableAccountId: 502,
+      })
+      mocks.certCreate.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+        Promise.resolve({ id: 5, ...data }),
+      )
+      const r = await issueWithholdingCertificate({
+        direction: "we_withhold", certificateNumber: `BP-${facility}`,
+        withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Maklon",
+        withholdingTypeId: 3, dpp: 100_000_000, facility, facilityNumber: "SKB-1",
+        idempotencyKey: key(),
+      })
+      expect(r.success).toBe(true)
+      const data = mocks.certCreate.mock.calls[0][0].data
+      expect(Number(data.withheldAmount)).toBe(0)
+      expect(Number(data.tariff)).toBe(2)
+      expect(data.facility).toBe(facility)
+    }
+  })
+
+  it("R8-PAJAK-03: fasilitas tak dikenal ditolak definitif", async () => {
+    const r = await issueWithholdingCertificate({
+      direction: "we_withhold", certificateNumber: "BP-X",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Maklon",
+      withholdingTypeId: 3, dpp: 10_000_000,
+      facility: "XYZ" as never, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/tidak dikenal/)
+    expect(mocks.certCreate).not.toHaveBeenCalled()
+  })
+
+  it("R8-PAJAK-08: jenis nonaktif/terhapus ditolak terbit", async () => {
+    for (const patch of [{ isActive: false }, { deletedAt: new Date() }]) {
+      mocks.typeFindUniqueOrThrow.mockResolvedValue({
+        id: 3, code: "PPh23-JASA", article: "PPh23", objectCode: "24-104-01",
+        rate: 2, liabilityAccountId: 501, receivableAccountId: 502,
+        isActive: true, deletedAt: null, ...patch,
+      })
+      const r = await issueWithholdingCertificate({
+        direction: "we_withhold", certificateNumber: "BP-NA",
+        withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Maklon",
+        withholdingTypeId: 3, dpp: 10_000_000, idempotencyKey: key(),
+      })
+      expect(r.success).toBe(false)
+      expect(String(r.error)).toMatch(/nonaktif|sudah dihapus/)
+    }
+    expect(mocks.certCreate).not.toHaveBeenCalled()
+  })
+
+  it("R8-PAJAK-08: jenis nonaktif ditolak settle", async () => {
+    mocks.typeFindUniqueOrThrow.mockResolvedValue({
+      id: 3, code: "PPh23-JASA", article: "PPh23", objectCode: "24-104-01",
+      rate: 2, liabilityAccountId: 501, receivableAccountId: 502,
+      isActive: false, deletedAt: null,
+    })
+    const r = await settleWithholdingTax({
+      withholdingTypeId: 3, period: "2026-01", paymentAccountId: 102,
+      amount: 200_000, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/nonaktif/)
+    expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
   })
 
   it("duplikat nomor bupot ditolak definitif", async () => {

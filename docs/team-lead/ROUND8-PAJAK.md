@@ -32,11 +32,26 @@ bentrok `@@unique([direction, taxInvoiceNumber])`
 Prisma tidak menangkap constraint DB nyata.
 
 ### R8-PAJAK-02 — HIGH, CONFIRMED — Race slug/nomor di settle bupot
+**Status: SELESAI 2026-10-31.** Nomor dari `generateDocumentNumber`
+sendiri atomic (upsert counter, tidak ikut rollback); celah nyata =
+slug dibangun dari cek prisma global di luar tx yang tidak melihat
+baris tak-tercommit transaksi lain. Slug TaxPayment + Journal kini
+dicek di dalam tx lewat tx delegate (`nextTxSlug` diperluas;
+`nextSlugGlobal` dihapus, revoke ikut dibenahi). Regression: suite
+settle existing hijau dengan mock tx `findFirst`.
 `settleWithholdingTax`: `generateDocumentNumber("PAJAK")` +
 `nextSlugGlobal` di LUAR tx (`withholding-certificate.service.ts:390-393,434-453`)
 → race slug/nomor konkuren → P2002 ditelan menjadi `ambiguous`.
 
 ### R8-PAJAK-03 — HIGH, CONFIRMED — Tarif fasilitas tidak menurunkan potongan
+**Status: SELESAI 2026-10-31.** Kontrak `computeWithheld` menyebut
+fasilitas diturunkan di sisi service — kini `issueWithholdingCertificate`
+menulis `withheldAmount = 0` bila `facility` SKB/PP23/DTP (SKB dibebaskan,
+PP23 final dibayar sendiri, DTP ditanggung pemerintah — lawan tidak
+dipotong), tarif snapshot tetap nominal master supaya ekspor
+membedakan lewat facility+facilityNumber (falsifikasi E114-7: SKB
+sah nol). Facility tak dikenal ditolak definitif. Regression: test
+parameter tiga fasilitas + test fasilitas tak dikenal.
 Bupot fasilitas SKB/PP23/DTP: `facility` hanya snapshot
 (`withholding-certificate.service.ts:195,203-225`);
 `withheldAmount = DPP × tarif penuh`. Vendor SKB tarif efektif 0%
@@ -78,6 +93,12 @@ bupot dari vendor bill yang dibatalkan/di-void tetap dihitung;
 aktif (bandingkan `reverseSalesPayment` sales yang menolak).
 
 ### R8-PAJAK-08 — MEDIUM, CONFIRMED — Terbit bupot untuk jenis PPh nonaktif
+**Status: SELESAI 2026-10-31.** `assertWithholdingTypeActive` di
+jalur terbit + settle bupot; `createTaxPayment` menolak jenis
+nonaktif/terhapus dari lookup-nya. Revoke sengaja TIDAK digerbang
+(bupot lama harus tetap bisa dibatalkan walau jenisnya sudah mati).
+Regression: test terbit nonaktif/deleted + settle nonaktif; suite
+tax-payment existing hijau.
 `issueWithholdingCertificate`: jenis PPh nonaktif/terhapus tetap bisa
 diterbit (`findUniqueOrThrow` tanpa `isActive/deletedAt`,
 `withholding-certificate.service.ts:161`; juga revoke `:279`,
