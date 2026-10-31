@@ -194,6 +194,13 @@ jobs:
   db-integration:
     name: DB Integration Tests
     runs-on: ubuntu-latest
+    # Output vitest WAJIB polos: gate anti-skip di bawah grep ringkasan
+    # "Tests  N passed" dari file .log. Runner menyuntik FORCE_COLOR,
+    # kode ANSI di antara "Tests" dan angka membuat regex ketat tak
+    # pernah cocok walau tes lulus (kegagalan warranty-unique
+    # 2026-10-31: tes ✓ tapi gate merah). NO_COLOR menonaktifkan warna.
+    env:
+      NO_COLOR: "1"
     needs: [changes, lint]
     if: ${{ !cancelled() && needs.lint.result == 'success' && needs.changes.outputs.code == 'true' }}
     services:
@@ -398,7 +405,7 @@ jobs:
             echo "::error::warranty-unique.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
             exit 1
           fi
-          if ! grep -Eq 'Tests[[:space:]]+1 passed \(1\)' warranty-unique.log; then
+          if ! grep -Eq 'Tests.*1 passed \(1\)' warranty-unique.log; then
             echo "::error::warranty-unique.integration.test.ts tidak melaporkan 1 tes lulus (skip hampa?) — jumlah tes berubah? sesuaikan angka ini."
             exit 1
           fi
@@ -418,7 +425,7 @@ jobs:
             echo "::error::asset-journal-integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
             exit 1
           fi
-          if ! grep -Eq 'Tests[[:space:]]+1 passed \(1\)' asset-journal-integration.log; then
+          if ! grep -Eq 'Tests.*1 passed \(1\)' asset-journal-integration.log; then
             echo "::error::asset-journal-integration.test.ts tidak melaporkan 1 tes lulus (skip hampa?) — jumlah tes berubah? sesuaikan angka ini."
             exit 1
           fi
@@ -438,7 +445,7 @@ jobs:
             echo "::error::sales-payment-withholding-integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
             exit 1
           fi
-          if ! grep -Eq 'Tests[[:space:]]+1 passed \(1\)' sales-payment-withholding-integration.log; then
+          if ! grep -Eq 'Tests.*1 passed \(1\)' sales-payment-withholding-integration.log; then
             echo "::error::sales-payment-withholding-integration.test.ts tidak melaporkan 1 tes lulus (skip hampa?) — jumlah tes berubah? sesuaikan angka ini."
             exit 1
           fi
@@ -462,7 +469,7 @@ jobs:
             echo "::error::db-concurrency.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
             exit 1
           fi
-          if ! grep -Eq 'Tests[[:space:]]+[0-9]+ passed' db-concurrency.log; then
+          if ! grep -Eq 'Tests.*[0-9]+ passed' db-concurrency.log; then
             echo "::error::db-concurrency.integration.test.ts tidak melaporkan tes lulus."
             exit 1
           fi
