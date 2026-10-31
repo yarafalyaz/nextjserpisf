@@ -3691,6 +3691,11 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
     // must EXCLUDE this return's own id because its existing rows are about
     // to be deleted/replaced below (counting them would double-count).
     const purchaseReturn = await prisma.$transaction(async (tx) => {
+      // Kunci baris retur dulu, baru baca ulang status: hook proses retur
+      // mengunci purchase_returns lalu commit "returned"; tanpa kunci ini,
+      // recheck di bawah bisa menang tepat sebelum proses commit dan edit
+      // menimpa baris retur yang sudah terproses (StokMove/jurnal sudah ada).
+      await tx.$executeRaw`SELECT id FROM purchase_returns WHERE id = ${id} FOR UPDATE`;
       const latestPr = await tx.purchaseReturn.findUnique({
         where: { id },
         select: { status: true },

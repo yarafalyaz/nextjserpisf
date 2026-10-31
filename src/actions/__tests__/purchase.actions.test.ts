@@ -1583,6 +1583,36 @@ describe("Purchase Return Actions", () => {
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_purchase_returns")
   })
 
+  it("updatePurchaseReturn mengunci baris retur SEBELUM baca ulang status di dalam tx", async () => {
+    const res = await actions.updatePurchaseReturn(1, fdMap({
+      purchaseOrderId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 3 }])
+    }))
+    expect(res?.success).toBe(true)
+    const rawCalls = mocks.prismaMock.$executeRaw.mock.calls
+    const lockIdx = rawCalls.findIndex((call: unknown[]) => {
+      const first = call[0] as unknown
+      const sql = Array.isArray(first) ? (first as string[]).join("") : String((first as { strings?: string[] } | undefined)?.strings?.join("") ?? first)
+      return sql.includes("purchase_returns") && sql.includes("FOR UPDATE")
+    })
+    expect(lockIdx).toBeGreaterThanOrEqual(0)
+    const findIdx = mocks.prismaMock.purchaseReturn.findUnique.mock.invocationCallOrder[0]
+    expect(mocks.prismaMock.$executeRaw.mock.invocationCallOrder[lockIdx]).toBeLessThan(findIdx)
+  })
+
+  it("updatePurchaseReturn menolak retur yang sudah returned saat baca ulang dalam tx", async () => {
+    mocks.prismaMock.purchaseReturn.findUnique.mockResolvedValue({ status: "returned" })
+    const res = await actions.updatePurchaseReturn(1, fdMap({
+      purchaseOrderId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 3 }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Hanya retur draft yang dapat diedit")
+    expect(mocks.prismaMock.purchaseReturnItem.deleteMany).not.toHaveBeenCalled()
+  })
+
   it("processPurchaseReturn succeeds", async () => {
     mockDraftReturn()
     mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([])
