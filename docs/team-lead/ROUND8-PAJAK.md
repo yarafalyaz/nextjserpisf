@@ -105,6 +105,12 @@ diterbit (`findUniqueOrThrow` tanpa `isActive/deletedAt`,
 settle `:402`, `createTaxPayment` `tax-payment.actions.ts:64,67`).
 
 ### R8-PAJAK-09 — MEDIUM, CONFIRMED — Race slug pra-tx pembayaran pajak
+**Status: SELESAI 2026-10-31.** `nextSlugWithClient(client, ...)`
+ditambahkan di `slug-db.ts` (delegate dari client yang diberikan);
+`createTaxPayment` memakainya dengan tx untuk slug TaxPayment +
+Journal. Nomor dokumen/sequence sudah atomic. Mock factory slug
+diperbarui menambah ekspor baru (bukan gerbang dilonggarkan).
+Regression: `slug-db.test.ts` baru + suite tax-payment existing.
 `createTaxPayment`: slug global pra-tx race
 (`tax-payment.actions.ts:70-72,90,111`); nomor urut atomik sehingga
 dampak lebih rendah dari R8-PAJAK-02.

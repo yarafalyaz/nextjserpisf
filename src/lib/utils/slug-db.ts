@@ -137,10 +137,26 @@ export async function nextSlug(
   base: string | null | undefined,
   options: NextSlugOptions = {},
 ): Promise<string | null> {
+  return nextSlugWithClient(prisma as never, model, base, options)
+}
+
+/**
+ * Varian dalam-transaksi: cek tabrakan lewat delegate tx pemanggil.
+ * `nextSlug` membaca prisma global, yang tidak melihat baris tak-tercommit
+ * milik transaksi lain — dua create bersamaan bisa memilih slug sama lalu
+ * salah satunya P2002 (R8-PAJAK-02/09). Pakai ini di dalam `$transaction`
+ * untuk model yang kolom slug-nya unik.
+ */
+export async function nextSlugWithClient(
+  client: Record<string, unknown>,
+  model: SluggedModel,
+  base: string | null | undefined,
+  options: NextSlugOptions = {},
+): Promise<string | null> {
   const delegate = SLUGGED_MODELS[model]
   if (!delegate) return null
 
-  const d = prisma[delegate as keyof typeof prisma] as unknown as {
+  const d = client[delegate] as unknown as {
     findFirst: (args: {
       where: Record<string, unknown>
       select: { id: true }

@@ -11,7 +11,7 @@ import { DocumentSequenceService } from "@/lib/services/document-sequence.servic
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
-import { nextSlug } from "@/lib/utils/slug-db"
+import { nextSlugWithClient } from "@/lib/utils/slug-db"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { checkIdempotency } from "@/lib/utils/idempotency"
@@ -93,7 +93,9 @@ export async function createTaxPayment(formData: FormData): Promise<TaxPaymentAc
 
       const payment = await tx.taxPayment.create({
         data: {
-          slug: await nextSlug("taxPayment", documentNo),
+          // R8-PAJAK-09: slug dicek lewat tx (nextSlug global tidak melihat
+          // baris tak-tercommit transaksi lain → race slug konkuren).
+          slug: await nextSlugWithClient(tx as never, "taxPayment", documentNo),
           documentNo,
           date,
           period: rawPeriod || null,
@@ -114,7 +116,7 @@ export async function createTaxPayment(formData: FormData): Promise<TaxPaymentAc
       const journal = await tx.journal.create({
         data: {
           journalNumber,
-          slug: await nextSlug("journal", journalNumber),
+          slug: await nextSlugWithClient(tx as never, "journal", journalNumber),
           transactionDate: date,
           description: notes ?? `Penyetoran ${label} ${documentNo}`,
           type: "TAX_PAYMENT",

@@ -15,8 +15,14 @@ export const revalidateFactory = (m: AnyMocks) => ({ revalidatePath: (...a: unkn
 export const docNumberFactory = (m: AnyMocks) => ({ generateDocumentNumber: (...a: unknown[]) => m.generateDocumentNumber(...a) })
 export const periodLockFactory = (m: AnyMocks) => ({ assertPeriodOpen: (...a: unknown[]) => m.assertPeriodOpen(...a) })
 export const docSequenceFactory = () => ({ DocumentSequenceService: { nextBatch: () => Promise.resolve([1]) } })
-export const slugFixedFactory = () => ({ nextSlug: () => Promise.resolve("slug-x") })
-export const slugMockFactory = (m: AnyMocks) => ({ nextSlug: (...a: unknown[]) => m.nextSlug(...a) })
+export const slugFixedFactory = () => ({
+  nextSlug: () => Promise.resolve("slug-x"),
+  nextSlugWithClient: () => Promise.resolve("slug-x"),
+})
+export const slugMockFactory = (m: AnyMocks) => ({
+  nextSlug: (...a: unknown[]) => m.nextSlug(...a),
+  nextSlugWithClient: (...a: unknown[]) => m.nextSlug(...a),
+})
 export const prismaFactory = (m: AnyMocks, key = "prisma") => ({ prisma: m[key] })
 
 export function formFormData(entries: Record<string, string>): FormData {
