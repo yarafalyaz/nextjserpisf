@@ -2630,8 +2630,35 @@ export async function deletePurchaseOrder(id: number) {
     }
 
     await prisma.$transaction(async (tx) => {
+      // Kunci baris PO lalu nilai ulang SEMUA guard dari bacaan segar:
+      // snapshot luar tx bisa basi (GR terverifikasi / bill lahir dari
+      // penulis lain di jendela baca→hapus) dan guard luar tidak menutupnya.
+      await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${id} FOR UPDATE`;
+      const lockedPo = await tx.purchaseOrder.findUniqueOrThrow({
+        where: { id },
+        include: { goodsReceipts: true },
+      });
+      if (lockedPo.status !== "draft") {
+        throw new Error(
+          "Hanya PO draft yang dapat dihapus. PO yang sudah diproses dibatalkan lewat tombol batal, bukan dihapus.",
+        );
+      }
+      if (lockedPo.goodsReceipts.some((gr) => gr.status !== "draft")) {
+        throw new Error(
+          "PO tidak dapat dihapus karena memiliki penerimaan barang yang sudah terverifikasi. Penerimaan terverifikasi tidak dapat dihapus; selesaikan lewat retur pembelian.",
+        );
+      }
+      const lockedActiveBills = await tx.vendorBill.count({
+        where: { purchaseOrderId: id, status: { notIn: ["cancelled"] } },
+      });
+      if (lockedActiveBills > 0) {
+        throw new Error(
+          "PO tidak dapat dihapus karena masih memiliki tagihan vendor aktif. Batalkan/void tagihan terlebih dahulu.",
+        );
+      }
+
       // 1. Delete all related GoodsReceipts and reverse their stock moves
-      const allGrIds = po.goodsReceipts.map((gr) => gr.id);
+      const allGrIds = lockedPo.goodsReceipts.map((gr) => gr.id);
       const allStockMoves = await tx.stockMove.findMany({
         where: {
           referenceType: "GoodsReceipt",
@@ -2665,7 +2692,7 @@ export async function deletePurchaseOrder(id: number) {
         }
       }
 
-      for (const gr of po.goodsReceipts) {
+      for (const gr of lockedPo.goodsReceipts) {
         const stockMoves = stockMovesByGrId.get(gr.id) || [];
 
         if (stockMoves.length > 0) {
@@ -2710,9 +2737,9 @@ export async function deletePurchaseOrder(id: number) {
       }
 
       // 2. Revert PurchaseRequest status back to 'approved' if linked
-      if (po.purchaseRequestId) {
+      if (lockedPo.purchaseRequestId) {
         await tx.purchaseRequest.update({
-          where: { id: po.purchaseRequestId },
+          where: { id: lockedPo.purchaseRequestId },
           data: { status: "approved" },
         });
       }
