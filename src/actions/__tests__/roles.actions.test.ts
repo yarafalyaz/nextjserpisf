@@ -15,9 +15,11 @@ vi.mock("@/lib/auth/permissions", () => ({
 const roleDeleteMock = vi.fn()
 const roleFindUniqueMock = vi.fn()
 const approvalWorkflowStepCountMock = vi.fn()
+const executeRawMock = vi.fn()
+const transactionMock = vi.fn()
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const prismaMock: Record<string, unknown> = {
     role: {
       create: (...a: unknown[]) => roleCreateMock(...a),
       update: (...a: unknown[]) => roleUpdateMock(...a),
@@ -31,8 +33,11 @@ vi.mock("@/lib/db/prisma", () => ({
     approvalWorkflowStep: {
       count: (...a: unknown[]) => approvalWorkflowStepCountMock(...a),
     },
-  },
-}))
+    $executeRaw: (...a: unknown[]) => executeRawMock(...a),
+  }
+  prismaMock.$transaction = (...a: unknown[]) => transactionMock(...a)
+  return { prisma: prismaMock }
+})
 vi.mock("next/cache", () => ({
   revalidatePath: (...a: unknown[]) => revalidateMock(...a),
 }))
@@ -72,7 +77,13 @@ beforeEach(() => {
     requirePermissionMock, revalidateMock, redirectMock, logActivityMock,
     roleCreateMock, roleUpdateMock, permissionFindManyMock,
     roleDeleteMock, roleFindUniqueMock, approvalWorkflowStepCountMock,
+    executeRawMock, transactionMock,
   ]) m.mockReset()
+  executeRawMock.mockResolvedValue(1)
+  transactionMock.mockImplementation(async (fn: (tx: unknown) => unknown) => {
+    const { prisma } = await import("@/lib/db/prisma")
+    return fn(prisma)
+  })
   approvalWorkflowStepCountMock.mockResolvedValue(0)
   roleCreateMock.mockResolvedValue({ id: 1 })
   roleUpdateMock.mockResolvedValue({ id: 1 })
@@ -269,6 +280,25 @@ describe("deleteRole", () => {
     approvalWorkflowStepCountMock.mockResolvedValue(2)
     await expect(deleteRole(1)).rejects.toThrow(/langkah persetujuan/)
     expect(approvalWorkflowStepCountMock).toHaveBeenCalledWith({ where: { roleId: 1 } })
+    expect(roleDeleteMock).not.toHaveBeenCalled()
+  })
+
+  it("mengunci baris role sebelum menghitung ulang langkah workflow", async () => {
+    roleFindUniqueMock
+      .mockResolvedValueOnce({ id: 1, name: "Staff", users: [] })
+      .mockResolvedValueOnce({ id: 1, name: "Staff", users: [] })
+    approvalWorkflowStepCountMock.mockResolvedValue(1)
+
+    await expect(deleteRole(1)).rejects.toThrow(/langkah persetujuan/)
+
+    expect(executeRawMock).toHaveBeenCalledTimes(1)
+    const first = executeRawMock.mock.calls[0][0]
+    const sql = Array.isArray(first) ? first.join("?") : ((first as any)?.strings?.join("?") ?? String(first ?? ""))
+    expect(sql).toMatch(/roles/i)
+    expect(sql).toMatch(/for update/i)
+    expect(executeRawMock.mock.invocationCallOrder[0]).toBeLessThan(
+      approvalWorkflowStepCountMock.mock.invocationCallOrder[0],
+    )
     expect(roleDeleteMock).not.toHaveBeenCalled()
   })
 

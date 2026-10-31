@@ -149,32 +149,43 @@ export async function deleteRole(id: number) {
   try {
   await requirePermission("manage_roles")
 
-  const role = await prisma.role.findUnique({
+  const snapshot = await prisma.role.findUnique({
     where: { id },
-    include: { users: true },
+    select: { name: true },
   })
 
-  if (!role) throw new Error("Role tidak ditemukan")
+  if (!snapshot) throw new Error("Role tidak ditemukan")
 
   // Protect the built-in super_admin role: must never be deleted.
-  if (role.name === "super_admin") {
+  if (snapshot.name === "super_admin") {
     throw new Error("Peran super_admin adalah peran sistem dan tidak dapat dihapus")
-  }
-
-  if (role.users.length > 0) {
-    throw new Error(`Role "${role.name}" masih digunakan oleh ${role.users.length} user. Hapus assignment terlebih dahulu.`)
   }
 
   // ApprovalWorkflowStep.roleId bare Int, no FK/relation to Role — raw delete
   // leaves dangling approver. assertStepApprover then finds no role, throws
   // "bukan approver" for everyone: pending approvals at that step deadlock
-  // permanently (only super_admin bypass). Refuse while steps reference it.
-  const usedBySteps = await prisma.approvalWorkflowStep.count({ where: { roleId: id } })
-  if (usedBySteps > 0) {
-    throw new Error(`Role "${role.name}" masih digunakan oleh ${usedBySteps} langkah persetujuan. Ubah approver langkah tersebut terlebih dahulu.`)
-  }
-
-  await prisma.role.delete({ where: { id } })
+  // permanently (only super_admin bypass). Penulis langkah workflow memakai
+  // kunci baris role yang sama; guard + delete wajib dinilai ulang di bawah
+  // kunci itu, bukan dari snapshot.
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT id FROM roles WHERE id = ${id} FOR UPDATE`
+    const role = await tx.role.findUnique({
+      where: { id },
+      include: { users: true },
+    })
+    if (!role) throw new Error("Role tidak ditemukan")
+    if (role.name === "super_admin") {
+      throw new Error("Peran super_admin adalah peran sistem dan tidak dapat dihapus")
+    }
+    if (role.users.length > 0) {
+      throw new Error(`Role "${role.name}" masih digunakan oleh ${role.users.length} user. Hapus assignment terlebih dahulu.`)
+    }
+    const usedBySteps = await tx.approvalWorkflowStep.count({ where: { roleId: id } })
+    if (usedBySteps > 0) {
+      throw new Error(`Role "${role.name}" masih digunakan oleh ${usedBySteps} langkah persetujuan. Ubah approver langkah tersebut terlebih dahulu.`)
+    }
+    await tx.role.delete({ where: { id } })
+  })
 
   revalidatePath("/pengaturan/peran")
   await logActivity("delete", "Role", id, "Menghapus peran")

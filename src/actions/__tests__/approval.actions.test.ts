@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => {
       if (typeof ops === "function") return ops(prismaMock);
       return Promise.all(ops);
     }),
+    $executeRaw: vi.fn().mockResolvedValue(1),
     $queryRaw: vi.fn().mockResolvedValue([]),
   };
 
@@ -237,6 +238,25 @@ describe("Approval Progression Actions", () => {
 });
 
 describe("Approval Workflow CRUD", () => {
+  it("createApprovalWorkflow mengunci role approver sebelum membuat langkah", async () => {
+    const events: string[] = []
+    mocks.prismaMock.$executeRaw.mockImplementation((...a: any[]) => {
+      const first = a[0]
+      const sql = Array.isArray(first) ? first.join("?") : ((first as any)?.strings?.join("?") ?? String(first ?? ""))
+      if (/roles/i.test(sql) && /for update/i.test(sql)) events.push("lock-role")
+      return Promise.resolve(1)
+    })
+    mocks.prismaMock.approvalWorkflow.create.mockImplementation(async () => {
+      events.push("create-workflow")
+      return { id: 1 }
+    })
+
+    const res = await actions.createApprovalWorkflow(wfFd([{ name: "Step1", roleId: 9 }]))
+
+    expect(res?.success).toBe(true)
+    expect(events).toEqual(["lock-role", "create-workflow"])
+  });
+
   it("createApprovalWorkflow succeeds", async () => {
     const res = await actions.createApprovalWorkflow(wfFd([{ name: "Step1", roleId: 1 }]));
     expect(res?.success).toBe(true);

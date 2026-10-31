@@ -76,6 +76,19 @@ async function logMoneyGateChange(
   );
 }
 
+/**
+ * ApprovalWorkflowStep.roleId tidak punya FK ke Role. Semua penulis langkah
+ * dan penghapus role wajib berbagi kunci baris role yang direferensikan;
+ * tanpa itu deleteRole dapat commit di antara guard dan pembuatan langkah,
+ * meninggalkan approver yatim yang mengunci approval selamanya.
+ */
+async function lockReferencedRoles(tx: any, roleIds: number[]): Promise<void> {
+  const ids = [...new Set(roleIds.filter((id) => Number.isInteger(id) && id > 0))].sort((a, b) => a - b);
+  for (const roleId of ids) {
+    await tx.$executeRaw`SELECT id FROM roles WHERE id = ${roleId} FOR UPDATE`;
+  }
+}
+
 const HR_REFERENCE_TYPES = new Set(["Payroll", "EmployeeLoan", "LeaveRequest", "OvertimeRequest"]);
 const HR_REFERENCE_MODELS: Record<string, string> = {
   Payroll: "payroll",
@@ -696,23 +709,30 @@ export async function createApprovalWorkflow(formData: FormData) {
       };
     }
 
-    const wf = await prisma.approvalWorkflow.create({
-      data: {
-        name,
-        slug: await nextSlug("approvalWorkflow", name),
-        modelType,
-        code: code || null,
-        isActive: isActive !== false,
-        steps: {
-          create: steps.map((s, i) => ({
-            stepOrder: i + 1,
-            name: s.name || `Langkah ${i + 1}`,
-            roleId: s.roleId ? Number(s.roleId) : null,
-            userId: s.userId ? Number(s.userId) : null,
-            approverType: s.approverType || null,
-          })),
+    const slug = await nextSlug("approvalWorkflow", name);
+    const wf = await prisma.$transaction(async (tx) => {
+      await lockReferencedRoles(
+        tx,
+        steps.map((s) => Number(s.roleId)),
+      );
+      return tx.approvalWorkflow.create({
+        data: {
+          name,
+          slug,
+          modelType,
+          code: code || null,
+          isActive: isActive !== false,
+          steps: {
+            create: steps.map((s, i) => ({
+              stepOrder: i + 1,
+              name: s.name || `Langkah ${i + 1}`,
+              roleId: s.roleId ? Number(s.roleId) : null,
+              userId: s.userId ? Number(s.userId) : null,
+              approverType: s.approverType || null,
+            })),
+          },
         },
-      },
+      });
     });
 
     await logActivity(
@@ -753,6 +773,10 @@ export async function updateApprovalWorkflow(id: number, formData: FormData) {
     // between the guard and step replacement.
     const pendingApprovals = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM approval_workflows WHERE id = ${id} FOR UPDATE`;
+      await lockReferencedRoles(
+        tx,
+        steps.map((s) => Number(s.roleId)),
+      );
       const pendingCount = await tx.approval.count({
         where: { workflowId: id, status: "pending" },
       });
