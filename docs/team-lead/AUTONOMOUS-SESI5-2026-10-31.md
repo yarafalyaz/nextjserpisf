@@ -541,3 +541,17 @@ sepihak; diajukan sebagai keputusan user. Bila diputuskan: pola
 termurah adalah baris kunci satu-baris per tabel (preseden gerbang
 NPWP ce620cc1b) + scan ulang di dalam tx, tanpa migrasi unik yang
 bisa gagal di data legacy beda format.
+
+### Lanjutan putaran 9 (2026-11-01) — lane A purchase+inventory (agent read-only, verifikasi sesi utama)
+
+5 fix terbukti merah-hijau, 1 vonis gugur:
+
+1. `21614afc1` fix(pembelian): `reverseVendorPayment` mengunci baris `vendor_payments` lalu membaca `paidAmount`/`balanceDue` bill dari snapshot tanpa kunci dan menulis nilai absolut — `confirmVendorPayment` lawan mengunci set bill vendor, lost update dua arah (bill terbaca lunas/terutang salah, risiko vendor dibayar ulang). Fix: kunci `vendor_bills` terkena alokasi urut id sesudah alokasi dibaca, sebelum `findMany` ulang. 238/238.
+2. `46a586652` fix(pembelian): `confirmVendorBill` hanya mengunci baris PO bila bill punya PO; bill tanpa PO membaca ulang status/nominal dalam tx tanpa kunci sama sekali — `updateVendorBill` (mengunci baris bill) bisa commit edit nominal di antaranya, posting menulis status/`balanceDue`/jurnal dari `grandTotal` basi. Fix: kunci `vendor_bills FOR UPDATE` tanpa syarat sebagai pernyataan pertama tx. 224/224.
+3. `70dd4e224` fix(pembelian): `applyOpenVendorCreditsToBill` membaca `VendorCredit` open snapshot lalu menulis `allocatedAmount` absolut — dua confirm bill vendor sama memakai kredit yang sama dua kali (relief subledger Rp200 atas jurnal AP Rp100). Fix: kunci `vendor_credits` open milik vendor sebelum `findMany`; urutan global bill lalu kredit. 231/231.
+4. `ff86b029f` fix(inventaris): guard silang MI↔PO satu arah tanpa kunci bersama — `completeMaterialIssue` membaca agregat `productionOrderMaterial` lewat prisma global sesudah klaim; `issueMaterial` mengunci PO tanpa WO. Material WO sama bisa keluar dua jalur. Fix: guard tertaut-WO pindah ke dalam tx sesudah baris `work_orders` dikunci; `issueMaterial` mengunci WO sesudah PO (urutan global PO lalu WO). 213/213 + 130/130.
+5. `745ccdc26` fix(pembelian): `assertNoDuplicateL3` membaca `ActivityLog` dalam tx tanpa kunci WO — dua pembuat L3 konkuren (bill/expense) sama-sama tidak melihat log lawan: dua draft + dua jejak untuk satu biaya telat. Fix terpusat: `resolveL3WorkOrder` mengunci baris `work_orders` sesudah WO terverifikasi closed; semua pemanggil memanggil resolver dalam tx. 420/420.
+
+Vonis GUGUR: `deleteRack`/`deleteRackRow` cek-referensi-luar-tx lalu delete polos — kelas yang sama dengan delete-guard master 9 lokasi (gugur putaran 6): FK `Item.defaultRackId/defaultRackRowId` `onDelete: SetNull`, dampak maksimal lokasi default hilang tanpa efek stok/finansial; risiko diterima, jangan diangkat lagi tanpa bukti jahitan konkret baru.
+
+CI: head `019e53ea4`/`141ff1300`/`ff00ff537` SUCCESS; head putaran 9 (`21614afc1`..`745ccdc26`) dipantau interval 120 detik.
