@@ -93,6 +93,38 @@ Sesudah fix: 4 file 39/39; full suite 1119 file — 10898 passed /
   SQL manual sesudah gerbang consent user; drift 0 terbukti lewat
   scratch. Jangan `prisma migrate deploy` ke DB dev (P3005 bersih).
 
+## Lanjutan 2026-10-31 malam — CI GitHub + triase branch
+
+- Push pertama `9c8cc7504` membuat CI run `41219147237` merah 2 job.
+  Unit: 9 kegagalan di atas (sudah fix `e8d56645`). DB Integration:
+  vonis awal "8 suite ke-skip" SALAH — kesimpulan step API membuktikan
+  7 step success; baris `::error::...SKIPPED` di log mentah adalah echo
+  skrip runner. Kegagalan tunggal nyata: `warranty-unique` — tes lulus
+  (✓ 305ms) tapi gate `grep -Eq 'Tests[[:space:]]+1 passed (1)'` tak
+  cocok karena runner menyuntik `FORCE_COLOR`, kode ANSI memecah
+  ringkasan `Tests … 1 passed`. Tiga step sesudahnya ke-skip akibatnya.
+- Fix `46dc3adc9`: `NO_COLOR: "1"` di env job `db-integration` +
+  regex dilonggarkan `Tests.*N passed`. Reproduksi lokal lawan MySQL 8
+  scratch (`vc-ci-db`, migrate deploy + seed penuh): 12 suite DB
+  semua passed (bank 4, bulk-payroll 2, JCO 2, journal-ref 5,
+  petty-cash 1, stocktake 2, credit-gate 2, warranty 1, asset-journal 1,
+  withholding 1, db-concurrency 3, inventory 4), nol `skipped`;
+  `FORCE_COLOR=1` membuktikan regex lama NO-MATCH dan `NO_COLOR=1`
+  MATCH. Bukti akhir: run `41220737901` **semua job success**
+  (Detect, Lint, Unit, Build, DB Integration, Docker). Scratch dibuang.
+- Triase 3 branch lokal belum merge:
+  - `fix/residual-be` (6 commit), `fix/round2-guard` (1),
+    `fix/round2-perf` (7): **SUPERSEDED, jangan merge.** Isi produksi
+    sudah hidup di main lewat jalur lain — roster FK + `approvedBy`
+    (`20261029173955_roster_fk` ada di main), saldo komisi Decimal
+    sen-persis (`hrm.actions.ts:826`), groupBy neraca
+    (`statement-data.ts:77` `sumEntriesByAccount`), cache Intl
+    (`format.ts:8`). Semua file kunci versi main lebih baru
+    (30–31 Okt) dari branch (29 Okt); merge-tree konflik dan merge
+    akan me-regresikan main. Guard main saat ini hijau 167/167.
+    Branch hanya lokal (tak ada di remote); penghapusan menunggu
+    perintah eksplisit (destruktif).
+
 ## Bukti penutup
 
 - Unit: 10920 test — 10898 passed, 22 skipped, 0 failed.
