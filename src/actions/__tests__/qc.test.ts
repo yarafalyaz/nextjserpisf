@@ -80,6 +80,7 @@ vi.mock("@/lib/db/prisma", () => {
     deliveryOrder: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
   }
   prisma.$queryRaw = vi.fn().mockResolvedValue([{ id: 1 }])
+  prisma.$executeRaw = vi.fn().mockResolvedValue(1)
   prisma.$transaction = vi.fn((cb: unknown) =>
     typeof cb === "function" ? (cb as (tx: unknown) => unknown)(prisma) : Promise.all(cb as unknown[]),
   )
@@ -362,6 +363,36 @@ describe("deleteQcChecklist", () => {
 })
 
 describe("resolveNonconformance", () => {
+  it("biaya rework dipertahankan dari bacaan TERKUNCI dalam tx, bukan snapshot luar", async () => {
+    // Snapshot luar reworkCost 100; sesudah kunci NCR, baris sudah 250
+    // oleh resolve konkuren. Form tanpa reworkCost wajib mempertahankan
+    // 250 — bukan menimpa balik ke 100 dan mengoreksi delta dobel.
+    nonconformanceFindUniqueMock
+      .mockResolvedValueOnce({
+        id: 1, status: "rework", documentNo: "NCR-0007",
+        referenceType: "ProductionOrder", referenceId: 55,
+        reworkCost: 100, reworkHours: 1, resolution: null,
+      })
+      .mockResolvedValue({
+        id: 1, status: "rework_done", documentNo: "NCR-0007",
+        referenceType: "ProductionOrder", referenceId: 55,
+        reworkCost: 250, reworkHours: 2, resolution: "diperbaiki",
+      })
+    nonconformanceUpdateMock.mockResolvedValue({})
+    syncReworkCostMock.mockResolvedValue({ posted: 250, productionOrderId: 55 })
+
+    const res = await resolveNonconformance(1, fd({ status: "closed" }))
+
+    expect(res.success).toBe(true)
+    const arg = nonconformanceUpdateMock.mock.calls[0][0]
+    expect(arg.data.reworkCost).toBe(250)
+    expect(arg.data.reworkHours).toBe(2)
+    expect(syncReworkCostMock).toHaveBeenCalledWith(
+      expect.objectContaining({ reworkCost: 250, reworkHours: 2 }),
+      expect.anything(),
+    )
+  })
+
   it("refuses to update an already-closed NCR", async () => {
     nonconformanceFindUniqueMock.mockResolvedValue({ id: 1, status: "closed" })
 

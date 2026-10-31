@@ -422,23 +422,43 @@ export async function resolveNonconformance(id: number, formData: FormData) {
     // programmatic caller) would otherwise wipe a rework cost that was already
     // rolled into the production order's HPP — reversing it back out
     // (WIP credited / HPP understated) on every subsequent status change.
-    const storedCost = Number(existing.reworkCost)
-    const storedHours = Number(existing.reworkHours)
-    const reworkCost = formData.has("reworkCost")
-      ? v.reworkCost
-      : Number.isFinite(storedCost)
-        ? storedCost
-        : 0
-    const reworkHours = formData.has("reworkHours")
-      ? v.reworkHours
-      : Number.isFinite(storedHours)
-        ? storedHours
-        : 0
-    const resolution = formData.has("resolution")
-      ? (v.resolution ?? null)
-      : (existing.resolution ?? null)
-
+    // Nilai tersimpan dibaca ULANG sesudah kunci baris NCR di dalam tx:
+    // snapshot luar basi oleh resolve konkuren, dan syncReworkCostToOrder
+    // menghitung delta dari baris ProductionCost — menimpa NCR dengan
+    // nilai basi menerapkan delta basi yang sama ke HPP + jurnal WIP.
     const synced = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM nonconformances WHERE id = ${id} FOR UPDATE`
+      const locked = await tx.nonconformance.findUnique({
+        where: { id },
+        select: {
+          status: true,
+          documentNo: true,
+          referenceType: true,
+          referenceId: true,
+          reworkCost: true,
+          reworkHours: true,
+          resolution: true,
+        },
+      })
+      if (!locked) throw new Error("NCR tidak ditemukan")
+      if (locked.status === "closed") throw new Error("NCR sudah ditutup.")
+
+      const storedCost = Number(locked.reworkCost)
+      const storedHours = Number(locked.reworkHours)
+      const reworkCost = formData.has("reworkCost")
+        ? v.reworkCost
+        : Number.isFinite(storedCost)
+          ? storedCost
+          : 0
+      const reworkHours = formData.has("reworkHours")
+        ? v.reworkHours
+        : Number.isFinite(storedHours)
+          ? storedHours
+          : 0
+      const resolution = formData.has("resolution")
+        ? (v.resolution ?? null)
+        : (locked.resolution ?? null)
+
       await tx.nonconformance.update({
         where: { id },
         data: {
@@ -455,13 +475,13 @@ export async function resolveNonconformance(id: number, formData: FormData) {
       return syncReworkCostToOrder(
         {
           nonconformance: {
-            id: existing.id,
-            referenceType: existing.referenceType,
-            referenceId: existing.referenceId,
+            id,
+            referenceType: locked.referenceType,
+            referenceId: locked.referenceId,
           },
           reworkCost,
           reworkHours,
-          documentNo: existing.documentNo,
+          documentNo: locked.documentNo,
           createdBy: Number(user.id),
         },
         tx,
