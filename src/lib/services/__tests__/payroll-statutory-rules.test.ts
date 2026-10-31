@@ -10,17 +10,23 @@ import {
 // yang sama — tes ini mengunci perilaku loader + dependents.
 
 function dbWith(rows: { key: string; value: number; effectiveFrom: string; effectiveTo?: string }[]) {
-  // Mock meniru DB nyata: hanya baris efektif pada tanggal acuan.
+  // Mock meniru DB nyata dengan operator yang BENAR-BENAR dikirim query
+  // (gt vs gte pada effectiveTo), supaya semantik batas teruji, bukan
+  // di-hardcode di mock.
   return {
     payrollStatutoryRule: {
-      findMany: vi.fn().mockImplementation((args: { where: { effectiveFrom: { lte: Date }; OR: { effectiveTo: null }[] | { effectiveTo: { gt: Date } }[] } }) => {
+      findMany: vi.fn().mockImplementation((args: { where: { effectiveFrom: { lte: Date }; OR: Record<string, unknown>[] } }) => {
         const asOf = args.where.effectiveFrom.lte
+        const toCond = (args.where.OR[1] as { effectiveTo?: { gt?: Date; gte?: Date } }).effectiveTo ?? {}
         return Promise.resolve(
           rows
             .filter((r) => {
               const from = new Date(r.effectiveFrom)
               const to = r.effectiveTo ? new Date(r.effectiveTo) : null
-              return from <= asOf && (to == null || to > asOf)
+              if (from > asOf) return false
+              if (to == null) return true
+              if (toCond.gte) return to >= asOf
+              return to > asOf
             })
             .map((r) => ({
               key: r.key,
@@ -46,6 +52,19 @@ describe("getStatutoryParams (P1-6)", () => {
 
     const p2026 = await getStatutoryParams(db as never, new Date("2026-06-01"))
     expect(p2026.bpjsJpCeiling).toBe(12_000_000)
+  })
+
+  it("effectiveTo inklusif: hari terakhir masa plafon tetap memakai plafon masa itu", async () => {
+    // Bentuk persis seed: plafon 2025 berlaku 2025-03-01→2026-02-28,
+    // plafon 2026 mulai 2026-03-01. Slip akhir Feb 2026 wajib plafon 2025.
+    const db = dbWith([
+      { key: "bpjs_jp_ceiling", value: 10_547_400, effectiveFrom: "2025-03-01", effectiveTo: "2026-02-28" },
+      { key: "bpjs_jp_ceiling", value: 11_086_300, effectiveFrom: "2026-03-01" },
+    ])
+    const lastDay = await getStatutoryParams(db as never, new Date("2026-02-28T00:00:00Z"))
+    expect(lastDay.bpjsJpCeiling).toBe(10_547_400)
+    const nextDay = await getStatutoryParams(db as never, new Date("2026-03-01T00:00:00Z"))
+    expect(nextDay.bpjsJpCeiling).toBe(11_086_300)
   })
 
   it("honours effectiveTo (closed rule no longer applies)", async () => {

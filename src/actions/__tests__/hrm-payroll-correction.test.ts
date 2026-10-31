@@ -110,6 +110,17 @@ function txClient() {
     payrollComponentLine: {
       findMany: async ({ where }: any) => [...(componentLinesByPayroll.get(where?.payrollId) ?? [])],
       createMany: async ({ data }: any) => {
+        // Tegakkan commissionPayableId @unique persis DB: baris baru yang
+        // menaut payable yang masih tertaut baris lain = P2002. Tanpa ini
+        // urutan createMany-sebelum-lepas-tautan lolos test tapi rollback
+        // di produksi.
+        for (const l of data) {
+          if (l.commissionPayableId == null) continue
+          const held = [...componentLinesByPayroll.values()].some((rows) =>
+            rows.some((r: any) => r.commissionPayableId === l.commissionPayableId),
+          )
+          if (held) throw Object.assign(new Error("Unique constraint"), { code: "P2002" })
+        }
         for (const l of data) {
           const arr = componentLinesByPayroll.get(l.payrollId) ?? []
           arr.push({ ...l })

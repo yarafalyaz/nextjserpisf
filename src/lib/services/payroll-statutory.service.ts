@@ -117,7 +117,10 @@ type RuleDb = {
 
 /**
  * P1-6: ambil parameter statutori yang berlaku pada tanggal acuan.
- * Baris efektif = effectiveFrom <= asOf < effectiveTo (atau tanpa batas).
+ * Baris efektif = effectiveFrom <= asOf <= effectiveTo (atau tanpa batas):
+ * seed menulis effectiveTo INKLUSIF (plafon JP 2024: 2024-03-01→2025-02-28,
+ * baris berikutnya mulai 2025-03-01) — `gt` meninggalkan satu hari terakhir
+ * setiap masa tanpa plafon (jatuh ke fallback 2024).
  * Key tanpa baris efektif → fallback 2024 (dicatat di fromFallback).
  */
 export async function getStatutoryParams(db: RuleDb, asOf: Date = new Date()): Promise<StatutoryParams> {
@@ -128,7 +131,7 @@ export async function getStatutoryParams(db: RuleDb, asOf: Date = new Date()): P
       where: {
         key: { in: keys },
         effectiveFrom: { lte: asOf },
-        OR: [{ effectiveTo: null } as never, { effectiveTo: { gt: asOf } } as never],
+        OR: [{ effectiveTo: null } as never, { effectiveTo: { gte: asOf } } as never],
       },
       orderBy: { effectiveFrom: "desc" },
     })

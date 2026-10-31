@@ -3730,6 +3730,17 @@ export async function correctPaidPayroll(
           Number(l.commissionInvoiceId ?? 0),
         );
       }
+      // Tautan asal WAJIB dilepas SEBELUM klon tertaut dibuat:
+      // commissionPayableId @unique, createMany duluan = P2002 deterministik
+      // (koreksi slip paid berkomisi selalu rollback). Semua dalam tx ini —
+      // pembaca luar tidak pernah melihat keadaan setengah pindah.
+      for (const l of sourceLines) {
+        if (l.commissionPayableId == null) continue;
+        await tx.payrollComponentLine.update({
+          where: { id: l.id },
+          data: { commissionPayableId: null },
+        });
+      }
       if (sourceLines.length > 0) {
         await tx.payrollComponentLine.createMany({
           data: sourceLines.map((l) => ({
@@ -3750,16 +3761,6 @@ export async function correctPaidPayroll(
           })),
         });
       }
-      // Tautan asal dilepas sesudah klon tertaut (satu baris payable paling
-      // banyak satu baris slip kapan pun di luar tx pun terbaca konsisten).
-      for (const l of sourceLines) {
-        if (l.commissionPayableId == null) continue;
-        await tx.payrollComponentLine.update({
-          where: { id: l.id },
-          data: { commissionPayableId: null },
-        });
-      }
-
       // (4) Jurnal koreksi atas dokumen BARU (referenceId baru, bukan re-post
       // payrollId asal — 135-V §Interaksi T5/B3). Filter REVERSED di
       // onPayrollPaid membuka jalan re-post yang benar; jurnal asal yang kini
