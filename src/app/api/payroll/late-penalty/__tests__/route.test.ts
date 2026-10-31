@@ -94,6 +94,23 @@ describe("GET /api/payroll/late-penalty", () => {
     expect(res.status).toBe(400)
   })
 
+  it("meneruskan tanggal sebagai tengah malam UTC hari kalender WIB", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 1 } })
+    mocks.hasPermission.mockResolvedValue(true)
+    mocks.calculateLatePenalty.mockResolvedValue({ totalLateMinutes: 0, totalPenalty: 0, details: [] })
+
+    const res = await GET(new NextRequest("http://localhost/api/payroll/late-penalty?karyawanId=1&tanggalMulai=2026-01-01&tanggalSelesai=2026-01-31"))
+
+    expect(res.status).toBe(200)
+    // attendance.date tersimpan tengah malam UTC; tanggal lokal proses
+    // membuat batas eksklusif service memotong hari terakhir.
+    expect(mocks.calculateLatePenalty).toHaveBeenCalledWith(
+      1,
+      new Date("2026-01-01T00:00:00.000Z"),
+      new Date("2026-01-31T00:00:00.000Z"),
+    )
+  })
+
   it("returns 200 with penalty calculation", async () => {
     mocks.authFn.mockResolvedValue({ user: { id: 1 } })
     mocks.hasPermission.mockResolvedValue(true)

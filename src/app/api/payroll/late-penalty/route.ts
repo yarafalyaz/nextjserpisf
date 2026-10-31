@@ -4,6 +4,7 @@ import { hasPermission } from "@/lib/auth/permissions"
 import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope"
 import { apiError } from "@/lib/api-response"
 import { calculateLatePenalty } from "@/lib/services/late-penalty.service"
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 
 /**
  * GET /api/payroll/late-penalty?karyawanId=X&tanggalMulai=YYYY-MM-DD&tanggalSelesai=YYYY-MM-DD
@@ -48,11 +49,14 @@ export async function GET(request: NextRequest) {
 
     // Tanggal kalender ketat: `new Date("2026-02-31")` digulung JS ke 3 Mar,
     // jadi regex + cek komponen wajib (pola collection-followup-validation).
+    // Nilai sah wajib tengah malam UTC hari kalender WIB — attendance.date
+    // memakai konvensi itu; tengah malam lokal proses menggeser batas
+    // eksklusif service dan memotong hari terakhir rentang.
     const parseStrict = (s: string): Date | null => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null
       const [y, m, d] = s.split("-").map(Number)
-      const dt = new Date(y, m - 1, d)
-      return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d ? dt : null
+      const dt = wibDateToUtcMidnight(s)
+      return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d ? dt : null
     }
     const startDate = parseStrict(startDateStr)
     const endDate = parseStrict(endDateStr)
