@@ -1036,6 +1036,16 @@ describe("Sales Return Actions", () => {
     mocks.generateDocNumMock.mockResolvedValue("SR-001")
     // Faktur rujukan retur pada fixture ini berstatus posted (bisa diretur).
     mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "posted" })
+    // Bacaan qty terfaktur DALAM tx (cap over-return dari baris terkunci):
+    // default besar per barang supaya tes happy-path lama tetap di bawah cap
+    // (format qty terbesar yang dipakai tes = "2.000" -> 2000).
+    // mockReset membuang antrean Once basi antar tes; mockResolvedValue di
+    // setUp tes spesifik (STOK-01 dsb) tetap menimpa default ini.
+    mocks.prismaMock.salesInvoiceItem.findMany.mockReset()
+    mocks.prismaMock.salesInvoiceItem.findMany.mockResolvedValue([
+      { itemId: 1, qty: 100_000, unitPrice: 100, uom: null, batchAllocations: null },
+      { itemId: 2, qty: 100_000, unitPrice: 100, uom: null, batchAllocations: null },
+    ])
   })
 
   // === completeSalesReturn ===
@@ -1129,6 +1139,44 @@ describe("Sales Return Actions", () => {
     const res = await actions.createSalesReturn(fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("melebihi yang difakturkan")
+  })
+  it("createSalesReturn menghitung ulang qty terfaktur dari baris terkunci dalam tx", async () => {
+    // Ganti mock findOverReturn dgn implementasi nyata supaya cap benar-benar
+    // dievaluasi: bacaan luar melihat qty 10, baris terkunci (sesudah
+    // updateSalesInvoice konkuren) hanya 5 -> retur 8 WAJIB ditolak dari
+    // bacaan DALAM tx, bukan lolos dari peta basi luar. Implementasi disalin
+    // verbatim dari src/lib/sales/return-validation.ts:35 (impor langsung
+    // menabrak alias mock modul itu sendiri).
+    mocks.findOverReturnMock.mockImplementation((lines: { itemId: number; qty: number }[], invoiced: Map<number, number>, already: Map<number, number>) => {
+      const requestedByItem = new Map<number, number>()
+      for (const line of lines) requestedByItem.set(line.itemId, (requestedByItem.get(line.itemId) ?? 0) + Number(line.qty))
+      for (const [itemId, requested] of requestedByItem) {
+        const inv = invoiced.get(itemId)
+        if (inv === undefined) return { itemId, type: "not_on_invoice", requested, invoiced: 0, alreadyReturned: 0, remaining: 0 }
+        const done = already.get(itemId) ?? 0
+        if (done + requested > inv) return { itemId, type: "exceeds_invoiced", requested, invoiced: inv, alreadyReturned: done, remaining: inv - done }
+      }
+      return null
+    })
+    mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "posted" })
+    mocks.prismaMock.salesInvoiceItem.findMany
+      .mockResolvedValueOnce([{ itemId: 1, unitPrice: 100, qty: 10, uom: "pcs" }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ itemId: 1, qty: 5 }])
+    mocks.prismaMock.salesReturnItem.findMany.mockResolvedValue([])
+    const items = JSON.stringify([{ itemId: 1, qty: 8 }])
+    const res = await actions.createSalesReturn(fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("melebihi yang difakturkan")
+    expect(mocks.prismaMock.salesReturn.create).not.toHaveBeenCalled()
+    const lockSql = (mocks.prismaMock.$executeRaw.mock.calls as unknown[][])
+      .map((c) => {
+        const first = c[0] as { strings?: string[] } | unknown
+        if (Array.isArray(first)) return first.join("?")
+        return (first as { strings?: string[] })?.strings?.join("?") ?? ""
+      })
+      .join(" ")
+    expect(lockSql).toContain("sales_invoices")
   })
 
   // === updateSalesReturn ===

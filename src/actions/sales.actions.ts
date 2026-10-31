@@ -2499,9 +2499,30 @@ export async function createSalesReturn(formData: FormData) {
         alreadyReturnedByItem.set(r.itemId, (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty))
       }
 
+      // Qty terfaktur dibaca ULANG di bawah kunci: bacaan luar bisa basi oleh
+      // updateSalesInvoice konkuren yang memangkas baris faktur sesudah
+      // gerbang status, jadi cap tidak boleh diputuskan dari peta luar.
+      // Status faktur juga dicek ulang dari baris terkunci (void konkuren).
+      const freshInvoice = await tx.salesInvoice.findUnique({
+        where: { id: invoiceId },
+        select: { status: true },
+      })
+      if (!freshInvoice || !(RETURNABLE_INVOICE_STATUSES as readonly string[]).includes(freshInvoice.status)) {
+        throw new Error(`Faktur berstatus '${freshInvoice?.status ?? "tidak ditemukan"}' tidak bisa diretur`)
+      }
+      const freshInvItems = await tx.salesInvoiceItem.findMany({
+        where: { salesInvoiceId: invoiceId, itemId: { in: returnItemIds.length ? returnItemIds : [-1] } },
+        select: { itemId: true, qty: true },
+      })
+      const freshInvoicedQtyByItem = new Map<number, number>()
+      for (const it of freshInvItems) {
+        if (it.itemId == null) continue
+        freshInvoicedQtyByItem.set(it.itemId, (freshInvoicedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty))
+      }
+
       const violation = findOverReturn(
         validItems.map((it) => ({ itemId: it.itemId, qty: it.qty })),
-        invoicedQtyByItem,
+        freshInvoicedQtyByItem,
         alreadyReturnedByItem
       )
       if (violation) {
