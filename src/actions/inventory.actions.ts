@@ -2168,13 +2168,10 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
     const miItems = parseMaterialIssuePayloadItems(v.items);
 
     const issue = await prisma.$transaction(async (tx) => {
-      await tx.materialIssueItem.deleteMany({ where: { materialIssueId: id } });
-      // F-008: baris lahir ulang saat update draft -> snapshot beku ulang.
-      const snapshotByItem = await resolveMaterialIssueScrapSnapshots(
-        tx, miItems.map((it) => ({ itemId: Number(it.itemId) })), mi.workOrderId ?? v.workOrderId ?? null,
-      );
-
-      // Re-check status inside transaction (TOCTOU guard)
+      // Kunci baris dulu, BARU hapus item: recheck plain sesudah deleteMany
+      // membaca snapshot tx — completeMaterialIssue konkuren bisa commit
+      // antaranya dan item dirakit ulang di atas dokumen yang sudah selesai.
+      await tx.$executeRaw`SELECT id FROM material_issues WHERE id = ${id} FOR UPDATE`;
       const latest = await tx.materialIssue.findUnique({
         where: { id },
         select: { status: true },
@@ -2182,6 +2179,12 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
       if (latest && latest.status !== "draft") {
         throw new Error("Hanya material issue draft yang dapat diedit");
       }
+
+      await tx.materialIssueItem.deleteMany({ where: { materialIssueId: id } });
+      // F-008: baris lahir ulang saat update draft -> snapshot beku ulang.
+      const snapshotByItem = await resolveMaterialIssueScrapSnapshots(
+        tx, miItems.map((it) => ({ itemId: Number(it.itemId) })), mi.workOrderId ?? v.workOrderId ?? null,
+      );
 
       return tx.materialIssue.update({
         where: { id },

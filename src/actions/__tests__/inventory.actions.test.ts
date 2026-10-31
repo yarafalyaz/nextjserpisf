@@ -470,6 +470,14 @@ describe("Material Issue Actions", () => {
     expect(payload?.data && "workOrderId" in payload.data).toBe(false);
     expect(payload?.data && "projectId" in payload.data).toBe(false);
   });
+  it("updateMaterialIssue refuses when the locked re-read is already completed (no item rewrite)", async () => {
+    seedDraft(mocks.prismaMock.materialIssue);
+    mocks.prismaMock.materialIssue.findUnique.mockResolvedValueOnce({ status: "completed" });
+    const res = await actions.updateMaterialIssue(1, miFd());
+    expect(res?.success).toBe(false);
+    expect(mocks.prismaMock.materialIssueItem.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.materialIssue.update).not.toHaveBeenCalled();
+  });
   it("completeMaterialIssue succeeds", async () => {
     seedDraft(mocks.prismaMock.materialIssue, { items: [] });
     const res = await actions.completeMaterialIssue(1);
