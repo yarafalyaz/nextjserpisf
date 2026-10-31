@@ -395,3 +395,47 @@ MONTHLY lintas bulan, rekonstruksi historis eksposur piutang.
 - tsc: clean. Lint: 0 error.
 - E2E chromium scratch terseed: hijau berulang (722–726 passed).
 - Commit sesi: `f230e0d9c`, `9c8cc7504`, `e8d56645`. Tree bersih.
+
+### Lanjutan putaran 6 (2026-11-01) — lane produksi/aset + crm/pengaturan
+
+Semua kandidat agent dibaca ulang sesi utama; semua terbukti.
+Fix (merah-hijau dengan regression test):
+`ce620cc1b` gerbang NPWP pelanggan diserialkan (tabel kunci satu
+baris `customer_npwp_gate` dikunci FOR UPDATE dalam tx sebelum scan
+konflik diulang; normalisasi digit di memori membuat unique mentah
+tidak sah); `519406068` kunci jurnal aktif kini memuat journal_number
+(migrasi 20261101110000) — jurnal peristiwa aset ke-2 per aset tidak
+lagi tabrakan P2002 semu, anti-replay tetap di sourceDocumentKey;
+`82b93e3a5` delta biaya produksi dihitung dari baris terkunci;
+`ab972f30f`+`1bed85be4` disposal membaca ulang nilai buku dari jurnal
+POSTED dalam tx berkunci aset, bacaan luar mati dibuang;
+`2eddca9ee` resolve NCR membaca ulang rework dari baris terkunci;
+`9c9c2b609` tarik labor timesheet WO mengunci baris timesheet sebelum
+dedupe; `f63be3358` edit checklist QC membaca ulang status terkunci;
+`16c98c5d6` validasi tarif komisi membaca rowset di bawah kunci baris
+kategori (create/update/delete); `315397610` update tiket membaca
+ulang stempel SLA dari baris terkunci dan menolak tiket ter-soft-delete.
+Penyesuaian bukti lama terhadap kontrak kunci jurnal baru (bukan bug):
+`b95e62104` ekspektasi integrasi journal-active-reference (nomor sama
+persis tetap P2002; nomor beda se-reference sah aktif bersamaan) dan
+`b5c29ad55` probe konkurensi TASK-023 memposting nomor yang sama dua
+kali paralel. Keduanya diverifikasi lokal terhadap migrate deploy DB
+scratch, suite 5/5 dan 3/3 hijau; scratch dibuang.
+CI: run `b5c29ad55` SUCCESS penuh (penanda penutup rangkaian ini).
+
+Vonis gugur putaran 6: keluarga delete-guard master 9 lokasi
+(deletePaymentTerm/Department/Position/Bank/Tax/ItemCategory/
+ItemGroup/Brand/Uom). Semua membaca count tanpa tx lalu delete tanpa
+syarat, TETAPI race jendelanya hanya antar PENULIS SQL langsung:
+setiap create/update yang memindahkan referensi melewati validasi
+keberadaan tanpa kunci di jalurnya sendiri, jadi mengunci satu sisi
+delete tidak menutup kelasnya; dampak satu pasangan balapan adalah
+SET NULL pada FK ter-nullable sesuai desain migrasi (rugi data sama
+dengan delete sesudah attach komitmen, yang menurut desain penjaga
+count memang diizinkan). Perbaikan yang justru keliru arah:
+mengunci baris yang dirujuk — penjaga deleteInventoryLocation di
+inventory.actions.ts menolak pendekatan itu ("mengunci baris
+inventory_locations akan memblokir semua penulis; PERIKSA historis
+saja"). Vonis: risiko diterima, jangan diangkat lagi tanpa bukti
+jahitan eksploitable konkret (pola vonis P2002 serial putaran 4
+yang akhirnya naik kelas hanya sesudah jahitan konkret ditemukan).
