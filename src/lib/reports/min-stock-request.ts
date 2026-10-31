@@ -24,6 +24,52 @@ export function buildMinStockRequestHref(
   return `/pembelian/permintaan/tambah/item/${encodeURIComponent(param)}`
 }
 
+/**
+ * Agregasi saran titik pesan-ulang per BARANG untuk prefill permintaan.
+ *
+ * `suggestedQty` per pasang (barang, gudang) = max(0, titik −
+ * (stok gudang + PO masuk)) dan `incomingQty` adalah angka per BARANG
+ * yang sama di semua pasang (PurchaseOrder tanpa warehouseId — lihat
+ * reorder-point.ts). Menjumlahkan suggestedQty antar-gudang akan
+ * mengurangkan PO masuk yang sama berkali-kali. Agregat yang sah:
+ * max(0, Σ titik − Σ stok − PO masuk) dengan PO masuk dikurangkan
+ * SEKALI. Hanya pasang `pesan_sekarang` yang ikut; tidak_dinilai
+ * (suggestedQty null) tidak pernah menjadi saran.
+ */
+export function buildReorderPointRequestHref(
+  lines: readonly {
+    itemId: number
+    status: string
+    reorderPoint: number | null
+    qtyAtWarehouse: number | null
+    incomingQty: number
+    suggestedQty: number | null
+  }[],
+): string | null {
+  const byItem = new Map<
+    number,
+    { pointTotal: number; stockTotal: number; incomingQty: number }
+  >()
+  for (const line of lines) {
+    if (line.status !== "pesan_sekarang") continue
+    if (line.reorderPoint === null || line.suggestedQty === null) continue
+    const acc = byItem.get(line.itemId) ?? {
+      pointTotal: 0,
+      stockTotal: 0,
+      incomingQty: line.incomingQty,
+    }
+    acc.pointTotal += line.reorderPoint
+    acc.stockTotal += line.qtyAtWarehouse ?? 0
+    byItem.set(line.itemId, acc)
+  }
+  return buildMinStockRequestHref(
+    [...byItem.entries()].map(([itemId, acc]) => ({
+      itemId,
+      shortage: Math.max(0, acc.pointTotal - acc.stockTotal - acc.incomingQty),
+    })),
+  )
+}
+
 export function parseMinStockPrefill(
   raw: string | undefined,
   validItemIds: ReadonlySet<number>,

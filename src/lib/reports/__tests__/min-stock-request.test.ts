@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   buildMinStockRequestHref,
+  buildReorderPointRequestHref,
   parseMinStockPrefill,
 } from "@/lib/reports/min-stock-request"
 
@@ -21,6 +22,54 @@ describe("buildMinStockRequestHref", () => {
       buildMinStockRequestHref([
         { itemId: null, shortage: 5 },
         { itemId: 7, shortage: 0 },
+      ]),
+    ).toBeNull()
+  })
+})
+
+describe("buildReorderPointRequestHref", () => {
+  const line = (over: Record<string, unknown>) => ({
+    itemId: 7,
+    status: "pesan_sekarang",
+    reorderPoint: 100,
+    qtyAtWarehouse: 10,
+    incomingQty: 0,
+    suggestedQty: 90,
+    ...over,
+  })
+
+  it("satu gudang: kekurangan = titik − stok − PO masuk", () => {
+    expect(buildReorderPointRequestHref([line({ incomingQty: 20, suggestedQty: 70 })])).toBe(
+      "/pembelian/permintaan/tambah/item/7%3A70",
+    )
+  })
+
+  it("multi-gudang: PO masuk per barang dikurangkan SEKALI, bukan per pasang", () => {
+    // Dua pasang barang sama: titik 100+100, stok 10+10, PO masuk 50
+    // (angka per barang yang sama di kedua pasang). Agregat sah =
+    // 200 − 20 − 50 = 130. Menjumlah suggestedQty per pasang (40+40=80)
+    // mengurangkan PO yang sama dua kali.
+    expect(
+      buildReorderPointRequestHref([
+        line({ suggestedQty: 40, incomingQty: 50 }),
+        line({ suggestedQty: 40, incomingQty: 50 }),
+      ]),
+    ).toBe("/pembelian/permintaan/tambah/item/7%3A130")
+  })
+
+  it("status bukan pesan_sekarang dan baris tidak dinilai tidak ikut", () => {
+    expect(
+      buildReorderPointRequestHref([
+        line({ status: "aman", suggestedQty: 0 }),
+        line({ itemId: 9, status: "tidak_dinilai", reorderPoint: null, suggestedQty: null }),
+      ]),
+    ).toBeNull()
+  })
+
+  it("kekurangan agregat nol (stok gabungan menutup titik) tidak menghasilkan baris", () => {
+    expect(
+      buildReorderPointRequestHref([
+        line({ reorderPoint: 10, qtyAtWarehouse: 8, incomingQty: 5, suggestedQty: 0 }),
       ]),
     ).toBeNull()
   })

@@ -10,7 +10,10 @@ import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportTableView } from "@/components/reports/report-table-view"
 import { minStockSummary } from "@/lib/reports/min-stock"
 import { MinStockWarehouseCard } from "@/components/reports/min-stock-warehouse-card"
-import { buildMinStockRequestHref } from "@/lib/reports/min-stock-request"
+import {
+  buildMinStockRequestHref,
+  buildReorderPointRequestHref,
+} from "@/lib/reports/min-stock-request"
 import { loadMinStock } from "@/lib/reports/min-stock-data"
 import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { loadReorderPoints } from "@/lib/reports/reorder-point-data"
@@ -38,8 +41,9 @@ export default async function MinStockPage() {
     await loadMinStock(asOf, scopeIds)
   const reorderPointReport = await loadReorderPoints()
   const requestHref = buildMinStockRequestHref(report.shortageLines)
+  const reorderHref = buildReorderPointRequestHref(reorderPointReport.result.lines)
   const canCreateRequest =
-    requestHref !== null &&
+    (requestHref !== null || reorderHref !== null) &&
     (user.roles.includes("super_admin") ||
       user.permissions.includes("create_purchase_requests"))
 
@@ -66,6 +70,14 @@ export default async function MinStockPage() {
               className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary-hover hover:shadow-md"
             >
               Buat Permintaan
+            </Link>
+          ) : null}
+          {canCreateRequest && reorderHref ? (
+            <Link
+              href={reorderHref}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-input bg-background px-4 py-2.5 text-sm font-medium transition-all hover:bg-accent hover:shadow-md"
+            >
+              Buat Permintaan dari Titik Pesan-Ulang
             </Link>
           ) : null}
           <ExportButtons
