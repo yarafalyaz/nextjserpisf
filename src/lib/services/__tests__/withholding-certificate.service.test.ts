@@ -556,4 +556,16 @@ describe("settleWithholdingTax", () => {
     expect(String(r.error)).toMatch(/15 digit/)
     expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
   })
+
+  it("tanggal setor masa 2026-11 = tengah malam UTC 1 Nov (bukan 31 Okt lokal)", async () => {
+    const r = await settleWithholdingTax({
+      withholdingTypeId: 3, period: "2026-11", paymentAccountId: 102,
+      amount: 200_000, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(true)
+    const payment = mocks.taxPaymentCreate.mock.calls[0][0].data
+    expect((payment.date as Date).toISOString()).toBe("2026-11-01T00:00:00.000Z")
+    const journal = mocks.journalCreate.mock.calls[0][0].data
+    expect((journal.transactionDate as Date).toISOString()).toBe("2026-11-01T00:00:00.000Z")
+  })
 })

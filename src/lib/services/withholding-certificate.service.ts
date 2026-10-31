@@ -30,6 +30,7 @@ import {
   type IdemScope,
 } from "@/lib/services/financial-idempotency.service"
 import { getErrorMessage } from "@/lib/utils/error"
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import {
   computeWithheld,
   resolvePph42RentRateEntry,
@@ -452,7 +453,10 @@ export async function settleWithholdingTax(input: SettleWithholdingInput): Promi
       period: input.period,
       amount: Number(input.amount).toFixed(2),
     })
-    const date = new Date(`${input.period}-01T00:00:00`)
+    // Tanggal dokumen repo = tengah malam UTC hari kalender. Konstruktor
+    // string lokal membuat setor tanggal 1 jatuh di bulan sebelumnya dalam
+    // komponen UTC, jadi jurnal muncul di laporan GL bulan yang salah.
+    const date = wibDateToUtcMidnight(`${input.period}-01`)
     let createdId: number | undefined
     let isReplay = false
     // R8-PAJAK-02: nomor dari generateDocumentNumber atomic (tak ikut
