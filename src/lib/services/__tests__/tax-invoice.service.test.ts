@@ -116,6 +116,66 @@ describe("issueTaxInvoice guards", () => {
     expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
   })
 
+  it("race nomor aktif: P2002 active_number_key diterjemahkan definitif", async () => {
+    mocks.taxInvoiceCreate.mockRejectedValueOnce(
+      Object.assign(new Error("Unique constraint failed"), {
+        code: "P2002",
+        meta: { target: "tax_invoices_active_number_unique" },
+      }),
+    )
+    const r = await issueTaxInvoice({
+      direction: "out", taxInvoiceNumber: "010.001-26.00000099",
+      taxInvoiceDate: new Date(2026, 0, 10), sellingPrice: 12_000_000,
+      salesInvoiceId: 1, idempotencyKey: key(),
+      counterpartyName: "PT Lawan Uji", counterpartyTaxId: "0123456789123456",
+    })
+    expect(r.success).toBe(false)
+    expect(r.ambiguous).toBe(false)
+    expect(String(r.error)).toMatch(/Nomor faktur pajak/)
+    expect(String(r.error)).toMatch(/sudah terbit untuk arah out/)
+  })
+
+  it("race FP UM nomor aktif diterjemahkan definitif", async () => {
+    mocks.dpFindUnique.mockResolvedValue({
+      id: 3, status: "confirmed", paymentDate: new Date(2026, 0, 15),
+      vatTransactionCode: "04", vatRate: 12, vatDpp: 11_000_000, vatAmount: 1_320_000,
+      vatTaxPeriod: "2026-01",
+      customer: {
+        name: "PT X", taxpayerName: "PT X WP", taxId: "0123456789123456", nitku: "0123456789123456000001",
+        taxAddress: "Alamat Pajak DP", address: "Alamat Umum DP", email: "dp@example.test",
+      },
+    })
+    mocks.taxInvoiceCreate.mockRejectedValueOnce(
+      Object.assign(new Error("Unique constraint failed"), {
+        code: "P2002",
+        meta: { target: "tax_invoices_active_number_unique" },
+      }),
+    )
+    const r = await issueDownPaymentTaxInvoice({
+      downPaymentId: 3, taxInvoiceNumber: "040.000-26.00000099", idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(r.ambiguous).toBe(false)
+    expect(String(r.error)).toMatch(/sudah terbit untuk arah out/)
+  })
+
+  it("P2002 constraint lain tetap ambiguous", async () => {
+    mocks.taxInvoiceCreate.mockRejectedValueOnce(
+      Object.assign(new Error("Unique constraint failed"), {
+        code: "P2002",
+        meta: { target: "tax_invoices_slug_unique" },
+      }),
+    )
+    const r = await issueTaxInvoice({
+      direction: "out", taxInvoiceNumber: "010.001-26.00000098",
+      taxInvoiceDate: new Date(2026, 0, 10), sellingPrice: 12_000_000,
+      salesInvoiceId: 1, idempotencyKey: key(),
+      counterpartyName: "PT Lawan Uji", counterpartyTaxId: "0123456789123456",
+    })
+    expect(r.success).toBe(false)
+    expect(r.ambiguous).toBe(true)
+  })
+
   it("terbit ok: DPP 11/12, cermin kepala rantai ditulis, bind key", async () => {
     // Putusan Lead §8A-5 (tafsir ulang AC-TX-B5): terbit out kini wajib
     // identitas — tes diperbarui di PR sama, bukan gerbang dilonggarkan.
@@ -283,6 +343,24 @@ describe("replaceTaxInvoice guards", () => {
     })
     expect(r.success).toBe(true)
     expect(order.indexOf("update-replaced")).toBeLessThan(order.indexOf("create"))
+  })
+
+  it("race pengganti nomor aktif diterjemahkan definitif", async () => {
+    mocks.taxInvoiceFindUniqueOrThrow.mockResolvedValue(oldInvoice)
+    mocks.taxInvoiceCreate.mockRejectedValueOnce(
+      Object.assign(new Error("Unique constraint failed"), {
+        code: "P2002",
+        meta: { target: "tax_invoices_active_number_unique" },
+      }),
+    )
+    const r = await replaceTaxInvoice({
+      replacesId: 7, taxInvoiceNumber: "010.001-26.00000009",
+      taxInvoiceDate: new Date(2026, 2, 5), sellingPrice: 6_000_000,
+      replaceReason: "salah DPP", idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(r.ambiguous).toBe(false)
+    expect(String(r.error)).toMatch(/masih dipakai faktur aktif lain/)
   })
 
   it("R8-PAJAK-04: faktur masukan sudah credited DITOLAK diganti", async () => {

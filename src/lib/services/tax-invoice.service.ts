@@ -73,6 +73,30 @@ function toRate(value: number): Prisma.Decimal {
   return new Prisma.Decimal(value.toFixed(2))
 }
 
+function isActiveNumberConflict(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false
+  const rec = error as Record<string, unknown>
+  if (rec.code !== "P2002") return false
+  const meta = rec.meta as Record<string, unknown> | undefined
+  const target = meta ? String(meta.target ?? "") : ""
+  const message = error instanceof Error ? error.message : ""
+  return /tax_invoices_active_number_unique|active_number_key/i.test(target)
+    || /tax_invoices_active_number_unique|active_number_key/i.test(message)
+}
+
+function taxInvoiceError(error: unknown, number?: string, direction?: "out" | "in"): TaxInvoiceResult {
+  if (number && isActiveNumberConflict(error)) {
+    return {
+      success: false,
+      error: direction
+        ? `Nomor faktur pajak "${number}" sudah terbit untuk arah ${direction}`
+        : `Nomor faktur pajak "${number}" masih dipakai faktur aktif lain`,
+      ambiguous: false,
+    }
+  }
+  return { success: false, error: getErrorMessage(error), ambiguous: !isDefinitiveError(error) }
+}
+
 /**
  * Slug unik di dalam tx: `prisma` global belum melihat baris tak-tercommit,
  * dua terbit berurutan dalam satu tx bisa bertabrakan di kolom @unique.
@@ -284,7 +308,7 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
     })
     return { success: true, replayed: isReplay, id: createdId }
   } catch (e) {
-    return { success: false, error: getErrorMessage(e), ambiguous: !isDefinitiveError(e) }
+    return taxInvoiceError(e, input.taxInvoiceNumber.trim(), input.direction)
   }
 }
 
@@ -410,7 +434,7 @@ export async function issueDownPaymentTaxInvoice(
     })
     return { success: true, replayed: isReplay, id: createdId }
   } catch (e) {
-    return { success: false, error: getErrorMessage(e), ambiguous: !isDefinitiveError(e) }
+    return taxInvoiceError(e, input.taxInvoiceNumber.trim(), "out")
   }
 }
 
@@ -529,7 +553,7 @@ export async function replaceTaxInvoice(input: ReplaceTaxInvoiceInput): Promise<
     })
     return { success: true, replayed: isReplay, id: createdId }
   } catch (e) {
-    return { success: false, error: getErrorMessage(e), ambiguous: !isDefinitiveError(e) }
+    return taxInvoiceError(e, input.taxInvoiceNumber.trim())
   }
 }
 
