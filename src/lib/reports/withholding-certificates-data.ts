@@ -66,7 +66,10 @@ export async function loadWithholdingCertificateInputs(
         // tidak boleh ikut laporan Bukti Potong (baca status sumber di sini
         // untuk menyaring; bill fallback sendiri sudah berstatus posted+).
         vendorBill: { select: { documentNo: true, status: true, deletedAt: true } },
-        salesPayment: { select: { documentNo: true, deletedAt: true } },
+        // SalesPayment tidak punya kolom deletedAt; pembatalannya berstatus
+        // "reversed" (FIN-BR-008). Memilih deletedAt membuat Prisma menolak
+        // query dan halaman Bukti Potong PPh crash di production.
+        salesPayment: { select: { documentNo: true, status: true } },
       },
       orderBy: [{ withholdingDate: "asc" }, { certificateNumber: "asc" }],
     }),
@@ -84,7 +87,7 @@ export async function loadWithholdingCertificateInputs(
       )
     }
     if (cert.salesPaymentId != null) {
-      return cert.salesPayment != null && cert.salesPayment.deletedAt == null
+      return cert.salesPayment != null && cert.salesPayment.status !== "reversed"
     }
     return true
   })

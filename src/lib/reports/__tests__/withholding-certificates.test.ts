@@ -185,4 +185,26 @@ describe("loadWithholdingCertificatesCsv (F-35a)", () => {
     const inputs = await loadWithholdingCertificateInputs({ start: new Date(2026, 0, 1), end: new Date(2026, 0, 31) })
     expect(inputs).toHaveLength(0)
   })
+
+  it("bupot pembayaran tidak memilih kolom SalesPayment yang tidak ada dan payment reversed dibuang", async () => {
+    vb.mockResolvedValue([] as never)
+    sp.mockResolvedValue([] as never)
+    wc.mockResolvedValue([{
+      direction: "withheld_from_us", certificateNumber: "BP-99", withholdingDate: new Date(2026, 0, 12),
+      counterpartyName: "PT Klien", counterpartyTaxId: "03.222",
+      article: "PPh23", objectCode: "24-104-01", dpp: 900, tariff: 2, withheldAmount: 18,
+      vendorBillId: null, salesPaymentId: 9,
+      withholdingType: { code: "PPh 23", name: "Jasa" },
+      vendorBill: null, salesPayment: { documentNo: "SP-009", status: "reversed" },
+    }] as never)
+
+    const inputs = await loadWithholdingCertificateInputs({ start: new Date(2026, 0, 1), end: new Date(2026, 0, 31) })
+
+    expect(inputs).toHaveLength(0)
+    expect(wc).toHaveBeenCalledWith(expect.objectContaining({
+      include: expect.objectContaining({
+        salesPayment: { select: { documentNo: true, status: true } },
+      }),
+    }))
+  })
 })
