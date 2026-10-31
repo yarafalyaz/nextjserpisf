@@ -19,12 +19,16 @@ import { JournalService } from "@/lib/services/journal.service"
  *    membuktikan perilaku InnoDB/MariaDB di bawah dua transaksi nyata.
  *
  * 2. Posting jurnal (`JournalService.createJournal`): transaksi
- *    Serializable + validasi debit=kredit, dijaga fisik oleh unique
- *    `journals_active_reference_unique` pada kolom generated
- *    `active_reference_key` (referenceType#referenceId untuk jurnal aktif).
- *    Dua posting paralel pada (referenceType, referenceId) yang sama harus
+ *    Serializable + validasi debit=kredit. Fisik DB hanya menolak NOMOR
+ *    yang sama persis aktif dua kali: sejak migrasi 20261101110000,
+ *    `active_reference_key` = referenceType#referenceId#journalNumber
+ *    (jurnal peristiwa aset per aset butuh banyak jurnal aktif
+ *    se-reference). Dua posting paralel dengan NOMOR YANG SAMA harus
  *    menghasilkan TEPAT SATU jurnal POSTED yang seimbang; yang kalah
- *    ditolak (P2002). Berlaku juga untuk reversal ganda satu jurnal.
+ *    ditolak (P2002). Anti-dobel se-reference untuk nomor berbeda adalah
+ *    kontrak lapis aplikasi (kunci dokumen/serialisasi pemanggil), bukan
+ *    DB — dibuktikan di suite journal-active-reference. Berlaku juga
+ *    untuk reversal ganda satu jurnal.
  *
  * Pola repo (lihat `inventory-integration.test.ts`): suite ini opt-in.
  * Tanpa `RUN_DB_INTEGRATION=1` — atau bila DB tidak terjangkau — setiap
@@ -213,7 +217,7 @@ describe("Konkurensi DB nyata (TASK-023)", () => {
   )
 
   it(
-    "posting jurnal: dua createJournal paralel pada referensi sama → tepat satu jurnal POSTED seimbang",
+    "posting jurnal: dua createJournal paralel nomor sama pada referensi sama → tepat satu jurnal POSTED seimbang",
     async () => {
       if (process.env.RUN_DB_INTEGRATION !== "1") {
         console.warn("RUN_DB_INTEGRATION tidak aktif — lewati tes konkurensi jurnal")
@@ -227,7 +231,10 @@ describe("Konkurensi DB nyata (TASK-023)", () => {
       const stamp = Date.now()
       const referenceType = "ConcurrencyProbe"
       const referenceId = stamp % 2_000_000_000
-      const journalNumbers = [`JU-CONC-${stamp}-A`, `JU-CONC-${stamp}-B`]
+      // Nomor SAMA untuk kedua posting: sejak active_reference_key memuat
+      // journalNumber, inilah kunci unik fisik yang tersisa (journalNumber
+      // juga @unique per baris).
+      const journalNumbers = [`JU-CONC-${stamp}-A`]
       const accA = await prisma.account.create({
         data: { code: `ITC${stamp}A`, name: `IT Conc A ${stamp}`, type: "ASSET" },
       })
@@ -253,7 +260,7 @@ describe("Konkurensi DB nyata (TASK-023)", () => {
 
         const results = await Promise.allSettled([
           post(journalNumbers[0]),
-          post(journalNumbers[1]),
+          post(journalNumbers[0]),
         ])
         const fulfilled = results.filter((r) => r.status === "fulfilled")
         const rejected = results.filter((r) => r.status === "rejected")
