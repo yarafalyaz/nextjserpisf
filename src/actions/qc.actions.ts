@@ -223,7 +223,19 @@ export async function deleteQcChecklist(id: number) {
       return { success: false, error: "Checklist sudah dipakai inspeksi dan tidak dapat dihapus." }
     }
 
-    await prisma.qcChecklist.delete({ where: { id } })
+    // Klaim kondisional: cek snapshot di atas bukan guard — release bisa
+    // memenangkan klaim draft->released (atau inspeksi pertama tercatat)
+    // di antara cek dan hapus. deleteMany bersyarat status + tanpa
+    // inspeksi menutup jendela itu secara atomik.
+    const claim = await prisma.qcChecklist.deleteMany({
+      where: { id, status: "draft", inspections: { none: {} } },
+    })
+    if (claim.count === 0) {
+      return {
+        success: false,
+        error: "Status checklist sudah berubah; muat ulang halaman sebelum menghapus.",
+      }
+    }
     await logActivity("delete", "QcChecklist", id, `Menghapus checklist QC #${id}`)
     revalidatePath("/produksi/qc/checklist")
     return { success: true }

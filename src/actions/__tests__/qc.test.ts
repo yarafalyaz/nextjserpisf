@@ -21,6 +21,7 @@ const qcChecklistCreateMock = vi.fn()
 const qcChecklistUpdateMock = vi.fn()
 const qcChecklistUpdateManyMock = vi.fn()
 const qcChecklistDeleteMock = vi.fn()
+const qcChecklistDeleteManyMock = vi.fn()
 const qcInspectionCreateMock = vi.fn()
 const nonconformanceFindUniqueMock = vi.fn()
 const nonconformanceCreateMock = vi.fn()
@@ -56,6 +57,7 @@ vi.mock("@/lib/db/prisma", () => {
       update: (...a: unknown[]) => qcChecklistUpdateMock(...a),
       updateMany: (...a: unknown[]) => qcChecklistUpdateManyMock(...a),
       delete: (...a: unknown[]) => qcChecklistDeleteMock(...a),
+      deleteMany: (...a: unknown[]) => qcChecklistDeleteManyMock(...a),
       findFirst: vi.fn().mockResolvedValue(null),
     },
     qcInspection: {
@@ -126,7 +128,7 @@ beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock, generateDocumentNumberMock,
     assertWorkOrderQcClearedMock, qcChecklistFindUniqueMock, qcChecklistCreateMock,
-    qcChecklistUpdateMock, qcChecklistUpdateManyMock, qcChecklistDeleteMock, qcInspectionCreateMock,
+    qcChecklistUpdateMock, qcChecklistUpdateManyMock, qcChecklistDeleteMock, qcChecklistDeleteManyMock, qcInspectionCreateMock,
     nonconformanceFindUniqueMock, nonconformanceCreateMock, nonconformanceUpdateMock,
     raiseNcrFromInspectionMock, syncReworkCostMock,
     workOrderFindUniqueQcMock, productionOrderFindUniqueQcMock, goodsReceiptFindUniqueQcMock,
@@ -373,14 +375,32 @@ describe("deleteQcChecklist", () => {
     expect(qcChecklistDeleteMock).not.toHaveBeenCalled()
   })
 
-  it("deletes an unused draft", async () => {
+  it("deletes an unused draft via klaim kondisional", async () => {
     qcChecklistFindUniqueMock.mockResolvedValue({ status: "draft", _count: { inspections: 0 } })
-    qcChecklistDeleteMock.mockResolvedValue({})
+    qcChecklistDeleteManyMock.mockResolvedValue({ count: 1 })
 
     const res = await deleteQcChecklist(1)
 
     expect(res.success).toBe(true)
-    expect(qcChecklistDeleteMock).toHaveBeenCalledWith({ where: { id: 1 } })
+    expect(qcChecklistDeleteMock).not.toHaveBeenCalled()
+    const claim = qcChecklistDeleteManyMock.mock.calls[0][0]
+    expect(claim.where.id).toBe(1)
+    expect(claim.where.status).toBe("draft")
+    expect(claim.where.inspections).toEqual({ none: {} })
+  })
+
+  it("menolak bila klaim hapus kalah race (dirilis penulis lain sesudah cek snapshot)", async () => {
+    // Snapshot terbaca draft + 0 inspeksi, tetapi releaseQcChecklist
+    // memenangkan klaim draft->released sebelum delete berjalan: klaim
+    // kondisional wajib count 0 dan tidak ada yang terhapus.
+    qcChecklistFindUniqueMock.mockResolvedValue({ status: "draft", _count: { inspections: 0 } })
+    qcChecklistDeleteManyMock.mockResolvedValue({ count: 0 })
+
+    const res = await deleteQcChecklist(1)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah berubah")
+    expect(qcChecklistDeleteMock).not.toHaveBeenCalled()
   })
 })
 
