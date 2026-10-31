@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
     leadActivity: buildModelMock(),
     customer: buildModelMock(),
     $queryRaw: vi.fn().mockResolvedValue([]),
+    $executeRaw: vi.fn().mockResolvedValue(1),
 
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
@@ -61,7 +62,15 @@ function fdMap(payload: Record<string, string | number | null | undefined>): For
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Antrean mockResolvedValueOnce/mockRejectedValueOnce tidak dibuang
+  // clearAllMocks; reset implementasi dasarnya supaya Once basi dari tes
+  // sebelumnya tidak bocor ke tes berikut (reset menghapus antrean juga).
+  mocks.prismaMock.crmTicket.update.mockReset()
+  mocks.prismaMock.crmTicket.update.mockResolvedValue({})
   mocks.requirePermissionMock.mockResolvedValue({ id: 1, permissions: ["manage_leads", "manage_tickets"], roles: ["super_admin"] })
+  // updateTicket membaca baris terkunci dalam tx; default baris hidup supaya
+  // tes lama tidak bergantung urutan mockResolvedValueOnce.
+  mocks.prismaMock.crmTicket.findUnique.mockResolvedValue({ id: 1, status: "open", firstResponseAt: null, resolvedAt: null, deletedAt: null })
 })
 
 describe("CRM Ticket Actions", () => {
@@ -117,10 +126,36 @@ describe("CRM Ticket Actions", () => {
   })
   it("updateTicket handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    mocks.prismaMock.crmTicket.update.mockRejectedValueOnce(new Error("db err"))
+    // Sekali pakai dari tes sebelumnya tidak mengambang (clearAllMocks tidak
+    // membuang antrean Once): tetapkan perilaku update untuk tes ini saja.
+    mocks.prismaMock.crmTicket.update.mockImplementationOnce(async () => { throw new Error("db err") })
     const res = await actions.updateTicket(1, fdMap({ subject: "Ticket Subject" }))
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
+  })
+  it("updateTicket membaca ulang stempel SLA dari baris terkunci dalam tx", async () => {
+    // Snapshot luar basi (open) akan menstempel firstResponseAt, tetapi baris
+    // terkunci sudah di-soft-delete -> update WAJIB ditolak, update polos
+    // tidak boleh terpanggil.
+    mocks.prismaMock.$executeRaw = vi.fn().mockResolvedValue(1)
+    // Produksi kini membaca baris tepat SATU kali (di dalam tx terkunci):
+    // baris terkunci ter-soft-delete -> update WAJIB ditolak.
+    mocks.prismaMock.crmTicket.findUnique
+      .mockResolvedValueOnce({ status: "open", firstResponseAt: null, resolvedAt: null, deletedAt: new Date() })
+    const res = await actions.updateTicket(1, fdMap({ subject: "Tiket", status: "in_progress" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("dihapus")
+    expect(mocks.prismaMock.crmTicket.update).not.toHaveBeenCalled()
+    const lockSql = (mocks.prismaMock.$executeRaw.mock.calls as unknown[][])
+      .map((c) => {
+        const first = c[0] as { strings?: string[] } | unknown
+        if (Array.isArray(first)) return first.join("?")
+        return (first as { strings?: string[] })?.strings?.join("?") ?? ""
+      })
+      .join(" ")
+    expect(lockSql).toContain("crm_tickets")
+    const lockOrder = mocks.prismaMock.$executeRaw.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(mocks.prismaMock.crmTicket.update.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER)
   })
   it("deleteTicket succeeds", async () => {
     const res = await actions.deleteTicket(1)

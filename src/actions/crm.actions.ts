@@ -95,44 +95,55 @@ export async function updateTicket(id: number, formData: FormData) {
   }
   const data = parsed.data
 
-  const existing = await prisma.crmTicket.findUnique({
-    where: { id },
-    select: { status: true, firstResponseAt: true, resolvedAt: true },
-  })
+  // Baca awal hanya untuk slug/feedback cepat; keputusan SLA dihitung ulang
+  // dari baris TERKUNCI di dalam tx (balapan dgn deleteTicket / update lain:
+  // snapshot REPEATABLE READ bukan penjaga, dan tiket ter-soft-delete tidak
+  // boleh ditulis lagi).
+  const slug = await nextSlug("crmTicket", data.subject, { excludeId: id })
 
-  const ticket = await prisma.crmTicket.update({
-    where: { id },
-    data: {
-      slug: await nextSlug("crmTicket", data.subject, { excludeId: id }),
-      subject: data.subject,
-      description: data.description ?? null,
-      customerId: data.customerId ?? null,
-      customerName: data.customerName ?? null,
-      customerEmail: data.customerEmail ?? null,
-      customerPhone: data.customerPhone ?? null,
-      type: data.type ?? null,
-      priority: data.priority || "medium",
-      // Status preservation: persist the new status when sent. Status updates
-      // intentionally fall through to the DB default ("open") when the form
-      // omits the field (i.e. a form that doesn't render a Status select).
-      status: data.status ?? undefined,
-      assignedTo: data.assignedTo ?? null,
-      resolutionNotes: data.resolutionNotes ?? null,
-      // Jejak waktu SLA dihitung di server, bukan dari form: respons pertama
-      // saat tiket keluar dari "open", selesai saat masuk resolved/closed,
-      // dikosongkan saat dibuka kembali (open/in_progress). Komentar
-      // internal/tindak lanjut (addTicketComment) tidak menyentuhnya.
-      firstResponseAt:
-        existing && existing.status === "open" && data.status && data.status !== "open"
-          ? (existing.firstResponseAt ?? new Date())
-          : undefined,
-      resolvedAt:
-        data.status === "open" || data.status === "in_progress"
-          ? null
-          : existing && data.status && (data.status === "resolved" || data.status === "closed") && !existing.resolvedAt
-            ? new Date()
+  const ticket = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT id FROM crm_tickets WHERE id = ${id} FOR UPDATE`
+    const existing = await tx.crmTicket.findUnique({
+      where: { id },
+      select: { status: true, firstResponseAt: true, resolvedAt: true, deletedAt: true },
+    })
+    if (!existing) throw new Error("Tiket tidak ditemukan")
+    if (existing.deletedAt) throw new Error("Tiket sudah dihapus dan tidak dapat diubah")
+
+    return tx.crmTicket.update({
+      where: { id },
+      data: {
+        slug,
+        subject: data.subject,
+        description: data.description ?? null,
+        customerId: data.customerId ?? null,
+        customerName: data.customerName ?? null,
+        customerEmail: data.customerEmail ?? null,
+        customerPhone: data.customerPhone ?? null,
+        type: data.type ?? null,
+        priority: data.priority || "medium",
+        // Status preservation: persist the new status when sent. Status updates
+        // intentionally fall through to the DB default ("open") when the form
+        // omits the field (i.e. a form that doesn't render a Status select).
+        status: data.status ?? undefined,
+        assignedTo: data.assignedTo ?? null,
+        resolutionNotes: data.resolutionNotes ?? null,
+        // Jejak waktu SLA dihitung di server, bukan dari form: respons pertama
+        // saat tiket keluar dari "open", selesai saat masuk resolved/closed,
+        // dikosongkan saat dibuka kembali (open/in_progress). Komentar
+        // internal/tindak lanjut (addTicketComment) tidak menyentuhnya.
+        firstResponseAt:
+          existing.status === "open" && data.status && data.status !== "open"
+            ? (existing.firstResponseAt ?? new Date())
             : undefined,
-    },
+        resolvedAt:
+          data.status === "open" || data.status === "in_progress"
+            ? null
+            : data.status && (data.status === "resolved" || data.status === "closed") && !existing.resolvedAt
+              ? new Date()
+              : undefined,
+      },
+    })
   })
 
   revalidatePath("/crm/tickets")
