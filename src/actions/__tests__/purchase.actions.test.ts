@@ -2669,6 +2669,32 @@ describe("Purchase Actions Redirect and Validation Gaps", () => {
     expect(res?.success).toBe(true)
   })
 
+  it.each([
+    ["updatePurchaseRequest", "purchase_requests", "purchaseRequest"],
+    ["updatePurchaseOrder", "purchase_orders", "purchaseOrder"],
+  ] as const)("updatePurchase* locks its own row before the in-tx status recheck (%s)", async (_fn, table, model) => {
+    mocks.prismaMock[model].findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft" })
+    mocks.prismaMock[model].findUnique.mockResolvedValueOnce({ status: "draft" })
+    if (model === "purchaseRequest") {
+      await actions.updatePurchaseRequest(1, fdMap({ date: "2026-06-12" }))
+    } else {
+      await actions.updatePurchaseOrder(1, fdMap({ date: "2026-06-12", vendorId: "1" }))
+    }
+    const execCalls = mocks.prismaMock.$executeRaw.mock.calls as unknown[][]
+    const lockIdx = execCalls.findIndex((c) => {
+      const first = c[0] as { strings?: string[] } | string[] | string
+      const text = String(
+        (first as { strings?: string[] }).strings?.join(" ") ??
+          (Array.isArray(first) ? (first as string[]).join(" ") : first),
+      )
+      return text.includes(table) && text.includes("FOR UPDATE")
+    })
+    expect(lockIdx).toBeGreaterThanOrEqual(0)
+    const lockOrder = (mocks.prismaMock.$executeRaw as unknown as { mock: { invocationCallOrder: number[] } }).mock.invocationCallOrder[lockIdx]
+    const readOrder = mocks.prismaMock[model].findUnique.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(readOrder)
+  })
+
   it("updateVendorBill succeeds when status is draft inside transaction", async () => {
     mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft" })
     mocks.prismaMock.vendorBill.findUnique.mockResolvedValueOnce({ status: "draft" })

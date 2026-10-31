@@ -3150,6 +3150,10 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
     const items = parsePurchaseRequestItems(v.items);
 
     const pr = await prisma.$transaction(async (tx) => {
+      // Kunci baris PR dulu: recheck plain membaca snapshot tx (approver
+      // konkuren yang commit sesudah snapshot tak terlihat, edit menimpa
+      // PR yang sudah disetujui). Sama pola updateGoodsReceipt.
+      await tx.$executeRaw`SELECT id FROM purchase_requests WHERE id = ${id} FOR UPDATE`;
       const latestStatus = await tx.purchaseRequest.findUnique({
         where: { id },
         select: { status: true },
@@ -3227,6 +3231,10 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
 
     // Keep existing documentNo (do not regenerate on edit)
     const po = await prisma.$transaction(async (tx) => {
+      // Kunci baris PO dulu: recheck plain membaca snapshot tx (approver
+      // konkuren yang commit sesudah snapshot tak terlihat, edit menimpa
+      // PO yang sudah disetujui isi berbeda).
+      await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${id} FOR UPDATE`;
       const latest = await tx.purchaseOrder.findUnique({
         where: { id },
         select: { status: true },
