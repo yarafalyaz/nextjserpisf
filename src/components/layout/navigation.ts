@@ -38,6 +38,14 @@ export interface NavItem {
    * jejak breadcrumb; yang berubah hanya cara sidebar merendernya.
    */
   sidebarLinkOnly?: boolean
+  /**
+   * Halaman self-service: gerbangnya login saja (PUTUSAN Lead Q-PS-1 —
+   * loader fail-closed per karyawan tertaut), jadi item tampil untuk semua
+   * pengguna di dalam grupnya. Tapi item ini TIDAK membuka grupnya:
+   * pengguna tanpa satu pun izin grup (mis. warehouse murni) tidak boleh
+   * ditawari grup SDM hanya karena tautan slip gaji universal ini.
+   */
+  selfService?: boolean
   children?: NavItem[]
 }
 
@@ -170,7 +178,7 @@ export const navigation: NavItem[] = [
       { label: "Lembur", href: "/sdm/lembur", icon: Timer, permission: "view_overtime" },
       { label: "Rekap Lembur", href: "/sdm/lembur/rekap", icon: Timer, permission: "view_overtime" },
       { label: "Penggajian", href: "/sdm/penggajian", icon: Banknote, permission: "view_payroll" },
-      { label: "Slip Gaji Saya", href: "/sdm/slip-gaji-saya", icon: Wallet },
+      { label: "Slip Gaji Saya", href: "/sdm/slip-gaji-saya", icon: Wallet, selfService: true },
       { label: "Aturan Statutori", href: "/sdm/aturan-statutori", icon: BookOpenCheck, permission: "view_payroll" },
       { label: "Lembar Waktu", href: "/sdm/lembar-waktu", icon: Clock, permission: "view_timesheets" },
       { label: "Pinjaman", href: "/sdm/pinjaman", icon: PiggyBank, permission: "view_employee_loans" },
@@ -370,6 +378,22 @@ export function canSeeNavItem(
   }
   if (!item.permission) return true
   return permissions.includes(item.permission)
+}
+
+/**
+ * Anak grup yang terlihat. Item self-service tidak membuka grupnya:
+ * grup tampil hanya bila super admin atau ada ≥1 anak non-self-service
+ * yang lolos izin — pengguna tanpa izin modul itu tidak ditawari grup
+ * kosong berisi tautan universal.
+ */
+export function visibleGroupChildren(
+  item: NavItem,
+  permissions: string[],
+  isSuperAdmin: boolean,
+): NavItem[] | null {
+  const visible = (item.children ?? []).filter((child) => canSeeNavItem(child, permissions, isSuperAdmin))
+  if (!isSuperAdmin && !visible.some((child) => !child.selfService)) return null
+  return visible
 }
 
 export interface FlatNavEntry {

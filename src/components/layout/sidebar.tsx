@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/shadcn/collapsible"
 import { NavUser } from "@/components/layout/nav-user"
 import { SafeImage } from "@/components/ui/safe-image"
-import { navigation, canSeeNavItem, type NavItem } from "@/components/layout/navigation"
+import { navigation, canSeeNavItem, visibleGroupChildren, type NavItem } from "@/components/layout/navigation"
 
 interface AppSidebarProps {
   companyName?: string
@@ -67,11 +67,6 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
   /** Check if a single nav item is visible to the current user */
   function canSee(item: NavItem): boolean {
     return canSeeNavItem(item, permissions, isSuperAdmin)
-  }
-
-  /** Filter children and return visible items; return null if nothing remains */
-  function filterChildren(children: NavItem[]): NavItem[] {
-    return children.filter(canSee)
   }
 
   return (
@@ -156,8 +151,8 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
               }
 
               // Group item — filter children first
-              const visibleChildren = filterChildren(item.children)
-              if (visibleChildren.length === 0) return null
+              const visibleChildren = visibleGroupChildren(item, permissions, isSuperAdmin)
+              if (!visibleChildren) return null
 
               // Grup berkatalog (`sidebarLinkOnly`): sidebar menautkan ke halaman
               // grupnya saja. 47 laporan sebagai submenu menenggelamkan modul lain

@@ -209,6 +209,11 @@ test.describe("RBAC: menu sidebar per role", () => {
 
       if (visibleLinkAfterGoto) {
         await page.goto(visibleLinkAfterGoto.goto)
+        // Tunggu pertukaran shell RSC selesai: selama `<div id="S:*">` belum
+        // ditukar, salinan CSR hasil hidrasi masih berdampingan di DOM dan
+        // locator strict-mode terkena violation palsu (pola yang sama seperti
+        // test tombol payroll di bawah — pelanggan paralel kena lebih sering).
+        await page.waitForLoadState("networkidle")
         await expect(
           sidebar.locator(`a[href="${visibleLinkAfterGoto.href}"]`),
           `${role} seharusnya melihat tautan ${visibleLinkAfterGoto.href} di sidebar`,

@@ -3,6 +3,7 @@ import {
   navigation,
   flattenNavigation,
   canSeeNavItem,
+  visibleGroupChildren,
   type NavItem,
 } from "../navigation"
 
@@ -158,5 +159,29 @@ describe("canSeeNavItem", () => {
   it("always shows items without a permission requirement", () => {
     const openItem: NavItem = { label: "X", href: "/x", icon: navigation[0].icon }
     expect(canSeeNavItem(openItem, [], false)).toBe(true)
+  })
+})
+
+describe("visibleGroupChildren (R8-NAV-01)", () => {
+  const sdm = navigation.find((item) => item.href === "/sdm")!
+
+  it("grup SDM tidak dibuka hanya oleh tautan self-service Slip Gaji Saya", () => {
+    // Warehouse murni: nol izin SDM. Slip Gaji Saya universal (Q-PS-1)
+    // tidak boleh menampakkan seluruh grup SDM di sidebar.
+    expect(visibleGroupChildren(sdm, [], false)).toBeNull()
+    expect(visibleGroupChildren(sdm, ["view_items"], false)).toBeNull()
+  })
+
+  it("grup SDM tampil bila ada izin anak, dan Slip Gaji Saya ikut di dalamnya", () => {
+    const visible = visibleGroupChildren(sdm, ["view_attendance"], false)
+    expect(visible).not.toBeNull()
+    expect(visible!.map((c) => c.href)).toContain("/sdm/absensi")
+    expect(visible!.map((c) => c.href)).toContain("/sdm/slip-gaji-saya")
+    expect(visible!.map((c) => c.href)).not.toContain("/sdm/penggajian")
+  })
+
+  it("super admin melihat semua anak grup", () => {
+    const visible = visibleGroupChildren(sdm, [], true)
+    expect(visible).toHaveLength(sdm.children!.length)
   })
 })
