@@ -2745,8 +2745,14 @@ export async function updatePettyCash(id: number, formData: FormData) {
       // stable (slug is derived from the immutable document number).
       const existingPettyCash = await tx.pettyCash.findUniqueOrThrow({
         where: { id },
-        select: { documentNo: true },
+        select: { documentNo: true, status: true, deletedAt: true },
       });
+      // Guard luar bisa basi: void konkuren yang menang kunci lebih dulu
+      // tidak boleh diedit kembali — jurnal asal ter-void lolos guard
+      // deletePettyCashJournal sehingga baris void mendapat jurnal baru.
+      if (existingPettyCash.status === "void" || existingPettyCash.deletedAt) {
+        throw new Error("Transaksi kas kecil yang sudah dibatalkan tidak dapat diubah.");
+      }
 
       // Remove the stale journal so it can be rebuilt with the new amount/type
       // (the create-hook is idempotent and would otherwise skip the update).

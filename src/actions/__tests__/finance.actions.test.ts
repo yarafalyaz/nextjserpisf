@@ -1035,6 +1035,20 @@ describe("Petty Cash Actions", () => {
       expect(mocks.prismaMock.pettyCash.update).not.toHaveBeenCalled()
     }
   })
+  it("updatePettyCash menolak baris yang ter-void di bacaan dalam tx terkunci", async () => {
+    // Guard luar belum melihat void; di dalam tx sesudah kunci baris status
+    // sudah void → edit wajib berhenti sebelum menghapus/membangun jurnal.
+    mocks.prismaMock.pettyCash.findUniqueOrThrow.mockResolvedValue({
+      id: 1, documentNo: "PC-001", status: "void", deletedAt: new Date("2026-06-13"),
+    })
+    const res = await (actions as any).updatePettyCash(1, fdMap({
+      type: "OUT", amount: 500, date: "2026-06-13",
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/dibatalkan/)
+    expect(mocks.prismaMock.pettyCash.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.journal.deleteMany).not.toHaveBeenCalled()
+  })
   it("updatePettyCash rejects invalid type and non-positive amount (Zod parity)", async () => {
     const res = await (actions as any).updatePettyCash(1, fdMap({
       type: "INVALID_TYPE",
