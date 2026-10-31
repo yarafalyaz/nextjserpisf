@@ -2165,6 +2165,14 @@ export async function reverseVendorPayment(
         where: { vendorPaymentId: id },
       });
       const billIds = [...new Set(allocations.map((a) => a.vendorBillId))];
+      // Kunci baris bill URUT ID sebelum saldo dibaca ulang: kunci payment
+      // saja tidak menahan confirmVendorPayment lain yang mengunci set bill
+      // vendor — tanpa kunci ini, nilai absolut hasil hitungan snapshot
+      // menimpa alokasi pembayaran lain (lost update).
+      if (billIds.length > 0) {
+        const sortedBillIds = [...billIds].sort((a, b) => a - b);
+        await tx.$executeRaw`SELECT id FROM vendor_bills WHERE id IN (${Prisma.join(sortedBillIds)}) FOR UPDATE`;
+      }
       const bills =
         billIds.length > 0
           ? await tx.vendorBill.findMany({ where: { id: { in: billIds } } })

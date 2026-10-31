@@ -182,6 +182,32 @@ describe("FIN-BR-008 reverseVendorPayment", () => {
     )
   })
 
+  it("kunci baris vendor_bills FOR UPDATE sebelum baca ulang saldo (anti lost-update vs confirm)", async () => {
+    arrangeCompleted()
+    const sqlSeen: string[] = []
+    mocks.prismaMock.$executeRaw.mockImplementation((...a: any[]) => {
+      const first = a[0]
+      sqlSeen.push(
+        Array.isArray(first)
+          ? first.join("?")
+          : ((first as any)?.strings?.join("?") ?? String(first ?? "")),
+      )
+      return Promise.resolve(1)
+    })
+    const res = await purchaseActions.reverseVendorPayment(1, REASON)
+    expect(res.success).toBe(true)
+    // Sesudah pembayaran terkunci, bill yang terkena alokasi dikunci sebelum
+    // saldo dibaca ulang — tanpa kunci, confirm payment lain menimpa hasil
+    // reverse (atau sebaliknya) dari snapshot basi.
+    const billLockIdx = sqlSeen.findIndex(
+      (s) => /vendor_bills/i.test(s) && /for update/i.test(s),
+    )
+    const billReadIdx = mocks.prismaMock.vendorBill.findMany.mock.invocationCallOrder[0]
+    const lockIdx = mocks.prismaMock.$executeRaw.mock.invocationCallOrder[billLockIdx]
+    expect(billLockIdx).toBeGreaterThanOrEqual(0)
+    expect(lockIdx).toBeLessThan(billReadIdx)
+  })
+
   it("R8-JB-04: reversal sesudah relief retur TIDAK menghidupkan saldo yang sudah diretur", async () => {
     arrangeCompleted()
     // Bill 21: grandTotal 1000, dibayar 600, lalu retur melegakan 400 →
