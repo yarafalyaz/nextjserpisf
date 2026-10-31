@@ -2589,6 +2589,43 @@ describe("Absensi Actions", () => {
     expect(res?.error).toContain("tidak memiliki akses")
     mocks.hrScopeOverride.current = null
   })
+
+  it("attachPkwtEventToPayroll membaca peristiwa+akrual di dalam tx sesudah kunci payroll", async () => {
+    // Snapshot peristiwa/akrual di luar tx basi: akrual bulanan yang commit
+    // di antara baca dan create membuat pkwtSettledViaAccrual menyimpang.
+    // Baris wajib dibaca dari tx yang sama sesudah payrolls dikunci.
+    ;(prismaMock as any).pkwtCompensationEvent = {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 7, employeeId: 1, amount: 2_500_000, status: "approved",
+        segmentStart: new Date("2026-01-01T00:00:00Z"),
+      }),
+    }
+    ;(prismaMock as any).pkwtCompensationAccrual = {
+      aggregate: vi.fn().mockResolvedValue({ _sum: { amount: 2_000_000 } }),
+    }
+    ;(prismaMock as any).account = {
+      findUnique: vi.fn().mockResolvedValue({ code: "210207", isActive: true, deletedAt: null }),
+    }
+    prismaMock.payroll.findUniqueOrThrow.mockResolvedValue({
+      id: 5, employeeId: 1, status: "draft", period: "2026-06", baseSalary: 4_000_000,
+      overtimeTotal: 0, appreciationTotal: 0, loanDeduction: 0, paymentDate: null,
+      lateDeduction: 0, lateMinutes: 0, workingDays: 22, presentDays: 22,
+      absentDays: 0, absentDeduction: 0, endDate: new Date("2026-06-30T00:00:00Z"), statutorySnapshot: null,
+    })
+    prismaMock.payrollComponentLine.findFirst.mockResolvedValue(null)
+    prismaMock.systemSetting.findFirst.mockResolvedValue({
+      pkwtCompensationExpenseAccountId: 631,
+      pkwtCompensationPayableAccountId: 231,
+    })
+    const res = await actions.attachPkwtEventToPayroll(5, fd({ eventId: "7" }))
+    if (!res?.success) throw new Error(`attach gagal: ${res?.error}`)
+    const lockOrder = (prismaMock as any).$executeRaw.mock.invocationCallOrder[0]
+    const eventOrder = (prismaMock as any).pkwtCompensationEvent.findUnique.mock.invocationCallOrder[0]
+    const createArg = prismaMock.payrollComponentLine.create.mock.calls[0][0]
+    expect(createArg.data.pkwtSettledViaAccrual).toBe(true)
+    expect(createArg.data.accountIdSnapshot).toBe(231)
+    expect(eventOrder).toBeGreaterThan(lockOrder)
+  })
 })
 
 describe("Employee Roster Actions", () => {

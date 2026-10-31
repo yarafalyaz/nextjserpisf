@@ -6131,11 +6131,10 @@ export async function attachPkwtEventToPayroll(payrollId: number, formData: Form
       where: { id: payrollId },
       select: { employeeId: true },
     });
-    const lineData = await buildPkwtPayrollLineData(prisma, {
-      eventId,
-      payrollEmployeeId: payroll.employeeId,
-    });
-    // R8-SDM-03: satu transaksi berpredikat draft (lihat addPayrollComponentLine).
+    // Snapshot peristiwa + akrual dibaca DI DALAM tx sesudah kunci baris
+    // payroll: baca luar tx membekukan pkwtSettledViaAccrual dari agregat
+    // akrual sesaat — akrual bulanan yang commit di antara baca dan create
+    // membuat snapshot baris menyimpang dari akun yang dipilih hook payroll.
     const created = await prisma.$transaction(async (tx) => {
       if (typeof tx.$executeRaw === "function") {
         await tx.$executeRaw`SELECT id FROM payrolls WHERE id = ${payrollId} FOR UPDATE`;
@@ -6144,6 +6143,10 @@ export async function attachPkwtEventToPayroll(payrollId: number, formData: Form
       if (locked.status !== "draft") {
         throw new Error("Baris komponen gaji hanya dapat diubah pada slip draft");
       }
+      const lineData = await buildPkwtPayrollLineData(tx as never, {
+        eventId,
+        payrollEmployeeId: payroll.employeeId,
+      });
       const row = await tx.payrollComponentLine.create({
         data: { payrollId, ...lineData },
       });
