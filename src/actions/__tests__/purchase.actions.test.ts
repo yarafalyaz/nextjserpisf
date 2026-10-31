@@ -456,6 +456,28 @@ describe("Purchase Order Actions", () => {
       expect(mocks.prismaMock.purchaseOrder.create).toHaveBeenCalled()
     })
 
+    it("refuses when the in-tx duplicate check finds an existing PO (race loser)", async () => {
+      wireServiceWo()
+      // Bacaan luar belum melihat PO lain (balapan); bacaan dalam tx sesudah
+      // kunci baris WO wajib melihatnya dan menolak tanpa membuat PO kedua.
+      // nextSlug("purchaseOrder") juga memanggil purchaseOrder.findFirst, jadi
+      // urutan panggilan: luar (null) → nextSlug (null) → dalam tx (PO-040).
+      mocks.prismaMock.purchaseOrder.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 40, documentNo: "PO-040" })
+      const res = await actions.createServicePurchaseOrderFromWorkOrder(9, 3)
+      expect(res.success).toBe(false)
+      expect(res.error).toMatch(/sudah ada/)
+      expect(mocks.prismaMock.purchaseOrder.create).not.toHaveBeenCalled()
+      const execCalls = mocks.prismaMock.$executeRaw.mock.calls as unknown[][]
+      const lockIdx = execCalls.findIndex((c) => JSON.stringify(c).includes("work_orders"))
+      expect(lockIdx).toBeGreaterThanOrEqual(0)
+      const lockOrder = (mocks.prismaMock.$executeRaw as unknown as { mock: { invocationCallOrder: number[] } }).mock.invocationCallOrder[lockIdx]
+      const findOrders = (mocks.prismaMock.purchaseOrder.findFirst as unknown as { mock: { invocationCallOrder: number[] } }).mock.invocationCallOrder
+      expect(lockOrder).toBeLessThan(findOrders[2])
+    })
+
     it("rejects a completed or cancelled work order", async () => {
       mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 3 })
       mocks.prismaMock.workOrder.findUnique.mockResolvedValue({

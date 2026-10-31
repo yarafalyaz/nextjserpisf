@@ -1030,6 +1030,26 @@ export async function createServicePurchaseOrderFromWorkOrder(
     const slug = await nextSlug("purchaseOrder", documentNo);
 
     const po = await prisma.$transaction(async (tx) => {
+      // Kunci baris WO lalu cek duplikat ulang dalam tx: cek di luar tx membaca
+      // snapshot, jadi dua submit konkuren sama-sama lolos dan lahir dua PO
+      // jasa untuk satu WO (biaya subkontrak dobel).
+      await tx.$executeRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
+      if (!options?.force) {
+        const dup = await tx.purchaseOrder.findFirst({
+          where: {
+            workOrderId,
+            isService: true,
+            status: { notIn: ["cancelled", "rejected"] },
+          },
+          select: { id: true, documentNo: true },
+        });
+        if (dup) {
+          throw new Error(
+            `PO jasa untuk perintah kerja ini sudah ada (${dup.documentNo}). ` +
+              `Batalkan PO tersebut dulu, atau buat ulang dengan paksa.`,
+          );
+        }
+      }
       const created = await tx.purchaseOrder.create({
         data: {
           documentNo,
