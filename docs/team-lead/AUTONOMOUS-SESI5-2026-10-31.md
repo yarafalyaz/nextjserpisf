@@ -320,19 +320,33 @@ adalah angka slip draft yang bisa basi sesaat, bukan dokumen final
 yang salah commit — jangan diangkat lagi tanpa bukti perilaku yang
 berbeda.
 
-Blocker sesi autonomous saat ini (harus diselesaikan sesi lanjutan
-sebelum backlog audit/fitur dianggap tuntas):
-- `deleteCostCenter` belum diverifikasi sesi utama (kandidat conf 4,
-  dinilai lemah).
-- Pesan P2002 serial duplikat generik di verify GR belum
-  diverifikasi sesi utama (kandidat conf 4, UX).
-- Fitur MRP-Lite report-only belum diimplementasikan
-  (`src/lib/reports/material-planning.ts`,
-  `material-planning-data.ts`, page
-  `laporan/perencanaan-material/[[...segments]]` path-based).
-- Deploy produksi belum bisa dieksekusi dari mesin sesi (host tak
-  terjangkau); langkah host tersisa tercatat §3B ringkasan sesi —
-  jangan pernah pakai image usang `20261101-97171c636`.
+Lanjutan putaran 4 (sesudah §"Lanjutan sesi autonomous"):
+`86d62d8b8` deleteCostCenter — TERBUKTI dan difix: 5 count guard
+dulu berjalan di luar tx lalu `prisma.costCenter.delete` terpisah,
+sehingga dokumen yang mengaitkan diri di antara dua fase lolos
+guard lalu kolomnya yatim; guard + delete kini dalam satu tx
+dengan `cost_centers ... FOR UPDATE`. Bukti: finance.actions
+177/177, tsc+lint bersih, CI `41236231351` SUCCESS — blocker log
+sebelumnya ditutup.
+`f87a7b7da` fitur MRP-Lite report-only: builder murni
+`buildMaterialPlan` mengagregatkan baris titik pesan-ulang existing
+per barang; PO masuk dikurangkan SEKALI di agregat
+(max(0, Σ titik − Σ stok − PO masuk)), pasangan `tidak_dinilai`
+terhitung per barang tanpa menyumbang angka, detail per gudang
+memakai kartu titik pesan-ulang existing. Page path-based
+`laporan/perencanaan-material/[[...segments]]` memakai
+`splitReportSegments` + scope gudang; prefill Permintaan Pembelian
+dari agregat. Tanpa schema/permission baru. Verifikasi lokal:
+builder 5/5 (bukti merah modul belum ada), gabungan guard
+36/36, tsc+lint bersih; CI head `f87a7b7da` (run 41237169479)
+dipantau sesi penerus.
+Vonis sisa: pesan P2002 serial duplikat generik di verify GR =
+GUGUR sebagai bug (hook memvalidasi keunikan dalam dokumen; sisa
+hanya pesan Prisma generik untuk tabrakan antar-dokumen — UX
+conf rendah, jangan diangkat tanpa bukti jahitan konkret).
+Deploy produksi tetap belum bisa dari mesin sesi (host tak
+terjangkau); langkah host tersisa tercatat §"Lanjutan 2026-11-01"
+di atas — jangan pernah pakai image usang `20261101-97171c636`.
 
 ## Bukti penutup
 
