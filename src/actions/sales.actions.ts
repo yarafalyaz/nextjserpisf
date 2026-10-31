@@ -1986,6 +1986,16 @@ export async function createSalesInvoice(formData: FormData) {
   const invoice = await prisma.$transaction(async (tx) => {
     await checkIdempotency(idempotencyKey, tx, user.id)
 
+    // Kunci baris SO SEBELUM bacaan pertama atas SO: gerbang status di
+    // bawah dan cap kumulatif di assertInvoiceWithinSalesOrderCap membaca
+    // plain read — snapshot REPEATABLE READ yang terbentuk sebelum SO
+    // terkunci tidak melihat faktur rival yang commit sesudahnya, jadi
+    // dua pembuatan bersamaan bisa sama-sama lolos cap. Kunci di hulu
+    // membuat seluruh bacaan tx terjadi sesudah serialisasi per SO.
+    if (v.salesOrderId) {
+      await tx.$executeRaw`SELECT id FROM sales_orders WHERE id = ${v.salesOrderId} FOR UPDATE`
+    }
+
     // Gerbang invoiceForbidden garansi (F-021 tahap 3 G5, server): faktur
     // dari jembatan quotation/sales-order milik WO repair klaim covered
     // ditolak sebelum lahir.

@@ -1620,6 +1620,25 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     expect(arg.data.dueDate?.toISOString()).toBe("2026-07-12T00:00:00.000Z")
   })
 
+  it("createSalesInvoice mengunci baris SO sebelum gerbang status/cap membaca SO", async () => {
+    // Snapshot REPEATABLE READ terbentuk pada plain read pertama; kunci
+    // SO di dalam assertInvoiceWithinSalesOrderCap tidak menyegarkannya.
+    // Dua pembuatan bersamaan atas SO sama bisa sama-sama lolos cap bila
+    // bacaan SO terjadi sebelum kunci — kunci wajib di awal tx.
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ status: "confirmed" })
+    const res = await actions.createSalesInvoice(fdMap({ customerId: "7", date: "2026-06-12", salesOrderId: "9", items: "[]" }))
+    expect(res?.success).toBe(true)
+    const lockSqls = (mocks.prismaMock as any).$executeRaw.mock.calls.map((c: unknown[]) => {
+      const first = c[0] as { strings?: string[] } | string[] | undefined
+      if (Array.isArray(first)) return first.join("?")
+      return (first as { strings?: string[] } | undefined)?.strings?.join("?") ?? ""
+    })
+    expect(lockSqls.some((s: string) => s.includes("sales_orders") && s.includes("FOR UPDATE"))).toBe(true)
+    const lockOrder = (mocks.prismaMock as any).$executeRaw.mock.invocationCallOrder[0]
+    const soOrder = mocks.prismaMock.salesOrder.findUnique.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(soOrder)
+  })
+
   it("R8-JB-09: dueDate eksplisit dari form menang atas termin", async () => {
     mocks.generateDocNumMock.mockResolvedValue("INV-JB09")
     mocks.prismaMock.customer.findUnique.mockImplementation(async (args: any) =>
