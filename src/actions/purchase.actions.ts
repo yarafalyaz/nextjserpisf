@@ -1872,8 +1872,10 @@ export async function confirmVendorBill(billId: number) {
     // Lock the PO row, re-check the bill is still draft, run the 3-way match, and
     // flip to posted atomically. Without the lock + in-tx re-check, two concurrent
     // confirms (or a confirm racing a createVendorBill) on the same PO could both
-    // pass the match and over-bill. Mirrors confirmVendorPayment. GL posting runs
-    // after commit (onVendorBillPosted opens its own tx and is idempotent).
+    // pass the match and over-bill. Mirrors confirmVendorPayment. GL posting
+    // (onVendorBillPosted) runs INSIDE this same transaction below — atomic
+    // with the status flip, not after commit. (R8-JB-10: komentar lama
+    // menyatakan sebaliknya.)
     let completedOrderNotice: string | undefined;
     let taxInvoiceWarning: string | undefined;
     await prisma.$transaction(async (tx) => {

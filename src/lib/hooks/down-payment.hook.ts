@@ -733,23 +733,28 @@ async function onDownPaymentConfirmedInner(
       const vmarker = `Uang muka dari DP ${vdp.documentNo}`
       if ([...allocatedMarkers].some((n) => n.includes(vmarker))) continue
       if (Number(vdp.amount) <= 0) continue
+      const vdpSen = Math.round(Number(vdp.amount) * 100)
+      // Porsi yang benar-benar melunasi faktur ini (kelebihan di atas
+      // grandTotal menjadi kredit pelanggan di bawah, bukan reklas).
+      const journalSen = Math.max(Math.min(vdpSen, createdSen - allocatedSen), 0)
       const payDocNo = await generateDocumentNumber("PAY");
       const allocPayment = await tx.salesPayment.create({
         data: {
           documentNo: payDocNo,
           salesInvoiceId: created.id,
           customerId: quotation.customerId,
-          amount: vdp.amount,
+          // R8-JB-05: baris payment hanya sebesar porsi teralokasi
+          // (journalSen), BUKAN amount DP penuh. recalcCore menjumlah
+          // baris payment apa adanya; baris penuh membuat paidAmount
+          // melebihi grandTotal sesudah recalc pertama pasca-posting.
+          // Kelebihan tetap tercatat sebagai CustomerCredit di bawah.
+          amount: journalSen / 100,
           paymentDate: vdp.paymentDate ?? new Date(),
           paymentMethod: "down_payment",
           notes: vmarker,
           createdBy: userId ?? null,
         },
       });
-      const vdpSen = Math.round(Number(vdp.amount) * 100)
-      // Porsi yang benar-benar melunasi faktur ini (kelebihan di atas
-      // grandTotal menjadi kredit pelanggan di bawah, bukan reklas).
-      const journalSen = Math.max(Math.min(vdpSen, createdSen - allocatedSen), 0)
       allocatedSen += vdpSen
       if (journalSen > 0) {
         if (!allocAccounts) {

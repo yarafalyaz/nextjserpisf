@@ -1274,6 +1274,14 @@ export async function postInvoice(invoiceId: number) {
     // Trigger accounting hook (replaces Laravel Observer) — runs once, guarded by
     // the atomic claim above so only the winning request reaches here.
     await onSalesInvoicePosted(invoiceId, Number(user.id), tx)
+
+    // R8-JB-06: faktur konversi DP lahir draft dengan paidAmount terisi
+    // tetapi tanpa akrual komisi (recalc melewati draft). Sesudah flip ke
+    // posted, recalc kanonis menurunkan status bayar dari baris payment
+    // nyata dan mengakrual komisi atas snapshot yang sudah dibekukan —
+    // tanpa ini komisi faktur konversi DP hilang senyap selamanya.
+    // Faktur biasa tanpa pembayaran: recalc no-op (totalPaid 0 → posted).
+    await onSalesPaymentUpdated(invoiceId, tx)
   })
 
   await logActivity("post", "SalesInvoice", invoiceId, `Posting faktur penjualan #${invoiceId}`)

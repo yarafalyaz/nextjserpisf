@@ -139,6 +139,23 @@ describe("review P0-1/P0-2 — alokasi DP penuh + tanpa bypass posting", () => {
     expectInvoiceNotPaid(mocks, { paidAmount: 1200 })
   })
 
+  it("R8-JB-05: baris SalesPayment konversi awal hanya sebesar porsi teralokasi (600+400, bukan 600+600)", async () => {
+    const dp = buildDp({ id: 2, amount: 600, status: "draft", docNo: "DP-2" })
+    const tx = buildTx(dp)
+    mockConfirmedDps(mocks, [
+      confirmedDpRow("DP-1", 600, "2026-09-01T00:00:00Z"),
+      confirmedDpRow("DP-2", 600, "2026-10-01T00:00:00Z"),
+    ])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(2, 1)
+
+    // recalcCore menjumlah baris payment apa adanya: baris penuh 600+600
+    // akan menulis paidAmount 1200 > grandTotal 1000 pada recalc pertama.
+    const amounts = mocks.salesPaymentCreate.mock.calls.map((c: any) => Number(c[0].data.amount))
+    expect(amounts).toEqual([600, 400])
+  })
+
   it("BLOCKER-1 F-036-S: konversi DP lahir lunas -> snapshot tarif beku 2% per tanggal faktur", async () => {
     const dp = buildDp({ id: 2, amount: 600, status: "draft", docNo: "DP-2" })
     const tx = buildTx(dp)

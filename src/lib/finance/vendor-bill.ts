@@ -47,8 +47,12 @@ export type VendorBillLineAmounts = {
 export function computeBillLineAmounts(line: VendorBillLineInput): VendorBillLineAmounts {
   const qty = safeRound(parseLocaleNumber(line.qty) ?? 0, 2)
   const unitPrice = safeRound(parseMoneyAmount(line.unitPrice) ?? 0, 2)
-  const discountPercent = safeRound(parseLocaleNumber(line.discountPercent) ?? 0, 2)
-  const taxPercent = safeRound(parseLocaleNumber(line.taxPercent) ?? 0, 2)
+  // R8-JB-07: persen di luar [0,100] menghasilkan subtotal/total negatif
+  // yang lolos ke kop + jurnal AP (bill tanpa PO/kop manual). Clamp di
+  // SATU sumber hitung ini (pola tax-invoice.ts creditablePercent),
+  // bukan menolak: form lama yang menyimpan persen wajar tak berubah.
+  const discountPercent = Math.min(100, Math.max(0, safeRound(parseLocaleNumber(line.discountPercent) ?? 0, 2)))
+  const taxPercent = Math.min(100, Math.max(0, safeRound(parseLocaleNumber(line.taxPercent) ?? 0, 2)))
   const gross = safeMultiply(qty, unitPrice, 2)
   const discountAmount = safeMultiply(gross, discountPercent / 100, 2)
   const subtotal = safeSubtract(gross, discountAmount, 2)

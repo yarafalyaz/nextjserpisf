@@ -12,6 +12,7 @@ const requirePermissionMock = vi.fn()
 const revalidateMock = vi.fn()
 const logActivityMock = vi.fn()
 const onSalesInvoicePostedMock = vi.fn()
+const onSalesPaymentUpdatedMock = vi.fn()
 
 const invoiceFindUniqueOrThrowMock = vi.fn()
 const invoiceItemCountMock = vi.fn()
@@ -50,7 +51,7 @@ vi.mock("@/lib/hooks/accounting.hook", () => ({
 }))
 vi.mock("@/lib/hooks/down-payment.hook", () => ({ onDownPaymentConfirmed: vi.fn() }))
 vi.mock("@/lib/hooks/sales-payment.hook", () => ({
-  onSalesPaymentCreated: vi.fn(), onSalesPaymentUpdated: vi.fn(), onSalesPaymentDeleted: vi.fn(),
+  onSalesPaymentCreated: vi.fn(), onSalesPaymentUpdated: (...a: unknown[]) => onSalesPaymentUpdatedMock(...a), onSalesPaymentDeleted: vi.fn(),
 }))
 vi.mock("@/lib/hooks/sales-return.hook", () => ({ onSalesReturnCompleted: vi.fn() }))
 vi.mock("@/lib/services/notification.service", () => ({ notificationService: {} }))
@@ -70,9 +71,11 @@ import { postInvoice } from "../sales.actions"
 beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock, onSalesInvoicePostedMock,
+    onSalesPaymentUpdatedMock,
     invoiceFindUniqueOrThrowMock, invoiceItemCountMock, invoiceUpdateManyMock,
     invoiceUpdateMock, invoiceFindFirstMock, generateDocumentNumberMock,
   ]) m.mockReset()
+  onSalesPaymentUpdatedMock.mockResolvedValue(undefined)
   requirePermissionMock.mockResolvedValue({ id: 3 })
   invoiceFindUniqueOrThrowMock.mockResolvedValue({
     id: 11, status: "draft", customerId: 8, grandTotal: 1000, paidAmount: 0, documentNo: null,
@@ -120,6 +123,17 @@ describe("postInvoice concurrency guard", () => {
 
     expect(result.success).toBe(false)
     expect(onSalesInvoicePostedMock).not.toHaveBeenCalled() // no double GL / StockMove
+    expect(onSalesPaymentUpdatedMock).not.toHaveBeenCalled()
+  })
+
+  it("R8-JB-06: sesudah posting, recalc kanonis dipanggil dalam tx yang sama (akrual komisi faktur konversi DP)", async () => {
+    const result = await postInvoice(11)
+
+    expect(result.success).toBe(true)
+    expect(onSalesPaymentUpdatedMock).toHaveBeenCalledTimes(1)
+    expect(onSalesPaymentUpdatedMock.mock.calls[0][0]).toBe(11)
+    // Argumen kedua = client transaksi pemanggil (bukan tx baru).
+    expect(onSalesPaymentUpdatedMock.mock.calls[0][1]).toBeDefined()
   })
 
   it("refuses posting an invoice that is not in draft", async () => {

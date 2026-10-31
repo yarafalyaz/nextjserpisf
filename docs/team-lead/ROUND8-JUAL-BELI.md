@@ -56,8 +56,12 @@ relief Rp40jt → reverse bayar → balanceDue kembali Rp100jt penuh,
 vendor bisa ditagih ulang.
 
 ### R8-JB-05 — MEDIUM, PLAUSIBLE — DP konversi awal: baris bayar penuh
-Baris SalesPayment dibuat sebesar `vdp.amount` PENUH per DP
-(`down-payment.hook.ts:737-748`); cap hanya di jurnal + `paidAmount`
+**Status: SELESAI 2026-10-31** — baris `SalesPayment` konversi awal
+kini sebesar porsi teralokasi (`journalSen`), bukan DP penuh;
+kelebihan tetap menjadi `CustomerCredit`. Baris Rp0 untuk DP yang
+kelebihannya seluruhnya jadi kredit DIPERTAHANKAN sebagai marker
+idempotency (notes nomor DP) agar retry tidak membuat kredit ganda.
+`down-payment.hook.ts:737-748`); cap hanya di jurnal + `paidAmount`
 tertulis; `recalcCore` (`sales-payment.hook.ts:50-53,86-94`)
 menjumlah baris payment TANPA cap grandTotal → pemicu recalc
 kemudian menulis `paidAmount` Rp140jt > grandTotal Rp100jt, sisa
@@ -65,6 +69,15 @@ negatif, pembayaran sah ditolak. Jalur DP lanjutan sudah benar
 (AUD-R3-04).
 
 ### R8-JB-06 — MEDIUM, CONFIRMED — Edit faktur lompat status + komisi hilang
+**Status: SELESAI 2026-10-31** — varian yang terbukti dari kode nyata:
+faktur konversi DP lahir draft dengan `paidAmount` terisi dan
+snapshot komisi beku, tetapi `recalcCore` melewati draft dan akrual
+komisi hanya lahir di sana saat status paid. Fix: `postInvoice`
+memanggil `onSalesPaymentUpdated(invoiceId, tx)` sesudah
+`onSalesInvoicePosted` dalam transaksi yang sama — recalc kanonis
+menurunkan status bayar dari baris payment nyata dan mengakrual
+komisi atas snapshot yang sudah dibekukan. Faktur biasa tanpa
+pembayaran: recalc no-op (tetap posted).
 `updateSalesInvoice` bisa memindahkan status ke paid tanpa jalur
 pembayaran + snapshot komisi dibekukan tapi akrual komisi TIDAK
 dipanggil (`sales.actions.ts:3381-3402`; accrue hanya di recalcCore/
@@ -72,6 +85,13 @@ jalur DP) → faktur konversi DP yang diedit lalu diposting: snapshot
 ada, baris CommissionPayable tak pernah lahir, komisi hilang senyap.
 
 ### R8-JB-07 — MEDIUM, CONFIRMED — Persen diskon/pajak baris bill tak terbatas
+**Status: SELESAI 2026-10-31** — persen di-clamp ke [0,100] di SATU
+sumber hitung `computeBillLineAmounts` (pola `tax-invoice.ts`
+creditablePercent), bukan ditolak: form lama yang menyimpan persen
+wajar tak berubah; satu fix menutup create/update/confirm karena
+semua lewat fungsi yang sama. Clamp dipilih atas penolakan —
+inkonsistensi kop hasil clamp menjadi cakupan R8-JB-08, tidak
+dicampur ke sini.
 `purchase.schemas.ts` field `discountPercent`/`taxPercent` tanpa
 `.min/.max`; `computeBillLineAmounts` tanpa clamp → diskon 150%
 menghasilkan subtotal baris negatif; reachable penuh untuk bill
@@ -91,6 +111,9 @@ dihitung) → aging bisa 30 hari lebih awal. Tak ada helper
 `computeDueDate` di repo; kesenjangan konsistensi, bukan regresi.
 
 ### R8-JB-10 — LOW, CONFIRMED — Komentar basi confirmVendorBill
+**Status: SELESAI 2026-10-31** — komentar diperbaiki: GL posting
+(`onVendorBillPosted`) jalan DI DALAM transaksi yang sama dengan
+flip status, bukan sesudah commit.
 Komentar `confirmVendorBill` (`purchase.actions.ts:1874-1876`)
 menyatakan GL posting sesudah commit, padahal hook jalan DI DALAM
 tx (`:1968-1969`); perilaku benar, komentar berisiko menyesatkan.

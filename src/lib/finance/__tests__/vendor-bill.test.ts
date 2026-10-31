@@ -24,6 +24,22 @@ describe("matematika baris tagihan vendor", () => {
     expect(a.discountAmount).toBe(0)
     expect(a.total).toBe(0)
   })
+
+  it("R8-JB-07: persen di luar [0,100] di-clamp — subtotal/total tak pernah negatif", () => {
+    const a = computeBillLineAmounts({ qty: 1, unitPrice: 100_000, discountPercent: 150, taxPercent: -11 })
+    expect(a.discountPercent).toBe(100)
+    expect(a.taxPercent).toBe(0)
+    expect(a.subtotal).toBe(0)
+    expect(a.taxAmount).toBe(0)
+    expect(a.total).toBe(0)
+  })
+
+  it("R8-JB-07: pajak di atas 100% di-clamp ke 100", () => {
+    const a = computeBillLineAmounts({ qty: 1, unitPrice: 100_000, taxPercent: 250 })
+    expect(a.taxPercent).toBe(100)
+    expect(a.taxAmount).toBe(100_000)
+    expect(a.total).toBe(200_000)
+  })
 })
 
 describe("Σ diskon baris untuk diskon level dokumen", () => {
