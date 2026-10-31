@@ -7,14 +7,22 @@ import {
 function mockTx(credits: Array<Record<string, unknown>>) {
   const creditUpdate = vi.fn().mockResolvedValue({})
   const billUpdate = vi.fn().mockResolvedValue({})
+  const executeRawCalls: string[] = []
   const tx = {
     vendorCredit: {
       findMany: vi.fn().mockResolvedValue(credits),
       update: creditUpdate,
     },
     vendorBill: { update: billUpdate },
+    $executeRaw: vi.fn((...a: any[]) => {
+      const first = a[0]
+      executeRawCalls.push(
+        Array.isArray(first) ? first.join("?") : ((first as any)?.strings?.join("?") ?? String(first ?? "")),
+      )
+      return Promise.resolve(1)
+    }),
   } as any
-  return { tx, creditUpdate, billUpdate }
+  return { tx, creditUpdate, billUpdate, executeRawCalls }
 }
 
 describe("vendorCreditBalance (lanjutan R8-JB-03)", () => {
@@ -91,6 +99,23 @@ describe("applyOpenVendorCreditsToBill", () => {
     expect(r).toEqual({ remainingBalanceDue: 1000, appliedTotal: 0 })
     expect(billUpdate).not.toHaveBeenCalled()
     expect(creditUpdate).not.toHaveBeenCalled()
+  })
+
+  it("kredit vendor dikunci FOR UPDATE sebelum dibaca (anti pakai-ganda dua confirm)", async () => {
+    const { tx, executeRawCalls } = mockTx([
+      { id: 1, receivedAmount: 500, allocatedAmount: 0 },
+    ])
+    const r = await applyOpenVendorCreditsToBill(tx, { vendorId: 9, billId: 82, balanceDue: 300 })
+    expect(r.appliedTotal).toBe(300)
+    // Tanpa kunci, dua confirm bill vendor sama sama-sama membaca
+    // allocatedAmount basi dan kredit Rp100 mengurangi dua bill.
+    const lockIdx = executeRawCalls.findIndex(
+      (s) => /vendor_credits/i.test(s) && /for update/i.test(s),
+    )
+    expect(lockIdx).toBeGreaterThanOrEqual(0)
+    expect(tx.$executeRaw.mock.invocationCallOrder[lockIdx]).toBeLessThan(
+      tx.vendorCredit.findMany.mock.invocationCallOrder[0],
+    )
   })
 
   it("bill sudah dalam toleransi Rp1: kredit tidak dikonsumsi", async () => {

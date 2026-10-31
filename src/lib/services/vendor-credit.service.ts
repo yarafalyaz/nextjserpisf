@@ -41,6 +41,14 @@ export async function applyOpenVendorCreditsToBill(
   if (remaining <= SETTLEMENT_TOLERANCE_IDR) {
     return { remainingBalanceDue: remaining, appliedTotal };
   }
+  // Serialisasi per vendor: kunci baris kredit open sebelum dibaca. Tanpa
+  // kunci, dua confirm bill vendor yang sama sama-sama membaca
+  // allocatedAmount basi dan menulis nilai absolut yang sama — kredit
+  // terpakai ganda, subledger AP lepas dari GL. Urutan kunci global:
+  // bill (pemanggil) lalu kredit. Guard typeof: tx stub tanpa $executeRaw.
+  if (typeof tx.$executeRaw === "function") {
+    await tx.$executeRaw`SELECT id FROM vendor_credits WHERE vendor_id = ${input.vendorId} AND status = 'open' FOR UPDATE`;
+  }
   const credits = await tx.vendorCredit.findMany({
     where: { vendorId: input.vendorId, status: "open" },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
