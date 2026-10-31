@@ -655,6 +655,7 @@ describe("Overtime Request Actions", () => {
       // dasar hitung tidak berubah.
       variableComponents: [{ name: "Tunjangan Variable", amount: 666_000 }],
       floor75Applied: false,
+      paymentFrequency: "MONTHLY",
       baseTotal: 4_000_001,
       overtimeDate: otDate.toISOString(),
     })
@@ -697,6 +698,7 @@ describe("Overtime Request Actions", () => {
       components: [],
       variableComponents: [],
       floor75Applied: false,
+      paymentFrequency: "MONTHLY",
       baseTotal: 5_000_000,
       overtimeDate: "2026-06-12T00:00:00.000Z",
     })
