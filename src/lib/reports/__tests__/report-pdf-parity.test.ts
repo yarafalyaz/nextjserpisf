@@ -116,6 +116,10 @@ describe("paritas registry PDF laporan", () => {
       "riwayat-harga-jual",
       "target-penjualan",
       "serapan-overhead",
+      // MRP-Lite report-only tahap 1; ekspor/PDF server-side belum dibuka
+      // (pola nomor-seri-batch; angka ekspor wajib builder yang sama dengan
+      // layar bila nanti dibuka).
+      "perencanaan-material",
     ]
     const hilang = REPORT_CATALOG_HREFS.map(hrefToKey).filter((key) => !(key in REPORTS) && !TANPA_PDF.includes(key))
     expect(hilang).toEqual([])
