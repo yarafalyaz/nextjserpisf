@@ -28,6 +28,7 @@ let payrollSeq: number
 let componentLinesByPayroll: Map<number, any[]>
 let pkwtBlocking: { id: number; status: string } | null
 let forceCreateP2002 = false
+let execRawSql: string[] = []
 let commissionPayableById: Map<number, any>
 let commissionPayableUpdates: Array<{ id: number; paidAmount: number }>
 
@@ -153,7 +154,11 @@ function txClient() {
         return row
       },
     },
-    $executeRaw: async () => 1,
+    $executeRaw: async (strings: unknown) => {
+      const parts = (strings as { strings?: string[] })?.strings ?? (strings as string[])
+      execRawSql.push(Array.isArray(parts) ? parts.join("?") : String(strings))
+      return 1
+    },
   }
 }
 
@@ -210,6 +215,7 @@ const fd = (reason: string) => {
 beforeEach(() => {
   vi.clearAllMocks()
   forceCreateP2002 = false
+  execRawSql = []
   payrollById = new Map([[1, BASE_SOURCE()]])
   loansByEmployee = new Map([
     [9, [{ id: 11, remainingAmount: 1000000, status: "active", loanDate: new Date("2026-09-01T00:00:00Z") }]],
@@ -304,6 +310,12 @@ describe("correctPaidPayroll E-HRCR (HR-BR-005 133-S/135-V)", () => {
     expect(reverseJournalsMock).not.toHaveBeenCalled()
     expect(onPayrollPaidMock).not.toHaveBeenCalled()
     expect(payrollById.size).toBe(2)
+  })
+
+  it("kunci baris slip sumber payrolls sebelum dup-check di dalam tx", async () => {
+    const res = await correctPaidPayroll(1, fd("Koreksi terkunci"))
+    expect(res.success).toBe(true)
+    expect(execRawSql.some((s) => s.includes("payrolls") && s.includes("FOR UPDATE"))).toBe(true)
   })
 
   it("E-HRCR-4: periode koreksi terkunci menolak sebelum mutasi", async () => {

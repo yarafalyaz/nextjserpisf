@@ -3575,6 +3575,11 @@ export async function correctPaidPayroll(
     // Baris komponen diklon dari slip asal supaya rekap periode koreksi
     // berdiri sendiri; netto dihitung ulang mesin yang sama.
     const result = await prisma.$transaction(async (tx) => {
+      // Kunci baris slip sumber sebelum cek ulang status + dup-check:
+      // correctsPayrollId hanya @@index dan unik (employeeId, rentang)
+      // tidak menangkap slip employeeId null, jadi tanpa kunci dua koreksi
+      // konkuren sama-sama lolos dan jurnal koreksi terbit dua kali.
+      await tx.$executeRaw`SELECT id FROM payrolls WHERE id = ${payrollId} FOR UPDATE`;
       const fresh = await tx.payroll.findUniqueOrThrow({ where: { id: payrollId } });
       if (fresh.status !== "paid") {
         throw new Error(
