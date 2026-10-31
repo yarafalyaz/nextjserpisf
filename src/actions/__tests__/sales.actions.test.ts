@@ -1935,6 +1935,24 @@ describe("Down Payment Actions (legacy happy paths)", () => {
     const res = await actions.confirmDownPayment(1)
     expect(res?.success).toBe(true)
   })
+  it("confirmDownPayment mengunci baris DP sebelum bacaan gate (snapshot sesudah kunci)", async () => {
+    // Plain read pertama dalam tx membentuk snapshot REPEATABLE READ;
+    // kunci quotation di hook konfirmasi tidak menyegarkannya. Dua DP
+    // berbeda pada quotation sama bisa sama-sama melihat belum ada
+    // invoice lalu sama-sama membuat WO/SO/Invoice.
+    mocks.prismaMock.downPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    const res = await actions.confirmDownPayment(1)
+    expect(res?.success).toBe(true)
+    const lockCalls = (mocks.prismaMock as any).$executeRaw.mock.calls.map((c: unknown[]) => {
+      const first = c[0] as { strings?: string[] } | string[] | undefined
+      if (Array.isArray(first)) return first.join("?")
+      return (first as { strings?: string[] } | undefined)?.strings?.join("?") ?? ""
+    })
+    expect(lockCalls.some((s: string) => s.includes("down_payments") && s.includes("FOR UPDATE"))).toBe(true)
+    const lockOrder = (mocks.prismaMock as any).$executeRaw.mock.invocationCallOrder[0]
+    const gateOrder = mocks.prismaMock.downPayment.findUnique.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(gateOrder)
+  })
   it("deleteDownPayment succeeds", async () => {
     mocks.prismaMock.downPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await actions.deleteDownPayment(1)

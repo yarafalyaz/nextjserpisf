@@ -1003,6 +1003,15 @@ export async function confirmDownPayment(dpId: number) {
   // kemudian ikut rollback.
   const afterCommit: Array<() => Promise<unknown>> = []
   await prisma.$transaction(async (tx) => {
+    // Kunci baris DP SEBELUM bacaan pertama: plain read pertama dalam tx
+    // membentuk snapshot REPEATABLE READ, dan kunci baris quotation di
+    // hook konfirmasi tidak menyegarkan snapshot itu — dua DP berbeda
+    // pada quotation sama bisa sama-sama melihat "belum ada invoice"
+    // dari snapshot masing-masing lalu sama-sama membuat WO/SO/Project/
+    // Invoice. Kunci di hulu memastikan seluruh bacaan tx terjadi
+    // sesudah serialisasi per DP. Urutan kunci dp -> quotation sama
+    // dengan hook, tidak membentuk siklus.
+    await tx.$executeRaw`SELECT id FROM down_payments WHERE id = ${dpId} FOR UPDATE`
     // F-2026-10-25-035-B titik tahan Q-CL2-4 butir 4: nilai SEKALI di hulu
     // sebelum rantai DP. Hasil idempoten (DP sudah confirmed / invoice
     // existing) TIDAK ditahan. Tertahan = throw = seluruh tx DP rollback.
