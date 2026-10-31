@@ -596,6 +596,18 @@ export async function onGoodsReceiptVerified(
             `Item #${item.itemId}: terdapat duplikasi nomor seri pada penerimaan.`,
           );
         }
+        // Nomor seri unik global; tanpa pemeriksaan ini, serial yang sudah
+        // terdaftar dari penerimaan lain jatuh ke P2002 Prisma generik dan
+        // operator tidak tahu serial mana yang konflik.
+        const existing = await tx.itemSerial.findMany({
+          where: { serialNumber: { in: serials } },
+          select: { serialNumber: true },
+        });
+        if (existing.length > 0) {
+          throw new Error(
+            `Item #${item.itemId}: nomor seri ${existing.map((e) => e.serialNumber).join(", ")} sudah terdaftar dari penerimaan lain.`,
+          );
+        }
         await tx.itemSerial.createMany({
           data: serials.map((serialNumber) => ({
             itemId: item.itemId,

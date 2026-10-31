@@ -90,6 +90,7 @@ function wireTx(opts: {
     itemBatchUpdate: vi.fn().mockResolvedValue({}),
     itemSerialCreate: vi.fn().mockResolvedValue({}),
     itemSerialCreateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    itemSerialFindMany: vi.fn().mockResolvedValue([]),
     systemSettingFindFirst: vi.fn().mockResolvedValue({ periodLockDate: null }),
     itemUpdate: vi.fn().mockResolvedValue({}),
   }
@@ -288,6 +289,17 @@ describe("onGoodsReceiptVerified stock tracking modules", () => {
       itemMeta: { trackSerial: true },
     })
     await expect(onGoodsReceiptVerified(100, 1)).rejects.toThrow(/tidak sama dengan qty diterima/)
+  })
+
+  it("rejects with the conflicting serial numbers when they are already registered", async () => {
+    const { spies } = wireTx({
+      poId: 50, poItems: [{ itemId: 7, qty: 2 }], priorGrItems: [],
+      grItems: [{ itemId: 7, qty: 2, serialNumbers: ["S1", "S9"] }],
+      itemMeta: { trackSerial: true },
+    })
+    spies.itemSerialFindMany.mockResolvedValue([{ serialNumber: "S9" }])
+    await expect(onGoodsReceiptVerified(100, 1)).rejects.toThrow(/S9.*sudah terdaftar/)
+    expect(spies.itemSerialCreateMany).not.toHaveBeenCalled()
   })
 
   it("throws when trackSerial received qty is fractional (1.5 unit, 2 serial)", async () => {

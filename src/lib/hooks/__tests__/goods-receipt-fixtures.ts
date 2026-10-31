@@ -20,7 +20,11 @@ export function buildGoodsReceiptTx(spies: Record<string, any>, overrides: Recor
     item: { findUnique: spies.itemFindUnique ?? vi.fn(), findMany: spies.itemFindMany, update: spies.itemUpdate },
     uomConversion: { findMany: spies.uomConversionFindMany },
     itemBatch: { findFirst: spies.itemBatchFindFirst, create: spies.itemBatchCreate, update: spies.itemBatchUpdate },
-    itemSerial: { create: spies.itemSerialCreate, createMany: spies.itemSerialCreateMany },
+    itemSerial: {
+      create: spies.itemSerialCreate,
+      createMany: spies.itemSerialCreateMany,
+      findMany: spies.itemSerialFindMany ?? vi.fn().mockResolvedValue([]),
+    },
     systemSetting: { findFirst: spies.systemSettingFindFirst },
   }
   return { ...tx, ...overrides }
