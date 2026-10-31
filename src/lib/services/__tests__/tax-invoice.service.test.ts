@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => {
     downPayment: { findUnique: dpFindUnique },
     vendorBill: { update: vendorBillUpdate },
     $queryRaw: queryRaw,
+    $executeRaw: vi.fn().mockResolvedValue(1),
   }
   const prisma = {
     $transaction: (fn: (tx: unknown) => unknown) => fn(tx),

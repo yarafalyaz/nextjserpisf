@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   tiFindFirst: vi.fn(),
   tiCreate: vi.fn(),
   claim: vi.fn(),
+  executeRaw: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -13,6 +14,7 @@ vi.mock("@/lib/db/prisma", () => ({
       fn({
         downPayment: { findUnique: mocks.dpFindUnique },
         taxInvoice: { findFirst: mocks.tiFindFirst, create: mocks.tiCreate },
+        $executeRaw: mocks.executeRaw,
       }),
     ),
   },
@@ -59,6 +61,7 @@ beforeEach(() => {
   mocks.tiFindFirst.mockResolvedValue(null)
   mocks.tiCreate.mockResolvedValue({ id: 501 })
   mocks.claim.mockResolvedValue({ replayed: false })
+  mocks.executeRaw.mockResolvedValue(1)
 })
 
 describe("B5(4) terbit FP UM anti-replay", () => {
@@ -90,6 +93,24 @@ describe("B5(4) terbit FP UM anti-replay", () => {
     expect(r.success).toBe(false)
     expect(r.error).toMatch(/Snapshot PPN uang muka belum dibekukan/)
     expect(mocks.tiCreate).not.toHaveBeenCalled()
+  })
+
+  it("baris DP dikunci FOR UPDATE sebelum cek FP aktif (serialisasi key berbeda)", async () => {
+    // Dua request idempotency key berbeda untuk DP sama: kunci baris
+    // down_payments menserialkan keduanya sehingga cek FP aktif yang
+    // kalah melihat FP pemenang. Tanpa kunci keduanya membaca aktif
+    // null dari snapshot dan sama-sama create.
+    const r = await issueDownPaymentTaxInvoice({ ...INPUT, idempotencyKey: "idem-key-0009" })
+    expect(r.success).toBe(true)
+    const lockSqls = mocks.executeRaw.mock.calls.map((c: unknown[]) => {
+      const first = c[0] as { strings?: string[] } | string[] | undefined
+      if (Array.isArray(first)) return first.join("?")
+      return (first as { strings?: string[] } | undefined)?.strings?.join("?") ?? ""
+    })
+    expect(lockSqls.some((s: string) => s.includes("down_payments") && s.includes("FOR UPDATE"))).toBe(true)
+    const lockOrder = mocks.executeRaw.mock.invocationCallOrder[0]
+    const activeOrder = mocks.tiFindFirst.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(activeOrder)
   })
 
   it("FP terbit membawa snapshot: DPP/PPN/tarif/masa dari DP, status draf", async () => {

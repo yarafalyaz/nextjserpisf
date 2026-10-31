@@ -356,6 +356,10 @@ export async function issueDownPaymentTaxInvoice(
         createdId = claim.resultRefId ?? undefined
         return
       }
+      // Serialisasi per DP: idempotency key berbeda tidak saling menahan.
+      // Kunci baris DP membuat cek FP aktif di bawah melihat FP pemenang
+      // balapan; tanpa kunci dua FP UM aktif lahir untuk satu DP.
+      await tx.$executeRaw`SELECT id FROM down_payments WHERE id = ${input.downPaymentId} FOR UPDATE`
       const dp = await tx.downPayment.findUnique({
         where: { id: input.downPaymentId },
         include: { customer: { select: { name: true, taxId: true, taxpayerName: true, nitku: true, taxAddress: true, address: true, email: true } } },
