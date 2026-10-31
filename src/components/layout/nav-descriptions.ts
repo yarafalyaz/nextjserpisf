@@ -115,6 +115,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/laporan/penerimaan-belum-ditagih": "Menampilkan penerimaan barang yang belum atau belum penuh ditagih vendor beserta umur sisa dan perbandingannya dengan saldo akun GRNI",
   "/laporan/transfer-terkirim": "Menampilkan pemindahan barang yang sudah keluar dari gudang asal tetapi belum diterima gudang tujuan beserta umur dan nilainya",
   "/laporan/stok-minimum": "Menampilkan barang yang sudah mencapai atau menembus batas minimum stoknya beserta kekurangan dan perkiraan nilai pembeliannya",
+  "/laporan/perencanaan-material": "Menampilkan saran pesan-ulang per barang berdasar titik pesan-ulang seluruh gudang, pemakaian 90 hari, dan pesanan pembelian terbuka",
   "/laporan/penerimaan-sebagian": "Menampilkan pesanan pembelian yang barisnya belum diterima penuh beserta nilai sisanya",
   "/laporan/pemenuhan-pesanan": "Menampilkan pesanan penjualan yang barisnya belum terkirim penuh beserta nilai sisanya",
   "/laporan/terkirim-belum-terfaktur": "Menampilkan pesanan penjualan yang sudah terkirim tetapi belum terfaktur penuh beserta umur dan sisa nilainya",

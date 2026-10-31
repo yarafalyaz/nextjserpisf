@@ -142,6 +142,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
       { href: "/laporan/umur-stok" },
       { href: "/laporan/stok-tidak-bergerak" },
       { href: "/laporan/stok-minimum" },
+      { href: "/laporan/perencanaan-material" },
       { href: "/laporan/penghitungan-stok" },
       { href: "/laporan/nomor-seri-batch" },
     ],

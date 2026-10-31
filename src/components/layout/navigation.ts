@@ -319,6 +319,7 @@ export const navigation: NavItem[] = [
       { label: "Barang Diterima Belum Ditagih", href: "/laporan/penerimaan-belum-ditagih", icon: PackageCheck, permission: "view_reports" },
       { label: "Persediaan Terkirim Belum Diterima", href: "/laporan/transfer-terkirim", icon: ArrowLeftRight, permission: "view_reports" },
       { label: "Barang Stok Minimum", href: "/laporan/stok-minimum", icon: Package, permission: "view_reports" },
+      { label: "Perencanaan Material", href: "/laporan/perencanaan-material", icon: Package, permission: "view_reports" },
       { label: "Barang Diterima Sebagian", href: "/laporan/penerimaan-sebagian", icon: PackageCheck, permission: "view_reports" },
       { label: "Pemenuhan Pesanan", href: "/laporan/pemenuhan-pesanan", icon: ShoppingCart, permission: "view_reports" },
       { label: "Terkirim Belum Terfaktur", href: "/laporan/terkirim-belum-terfaktur", icon: FileText, permission: "view_reports" },
