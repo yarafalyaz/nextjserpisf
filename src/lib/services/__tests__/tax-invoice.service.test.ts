@@ -319,6 +319,28 @@ describe("cancelTaxInvoice guards", () => {
       { where: { id: 1 }, data: { taxInvoiceNumber: null } },
     )
   })
+
+  it("batal faktur masukan credited: status kredit dilepas agar jalur koreksi terbuka", async () => {
+    mocks.taxInvoiceFindUniqueOrThrow.mockResolvedValue({
+      id: 7, direction: "in", taxPeriod: "2026-01", taxInvoiceNumber: "010.001-26.00000009",
+      taxInvoiceDate: new Date(2026, 0, 10), taxAmount: 1_320_000,
+      djpStatus: "approved", creditStatus: "credited", creditPeriod: "2026-01",
+      transactionCode: "04", taxRate: 12,
+      salesInvoiceId: null, vendorBillId: 3, vendorId: 1,
+      counterpartyTaxId: null, counterpartyName: null, counterpartyNitku: null,
+    })
+    mocks.taxInvoiceFindFirst.mockResolvedValue(null)
+    const r = await cancelTaxInvoice({ id: 7, cancelReason: "faktur salah", idempotencyKey: key() })
+    expect(r.success).toBe(true)
+    expect(mocks.taxInvoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 7 },
+        data: expect.objectContaining({
+          djpStatus: "cancelled", creditStatus: "uncredited", creditPeriod: null,
+        }),
+      }),
+    )
+  })
 })
 
 describe("creditInputInvoice guards", () => {

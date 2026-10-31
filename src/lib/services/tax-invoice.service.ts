@@ -569,9 +569,20 @@ export async function cancelTaxInvoice(input: CancelTaxInvoiceInput): Promise<Ta
       if (inv.djpStatus === "cancelled") throw definitive("Faktur ini sudah batal")
       if (inv.djpStatus === "replaced") throw definitive("Faktur ini sudah diganti — batal faktur pengganti, bukan asal")
       await assertPeriodOpen(inv.taxInvoiceDate, tx as never)
+      // Faktur masukan yang sudah dikreditkan lalu dibatalkan wajib lepas
+      // status kreditnya: baris batal ter-skip di SPT, tapi creditStatus
+      // `credited` permanen mengunci jalur koreksi (re-kredit ditolak,
+      // pengganti ditolak) — masa asal kehilangan PPN Masukan tanpa
+      // dokumen pengganti. Kembali `uncredited`; kredit ulang hanya
+      // mungkin lewat faktur pengganti (batal sendiri tak bisa
+      // dikreditkan ulang — guard kredit menolak djpStatus cancelled).
+      const clearCredit =
+        inv.direction === "in" && inv.creditStatus === "credited"
+          ? { creditStatus: "uncredited", creditPeriod: null, creditablePercent: 100 }
+          : {}
       await tx.taxInvoice.update({
         where: { id: inv.id },
-        data: { djpStatus: "cancelled", replaceReason: input.cancelReason.trim() },
+        data: { djpStatus: "cancelled", replaceReason: input.cancelReason.trim(), ...clearCredit },
       })
       // Cermin kepala: faktur tertaut terbaru yg masih hidup, else kosong.
       if (inv.direction === "out" && inv.salesInvoiceId != null) {

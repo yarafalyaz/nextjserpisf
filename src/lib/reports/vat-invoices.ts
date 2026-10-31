@@ -61,10 +61,12 @@ export interface VatInvoiceGroup {
 
 /**
  * Pengurang masa retur (vonis Salsa F-2026-10-20-61): baris retur penjualan
- * terproses pada masa berjalan. DPP-retur = Σ qty × SalesReturnItem.price
- * (price membeku dari faktur asal saat create); PPN-retur = DPP-retur × tarif
- * efektif faktur asal. Baris pengurang tampil TERPISAH — baris faktur asal
- * tidak diubah. Sisi beli belum ada (tautan PurchaseReturn→VendorBill ambigu).
+ * terproses pada masa berjalan. Nilai dari snapshot beku
+ * `SalesReturnItem.returnDpp/returnVat` (diisi loader); baris legacy tanpa
+ * snapshot dihitung ulang DPP-retur = Σ qty × price baris retur,
+ * PPN-retur = DPP-retur × tarif efektif faktur asal. Baris pengurang
+ * tampil TERPISAH — baris faktur asal tidak diubah. Sisi beli belum ada
+ * (tautan PurchaseReturn→VendorBill ambigu).
  */
 export interface VatReturnDeductionInput {
   date: Date

@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => {
   const queryRaw = vi.fn()
 
   const systemSettingFindFirst = vi.fn()
+  const billFindUnique = vi.fn(async () => ({ id: 42, status: "posted", deletedAt: null }))
+  const paymentFindUnique = vi.fn(async () => ({ id: 88, status: "posted" }))
   const tx: Record<string, unknown> = {
     withholdingCertificate: {
       findFirst: certFindFirst,
@@ -31,6 +33,8 @@ const mocks = vi.hoisted(() => {
       findUniqueOrThrow: certFindUniqueOrThrow,
       update: certUpdate,
     },
+    vendorBill: { findUnique: billFindUnique },
+    salesPayment: { findUnique: paymentFindUnique },
     withholdingTaxType: { findUniqueOrThrow: typeFindUniqueOrThrow, findMany: typeFindMany },
     account: { findMany: accountFindMany },
     taxPayment: { findFirst: vi.fn(async () => null), create: taxPaymentCreate, update: taxPaymentUpdate },
@@ -46,6 +50,7 @@ const mocks = vi.hoisted(() => {
     typeFindUniqueOrThrow, typeFindMany, accountFindMany, taxPaymentCreate, taxPaymentUpdate,
     journalCreate, claimIdempotencyKey, bindIdempotencyKey, assertPeriodOpen,
     reverseJournals, queryRaw, prisma, systemSettingFindFirst,
+    billFindUnique, paymentFindUnique,
   }
 })
 
@@ -105,6 +110,8 @@ beforeEach(() => {
     salesReceivableAccountId: 110,
   })
   mocks.certUpdate.mockResolvedValue({})
+  mocks.billFindUnique.mockResolvedValue({ id: 42, status: "posted", deletedAt: null })
+  mocks.paymentFindUnique.mockResolvedValue({ id: 88, status: "posted" })
 })
 
 function key() {
@@ -126,6 +133,43 @@ describe("issueWithholdingCertificate guards", () => {
     expect(Number(data.tariff)).toBe(2)
     expect(Number(data.withheldAmount)).toBe(200_000)
     expect(data.taxPeriod).toBe("2026-01")
+  })
+
+  it("bupot kedua atas bill sama ditolak — satu dokumen satu bupot aktif", async () => {
+    mocks.certFindFirst
+      .mockResolvedValueOnce(null) // nomor bupot baru belum ada
+      .mockResolvedValueOnce({ id: 9, certificateNumber: "BP-LAMA" }) // bill sudah berbupot
+    const r = await issueWithholdingCertificate({
+      direction: "we_withhold", certificateNumber: "BP-BARU",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Maklon",
+      withholdingTypeId: 3, dpp: 10_000_000, vendorBillId: 42, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/sudah punya bupot aktif/)
+    expect(mocks.certCreate).not.toHaveBeenCalled()
+  })
+
+  it("arah tak cocok dokumen tertaut ditolak (bill + withheld_from_us)", async () => {
+    const r = await issueWithholdingCertificate({
+      direction: "withheld_from_us", certificateNumber: "BP-X",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Maklon",
+      withholdingTypeId: 3, dpp: 10_000_000, vendorBillId: 42, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/we_withhold/)
+    expect(mocks.certCreate).not.toHaveBeenCalled()
+  })
+
+  it("bupot atas pembayaran yang sudah dibalik ditolak", async () => {
+    mocks.paymentFindUnique.mockResolvedValue({ id: 88, status: "reversed" })
+    const r = await issueWithholdingCertificate({
+      direction: "withheld_from_us", certificateNumber: "BP-Y",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Langganan",
+      withholdingTypeId: 3, dpp: 10_000_000, salesPaymentId: 88, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/sudah dibalik/)
+    expect(mocks.certCreate).not.toHaveBeenCalled()
   })
 
   it("fail-closed: we_withhold tanpa akun Hutang PPh ditolak", async () => {

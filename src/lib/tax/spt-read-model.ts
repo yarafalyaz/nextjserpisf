@@ -47,6 +47,40 @@ export interface OutputChain {
   originPeriod: string
 }
 
+/**
+ * Kepala rantai efektif per id TaxInvoice (semua anggota rantai memetakan
+ * ke kepala yang sama) untuk laporan daftar faktur: dokumen komersial
+ * yang punya TaxInvoice tampil dari kepala rantainya — nilai pengganti
+ * terakhir — bukan dari nilai kop komersial. `null` = tidak ada kepala
+ * hidup (semua draf/batal/tolak/diganti): dokumen nol-efek di SPT.
+ */
+export function buildChainHeads(
+  rows: { id: number; replacesId: number | null; djpStatus: string; dpp: number; taxAmount: number }[],
+): Map<number, { dpp: number; taxAmount: number } | null> {
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  const replacementOf = new Map<number, number>()
+  for (const r of rows) {
+    if (r.replacesId != null && byId.has(r.replacesId)) replacementOf.set(r.replacesId, r.id)
+  }
+  const heads = new Map<number, { dpp: number; taxAmount: number } | null>()
+  for (const r of rows) {
+    if (r.replacesId != null && byId.has(r.replacesId)) continue // bukan akar
+    const chain: ChainInvoice[] = []
+    let cursor: (typeof rows)[number] | undefined = r
+    const seen = new Set<number>()
+    while (cursor && !seen.has(cursor.id)) {
+      seen.add(cursor.id)
+      chain.push({ id: cursor.id, djpStatus: cursor.djpStatus, dpp: cursor.dpp, taxAmount: cursor.taxAmount })
+      const nextId = replacementOf.get(cursor.id)
+      cursor = nextId != null ? byId.get(nextId) : undefined
+    }
+    const head = effectiveChainHead(chain)
+    const ref = head ? { dpp: head.dpp, taxAmount: head.taxAmount } : null
+    for (const member of chain) heads.set(member.id, ref)
+  }
+  return heads
+}
+
 export function buildOutputSptRows(chains: OutputChain[]): SptOutputRow[] {
   const byPeriod = new Map<string, SptOutputRow>()
   for (const { chain, originPeriod } of chains) {

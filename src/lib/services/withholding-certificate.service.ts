@@ -147,6 +147,52 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         select: { id: true },
       })
       if (dupe) throw definitive(`Nomor bupot "${number}" sudah terbit`)
+      // Satu dokumen sumber = satu bupot aktif: bupot kedua bernomor beda
+      // atas bill/payment sama tampil dobel di laporan (potongan terhitung
+      // dua kali). Arah wajib cocok dengan dokumen tertaut.
+      if (input.vendorBillId != null && input.salesPaymentId != null) {
+        throw definitive("Bupot hanya boleh tertaut ke satu dokumen sumber")
+      }
+      if (input.vendorBillId != null) {
+        if (input.direction !== "we_withhold") {
+          throw definitive("Bupot atas tagihan vendor wajib arah we_withhold (kita yang memotong)")
+        }
+        const bill = await tx.vendorBill.findUnique({
+          where: { id: input.vendorBillId },
+          select: { id: true, status: true, deletedAt: true },
+        })
+        if (!bill) throw definitive("Tagihan vendor tertaut tidak ditemukan")
+        if (bill.deletedAt != null || bill.status === "cancelled") {
+          throw definitive("Tagihan vendor tertaut sudah batal/terhapus — bupot tidak bisa diterbitkan")
+        }
+        const activeDupe = await tx.withholdingCertificate.findFirst({
+          where: { vendorBillId: input.vendorBillId, status: { not: "revoked" } },
+          select: { id: true, certificateNumber: true },
+        })
+        if (activeDupe) {
+          throw definitive(`Tagihan ini sudah punya bupot aktif "${activeDupe.certificateNumber}" — cabut dulu sebelum terbit baru`)
+        }
+      }
+      if (input.salesPaymentId != null) {
+        if (input.direction !== "withheld_from_us") {
+          throw definitive("Bupot atas pembayaran pelanggan wajib arah withheld_from_us (kita yang dipotong)")
+        }
+        const payment = await tx.salesPayment.findUnique({
+          where: { id: input.salesPaymentId },
+          select: { id: true, status: true },
+        })
+        if (!payment) throw definitive("Pembayaran pelanggan tertaut tidak ditemukan")
+        if (payment.status === "reversed") {
+          throw definitive("Pembayaran tertaut sudah dibalik — bupot tidak bisa diterbitkan")
+        }
+        const activeDupe = await tx.withholdingCertificate.findFirst({
+          where: { salesPaymentId: input.salesPaymentId, status: { not: "revoked" } },
+          select: { id: true, certificateNumber: true },
+        })
+        if (activeDupe) {
+          throw definitive(`Pembayaran ini sudah punya bupot aktif "${activeDupe.certificateNumber}" — cabut dulu sebelum terbit baru`)
+        }
+      }
       // R8-PAJAK-08: jenis nonaktif/terhapus tidak boleh melahirkan bupot.
       const type = await tx.withholdingTaxType.findUniqueOrThrow({ where: { id: input.withholdingTypeId } })
       assertWithholdingTypeActive(type)

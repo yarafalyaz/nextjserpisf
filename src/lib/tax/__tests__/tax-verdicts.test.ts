@@ -32,6 +32,14 @@ describe("F-001 (a) kode 04 harga 12jt → DPP 11jt PPN 1,32jt, pendapatan tetap
   it("masa diturunkan dari tanggal faktur", () => {
     expect(taxPeriodFromDate(new Date(2026, 0, 15))).toBe("2026-01")
   })
+
+  it("masa dibaca dari komponen UTC — tanggal 1 tidak mundur sebulan di proses non-WIB", () => {
+    // Dokumen disimpan tengah malam UTC (wibDateToUtcMidnight). Di proses
+    // TZ=UTC-x, 2026-11-01T00:00Z terbaca lokal 31 Okt — getMonth() lama
+    // menghasilkan 2026-10 (regresi audit pajak 2026-11-01).
+    expect(taxPeriodFromDate(new Date(Date.UTC(2026, 10, 1)))).toBe("2026-11")
+    expect(taxPeriodFromDate(new Date(Date.UTC(2026, 0, 31)))).toBe("2026-01")
+  })
 })
 
 describe("F-001 (b) pengganti mengubah PPN — SPT masa asal, tanpa dobel masa terbit", () => {

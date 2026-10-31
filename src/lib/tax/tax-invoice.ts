@@ -142,10 +142,16 @@ export function computeVatFromSellingPrice(
   }
 }
 
-/** Masa "YYYY-MM" dari tanggal faktur (DITURUNKAN, bukan input bebas). */
+/**
+ * Masa "YYYY-MM" dari tanggal faktur (DITURUNKAN, bukan input bebas).
+ * Tanggal dokumen disimpan tengah malam UTC untuk hari kalender WIB
+ * (konvensi `wibDateToUtcMidnight`), jadi masa dibaca dari komponen UTC —
+ * `getFullYear()/getMonth()` lokal menggeser masa sebulan di proses
+ * non-WIB (CI/container tanpa TZ) untuk tanggal 1.
+ */
 export function taxPeriodFromDate(date: Date): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const y = date.getUTCFullYear()
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0")
   return `${y}-${m}`
 }
 
