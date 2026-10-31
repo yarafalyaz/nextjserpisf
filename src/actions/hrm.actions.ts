@@ -441,11 +441,28 @@ export async function assignEmployeePayrollComponent(formData: FormData) {
       select: { id: true },
     });
     if (overlap) throw new Error("Penugasan komponen gaji tumpang tindih untuk karyawan ini");
-    const created = await prisma.employeePayrollComponent.create({
-      data: {
-        employeeId, componentId, defaultAmount, effectiveFrom, effectiveTo,
-        createdBy: Number(user.id), updatedBy: Number(user.id),
-      },
+    // Kunci baris karyawan lalu cek irisan ulang dalam tx yang sama dengan
+    // create: cek di atas membaca snapshot, jadi dua submit konkuren bisa
+    // sama-sama lolos dan tunjangan yang sama tertarik dua kali di slip.
+    const created = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
+      const dup = await tx.employeePayrollComponent.findFirst({
+        where: {
+          employeeId,
+          componentId,
+          isActive: true,
+          effectiveFrom: { lte: newEnd },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: effectiveFrom } }],
+        },
+        select: { id: true },
+      });
+      if (dup) throw new Error("Penugasan komponen gaji tumpang tindih untuk karyawan ini");
+      return tx.employeePayrollComponent.create({
+        data: {
+          employeeId, componentId, defaultAmount, effectiveFrom, effectiveTo,
+          createdBy: Number(user.id), updatedBy: Number(user.id),
+        },
+      });
     });
     revalidatePath("/sdm/penggajian");
     return { success: true, id: created.id };
@@ -479,24 +496,29 @@ export async function updateEmployeePayrollComponent(id: number, formData: FormD
     }
     const rawActive = formData.get("isActive");
     const isActive = rawActive == null ? existing.isActive : rawActive === "true";
-    if (isActive) {
-      const newEnd = effectiveTo ?? new Date("9999-12-31T00:00:00.000Z");
-      const overlap = await prisma.employeePayrollComponent.findFirst({
-        where: {
-          id: { not: id },
-          employeeId: existing.employeeId,
-          componentId: existing.componentId,
-          isActive: true,
-          effectiveFrom: { lte: newEnd },
-          OR: [{ effectiveTo: null }, { effectiveTo: { gte: effectiveFrom } }],
-        },
-        select: { id: true },
+    // Kunci baris karyawan lalu (bila aktif) cek irisan ulang dalam tx yang
+    // sama dengan update — alasan sama dengan jalur buat penugasan.
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM employees WHERE id = ${existing.employeeId} FOR UPDATE`;
+      if (isActive) {
+        const newEnd = effectiveTo ?? new Date("9999-12-31T00:00:00.000Z");
+        const dup = await tx.employeePayrollComponent.findFirst({
+          where: {
+            id: { not: id },
+            employeeId: existing.employeeId,
+            componentId: existing.componentId,
+            isActive: true,
+            effectiveFrom: { lte: newEnd },
+            OR: [{ effectiveTo: null }, { effectiveTo: { gte: effectiveFrom } }],
+          },
+          select: { id: true },
+        });
+        if (dup) throw new Error("Penugasan komponen gaji tumpang tindih untuk karyawan ini");
+      }
+      return tx.employeePayrollComponent.update({
+        where: { id },
+        data: { defaultAmount, effectiveFrom, effectiveTo, isActive, updatedBy: Number(user.id) },
       });
-      if (overlap) throw new Error("Penugasan komponen gaji tumpang tindih untuk karyawan ini");
-    }
-    const updated = await prisma.employeePayrollComponent.update({
-      where: { id },
-      data: { defaultAmount, effectiveFrom, effectiveTo, isActive, updatedBy: Number(user.id) },
     });
     revalidatePath("/sdm/penggajian");
     return { success: true, id: updated.id };

@@ -246,6 +246,43 @@ describe("F-027 penugasan", () => {
     expect(res.success).toBe(false)
     expect(res.error).toContain("negatif")
   })
+
+  it("penugasan: irisan yang muncul di bacaan dalam tx ditolak (kunci mendahului cek ulang)", async () => {
+    prismaMock.employee.findUnique.mockResolvedValue({ id: 7 })
+    prismaMock.payrollComponent.findUnique.mockResolvedValue({ id: 3, isActive: true, recurrence: "fixed" })
+    // Bacaan luar bersih; bacaan dalam tx (sesudah kunci baris karyawan)
+    // melihat penugasan konkuren yang baru lahir.
+    prismaMock.employeePayrollComponent.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 8 })
+    const res = await actions.assignEmployeePayrollComponent(fd({
+      employeeId: "7", componentId: "3", defaultAmount: "500000", effectiveFrom: "2026-05-01",
+    }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tumpang tindih")
+    expect(prismaMock.employeePayrollComponent.create).not.toHaveBeenCalled()
+    const lockOrder = prismaMock.$executeRaw.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(prismaMock.employeePayrollComponent.findFirst.mock.invocationCallOrder[1])
+  })
+
+  it("ubah penugasan: irisan yang muncul di bacaan dalam tx ditolak (kunci mendahului cek ulang)", async () => {
+    prismaMock.employeePayrollComponent.findUnique.mockResolvedValue({
+      id: 21, employeeId: 7, componentId: 3, defaultAmount: 400000,
+      effectiveFrom: new Date("2026-05-01T00:00:00.000Z"), effectiveTo: null, isActive: true,
+    })
+    // Jalur ubah hanya punya SATU bacaan irisan: sesudah fix bacaan itu di
+    // dalam tx berkunci; mock langsung mengembalikan irisan di sana.
+    prismaMock.employeePayrollComponent.findFirst.mockResolvedValue({ id: 9 })
+    const res = await actions.updateEmployeePayrollComponent(21, fd({
+      defaultAmount: "500000", effectiveFrom: "2026-05-01", isActive: "true",
+    }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tumpang tindih")
+    expect(prismaMock.employeePayrollComponent.update).not.toHaveBeenCalled()
+    const lockOrder = prismaMock.$executeRaw.mock.invocationCallOrder[0]
+    const findOrder = prismaMock.employeePayrollComponent.findFirst.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(findOrder)
+  })
 })
 
 describe("F-027 tarikan generate", () => {
