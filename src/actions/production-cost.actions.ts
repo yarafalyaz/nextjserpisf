@@ -200,6 +200,17 @@ export async function updateProductionCost(id: number, formData: FormData) {
     }
 
     await prisma.$transaction(async (tx) => {
+      // Kunci baris biaya lalu baca ulang amount SEBELUM hitung delta:
+      // snapshot di luar tx basi bila penulis lain mengubah baris yang
+      // sama; delta atas amount basi menggeser totalActualCost + jurnal
+      // WIP dari jumlah baris final (kunci PO hanya menserialkan penulis,
+      // tidak menyegarkan input delta).
+      await tx.$queryRaw`SELECT id FROM production_costs WHERE id = ${id} FOR UPDATE`
+      const fresh = await tx.productionCost.findUnique({
+        where: { id },
+        select: { amount: true },
+      })
+      if (!fresh) throw new Error("Biaya tidak ditemukan")
       await assertJobCostMutable(
         { productionOrderId: existing.productionOrderId, workOrderId: existing.workOrderId },
         "diubah",
@@ -219,7 +230,7 @@ export async function updateProductionCost(id: number, formData: FormData) {
         },
       })
       if (existing.productionOrderId) {
-        const delta = safeSubtract(v.amount, Number(existing.amount), 2)
+        const delta = safeSubtract(v.amount, Number(fresh.amount), 2)
         await applyProductionCostDelta(existing.productionOrderId, delta, tx, {
           userId: Number(user.id),
           costLineId: id,
@@ -260,6 +271,14 @@ export async function deleteProductionCost(id: number) {
     }
 
     await prisma.$transaction(async (tx) => {
+      // Cermin updateProductionCost: kunci baris biaya, amount segar
+      // menjadi pengurang — snapshot luar bisa basi oleh penulis konkuren.
+      await tx.$queryRaw`SELECT id FROM production_costs WHERE id = ${id} FOR UPDATE`
+      const fresh = await tx.productionCost.findUnique({
+        where: { id },
+        select: { amount: true },
+      })
+      if (!fresh) throw new Error("Biaya tidak ditemukan")
       await assertJobCostMutable(
         { productionOrderId: existing.productionOrderId, workOrderId: existing.workOrderId },
         "dihapus",
@@ -268,7 +287,7 @@ export async function deleteProductionCost(id: number) {
       if (existing.productionOrderId) await assertNoPartialRelease(tx, existing.productionOrderId, "dihapus")
       await tx.productionCost.delete({ where: { id } })
       if (existing.productionOrderId) {
-        await applyProductionCostDelta(existing.productionOrderId, -Number(existing.amount), tx, {
+        await applyProductionCostDelta(existing.productionOrderId, -Number(fresh.amount), tx, {
           userId: Number(user.id),
           costLineId: id,
         })

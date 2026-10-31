@@ -225,6 +225,23 @@ describe("updateProductionCost", () => {
     expect(applyDeltaMock).toHaveBeenCalledWith(1, 200, expect.anything(), expect.anything())
   })
 
+  it("delta dihitung dari amount TERKUNCI di dalam tx, bukan snapshot luar", async () => {
+    // Snapshot luar basi (100); baris sudah berubah jadi 250 oleh penulis
+    // lain sebelum kunci didapat. Delta wajib 300 − 250 = 50, bukan 200.
+    costFindUniqueMock
+      .mockResolvedValueOnce({ id: 5, productionOrderId: 1, amount: 100 })
+      .mockResolvedValue({ id: 5, productionOrderId: 1, amount: 250 })
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress" })
+    costUpdateMock.mockResolvedValue({})
+
+    const res = await updateProductionCost(5, fd({ category: "labor", amount: 300 }))
+
+    expect(res.success).toBe(true)
+    const sql = queryRawMock.mock.calls.flat().join(" ")
+    expect(sql).toContain("production_costs")
+    expect(applyDeltaMock).toHaveBeenCalledWith(1, 50, expect.anything(), expect.anything())
+  })
+
   it("refuses to edit a cost on a completed/cancelled production order", async () => {
     costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: 1, amount: 100 })
     orderFindUniqueMock.mockResolvedValue({ id: 1, status: "completed" })
@@ -260,6 +277,19 @@ describe("deleteProductionCost", () => {
 
     expect(res.success).toBe(true)
     expect(applyDeltaMock).toHaveBeenCalledWith(1, -400, expect.anything(), expect.anything())
+  })
+
+  it("pengurangan memakai amount TERKUNCI di dalam tx, bukan snapshot luar", async () => {
+    costFindUniqueMock
+      .mockResolvedValueOnce({ id: 5, productionOrderId: 1, amount: 400 })
+      .mockResolvedValue({ id: 5, productionOrderId: 1, amount: 250 })
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress" })
+    costDeleteMock.mockResolvedValue({})
+
+    const res = await deleteProductionCost(5)
+
+    expect(res.success).toBe(true)
+    expect(applyDeltaMock).toHaveBeenCalledWith(1, -250, expect.anything(), expect.anything())
   })
 
   it("refuses to delete a cost on a completed production order", async () => {
