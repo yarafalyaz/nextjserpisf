@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   candidateFindMany: vi.fn(),
   exchangedFindMany: vi.fn(),
   customerFindMany: vi.fn(),
+  returnCredit: vi.fn().mockResolvedValue(new Map()),
 }))
 
 vi.mock("@/lib/auth/permissions", () => ({
@@ -25,6 +26,10 @@ vi.mock("@/lib/db/prisma", () => ({
 
 vi.mock("@/actions/invoice-exchange.actions", () => ({
   createInvoiceExchange: vi.fn(),
+}))
+
+vi.mock("@/lib/reports/return-credit", () => ({
+  loadReturnCreditByInvoiceId: mocks.returnCredit,
 }))
 
 vi.mock("next/navigation", () => ({
@@ -52,6 +57,7 @@ beforeEach(() => {
   mocks.requirePermission.mockResolvedValue({ id: "u1", name: "Uji", email: "uji@x.id" })
   mocks.customerFindMany.mockResolvedValue([{ id: 7, name: "Pelanggan Tujuh" }])
   mocks.exchangedFindMany.mockResolvedValue([])
+  mocks.returnCredit.mockResolvedValue(new Map())
 })
 
 async function candidateIds(paidAmounts: number[]) {
@@ -76,6 +82,18 @@ describe("FIN-BR-006 kandidat tukar faktur", () => {
 
   it("sisa Rp1,01 tetap kandidat", async () => {
     const html = await candidateIds([GRAND - 1.01])
+    expect(html).toContain("SI-1")
+  })
+
+  it("lunas lewat kredit retur (bayar 200rb + retur 800rb) tidak masuk kandidat", async () => {
+    mocks.returnCredit.mockResolvedValue(new Map([[1, 800000]]))
+    const html = await candidateIds([200000])
+    expect(html).not.toContain("SI-1")
+  })
+
+  it("sisa sesudah kredit retur masih di atas ambang tetap kandidat", async () => {
+    mocks.returnCredit.mockResolvedValue(new Map([[1, 500000]]))
+    const html = await candidateIds([200000])
     expect(html).toContain("SI-1")
   })
 })
