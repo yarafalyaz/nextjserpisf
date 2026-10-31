@@ -649,6 +649,36 @@ describe("inventory-fifo", () => {
       ).rejects.toThrow("Sebagian nomor seri tidak tersedia");
     });
 
+    it("qty pecahan ditolak untuk item berseri — Math.round menandai serial tak sebanding unit keluar", async () => {
+      const tx = mockTx({
+        layers: [{ id: 1, remaining: 10, unitCost: 5, batchNumber: null }],
+        trackSerial: true,
+        availableSerials: [
+          { id: 11, serialNumber: "SN-1" },
+          { id: 12, serialNumber: "SN-2" },
+          { id: 13, serialNumber: "SN-3" },
+        ],
+      });
+
+      // 2,5 unit keluar tak bisa dipetakan ke bilangan bulat serial:
+      // Math.round(2.5)=3 akan menandai 3 serial untuk 2,5 unit layer.
+      await expect(consumeFifoLayers(tx, { itemId: 1, qty: 2.5 })).rejects.toThrow(/bilangan bulat/);
+      expect(tx._spies.serialUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it("qty pecahan ditolak juga pada jalur serial pilihan manual", async () => {
+      const tx = mockTx({
+        layers: [{ id: 1, remaining: 10, unitCost: 5, batchNumber: null }],
+        trackSerial: true,
+        availableSerials: [{ id: 21, serialNumber: "SN-1" }, { id: 22, serialNumber: "SN-2" }],
+      });
+
+      await expect(
+        consumeFifoLayers(tx, { itemId: 1, qty: 1.5, serialNumbers: ["SN-1", "SN-2"] })
+      ).rejects.toThrow(/bilangan bulat/);
+      expect(tx._spies.serialUpdateMany).not.toHaveBeenCalled();
+    });
+
     it("konkuren: updateMany hanya klaim 1 dari 2 -> throw (TOCTOU serial)", async () => {
       const tx = mockTx({
         layers: [{ id: 1, remaining: 10, unitCost: 5, batchNumber: null }],

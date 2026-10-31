@@ -452,6 +452,15 @@ export async function consumeFifoLayers(
     // Mark serials as used for serial-tracked items.
     const trackInfo = await tx.item.findUnique({ where: { id: itemId }, select: { trackSerial: true } })
     if (trackInfo?.trackSerial) {
+      // Serial = unit diskrit: qty pecahan (faktur 1,5 / faktor UOM) tak
+      // bisa dipetakan ke bilangan bulat serial — Math.round di bawah akan
+      // menandai serial lebih/kurang dari unit layer yang benar-benar
+      // keluar dan merusak akurasi serial vs qtyOnHand selamanya.
+      if (!Number.isInteger(consumedQty)) {
+        throw new Error(
+          `Item berseri #${itemId} wajib dikeluarkan dengan kuantitas bilangan bulat (diminta ${consumedQty}).`,
+        )
+      }
       const picked = (serialNumbers ?? []).map((s) => String(s).trim()).filter((s) => s.length > 0)
       if (picked.length > 0) {
         // Manual selection: mark exactly the chosen serials (must be available).
