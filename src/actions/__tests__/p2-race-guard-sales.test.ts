@@ -44,6 +44,8 @@ function paymentBranches() {
     salesInvoice: {
       findUniqueOrThrow: (...a: unknown[]) => invoiceFindUniqueOrThrowMock(...a),
     },
+    // R8-KEU-09: loader kredit retur membaca salesReturn dari tx; kosong = 0.
+    salesReturn: { findMany: vi.fn().mockResolvedValue([]) },
     account: { count: (...a: unknown[]) => accountCountMock(...a) },
   }
 }

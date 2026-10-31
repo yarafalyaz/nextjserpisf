@@ -121,3 +121,7 @@ sebelum fix (klaim agen bukan vonis).
   penutup (previouslyRefunded dari akumulasi kredit sumber DP). Finance
   164/164, DP VAT + customer-credit 62/62. Berikutnya R8-KEU-07,
   R8-KEU-09, R8-JB-03..10, R8-SDM-01..06.
+- R8-KEU-09 selesai: guard edit pembayaran penjualan legacy kini
+  mengurangkan kredit retur completed dari sisa tagihan (loader kanonis,
+  sama seperti create). Sales suites 218/218 hijau. Berikutnya
+  R8-KEU-07 (PLAUSIBLE), R8-JB-03..10, R8-SDM-01..06.

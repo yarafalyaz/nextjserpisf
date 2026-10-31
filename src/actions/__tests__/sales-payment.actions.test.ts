@@ -27,6 +27,8 @@ vi.mock("@/lib/db/prisma", () => ({
       update: (...a: unknown[]) => paymentUpdateMock(...a),
     },
     salesInvoice: { findUniqueOrThrow: (...a: unknown[]) => invoiceFindUniqueOrThrowMock(...a) },
+    // R8-KEU-09: loader kredit retur membaca salesReturn dari tx; kosong = 0.
+    salesReturn: { findMany: vi.fn().mockResolvedValue([]) },
     account: { count: vi.fn().mockResolvedValue(0) },
     transactionAttachment: { updateMany: (...a: unknown[]) => attachmentUpdateManyMock(...a) },
     $transaction: (...a: unknown[]) => transactionMock(...a),
@@ -76,6 +78,8 @@ function wireTransaction(journalValue: unknown = null) {
       update: (...a: unknown[]) => paymentUpdateMock(...a),
     },
     salesInvoice: { findUniqueOrThrow: (...a: unknown[]) => invoiceFindUniqueOrThrowMock(...a) },
+    // R8-KEU-09: loader kredit retur membaca salesReturn dari tx; kosong = 0.
+    salesReturn: { findMany: vi.fn().mockResolvedValue([]) },
     account: { count: vi.fn().mockResolvedValue(0) },
     transactionAttachment: { updateMany: (...a: unknown[]) => attachmentUpdateManyMock(...a) },
   }
@@ -105,6 +109,44 @@ beforeEach(() => {
 })
 
 describe("updateSalesPayment overpay guard", () => {
+  it("R8-KEU-09: edit legacy memperhitungkan kredit retur completed dalam sisa", async () => {
+    wireTransaction()
+    const txWithReturns = {
+      $executeRaw: (...a: unknown[]) => execRawMock(...a),
+      journal: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        // Kredit retur loader = kaki Cr Piutang jurnal SalesReturn POSTED.
+        findMany: vi.fn().mockResolvedValue([
+          { referenceId: 5, entries: [{ credit: 300 }] },
+        ]),
+      },
+      salesPayment: {
+        findUniqueOrThrow: (...a: unknown[]) => paymentFindUniqueOrThrowMock(...a),
+        aggregate: (...a: unknown[]) => paymentAggregateMock(...a),
+        update: (...a: unknown[]) => paymentUpdateMock(...a),
+      },
+      salesInvoice: { findUniqueOrThrow: (...a: unknown[]) => invoiceFindUniqueOrThrowMock(...a) },
+      salesReturn: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 5, salesInvoiceId: 50 },
+        ]),
+      },
+      // Loader membaca receivable account dari systemSetting client; akun 210.
+      systemSetting: { findFirst: vi.fn().mockResolvedValue({ salesReceivableAccountId: 210 }) },
+      account: { count: vi.fn().mockResolvedValue(0) },
+      transactionAttachment: { updateMany: (...a: unknown[]) => attachmentUpdateManyMock(...a) },
+    }
+    transactionMock.mockImplementation(async (cb: (t: typeof txWithReturns) => unknown) => cb(txWithReturns))
+    // grandTotal 1000, others 200, kredit retur completed 300 → sisa 500.
+    // Edit 900 harus ditolak walau grandTotal - others = 800.
+    const result = await updateSalesPayment(9, fd({
+      salesInvoiceId: "50", amount: "900", paymentDate: "2026-06-09", paymentMethod: "cash",
+    }))
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("melebihi sisa tagihan")
+    expect(paymentUpdateMock).not.toHaveBeenCalled()
+  })
+
   it("rejects an edit that pushes total paid past grandTotal", async () => {
     // grandTotal 1000, others paid 200 → remaining 800. Editing this payment to
     // 900 would overpay.

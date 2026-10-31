@@ -3592,8 +3592,17 @@ export async function updateSalesPayment(id: number, formData: FormData) {
       _sum: { amount: true, withholdingAmount: true },
     })
     const otherPaid = safeAdd(Number(others._sum.amount ?? 0), Number(others._sum.withholdingAmount ?? 0))
+    // R8-KEU-09: jalur legacy (tanpa jurnal posted) dulu melewatkan kredit
+    // retur completed — faktur yang sudah dilunasi retur bisa di-over-apply
+    // lalu jurnal repost terlalu besar. Buat berkurang kredit retur completed
+    // dari sisa (sama seperti createSalesPayment).
+    const returnCreditMap = await loadReturnCreditByInvoiceIdWithClient(tx, [newInvoiceId])
     // F-2026-10-28-155-S P4: presisi sen (sama dengan guard create di atas).
-    const remaining = safeSubtract(invoice.grandTotal, otherPaid, 2)
+    const remaining = safeSubtract(
+      safeSubtract(invoice.grandTotal, otherPaid, 2),
+      returnCreditMap.get(newInvoiceId) ?? 0,
+      2,
+    )
     const settled = safeAdd(newAmount, newWithholdingAmount)
     // FIN-BR-006: kelebihan dalam toleransi lunas Rp1 adalah pembulatan
     // rupiah-penuh, bukan overpay — jangan tolak. Di atas itu tetap tolak.

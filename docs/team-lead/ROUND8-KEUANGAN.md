@@ -148,12 +148,19 @@ reversal. Guard luar dipertahankan sebagai fast-fail. Regression:
 `finance.actions.test.ts` (jurnal POSTED muncul di dalam tx → update
 ditolak, nol delete).
 
-### R8-KEU-09 — LOW, PLAUSIBLE — updateSalesPayment abaikan returnCredit (legacy)
+### R8-KEU-09 — SELESAI 2026-10-31 — updateSalesPayment abaikan returnCredit (legacy)
 `src/actions/sales.actions.ts:3596` — `remaining = grandTotal -
 otherPaid`, returnCredit tidak dikurangkan; bandingkan
 `createSalesPayment:2080-2098` yang benar. Skenario: faktur sudah
 terpotong retur → edit pembayaran legacy → over-apply lolos → jurnal
 repost terlalu besar. Hanya baris legacy tanpa jurnal.
+Triase main session: CONFIRMED pada jalur legacy (pembayaran tanpa jurnal
+POSTED/REVERSED memakai guard ini). Perbaikan: guard edit kini memanggil
+loader kanonis `loadReturnCreditByInvoiceIdWithClient` dan mengurangkan
+kredit retur dari sisa, sama seperti `createSalesPayment`. Jalur posted
+tetap menolak edit finansial lebih dulu, tak berubah. Regression:
+`sales-payment.actions.test.ts` (grandTotal 1000 − others 200 − retur
+completed 300 → sisa 500, edit 900 ditolak).
 
 ### R8-KEU-10 — SELESAI 2026-10-31 — Refund PPN uang muka: drift rounding
 `src/lib/tax/down-payment-vat.ts:285-306` — porsi PPN proporsional
