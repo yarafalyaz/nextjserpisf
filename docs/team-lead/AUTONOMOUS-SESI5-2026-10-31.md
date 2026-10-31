@@ -89,6 +89,8 @@ Sesudah fix: 4 file 39/39; full suite 1119 file — 10898 passed /
   status `posted`, `deletedAt` null, sisa run sesi yang sempat salah
   target DB. SENGAJA tidak dihapus (DB dev dirawat tangan; tidak ada
   instruksi eksplisit; hapus = destruktif). Tercatat di sini.
+  → SELESAI di lanjutan malam (lihat bawah): di-void lewat jalur
+  produksi, tidak hard-delete.
 - Migrasi R8-JB-09 (`customer_payment_term`): diterapkan ke DB dev via
   SQL manual sesudah gerbang consent user; drift 0 terbukti lewat
   scratch. Jangan `prisma migrate deploy` ke DB dev (P3005 bersih).
@@ -124,6 +126,48 @@ Sesudah fix: 4 file 39/39; full suite 1119 file — 10898 passed /
     akan me-regresikan main. Guard main saat ini hijau 167/167.
     Branch hanya lokal (tak ada di remote); penghapusan menunggu
     perintah eksplisit (destruktif).
+
+## Lanjutan 2026-10-31 malam 2 — perintah "perbaiki semuanya sampai fix semua"
+
+- Lint: 2 warning `e2e/mobile-overflow-guard.spec.ts` (assignment
+  `overflow` tak terbaca sesudah poll) dibuang (`9d0b911f2`). File
+  bersih eslint; poll tetap penjaga overflow.
+- DB dev: BTF-0005..BTF-0008 (id 6–9, @777888) di-void meniru persis
+  badan `deleteBankTransfer` (lock baris, recheck, `assertPeriodOpen`,
+  `reverseJournalsByReferenceTx("BANK_TRANSFER")`, status void +
+  `voidAt`/`voidReason`/`deletedAt`). Verifikasi SQL: 4 baris void;
+  jurnal asal 65/67/68/70 `REVERSED`; reversal 113–116 `POSTED`
+  balance debit=kredit=777888. Prasyarat tercek: `period_lock_date`
+  NULL, 0 item rekon matched. Skrip sekali pakai di luar repo, sudah
+  dibuang.
+- Pembersihan git (perintah eksplisit user):
+  - Remote GitHub: hanya `main` + `fix/pr-1428-dupe`; PR #1428
+    MERGED → branch remote dihapus. `git remote prune origin` +
+    58 ref tracking lokal basi (`pr/*`, `pull/*`, `prNNNN`,
+    `localmain`, `origin-main-check`, `origin-main-tmp`) dihapus;
+    tersisa `origin/HEAD`, `origin/main`.
+  - Klasifikasi 38 branch lokal non-main: patch-equivalent
+    (unik=0), vonis docs sudah di main lewat PR, atau kode
+    superseded — tidak ada kerja unik hilang. 37 branch dihapus;
+    worktree bersih `/private/tmp/kE` (`fix/kampanye-guard`) dilepas
+    lebih dulu.
+  - SATU yang dipertahankan: `hermes/backend-1360-verify-board`
+    terikat worktree sesi Hermes
+    (`~/.hermes/profiles/backend-prisma-inventory-workshop/.../backend-1369-sync`)
+    dengan konflik terbuka `UU docs/autonomous-board.md` — tree
+    kotor sesi bot lain, tidak dihapus paksa. Hapus sesudah sesi itu
+    selesai.
+  - 18 stash (28–30 Okt, label tree asing/lane lain) ditriase
+    per-berkas lawan main: semua isi sama atau versi main sama/lebih
+    baru (108 perbandingan berkas beda, 0 berkas main lebih tua dari
+    stash). Semua di-drop. Commit stash tetap terjangkau reflog
+    dalam masa simpan git bila perlu dipulihkan.
+- Status akhir git: branch lokal tinggal `main` +
+  `hermes/backend-1360-verify-board`, stash 0, remote hanya `main`.
+- BELUM (tetap menunggu konfirmasi eksplisit spesifik, perintah
+  generik tidak cukup): Task #8 rewrite author + force-push histori
+  yang sudah publik; deploy produksi (`migrate deploy` + pindah
+  `public/uploads` lama ke `private/uploads`).
 
 ## Bukti penutup
 
