@@ -1235,7 +1235,12 @@ export async function createPettyCash(formData: FormData) {
       // the tail balance must come from the max (date, id), NOT `createdAt desc`.
       // A backdated entry created later would otherwise be treated as the tail
       // and make this OUT overdraw pre-check reject/allow the wrong amount.
+      // Ekor rantai = record AKTIF terakhir: record void/deleted
+      // balanceAfter-nya beku sebagai snapshot historis (GL-BR-003) dan
+      // tidak berkontribusi saldo — memakainya sebagai balanceBefore
+      // membuat OUT aktif sesudahnya ditolak dengan saldo basi.
       const lastRecord = await tx.pettyCash.findFirst({
+        where: { status: "posted", deletedAt: null },
         orderBy: [{ date: "desc" }, { id: "desc" }],
       });
       const balanceBefore = lastRecord ? Number(lastRecord.balanceAfter) : 0;
@@ -1262,6 +1267,12 @@ export async function createPettyCash(formData: FormData) {
           balanceAfter,
           date: wibDateToUtcMidnight(v.date),
           accountId: v.accountId ?? null,
+          // Akun pilihan form adalah akun sumber (IN) / beban (OUT) —
+          // petakan ke kolom yang benar-benar dibaca jurnal hook
+          // (sourceAccountId/expenseAccountId), bukan hanya accountId
+          // tampilan; tanpa ini jurnal selalu akun default setting.
+          sourceAccountId: type === "IN" ? (v.accountId ?? null) : null,
+          expenseAccountId: type === "OUT" ? (v.accountId ?? null) : null,
           referenceNo: v.referenceNo ?? null,
           description: v.description ?? null,
           projectId: v.projectId ?? null,
@@ -2632,6 +2643,8 @@ export async function updatePettyCash(id: number, formData: FormData) {
           amount,
           date: wibDateToUtcMidnight(v.date),
           accountId: v.accountId ?? null,
+          sourceAccountId: type === "IN" ? (v.accountId ?? null) : null,
+          expenseAccountId: type === "OUT" ? (v.accountId ?? null) : null,
           referenceNo: v.referenceNo ?? null,
           description: v.description ?? null,
           projectId: v.projectId ?? null,

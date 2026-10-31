@@ -1441,7 +1441,11 @@ export async function onReimbursementClaimApproved(
       debitAccountId: expense.accountId,
       creditAccountId: liabilityAccountId,
       amount: expense.amount,
-      transactionDate: new Date(),
+      // Tanggal jurnal = tanggal beban klaim, bukan tanggal persetujuan:
+      // assertPeriodOpen di postReimbursementJournal lalu mengunci masa
+      // beban (klaim September yang disetujui November sesudah lock
+      // September kini ditolak, bukan terposting diam-diam di November).
+      transactionDate: expense.date,
       description: `Klaim reimbursement disetujui: ${expense.description ?? expense.documentNo}`,
       debitMemo: `Beban klaim: ${expense.description ?? ""}`,
       creditMemo: "Utang Reimbursement Karyawan",

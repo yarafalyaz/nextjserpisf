@@ -26,6 +26,7 @@ type JournalRow = {
   status: string
   deletedAt: Date | null
   totalDebit: number
+  transactionDate?: Date
 }
 
 let journals: JournalRow[]
@@ -61,6 +62,7 @@ function makeTx() {
         description: "Bensin",
         costCenterId: null,
         paidFromAccountId: 100,
+        date: new Date(2026, 8, 15),
       }),
     },
     journal: {
@@ -75,6 +77,7 @@ function makeTx() {
           status: String(a.data.status),
           deletedAt: null,
           totalDebit: Number(a.data.totalDebit),
+          transactionDate: a.data.transactionDate as Date,
         }
         journals.push(row)
         return row
@@ -107,6 +110,12 @@ describe("onReimbursementClaimApproved (018-V Putusan 3)", () => {
     expect(
       journals.filter((j) => j.referenceType === REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE),
     ).toHaveLength(1)
+  })
+
+  it("jurnal akrual bertanggal tanggal beban klaim, bukan tanggal persetujuan", async () => {
+    await onReimbursementClaimApproved(42, 7, makeTx() as never)
+    const accrual = journals.find((j) => j.referenceType === REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE)
+    expect(accrual?.transactionDate).toEqual(new Date(2026, 8, 15))
   })
 })
 

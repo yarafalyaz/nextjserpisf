@@ -851,6 +851,42 @@ describe("Petty Cash Actions", () => {
     )
   })
 
+  it("createPettyCash memetakan accountId form ke source/expenseAccountId jurnal", async () => {
+    // Ekor rantai mock default mengembalikan saldo besar; test ini butuh
+    // ekor kosong agar OUT 100 tidak ditolak saldo.
+    mocks.prismaMock.pettyCash.findFirst.mockResolvedValue({ id: 1, balanceAfter: 100000 })
+    const resOut = await (actions as any).createPettyCash(fdMap({
+      type: "OUT", amount: 100, date: "2026-06-13", accountId: 777,
+    }))
+    expect(resOut?.success).toBe(true)
+    expect(mocks.prismaMock.pettyCash.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 777, expenseAccountId: 777, sourceAccountId: null }),
+      }),
+    )
+    const resIn = await (actions as any).createPettyCash(fdMap({
+      type: "IN", amount: 100, date: "2026-06-13", accountId: 555,
+    }))
+    expect(resIn?.success).toBe(true)
+    expect(mocks.prismaMock.pettyCash.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 555, sourceAccountId: 555, expenseAccountId: null }),
+      }),
+    )
+  })
+
+  it("createPettyCash ekor rantai hanya dari record aktif (void diabaikan)", async () => {
+    await (actions as any).createPettyCash(fdMap({
+      type: "OUT", amount: 100, date: "2026-06-13",
+    }))
+    expect(mocks.prismaMock.pettyCash.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { status: "posted", deletedAt: null },
+        orderBy: [{ date: "desc" }, { id: "desc" }],
+      }),
+    )
+  })
+
   it("createPettyCash persists Nama Project + Vendor + Kategori", async () => {
     // The create runs inside a tx; the model mock's create is the same fn.
     const res = await (actions as any).createPettyCash(fdMap({
