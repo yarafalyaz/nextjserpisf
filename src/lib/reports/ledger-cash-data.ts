@@ -363,6 +363,8 @@ export async function loadReceivableSubledger(period: Period, partyKey: string |
 export interface PayableSubledgerSource {
   bills: readonly { documentNo: string; date: Date; grandTotal: unknown; withholdingAmount?: unknown }[]
   payments: readonly { documentNo: string; paymentDate: Date; amount: unknown }[]
+  /** Relief retur per dokumen retur (harga beku baris, fallback cost). */
+  returns?: readonly { documentNo: string; date: Date; debit: number }[]
 }
 
 /**
@@ -388,6 +390,15 @@ export function buildPayableSubledgerEntries(source: PayableSubledgerSource): Le
       debit: pay.amount,
       credit: 0,
     })),
+    ...(source.returns ?? [])
+      .filter((ret) => ret.debit > 0)
+      .map((ret) => ({
+        date: ret.date,
+        doc: ret.documentNo,
+        desc: "Retur Pembelian",
+        debit: ret.debit,
+        credit: 0,
+      })),
   ].sort((a, b) => a.date.getTime() - b.date.getTime())
 }
 
@@ -403,7 +414,7 @@ export async function loadPayableSubledger(period: Period, partyKey: string | nu
       ...periodOf(period),
     }
   }
-  const [bills, payments] = await Promise.all([
+  const [bills, payments, purchaseReturns] = await Promise.all([
     prisma.vendorBill.findMany({
       where: { vendorId: partyId, status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null },
       select: { documentNo: true, date: true, grandTotal: true, withholdingAmount: true },
@@ -417,8 +428,30 @@ export async function loadPayableSubledger(period: Period, partyKey: string | nu
       select: { documentNo: true, paymentDate: true, amount: true },
       orderBy: { paymentDate: "asc" },
     }),
+    prisma.purchaseReturn.findMany({
+      // Status final retur beli = returned; relief = Σ qty × (price ?? cost)
+      // harga beku baris, sama dengan hook jurnal retur beli.
+      where: { purchaseOrder: { vendorId: partyId }, status: "returned" },
+      select: {
+        documentNo: true,
+        date: true,
+        items: { select: { qty: true, price: true, cost: true } },
+      },
+      orderBy: { date: "asc" },
+    }),
   ])
-  const entries = buildPayableSubledgerEntries({ bills, payments })
+  const entries = buildPayableSubledgerEntries({
+    bills,
+    payments,
+    returns: purchaseReturns.map((ret) => ({
+      documentNo: ret.documentNo,
+      date: ret.date,
+      debit: ret.items.reduce(
+        (sum, item) => safeAdd(sum, Number(item.qty) * Number(item.price ?? item.cost), 2),
+        0,
+      ),
+    })),
+  })
   const inPeriod = entries.filter((e) => e.date >= period.start && e.date <= period.end)
   const opening = buildLedgerRows({ opening: 0, entries: entries.filter((e) => e.date < period.start), direction: "credit" }).balance
   const built = buildLedgerRows({ opening, entries: inPeriod, direction: "credit" })

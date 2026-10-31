@@ -4,6 +4,9 @@ import { formatAccounting, formatDate } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
 import { safeAdd, safeMultiply, safeSubtract } from "@/lib/utils/math"
 import { agingBucket, daysOverdue } from "@/lib/reports/aging"
+import { payableOutstanding } from "@/lib/reports/aging-amounts"
+import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
+import { loadReturnCreditByInvoiceId, loadReturnCreditByReturnId } from "@/lib/reports/return-credit"
 import { RECOGNISED_AP_STATUSES, RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
 import {
   buildSubledger,
@@ -85,14 +88,16 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
           select: { id: true, slug: true, documentNo: true, date: true, dueDate: true, grandTotal: true, paidAmount: true },
         }),
         prisma.salesPayment.findMany({
-          where: { salesInvoice: { customerId: partyId } },
-          select: { id: true, slug: true, documentNo: true, paymentDate: true, amount: true, salesInvoice: { select: { id: true, documentNo: true } } },
+          where: activeSalesPaymentWhere({ salesInvoice: { customerId: partyId } }),
+          select: { id: true, slug: true, documentNo: true, paymentDate: true, amount: true, withholdingAmount: true, salesInvoice: { select: { id: true, documentNo: true } } },
         }),
         prisma.salesReturn.findMany({
           where: { customerId: partyId, status: "completed" },
-          select: { id: true, slug: true, documentNo: true, date: true, items: { select: { qty: true, price: true } } },
+          select: { id: true, slug: true, documentNo: true, date: true, salesInvoiceId: true },
         }),
       ])
+      const returnCreditByReturnId = await loadReturnCreditByReturnId(returns.map((ret) => ret.id))
+      const returnCreditByInvoiceId = await loadReturnCreditByInvoiceId(invoices.map((inv) => inv.id))
 
       entries = [
         ...invoices.map((inv) => ({
@@ -111,7 +116,9 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
           href: entityHref("/penjualan/pembayaran", pay),
           description: pay.salesInvoice ? `Pembayaran ${salesInvoiceLabel(pay.salesInvoice)}` : "Pembayaran",
           debit: 0,
-          credit: Number(pay.amount),
+          // Pelunasan piutang = kas + PPh dipotong pelanggan; basis sama
+          // dengan paidAmount, aging, dan PDF buku pembantu.
+          credit: safeAdd(pay.amount as never, pay.withholdingAmount as never, 2),
         })),
         ...returns.map((ret) => ({
           key: `SalesReturn:${ret.id}`,
@@ -120,7 +127,9 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
           href: entityHref("/penjualan/retur", ret),
           description: "Retur Penjualan",
           debit: 0,
-          credit: ret.items.reduce((sum, item) => safeAdd(sum, safeMultiply(Number(item.qty), Number(item.price), 2), 2), 0),
+          // Kredit kanonis = kaki Cr Piutang jurnal SalesReturn POSTED.
+          // qty×price mengabaikan PPN dan retur tanpa jurnal.
+          credit: returnCreditByReturnId.get(ret.id) ?? 0,
         })),
       ]
 
@@ -133,22 +142,31 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
           dueDate: inv.dueDate,
           total: Number(inv.grandTotal),
           paid: Number(inv.paidAmount),
-          remaining: safeSubtract(inv.grandTotal, inv.paidAmount, 2),
+          // Sisa kanonis: grandTotal − pembayaran − kredit retur jurnal.
+          remaining: safeSubtract(
+            safeSubtract(inv.grandTotal, inv.paidAmount, 2),
+            returnCreditByInvoiceId.get(inv.id) ?? 0,
+            2,
+          ),
         }))
         .filter((row) => row.remaining > 0)
     } else {
       const [bills, payments, returns] = await Promise.all([
         prisma.vendorBill.findMany({
           where: { vendorId: partyId, status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null },
-          select: { id: true, slug: true, documentNo: true, date: true, dueDate: true, grandTotal: true, paidAmount: true, balanceDue: true },
+          select: { id: true, slug: true, documentNo: true, date: true, dueDate: true, grandTotal: true, paidAmount: true, balanceDue: true, withholdingAmount: true },
         }),
         prisma.vendorPayment.findMany({
-          where: { vendorId: partyId, status: { not: "draft" }, deletedAt: null },
+          // Hanya completed: draft belum mengalokasi/memposting, reversed
+          // sudah dilawan jurnalnya — keduanya tak boleh mengurangi utang.
+          where: { vendorId: partyId, status: "completed", deletedAt: null },
           select: { id: true, slug: true, documentNo: true, paymentDate: true, amount: true },
         }),
         prisma.purchaseReturn.findMany({
-          where: { purchaseOrder: { vendorId: partyId }, status: "completed" },
-          select: { id: true, slug: true, documentNo: true, date: true, items: { select: { qty: true, cost: true } } },
+          // Status final retur beli = returned (hook mempostingnya seperti
+          // itu); "completed" tidak pernah ada → retur tak pernah tampil.
+          where: { purchaseOrder: { vendorId: partyId }, status: "returned" },
+          select: { id: true, slug: true, documentNo: true, date: true, items: { select: { qty: true, price: true, cost: true } } },
         }),
       ])
 
@@ -159,8 +177,10 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
           documentNo: bill.documentNo,
           href: entityHref("/pembelian/tagihan", bill),
           description: "Tagihan Pemasok",
-          debit: Number(bill.grandTotal),
-          credit: 0,
+          debit: 0,
+          // Utang ke pemasok NETO PPh (PPh dipotong = Hutang PPh), sama
+          // dengan aging/PDF; grandTotal penuh menaikkan saldo semu.
+          credit: payableOutstanding(bill.grandTotal, bill.withholdingAmount, 0),
         })),
         ...payments.map((pay) => ({
           key: `VendorPayment:${pay.id}`,
@@ -168,8 +188,8 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
           documentNo: pay.documentNo,
           href: entityHref("/pembelian/pembayaran-vendor", pay),
           description: "Pembayaran Pemasok",
-          debit: 0,
-          credit: Number(pay.amount),
+          debit: Number(pay.amount),
+          credit: 0,
         })),
         ...returns.map((ret) => ({
           key: `PurchaseReturn:${ret.id}`,
@@ -177,8 +197,13 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
           documentNo: ret.documentNo,
           href: entityHref("/pembelian/retur", ret),
           description: "Retur Pembelian",
-          debit: 0,
-          credit: ret.items.reduce((sum, item) => safeAdd(sum, safeMultiply(Number(item.qty), Number(item.cost), 2), 2), 0),
+          // Relief kanonis hook: harga beku baris (price), legacy jatuh ke
+          // cost — BUKAN cost master yang bergerak.
+          debit: ret.items.reduce(
+            (sum, item) => safeAdd(sum, safeMultiply(Number(item.qty), Number(item.price ?? item.cost), 2), 2),
+            0,
+          ),
+          credit: 0,
         })),
       ]
 
