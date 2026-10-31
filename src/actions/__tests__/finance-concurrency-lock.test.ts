@@ -103,8 +103,12 @@ function wireReconTx(order: string[]) {
     updateMany: reconUpdateManyMock,
     extra: {
       // R8-KEU-07: GL tie-out (1000 cocok bookBalance) + cakupan koran
-      // hanya baris 1 yang sudah menjadi item recon ini.
-      journalEntry: { aggregate: vi.fn().mockResolvedValue({ _sum: { debit: 1000, credit: 0 } }) },
+      // hanya baris 1 yang sudah menjadi item recon ini. Validasi-ulang
+      // status jurnal ter-match: entri 1 masih POSTED.
+      journalEntry: {
+        aggregate: vi.fn().mockResolvedValue({ _sum: { debit: 1000, credit: 0 } }),
+        findMany: vi.fn().mockResolvedValue([{ id: 1, journal: { status: "POSTED", deletedAt: null } }]),
+      },
       bankStatementLine: { findMany: vi.fn().mockResolvedValue([{ id: 1 }]) },
       bankReconciliationItem: {
         findMany: vi.fn().mockResolvedValue([]),

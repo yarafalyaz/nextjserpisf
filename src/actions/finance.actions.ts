@@ -1921,6 +1921,25 @@ export async function completeReconciliation(reconciliationId: number) {
       for (const lineId of lockLineIds) {
         await tx.$executeRaw`SELECT id FROM bank_statement_lines WHERE id = ${lineId} FOR UPDATE`;
       }
+      // Sertifikasi hanya atas jurnal yang MASIH posted: jurnal item
+      // ter-match bisa dibalik (reverseJournal) sesudah match — complete
+      // yang mensertifikasinya mengunci baris koran ke entri jurnal mati
+      // dan rekonsiliasi completed tidak bisa di-unmatch lagi. Status
+      // dibaca ulang di sini, di bawah kunci baris entri jurnal.
+      if (lockEntryIds.length > 0) {
+        const matchedEntries = await tx.journalEntry.findMany({
+          where: { id: { in: lockEntryIds } },
+          select: { id: true, journal: { select: { status: true, deletedAt: true } } },
+        });
+        const deadEntry = matchedEntries.find(
+          (e) => e.journal.status !== "POSTED" || e.journal.deletedAt,
+        );
+        if (matchedEntries.length !== lockEntryIds.length || deadEntry) {
+          throw new Error(
+            "Sebagian jurnal yang dicocokkan sudah dibalik atau terhapus. Lepas kecocokannya dan cocokkan ke jurnal yang masih posted sebelum menyelesaikan rekonsiliasi.",
+          );
+        }
+      }
       const alreadyUsed = await tx.bankReconciliationItem.findFirst({
         where: {
           bankReconciliationId: { not: reconciliationId },
