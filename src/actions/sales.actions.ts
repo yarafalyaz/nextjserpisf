@@ -698,6 +698,23 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
   const { computedSubtotal, headerDiscount, headerTax, computedGrandTotal } = computeQuotationTotals(data)
 
   await prisma.$transaction(async (tx) => {
+    // Kunci baris penawaran SEBELUM gerbang dinilai ulang: snapshot luar bisa
+    // basi oleh createSalesPayment konkuren (pelunasan masuk tidak mengunci
+    // baris penawaran) atau pembatalan konkuren, jadi status + pelunasan
+    // WAJIB dibaca ulang di bawah kunci sebelum sections ditimpa.
+    await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+    const lockedQuotation = await tx.quotation.findUnique({
+      where: { id: quotationId },
+      select: { status: true },
+    })
+    if (!lockedQuotation) throw new Error("Penawaran tidak ditemukan")
+    if (lockedQuotation.status === "cancelled") {
+      throw new Error("Penawaran yang sudah dibatalkan tidak bisa diedit")
+    }
+    if (await quotationHasRealSettlement(quotationId, tx as never)) {
+      throw new Error("Penawaran sudah ada pelunasan, item tidak bisa diubah lagi")
+    }
+
     // Replace sections + items wholesale: the edit form sends the full section
     // tree, so delete the existing rows and recreate from the payload. Item IDs
     // are not referenced elsewhere (resyncOnEdit re-reads + re-flattens), so

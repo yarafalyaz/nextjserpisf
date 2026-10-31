@@ -488,6 +488,27 @@ describe("Quotation Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("Data penawaran tidak valid")
   })
+  it("updateQuotation mengecek ulang status + pelunasan dari baris terkunci dalam tx", async () => {
+    // Snapshot luar: draft tanpa pelunasan. Baris terkunci sudah cancelled
+    // oleh penulis konkuren -> edit WAJIB ditolak dalam tx, tulis polos
+    // tidak boleh terpanggil.
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", customerId: 1, documentNo: "Q-001" })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ id: 1, status: "cancelled", revisionNumber: 3 })
+    const res = await actions.updateQuotation(1, fdQuotation({
+      customerId: 1, sections: [{ name: "Jasa", items: [{ itemId: 5, qty: 2, unitPrice: 1000, discount: 0, total: 2000 }] }],
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("dibatalkan")
+    expect(mocks.prismaMock.quotation.update).not.toHaveBeenCalled()
+    const lockSql = (mocks.prismaMock.$executeRaw.mock.calls as unknown[][])
+      .map((c) => {
+        const first = c[0] as { strings?: string[] } | unknown
+        if (Array.isArray(first)) return first.join("?")
+        return (first as { strings?: string[] })?.strings?.join("?") ?? ""
+      })
+      .join(" ")
+    expect(lockSql).toContain("quotations")
+  })
 })
 
 describe("Down Payment Actions", () => {
@@ -1348,6 +1369,11 @@ describe("Quotation Actions (legacy happy paths)", () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({
       id: 1, status: "draft", sections: [{ items: [{ id: 1 }] }],
     })
+    // Baca ulang TERKUNCI (decide/revise/update): default sent sah.
+    // mockReset membuang antrean Once basi antar tes yang ikut terkonsumsi
+    // jalur decide/revise/update kini.
+    mocks.prismaMock.quotation.findUnique.mockReset()
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ id: 1, status: "sent", revisionNumber: 3 })
     mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
   })
 
