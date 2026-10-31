@@ -77,7 +77,7 @@ dalam tx lewat `nextSlugWithClient`. Regression di
 `purchase-advance-validation.test.ts` (klaim key, throw sebelum create,
 akun nonaktif/wrong-group/wrong-type).
 
-### R8-KEU-04 — HIGH, CONFIRMED — deleteExpense race: jurnal POSTED yatim
+### R8-KEU-04 — SELESAI 2026-10-31 — deleteExpense race: jurnal POSTED yatim
 `src/actions/finance.actions.ts:1960-1966` — status dibaca di luar
 tx; `:1979` — `tx.expense.delete` tanpa syarat, tanpa lock baris,
 tanpa recheck. Skenario: delete baca status `draft` → concurrent
@@ -85,8 +85,11 @@ tanpa recheck. Skenario: delete baca status `draft` → concurrent
 Cr Kas) → delete tetap hapus baris expense. Jurnal yatim, uang
 terposting, sumber hilang. Jalur sama juga hapus expense yang
 petty-cash sync-nya sudah commit.
+Perbaikan: delete mengunci baris `FOR UPDATE`, membaca ulang status di
+dalam tx, dan hanya menghapus lewat `deleteMany` bila status bukan
+approved/paid. Regression di `finance.actions.test.ts`.
 
-### R8-KEU-05 — MEDIUM, CONFIRMED — approveExpense partial commit
+### R8-KEU-05 — SELESAI 2026-10-31 — approveExpense partial commit
 `src/actions/finance.actions.ts:871-901` —
 `onExpenseApprovedSyncPettyCash` jalan sebagai tx sendiri, flip
 status `updateMany` sesudahnya di luar tx bersama.
@@ -96,6 +99,13 @@ commit (PettyCash OUT + chain recalc) → flip gagal (count 0 karena
 reject/delete menyela) atau proses mati di antara → kas kecil
 berkurang, expense tetap draft/rejected. Dedupe by referenceNo
 cegah dobel saat retry, tapi state tidak konsisten.
+Perbaikan: `approveExpense` kini mengunci baris, membaca ulang status,
+menjalankan sinkron kas kecil, akrual klaim bila ada, dan flip status
+dalam tx yang sama. Hook menerima `txClient` opsional (selaras pola tx
+hook repo) dan menolak status di luar draft/pending/approved sebelum
+menulis kas kecil. Workflow path sesudah commit tetap memakai hook
+satu-argumen — guard status yang sama melindungi sinkron tertunda dari
+expense terminal. Regression: order test + hook status test.
 
 ### R8-KEU-06 — MEDIUM, CONFIRMED — Item rekonsiliasi dipakai ulang lintas draft
 `src/actions/finance.actions.ts:1447-1457` — reuse check hanya dalam

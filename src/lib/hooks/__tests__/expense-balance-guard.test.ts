@@ -81,6 +81,7 @@ describe("onExpenseApprovedSyncPettyCash balance guard", () => {
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
       id: 1,
       documentNo: "EXP-001",
+      status: "draft",
       amount: 1000,
       paidFromAccountId: 10,
       date: new Date(),
@@ -100,6 +101,7 @@ describe("onExpenseApprovedSyncPettyCash balance guard", () => {
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
       id: 2,
       documentNo: "EXP-002",
+      status: "draft",
       amount: 400,
       paidFromAccountId: 10,
       date: new Date(),
@@ -120,6 +122,7 @@ describe("onExpenseApprovedSyncPettyCash balance guard", () => {
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
       id: 3,
       documentNo: "EXP-003",
+      status: "draft",
       amount: 300,
       paidFromAccountId: 10,
       date: new Date(),
@@ -142,10 +145,32 @@ describe("onExpenseApprovedSyncPettyCash balance guard", () => {
   })
 })
 
+describe("R8-KEU-04/05 status guard", () => {
+  it("status paid ditolak sebelum sync kas kecil", async () => {
+    mocks.expenseFindUniqueOrThrow.mockResolvedValue({
+      id: 11, documentNo: "EXP-011", status: "paid", amount: 100, paidFromAccountId: 10, date: new Date(),
+    })
+
+    await expect(onExpenseApprovedSyncPettyCash(11, 99)).rejects.toThrow(/sudah diproses/)
+    expect(mocks.accountFindUnique).not.toHaveBeenCalled()
+    expect(mocks.pettyCashCreate).not.toHaveBeenCalled()
+  })
+
+  it("status rejected ditolak sebelum sync kas kecil", async () => {
+    mocks.expenseFindUniqueOrThrow.mockResolvedValue({
+      id: 12, documentNo: "EXP-012", status: "rejected", amount: 100, paidFromAccountId: 10, date: new Date(),
+    })
+
+    await expect(onExpenseApprovedSyncPettyCash(12, 99)).rejects.toThrow(/sudah diproses/)
+    expect(mocks.accountFindUnique).not.toHaveBeenCalled()
+    expect(mocks.pettyCashCreate).not.toHaveBeenCalled()
+  })
+})
+
 describe("onExpenseApprovedSyncPettyCash race + period + deteksi akun", () => {
   it("kunci baris expenses FOR UPDATE sebelum baca ulang expense dan cek duplikat", async () => {
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
-      id: 4, documentNo: "EXP-004", amount: 100, paidFromAccountId: 10, date: new Date(),
+      id: 4, documentNo: "EXP-004", amount: 100, paidFromAccountId: 10, status: "draft", date: new Date(),
     })
     mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama" })
     mocks.pettyCashFindFirst.mockResolvedValue(null)
@@ -166,7 +191,7 @@ describe("onExpenseApprovedSyncPettyCash race + period + deteksi akun", () => {
   it("assertPeriodOpen dipanggil dengan tanggal expense di dalam tx sebelum create", async () => {
     const date = new Date(2026, 0, 15)
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
-      id: 5, documentNo: "EXP-005", amount: 100, paidFromAccountId: 10, date,
+      id: 5, documentNo: "EXP-005", amount: 100, paidFromAccountId: 10, status: "draft", date,
     })
     mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama" })
     mocks.pettyCashFindFirst.mockResolvedValue(null)
@@ -182,7 +207,7 @@ describe("onExpenseApprovedSyncPettyCash race + period + deteksi akun", () => {
 
   it("periode tertutup: assertPeriodOpen melempar → tidak ada create pettyCash", async () => {
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
-      id: 6, documentNo: "EXP-006", amount: 100, paidFromAccountId: 10, date: new Date(2020, 0, 1),
+      id: 6, documentNo: "EXP-006", amount: 100, paidFromAccountId: 10, status: "draft", date: new Date(2020, 0, 1),
     })
     mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama" })
     mocks.assertPeriodOpen.mockRejectedValue(new Error("Periode akuntansi sudah ditutup"))
@@ -194,7 +219,7 @@ describe("onExpenseApprovedSyncPettyCash race + period + deteksi akun", () => {
   it("setting pettyCashAccountId cocok walau nama akun bukan kas kecil → tetap sinkron", async () => {
     mocks.getSystemSettings.mockResolvedValue({ pettyCashAccountId: 42 })
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
-      id: 7, documentNo: "EXP-007", amount: 100, paidFromAccountId: 42, date: new Date(),
+      id: 7, documentNo: "EXP-007", amount: 100, paidFromAccountId: 42, status: "draft", date: new Date(),
     })
     mocks.accountFindUnique.mockResolvedValue({ id: 42, name: "Kas Operasional" })
     mocks.pettyCashFindFirst.mockResolvedValue(null)
@@ -209,7 +234,7 @@ describe("onExpenseApprovedSyncPettyCash race + period + deteksi akun", () => {
   it("setting pettyCashAccountId terisi tapi akun expense beda (nama kas kecil pun) → dilewati", async () => {
     mocks.getSystemSettings.mockResolvedValue({ pettyCashAccountId: 42 })
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
-      id: 8, documentNo: "EXP-008", amount: 100, paidFromAccountId: 10, date: new Date(),
+      id: 8, documentNo: "EXP-008", amount: 100, paidFromAccountId: 10, status: "draft", date: new Date(),
     })
     mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama" })
 
@@ -219,7 +244,7 @@ describe("onExpenseApprovedSyncPettyCash race + period + deteksi akun", () => {
 
   it("rantai recalc hanya posted & belum terhapus: where findMany eksplisit, void/deleted tak ditulis ulang", async () => {
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
-      id: 9, documentNo: "EXP-009", amount: 100, paidFromAccountId: 10, date: new Date(),
+      id: 9, documentNo: "EXP-009", amount: 100, paidFromAccountId: 10, status: "draft", date: new Date(),
     })
     mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama" })
     mocks.pettyCashFindFirst.mockResolvedValue(null)

@@ -868,37 +868,31 @@ export async function approveExpense(expenseId: number) {
       if (!sod.ok) throw new Error(sod.error);
     }
 
-    // Sync to PettyCash (idempotent on documentNo), THEN flip to approved.
-    // Ordering matters: if the petty-cash sync fails, the expense keeps its
-    // pre-approval status and the whole approveExpense is retryable. The sync is
-    // idempotent on documentNo, so a retry after a partial failure will not
-    // double-create the petty cash record.
-    await onExpenseApprovedSyncPettyCash(expenseId, Number(user.id));
+    // R8-KEU-05: lock baris + cek status + sinkron kas kecil + flip status
+    // dalam SATU tx. Jalur lama menyinkronkan kas kecil di tx terpisah lalu flip
+    // di luar; kegagalan di antara keduanya meninggalkan kas berkurang sementara
+    // expense tetap draft/rejected. Klaim reimbursement sudah memakai pola ini.
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM expenses WHERE id = ${expenseId} FOR UPDATE`;
+      const locked = await tx.expense.findUniqueOrThrow({ where: { id: expenseId } });
+      if (locked.status !== "draft" && locked.status !== "approved") {
+        throw new Error("Expense hanya bisa di-approve dari status draft");
+      }
 
-    // Guarded write: only flip when the row is still in a pre-approval state,
-    // so a concurrent approver cannot double-apply the status change.
-    if (isClaim) {
-      // J-RB1 + flip status dalam SATU tx: akrual gagal (setting 210209
-      // kosong/periode tutup) = klaim tetap draft, bukan setengah berjurnal.
-      await prisma.$transaction(async (tx) => {
+      await onExpenseApprovedSyncPettyCash(expenseId, Number(user.id), tx);
+      if (isClaim) {
+        // J-RB1: akrual gagal (setting 210209 kosong/periode tutup) = klaim
+        // tetap draft, bukan setengah berjurnal.
         await onReimbursementClaimApproved(expenseId, Number(user.id), tx);
-        const claimTx = await tx.expense.updateMany({
-          where: { id: expenseId, status: { in: ["draft", "approved"] } },
-          data: { status: "approved", approvedBy: Number(user.id) },
-        });
-        if (claimTx.count === 0) {
-          throw new Error("Pengeluaran sudah diproses atau status tidak valid");
-        }
-      });
-    } else {
-      const claim = await prisma.expense.updateMany({
+      }
+      const claim = await tx.expense.updateMany({
         where: { id: expenseId, status: { in: ["draft", "approved"] } },
         data: { status: "approved", approvedBy: Number(user.id) },
       });
       if (claim.count === 0) {
         throw new Error("Pengeluaran sudah diproses atau status tidak valid");
       }
-    }
+    });
 
     await logActivity(
       "approve",
@@ -1957,26 +1951,30 @@ export async function deleteExpense(id: number) {
   try {
     await requirePermission("delete_expenses");
 
-    const expense = await prisma.expense.findUniqueOrThrow({ where: { id } });
-    // Laravel parity: only draft/pending expenses can be deleted
-    if (expense.status === "approved" || expense.status === "paid") {
-      throw new Error(
-        "Tidak bisa menghapus expense yang sudah approved atau paid",
-      );
-    }
-
-    // Atomicity: the attachment deleteMany + expense delete must commit
-    // together. Without the wrapper, a failure in either step leaves
-    // attachments orphaned with the wrong referenceId (or pointing at a
-    // deleted expense) — the user retries and the receipts are gone, or the
-    // expense vanishes but the receipts persist with referenceId pointing at
-    // a row that no longer exists.
+    // R8-KEU-04: lock + recheck + delete dalam satu tx. Baca status di luar tx
+    // tidak cukup: approve/mark-paid yang commit sesudah baca bisa meninggalkan
+    // jurnal POSTED atau kas kecil yatim saat delete tetap menghapus sumbernya.
     let removedFiles: { fileUrl: string; referenceType: string }[] = [];
     await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM expenses WHERE id = ${id} FOR UPDATE`;
+      const locked = await tx.expense.findUniqueOrThrow({ where: { id } });
+      if (locked.status === "approved" || locked.status === "paid") {
+        throw new Error(
+          "Tidak bisa menghapus expense yang sudah approved atau paid",
+        );
+      }
+
       removedFiles = await deleteTransactionAttachmentsTx(tx, {
         referenceType: "Expense", referenceId: id,
       });
-      await tx.expense.delete({ where: { id } });
+      const deleted = await tx.expense.deleteMany({
+        where: { id, status: { notIn: ["approved", "paid"] } },
+      });
+      if (deleted.count === 0) {
+        throw new Error(
+          "Tidak bisa menghapus expense yang sudah approved atau paid",
+        );
+      }
       await tx.approval.deleteMany({
         where: { referenceType: "Expense", referenceId: id },
       });

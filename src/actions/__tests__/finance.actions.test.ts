@@ -760,9 +760,18 @@ describe("Expense Actions", () => {
     expect(res?.success).toBe(true)
   })
   it("deleteExpense succeeds", async () => {
-    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, isPosted: false })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", isPosted: false })
     const res = await (actions as any).deleteExpense(1)
     expect(res?.success).toBe(true)
+  })
+
+  it("R8-KEU-04: deleteExpense rereads status inside the tx and rejects approved", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved" })
+    const res = await actions.deleteExpense(1)
+    expect(res.success).toBe(false)
+    expect(mocks.prismaMock.expense.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.transactionAttachment.deleteMany).not.toHaveBeenCalled()
   })
 })
 

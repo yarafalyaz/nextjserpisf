@@ -136,6 +136,9 @@ beforeEach(() => {
   paidMock.mockResolvedValue(undefined)
   expenseJournalMock.mockResolvedValue(undefined)
   expenseUpdateManyMock.mockResolvedValue({ count: 1 })
+  // R8-KEU-05: approve membaca expense dua kali — luar (gerbang klaim) dan
+  // di dalam tx bersama sync; baca dalam tx jatuh ke fixture klaim draft.
+  txExpenseFindUniqueOrThrowMock.mockResolvedValue({ ...CLAIM })
   txExpenseUpdateManyMock.mockResolvedValue({ count: 1 })
   attachmentCountMock.mockResolvedValue(1)
   employeeFindFirstMock.mockResolvedValue(null) // approver bukan karyawan tertaut
@@ -187,7 +190,7 @@ describe("approveExpense klaim (AC-RB-B3/B4, E-RB5-1)", () => {
     const r = await approveExpense(42)
     expect(r.success).toBe(true)
     expect(accrualMock).not.toHaveBeenCalled()
-    expect(expenseUpdateManyMock).toHaveBeenCalled()
+    expect(txExpenseUpdateManyMock).toHaveBeenCalled()
   })
 })
 

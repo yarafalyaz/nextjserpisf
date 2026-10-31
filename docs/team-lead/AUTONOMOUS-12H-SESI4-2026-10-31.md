@@ -106,3 +106,9 @@ sebelum fix (klaim agen bukan vonis).
   Test purchase advance 25/25 lokal, suite purchase terkait 213/213; tsc
   0 debug, lint 0 error, diff bersih. Berikutnya R8-KEU-04..10,
   R8-JB-03..10, R8-SDM-01..06.
+- R8-KEU-04/05 selesai: deleteExpense lock + recheck + deleteMany
+  bersyarat dalam tx; approveExpense lock + recheck + sync kas kecil +
+  flip (dan akrual klaim) dalam tx bersama; hook terima txClient opsional
+  + guard status. 276 test terkait hijau, tsc bersih, lint 0 error,
+  diff bersih. Berikutnya R8-KEU-06..10, R8-JB-03..10,
+  R8-SDM-01..06.

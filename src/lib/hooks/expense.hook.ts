@@ -17,9 +17,10 @@ function isPettyCashAccountName(name: string): boolean {
 
 export async function onExpenseApprovedSyncPettyCash(
   expenseId: number,
-  approvedByUserId?: number
+  approvedByUserId?: number,
+  txClient?: unknown,
 ): Promise<void> {
-  await prisma.$transaction(async (tx) => {
+  const run = async (tx: any) => {
     // Kunci baris expense lebih dulu: dua approval konkuren untuk expense yang
     // sama men-serialize di sini, sehingga cek duplikat + create di bawah tak
     // bisa sama-sama lolos. Baris dibaca ulang di dalam tx (keadaan terkunci).
@@ -29,6 +30,13 @@ export async function onExpenseApprovedSyncPettyCash(
     const expense = await tx.expense.findUniqueOrThrow({
       where: { id: expenseId },
     });
+
+    // R8-KEU-04/05: sync hanya boleh menulis untuk expense yang masih hidup di
+    // status pra/sesudah-approve. Bila penghapusan atau reject menang lebih
+    // dulu, jangan bangkitkan kas kecil untuk dokumen yang sudah selesai.
+    if (!["draft", "pending", "approved"].includes(expense.status)) {
+      throw new Error("Pengeluaran sudah diproses atau status tidak valid");
+    }
 
     // Only sync if paid from a petty cash type account
     if (!expense.paidFromAccountId) {
@@ -165,5 +173,11 @@ export async function onExpenseApprovedSyncPettyCash(
       // in recalcPettyCashChain in finance.actions.ts.
       await Promise.all(updates);
     }
-  });
+  };
+
+  if (txClient) {
+    await run(txClient);
+    return;
+  }
+  await prisma.$transaction(run);
 }

@@ -15,18 +15,26 @@ const syncPettyCashMock = vi.fn()
 
 const expenseFindUniqueOrThrowMock = vi.fn()
 const expenseUpdateManyMock = vi.fn()
+const executeRawMock = vi.fn().mockResolvedValue(1)
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
 }))
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const tx = {
+    $executeRaw: (...a: unknown[]) => executeRawMock(...a),
     expense: {
       findUniqueOrThrow: (...a: unknown[]) => expenseFindUniqueOrThrowMock(...a),
       updateMany: (...a: unknown[]) => expenseUpdateManyMock(...a),
     },
-  },
-}))
+  }
+  return {
+    prisma: {
+      expense: tx.expense,
+      $transaction: async (fn: (client: typeof tx) => unknown) => fn(tx),
+    },
+  }
+})
 vi.mock("@/lib/hooks/expense.hook", () => ({
   onExpenseApprovedSyncPettyCash: (...a: unknown[]) => syncPettyCashMock(...a),
 }))
@@ -78,7 +86,7 @@ describe("approveExpense ordering guard", () => {
     const result = await approveExpense(42)
 
     expect(result.success).toBe(true)
-    expect(syncPettyCashMock).toHaveBeenCalledWith(42, 7)
+    expect(syncPettyCashMock).toHaveBeenCalledWith(42, 7, expect.anything())
     expect(order).toEqual(["sync", "approve"]) // sync strictly precedes approve
   })
 
@@ -100,7 +108,7 @@ describe("approveExpense ordering guard", () => {
     const result = await approveExpense(42)
 
     expect(result.success).toBe(true)
-    expect(syncPettyCashMock).toHaveBeenCalledWith(42, 7)
+    expect(syncPettyCashMock).toHaveBeenCalledWith(42, 7, expect.anything())
     expect(expenseUpdateManyMock).toHaveBeenCalled()
   })
 
