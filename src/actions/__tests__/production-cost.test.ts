@@ -580,6 +580,30 @@ describe("pullLaborCostFromTimesheets", () => {
 })
 
 describe("pullLaborCostFromWorkOrderTimesheets — jalur WO langsung (F-2026-10-21-019)", () => {
+  it("kunci baris timesheet mendahului baca ulang dedupe di dalam tx (pola jalur proyek)", async () => {
+    woFindUniqueMock.mockResolvedValue({ id: 7, status: "in_progress" })
+    timesheetFindManyMock.mockResolvedValue([
+      { id: 21, hours: 8, date: new Date(), description: null },
+      { id: 22, hours: 2, date: new Date(), description: null },
+    ])
+    // Baca ulang dalam tx: 21 sudah tertarik penarik paralel → hanya 22 dibuat.
+    costFindManyMock.mockResolvedValue([{ sourceTimesheetId: 21 }])
+    costCreateMock.mockResolvedValue({ id: 1 })
+
+    const res = await pullLaborCostFromWorkOrderTimesheets(7, 25000)
+
+    expect(res.success).toBe(true)
+    expect(res.count).toBe(1)
+    expect(costCreateMock.mock.calls[0][0].data.sourceTimesheetId).toBe(22)
+    const tsCall = queryRawMock.mock.calls.findIndex(
+      (c) => ((c[0] as TemplateStringsArray).join("?") ?? "").includes("FROM timesheets"),
+    )
+    expect(tsCall).toBeGreaterThanOrEqual(0)
+    const lockOrder = queryRawMock.mock.invocationCallOrder[tsCall]
+    expect(lockOrder).toBeLessThan(costFindManyMock.mock.invocationCallOrder[0])
+    expect(costFindManyMock.mock.invocationCallOrder[0]).toBeLessThan(costCreateMock.mock.invocationCallOrder[0])
+  })
+
   it("WO non-proyek: timesheet WO 8 jam menjadi tepat 1 ProductionCost labor tanpa PO/rollup", async () => {
     woFindUniqueMock.mockResolvedValue({ id: 7, status: "in_progress" })
     timesheetFindManyMock.mockResolvedValue([

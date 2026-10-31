@@ -469,10 +469,17 @@ export async function pullLaborCostFromWorkOrderTimesheets(
     let totalAdded = 0
     let createdCount = 0
     await prisma.$transaction(async (tx) => {
+      // Kunci baris timesheet kandidat (urutan id global) lalu dedupe
+      // dibaca ulang di dalam tx — cermin jalur proyek di atas. Tanpa
+      // kunci, dua penarik konkuren sama-sama membaca snapshot kosong
+      // dan menggandakan baris labor timesheet yang sama; tanpa unique
+      // DB pada sourceTimesheetId, kunci baris adalah serialisasinya.
+      const timesheetIds = timesheets.map((t) => t.id)
+      await tx.$queryRaw`SELECT id FROM timesheets WHERE id IN (${Prisma.join(timesheetIds)}) ORDER BY id FOR UPDATE`
       // Dibaca ulang di dalam transaksi: semesta idempoten per-timesheet
       // global (lintas jalur proyek/WO), bukan per perintah.
       const alreadyPulled = await tx.productionCost.findMany({
-        where: { sourceTimesheetId: { in: timesheets.map((t) => t.id) } },
+        where: { sourceTimesheetId: { in: timesheetIds } },
         select: { sourceTimesheetId: true },
       })
       const pulledSet = new Set(alreadyPulled.map((c) => c.sourceTimesheetId))
