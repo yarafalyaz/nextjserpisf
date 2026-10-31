@@ -2392,6 +2392,15 @@ describe("Purchase Actions Additional Branch Coverage", () => {
     expect(res?.error).toContain("Tidak bisa menghapus PR yang sudah approved")
   })
 
+  it("deletePurchaseRequest refuses when the atomic claim loses (approved mid-flight)", async () => {
+    mocks.prismaMock.purchaseRequest.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft" })
+    mocks.prismaMock.purchaseRequest.deleteMany.mockResolvedValueOnce({ count: 0 })
+    const res = await actions.deletePurchaseRequest(1)
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.purchaseRequest.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.approval.deleteMany).not.toHaveBeenCalled()
+  })
+
   it("deletePurchaseOrder deletes PO and reverses GRs with stock moves", async () => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({
       id: 1, status: "draft", purchaseRequestId: 10, goodsReceipts: [{ id: 101, status: "draft" }]

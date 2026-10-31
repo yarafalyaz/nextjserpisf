@@ -2533,7 +2533,15 @@ export async function deletePurchaseRequest(id: number) {
       throw new Error("Tidak bisa menghapus PR yang sudah approved");
     }
 
-    await prisma.purchaseRequest.delete({ where: { id } });
+    // Klaim atomik: bacaan di atas bisa basi — approver yang commit
+    // "approved" di antaranya memakai status. Hapus hanya bila status
+    // SAAT klaim belum approved; count 0 kalah balapan.
+    const claim = await prisma.purchaseRequest.deleteMany({
+      where: { id, status: { not: "approved" } },
+    });
+    if (claim.count === 0) {
+      throw new Error("Tidak bisa menghapus PR yang sudah approved");
+    }
     await prisma.approval.deleteMany({
       where: { referenceType: "PurchaseRequest", referenceId: id },
     });
