@@ -1777,7 +1777,14 @@ describe("Delivery Order Actions (legacy happy paths)", () => {
     mocks.prismaMock.deliveryOrder.findUniqueOrThrow.mockResolvedValue({ status: "draft" })
     const res = await actions.deleteDeliveryOrder(1)
     expect(res?.success).toBe(true)
-    expect(mocks.prismaMock.deliveryOrder.delete).toHaveBeenCalledWith({ where: { id: 1 } })
+    expect(mocks.prismaMock.deliveryOrder.deleteMany).toHaveBeenCalledWith({ where: { id: 1, status: "draft" } })
+  })
+  it("deleteDeliveryOrder menolak bila klaim kondisional kalah balapan (status berubah)", async () => {
+    mocks.prismaMock.deliveryOrder.findUniqueOrThrow.mockResolvedValue({ status: "draft" })
+    mocks.prismaMock.deliveryOrder.deleteMany.mockResolvedValue({ count: 0 })
+    const res = await actions.deleteDeliveryOrder(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("sudah berubah status")
   })
   it("deleteDeliveryOrder refuses a confirmed/delivered DO and never deletes", async () => {
     mocks.prismaMock.deliveryOrder.findUniqueOrThrow.mockResolvedValue({ status: "delivered" })

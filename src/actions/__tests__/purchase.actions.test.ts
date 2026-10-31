@@ -132,6 +132,10 @@ beforeEach(() => {
   // aturan bisnisnya. Cek scope gudangnya sendiri diuji terpisah.
   mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["super_admin"] })
   mocks.generateDocNumMock.mockResolvedValue("DOC-001")
+  // Baca-ulang status GR di dalam tx deleteGoodsReceipt (sesudah lock):
+  // default draft agar jalur hapus draft lama tetap lolos; test balapan
+  // menimpanya ke verified.
+  mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValue({ status: "draft" })
 })
 
 function mockDraftReturn() {
@@ -2829,6 +2833,23 @@ describe("PUR-BR-010 larangan hapus fisik dokumen pembelian posted", () => {
     mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "returned" })
     expectRefused(await actions.deletePurchaseReturn(1), "Hanya retur draft yang dapat dihapus",
       mocks.prismaMock.purchaseReturn.delete)
+  })
+
+  it("deletePurchaseReturn menolak bila klaim kondisional kalah balapan (status berubah)", async () => {
+    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft" })
+    mocks.prismaMock.purchaseReturn.deleteMany.mockResolvedValue({ count: 0 })
+    expectRefused(await actions.deletePurchaseReturn(1), "sudah berubah status",
+      mocks.prismaMock.purchaseReturn.delete)
+  })
+
+  it("deletePurchaseReturn sukses lewat klaim kondisional draft", async () => {
+    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft" })
+    mocks.prismaMock.purchaseReturn.deleteMany.mockResolvedValue({ count: 1 })
+    const res = await actions.deletePurchaseReturn(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.purchaseReturn.deleteMany).toHaveBeenCalledWith({
+      where: { id: 1, status: "draft" },
+    })
   })
 })
 

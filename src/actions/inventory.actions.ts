@@ -1899,7 +1899,14 @@ export async function deleteStockAdjustment(id: number) {
       throw new Error("Hanya stock adjustment draft yang dapat dihapus");
     }
 
-    await prisma.stockAdjustment.delete({ where: { id } });
+    // Klaim kondisional: process konkuren yang commit lebih dulu membuat
+    // count 0 — dokumen non-draft tidak ikut terhapus dari bacaan basi.
+    const claim = await prisma.stockAdjustment.deleteMany({
+      where: { id, status: "draft" },
+    });
+    if (claim.count === 0) {
+      throw new Error("Stock adjustment sudah berubah status; muat ulang halaman");
+    }
 
     await logActivity(
       "delete",
@@ -1928,7 +1935,12 @@ export async function deleteInventoryTransfer(id: number) {
       throw new Error("Hanya transfer draft yang dapat dihapus");
     }
 
-    await prisma.inventoryTransfer.delete({ where: { id } });
+    const claim = await prisma.inventoryTransfer.deleteMany({
+      where: { id, status: "draft" },
+    });
+    if (claim.count === 0) {
+      throw new Error("Transfer sudah berubah status; muat ulang halaman");
+    }
 
     await logActivity(
       "delete",
@@ -1957,7 +1969,12 @@ export async function deleteMaterialIssue(id: number) {
       throw new Error("Hanya material issue draft yang dapat dihapus");
     }
 
-    await prisma.materialIssue.delete({ where: { id } });
+    const claim = await prisma.materialIssue.deleteMany({
+      where: { id, status: "draft" },
+    });
+    if (claim.count === 0) {
+      throw new Error("Material issue sudah berubah status; muat ulang halaman");
+    }
 
     await logActivity(
       "delete",

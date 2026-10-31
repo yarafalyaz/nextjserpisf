@@ -4063,7 +4063,12 @@ export async function deletePurchaseReturn(id: number) {
       throw new Error("Hanya retur draft yang dapat dihapus");
     }
 
-    await prisma.purchaseReturn.delete({ where: { id } });
+    const claim = await prisma.purchaseReturn.deleteMany({
+      where: { id, status: "draft" },
+    });
+    if (claim.count === 0) {
+      throw new Error("Retur pembelian sudah berubah status; muat ulang halaman");
+    }
     await logActivity(
       "delete",
       "PurchaseReturn",

@@ -265,7 +265,17 @@ describe("Stock Adjustment Actions", () => {
     seedDraft(mocks.prismaMock.stockAdjustment);
     const res = await actions.deleteStockAdjustment(1);
     expect(res?.success).toBe(true);
-    expect(mocks.prismaMock.stockAdjustment.delete).toHaveBeenCalled();
+    expect(mocks.prismaMock.stockAdjustment.deleteMany).toHaveBeenCalledWith({
+      where: { id: 1, status: "draft" },
+    });
+  });
+
+  it("deleteStockAdjustment menolak bila klaim kondisional kalah balapan (status berubah)", async () => {
+    seedDraft(mocks.prismaMock.stockAdjustment);
+    mocks.prismaMock.stockAdjustment.deleteMany.mockResolvedValue({ count: 0 });
+    const res = await actions.deleteStockAdjustment(1);
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("sudah berubah status");
   });
 });
 
@@ -339,7 +349,17 @@ describe("Inventory Transfer Actions", () => {
     seedDraft(mocks.prismaMock.inventoryTransfer);
     const res = await actions.deleteInventoryTransfer(1);
     expect(res?.success).toBe(true);
-    expect(mocks.prismaMock.inventoryTransfer.delete).toHaveBeenCalled();
+    expect(mocks.prismaMock.inventoryTransfer.deleteMany).toHaveBeenCalledWith({
+      where: { id: 1, status: "draft" },
+    });
+  });
+
+  it("deleteInventoryTransfer menolak bila klaim kondisional kalah balapan", async () => {
+    seedDraft(mocks.prismaMock.inventoryTransfer);
+    mocks.prismaMock.inventoryTransfer.deleteMany.mockResolvedValue({ count: 0 });
+    const res = await actions.deleteInventoryTransfer(1);
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("sudah berubah status");
   });
 
   it("STOK-19: closeInventoryTransferShortage menolak bila draf aktif sudah ada di dalam tx", async () => {
@@ -486,7 +506,17 @@ describe("Material Issue Actions", () => {
     seedDraft(mocks.prismaMock.materialIssue);
     const res = await actions.deleteMaterialIssue(1);
     expect(res?.success).toBe(true);
-    expect(mocks.prismaMock.materialIssue.delete).toHaveBeenCalled();
+    expect(mocks.prismaMock.materialIssue.deleteMany).toHaveBeenCalledWith({
+      where: { id: 1, status: "draft" },
+    });
+  });
+
+  it("deleteMaterialIssue menolak bila klaim kondisional kalah balapan", async () => {
+    seedDraft(mocks.prismaMock.materialIssue);
+    mocks.prismaMock.materialIssue.deleteMany.mockResolvedValue({ count: 0 });
+    const res = await actions.deleteMaterialIssue(1);
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("sudah berubah status");
   });
   // WO-BR-004: form Inventaris menolak MI kedua untuk WO yang sama.
   it("createMaterialIssue menolak WO yang sudah punya MI aktif", async () => {

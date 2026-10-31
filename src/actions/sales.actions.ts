@@ -3075,7 +3075,12 @@ export async function deleteDeliveryOrder(id: number) {
     )
   }
 
-  await prisma.deliveryOrder.delete({ where: { id } })
+  // Klaim kondisional: ship/confirm konkuren yang commit lebih dulu
+  // membuat count 0 — surat jalan non-draft tidak terhapus dari bacaan basi.
+  const claim = await prisma.deliveryOrder.deleteMany({ where: { id, status: "draft" } })
+  if (claim.count === 0) {
+    throw new Error("Surat jalan sudah berubah status; muat ulang halaman")
+  }
 
   await logActivity("delete", "DeliveryOrder", id, `Menghapus surat jalan #${id}`)
   revalidatePath("/penjualan/surat-jalan")
