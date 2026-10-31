@@ -86,7 +86,13 @@ export function buildInputSptRows(invoices: InputInvoiceRow[]): SptInputRow[] {
     if (inv.creditStatus !== "credited" || !inv.creditPeriod) continue
     // Faktur batal/tolak DJP tidak dikreditkan, walau `cancelTaxInvoice`
     // tidak mengosongkan creditStatus/creditPeriod pada data lama.
-    if (inv.djpStatus === "cancelled" || inv.djpStatus === "rejected") continue
+    // R8-PAJAK-06: `replaced` juga nol-efek — data warisan replaced+credited
+    // (penggantian sebelum guard service) tidak boleh bocor ke SPT.
+    if (
+      inv.djpStatus === "cancelled" ||
+      inv.djpStatus === "rejected" ||
+      inv.djpStatus === "replaced"
+    ) continue
     const pct = inv.creditablePercent ?? 100
     const row = byPeriod.get(inv.creditPeriod) ?? {
       period: inv.creditPeriod,

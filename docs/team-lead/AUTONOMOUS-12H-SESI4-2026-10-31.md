@@ -78,3 +78,19 @@ Empat dokumen hasil agen + daftar "Bersih" (anti-audit-ulang) dicatat
 persis seperti dilaporkan; status CONFIRMED/PLAUSIBLE dicantumkan
 apa adanya. Triase per temuan dilakukan main session dari kode nyata
 sebelum fix (klaim agen bukan vonis).
+
+- Batch customer-credit (ter-commit): R8-KEU-01 refund parsial kedua
+  P2002 + R8-KEU-02/R8-JB-01/02 alokasi kredit (gate posted/partial +
+  returnCredit) — `ROUND8-KEUANGAN.md`/`ROUND8-JUAL-BELI.md`.
+- Batch pajak: R8-PAJAK-04 (replace faktur masukan credited ditolak),
+  R8-PAJAK-05 (kredit replaced/draft/rejected ditolak), R8-PAJAK-06
+  (read-model SPT skip replaced). R8-PAJAK-01 ternyata lebih dalam
+  dari laporan agen: unique DB plain semua baris, jadi reorder saja
+  tidak cukup — nomor seri pengganti memang sama dengan asal. Fix =
+  kolom GENERATED `active_number_key` + unique aktif saja (pola
+  `Journal.activeReferenceKey`) + reorder tulis; migrasi
+  `20261031100000_taxinvoice_active_number_unique` drift 0,
+  diterapkan manual ke DB dev (db push diblokir gerbang
+  `--accept-data-loss`; tax_invoices 0 baris), regression integrasi
+  DB hijau lawan DB dev (RUN_DB_INTEGRATION). Suite pajak 38 + guard
+  schema-usage 53 hijau, tsc+lint bersih.

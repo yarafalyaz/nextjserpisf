@@ -98,6 +98,20 @@ describe("SPT masukan: masa kredit, hanya credited", () => {
     expect(rows).toHaveLength(0)
   })
 
+  it("R8-PAJAK-06: replaced+credited warisan tidak bocor ke SPT masukan", () => {
+    const rows = buildInputSptRows([
+      {
+        taxPeriod: "2026-01",
+        creditPeriod: "2026-01",
+        creditStatus: "credited",
+        dpp: 11_000_000,
+        taxAmount: 1_320_000,
+        djpStatus: "replaced",
+      },
+    ])
+    expect(rows).toHaveLength(0)
+  })
+
   it("creditablePercent 50%: PPN 1.320.000 dikreditkan 660.000, bukan penuh", () => {
     const rows = buildInputSptRows([
       {

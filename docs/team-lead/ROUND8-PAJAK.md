@@ -7,6 +7,24 @@ vonis akhir sebelum fix. Format: `R8-PAJAK-NN` — file:line, skenario.
 ## Temuan
 
 ### R8-PAJAK-01 — HIGH, CONFIRMED — Faktur pengganti mustahil terbit
+**Status: SELESAI 2026-10-31.** Akar lebih dalam dari laporan awal:
+unique DB adalah plain `@@unique([direction, taxInvoiceNumber])`
+semua baris, jadi menandai asal `replaced` lebih dulu tetap P2002 —
+nomor seri pengganti memang sama dengan faktur diganti (vonis
+backlog F-001/F-002: "nomor seri sama dengan digit status pengganti
+sesuai Coretax"; form meminta "Nomor Faktur Pengganti" dan service
+menegakkannya). Fix: kolom GENERATED `active_number_key`
+(`${direction}#${taxInvoiceNumber}`, NULL saat `replaced`) + unique
+`tax_invoices_active_number_unique`, unique plain dibuang — pola yang
+sama dengan `Journal.activeReferenceKey`; urutan tulis di
+`replaceTaxInvoice` juga dibalik (asal `replaced` sebelum create)
+supaya kunci aktif benar-benar bebas saat create. Migrasi
+`20261031100000_taxinvoice_active_number_unique` lolos
+`db:check-migrations` (drift 0); perilaku kunci diverifikasi di
+MySQL 8.0 scratch (replaced→NULL, draft memegang nomor, aktif kedua
+1062, precheck berhenti tanpa ubah data). Regression:
+`tax-invoice-active-number.integration.test.ts` (opt-in
+`RUN_DB_INTEGRATION`) + test urutan tulis mock.
 `src/lib/services/tax-invoice.service.ts:484-511` membuat baris baru
 dengan nomor seri SAMA sebelum faktur asal ditandai `replaced` →
 bentrok `@@unique([direction, taxInvoiceNumber])`
@@ -25,6 +43,11 @@ Bupot fasilitas SKB/PP23/DTP: `facility` hanya snapshot
 tetap dipotong (cth DPP Rp100jt PPh23 2% → dipotong Rp2jt, salah).
 
 ### R8-PAJAK-04 — HIGH, CONFIRMED — Penggantian faktur masukan credited
+**Status: SELESAI 2026-10-31.** Guard di `replaceTaxInvoice`: faktur
+masukan `creditStatus === "credited"` ditolak definitif ("batalkan
+kreditnya dulu lewat masa yang sama") sebelum nomor dibandingkan /
+baris pengganti dibuat. Regression: test "R8-PAJAK-04" (create tidak
+terpanggil).
 `replaceTaxInvoice` boleh mengganti faktur masukan yang sudah
 `credited` (`tax-invoice.service.ts:433-525` tanpa guard
 `old.creditStatus`); asal tetap `credited` terhitung SPT, pengganti
@@ -32,11 +55,19 @@ tetap dipotong (cth DPP Rp100jt PPh23 2% → dipotong Rp2jt, salah).
 tidak menyaring `djpStatus=replaced`).
 
 ### R8-PAJAK-05 — HIGH, CONFIRMED — Kredit faktur replaced/draft/rejected
+**Status: SELESAI 2026-10-31.** `creditInputInvoice` menolak
+`djpStatus` replaced ("kreditkan faktur penggantinya"), rejected, dan
+draft selain `cancelled` yang sudah ada. Fixture lama yang memakai
+`draft` untuk jalur expired/duplikat disesuaikan ke `approved`
+(gerbang tidak dilonggarkan). Regression: test parameter tiga status.
 `creditInputInvoice` hanya memblokir `cancelled` + sudah credited
 (`tax-invoice.service.ts:642-644`) → faktur `replaced`/`draft`/
 `rejected` bisa dikreditkan → kredit dobel atas satu nomor seri.
 
 ### R8-PAJAK-06 — MEDIUM, CONFIRMED — Sisi baca SPT (pasangan 04)
+**Status: SELESAI 2026-10-31.** `buildInputSptRows` kini skip
+`replaced` bersama cancelled/rejected. Regression: test
+"R8-PAJAK-06: replaced+credited warisan tidak bocor ke SPT masukan".
 `spt-read-model.ts:89` hanya skip cancelled|rejected; data warisan
 `replaced`+`credited` tetap bocor walau service diperbaiki.
 

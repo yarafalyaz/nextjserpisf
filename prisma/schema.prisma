@@ -1347,6 +1347,16 @@ model TaxInvoice {
   buyerAddress         String?      @map("buyer_address") @db.Text
   buyerEmail           String?      @map("buyer_email")
   /**
+   * Kunci unik faktur AKTIF: dihasilkan DB sebagai
+   * `${direction}#${taxInvoiceNumber}` bila djpStatus bukan replaced.
+   * Pengganti memakai nomor seri sama dengan faktur diganti, jadi dua
+   * baris boleh menyimpan nomor yang sama asal hanya satu yang hidup
+   * (migrasi 20261031100000_taxinvoice_active_number_unique). Prisma tidak
+   * menulis/membacanya; MySQL yang menghitungnya. Pattern yang sama seperti
+   * `Journal.activeReferenceKey`.
+   */
+  activeNumberKey      String?      @map("active_number_key")
+  /**
    * Masa pengkreditan dipilih (arah in saja), "YYYY-MM".
    */
   creditPeriod         String?      @map("credit_period") @db.VarChar(7)
@@ -1384,7 +1394,7 @@ model TaxInvoice {
   purchaseReturnNotes  PurchaseReturn[]
   disputeAssessments   TaxAssessment[]
 
-  @@unique([direction, taxInvoiceNumber], map: "uq_tax_invoices_direction_number")
+  @@unique([activeNumberKey], map: "tax_invoices_active_number_unique")
   @@index([taxPeriod], map: "idx_tax_invoices_period")
   @@index([djpStatus], map: "idx_tax_invoices_status")
   @@index([creditPeriod], map: "idx_tax_invoices_credit_period")

@@ -70,6 +70,12 @@ const KNOWN_UNUSED: string[] = [
   // sebutan namanya di kode produk adalah komentar itu. Menghapus kolom =
   // menghapus penegak unik jurnal-aktif-per-referensi, jadi beku ini disengaja.
   "Journal.activeReferenceKey",
+  // Kolom GENERATED di DB (migrasi 20261031100000_taxinvoice_active_number_unique):
+  // MySQL menghitung `direction#taxInvoiceNumber` untuk faktur selain
+  // `replaced`; client Prisma sengaja tidak menulis/membacanya. Menghapusnya
+  // menghapus penegak unik faktur-aktif-per-nomor-seri (pengganti memakai
+  // nomor seri sama), jadi beku ini disengaja.
+  "TaxInvoice.activeNumberKey",
 ].sort()
 
 const ROOT = path.resolve(__dirname, "../..")

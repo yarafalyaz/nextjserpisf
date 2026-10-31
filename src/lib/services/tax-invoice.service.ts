@@ -455,6 +455,12 @@ export async function replaceTaxInvoice(input: ReplaceTaxInvoiceInput): Promise<
       const old = await tx.taxInvoice.findUniqueOrThrow({ where: { id: input.replacesId } })
       if (old.djpStatus === "cancelled") throw definitive("Faktur batal tidak bisa diganti")
       if (old.djpStatus === "replaced") throw definitive("Faktur ini sudah diganti — rantai satu pengganti per faktur")
+      // R8-PAJAK-04: faktur masukan yang sudah dikreditkan tidak boleh
+      // diganti — asal tetap credited terhitung SPT sementara pengganti
+      // uncredited → PPN Masukan overstate/dobel atas satu nomor seri.
+      if (old.direction === "in" && old.creditStatus === "credited") {
+        throw definitive("Faktur masukan sudah dikreditkan tidak bisa diganti — batalkan kreditnya dulu lewat masa yang sama")
+      }
       // Pengganti memakai masa faktur DIGANTI (PER-11/PJ/2025): masa asal
       // terkunci menolak; tanggal terbit pengganti bebas (reportedAtPeriod).
       await assertPeriodOpen(old.taxInvoiceDate, tx as never)
@@ -479,8 +485,12 @@ export async function replaceTaxInvoice(input: ReplaceTaxInvoiceInput): Promise<
         normalizeTransactionCode(old.transactionCode),
         Number(old.taxRate),
       )
-      // Terbit draft dulu supaya tak ada celah tanpa cermin; cermin kepala
-      // diperbarui ke nomor pengganti bersamaan (mirrorHeadNumber).
+      // R8-PAJAK-01: asal ditandai replaced SEBELUM baris baru dibuat.
+      // Kunci DB `active_number_key` hanya mengikat faktur selain
+      // `replaced`, jadi urutan ini yang memberi ruang bagi pengganti
+      // bernomor seri sama. Satu tx: rollback mengembalikan status asal
+      // bila create/mirror gagal.
+      await tx.taxInvoice.update({ where: { id: old.id }, data: { djpStatus: "replaced" } })
       const created = await tx.taxInvoice.create({
         data: {
           slug: await nextTxSlug(tx as never, "taxInvoice", `fp-ganti-${input.taxInvoiceNumber.trim()}`),
@@ -508,7 +518,6 @@ export async function replaceTaxInvoice(input: ReplaceTaxInvoiceInput): Promise<
           createdBy: input.userId ?? null,
         },
       })
-      await tx.taxInvoice.update({ where: { id: old.id }, data: { djpStatus: "replaced" } })
       await mirrorHeadNumber(tx, {
         direction: created.direction,
         taxInvoiceNumber: created.taxInvoiceNumber,
@@ -640,7 +649,13 @@ export async function creditInputInvoice(input: CreditInputInvoiceInput): Promis
       await tx.$queryRaw`SELECT id FROM tax_invoices WHERE id = ${input.id} FOR UPDATE`
       const inv = await tx.taxInvoice.findUniqueOrThrow({ where: { id: input.id } })
       if (inv.direction !== "in") throw definitive("Hanya faktur masukan yang bisa dikreditkan")
+      // R8-PAJAK-05: hanya faktur hidup non-draft yang bisa dikreditkan —
+      // replaced/draft/rejected yang dikreditkan = kredit dobel satu
+      // nomor seri (asal dan pengganti sama-sama terhitung SPT).
       if (inv.djpStatus === "cancelled") throw definitive("Faktur batal tidak bisa dikreditkan")
+      if (inv.djpStatus === "replaced") throw definitive("Faktur sudah diganti tidak bisa dikreditkan — kreditkan faktur penggantinya")
+      if (inv.djpStatus === "rejected") throw definitive("Faktur ditolak DJP tidak bisa dikreditkan")
+      if (inv.djpStatus === "draft") throw definitive("Faktur draft belum terbit tidak bisa dikreditkan")
       if (inv.creditStatus === "credited") throw definitive("Faktur ini sudah dikreditkan — duplikat kredit ditolak")
       if (input.nonCreditableReason) {
         if (!(NON_CREDITABLE_REASONS as readonly string[]).includes(input.nonCreditableReason)) {

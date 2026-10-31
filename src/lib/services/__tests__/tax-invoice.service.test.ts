@@ -73,7 +73,9 @@ beforeEach(() => {
   )
   mocks.taxInvoiceFindUniqueOrThrow.mockResolvedValue({
     id: 7, direction: "in", taxPeriod: "2026-01", taxAmount: 1_320_000,
-    djpStatus: "draft", creditStatus: "uncredited", transactionCode: "04", taxRate: 12,
+    // R8-PAJAK-05: kredit hanya untuk faktur hidup non-draft; fixture lama
+    // memakai "draft" yang kini ditolak sebelum evaluasi jendela kredit.
+    djpStatus: "approved", creditStatus: "uncredited", transactionCode: "04", taxRate: 12,
     salesInvoiceId: null, vendorBillId: 3,
     counterpartyTaxId: null, counterpartyName: null, counterpartyNitku: null, vendorId: 5,
   })
@@ -263,6 +265,39 @@ describe("replaceTaxInvoice guards", () => {
     expect(r.success).toBe(false)
     expect(String(r.error)).toMatch(/sudah diganti/)
   })
+
+  it("R8-PAJAK-01: urutan tulis pengganti — asal replaced SEBELUM baris baru dibuat", async () => {
+    mocks.taxInvoiceFindUniqueOrThrow.mockResolvedValue(oldInvoice)
+    const order: string[] = []
+    const origUpdate = mocks.taxInvoiceUpdate as unknown as { mockImplementation: (fn: (args: unknown) => Promise<void>) => void }
+    const origCreate = mocks.taxInvoiceCreate as unknown as { mockImplementation: (fn: (args: { data: Record<string, unknown> }) => Promise<{ id: number }>) => void }
+    origUpdate.mockImplementation(async () => { order.push("update-replaced") })
+    origCreate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+      order.push("create")
+      return { id: 8, ...data }
+    })
+    const r = await replaceTaxInvoice({
+      replacesId: 7, taxInvoiceNumber: "010.001-26.00000009",
+      taxInvoiceDate: new Date(2026, 2, 5), sellingPrice: 6_000_000,
+      replaceReason: "salah DPP", idempotencyKey: key(),
+    })
+    expect(r.success).toBe(true)
+    expect(order.indexOf("update-replaced")).toBeLessThan(order.indexOf("create"))
+  })
+
+  it("R8-PAJAK-04: faktur masukan sudah credited DITOLAK diganti", async () => {
+    mocks.taxInvoiceFindUniqueOrThrow.mockResolvedValue({
+      ...oldInvoice, direction: "in", creditStatus: "credited",
+    })
+    const r = await replaceTaxInvoice({
+      replacesId: 7, taxInvoiceNumber: "010.001-26.00000009",
+      taxInvoiceDate: new Date(2026, 2, 5), sellingPrice: 6_000_000,
+      replaceReason: "salah DPP", idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/sudah dikreditkan/)
+    expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+  })
 })
 
 describe("cancelTaxInvoice guards", () => {
@@ -343,11 +378,28 @@ describe("creditInputInvoice guards", () => {
   it("duplikat kredit (sudah credited) ditolak", async () => {
     mocks.taxInvoiceFindUniqueOrThrow.mockResolvedValue({
       id: 7, direction: "in", taxPeriod: "2026-01", taxAmount: 100,
-      djpStatus: "draft", creditStatus: "credited",
+      djpStatus: "approved", creditStatus: "credited",
     })
     const r = await creditInputInvoice({ id: 7, creditPeriod: "2026-02", idempotencyKey: key() })
     expect(r.success).toBe(false)
     expect(String(r.error)).toMatch(/sudah dikreditkan/)
+  })
+
+  it("R8-PAJAK-05: replaced/draft/rejected ditolak, bukan dikreditkan", async () => {
+    const cases: [string, RegExp][] = [
+      ["replaced", /sudah diganti/],
+      ["draft", /draft belum terbit/],
+      ["rejected", /ditolak DJP/],
+    ]
+    for (const [djpStatus, pattern] of cases) {
+      mocks.taxInvoiceFindUniqueOrThrow.mockResolvedValue({
+        id: 7, direction: "in", taxPeriod: "2026-01", taxAmount: 100,
+        djpStatus, creditStatus: "uncredited",
+      })
+      const r = await creditInputInvoice({ id: 7, creditPeriod: "2026-01", idempotencyKey: key() })
+      expect(r.success).toBe(false)
+      expect(String(r.error)).toMatch(pattern)
+    }
   })
 })
 
