@@ -31,6 +31,9 @@ export default async function AgingPayablesPage() {
       grandTotal: bill.grandTotal,
       paidAmount: bill.paidAmount,
       withholdingAmount: bill.withholdingAmount,
+      // Sisa kanonis balanceDue (neto PPh + relief retur), sama dengan PDF;
+      // formula kop menghidupkan lagi saldo ter-relief.
+      balanceDue: bill.balanceDue,
     })),
     new Date(),
   )

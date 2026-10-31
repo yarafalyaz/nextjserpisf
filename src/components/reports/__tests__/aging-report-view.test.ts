@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
+import { readFileSync } from "node:fs"
 
 // Letterhead menarik auth (next-auth/next/server) yang tidak ter-resolve di
 // vitest; builder yang diuji murni — mock permukaan beratnya saja.
@@ -67,5 +68,57 @@ describe("buildAgingRows returnCredit (F-104-V)", () => {
     )
     expect(rows).toHaveLength(1)
     expect(rows[0].outstanding).toBe(800_000)
+  })
+})
+
+/**
+ * R8-JB-04 lanjutan: layar Hutang Jatuh Tempo WAJIB memakai balanceDue
+ * tersimpan bila ada — sama dengan loader PDF. Formula kop
+ * (grandTotal − withholding − paid) tidak melihat relief retur, sehingga
+ * tagihan yang sudah direlief retur tampil lagi seolah belum direlief.
+ */
+describe("buildAgingRows balanceDue kanonis AP (R8-JB-04)", () => {
+  it("balanceDue menang atas formula kop: relief retur tidak hidup lagi", () => {
+    // Kop: 1.000.000 − 20.000 PPh − 200.000 bayar = 780.000. Retur sudah
+    // melegakan 300.000 → balanceDue tersimpan 480.000. Layar wajib 480.000.
+    const rows = buildAgingRows(
+      [
+        {
+          party: "V",
+          documentNo: "BILL-RELIEF",
+          dueDate: DUE,
+          grandTotal: 1_000_000,
+          paidAmount: 200_000,
+          withholdingAmount: 20_000,
+          balanceDue: 480_000,
+        },
+      ],
+      NOW,
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].outstanding).toBe(480_000)
+  })
+
+  it("balanceDue lunas (≤ Rp1) membuang baris walau formula kop masih besar", () => {
+    const rows = buildAgingRows(
+      [
+        {
+          party: "V",
+          documentNo: "BILL-LUNAS-RETUR",
+          dueDate: DUE,
+          grandTotal: 1_000_000,
+          paidAmount: 200_000,
+          withholdingAmount: 20_000,
+          balanceDue: 0,
+        },
+      ],
+      NOW,
+    )
+    expect(rows).toEqual([])
+  })
+
+  it("guard statis: halaman hutang meneruskan balanceDue ke builder", () => {
+    const page = readFileSync("src/app/(dashboard)/laporan/hutang-jatuh-tempo/page.tsx", "utf8")
+    expect(page).toContain("balanceDue: bill.balanceDue")
   })
 })

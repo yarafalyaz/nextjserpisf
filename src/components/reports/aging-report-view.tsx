@@ -7,7 +7,7 @@ import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
 import { AGING_BUCKETS, agingBucket, daysOverdue } from "@/lib/reports/aging"
-import { payableOutstanding } from "@/lib/reports/aging-amounts"
+import { payableOutstanding, payableOutstandingCanonical } from "@/lib/reports/aging-amounts"
 import { isOutstandingSettled } from "@/lib/finance/settlement-status"
 import type { SafeMathInput } from "@/lib/utils/math"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -27,6 +27,11 @@ export interface AgingRowInput {
    * sisa NETO via `payableOutstanding`, sama dengan loader PDF. Piutang
    * tidak mengisinya (default 0 = perilaku lama). */
   withholdingAmount?: SafeMathInput
+  /** R8-JB-04 (hutang saja): sisa operasional tersimpan tagihan (neto PPh
+   * DAN relief retur). Bila terisi, sisa layar WAJIB dari sini
+   * (`payableOutstandingCanonical`) — hitung ulang dari kop menghidupkan
+   * lagi saldo yang sudah direlief retur. Piutang tidak mengisinya. */
+  balanceDue?: SafeMathInput | null
 }
 
 export interface AgingReportTexts {
@@ -55,8 +60,12 @@ export function buildAgingRows(items: AgingRowInput[], now: Date) {
       // FIN-BR-009-S2: sisa NETO via payableOutstanding — definisi yang sama
       // dengan loader PDF (aging-reports-data.ts) — lalu returnCredit layar
       // piutang (F-104-V; AP tak mengisinya sehingga AP murni NETO).
+      // R8-JB-04: tagihan dengan balanceDue tersimpan memakai sisa kanonis
+      // (relief retur sudah termasuk); formula kop hanya fallback fixture.
       const outstanding =
-        payableOutstanding(item.grandTotal, item.withholdingAmount ?? 0, item.paidAmount) -
+        (item.balanceDue != null
+          ? payableOutstandingCanonical(item)
+          : payableOutstanding(item.grandTotal, item.withholdingAmount ?? 0, item.paidAmount)) -
         Number(item.returnCreditAmount ?? 0)
       // FIN-BR-006 + V3 vonis F-2026-10-28-130-V: gerbang populasi bentuk
       // `sisa > SETTLEMENT_TOLERANCE_IDR` (Rp1). `!isSettled()` mentah
