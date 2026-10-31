@@ -12,6 +12,7 @@
  */
 
 import { AGING_BUCKETS, agingBucket, daysOverdue, type AgingBucket } from "./aging"
+import { payableOutstandingCanonical } from "./aging-amounts"
 import { isOutstandingSettled } from "@/lib/finance/settlement-status"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 
@@ -28,6 +29,8 @@ export interface PayableBill {
   paidAmount: number
   /** PPh dipotong — sisa ke supplier = grandTotal − withholding − paid. */
   withholdingAmount?: number
+  /** Sisa operasional kanonis tersimpan; bila ada, mengalahkan formula kop. */
+  balanceDue?: number
 }
 
 export interface PayableBillRow extends PayableBill {
@@ -71,8 +74,9 @@ export function buildPayablesSummary(bills: PayableBill[], asOf: Date): Payables
   let totalPaid = 0
 
   for (const bill of bills) {
-    // P0-2: sisa NETO — konsisten dengan jurnal (Cr AP neto).
-    const outstanding = safeSubtract(safeSubtract(bill.grandTotal, bill.withholdingAmount ?? 0, 2), bill.paidAmount, 2)
+    // Sisa kanonis balanceDue tersimpan (neto withholding + relief
+    // retur); formula kop hanya fallback baris tanpa kolom.
+    const outstanding = payableOutstandingCanonical(bill)
     totalBilled = safeAdd(totalBilled, safeSubtract(bill.grandTotal, bill.withholdingAmount ?? 0, 2), 2)
     totalPaid = safeAdd(totalPaid, bill.paidAmount, 2)
 

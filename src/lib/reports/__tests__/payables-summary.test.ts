@@ -15,6 +15,25 @@ function bill(overrides: Partial<PayableBill>): PayableBill {
   }
 }
 
+describe("buildPayablesSummary balanceDue kanonis (lanjutan R8-JB-04)", () => {
+  it("bill lunas via relief retur (balanceDue 0) terbuang walau formula kop bersisa", () => {
+    const summary = buildPayablesSummary(
+      [bill({ documentNo: "VB-RELIEF", dueDate: new Date(2026, 0, 10), grandTotal: 100_000_000, paidAmount: 60_000_000, balanceDue: 0 })],
+      asOf,
+    )
+    expect(summary.rows).toHaveLength(0)
+    expect(summary.totalOutstanding).toBe(0)
+  })
+
+  it("balanceDue parsial dipakai apa adanya, bukan grandTotal - paid", () => {
+    const summary = buildPayablesSummary(
+      [bill({ documentNo: "VB-PART", dueDate: new Date(2026, 0, 10), grandTotal: 100_000_000, paidAmount: 60_000_000, balanceDue: 25_000_000 })],
+      asOf,
+    )
+    expect(summary.rows[0]?.outstanding).toBe(25_000_000)
+  })
+})
+
 describe("buildPayablesSummary", () => {
   const bills: PayableBill[] = [
     // 80 days overdue → "61–90 Hari"

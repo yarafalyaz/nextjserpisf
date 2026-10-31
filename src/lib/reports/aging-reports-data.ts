@@ -24,7 +24,7 @@ import {
 import { buildPayablesSummary } from "@/lib/reports/payables-summary"
 import {
   buildAgingTotals,
-  payableOutstanding,
+  payableOutstandingCanonical,
   receivableOutstanding,
 } from "@/lib/reports/aging-amounts"
 import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
@@ -154,10 +154,10 @@ export async function loadPayablesAging(asOf: Date = new Date()): Promise<AgingR
   const items = bills
     .map((bill) => {
       if (!bill.dueDate) return null
-      // P0-2: sisa = NETO (grandTotal − withholding) − terbayar. Laporan
-      // sebelumnya memakai grandTotal sehingga tagihan ber-PPh tampil sisa
-      // lebih besar dari utang supplier sebenarnya.
-      const outstanding = payableOutstanding(bill.grandTotal, bill.withholdingAmount ?? 0, bill.paidAmount)
+      // Sisa kanonis = balanceDue tersimpan (sudah neto withholding DAN
+      // relief retur); hitung ulang dari kop akan menghidupkan lagi
+      // saldo yang sudah direlief retur (lanjutan R8-JB-04).
+      const outstanding = payableOutstandingCanonical(bill)
       // FIN-BR-006 + V3 130-V: `sisa > SETTLEMENT_TOLERANCE_IDR` (Rp1).
       if (isOutstandingSettled(outstanding)) return null
       return {
@@ -200,6 +200,7 @@ export async function loadPayablesTotal(asOf: Date = new Date()): Promise<AgingR
       grandTotal: Number(b.grandTotal),
       paidAmount: Number(b.paidAmount),
       withholdingAmount: Number(b.withholdingAmount ?? 0),
+      balanceDue: Number(b.balanceDue),
     })),
     now,
   )

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildAgingTotals, payableOutstanding, receivableOutstanding, sumMoney } from "../aging-amounts"
+import { buildAgingTotals, payableOutstanding, payableOutstandingCanonical, receivableOutstanding, sumMoney } from "../aging-amounts"
 
 describe("aging-amounts safe-math", () => {
   it("sisa piutang presisi sen", () => {
@@ -11,6 +11,15 @@ describe("aging-amounts safe-math", () => {
   it("sisa utang neto withholding presisi sen", () => {
     expect(payableOutstanding(10_000_000.1, 0.1, 0)).toBe(10_000_000)
     expect(payableOutstanding(10_000_000.1, null, 10_000_000.1)).toBe(0)
+  })
+
+  it("kanonis: balanceDue tersimpan menang; tanpa kolom fallback formula kop", () => {
+    expect(
+      payableOutstandingCanonical({ balanceDue: 0, grandTotal: 100_000_000, withholdingAmount: 0, paidAmount: 60_000_000 }),
+    ).toBe(0)
+    expect(
+      payableOutstandingCanonical({ balanceDue: null, grandTotal: 100_000_000, withholdingAmount: 0, paidAmount: 60_000_000 }),
+    ).toBe(40_000_000)
   })
 
   it("3x 10.000.000,10 = 30000000.3 persis, bukan drift float", () => {

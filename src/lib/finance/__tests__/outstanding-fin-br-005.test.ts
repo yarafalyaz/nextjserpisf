@@ -71,6 +71,19 @@ describe("155-S M2 — hutang per tagihan NETO", () => {
     expect(isSettled(1078000, 1078000)).toBe(true)
   })
 
+  it("laporan AP: sisa dari balanceDue kanonis, bukan formula kop (lanjutan R8-JB-04)", () => {
+    const aging = root("src/lib/reports/aging-reports-data.ts")
+    expect(aging).toContain("payableOutstandingCanonical(bill)")
+    const summary = root("src/lib/reports/payables-summary.ts")
+    expect(summary).toContain("payableOutstandingCanonical(bill)")
+    const arAp = root("src/lib/reports/ar-ap-summary-data.ts")
+    expect(arAp).toContain("balanceDue: bill.balanceDue")
+    const subledger = root("src/app/(dashboard)/laporan/_components/subledger-report.tsx")
+    expect(subledger).toContain("remaining: safeSubtract(bill.balanceDue, 0, 2)")
+    const paymentOrder = root("src/app/(dashboard)/pembelian/perintah-pembayaran/[[...segments]]/page.tsx")
+    expect(paymentOrder).toContain("remaining: safeSubtract(bill.balanceDue, 0, 2)")
+  })
+
   it("reversal beli: status dari sisa operasional balanceDue + toleransi Rp1 (R8-JB-04)", () => {
     const actions = root("src/actions/purchase.actions.ts")
     // R8-JB-04: reversal/confirm TIDAK boleh hitung ulang balanceDue dari

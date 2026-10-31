@@ -25,13 +25,18 @@ export function buildArByCustomer(invoices: readonly { customerName: string; gra
   return m
 }
 
-/** Agregasi AP per pemasok NETO withholding, presisi sen. */
-export function buildApByVendor(bills: readonly { vendorName: string; grandTotal: SafeMathInput; withholdingAmount: SafeMathInput; paidAmount: SafeMathInput }[]): Map<string, PartyMoney> {
+/** Agregasi AP per pemasok NETO withholding, presisi sen. Sisa dari
+ * balanceDue kanonis bila kolom dipasok (loader produksi selalu). */
+export function buildApByVendor(bills: readonly { vendorName: string; grandTotal: SafeMathInput; withholdingAmount: SafeMathInput; paidAmount: SafeMathInput; balanceDue?: SafeMathInput | null }[]): Map<string, PartyMoney> {
   const m = new Map<string, PartyMoney>()
   for (const b of bills) {
     const billed = safeSubtract(b.grandTotal, b.withholdingAmount ?? 0, 2)
     const paid = safeSubtract(b.paidAmount, 0, 2)
-    addTo(m, b.vendorName, billed, paid, safeSubtract(billed, paid, 2))
+    const outstanding =
+      b.balanceDue != null && Number.isFinite(Number(b.balanceDue))
+        ? safeSubtract(b.balanceDue, 0, 2)
+        : safeSubtract(billed, paid, 2)
+    addTo(m, b.vendorName, billed, paid, outstanding)
   }
   return m
 }

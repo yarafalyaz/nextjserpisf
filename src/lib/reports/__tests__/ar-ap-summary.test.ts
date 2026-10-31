@@ -19,6 +19,23 @@ describe("ar-ap-summary safe-math", () => {
   })
 })
 
+describe("ar-ap-summary AP balanceDue kanonis (lanjutan R8-JB-04)", () => {
+  it("balanceDue menang dari formula kop: relief retur tidak terhidupkan lagi", () => {
+    // Bill 100jt, bayar 60jt, relief retur 40jt → balanceDue 0 (lunas
+    // operasional). Formula kop memberi 40jt — laporan lama menagih ulang.
+    const m = buildApByVendor([
+      { vendorName: "V", grandTotal: 100_000_000, withholdingAmount: 0, paidAmount: 60_000_000, balanceDue: 0 },
+    ])
+    expect(m.get("V")).toEqual({ count: 1, billed: 100_000_000, paid: 60_000_000, outstanding: 0 })
+  })
+  it("tanpa balanceDue formula kop lama persis (fallback)", () => {
+    const m = buildApByVendor([
+      { vendorName: "V", grandTotal: 100_000_000, withholdingAmount: 0, paidAmount: 60_000_000 },
+    ])
+    expect(m.get("V")?.outstanding).toBe(40_000_000)
+  })
+})
+
 describe("ar-ap-summary returnCredit (F-104-V)", () => {
   it("returnCredit kurangi outstanding, kolom paid tetap murni", () => {
     const m = buildArByCustomer([

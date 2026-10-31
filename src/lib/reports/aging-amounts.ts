@@ -33,6 +33,26 @@ export function payableOutstanding(
   return safeSubtract(safeSubtract(grandTotal, withholdingAmount ?? 0, 2), paidAmount, 2)
 }
 
+/**
+ * Sisa utang KANONIS laporan (Task lanjutan R8-JB-04): `balanceDue`
+ * tersimpan adalah sisa operasional sisi beli (lahir grandTotal −
+ * withholding, digeser persis oleh pembayaran dan relief retur) —
+ * laporan TIDAK menghitung ulang dari kop karena relief retur tidak
+ * terlihat dari kop. Fallback formula hanya untuk baris tanpa kolom
+ * (fixture murni lama); loader produksi selalu memasok balanceDue.
+ */
+export function payableOutstandingCanonical(bill: {
+  balanceDue?: SafeMathInput | null
+  grandTotal: SafeMathInput
+  withholdingAmount?: SafeMathInput | null
+  paidAmount: SafeMathInput
+}): number {
+  if (bill.balanceDue != null && Number.isFinite(Number(bill.balanceDue))) {
+    return safeSubtract(bill.balanceDue, 0, 2)
+  }
+  return payableOutstanding(bill.grandTotal, bill.withholdingAmount ?? 0, bill.paidAmount)
+}
+
 /** Jumlahkan nominal presisi sen. */
 export function sumMoney(amounts: readonly SafeMathInput[]): number {
   return amounts.reduce<number>((s, a) => safeAdd(s, a, 2), 0)

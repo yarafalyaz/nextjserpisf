@@ -8,7 +8,7 @@
 
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { formatPeriod } from "@/lib/utils/format"
-import { payableOutstanding } from "@/lib/reports/aging-amounts"
+import { payableOutstandingCanonical } from "@/lib/reports/aging-amounts"
 
 export interface CashFlowItem {
   dueDate: Date
@@ -30,6 +30,7 @@ export interface PayableProjectionBill {
   grandTotal: unknown
   withholdingAmount?: unknown
   paidAmount: unknown
+  balanceDue?: unknown
 }
 
 /**
@@ -83,11 +84,12 @@ export function buildPayableProjectionItems(bills: readonly PayableProjectionBil
     .filter((bill): bill is PayableProjectionBill & { dueDate: Date } => bill.dueDate != null)
     .map((bill) => ({
       dueDate: bill.dueDate,
-      amount: payableOutstanding(
-        Number(bill.grandTotal ?? 0),
-        Number(bill.withholdingAmount ?? 0),
-        Number(bill.paidAmount ?? 0),
-      ),
+      amount: payableOutstandingCanonical({
+        balanceDue: bill.balanceDue == null ? null : Number(bill.balanceDue),
+        grandTotal: Number(bill.grandTotal ?? 0),
+        withholdingAmount: Number(bill.withholdingAmount ?? 0),
+        paidAmount: Number(bill.paidAmount ?? 0),
+      }),
     }))
     .filter((row) => row.amount > 0)
 }

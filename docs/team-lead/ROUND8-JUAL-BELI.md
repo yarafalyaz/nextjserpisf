@@ -50,6 +50,17 @@ Guard statis 155-S yang mengunci formula kop diperbarui sadar ke
 aturan baru. Batas tercatat: laporan aging/AP-summary masih memakai
 formula kop per kontrak 155-S (bukan `balanceDue`) — perubahan basis
 laporan butuh vonis tersendiri, tidak dicampur ke fix ini.
+**Lanjutan (2026-10-31): basis laporan AP resmi pindah ke
+`balanceDue`** — vonis lanjutan sesi "kerjakan semua": sisa AP di
+aging hutang, ringkasan AR/AP, Total Hutang (helper + halaman),
+kartu subledger vendor, antrean perintah pembayaran, dan proyeksi
+kas kini dari `payableOutstandingCanonical` (balanceDue tersimpan;
+formula kop hanya fallback baris tanpa kolom). Sisi AR tidak
+berubah (SalesInvoice tidak punya kolom balanceDue; kanonisnya
+tetap grandTotal − paid − returnCredit jurnal). Kredit pengakuan
+utang di buku pembantu (grandTotal − withholding saat bill lahir)
+bukan sisa dan tidak disentuh. Guard FIN-BR-005 diperluas
+mengunci basis laporan ini.
 `purchase.actions.ts:2078-2098` `nextBalance = netPayable − nextPaid`
 dari grandTotal, mengabaikan relief; bill Rp100jt lunas → retur
 relief Rp40jt → reverse bayar → balanceDue kembali Rp100jt penuh,

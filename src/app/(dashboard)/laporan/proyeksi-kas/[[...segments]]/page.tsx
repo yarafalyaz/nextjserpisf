@@ -53,7 +53,7 @@ export default async function CashProjectionPage({
     }),
     prisma.vendorBill.findMany({
       where: { status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null, dueDate: { not: null } },
-      select: { dueDate: true, grandTotal: true, withholdingAmount: true, paidAmount: true },
+      select: { dueDate: true, grandTotal: true, withholdingAmount: true, paidAmount: true, balanceDue: true },
     }),
     // F-2026-10-20-48(b): komitmen belum tertagih (memo, bukan proyeksi).
     prisma.purchaseOrder.findMany({

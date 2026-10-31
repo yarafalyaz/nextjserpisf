@@ -110,7 +110,9 @@ export default async function PaymentOrderPage({
       dueDate: bill.dueDate,
       overdueDays: bill.dueDate ? daysOverdue(bill.dueDate, now) : null,
       ageBucket: bill.dueDate ? agingBucket(daysOverdue(bill.dueDate, now)) : 'Tanpa Jatuh Tempo',
-      remaining: safeSubtract(bill.grandTotal, bill.paidAmount, 2),
+      // Sisa yang boleh dibayar = balanceDue kanonis (sudah neto
+      // withholding + relief retur), bukan grandTotal - paidAmount.
+      remaining: safeSubtract(bill.balanceDue, 0, 2),
     }))
     .filter((row) => row.remaining > 0)
 

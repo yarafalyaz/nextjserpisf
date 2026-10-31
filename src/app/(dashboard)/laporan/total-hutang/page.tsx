@@ -40,6 +40,7 @@ export default async function TotalPayablesPage() {
       paidAmount: Number(b.paidAmount),
       // PDF loadPayablesTotal pakai NETO (aging-reports-data.ts:176); layar WAJIB sama.
       withholdingAmount: Number(b.withholdingAmount ?? 0),
+      balanceDue: Number(b.balanceDue),
     })),
     now,
   )

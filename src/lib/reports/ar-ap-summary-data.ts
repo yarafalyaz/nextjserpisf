@@ -60,7 +60,7 @@ export async function loadArApSummary(): Promise<ArApSummaryReport> {
 
   // P0-2: utang supplier = NETO (grandTotal − withholding), bukan bruto.
   const apByVendor = buildApByVendor(bills.map((bill) => ({
-    vendorName: bill.vendor.name, grandTotal: bill.grandTotal, withholdingAmount: bill.withholdingAmount, paidAmount: bill.paidAmount,
+    vendorName: bill.vendor.name, grandTotal: bill.grandTotal, withholdingAmount: bill.withholdingAmount, paidAmount: bill.paidAmount, balanceDue: bill.balanceDue,
   })))
   const apRows = [...apByVendor.entries()].filter(([, r]) => r.outstanding > 0)
 

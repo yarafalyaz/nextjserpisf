@@ -140,7 +140,7 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
       const [bills, payments, returns] = await Promise.all([
         prisma.vendorBill.findMany({
           where: { vendorId: partyId, status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null },
-          select: { id: true, slug: true, documentNo: true, date: true, dueDate: true, grandTotal: true, paidAmount: true },
+          select: { id: true, slug: true, documentNo: true, date: true, dueDate: true, grandTotal: true, paidAmount: true, balanceDue: true },
         }),
         prisma.vendorPayment.findMany({
           where: { vendorId: partyId, status: { not: "draft" }, deletedAt: null },
@@ -191,7 +191,9 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
           dueDate: bill.dueDate,
           total: Number(bill.grandTotal),
           paid: Number(bill.paidAmount),
-          remaining: safeSubtract(bill.grandTotal, bill.paidAmount, 2),
+          // Sisa kanonis balanceDue (relief retur sudah mengurangi);
+          // formula kop menghidupkan lagi saldo ter-relief.
+          remaining: safeSubtract(bill.balanceDue, 0, 2),
         }))
         .filter((row) => row.remaining > 0)
     }
