@@ -136,7 +136,7 @@ export async function onExpenseApprovedSyncPettyCash(
       select: { id: true, documentNo: true, type: true, amount: true, balanceBefore: true, balanceAfter: true, status: true },
     });
 
-    const records = all.map((r) => ({
+    const records = all.map((r: (typeof all)[number]) => ({
       id: r.id,
       documentNo: r.documentNo,
       type: r.type,
@@ -154,7 +154,7 @@ export async function onExpenseApprovedSyncPettyCash(
     const balances = computePettyCashChain(records);
     const balanceById = new Map(balances.map((b) => [b.id, b]));
     const updates = all
-      .map((r) => {
+      .map((r: (typeof all)[number]) => {
         const target = balanceById.get(r.id);
         if (!target) return null;
         if (Number(r.balanceBefore) === target.balanceBefore && Number(r.balanceAfter) === target.balanceAfter) {
@@ -165,7 +165,7 @@ export async function onExpenseApprovedSyncPettyCash(
           data: { balanceBefore: target.balanceBefore, balanceAfter: target.balanceAfter },
         });
       })
-      .filter((u) => u !== null);
+      .filter((u: unknown) => u !== null);
 
     if (updates.length > 0) {
       // Parallelise the per-row updates — N sequential round-trips → 1
