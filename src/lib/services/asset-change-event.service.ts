@@ -55,6 +55,19 @@ interface CategoryRow {
   accumulatedImpairmentAccountId: number | null
 }
 
+/**
+ * Serialisasi per aset: kunci baris assets adalah kunci yang sama dengan
+ * cron penyusutan, disposeAsset, dan updateAsset. Fakta POSTED dibaca
+ * sesudah kunci supaya peristiwa dokumen berbeda tidak menghitung delta
+ * dua kali dari basis yang sama. Guard typeof: tx stub tanpa
+ * $executeRaw tidak pecah (pola cron repo).
+ */
+async function lockAssetRow(tx: TxClient, assetId: number): Promise<void> {
+  if (typeof tx.$executeRaw === "function") {
+    await tx.$executeRaw`SELECT id FROM assets WHERE id = ${assetId} FOR UPDATE`
+  }
+}
+
 function toMapped(row: AccountRow | null | undefined): MappedAccount | null {
   if (!row) return null
   return { id: row.id, code: row.code, type: row.type, reportGroup: row.reportGroup, isActive: row.isActive }
@@ -372,6 +385,7 @@ export async function postAssetChangeEvent(
   const { assetId, request } = input
   try {
     return await prisma.$transaction(async (tx) => {
+      await lockAssetRow(tx, assetId)
       const asset = await tx.asset.findUnique({
         where: { id: assetId },
         select: {
@@ -516,6 +530,7 @@ export async function postAssetReclassification(input: {
   const { assetId, toCategoryId, request } = input
   try {
     return await prisma.$transaction(async (tx) => {
+      await lockAssetRow(tx, assetId)
       const asset = await tx.asset.findUnique({
         where: { id: assetId },
         select: {
@@ -649,6 +664,17 @@ export async function reverseAssetChangeEvent(input: {
       })
       if (!original) throw new Error("Peristiwa perubahan aset tidak ditemukan.")
       if (original.status !== "POSTED") throw new Error("Peristiwa sudah dibalik atau tidak POSTED.")
+      // Kunci baris aset induk menahan peristiwa/dispose/penyusutan lain;
+      // status peristiwa asal dibaca ulang di bawah kunci karena snapshot
+      // di atas bukan guard (reversal ganda konkuren).
+      await lockAssetRow(tx, original.assetId)
+      const lockedOriginal = await tx.assetChangeEvent.findUnique({
+        where: { id: input.eventId },
+        select: { status: true },
+      })
+      if (!lockedOriginal || lockedOriginal.status !== "POSTED") {
+        throw new Error("Peristiwa sudah dibalik atau tidak POSTED.")
+      }
 
       await assertSourceDocumentUnused(tx, input.sourceDocumentKey)
       await assertPeriodOpen(input.reversalDate, tx)

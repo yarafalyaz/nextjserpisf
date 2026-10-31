@@ -36,6 +36,14 @@ const CATEGORY = {
 vi.mock("@/lib/db/prisma", () => {
   const tx = {
     $queryRaw: vi.fn(async () => [{ id: 1, period_lock_date: null }]),
+    $executeRaw: vi.fn(async (...args: unknown[]) => {
+      const first = args[0] as { strings?: string[] } | string[] | undefined
+      const sql = Array.isArray(first)
+        ? first.join("?")
+        : (first as { strings?: string[] } | undefined)?.strings?.join("?") ?? ""
+      if (sql) lockCalls.push(sql)
+      return 1
+    }),
     asset: {
       findUnique: vi.fn(async () => ({
         id: 1, name: "Mesin A", code: "AST-1", status: "active", categoryId: 1,
@@ -120,7 +128,10 @@ vi.mock("@/lib/db/prisma", () => {
   return { prisma: { $transaction: vi.fn(async (cb: (t: unknown) => Promise<unknown>) => cb(tx)) } }
 })
 
-import { postAssetChangeEvent, reverseAssetChangeEvent } from "@/lib/services/asset-change-event.service"
+import { postAssetChangeEvent, postAssetReclassification, reverseAssetChangeEvent } from "@/lib/services/asset-change-event.service"
+
+// SQL kunci baris yang diterbitkan service selama tes berjalan.
+const lockCalls: string[] = []
 
 function seedAcquisition() {
   store.journals.push({
@@ -137,6 +148,7 @@ beforeEach(() => {
   store.nextEventId = 101
   store.seq = 0
   store.assetUpdates = []
+  lockCalls.length = 0
   seedAcquisition()
 })
 
@@ -224,5 +236,32 @@ describe("asset-change-event.service", () => {
       oj?.entries.map((e) => `${e.accountId}:${e.credit}/${e.debit}`).sort(),
     )
     expect(store.events.find((e) => e.id === up.eventId)?.status).toBe("REVERSED")
+  })
+
+  it("E111-S3: ketiga penulis mengunci baris aset sebelum membaca fakta POSTED", async () => {
+    // Serialisasi per aset: kunci baris assets adalah kunci yang sama
+    // dengan cron penyusutan/dispose/update aset. Tanpa kunci, dua
+    // peristiwa dokumen berbeda membaca fakta POSTED yang sama dan
+    // delta dihitung dua kali dari basis lama.
+    const first = await postAssetChangeEvent({ assetId: 1, request: impairmentReq("DOC-L1", 700) })
+    await reverseAssetChangeEvent({
+      eventId: first.eventId,
+      reversalDate: new Date("2026-03-01"),
+      sourceDocumentKey: "REV-L1",
+    })
+    // Reklasifikasi boleh gagal di builder mock; kunci yang dinilai.
+    await postAssetReclassification({
+      assetId: 1,
+      toCategoryId: 2,
+      request: {
+        kind: "RECLASSIFICATION",
+        effectiveDate: new Date("2026-03-05"),
+        sourceDocumentKey: "RCL-L1",
+        reasonCode: "PINDAH",
+      },
+    }).catch(() => undefined)
+
+    expect(lockCalls.length).toBeGreaterThanOrEqual(3)
+    expect(lockCalls.every((s) => s.includes("assets") && s.includes("FOR UPDATE"))).toBe(true)
   })
 })
