@@ -1760,6 +1760,26 @@ describe("Delivery Order Actions (legacy happy paths)", () => {
     )
     expect(res?.success).toBe(true)
   })
+  it("createDeliveryOrder menolak bila status pesanan berubah jadi dibatalkan di dalam tx (balapan)", async () => {
+    let calls = 0
+    mocks.prismaMock.salesOrder.findUnique.mockImplementation(async () => {
+      calls += 1
+      return calls === 1
+        ? { id: 1, documentNo: "SO-001", status: "confirmed", customerId: 1 }
+        : { status: "cancelled" }
+    })
+    mocks.prismaMock.salesOrderItem.findMany.mockResolvedValue([{ id: 11, itemId: 5 }])
+    const res = await actions.createDeliveryOrder(
+      fdMap({
+        salesOrderId: "1",
+        date: "2026-06-12",
+        items: JSON.stringify([{ salesOrderItemId: 11, itemId: 5, qty: 2 }]),
+      }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Status pesanan sudah berubah")
+    expect(mocks.prismaMock.deliveryOrder.create).not.toHaveBeenCalled()
+  })
   it("updateDeliveryOrder succeeds", async () => {
     mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ customerId: 1 })
     mocks.prismaMock.deliveryOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "DO-1" })

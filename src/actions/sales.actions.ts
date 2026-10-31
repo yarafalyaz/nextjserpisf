@@ -2640,6 +2640,19 @@ export async function createDeliveryOrder(formData: FormData) {
   // keluar stok hanya lewat posting faktur.
   const deliveryOrder = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM sales_orders WHERE id = ${salesOrderId} FOR UPDATE`
+    // Baca ulang status SESUDAH kunci: pesanan bisa dibatalkan/ditutup di antara
+    // cek awal (di luar tx) dan kunci ini. Gerbang luar saja tak cukup — DO dari
+    // pesanan yang sudah batal melahirkan dokumen logistik atas komitmen yang
+    // sudah tidak ada.
+    const lockedOrder = await tx.salesOrder.findUnique({
+      where: { id: salesOrderId },
+      select: { status: true },
+    })
+    if (!lockedOrder || !(DELIVERABLE_ORDER_STATUSES as readonly string[]).includes(lockedOrder.status)) {
+      throw new Error(
+        `Surat jalan hanya bisa dibuat dari Pesanan Penjualan berstatus ${DELIVERABLE_ORDER_STATUS_LABELS}. Status pesanan sudah berubah; muat ulang halaman.`,
+      )
+    }
     await assertDeliveryWithinOrderCap(tx, {
       salesOrderId,
       requestedByLine: qtyByLine,
