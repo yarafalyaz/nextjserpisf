@@ -1585,6 +1585,31 @@ describe("upsertAssetUsageRecord (F-118-V Putusan 2b)", () => {
     const res = await upsertAssetUsageRecord(usageFd({ sourceName: "" }))
     expect(res?.success).toBe(false)
   })
+
+  it("menolak bila jurnal masa terbit di bawah kunci aset sesudah cek luar", async () => {
+    // Cek luar: belum ada jurnal. Cron memposting jurnal masa ini dan
+    // commit; upsert wajib membaca ulang di bawah kunci baris aset dan
+    // menolak, bukan menimpa record masa yang sudah berjurnal.
+    prismaMock.asset.findUnique.mockResolvedValue({
+      id: 100,
+      depreciationMethod: "units_of_production",
+    })
+    prismaMock.journal.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 9 })
+
+    const res = await upsertAssetUsageRecord(usageFd())
+
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("reversal")
+    expect(prismaMock.assetUsageRecord.upsert).not.toHaveBeenCalled()
+    const lockSqls = prismaMock.$executeRaw.mock.calls.map((c: unknown[]) => {
+      const first = c[0] as { strings?: string[] } | string[] | undefined
+      if (Array.isArray(first)) return first.join("?")
+      return (first as { strings?: string[] } | undefined)?.strings?.join("?") ?? ""
+    })
+    expect(lockSqls.some((s: string) => s.includes("assets") && s.includes("FOR UPDATE"))).toBe(true)
+  })
 })
 
 describe("generateAssetFiscalYearRows (F-109-V P4)", () => {

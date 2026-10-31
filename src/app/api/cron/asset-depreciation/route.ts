@@ -300,20 +300,94 @@ export async function POST(request: Request) {
           })
           if (alreadyPosted) return "skipped-posted" as const
 
+          // UOP: unit aktual dibaca ulang DI BAWAH kunci baris aset dan
+          // beban dihitung ulang dari nilai buku jurnal yang sama.
+          // Snapshot luar tx bisa dikoreksi operator lewat
+          // upsertAssetUsageRecord (yang kini memegang kunci aset yang
+          // sama) sesudah daftar toProcess dibentuk — memakai angka
+          // basi memposting beban dari unit yang sudah tidak berlaku.
+          let effectiveDepreciation = monthlyDepreciation
+          let effectiveBookValue = newBookValue
+          if (asset.depreciationMethod === "units_of_production") {
+            const freshAsset = await tx.asset.findUnique({
+              where: { id: asset.id },
+              select: {
+                status: true,
+                residualValue: true,
+                totalEstimatedUnits: true,
+                usefulLifeMonths: true,
+                purchaseDate: true,
+              },
+            })
+            const freshRecord = await tx.assetUsageRecord.findFirst({
+              where: { assetId: asset.id, periodYear: year, periodMonth: month },
+              select: { actualUnits: true },
+            })
+            const freshJournals = await tx.journal.findMany({
+              where: {
+                referenceId: asset.id,
+                status: "POSTED",
+                deletedAt: null,
+                OR: [
+                  { referenceType: "ASSET_ACQUISITION" },
+                  { referenceType: "ASSET_DISPOSAL" },
+                  { referenceType: { startsWith: "ASSET_DEPRECIATION_" } },
+                ],
+              },
+              select: {
+                referenceType: true,
+                entries: { select: { accountId: true, debit: true, credit: true } },
+              },
+            })
+            const freshBook = journalBookValue(
+              freshJournals.map((j) => ({
+                referenceType: j.referenceType ?? "",
+                lines: j.entries.map((e) => ({
+                  accountId: e.accountId,
+                  debit: e.debit,
+                  credit: e.credit,
+                })),
+              })),
+              {
+                fixedAssetAccountId:
+                  asset.category?.assetAccountId ??
+                  (envAccount("FIXED_ASSET_ACCOUNT_ID") || null),
+                accumulatedDepreciationAccountId: accumulatedAccountId || null,
+              },
+            )
+            const freshResult = resolveAnalyticalAssetStatus({
+              depreciationMethod: asset.depreciationMethod,
+              status: freshAsset?.status ?? asset.status,
+              purchaseCost: freshBook.grossCostPosted,
+              bookValue: freshBook.bookValue,
+              residualValue: freshAsset?.residualValue ?? asset.residualValue,
+              totalEstimatedUnits: freshAsset?.totalEstimatedUnits ?? asset.totalEstimatedUnits,
+              usefulLifeMonths: freshAsset?.usefulLifeMonths ?? asset.usefulLifeMonths,
+              actualUnits: freshRecord?.actualUnits ?? null,
+              purchaseDate: freshAsset?.purchaseDate ?? asset.purchaseDate,
+              periodYear: year,
+              periodMonth: month,
+              alreadyPosted: false,
+            })
+            if (freshResult.status !== "computed") return "skipped-posted" as const
+            effectiveDepreciation = freshResult.amount
+            effectiveBookValue = freshBook.bookValue.sub(freshResult.amount)
+          }
+
           // Penjaga periode otoritatif di DALAM tx (Putusan 4): penolakan
           // periode tertutup menggagalkan tx aset ini dan tercatat sebagai
           // error, bukan skip senyap; currentValue/history tidak berubah.
           await assertPeriodOpen(periodStart, tx)
           await tx.asset.update({
             where: { id: asset.id },
-            data: { currentValue: newBookValue },
+            data: { currentValue: effectiveBookValue },
           })
           await tx.assetHistory.create({
             data: {
               assetId: asset.id,
               type: "depreciation",
               description: `Penyusutan bulan ${month}/${year} - ${asset.name}`,
-              amount: monthlyDepreciation,
+              amount: effectiveDepreciation,
               date: periodStart,
             },
           })
@@ -326,20 +400,20 @@ export async function POST(request: Request) {
               description: `Penyusutan aset: ${asset.name} (${asset.code}) - ${month}/${year}`,
               type: "DEPRECIATION",
               status: "POSTED",
-              totalDebit: monthlyDepreciation,
-              totalCredit: monthlyDepreciation,
+              totalDebit: effectiveDepreciation,
+              totalCredit: effectiveDepreciation,
               entries: {
                 create: [
                   {
                     accountId: expenseAccountId,
-                    debit: monthlyDepreciation,
+                    debit: effectiveDepreciation,
                     credit: new Prisma.Decimal(0),
                     memo: `Beban penyusutan - ${asset.name}`,
                   },
                   {
                     accountId: accumulatedAccountId,
                     debit: new Prisma.Decimal(0),
-                    credit: monthlyDepreciation,
+                    credit: effectiveDepreciation,
                     memo: `Akumulasi penyusutan - ${asset.name}`,
                   },
                 ],

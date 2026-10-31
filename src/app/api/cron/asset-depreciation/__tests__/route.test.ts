@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => ({
   docSeqNextBatch: vi.fn(),
   systemSettingFindFirst: vi.fn(),
   assertPeriodOpen: vi.fn(),
+  assetUsageRecordFindFirst: vi.fn(),
+  assetFindUniqueTx: vi.fn(),
+  journalFindManyTx: vi.fn(),
 }))
 
 vi.mock("@/lib/security/cron", () => ({
@@ -61,6 +64,9 @@ vi.mock("@/lib/db/prisma", () => ({
     // Route memanggil $transaction SATU kali dengan callback yang diisi
     // Promise.allSettled di dalam rute (bukan array operasi).
     $transaction: (...a: unknown[]) => mocks.transaction(...a),
+    assetUsageRecord: {
+      findFirst: (...a: unknown[]) => mocks.assetUsageRecordFindFirst(...a),
+    },
   },
 }))
 
@@ -142,14 +148,27 @@ describe("POST /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () =>
     )
     mocks.journalFindFirst.mockResolvedValue(null)
     mocks.journalCreate.mockResolvedValue({})
+    // Bacaan ulang UOP dalam tx: default meniru snapshot luar tes lama
+    // (aset aktif, jurnal perolehan sama, record dari fixture per-tes).
+    mocks.assetFindUniqueTx.mockResolvedValue(null)
+    mocks.journalFindManyTx.mockResolvedValue(acquisitionJournals())
+    mocks.assetUsageRecordFindFirst.mockResolvedValue(null)
     mocks.txQueryRaw.mockResolvedValue([{ id: 1 }])
     // Callback tx: jalankan dengan klien palsu yang merekam pemanggilnya.
     mocks.transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         $queryRaw: mocks.txQueryRaw,
-        asset: { update: mocks.assetUpdate },
+        asset: {
+          update: mocks.assetUpdate,
+          findUnique: mocks.assetFindUniqueTx,
+        },
         assetHistory: { create: mocks.assetHistoryCreate },
-        journal: { create: mocks.journalCreate, findFirst: mocks.journalFindFirst },
+        journal: {
+          create: mocks.journalCreate,
+          findFirst: mocks.journalFindFirst,
+          findMany: mocks.journalFindManyTx,
+        },
+        assetUsageRecord: { findFirst: mocks.assetUsageRecordFindFirst },
       }),
     )
   })
@@ -437,6 +456,7 @@ describe("POST /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () =>
     mocks.journalFindMany
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(acquisitionJournals())
+    mocks.assetUsageRecordFindFirst.mockResolvedValue({ actualUnits: D(10) })
 
     const res = await POST(makeReq())
     const json = await res.json()
@@ -493,6 +513,39 @@ describe("POST /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () =>
     expect(json.rejectedMethods).toBe(1)
     expect(json.errorDetails[0]).toContain("actualUnits")
     expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("F118-V: UOP memakai unit TERKUNCI dari bacaan ulang dalam tx, bukan snapshot luar", async () => {
+    // Snapshot luar tx: 10 unit. Operator mengoreksi record menjadi 50
+    // unit dan commit sebelum cron masuk tx. Jurnal wajib memakai 50 —
+    // bacaan ulang di bawah kunci baris aset (kunci yang sama dengan
+    // upsertAssetUsageRecord).
+    mocks.assetFindMany.mockResolvedValue([
+      assetRow({
+        depreciationMethod: "units_of_production",
+        currentValue: D(1000),
+        totalEstimatedUnits: D(100),
+        usageRecords: [{ actualUnits: D(10) }],
+        category: null,
+      }),
+    ])
+    mocks.systemSettingFindFirst.mockResolvedValue({
+      depreciationExpenseAccountId: 700,
+      accumulatedDepreciationAccountId: 701,
+    })
+    process.env.FIXED_ASSET_ACCOUNT_ID = "900"
+    mocks.journalFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(acquisitionJournals())
+    mocks.assetUsageRecordFindFirst.mockResolvedValue({ actualUnits: D(50) })
+
+    const res = await POST(makeReq())
+    const json = await res.json()
+    expect(json.processed).toBe(1)
+    expect(mocks.assetUsageRecordFindFirst).toHaveBeenCalled()
+    const call = mocks.journalCreate.mock.calls[0]?.[0]
+    expect(String(call.data.totalDebit)).toBe("500")
+    expect(String(mocks.assetUpdate.mock.calls[0][0].data.currentValue)).toBe("500")
   })
 
   it("F118-V: analyticalWithoutAccounts fail-closed missingAccounts", async () => {

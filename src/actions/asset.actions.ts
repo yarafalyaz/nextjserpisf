@@ -1296,28 +1296,48 @@ export async function upsertAssetUsageRecord(formData: FormData) {
       };
     }
 
-    const record = await prisma.assetUsageRecord.upsert({
-      where: {
-        assetId_periodYear_periodMonth: {
+    // Serialkan terhadap cron penyusutan yang memegang kunci baris aset
+    // yang sama: cek jurnal di atas adalah snapshot — jurnal masa ini
+    // bisa terbit sesudah cek. Baca ulang di bawah kunci, lalu upsert.
+    const record = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM assets WHERE id = ${data.assetId} FOR UPDATE`;
+      const lockedPosted = await tx.journal.findFirst({
+        where: {
+          referenceType,
+          referenceId: data.assetId,
+          status: "POSTED",
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      if (lockedPosted) {
+        throw new Error(
+          "Penyusutan masa ini sudah berjurnal; koreksi unit hanya lewat reversal jurnal.",
+        );
+      }
+      return tx.assetUsageRecord.upsert({
+        where: {
+          assetId_periodYear_periodMonth: {
+            assetId: data.assetId,
+            periodYear: data.periodYear,
+            periodMonth: data.periodMonth,
+          },
+        },
+        create: {
           assetId: data.assetId,
           periodYear: data.periodYear,
           periodMonth: data.periodMonth,
+          actualUnits: new Prisma.Decimal(data.actualUnits.toFixed(2)),
+          sourceName: data.sourceName,
+          sourceRef: data.sourceRef || null,
+          createdBy: Number(user.id) || null,
         },
-      },
-      create: {
-        assetId: data.assetId,
-        periodYear: data.periodYear,
-        periodMonth: data.periodMonth,
-        actualUnits: new Prisma.Decimal(data.actualUnits.toFixed(2)),
-        sourceName: data.sourceName,
-        sourceRef: data.sourceRef || null,
-        createdBy: Number(user.id) || null,
-      },
-      update: {
-        actualUnits: new Prisma.Decimal(data.actualUnits.toFixed(2)),
-        sourceName: data.sourceName,
-        sourceRef: data.sourceRef || null,
-      },
+        update: {
+          actualUnits: new Prisma.Decimal(data.actualUnits.toFixed(2)),
+          sourceName: data.sourceName,
+          sourceRef: data.sourceRef || null,
+        },
+      });
     });
 
     await logActivity(
