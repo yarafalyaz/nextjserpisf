@@ -14,12 +14,35 @@ import { parseFormData } from "@/lib/validations/parse-form"
 import { invoiceExchangeSchema } from "@/lib/validations/sales.schemas"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { isSettled } from "@/lib/finance/settlement-status"
+import type { SafeMathInput } from "@/lib/utils/math"
+import {
+  loadReturnCreditByInvoiceId,
+  loadReturnCreditByInvoiceIdWithClient,
+} from "@/lib/reports/return-credit"
 
 const REVALIDATE = "/penjualan/tukar-faktur"
 
+/** Terbukti lunas untuk gerbang tukar faktur: status paid, ATAU angka
+ * kanonis FIN-BR-006 atas total terbayar VALID =
+ * paidAmount + returnCredit (outstanding kanonis return-credit.ts:
+ * grandTotal − paidAmount − returnCredit). Tanpa returnCredit, faktur
+ * yang lunas lewat retur (status bisa tetap "partial" — hook retur
+ * menilai dari kredit retur terakhir, bukan akumulasi) lolos gerbang
+ * dan tercatat diserahkan. */
+function isExchangeSettled(
+  invoice: { grandTotal: SafeMathInput; paidAmount: SafeMathInput; status: string },
+  returnCreditByInvoiceId: Map<number, number>,
+  invoiceId: number,
+): boolean {
+  return (
+    invoice.status === "paid" ||
+    isSettled(invoice.grandTotal, Number(invoice.paidAmount ?? 0) + (returnCreditByInvoiceId.get(invoiceId) ?? 0))
+  )
+}
+
 /** Faktur yang boleh diserahkan: sudah diposting (bukan draft). Kelunasan
  * diputuskan dari ANGKA lewat predikat kanonis FIN-BR-006
- * `isSettled(grandTotal, paidAmount)` (ambang Rp1),
+ * `isSettled(grandTotal, paidAmount + returnCredit)` (ambang Rp1),
  * bukan status saja — halaman tambah memakai tolok ukur yang sama. */
 const EXCHANGEABLE_STATUSES = ["posted", "partial"] as const
 
@@ -88,9 +111,8 @@ export async function createInvoiceExchange(formData: FormData): Promise<Invoice
       }
     }
 
-    const settled = invoices.filter(
-      (invoice) => invoice.status === "paid" || isSettled(invoice.grandTotal, invoice.paidAmount),
-    )
+    const returnCreditByInvoiceId = await loadReturnCreditByInvoiceId(invoiceIds)
+    const settled = invoices.filter((invoice) => isExchangeSettled(invoice, returnCreditByInvoiceId, invoice.id))
     if (settled.length > 0) {
       return {
         success: false,
@@ -138,8 +160,9 @@ export async function createInvoiceExchange(formData: FormData): Promise<Invoice
       if (wrongLocked.length > 0) {
         throw new Error(`Faktur berikut bukan milik pelanggan ini: ${wrongLocked.map((invoice) => invoice.documentNo).join(", ")}.`)
       }
-      const settledLocked = lockedInvoices.filter(
-        (invoice) => invoice.status === "paid" || isSettled(invoice.grandTotal, invoice.paidAmount),
+      const returnCreditLocked = await loadReturnCreditByInvoiceIdWithClient(tx, invoiceIds)
+      const settledLocked = lockedInvoices.filter((invoice) =>
+        isExchangeSettled(invoice, returnCreditLocked, invoice.id),
       )
       if (settledLocked.length > 0) {
         throw new Error(`Faktur berikut sudah lunas sehingga tidak perlu diserahkan: ${settledLocked.map((invoice) => invoice.documentNo).join(", ")}.`)

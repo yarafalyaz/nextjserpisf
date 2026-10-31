@@ -28,6 +28,8 @@ const mocks = vi.hoisted(() => {
     logActivityMock: vi.fn(),
     generateDocMock: vi.fn(),
     assertPeriodMock: vi.fn(),
+    returnCreditMock: vi.fn().mockResolvedValue(new Map()),
+    returnCreditTxMock: vi.fn().mockResolvedValue(new Map()),
   }
 })
 
@@ -38,6 +40,10 @@ vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: mocks.logAc
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: (...a: any) => mocks.generateDocMock(...a) }))
 vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug") }))
 vi.mock("@/lib/services/period-lock.service", () => ({ assertPeriodOpen: (...a: any) => mocks.assertPeriodMock(...a) }))
+vi.mock("@/lib/reports/return-credit", () => ({
+  loadReturnCreditByInvoiceId: (...a: any) => mocks.returnCreditMock(...a),
+  loadReturnCreditByInvoiceIdWithClient: (...a: any) => mocks.returnCreditTxMock(...a),
+}))
 
 import * as actions from "../invoice-exchange.actions"
 
@@ -57,10 +63,12 @@ beforeEach(() => {
   mocks.assertPeriodMock.mockResolvedValue(undefined)
   mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 1, name: "PT Uji" })
   mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
-    { id: 10, documentNo: "INV-10", customerId: 1, grandTotal: 1000, status: "posted" },
+    { id: 10, documentNo: "INV-10", customerId: 1, grandTotal: 1000, paidAmount: 0, status: "posted" },
   ])
   mocks.prismaMock.invoiceExchangeItem.findMany.mockResolvedValue([])
   mocks.prismaMock.invoiceExchange.create.mockResolvedValue({ id: 1 })
+  mocks.returnCreditMock.mockResolvedValue(new Map())
+  mocks.returnCreditTxMock.mockResolvedValue(new Map())
 })
 
 describe("createInvoiceExchange Zod validation", () => {
@@ -191,6 +199,42 @@ describe("createInvoiceExchange ambang lunas FIN-BR-006 (Rp1 kanonis)", () => {
     expect(res.success).toBe(false)
     expect(res.error).toContain("belum diposting")
     expect(mocks.prismaMock.invoiceExchange.create).not.toHaveBeenCalled()
+  })
+
+  it("menolak faktur yang lunas lewat kredit retur (paidAmount + returnCredit), bukan dibiarkan diserahkan", async () => {
+    // Outstanding kanonis = grandTotal − paidAmount − returnCredit
+    // (return-credit.ts). Faktur 1.000.000 terbayar 200.000 + dua retur
+    // completed Rp400.000 = lunas, walau status tetap "partial" (hook retur
+    // menilai dari kredit retur terakhir, bukan akumulasi).
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      { id: 10, documentNo: "INV-10", customerId: 1, grandTotal: 1000000, paidAmount: 200000, status: "partial" },
+    ])
+    mocks.returnCreditMock.mockResolvedValue(new Map([[10, 800000]]))
+    const res = await actions.createInvoiceExchange(fd(base))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah lunas")
+    expect(mocks.prismaMock.invoiceExchange.create).not.toHaveBeenCalled()
+  })
+
+  it("menolak kredit retur yang mencapai ambang lunas sesudah lock di dalam tx", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      { id: 10, documentNo: "INV-10", customerId: 1, grandTotal: 1000000, paidAmount: 200000, status: "partial" },
+    ])
+    mocks.returnCreditMock.mockResolvedValue(new Map())
+    mocks.returnCreditTxMock.mockResolvedValue(new Map([[10, 800000]]))
+    const res = await actions.createInvoiceExchange(fd(base))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah lunas")
+    expect(mocks.prismaMock.invoiceExchange.create).not.toHaveBeenCalled()
+  })
+
+  it("tetap menerima faktur partial yang sisa sesudah kredit retur masih di atas ambang", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      { id: 10, documentNo: "INV-10", customerId: 1, grandTotal: 1000000, paidAmount: 200000, status: "partial" },
+    ])
+    mocks.returnCreditMock.mockResolvedValue(new Map([[10, 500000]]))
+    const res = await actions.createInvoiceExchange(fd(base))
+    expect(res.success).toBe(true)
   })
 
   it("menolak sisa Rp0,50 yang muncul sesudah lock di dalam tx", async () => {

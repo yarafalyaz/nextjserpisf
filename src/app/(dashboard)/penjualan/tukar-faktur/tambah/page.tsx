@@ -6,6 +6,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { InvoiceExchangeForm, type ExchangeableInvoice } from "../_components/invoice-exchange-form"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { isSettled } from "@/lib/finance/settlement-status"
+import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
 
 import type { Metadata } from "next"
 
@@ -47,10 +48,17 @@ export default async function CreateInvoiceExchangePage({
     ])
 
     const exchanged = new Set(alreadyExchanged.map((item) => item.salesInvoiceId))
+    // Kelunasan kanonis memakai total terbayar valid = paidAmount +
+    // returnCredit (outstanding = grandTotal − paidAmount − returnCredit),
+    // sama dengan gerbang aksi — faktur lunas lewat retur bukan kandidat.
+    const returnCreditByInvoiceId = await loadReturnCreditByInvoiceId(candidates.map((c) => c.id))
     invoices = candidates
       // Belum lunas FIN-BR-006 (sisa <= Rp1 = lunas, tidak masuk kandidat) dan
       // belum pernah diserahkan.
-      .filter((invoice) => !isSettled(invoice.grandTotal, invoice.paidAmount))
+      .filter(
+        (invoice) =>
+          !isSettled(invoice.grandTotal, Number(invoice.paidAmount) + (returnCreditByInvoiceId.get(invoice.id) ?? 0)),
+      )
       .filter((invoice) => !exchanged.has(invoice.id))
       .map((invoice) => ({
         id: invoice.id,
