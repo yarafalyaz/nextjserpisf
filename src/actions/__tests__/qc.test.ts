@@ -18,6 +18,7 @@ const syncReworkCostMock = vi.fn()
 
 const qcChecklistFindUniqueMock = vi.fn()
 const qcChecklistCreateMock = vi.fn()
+const qcChecklistUpdateMock = vi.fn()
 const qcChecklistUpdateManyMock = vi.fn()
 const qcChecklistDeleteMock = vi.fn()
 const qcInspectionCreateMock = vi.fn()
@@ -52,6 +53,7 @@ vi.mock("@/lib/db/prisma", () => {
     qcChecklist: {
       findUnique: (...a: unknown[]) => qcChecklistFindUniqueMock(...a),
       create: (...a: unknown[]) => qcChecklistCreateMock(...a),
+      update: (...a: unknown[]) => qcChecklistUpdateMock(...a),
       updateMany: (...a: unknown[]) => qcChecklistUpdateManyMock(...a),
       delete: (...a: unknown[]) => qcChecklistDeleteMock(...a),
       findFirst: vi.fn().mockResolvedValue(null),
@@ -91,6 +93,7 @@ import {
   createQcInspection,
   createNonconformance,
   releaseQcChecklist,
+  updateQcChecklist,
   deleteQcChecklist,
   resolveNonconformance,
 } from "../qc.actions"
@@ -123,7 +126,7 @@ beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock, generateDocumentNumberMock,
     assertWorkOrderQcClearedMock, qcChecklistFindUniqueMock, qcChecklistCreateMock,
-    qcChecklistUpdateManyMock, qcChecklistDeleteMock, qcInspectionCreateMock,
+    qcChecklistUpdateMock, qcChecklistUpdateManyMock, qcChecklistDeleteMock, qcInspectionCreateMock,
     nonconformanceFindUniqueMock, nonconformanceCreateMock, nonconformanceUpdateMock,
     raiseNcrFromInspectionMock, syncReworkCostMock,
     workOrderFindUniqueQcMock, productionOrderFindUniqueQcMock, goodsReceiptFindUniqueQcMock,
@@ -295,6 +298,25 @@ describe("createNonconformance", () => {
 
     expect(res.success).toBe(true)
     expect(nonconformanceCreateMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("updateQcChecklist", () => {
+  it("menolak bila checklist dirilis sesudah bacaan luar tetapi sebelum tulis (status dibaca ulang terkunci)", async () => {
+    // Bacaan luar: draft. Bacaan dalam tx (sesudah kunci): released →
+    // update item TIDAK terjadi; checklist terilis tetap beku.
+    qcChecklistFindUniqueMock
+      .mockResolvedValueOnce({ status: "draft" })
+      .mockResolvedValue({ status: "released" })
+
+    const f = fd({ name: "Checklist A", checklistType: "final" })
+    f.append("itemName", "Periksa dimensi")
+    f.append("itemMethod", "measure")
+    const res = await updateQcChecklist(1, f)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("dirilis")
+    expect(qcChecklistUpdateMock).not.toHaveBeenCalled()
   })
 })
 

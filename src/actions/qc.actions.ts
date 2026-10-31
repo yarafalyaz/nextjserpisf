@@ -128,6 +128,19 @@ export async function updateQcChecklist(id: number, formData: FormData) {
     }
 
     await prisma.$transaction(async (tx) => {
+      // Kunci baris checklist lalu baca ulang status: klaim atomik
+      // releaseQcChecklist hanya melindungi sisi rilis — editor yang
+      // membaca draft di luar tx bisa menimpa item checklist yang BARU
+      // dirilis di antaranya. Checklist terilis beku, ditegakkan di sini.
+      await tx.$executeRaw`SELECT id FROM qc_checklists WHERE id = ${id} FOR UPDATE`
+      const locked = await tx.qcChecklist.findUnique({
+        where: { id },
+        select: { status: true },
+      })
+      if (!locked) throw new Error("Checklist tidak ditemukan")
+      if (locked.status !== "draft") {
+        throw new Error("Checklist yang sudah dirilis tidak dapat diubah; buat versi baru.")
+      }
       await tx.qcChecklist.update({
         where: { id },
         data: {
