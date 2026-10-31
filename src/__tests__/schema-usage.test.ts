@@ -70,12 +70,11 @@ const KNOWN_UNUSED: string[] = [
   // sebutan namanya di kode produk adalah komentar itu. Menghapus kolom =
   // menghapus penegak unik jurnal-aktif-per-referensi, jadi beku ini disengaja.
   "Journal.activeReferenceKey",
-  // Kolom GENERATED di DB (migrasi 20261031100000_taxinvoice_active_number_unique):
-  // MySQL menghitung `direction#taxInvoiceNumber` untuk faktur selain
-  // `replaced`; client Prisma sengaja tidak menulis/membacanya. Menghapusnya
-  // menghapus penegak unik faktur-aktif-per-nomor-seri (pengganti memakai
-  // nomor seri sama), jadi beku ini disengaja.
-  "TaxInvoice.activeNumberKey",
+  // (`TaxInvoice.activeNumberKey` PERNAH di sini — ditutup: service faktur
+  // pajak kini menyebut kolom GENERATED itu (`active_number_key`) saat
+  // menerjemahkan P2002 unique `tax_invoices_active_number_unique` menjadi
+  // penolakan definitif; guard berarah dua memerah saat entri basi ini
+  // dibiarkan sesudah rujukan itu mendarat.)
 ].sort()
 
 const ROOT = path.resolve(__dirname, "../..")
