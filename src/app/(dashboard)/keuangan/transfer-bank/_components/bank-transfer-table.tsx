@@ -54,6 +54,7 @@ const columns = [
         deleteAction={deleteBankTransfer}
         deleteId={info.row.original.id}
         deletePermission="delete_bank_transfers"
+        deleteReasonLabel="Alasan pembatalan"
       />
     ),
   }),

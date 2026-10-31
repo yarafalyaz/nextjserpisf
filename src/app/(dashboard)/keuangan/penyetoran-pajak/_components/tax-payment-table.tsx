@@ -47,6 +47,7 @@ const columns = [
         deleteAction={deleteTaxPayment}
         deleteId={info.row.original.id}
         deletePermission="delete_tax_payments"
+        deleteReasonLabel="Alasan pembatalan"
       />
     ),
   }),

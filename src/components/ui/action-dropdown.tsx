@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/shadcn/button"
 import { showSuccess, showError, showProcessResult } from "@/lib/utils/toast"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { ReasonField } from "@/components/ui/reason-field"
 import { useSession } from "next-auth/react"
 import { resolveEditPerm, resolveDeletePerm } from "@/lib/auth/action-perms"
 
@@ -21,8 +22,15 @@ interface ActionDropdownProps {
   viewHref?: string
   editHref?: string
   printAction?: () => void
-  deleteAction?: (id: number) => Promise<{ success: boolean }>
+  deleteAction?: (id: number, reason?: string) => Promise<{ success: boolean }>
   deleteId?: number
+  /**
+   * Bila diisi, dialog hapus wajib mengoleksi alasan (ReasonField) dan
+   * mengirimnya sebagai argumen kedua deleteAction. Wajib untuk aksi void
+   * finansial yang menolak alasan kosong (uang muka, transfer bank, setor
+   * pajak) — tanpa ini menu Hapus selalu gagal senyap dari UI.
+   */
+  deleteReasonLabel?: string
   /** Overrides the delete confirmation title (default generic). */
   deleteConfirmTitle?: string
   /** Overrides the delete confirmation body (default generic). */
@@ -41,7 +49,7 @@ interface ActionDropdownProps {
   processPermission?: string
 }
 
-export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, deleteId, deleteConfirmTitle, deleteConfirmBody, editPermission, deletePermission, processAction, processLabel = "Proses", processConfirmTitle, processConfirmBody, processSuccessMessage, processPermission }: ActionDropdownProps) {
+export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, deleteId, deleteReasonLabel, deleteConfirmTitle, deleteConfirmBody, editPermission, deletePermission, processAction, processLabel = "Proses", processConfirmTitle, processConfirmBody, processSuccessMessage, processPermission }: ActionDropdownProps) {
   const { data: session } = useSession()
   const userRoles = session?.user?.roles ?? []
   const userPerms = session?.user?.permissions ?? []
@@ -68,6 +76,7 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
   const [isPending, startTransition] = useTransition()
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [isProcessOpen, setIsProcessOpen] = useState(false)
+  const [deleteReason, setDeleteReason] = useState("")
 
   function handleProcess() {
     if (!processAction || !deleteId) return
@@ -89,9 +98,13 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
 
   function handleDelete() {
     if (!deleteAction || !deleteId) return
+    if (deleteReasonLabel && !deleteReason.trim()) {
+      showError("Alasan pembatalan wajib diisi")
+      return
+    }
     startTransition(async () => {
       try {
-        const result = await deleteAction(deleteId)
+        const result = await deleteAction(deleteId, deleteReasonLabel ? deleteReason.trim() : undefined)
         if (!result?.success) {
           throw new Error((result as { error?: string } | undefined)?.error || "Gagal menghapus data")
         }
@@ -190,7 +203,10 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
 
       <ConfirmDialog
         isOpen={isDeleteOpen}
-        onOpenChange={setIsDeleteOpen}
+        onOpenChange={(open) => {
+          setIsDeleteOpen(open)
+          if (!open) setDeleteReason("")
+        }}
         title={deleteConfirmTitle || "Hapus data ini?"}
         body={deleteConfirmBody || "Data yang dihapus tidak dapat dikembalikan. Pastikan Anda yakin sebelum melanjutkan."}
         confirmLabel="Hapus"
@@ -198,7 +214,18 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
         variant="danger"
         isPending={isPending}
         onConfirm={handleDelete}
-      />
+      >
+        {deleteReasonLabel ? (
+          <ReasonField
+            id={`delete-reason-${deleteId ?? "row"}`}
+            label={deleteReasonLabel}
+            value={deleteReason}
+            onChange={setDeleteReason}
+            placeholder="Tulis alasan pembatalan (wajib diisi)"
+            disabled={isPending}
+          />
+        ) : undefined}
+      </ConfirmDialog>
     </>
   )
 }

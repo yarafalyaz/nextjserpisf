@@ -52,6 +52,7 @@ const columns = [
         deleteAction={deletePurchaseAdvance}
         deleteId={info.row.original.id}
         deletePermission="delete_purchase_advances"
+        deleteReasonLabel="Alasan pembatalan"
       />
     ),
   }),
