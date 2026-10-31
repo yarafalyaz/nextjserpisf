@@ -100,8 +100,12 @@ export async function updateRecurringTransaction(id: number, formData: FormData)
     // editing the amount would silently reset a schedule that is already running.
     const startChanged = existing.startDate.getTime() !== wibDateToUtcMidnight(v.startDate).getTime()
 
-    await prisma.recurringTransaction.update({
-      where: { id },
+    // Klaim kondisional pada nextRunDate yang dibaca: runner memakai kunci
+    // optimistis yang sama untuk memajukan jadwal. Tanpa syarat ini, edit
+    // yang mulai sebelum runner commit menulis ulang nextRunDate lama dan
+    // occurrence yang sama terbit dua kali.
+    const claimed = await prisma.recurringTransaction.updateMany({
+      where: { id, nextRunDate: existing.nextRunDate, deletedAt: null },
       data: {
         slug,
         name: v.name.trim(),
@@ -115,6 +119,9 @@ export async function updateRecurringTransaction(id: number, formData: FormData)
         isActive: v.isActive,
       },
     })
+    if (claimed.count === 0) {
+      return { success: false, error: "Jadwal sudah berubah atau dijalankan eksekusi lain; muat ulang halaman sebelum menyimpan." }
+    }
 
     await logActivity("update", "RecurringTransaction", id, `Memperbarui transaksi berulang ${v.name}`)
     revalidatePath("/pengaturan/transaksi-berulang")

@@ -16,14 +16,19 @@ const mocks = vi.hoisted(() => {
   const scheduleCreate = vi.fn()
   const scheduleFindUniqueOrThrow = vi.fn()
   const scheduleUpdate = vi.fn()
+  const scheduleUpdateMany = vi.fn()
+  const queryRaw = vi.fn()
 
   const prisma: Record<string, unknown> = {
     recurringTransaction: {
       create: scheduleCreate,
       findUniqueOrThrow: scheduleFindUniqueOrThrow,
       update: scheduleUpdate,
+      updateMany: scheduleUpdateMany,
     },
+    $queryRaw: queryRaw,
   }
+  prisma.$transaction = vi.fn(async (fn: (tx: unknown) => unknown) => fn(prisma))
 
   return {
     requirePermission,
@@ -34,6 +39,8 @@ const mocks = vi.hoisted(() => {
     scheduleCreate,
     scheduleFindUniqueOrThrow,
     scheduleUpdate,
+    scheduleUpdateMany,
+    queryRaw,
     prisma,
   }
 })
@@ -73,6 +80,8 @@ beforeEach(() => {
     nextRunDate: new Date(Date.UTC(2026, 2, 1)),
   })
   mocks.scheduleUpdate.mockResolvedValue({})
+  mocks.scheduleUpdateMany.mockResolvedValue({ count: 1 })
+  mocks.queryRaw.mockResolvedValue([{ id: 7 }])
 })
 
 describe("createRecurringTransaction — tanggal kalender", () => {
@@ -110,5 +119,24 @@ describe("createRecurringTransaction — tanggal kalender", () => {
 
     expect(res.success).toBe(false)
     expect(mocks.scheduleUpdate).not.toHaveBeenCalled()
+  })
+
+  it("update tidak menulis ulang nextRunDate basi sesudah runner memajukannya", async () => {
+    mocks.scheduleUpdateMany.mockResolvedValue({ count: 0 })
+
+    const res = await updateRecurringTransaction(7, form({}))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/sudah berubah/)
+    expect(mocks.scheduleUpdate).not.toHaveBeenCalled()
+    expect(mocks.scheduleUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 7,
+          nextRunDate: new Date(Date.UTC(2026, 2, 1)),
+          deletedAt: null,
+        },
+      }),
+    )
   })
 })
