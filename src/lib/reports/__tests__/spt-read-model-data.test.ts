@@ -34,7 +34,7 @@ import { loadSptPeriodRows, loadSptPeriodRowsForRange } from "../spt-read-model-
 // tanggal mentah caller).
 // ---------------------------------------------------------------------------
 
-const D = (y: number, m: number, d: number) => new Date(y, m - 1, d)
+const D = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d))
 
 const TAX_INVOICES = [
   // Rantai keluaran asal Jan: 1 (approved) -> 2 (replaced, nol-efek) -> 3 (approved, kepala)
@@ -159,8 +159,11 @@ function wirePrisma() {
 }
 
 const RANGE = { start: D(2026, 1, 10), end: D(2026, 1, 20) }
-const RANGE_START = D(2026, 1, 1)
-const RANGE_END = new Date(2026, 0, 31, 23, 59, 59, 999)
+// Awal/akhir masa dihitung produksi dari getter lokal atas start/end (tepi
+// rentang, bukan tanggal dokumen). Pin kontrak yang sama di sini supaya
+// aman di TZ apa pun: awal bulan start s/d akhir bulan end.
+const RANGE_START = new Date(RANGE.start.getFullYear(), RANGE.start.getMonth(), 1)
+const RANGE_END = new Date(RANGE.end.getFullYear(), RANGE.end.getMonth() + 1, 0, 23, 59, 59, 999)
 
 beforeEach(() => {
   vi.clearAllMocks()

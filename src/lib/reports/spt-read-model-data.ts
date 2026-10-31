@@ -23,7 +23,7 @@ import {
 } from "@/lib/tax/spt-read-model"
 import { buildTaxLiability } from "@/lib/tax/tax-liability"
 import { isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice"
-import { returnDeductionPeriod } from "@/lib/tax/return-snapshot"
+import { returnDeductionPeriod, utcPeriodOf } from "@/lib/tax/return-snapshot"
 import { safeSubtract } from "@/lib/utils/math"
 
 export interface SptPeriodRow {
@@ -43,8 +43,12 @@ export interface SptPeriodRow {
   overpaid: boolean
 }
 
+// Tanggal dokumen tersimpan tengah malam UTC (konvensi WIB) — masa SELALU
+// dari komponen UTC; getter lokal menggeser bulan untuk tanggal 1 di proses
+// non-WIB (CI/container tanpa TZ), memisahkan PPN dokumen dari kewajiban
+// jurnal pada masa yang sama.
 function periodOf(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+  return utcPeriodOf(date)
 }
 
 export async function loadSptPeriodRows(): Promise<SptPeriodRow[]> {

@@ -83,7 +83,19 @@ export function checkCumulativeReturnCap(input: {
 /** Masa pengurang: tanggal nota bila ada, else tanggal retur. */
 export function returnDeductionPeriod(returnDate: Date, noteDate?: Date | null): string {
   const d = noteDate ?? returnDate
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+  return utcPeriodOf(d)
+}
+
+/**
+ * Masa dari tanggal dokumen. Tanggal disimpan tengah malam UTC untuk hari
+ * kalender WIB (`wibDateToUtcMidnight`), jadi masa dibaca dari komponen UTC —
+ * getter lokal menggeser masa sebulan di proses non-WIB (CI/container tanpa
+ * TZ) untuk tanggal 1. Sama seperti `taxPeriodFromDate` di tax-invoice.ts;
+ * helper lokal di sini menjaga modul ini tetap murni tanpa mengimpor modul
+ * pajak yang memuat Prisma.
+ */
+export function utcPeriodOf(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
 }
 
 /** Baris tanpa snapshot = legacy: hitung-ulang berlabel, bukan snapshot. */

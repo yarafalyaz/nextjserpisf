@@ -9,7 +9,7 @@ import {
   effectiveChainHead,
 } from "@/lib/tax/tax-invoice"
 import { computeWithheld, snapshotWithholding, resolvePph23Rate, resolvePph42Rate, resolvePph42RentRate } from "@/lib/tax/withholding-certificate"
-import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot"
+import { snapshotReturnLine, checkCumulativeReturnCap, returnDeductionPeriod, utcPeriodOf } from "@/lib/tax/return-snapshot"
 import { buildTaxLiability, isValidTaxPeriod, isValidBillingCode, isValidNtpn } from "@/lib/tax/tax-liability"
 import { assertDispositionAllowed } from "@/lib/tax/production-variance-gate"
 
@@ -200,6 +200,22 @@ describe("F-005 kewajiban dari jurnal + validasi setor", () => {
     expect(isValidBillingCode("123456789012345")).toBe(true)
     expect(isValidBillingCode("123")).toBe(false)
     expect(isValidNtpn("1234567890123456")).toBe(true)
+  })
+})
+
+describe("F-004b masa pengurang dari komponen UTC (selaras taxPeriodFromDate)", () => {
+  it("tengah malam UTC tanggal 1 tetap bulan yang sama (getter lokal di proses non-WIB mundur sebulan)", () => {
+    // 2026-11-01 tengah malam UTC = 31 Okt 17:00 UTC; getMonth lokal di
+    // container UTC akan membaca Oktober. Masa harus November.
+    const d = new Date(Date.UTC(2026, 10, 1))
+    expect(utcPeriodOf(d)).toBe("2026-11")
+    expect(returnDeductionPeriod(d)).toBe("2026-11")
+  })
+
+  it("masa memakai tanggal nota bila ada, bukan tanggal retur", () => {
+    const ret = new Date(Date.UTC(2026, 10, 5))
+    const note = new Date(Date.UTC(2026, 11, 1))
+    expect(returnDeductionPeriod(ret, note)).toBe("2026-12")
   })
 })
 
