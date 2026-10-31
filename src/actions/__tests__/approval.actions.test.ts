@@ -72,6 +72,22 @@ vi.mock("@/lib/services/activity-log.service", () => ({
 
 import * as actions from "../approval.actions";
 
+function buildModelMockLocal() {
+  return {
+    findFirst: vi.fn().mockResolvedValue(null),
+    findUnique: vi.fn().mockResolvedValue(null),
+    findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 1 }),
+    findMany: vi.fn().mockResolvedValue([]),
+    count: vi.fn().mockResolvedValue(0),
+    create: vi.fn().mockResolvedValue({ id: 1 }),
+    createMany: vi.fn().mockResolvedValue({ count: 1 }),
+    update: vi.fn().mockResolvedValue({}),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    delete: vi.fn().mockResolvedValue({}),
+    deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+  };
+}
+
 function fdMap(
   payload: Record<string, string | number | null | undefined>,
 ): FormData {
@@ -182,6 +198,22 @@ describe("Approval Progression Actions", () => {
       1,
       expect.any(String),
     );
+  });
+
+  it("does not resurrect a cancelled PurchaseOrder through generic approve", async () => {
+    seedApproval({ referenceType: "PurchaseOrder", referenceId: 9 });
+    mocks.prismaMock.purchaseOrder = buildModelMockLocal();
+    mocks.prismaMock.purchaseOrder.updateMany.mockResolvedValue({ count: 0 });
+    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow(/draft/);
+    expect(mocks.prismaMock.purchaseOrder.update).not.toHaveBeenCalled();
+  });
+
+  it("does not reject a posted VendorBill through generic reject", async () => {
+    seedApproval({ referenceType: "VendorBill", referenceId: 9 });
+    mocks.prismaMock.vendorBill = buildModelMockLocal();
+    mocks.prismaMock.vendorBill.updateMany.mockResolvedValue({ count: 0 });
+    await expect(actions.rejectStep(1, fdMap({ notes: "NO" }))).rejects.toThrow(/draft/);
+    expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled();
   });
 
   it("rejects approval records whose workflow has no steps", async () => {
