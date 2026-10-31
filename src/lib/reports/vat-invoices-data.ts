@@ -32,7 +32,7 @@ import {
   type VatReturnDeductionInput,
 } from "@/lib/reports/vat-invoices"
 import { buildChainHeads } from "@/lib/tax/spt-read-model"
-import { safeSubtract, type SafeMathInput } from "@/lib/utils/math"
+import { safeAdd, safeSubtract, type SafeMathInput } from "@/lib/utils/math"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 
@@ -124,6 +124,11 @@ export function applyChainHeads<T extends { id: number }, R>(
     if (mapped != null) out.push(mapped)
   }
   return out
+}
+
+/** Total baris dari kepala rantai: DPP efektif + PPN efektif. */
+export function chainHeadTotal(head: { dpp: number; taxAmount: number }): number {
+  return safeAdd(head.dpp, head.taxAmount, 2)
 }
 
 export async function loadVatInvoices(period: {
@@ -227,11 +232,13 @@ export async function loadVatInvoices(period: {
     ...invoice,
     dppShown: head ? head.dpp : vatDpp(invoice.subtotal, invoice.discount),
     vatShown: head ? head.taxAmount : Number(invoice.taxAmount),
+    totalShown: head ? chainHeadTotal(head) : Number(invoice.grandTotal),
   }))
   const inputDocs = applyChainHeads(vendorBills, taxInvoices, "vendorBillId", (bill, head) => ({
     ...bill,
     dppShown: head ? head.dpp : vatDpp(bill.subtotal, bill.discountAmount),
     vatShown: head ? head.taxAmount : Number(bill.tax),
+    totalShown: head ? chainHeadTotal(head) : Number(bill.grandTotal),
   }))
 
   const output: VatInvoiceInput[] = outputDocs.map((invoice) => ({
@@ -242,7 +249,7 @@ export async function loadVatInvoices(period: {
     npwp: invoice.customer.taxId,
     dpp: invoice.dppShown,
     vat: invoice.vatShown,
-    total: Number(invoice.grandTotal),
+    total: invoice.totalShown,
     returnRef: salesReturnByInvoice.get(invoice.id) ?? null,
   }))
 
@@ -254,7 +261,7 @@ export async function loadVatInvoices(period: {
     npwp: bill.vendor.npwp,
     dpp: bill.dppShown,
     vat: bill.vatShown,
-    total: Number(bill.grandTotal),
+    total: bill.totalShown,
     returnRef: purchaseReturnByBill.get(bill.documentNo) ?? null,
   }))
 

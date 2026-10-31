@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { applyChainHeads, linkPurchaseReturns } from "@/lib/reports/vat-invoices-data"
+import { applyChainHeads, chainHeadTotal, linkPurchaseReturns } from "@/lib/reports/vat-invoices-data"
 
 const bill = (documentNo: string, vendorId: number) => ({ documentNo, vendorId })
 const ret = (documentNo: string, poNo: string, vendorId: number) => ({
@@ -71,5 +71,10 @@ describe("applyChainHeads (dedupe TaxInvoice laporan faktur-ppn)", () => {
   it("tanpa TaxInvoice: dokumen lolos apa adanya (legacy)", () => {
     const out = applyChainHeads(docs, [], "salesInvoiceId", map)
     expect(out).toEqual(docs)
+  })
+
+  it("total kepala rantai = DPP + PPN kepala, bukan grandTotal komersial asal", () => {
+    expect(chainHeadTotal({ dpp: 5_500_000, taxAmount: 660_000 })).toBe(6_160_000)
+    expect(chainHeadTotal({ dpp: 0.24, taxAmount: 0.24 })).toBe(0.48)
   })
 })
