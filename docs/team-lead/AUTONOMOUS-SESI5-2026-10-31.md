@@ -348,6 +348,47 @@ Deploy produksi tetap belum bisa dari mesin sesi (host tak
 terjangkau); langkah host tersisa tercatat §"Lanjutan 2026-11-01"
 di atas — jangan pernah pakai image usang `20261101-97171c636`.
 
+Lanjutan putaran 5 (audit 2 lane agent read-only, semua kandidat
+diverifikasi sesi utama dengan membaca kode):
+KOREKSI VONIS: dua vonis GUGUR lama putaran ini DIBALIK oleh bukti.
+(a) P2002 serial GR — jahitan konkret ditemukan: `ItemSerial.
+serialNumber @unique` global + `createMany` tanpa pre-check di hook
+verify, jadi serial yang sama dari dua GR meledak sebagai pesan
+Prisma generik tanpa menyebut serial konflik; fix `57dbe7bf9`
+(pre-check menyebut nomor serial yang sudah terdaftar).
+(b) updateMaterialIssue — recheck status lama berjalan SESUDAH
+`materialIssueItem.deleteMany` dan tanpa kunci, jadi bukan guard;
+fix `67ea86d01` (kunci baris + baca ulang sebelum hapus item).
+CI run `41237169479` (MRP-Lite) dan `41237388209` merah dengan sebab
+tunggal yang sama: halaman perencanaan-material belum terdaftar di
+navigasi/katalog — difix `fd62ee6cf`; run lama `67ea86d01`/
+`22bce650a` merah SUPERSEDED oleh sebab yang sama karena guard itu
+menghitung seluruh halaman di disk. `0d263d6da` SUCCESS.
+Fix putaran 5 (semua merah-hijau dengan regression test):
+`7a3999881` klaim atomik status dokumen dagang di approval generik
+(PO cancelled tidak hidup lagi; VendorBill posted tidak ter-reject);
+`e47feef38` kunci baris PR/PO sebelum baca ulang status saat edit;
+`22bce650a` keputusan + revisi penawaran dikunci dan dibaca ulang
+dalam tx; `8dc6c0935` hapus PR memakai klaim atomik non-approved;
+`3c74c8bdb` cek duplikat PO jasa diulang dalam tx berkunci WO;
+`94f7e7c69` peristiwa PKWT dibuat dalam tx berkunci baris karyawan
+(cek irisan tanpa kunci melahirkan peristiwa dobel, akrual menutup
+ke nominal penuh dua kali); `c1484c0fb` approve peristiwa PKWT
+klaim atomik dari draft (paid tidak turun lagi ke approved);
+`ee9ffb98c` cek irisan penugasan komponen gaji diulang dalam tx
+berkunci karyawan (tunjangan tidak tertarik dobel);
+`539014fb6` tanggal faktur/bupot `z.coerce.date()` memutar
+2026-02-30 ke Maret — kini `dateOnly` + tengah malam UTC;
+`c214b8463` tanggal setor PPh tengah malam lokal membuat jurnal
+tanggal 1 jatuh di bulan sebelumnya — kini tengah malam UTC;
+`9c3e52e4f` updatePettyCash menolak baris ter-void di bacaan dalam
+tx; `417c994aa` correctPaidPayroll mengunci baris slip sumber
+(correctsPayrollId hanya index; unik rentang tak menangkap
+employeeId NULL).
+Antrean audit berikutnya: lane produksi/aset/crm/pengaturan.
+Keputusan ditahan tetap: average costing per-gudang, prorate
+MONTHLY lintas bulan, rekonstruksi historis eksposur piutang.
+
 ## Bukti penutup
 
 - Unit: 10920 test — 10898 passed, 22 skipped, 0 failed.
