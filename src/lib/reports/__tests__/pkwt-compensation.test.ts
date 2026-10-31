@@ -36,6 +36,35 @@ describe("E132-1 masa kerja pecahan + nominal per segmen", () => {
   it("pengakhiran dini berhenti tanggal aktual", () => {
     expect(computeServiceMonths(d("2026-01-01"), d("2026-03-31"))).toBe(3)
   })
+
+  it("jangkar mundur: sisa hari / panjang periode bulanan jangkar, jangkar tak overflow", () => {
+    // Tepat satu periode bulanan terlayani = 1,0000 persis: pembagi adalah
+    // panjang periode 15 Jan→15 Feb (31 hari), BUKAN hari bulan Feb (28) —
+    // pembagi kalender apa pun mematahkan kasus ini (31/28 = 1,1071).
+    expect(computeServiceMonths(d("2026-01-15"), d("2026-02-14"))).toBe(1)
+    // Periode ter-clamp 31 Jan→28 Feb panjangnya 28 hari: terlayani penuh
+    // pada 27 Feb inklusif (28/28), hari berikutnya masuk periode baru.
+    expect(computeServiceMonths(d("2026-01-31"), d("2026-02-27"))).toBe(1)
+    expect(computeServiceMonths(d("2026-01-31"), d("2026-02-28"))).toBe(1.0323)
+    expect(computeServiceMonths(d("2026-01-30"), d("2026-02-28"))).toBe(1.0333)
+    // 31 Jan→1 Mar: 1 bulan penuh (ke 28 Feb, clamp) + sisa 2 hari / periode
+    // berjalan 28 Feb→31 Mar = 31 hari.
+    expect(computeServiceMonths(d("2026-01-31"), d("2026-03-01"))).toBe(1.0645)
+  })
+
+  it("jangkar ter-clamp dari bulan pendek: 31 Agu→Feb tetap konsisten", () => {
+    // 31 Agu + 6 bulan ter-clamp 28 Feb: 28 Feb = hari pertama periode ke-7.
+    expect(computeServiceMonths(d("2025-08-31"), d("2026-02-28"))).toBe(6.0323)
+    expect(computeServiceMonths(d("2025-08-31"), d("2026-03-01"))).toBe(6.0645)
+  })
+
+  it("monoton: tambah satu hari tak pernah menurunkan masa kerja", () => {
+    const feb28 = computeServiceMonths(d("2026-01-31"), d("2026-02-28"))
+    const mar1 = computeServiceMonths(d("2026-01-31"), d("2026-03-01"))
+    const mar2 = computeServiceMonths(d("2026-01-31"), d("2026-03-02"))
+    expect(feb28).toBeLessThan(mar1)
+    expect(mar1).toBeLessThan(mar2)
+  })
 })
 
 describe("E132-2 rencana akrual menutup ke nominal peristiwa", () => {

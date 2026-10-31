@@ -34,6 +34,14 @@ function daysInWibMonth(year: number, monthIndex: number): number {
   return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
 }
 
+/** start + offset bulan dengan hari di-clamp ke panjang bulan target. */
+function addMonthsClamped(year: number, monthIndex: number, offset: number, day: number): Date {
+  const total = monthIndex + offset
+  const y = year + Math.floor(total / 12)
+  const m = ((total % 12) + 12) % 12
+  return new Date(Date.UTC(y, m, Math.min(day, daysInWibMonth(y, m))))
+}
+
 /**
  * Masa kerja bulan pecahan (Putusan 1): bulan penuh terlayani dari start
  * sampai end inklusif + sisa hari / hari bulan kalender bulan sisa.
@@ -49,36 +57,36 @@ export function computeServiceMonths(start: Date, end: Date): number {
   let months =
     (e.getUTCFullYear() - s.getUTCFullYear()) * 12 +
     (e.getUTCMonth() - s.getUTCMonth())
-  // Tanggal jangkar bulan penuh terakhir: start + months bulan.
-  const anchor = new Date(
-    Date.UTC(s.getUTCFullYear(), s.getUTCMonth() + months, s.getUTCDate()),
-  )
-  const anchorDay = Math.floor(anchor.getTime() / DAY_MS)
+  // Tanggal jangkar bulan penuh terakhir: start + months bulan, hari
+  // di-clamp ke hari bulan target (start 31 Jan + 1 bulan = 28 Feb, BUKAN
+  // overflow 3 Mar — tanpa clamp masa kerja tidak monoton).
+  const anchorDate = addMonthsClamped(s.getUTCFullYear(), s.getUTCMonth(), months, s.getUTCDate())
+  const anchorDay = Math.floor(anchorDate.getTime() / DAY_MS)
   const endUtcDay = Math.floor(
     Date.UTC(e.getUTCFullYear(), e.getUTCMonth(), e.getUTCDate()) / DAY_MS,
   )
   if (anchorDay > endUtcDay) {
-    // Jangkar melewati end (mis. start 31 Jan): mundur satu bulan penuh,
-    // sisa hari inklusif dari jangkar mundur itu / hari bulan end.
+    // Jangkar melewati end (mis. start 15 Jan, end 14 Feb): mundur satu
+    // bulan penuh. Sisa inklusif dibagi PANJANG PERIODE BULANAN itu
+    // (jangkar mundur -> jangkar), bukan hari bulan kalender: periode
+    // 15 Jan->15 Feb panjangnya 31 hari, jadi 15 Jan-14 Feb = tepat 1,0000.
+    // Pembagi bulan kalender mana pun (Jan 31 / Feb 28) mematahkan itu.
     months -= 1
-    const prev = new Date(
-      Date.UTC(s.getUTCFullYear(), s.getUTCMonth() + months, s.getUTCDate()),
-    )
+    const prev = addMonthsClamped(s.getUTCFullYear(), s.getUTCMonth(), months, s.getUTCDate())
     const prevDay = Math.floor(prev.getTime() / DAY_MS)
     const remDays = endUtcDay - prevDay + 1
-    return safeRound(
-      months + remDays / daysInWibMonth(e.getUTCFullYear(), e.getUTCMonth()),
-      4,
-    )
+    return safeRound(months + remDays / (anchorDay - prevDay), 4)
   }
   const remDays = endUtcDay - anchorDay + 1
   if (remDays <= 0) return safeRound(months, 4)
   // Sisa inklusif (vonis: 1 Jan-15 Jun = 5 + 15/30; jangkar 1 Jun, sisa
-  // 1..15 Jun / 30 hari Jun).
-  return safeRound(
-    months + remDays / daysInWibMonth(e.getUTCFullYear(), e.getUTCMonth()),
-    4,
-  )
+  // 1..15 Jun / 30 hari Jun). Pembagi = panjang periode bulanan berjalan
+  // (jangkar -> jangkar berikutnya); untuk jangkar tak ter-clamp nilainya
+  // sama dengan hari bulan end, untuk jangkar ter-clamp (31 Jan -> 28 Feb)
+  // periode berjalan 28 Feb->31 Mar = 31 hari, bukan 28.
+  const nextAnchor = addMonthsClamped(s.getUTCFullYear(), s.getUTCMonth(), months + 1, s.getUTCDate())
+  const periodDays = Math.floor(nextAnchor.getTime() / DAY_MS) - anchorDay
+  return safeRound(months + remDays / periodDays, 4)
 }
 
 /** Nominal peristiwa: masa/12 x basis, safeRound sen hasil akhir saja. */
