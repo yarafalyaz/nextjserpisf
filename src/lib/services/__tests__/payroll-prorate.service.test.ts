@@ -153,4 +153,17 @@ describe("loadSalaryHistoryAsOf", () => {
       { effectiveDate: d("2026-11-20"), newBaseSalary: 6_000_000 },
     ])
   })
+
+  it("kenaikan efektif SESUDAH asOf: salaryBefore tetap terbaca, adjustments kosong (basis lembur lama)", async () => {
+    const db = {
+      salaryAdjustment: {
+        findMany: vi.fn(async () => [
+          { effectiveDate: d("2026-10-01"), previousBaseSalary: 4_000_000, newBaseSalary: 5_000_000 },
+        ]),
+      },
+    }
+    const r = await loadSalaryHistoryAsOf(db as never, 7, 5_000_000, d("2026-09-10"))
+    expect(r.salaryBefore).toBe(4_000_000)
+    expect(r.adjustments).toEqual([])
+  })
 })

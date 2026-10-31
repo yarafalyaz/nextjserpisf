@@ -37,6 +37,30 @@ const TIERS: Record<OvertimeDayKind, { upTo: number; rate: number }[]> = {
   ],
 }
 
+/**
+ * Basis upah sebulan untuk hitung lembur (PP 36/2021 Pasal 27):
+ * upah = gaji pokok + tunjangan tetap; bila pokok + tunjangan tetap
+ * < 75% upah total (pokok + tetap + tidak tetap), basis = 75% upah
+ * total. Klasifikasi tetap/tidak-tetap dari recurrence komponen
+ * ("fixed" vs "variable") yang berlaku pada tanggal lembur.
+ */
+export function resolveOvertimeBasis(input: {
+  baseSalary: number
+  fixedAllowance: number
+  variableAllowance: number
+}): { fixedWage: number; totalWage: number; basis: number; floor75Applied: boolean } {
+  const fixedWage = input.baseSalary + input.fixedAllowance
+  const totalWage = fixedWage + input.variableAllowance
+  const floor = 0.75 * totalWage
+  const floor75Applied = fixedWage < floor
+  return {
+    fixedWage,
+    totalWage,
+    basis: floor75Applied ? floor : fixedWage,
+    floor75Applied,
+  }
+}
+
 /** Nilai lembur (rupiah, dibulatkan) untuk satu pengajuan. */
 export function computeOvertimePay(input: {
   monthlySalary: number

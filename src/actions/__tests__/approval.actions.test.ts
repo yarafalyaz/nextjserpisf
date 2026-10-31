@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => {
     payroll: buildModelMock(),
     employeeLoan: buildModelMock(),
     overtimeRequest: buildModelMock(),
+    // R8-SDM-06: approval lembur membaca riwayat gaji terapan (basis as-of).
+    salaryAdjustment: buildModelMock(),
     employeePayrollComponent: buildModelMock(),
     workSchedule: buildModelMock(),
     holiday: buildModelMock(),

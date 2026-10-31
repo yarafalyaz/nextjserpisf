@@ -117,15 +117,20 @@ kelebihan ≈ Rp367rb. Bila kebijakan kontrak memang full-month, ini
 by-design — tapi tak ada aturan tertulis di kode.
 
 ### R8-SDM-06 — MEDIUM, CONFIRMED — Basis lembur dari gaji berjalan, tanpa lantai 75%
-**Status: DITANGGUHI — butuh histori gaji bertanggal + vonis** —
-skenario A (basis lembur tanggal Lampau) butuh gaji yang berlaku
-PADA tanggal lembur; repo hanya menyimpan master berjalan +
-`SalaryAdjustment` terjadwal, bukan snapshot as-of per tanggal,
-jadi implementasi sekarang akan tetap menebak untuk lembur yang
-mendahului kenaikan pertama. Skenario B (lantai 75% PP 36/2021)
-butuh klasifikasi tunjangan tetap/tidak-tetap per komponen pada
-tanggal lembur -- data master existing tidak menyimpannya secara
-historis. Keduanya perlu keputusan desain data dulu, bukan patch.
+**Status: SELESAI (2026-10-31)** — penangguhan gugur oleh data:
+rantai `SalaryAdjustment` terapan memang menyimpan histori
+bertanggal (`previousBaseSalary` kenaikan pertama = gaji sebelum
+seluruh rantai), dan klasifikasi tetap/tidak-tetap tersimpan
+sebagai `recurrence` komponen ("fixed"/"variable") dengan jendela
+efektif per penugasan. Skenario A: basis = gaji berlaku pada
+tanggal lembur via `loadSalaryHistoryAsOf` (rantai penuh dibaca,
+`salaryBefore` dari kenaikan pertama walau efektif sesudah tanggal
+lembur). Skenario B: `resolveOvertimeBasis` (PP 36/2021 Pasal 27) —
+pokok+tunjangan tetap < 75% upah total → basis 75% upah total.
+Snapshot lembur kini memuat gaji as-of, `variableComponents`, dan
+`floor75Applied`; parser/UI menampilkan lantai bila berlaku.
+Bukti: test service skenario audit A (127.168, bukan 158.960) dan
+B (basis 7,5jt) + unit basis; batch terkait 279/279 hijau.
 `src/lib/services/overtime-approval.service.ts:48-51,58-62` (basis =
 `Employee.baseSalary` berjalan + tunjangan tetap; tanpa lantai 75%
 upah total PP 36/2021 Pasal 27). Skenario A (repricing): lembur

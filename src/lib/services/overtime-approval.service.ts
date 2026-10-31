@@ -4,8 +4,13 @@ import { safeRound } from "@/lib/utils/math"
 import { resolveDayKind } from "@/lib/services/leave-quota.service"
 import {
   computeOvertimePay,
+  resolveOvertimeBasis,
   type OvertimeDayKind,
 } from "@/lib/services/overtime-pay.service"
+import {
+  loadSalaryHistoryAsOf,
+  salaryAsOfFromHistory,
+} from "@/lib/services/payroll-prorate.service"
 
 type Db = Prisma.TransactionClient | typeof prisma
 
@@ -28,27 +33,39 @@ export async function computeOvertimeApprovalValue(
     ot = { ...ot, employee: row?.employee ?? null }
   }
 
-  const fixedAssignments = await db.employeePayrollComponent.findMany({
+  // R8-SDM-06: basis lembur memakai gaji yang berlaku PADA tanggal
+  // lembur (rantai SalaryAdjustment terapan), bukan master berjalan —
+  // approval sesudah kenaikan tidak boleh me-reprice lembur lama.
+  const currentBase = Number(ot.employee?.baseSalary ?? 0)
+  const history = await loadSalaryHistoryAsOf(db, ot.employeeId, currentBase, ot.date)
+  const baseSalaryAsOf = safeRound(salaryAsOfFromHistory(history), 2)
+
+  // Klasifikasi tunjangan pada tanggal lembur: recurrence "fixed" =
+  // tunjangan tetap, "variable" = tidak tetap (PP 36/2021 Pasal 27).
+  const assignments = await db.employeePayrollComponent.findMany({
     where: {
       employeeId: ot.employeeId,
       isActive: true,
       effectiveFrom: { lte: ot.date },
       OR: [{ effectiveTo: null }, { effectiveTo: { gte: ot.date } }],
-      component: { isActive: true, recurrence: "fixed", kind: "earning" },
+      component: { isActive: true, kind: "earning", recurrence: { in: ["fixed", "variable"] } },
     },
     select: {
       defaultAmount: true,
-      component: { select: { name: true } },
+      component: { select: { name: true, recurrence: true } },
     },
   })
-  const fixedAllowance = fixedAssignments.reduce(
-    (sum, a) => safeRound(sum + Number(a.defaultAmount), 2),
-    0,
-  )
-  const baseSalary = safeRound(
-    Number(ot.employee?.baseSalary ?? 0) + fixedAllowance,
-    2,
-  )
+  const fixedAssignments = assignments.filter((a) => a.component.recurrence === "fixed")
+  const variableAssignments = assignments.filter((a) => a.component.recurrence === "variable")
+  const sumAmounts = (rows: typeof assignments) =>
+    rows.reduce((sum, a) => safeRound(sum + Number(a.defaultAmount), 2), 0)
+  // Lantai 75%: pokok + tetap < 75% upah total → basis 75% upah total.
+  const basisResult = resolveOvertimeBasis({
+    baseSalary: baseSalaryAsOf,
+    fixedAllowance: sumAmounts(fixedAssignments),
+    variableAllowance: sumAmounts(variableAssignments),
+  })
+  const baseSalary = safeRound(basisResult.basis, 2)
   const dayProfile = await resolveDayKind(ot.employeeId, ot.date, db)
   const dayKind: OvertimeDayKind = dayProfile.isWorkingDay
     ? "workday"
@@ -61,12 +78,17 @@ export async function computeOvertimeApprovalValue(
     dayKind,
   })
   const overtimeBaseSnapshot = {
-    baseSalary: safeRound(Number(ot.employee?.baseSalary ?? 0), 2),
+    baseSalary: baseSalaryAsOf,
     components: fixedAssignments.map((a) => ({
       name: a.component.name,
       amount: Number(a.defaultAmount),
     })),
+    variableComponents: variableAssignments.map((a) => ({
+      name: a.component.name,
+      amount: Number(a.defaultAmount),
+    })),
     baseTotal: baseSalary,
+    floor75Applied: basisResult.floor75Applied,
     overtimeDate: new Date(ot.date).toISOString(),
   }
 

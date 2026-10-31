@@ -587,8 +587,9 @@ describe("Overtime Request Actions", () => {
       { defaultAmount: 444_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { isActive: false, kind: "earning", recurrence: "fixed" } },
       // EC-OT-3: deduction/fixed aktif → tidak ikut (falsifikasi filter kind).
       { defaultAmount: 555_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { isActive: true, kind: "deduction", recurrence: "fixed" } },
-      // E-OT-5: variable aktif → tidak ikut, tidak memicu cabang 75%.
-      { defaultAmount: 666_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { isActive: true, kind: "earning", recurrence: "variable" } },
+      // E-OT-5: variable aktif → tidak masuk dasar pokok+tunjangan tetap,
+      // tapi (R8-SDM-06) ikut penyebut lantai 75% + snapshot variableComponents.
+      { defaultAmount: 666_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { name: "Tunjangan Variable", isActive: true, kind: "earning", recurrence: "variable" } },
       // EC-OT-1: batas inklusif — mulai & berakhir persis pada ot.date ikut.
       // EC-OT-2: komponen kedua yang ikut; 540.000 + 1 = dasar E-OT-7.
       { defaultAmount: 1, isActive: true, effectiveFrom: otDate, effectiveTo: otDate, component: { name: "Tunjangan Tetap B", isActive: true, kind: "earning", recurrence: "fixed" } },
@@ -609,7 +610,13 @@ describe("Overtime Request Actions", () => {
           const cw = w.component ?? {}
           if (cw.isActive !== undefined && a.component.isActive !== cw.isActive) return false
           if (cw.kind !== undefined && a.component.kind !== cw.kind) return false
-          if (cw.recurrence !== undefined && a.component.recurrence !== cw.recurrence) return false
+          if (cw.recurrence !== undefined) {
+            // R8-SDM-06: produksi kini meminta recurrence { in: [fixed, variable] }.
+            const ok = Array.isArray(cw.recurrence?.in)
+              ? cw.recurrence.in.includes(a.component.recurrence)
+              : a.component.recurrence === cw.recurrence
+            if (!ok) return false
+          }
           return true
         })
       },
@@ -643,6 +650,11 @@ describe("Overtime Request Actions", () => {
         { name: "Tunjangan Tetap A", amount: 540_000 },
         { name: "Tunjangan Tetap B", amount: 1 },
       ],
+      // R8-SDM-06: variable 666.000 (E-OT-5) kini tercatat untuk lantai
+      // 75%; fixed 4.000.001 >= 75% x 4.666.001 → lantai tidak terpicu,
+      // dasar hitung tidak berubah.
+      variableComponents: [{ name: "Tunjangan Variable", amount: 666_000 }],
+      floor75Applied: false,
       baseTotal: 4_000_001,
       overtimeDate: otDate.toISOString(),
     })
@@ -683,6 +695,8 @@ describe("Overtime Request Actions", () => {
     expect(arg.data.overtimeBaseSnapshot).toEqual({
       baseSalary: 5_000_000,
       components: [],
+      variableComponents: [],
+      floor75Applied: false,
       baseTotal: 5_000_000,
       overtimeDate: "2026-06-12T00:00:00.000Z",
     })

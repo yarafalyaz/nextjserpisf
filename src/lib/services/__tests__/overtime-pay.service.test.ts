@@ -2,11 +2,37 @@ import { describe, expect, it } from "vitest"
 import {
   computeOvertimePay,
   endOfWeekSunday,
+  resolveOvertimeBasis,
   startOfWeekMonday,
 } from "../overtime-pay.service"
 
 // Gaji 3.460.000 -> upah sejam tepat 20.000 (3.460.000 / 173).
 const SALARY = 3_460_000
+
+describe("resolveOvertimeBasis (PP 36/2021 Pasal 27, R8-SDM-06)", () => {
+  it("pokok + tetap >= 75% total → basis = pokok + tetap, tanpa lantai", () => {
+    const r = resolveOvertimeBasis({ baseSalary: 4_000_000, fixedAllowance: 1_000_000, variableAllowance: 1_000_000 })
+    expect(r.floor75Applied).toBe(false)
+    expect(r.basis).toBe(5_000_000)
+  })
+
+  it("skenario audit B: tetap 50% dari total 10jt → basis lantai 7,5jt", () => {
+    const r = resolveOvertimeBasis({ baseSalary: 4_000_000, fixedAllowance: 1_000_000, variableAllowance: 5_000_000 })
+    expect(r.totalWage).toBe(10_000_000)
+    expect(r.floor75Applied).toBe(true)
+    expect(r.basis).toBe(7_500_000)
+    // 3 jam hari kerja atas basis statutori: (1,5 + 2 + 2) x 7,5jt/173.
+    expect(computeOvertimePay({ monthlySalary: r.basis, hours: 3, dayKind: "workday" })).toBe(
+      Math.round(5.5 * (7_500_000 / 173)),
+    )
+  })
+
+  it("tanpa tunjangan tidak tetap → basis = pokok + tetap", () => {
+    const r = resolveOvertimeBasis({ baseSalary: 5_000_000, fixedAllowance: 500_000, variableAllowance: 0 })
+    expect(r.floor75Applied).toBe(false)
+    expect(r.basis).toBe(5_500_000)
+  })
+})
 
 describe("overtime pay (PP 35/2021 jo Kepmenakertrans 102/2004)", () => {
   it("workday: first hour 1.5x, subsequent hours 2x", () => {

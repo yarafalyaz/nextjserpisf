@@ -38,6 +38,19 @@ export function OvertimeBaseSnapshotFields({
           value={formatCurrency(component.amount)}
         />
       ))}
+      {(snapshot.variableComponents ?? []).map((component) => (
+        <DetailField
+          key={component.name}
+          label={`${component.name} (tidak tetap)`}
+          value={formatCurrency(component.amount)}
+        />
+      ))}
+      {snapshot.floor75Applied ? (
+        <DetailField
+          label="Lantai 75% Upah Total (PP 36/2021)"
+          value="Berlaku — pokok + tunjangan tetap di bawah 75% upah total"
+        />
+      ) : null}
       <DetailField label="Dasar Upah Lembur" value={formatCurrency(snapshot.baseTotal)} />
     </>
   )

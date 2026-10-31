@@ -23,6 +23,9 @@ import { hasPermission } from "@/lib/auth/permissions"
 export interface OvertimeBaseSnapshot {
   baseSalary: number
   components: { name: string; amount: number }[]
+  /** R8-SDM-06: tunjangan tidak tetap + penanda lantai 75% (snapshot lama tidak punya). */
+  variableComponents?: { name: string; amount: number }[]
+  floor75Applied?: boolean
   baseTotal: number
 }
 
@@ -36,14 +39,29 @@ function parseSnapshot(raw: unknown): OvertimeBaseSnapshot | null {
   if (typeof baseSalary !== "number" || !Number.isFinite(baseSalary)) return null
   if (typeof baseTotal !== "number" || !Number.isFinite(baseTotal)) return null
   if (!Array.isArray(components)) return null
-  const parsed: { name: string; amount: number }[] = []
-  for (const c of components) {
-    if (!isRecord(c)) return null
-    if (typeof c.name !== "string") return null
-    if (typeof c.amount !== "number" || !Number.isFinite(c.amount)) return null
-    parsed.push({ name: c.name, amount: c.amount })
+  const parseComponents = (rows: unknown): { name: string; amount: number }[] | null => {
+    if (!Array.isArray(rows)) return null
+    const parsed: { name: string; amount: number }[] = []
+    for (const c of rows) {
+      if (!isRecord(c)) return null
+      if (typeof c.name !== "string") return null
+      if (typeof c.amount !== "number" || !Number.isFinite(c.amount)) return null
+      parsed.push({ name: c.name, amount: c.amount })
+    }
+    return parsed
   }
-  return { baseSalary, components: parsed, baseTotal }
+  const parsed = parseComponents(components)
+  if (!parsed) return null
+  const variableComponents =
+    raw.variableComponents === undefined ? undefined : parseComponents(raw.variableComponents)
+  if (variableComponents === null) return null
+  return {
+    baseSalary,
+    components: parsed,
+    ...(variableComponents ? { variableComponents } : {}),
+    ...(typeof raw.floor75Applied === "boolean" ? { floor75Applied: raw.floor75Applied } : {}),
+    baseTotal,
+  }
 }
 
 export async function loadOvertimeBaseSnapshot(

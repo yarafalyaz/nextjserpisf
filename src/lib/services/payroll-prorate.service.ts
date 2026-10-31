@@ -49,8 +49,12 @@ export async function loadSalaryHistoryAsOf(
   currentBaseSalary: number,
   asOf: Date,
 ): Promise<{ salaryBefore: number; adjustments: { effectiveDate: Date; newBaseSalary: number }[] }> {
+  // Seluruh rantai terapan dibaca (bukan hanya <= asOf): gaji SEBELUM
+  // kenaikan pertama hanya tercatat sebagai previousBaseSalary pada
+  // baris kenaikan itu, yang bisa efektif SESUDAH asOf (lembur lama
+  // yang disetujui sesudah kenaikan). adjustments tetap dibatasi asOf.
   const rows = await db.salaryAdjustment.findMany({
-    where: { employeeId, status: "applied", effectiveDate: { lte: asOf } },
+    where: { employeeId, status: "applied" },
     orderBy: [{ effectiveDate: "asc" }, { id: "asc" }],
     select: { effectiveDate: true, previousBaseSalary: true, newBaseSalary: true },
   })
@@ -59,11 +63,26 @@ export async function loadSalaryHistoryAsOf(
   }
   return {
     salaryBefore: Number(rows[0].previousBaseSalary ?? currentBaseSalary),
-    adjustments: rows.map((r) => ({
-      effectiveDate: r.effectiveDate,
-      newBaseSalary: Number(r.newBaseSalary),
-    })),
+    adjustments: rows
+      .filter((r) => r.effectiveDate <= asOf)
+      .map((r) => ({
+        effectiveDate: r.effectiveDate,
+        newBaseSalary: Number(r.newBaseSalary),
+      })),
   }
+}
+
+/**
+ * Gaji yang berlaku dari hasil `loadSalaryHistoryAsOf` (rantai sudah
+ * dibatasi ≤ tanggal acuan): kenaikan terapan terakhir dalam rantai,
+ * atau `salaryBefore` bila belum ada kenaikan pada tanggal itu.
+ */
+export function salaryAsOfFromHistory(history: {
+  salaryBefore: number
+  adjustments: readonly { newBaseSalary: number }[]
+}): number {
+  const last = history.adjustments[history.adjustments.length - 1]
+  return last ? last.newBaseSalary : history.salaryBefore
 }
 
 export interface ProrateSegment {
