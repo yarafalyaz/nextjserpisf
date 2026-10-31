@@ -487,3 +487,57 @@ delete konkuren) tidak merusak jumlah karena update absolut
 terakhir-menang. (c) shipDeliveryOrder — klaim agent basi:
 TASK-016 BUG-03 sudah menutupnya (assertDeliveryWithinOrderCap
 dalam tx berkunci SO + klaim atomik status draft).
+
+### Lanjutan putaran 8 (2026-11-01) — lane aset/qc/master + hrm/produksi/pajak
+
+Lane D (asset/qc/master) dan lane C (hrm/production-cost/tax-documents)
+mengembalikan 12 kandidat race baca-luar-tx. Fix terbukti (test merah
+dulu, sesi utama memverifikasi jahitan dengan membaca kode):
+`92adb5279` deleteQcChecklist memakai klaim atomik deleteMany
+status draft + tanpa inspeksi (cek snapshot + delete polos kalah race
+release); `6dde05688` updateAsset menilai ulang status/harga dari
+baris assets terkunci; `52cfce70c` ketiga penulis peristiwa aset
+mengunci baris aset (helper lockAssetRow) sebelum membaca fakta
+POSTED; `c5569edd8` unit UOP dan cron penyusutan diserialkan pada
+kunci baris aset yang sama (cron menghitung ulang UOP dari bacaan
+dalam-tx; upsert mengulang cek jurnal di bawah kunci);
+`6b6b5adb4` terbit FP uang muka mengunci baris DP sebelum cek FP
+aktif (idempotency key berbeda tidak saling menahan — pola sama
+FP UM ditutup `065b7bcf0` untuk bupot atas baris vendor_bills /
+sales_payments); `72d38df88` create lembur mengunci baris karyawan
+sebelum cek cap PP 35/2021 (findMany cap adalah snapshot read —
+create adalah satu-satunya penulis baris baru; updateOvertimeRequest
+sudah aman karena mengunci baris lemburnya sendiri);
+`5312fcdde` attach PKWT membaca peristiwa+akrual di dalam tx
+terkunci (snapshot pkwtSettledViaAccrual luar tx basi terhadap
+akrual bulanan yang commit di antara; hook payroll menilai ulang
+porsi 210207 secara live sehingga fix hanya menyelaraskan snapshot);
+`094d6dff7` updateEmployee menilai ulang userId + rantai atasan dari
+baris karyawan terkunci (dua create-login email berbeda meninggalkan
+User yatim aktif; atasan timbal-balik X->Y/Y->X lolos cek acyclic
+snapshot).
+CI: head putaran 8 sampai `065b7bcf0` SUCCESS (run `41248689923`
+dsk.); head `72d38df88`/`5312fcdde`/`094d6dff7` dipantau interval
+120 detik.
+
+Vonis putaran 8 (tidak difix, dengan alasan): (a) timesheet ditarik
+lalu diubah/dihapus (lane C #4) — GUGUR: pull mengunci baris
+timesheet dan membaca ulang dedupe di dalam tx; arah berbahaya
+pulled->orphan tidak bisa terjadi; update/delete yang kalah sesudah
+pull commit meninggalkan drift terdeteksi (sumber hilang), bukan
+angka dobel — risiko diterima sesuai komentar desain F-96.
+(b) biaya produksi masuk sesudah WO closed (lane C #5) — GUGUR:
+dua-arah klaim tidak seimbang; baris PO/WO sendiri Dikunci penulis
+biaya (preseden applyProductionCostDelta kunci PO FOR UPDATE),
+order kunci tidak konsisten lintas penulis, dan tidak ada bukti
+kabur konkrit — komentar ponytail job-closeout.service.ts:17-19
+sudah memutuskan FOR UPDATE gabungan hanya bila ada bukti race.
+(c) quick-add master nama tanpa unique (lane D #6) — TIDAK DITUTUP
+SEPENUHNYA: 9 situs find-or-create nama mentah sama-sama rawan duplikat
+identik konkuren, tetapi perbaikannya adalah keputusan desain
+per-situs (unique key normalisasi vs baris kunci serialisasi vs
+kasus-legitim nama-sama) — ubah default konservatif = tidak difix
+sepihak; diajukan sebagai keputusan user. Bila diputuskan: pola
+termurah adalah baris kunci satu-baris per tabel (preseden gerbang
+NPWP ce620cc1b) + scan ulang di dalam tx, tanpa migrasi unik yang
+bisa gagal di data legacy beda format.
