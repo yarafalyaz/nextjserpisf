@@ -34,7 +34,7 @@ test.describe("SDM — Kalender Kerja", () => {
     await expect(page.getByRole("heading", { name: "Jadwal Kerja", exact: true })).toBeVisible({ timeout: 10_000 })
 
     // ─── TULIS: tambah hari libur lewat halaman buatnya ─────────────────────
-    await page.locator("a[href='/sdm/kalender-kerja/libur/tambah']").click()
+    await page.locator("a[href='/sdm/kalender-kerja/libur/tambah']:visible").first().click()
     await expect(page.getByRole("heading", { name: "Tambah Hari Libur" })).toBeVisible({ timeout: 30_000 })
 
     await page.locator("#holidayName").fill(name)

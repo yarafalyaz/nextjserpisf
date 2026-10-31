@@ -523,6 +523,34 @@ async function main() {
   }
 
   // Idempoten: seed dijalankan berkali-kali tetap menyisakan SATU fixture draft.
+  // Sesudah rantai jual jalan, faktur fixture punya anak (pembayaran/retur/
+  // kredit) yang menolak hapus induk (FK sales_invoice_id) — bersihkan dulu,
+  // cermin reset di awal e2e/sales-chain.spec.ts.
+  const oldFixture = await prisma.salesInvoice.findUnique({
+    where: { slug: "e2e-post-invoice-draft" },
+    select: { id: true },
+  });
+  if (oldFixture) {
+    const oldReturnIds = (
+      await prisma.salesReturn.findMany({
+        where: { salesInvoiceId: oldFixture.id },
+        select: { id: true },
+      })
+    ).map((r) => r.id);
+    if (oldReturnIds.length) {
+      await prisma.customerCredit.deleteMany({
+        where: { sourceType: "SalesReturn", sourceId: { in: oldReturnIds } },
+      });
+    }
+    await prisma.salesReturnItem.deleteMany({
+      where: { salesReturn: { salesInvoiceId: oldFixture.id } },
+    });
+    await prisma.salesReturn.deleteMany({ where: { salesInvoiceId: oldFixture.id } });
+    await prisma.salesPayment.deleteMany({ where: { salesInvoiceId: oldFixture.id } });
+    await prisma.salesInvoiceItem.deleteMany({
+      where: { salesInvoiceId: oldFixture.id },
+    });
+  }
   await prisma.salesInvoice.deleteMany({ where: { slug: "e2e-post-invoice-draft" } });
   const draftInvoice = await prisma.salesInvoice.create({
     data: {

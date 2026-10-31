@@ -18,17 +18,19 @@ test.describe("Aset Kategori CRUD", () => {
 
     // The per-category GL mapping section must render (it is what makes the
     // depreciation/acquisition cron honour a category-specific account).
-    await expect(page.getByText("Mapping Akun (opsional)")).toBeVisible({ timeout: 10000 })
-    await expect(page.locator("#depreciationExpenseAccountId")).toBeAttached()
-    await expect(page.locator("#accumulatedDepreciationAccountId")).toBeAttached()
+    await expect(page.getByText("Mapping Akun (opsional)").first()).toBeVisible({ timeout: 10000 })
+    await expect(page.locator("#depreciationExpenseAccountId").first()).toBeAttached()
+    await expect(page.locator("#accumulatedDepreciationAccountId").first()).toBeAttached()
 
-    const nameInput = page.locator("#name")
+    // Transien hidrasi/streaming Next bisa menggandakan elemen sesaat;
+    // locator id tetap satu sesudah settle — .first() mengambil yang stabil.
+    const nameInput = page.locator("#name").first()
     await expect(nameInput).toBeVisible({ timeout: 10000 })
     await nameInput.fill(name)
     await expect(nameInput).toHaveValue(name)
-    await page.locator("#code").fill(`KAT-${ts}`)
-    await page.locator("#depreciationRate").fill("10")
-    await page.locator("#usefulLife").fill("5")
+    await page.locator("#code").first().fill(`KAT-${ts}`)
+    await page.locator("#depreciationRate").first().fill("10")
+    await page.locator("#usefulLife").first().fill("5")
     await page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ }).click()
     await page.waitForURL("**/aset/kategori", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
@@ -59,7 +61,7 @@ test.describe("Aset Kategori CRUD", () => {
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/aset\/kategori\/[^/]+\/ubah$/, { timeout: 30000 })
-    await page.locator("#name").fill(updated)
+    await page.locator("#name").first().fill(updated)
     await expect(page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ })).toBeEnabled({ timeout: 15_000 })
     await page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ }).click()
     await page.waitForURL("**/aset/kategori", { timeout: 30000 })

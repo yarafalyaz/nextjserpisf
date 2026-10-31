@@ -19,7 +19,7 @@ test.describe("Pengaturan Peran CRUD", () => {
     await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
     await page.locator("#name").first().fill(name)
     await expect(page.locator("#name").first()).toHaveValue(name)
-    await page.locator("button[type='submit']").click()
+    await page.locator("button[type='submit']:visible").first().click()
 
     await awaitListContains(page, "**/pengaturan/peran", name)
 
@@ -37,7 +37,7 @@ test.describe("Pengaturan Peran CRUD", () => {
     await expect(page.locator("#name").first()).toBeVisible({ timeout: 30_000 })
     await page.locator("#name").first().fill(updated)
     await expect(page.locator("#name").first()).toHaveValue(updated)
-    await page.locator("button[type='submit']").click()
+    await page.locator("button[type='submit']:visible").first().click()
 
     await awaitListContains(page, "**/pengaturan/peran", updated)
 

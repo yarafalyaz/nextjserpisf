@@ -1,5 +1,16 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, type Page } from "@playwright/test"
 import { prisma } from "@/lib/db/prisma"
+
+const RETURN_APPROVER_EMAIL = "admin.dewi@isf.co.id"
+const DEMO_PASSWORD = process.env.E2E_PASSWORD || "Yara1234"
+
+async function loginAs(page: Page, email: string) {
+  await page.goto("/login")
+  await page.locator("#email").fill(email)
+  await page.locator("#password").fill(DEMO_PASSWORD)
+  await page.locator("#login-submit").click()
+  await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 15_000 })
+}
 
 /**
  * RANTAI JUAL P2-2: faktur draft (fixture) → posting → bayar lunas →
@@ -16,6 +27,7 @@ import { prisma } from "@/lib/db/prisma"
 test.describe.serial("Penjualan — rantai penuh", () => {
   test("faktur → posting → bayar → retur, jurnal & stok & sisa terbukti di DB", async ({
     page,
+    browser,
   }) => {
     // 0. Reset fixture berstok: faktur kembali draft, lapisan FIFO 10.
     const fixture = await prisma.salesInvoice.findUniqueOrThrow({
@@ -144,10 +156,21 @@ test.describe.serial("Penjualan — rantai penuh", () => {
     // jurnal run ini, lalu tekan Posting sungguhan.
     await prisma.$executeRaw`DELETE je FROM journal_entries je JOIN journals j ON j.id = je.journal_id WHERE (j.reference_type = 'SalesInvoice' OR j.reference_type = 'SalesInvoiceCOGS') AND j.reference_id = ${fixture.id}`
     await prisma.$executeRaw`DELETE FROM journals WHERE (reference_type = 'SalesInvoice' OR reference_type = 'SalesInvoiceCOGS') AND reference_id = ${fixture.id}`
-    await prisma.salesInvoice.update({
-      where: { id: fixture.id },
-      data: { status: "draft" },
-    })
+    // Guard versi: halaman faktur yang masih terbuka (pasca posting langkah 1)
+    // bisa menulis baris ini bersamaan — MariaDB 1020 "Record has changed".
+    // Retry pendek sampai tulis menang; bukan menyerah (gagal = fixture basi).
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await prisma.salesInvoice.update({
+          where: { id: fixture.id },
+          data: { status: "draft" },
+        })
+        break
+      } catch (e) {
+        if (attempt >= 9) throw e
+        await page.waitForTimeout(500)
+      }
+    }
     await page.reload({ waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     const postingBtn2 = page.getByRole("button", { name: "Posting" })
@@ -219,7 +242,10 @@ test.describe.serial("Penjualan — rantai penuh", () => {
     await page.waitForLoadState("networkidle")
     // Prefill mengisi 1 baris qty 2 — ubah jadi 1 (retur sebagian).
     // Prefill mengisi 1 baris qty 2 — retur sebagian: ubah jadi 1.
+    // Alasan wajib diisi saat BUAT: gerbang P4 menolak selesaikan retur
+    // ber-reason kosong (koreksi tak teraudit), dan detail hanya menampilkan.
     await page.getByLabel(/jumlah baris 1/i).fill("1")
+    await page.locator("#reason").fill("E2E rantai jual — retur sebagian 1 pcs")
     await page.locator("#submit-sales-return").click()
     // Form push ke DAFTAR retur — buka detail retur baru via link dokumen.
     await page.waitForURL(/\/penjualan\/retur$/, { timeout: 30_000 })
@@ -229,17 +255,29 @@ test.describe.serial("Penjualan — rantai penuh", () => {
     })
     expect(salesReturns.length).toBe(1)
     const salesReturn = salesReturns[0]
-    await page.getByRole("link", { name: new RegExp(salesReturn.documentNo.replace(/\//g, "\\/")) }).first().click()
-    await page.waitForURL(/\/penjualan\/retur\/[^/]+$/, { timeout: 30_000 })
-    await page.getByRole("button", { name: "Selesaikan" }).first().click()
-    await page.getByRole("button", { name: "Selesaikan" }).last().click()
-    // Sukses = chip "Selesai" ATAU toast galat (tolak diam) — tunggu salah satunya, bukan sleep buta.
-    const retToast = page.locator("li", { hasText: /gagal|tidak|wajib|kurang|ditolak/i }).first()
-    await expect(page.getByText("Selesai").first().or(retToast)).toBeVisible({ timeout: 30_000 })
-    if ((await retToast.count()) > 0) {
-      throw new Error("retur gagal diselesaikan: " + ((await retToast.textContent()) ?? "").slice(0, 250))
+    // SoD produk: pembuat retur (sesi super_admin) tidak boleh menyelesaikan
+    // buatannya sendiri. Gunakan konteks browser kedua sebagai admin demo —
+    // role admin memegang approve_sales_returns dan bukan pembuat dokumen.
+    const approverContext = await browser.newContext({ storageState: { cookies: [], origins: [] } })
+    const approverPage = await approverContext.newPage()
+    try {
+      await loginAs(approverPage, RETURN_APPROVER_EMAIL)
+      await approverPage.goto(`/penjualan/retur/${salesReturn.slug ?? salesReturn.id}`, {
+        waitUntil: "domcontentloaded",
+      })
+      await approverPage.waitForLoadState("networkidle")
+      await approverPage.getByRole("button", { name: "Selesaikan" }).first().click()
+      await approverPage.getByRole("button", { name: "Selesaikan" }).last().click()
+      // Sukses = chip "Selesai" ATAU toast galat (tolak diam) — tunggu salah satunya, bukan sleep buta.
+      const retToast = approverPage.locator("li", { hasText: /gagal|tidak|wajib|kurang|ditolak/i }).first()
+      await expect(approverPage.getByText("Selesai").first().or(retToast)).toBeVisible({ timeout: 30_000 })
+      if ((await retToast.count()) > 0) {
+        throw new Error("retur gagal diselesaikan: " + ((await retToast.textContent()) ?? "").slice(0, 250))
+      }
+      await expect(approverPage.getByText("Selesai").first()).toBeVisible({ timeout: 30_000 })
+    } finally {
+      await approverContext.close()
     }
-    await expect(page.getByText("Selesai").first()).toBeVisible({ timeout: 30_000 })
 
     // Selesai = server action async — poll sampai status completed.
     let doneReturn = await prisma.salesReturn.findUniqueOrThrow({

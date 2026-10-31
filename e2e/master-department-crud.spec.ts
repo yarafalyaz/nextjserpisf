@@ -27,7 +27,7 @@ test.describe("Master Departemen CRUD", () => {
     await awaitListContains(page, "**/master/departemen", name)
     await page.goto(`/master/departemen?cari=${encodeURIComponent(name)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(name)
+    await expect(page.locator("tr").filter({ hasText: name }).first()).toBeVisible({ timeout: 30_000 })
 
     // ─── DETAIL ───────────────────────────────────────────────
     const detailLink = page
@@ -55,7 +55,7 @@ test.describe("Master Departemen CRUD", () => {
     await expect(page.locator("#name").first()).toBeVisible({ timeout: 30_000 })
     await page.locator("#name").first().fill(updated)
     await expect(page.locator("#name").first()).toHaveValue(updated)
-    await page.locator("button[type='submit']").first().click()
+    await page.locator("button[type='submit']:visible").first().click()
 
     await page.waitForURL("**/master/departemen", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
@@ -75,7 +75,9 @@ test.describe("Master Departemen CRUD", () => {
     await confirmBtn.click({ force: true })
 
     await page.waitForLoadState("networkidle")
-    await expect(updatedRow).toBeHidden({ timeout: 30000 })
-    await expect(page.locator("body")).not.toContainText(updated, { timeout: 5000 })
+    await expect(page.locator("tr").filter({ hasText: updated })).toHaveCount(0, { timeout: 30000 })
+    await page.goto(`/master/departemen?cari=${encodeURIComponent(updated)}`, { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
+    await expect(page.locator("tr").filter({ hasText: updated })).toHaveCount(0, { timeout: 10000 })
   })
 })

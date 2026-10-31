@@ -22,6 +22,9 @@ test.describe("Penjualan — posting faktur", () => {
 
     // Retry-safe: kalau percobaan sebelumnya sudah memposting faktur ini, tombolnya
     // tidak ada lagi dan yang tersisa justru status "Diposting" — asersinya tetap sah.
+    // Hati-hati: status "posted" TANPA pembayaran membayar menampilkan label
+    // pembayaran "Belum Bayar", bukan "Diposting" — bukti lulus = tombol Posting
+    // hilang (hanya ditawarkan untuk draft) ATAU label status posted tampil.
     const postingButtons = page.getByRole("button", { name: "Posting" })
     if ((await postingButtons.count()) > 0) {
       await postingButtons.first().click()
@@ -29,7 +32,14 @@ test.describe("Penjualan — posting faktur", () => {
       await page.getByRole("button", { name: "Posting" }).last().click()
     }
 
-    // Bukti di UI: status faktur berpindah ke "Diposting" (label dari status-labels.ts).
-    await expect(page.getByText("Diposting").first()).toBeVisible({ timeout: 30_000 })
+    // Bukti lulus TEPAT SATU indikator sah terjadwal: label status dokumen
+    // ("Diposting" untuk posted, "Dibayar" untuk paid, "Sebagian" untuk
+    // partial) — tombol Posting TIDAK PERNAH jadi bukti (ia justru yang
+    // ditekan spec ini). Faktur lunas oleh spec lain menampilkan "Dibayar",
+    // bukan "Diposting", walau alur posting sudah terbukti.
+    await expect(
+      page.getByText(/Diposting|Dibayar|Sebagian ditagih|Sebagian/i).first(),
+    ).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByRole("button", { name: "Posting" })).toHaveCount(0, { timeout: 30_000 })
   })
 })

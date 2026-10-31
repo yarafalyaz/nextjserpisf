@@ -93,8 +93,9 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     })
     expect(["approved", "ordered", "partial_received"]).toContain(po.status)
 
-    // 1. Buat penerimaan dari PO (prefill poId).
-    await page.goto(`/pembelian/penerimaan/tambah?poId=${po.id}`, { waitUntil: "domcontentloaded" })
+    // 1. Buat penerimaan dari PO (prefill path po/<slug>; query ?poId lama
+    // di-redirect server ke bentuk ini).
+    await page.goto(`/pembelian/penerimaan/tambah/po/${po.slug ?? po.id}`, { waitUntil: "domcontentloaded" })
     await awaitReady(page, "form")
 
     // Header "Gudang Tujuan" wajib dipilih manual (combobox kosong walau baris
@@ -111,14 +112,14 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     // Tunggu toast hasil (sukses ATAU galat) — bukan navigasi buta.
     const toast = page.locator("[data-sonner-toast], [role='status'], .toaster, [data-testid='toast']").first()
     await page.getByRole("button", { name: "Terima Barang" }).click()
-    // Sukses = URL pindah dari /tambah — tunggu navigasi, bukan sleep buta.
+    // Sukses = URL pindah dari cabang /tambah — tunggu navigasi, bukan sleep buta.
     // Tanpa catch: timeout waitForURL = gagal tegas (dulu ditelan, tes lanjut semu).
-    await page.waitForURL((url) => !url.pathname.endsWith("/pembelian/penerimaan/tambah"), { timeout: 30_000 })
+    await page.waitForURL((url) => !url.pathname.startsWith("/pembelian/penerimaan/tambah"), { timeout: 30_000 })
     const afterUrl = page.url()
     const toastText = (await toast.count()) > 0 ? ((await toast.textContent()) ?? "") : ""
     expect(
       `${afterUrl} :: ${toastText.slice(0, 200)}`,
-    ).not.toContain("/pembelian/penerimaan/tambah")
+    ).not.toContain("/pembelian/penerimaan/tambah/")
 
     // GR terbaru untuk PO fixture = yang baru saja dibuat (id > id tertinggi
     // SEBELUM klik Terima — kunci poId saja tak cukup: run paralel / sisa run
@@ -168,8 +169,8 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     const item = await prisma.item.findUniqueOrThrow({ where: { sku: "E2E-BUY-ITEM" } })
     expect(Number(item.qtyOnHand)).toBe(10)
 
-    // 3. Buat tagihan dari GR (prefill grId) → konfirmasi → jurnal AP lahir.
-    await page.goto(`/pembelian/tagihan/tambah?grId=${gr.id}`, { waitUntil: "domcontentloaded" })
+    // 3. Buat tagihan dari GR (prefill path penerimaan/<slug GR>) → konfirmasi → jurnal AP lahir.
+    await page.goto(`/pembelian/tagihan/tambah/penerimaan/${gr.slug ?? gr.id}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await page.getByRole("button", { name: "Simpan", exact: true }).click()
     // Sukses = redirect ke DAFTAR tagihan (form push ke /pembelian/tagihan).
@@ -216,7 +217,7 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     // via tombol "Bayar" (prefill billId + vendor + jumlah otomatis). Scope ke
     // <main>: link "Bayar" juga ada di sidebar/nav.
     await page.locator("main").getByRole("link", { name: "Bayar" }).click()
-    await page.waitForURL(/\/pembelian\/pembayaran-vendor\/tambah/, { timeout: 30_000 })
+    await page.waitForURL(/\/pembelian\/pembayaran-vendor\/tambah\/tagihan\//, { timeout: 30_000 })
     await page.waitForLoadState("networkidle")
     // Metode pembayaran wajib — Combobox CommandInput: ketik + pilih.
     // Rekening kas/bank wajib untuk transfer (kolom No. Rekening diisi).
@@ -232,7 +233,7 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     // Tanpa catch: timeout waitForURL = gagal tegas (dulu ditelan, tes lanjut semu).
     await page.waitForURL(/\/pembelian\/pembayaran-vendor(\?|$)/, { timeout: 30_000 })
     const payToast = page.locator("li", { hasText: /gagal|wajib|tidak|kurang/i }).first()
-    if (page.url().includes("/pembayaran-vendor/tambah")) {
+    if (page.url().includes("/pembayaran-vendor/tambah/")) {
       const msg = (await payToast.count()) > 0 ? await payToast.textContent() : "(tanpa toast)"
       throw new Error("pembayaran gagal tersimpan, masih di /tambah: " + (msg ?? "").slice(0, 200))
     }
@@ -244,10 +245,35 @@ test.describe.serial("Pembelian — rantai penuh", () => {
       orderBy: { id: "desc" },
     })
     expect(Number(payment.amount)).toBe(500000)
-    // Konfirmasi dari menu aksi baris (ActionDropdown → "Konfirmasi & Posting").
+
+    // Seed memasang workflow vendor payment satu langkah (finance). Sesi
+    // super_admin boleh menyetujui lewat halaman persetujuan; tanpa approval
+    // ini confirmVendorPayment memang harus menolak. Approval adalah gerbang,
+    // bukan perubahan status pembayaran vendor.
+    const approval = await prisma.approval.findFirstOrThrow({
+      where: { referenceType: "VendorPayment", referenceId: payment.id },
+      orderBy: { id: "desc" },
+    })
+    expect(approval.status).toBe("pending")
+    await page.goto(`/pengaturan/persetujuan/${approval.slug ?? approval.id}`, {
+      waitUntil: "domcontentloaded",
+    })
+    await page.waitForLoadState("networkidle")
+    await page.getByRole("button", { name: "Setujui" }).click()
+    await expect(page.getByText("Disetujui").first()).toBeVisible({ timeout: 30_000 })
+    let approved = await prisma.approval.findUniqueOrThrow({ where: { id: approval.id } })
+    for (let i = 0; i < 20 && approved.status !== "approved"; i++) {
+      await page.waitForTimeout(1000)
+      approved = await prisma.approval.findUniqueOrThrow({ where: { id: approval.id } })
+    }
+    expect(approved.status).toBe("approved")
+
+    // Konfirmasi dari menu aksi baris payment ini persis (bukan baris pertama).
     await page.goto("/pembelian/pembayaran-vendor", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await page.getByRole("button", { name: /buka menu aksi/i }).first().click()
+    const paymentRow = page.locator("tr").filter({ hasText: payment.documentNo }).first()
+    await expect(paymentRow).toBeVisible({ timeout: 30_000 })
+    await paymentRow.getByRole("button", { name: /buka menu aksi/i }).click()
     await page.getByRole("menuitem", { name: /konfirmasi/i }).click()
     await page.getByRole("button", { name: /konfirmasi/i }).last().click()
     await expect(page.getByText(/dikembalikan|dibayar|diposting/i).first()).toBeVisible({

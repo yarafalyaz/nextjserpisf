@@ -10,10 +10,22 @@ import type { Page } from "@playwright/test"
  * cara yang didukung untuk mengisinya dari E2E.
  */
 
-/** Pilih bulan pada AppMonthPicker lewat opsi grid-nya (nama pendek, mis. "Sep"). */
+const FULL_MONTH: Record<string, string> = {
+  Jan: "Januari", Feb: "Februari", Mar: "Maret", Apr: "April", Mei: "Mei", Jun: "Juni",
+  Jul: "Juli", Agu: "Agustus", Sep: "September", Okt: "Oktober", Nov: "November", Des: "Desember",
+}
+
+/**
+ * Pilih bulan pada AppMonthPicker lewat opsi grid-nya (nama pendek, mis. "Sep").
+ * Bulan di grid adalah <button> ber-aria-label "September 2026" (nama PENUH),
+ * bukan role=option — dan grid baru ter-render lewat popover sesudah klik
+ * pemicu, jadi tombolnya wajib ditunggu (klik option pernah timeout 30s di CI
+ * lokal karena locator menembak elemen yang tak pernah ada).
+ */
 export async function pickMonth(page: Page, name: string, monthLabel: string): Promise<void> {
+  const full = FULL_MONTH[monthLabel] ?? monthLabel
   await page.locator(`#${name}-trigger`).click()
-  await page.getByRole("option", { name: monthLabel, exact: true }).click()
+  await page.getByRole("button", { name: new RegExp(`^${full} \\d{4}$`) }).click()
 }
 
 /**

@@ -2,6 +2,56 @@ import { expect, test, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 import { openCombobox, selectComboboxOptionBySearch, selectFirstComboboxOption } from "./utils/combobox"
 import { pickMonth } from "./utils/pickers"
+import { prisma } from "@/lib/db/prisma"
+
+/**
+ * Nominal format id-ID yang tampil di daftar (555222 → "555.222"). Nominal
+ * dipilih pseudo-acak per run supaya baris test ini tak pernah tertukar
+ * dengan sisa run lain di DB bersama.
+ */
+function fmtAmount(n: number): string {
+  return n.toLocaleString("id-ID")
+}
+
+function uniqueAmount(base: number): number {
+  return base + (Date.now() % 900)
+}
+
+/**
+ * Hapus/void lewat menu aksi baris ini persis. Aksi void finansial kini
+ * menolak alasan kosong (guard server) — dialog wajib diisi alasannya dulu;
+ * tanpa alasan, klik Hapus hanya memunculkan toast galat dan dialog tetap
+ * terbuka (perilaku produk yang benar, ditegaskan di sini, bukan dilewati).
+ */
+async function deleteRowWithReason(page: Page, rowText: string): Promise<void> {
+  const row = page.locator("tr").filter({ hasText: rowText }).first()
+  await expect(row).toBeVisible({ timeout: 30_000 })
+  await row.getByRole("button", { name: "Buka menu aksi" }).click()
+  await page.getByRole("menuitem", { name: "Hapus" }).click()
+  const dialog = page.getByRole("alertdialog")
+  // ReasonField memakai <label htmlFor> + Textarea tanpa htmlFor dari label
+  // shadcn, jadi getByLabel bisa meleset — isi lewat placeholder stabilnya.
+  // Dialog harus BENAR-BENAR tertutup sesudahnya; bila alasan kosong, guard
+  // klien menolak dan dialog tetap terbuka — gagal cepat di sini, bukan
+  // timeout 30 dtk di oracle reload yang membingungkan.
+  await dialog.getByPlaceholder("Tulis alasan pembatalan (wajib diisi)").fill("E2E hapus record uji")
+  await dialog.getByRole("button", { name: "Hapus" }).click()
+  await expect(dialog, "dialog hapus tidak tertutup — alasan/aksi void gagal").toBeHidden({ timeout: 10_000 })
+}
+
+/**
+ * Oracle hapus yang jujur di DB bersama: segarkan daftar lewat navigasi ulang
+ * (RSC segar dari server), lalu tegaskan TIDAK ADA baris desktop yang memuat
+ * teks ini. Menghitung `tr` mentah menghitung juga kartu mobile DataTable
+ * (baris tampil dua kali di DOM) dan payload basi pra-refresh.
+ */
+async function expectRowGoneAfterReload(page: Page, listUrl: string, rowText: string): Promise<void> {
+  await page.goto(listUrl, { waitUntil: "domcontentloaded" })
+  await page.waitForLoadState("networkidle")
+  await expect(
+    page.locator("div.hidden.md\\:block tr").filter({ hasText: rowText }),
+  ).toHaveCount(0, { timeout: 30_000 })
+}
 
 /**
  * Memilih opsi lewat pencarian, memilih dengan **keyboard**.
@@ -108,12 +158,15 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
   test("penyetoran pajak: setor lalu hapus", async ({ page }, testInfo) => {
     skipOnMobile(testInfo.project.name, "Form dan aksi baris dirancang untuk layar besar")
 
+    const amount = uniqueAmount(555_000)
+    const label = fmtAmount(amount)
+
     await page.goto("/keuangan/penyetoran-pajak/tambah", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
 
     // Masa pajak kini AppMonthPicker (bukan <input type=month>): pilih dari grid.
     await pickMonth(page, "period", "Sep")
-    await page.locator("#amount").fill("555222")
+    await page.locator("#amount").fill(String(amount))
 
     const adaAkun = await selectFirstComboboxOption(page, { name: /Akun Utang Pajak/ })
     test.skip(!adaAkun, "DB ini tidak punya akun utang pajak — alur dilewati, bukan lulus semu")
@@ -123,23 +176,28 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
     await page.locator("#submit-tax-payment").click()
 
     await page.waitForURL("**/keuangan/penyetoran-pajak", { timeout: 30_000 })
-    const baris = page.locator("tr").filter({ hasText: "555.222" }).first()
-    await expect(baris.first()).toBeVisible({ timeout: 30_000 })
+    const baris = page.locator("tr").filter({ hasText: label }).first()
+    await expect(baris).toBeVisible({ timeout: 30_000 })
 
-    await baris.first().getByRole("button", { name: "Buka menu aksi" }).click()
-    await page.getByRole("menuitem", { name: "Hapus" }).click()
-    await page.getByRole("alertdialog").getByRole("button", { name: "Hapus" }).click()
-
-    await expect(page.locator("tr").filter({ hasText: "555.222" })).toHaveCount(0, { timeout: 30_000 })
+    await deleteRowWithReason(page, label)
+    await expectRowGoneAfterReload(page, "/keuangan/penyetoran-pajak", label)
+    const gone = await prisma.taxPayment.findFirst({
+      where: { amount, deletedAt: null },
+      select: { id: true },
+    })
+    expect(gone).toBeNull()
   })
 
   test("uang muka pembelian: catat lalu hapus", async ({ page }, testInfo) => {
     skipOnMobile(testInfo.project.name, "Form dan aksi baris dirancang untuk layar besar")
 
+    const amount = uniqueAmount(444_000)
+    const label = fmtAmount(amount)
+
     await page.goto("/pembelian/uang-muka/tambah", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
 
-    await page.locator("#amount").fill("444333")
+    await page.locator("#amount").fill(String(amount))
 
     const adaPemasok = await selectFirstComboboxOption(page, { name: /Pemasok/ })
     test.skip(!adaPemasok, "DB ini tidak punya data pemasok — alur dilewati, bukan lulus semu")
@@ -158,20 +216,23 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
     await page.locator("#submit-purchase-advance").click()
 
     await page.waitForURL("**/pembelian/uang-muka", { timeout: 30_000 })
-    const baris = page.locator("tr").filter({ hasText: "444.333" }).first()
-    await expect(baris.first()).toBeVisible({ timeout: 30_000 })
+    const baris = page.locator("tr").filter({ hasText: label }).first()
+    await expect(baris).toBeVisible({ timeout: 30_000 })
 
-    await baris.first().getByRole("button", { name: "Buka menu aksi" }).click()
-    await page.getByRole("menuitem", { name: "Hapus" }).click()
-    await page.getByRole("alertdialog").getByRole("button", { name: "Hapus" }).click()
-
-    await expect(page.locator("tr").filter({ hasText: "444.333" })).toHaveCount(0, { timeout: 30_000 })
+    await deleteRowWithReason(page, label)
+    await expectRowGoneAfterReload(page, "/pembelian/uang-muka", label)
+    const gone = await prisma.purchaseAdvance.findFirst({
+      where: { amount, deletedAt: null },
+      select: { id: true },
+    })
+    expect(gone).toBeNull()
   })
 
   test("giro: catat lalu tandai cair lalu hapus", async ({ page }, testInfo) => {
     skipOnMobile(testInfo.project.name, "Form dan aksi baris dirancang untuk layar besar")
 
     const nomor = `E2E-CHQ-${Date.now()}`
+    const amount = uniqueAmount(333_000)
 
     await page.goto("/keuangan/giro", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
@@ -179,57 +240,115 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
     // Rekening bersifat opsional di aksinya, jadi alur ini tidak bergantung data master.
     await page.locator("#cheque-number").fill(nomor)
     await page.locator("#cheque-party").fill("E2E Pihak")
-    await page.locator("#cheque-amount").fill("333222")
+    await page.locator("#cheque-amount").fill(String(amount))
     await page.locator("#create-cheque-btn").click()
 
-    const baris = page.locator("tr").filter({ hasText: nomor }).first()
+    // Daftar giro dirender klien dari props SSR sesudah router.refresh() —
+    // baris baru lahir dengan status pending ("Belum Cair" di sel Status).
+    // Scope ke tabel manajer `Daftar Giro & Cek`: halaman yang sama juga
+    // merender seksi antrean lewat tempo berisi <tr> lain dengan jumlah sel
+    // berbeda — `tr`.first() di halaman menangkap baris antrean itu dan
+    // indeks sel Status-nya bergeser (nth(8) = sel Nominal antrean).
+    const tblManajer = page.locator('table[data-report-table="Daftar Giro & Cek"]')
+    const baris = tblManajer.locator("tr").filter({ hasText: nomor }).first()
     await expect(baris).toBeVisible({ timeout: 30_000 })
-    await expect(baris).toContainText("Belum Cair")
+    // Kolom Status = sel ke-9 (Jatuh Tempo, No. Dokumen, Nomor, Jenis, Arah,
+    // Pihak, Rekening, Nominal, Status, Aksi).
+    await expect(baris.locator("td").nth(8)).toContainText("Belum Cair", { timeout: 30_000 })
 
     // Ubah status: tombol per baris memakai aria-label yang memuat nomor dokumen.
     await baris.getByRole("button", { name: /Tandai cair/ }).click()
-    await expect(page.locator("tr").filter({ hasText: nomor })).toContainText("Sudah Cair", {
-      timeout: 30_000,
-    })
+    await expect(
+      tblManajer.locator("tr").filter({ hasText: nomor }).locator("td").nth(8),
+    ).toContainText("Sudah Cair", { timeout: 30_000 })
 
-    await page
+    // Hapus tombol per baris (tanpa dialog pada komponen ini; label memuat nomor).
+    await tblManajer
       .locator("tr")
       .filter({ hasText: nomor })
       .getByRole("button", { name: /^Hapus/ })
       .click()
-    await expect(page.locator("tr").filter({ hasText: nomor })).toHaveCount(0, { timeout: 30_000 })
+    // Daftar klien: tunggu refresh sesudah hapus — baris hilang dari DOM tabel.
+    await expect(tblManajer.locator("tr").filter({ hasText: nomor })).toHaveCount(0, { timeout: 30_000 })
+    const gone = await prisma.cheque.findFirst({
+      where: { number: nomor, deletedAt: null },
+      select: { id: true },
+    })
+    expect(gone).toBeNull()
   })
 
   test("transfer pemasok: tandai sudah ditransfer lalu batalkan", async ({ page }, testInfo) => {
     skipOnMobile(testInfo.project.name, "Panel instruksi transfer dirancang untuk layar besar")
 
-    // Pembayaran vendor dari seed (nominal 180.000, tanggal Mei 2026, status draft).
-    await page.goto("/pembelian/transfer-pemasok?periode=2026-05", { waitUntil: "domcontentloaded" })
+    // Target = pembayaran vendor 180.000 Mei 2026 yang BELUM ditransfer, diambil
+    // dari DB — bukan label nominal pertama di halaman. Seed membuat beberapa
+    // pembayaran 180.000 di periode yang sama; memilih yang pertama menandai/
+    // membatalkan baris yang salah dan memalsukan hitungan panel.
+    const target = await prisma.vendorPayment.findFirst({
+      where: {
+        amount: 180000,
+        transferredAt: null,
+        deletedAt: null,
+        paymentDate: { gte: new Date("2026-05-01"), lt: new Date("2026-06-01") },
+      },
+      orderBy: { id: "asc" },
+      select: { id: true, documentNo: true },
+    })
+    expect(target, "fixture pembayaran vendor Mei 2026 belum-ditransfer tidak ada").not.toBeNull()
+    if (!target) return
+
+    await page.goto("/pembelian/transfer-pemasok/bulan/2026-05", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
 
-    const baris = page.locator("label").filter({ hasText: "180.000" }).first()
-    await expect(baris).toBeVisible({ timeout: 30_000 })
-    // Status pembayaran terlihat pada baris ini; spec konfirmasi bisa mengubahnya lebih dulu
-    // (berjalan paralel), jadi jangan dikunci ke "draft".
-    await expect(baris).toContainText(/Konsep|Selesai/)
+    const row = page.locator("label").filter({ hasText: target.documentNo }).first()
+    await expect(row).toBeVisible({ timeout: 30_000 })
 
-    await baris.getByRole("checkbox").check()
+    const transferredBefore = await prisma.vendorPayment.count({
+      where: {
+        transferredAt: { not: null },
+        deletedAt: null,
+        paymentDate: { gte: new Date("2026-05-01"), lt: new Date("2026-06-01") },
+      },
+    })
+
+    await row.getByRole("checkbox").check()
     await page.locator("#mark-transferred").click()
-    await expect(page.getByText("Sudah ditransfer (1)")).toBeVisible({ timeout: 30_000 })
+    // Panel memperbarui hitungan seksi sesudah refresh; target pindah seksi.
+    await expect(
+      page.getByText(`Sudah ditransfer (${transferredBefore + 1})`),
+    ).toBeVisible({ timeout: 30_000 })
+    let marked = await prisma.vendorPayment.findUniqueOrThrow({ where: { id: target.id } })
+    for (let i = 0; i < 20 && !marked.transferredAt; i++) {
+      await page.waitForTimeout(500)
+      marked = await prisma.vendorPayment.findUniqueOrThrow({ where: { id: target.id } })
+    }
+    expect(marked.transferredAt).not.toBeNull()
 
     // Batalkan lagi supaya DB tidak ditinggalkan dalam keadaan tertandai.
-    await page.locator("label").filter({ hasText: "180.000" }).first().getByRole("checkbox").check()
+    const markedRow = page.locator("label").filter({ hasText: target.documentNo }).first()
+    await markedRow.getByRole("checkbox").check()
     await page.locator("#unmark-transferred").click()
-    await expect(page.getByText("Sudah ditransfer (0)")).toBeVisible({ timeout: 30_000 })
+    await expect(
+      page.getByText(`Sudah ditransfer (${transferredBefore})`),
+    ).toBeVisible({ timeout: 30_000 })
+    let unmarked = await prisma.vendorPayment.findUniqueOrThrow({ where: { id: target.id } })
+    for (let i = 0; i < 20 && unmarked.transferredAt; i++) {
+      await page.waitForTimeout(500)
+      unmarked = await prisma.vendorPayment.findUniqueOrThrow({ where: { id: target.id } })
+    }
+    expect(unmarked.transferredAt).toBeNull()
   })
 
   test("transfer antar rekening: catat lalu hapus (jurnal ikut diposting)", async ({ page }, testInfo) => {
     skipOnMobile(testInfo.project.name, "Form dan kolom aksi dirancang untuk layar besar")
 
+    const amount = uniqueAmount(777_000)
+    const label = fmtAmount(amount)
+
     await page.goto("/keuangan/transfer-bank/tambah", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
 
-    await page.locator("#amount").fill("777888")
+    await page.locator("#amount").fill(String(amount))
 
     // Rekening asal dan tujuan wajib berbeda (aksi menolak bila sama).
     const dari = await pilihOpsiDenganPencarian(page, "Pilih rekening asal...", "Kas Kecil", /Kas Kecil/i)
@@ -243,13 +362,16 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
     await page.locator("#submit-bank-transfer").click()
     await page.waitForURL("**/keuangan/transfer-bank", { timeout: 30_000 })
 
-    const baris = page.locator("tr").filter({ hasText: "777.888" }).first()
+    const baris = page.locator("tr").filter({ hasText: label }).first()
     await expect(baris).toBeVisible({ timeout: 30_000 })
 
-    await baris.getByRole("button", { name: "Buka menu aksi" }).click()
-    await page.getByRole("menuitem", { name: "Hapus" }).click()
-    await page.getByRole("alertdialog").getByRole("button", { name: "Hapus" }).click()
-    await expect(page.locator("tr").filter({ hasText: "777.888" })).toHaveCount(0, { timeout: 30_000 })
+    await deleteRowWithReason(page, label)
+    await expectRowGoneAfterReload(page, "/keuangan/transfer-bank", label)
+    const gone = await prisma.bankTransfer.findFirst({
+      where: { amount, deletedAt: null },
+      select: { id: true },
+    })
+    expect(gone).toBeNull()
   })
 
   test("tukar faktur: serahkan faktur belum lunas lalu hapus", async ({ page }, testInfo) => {
@@ -331,13 +453,31 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
   test("jurnal manual: posting lewat UI sehingga masuk pembukuan", async ({ page }, testInfo) => {
     skipOnMobile(testInfo.project.name, "Menu aksi dirancang untuk layar besar")
 
-    // Seed menyediakan satu jurnal DRAFT; yang lain sudah POSTED ("Diposting").
-    await page.goto("/keuangan/jurnal", { waitUntil: "domcontentloaded" })
+    // Fixture jurnal draft dipilih dari DB dan DIPASTIKAN masih DRAFT oleh
+    // spec ini sendiri (reset di awal, pola sales-chain): jurnal draft
+    // berdeskripsi sama bisa sudah terposting oleh run/batch lain yang
+    // berjalan paralel di DB yang sama, dan memilih baris pertama berteks
+    // deskripsi menangkap yang sudah "Diposting".
+    const fixture = await prisma.journal.findFirst({
+      where: { description: { contains: "E2E jurnal manual menunggu posting" } },
+      orderBy: { id: "desc" },
+      select: { id: true, journalNumber: true, status: true },
+    })
+    if (!fixture || !fixture.journalNumber) {
+      throw new Error("fixture jurnal 'E2E jurnal manual menunggu posting' tidak ada — jalankan reseed scratch")
+    }
+    if (fixture.status !== "DRAFT") {
+      await prisma.journal.update({
+        where: { id: fixture.id },
+        data: { status: "DRAFT" },
+      })
+    }
+    // Daftar jurnal terpaginasi; filter server lewat ?cari= supaya baris
+    // fixture terpilih tepat (bukan halaman pertama daftar).
+    await page.goto(`/keuangan/jurnal?cari=${encodeURIComponent(fixture.journalNumber)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
 
-    // Ditemukan lewat deskripsinya (bukan hitungan baris): spec lain bisa membuat jurnal
-    // draft bersamaan, sehingga "tepat satu baris draft" tidak boleh diasumsikan.
-    const barisDraft = page.locator("tbody tr").filter({ hasText: "E2E jurnal manual menunggu posting" }).first()
+    const barisDraft = page.locator("tbody tr").filter({ hasText: fixture.journalNumber }).first()
     await expect(barisDraft).toBeVisible({ timeout: 30_000 })
     await expect(barisDraft).toContainText("Konsep")
 
@@ -406,14 +546,40 @@ test("status dokumen: Setujui menaikkan status SO, dan gerbang surat jalan mener
   // Tes ini mengabadikan KOREKSI atas klaim lama saya ("gerbang buntu"): rute status generik
   // /api/workflow punya jalur fall-through yang, tanpa workflow terkonfigurasi, menaikkan
   // dokumen menjadi `approved`. Tanpa tes ini, kekeliruan itu bisa terulang.
-  await page.goto("/penjualan/pesanan", { waitUntil: "domcontentloaded" })
-  await page.waitForLoadState("networkidle")
-  // Hati-hati: `a[href^="/penjualan/pesanan/"]` juga cocok dengan tautan "/tambah";
-  // ambil tautan di dalam baris tabel (detail), bukan tombol tambah di header.
-  const tautan = page.locator('tbody a[href^="/penjualan/pesanan/"]').first()
-  await expect(tautan).toBeVisible({ timeout: 30_000 })
-  const href = await tautan.getAttribute("href")
-  await page.goto(href as string, { waitUntil: "domcontentloaded" })
+  // Target SO dipilih dari DB: draft dengan sisa kirim > 0 (baris yang sudah
+  // terikat surat jalan non-batal menghabiskan sisa — `buildDeliveryOrderLines`
+  // membuang baris ber-sisa 0, jadi SO seperti itu tak membuktikan gerbang).
+  // Setiap SO seed scratch sudah terikat DO draft penuh → tak ada target → skip
+  // SAH di DB ini; di DB tanpa DO menempel, target tersedia dan asersi penuh jalan.
+  const candidates = await prisma.salesOrder.findMany({
+    where: { status: "draft", deletedAt: null },
+    orderBy: { id: "asc" },
+    select: {
+      id: true,
+      slug: true,
+      documentNo: true,
+      items: { select: { id: true, qty: true, itemId: true } },
+      deliveryOrders: {
+        where: { status: { notIn: ["cancelled", "void"] } },
+        select: { items: { select: { salesOrderItemId: true, qty: true } } },
+      },
+    },
+  })
+  const targetSO = candidates.find((so) => {
+    const shipped = new Map<number, number>()
+    for (const d of so.deliveryOrders) {
+      for (const it of d.items) {
+        if (it.salesOrderItemId == null) continue
+        shipped.set(it.salesOrderItemId, (shipped.get(it.salesOrderItemId) ?? 0) + Number(it.qty))
+      }
+    }
+    return so.items.some((li) => li.itemId != null && Number(li.qty) - (shipped.get(li.id) ?? 0) > 0)
+  })
+  test.skip(!targetSO, "tidak ada SO draft dengan sisa kirim di DB ini")
+  if (!targetSO) return
+
+  // Navigasi ke detail SO target persis (bukan baris pertama daftar).
+  await page.goto(`/penjualan/pesanan/${targetSO.slug ?? targetSO.id}`, { waitUntil: "domcontentloaded" })
 
   // Halaman detail mengalirkan komponen klien (StatusActions) — jadi JANGAN memutuskan skip
   // dari `count()` seketika: tunggu tombolnya benar-benar muncul. (Pelajaran yang sama seperti

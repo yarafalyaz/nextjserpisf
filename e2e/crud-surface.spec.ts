@@ -62,8 +62,12 @@ test.describe("CRUD surface smoke (all modules)", () => {
       await page.goto(`${baseRoute}/tambah`, { waitUntil: "domcontentloaded" })
       await expect(page).not.toHaveURL(/\/login/)
 
+      // Permukaan buat bisa berupa form, ATAU langkah pilih-induk dulu yang
+      // sah (mis. /produksi/garansi/tambah menampilkan tabel "Pilih Kendaraan"
+      // sebelum form klaim ada) — keduanya permukaan buat yang hidup.
       const createSurface = page
-        .locator("form:visible, input:visible, textarea:visible, select:visible, [role='textbox']:visible")
+        .locator("form:visible, input:visible, textarea:visible, select:visible, [role='textbox']:visible, table:visible, section[aria-label='Pilih kendaraan untuk klaim garansi']:visible, table[aria-label='Daftar kendaraan aktif']:visible")
+        .or(page.getByText("Belum ada kendaraan aktif tercatat."))
         .first()
       await expect(createSurface).toBeVisible({ timeout: 30000 })
 

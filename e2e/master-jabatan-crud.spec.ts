@@ -17,9 +17,9 @@ test.describe("Master Jabatan CRUD", () => {
     await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
     await expect(page.getByRole("heading", { name: "Tambah Jabatan" })).toBeVisible({ timeout: 30000 })
 
-    await page.locator("#name").fill(name)
-    await expect(page.locator("#submit-position")).toBeEnabled({ timeout: 15_000 })
-    await page.locator("#submit-position").click()
+    await page.locator("#name").first().fill(name)
+    await expect(page.locator("#submit-position").first()).toBeEnabled({ timeout: 15_000 })
+    await page.locator("#submit-position").first().click()
 
     await awaitListContains(page, "**/master/jabatan", name)
 
@@ -44,9 +44,9 @@ test.describe("Master Jabatan CRUD", () => {
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/master\/jabatan\/[^/]+\/ubah$/, { timeout: 30000 })
-    await expect(page.locator("#name")).toBeVisible({ timeout: 30_000 })
-    await page.locator("#name").fill(updated)
-    await page.locator("#submit-position").click()
+    await expect(page.locator("#name").first()).toBeVisible({ timeout: 30_000 })
+    await page.locator("#name").first().fill(updated)
+    await page.locator("#submit-position").first().click()
 
     await awaitListContains(page, "**/master/jabatan", updated)
 

@@ -17,7 +17,9 @@ test.describe("Aset Brand (Merek) CRUD", () => {
     await expect(page.getByRole("heading", { name: "Tambah Merek Aset" })).toBeVisible({ timeout: 30000 })
     await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
 
-    const nameInput = page.locator("#name")
+    // Transien hidrasi/streaming Next bisa menggandakan elemen sesaat;
+    // locator id tetap satu sesudah settle — .first() mengambil yang stabil.
+    const nameInput = page.locator("#name").first()
     await expect(nameInput).toBeVisible({ timeout: 10000 })
     await nameInput.fill(name)
     await expect(nameInput).toHaveValue(name)
@@ -47,7 +49,7 @@ test.describe("Aset Brand (Merek) CRUD", () => {
     await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/aset\/merek\/[^/]+\/ubah$/, { timeout: 30000 })
-    await page.locator("#name").fill(updated)
+    await page.locator("#name").first().fill(updated)
     await expect(page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ })).toBeEnabled({ timeout: 15_000 })
     await page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ }).click()
     await awaitListContains(page, "**/aset/merek", updated)
