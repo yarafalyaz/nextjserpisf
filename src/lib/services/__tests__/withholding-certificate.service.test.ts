@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
   const assertPeriodOpen = vi.fn()
   const reverseJournals = vi.fn()
   const queryRaw = vi.fn()
+  const executeRaw = vi.fn()
 
   const systemSettingFindFirst = vi.fn()
   const billFindUnique = vi.fn(async () => ({ id: 42, status: "posted", deletedAt: null }))
@@ -41,6 +42,7 @@ const mocks = vi.hoisted(() => {
     journal: { findFirst: vi.fn(async () => null), create: journalCreate },
     systemSetting: { findFirst: systemSettingFindFirst },
     $queryRaw: queryRaw,
+    $executeRaw: executeRaw,
   }
   const prisma = {
     $transaction: (fn: (tx: unknown) => unknown) => fn(tx),
@@ -49,7 +51,7 @@ const mocks = vi.hoisted(() => {
     certFindFirst, certCreate, certFindUniqueOrThrow, certUpdate,
     typeFindUniqueOrThrow, typeFindMany, accountFindMany, taxPaymentCreate, taxPaymentUpdate,
     journalCreate, claimIdempotencyKey, bindIdempotencyKey, assertPeriodOpen,
-    reverseJournals, queryRaw, prisma, systemSettingFindFirst,
+    reverseJournals, queryRaw, executeRaw, prisma, systemSettingFindFirst,
     billFindUnique, paymentFindUnique,
   }
 })
@@ -110,6 +112,7 @@ beforeEach(() => {
     salesReceivableAccountId: 110,
   })
   mocks.certUpdate.mockResolvedValue({})
+  mocks.executeRaw.mockResolvedValue(1)
   mocks.billFindUnique.mockResolvedValue({ id: 42, status: "posted", deletedAt: null })
   mocks.paymentFindUnique.mockResolvedValue({ id: 88, status: "posted" })
 })
@@ -158,6 +161,27 @@ describe("issueWithholdingCertificate guards", () => {
     expect(r.success).toBe(false)
     expect(String(r.error)).toMatch(/we_withhold/)
     expect(mocks.certCreate).not.toHaveBeenCalled()
+  })
+
+  it("baris dokumen sumber dikunci FOR UPDATE sebelum cek bupot aktif", async () => {
+    // Dua terbit key berbeda atas bill sama: kunci vendor_bills
+    // menserialkan sehingga cek bupot aktif yang kalah melihat bupot
+    // pemenang. Tanpa kunci dua bupot aktif lahir untuk satu bill.
+    const r = await issueWithholdingCertificate({
+      direction: "we_withhold", certificateNumber: "BP-LOCK",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Maklon",
+      withholdingTypeId: 3, dpp: 10_000_000, vendorBillId: 42, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(true)
+    const lockSqls = mocks.executeRaw.mock.calls.map((c: unknown[]) => {
+      const first = c[0] as { strings?: string[] } | string[] | undefined
+      if (Array.isArray(first)) return first.join("?")
+      return (first as { strings?: string[] } | undefined)?.strings?.join("?") ?? ""
+    })
+    expect(lockSqls.some((s: string) => s.includes("vendor_bills") && s.includes("FOR UPDATE"))).toBe(true)
+    expect(mocks.executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.billFindUnique.mock.invocationCallOrder[0],
+    )
   })
 
   it("bupot atas pembayaran yang sudah dibalik ditolak", async () => {

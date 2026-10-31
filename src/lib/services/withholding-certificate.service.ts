@@ -179,6 +179,10 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         if (input.direction !== "we_withhold") {
           throw definitive("Bupot atas tagihan vendor wajib arah we_withhold (kita yang memotong)")
         }
+        // Serialisasi per dokumen sumber: idempotency key berbeda tidak
+        // saling menahan — kunci baris bill membuat cek bupot aktif di
+        // bawah melihat bupot pemenang balapan.
+        await tx.$executeRaw`SELECT id FROM vendor_bills WHERE id = ${input.vendorBillId} FOR UPDATE`
         const bill = await tx.vendorBill.findUnique({
           where: { id: input.vendorBillId },
           select: { id: true, status: true, deletedAt: true },
@@ -199,6 +203,7 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         if (input.direction !== "withheld_from_us") {
           throw definitive("Bupot atas pembayaran pelanggan wajib arah withheld_from_us (kita yang dipotong)")
         }
+        await tx.$executeRaw`SELECT id FROM sales_payments WHERE id = ${input.salesPaymentId} FOR UPDATE`
         const payment = await tx.salesPayment.findUnique({
           where: { id: input.salesPaymentId },
           select: { id: true, status: true },
