@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   vendorBillFindUnique: vi.fn(),
   expenseFindUnique: vi.fn(),
   journalFindFirst: vi.fn(),
+  executeRaw: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -33,6 +34,7 @@ import {
 
 function makeClient() {
   return {
+    $executeRaw: mocks.executeRaw,
     workOrder: { findUnique: mocks.workOrderFindUnique },
     account: { findUnique: mocks.accountFindUnique },
     systemSetting: { findFirst: mocks.settingFindFirst },
@@ -47,6 +49,7 @@ const WO = { id: 7, documentNo: "WO-0007", status: "closed" }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.executeRaw.mockResolvedValue(1)
   mocks.workOrderFindUnique.mockResolvedValue(WO)
   mocks.activityLogFindMany.mockResolvedValue([])
   mocks.activityLogCreate.mockResolvedValue({})
@@ -100,6 +103,20 @@ describe("resolveL3WorkOrder", () => {
     await expect(
       resolveL3WorkOrder(makeClient(), formatL3Tag("WO-9999", "alasan sah"), "Tagihan"),
     ).rejects.toThrow(/tidak ditemukan/)
+  })
+
+  it("baris WO dikunci FOR UPDATE sesudah resolve (serialisasi guard duplikat antar pembuat)", async () => {
+    const sqlSeen: string[] = []
+    mocks.executeRaw.mockImplementation((...a: any[]) => {
+      const first = a[0]
+      sqlSeen.push(Array.isArray(first) ? first.join("?") : ((first as any)?.strings?.join("?") ?? String(first ?? "")))
+      return Promise.resolve(1)
+    })
+    const r = await resolveL3WorkOrder(makeClient(), formatL3Tag("WO-0007", "alasan sah"), "Tagihan")
+    expect(r?.workOrder.id).toBe(7)
+    // Tanpa kunci, dua pembuat L3 (bill/expense) sama-sama membaca daftar
+    // ActivityLog sebelum lawan commit → dua dokumen + dua jejak lahir.
+    expect(sqlSeen.some((s) => /work_orders/i.test(s) && /for update/i.test(s))).toBe(true)
   })
 })
 

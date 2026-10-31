@@ -106,6 +106,15 @@ export async function resolveL3WorkOrder(
   if (workOrder.status !== "closed") {
     throw new Error(L3_MSG.woNotClosed(workOrder.documentNo, workOrder.status))
   }
+  // Serialisasi per WO: guard duplikat membaca ActivityLog dalam tx yang
+  // sama, tetapi tanpa kunci dua pembuat L3 konkuren (bill/expense) sama-
+  // sama tidak melihat log lawan yang belum commit — dua dokumen + dua
+  // jejak lahir untuk satu biaya telat. Kunci baris WO di sini menutup
+  // semua pemanggil sekaligus (semua memanggil resolver dalam tx).
+  // Guard typeof: klien non-tx/stub tanpa $executeRaw tidak pecah.
+  if (typeof (client as TxClient).$executeRaw === "function") {
+    await (client as TxClient).$executeRaw`SELECT id FROM work_orders WHERE id = ${workOrder.id} FOR UPDATE`
+  }
   return { tag, workOrder }
 }
 
