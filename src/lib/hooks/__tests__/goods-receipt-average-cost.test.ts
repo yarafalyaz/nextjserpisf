@@ -95,7 +95,7 @@ describe("onGoodsReceiptVerified: average cost dari baseline terkunci", () => {
     const tx = buildGoodsReceiptTx(spies);
     mocks.transaction.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx));
 
-    await onGoodsReceiptVerified(100, tx as never, 1);
+    await onGoodsReceiptVerified(100, 1);
 
     // Benar: (30*200 + 10*300) / 40 = 225. Basi: (10*100 + 10*300)/20 = 200.
     expect(spies.itemUpdate).toHaveBeenCalledWith({
