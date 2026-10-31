@@ -7,12 +7,16 @@ kode nyata menentukan vonis akhir sebelum fix.
 ## Temuan
 
 ### R8-JB-01 — HIGH, CONFIRMED — Alokasi kredit abaikan returnCredit
+**Status: SELESAI 2026-10-31** — fix yang sama dengan R8-KEU-02 di
+`ROUND8-KEUANGAN.md` (loader kanonis dalam tx alokasi).
 `customer-credit.service.ts:97-101` `owing = grandTotal − paidAmount`
 (bandingkan `createSalesPayment` sales.actions ±2090 yang neto
 returnCredit). Faktur Rp100jt lunas-by-retur bisa dialokasi kredit
 Rp100jt lagi → manfaat ganda; jurnal Dr 210102/Cr Piutang yatim.
 
 ### R8-JB-02 — HIGH, CONFIRMED — Alokasi kredit terima faktur draft
+**Status: SELESAI 2026-10-31** — gate status `["posted","partial"]` di
+`allocateCreditToInvoice` (lihat R8-KEU-02).
 Hanya `cancelled` ditolak (`customer-credit.service.ts:87-88`); draft
 Rp50jt dialokasi → jurnal piutang mendahului pengakuan; jalur hapus
 draft tidak mengembalikan `CustomerCredit.allocatedAmount` → kredit

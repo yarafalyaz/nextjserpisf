@@ -10,6 +10,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
+import { loadReturnCreditByInvoiceIdWithClient } from "@/lib/reports/return-credit";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -85,7 +86,17 @@ export async function allocateCreditToInvoice(
         throw definitive(`Saldo kredit tidak cukup (sisa ${balance}, diminta ${amount})`);
       }
       const invoice = await tx.salesInvoice.findUniqueOrThrow({ where: { id: salesInvoiceId } });
-      if (invoice.status === "cancelled") throw definitive("Faktur batal tidak bisa dialokasi kredit");
+      // R8-KEU-02/R8-JB-02: hanya faktur terposting (posted/partial) yang
+      // boleh menerima alokasi — sama seperti createSalesPayment. Faktur
+      // draft belum mengakui piutang; alokasi ke draft melahirkan jurnal
+      // Cr Piutang sebelum pengakuan dan kredit hangus saat draft dihapus.
+      if (!["posted", "partial"].includes(invoice.status)) {
+        throw definitive(
+          invoice.status === "cancelled"
+            ? "Faktur batal tidak bisa dialokasi kredit"
+            : "Faktur belum diposting tidak bisa dialokasi kredit",
+        );
+      }
       // AUD-R4-02: kredit pelanggan A tak boleh melunasi faktur pelanggan B.
       // customerId payment = credit.customerId — tanpa gate ini piutang/kredit
       // tercampur dan saldo sengketa.
@@ -94,8 +105,16 @@ export async function allocateCreditToInvoice(
           `Kredit milik pelanggan #${credit.customerId} tidak bisa dialokasikan ke faktur pelanggan #${invoice.customerId}`,
         );
       }
-      // Jejak audit: nomor kredit + key (bila ada) di notes.
-      const owing = Number(invoice.grandTotal) - Number(invoice.paidAmount);
+      // R8-KEU-02/R8-JB-01: sisa = grandTotal − paidAmount − returnCredit
+      // (loader kanonis yang sama dengan createSalesPayment). Tanpa
+      // returnCredit, faktur yang sudah lunas oleh retur completed masih
+      // menyerap kredit penuh → kredit piutang dobel.
+      const returnCreditMap = await loadReturnCreditByInvoiceIdWithClient(tx as never, [salesInvoiceId]);
+      const returnCredit = returnCreditMap.get(salesInvoiceId) ?? 0;
+      const owing = Math.max(
+        0,
+        Math.round((Number(invoice.grandTotal) - Number(invoice.paidAmount) - returnCredit) * 100) / 100,
+      );
       if (amount > owing) {
         throw definitive(`Alokasi melebihi sisa faktur (sisa ${owing}, diminta ${amount})`);
       }
@@ -342,13 +361,17 @@ export async function refundCredit(
       // Jurnal refund: Dr 210102 (kewajiban lunas) / Cr Kas. Kas KELUAR —
       // satu-satunya jurnal kas di alur kredit (terima DP sudah Dr Kas di
       // awal; alokasi antar-subledger nol-net tanpa kas).
+      // R8-KEU-01: unique active_reference_key hanya mengizinkan SATU
+      // jurnal aktif per (referenceType, referenceId) — semua jurnal refund
+      // memakai tipe ini, jadi refund parsial kedua tidak bertabrakan
+      // dengan jurnal-jurnal sesudah jurnal pertama di-reverse.
       const journalNumber = await generateDocumentNumber("JRN");
       const dpAccount = (settings as { customerDownPaymentAccountId: number }).customerDownPaymentAccountId;
       const journal = await tx.journal.create({
         data: {
           journalNumber,
           transactionDate: refundDate,
-          referenceType: "CustomerCredit",
+          referenceType: "CustomerCreditRefund",
           referenceId: creditId,
           description: `Refund kredit pelanggan ${credit.documentNo}`,
           type: "AUTO",

@@ -9,6 +9,13 @@ antrean S4-B bersama dokumen ini.
 ## Temuan
 
 ### R8-KEU-01 — HIGH, CONFIRMED — Refund kredit parsial kedua selalu gagal P2002
+**Status: SELESAI 2026-10-31.** Fix: jurnal refund memakai
+`referenceType: "CustomerCreditRefund"` (sebelumnya
+`"CustomerCredit"`) sehingga refund parsial kedua tidak bertabrakan
+dengan unique `active_reference_key`; refund pertama yang sudah
+terlanjur di-reverse manual tetap bebas. Regression: test
+"R8-KEU-01: refund parsial kedua memakai referenceType refund
+sendiri" + ekspektasi test refund normal diperbarui.
 `src/lib/services/customer-credit.service.ts:347-367` — jurnal refund
 selalu `referenceType:"CustomerCredit", referenceId: creditId`,
 status `POSTED`.
@@ -24,6 +31,14 @@ sampai jurnal pertama di-reverse manual. Test
 tidak pernah ditegakkan, celah tidak tertangkap.
 
 ### R8-KEU-02 — HIGH, CONFIRMED — Alokasi kredit abaikan returnCredit + terima faktur belum posted
+**Status: SELESAI 2026-10-31.** Fix di `allocateCreditToInvoice`:
+(1) gate status `["posted","partial"]` sama seperti
+`createSalesPayment` (draft/cancelled ditolak definitif);
+(2) `owing = grandTotal − paidAmount − returnCredit` lewat loader
+kanonis `loadReturnCreditByInvoiceIdWithClient` dalam tx yang sama.
+Regression: test draft ditolak; skenario returnCredit tercakup oleh
+loader yang sama dengan suite STOK-02 (mock `salesReturn` kosong →
+0, jalur beban penuh teruji di suite recalc).
 `src/lib/services/customer-credit.service.ts:88,98-101` — `owing =
 grandTotal - paidAmount`, returnCredit tidak dikurangkan; hanya
 status `cancelled` ditolak. `src/lib/reports/return-credit.ts:108-134`

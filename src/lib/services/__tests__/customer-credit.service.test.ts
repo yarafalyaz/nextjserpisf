@@ -329,7 +329,7 @@ describe("customer-credit.service", () => {
     expect(mocks.journalCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          referenceType: "CustomerCredit",
+          referenceType: "CustomerCreditRefund",
           entries: {
             create: [
               expect.objectContaining({ accountId: 210102, debit: 2000 }),
@@ -352,6 +352,27 @@ describe("customer-credit.service", () => {
     expect(r.success).toBe(false)
     expect(r.error).toContain("tidak cukup")
     expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("R8-KEU-02: alokasi ke faktur draft DITOLAK tanpa payment/jurnal", async () => {
+    seedCredit({ receivedAmount: 9000 })
+    seedInvoice({ status: "draft", paidAmount: 0 })
+    const r = await allocateCreditToInvoice(1, 101, 1000, 7, "99999999-9999-4999-8999-999999999991")
+    expect(r.success).toBe(false)
+    expect(r.error).toContain("belum diposting")
+    expect(mocks.paymentCreate).not.toHaveBeenCalled()
+    expect(mocks.creditUpdate).not.toHaveBeenCalled()
+  })
+
+  it("R8-KEU-01: refund parsial kedua memakai referenceType refund sendiri", async () => {
+    seedCredit({ receivedAmount: 3000, refundedAmount: 1000 })
+    const r = await refundCredit(1, 2000, 7, "dddddddd-dddd-4ddd-8ddd-ddddddddddd1")
+    expect(r.success).toBe(true)
+    const refundCall = mocks.journalCreate.mock.calls.find(
+      (c: any) => c?.[0]?.data?.referenceType === "CustomerCreditRefund",
+    )
+    expect(refundCall).toBeDefined()
+    expect(refundCall![0].data.referenceId).toBe(1)
   })
 
   it("alokasi ke faktur pelanggan LAIN: DITOLAK tanpa payment (AUD-R4-02)", async () => {
