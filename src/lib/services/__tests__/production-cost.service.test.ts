@@ -299,6 +299,27 @@ describe("syncReworkCostToOrder", () => {
     expect(res).toEqual({ posted: 150000, productionOrderId: 55 })
     expect(costCreateMock).toHaveBeenCalledTimes(1)
   })
+
+  it("status dibaca ulang di bawah kunci PO: complete yang commit sesudah snapshot meng-skip sync", async () => {
+    // Snapshot pra-kunci: in_progress/0 → lolos filter. Complete commit
+    // sesudahnya; sesudah baris PO dikunci status wajib terbaca completed
+    // dan sync dilewati tanpa baris/HPP/jurnal.
+    orderFindUniqueMock
+      .mockResolvedValueOnce({ status: "in_progress", workOrderId: null })
+      .mockResolvedValueOnce({ status: "in_progress", completedQty: 0 })
+      .mockResolvedValueOnce({ status: "completed", completedQty: 10 })
+    const sqlSeen: string[] = []
+    executeRawMock.mockImplementation((...a: unknown[]) => {
+      const first = a[0] as any
+      sqlSeen.push(Array.isArray(first) ? first.join("?") : (first?.strings?.join("?") ?? String(first ?? "")))
+      return Promise.resolve([])
+    })
+    const res = await syncReworkCostToOrder(base, client as never)
+    expect(res).toEqual({ posted: 0, productionOrderId: 55, skipped: true })
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(orderUpdateMock).not.toHaveBeenCalled()
+    expect(sqlSeen.some((s) => /production_orders/i.test(s) && /for update/i.test(s))).toBe(true)
+  })
 })
 
 describe("syncServicePurchaseOrderCost", () => {
@@ -467,10 +488,13 @@ describe("syncServicePurchaseOrderCost", () => {
 
   it("F-71: spreads the PO value only across non-completed orders", async () => {
     poFindUniqueMock.mockResolvedValue({ isService: true, workOrderId: 9, vendorId: 3 })
-    orderFindManyMock.mockResolvedValue([
-      { id: 55, status: "completed" },
-      { id: 56, status: "in_progress" },
-    ])
+    orderFindManyMock
+      .mockResolvedValueOnce([
+        { id: 55, status: "completed" },
+        { id: 56, status: "in_progress" },
+      ])
+      // Bacaan ulang terkunci hanya memuat kandidat (id in [56]).
+      .mockResolvedValueOnce([{ id: 56, status: "in_progress", completedQty: 0 }])
     costFindManyMock.mockResolvedValue([])
     costCreateMock.mockResolvedValue({ id: 1 })
     orderFindUniqueMock.mockResolvedValue({ totalActualCost: 0 })
@@ -487,6 +511,20 @@ describe("syncServicePurchaseOrderCost", () => {
     expect(created[0].productionOrderId).toBe(56)
     expect(Number(created[0].amount)).toBe(100)
     expect(orderUpdateMock.mock.calls.every((c) => c[0].where.id === 56)).toBe(true)
+  })
+
+  it("status dibaca ulang di bawah kunci: complete sesudah snapshot memindah order ke skipped", async () => {
+    poFindUniqueMock.mockResolvedValue({ isService: true, workOrderId: 9, vendorId: 3 })
+    orderFindManyMock
+      .mockResolvedValueOnce([{ id: 56, status: "in_progress", qty: 10, completedQty: 0 }])
+      // Bacaan ulang terkunci: order sudah completed oleh penulis lawan.
+      .mockResolvedValueOnce([{ id: 56, status: "completed", completedQty: 10 }])
+    costFindManyMock.mockResolvedValue([])
+    const res = await syncServicePurchaseOrderCost({ ...input, amount: 100 }, client as never)
+    expect(res.skippedProductionOrderIds).toEqual([56])
+    expect(res.productionOrderIds).toEqual([])
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(orderUpdateMock).not.toHaveBeenCalled()
   })
 
   it("F-71: leaves existing subcontract lines on a completed order untouched", async () => {

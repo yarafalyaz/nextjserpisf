@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client"
 import { prisma, TxClient } from "@/lib/db/prisma"
 import { safeAdd, safeSubtract, safeMultiply } from "@/lib/utils/math"
 import { stockJournalService } from "@/lib/services/stock-journal.service"
@@ -119,12 +120,38 @@ export async function syncServicePurchaseOrderCost(
       .filter((o) => o.status === "completed" || o.status === "closed" || Number(o.completedQty ?? 0) > 0)
       .map((o) => o.id),
   )
-  const productionOrders = allProductionOrders.filter((o) => !completedIds.has(o.id))
-  const skippedProductionOrderIds = allProductionOrders
+  let productionOrders = allProductionOrders.filter((o) => !completedIds.has(o.id))
+  let skippedProductionOrderIds = allProductionOrders
     .filter((o) => completedIds.has(o.id))
     .map((o) => o.id)
   if (allProductionOrders.length === 0) {
     return { posted: 0, productionOrderIds: [], skippedProductionOrderIds: [] }
+  }
+
+  // Baca ulang DI BAWAH kunci baris PO (urut id): filter completed/parsial
+  // di atas adalah snapshot — completeProductionOrder mengunci baris yang
+  // sama, jadi complete/rilis parsial yang commit di antara snapshot dan
+  // tulis terlihat di sini dan order itu dipindah ke skipped. Tanpa ini
+  // biaya jasa menaikkan totalActualCost PO completed dari nol (Dr WIP
+  // menggantung) atau mengubah unit cost release akhir.
+  if (typeof client.$queryRaw === "function") {
+    const candidateIds = productionOrders.map((o) => o.id).sort((a, b) => a - b)
+    if (candidateIds.length > 0) {
+      await client.$queryRaw`SELECT id FROM production_orders WHERE id IN (${Prisma.join(candidateIds)}) FOR UPDATE`
+      const lockedOrders = await client.productionOrder.findMany({
+        where: { id: { in: candidateIds } },
+        select: { id: true, status: true, completedQty: true },
+      })
+      const newlyFrozen = new Set(
+        lockedOrders
+          .filter((o) => o.status === "completed" || o.status === "closed" || Number(o.completedQty ?? 0) > 0)
+          .map((o) => o.id),
+      )
+      if (newlyFrozen.size > 0) {
+        productionOrders = productionOrders.filter((o) => !newlyFrozen.has(o.id))
+        skippedProductionOrderIds = [...skippedProductionOrderIds, ...newlyFrozen]
+      }
+    }
   }
 
   const desiredTotal = Math.max(0, Number(input.amount) || 0)
@@ -287,6 +314,22 @@ export async function syncReworkCostToOrder(
   // completed di atas — biaya rework susulan hanya membebani release akhir.
   if (orderStatus?.status === "completed" || Number(orderStatus?.completedQty ?? 0) > 0) {
     return { posted: 0, productionOrderId, skipped: true }
+  }
+
+  // Baca ulang DI BAWAH kunci baris PO: snapshot di atas bukan guard —
+  // completeProductionOrder mengunci baris yang sama, jadi complete yang
+  // commit di antara snapshot dan tulis akan terlihat di sini. Tanpa ini
+  // biaya rework menaikkan totalActualCost PO completed dari nol dan Dr
+  // WIP menggantung tanpa release pengkredit.
+  if (typeof client.$queryRaw === "function") {
+    await client.$queryRaw`SELECT id FROM production_orders WHERE id = ${productionOrderId} FOR UPDATE`
+    const lockedStatus = await client.productionOrder.findUnique({
+      where: { id: productionOrderId },
+      select: { status: true, completedQty: true },
+    })
+    if (lockedStatus?.status === "completed" || lockedStatus?.status === "closed" || Number(lockedStatus?.completedQty ?? 0) > 0) {
+      return { posted: 0, productionOrderId, skipped: true }
+    }
   }
 
   const existing = await client.productionCost.findUnique({
