@@ -35,7 +35,19 @@ export interface SubledgerResult {
   closingBalance: number
 }
 
-export function buildSubledger(entries: SubledgerEntry[], openingBalance: number): SubledgerResult {
+export type SubledgerDirection = "debit" | "credit"
+
+export function buildSubledger(
+  entries: SubledgerEntry[],
+  openingBalance: number,
+  direction: SubledgerDirection = "debit",
+): SubledgerResult {
+  // AP kredit-normal: kredit menaikkan saldo utang. Builder debit-normal
+  // tanpa arah menampilkan tagihan sebagai saldo negatif.
+  const step = (balance: number, debit: number, credit: number) =>
+    direction === "credit"
+      ? safeAdd(safeSubtract(balance, debit, 2), credit, 2)
+      : safeAdd(balance, safeSubtract(debit, credit, 2), 2)
   let balance = safeAdd(0, openingBalance, 2)
   let totalDebit = 0
   let totalCredit = 0
@@ -43,7 +55,7 @@ export function buildSubledger(entries: SubledgerEntry[], openingBalance: number
   const rows: SubledgerRow[] = entries.map((entry) => {
     totalDebit = safeAdd(totalDebit, entry.debit, 2)
     totalCredit = safeAdd(totalCredit, entry.credit, 2)
-    balance = safeAdd(balance, safeSubtract(entry.debit, entry.credit, 2), 2)
+    balance = step(balance, entry.debit, entry.credit)
     return { ...entry, balance }
   })
 
@@ -56,15 +68,19 @@ export function buildSubledger(entries: SubledgerEntry[], openingBalance: number
   }
 }
 
-/** Balance (debit − credit) of the entries that precede the period. */
+/** Balance of the entries that precede the period, following direction. */
 export function openingFromEntries(
   entries: { date: Date; debit: number; credit: number }[],
   startDate: Date,
+  direction: SubledgerDirection = "debit",
 ): number {
   let opening = 0
   for (const entry of entries) {
     if (entry.date.getTime() >= startDate.getTime()) continue
-    opening = safeAdd(opening, safeSubtract(entry.debit, entry.credit, 2), 2)
+    opening =
+      direction === "credit"
+        ? safeAdd(safeSubtract(opening, entry.debit, 2), entry.credit, 2)
+        : safeAdd(opening, safeSubtract(entry.debit, entry.credit, 2), 2)
   }
   return opening
 }

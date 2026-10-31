@@ -65,6 +65,21 @@ describe("layar buku pembantu utang satu basis dengan aging/PDF", () => {
   it("outstanding tetap balanceDue kanonis (relief retur sudah termasuk)", () => {
     expect(screen).toContain("remaining: safeSubtract(bill.balanceDue, 0, 2)")
   })
+
+  it("saldo berjalan kredit-normal, bukan debit-normal mentah", () => {
+    // Regresi: buildSubledger tanpa arah menghitung debit − kredit,
+    // sehingga tagihan AP (kredit) tampil sebagai saldo negatif.
+    expect(screen).toContain('const direction = isAr ? "debit" : "credit"')
+    expect(screen).toContain("openingFromEntries(entries, startDate, direction)")
+    expect(screen).toContain(
+      "buildSubledger(periodEntries(entries, startDate, endDate), opening, direction)",
+    )
+  })
+
+  it("header kolom Debit/Kredit mentah sama seperti PDF", () => {
+    expect(screen).toContain('const debitLabel = "Debit"')
+    expect(screen).toContain('const creditLabel = "Kredit"')
+  })
 })
 
 describe("PDF buku pembantu utang memuat retur pembelian", () => {

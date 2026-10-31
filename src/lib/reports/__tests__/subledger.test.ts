@@ -50,6 +50,24 @@ describe("buildSubledger", () => {
     expect(ledger.rows[0].balance).toBe(0.6)
     expect(ledger.rows[1].balance).toBe(0.5)
   })
+
+  it("credit direction: kredit tagihan menaikkan saldo utang (AP)", () => {
+    // Regresi B7-lanjutan: layar AP memakai builder debit-normal sehingga
+    // tagihan 980.000 tampil sebagai saldo −980.000. Harus sama PDF.
+    const ledger = buildSubledger(
+      [
+        entry({ key: "BILL", credit: 980_000 }),
+        entry({ key: "PAY", debit: 200_000 }),
+        entry({ key: "RET", debit: 60_000 }),
+      ],
+      0,
+      "credit",
+    )
+    expect(ledger.rows.map((r) => r.balance)).toEqual([980_000, 780_000, 720_000])
+    expect(ledger.closingBalance).toBe(720_000)
+    expect(ledger.totalDebit).toBe(260_000)
+    expect(ledger.totalCredit).toBe(980_000)
+  })
 })
 
 describe("openingFromEntries", () => {
@@ -64,6 +82,11 @@ describe("openingFromEntries", () => {
 
   it("is zero when nothing precedes the period", () => {
     expect(openingFromEntries(entries, new Date(2026, 8, 1))).toBe(0)
+  })
+
+  it("credit direction: saldo awal AP = kredit − debit sebelum periode", () => {
+    expect(openingFromEntries(entries, new Date(2026, 9, 1), "credit")).toBe(-1000)
+    expect(openingFromEntries(entries, new Date(2026, 9, 6), "credit")).toBe(-700)
   })
 })
 

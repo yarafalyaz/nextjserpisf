@@ -226,15 +226,20 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
     entries.sort((a, b) => a.date.getTime() - b.date.getTime())
   }
 
-  const opening = openingFromEntries(entries, startDate)
-  const card = buildSubledger(periodEntries(entries, startDate, endDate), opening)
+  // AP kredit-normal (samakan PDF loadPayableSubledger): tagihan kredit
+  // menaikkan saldo utang. Tanpa arah ini saldo layar jadi negatif.
+  const direction = isAr ? "debit" : "credit"
+  const opening = openingFromEntries(entries, startDate, direction)
+  const card = buildSubledger(periodEntries(entries, startDate, endDate), opening, direction)
   const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
 
   const title = isAr ? "Buku Besar Pembantu Piutang" : "Buku Besar Pembantu Utang"
   const partyLabel = isAr ? "Pelanggan" : "Pemasok"
   const balanceLabel = isAr ? "Saldo Piutang" : "Saldo Utang"
-  const debitLabel = isAr ? "Faktur" : "Tagihan"
-  const creditLabel = isAr ? "Pembayaran Piutang/Retur" : "Pembayaran Utang/Retur"
+  // Header kolom = sisi akuntansi mentah, sama seperti PDF (Debit/Kredit),
+  // supaya nominal tagihan AP memang tampil di kolom Kredit.
+  const debitLabel = "Debit"
+  const creditLabel = "Kredit"
   const outstandingTitle = isAr ? "Faktur Belum Lunas" : "Tagihan Belum Lunas"
 
   const totalOutstanding = outstanding.reduce((sum, row) => safeAdd(sum, row.remaining, 2), 0)
