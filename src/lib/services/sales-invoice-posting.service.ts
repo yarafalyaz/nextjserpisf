@@ -21,9 +21,10 @@ import { slugify } from "@/lib/utils/slug"
  *  - Serial: nomor seri yang dijual (tercatat di baris faktur) dan masih
  *    `used` dikembalikan ke `available`. Tanpa ini serial hilang selamanya
  *    ("manual correction" sebelumnya).
- *  - Batch: lot yang terkonsumsi (tercatat sebagai qtyOut pada layer sumber
- *    ber-batch) dipulihkan — layer pulih membawa batchNumber asalnya dan
- *    `ItemBatch.qty` ditambah kembali, simetris dengan serial.
+ *  - Batch: lot yang terkonsumsi (atribusi per layer yang disimpan posting
+ *    di `SalesInvoiceItem.batchAllocations`) dipulihkan — layer pulih
+ *    membawa batchNumber asalnya dan `ItemBatch.qty` ditambah kembali,
+ *    simetris dengan serial.
  *  - Revenue journal (referenceType "SalesInvoice") and COGS journal
  *    ("SalesInvoiceCOGS"): P1-7 dibalik via reversal entry (asli REVERSED +
  *    jurnal lawan), bukan dihapus.
@@ -45,8 +46,30 @@ export async function reverseSalesInvoicePostingTx(
   // 1. Restore stock for every POSTED OUT move created at posting time.
   const outMoves = await tx.stockMove.findMany({
     where: { referenceType: "SalesInvoice", referenceId: invoiceId, impact: "OUT", status: "posted" },
+    orderBy: [{ id: "asc" }],
     select: { id: true, itemId: true, warehouseId: true, qty: true, cost: true },
   })
+
+  // STOK-01: antrean atribusi lot per item dari baris faktur (batchAllocations
+  // yang disimpan posting, urut baris = urut OUT move dibuat). Baris lama
+  // tanpa atribusi → antrean kosong → pulih tanpa lot seperti perilaku lama.
+  type LotAlloc = { batchNumber: string | null; warehouseId: number | null; qty: number }
+  const lotQueueByItem = new Map<number, LotAlloc[]>()
+  if (typeof tx.salesInvoiceItem?.findMany === "function" && outMoves.length > 0) {
+    const invLines = await tx.salesInvoiceItem.findMany({
+      where: { salesInvoiceId: invoiceId },
+      orderBy: [{ id: "asc" }],
+      select: { itemId: true, batchAllocations: true },
+    })
+    for (const line of invLines) {
+      if (line.itemId == null || !Array.isArray(line.batchAllocations)) continue
+      const queue = lotQueueByItem.get(line.itemId) ?? []
+      for (const a of line.batchAllocations as LotAlloc[]) {
+        if (a && Number(a.qty) > 0) queue.push({ batchNumber: a.batchNumber ?? null, warehouseId: a.warehouseId ?? null, qty: Number(a.qty) })
+      }
+      lotQueueByItem.set(line.itemId, queue)
+    }
+  }
   const qtyUpdates: Promise<unknown>[] = []
   const moveInserts: Array<{
     documentNo: string
@@ -62,12 +85,10 @@ export async function reverseSalesInvoicePostingTx(
     notes: string
   }> = []
 
-  // Batch lots to restore per OUT move (parallel to moveInserts). Derived
-  // from the source FIFO layers this sale consumed: layers with qtyOut > 0
-  // carrying a batchNumber, oldest first. Faktur tak menyimpan identitas lot
-  // per baris (hanya serial), jadi layer sumber adalah satu-satunya catatan
-  // lot yang benar-benar keluar; sisa yang tak teratribusi (layer lama tanpa
-  // batch) pulih sebagai layer tanpa batch seperti sebelumnya.
+  // Batch lots to restore per OUT move (parallel to moveInserts), from the
+  // consumption attribution the posting stored on the invoice lines
+  // (batchAllocations). Sisa yang tak teratribusi (baris lama tanpa catatan)
+  // pulih sebagai layer tanpa batch seperti sebelumnya.
   const allocationsByMove: Array<Array<{ batchNumber: string | null; warehouseId: number | null; qty: number }>> = []
 
   for (const m of outMoves) {
@@ -88,43 +109,36 @@ export async function reverseSalesInvoicePostingTx(
       notes: `Pembalikan stok penghapusan faktur #${invoiceId}`,
     })
 
+    // STOK-01/STOK-04: atribusi batch berasal dari catatan konsumsi posting
+    // (batchAllocations baris faktur), BUKAN dari qtyOut agregat layer —
+    // qtyOut tak menandai move pengkonsumsinya, dan query lama
+    // `stockMoveId = OUT move` tak pernah cocok (stockMoveId layer = move
+    // PENCIPTA layer), sehingga lot tak pernah pulih saat void. Antrean per
+    // item dikonsumsi berurutan sebanyak qty move ini; sisa tanpa catatan
+    // lot pulih sebagai layer tanpa batch seperti sebelumnya.
     const allocations: Array<{ batchNumber: string | null; warehouseId: number | null; qty: number }> = []
-    if (typeof tx.inventoryLayer.findMany === "function") {
-      // STOK-01/STOK-04: atribusi batch WAJIB berasal dari layer yang
-      // benar-benar dikonsumsi OUT move ini. Layer ditandai stockMoveId =
-      // move yang menciptakannya; konsumsi FIFO menaikkan qtyOut layer itu
-      // sendiri. Mengambil SEMUA layer item+gudang qtyOut>0 memulihkan lot
-      // milik penjualan lain (identitas lot tertukar antar-faktur).
-      const sourceLayers = await tx.inventoryLayer.findMany({
-        where: {
-          itemId: m.itemId,
-          ...(m.warehouseId != null ? { warehouseId: m.warehouseId } : {}),
-          qtyOut: { gt: 0 },
-          batchNumber: { not: null },
-          stockMoveId: m.id,
-        },
-        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-        select: { batchNumber: true, warehouseId: true, qtyOut: true },
-      })
+    {
       let remaining = qty
       const byLot = new Map<string, { batchNumber: string | null; warehouseId: number | null; qty: number }>()
-      for (const layer of sourceLayers) {
-        if (remaining <= 0) break
-        if (!layer.batchNumber) continue
-        const take = Math.min(Number(layer.qtyOut), remaining)
-        if (take <= 0) continue
-        const key = `${layer.batchNumber}|${layer.warehouseId ?? ""}`
+      const queue = lotQueueByItem.get(m.itemId) ?? []
+      while (remaining > 0 && queue.length > 0) {
+        const head = queue[0]
+        const take = Math.min(head.qty, remaining)
+        head.qty = Math.round((head.qty - take) * 100) / 100
+        if (head.qty <= 0) queue.shift()
+        remaining = Math.round((remaining - take) * 100) / 100
+        if (!head.batchNumber) continue
+        const key = `${head.batchNumber}|${head.warehouseId ?? ""}`
         const existing = byLot.get(key)
         if (existing) {
           existing.qty = Math.round((existing.qty + take) * 100) / 100
         } else {
           byLot.set(key, {
-            batchNumber: layer.batchNumber,
-            warehouseId: layer.warehouseId ?? m.warehouseId,
+            batchNumber: head.batchNumber,
+            warehouseId: head.warehouseId ?? m.warehouseId,
             qty: take,
           })
         }
-        remaining = Math.round((remaining - take) * 100) / 100
       }
       allocations.push(...byLot.values())
       if (remaining > 0) {

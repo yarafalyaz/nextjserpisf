@@ -2418,33 +2418,32 @@ export async function createSalesReturn(formData: FormData) {
   const factorRows = await Promise.all(returnItemIds.map(async (itemId) => [itemId, await toBaseFactor(prisma, itemId, invoiceUomByItem.get(itemId))] as const))
   const factorByItem = new Map(factorRows)
   // STOK-01: biaya restock retur tertaut faktur = biaya layer yang
-  // benar-benar dikonsumsi penjualan asal (qtyOut layer sumber OUT move
-  // faktur), BUKAN Item.cost berjalan. Master cost hanya fallback retur
-  // tanpa faktur / tanpa layer sumber. Per UOM faktur (sama basis returnCostMap).
+  // benar-benar dikonsumsi penjualan asal, dari atribusi batchAllocations
+  // baris faktur (disimpan posting), BUKAN Item.cost berjalan. Query lama
+  // atas InventoryLayer `stockMoveId IN OUT moves` tak pernah cocok —
+  // stockMoveId layer adalah move PENCIPTA layer, bukan pengkonsumsinya.
+  // Master cost hanya fallback retur tanpa faktur / baris lama tanpa
+  // atribusi. Per UOM faktur (sama basis returnCostMap).
   const soldCostByItem = new Map<number, number>()
   if (invoiceId && returnItemIds.length > 0) {
-    const outMoves = await prisma.stockMove.findMany({
-      where: { referenceType: "SalesInvoice", referenceId: invoiceId, impact: "OUT", status: "posted", itemId: { in: returnItemIds } },
-      select: { id: true, itemId: true },
+    const invLines = await prisma.salesInvoiceItem.findMany({
+      where: { salesInvoiceId: invoiceId, itemId: { in: returnItemIds } },
+      select: { itemId: true, batchAllocations: true },
     })
-    if (outMoves.length > 0) {
-      const consumedLayers = await prisma.inventoryLayer.findMany({
-        where: { stockMoveId: { in: outMoves.map((m) => m.id) }, qtyOut: { gt: 0 } },
-        select: { stockMoveId: true, qtyOut: true, unitCost: true },
-      })
-      const moveItemById = new Map(outMoves.map((m) => [m.id, m.itemId]))
-      const aggByItem = new Map<number, { qty: number; value: number }>()
-      for (const layer of consumedLayers) {
-        const itemId = moveItemById.get(layer.stockMoveId)
-        if (itemId === undefined) continue
-        const agg = aggByItem.get(itemId) ?? { qty: 0, value: 0 }
-        agg.qty += Number(layer.qtyOut)
-        agg.value += Number(layer.qtyOut) * Number(layer.unitCost)
-        aggByItem.set(itemId, agg)
+    const aggByItem = new Map<number, { qty: number; value: number }>()
+    for (const line of invLines) {
+      if (line.itemId == null || !Array.isArray(line.batchAllocations)) continue
+      for (const a of line.batchAllocations as { qty?: unknown; unitCost?: unknown }[]) {
+        const q = Number(a?.qty)
+        if (!Number.isFinite(q) || q <= 0) continue
+        const agg = aggByItem.get(line.itemId) ?? { qty: 0, value: 0 }
+        agg.qty += q
+        agg.value += q * Number(a?.unitCost ?? 0)
+        aggByItem.set(line.itemId, agg)
       }
-      for (const [itemId, agg] of aggByItem) {
-        if (agg.qty > 0) soldCostByItem.set(itemId, Math.round((agg.value / agg.qty) * 100) / 100)
-      }
+    }
+    for (const [itemId, agg] of aggByItem) {
+      if (agg.qty > 0) soldCostByItem.set(itemId, Math.round((agg.value / agg.qty) * 100) / 100)
     }
   }
   const returnCostMap = new Map([...baseReturnCostMap].map(([itemId, cost]) => [itemId, (soldCostByItem.get(itemId) ?? cost) * (factorByItem.get(itemId) ?? 1)]))
@@ -3799,32 +3798,29 @@ export async function updateSalesReturn(id: number, formData: FormData) {
   }
   const updFactorRows = await Promise.all(updReturnIds.map(async (itemId) => [itemId, await toBaseFactor(prisma, itemId, updInvoiceUomByItem.get(itemId))] as const))
   const updFactorByItem = new Map(updFactorRows)
-  // STOK-01: biaya restock dari layer terkonsumsi penjualan asal, bukan
-  // Item.cost berjalan (sama dengan createSalesReturn).
+  // STOK-01: biaya restock dari atribusi konsumsi penjualan asal
+  // (batchAllocations baris faktur), bukan Item.cost berjalan (sama dengan
+  // createSalesReturn).
   const updSoldCostByItem = new Map<number, number>()
   if (updInvoiceId && updReturnIds.length > 0) {
-    const outMoves = await prisma.stockMove.findMany({
-      where: { referenceType: "SalesInvoice", referenceId: updInvoiceId, impact: "OUT", status: "posted", itemId: { in: updReturnIds } },
-      select: { id: true, itemId: true },
+    const invLines = await prisma.salesInvoiceItem.findMany({
+      where: { salesInvoiceId: updInvoiceId, itemId: { in: updReturnIds } },
+      select: { itemId: true, batchAllocations: true },
     })
-    if (outMoves.length > 0) {
-      const consumedLayers = await prisma.inventoryLayer.findMany({
-        where: { stockMoveId: { in: outMoves.map((m) => m.id) }, qtyOut: { gt: 0 } },
-        select: { stockMoveId: true, qtyOut: true, unitCost: true },
-      })
-      const moveItemById = new Map(outMoves.map((m) => [m.id, m.itemId]))
-      const aggByItem = new Map<number, { qty: number; value: number }>()
-      for (const layer of consumedLayers) {
-        const itemId = moveItemById.get(layer.stockMoveId)
-        if (itemId === undefined) continue
-        const agg = aggByItem.get(itemId) ?? { qty: 0, value: 0 }
-        agg.qty += Number(layer.qtyOut)
-        agg.value += Number(layer.qtyOut) * Number(layer.unitCost)
-        aggByItem.set(itemId, agg)
+    const aggByItem = new Map<number, { qty: number; value: number }>()
+    for (const line of invLines) {
+      if (line.itemId == null || !Array.isArray(line.batchAllocations)) continue
+      for (const a of line.batchAllocations as { qty?: unknown; unitCost?: unknown }[]) {
+        const q = Number(a?.qty)
+        if (!Number.isFinite(q) || q <= 0) continue
+        const agg = aggByItem.get(line.itemId) ?? { qty: 0, value: 0 }
+        agg.qty += q
+        agg.value += q * Number(a?.unitCost ?? 0)
+        aggByItem.set(line.itemId, agg)
       }
-      for (const [itemId, agg] of aggByItem) {
-        if (agg.qty > 0) updSoldCostByItem.set(itemId, Math.round((agg.value / agg.qty) * 100) / 100)
-      }
+    }
+    for (const [itemId, agg] of aggByItem) {
+      if (agg.qty > 0) updSoldCostByItem.set(itemId, Math.round((agg.value / agg.qty) * 100) / 100)
     }
   }
   const updReturnCostMap = new Map([...baseUpdReturnCostMap].map(([itemId, cost]) => [itemId, (updSoldCostByItem.get(itemId) ?? cost) * (updFactorByItem.get(itemId) ?? 1)]))

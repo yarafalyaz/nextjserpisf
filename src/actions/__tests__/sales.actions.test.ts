@@ -1195,10 +1195,13 @@ describe("Sales Return Actions", () => {
 
   it("STOK-01: cost snapshot retur dari layer terkonsumsi faktur asal, bukan master cost", async () => {
     mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 1, cost: 120_000, price: 200_000 }])
-    mocks.prismaMock.stockMove.findMany.mockResolvedValueOnce([{ id: 42, itemId: 1 }])
-    mocks.prismaMock.inventoryLayer.findMany.mockResolvedValueOnce([
-      { stockMoveId: 42, qtyOut: 10, unitCost: 80_000 },
-    ])
+    // Atribusi konsumsi dari batchAllocations baris faktur (disimpan
+    // posting); panggilan findMany pertama = harga faktur, kedua = atribusi.
+    mocks.prismaMock.salesInvoiceItem.findMany
+      .mockResolvedValueOnce([{ itemId: 1, unitPrice: 200_000, qty: 10, uom: null }])
+      .mockResolvedValueOnce([
+        { itemId: 1, batchAllocations: [{ batchNumber: "LOT-A", warehouseId: 2, qty: 10, unitCost: 80_000 }] },
+      ])
     const items = JSON.stringify([{ itemId: 1, qty: 2 }])
     const res = await actions.createSalesReturn(fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))
     expect(res?.success).toBe(true)

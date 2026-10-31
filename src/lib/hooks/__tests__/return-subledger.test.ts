@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   settings: {
     salesReturnAccountId: 420 as number | null,
     salesReceivableAccountId: 110 as number | null,
+    salesTaxAccountId: 230 as number | null,
     inventoryAccountId: 130 as number | null,
     purchasePayableAccountId: 210 as number | null,
     purchaseReturnAccountId: 220 as number | null,
@@ -35,6 +36,7 @@ const mocks = vi.hoisted(() => ({
   vendorCreditCreate: vi.fn(),
   poFindUnique: vi.fn(),
   generateDocumentNumber: vi.fn(),
+  entryCreateMany: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -82,7 +84,7 @@ function salesTx(invoice: Record<string, unknown>) {
     },
     taxInvoice: { findFirst: vi.fn().mockResolvedValue(null) },
     journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-    journalEntry: { createMany: vi.fn().mockResolvedValue({ count: 4 }) },
+    journalEntry: { createMany: mocks.entryCreateMany },
     customerCredit: { findFirst: mocks.creditFindFirst, create: mocks.creditCreate },
   }
 }
@@ -128,6 +130,36 @@ describe("TASK-011 BUG-04 — subledger retur selaras GL", () => {
     mocks.generateDocumentNumber.mockResolvedValue("CC-900")
     mocks.itemFindMany.mockResolvedValue([{ id: 60, isScrapSaleItem: false }])
     mocks.stockMoveFindMany.mockResolvedValue([])
+    mocks.entryCreateMany.mockResolvedValue({ count: 5 })
+  })
+
+  it("retur jual faktur ber-PPN: jurnal memuat Dr PPN Keluaran, Cr Piutang = DPP+PPN", async () => {
+    mocks.salesReturnFind.mockResolvedValue({
+      id: 8,
+      documentNo: "SR-8",
+      salesInvoiceId: 58,
+      date: new Date("2026-10-02T00:00:00Z"),
+      items: [{ id: 903, itemId: 60, qty: 2, price: 100, cost: 60 }],
+    })
+    mocks.invoiceFindUnique.mockResolvedValue({ id: 58, items: [{ itemId: 60, qty: 2 }] })
+    // DPP faktur 1000, PPN 11% = 110 → tarif snapshot 11%. Retur DPP 200 → PPN 22.
+    const invoice = {
+      subtotal: 1000, discount: 0, taxAmount: 110,
+      grandTotal: 1110, paidAmount: 0, customerId: 99, documentNo: "INV-8",
+    }
+    mocks.transaction.mockImplementation(async (fn: any) => fn(salesTx(invoice)))
+
+    await onSalesReturnCompleted(8, 7)
+
+    const rows = mocks.entryCreateMany.mock.calls[0][0].data as any[]
+    const leg = (accountId: number, side: "debit" | "credit") =>
+      rows.filter((r) => r.accountId === accountId).reduce((s, r) => s + Number(r[side]), 0)
+    expect(leg(420, "debit")).toBe(200)
+    expect(leg(230, "debit")).toBe(22)
+    expect(leg(110, "credit")).toBe(222)
+    const debit = rows.reduce((s, r) => s + Number(r.debit), 0)
+    const credit = rows.reduce((s, r) => s + Number(r.credit), 0)
+    expect(debit).toBe(credit)
   })
 
   it("retur jual atas faktur partial: grandTotalAsal BEKU, status dari outstanding valid, tanpa kredit", async () => {

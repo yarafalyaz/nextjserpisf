@@ -229,7 +229,7 @@ describe("inventory-fifo", () => {
     it("returns zero when qty <= 0", async () => {
       const tx = mockTx({});
       const result = await consumeFifoLayers(tx, { itemId: 1, qty: 0 });
-      expect(result).toEqual({ consumedCost: 0, shortfall: 0, consumedSerials: [], consumedBatches: [], sourceAgeAt: null });
+      expect(result).toEqual({ consumedCost: 0, shortfall: 0, consumedSerials: [], consumedBatches: [], consumedLayers: [], sourceAgeAt: null });
       expect(tx.$queryRaw).not.toHaveBeenCalled();
     });
 

@@ -65,7 +65,9 @@ describe("diskon tagihan vendor: penulis dan pembaca DPP harus sepakat", () => {
       // vat-invoices-cents.test.ts). Keduanya wajib TETAP mengurangi diskon;
       // menghilangkan pengurangan, bukan mengganti bentuk, yang dilarang.
       const rawDiscount = /subtotal\)\s*-\s*Number\([^)]*discountAmount/
-      const viaVatDpp = /dpp:\s*vatDpp\([^,]*\.subtotal,\s*[^,]*\.discountAmount/
+      // Bentuk langsung `dpp: vatDpp(...)` atau lewat kolom turunan
+      // `dppShown: head ? head.dpp : vatDpp(...)` (dedupe rantai faktur).
+      const viaVatDpp = /dpp(?:Shown)?:\s*(?:head \? head\.dpp : )?vatDpp\([^,]*\.subtotal,\s*[^,]*\.discountAmount/
       const viaPurchaseDpp = /dpp:\s*purchaseDpp\(Number\([^)]*\.subtotal\),\s*Number\([^)]*discountAmount/
       expect(
         rawDiscount.test(src) || viaVatDpp.test(src) || viaPurchaseDpp.test(src),

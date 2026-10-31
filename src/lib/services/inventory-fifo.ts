@@ -10,6 +10,16 @@ export type ConsumedBatch = {
   qty: number
 }
 
+/** Konsumsi per layer sumber: atribusi yang void/retur butuhkan untuk
+ * memulihkan lot yang BENAR-BENAR keluar dan menilai restock pada cost
+ * asal (qtyOut agregat layer tak bisa diatribusikan ke satu move). */
+export type ConsumedLayer = {
+  batchNumber: string | null
+  warehouseId: number | null
+  qty: number
+  unitCost: number
+}
+
 /** Cost consumed plus the lot/serial attribution needed to mirror the movement. */
 export type FifoConsumption = {
   consumedCost: number
@@ -26,6 +36,8 @@ export type FifoConsumption = {
    * and expiry reporting correct.
    */
   consumedBatches: ConsumedBatch[]
+  /** Konsumsi per layer sumber (FIFO maupun average), urutan konsumsi. */
+  consumedLayers: ConsumedLayer[]
   /**
    * STOK-08/CST-02: umur FIFO tertua (COALESCE(sourceCreatedAt, createdAt))
    * di antara lapisan yang dikonsumsi. Pemindah stok (transfer) meneruskan
@@ -154,7 +166,7 @@ export async function consumeFifoLayers(
 ): Promise<FifoConsumption> {
   const { itemId, warehouseId, qty, label, allowShortfall = false, serialNumbers, documentDate } = opts
   if (qty <= 0) {
-    return { consumedCost: 0, shortfall: 0, consumedSerials: [], consumedBatches: [], sourceAgeAt: null }
+    return { consumedCost: 0, shortfall: 0, consumedSerials: [], consumedBatches: [], consumedLayers: [], sourceAgeAt: null }
   }
 
   // Locking read: fetch + lock candidate FIFO layers with FOR UPDATE so concurrent
@@ -497,12 +509,19 @@ export async function consumeFifoLayers(
 
   // Umur FIFO tertua yang benar-benar ikut terambil (untuk transfer).
   let sourceAgeAt: Date | null = null
+  const consumedLayers: ConsumedLayer[] = []
   for (const { layer, consume } of consumptions) {
     if (consume <= 0) continue
     const age = layer.sourceCreatedAt ?? layer.createdAt
     if (age && (sourceAgeAt === null || age.getTime() < sourceAgeAt.getTime())) {
       sourceAgeAt = age
     }
+    consumedLayers.push({
+      batchNumber: layer.batchNumber ?? null,
+      warehouseId: layer.warehouseId ?? null,
+      qty: consume,
+      unitCost: Number(layer.unitCost !== undefined ? layer.unitCost : (layer as any).unit_cost),
+    })
   }
 
   return {
@@ -510,6 +529,7 @@ export async function consumeFifoLayers(
     shortfall: Math.max(0, toConsume),
     consumedSerials,
     consumedBatches,
+    consumedLayers,
     sourceAgeAt,
   }
 }

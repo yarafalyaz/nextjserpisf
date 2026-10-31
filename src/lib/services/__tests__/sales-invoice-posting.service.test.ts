@@ -142,8 +142,9 @@ describe("reverseSalesInvoicePostingTx", () => {
     stockMoveFindMany.mockResolvedValue([
       { id: 1, itemId: 10, warehouseId: 2, qty: 5, cost: 1000 },
     ])
-    inventoryLayerFindMany.mockResolvedValue([
-      { batchNumber: "LOT-A", warehouseId: 2, qtyOut: 5 },
+    // Atribusi lot dari catatan konsumsi posting di baris faktur.
+    salesInvoiceItemFindMany.mockResolvedValue([
+      { itemId: 10, serialNumbers: null, batchAllocations: [{ batchNumber: "LOT-A", warehouseId: 2, qty: 5, unitCost: 1000 }] },
     ])
     itemBatchFindFirst.mockResolvedValue({ id: 77 })
 
@@ -169,8 +170,8 @@ describe("reverseSalesInvoicePostingTx", () => {
     stockMoveFindMany.mockResolvedValue([
       { id: 1, itemId: 10, warehouseId: 2, qty: 5, cost: 1000 },
     ])
-    inventoryLayerFindMany.mockResolvedValue([
-      { batchNumber: "LOT-A", warehouseId: 2, qtyOut: 5 },
+    salesInvoiceItemFindMany.mockResolvedValue([
+      { itemId: 10, serialNumbers: null, batchAllocations: [{ batchNumber: "LOT-A", warehouseId: 2, qty: 5, unitCost: 1000 }] },
     ])
     itemBatchFindFirst.mockResolvedValue(null)
 
@@ -223,20 +224,45 @@ describe("reverseSalesInvoicePostingTx", () => {
 })
 
 describe("reverseSalesInvoicePostingTx — atribusi batch per move (STOK-04)", () => {
-  it("query layer sumber dibatasi stockMoveId move yang di-void", async () => {
+  it("lot dibaca dari batchAllocations baris faktur, bukan query layer stockMoveId", async () => {
+    // Regresi: query lama `inventoryLayer where stockMoveId = OUT move`
+    // tak pernah cocok (stockMoveId layer = move pencipta layer), jadi
+    // void tak pernah memulihkan lot. Service kini TIDAK query layer
+    // untuk atribusi; ia membaca catatan konsumsi posting.
     stockMoveFindMany.mockResolvedValue([
       { id: 42, itemId: 10, warehouseId: 2, qty: 5, cost: 1000 },
     ])
-    inventoryLayerFindMany.mockResolvedValue([
-      { batchNumber: "LOT-B", warehouseId: 2, qtyOut: 5 },
+    salesInvoiceItemFindMany.mockResolvedValue([
+      { itemId: 10, serialNumbers: null, batchAllocations: [{ batchNumber: "LOT-B", warehouseId: 2, qty: 5, unitCost: 800 }] },
     ])
+    itemBatchFindFirst.mockResolvedValue({ id: 78 })
     await reverseSalesInvoicePostingTx(client as never, 7)
-    expect(inventoryLayerFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ stockMoveId: 42, itemId: 10 }),
-      }),
-    )
+    expect(inventoryLayerFindMany).not.toHaveBeenCalled()
     const layerArg = inventoryLayerCreateMany.mock.calls.at(-1)?.[0]
     expect(JSON.stringify(layerArg)).toContain("LOT-B")
+    expect(itemBatchUpdate).toHaveBeenCalledWith({
+      where: { id: 78 },
+      data: { qty: { increment: 5 } },
+    })
+  })
+
+  it("dua baris item sama: antrean lot dibagi antar move berurutan", async () => {
+    stockMoveFindMany.mockResolvedValue([
+      { id: 42, itemId: 10, warehouseId: 2, qty: 3, cost: 1000 },
+      { id: 43, itemId: 10, warehouseId: 2, qty: 4, cost: 1000 },
+    ])
+    salesInvoiceItemFindMany.mockResolvedValue([
+      { itemId: 10, serialNumbers: null, batchAllocations: [{ batchNumber: "LOT-A", warehouseId: 2, qty: 3, unitCost: 900 }] },
+      { itemId: 10, serialNumbers: null, batchAllocations: [{ batchNumber: "LOT-B", warehouseId: 2, qty: 4, unitCost: 950 }] },
+    ])
+    itemBatchFindFirst.mockResolvedValue({ id: 78 })
+    await reverseSalesInvoicePostingTx(client as never, 7)
+    const layerArg = inventoryLayerCreateMany.mock.calls.at(-1)?.[0]
+    const lots = (layerArg.data as { batchNumber: string | null; qtyIn: number }[])
+      .filter((r) => r.batchNumber != null)
+      .map((r) => `${r.batchNumber}:${r.qtyIn}`)
+    expect(lots).toEqual(["LOT-A:3", "LOT-B:4"])
+    expect(itemBatchUpdate).toHaveBeenCalledWith({ where: { id: 78 }, data: { qty: { increment: 3 } } })
+    expect(itemBatchUpdate).toHaveBeenCalledWith({ where: { id: 78 }, data: { qty: { increment: 4 } } })
   })
 })

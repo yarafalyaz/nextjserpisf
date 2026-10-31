@@ -859,7 +859,7 @@ export async function onSalesInvoicePosted(
             (line as { serialNumbers?: unknown[] }).serialNumbers as unknown[]
           ).map((s) => String(s))
         : null;
-      const { consumedCost, shortfall } = await consumeFifoLayers(tx, {
+      const { consumedCost, shortfall, consumedLayers } = await consumeFifoLayers(tx, {
         itemId: line.itemId,
         warehouseId: info.defaultWarehouseId,
         qty,
@@ -869,6 +869,16 @@ export async function onSalesInvoicePosted(
         // seperti material issue (F-79). Biaya tetap lapisan FIFO.
         documentDate: invoice.date,
       });
+      // STOK-01: simpan atribusi konsumsi per layer pada baris faktur —
+      // satu-satunya catatan lot/cost yang benar-benar keluar untuk baris
+      // ini. Void memulihkan lot persis dari sini; retur menilai restock
+      // pada cost asal. qty dalam satuan dasar (sudah dikonversi UoM).
+      if ((consumedLayers ?? []).length > 0 && typeof tx.salesInvoiceItem?.update === "function") {
+        await tx.salesInvoiceItem.update({
+          where: { id: line.id },
+          data: { batchAllocations: (consumedLayers ?? []) as unknown as Prisma.InputJsonValue },
+        });
+      }
       const lineCogs = consumedCost + shortfall * fallbackUnitCost;
       cogsAmount += lineCogs;
       const moveUnitCost = qty > 0 ? lineCogs / qty : fallbackUnitCost;
@@ -1653,8 +1663,8 @@ export async function onPettyCashCreated(
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 8. onSalesReturnCompleted
-//    Dr. Sales Return (amount)
-//    Cr. Receivable (amount)
+//    Dr. Sales Return (DPP) + Dr. PPN Keluaran (snapshot) / Cr. Receivable (DPP+PPN)
+//    Dr. Inventory (cost) / Cr. Sales Return (cost)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function onSalesReturnCompleted(
@@ -1805,8 +1815,11 @@ export async function onSalesReturnCompleted(
   await executeInTx(txClient, async (tx) => {
     // F-004: bekukan snapshot pajak retur + guard kumulatif keras DALAM tx.
     // Baris dengan snapshot = potongan SPT dari snapshot (bukan hitung
-    // ulang); tanpa faktur asal PPN-retur = 0. Jurnal GL tetap tanpa kaki
-    // PPN — lapisan SPT membaca snapshot ini.
+    // ulang); tanpa faktur asal PPN-retur = 0. Σ PPN snapshot juga menjadi
+    // kaki Dr PPN Keluaran jurnal dagang di bawah (sebelumnya GL tanpa kaki
+    // PPN: Piutang GL tak pernah nol untuk faktur ber-PPN dan PPN Keluaran
+    // GL menyimpang permanen dari SPT — jalur scrap sudah benar).
+    let returnVatTotal = 0;
     if (linkedToInvoice && salesReturn.salesInvoiceId != null) {
       await tx.$queryRaw`SELECT id FROM sales_invoices WHERE id = ${salesReturn.salesInvoiceId} FOR UPDATE`;
       const invoice = await tx.salesInvoice.findUniqueOrThrow({
@@ -1842,6 +1855,7 @@ export async function onSalesReturnCompleted(
       });
       const completedDpp = completedOthers.reduce((s, r) => s + Number(r.returnDpp ?? 0), 0);
       const completedVat = completedOthers.reduce((s, r) => s + Number(r.returnVat ?? 0), 0);
+      returnVatTotal = candidateVat;
       const cap = checkCumulativeReturnCap({
         sourceDpp,
         sourceVat: source.taxAmount,
@@ -2099,7 +2113,14 @@ export async function onSalesReturnCompleted(
 
     const journalNumber = await generateJournalNumber(tx, "SR", returnId);
 
-    const totalAmount = priceTotal + costTotal;
+    if (returnVatTotal > 0 && !settings.salesTaxAccountId) {
+      throw new Error(
+        "Retur penjualan ditolak: PPN Keluaran belum dipetakan padahal retur memuat PPN snapshot. " +
+          "Atur salesTaxAccountId di Pengaturan → Akun.",
+      );
+    }
+    const creditTotal = safeAdd(priceTotal, returnVatTotal, 2);
+    const totalAmount = creditTotal + costTotal;
 
     const journal = await tx.journal.create({
       data: {
@@ -2116,10 +2137,11 @@ export async function onSalesReturnCompleted(
       },
     });
 
-    // Dr. Retur Penjualan (harga jual) + Cr. Piutang (harga jual) +
-    // Dr. Persediaan (cost) + Cr. Retur Penjualan (cost) — batch eliminates 4
-    // sequential tx.journalEntry.create round-trips. The price/AR legs are only
-    // included when the return is tied to an invoice (see `linkedToInvoice`).
+    // Dr. Retur Penjualan (DPP) + Dr. PPN Keluaran (PPN snapshot) +
+    // Cr. Piutang (DPP+PPN) + Dr. Persediaan (cost) + Cr. Retur Penjualan
+    // (cost) — batch eliminates sequential tx.journalEntry.create
+    // round-trips. The price/AR legs are only included when the return is
+    // tied to an invoice (see `linkedToInvoice`).
     const entryRows: {
       journalId: number;
       accountId: number;
@@ -2140,10 +2162,19 @@ export async function onSalesReturnCompleted(
           journalId: journal.id,
           accountId: settings.salesReceivableAccountId!,
           debit: 0,
-          credit: priceTotal,
+          credit: creditTotal,
           memo: "Pengurangan Piutang (Retur)",
         },
       );
+      if (returnVatTotal > 0) {
+        entryRows.push({
+          journalId: journal.id,
+          accountId: settings.salesTaxAccountId!,
+          debit: returnVatTotal,
+          credit: 0,
+          memo: "PPN Keluaran (Retur)",
+        });
+      }
     }
     if (costTotal > 0) {
       entryRows.push(
@@ -2187,7 +2218,7 @@ export async function onSalesReturnCompleted(
           documentNo: true,
         },
       });
-      const returnCreditSen = Math.round(priceTotal * 100);
+      const returnCreditSen = Math.round(creditTotal * 100);
       // FIN-BR-006: lunas dari outstanding valid (grandTotalAsal − paid −
       // returnCredit jurnal ini) dalam toleransi Rp1. isSettled menerima
       // total kewajiban + total terbayar valid (kas + kredit retur), bukan

@@ -79,6 +79,7 @@ const mocks = vi.hoisted(() => ({
   queryRaw: vi.fn(),
   executeRaw: vi.fn(),
   stockMoveCreate: vi.fn(),
+  salesInvoiceItemUpdate: vi.fn(),
   itemFindMany: vi.fn(),
   uomConversionFindMany: vi.fn(),
   generateDocumentNumberBatch: vi.fn(),
@@ -241,6 +242,7 @@ function buildSalesInvoiceTx(inventoryLayerGroupBy: unknown) {
     // Penutup DP J-PL1/J-PL2 membaca keduanya; fixture tanpa DP tertaut.
     journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
     journalEntry: journalEntryBranch(),
+    salesInvoiceItem: { update: mocks.salesInvoiceItemUpdate },
     item: { findUnique: mocks.itemFindUnique, findMany: mocks.itemFindMany, update: mocks.itemUpdate },
     uomConversion: { findMany: mocks.uomConversionFindMany },
     stockMove: { create: mocks.stockMoveCreate, findFirst: mocks.stockMoveFindFirst },
@@ -586,6 +588,7 @@ describe("onSalesInvoicePosted", () => {
         },
         // B4 (PR #785): blok penutup 210102 jalur konversi membaca pembayaran DP.
         salesPayment: { findMany: vi.fn().mockResolvedValue([]) },
+        salesInvoiceItem: { update: mocks.salesInvoiceItemUpdate },
         downPayment: { findMany: vi.fn().mockResolvedValue([]) },
         account: {
           findMany: mocks.accountFindMany,
@@ -880,6 +883,35 @@ describe("onSalesInvoicePosted", () => {
     await expect(onSalesInvoicePosted(1)).rejects.toThrow(/PPN Keluar belum dipetakan/);
     expect(mocks.journalCreate).not.toHaveBeenCalled();
     expect(mocks.journalEntryCreate).not.toHaveBeenCalled();
+  });
+
+  it("STOK-01: posting menyimpan atribusi konsumsi per layer ke baris faktur", async () => {
+    const inner = innerInvoice({ totalAmount: 1000 });
+    seedInvoice(inner, [{ id: 501, itemId: 50, qty: 2, cost: 100 }]);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 50, cost: 100, isProduct: true, defaultWarehouseId: 7 },
+    ]);
+    mocks.fifoConsume.mockResolvedValue({
+      consumedCost: 190,
+      shortfall: 0,
+      consumedLayers: [
+        { batchNumber: "LOT-A", warehouseId: 7, qty: 1, unitCost: 90 },
+        { batchNumber: "LOT-B", warehouseId: 7, qty: 1, unitCost: 100 },
+      ],
+    });
+    mocks.journalCreate.mockResolvedValue({ id: 50 });
+
+    await onSalesInvoicePosted(1, 999);
+
+    expect(mocks.salesInvoiceItemUpdate).toHaveBeenCalledWith({
+      where: { id: 501 },
+      data: {
+        batchAllocations: [
+          { batchNumber: "LOT-A", warehouseId: 7, qty: 1, unitCost: 90 },
+          { batchNumber: "LOT-B", warehouseId: 7, qty: 1, unitCost: 100 },
+        ],
+      },
+    });
   });
 
   it("creates Dr. COGS / Cr. Inventory for product items with non-zero COGS", async () => {
@@ -1787,17 +1819,18 @@ describe("onSalesReturnCompleted", () => {
     mocks.journalCreate.mockResolvedValue({ id: 9 });
     await onSalesReturnCompleted(1, 999);
 
-    // totalDebit/Credit = priceTotal (200) + costTotal (120) = 320
+    // totalDebit/Credit = DPP 200 + PPN snapshot 22 (faktur mock ber-PPN
+    // 11%) + costTotal 120 = 342
     expect(mocks.journalCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           referenceType: "SalesReturn",
-          totalDebit: 320,
-          totalCredit: 320,
+          totalDebit: 342,
+          totalCredit: 342,
         }),
       }),
     );
-    expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(4);
+    expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(5);
     // Dr. Sales Return (200)
     expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1808,13 +1841,23 @@ describe("onSalesReturnCompleted", () => {
         }),
       }),
     );
-    // Cr. AR (200)
+    // Dr. PPN Keluaran (22)
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          accountId: 160,
+          debit: 22,
+          credit: 0,
+        }),
+      }),
+    );
+    // Cr. AR (222 = DPP+PPN)
     expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           accountId: 110,
           debit: 0,
-          credit: 200,
+          credit: 222,
         }),
       }),
     );
@@ -1863,13 +1906,13 @@ describe("onSalesReturnCompleted", () => {
     mocks.journalCreate.mockResolvedValue({ id: 9 });
     await onSalesReturnCompleted(1, 999);
 
-    // priceTotal = 400 (nilai penuh) + costTotal = 120 (hanya barang) = 520.
+    // DPP 400 + PPN snapshot 44 (11%) + costTotal 120 (hanya barang) = 564.
     expect(mocks.journalCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ totalDebit: 520, totalCredit: 520 }),
+        data: expect.objectContaining({ totalDebit: 564, totalCredit: 564 }),
       }),
     );
-    // Kaki nilai penuh: Dr Retur 400 / Cr Piutang 400.
+    // Kaki nilai penuh: Dr Retur 400 / Cr Piutang 444 (DPP+PPN).
     expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ accountId: 420, debit: 400, credit: 0 }),
@@ -1877,7 +1920,7 @@ describe("onSalesReturnCompleted", () => {
     );
     expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ accountId: 110, debit: 0, credit: 400 }),
+        data: expect.objectContaining({ accountId: 110, debit: 0, credit: 444 }),
       }),
     );
     // Kaki persediaan hanya 120 (bukan 240).

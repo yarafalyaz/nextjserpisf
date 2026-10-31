@@ -2053,6 +2053,11 @@ model SalesInvoiceItem {
   qty            Decimal      @default(1.00) @db.Decimal(15, 2)
   uom            String?
   serialNumbers  Json?        @map("serial_numbers")
+  // STOK-01: atribusi konsumsi FIFO per layer sumber saat posting
+  // ([{batchNumber, warehouseId, qty, unitCost}]) — void memulihkan lot
+  // persis ini, retur menilai restock pada cost asal. Null = baris lama
+  // (posting sebelum kolom ada): void/retur jatuh ke perilaku tanpa lot.
+  batchAllocations Json?      @map("batch_allocations")
   unitPrice      Decimal      @default(0.00) @map("unit_price") @db.Decimal(15, 2)
   discount       Decimal      @default(0.00) @db.Decimal(15, 2)
   total          Decimal      @default(0.00) @db.Decimal(15, 2)
