@@ -42,15 +42,24 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     const rackInput = await openCombobox(page, { placeholder: "Cari rak..." })
     await expect(rackInput).toBeEnabled({ timeout: 10000 })
 
-    const rackOptions = page.getByRole("option")
-    await expect(rackOptions.first()).toBeVisible({ timeout: 10000 })
-    const rackCount = await rackOptions.count()
-    test.skip(rackCount === 0, "Tidak ada data rak pada gudang terpilih untuk skenario CRUD baris rak")
+    // Opsi combobox "Gudang" dari langkah sebelumnya LEBIH DULU resolve
+    // visible, jadi `getByRole("option").first()` bocor antar-combobox dan
+    // skip tidak terpicu. Baca empty-state-nya sendiri: teks "belum punya
+    // rak" juga sematkan di DOM dan lebih awet. Tidak ada rak = skip sah.
+    const emptyRackVisible = await page
+      .locator(':text("belum punya rak"):visible')
+      .first()
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .then(() => true)
+      .catch(() => false)
+    test.skip(emptyRackVisible, "Tidak ada data rak pada gudang terpilih untuk skenario CRUD baris rak")
 
-    await rackOptions.first().click()
+    // Klik opsi cmdk tidak stabil; keyboard memilih opsi ter-highlight.
+    await rackInput.press("ArrowDown")
+    await rackInput.press("Enter")
     await expect(page.locator("input[name='rackId']")).toHaveValue(/\d+/, { timeout: 10000 })
 
-    await page.locator("#name").fill(name)
+    await page.locator("#name").first().fill(name)
     await submitAndWaitForListPage(page, /^Simpan$/)
 
     await page.goto("/inventaris/baris-rak", { waitUntil: "domcontentloaded" })

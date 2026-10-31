@@ -18,8 +18,8 @@ test.describe("Master Merek CRUD", () => {
     await expect(page.getByRole("heading", { name: "Tambah Merek" })).toBeVisible({ timeout: 30000 })
     await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
 
-    await page.locator("#name").fill(name)
-    await expect(page.locator("#name")).toHaveValue(name)
+    await page.locator("#name").first().fill(name)
+    await expect(page.locator("#name").first()).toHaveValue(name)
     await page.locator("#submit-brand").click()
     await awaitListContains(page, "**/master/merek", name)
 
@@ -46,9 +46,9 @@ test.describe("Master Merek CRUD", () => {
 
     await page.waitForURL(/\/master\/merek\/[^/]+\/ubah$/, { timeout: 30000 })
 
-    await expect(page.locator("#name")).toBeVisible({ timeout: 30_000 })
-    await page.locator("#name").fill(updated)
-    await expect(page.locator("#name")).toHaveValue(updated)
+    await expect(page.locator("#name").first()).toBeVisible({ timeout: 30_000 })
+    await page.locator("#name").first().fill(updated)
+    await expect(page.locator("#name").first()).toHaveValue(updated)
     await page.getByRole("button", { name: /Update|Perbarui/ }).click()
 
     await awaitListContains(page, "**/master/merek", updated)

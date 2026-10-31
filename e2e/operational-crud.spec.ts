@@ -67,7 +67,7 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
     await page.locator("#submit-item-group").click()
 
     await page.waitForURL("**/master/grup-barang", { timeout: 30_000 })
-    const baris = page.locator("tr").filter({ hasText: name })
+    const baris = page.locator("tr").filter({ hasText: name }).first()
     await expect(baris).toBeVisible({ timeout: 30_000 })
 
     // Hapus: menu aksi → Hapus → konfirmasi dialog (DeleteButton memakai AlertDialog).
@@ -95,7 +95,7 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
     await page.locator("#submit-vendor-price").click()
 
     await page.waitForURL("**/pembelian/harga-pemasok", { timeout: 30_000 })
-    const baris = page.locator("tr").filter({ hasText: "987.654" })
+    const baris = page.locator("tr").filter({ hasText: "987.654" }).first()
     await expect(baris.first()).toBeVisible({ timeout: 30_000 })
 
     await baris.first().getByRole("button", { name: "Buka menu aksi" }).click()
@@ -123,7 +123,7 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
     await page.locator("#submit-tax-payment").click()
 
     await page.waitForURL("**/keuangan/penyetoran-pajak", { timeout: 30_000 })
-    const baris = page.locator("tr").filter({ hasText: "555.222" })
+    const baris = page.locator("tr").filter({ hasText: "555.222" }).first()
     await expect(baris.first()).toBeVisible({ timeout: 30_000 })
 
     await baris.first().getByRole("button", { name: "Buka menu aksi" }).click()
@@ -158,7 +158,7 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
     await page.locator("#submit-purchase-advance").click()
 
     await page.waitForURL("**/pembelian/uang-muka", { timeout: 30_000 })
-    const baris = page.locator("tr").filter({ hasText: "444.333" })
+    const baris = page.locator("tr").filter({ hasText: "444.333" }).first()
     await expect(baris.first()).toBeVisible({ timeout: 30_000 })
 
     await baris.first().getByRole("button", { name: "Buka menu aksi" }).click()
@@ -182,7 +182,7 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
     await page.locator("#cheque-amount").fill("333222")
     await page.locator("#create-cheque-btn").click()
 
-    const baris = page.locator("tr").filter({ hasText: nomor })
+    const baris = page.locator("tr").filter({ hasText: nomor }).first()
     await expect(baris).toBeVisible({ timeout: 30_000 })
     await expect(baris).toContainText("Belum Cair")
 
@@ -278,7 +278,7 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
 
     // Register menampilkan kolom Tanda Terima → barisnya dikenali dari nomor unik ini.
     await page.waitForURL("**/penjualan/tukar-faktur", { timeout: 30_000 })
-    const baris = page.locator("tr").filter({ hasText: tandaTerima })
+    const baris = page.locator("tr").filter({ hasText: tandaTerima }).first().first()
     await expect(baris).toBeVisible({ timeout: 30_000 })
     await expect(baris).toContainText("125.000")
 

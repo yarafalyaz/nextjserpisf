@@ -140,7 +140,7 @@ test.describe("Laporan — every report page renders", () => {
       // Kerangka seragam: seluruh halaman laporan dirender di dalam
       // `ReportPageShell` (remah → parameter → aksi → lembar). Dulu 23 halaman
       // menyusun remah/kopnya sendiri sehingga tampil beda-beda.
-      await expect(page.locator(".report-page-shell")).toHaveCount(1)
+      await expect(page.locator(".report-page-shell:visible")).toHaveCount(1)
       // Tepat SATU remah yang terlihat: kalau ada halaman yang masih menulis
       // remahnya sendiri, dua remah akan tampil bertumpuk.
       // (`:visible` penting — Next menyisakan salinan tersembunyi sisa streaming

@@ -19,10 +19,10 @@ test.describe("Master Departemen CRUD", () => {
     await expect(page.getByRole("heading", { name: "Tambah Departemen" })).toBeVisible({ timeout: 30000 })
     await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
 
-    await page.locator("#name").fill(name)
-    await page.locator("#description").fill(description)
-    await expect(page.locator("#submit-department")).toBeEnabled({ timeout: 15_000 })
-    await page.locator("#submit-department").click()
+    await page.locator("#name").first().fill(name)
+    await page.locator("#description").first().fill(description)
+    await expect(page.locator("#submit-department").first()).toBeEnabled({ timeout: 15_000 })
+    await page.locator("#submit-department").first().click()
 
     await awaitListContains(page, "**/master/departemen", name)
     await page.goto(`/master/departemen?cari=${encodeURIComponent(name)}`, { waitUntil: "domcontentloaded" })
@@ -52,10 +52,10 @@ test.describe("Master Departemen CRUD", () => {
     await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/master\/departemen\/[^/]+\/ubah$/, { timeout: 30000 })
-    await expect(page.locator("#name")).toBeVisible({ timeout: 30_000 })
-    await page.locator("#name").fill(updated)
-    await expect(page.locator("#name")).toHaveValue(updated)
-    await page.locator("button[type='submit']").click()
+    await expect(page.locator("#name").first()).toBeVisible({ timeout: 30_000 })
+    await page.locator("#name").first().fill(updated)
+    await expect(page.locator("#name").first()).toHaveValue(updated)
+    await page.locator("button[type='submit']").first().click()
 
     await page.waitForURL("**/master/departemen", { timeout: 30000 })
     await page.waitForLoadState("networkidle")

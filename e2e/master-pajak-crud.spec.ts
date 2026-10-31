@@ -18,8 +18,8 @@ test.describe("Master Pajak CRUD", () => {
     await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
     await expect(page.getByRole("heading", { name: "Tambah Pajak" })).toBeVisible({ timeout: 30000 })
 
-    await page.locator("#tax-name").fill(name)
-    await page.locator("#tax-rate").fill(rate)
+    await page.locator("#tax-name").first().fill(name)
+    await page.locator("#tax-rate").first().fill(rate)
     await expect(page.locator("#submit-tax")).toBeEnabled({ timeout: 15_000 })
     await page.locator("#submit-tax").click()
     await awaitListContains(page, "**/master/pajak", name)
@@ -47,7 +47,7 @@ test.describe("Master Pajak CRUD", () => {
     await page.waitForURL(/\/master\/pajak\/[^/]+\/ubah$/, { timeout: 30000 })
 
     // Edit form has no explicit id, use name attribute
-    await page.locator('input[name="name"]').fill(updated)
+    await page.locator('input[name="name"]').first().fill(updated)
     await page.getByRole("button", { name: /Update|Perbarui/ }).click()
 
     await awaitListContains(page, "**/master/pajak", updated)

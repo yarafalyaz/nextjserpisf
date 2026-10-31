@@ -17,17 +17,43 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     await page.goto("/master/pajak/tambah", { waitUntil: "domcontentloaded" })
     await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
     await expect(page.getByRole("heading", { name: "Tambah Pajak" })).toBeVisible({ timeout: 30000 })
-    await page.locator("#tax-name").fill(taxName)
-    await page.locator("#tax-rate").fill("11")
-    await page.locator("#submit-tax").click()
+    await page.locator("#tax-name").first().fill(taxName)
+    await page.locator("#tax-rate").first().fill("11")
+    // Protective wait: form create ini cuma client (React onSubmit +
+    // preventDefault + router.push). Bila submit lolos sebelum hidrasi,
+    // browser jatuh ke submit GET native → URL kirim ulang berisi
+    // ?name=…&rate=… dan navigation RSC dari nav batch bersamaan hilang.
+    // Hidrasi selesai = state terikat ke DOM (value bertahan sesudah
+    // re-commit React) DAN networkidle (streaming selesai). expect
+    // toHaveValue adalah cara andal memastikan yang pertama.
+    await expect(page.locator("#tax-name").first()).toHaveValue(taxName)
+    await expect(page.locator("#tax-rate").first()).toHaveValue("11")
+    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => undefined)
+
+    await page.locator("#submit-tax").first().click()
     await page.waitForURL("**/master/pajak", { timeout: 30000 })
+
+    if (new URL(page.url()).pathname === "/master/pajak/tambah") {
+      // Native GET tersisa: URL lolos submit sebelum hidrasi (pattern
+      // ?name=…&rate=…). createTax idempoten terhadap nama yang sama —
+      // klik sekali lagi sesudah hidrasi menyelesaikan dengan aman.
+      await page.locator("#submit-tax").first().click()
+      await page.waitForURL("**/master/pajak", { timeout: 30000 })
+    }
+
+    // Di halaman daftar, pajak baru harus benar-benar ada sebelum fase
+    // kelompok: tanpa baris, form kelompok tidak punya checkbox pajak
+    // sama sekali (kelompok wajib ≥1 pajak) dan kegagalan ini menyamar
+    // sebagai error fase grup.
+    await page.goto(`/master/pajak?cari=${encodeURIComponent(taxName)}`, { waitUntil: "domcontentloaded" })
+    await expect(page.locator("tr").filter({ hasText: new RegExp(taxName) })).toHaveCount(1, { timeout: 15000 })
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/master/kelompok-pajak/tambah", { waitUntil: "domcontentloaded" })
     await awaitReady(page, "form")
     await expect(page.getByRole("heading", { name: "Tambah Grup Pajak" })).toBeVisible({ timeout: 30000 })
 
-    await page.locator("#name").fill(name)
+    await page.locator("#name").first().fill(name)
     await page.getByRole("checkbox").first().check()
     await expect(page.getByRole("button", { name: "Simpan" })).toBeEnabled({ timeout: 15_000 })
     await page.getByRole("button", { name: "Simpan" }).click()
@@ -36,7 +62,7 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     await page.waitForLoadState("networkidle")
 
     // Search dulu supaya item baru pasti muncul
-    await page.locator("input[placeholder*='Cari nama grup pajak']").fill(name)
+    await page.locator("input[placeholder*='Cari nama grup pajak']").first().fill(name)
     await expect(page.locator("body")).toContainText(name)
 
     // Verify row exists in table (use tr only, avoid div matching)
@@ -58,22 +84,36 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     await expect(confirmDialog).toBeVisible({ timeout: 5000 })
     await confirmDialog.getByRole("button", { name: /^hapus$/i }).first().click()
 
-    // 6. Verify gone — reload the search page directly (assertion web-first di bawah)
+    // 6. Delete berhasil = dialog tutup (alertdialog hilang). Verifikasi
+    // hilang via halaman cari: baris hasil itulah yang relevan — jangan
+    // body (memuat TEL saran Pencarian Cepat Cmd-K yang di-SSR global).
+    await expect(
+      page.locator('[role="alertdialog"], [role="dialog"]').filter({ hasText: "Hapus data ini?" })
+    ).toHaveCount(0, { timeout: 15000 })
+
     await page.goto(`/master/kelompok-pajak?cari=${encodeURIComponent(name)}`, {
       waitUntil: "domcontentloaded",
     })
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 30_000 })
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).not.toContainText(name, { timeout: 30000 })
+    await expect(page.locator("tr").filter({ hasText: new RegExp(name) })).toHaveCount(0, { timeout: 30000 })
 
-    // Bersihkan pajak yang dibuat di awal spec ini.
+    // Bersihkan pajak yang dibuat di awal spec ini: pajak sisa run lama
+    // menumpuk karena menu aksi menghapus di server tapi baris tidak
+    // di-refresh sampai reload — kini fix action-dropdown (router.refresh)
+    // melengkapi lingkaran itu. Gunakan pemilih row ter-scope sama seperti
+    // verifikasi grup di atas.
     await page.goto("/master/pajak", { waitUntil: "domcontentloaded" })
     await expect(page.locator("table").first()).toBeVisible({ timeout: 30_000 })
-    const taxRow = page.getByRole("row", { name: new RegExp(taxName) }).first()
+    const taxRow = page.locator("tr").filter({ hasText: new RegExp(taxName) }).first()
     await expect(taxRow).toBeVisible({ timeout: 30000 })
     await taxRow.getByRole("button", { name: "Buka menu aksi" }).click()
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()
-    await page.getByRole("button", { name: "Hapus" }).last().click()
-    await expect(page.getByRole("row", { name: new RegExp(taxName) })).toHaveCount(0, { timeout: 30000 })
+    const taxDialog = page
+      .locator('[role="alertdialog"], [role="dialog"]')
+      .filter({ hasText: "Hapus data ini?" })
+      .first()
+    await expect(taxDialog).toBeVisible({ timeout: 10000 })
+    await taxDialog.getByRole("button", { name: /^hapus$/i }).first().click()
+    await expect(page.locator("tr").filter({ hasText: new RegExp(taxName) })).toHaveCount(0, { timeout: 30000 })
   })
 })

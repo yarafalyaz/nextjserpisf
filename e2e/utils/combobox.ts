@@ -63,7 +63,10 @@ export async function selectFirstComboboxOption(
     .catch(() => false)
   if (!appeared) return false
 
-  await option.click()
+  // Klik cmdk bisa timeout karena re-render; Enter memilih opsi aktif.
+  await option.click({ timeout: 5_000 }).catch(async () => {
+    await page.keyboard.press("Enter")
+  })
   return true
 }
 
@@ -86,6 +89,8 @@ export async function selectComboboxOptionBySearch(
     .catch(() => false)
   if (!appeared) return false
 
-  await option.click()
+  await option.click({ timeout: 5_000 }).catch(async () => {
+    await page.keyboard.press("Enter")
+  })
   return true
 }

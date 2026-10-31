@@ -18,12 +18,26 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     await expect(page.getByRole("heading", { name: "Buat Pusat Biaya" })).toBeVisible({ timeout: 30000 })
     await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
 
-    const nameInput = page.locator("#name")
+    const nameInput = page.locator("#name").first()
     await expect(nameInput).toBeVisible({ timeout: 30000 })
-    await page.locator("#code").fill(code)
+    await page.locator("#code").first().fill(code)
     await nameInput.fill(name)
     await expect(nameInput).toHaveValue(name)
     await page.getByRole("button", { name: "Simpan" }).click()
+
+    // Tombol "Simpan" bisa diklik sebelum hidrasi selesai (React onSubmit
+    // belum terpasang): browser jatuh ke submit GET native tanpa menulis
+    // apa pun. Bila tak ada token toast sesudah 6 detik, klik sekali lagi —
+    // createCostCenter idempoten (match nama/kode mengembalikan id lama).
+    const created = await page
+      .getByText(/Data berhasil ditambahkan/)
+      .first()
+      .waitFor({ state: "visible", timeout: 6000 })
+      .then(() => true)
+      .catch(() => false)
+    if (!created) {
+      await page.getByRole("button", { name: "Simpan" }).click()
+    }
 
     await awaitListContains(page, "**/keuangan/pusat-biaya", name)
     await expect(page.locator("body")).toContainText(code)
@@ -45,7 +59,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     await page.waitForLoadState("networkidle")
 
     // Filter dulu agar item baru pasti muncul
-    await page.locator("input[placeholder*='Cari kode atau nama']").fill(name)
+    await page.locator("input[placeholder*='Cari kode atau nama']").first().fill(name)
     // Debounce search ditunggu assertion web-first di bawah, bukan sleep.
     await expect(page.locator("body")).toContainText(name)
 
@@ -57,12 +71,25 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
 
     await page.waitForURL(/\/keuangan\/pusat-biaya\/[^/]+\/ubah$/, { timeout: 30000 })
 
-    await page.locator("#name").fill(updated)
+    await page.locator("#name").first().fill(updated)
     await page.getByRole("button", { name: /Update|Perbarui/ }).click()
+
+    // Update bisa kehilangan klik sebelum hidrasi sama seperti create:
+    // tanpa toast "Data berhasil diperbarui" dalam 6 detik, klik sekali
+    // lagi (update idempoten — payload-nya sama persis).
+    const updatedOk = await page
+      .getByText(/Data berhasil diperbarui/)
+      .first()
+      .waitFor({ state: "visible", timeout: 6000 })
+      .then(() => true)
+      .catch(() => false)
+    if (!updatedOk && new URL(page.url()).pathname.includes("/ubah")) {
+      await page.getByRole("button", { name: /Update|Perbarui/ }).click()
+    }
 
     await page.waitForURL("**/keuangan/pusat-biaya", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
-    await page.locator("input[placeholder*='Cari kode atau nama']").fill(code)
+    await page.locator("input[placeholder*='Cari kode atau nama']").first().fill(code)
     await expect(page.locator("body")).toContainText(updated)
 
     // ─── DELETE ───────────────────────────────────────────────
@@ -85,12 +112,18 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     const confirmDialog = page.locator('[role="alertdialog"], [role="dialog"]').filter({ hasText: "Hapus data ini?" }).first()
     await expect(confirmDialog).toBeVisible({ timeout: 5000 })
     await confirmDialog.getByRole("button", { name: /^hapus$/i }).click()
-    // 5. Verify gone via unique code text on direct search page (avoid stale table rows)
+    // 5. Verify gone: dialog tutup dulu (delete tuntas), lalu baris hasil
+    // cari harus absen. Jangan pakai body — TEL saran Pencarian Cepat
+    // (Cmd-K) yang di-SSR global membawa `cari=` + kode ini dan menunggu
+    // dalam DOM walau record sudah terhapus.
+    await expect(
+      page.locator('[role="alertdialog"], [role="dialog"]').filter({ hasText: "Hapus data ini?" })
+    ).toHaveCount(0, { timeout: 15000 })
     await page.goto(`/keuangan/pusat-biaya?cari=${encodeURIComponent(code)}`, {
       waitUntil: "domcontentloaded",
     })
 
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).not.toContainText(code, { timeout: 30000 })
+    await expect(page.locator("tr").filter({ hasText: new RegExp(code) })).toHaveCount(0, { timeout: 30000 })
   })
 })

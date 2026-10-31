@@ -9,11 +9,11 @@ test.describe("Pindai Barang + Barcode wiring", () => {
   test("halaman scan tampil + kode tak dikenal ditolak berisik", async ({ page }) => {
     await page.goto("/inventaris/scan", { waitUntil: "domcontentloaded" })
 
-    await expect(page.getByRole("heading", { name: "Pindai Barang" })).toBeVisible({ timeout: 30000 })
-    await expect(page.locator("#scan-code")).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Pindai Barang" }).first()).toBeVisible({ timeout: 30000 })
+    await expect(page.locator("#scan-code").first()).toBeVisible()
 
-    await page.locator("#scan-code").fill("KODE-TIDAK-ADA-E2E")
-    await page.getByRole("button", { name: "Buka Detail Barang" }).click()
+    await page.locator("#scan-code").first().fill("KODE-TIDAK-ADA-E2E")
+    await page.getByRole("button", { name: "Buka Detail Barang" }).first().click()
 
     await expect(page.locator("body")).toContainText("tidak ditemukan", { timeout: 30000 })
     await expect(page).toHaveURL(/\/inventaris\/scan/)
@@ -23,7 +23,9 @@ test.describe("Pindai Barang + Barcode wiring", () => {
     await page.goto("/master/barcode", { waitUntil: "domcontentloaded" })
 
     await expect(page.getByRole("heading", { name: "Barcode" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Cari barcode...")).toBeVisible({ timeout: 30000 })
+    // Duplikat streaming hidrasi: steady-state DOM cuma 1 input cari; locator
+    // polos kalah strict mode saat salinan sisa streaming masih hidup.
+    await expect(page.getByPlaceholder("Cari barcode...").first()).toBeVisible({ timeout: 30000 })
 
     const firstRow = page.getByRole("row").nth(1)
     // DB seed kosong wajar: tanpa baris, wiring tidak bisa dibuktikan dari UI.
@@ -37,8 +39,10 @@ test.describe("Pindai Barang + Barcode wiring", () => {
         { timeout: 30_000 },
       )
       .toBe(true)
+    // Baris empty-state ikut terhitung sebagai row (header + "Tidak ada data"
+    // = 2), jadi skip harus membaca empty-state-nya, bukan jumlah row.
     test.skip(
-      (await page.getByRole("row").count()) < 2,
+      (await page.locator(':text("Tidak ada data"):visible').count()) > 0,
       "Tidak ada baris barcode di DB uji — wiring aksi dilewati, bukan lulus semu",
     )
     await expect(firstRow).toBeVisible({ timeout: 30000 })

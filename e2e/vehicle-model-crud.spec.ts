@@ -34,7 +34,7 @@ test.describe("Kendaraan Model CRUD", () => {
     await brandInput.press("ArrowDown")
     await brandInput.press("Enter")
 
-    await page.locator("#name").fill(name)
+    await page.locator("#name").first().fill(name)
     await page.getByRole("button", { name: /^Simpan$/ }).first().click()
 
     // After a successful save the form redirects (to the new model's edit page

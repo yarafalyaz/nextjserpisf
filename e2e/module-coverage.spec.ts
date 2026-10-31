@@ -25,7 +25,7 @@ test.describe("Produksi - Products CRUD", () => {
     await page.goto("/produksi/products/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Tambah Produk (BOM)" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Nama produk")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByPlaceholder("Nama produk").first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -38,20 +38,20 @@ test.describe("Produksi - Production Order CRUD", () => {
     await page.goto("/produksi/production-orders/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Buat Perintah Produksi" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Cari produk...")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("combobox").filter({ hasText: "Cari produk..." }).first()).toBeVisible({ timeout: 30000 })
   })
 })
 
 test.describe("Produksi - Work Order CRUD", () => {
   test("list loads + create form loads", async ({ page }) => {
     await page.goto("/produksi/perintah-kerja", { waitUntil: "domcontentloaded" })
-    await expect(page.getByRole("heading", { name: "Perintah Kerja" })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("heading", { name: "Perintah Kerja", exact: true })).toBeVisible({ timeout: 30000 })
     await expect(page.getByRole("link", { name: "+ Buat Perintah Kerja" })).toBeVisible({ timeout: 30000 })
 
     await page.goto("/produksi/perintah-kerja/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Buat Perintah Kerja" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Cari pelanggan...")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("combobox").filter({ hasText: "Cari pelanggan..." }).first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -130,12 +130,12 @@ test.describe("Penjualan - Uang Muka (Advance) CRUD", () => {
   test("list loads + create form loads", async ({ page }) => {
     await page.goto("/penjualan/uang-muka", { waitUntil: "domcontentloaded" })
     await expect(page.getByRole("heading", { name: "Uang Muka" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Cari pelanggan atau penawaran...")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByPlaceholder("Cari pelanggan atau penawaran...").first()).toBeVisible({ timeout: 30000 })
 
     await page.goto("/penjualan/uang-muka/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Buat Uang Muka" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Cari penawaran...")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("combobox").filter({ hasText: "Cari penawaran..." }).first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -148,7 +148,7 @@ test.describe("Penjualan - Retur CRUD", () => {
     await page.goto("/penjualan/retur/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Buat Retur Penjualan" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Cari faktur...")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("combobox").filter({ hasText: "Cari faktur..." }).first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -161,7 +161,7 @@ test.describe("Penjualan - Surat Jalan CRUD", () => {
     await page.goto("/penjualan/surat-jalan/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Buat Surat Jalan" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Cari pesanan penjualan...")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("combobox").filter({ hasText: "Cari pesanan penjualan..." }).first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -174,7 +174,7 @@ test.describe("Pembelian - Retur CRUD", () => {
     await page.goto("/pembelian/retur/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Buat Retur Pembelian" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Cari pesanan pembelian...")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("combobox").filter({ hasText: "Cari pesanan pembelian..." }).first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -187,7 +187,7 @@ test.describe("Pembelian - Pembayaran Vendor CRUD", () => {
     await page.goto("/pembelian/pembayaran-vendor/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Buat Pembayaran Pemasok" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Cari pemasok...")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("combobox").filter({ hasText: "Cari pemasok..." }).first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -200,7 +200,7 @@ test.describe("Penjualan - Pembayaran CRUD", () => {
     await page.goto("/penjualan/pembayaran/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Terima Pembayaran" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Cari faktur...")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("combobox").filter({ hasText: "Cari faktur..." }).first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -208,7 +208,7 @@ test.describe("Keuangan - Jurnal CRUD", () => {
   test("list loads", async ({ page }) => {
     await page.goto("/keuangan/jurnal", { waitUntil: "domcontentloaded" })
     await expect(page.getByRole("heading", { name: "Jurnal" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Cari no. jurnal atau deskripsi...")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByPlaceholder("Cari no. jurnal atau deskripsi...").first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -221,20 +221,20 @@ test.describe("Keuangan - Kas Kecil CRUD", () => {
     await page.goto("/keuangan/kas-kecil/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Buat Transaksi Kas Kecil" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByText("Akun Sumber (IN) / Beban (OUT)")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByText("Akun Sumber (IN) / Beban (OUT)").first()).toBeVisible({ timeout: 30000 })
   })
 })
 
 test.describe("Keuangan - Pengeluaran CRUD", () => {
   test("list loads + create form loads", async ({ page }) => {
     await page.goto("/keuangan/pengeluaran", { waitUntil: "domcontentloaded" })
-    await expect(page.getByRole("heading", { name: "Pengeluaran" })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("heading", { name: "Pengeluaran", exact: true })).toBeVisible({ timeout: 30000 })
     await expect(page.getByRole("link", { name: "+ Buat Pengeluaran" })).toBeVisible({ timeout: 30000 })
 
     await page.goto("/keuangan/pengeluaran/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Buat Pengeluaran" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByText("Dibayar Dari")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByText("Dibayar Dari").first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -248,7 +248,7 @@ test.describe("SDM - Cuti CRUD", () => {
     await page.goto("/sdm/cuti/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Ajukan Cuti" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Alasan cuti...")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByPlaceholder("Alasan cuti...").first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -256,12 +256,12 @@ test.describe("SDM - Lembur CRUD", () => {
   test("list loads + create form loads", async ({ page }) => {
     await page.goto("/sdm/lembur", { waitUntil: "domcontentloaded" })
     await expect(page.getByRole("heading", { name: "Permintaan Lembur" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Cari nama karyawan...")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByPlaceholder("Cari nama karyawan...").first()).toBeVisible({ timeout: 30000 })
 
     await page.goto("/sdm/lembur/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Ajukan Lembur" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Alasan lembur...")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByPlaceholder("Alasan lembur...").first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -274,7 +274,7 @@ test.describe("CRM - Tickets CRUD", () => {
     await page.goto("/crm/tickets/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Buat Tiket" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Subjek tiket")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByPlaceholder("Subjek tiket").first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -297,13 +297,13 @@ test.describe("Pengaturan - Persetujuan CRUD", () => {
 test.describe("Proyek - Tugas CRUD", () => {
   test("list loads + create form loads", async ({ page }) => {
     await page.goto("/proyek/tugas", { waitUntil: "domcontentloaded" })
-    await expect(page.getByRole("heading", { name: "Tugas Proyek" })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("heading", { name: "Tugas Proyek", exact: true })).toBeVisible({ timeout: 30000 })
     await expect(page.getByRole("link", { name: "Tambah Tugas" })).toBeVisible({ timeout: 30000 })
 
     await page.goto("/proyek/tugas/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Tambah Tugas" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Nama tugas...")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByPlaceholder("Nama tugas...").first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -316,15 +316,15 @@ test.describe("Aset - Transfer CRUD", () => {
     await page.goto("/aset/transfer/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Buat Transfer Aset" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Cari aset...")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("combobox").filter({ hasText: "Cari aset..." }).first()).toBeVisible({ timeout: 30000 })
   })
 })
 
 test.describe("Laporan - Laba Rugi", () => {
   test("list loads", async ({ page }) => {
     await page.goto("/laporan/laba-rugi", { waitUntil: "domcontentloaded" })
-    await expect(page.getByRole("heading", { name: "Laba Rugi" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByText("Multi Tahap")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("heading", { name: "Laba/Rugi (Standar)" })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByText("Multi Tahap").first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -332,7 +332,7 @@ test.describe("Laporan - Neraca", () => {
   test("list loads", async ({ page }) => {
     await page.goto("/laporan/neraca", { waitUntil: "domcontentloaded" })
     await expect(page.getByRole("heading", { name: "Neraca" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByText("Laporan Posisi Keuangan")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByText("Laporan Posisi Keuangan").first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -340,7 +340,7 @@ test.describe("Laporan - Arus Kas", () => {
   test("list loads", async ({ page }) => {
     await page.goto("/laporan/arus-kas", { waitUntil: "domcontentloaded" })
     await expect(page.getByRole("heading", { name: "Arus Kas" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByText("Arus Kas dari Aktivitas Operasi")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByText("Arus Kas dari Aktivitas Operasi").first()).toBeVisible({ timeout: 30000 })
   })
 })
 
@@ -348,6 +348,6 @@ test.describe("Laporan - Stok", () => {
   test("list loads", async ({ page }) => {
     await page.goto("/laporan/ringkasan-stok", { waitUntil: "domcontentloaded" })
     await expect(page.getByRole("heading", { name: "Ringkasan Persediaan" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByText("Persediaan per Gudang")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByText("Persediaan per Gudang").first()).toBeVisible({ timeout: 30000 })
   })
 })

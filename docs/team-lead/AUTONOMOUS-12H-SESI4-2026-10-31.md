@@ -190,7 +190,34 @@ Disiplin verifikasi yang berlaku: reviewer code-review terpisah per commit (mene
   `sales-chain` tanpa pesan locator (perlu rerun terisolasi untuk
   vonis), dan beberapa `toBeVisible`/`toHaveCount` halaman modul
   yang perlu dibedakan beban vs perubahan halaman per kasus.
-- Belum ada edit spec yang dilakukan; tak ada temuan produk dari
-  klasifikasi ini. Perbaikan spec per pola rumah: `.first()`/
-  `:visible` pada locator yang terbukti transien, helper
-  `awaitReady` yang sudah ada.
+- Hasil final (rerun serial, bundle rebuild sebagai langkah terakhir):
+
+  Fix PRODUK (commit terpisah, masing-masing + regression test):
+  1. Laporan Bukti Potong PPh crash total — loader memilih kolom
+     `deletedAt` yang tidak ada di `SalesPayment` (pembatalan = status
+     "reversed", FIN-BR-008). Fix select `status` + filter live.
+  2. Delete via ActionDropdown menghapus di server tapi baris tidak
+     di-refresh — tambah `router.refresh()` sesudah `showSuccess`
+     (pola `handleProcess`/`DeleteButton`), guard test sumber.
+
+  Fix SPEC (batch ini): `.first()` pada locator korban duplikat
+  streaming terarah; heading `exact: true`; scope `tr` untuk baris
+  ganda tabel-desktop+kartu-mobile; `.report-page-shell:visible`;
+  placeholder "Cari …" form tambah → trigger combobox; skip sah
+  berbasis empty-state untuk data kosong (barcode, rak Gudang Utama
+  tanpa rak); verifikasi delete ter-scope ke `[role=alertdialog]`
+  + baris `tr` (BJT: `body` memuat TEL saran Cmd-K global); pemulihan
+  proyek = bersihkan filter "E2E" lalu keyboard ArrowDown+Enter
+  (klik opsi cmdk kalah hidrasi; handler Enter kosong popup menutup
+  alih-alih memilih); pemulihan submit CC/PPN = klik ulang bila tak
+  ada toast dalam 6 detik (klik pra-hidrasi jatuh ke submit GET
+  native; ketiga aksi create/update idempoten).
+
+  Hijau final: 4 passed/1 skip sah (rack-row) pada 4 file terakhir
+  (kelompok-pajak 6,5s, pusat-biaya 7s, proyek 21,9s). Sebelumnya
+  hijau di bundle sama: master-merek, master-pajak, vehicle-model,
+  master-department, master-bank, module-coverage (27/27),
+  report-catalog, finance-journal, laporan-coverage, barcode.
+  Tertunda Task #7 (scratch DB terseed, JANGAN seed DB dev):
+  purchase-chain, sales-chain, crud-surface qc/inspeksi,
+  operasional berbasis seed, barcode berdata.
