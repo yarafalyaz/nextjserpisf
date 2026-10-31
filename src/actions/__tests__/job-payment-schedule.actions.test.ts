@@ -177,6 +177,39 @@ describe("updateJobPaymentScheduleTerms (BR-TM67-06)", () => {
   })
 })
 
+describe("status dibaca ulang sesudah lock quotation (race cancel vs update)", () => {
+  it("update menolak bila jadwal dibatalkan sesudah bacaan awal, sebelum lock didapat", async () => {
+    // Bacaan awal: aktif. Sesudah lockQuotationRow, pembatal konkuren sudah
+    // commit: bacaan segar harus "dibatalkan" dan tidak ada tulis termin.
+    let calls = 0
+    mocks.txMock.jobPaymentSchedule.findUnique.mockImplementation(async () => {
+      calls += 1
+      return scheduleWithTerms(calls === 1 ? "aktif" : "dibatalkan")
+    })
+    const res = await updateJobPaymentScheduleTerms({ scheduleId: 5, terms: TERMS })
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah tidak aktif")
+    expect(mocks.txMock.jobPaymentScheduleTerm.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.txMock.jobPaymentScheduleTerm.createMany).not.toHaveBeenCalled()
+    expect(mocks.txMock.jobPaymentSchedule.update).not.toHaveBeenCalled()
+  })
+
+  it("cancel menolak bila jadwal sudah dibatalkan sesudah bacaan awal (tak menimpa pencatat pertama)", async () => {
+    // Implementasi hitung: panggilan ke-1 (bacaan awal) aktif, panggilan
+    // ke-2+ (sesudah lock) dibatalkan. Tanpa baca-ulang di kode, panggilan
+    // ke-2 tak pernah terjadi dan cancel menimpa pencatat pertama.
+    let calls = 0
+    mocks.txMock.jobPaymentSchedule.findUnique.mockImplementation(async () => {
+      calls += 1
+      return scheduleWithTerms(calls === 1 ? "aktif" : "dibatalkan")
+    })
+    const res = await cancelJobPaymentSchedule({ scheduleId: 5, reason: "Batal kedua" })
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah tidak aktif")
+    expect(mocks.txMock.jobPaymentSchedule.update).not.toHaveBeenCalled()
+  })
+})
+
 describe("cancelJobPaymentSchedule", () => {
   it("alasan wajib; batal menandai status + pencatat", async () => {
     expect((await cancelJobPaymentSchedule({ scheduleId: 5, reason: " " })).success).toBe(false)

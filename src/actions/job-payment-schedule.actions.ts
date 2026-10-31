@@ -194,6 +194,17 @@ export async function updateJobPaymentScheduleTerms(input: {
     const reason = cleanText(input.reason)
 
     await prisma.$transaction(async (tx) => {
+      // Bacaan awal hanya untuk quotationId (kunci lock). Status + baris
+      // termin diputuskan dari bacaan SESUDAH lock: tanpa itu, cancel
+      // konkuren yang commit lebih dulu kalah — update ini menghapus dan
+      // membuat ulang termin jadwal yang sudah dibatalkan.
+      const probe = await tx.jobPaymentSchedule.findUnique({
+        where: { id: scheduleId },
+        select: { id: true, quotationId: true },
+      })
+      if (!probe) throw new Error("Jadwal termin tidak ditemukan")
+
+      await lockQuotationRow(tx, probe.quotationId)
       const schedule = await tx.jobPaymentSchedule.findUnique({
         where: { id: scheduleId },
         select: {
@@ -215,8 +226,6 @@ export async function updateJobPaymentScheduleTerms(input: {
       })
       if (!schedule) throw new Error("Jadwal termin tidak ditemukan")
       if (schedule.status !== "aktif") throw new Error("Jadwal termin sudah tidak aktif")
-
-      await lockQuotationRow(tx, schedule.quotationId)
       const quotation = await tx.quotation.findFirst({
         where: { id: schedule.quotationId, deletedAt: null },
         select: { id: true, grandTotal: true },
@@ -291,13 +300,20 @@ export async function cancelJobPaymentSchedule(input: {
     }
 
     await prisma.$transaction(async (tx) => {
+      const probe = await tx.jobPaymentSchedule.findUnique({
+        where: { id: scheduleId },
+        select: { id: true, quotationId: true },
+      })
+      if (!probe) throw new Error("Jadwal termin tidak ditemukan")
+      await lockQuotationRow(tx, probe.quotationId)
+      // Status diputuskan SESUDAH lock (lihat updateJobPaymentScheduleTerms):
+      // cancel-vs-cancel tak menimpa cancelReason/cancelledBy pertama.
       const schedule = await tx.jobPaymentSchedule.findUnique({
         where: { id: scheduleId },
         select: { id: true, quotationId: true, status: true },
       })
       if (!schedule) throw new Error("Jadwal termin tidak ditemukan")
       if (schedule.status !== "aktif") throw new Error("Jadwal termin sudah tidak aktif")
-      await lockQuotationRow(tx, schedule.quotationId)
       await tx.jobPaymentSchedule.update({
         where: { id: scheduleId },
         data: {
