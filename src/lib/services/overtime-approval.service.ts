@@ -21,14 +21,14 @@ export async function computeOvertimeApprovalValue(
     employeeId: number
     date: Date
     hours: unknown
-    employee?: { baseSalary: unknown } | null
+    employee?: { baseSalary: unknown; paymentFrequency?: string | null } | null
   },
   approvedBy: number,
 ): Promise<{ count: number }> {
   if (!ot.employee) {
     const row = await db.overtimeRequest.findUnique({
       where: { id: ot.id },
-      select: { employee: { select: { baseSalary: true } } },
+      select: { employee: { select: { baseSalary: true, paymentFrequency: true } } },
     })
     ot = { ...ot, employee: row?.employee ?? null }
   }
@@ -65,7 +65,13 @@ export async function computeOvertimeApprovalValue(
     fixedAllowance: sumAmounts(fixedAssignments),
     variableAllowance: sumAmounts(variableAssignments),
   })
-  const baseSalary = safeRound(basisResult.basis, 2)
+  // Karyawan WEEKLY: baseSalary master + komponen adalah nominal PER
+  // MINGGU (konvensi prorate: minggu utuh = nominal persis / 7 hari).
+  // Tarif lembur statutori = 1/173 × upah SEBULAN, jadi basis wajib
+  // dinormalisasi ke bulanan (× 52/12); memakai nominal mingguan mentah
+  // membayar lembur ~4,3x di bawah haknya.
+  const isWeekly = ot.employee?.paymentFrequency === "WEEKLY"
+  const baseSalary = safeRound(basisResult.basis * (isWeekly ? 52 / 12 : 1), 2)
   const dayProfile = await resolveDayKind(ot.employeeId, ot.date, db)
   const dayKind: OvertimeDayKind = dayProfile.isWorkingDay
     ? "workday"
@@ -79,6 +85,7 @@ export async function computeOvertimeApprovalValue(
   })
   const overtimeBaseSnapshot = {
     baseSalary: baseSalaryAsOf,
+    paymentFrequency: isWeekly ? "WEEKLY" : "MONTHLY",
     components: fixedAssignments.map((a) => ({
       name: a.component.name,
       amount: Number(a.defaultAmount),

@@ -352,7 +352,7 @@ export async function approveStep(approvalId: number, formData: FormData) {
                   date: true,
                   hours: true,
                   calculatedValue: true,
-                  employee: { select: { baseSalary: true } },
+                  employee: { select: { baseSalary: true, paymentFrequency: true } },
                 },
               });
               if (!ot) throw new Error("Dokumen tidak ditemukan");

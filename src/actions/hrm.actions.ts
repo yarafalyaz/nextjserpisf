@@ -1213,7 +1213,7 @@ export async function approveOvertime(overtimeId: number) {
 
     const ot = await prisma.overtimeRequest.findUniqueOrThrow({
       where: { id: overtimeId },
-      include: { employee: { select: { baseSalary: true } } },
+      include: { employee: { select: { baseSalary: true, paymentFrequency: true } } },
     });
     // Jalur manual (route workflow tanpa workflow aktif + server action
     // langsung) wajib scope sama dengan approveStep generik: tanpa ini

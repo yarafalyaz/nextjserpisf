@@ -85,4 +85,28 @@ describe("R8-SDM-06 basis lembur historis + lantai 75%", () => {
       computeOvertimePay({ monthlySalary: 7_500_000, hours: 3, dayKind: "workday" }),
     )
   })
+
+  it("karyawan WEEKLY: nominal mingguan dinormalisasi ke bulanan sebelum /173", async () => {
+    const { db, updateMany } = mockDb({ adjustments: [] })
+    const ot = {
+      id: 9,
+      employeeId: 3,
+      date: d("2026-09-10"),
+      hours: 3,
+      // Rp1.200.000 per MINGGU — bukan per bulan.
+      employee: { baseSalary: 1_200_000, paymentFrequency: "WEEKLY" },
+    }
+    await computeOvertimeApprovalValue(db, ot, 99)
+    const data = updateMany.mock.calls[0][0].data
+    const monthly = (1_200_000 * 52) / 12
+    expect(data.overtimeBaseSnapshot.paymentFrequency).toBe("WEEKLY")
+    expect(data.overtimeBaseSnapshot.baseTotal).toBe(monthly)
+    expect(data.calculatedValue).toBe(
+      computeOvertimePay({ monthlySalary: monthly, hours: 3, dayKind: "workday" }),
+    )
+    // Tanpa normalisasi nilai lama = basis mingguan mentah /173.
+    expect(data.calculatedValue).toBeGreaterThan(
+      computeOvertimePay({ monthlySalary: 1_200_000, hours: 3, dayKind: "workday" }),
+    )
+  })
 })
