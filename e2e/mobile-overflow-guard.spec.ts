@@ -43,7 +43,6 @@ test.describe("Mobile overflow guard 390px", () => {
           { timeout: 10_000, message: `Overflow di ${route.path} melebihi viewport 390` },
         )
         .toBeLessThanOrEqual(1)
-      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
 
       // Tambahan: body juga tidak boleh overflow signifikan
       const bodyOverflow = await page.evaluate(() => document.body.scrollWidth - document.body.clientWidth)
@@ -88,6 +87,5 @@ test.describe("Detail pages mobile no overflow", () => {
         { timeout: 10_000, message: "Overflow di detail proyek" },
       )
       .toBeLessThanOrEqual(1)
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   })
 })
