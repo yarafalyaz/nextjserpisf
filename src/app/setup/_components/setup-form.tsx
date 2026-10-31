@@ -120,9 +120,7 @@ export function SetupForm() {
       try {
         const result = await provisionSetupSchema()
         if (result.checks) {
-          const { tableCount: _tableCount, ...publicChecks } = result.checks
-          void _tableCount
-          setStatus({ installed: false, checks: publicChecks })
+          setStatus({ installed: false, checks: result.checks })
         }
         if (!result.success) {
           setProvError(result.error ?? "Gagal menyiapkan skema database")

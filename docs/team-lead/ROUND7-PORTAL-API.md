@@ -50,8 +50,10 @@ Semua entri di bawah SELESAI kecuali dinyatakan lain. Hash merujuk commit lokal 
 - Bukti: `getSetupStatus` publik memaparkan `tableCount` pra-instalasi.
 - Fix: tipe publik `PublicSetupChecks = Omit<SetupChecks, "tableCount">`, strip sebelum
   keluar; form men-strip hasil provision sebelum simpan state.
-- Sisa (bukan temuan baru): `provisionSetupSchema()` sendiri masih mengembalikan `checks`
-  penuh di payload action; `getSetupChecks` internal tetap menghitung untuk pemakaian internal.
+- Sisa DITUTUP 2026-10-31: `provisionSetupSchema()` kini juga mengembalikan
+  `PublicSetupChecks` lewat helper `toPublicChecks` yang sama (form tidak lagi
+  men-strip sendiri). `getSetupChecks` internal tetap menghitung `tableCount`
+  untuk pemakaian internal.
 
 ## R7PB-06 — LOW · CONFIRMED — SELESAI `cbc32d49a`
 

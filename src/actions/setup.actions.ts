@@ -26,6 +26,13 @@ import { getErrorMessage } from "@/lib/utils/error"
  */
 export type PublicSetupChecks = Omit<SetupChecks, "tableCount">
 
+/** R7PB-05: strip sidik jari DB dari checks sebelum keluar ke klien publik. */
+function toPublicChecks(checks: SetupChecks): PublicSetupChecks {
+  const { tableCount: _tableCount, ...publicChecks } = checks
+  void _tableCount
+  return publicChecks
+}
+
 export async function getSetupStatus(): Promise<{
   installed: boolean
   checks: PublicSetupChecks | null
@@ -35,9 +42,7 @@ export async function getSetupStatus(): Promise<{
   const checks = await getSetupChecks()
   // R7PB-05: endpoint publik pra-instalasi hanya butuh boolean kesiapan;
   // jumlah tabel eksak adalah sidik jari kesiapan DB yang tak perlu keluar.
-  const { tableCount: _tableCount, ...publicChecks } = checks
-  void _tableCount
-  return { installed, checks: publicChecks }
+  return { installed, checks: toPublicChecks(checks) }
 }
 
 /**
@@ -59,11 +64,11 @@ export async function provisionSetupSchema() {
       return {
         success: false,
         error: "Database tidak terjangkau. Periksa DATABASE_URL pada konfigurasi server.",
-        checks: before,
+        checks: toPublicChecks(before),
       }
     }
     if (before.schemaReady) {
-      return { success: true, checks: before }
+      return { success: true, checks: toPublicChecks(before) }
     }
 
     const result = await provisionSchema()
@@ -72,10 +77,10 @@ export async function provisionSetupSchema() {
       return {
         success: false,
         error: result.message || "Skema database belum siap.",
-        checks,
+        checks: toPublicChecks(checks),
       }
     }
-    return { success: true, checks }
+    return { success: true, checks: toPublicChecks(checks) }
   } catch (e: unknown) {
     console.error("[provisionSetupSchema]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Gagal menyiapkan skema database") }
