@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => {
       ...buildModelMock(),
       findUnique: vi.fn().mockResolvedValue({ id: 1 }),
     },
+    customerCommissionRate: buildModelMock(),
+    salesInvoice: buildModelMock(),
     customerVehicle: buildModelMock(),
     vendor: buildModelMock(),
     item: buildModelMock(),
@@ -146,6 +148,25 @@ describe("FK fiktif customerCategoryId/paymentTermId (repro)", () => {
     expect(res?.success).toBe(false)
     expect(mocks.prismaMock.customer.update).not.toHaveBeenCalled()
     expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+  })
+  it("createCustomerCommissionRate mengunci baris kategori sebelum validasi overlap", async () => {
+    mocks.prismaMock.customerCategory.findFirst.mockResolvedValue({ id: 3 })
+    mocks.prismaMock.customerCommissionRate.findMany.mockResolvedValue([])
+    mocks.prismaMock.customerCommissionRate.create.mockResolvedValue({ id: 9 })
+    const res = await actions.createCustomerCommissionRate(fdMap({
+      customerCategoryId: "3", commissionPercent: "5", effectiveFrom: "2026-01-01",
+    }))
+    expect(res?.success).toBe(true)
+    const lockSql = (mocks.prismaMock.$executeRaw.mock.calls as unknown[][])
+      .map((c) => {
+        const first = c[0] as { strings?: string[] } | unknown
+        if (Array.isArray(first)) return first.join("?")
+        return (first as { strings?: string[] })?.strings?.join("?") ?? ""
+      })
+      .join(" ")
+    expect(lockSql).toContain("customer_categories")
+    const lockOrder = mocks.prismaMock.$executeRaw.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(mocks.prismaMock.customerCommissionRate.findMany.mock.invocationCallOrder[0])
   })
   it("createVendor tolak paymentTermId fiktif", async () => {
     const res = await actions.createVendor(fdMap({ name: "V", paymentTermId: "999999" }))

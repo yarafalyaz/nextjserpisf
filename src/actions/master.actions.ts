@@ -3687,6 +3687,10 @@ export async function createCustomerCommissionRate(formData: FormData) {
     if ("error" in parsed) return { success: false, error: parsed.error }
 
     const created = await prisma.$transaction(async (tx) => {
+      // Kunci baris kategori SEBELUM rowset dibaca: penulis konkuren kategori
+      // yang sama terserialkan, jadi validasi overlap tidak balapan dengan
+      // insert rentang yang baru saja berkomitmen di transaksi lain.
+      await tx.$executeRaw`SELECT id FROM customer_categories WHERE id = ${parsed.customerCategoryId} FOR UPDATE`
       const category = await tx.customerCategory.findFirst({
         where: { id: parsed.customerCategoryId, deletedAt: null },
         select: { id: true },
@@ -3735,6 +3739,8 @@ export async function updateCustomerCommissionRate(id: number, formData: FormDat
     const result = await prisma.$transaction(async (tx) => {
       const target = await tx.customerCommissionRate.findUnique({ where: { id } })
       if (!target) return { error: "Baris tarif komisi tidak ditemukan" } as const
+      // Kunci kategori target, lalu rowset + cek snapshot dibaca di bawah kunci.
+      await tx.$executeRaw`SELECT id FROM customer_categories WHERE id = ${target.customerCategoryId} FOR UPDATE`
       const existing = await loadCommissionRateRows(tx, target.customerCategoryId)
       const snapshotSource = await tx.salesInvoice.findFirst({
         where: { commissionRateId: id },
@@ -3779,6 +3785,8 @@ export async function deleteCustomerCommissionRate(id: number) {
     const result = await prisma.$transaction(async (tx) => {
       const target = await tx.customerCommissionRate.findUnique({ where: { id } })
       if (!target) return { error: "Baris tarif komisi tidak ditemukan" } as const
+      // Kunci kategori milik target, lalu cek snapshot dibaca di bawah kunci.
+      await tx.$executeRaw`SELECT id FROM customer_categories WHERE id = ${target.customerCategoryId} FOR UPDATE`
       const snapshotSource = await tx.salesInvoice.findFirst({
         where: { commissionRateId: id },
         select: { id: true },
