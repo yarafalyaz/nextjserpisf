@@ -466,6 +466,32 @@ describe("Production Order Actions", () => {
     expect(fifoArg.documentDate.getTime()).toBeGreaterThan(Date.now() - 60_000)
   })
 
+  it("issueMaterial mengunci baris WO sebelum guard konsumsi MI (pasangan completeMaterialIssue)", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", totalActualCost: 0, workOrderId: 42,
+    })
+    mocks.prismaMock.materialIssue.count.mockResolvedValue(0)
+    mocks.prismaMock.item.findMany.mockResolvedValue([{
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+    }])
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 99 })
+    const sqlSeen: string[] = []
+    mocks.prismaMock.$queryRaw.mockImplementation((...a: any[]) => {
+      const first = a[0]
+      sqlSeen.push(Array.isArray(first) ? first.join("?") : ((first as any)?.strings?.join("?") ?? String(first ?? "")))
+      return Promise.resolve([])
+    })
+    const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 3 }])
+    expect(res.success).toBe(true)
+    const woLockIdx = sqlSeen.findIndex((s) => /work_orders/i.test(s) && /for update/i.test(s))
+    expect(woLockIdx).toBeGreaterThanOrEqual(0)
+    expect(mocks.prismaMock.$queryRaw.mock.invocationCallOrder[woLockIdx]).toBeLessThan(
+      mocks.prismaMock.materialIssue.count.mock.invocationCallOrder[0],
+    )
+  })
+
   it("refuses PO issue when the linked WO was already consumed via MI (P1-4)", async () => {
     mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
       id: 8, documentNo: "MO-008", status: "in_progress", totalActualCost: 0, workOrderId: 42,

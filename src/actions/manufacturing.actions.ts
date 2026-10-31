@@ -939,8 +939,14 @@ export async function issueMaterial(
       // P1-4: guard silang antar-jalur konsumsi. PO tertaut WO yang sudah
       // dikonsumsi via Material Issue resmi (completed/processing) tidak
       // boleh dikonsumsi lagi via issueMaterial — material sama keluar dua
-      // kali tanpa guard ini. Pilih satu jalur per WO.
+      // kali tanpa guard ini. Pilih satu jalur per WO. Kunci baris WO
+      // adalah pasangan serialisasi dengan completeMaterialIssue (yang
+      // mengunci WO sebelum membaca agregat actualQty): tanpa kunci ini,
+      // complete yang sudah lolos guard bisa commit StockMove sesudah cek
+      // di bawah, dan actualQty di sini tetap lahir — material keluar dua
+      // jalur. Urutan kunci global: PO lalu WO.
       if (order.workOrderId != null) {
+        await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${order.workOrderId} FOR UPDATE`;
         const consumedViaMI = await tx.materialIssue.count({
           where: {
             workOrderId: order.workOrderId,

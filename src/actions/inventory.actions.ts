@@ -1192,46 +1192,35 @@ export async function completeMaterialIssue(issueId: number) {
 
     // P1-4: guard silang arah sebaliknya. MI tertaut WO yang PO-nya sudah
     // mengonsumsi material (actualQty > 0) tidak boleh diselesaikan — jalur
-    // PO sudah mengeluarkan material yang sama. Dicek setelah klaim agar
-    // serial dengan complete konkuren. Klaim dikembalikan ke draft sebelum
-    // menolak agar bisa dicoba lagi setelah jalur diluruskan.
-    const issueWo = await prisma.materialIssue.findUniqueOrThrow({
-      where: { id: issueId },
-      select: { workOrderId: true },
-    });
-    if (issueWo.workOrderId != null) {
-      // F-009-V: MI draft lama ke WO yang kini closed ikut beku saat complete.
-      try {
-        await assertJobCostMutable({ workOrderId: issueWo.workOrderId }, "diselesaikan pengeluaran materialnya")
-      } catch (closedErr) {
-        await prisma.materialIssue.updateMany({
-          where: { id: issueId, status: "processing" },
-          data: { status: "draft" },
-        });
-        throw closedErr;
-      }
-    }
-    if (issueWo.workOrderId != null) {
-      const poConsumed = await prisma.productionOrderMaterial.aggregate({
-        where: {
-          productionOrder: { workOrderId: issueWo.workOrderId },
-          actualQty: { gt: 0 },
-        },
-        _sum: { actualQty: true },
-      });
-      if (Number(poConsumed._sum.actualQty ?? 0) > 0) {
-        await prisma.materialIssue.updateMany({
-          where: { id: issueId, status: "processing" },
-          data: { status: "draft" },
-        });
-        throw new Error(
-          "WO ini sudah dikonsumsi via perintah produksi — batalkan/void MI ini dan gunakan jalur PO.",
-        );
-      }
-    }
-
+    // PO sudah mengeluarkan material yang sama. Guard berjalan DI DALAM tx
+    // sesudah baris WO dikunci: issueMaterial mengunci PO lalu WO sebelum
+    // menulis actualQty, jadi agregat di bawah membaca nilai yang sudah
+    // commit. Versi lama membaca agregat lewat prisma global sesudah klaim
+    // — PO yang commit di antaranya lolos dan material keluar dua jalur.
+    // Throw dalam tx mengembalikan klaim ke draft lewat catch di bawah.
     try {
       await prisma.$transaction(async (tx) => {
+        const issueWo = await tx.materialIssue.findUniqueOrThrow({
+          where: { id: issueId },
+          select: { workOrderId: true },
+        });
+        if (issueWo.workOrderId != null) {
+          await tx.$executeRaw`SELECT id FROM work_orders WHERE id = ${issueWo.workOrderId} FOR UPDATE`;
+          // F-009-V: MI draft lama ke WO yang kini closed ikut beku saat complete.
+          await assertJobCostMutable({ workOrderId: issueWo.workOrderId }, "diselesaikan pengeluaran materialnya", tx as never)
+          const poConsumed = await tx.productionOrderMaterial.aggregate({
+            where: {
+              productionOrder: { workOrderId: issueWo.workOrderId },
+              actualQty: { gt: 0 },
+            },
+            _sum: { actualQty: true },
+          });
+          if (Number(poConsumed._sum.actualQty ?? 0) > 0) {
+            throw new Error(
+              "WO ini sudah dikonsumsi via perintah produksi — batalkan/void MI ini dan gunakan jalur PO.",
+            );
+          }
+        }
         // Hook creates Stock Moves OUT per item + Accounting journal
         await onMaterialIssueStock(issueId, Number(user.id), tx);
         // F-2026-10-22-072-S (Q-IP-1): MI proyek tanpa WO melahirkan

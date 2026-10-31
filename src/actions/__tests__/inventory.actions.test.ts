@@ -502,6 +502,31 @@ describe("Material Issue Actions", () => {
       expect.objectContaining({ data: { status: "draft" } }),
     );
   });
+  it("completeMaterialIssue mengunci baris WO sebelum guard konsumsi PO (anti keluar dua jalur)", async () => {
+    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", items: [], workOrderId: 42,
+    });
+    mocks.prismaMock.productionOrderMaterial.aggregate.mockResolvedValue({
+      _sum: { actualQty: 0 },
+    });
+    const sqlSeen: string[] = [];
+    (mocks.prismaMock as any).$executeRaw.mockImplementation((...a: any[]) => {
+      const first = a[0];
+      sqlSeen.push(Array.isArray(first) ? first.join("?") : ((first as any)?.strings?.join("?") ?? String(first ?? "")));
+      return Promise.resolve(1);
+    });
+    const res = await actions.completeMaterialIssue(1);
+    expect(res?.success).toBe(true);
+    // Guard agregat selama ini prisma global sesudah klaim: issueMaterial
+    // (kunci PO, tanpa kunci WO) bisa commit actualQty di antaranya dan MI
+    // tetap mengeluarkan material yang sama. Kunci WO bersama menahan itu.
+    const woLockIdx = sqlSeen.findIndex((s) => /work_orders/i.test(s) && /for update/i.test(s));
+    expect(woLockIdx).toBeGreaterThanOrEqual(0);
+    expect((mocks.prismaMock as any).$executeRaw.mock.invocationCallOrder[woLockIdx]).toBeLessThan(
+      mocks.prismaMock.productionOrderMaterial.aggregate.mock.invocationCallOrder[0],
+    );
+  });
+
   it("completeMaterialIssue does not duplicate journal (stock hook owns it)", async () => {
     vi.clearAllMocks();
     seedDraft(mocks.prismaMock.materialIssue, { items: [] });
