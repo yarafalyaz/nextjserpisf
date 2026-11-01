@@ -1474,6 +1474,29 @@ describe("RAB proyek F-2026-10-21-030", () => {
     expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 47: usulan revisi kedua ditolak selagi usulan lain masih terbuka", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({ budgetLockedAt: new Date(2026, 9, 20) }),
+    )
+    // Usulan id 31 sudah lahir dan belum diputuskan (tidak ada log settled
+    // yang menunjuknya). Usulan kedua atas RAB yang sama harus ditolak —
+    // kontrak UI hanya pernah menampilkan satu usulan terbuka; dua usulan
+    // terbuka memungkinkan usulan basi diterapkan sesudah yang lebih muda.
+    mocks.prismaMock.projectLog.findMany
+      .mockResolvedValueOnce([{ id: 31 }]) // proposals: terbuka id 31
+      .mockResolvedValueOnce([]) // settled logs: belum ada
+    const payload = JSON.stringify({
+      changes: [{ type: "create", data: { qty: 1, cost: 1000 } }],
+    })
+    const res = await actions.proposeProjectBudgetRevision(
+      10,
+      fdMap({ reason: "Usulan kedua", changes: payload }),
+    )
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/usulan.*terbuka|sudah ada usulan/i)
+    expect(mocks.prismaMock.projectLog.create).not.toHaveBeenCalled()
+  })
+
   it("terapkan revisi: ubah baris + budgetRevisionNo+1 + log rab_revision lama->baru", async () => {
     mocks.prismaMock.project.findUnique.mockResolvedValue(
       unlockedProject({

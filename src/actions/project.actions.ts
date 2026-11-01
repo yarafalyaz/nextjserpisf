@@ -1447,6 +1447,18 @@ export async function proposeProjectBudgetRevision(
           "Anggaran proyek belum terkunci — ubah baris RAB langsung, revisi hanya untuk anggaran terkunci.",
         )
       }
+      // Satu usulan terbuka per proyek: UI hanya menampilkan yang terbaru,
+      // tetapi apply menerima logId mana pun — dua usulan terbuka berarti
+      // usulan lama (dibuat atas dasar RAB pra-revisi) bisa diterapkan
+      // sesudah usulan yang lebih muda dan menumpuk revisi. loadBudgetProject
+      // di atas sudah mengunci baris proyek, jadi cek ini terserialisasi
+      // terhadap propose/apply/reject konkuren.
+      const open = await findOpenRevisionProposal(tx, projectId)
+      if (open) {
+        throw new Error(
+          "Sudah ada usulan revisi RAB yang masih terbuka pada proyek ini — putuskan usulan tersebut terlebih dahulu sebelum mengajukan usulan baru.",
+        )
+      }
       return tx.projectLog.create({
         data: {
           projectId,
@@ -1473,6 +1485,31 @@ export async function proposeProjectBudgetRevision(
     console.error("[proposeProjectBudgetRevision]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
+}
+
+/**
+ * Terbuka = usulan rab_revision_proposed yang belum dirujuk log settled
+ * (rab_revision/rab_revision_rejected). Definisi yang sama dengan pembaca
+ * RSC halaman proyek dan loadOpenRevisionProposal.
+ */
+async function findOpenRevisionProposal(tx: TxClient, projectId: number) {
+  const [proposals, settledLogs] = await Promise.all([
+    tx.projectLog.findMany({
+      where: { projectId, action: "rab_revision_proposed" },
+      select: { id: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    tx.projectLog.findMany({
+      where: { projectId, action: { in: ["rab_revision", "rab_revision_rejected"] } },
+      select: { details: true },
+    }),
+  ])
+  const settled = new Set(
+    settledLogs
+      .map((l) => (l.details as { proposalLogId?: unknown } | null)?.proposalLogId)
+      .filter((v): v is number => typeof v === "number"),
+  )
+  return proposals.find((p) => !settled.has(p.id)) ?? null
 }
 
 async function loadOpenRevisionProposal(tx: TxClient, projectId: number, proposalLogId: number, deciderUserId?: number) {
