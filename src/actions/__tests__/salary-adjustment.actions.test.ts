@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   logActivity: vi.fn(),
   employeeFindUniqueScope: vi.fn(),
+  employeeFindFirst: vi.fn(),
 }))
 
 vi.mock("@/lib/auth/permissions", () => ({
@@ -48,6 +49,7 @@ vi.mock("@/lib/db/prisma", () => ({
     employee: {
       findUnique: mocks.employeeFindUnique,
       findUniqueOrThrow: mocks.employeeFindUniqueOrThrow,
+      findFirst: mocks.employeeFindFirst,
     },
     $transaction: mocks.transaction,
   },
@@ -81,6 +83,7 @@ function mockCreateTransaction() {
     $executeRaw: vi.fn(async () => 1),
     employee: {
       findUniqueOrThrow: vi.fn(async () => ({ baseSalary: 4_000_000, name: "Budi" })),
+      findFirst: vi.fn(async () => ({ id: 7 })),
     },
     salaryAdjustment: {
       create: vi.fn(async (args: { data: Record<string, unknown> }) => ({
@@ -102,6 +105,7 @@ beforeEach(() => {
   mocks.requirePermission.mockResolvedValue(approver)
   mocks.adjustmentFindUnique.mockResolvedValue(pendingRow())
   mocks.adjustmentUpdateMany.mockResolvedValue({ count: 1 })
+  mocks.employeeFindFirst.mockResolvedValue({ id: 7 })
   mocks.logActivity.mockResolvedValue(undefined)
 })
 
@@ -299,6 +303,59 @@ describe("TEMUAN-1 scope HR create/get/cancel", () => {
       const desc = String(call[3] ?? "")
       expect(desc).not.toMatch(NOMINAL_GAJI_TERLARANG)
     }
+  })
+})
+
+describe("putaran 38: gerbang create/approve penyesuaian gaji", () => {
+  function form() {
+    const fd = new FormData()
+    fd.set("employeeId", "7")
+    fd.set("newBaseSalary", "5000000")
+    fd.set("reason", "berkala")
+    fd.set("effectiveDate", "2027-01-01")
+    return fd
+  }
+
+  it("tanggal efektif fiktif 2027-02-30 ditolak, bukan bergulir ke Maret", async () => {
+    mocks.requirePermission.mockResolvedValue(maker)
+    mockCreateTransaction()
+    const fd = form()
+    fd.set("effectiveDate", "2027-02-30")
+    const res = await createSalaryAdjustment(fd)
+    expect(res.success).toBe(false)
+    expect(mocks.transaction).not.toHaveBeenCalled()
+  })
+
+  it("gaji pokok baru 0 ditolak (bukan hanya negatif)", async () => {
+    mocks.requirePermission.mockResolvedValue(maker)
+    mockCreateTransaction()
+    const fd = form()
+    fd.set("newBaseSalary", "0")
+    const res = await createSalaryAdjustment(fd)
+    expect(res.success).toBe(false)
+    expect(mocks.transaction).not.toHaveBeenCalled()
+  })
+
+  it("create untuk karyawan nonaktif/terhapus ditolak sebelum transaksi", async () => {
+    mocks.requirePermission.mockResolvedValue(maker)
+    mockCreateTransaction()
+    mocks.employeeFindFirst.mockResolvedValue(null)
+    const res = await createSalaryAdjustment(form())
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toContain("Karyawan tidak ditemukan atau tidak aktif")
+    expect(mocks.transaction).not.toHaveBeenCalled()
+    expect(mocks.employeeFindFirst).toHaveBeenCalledWith({
+      where: { id: 7, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+  })
+
+  it("approve untuk karyawan yang kini mati ditolak sebelum klaim", async () => {
+    mocks.employeeFindFirst.mockResolvedValue(null)
+    const res = await approveSalaryAdjustment(5)
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toContain("Karyawan tidak ditemukan atau tidak aktif")
+    expect(mocks.adjustmentUpdateMany).not.toHaveBeenCalled()
   })
 })
 

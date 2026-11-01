@@ -11,6 +11,22 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { revalidatePath } from "next/cache";
 import { computeChangePercent } from "@/lib/services/salary-adjustment.service";
 import { SALARY_ADJUSTMENT_REASONS } from "@/lib/hr/hcms-scoring";
+import { dateOnly } from "@/lib/validations/finance.schemas";
+
+/**
+ * Karyawan target penyesuaian wajib hidup (ada + isActive + belum
+ * soft-delete) — pola assertLiveEmployee hrm.actions.ts. Penyesuaian
+ * untuk karyawan mati tak pernah boleh lahir maupun disetujui:
+ * applyDueSalaryAdjustments akan menuliskannya ke master saat jatuh
+ * tempo dan sweep berhenti hanya berjalan di jalur baca.
+ */
+async function assertLiveSalaryEmployee(employeeId: number): Promise<void> {
+  const live = await prisma.employee.findFirst({
+    where: { id: employeeId, isActive: true, deletedAt: null },
+    select: { id: true },
+  });
+  if (!live) throw new Error("Karyawan tidak ditemukan atau tidak aktif");
+}
 
 function resultError(e: unknown, tag: string) {
   if (isNextRedirectError(e)) throw e;
@@ -99,7 +115,9 @@ export async function createSalaryAdjustment(formData: FormData) {
     // TEMUAN-1 PR #959: scope HR ditegakkan sebelum employeeId dipakai.
     await assertSalaryEmployeeScope(actor, employeeIdRaw);
     const newBaseSalary = parseMoneyAmount(formData.get("newBaseSalary"));
-    if (newBaseSalary == null || newBaseSalary < 0) {
+    // Gaji Rp0 bukan penyesuaian sah: sekali disetujui, penerapan
+    // menuliskan 0 ke master dan slip berikutnya lahir tanpa pokok.
+    if (newBaseSalary == null || newBaseSalary <= 0) {
       throw new Error("Gaji pokok baru tidak valid");
     }
     const reason = String(formData.get("reason") ?? "");
@@ -108,6 +126,13 @@ export async function createSalaryAdjustment(formData: FormData) {
     }
     const effectiveRaw = String(formData.get("effectiveDate") ?? "").trim();
     if (!effectiveRaw) throw new Error("Tanggal efektif wajib diisi");
+    // wibDateToUtcMidnight menggulir 2027-02-30 ke 2 Mar — tolak tanggal
+    // kalender fiktif lewat dateOnly (preseden hrm.actions.ts:430-437,
+    // assignEmployeePayrollComponent; pengecualian terakhir SDM).
+    if (!dateOnly.safeParse(effectiveRaw).success) {
+      throw new Error("Tanggal efektif tidak valid");
+    }
+    await assertLiveSalaryEmployee(employeeIdRaw);
     const effectiveDate = wibDateToUtcMidnight(effectiveRaw);
     const notes = String(formData.get("notes") ?? "").trim() || null;
 
@@ -117,6 +142,15 @@ export async function createSalaryAdjustment(formData: FormData) {
         where: { id: employeeIdRaw },
         select: { baseSalary: true, name: true },
       });
+      // Status karyawan berubah di antara penilaian pra-tx dan kunci:
+      // nilai ulang di bawah kunci (pola titik tulis putaran 30-38).
+      const liveLocked = await tx.employee.findFirst({
+        where: { id: employeeIdRaw, isActive: true, deletedAt: null },
+        select: { id: true },
+      });
+      if (!liveLocked) {
+        throw new Error("Karyawan tidak ditemukan atau tidak aktif");
+      }
       const previous = Number(employee.baseSalary);
       if (newBaseSalary === previous) {
         throw new Error("Gaji pokok baru sama dengan gaji saat ini");
@@ -166,6 +200,10 @@ export async function approveSalaryAdjustment(id: number) {
     await assertSalaryApproverScope(actor);
     const row = await loadAdjustmentForDecision(id);
     assertNotSelfDecision(actor, row);
+    // Karyawan yang mati sesudah pengajuan tak boleh lagi disetujui —
+    // penyesuaian terjadwal akan diterapkan ke master oleh
+    // applyDueSalaryAdjustments tanpa penilaian hidup di sana.
+    await assertLiveSalaryEmployee(row.employeeId);
     // Klaim atomik bersyarat: hanya baris yang masih menunggu yang beralih;
     // balapan dua penyetuju -> yang kalah count 0 (EC-SA-1, idempoten).
     const claim = await prisma.salaryAdjustment.updateMany({
