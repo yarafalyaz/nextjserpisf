@@ -157,6 +157,58 @@ describe("reverseJournal", () => {
     expect(journalUpdateMock).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 47: menolak reversal generik jurnal siklus aset (perolehan), nol jurnal ditulis", async () => {
+    journalFindUniqueOrThrowMock.mockResolvedValue({
+      id: 55,
+      status: "POSTED",
+      referenceType: "ASSET_ACQUISITION",
+      referenceId: 42,
+      transactionDate: new Date("2026-06-15"),
+      journalNumber: "JRN-202606-00055",
+      description: "Perolehan aset: Mesin (AST-01)",
+      type: "ASSET_ACQUISITION",
+      totalDebit: 1000,
+      totalCredit: 1000,
+      entries: [
+        { accountId: 100, debit: 1000, credit: 0, memo: "aset", costCenterId: null, profitCenterId: null },
+        { accountId: 200, debit: 0, credit: 1000, memo: "kas", costCenterId: null, profitCenterId: null },
+      ],
+    })
+
+    const result = await reverseJournal(55)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("siklus aset")
+    expect(journalCreateMock).not.toHaveBeenCalled()
+    expect(journalUpdateManyMock).not.toHaveBeenCalled()
+    expect(journalUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 47: menolak reversal generik jurnal penyusutan masa (ASSET_DEPRECIATION_YYYYMM)", async () => {
+    journalFindUniqueOrThrowMock.mockResolvedValue({
+      id: 56,
+      status: "POSTED",
+      referenceType: "ASSET_DEPRECIATION_202606",
+      referenceId: 42,
+      transactionDate: new Date("2026-06-01"),
+      journalNumber: "JRN-202606-00056",
+      description: "Penyusutan aset: Mesin (AST-01) - 6/2026",
+      type: "DEPRECIATION",
+      totalDebit: 100,
+      totalCredit: 100,
+      entries: [
+        { accountId: 300, debit: 100, credit: 0, memo: "beban", costCenterId: null, profitCenterId: null },
+        { accountId: 301, debit: 0, credit: 100, memo: "akumulasi", costCenterId: null, profitCenterId: null },
+      ],
+    })
+
+    const result = await reverseJournal(56)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("siklus aset")
+    expect(journalCreateMock).not.toHaveBeenCalled()
+    expect(journalUpdateManyMock).not.toHaveBeenCalled()
+    expect(journalUpdateMock).not.toHaveBeenCalled()
+  })
+
   it("rolls the tx back when the reversal body throws (atomic claim+reversal)", async () => {
     // The claim now lives INSIDE the same tx as the reversal: a tx failure
     // rolls both back atomically. No outer claim + compensating restore

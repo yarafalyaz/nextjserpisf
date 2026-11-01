@@ -2713,6 +2713,25 @@ export async function reverseJournal(journalId: number) {
         throw new Error(YEAR_END_CLOSING_GENERIC_REVERSAL_ERROR);
       }
 
+      // Putaran 47: jurnal siklus aset (perolehan/pelepasan/penyusutan masa/
+      // peristiwa perubahan) tidak boleh lewat jalur generik ini. Pembaca
+      // aset (cron penyusutan, disposal, registry) hanya membaca pasangan
+      // POSTED referenceType aset; reversal generik lahir sebagai "Journal"
+      // sehingga asli yang REVERSED lenyap dari nilai buku jurnal sementara
+      // status/peristiwa aset tidak ikut dibatalkan — aset yatim di GL.
+      // Koreksi jurnal aset lewat jalur aset (reversal peristiwa perubahan,
+      // disposal, jurnal koreksi manual).
+      if (
+        journal.referenceType === "ASSET_ACQUISITION" ||
+        journal.referenceType === "ASSET_DISPOSAL" ||
+        journal.referenceType === "ASSET_CHANGE_EVENT" ||
+        journal.referenceType?.startsWith("ASSET_DEPRECIATION_")
+      ) {
+        throw new Error(
+          "Jurnal siklus aset tidak dapat dibalik lewat jurnal umum. Koreksi melalui jalur aset (peristiwa perubahan/pelepasan) atau jurnal koreksi manual.",
+        );
+      }
+
       // Atomic conditional claim — serialize concurrent reverse requests so only one
       // reversal journal is created; duplicates get a clean error instead of
       // corrupting the GL with two reversals. Runs INSIDE the same tx after the
