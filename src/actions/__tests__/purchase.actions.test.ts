@@ -1488,6 +1488,36 @@ describe("Purchase Return Actions", () => {
     vi.mocked(findOverReturn).mockReturnValue(null)
   })
 
+  it("regression round 18: retur lampau ikut dikonversi ke qty dasar sebelum cap", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ unitOfMeasure: "PCS" })
+    mocks.prismaMock.uomConversion.findUnique.mockImplementation(async ({ where }: any) =>
+      where?.itemId_code?.code === "BOX" ? { factorToBase: 12 } : null,
+    )
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValue([
+      { id: 11, itemId: 1, qty: 10, uom: "BOX" },
+    ])
+    // 10 BOX sudah diretur sebelumnya = 120 PCS dasar; bukan "10" mentah.
+    mocks.prismaMock.purchaseReturnItem.findMany.mockResolvedValue([
+      { itemId: 1, qty: 10, goodsReceiptItemId: null },
+    ])
+    const real = await vi.importActual<typeof import("@/lib/sales/return-validation")>("@/lib/sales/return-validation")
+    const { findOverReturn } = await import("@/lib/sales/return-validation")
+    vi.mocked(findOverReturn).mockImplementation(real.findOverReturn)
+
+    const over = await actions.createPurchaseReturn(fdMap({
+      purchaseOrderId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1 }]),
+    }))
+    const createCalled = mocks.prismaMock.purchaseReturn.create.mock.calls.length > 0
+    vi.mocked(findOverReturn).mockReset()
+    vi.mocked(findOverReturn).mockReturnValue(null)
+
+    expect(over?.success).toBe(false)
+    expect(over?.error).toContain("melebihi yang diterima")
+    expect(createCalled).toBe(false)
+  })
+
   it("STOK-16: tautan baris penerimaan asal disimpan dan cap per baris GR ditegakkan", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     // Dua penerimaan item sama, UOM beda: GR 11 = 1 BOX (12 PCS), GR 12 = 5 PCS.

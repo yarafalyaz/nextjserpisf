@@ -652,9 +652,18 @@ async function assertPurchaseReturnWithinReceived(
   });
   const alreadyReturnedByItem = new Map<number, number>();
   for (const r of priorReturns) {
+    // Basis dasar juga untuk retur lampau: qty tersimpan dalam UoM baris
+    // GR tertautnya, atau UoM receipt pertama per item bila tak tertaut
+    // (konvensi yang sama dengan returnBaseItems). Menjumlah mentah
+    // mencampur basis — retur 10 BOX terbaca 10 terhadap diterima dasar
+    // 120 PCS dan sisa 110 semu membuka retur berlebih.
+    const linked = r.goodsReceiptItemId != null ? grById.get(r.goodsReceiptItemId) : undefined;
+    const f = linked
+      ? (factorByKey.get(`${linked.itemId}:${linked.uom ?? ""}`) ?? 1)
+      : (factorByItem.get(r.itemId) ?? 1);
     alreadyReturnedByItem.set(
       r.itemId,
-      (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty),
+      (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty) * f,
     );
   }
   // STOK-16: baris tertaut juga dibatasi per baris GR asal — dua penerimaan
