@@ -417,6 +417,14 @@ describe("addLeadActivity guard + scheduledAt (round4 #5)", () => {
     // Lead hidup milik user sesi (id 1); kasus lain menimpa per tes.
     mocks.prismaMock.lead.findFirst.mockResolvedValue({ id: 1, assignedTo: 1 })
   })
+  it("regresi putaran 46: menolak aktivitas baru pada lead lost tanpa tulis DB", async () => {
+    mocks.prismaMock.lead.findFirst.mockResolvedValueOnce({ id: 1, assignedTo: 1, status: "lost" })
+    const res = await actions.addLeadActivity(1, fdMap({ type: "note", subject: "Catatan" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/sudah kalah \(lost\)/i)
+    expect(mocks.prismaMock.leadActivity.create).not.toHaveBeenCalled()
+  })
+
   it("menolak lead tidak ada/terhapus tanpa tulis DB", async () => {
     mocks.prismaMock.lead.findFirst.mockResolvedValueOnce(null)
     const res = await actions.addLeadActivity(404, fdMap({ type: "note", subject: "Catatan" }))
@@ -554,6 +562,18 @@ describe("completeLeadActivity / reopenLeadActivity (F-2026-10-25-008-S)", () =>
   function leadMilik(userId: number) {
     mocks.prismaMock.lead.findFirst.mockResolvedValue({ id: 1, assignedTo: userId })
   }
+
+  it("regresi putaran 46: menolak menandai selesai aktivitas pada lead lost", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce(pemilik)
+    mocks.prismaMock.lead.findFirst.mockResolvedValue({ id: 1, assignedTo: 3, status: "lost" })
+    mocks.prismaMock.leadActivity.findFirst.mockResolvedValue({
+      id: 5, scheduledAt: new Date(), completedAt: null,
+    })
+    const res = await actions.completeLeadActivity(1, 5)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/sudah kalah \(lost\)/i)
+    expect(mocks.prismaMock.leadActivity.updateMany).not.toHaveBeenCalled()
+  })
 
   it("B1: pemilik menandai -> klaim atomik completedAt waktu server + log + revalidate", async () => {
     mocks.requirePermissionMock.mockResolvedValueOnce(pemilik)

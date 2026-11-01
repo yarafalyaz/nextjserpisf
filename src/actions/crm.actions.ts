@@ -491,9 +491,15 @@ export async function addLeadActivity(leadId: number, formData: FormData) {
       await tx.$executeRaw`SELECT id FROM leads WHERE id = ${leadId} FOR UPDATE`
       const lead = await tx.lead.findFirst({
         where: { id: leadId, deletedAt: null },
-        select: { id: true, assignedTo: true },
+        select: { id: true, assignedTo: true, status: true },
       })
       if (!lead) throw new Error("Lead tidak ditemukan")
+      // lost terminal mutlak (BR-LF-03/Q-LFU-1): aktivitas baru pada lead
+      // kalah hanya mencemari histori dan antrean follow-up. won tetap boleh
+      // karena antrean follow-up memang mempertahankan lead menang.
+      if (lead.status === "lost") {
+        throw new Error("Lead sudah kalah (lost) dan tidak dapat menerima aktivitas baru. Buat lead baru untuk peluang lanjutan.")
+      }
       const isAdmin =
         user.permissions.includes("manage_leads") || user.roles.includes("super_admin")
       if (!isAdmin && lead.assignedTo !== Number(user.id)) {
@@ -639,9 +645,18 @@ async function assertLeadActivityCompletionGuard(
 ): Promise<{ success: false; error: string } | null> {
   const lead = await prisma.lead.findFirst({
     where: { id: leadId, deletedAt: null },
-    select: { id: true, assignedTo: true },
+    select: { id: true, assignedTo: true, status: true },
   })
   if (!lead) return { success: false, error: "Lead tidak ditemukan" }
+  // Menyelesaikan aktivitas pada lead lost bertabrakan dengan status
+  // terminalnya dan Q-LFU-1 yang mengeluarkannya dari antrean. Reopen tidak
+  // digerbang: mengosongkan penanda lama tidak menulis tindak lanjut baru.
+  if (completing && lead.status === "lost") {
+    return {
+      success: false,
+      error: "Lead sudah kalah (lost) dan aktivitasnya tidak dapat ditandai selesai. Buat lead baru untuk peluang lanjutan.",
+    }
+  }
 
   const isAdmin =
     user.permissions.includes("manage_leads") || user.roles.includes("super_admin")
