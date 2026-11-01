@@ -578,6 +578,46 @@ describe("pullLaborCostFromTimesheets", () => {
     expect(logActivityMock).not.toHaveBeenCalled()
   })
 
+  it("jam timesheet dinilai ulang dari bacaan terkunci: edit yang commit sesudah snapshot menjadi dasar amount (jalur proyek)", async () => {
+    woFindUniqueMock.mockResolvedValue({ id: 7, projectId: 3 })
+    orderFindUniqueMock.mockResolvedValue({ id: 1 })
+    // Snapshot luar tx membaca 4 jam; bacaan terkunci di dalam tx adalah
+    // satu-satunya bacaan konsisten transaksi (snapshot REPEATABLE READ
+    // terbentuk sesudah kunci), jadi nilai terkuncilah dasar amount.
+    timesheetFindManyMock
+      .mockResolvedValueOnce([{ id: 11, hours: 4, date: new Date(), description: null }])
+      .mockResolvedValueOnce([{ id: 11, hours: 7, date: new Date(), description: "koreksi" }])
+    costFindManyMock.mockResolvedValue([])
+    costCreateMock.mockResolvedValue({ id: 1 })
+
+    const res = await pullLaborCostFromTimesheets(7, 1, 25000)
+
+    expect(res.success).toBe(true)
+    expect(res.count).toBe(1)
+    // Nilai terkunci 7 jam x 25000, BUKAN snapshot 4 jam = 100000.
+    expect(res.added).toBe(175000)
+    expect(costCreateMock.mock.calls[0][0].data).toMatchObject({
+      sourceTimesheetId: 11,
+      hours: 7,
+      amount: 175000,
+      description: "koreksi",
+    })
+    expect(applyDeltaMock).toHaveBeenCalledWith(1, 175000, expect.anything(), expect.anything())
+    // Urutan: kunci baris timesheet mendahului bacaan terkunci.
+    const tsCall = queryRawMock.mock.calls.findIndex(
+      (c) => ((c[0] as TemplateStringsArray).join("?") ?? "").includes("FROM timesheets"),
+    )
+    expect(tsCall).toBeGreaterThanOrEqual(0)
+    expect(queryRawMock.mock.invocationCallOrder[tsCall]).toBeLessThan(timesheetFindManyMock.mock.invocationCallOrder[1])
+    expect(timesheetFindManyMock).toHaveBeenCalledTimes(2)
+    // Bacaan terkunci membawa jam/deskripsi di SELECT.
+    expect(String(timesheetFindManyMock.mock.calls[1][0].select.hours)).toBe("true")
+    expect(String(timesheetFindManyMock.mock.calls[1][0].select.description)).toBe("true")
+    // Sisi penulis (updateTimesheet/deleteTimesheet) mengunci baris yang
+    // sama, jadi sesudah kunci ini jam beku; test ini membuktikan NILAI
+    // yang dipakai adalah bacaan terkunci, bukan snapshot pra-kunci.
+  })
+
   it("fails when the work order has no linked project", async () => {
     woFindUniqueMock.mockResolvedValue({ id: 7, projectId: null })
 
@@ -737,6 +777,40 @@ describe("pullLaborCostFromWorkOrderTimesheets — jalur WO langsung (F-2026-10-
     expect(empty.success).toBe(false)
     expect(empty.error).toContain("Tidak ada timesheet")
     expect(costCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("jam timesheet dinilai ulang dari bacaan terkunci: edit yang commit sesudah snapshot menjadi dasar amount (jalur WO)", async () => {
+    woFindUniqueMock.mockResolvedValue({ id: 7, status: "in_progress" })
+    // Snapshot luar tx membaca 8 jam; bacaan terkunci di dalam tx adalah
+    // satu-satunya bacaan konsisten transaksi (snapshot REPEATABLE READ
+    // terbentuk sesudah kunci), jadi nilai terkuncilah dasar amount.
+    timesheetFindManyMock
+      .mockResolvedValueOnce([{ id: 21, hours: 8, date: new Date(), description: null }])
+      .mockResolvedValueOnce([{ id: 21, hours: 3, date: new Date(), description: "revisi" }])
+    costFindManyMock.mockResolvedValue([])
+    costCreateMock.mockResolvedValue({ id: 1 })
+
+    const res = await pullLaborCostFromWorkOrderTimesheets(7, 25000)
+
+    expect(res.success).toBe(true)
+    expect(res.count).toBe(1)
+    // Nilai terkunci 3 jam x 25000, BUKAN snapshot 8 jam = 200000.
+    expect(res.added).toBe(75000)
+    expect(costCreateMock.mock.calls[0][0].data).toMatchObject({
+      sourceTimesheetId: 21,
+      hours: 3,
+      amount: 75000,
+      description: "revisi",
+    })
+    const tsCall = queryRawMock.mock.calls.findIndex(
+      (c) => ((c[0] as TemplateStringsArray).join("?") ?? "").includes("FROM timesheets"),
+    )
+    expect(tsCall).toBeGreaterThanOrEqual(0)
+    expect(queryRawMock.mock.invocationCallOrder[tsCall]).toBeLessThan(timesheetFindManyMock.mock.invocationCallOrder[1])
+    expect(timesheetFindManyMock).toHaveBeenCalledTimes(2)
+    // Sisi penulis (updateTimesheet/deleteTimesheet) mengunci baris yang
+    // sama, jadi sesudah kunci ini jam beku; test ini membuktikan NILAI
+    // yang dipakai adalah bacaan terkunci, bukan snapshot pra-kunci.
   })
 
   it("tanpa izin manage_production_costs ditolak sebelum query apa pun", async () => {

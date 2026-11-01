@@ -389,12 +389,29 @@ export async function pullLaborCostFromTimesheets(
       // (pullLaborCostFromWorkOrderTimesheets) + kunci baris.
       const timesheetIds = timesheets.map((t) => t.id)
       await tx.$queryRaw`SELECT id FROM timesheets WHERE id IN (${Prisma.join(timesheetIds)}) ORDER BY id FOR UPDATE`
+      // Jam/deskripsi dinilai ulang dari bacaan TERKUNCI: snapshot luar tx
+      // hanya semesta kandidat. Bacaan ini bukan sekadar baca ulang —
+      // bacaan konsisten pertama transaksi ini (snapshot dibentuk di
+      // titik ini, sesudah kunci), jadi nilai yang kembali adalah nilai
+      // yang akan dipegang sampai commit; dan sisi penulis
+      // (updateTimesheet/deleteTimesheet) mengunci baris yang sama, jadi
+      // sesudah titik ini jam beku. Tanpa ini amount memakai jam basi:
+      // koreksi yang commit sesudah snapshot tapi sebelum kunci menulis
+      // ProductionCost jam lama dan sesudahnya timesheet terkunci
+      // timesheetPulledError — subledger HPP tak pernah bisa dikoreksi.
+      const lockedTimesheets = await tx.timesheet.findMany({
+        where: { id: { in: timesheetIds } },
+        select: { id: true, hours: true, date: true, description: true },
+      })
+      const freshById = new Map(lockedTimesheets.map((t) => [t.id, t]))
       const alreadyPulled = await tx.productionCost.findMany({
         where: { sourceTimesheetId: { in: timesheetIds } },
         select: { sourceTimesheetId: true },
       })
       const pulledSet = new Set(alreadyPulled.map((c) => c.sourceTimesheetId))
-      const toCreate = timesheets.filter((t) => !pulledSet.has(t.id))
+      const toCreate = timesheets
+        .map((t) => freshById.get(t.id))
+        .filter((t): t is (typeof timesheets)[number] => t != null && !pulledSet.has(t.id))
       for (const t of toCreate) {
         const hours = Number(t.hours)
         const amount = Math.round(hours * ratePerHour * 100) / 100
@@ -490,6 +507,17 @@ export async function pullLaborCostFromWorkOrderTimesheets(
       // DB pada sourceTimesheetId, kunci baris adalah serialisasinya.
       const timesheetIds = timesheets.map((t) => t.id)
       await tx.$queryRaw`SELECT id FROM timesheets WHERE id IN (${Prisma.join(timesheetIds)}) ORDER BY id FOR UPDATE`
+      // Jam/deskripsi dinilai ulang dari bacaan TERKUNCI (cermin jalur
+      // proyek di atas): snapshot luar tx hanya semesta kandidat; bacaan
+      // konsisten pertama transaksi ini terbentuk sesudah kunci dan sisi
+      // penulis (updateTimesheet/deleteTimesheet) mengunci baris yang
+      // sama, jadi sesudah titik ini jam beku. Tanpa ini amount memakai
+      // jam basi yang sesudahnya terkunci timesheetPulledError.
+      const lockedTimesheets = await tx.timesheet.findMany({
+        where: { id: { in: timesheetIds } },
+        select: { id: true, hours: true, date: true, description: true },
+      })
+      const freshById = new Map(lockedTimesheets.map((t) => [t.id, t]))
       // Dibaca ulang di dalam transaksi: semesta idempoten per-timesheet
       // global (lintas jalur proyek/WO), bukan per perintah.
       const alreadyPulled = await tx.productionCost.findMany({
@@ -497,8 +525,9 @@ export async function pullLaborCostFromWorkOrderTimesheets(
         select: { sourceTimesheetId: true },
       })
       const pulledSet = new Set(alreadyPulled.map((c) => c.sourceTimesheetId))
-      for (const t of timesheets) {
-        if (pulledSet.has(t.id)) continue
+      for (const snapshot of timesheets) {
+        const t = freshById.get(snapshot.id)
+        if (t == null || pulledSet.has(t.id)) continue
         const hours = Number(t.hours)
         const amount = safeRound(safeMultiply(hours, ratePerHour, 0), 2)
         if (amount <= 0) continue
