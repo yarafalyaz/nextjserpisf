@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => {
       if (typeof ops === "function") return (ops as (p: unknown) => unknown)(prismaMock)
       return Promise.all(ops as Promise<unknown>[])
     }),
+    // Putaran 16: updateTimesheet mengunci baris timesheets FOR UPDATE dalam tx.
+    $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
   }
   return {
     requirePermissionMock: vi.fn(),
