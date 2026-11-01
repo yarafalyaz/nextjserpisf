@@ -17,12 +17,14 @@ const mocks = vi.hoisted(() => {
   const scheduleUpdate = vi.fn()
   const scheduleUpdateMany = vi.fn()
   const settingsFindFirst = vi.fn()
+  const accountFindMany = vi.fn()
   const generateDocumentNumber = vi.fn()
   const nextSlug = vi.fn()
 
   const prisma: Record<string, unknown> = {
     journal: { findFirst: journalFindFirst, create: journalCreate },
     expense: { create: expenseCreate },
+    account: { findMany: accountFindMany },
     recurringTransaction: {
       findMany: scheduleFindMany,
       update: scheduleUpdate,
@@ -44,6 +46,7 @@ const mocks = vi.hoisted(() => {
     scheduleUpdate,
     scheduleUpdateMany,
     settingsFindFirst,
+    accountFindMany,
     generateDocumentNumber,
     nextSlug,
     prisma,
@@ -98,6 +101,8 @@ beforeEach(() => {
   mocks.nextSlug.mockResolvedValue("jrn-202610-00001")
   mocks.journalFindFirst.mockResolvedValue(null)
   mocks.journalCreate.mockResolvedValue({ id: 9, journalNumber: "JRN-202610-00001" })
+  // Gerbang akun hidup putaran 51: default semua akun template hidup.
+  mocks.accountFindMany.mockImplementation(async (args: any) => (args.where.id.in as number[]).map((id) => ({ id })))
   mocks.scheduleUpdate.mockResolvedValue({})
   mocks.scheduleUpdateMany.mockResolvedValue({ count: 1 })
 })
@@ -167,6 +172,30 @@ describe("runDueRecurring — expense output", () => {
 
     expect(result.errors).toEqual([])
     expect(mocks.expenseCreate).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("runDueRecurring — akun template hidup (putaran 51)", () => {
+  it("menolak jurnal kron dengan akun nonaktif sebelum jurnal lahir", async () => {
+    mocks.scheduleFindMany.mockResolvedValue([journalSchedule()])
+    mocks.accountFindMany.mockImplementation(async (args: any) =>
+      (args.where.id.in as number[]).filter((id) => id !== 110).map((id) => ({ id })))
+
+    const result = await runDueRecurring(new Date(2026, 9, 17), 1)
+
+    expect(result.errors[0]).toMatch(/tidak aktif\/terhapus/)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("menolak expense kron dengan akun asal nonaktif sebelum expense lahir", async () => {
+    mocks.scheduleFindMany.mockResolvedValue([expenseSchedule()])
+    mocks.accountFindMany.mockImplementation(async (args: any) =>
+      (args.where.id.in as number[]).filter((id) => id !== 110).map((id) => ({ id })))
+
+    const result = await runDueRecurring(new Date(2026, 9, 17), 1)
+
+    expect(result.errors[0]).toMatch(/tidak aktif\/terhapus/)
+    expect(mocks.expenseCreate).not.toHaveBeenCalled()
   })
 })
 

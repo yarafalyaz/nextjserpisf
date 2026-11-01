@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
   const journalCreate = vi.fn()
   const expenseCreate = vi.fn()
   const settingsFindFirst = vi.fn()
+  const accountFindMany = vi.fn()
 
   const prisma: Record<string, unknown> = {
     recurringTransaction: {
@@ -29,6 +30,7 @@ const mocks = vi.hoisted(() => {
     },
     journal: { findFirst: journalFindFirst, create: journalCreate },
     expense: { create: expenseCreate },
+    account: { findMany: accountFindMany },
     systemSetting: { findFirst: settingsFindFirst },
   }
   prisma.$transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma))
@@ -51,6 +53,7 @@ const mocks = vi.hoisted(() => {
     journalCreate,
     expenseCreate,
     settingsFindFirst,
+    accountFindMany,
     prisma,
   }
 })
@@ -95,6 +98,8 @@ beforeEach(() => {
   mocks.scheduleUpdateMany.mockResolvedValue({ count: 1 })
   mocks.journalFindFirst.mockResolvedValue(null)
   mocks.journalCreate.mockResolvedValue({ id: 9, journalNumber: "JRN-202001-00001" })
+  // Gerbang akun hidup putaran 51: default semua akun template hidup.
+  mocks.accountFindMany.mockImplementation(async (args: any) => (args.where.id.in as number[]).map((id) => ({ id })))
   mocks.generateDocumentNumber.mockResolvedValue("JRN-202001-00001")
   mocks.nextSlug.mockResolvedValue("jrn-202001-00001")
 })
@@ -135,6 +140,30 @@ describe("runRecurringNow — journal reference", () => {
 
     expect(res.success).toBe(true)
     expect(res.success === true && res.message).toContain("sudah ada, dilewati")
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+})
+
+describe("runRecurringNow — jendela jadwal + akun hidup (putaran 51)", () => {
+  it("menolak jadwal yang nextRunDate-nya melewati endDate", async () => {
+    mocks.scheduleFindUnique.mockResolvedValue({ ...schedule, endDate: new Date(2019, 11, 31) })
+
+    const res = await runRecurringNow(42)
+
+    expect(res.success).toBe(false)
+    expect(mocks.scheduleUpdateMany).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.expenseCreate).not.toHaveBeenCalled()
+  })
+
+  it("menolak jurnal template dengan akun nonaktif sebelum jurnal lahir", async () => {
+    mocks.accountFindMany.mockImplementation(async (args: any) =>
+      (args.where.id.in as number[]).filter((id) => id !== 110).map((id) => ({ id })))
+
+    const res = await runRecurringNow(42)
+
+    expect(res.success).toBe(false)
+    expect(res.success === false && res.error).toMatch(/tidak aktif\/terhapus/)
     expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
 })

@@ -3,6 +3,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { nextSlug } from "@/lib/utils/slug-db"
 import { safeAdd } from "@/lib/utils/math"
 import { isRecurrenceFrequency, isWithinSchedule, nextRunAfter, type RecurrenceFrequency } from "@/lib/reports/recurring-schedule"
+import { assertAccountsExist } from "@/lib/hooks/accounting.hook"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 
 export interface RecurringTemplate {
@@ -80,7 +81,7 @@ export function validateRecurringTemplate(type: string, template: RecurringTempl
   return `Jenis transaksi berulang "${type}" tidak dikenal`
 }
 
-type RecurringDb = Pick<typeof prisma, "journal" | "expense"> &
+type RecurringDb = Pick<typeof prisma, "journal" | "expense" | "account"> &
   Partial<Pick<TxClient, "$queryRaw">>
 
 /** Creates the scheduled document as a DRAFT and returns a human summary. */
@@ -93,6 +94,7 @@ async function generateDocument(
 ): Promise<string> {
   if (schedule.type === "journal") {
     const { lines, totalDebit, totalCredit } = recurringJournalLines(template)
+    await assertAccountsExist(db as TxClient, lines.map((line) => line.accountId), "Transaksi berulang")
     const { referenceType, referenceId } = recurringJournalReference(schedule.id, date)
 
     // Period key: a journal must never be born inside a closed accounting period.
@@ -145,6 +147,7 @@ async function generateDocument(
   }
 
   if (schedule.type === "expense") {
+    await assertAccountsExist(db as TxClient, [template.accountId, template.paidFromAccountId], "Transaksi berulang")
     // Gated seperti jalur journal & createExpense biasa: draft tanggal tertutup
     // takkan bisa diproses onExpenseApproved (assertPeriodOpen lagi di hook),
     // jadi gagal keras di sini dan jadwal tetap due untuk retry. Sama seperti

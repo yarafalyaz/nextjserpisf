@@ -17,8 +17,9 @@ import {
   validateRecurringTemplate,
   type RecurringTemplate,
 } from "@/lib/services/recurring.service"
+import { assertAccountsExist } from "@/lib/hooks/accounting.hook"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
-import { isRecurrenceFrequency, nextRunAfter } from "@/lib/reports/recurring-schedule"
+import { isRecurrenceFrequency, isWithinSchedule, nextRunAfter } from "@/lib/reports/recurring-schedule"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 
 /** Turn the flat form fields into the JSON template stored on the schedule. */
@@ -159,6 +160,9 @@ export async function runRecurringNow(id: number) {
     // jalur manual wajib sama, atau jadwal terhapus/nonaktif hidup lagi via tombol/API.
     if (schedule.deletedAt) return { success: false, error: "Jadwal transaksi berulang sudah dihapus." }
     if (!schedule.isActive) return { success: false, error: "Jadwal transaksi berulang tidak aktif." }
+    if (!isWithinSchedule(schedule.nextRunDate, schedule.startDate, schedule.endDate)) {
+      return { success: false, error: "Jadwal transaksi berulang sudah melewati tanggal akhir." }
+    }
     const template = parseRecurringTemplate(schedule.template)
     const invalid = validateRecurringTemplate(schedule.type, template)
     if (invalid) return { success: false, error: invalid }
@@ -193,6 +197,7 @@ export async function runRecurringNow(id: number) {
       let summary: string
       if (schedule.type === "journal") {
         const { lines, totalDebit, totalCredit } = recurringJournalLines(template)
+        await assertAccountsExist(tx, lines.map((line) => line.accountId), "Transaksi berulang")
         const { referenceType, referenceId } = recurringJournalReference(schedule.id, runDate)
 
         // Period key — same rule as the cron path (recurring.service): a journal must
@@ -236,6 +241,7 @@ export async function runRecurringNow(id: number) {
           summary = `Jurnal ${journal.journalNumber}`
         }
       } else {
+        await assertAccountsExist(tx, [template.accountId, template.paidFromAccountId], "Transaksi berulang")
         // Sama seperti jalur cron/jurnal: draft di periode tertutup takkan bisa
         // dijurnal onExpenseApproved, jadi gagal keras sebelum menulis apa pun.
         await assertPeriodOpen(runDate, tx)
