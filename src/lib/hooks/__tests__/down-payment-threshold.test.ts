@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   generateDocumentNumber: vi.fn(),
   notifyDocumentsReadyBatch: vi.fn(),
   onSalesInvoicePosted: vi.fn(),
+  accountFindMany: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", async () => (await import("./down-payment-fixtures")).dpPrismaFactory(mocks))
@@ -47,6 +48,7 @@ function buildTx(dp: ReturnType<typeof buildDp>) {
       update: vi.fn(),
     },
     salesPayment: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null), create: mocks.salesPaymentCreate },
+    account: { findMany: mocks.accountFindMany },
     systemSetting: { findFirst: vi.fn().mockResolvedValue({ customerDownPaymentAccountId: 210102, salesReceivableAccountId: 110 }) },
     journal: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({ id: 77 }) },
   })
@@ -68,6 +70,7 @@ describe("ambang snapshot konversi DP ke invoice (F-2026-10-22-065-S)", () => {
     mocks.salesOrderFindFirst.mockResolvedValue(null)
     mocks.salesInvoiceFindFirst.mockResolvedValue(null)
     mocks.queryRaw.mockResolvedValue([{ id: 1, period_lock_date: null }])
+    mocks.accountFindMany.mockImplementation(async (args: any) => (args?.where?.id?.in ?? []).map((id: number) => ({ id })))
   })
 
   it("DP 300 dari 1000 (30%): WO/SO dibuat, invoice TIDAK dibuat, posting TIDAK dipanggil", async () => {
@@ -275,6 +278,35 @@ describe("ambang snapshot konversi DP ke invoice (F-2026-10-22-065-S)", () => {
         }),
       }),
     )
+  })
+
+  it("putaran 51: akun piutang mati → alokasi DP lanjutan ditolak, jurnal tidak dibuat", async () => {
+    const dp = buildDp({ id: 9, amount: 300, status: "draft", docNo: "DP-9" })
+    const tx = buildTx(dp)
+    wireInvoice(tx, existingInvoice())
+    ;(tx.salesPayment as any).findMany = vi.fn()
+      .mockResolvedValueOnce([{ amount: 600, withholdingAmount: 0 }])
+      .mockResolvedValueOnce([{ amount: 600, withholdingAmount: 0 }, { amount: 300, withholdingAmount: 0 }])
+    // Akun 110 (piutang) nonaktif/terhapus: assertAccountsExist hanya melihat 210102.
+    mocks.accountFindMany.mockImplementation(async (args: any) => (args?.where?.id?.in ?? []).filter((id: number) => id !== 110).map((id: number) => ({ id })))
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await expect(onDownPaymentConfirmed(9, 1)).rejects.toThrow(/tidak aktif\/terhapus/)
+    expect(tx.journal.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 51: akun kewajiban UMP mati → alokasi DP awal ditolak, jurnal tidak dibuat", async () => {
+    const dp = buildDp({ id: 13, amount: 600, status: "draft", docNo: "DP-13" })
+    const tx = buildTx(dp)
+    mocks.downPaymentFindMany.mockResolvedValue([
+      { documentNo: "DP-13", amount: 600, paymentDate: new Date("2026-10-01T00:00:00Z") },
+    ])
+    // Akun 210102 (UMP) nonaktif/terhapus: assertAccountsExist hanya melihat 110.
+    mocks.accountFindMany.mockImplementation(async (args: any) => (args?.where?.id?.in ?? []).filter((id: number) => id !== 210102).map((id: number) => ({ id })))
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await expect(onDownPaymentConfirmed(13, 1)).rejects.toThrow(/tidak aktif\/terhapus/)
+    expect(tx.journal.create).not.toHaveBeenCalled()
   })
 
   it("snapshot korup 150: fail-closed ke 50 + log, invoice tidak lahir pada 30% (AC-DP65-5)", async () => {

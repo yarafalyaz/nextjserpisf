@@ -206,4 +206,18 @@ export const dpNotificationFactory = (mocks: any) => ({
 })
 export const dpAccountingFactory = (mocks: any) => ({
   onSalesInvoicePosted: (...a: unknown[]) => mocks.onSalesInvoicePosted(...a),
+  // Putaran 51: alokasi DP kini menilai akun hidup lewat assertAccountsExist —
+  // mock menilai dari account.findMany pemanggil (echo id by default).
+  assertAccountsExist: async (db: any, accountIds: (number | null | undefined)[], label: string) => {
+    const ids = [...new Set(accountIds.filter((v): v is number => typeof v === "number" && Number.isInteger(v) && v > 0))];
+    if (ids.length === 0) return;
+    const found = await db.account.findMany({
+      where: { id: { in: ids }, isActive: true, deletedAt: null },
+      select: { id: true },
+    });
+    if (found.length !== ids.length) {
+      const missing = ids.filter((id) => !found.some((f: { id: number }) => f.id === id));
+      throw new Error(`${label}: akun tidak aktif/terhapus atau tidak ditemukan (id: ${missing.join(", ")}). Pilih ulang akun sebelum posting.`);
+    }
+  },
 })

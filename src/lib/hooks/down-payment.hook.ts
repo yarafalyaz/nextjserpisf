@@ -9,6 +9,7 @@ import { notificationService } from "@/lib/services/notification.service";
 import { getWibTodayUtcDate } from "@/lib/utils/attendance-time";
 import { resolveDueDate } from "@/lib/finance/vendor-bill";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { assertAccountsExist } from "@/lib/hooks/accounting.hook";
 import { stampWorkOrderFitmentSnapshot } from "@/lib/services/vehicle-fitment.service";
 import { Status, WorkOrderStatus, SalesStatus } from "@/lib/constants";
 import {
@@ -248,6 +249,9 @@ async function onDownPaymentConfirmedInner(
               { accountId: dpTaxId ?? 0, debit: 0, credit: netAlloc.ppnPortion, memo: "Reklas PPN uang muka alokasi" },
               { accountId: dpArId, debit: 0, credit: netAlloc.netAmount, memo: "Pelunasan piutang via uang muka" },
             ].filter((e) => e.debit > 0 || e.credit > 0);
+            // Putaran 51: akun terkonfigurasi-then-mati juga fail-closed,
+            // bukan hanya belum terkonfigurasi (null).
+            await assertAccountsExist(tx, allocEntries.map((e) => e.accountId), "Alokasi DP");
             await tx.journal.create({
               data: {
                 journalNumber: allocJournalNo,
@@ -814,6 +818,8 @@ async function onDownPaymentConfirmedInner(
         if (!existingAllocJournal) {
           const allocJournalNo = await generateDocumentNumber("JRN");
           const allocAmount = journalSen / 100;
+          // Putaran 51: akun terkonfigurasi-then-mati juga fail-closed.
+          await assertAccountsExist(tx, [allocAccounts.liabilityId, allocAccounts.arId], "Alokasi DP");
           await tx.journal.create({
             data: {
               journalNumber: allocJournalNo,
