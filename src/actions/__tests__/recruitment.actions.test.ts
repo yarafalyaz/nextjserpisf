@@ -120,6 +120,20 @@ describe("recruitment actions", () => {
     )
   })
 
+  it("menolak tahap bila bacaan segar di bawah kunci sudah hired (lawan hireApplicant)", async () => {
+    applicantFindFirst
+      .mockResolvedValueOnce({ id: 9 })
+      .mockResolvedValueOnce({ id: 9, stage: "hired", name: "Budi" })
+    const res = await moveApplicantStage(9, "rejected")
+    expect(res.success).toBe(false)
+    expect(applicantUpdate).not.toHaveBeenCalled()
+    expect(historyCreate).not.toHaveBeenCalled()
+    const lockCall = (txMock.$executeRaw.mock.calls as unknown[][])[0]?.[0] as { sql?: string; strings?: string[] } | string[]
+    const sql = Array.isArray(lockCall) ? lockCall.join("?") : (lockCall?.sql ?? lockCall?.strings?.join("?") ?? "")
+    expect(sql).toContain("job_applicants")
+    expect(sql).toContain("FOR UPDATE")
+  })
+
   it("hiring creates the employee and links the applicant", async () => {
     applicantFindFirst.mockResolvedValue({
       id: 9,

@@ -220,16 +220,25 @@ export async function moveApplicantStage(
       };
     }
 
-    const applicant = await prisma.jobApplicant.findFirst({
+    const peek = await prisma.jobApplicant.findFirst({
       where: { id: applicantId, deletedAt: null },
-      select: { id: true, stage: true, name: true },
+      select: { id: true },
     });
-    if (!applicant) return { success: false as const, error: "Pelamar tidak ditemukan" };
-    if (TERMINAL_STAGES.has(applicant.stage)) {
-      return { success: false as const, error: "Pelamar sudah pada tahap akhir" };
-    }
+    if (!peek) return { success: false as const, error: "Pelamar tidak ditemukan" };
 
-    await prisma.$transaction(async (tx) => {
+    // Kunci baris yang sama dengan hireApplicant: tahap dibaca ulang segar di
+    // bawah kunci agar "hired" yang baru commit tidak tertimpa tahap lain dari
+    // snapshot luar (karyawan yatim dari pelamar yang tampak ditolak).
+    const applicant = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM job_applicants WHERE id = ${applicantId} FOR UPDATE`;
+      const fresh = await tx.jobApplicant.findFirst({
+        where: { id: applicantId, deletedAt: null },
+        select: { id: true, stage: true, name: true },
+      });
+      if (!fresh) throw new Error("Pelamar tidak ditemukan");
+      if (TERMINAL_STAGES.has(fresh.stage)) {
+        throw new Error("Pelamar sudah pada tahap akhir");
+      }
       await tx.jobApplicant.update({
         where: { id: applicantId },
         data: { stage: toStage },
@@ -237,12 +246,13 @@ export async function moveApplicantStage(
       await tx.applicantStageHistory.create({
         data: {
           applicantId,
-          fromStage: applicant.stage,
+          fromStage: fresh.stage,
           toStage,
           notes: notes ?? null,
           changedBy: Number(user.id),
         },
       });
+      return fresh;
     });
 
     await logActivity(
