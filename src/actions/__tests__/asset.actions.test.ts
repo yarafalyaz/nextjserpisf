@@ -1506,6 +1506,38 @@ describe("createAsset / updateAsset", () => {
     prismaMock.journal.findFirst.mockResolvedValue(null)
   })
 
+  it("regresi putaran 47: updateAsset menolak status tak terdaftar yang menghentikan cron senyap", async () => {
+    prismaMock.asset.findUniqueOrThrow.mockResolvedValue({ purchaseCost: 1000, status: "active" })
+    prismaMock.asset.findUnique.mockResolvedValue({
+      purchaseCost: 1000, status: "active", categoryId: null,
+      depreciationMethod: "straight_line", usefulLifeMonths: null, residualValue: 0,
+    })
+    const res = await updateAsset(100, fd({
+      name: "Laptop",
+      purchasePrice: "1000",
+      status: "on_loan",
+    }))
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/tidak terdaftar/)
+    expect(prismaMock.asset.update).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 47: updateAsset menolak masuk held_for_sale tanpa 5 fakta klasifikasi", async () => {
+    prismaMock.asset.findUniqueOrThrow.mockResolvedValue({ purchaseCost: 1000, status: "active" })
+    prismaMock.asset.findUnique.mockResolvedValue({
+      purchaseCost: 1000, status: "active", categoryId: null,
+      depreciationMethod: "straight_line", usefulLifeMonths: null, residualValue: 0,
+    })
+    const res = await updateAsset(100, fd({
+      name: "Laptop",
+      purchasePrice: "1000",
+      status: "held_for_sale",
+    }))
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/klasifikasi|fakta/)
+    expect(prismaMock.asset.update).not.toHaveBeenCalled()
+  })
+
   it("updates asset and skips GL check when cost unchanged", async () => {
     prismaMock.asset.findUniqueOrThrow.mockResolvedValue({ purchaseCost: 1000, status: "active" })
     // Bacaan terkunci di dalam tx melihat harga yang sama.

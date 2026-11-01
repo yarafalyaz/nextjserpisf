@@ -35,6 +35,7 @@ import { buildAssetDisposalEntries } from "@/lib/finance/asset-disposal";
 import { buildFiscalYearRows } from "@/lib/finance/asset-fiscal-balance";
 import { resolveFiscalGroup } from "@/lib/finance/asset-fiscal-groups";
 import { journalBookValue } from "@/lib/finance/asset-book-value";
+import { isRegisteredAssetUseStatus } from "@/lib/finance/asset-use-status";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { nextSlug } from "@/lib/utils/slug-db";
 
@@ -1100,6 +1101,29 @@ export async function updateAsset(id: number, formData: FormData) {
     // asset keeps its book value forever, the GL stays on the books, and the
     // depreciation cron (status:"active" only) silently stops. Refuse the transition.
     const nextStatus = data.status || "active";
+    // Daftar status guna F-117: di luar daftar terdaftar (active/
+    // held_for_sale/disposed) string apa pun membuat aset lenyap SENYAP
+    // dari seleksi cron (status:"active") — temuan tak terdaftar harus
+    // ditolak di pintu tulis, bukan disimpan. Echo status lama yang sama
+    // persis tetap lolos supaya temuan historis tetap bisa diedit field
+    // lain dan dikoreksi manual ke status sah.
+    if (nextStatus !== existing.status && !isRegisteredAssetUseStatus(nextStatus)) {
+      return {
+        success: false,
+        error: `Status aset "${nextStatus}" tidak terdaftar (hanya active/held_for_sale/disposed).`,
+      };
+    }
+    // held_for_sale hanya lewat klasifikasi terstruktur (5 fakta F-117
+    // Putusan 3 + peristiwa status); inti itu belum dibangun, jadi jalur
+    // edit bebas tidak boleh memindahkan aset keluar dari penyusutan
+    // tanpa fakta dan tanpa jejak.
+    if (nextStatus === "held_for_sale" && existing.status !== "held_for_sale") {
+      return {
+        success: false,
+        error:
+          "Klasifikasi dimiliki-untuk-dijual wajib melalui klasifikasi terstruktur (5 fakta F-117), bukan edit status bebas.",
+      };
+    }
     if (nextStatus === "disposed" && existing.status !== "disposed") {
       return {
         success: false,
