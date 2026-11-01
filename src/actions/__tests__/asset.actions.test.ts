@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => {
       create: vi.fn(),
       delete: vi.fn(),
       update: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue(null),
       findUniqueOrThrow: vi.fn(),
       findFirst: vi.fn().mockResolvedValue(null),
     },
@@ -637,6 +638,11 @@ describe("Asset Transfer Actions", () => {
     prismaMock.assetTransfer.create.mockResolvedValue({ id: 30 })
     prismaMock.asset.update.mockResolvedValue({})
     prismaMock.asset.findUnique.mockResolvedValue({ status: "active" })
+    // Bacaan segar dalam tx mengikuti baris yang dipasang test lewat
+    // findUniqueOrThrow (snapshot luar), kecuali test menimpanya sendiri.
+    prismaMock.assetTransfer.findUnique.mockImplementation(
+      async () => prismaMock.assetTransfer.findUniqueOrThrow.mock.results.at(-1)?.value ?? null,
+    )
   })
 
   it("fails validation with empty form on create", async () => {
@@ -1027,6 +1033,41 @@ describe("Asset Transfer Actions", () => {
     expect(res?.success).toBe(false)
     expect(String(res?.error)).toMatch(/disposed/)
     expect(prismaMock.assetTransfer.update).not.toHaveBeenCalled()
+  })
+
+  it("putaran 37: update memakai baris transfer SEGAR dalam tx, bukan snapshot luar basi", async () => {
+    // Snapshot luar: transfer masih menunjuk aset 5. Baris segar (konkuren
+    // sudah relink ke aset 9): revert + kunci wajib mengikuti baris segar.
+    prismaMock.assetTransfer.findUniqueOrThrow.mockResolvedValue({
+      id: 30,
+      assetId: 5,
+      fromLocation: "OldLoc",
+      toLocation: "Branch1",
+    })
+    prismaMock.assetTransfer.findUnique.mockResolvedValue({
+      id: 30,
+      assetId: 9,
+      fromLocation: "Loc9",
+      toLocation: "Branch9",
+    })
+    prismaMock.assetTransfer.update.mockResolvedValue({ id: 30 })
+    prismaMock.asset.findUnique.mockImplementation(async (args: any) =>
+      args?.where?.id === 9
+        ? { status: "active", location: "Branch9" }
+        : { status: "active", location: "Branch1" },
+    )
+    const res = await updateAssetTransfer(30, fd({
+      assetId: "7",
+      toLocation: "Branch2",
+      transferDate: "2026-06-12",
+    }))
+    expect(res?.success).toBe(true)
+    expect(prismaMock.assetTransfer.findUnique).toHaveBeenCalledWith({ where: { id: 30 } })
+    // Revert mengikuti aset segar 9 (location === Branch9), bukan snapshot 5.
+    expect(prismaMock.asset.update).toHaveBeenCalledWith({
+      where: { id: 9 },
+      data: { location: "Loc9" },
+    })
   })
 
   it("putaran 37: menolak relink transfer ke karyawan asal mati", async () => {

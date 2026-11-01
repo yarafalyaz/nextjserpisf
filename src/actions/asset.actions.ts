@@ -758,6 +758,20 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
         for (const lockId of lockIds) {
           await tx.$executeRaw`SELECT id FROM assets WHERE id = ${lockId} FOR UPDATE`;
         }
+        // Baris transfer dibaca ULANG di bawah kunci: snapshot luar bisa
+        // basi bila edit konkuren sudah me-relink transfer ke aset lain —
+        // revert/lokasi wajib mengikuti baris segar, bukan snapshot.
+        // Kunci baris transfer sendiri menahan edit/hapus konkuren.
+        await tx.$executeRaw`SELECT id FROM asset_transfers WHERE id = ${id} FOR UPDATE`;
+        const freshTransfer = await tx.assetTransfer.findUnique({ where: { id } });
+        if (!freshTransfer) throw new Error("Transfer aset tidak ditemukan.");
+        const currentOld = freshTransfer;
+        // Aset segar bisa berbeda dari snapshot: kunci juga barisnya sebelum
+        // lokasinya dibaca/ditulis (id terurut di himpunan awal; aset ketiga
+        // dikunci di sini sebelum disentuh).
+        if (!lockIds.includes(currentOld.assetId)) {
+          await tx.$executeRaw`SELECT id FROM assets WHERE id = ${currentOld.assetId} FOR UPDATE`;
+        }
         // If asset changed, revert old asset location first — but ONLY if this
         // transfer is what currently drives the old asset's location. Without the
         // check, editing a back-dated transfer while the asset has since been
@@ -780,19 +794,19 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
             `Aset berstatus '${targetAsset.status}' tidak dapat ditransfer (hanya aset aktif).`,
           );
         }
-        if (oldTransfer.assetId !== data.assetId) {
+        if (currentOld.assetId !== data.assetId) {
           const oldAsset = await tx.asset.findUnique({
-            where: { id: oldTransfer.assetId },
+            where: { id: currentOld.assetId },
             select: { location: true, status: true },
           });
-          if (oldAsset && oldAsset.status !== "active" && oldAsset.location === oldTransfer.toLocation) {
+          if (oldAsset && oldAsset.status !== "active" && oldAsset.location === currentOld.toLocation) {
             throw new Error(
               `Aset asal berstatus '${oldAsset.status}' tidak dapat digerakkan lokasinya.`,
             );
           }
-          if (oldAsset && oldAsset.location === oldTransfer.toLocation) {
+          if (oldAsset && oldAsset.location === currentOld.toLocation) {
             const latest = await tx.assetTransfer.findFirst({
-              where: { assetId: oldTransfer.assetId, NOT: { id } },
+              where: { assetId: currentOld.assetId, NOT: { id } },
               // See deleteAssetTransfer for the tiebreaker rationale: an id
               // tiebreaker keeps the "latest" pick stable when several
               // transfers share a date.
@@ -800,9 +814,9 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
               select: { toLocation: true },
             });
             await tx.asset.update({
-              where: { id: oldTransfer.assetId },
+              where: { id: currentOld.assetId },
               data: {
-                location: latest?.toLocation ?? oldTransfer.fromLocation,
+                location: latest?.toLocation ?? currentOld.fromLocation,
               },
             });
           }
