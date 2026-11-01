@@ -51,6 +51,7 @@ import {
   snapshotCounterpartyFromMaster,
   type CounterpartySnapshot,
 } from "@/lib/tax/customer-tax-identity"
+import { RECOGNISED_AP_STATUSES } from "@/lib/reports/document-status"
 
 const SCOPE_ISSUE: IdemScope = "tax_invoice_issue"
 const SCOPE_DP_ISSUE: IdemScope = "tax_invoice_dp_issue"
@@ -205,8 +206,16 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
       if (input.direction === "out" && input.salesInvoiceId != null) {
         const linkedInvoice = await tx.salesInvoice.findUnique({
           where: { id: input.salesInvoiceId },
-          select: { quotationId: true },
+          select: { quotationId: true, status: true, deletedAt: true },
         })
+        if (!linkedInvoice) throw definitive("Faktur penjualan tertaut tidak ditemukan")
+        // Gerbang dokumen sumber (pola bupot atas bill): terbit/cermin atas
+        // faktur draft/batal/soft-deleted menanam nomor kepala pada dokumen
+        // mati dan SPT cukai lahir tanpa kewajiban diakui.
+        if (linkedInvoice.deletedAt != null) throw definitive("Faktur penjualan tertaut sudah dihapus — faktur pajak tidak bisa diterbitkan")
+        if (!(RECOGNISED_AP_STATUSES as readonly string[]).includes(linkedInvoice.status)) {
+          throw definitive("Faktur penjualan tertaut belum terposting — faktur pajak hanya untuk posted/partial/paid")
+        }
         if (linkedInvoice?.quotationId != null) {
           // Kunci baris quotation sebelum Sigma FP UM dibaca: FP UM
           // (issueDownPaymentTaxInvoice) mengunci quotation yang sama,
@@ -241,6 +250,31 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
       if (dupe) throw definitive(`Nomor faktur pajak "${number}" sudah terbit untuk arah ${input.direction}`)
       if (input.direction === "in") {
         if (input.vendorId == null) throw definitive("Faktur masukan wajib vendor")
+        if (input.vendorBillId != null) {
+          // Sumber masukan dinilai dari tagihan itu sendiri (bill sudah
+          // dikunci FOR UPDATE di atas): tertaut ke bill batal/soft-deleted
+          // atau bill vendor lain membuat dupe-check + cermin salah alamat;
+          // vendor wajib hidup (pola assertLiveVendorTx pembelian).
+          const bill = await tx.vendorBill.findUnique({
+            where: { id: input.vendorBillId },
+            select: { vendorId: true, status: true, deletedAt: true },
+          })
+          if (!bill) throw definitive("Tagihan vendor tertaut tidak ditemukan")
+          if (bill.deletedAt != null || bill.status === "cancelled") {
+            throw definitive("Tagihan vendor tertaut sudah batal/terhapus — faktur pajak tidak bisa diterbitkan")
+          }
+          if (!(RECOGNISED_AP_STATUSES as readonly string[]).includes(bill.status)) {
+            throw definitive("Tagihan vendor tertaut belum terposting — faktur pajak hanya untuk posted/partial/paid")
+          }
+          if (bill.vendorId !== input.vendorId) {
+            throw definitive(`Tagihan vendor tertaut milik vendor #${bill.vendorId} yang berbeda dari vendor #${input.vendorId}`)
+          }
+          const vendor = await tx.vendor.findFirst({
+            where: { id: input.vendorId, isActive: true, deletedAt: null },
+            select: { id: true },
+          })
+          if (!vendor) throw definitive(`Faktur masukan: vendor #${input.vendorId} tidak ditemukan atau tidak aktif`)
+        }
         const dupeVendor = await tx.taxInvoice.findFirst({
           where: { direction: "in", vendorId: input.vendorId, taxInvoiceNumber: number, djpStatus: { not: "cancelled" } },
           select: { id: true },

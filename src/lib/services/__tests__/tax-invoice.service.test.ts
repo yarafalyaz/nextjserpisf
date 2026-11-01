@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => {
   const salesInvoiceUpdate = vi.fn()
   const salesInvoiceFindUnique = vi.fn()
   const vendorBillUpdate = vi.fn()
+  const vendorBillFindUnique = vi.fn()
+  const vendorFindFirst = vi.fn()
   const claimIdempotencyKey = vi.fn()
   const bindIdempotencyKey = vi.fn()
   const assertPeriodOpen = vi.fn()
@@ -33,7 +35,8 @@ const mocks = vi.hoisted(() => {
     },
     salesInvoice: { update: salesInvoiceUpdate, findUnique: salesInvoiceFindUnique },
     downPayment: { findUnique: dpFindUnique },
-    vendorBill: { update: vendorBillUpdate },
+    vendorBill: { update: vendorBillUpdate, findUnique: vendorBillFindUnique },
+    vendor: { findFirst: vendorFindFirst },
     $queryRaw: queryRaw,
     $executeRaw: vi.fn().mockResolvedValue(1),
   }
@@ -42,7 +45,8 @@ const mocks = vi.hoisted(() => {
   }
   return {
     taxInvoiceFindFirst, taxInvoiceCreate, taxInvoiceUpdate, taxInvoiceFindUniqueOrThrow,
-    salesInvoiceUpdate, salesInvoiceFindUnique, vendorBillUpdate, claimIdempotencyKey, bindIdempotencyKey,
+    salesInvoiceUpdate, salesInvoiceFindUnique, vendorBillUpdate, vendorBillFindUnique,
+    vendorFindFirst, claimIdempotencyKey, bindIdempotencyKey,
     assertPeriodOpen, queryRaw, dpFindUnique, tiFindMany, prisma, tx,
   }
 })
@@ -81,13 +85,77 @@ beforeEach(() => {
     counterpartyTaxId: null, counterpartyName: null, counterpartyNitku: null, vendorId: 5,
   })
   // F-004-S: faktur penjualan tertaut tanpa pelanggan ter-load → snapshot
-  // jatuh ke isian manual input (gerbang EC-3 menilai isian itu).
-  mocks.salesInvoiceFindUnique.mockResolvedValue(null)
+  // jatuh ke isian manual input (gerbang EC-3 menilai isian itu). Default
+  // hanya dipakai test tertaut; untautan tak menyentuhnya. Gerbang putaran
+  // 35: tertaut tak-ditemukan kini ditolak definitif.
+  mocks.salesInvoiceFindUnique.mockResolvedValue({ quotationId: null, status: "posted", deletedAt: null, customer: null })
+  // Gerbang sumber hidup (putaran 35): default sumber sehat.
+  mocks.vendorBillFindUnique.mockResolvedValue({ vendorId: 5, status: "posted", deletedAt: null })
+  mocks.vendorFindFirst.mockResolvedValue({ id: 5 })
 })
 
 function key() {
   return `test-key-${Math.random().toString(36).slice(2, 10)}-ab`
 }
+
+// regresi putaran 35: terbit atas dokumen sumber mati/salah-status/salah-vendor
+describe("issueTaxInvoice sumber hidup (putaran 35)", () => {
+  it("tolak bila faktur penjualan tertaut masih draft", async () => {
+    mocks.salesInvoiceFindUnique.mockResolvedValue({ quotationId: null, status: "draft", deletedAt: null, customer: null })
+    const r = await issueTaxInvoice({
+      direction: "out", taxInvoiceNumber: "010.002-26.10000001",
+      taxInvoiceDate: new Date(2026, 0, 10), sellingPrice: 1_000_000,
+      salesInvoiceId: 42, counterpartyTaxId: "0123456789123456", counterpartyName: "PT Uji",
+      counterpartyNitku: "0123456789123456000000", idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/belum terposting/)
+    expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+    expect(mocks.salesInvoiceUpdate).not.toHaveBeenCalled()
+  })
+
+  it("tolak bila faktur penjualan tertaut sudah dihapus", async () => {
+    mocks.salesInvoiceFindUnique.mockResolvedValue({
+      quotationId: null, status: "posted", deletedAt: new Date(2026, 0, 1), customer: null,
+    })
+    const r = await issueTaxInvoice({
+      direction: "out", taxInvoiceNumber: "010.002-26.10000002",
+      taxInvoiceDate: new Date(2026, 0, 10), sellingPrice: 1_000_000,
+      salesInvoiceId: 42, counterpartyTaxId: "0123456789123456", counterpartyName: "PT Uji",
+      counterpartyNitku: "0123456789123456000000", idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/dihapus/)
+    expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+  })
+
+  it("tolak bila tagihan tertaut milik vendor lain", async () => {
+    mocks.vendorBillFindUnique.mockResolvedValue({ vendorId: 7, status: "posted", deletedAt: null })
+    mocks.vendorFindFirst.mockResolvedValue({ id: 5 })
+    const r = await issueTaxInvoice({
+      direction: "in", taxInvoiceNumber: "010.002-26.10000003",
+      taxInvoiceDate: new Date(2026, 0, 10), sellingPrice: 1_000_000,
+      vendorBillId: 9, vendorId: 5, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/milik vendor/)
+    expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+    expect(mocks.vendorBillUpdate).not.toHaveBeenCalled()
+  })
+
+  it("tolak bila vendor faktur masukan nonaktif", async () => {
+    mocks.vendorBillFindUnique.mockResolvedValue({ vendorId: 5, status: "posted", deletedAt: null })
+    mocks.vendorFindFirst.mockResolvedValue(null)
+    const r = await issueTaxInvoice({
+      direction: "in", taxInvoiceNumber: "010.002-26.10000004",
+      taxInvoiceDate: new Date(2026, 0, 10), sellingPrice: 1_000_000,
+      vendorBillId: 9, vendorId: 5, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/vendor #5 tidak/)
+    expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+  })
+})
 
 describe("issueTaxInvoice guards", () => {
   it("kunci baris dokumen sumber (sales_invoices/vendor_bills) sebelum bacaan tertaut", async () => {
@@ -102,7 +170,10 @@ describe("issueTaxInvoice guards", () => {
       })
       return fn(tx)
     }) as never
-    mocks.salesInvoiceFindUnique.mockImplementation(() => { events.push("read-si"); return Promise.resolve(null) })
+    mocks.salesInvoiceFindUnique.mockImplementation(() => {
+      events.push("read-si")
+      return Promise.resolve({ quotationId: null, status: "posted", deletedAt: null, customer: null })
+    })
 
     const out = await issueTaxInvoice({
       direction: "out", taxInvoiceNumber: "010.000-26.1", taxInvoiceDate: new Date(2026, 0, 10),
@@ -242,6 +313,7 @@ describe("issueTaxInvoice guards", () => {
 
     // Tertaut faktur penjualan: snapshot = master saat terbit (AC-TX-B1).
     mocks.salesInvoiceFindUnique.mockResolvedValue({
+      status: "posted", deletedAt: null,
       customer: {
         taxId: "0123456789123456",
         taxpayerName: "PT WP Master",
@@ -294,6 +366,7 @@ describe("issueTaxInvoice guards", () => {
 
     // Tertaut: mismatch disalin dari master pelanggan faktur penjualan.
     mocks.salesInvoiceFindUnique.mockResolvedValue({
+      status: "posted", deletedAt: null,
       customer: { taxId: "0123456789123456", taxpayerName: "PT WP Master", nitku: "9999999999999999000001" },
     })
     const tertaut = await issueTaxInvoice({
@@ -687,8 +760,9 @@ describe("issueDownPaymentTaxInvoice (F-2026-10-25-004-V)", () => {
   })
 
   it("FP pelunasan selisih: dokumen penuh minus Sigma FP UM aktif", async () => {
-    // salesInvoice.findUnique mock default null; override via tx sulit diakses di sini,
-    // diarahkan lewat tiFindMany kosong -> angka penuh (dijamin oleh test builder).
+    // Ganti bacaan hubungan: sumber sehat tanpa quotation tertaut; tiFindMany
+    // kosong -> angka penuh (dijamin oleh test builder).
+    mocks.salesInvoiceFindUnique.mockResolvedValue({ quotationId: null, status: "posted", deletedAt: null, customer: null })
     // F-004-S §8A-5: terbit out wajib identitas — isian manual ditambah (angka PPN tak berubah).
     const r = await issueTaxInvoice({
       direction: "out", taxInvoiceNumber: "040.000-26.00000099",
