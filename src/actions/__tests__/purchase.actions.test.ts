@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => {
     purchaseOrderItem: buildModelMock(),
     goodsReceipt: buildModelMock(),
     goodsReceiptItem: buildModelMock(),
+    rack: buildModelMock(),
+    rackRow: buildModelMock(),
     // Guard delete GR ber-QC: count polimorfik, default 0.
     qcInspection: buildModelMock(),
     nonconformance: buildModelMock(),
@@ -199,6 +201,44 @@ describe("Scope gudang penerimaan barang", () => {
       items: JSON.stringify([{ itemId: 1, qty: 1, unitCost: 100 }]),
     }))
     expect(res?.success).toBe(true)
+  })
+
+  it("regresi putaran 32: createGoodsReceipt menolak rak dari gudang lain", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["super_admin"] })
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "ordered", items: [{ itemId: 1, qty: 10 }],
+    })
+    mocks.prismaMock.rack.findMany.mockResolvedValue([
+      { id: 55, warehouseId: 2, name: "Rak B" },
+    ])
+    const res = await actions.createGoodsReceipt(fdMap({
+      purchaseOrderId: "1", warehouseId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1, unitCost: 100, warehouseId: 1, rackId: 55 }]),
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak berada di gudang")
+    expect(mocks.prismaMock.goodsReceipt.create).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 32: updateGoodsReceipt menolak rackRow dari rak lain", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["super_admin"] })
+    mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", documentNo: "GR-001" })
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "ordered", items: [{ itemId: 1, qty: 10 }],
+    })
+    mocks.prismaMock.rack.findMany.mockResolvedValue([
+      { id: 55, warehouseId: 1, name: "Rak A" },
+    ])
+    mocks.prismaMock.rackRow.findMany.mockResolvedValue([
+      { id: 77, rackId: 99, name: "Baris X" },
+    ])
+    const res = await actions.updateGoodsReceipt(1, fdMap({
+      purchaseOrderId: "1", warehouseId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1, unitCost: 100, warehouseId: 1, rackId: 55, rackRowId: 77 }]),
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak berada di rak")
+    expect(mocks.prismaMock.goodsReceiptItem.createMany).not.toHaveBeenCalled()
   })
 })
 

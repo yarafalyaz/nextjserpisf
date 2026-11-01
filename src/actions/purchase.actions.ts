@@ -175,6 +175,56 @@ function parsePurchaseOrderItems(
   return items;
 }
 
+/**
+ * Konsistensi rak baris penerimaan: rak wajib milik gudang baris (atau
+ * gudang header bila baris tak menyasar gudang sendiri), dan baris rak
+ * wajib milik rak baris. FK hanya menolak id gaib — pasangan lintas
+ * gudang/rak lolos dan ditulis hook verify ke StockMove/layer apa adanya.
+ */
+async function assertGrRackConsistency(
+  tx: Prisma.TransactionClient,
+  headerWarehouseId: number,
+  items: GrItemInput[],
+): Promise<void> {
+  const rackIds = [
+    ...new Set(items.map((i) => (i.rackId ? Number(i.rackId) : null)).filter((n): n is number => n != null)),
+  ];
+  if (rackIds.length > 0) {
+    const racks = await tx.rack.findMany({
+      where: { id: { in: rackIds } },
+      select: { id: true, warehouseId: true },
+    });
+    const rackById = new Map(racks.map((r) => [r.id, r]));
+    for (const item of items) {
+      if (!item.rackId) continue;
+      const rack = rackById.get(Number(item.rackId));
+      if (!rack) throw new Error(`Rak #${item.rackId} tidak ditemukan`);
+      const lineWarehouseId = item.warehouseId ? Number(item.warehouseId) : headerWarehouseId;
+      if (rack.warehouseId !== lineWarehouseId) {
+        throw new Error(`Rak #${item.rackId} tidak berada di gudang baris penerimaan`);
+      }
+    }
+  }
+  const rowIds = [
+    ...new Set(items.map((i) => (i.rackRowId ? Number(i.rackRowId) : null)).filter((n): n is number => n != null)),
+  ];
+  if (rowIds.length > 0) {
+    const rows = await tx.rackRow.findMany({
+      where: { id: { in: rowIds } },
+      select: { id: true, rackId: true },
+    });
+    const rowById = new Map(rows.map((r) => [r.id, r]));
+    for (const item of items) {
+      if (!item.rackRowId) continue;
+      const row = rowById.get(Number(item.rackRowId));
+      if (!row) throw new Error(`Baris rak #${item.rackRowId} tidak ditemukan`);
+      if (!item.rackId || row.rackId !== Number(item.rackId)) {
+        throw new Error(`Baris rak #${item.rackRowId} tidak berada di rak baris penerimaan`);
+      }
+    }
+  }
+}
+
 // expiryDate baris lolos JSON tanpa validasi kalender: "2026-02-30"
 // bergulir ke 2 Mar oleh new Date, string acak jadi Invalid Date.
 function assertGrItemExpiryDates(items: GrItemInput[]) {
@@ -1232,6 +1282,7 @@ export async function createGoodsReceipt(formData: FormData) {
     for (const item of items) {
       if (item.warehouseId) assertWarehouseAccess(scope, Number(item.warehouseId));
     }
+    await assertGrRackConsistency(prisma, v.warehouseId, items);
 
     const gr = await prisma.$transaction(async (tx) => {
       // Lock + validate the PO status before creating the receipt. Without this a
@@ -3920,6 +3971,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
       });
 
       // Recreate items with per-item warehouseId
+      await assertGrRackConsistency(tx, v.warehouseId, items);
       await tx.goodsReceiptItem.deleteMany({ where: { goodsReceiptId: id } });
       if (items.length > 0) {
         await tx.goodsReceiptItem.createMany({
