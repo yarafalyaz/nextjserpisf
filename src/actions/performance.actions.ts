@@ -195,10 +195,14 @@ export async function submitSelfReview(
     if (review.status === "finalized") {
       return { success: false as const, error: "Ulasan sudah difinalisasi" };
     }
-    await prisma.performanceReview.update({
-      where: { id: review.id },
+    // Klaim kondisional: finalisasi konkuren yang menang membuat count 0.
+    const claim = await prisma.performanceReview.updateMany({
+      where: { id: review.id, status: { not: "finalized" } },
       data: { selfScore, status: "self_submitted" },
     });
+    if (claim.count === 0) {
+      return { success: false as const, error: "Ulasan sudah difinalisasi" };
+    }
     revalidatePath("/sdm/kinerja");
     return { success: true as const, id: review.id };
   } catch (e: unknown) {
@@ -228,8 +232,10 @@ export async function submitManagerReview(
     }
     const reviewerEmployeeId =
       scope.kind === "all" ? review.reviewerEmployeeId : scope.employeeId;
-    await prisma.performanceReview.update({
-      where: { id: review.id },
+    // Klaim kondisional: finalisasi konkuren yang menang membuat count 0,
+    // sehingga skor atasan tidak menimpa baris finalized dari snapshot basi.
+    const claim = await prisma.performanceReview.updateMany({
+      where: { id: review.id, status: { not: "finalized" } },
       data: {
         managerScore: input.managerScore,
         strengths: input.strengths ?? null,
@@ -238,6 +244,9 @@ export async function submitManagerReview(
         status: "manager_reviewed",
       },
     });
+    if (claim.count === 0) {
+      return { success: false as const, error: "Ulasan sudah difinalisasi" };
+    }
     await logActivity("update", "PerformanceReview", review.id, "Ulasan atasan disimpan");
     revalidatePath("/sdm/kinerja");
     return { success: true as const, id: review.id };
@@ -270,10 +279,18 @@ export async function finalizeReview(cycleId: number, employeeId: number) {
         error: "Belum ada skor sasaran maupun skor atasan untuk difinalisasi",
       };
     }
-    await prisma.performanceReview.update({
-      where: { id: review.id },
+    // Klaim dari status terbaca: submit konkuren yang mengubah status lebih
+    // dulu membuat count 0 daripada finalScore basi tersimpan senyap.
+    const claim = await prisma.performanceReview.updateMany({
+      where: { id: review.id, status: review.status },
       data: { finalScore, status: "finalized" },
     });
+    if (claim.count === 0) {
+      return {
+        success: false as const,
+        error: "Status ulasan berubah saat finalisasi; muat ulang sebelum finalisasi",
+      };
+    }
     await logActivity("update", "PerformanceReview", review.id, `Ulasan difinalisasi (${finalScore})`);
     revalidatePath("/sdm/kinerja");
     return { success: true as const, id: review.id, finalScore };

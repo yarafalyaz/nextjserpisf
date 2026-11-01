@@ -7,6 +7,7 @@ const goalFindMany = vi.fn()
 const reviewFindFirst = vi.fn()
 const reviewCreate = vi.fn()
 const reviewUpdate = vi.fn()
+const reviewUpdateMany = vi.fn(async (..._a: unknown[]) => ({ count: 1 }))
 const employeeFindFirst = vi.fn()
 const employeeFindUnique = vi.fn()
 const employeeFindMany = vi.fn()
@@ -33,6 +34,7 @@ vi.mock("@/lib/db/prisma", () => ({
       findFirst: (...a: unknown[]) => reviewFindFirst(...a),
       create: (...a: unknown[]) => reviewCreate(...a),
       update: (...a: unknown[]) => reviewUpdate(...a),
+      updateMany: (...a: unknown[]) => reviewUpdateMany(...a),
     },
     employee: {
       findFirst: (...a: unknown[]) => employeeFindFirst(...a),
@@ -104,7 +106,7 @@ describe("performance scoring", () => {
     ])
     const res = await finalizeReview(3, 7)
     expect(res.success).toBe(true)
-    expect(reviewUpdate).toHaveBeenCalledWith(
+    expect(reviewUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ finalScore: 90, status: "finalized" }),
       }),
@@ -115,7 +117,7 @@ describe("performance scoring", () => {
     employeeFindFirst.mockResolvedValue({ id: 7, departmentId: 1 })
     const res = await submitManagerReview(3, 8, { managerScore: 90 })
     expect(res.success).toBe(false)
-    expect(reviewUpdate).not.toHaveBeenCalled()
+    expect(reviewUpdateMany).not.toHaveBeenCalled()
   })
 
   it("self review is accepted for the employee's own record", async () => {
@@ -123,7 +125,7 @@ describe("performance scoring", () => {
     reviewFindFirst.mockResolvedValue({ id: 11, status: "draft" })
     const res = await submitSelfReview(3, 7, 88)
     expect(res.success).toBe(true)
-    expect(reviewUpdate).toHaveBeenCalledWith(
+    expect(reviewUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ selfScore: 88, status: "self_submitted" }),
       }),
