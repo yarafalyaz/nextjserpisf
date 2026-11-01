@@ -2124,26 +2124,36 @@ export async function deleteProduct(id: number) {
   try {
     await requirePermission("delete_products");
 
-    // Guard: BomRevision.productId Cascade (hapus produk ikut hapus semua
-    // revisi BOM + material diam-diam), QcChecklist.productId SetNull
-    // (checklist kehilangan tautan produk), ProductionOrder Restrict
-    // (P2003 mentah). Tolak berpesan jumlah, pola deleteBomRevision.
-    const [productionOrderCount, bomCount, qcCount] = await Promise.all([
-      prisma.productionOrder.count({ where: { productId: id } }),
-      prisma.bomRevision.count({ where: { productId: id } }),
-      prisma.qcChecklist.count({ where: { productId: id } }),
-    ]);
-    if (productionOrderCount > 0 || bomCount > 0 || qcCount > 0) {
+    // Guard wajib dinilai dalam tx sesudah kunci baris produk. Count di luar
+    // tx bisa membaca 0, lalu create production-order/BOM/QC commit sebelum
+    // delete dan menghasilkan P2003 mentah atau Cascade/SetNull diam-diam.
+    const guard = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM products WHERE id = ${id} FOR UPDATE`;
+      }
+      const [productionOrderCount, bomCount, qcCount] = await Promise.all([
+        tx.productionOrder.count({ where: { productId: id } }),
+        tx.bomRevision.count({ where: { productId: id } }),
+        tx.qcChecklist.count({ where: { productId: id } }),
+      ]);
+      if (productionOrderCount > 0 || bomCount > 0 || qcCount > 0) {
+        return { productionOrderCount, bomCount, qcCount };
+      }
+
+      // Klaim produk yang sudah dikunci; deleteMany membedakan hilang/terhapus.
+      const claim = await tx.product.deleteMany({ where: { id } });
+      if (claim.count === 0) throw new Error("Produk tidak ditemukan");
+      return null;
+    });
+    if (guard) {
       return {
         success: false,
         error:
-          `Produk masih dipakai oleh ${productionOrderCount + bomCount + qcCount} data ` +
-          `(perintah produksi: ${productionOrderCount}, revisi BOM: ${bomCount}, checklist QC: ${qcCount}) ` +
+          `Produk masih dipakai oleh ${guard.productionOrderCount + guard.bomCount + guard.qcCount} data ` +
+          `(perintah produksi: ${guard.productionOrderCount}, revisi BOM: ${guard.bomCount}, checklist QC: ${guard.qcCount}) ` +
           `dan tidak bisa dihapus. Hapus atau lepaskan data terkait terlebih dahulu.`,
       };
     }
-
-    await prisma.product.delete({ where: { id } });
 
     await logActivity("delete", "Product", id, `Menghapus produk #${id}`);
     revalidatePath("/produksi/products");

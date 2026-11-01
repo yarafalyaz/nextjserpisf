@@ -425,6 +425,24 @@ describe("Product Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("deleteProduct menolak bila hitungan dalam transaksi berkunci menemukan pengguna", async () => {
+    mocks.prismaMock.bomRevision.count.mockResolvedValue(2)
+    const res = await actions.deleteProduct(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/revisi BOM: 2/)
+    expect(mocks.prismaMock.product.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.product.delete).not.toHaveBeenCalled()
+  })
+
+  it("deleteProduct memakai deleteMany bersyarat di jalur kosong (klaim atomik)", async () => {
+    mocks.prismaMock.bomRevision.count.mockResolvedValue(0)
+    mocks.prismaMock.product.deleteMany.mockResolvedValueOnce({ count: 0 })
+    const res = await actions.deleteProduct(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/tidak ditemukan/i)
+    expect(mocks.prismaMock.product.delete).not.toHaveBeenCalled()
+  })
+
   it("deleteProduct menolak produk yang masih punya revisi BOM (Cascade ikut terhapus)", async () => {
     mocks.prismaMock.bomRevision.count.mockResolvedValueOnce(3)
     const res = await actions.deleteProduct(1)
