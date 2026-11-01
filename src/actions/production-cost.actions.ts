@@ -479,6 +479,10 @@ export async function pullLaborCostFromWorkOrderTimesheets(
       // Jalur WO-only tanpa jurnal: gerbang periode dalam tx adalah
       // satu-satunya penjaga lawan tutup periode konkuren.
       await assertPeriodOpen(new Date(), tx)
+      // Putaran 22: status WO dinilai ulang di dalam tx (pola jalur
+      // proyek) — close konkuren sesudah cek luar tak boleh melahirkan
+      // ProductionCost menempel WO closed (klaim job-closeout.service).
+      await assertJobCostMutable({ workOrderId }, "ditambahkan", tx)
       // Kunci baris timesheet kandidat (urutan id global) lalu dedupe
       // dibaca ulang di dalam tx — cermin jalur proyek di atas. Tanpa
       // kunci, dua penarik konkuren sama-sama membaca snapshot kosong

@@ -685,6 +685,26 @@ describe("pullLaborCostFromWorkOrderTimesheets — jalur WO langsung (F-2026-10-
     expect(lastFindManyCall?.[0].where).toEqual({ sourceTimesheetId: { in: [21] } })
   })
 
+  it("status WO dinilai ulang assertJobCostMutable di dalam tx; penolakan guard menghentikan create (putaran 22)", async () => {
+    // Suite ini memock job-closeout.service: yang dibuktikan di sini adalah
+    // PENEMPATAN guard — jalur WO kini memanggilnya di dalam tx (pola jalur
+    // proyek), bukan hanya cek status di luar tx.
+    woFindUniqueMock.mockResolvedValue({ id: 7, status: "in_progress" })
+    timesheetFindManyMock.mockResolvedValue([
+      { id: 21, hours: 8, date: new Date(), description: null },
+    ])
+    costFindManyMock.mockResolvedValue([])
+    jobGuardMock.mockReset()
+    jobGuardMock.mockRejectedValue(new Error("Biaya tidak dapat ditambahkan: perintah kerja sudah ditutup (closed)."))
+
+    const res = await pullLaborCostFromWorkOrderTimesheets(7, 25000)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("ditutup (closed)")
+    expect(jobGuardMock).toHaveBeenCalledWith({ workOrderId: 7 }, "ditambahkan", expect.anything())
+    expect(costCreateMock).not.toHaveBeenCalled()
+  })
+
   it.each(["completed", "cancelled"])("pull ke WO %s ditolak menyebut status", async (status) => {
     woFindUniqueMock.mockResolvedValue({ id: 7, status })
 
