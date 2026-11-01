@@ -1396,6 +1396,22 @@ describe("Cost Center Actions", () => {
     expect(String(res?.error)).toContain("4 pusat biaya")
     expect(mocks.prismaMock.profitCenter.delete).not.toHaveBeenCalled()
   })
+
+  it("deleteProfitCenter menolak bila dirujuk entri jurnal tanpa menghapus (putaran 22)", async () => {
+    mocks.prismaMock.journalEntry.count.mockResolvedValueOnce(3)
+    const res = await (actions as any).deleteProfitCenter(7)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("3 entri jurnal")
+    expect(mocks.prismaMock.profitCenter.delete).not.toHaveBeenCalled()
+  })
+
+  it("deleteCostCenter menolak bila dirujuk entri jurnal tanpa menghapus (putaran 22)", async () => {
+    mocks.prismaMock.journalEntry.count.mockResolvedValueOnce(2)
+    const res = await (actions as any).deleteCostCenter(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("2 entri jurnal")
+    expect(mocks.prismaMock.costCenter.delete).not.toHaveBeenCalled()
+  })
 })
 
 

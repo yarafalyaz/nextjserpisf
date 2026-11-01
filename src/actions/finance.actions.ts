@@ -2103,18 +2103,29 @@ export async function deleteProfitCenter(id: number) {
   try {
     await requirePermission("delete_profit_centers");
 
-    // Guard: CostCenter.profitCenterId menunjuk ke sini. FK-nya TIDAK punya
-    // onDelete (relasi implisit di skema), jadi hapus mentah melempar P2003
-    // mentah ke UI. Tolak dulu dengan pesan yang menyebut jumlah pemakai.
-    const usedByCostCenters = await prisma.costCenter.count({ where: { profitCenterId: id } });
-    if (usedByCostCenters > 0) {
-      return {
-        success: false as const,
-        error: `Pusat laba masih digunakan oleh ${usedByCostCenters} pusat biaya. Lepaskan dulu sebelum menghapus.`,
-      };
-    }
-
-    await prisma.profitCenter.delete({ where: { id } });
+    // Guard + delete dalam SATU transaksi dengan baris ProfitCenter dikunci
+    // (pola deleteCostCenter AUD-COSTCENTER-01): penunjuk konkuren di antara
+    // hitungan dan delete tak terlihat guard. Perujuk: CostCenter.profitCenterId
+    // (FK tanpa onDelete → P2003) + JournalEntry.profitCenterId bare-int tanpa
+    // relasi (hapus sukses meninggalkan entri yatim; laporan pusat laba lalu
+    // menamainya "Tanpa Pusat Laba").
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM profit_centers WHERE id = ${id} FOR UPDATE`;
+      }
+      const [usedByCostCenters, usedByEntries] = await Promise.all([
+        tx.costCenter.count({ where: { profitCenterId: id } }),
+        tx.journalEntry.count({ where: { profitCenterId: id } }),
+      ]);
+      const usages = [
+        usedByCostCenters > 0 ? `${usedByCostCenters} pusat biaya` : null,
+        usedByEntries > 0 ? `${usedByEntries} entri jurnal` : null,
+      ].filter((u): u is string => u !== null);
+      if (usages.length > 0) {
+        throw new Error(`Pusat laba masih digunakan (${usages.join(", ")}). Lepaskan dulu sebelum menghapus.`);
+      }
+      await tx.profitCenter.delete({ where: { id } });
+    });
 
     await logActivity("delete", "ProfitCenter", id, `Menghapus pusat laba #${id}`);
     revalidatePath("/keuangan/pusat-laba");
@@ -2431,12 +2442,15 @@ export async function deleteCostCenter(id: number) {
     // dan delete di snapshot yang sama.
     await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT id FROM cost_centers WHERE id = ${id} FOR UPDATE`;
-      const [children, payrolls, materialIssues, projects, expenses] = await Promise.all([
+      const [children, payrolls, materialIssues, projects, expenses, journalEntries] = await Promise.all([
         tx.costCenter.count({ where: { parentId: id } }),
         tx.payroll.count({ where: { costCenterId: id } }),
         tx.materialIssue.count({ where: { costCenterId: id } }),
         tx.project.count({ where: { costCenterId: id } }),
         tx.expense.count({ where: { costCenterId: id } }),
+        // JournalEntry.costCenterId bare-int tanpa relasi: hard delete
+        // sukses meninggalkan entri yatim yang tak bisa direkonstruksi.
+        tx.journalEntry.count({ where: { costCenterId: id } }),
       ]);
       const usages = [
         children > 0 ? `${children} pusat biaya anak` : null,
@@ -2444,6 +2458,7 @@ export async function deleteCostCenter(id: number) {
         materialIssues > 0 ? `${materialIssues} pengeluaran material` : null,
         projects > 0 ? `${projects} proyek` : null,
         expenses > 0 ? `${expenses} pengeluaran` : null,
+        journalEntries > 0 ? `${journalEntries} entri jurnal` : null,
       ].filter((u): u is string => u !== null);
       if (usages.length > 0) {
         throw new Error(`Pusat biaya masih digunakan (${usages.join(", ")}). Lepaskan dulu sebelum menghapus.`);
