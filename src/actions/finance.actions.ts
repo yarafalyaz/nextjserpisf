@@ -898,6 +898,26 @@ export async function postJournal(journalId: number) {
 
 // ==================== EXPENSE ACTIONS ====================
 
+/**
+ * Pengaju klaim reimbursement wajib masih berhak menerima uang perusahaan
+ * (hidup + belum berhenti). Create menolak pengaju berhenti (EC-1), tetapi
+ * karyawan bisa berhenti/nonaktif/terhapus sesudah klaim lahir — approve
+ * dan bayar menilai ulang di sini, di dalam tx titik uang bergerak.
+ */
+async function assertClaimantPayable(
+  client: Pick<typeof prisma, "employee">,
+  employeeId: number | null,
+): Promise<void> {
+  if (employeeId == null) throw new Error("Klaim tidak tertaut ke karyawan pengaju.");
+  const claimant = await client.employee.findUnique({
+    where: { id: employeeId },
+    select: { isActive: true, deletedAt: true, employmentEndedAt: true },
+  });
+  if (!claimant || claimant.deletedAt != null || !claimant.isActive || claimant.employmentEndedAt != null) {
+    throw new Error("Klaim tidak dapat diproses: karyawan pengaju sudah nonaktif/berhenti — tolak klaim dan selesaikan lewat jalur berhenti.");
+  }
+}
+
 export async function createExpense(formData: FormData) {
   try {
     const user = await requirePermission("create_expenses");
@@ -1073,6 +1093,9 @@ export async function approveExpense(expenseId: number) {
       if (locked.status !== "draft" && locked.status !== "approved") {
         throw new Error("Expense hanya bisa di-approve dari status draft");
       }
+      // Pengaju klaim dinilai ulang hidup/berhenti di titik akrual lahir —
+      // klaim karyawan yang sudah berhenti ditolak, bukan diakru.
+      if (locked.isReimbursementClaim) await assertClaimantPayable(tx, locked.employeeId);
 
       // Pemisahan tugas non-klaim: klaim sudah dijaga SoD claimant vs
       // approver employee (BR-RB-07); non-klaim tanpa workflow hanya
@@ -1172,6 +1195,10 @@ export async function markExpensePaid(expenseId: number) {
           "Hanya pengeluaran yang sudah disetujui yang dapat ditandai sebagai dibayar",
         );
       }
+
+      // Pengaju dinilai ulang sebelum uang keluar: karyawan yang berhenti
+      // sesudah approve tidak dibayar lewat klaim (jalur berhenti yang sah).
+      if (locked.isReimbursementClaim) await assertClaimantPayable(tx, locked.employeeId);
 
       // Refuse to settle an expense that has no source of funds. `onExpenseApproved`
       // cannot post Dr. Beban / Cr. Kas-Bank without `paidFromAccountId`, and the old

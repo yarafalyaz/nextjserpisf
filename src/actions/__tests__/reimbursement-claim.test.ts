@@ -34,6 +34,9 @@ const txMock = {
     create: (...a: unknown[]) => expenseCreateMock(...a),
     updateMany: (...a: unknown[]) => txExpenseUpdateManyMock(...a),
   },
+  employee: {
+    findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a),
+  },
   journal: { findFirst: (...a: unknown[]) => journalFindFirstMock(...a) },
 }
 
@@ -142,6 +145,8 @@ beforeEach(() => {
   txExpenseUpdateManyMock.mockResolvedValue({ count: 1 })
   attachmentCountMock.mockResolvedValue(1)
   employeeFindFirstMock.mockResolvedValue(null) // approver bukan karyawan tertaut
+  // Gerbang pengaju (putaran 47): default pengaju hidup dan belum berhenti.
+  employeeFindUniqueMock.mockResolvedValue({ id: 5, isActive: true, deletedAt: null, employmentEndedAt: null })
   journalFindFirstMock.mockResolvedValue({ totalDebit: 150000 })
   // FINHR-8 default: akun beban klaim valid EXPENSE aktif.
   accountFindUniqueMock.mockResolvedValue({ type: "EXPENSE", isActive: true, deletedAt: null })
@@ -179,6 +184,17 @@ describe("approveExpense klaim (AC-RB-B3/B4, E-RB5-1)", () => {
     const r = await approveExpense(42)
     expect(r.success).toBe(false)
     expect(accrualMock).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 47: pengaju sudah berhenti/nonaktif/terhapus — approve ditolak, nol akrual", async () => {
+    expenseFindUniqueOrThrowMock.mockResolvedValue({ ...CLAIM })
+    employeeFindUniqueMock.mockResolvedValue({
+      id: 5, isActive: false, deletedAt: null, employmentEndedAt: new Date("2026-10-20"),
+    })
+    const r = await approveExpense(42)
+    expect(r.success).toBe(false)
+    expect(accrualMock).not.toHaveBeenCalled()
+    expect(txExpenseUpdateManyMock).not.toHaveBeenCalled()
   })
 
   it("Expense non-klaim: perilaku existing utuh (nol gerbang klaim)", async () => {
@@ -287,6 +303,19 @@ describe("markExpensePaid klaim (E-RB5-2)", () => {
     expect(r.success).toBe(true)
     expect(paidMock).toHaveBeenCalledWith(42, 7, expect.anything())
     expect(expenseJournalMock).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 47: pengaju berhenti sesudah approve — bayar ditolak, nol J-RB2", async () => {
+    txExpenseFindUniqueOrThrowMock.mockResolvedValue({
+      ...CLAIM, status: "approved", paidFromAccountId: 100,
+    })
+    employeeFindUniqueMock.mockResolvedValue({
+      id: 5, isActive: true, deletedAt: null, employmentEndedAt: new Date("2026-10-28"),
+    })
+    const r = await markExpensePaid(42)
+    expect(r.success).toBe(false)
+    expect(paidMock).not.toHaveBeenCalled()
+    expect(txExpenseUpdateManyMock).not.toHaveBeenCalled()
   })
 
   it("non-klaim tetap jurnal existing", async () => {
