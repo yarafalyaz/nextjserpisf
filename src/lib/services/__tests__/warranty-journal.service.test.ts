@@ -43,6 +43,7 @@ function makeTx(overrides: {
   productionCosts?: { amount: number }[]
   settings?: Record<string, unknown> | null
   existingJournal?: { id: number; journalNumber: string } | null
+  costJournal?: { id: number; journalNumber: string } | null
   attachmentCount?: number
   postSentAttachmentCount?: number
   sentLogAt?: Date | null
@@ -88,10 +89,12 @@ function makeTx(overrides: {
         where.id.in.map((id: number) => ({ id, isActive: true, deletedAt: null, _count: { children: 0 } })),
     },
     journal: {
-      findFirst: async ({ where }: { where?: { referenceId?: unknown } }) =>
+      findFirst: async ({ where }: { where?: { referenceId?: unknown; referenceType?: string } }) =>
         where?.referenceId !== null && typeof where?.referenceId === "object"
           ? (overrides.siblingJournal ?? null)
-          : (overrides.existingJournal ?? null),
+          : where?.referenceType === "WarrantyClaimCost"
+            ? (overrides.costJournal ?? null)
+            : (overrides.existingJournal ?? null),
       create: async ({ data }: { data: Record<string, unknown> }) => ({ id: 77, journalNumber: "JRN-77", ...data }),
     },
     journalEntry: {
@@ -181,7 +184,7 @@ describe("E2 WarrantyClaimCost (rute provisi MATI)", () => {
     const { tx, entries } = makeTx({
       claim: coveredClaim,
       ...costRows,
-      existingJournal: { id: 9, journalNumber: "JRN-9" },
+      costJournal: { id: 9, journalNumber: "JRN-9" },
     })
     state.tx = tx
     await expect(
@@ -269,8 +272,20 @@ describe("E2 WarrantyClaimCost (rute provisi MATI)", () => {
 })
 
 describe("E3 WarrantySupplierRecovery", () => {
+  it("regresi putaran 50: E3 tanpa E2 POSTED ditolak — recovery tak boleh mendahului biaya", async () => {
+    const { tx, entries } = makeTx({
+      claim: coveredClaim, ...costRows, attachmentCount: 1, postSentAttachmentCount: 1,
+      costJournal: null,
+    })
+    state.tx = tx
+    await expect(
+      postWarrantySupplierRecoveryJournal({ claimId: 5, amount: 900_000, eventDate: new Date("2026-10-21T00:00:00Z") }),
+    ).rejects.toThrow(/biaya garansi.*belum diposting|posting jurnal biaya/i)
+    expect(entries).toHaveLength(0)
+  })
+
   it("AC-G5 virtually-certain 900rb: Dr 110508 / Cr 510104, provisi tidak tersentuh", async () => {
-    const { tx, entries } = makeTx({ claim: coveredClaim, ...costRows, attachmentCount: 1, postSentAttachmentCount: 1 })
+    const { tx, entries } = makeTx({ claim: coveredClaim, ...costRows, attachmentCount: 1, postSentAttachmentCount: 1, costJournal: { id: 8, journalNumber: "JRN-8" } })
     state.tx = tx
     const result = await postWarrantySupplierRecoveryJournal({
       claimId: 5,
@@ -350,6 +365,7 @@ describe("E3 WarrantySupplierRecovery", () => {
       ...costRows,
       attachmentCount: 2,
       postSentAttachmentCount: 1,
+      costJournal: { id: 8, journalNumber: "JRN-8" },
     })
     state.tx = tx
     const result = await postWarrantySupplierRecoveryJournal({
@@ -388,6 +404,7 @@ describe("E3 WarrantySupplierRecovery", () => {
       attachmentCount: 1,
       postSentAttachmentCount: 0,
       sentLogAt: null,
+      costJournal: { id: 8, journalNumber: "JRN-8" },
     })
     state.tx = tx
     const result = await postWarrantySupplierRecoveryJournal({
@@ -440,6 +457,7 @@ describe("E3 WarrantySupplierRecovery", () => {
       siblingJournal: { id: 9, journalNumber: "JRN-9", referenceId: 5 },
       ...costRows,
       attachmentCount: 1, postSentAttachmentCount: 1,
+      costJournal: { id: 8, journalNumber: "JRN-8" },
     })
     state.tx = tx
     await expect(

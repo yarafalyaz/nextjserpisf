@@ -429,10 +429,45 @@ export async function transitionWarrantyClaim(
   }
   const claim = await client.warrantyClaim.findUnique({
     where: { id: input.claimId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, customerVehicleId: true },
   })
   if (!claim) throw new Error("Klaim garansi tidak ditemukan.")
   assertWarrantyClaimTransition(claim.status, input.to)
+  // Putaran 50: tautan WO repair divalidasi sebelum tertulis. Sebelumnya
+  // ID apa pun lolos (UI input angka bebas): WO kendaraan lain / WO yang
+  // sudah ditaut klaim aktif lain menelan biaya repair klaim salah, dan
+  // guard lintas klaim TASK-019 lalu menolak klaim pemilik sah secara
+  // permanen. WO tanpa kendaraan tercatat tidak ditolak (data lama).
+  if (input.to === "in_repair" && input.repairWorkOrderId != null) {
+    const wo = await client.workOrder.findUnique({
+      where: { id: input.repairWorkOrderId },
+      select: { id: true, status: true, customerVehicleId: true },
+    })
+    if (!wo) throw new Error("WO repair tidak ditemukan — tautkan WO yang benar-benar ada.")
+    if (wo.status === "cancelled") {
+      throw new Error("WO repair sudah dibatalkan — tautkan WO repair yang masih berjalan.")
+    }
+    if (
+      wo.customerVehicleId != null &&
+      claim.customerVehicleId != null &&
+      wo.customerVehicleId !== claim.customerVehicleId
+    ) {
+      throw new Error("WO repair terdaftar untuk kendaraan lain — tautkan WO milik kendaraan klaim ini.")
+    }
+    const linkedElsewhere = await client.warrantyClaim.findMany({
+      where: {
+        repairWorkOrderId: input.repairWorkOrderId,
+        id: { not: claim.id },
+        status: { notIn: ["closed", "rejected"] },
+      },
+      select: { id: true },
+    })
+    if (linkedElsewhere.length > 0) {
+      throw new Error(
+        `WO repair #${input.repairWorkOrderId} sudah tertaut ke klaim #${linkedElsewhere[0].id} yang masih aktif — satu WO repair hanya melayani satu klaim aktif.`,
+      )
+    }
+  }
   await claimWarrantyClaimUpdate(client, claim.id, { status: claim.status }, {
     status: input.to,
     ...(input.to === "in_repair" && input.repairWorkOrderId != null

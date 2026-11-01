@@ -23,6 +23,7 @@ vi.mock("@/lib/db/prisma", () => ({
       create: vi.fn(),
       findUnique: vi.fn(),
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
     },
@@ -301,8 +302,13 @@ describe("klaim di luar masa (F-021 AC2): manual, BUKAN auto-reject", () => {
   })
 
   it("alur sah penuh: intake→eligibility→approved→in_repair→closed", async () => {
-    const claim: { id: number; status: string } = { id: 1, status: "intake" }
+    const claim: { id: number; status: string; customerVehicleId: number } = {
+      id: 1, status: "intake", customerVehicleId: 7,
+    }
     p.warrantyClaim.findUnique.mockImplementation(async () => ({ ...claim }))
+    // Putaran 50: tautan WO repair divalidasi — WO cocok kendaraan klaim.
+    p.workOrder.findUnique.mockResolvedValue({ id: 123, status: "processing", customerVehicleId: 7 })
+    p.warrantyClaim.findMany.mockResolvedValue([])
     mockClaimWrite(claim)
 
     await transitionWarrantyClaim({ claimId: 1, to: "eligibility" }, prisma as never)
@@ -320,6 +326,55 @@ describe("klaim di luar masa (F-021 AC2): manual, BUKAN auto-reject", () => {
     await expect(transitionWarrantyClaim({ claimId: 1, to: "intake" }, prisma as never)).rejects.toThrow(
       "tidak diizinkan",
     )
+  })
+
+  it("regresi putaran 50: tautan WO repair kendaraan lain ditolak", async () => {
+    const claim: { id: number; status: string; customerVehicleId: number } = {
+      id: 1, status: "approved", customerVehicleId: 7,
+    }
+    p.warrantyClaim.findUnique.mockImplementation(async () => ({ ...claim }))
+    p.workOrder.findUnique.mockResolvedValue({ id: 55, status: "processing", customerVehicleId: 9 })
+    p.warrantyClaim.findMany.mockResolvedValue([])
+    mockClaimWrite(claim)
+
+    await expect(
+      transitionWarrantyClaim({ claimId: 1, to: "in_repair", repairWorkOrderId: 55 }, prisma as never),
+    ).rejects.toThrow("kendaraan lain")
+    expect(p.warrantyClaim.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 50: tautan WO repair yang sudah ditaut klaim aktif lain ditolak", async () => {
+    const claim: { id: number; status: string; customerVehicleId: number } = {
+      id: 1, status: "approved", customerVehicleId: 7,
+    }
+    p.warrantyClaim.findUnique.mockImplementation(async () => ({ ...claim }))
+    p.workOrder.findUnique.mockResolvedValue({ id: 55, status: "processing", customerVehicleId: 7 })
+    p.warrantyClaim.findMany.mockResolvedValue([{ id: 2 }])
+    mockClaimWrite(claim)
+
+    await expect(
+      transitionWarrantyClaim({ claimId: 1, to: "in_repair", repairWorkOrderId: 55 }, prisma as never),
+    ).rejects.toThrow("sudah tertaut ke klaim")
+    expect(p.warrantyClaim.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 50: tautan WO repair batal / tak ditemukan ditolak", async () => {
+    const claim: { id: number; status: string; customerVehicleId: number } = {
+      id: 1, status: "approved", customerVehicleId: 7,
+    }
+    p.warrantyClaim.findUnique.mockImplementation(async () => ({ ...claim }))
+    p.warrantyClaim.findMany.mockResolvedValue([])
+    mockClaimWrite(claim)
+
+    p.workOrder.findUnique.mockResolvedValue({ id: 55, status: "cancelled", customerVehicleId: 7 })
+    await expect(
+      transitionWarrantyClaim({ claimId: 1, to: "in_repair", repairWorkOrderId: 55 }, prisma as never),
+    ).rejects.toThrow("dibatalkan")
+    p.workOrder.findUnique.mockResolvedValue(null)
+    await expect(
+      transitionWarrantyClaim({ claimId: 1, to: "in_repair", repairWorkOrderId: 55 }, prisma as never),
+    ).rejects.toThrow("tidak ditemukan")
+    expect(p.warrantyClaim.updateMany).not.toHaveBeenCalled()
   })
 
   it("keluhan kosong / odometer negatif ditolak di intake", async () => {

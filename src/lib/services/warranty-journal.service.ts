@@ -425,6 +425,19 @@ export async function postWarrantySupplierRecoveryJournal(
 
     await assertPeriodOpen(input.eventDate, tx)
     await assertNoExistingJournal(tx, WARRANTY_SUPPLIER_RECOVERY_REF, claim.id, "Jurnal recovery supplier")
+    // Putaran 50: recovery (E3) memulihkan beban yang SUDAH diakui biaya
+    // (E2). Tanpa gerbang ini E3 bisa mendahului E2: Dr Piutang Klaim /
+    // Cr Beban Garansi atas beban yang belum pernah dibebankan — beban
+    // garansi GL negatif dan cap biaya terverifikasi tak bermakna.
+    const costJournal = await tx.journal.findFirst({
+      where: { referenceType: WARRANTY_CLAIM_COST_REF, referenceId: claim.id, status: "POSTED", deletedAt: null },
+      select: { id: true },
+    })
+    if (!costJournal) {
+      throw new Error(
+        "Recovery ditolak: jurnal biaya garansi (E2) untuk klaim ini belum diposting — posting jurnal biaya dulu, recovery memulihkan beban yang sudah diakui.",
+      )
+    }
     // TASK-019: recovery atas WO repair yang sama juga satu kali lintas
     // klaim — dua klaim tidak boleh mengkredit Beban Garansi dua kali
     // untuk biaya repair yang sama.
