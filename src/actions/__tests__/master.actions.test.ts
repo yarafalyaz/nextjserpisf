@@ -2141,6 +2141,17 @@ describe('Coverage Hardening Edge Cases', () => {
     expect(mocks.prismaMock.user.update).toHaveBeenCalled()
   })
 
+  it('putaran 42: deleteEmployee menolak employee milik super_admin untuk aktor non-super_admin', async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce({ id: 9, permissions: [], roles: ["admin"] })
+    mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: 77 })
+    mocks.prismaMock.user.findUnique.mockResolvedValueOnce({ id: 77, roles: [{ name: "super_admin" }] })
+    const res = await actions.deleteEmployee(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Hanya super admin")
+    expect(mocks.prismaMock.user.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.employee.delete).not.toHaveBeenCalled()
+  })
+
   it('deleteDepartment - active employees guard', async () => {
     mocks.prismaMock.employee.count.mockResolvedValueOnce(1)
     const res = await actions.deleteDepartment(1)

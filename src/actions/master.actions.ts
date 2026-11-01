@@ -3036,6 +3036,19 @@ export async function deleteEmployee(id: number) {
     if (existing) {
       const scope = await getHrScope(actor);
       await assertHrEmployeeAccess(scope, id);
+
+      // Target-escalation guard (sama seperti updateEmployee): nonaktifkan
+      // employee di bawah ini ikut menonaktifkan akun login tertaut, jadi
+      // aktor non-super_admin tidak boleh menyentuh employee milik
+      // super_admin — admin biasa (delete_employees + HR scope all) bisa
+      // mematikan login super_admin terakhir dan mengunci administrasi.
+      const targetErr = await assertCanModifyEmployeeTarget(
+        actor.roles ?? [],
+        existing.userId ?? null,
+      );
+      if (targetErr) {
+        return { success: false, error: targetErr };
+      }
     }
 
     // SECURITY-FIRST ORDERING: revoke the linked login BEFORE the employee row
