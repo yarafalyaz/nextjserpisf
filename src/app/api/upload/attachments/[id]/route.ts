@@ -44,6 +44,22 @@ export async function DELETE(
       return apiError("FORBIDDEN", "Tidak memiliki izin")
     }
 
+    // Klaim baris DULU, terikat referensi yang terbaca: lampiran temp yang
+    // barusan diklaim dokumen oleh submit konkuren (referenceId 0 -> nyata)
+    // membuat klaim ini count 0, sehingga berkas bukti dokumen tidak ikut
+    // ter-unlink. Unlink hanya berjalan sesudah klaim menang.
+    const deleted = await prisma.transactionAttachment.deleteMany({
+      where: {
+        id: attachmentId,
+        uploadedBy: userId,
+        referenceType: attachment.referenceType,
+        referenceId: attachment.referenceId,
+      },
+    })
+    if (deleted.count === 0) {
+      return apiError("NOT_FOUND", "Lampiran tidak ditemukan")
+    }
+
     // Delete file from disk (normalize path)
     // Files are stored under private/uploads/attachments/ but fileUrl is the API
     // route path (/api/attachments/<ref>/<filename>). Resolve actual disk path.
@@ -67,15 +83,6 @@ export async function DELETE(
       }
     } catch {
       // File might already be deleted or on R2, continue
-    }
-
-    // Delete atomik terikat pemilik: dua DELETE konkuren tak lagi membuat
-    // satu sukses + satu P2025->500; count 0 = sudah terhapus pihak lain.
-    const deleted = await prisma.transactionAttachment.deleteMany({
-      where: { id: attachmentId, uploadedBy: userId },
-    })
-    if (deleted.count === 0) {
-      return apiError("NOT_FOUND", "Lampiran tidak ditemukan")
     }
 
     return NextResponse.json({ success: true })

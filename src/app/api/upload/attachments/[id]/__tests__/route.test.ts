@@ -109,20 +109,43 @@ describe("DELETE /api/upload/attachments/[id]", () => {
     expect(res.status).toBe(403)
   })
 
-  it("deletes file and db record on success (deleteMany atomik terikat pemilik)", async () => {
+  it("deletes file and db record on success (klaim terikat pemilik+referensi terbaca)", async () => {
     const res = await DELETE(makeReq(), makeParams("1"))
     const json = await res.json()
     expect(res.status).toBe(200)
     expect(json.success).toBe(true)
     expect(mocks.unlink).toHaveBeenCalled()
-    expect(mocks.deleteMany).toHaveBeenCalledWith({ where: { id: 1, uploadedBy: 5 } })
+    expect(mocks.deleteMany).toHaveBeenCalledWith({
+      where: { id: 1, uploadedBy: 5, referenceType: "quotation", referenceId: 5 },
+    })
     expect(mocks.delete).not.toHaveBeenCalled()
+    // Klaim DB mendahului unlink: berkas hanya dihapus sesudah baris menang.
+    expect(mocks.deleteMany.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.unlink.mock.invocationCallOrder[0],
+    )
   })
 
   it("returns 404 when concurrent delete already removed the row (count 0, bukan 500)", async () => {
     mocks.deleteMany.mockResolvedValue({ count: 0 })
     const res = await DELETE(makeReq(), makeParams("1"))
     expect(res.status).toBe(404)
+  })
+
+  it("tidak meng-unlink berkas bila lampiran sudah diklaim dokumen (klaim count 0)", async () => {
+    mocks.findUnique.mockResolvedValue({
+      id: 1,
+      fileUrl: "/api/attachments/quotation/quotation-1-123.pdf",
+      referenceId: 0,
+      uploadedBy: 5,
+      referenceType: "quotation",
+    })
+    mocks.deleteMany.mockResolvedValue({ count: 0 })
+    const res = await DELETE(makeReq(), makeParams("1"))
+    expect(res.status).toBe(404)
+    expect(mocks.unlink).not.toHaveBeenCalled()
+    expect(mocks.deleteMany).toHaveBeenCalledWith({
+      where: { id: 1, uploadedBy: 5, referenceType: "quotation", referenceId: 0 },
+    })
   })
 
   it("falls back to 'general' refType when null", async () => {
