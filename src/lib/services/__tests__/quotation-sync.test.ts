@@ -87,6 +87,39 @@ describe("quotation-sync.service / resyncOnEdit", () => {
     expect(p.salesInvoice.update).toHaveBeenCalledTimes(1)
   })
 
+  // Regresi putaran 44: penawaran pindah customer — SO/faktur draft turunan
+  // di-resync item/totalnya tetapi customerId-nya tertinggal di customer
+  // lama, jadi satu rantai dokumen menampilkan dua pihak berbeda.
+  it("regresi putaran 44: resync menyelaraskan customerId SO/faktur draft dengan penawaran", async () => {
+    const p = mocks.prismaMock
+    p.quotation.findUnique.mockResolvedValue({
+      id: 4, status: "draft", customerId: 9, subtotal: 800, discount: 0, tax: 0, grandTotal: 800,
+      sections: [{ items: [{ itemId: 1, qty: 1, unitPrice: 800, discount: 0, total: 800 }] }],
+    })
+    p.salesOrder.findMany.mockResolvedValue([{ id: 10, customerId: 1, grandTotal: 800, documentNo: "SO-1" }])
+    p.salesOrder.update.mockResolvedValue({})
+    p.salesOrderItem.deleteMany.mockResolvedValue({ count: 0 })
+    p.salesOrderItem.createMany.mockResolvedValue({ count: 1 })
+    p.salesInvoiceItem.deleteMany.mockResolvedValue({ count: 0 })
+    p.salesInvoiceItem.createMany.mockResolvedValue({ count: 1 })
+    p.salesInvoice.update.mockResolvedValue({})
+    p.salesInvoice.findMany.mockImplementation(async (args: any) => {
+      const want = args?.where?.status
+      return [
+        { id: 101, salesOrderId: 10, status: "draft", customerId: 1, paidAmount: 0, grandTotal: 800 },
+      ].filter((inv) => inv.status === want)
+    })
+
+    await resyncOnEdit(4)
+
+    expect(p.salesOrder.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ customerId: 9 }) }),
+    )
+    expect(p.salesInvoice.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ customerId: 9 }) }),
+    )
+  })
+
   it("E127-8b/L-1: faktur cancelled tidak pernah tersentuh resyncOnEdit", async () => {
     const p = mocks.prismaMock
     p.quotation.findUnique.mockResolvedValue({

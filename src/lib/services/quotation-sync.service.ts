@@ -144,9 +144,13 @@ export async function resyncOnEdit(quotationId: number, userId: number | null = 
         }
       }
 
+      // Putaran 44: customer penawaran ikut diselaraskan — edit penawaran
+      // yang memindah customer menata ulang SO ini, jadi pihak yang tampil
+      // wajib sama di seluruh rantai (hanya SO draft yang sampai sini).
       await tx.salesOrder.update({
         where: { id: so.id },
         data: {
+          customerId: quotation.customerId,
           subtotal: quotation.subtotal,
           discount: quotation.discount,
           tax: quotation.tax,
@@ -201,9 +205,11 @@ export async function resyncOnEdit(quotationId: number, userId: number | null = 
           }
         }
 
+        // Putaran 44: pihak faktur draft ikut diselaraskan dengan penawaran.
         await tx.salesInvoice.update({
           where: { id: inv.id },
           data: {
+            customerId: quotation.customerId,
             subtotal: quotation.subtotal,
             discount: quotation.discount,
             tax: quotation.tax,
