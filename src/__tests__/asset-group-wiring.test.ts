@@ -61,7 +61,7 @@ describe("grup aset: halaman, formulir, dan izin tersambung", () => {
     // Relasi Asset.groupId opsional: tanpa penjagaan ini Prisma melepas asetnya
     // diam-diam (SetNull) dan pengelompokan hilang tanpa pesan.
     const src = read("src/actions/asset.actions.ts")
-    expect(src).toMatch(/deleteAssetGroup[\s\S]{0,600}prisma\.asset\.count\(\{ where: \{ groupId: id \} \}\)/)
+    expect(src).toMatch(/deleteAssetGroup[\s\S]{0,900}tx\.asset\.count\(\{ where: \{ groupId: id \} \}\)/)
     expect(src).toMatch(/deleteAssetGroup[\s\S]{0,900}masih dipakai/)
   })
 })

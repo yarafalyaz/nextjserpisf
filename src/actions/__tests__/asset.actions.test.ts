@@ -250,6 +250,24 @@ describe("Asset Group Actions", () => {
     expect(requirePermissionMock).toHaveBeenCalledWith("delete_asset_groups")
     expect(prismaMock.assetGroup.delete).toHaveBeenCalledWith({ where: { id: 11 } })
   })
+
+  it("deleteAssetGroup mengunci baris grup sebelum menilai pemakaian (putaran 21)", async () => {
+    // Tanpa kunci baris di dalam tx, aset konkuren yang menunjuk grup sesudah
+    // hitungan tetap ter-SetNull diam-diam oleh delete.
+    prismaMock.asset.count.mockResolvedValue(0)
+    prismaMock.assetGroup.delete.mockResolvedValue({})
+
+    const res = await deleteAssetGroup(11)
+
+    expect(res).toEqual({ success: true })
+    expect(prismaMock.$transaction).toHaveBeenCalled()
+    expect(prismaMock.$executeRaw).toHaveBeenCalled()
+    const lockSql = JSON.stringify(prismaMock.$executeRaw.mock.calls.at(-1))
+    expect(lockSql).toContain("asset_groups")
+    expect(lockSql).toContain("FOR UPDATE")
+    const order = prismaMock.$executeRaw.mock.invocationCallOrder.at(-1)!
+    expect(order).toBeLessThan(prismaMock.asset.count.mock.invocationCallOrder.at(-1)!)
+  })
 })
 
 describe("Asset Brand Actions", () => {
@@ -572,6 +590,29 @@ describe("Asset Category Actions", () => {
     const res = await deleteAssetCategory(10)
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
+  })
+
+  it("deleteAssetCategory mengunci baris kategori sebelum menilai pemakaian (putaran 21)", async () => {
+    prismaMock.asset.count.mockResolvedValue(0)
+    prismaMock.assetCategory.delete.mockResolvedValue({})
+    await expect(deleteAssetCategory(10)).rejects.toThrow("NEXT_REDIRECT")
+    const lockSql = JSON.stringify(prismaMock.$executeRaw.mock.calls.at(-1))
+    expect(lockSql).toContain("asset_categories")
+    expect(lockSql).toContain("FOR UPDATE")
+    const order = prismaMock.$executeRaw.mock.invocationCallOrder.at(-1)!
+    expect(order).toBeLessThan(prismaMock.asset.count.mock.invocationCallOrder.at(-1)!)
+  })
+
+  it("deleteAssetBrand mengunci baris merek sebelum menilai pemakaian (putaran 21)", async () => {
+    prismaMock.asset.count.mockResolvedValue(0)
+    prismaMock.assetBrandModel.findMany.mockResolvedValue([])
+    prismaMock.assetBrand.delete.mockResolvedValue({})
+    await expect(deleteAssetBrand(20)).rejects.toThrow("NEXT_REDIRECT")
+    const lockSql = JSON.stringify(prismaMock.$executeRaw.mock.calls.at(-1))
+    expect(lockSql).toContain("asset_brands")
+    expect(lockSql).toContain("FOR UPDATE")
+    const order = prismaMock.$executeRaw.mock.invocationCallOrder.at(-1)!
+    expect(order).toBeLessThan(prismaMock.asset.count.mock.invocationCallOrder.at(-1)!)
   })
 })
 

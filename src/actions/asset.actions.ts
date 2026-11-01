@@ -237,16 +237,24 @@ export async function deleteAssetGroup(id: number) {
 
     // Penghapusan DITOLAK bila masih dipakai. Relasi `Asset.groupId` opsional, dan
     // tanpa penjagaan ini Prisma melepas asetnya secara DIAM-DIAM (SetNull) —
-    // pengelompokan aset hilang tanpa satu pun pesan.
-    const usedByAssets = await prisma.asset.count({ where: { groupId: id } });
+    // pengelompokan aset hilang tanpa satu pun pesan. Hitungan + hapus dalam
+    // satu tx berkunci baris grup: tanpa kunci, aset konkuren yang baru
+    // menunjuk grup ini sesudah hitungan tetap ter-SetNull diam-diam.
+    const usedByAssets = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM asset_groups WHERE id = ${id} FOR UPDATE`;
+      }
+      const used = await tx.asset.count({ where: { groupId: id } });
+      if (used > 0) return used;
+      await tx.assetGroup.delete({ where: { id } });
+      return 0;
+    });
     if (usedByAssets > 0) {
       return {
         success: false,
         error: `Grup aset masih dipakai ${usedByAssets} aset. Pindahkan asetnya dulu.`,
       };
     }
-
-    await prisma.assetGroup.delete({ where: { id } });
 
     await logActivity("delete", "AssetGroup", id, `Menghapus grup aset #${id}`);
     revalidatePath("/aset/grup");
@@ -374,15 +382,22 @@ export async function deleteAssetCategory(id: number) {
     // (SET NULL), jadi tanpa penjagaan ini hapus kategori diam-diam melepas
     // aset dari kategorinya — pengelompokan hilang tanpa satu pun pesan.
     // Kolomnya memang ditulis createAsset/updateAsset, jadi hitungan ini hidup.
-    const usedByAssets = await prisma.asset.count({ where: { categoryId: id } });
+    // Hitungan + hapus dalam tx berkunci baris kategori (pola deleteAssetGroup).
+    const usedByAssets = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM asset_categories WHERE id = ${id} FOR UPDATE`;
+      }
+      const used = await tx.asset.count({ where: { categoryId: id } });
+      if (used > 0) return used;
+      await tx.assetCategory.delete({ where: { id } });
+      return 0;
+    });
     if (usedByAssets > 0) {
       return {
         success: false,
         error: `Kategori aset masih dipakai ${usedByAssets} aset. Pindahkan asetnya dulu.`,
       };
     }
-
-    await prisma.assetCategory.delete({ where: { id } });
 
     await logActivity("delete", "AssetCategory", id, "Menghapus kategori aset");
     revalidatePath("/aset/kategori");
@@ -398,47 +413,50 @@ export async function deleteAssetBrand(id: number) {
   try {
     await requirePermission("delete_asset_brands");
 
-    // Penghapusan DITOLAK bila masih dipakai. `Asset.assetBrandId` opsional dan
-    // form aset memang menulisnya (createAsset/updateAsset), jadi tanpa penjagaan
-    // ini hapus merek diam-diam melepas merek dari asetnya (SetNull).
-    const usedByAssets = await prisma.asset.count({ where: { assetBrandId: id } });
-    if (usedByAssets > 0) {
-      return {
-        success: false,
-        error: `Merek aset masih dipakai ${usedByAssets} aset. Pindahkan asetnya dulu.`,
-      };
-    }
+    // Seluruh penilaian + hapus dalam tx berkunci baris merek: tanpa kunci,
+    // aset/tipe konkuren yang menunjuk merek sesudah hitungan tetap
+    // ter-SetNull / yatim diam-diam (pola deleteAssetGroup).
+    const blocked = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM asset_brands WHERE id = ${id} FOR UPDATE`;
+      }
+      // Penghapusan DITOLAK bila masih dipakai. `Asset.assetBrandId` opsional dan
+      // form aset memang menulisnya (createAsset/updateAsset), jadi tanpa penjagaan
+      // ini hapus merek diam-diam melepas merek dari asetnya (SetNull).
+      const usedByAssets = await tx.asset.count({ where: { assetBrandId: id } });
+      if (usedByAssets > 0) {
+        return `Merek aset masih dipakai ${usedByAssets} aset. Pindahkan asetnya dulu.`;
+      }
 
-    // Tipe/model (`asset_brand_models.asset_brand_id`) ber-FK RESTRICT ke merek —
-    // hapus merek yang masih punya tipe gagal dengan pesan FK mentah. Dan
-    // `Asset.assetBrandModelId` adalah bare int TANPA relasi FK, jadi hapus tipe
-    // diam-diam meninggalkan ID yatim di aset. Karena itu tolak hapus merek
-    // selama masih ada aset yang menunjuk mereknya ATAU tipenya, dan tolak
-    // selama merek masih punya tipe (kosongkan dulu lewat form ubah merek).
-    const brandModelIds = (
-      await prisma.assetBrandModel.findMany({
-        where: { assetBrandId: id },
-        select: { id: true },
-      })
-    ).map((m) => m.id);
-    const usedByModelAssets =
-      brandModelIds.length > 0
-        ? await prisma.asset.count({ where: { assetBrandModelId: { in: brandModelIds } } })
-        : 0;
-    if (usedByModelAssets > 0) {
-      return {
-        success: false,
-        error: `Merek aset masih dipakai ${usedByModelAssets} aset lewat tipenya. Pindahkan asetnya dulu.`,
-      };
-    }
-    if (brandModelIds.length > 0) {
-      return {
-        success: false,
-        error: `Merek aset masih punya ${brandModelIds.length} tipe/model. Kosongkan dulu lewat Ubah Merek.`,
-      };
-    }
+      // Tipe/model (`asset_brand_models.asset_brand_id`) ber-FK RESTRICT ke merek —
+      // hapus merek yang masih punya tipe gagal dengan pesan FK mentah. Dan
+      // `Asset.assetBrandModelId` adalah bare int TANPA relasi FK, jadi hapus tipe
+      // diam-diam meninggalkan ID yatim di aset. Karena itu tolak hapus merek
+      // selama masih ada aset yang menunjuk mereknya ATAU tipenya, dan tolak
+      // selama merek masih punya tipe (kosongkan dulu lewat form ubah merek).
+      const brandModelIds = (
+        await tx.assetBrandModel.findMany({
+          where: { assetBrandId: id },
+          select: { id: true },
+        })
+      ).map((m) => m.id);
+      const usedByModelAssets =
+        brandModelIds.length > 0
+          ? await tx.asset.count({ where: { assetBrandModelId: { in: brandModelIds } } })
+          : 0;
+      if (usedByModelAssets > 0) {
+        return `Merek aset masih dipakai ${usedByModelAssets} aset lewat tipenya. Pindahkan asetnya dulu.`;
+      }
+      if (brandModelIds.length > 0) {
+        return `Merek aset masih punya ${brandModelIds.length} tipe/model. Kosongkan dulu lewat Ubah Merek.`;
+      }
 
-    await prisma.assetBrand.delete({ where: { id } });
+      await tx.assetBrand.delete({ where: { id } });
+      return null;
+    });
+    if (blocked) {
+      return { success: false, error: blocked };
+    }
 
     await logActivity("delete", "AssetBrand", id, "Menghapus merek aset");
     revalidatePath("/aset/merek");
