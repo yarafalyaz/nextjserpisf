@@ -242,10 +242,25 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
     // mana pun — membatasinya ke demote-diri-sendiri membiarkan dua
     // super_admin terakhir saling menurunkan dan mengunci semua akses admin.
     const roleError = await prisma.$transaction(async (tx) => {
+      // Kunci baris user target DULU: guard target di luar tx membaca snapshot,
+      // promosi target menjadi super_admin yang commit di antaranya (lewat
+      // updateUserRoles lain atau sync updateEmployee) tak boleh tertimpa
+      // roles.set dari keputusan basi. Penulis lawan yang mengunci baris
+      // employees saja terserialkan lewat kunci baris users ini.
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`
       const targetRoles = await tx.role.findMany({
         where: { users: { some: { id: userId } } },
         select: { id: true, name: true },
       })
+      // Nilai ulang guard target dari bacaan terkunci (semantik sama dengan
+      // assertCanModifyTarget): non-super_admin tak boleh mengubah akun yang
+      // kini sudah super_admin.
+      if (
+        !actor.roles.includes("super_admin") &&
+        targetRoles.some((r) => r.name === "super_admin")
+      ) {
+        return "Hanya super admin yang dapat mengubah atau menonaktifkan akun super admin"
+      }
       const wasSuperAdmin = targetRoles.some((r) => r.name === "super_admin")
       const stillSuperAdmin = targetRoles.some((r) => r.name === "super_admin" && cleanRoleIds.includes(r.id))
       if (wasSuperAdmin && !stillSuperAdmin) {

@@ -418,6 +418,36 @@ describe("updateUserRoles", () => {
     expect(userUpdateMock).toHaveBeenCalled()
   })
 
+  it("menolak ubah role target yang dipromosikan menjadi super_admin sesudah guard snapshot", async () => {
+    // Guard luar (findUnique): target belum super_admin -> lolos.
+    userFindUniqueMock.mockResolvedValue({ id: 3, roles: [] })
+    // Panggilan findMany pertama = grant-guard luar atas peran diminta [5]
+    // (peran biasa, izin aktor di beforeEach cukup) -> lolos.
+    roleFindManyMock.mockResolvedValueOnce([{ name: "petugas" }])
+    // Bacaan peran DI DALAM tx sesudah kunci baris users: target kini
+    // super_admin (promosi konkuren commit di antaranya) -> wajib ditolak,
+    // bukan ditimpa roles.set dari keputusan snapshot luar.
+    roleFindManyMock.mockResolvedValue([{ id: 9, name: "super_admin" }])
+
+    const res = await updateUserRoles(3, [5])
+
+    expect(res).toEqual({
+      error: "Hanya super admin yang dapat mengubah atau menonaktifkan akun super admin",
+    })
+    expect(queryRawMock).toHaveBeenCalled()
+    const rawArg = queryRawMock.mock.calls[0][0] as unknown
+    const sql = rawArg as { sql?: string; strings?: string[] | string }
+    const locked = Array.isArray(rawArg)
+      ? rawArg.join("?")
+      : sql.sql ?? (Array.isArray(sql.strings) ? sql.strings.join("?") : String(sql.strings))
+    expect(locked).toMatch(/FROM users[\s\S]*FOR UPDATE/)
+    // Kunci baris users mendahului bacaan peran tx (panggilan findMany
+    // terakhir; panggilan pertama milik grant-guard luar).
+    const roleOrders = roleFindManyMock.mock.invocationCallOrder
+    expect(queryRawMock.mock.invocationCallOrder[0]).toBeLessThan(roleOrders[roleOrders.length - 1])
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
   it("menolak nonaktifkan target yang dipromosikan menjadi super_admin sesudah guard snapshot", async () => {
     userFindMock.mockResolvedValue({ isActive: true, roles: [{ name: "super_admin" }] })
     // Guard luar memakai findUnique, bacaan terkunci memakai
@@ -460,11 +490,12 @@ describe("updateUserRoles", () => {
     const res = await updateUserRoles(3, [5])
     expect(res).toEqual({ error: "Tidak dapat mencabut role super admin terakhir" })
     expect(transactionMock).toHaveBeenCalledTimes(1)
-    expect(queryRawMock).toHaveBeenCalledTimes(1)
-    const sql = (queryRawMock.mock.calls[0][0] as string[]).join("?")
+    // Dua kunci FOR UPDATE: baris users target dulu, lalu himpunan super_admin.
+    expect(queryRawMock).toHaveBeenCalledTimes(2)
+    const sql = (queryRawMock.mock.calls[1][0] as string[]).join("?")
     expect(sql).toContain("_UserRoles")
     expect(sql).toContain("FOR UPDATE")
-    expect(queryRawMock.mock.invocationCallOrder[0]).toBeLessThan(userCountMock.mock.invocationCallOrder[0])
+    expect(queryRawMock.mock.invocationCallOrder[1]).toBeLessThan(userCountMock.mock.invocationCallOrder[0])
     expect(userUpdateMock).not.toHaveBeenCalled()
   })
 
@@ -475,14 +506,15 @@ describe("updateUserRoles", () => {
     userCountMock.mockResolvedValue(0)
     const res = await updateUserRoles(1, [5])
     expect(res).toEqual({ error: "Tidak dapat mencabut role super admin terakhir" })
-    // Serialisasi: transaksi dibuka, baris super_admin dikunci FOR UPDATE,
-    // count dijalankan sesudah kunci — bukan count lepas di luar tx.
+    // Serialisasi: transaksi dibuka, baris users target lalu himpunan
+    // super_admin dikunci FOR UPDATE, count dijalankan sesudah kunci —
+    // bukan count lepas di luar tx.
     expect(transactionMock).toHaveBeenCalledTimes(1)
-    expect(queryRawMock).toHaveBeenCalledTimes(1)
-    const sql = (queryRawMock.mock.calls[0][0] as string[]).join("?")
+    expect(queryRawMock).toHaveBeenCalledTimes(2)
+    const sql = (queryRawMock.mock.calls[1][0] as string[]).join("?")
     expect(sql).toContain("_UserRoles")
     expect(sql).toContain("FOR UPDATE")
-    expect(queryRawMock.mock.invocationCallOrder[0]).toBeLessThan(userCountMock.mock.invocationCallOrder[0])
+    expect(queryRawMock.mock.invocationCallOrder[1]).toBeLessThan(userCountMock.mock.invocationCallOrder[0])
     expect(userUpdateMock).not.toHaveBeenCalled()
   })
 
