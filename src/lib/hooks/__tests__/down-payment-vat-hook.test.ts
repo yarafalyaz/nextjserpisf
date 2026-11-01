@@ -267,6 +267,12 @@ describe("J-PL1: posting faktur pelunasan reklas anti-dobel", () => {
   function invoiceTx() {
     return {
       systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.settings) },
+      account: {
+        findMany: vi.fn(async (args: any) => {
+          const ids: number[] = args?.where?.id?.in ?? [];
+          return ids.map((id) => ({ id }));
+        }),
+      },
       salesInvoice: { findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow, findUnique: mocks.invoiceFindUnique },
       downPayment: { findMany: mocks.dpFindMany },
       salesPayment: { findMany: mocks.salesPaymentFindMany },

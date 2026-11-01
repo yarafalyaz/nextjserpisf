@@ -231,6 +231,7 @@ function journalEntryBranch() {
 function buildSalesInvoiceTx(inventoryLayerGroupBy: unknown) {
   return {
     systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
+    account: { findMany: mocks.accountFindMany, findFirst: mocks.accountFindFirst },
     downPayment: { findMany: vi.fn().mockResolvedValue([]) },
     // B4 (PR #785): blok penutup 210102 jalur konversi membaca pembayaran
     // DP tertaut; default kosong = bukan faktur konversi.
@@ -813,6 +814,25 @@ describe("onSalesInvoicePosted", () => {
 
   // E135-7: isScrapSaleItem=true && isProduct=true -> posting ditolak
   // sebelum jurnal/stok disentuh. COGS > Rp0 = MERAH.
+  it("menolak posting bila akun piutang terpetakan nonaktif/terhapus (assertAccountsExist)", async () => {
+    // Mapping menunjuk akun yang kemudian dinonaktifkan/dihapus: tanpa gerbang
+    // hidup jurnal POSTED menunjuk akun mati. Guard harus melempar SEBELUM
+    // jurnal apa pun lahir.
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? [];
+      return ids.filter((id) => id !== 110).map((id) => ({ id }));
+    });
+    const inner = innerInvoice({ totalAmount: 1100, taxAmount: 100 });
+    seedInvoice(inner, []);
+    mocks.journalCreate.mockResolvedValue({ id: 50 });
+
+    await expect(onSalesInvoicePosted(1)).rejects.toThrow(/akun tidak aktif\/terhapus/);
+    // Jurnal header lahir sebelum entri divalidasi, tetapi eksekusi di dalam tx
+    // yang sama — lemparan guard me-rollback header itu juga, jadi nol baris
+    // jurnal bertahan. Yang dilarang di sini: entri jurnal apa pun tertulis.
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalled();
+  });
+
   it("E135-7: item besi tua bertanda stok ditolak berisik", async () => {
     const inner = innerInvoice({ totalAmount: 500000 });
     seedInvoice(inner, [{ itemId: 60, qty: 10, cost: 12345 }]);

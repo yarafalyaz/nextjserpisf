@@ -720,6 +720,16 @@ export async function onSalesInvoicePosted(
         });
       }
     }
+    // Gerbang hidup: mapping Pengaturan dinilai intNull tanpa cek akun, jadi id
+    // bisa menunjuk akun yang sudah dinonaktifkan/dihapus. Tanpa ini jurnal
+    // POSTED menunjuk akun mati — jalur lain (pembayaran penjualan dsb.) sudah
+    // fail-closed lewat assertAccountsExist. Dinilai atas akun yang BENAR-BENAR
+    // dipakai entri jurnal ini, di dalam tx (rollback penuh bila gagal).
+    await assertAccountsExist(
+      tx,
+      invoiceEntries.map((e) => e.accountId),
+      "Posting faktur penjualan",
+    );
     await tx.journalEntry.createMany({ data: invoiceEntries });
 
     // Dr. HPP / Cr. Persediaan + physical stock-out for PRODUCT items.
@@ -979,6 +989,11 @@ export async function onSalesInvoicePosted(
       );
     }
     if (cogsAmount > 0 && settings.cogsAccountId && settings.inventoryAccountId) {
+      await assertAccountsExist(
+        tx,
+        [settings.cogsAccountId, settings.inventoryAccountId],
+        "Posting HPP faktur penjualan",
+      );
       const cogsJournalNumber = await generateJournalNumber(
         tx,
         "INV-COGS",
