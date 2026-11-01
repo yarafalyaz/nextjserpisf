@@ -135,10 +135,10 @@ describe("total trailing: aging & AR/AP", () => {
 
   it("ringkasan AR/AP: ketiga total 1 sel trailing (Belum Lunas)", async () => {
     mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
-      { id: 1, grandTotal: 1000, paidAmount: 0, dueDate: new Date("2026-01-01"), customer: { name: "PT A" } },
+      { id: 1, customerId: 1, grandTotal: 1000, paidAmount: 0, dueDate: new Date("2026-01-01"), customer: { name: "PT A" } },
     ])
     mocks.prismaMock.vendorBill.findMany.mockResolvedValue([
-      { id: 1, grandTotal: 500, paidAmount: 0, withholdingAmount: 0, dueDate: new Date("2026-01-01"), vendor: { name: "PT V" } },
+      { id: 1, vendorId: 1, grandTotal: 500, paidAmount: 0, withholdingAmount: 0, dueDate: new Date("2026-01-01"), vendor: { name: "PT V" } },
     ])
     const report = await loadArApSummary()
     const totals = totalsOf(report.table.rows)

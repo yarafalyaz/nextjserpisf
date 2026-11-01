@@ -53,36 +53,36 @@ export async function loadArApSummary(): Promise<ArApSummaryReport> {
   // tetap paidAmount murni.
   const returnCreditByInvoiceId = await loadReturnCreditByInvoiceId(invoices.map((inv) => inv.id))
   const arByCustomer = buildArByCustomer(invoices.map((inv) => ({
-    customerName: inv.customer.name, grandTotal: inv.grandTotal, paidAmount: inv.paidAmount,
+    customerId: inv.customerId, customerName: inv.customer.name, grandTotal: inv.grandTotal, paidAmount: inv.paidAmount,
     returnCreditAmount: returnCreditByInvoiceId.get(inv.id) ?? 0,
   })))
-  const arRows = [...arByCustomer.entries()].filter(([, r]) => r.outstanding > 0)
+  const arRows = arByCustomer.filter((r) => r.outstanding > 0)
 
   // P0-2: utang supplier = NETO (grandTotal − withholding), bukan bruto.
   const apByVendor = buildApByVendor(bills.map((bill) => ({
-    vendorName: bill.vendor.name, grandTotal: bill.grandTotal, withholdingAmount: bill.withholdingAmount, paidAmount: bill.paidAmount, balanceDue: bill.balanceDue,
+    vendorId: bill.vendorId, vendorName: bill.vendor.name, grandTotal: bill.grandTotal, withholdingAmount: bill.withholdingAmount, paidAmount: bill.paidAmount, balanceDue: bill.balanceDue,
   })))
-  const apRows = [...apByVendor.entries()].filter(([, r]) => r.outstanding > 0)
+  const apRows = apByVendor.filter((r) => r.outstanding > 0)
 
   const totalAR = sumOutstanding(arRows)
   const totalAP = sumOutstanding(apRows)
 
   if (arRows.length > 0) {
     rows.push({ kind: "group", label: "Piutang Usaha" })
-    for (const [name, r] of arRows) {
+    for (const r of arRows) {
       rows.push({
         kind: "data",
-        cells: [name, String(r.count), money(r.billed), money(r.paid), money(r.outstanding)],
+        cells: [r.name, String(r.count), money(r.billed), money(r.paid), money(r.outstanding)],
       })
     }
     rows.push({ kind: "total", label: "Jumlah Piutang", cells: [money(totalAR)] })
   }
   if (apRows.length > 0) {
     rows.push({ kind: "group", label: "Hutang Usaha" })
-    for (const [name, r] of apRows) {
+    for (const r of apRows) {
       rows.push({
         kind: "data",
-        cells: [name, String(r.count), money(r.billed), money(r.paid), money(r.outstanding)],
+        cells: [r.name, String(r.count), money(r.billed), money(r.paid), money(r.outstanding)],
       })
     }
     rows.push({ kind: "total", label: "Jumlah Hutang", cells: [money(totalAP)] })
