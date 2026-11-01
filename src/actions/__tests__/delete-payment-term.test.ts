@@ -6,6 +6,7 @@ vi.mock("@/lib/auth/permissions", () => ({ requirePermission: vi.fn() }))
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     vendor: { count: vi.fn() },
+    customer: { count: vi.fn() },
     paymentTerm: { delete: vi.fn() },
   },
 }))
@@ -15,14 +16,25 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 describe("deletePaymentTerm", () => {
   it("fails if vendors are tied to the payment term", async () => {
     vi.mocked(prisma.vendor.count).mockResolvedValueOnce(3)
+    vi.mocked(prisma.customer.count).mockResolvedValueOnce(0)
     const res = await deletePaymentTerm(1)
     expect(res.success).toBe(false)
     expect(res.error).toContain("Syarat pembayaran")
     expect(prisma.paymentTerm.delete).not.toHaveBeenCalled()
   })
 
+  it("regression round 19: fails if customers tie the payment term", async () => {
+    vi.mocked(prisma.vendor.count).mockResolvedValueOnce(0)
+    vi.mocked(prisma.customer.count).mockResolvedValueOnce(2)
+    const res = await deletePaymentTerm(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("2 pelanggan")
+    expect(prisma.paymentTerm.delete).not.toHaveBeenCalled()
+  })
+
   it("deletes when no vendors reference the payment term", async () => {
     vi.mocked(prisma.vendor.count).mockResolvedValueOnce(0)
+    vi.mocked(prisma.customer.count).mockResolvedValueOnce(0)
     vi.mocked(prisma.paymentTerm.delete).mockResolvedValueOnce({} as never)
     const res = await deletePaymentTerm(1)
     expect(res.success).toBe(true)
