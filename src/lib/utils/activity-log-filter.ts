@@ -13,6 +13,20 @@ export type ActivityLogWhereResult =
   | { ok: true; where: Record<string, unknown> }
   | { ok: false; message: string };
 
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** `YYYY-MM-DD` harus hari kalender nyata: `new Date("2026-02-31")`
+ * bergeser senyap ke 3 Mar, bukan NaN. Bentuk lain diserahkan ke `new Date`. */
+function isImpossibleDateOnly(value: string): boolean {
+  const m = DATE_ONLY.exec(value);
+  if (!m) return false;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (month < 1 || month > 12 || day < 1) return true;
+  return day > new Date(year, month, 0).getDate();
+}
+
 export function buildActivityLogWhere(sp: URLSearchParams): ActivityLogWhereResult {
   const where: Record<string, unknown> = {};
 
@@ -37,6 +51,8 @@ export function buildActivityLogWhere(sp: URLSearchParams): ActivityLogWhereResu
   const parsedFrom = dateFrom ? new Date(dateFrom) : null;
   const parsedTo = dateTo ? new Date(dateTo) : null;
   if (
+    (dateFrom && isImpossibleDateOnly(dateFrom)) ||
+    (dateTo && isImpossibleDateOnly(dateTo)) ||
     (parsedFrom && Number.isNaN(parsedFrom.getTime())) ||
     (parsedTo && Number.isNaN(parsedTo.getTime()))
   ) {

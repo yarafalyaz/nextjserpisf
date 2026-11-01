@@ -38,6 +38,16 @@ describe("buildActivityLogWhere", () => {
     expect(buildActivityLogWhere(sp("dateTo=%")).ok).toBe(false)
   })
 
+  it("rejects impossible calendar days instead of rolling them into next month", () => {
+    expect(buildActivityLogWhere(sp("dateFrom=2026-02-31"))).toEqual({
+      ok: false,
+      message: "Tanggal tidak valid",
+    })
+    expect(buildActivityLogWhere(sp("dateTo=2026-04-31")).ok).toBe(false)
+    expect(buildActivityLogWhere(sp("dateFrom=2026-02-29")).ok).toBe(false)
+    expect(buildActivityLogWhere(sp("dateFrom=2024-02-29")).ok).toBe(true)
+  })
+
   it("rejects dateFrom after dateTo", () => {
     expect(buildActivityLogWhere(sp("dateFrom=2026-10-20&dateTo=2026-10-01"))).toEqual({
       ok: false,
