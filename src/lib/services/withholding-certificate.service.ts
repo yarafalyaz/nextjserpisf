@@ -283,6 +283,11 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         recordedWithholding = { amount: Number(payment.withholdingAmount ?? 0), typeId: payment.withholdingTypeId ?? null }
       }
       // R8-PAJAK-08: jenis nonaktif/terhapus tidak boleh melahirkan bupot.
+      // Kunci baris jenis lebih dulu (pola settleWithholdingTax): bacaan
+      // polos di dalam tx membaca snapshot awal transaksi, jadi jenis yang
+      // dinonaktifkan/diganti tarif sesudah bupot sumber dikunci tetap
+      // lolos dengan tarif basi; locking read menilai baris segar.
+      await tx.$executeRaw`SELECT id FROM withholding_tax_types WHERE id = ${input.withholdingTypeId} FOR UPDATE`
       const type = await tx.withholdingTaxType.findUniqueOrThrow({ where: { id: input.withholdingTypeId } })
       assertWithholdingTypeActive(type)
       const article = assertArticle(type.article ?? "")

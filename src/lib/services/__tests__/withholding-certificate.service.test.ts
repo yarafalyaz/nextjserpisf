@@ -343,6 +343,24 @@ describe("issueWithholdingCertificate guards", () => {
     expect(mocks.certCreate).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 48: baris jenis PPh dikunci FOR UPDATE sebelum dibaca saat terbit", async () => {
+    const r = await issueWithholdingCertificate({
+      direction: "we_withhold", certificateNumber: "BP-LOCKTYPE",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Maklon",
+      withholdingTypeId: 3, dpp: 10_000_000, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(true)
+    const lockIdx = mocks.executeRaw.mock.calls.findIndex((c: unknown[]) => {
+      const first = c[0] as { strings?: string[] } | string[] | undefined
+      const sql = Array.isArray(first) ? first.join("?") : (first as { strings?: string[] } | undefined)?.strings?.join("?") ?? ""
+      return sql.includes("withholding_tax_types") && sql.includes("FOR UPDATE")
+    })
+    expect(lockIdx).toBeGreaterThanOrEqual(0)
+    expect(mocks.executeRaw.mock.invocationCallOrder[lockIdx]).toBeLessThan(
+      mocks.typeFindUniqueOrThrow.mock.invocationCallOrder[0],
+    )
+  })
+
   it("R8-PAJAK-03: fasilitas SKB/PP23/DTP → potong 0, tarif snapshot tetap nominal", async () => {
     for (const facility of ["SKB", "PP23", "DTP"] as const) {
       vi.clearAllMocks()
