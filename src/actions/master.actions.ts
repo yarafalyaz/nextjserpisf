@@ -1837,41 +1837,53 @@ export async function updateItemCategory(id: number, formData: FormData) {
       slug: await nextSlug("itemCategory", v.name, { excludeId: id }),
       description: v.description ?? null,
     };
-    if (formData.has("parentId")) {
-      if (v.parentId === undefined) {
-        data.parentId = null;
-      } else {
-        if (v.parentId === id) {
-          return { success: false, error: "Kategori tidak dapat menjadi induk bagi dirinya sendiri" };
-        }
-        const parent = await prisma.itemCategory.findUnique({
-          where: { id: v.parentId },
-          select: { id: true, parentId: true },
-        });
-        if (!parent) return { success: false, error: "Kategori induk tidak ditemukan" };
-        // Anti-siklus: induk baru tidak boleh keturunan kategori ini.
-        let cursor: { id: number; parentId: number | null } | null = parent;
-        for (let depth = 0; cursor && depth < 100; depth++) {
-          if (cursor.parentId === id) {
-            return { success: false, error: "Kategori induk tidak boleh berupa sub-kategori dari kategori ini" };
-          }
-          if (cursor.parentId === null) break;
-          cursor = await prisma.itemCategory.findUnique({
-            where: { id: cursor.parentId },
-            select: { id: true, parentId: true },
-          });
-        }
-        data.parentId = v.parentId;
-      }
-    }
     if (formData.has("costingMethod") && v.costingMethod !== undefined) {
       data.costingMethod = v.costingMethod;
     }
 
-    await prisma.itemCategory.update({
-      where: { id },
-      data,
+    // Walk anti-siklus + tulis dalam SATU tx berkunci (pola updateAccount):
+    // baris kategori dan baris induk baru dikunci urut id, rantai dinilai
+    // dari bacaan terkunci. Walk luar-tx lama membiarkan update silang
+    // A.parent=B dan B.parent=A sama-sama lolos dari snapshot masing-masing
+    // — pohon kategori bersiklus permanen, dan rantai >100 di atas parent
+    // usulan mengelabui cek kedalaman.
+    const outcome = await prisma.$transaction(async (tx) => {
+      const wantsParent = formData.has("parentId") && v.parentId !== undefined;
+      const lockIds = [...new Set(wantsParent ? [id, v.parentId as number] : [id])].sort((a, b) => a - b);
+      for (const lockId of lockIds) {
+        await tx.$queryRaw`SELECT id FROM item_categories WHERE id = ${lockId} FOR UPDATE`;
+      }
+      if (formData.has("parentId")) {
+        if (v.parentId === undefined) {
+          data.parentId = null;
+        } else {
+          if (v.parentId === id) {
+            return { error: "Kategori tidak dapat menjadi induk bagi dirinya sendiri" };
+          }
+          const parent = await tx.itemCategory.findUnique({
+            where: { id: v.parentId },
+            select: { id: true, parentId: true },
+          });
+          if (!parent) return { error: "Kategori induk tidak ditemukan" };
+          // Anti-siklus: induk baru tidak boleh keturunan kategori ini.
+          let cursor: { id: number; parentId: number | null } | null = parent;
+          for (let depth = 0; cursor && depth < 100; depth++) {
+            if (cursor.parentId === id) {
+              return { error: "Kategori induk tidak boleh berupa sub-kategori dari kategori ini" };
+            }
+            if (cursor.parentId === null) break;
+            cursor = await tx.itemCategory.findUnique({
+              where: { id: cursor.parentId },
+              select: { id: true, parentId: true },
+            });
+          }
+          data.parentId = v.parentId;
+        }
+      }
+      await tx.itemCategory.update({ where: { id }, data });
+      return {};
     });
+    if ("error" in outcome) return { success: false, error: outcome.error };
 
     revalidatePath("/master/kategori-barang");
     await logActivity(

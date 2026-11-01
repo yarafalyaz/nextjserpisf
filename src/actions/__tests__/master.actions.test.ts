@@ -1991,6 +1991,19 @@ describe('Coverage Hardening Edge Cases', () => {
     expect(createArg.data.parentId).toBe(7)
   })
 
+  it("regression round 18: updateItemCategory mengunci baris kategori + induk baru dalam tx sebelum walk anti-siklus", async () => {
+    mocks.prismaMock.itemCategory.findUnique.mockReset()
+    mocks.prismaMock.itemCategory.findUnique.mockResolvedValue({ id: 9, parentId: null })
+    const res = await actions.updateItemCategory(5, fdMap({ name: "Kat", parentId: "9" }))
+    expect(res?.success).toBe(true)
+    const lockValues = (mocks.prismaMock.$queryRaw.mock.calls as unknown[][]).map((c) => c[1])
+    expect(lockValues).toContain(5)
+    expect(lockValues).toContain(9)
+    const firstLock = mocks.prismaMock.$queryRaw.mock.invocationCallOrder[0]
+    const firstWalk = mocks.prismaMock.itemCategory.findUnique.mock.invocationCallOrder[0]
+    expect(firstLock).toBeLessThan(firstWalk)
+  })
+
   it("updateItemCategory rejects arbitrary costingMethod, self-parent, and cycle", async () => {
     const badCosting = await actions.updateItemCategory(5, fdMap({ name: "Kat", costingMethod: "weird" }))
     expect(badCosting?.success).toBe(false)
