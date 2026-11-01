@@ -890,6 +890,15 @@ export async function createPurchaseOrder(formData: FormData) {
         }
       }
 
+      // Putaran 22: vendor soft-deleted/nonaktif tak boleh melahirkan PO
+      // baru (pola createServicePurchaseOrderFromWorkOrder) — picker
+      // menyembunyikannya, FormData langsung tetap harus ditolak server.
+      const liveVendor = await tx.vendor.findFirst({
+        where: { id: v.vendorId, isActive: true, deletedAt: null },
+        select: { id: true },
+      });
+      if (!liveVendor) throw new Error("Vendor tidak ditemukan atau tidak aktif");
+
       const created = await tx.purchaseOrder.create({
         data: {
           documentNo,
@@ -3953,6 +3962,13 @@ export async function updateVendorPayment(id: number, formData: FormData) {
       if (freshPayment.status !== "draft") {
         throw new Error("Hanya pembayaran draft yang dapat diedit");
       }
+      // Putaran 22: edit tak boleh memindah pembayaran ke vendor
+      // soft-deleted/nonaktif (pola guard createPurchaseOrder).
+      const liveVendor = await tx.vendor.findFirst({
+        where: { id: v.vendorId, isActive: true, deletedAt: null },
+        select: { id: true },
+      });
+      if (!liveVendor) throw new Error("Vendor tidak ditemukan atau tidak aktif");
       const paymentDate = wibDateToUtcMidnight(v.paymentDate);
       const updated = await tx.vendorPayment.update({
         where: { id },

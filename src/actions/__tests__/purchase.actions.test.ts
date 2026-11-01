@@ -268,15 +268,31 @@ describe("Purchase Request Actions", () => {
 describe("Purchase Order Actions", () => {
   beforeEach(() => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    // Putaran 22: create menolak vendor mati — default fixture vendor hidup.
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1 })
   })
 
   it("createPurchaseOrder succeeds", async () => {
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1 })
     const res = await actions.createPurchaseOrder(fdMap({
       vendorId: "1",
       date: "2026-06-12",
       items: JSON.stringify([{ itemId: 1, qty: 5, unitPrice: 1000, discount: 0 }])
     }))
     expect(res?.success).toBe(true)
+  })
+
+  it("regresi putaran 22: createPurchaseOrder menolak vendor nonaktif/terhapus", async () => {
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue(null)
+    const res = await actions.createPurchaseOrder(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 5, unitPrice: 1000, discount: 0 }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.purchaseOrder.create).not.toHaveBeenCalled()
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1 })
   })
 
   it("createPurchaseOrder persists the service flag and work order link", async () => {
@@ -1357,6 +1373,8 @@ describe("Vendor Bill Actions", () => {
 describe("Vendor Payment Actions", () => {
   beforeEach(() => {
     mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    // Putaran 22: edit menolak vendor mati — default fixture vendor hidup.
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1 })
   })
 
   it("createVendorPayment succeeds", async () => {
@@ -1445,6 +1463,7 @@ describe("Vendor Payment Actions", () => {
   })
 
   it("updateVendorPayment succeeds", async () => {
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1 })
     const res = await actions.updateVendorPayment(1, fdMap({
       vendorId: "1",
       amount: "1200",
@@ -1453,6 +1472,20 @@ describe("Vendor Payment Actions", () => {
     }))
     expect(res?.success).toBe(true)
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_vendor_payments")
+  })
+
+  it("regresi putaran 22: updateVendorPayment menolak vendor nonaktif/terhapus", async () => {
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue(null)
+    const res = await actions.updateVendorPayment(1, fdMap({
+      vendorId: "1",
+      amount: "1200",
+      paymentDate: "2026-06-12",
+      paymentMethod: "cash"
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.vendorPayment.update).not.toHaveBeenCalled()
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1 })
   })
 
   it("confirmVendorPayment succeeds", async () => {
