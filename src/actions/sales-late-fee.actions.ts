@@ -336,6 +336,31 @@ export async function paySalesLateFee(formData: FormData): Promise<LateFeeAction
         throw new Error("Pembayaran melebihi sisa saldo dokumen denda.")
       }
 
+      // Paritas createSalesPayment: accountId payload menjadi akun Dr kas/bank
+      // jurnal. Tanpa gerbang grup BANK, akun beban/piutang bisa dipilih
+      // (atau dipalsukan payload) dan penerimaan denda tidak pernah menambah
+      // kas riil. Dinilai di dalam tx sebelum baris pembayaran lahir; akun
+      // default settings.cashBankAccountId tetap dinilai hook lewat
+      // assertAccountsExist (hidup), tetapi grupnya tanggung jawab master.
+      if (accountId != null) {
+        const cashAccount = await tx.account.findUnique({
+          where: { id: accountId },
+          select: { id: true, isActive: true, deletedAt: true, reportGroup: true },
+        })
+        if (!cashAccount) {
+          throw new Error(`Akun tidak ditemukan (id: ${accountId}). Pilih ulang akun sebelum menyimpan.`)
+        }
+        if (cashAccount.deletedAt != null) {
+          throw new Error("Akun penerima sudah dihapus. Pilih ulang akun sebelum menyimpan.")
+        }
+        if (!cashAccount.isActive) {
+          throw new Error("Akun penerima tidak aktif. Pilih ulang akun sebelum menyimpan.")
+        }
+        if (cashAccount.reportGroup !== "BANK") {
+          throw new Error("Akun penerima bukan rekening kas/bank (grup laporan BANK).")
+        }
+      }
+
       const documentNo = await generateDocumentNumber("PAY")
       const payment = await tx.salesLateFeePayment.create({
         data: {

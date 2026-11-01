@@ -345,6 +345,32 @@ describe("paySalesLateFee (E93-7)", () => {
     expect(queryRaw.mock.invocationCallOrder[0]).toBeLessThan(findFirst.mock.invocationCallOrder[0])
   })
 
+  it("pembayaran dengan accountId non-BANK ditolak sebelum baris pembayaran lahir", async () => {
+    tx.salesLateFee.findFirst.mockResolvedValue({
+      id: 55,
+      documentNo: "001/LF/YRA/10/2026",
+      amount: 60_000,
+      paidAmount: 0,
+      status: "posted",
+    })
+    tx.account.findUnique.mockResolvedValue({
+      id: 510, isActive: true, deletedAt: null, reportGroup: "EXPENSE",
+    })
+    const res = await actions.paySalesLateFee(
+      fd({
+        salesLateFeeId: "55",
+        amount: "10000",
+        paymentDate: "2026-10-12",
+        paymentMethod: "transfer",
+        accountId: "510",
+        idempotencyKey: "latefee-pay-nonbank-1",
+      }),
+    )
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("bukan rekening kas/bank")
+    expect(tx.salesLateFeePayment.create).not.toHaveBeenCalled()
+  })
+
   it("pembayaran melebihi sisa denda → ditolak", async () => {
     tx.salesLateFee.findFirst.mockResolvedValue({
       id: 55,
