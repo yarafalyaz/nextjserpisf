@@ -2750,6 +2750,10 @@ export async function deletePurchaseOrder(id: number) {
       }
 
       for (const gr of lockedPo.goodsReceipts) {
+        // Putaran 22: catatan QC GR polimorfik tanpa FK — menghapus GR
+        // ber-inspeksi/NCR meninggalkannya yatim (guard yang sama di
+        // deleteGoodsReceipt; helper mengunci baris GR lebih dulu).
+        await assertQcReferenceUnreferenced("GoodsReceipt", gr.id, tx);
         const stockMoves = stockMovesByGrId.get(gr.id) || [];
 
         if (stockMoves.length > 0) {

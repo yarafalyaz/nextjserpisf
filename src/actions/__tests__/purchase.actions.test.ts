@@ -1862,6 +1862,23 @@ describe("Purchase Return Actions", () => {
     const res = await actions.deletePurchaseOrder(1)
     expect(res?.success).toBe(true)
   })
+  it("regresi putaran 22: deletePurchaseOrder menolak GR anak ber-catatan QC", async () => {
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow
+      .mockResolvedValue({ id: 1, status: "draft", goodsReceipts: [{ id: 55, status: "draft" }] })
+    mocks.prismaMock.vendorBill.count.mockResolvedValue(0)
+    mocks.prismaMock.qcInspection.count.mockResolvedValue(1)
+    mocks.prismaMock.nonconformance.count.mockResolvedValue(0)
+    const res = await actions.deletePurchaseOrder(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("catatan QC")
+    expect(mocks.prismaMock.goodsReceipt.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.purchaseOrder.delete).not.toHaveBeenCalled()
+    // clearAllMocks tak membuang implementasi — kembalikan hitungan QC ke 0
+    // agar test hapus lain tak mewarisi catatan QC hantu.
+    mocks.prismaMock.qcInspection.count.mockResolvedValue(0)
+    mocks.prismaMock.nonconformance.count.mockResolvedValue(0)
+  })
+
   it("regresi putaran 16: deletePurchaseOrder menghitung ulang status PR, bukan revert keras", async () => {
     const hook = await import("@/lib/hooks/purchase-order.hook") as any
     ;(hook.recalcPurchaseRequestStatus as any).mockClear()
