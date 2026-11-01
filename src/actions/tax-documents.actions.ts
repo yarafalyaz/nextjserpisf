@@ -22,6 +22,7 @@ import {
 import { coretaxExportIdempotencyKey } from "@/lib/tax/coretax-xml-export"
 import { loadCoretaxOutputExport } from "@/lib/tax/coretax-xml-export-data"
 import { logActivity } from "@/lib/services/activity-log.service"
+import { prisma } from "@/lib/db/prisma"
 
 /**
  * Server action tipis F-001/F-002 (TaxInvoice) + F-003 (bupot/setor):
@@ -247,6 +248,12 @@ export async function exportCoretaxOutputXmlAction(formData: FormData) {
   // R6IE-07: catat peristiwa ekspor sebagai jejak audit yang bisa ditelusuri
   // dari kunci idempotensi. Tidak menyentuh kolom impor TaxInvoice dan tidak
   // mengeklaim status DJP; satu log per faktur agar replay hash terlihat.
+  // Kontrak coretaxExportIdempotencyKey: ekspor ulang snapshot sama
+  // (kunci + hash sama) adalah REPLAY, bukan peristiwa baru — faktur yang
+  // sudah punya log ekspor dengan kunci itu tidak ditulis log kedua. Hash
+  // berubah (snapshot berubah) atau versi template berubah = peristiwa
+  // baru dan tetap dicatat. Metadata tersimpan String, jadi pencocokan
+  // memakai potongan kunci+hash di dalamnya.
   if (result.xmlHash && result.exportedIds.length > 0) {
     const metadata = {
       templateVersion: result.templateVersion,
@@ -255,12 +262,23 @@ export async function exportCoretaxOutputXmlAction(formData: FormData) {
       exportedBy: Number(user.id),
     }
     for (const taxInvoiceId of result.exportedIds) {
+      const key = coretaxExportIdempotencyKey(taxInvoiceId, result.templateVersion)
+      const replay = await prisma.activityLog.findFirst({
+        where: {
+          action: "export",
+          modelType: "TaxInvoice",
+          modelId: taxInvoiceId,
+          metadata: { contains: key },
+        },
+        select: { metadata: true },
+      })
+      if (replay?.metadata?.includes(result.xmlHash)) continue
       await logActivity(
         "export",
         "TaxInvoice",
         taxInvoiceId,
         `Ekspor XML Coretax faktur pajak #${taxInvoiceId}`,
-        { ...metadata, key: coretaxExportIdempotencyKey(taxInvoiceId, result.templateVersion) },
+        { ...metadata, key },
       )
     }
   }
