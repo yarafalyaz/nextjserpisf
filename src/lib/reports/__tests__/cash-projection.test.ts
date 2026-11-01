@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest"
-import { projectCash, buildReceivableProjectionItems, buildPayableProjectionItems, summarizeOpenCommitments } from "../cash-projection"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
+import { projectCash, buildReceivableProjectionItems, buildPayableProjectionItems, summarizeOpenCommitments, PAYROLL_PROJECTION_STATUSES, sumProjectionPayrollNet } from "../cash-projection"
 
 describe("projectCash", () => {
   const from = new Date(2026, 9, 1) // Oct 2026
@@ -88,5 +90,31 @@ describe("projectCash", () => {
   it("F-48(b): summarizeOpenCommitments kosong tanpa PO terbuka/payroll", () => {
     const r = summarizeOpenCommitments({ purchaseOrders: [], payrollPeriod: null, payrollNetTotal: 0 })
     expect(r).toEqual({ openPurchaseOrderCount: 0, openPurchaseAmount: 0, payrollPeriod: null, estimatedPayrollAmount: 0, total: 0 })
+  })
+
+  it("putaran 41: status basis estimasi gaji hanya approved/paid (filter positif)", () => {
+    expect([...PAYROLL_PROJECTION_STATUSES]).toEqual(["approved", "paid"])
+  })
+
+  it("putaran 41: slip asal terkoreksi tidak terhitung bersama koreksinya", () => {
+    // Slip asal tetap paid (jurnal di-reverse); koreksi mengemban angka penuh.
+    const total = sumProjectionPayrollNet(
+      [
+        { id: 1, netSalary: 1_000_000 },
+        { id: 2, netSalary: 1_200_000 },
+      ],
+      new Set([1]),
+    )
+    expect(total).toBe(1_200_000)
+  })
+
+  it("putaran 41: halaman proyeksi-kas memakai filter positif, bukan not-cancelled", () => {
+    const page = readFileSync(
+      resolve(process.cwd(), "src/app/(dashboard)/laporan/proyeksi-kas/[[...segments]]/page.tsx"),
+      "utf8",
+    )
+    expect(page).not.toContain("not: 'cancelled'")
+    expect(page).toContain("PAYROLL_PROJECTION_STATUSES")
+    expect(page).toContain("sumProjectionPayrollNet")
   })
 })

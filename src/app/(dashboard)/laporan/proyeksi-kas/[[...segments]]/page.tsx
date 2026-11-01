@@ -6,7 +6,7 @@ import { sumEntriesByAccount } from '@/lib/services/report-aggregation.service'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
 import { safeAdd, safeSubtract } from '@/lib/utils/math'
-import { projectCash, buildReceivableProjectionItems, buildPayableProjectionItems, summarizeOpenCommitments } from '@/lib/reports/cash-projection'
+import { projectCash, buildReceivableProjectionItems, buildPayableProjectionItems, summarizeOpenCommitments, PAYROLL_PROJECTION_STATUSES, sumProjectionPayrollNet } from '@/lib/reports/cash-projection'
 import { loadReturnCreditByInvoiceId } from '@/lib/reports/return-credit'
 import { RECOGNISED_AP_STATUSES, RECOGNISED_AR_STATUSES } from '@/lib/reports/document-status'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
@@ -61,8 +61,11 @@ export default async function CashProjectionPage({
       where: { status: { in: ['ordered', 'partial_received'] }, deletedAt: null },
       select: { status: true, items: { select: { qty: true, receivedQty: true, unitPrice: true } } },
     }),
+    // Estimasi gaji hanya dari slip approved/paid (filter positif kanonis
+    // payroll-reports-data): filter negatif "bukan cancelled" lama ikut
+    // mengakui draft dan rejected — tidak ada penulis produksi cancelled.
     prisma.payroll.findFirst({
-      where: { status: { not: 'cancelled' } },
+      where: { status: { in: [...PAYROLL_PROJECTION_STATUSES] } },
       orderBy: { period: 'desc' },
       select: { period: true },
     }),
@@ -82,19 +85,33 @@ export default async function CashProjectionPage({
   // aging/payables-summary; bruto menaikkan proyeksi kas keluar tagihan ber-PPh.
   const payables = buildPayableProjectionItems(bills)
 
-  const payrollNet = lastPayroll
-    ? await prisma.payroll.aggregate({
-        where: { period: lastPayroll.period, status: { not: 'cancelled' } },
-        _sum: { netSalary: true },
+  const periodSlips = lastPayroll
+    ? await prisma.payroll.findMany({
+        where: { period: lastPayroll.period, status: { in: [...PAYROLL_PROJECTION_STATUSES] } },
+        select: { id: true, netSalary: true },
       })
-    : null
+    : []
+  // R8-SDM-02: slip asal yang sudah digantikan koreksi (penunjuk tanpa filter
+  // periode/status) tidak ikut jumlah — koreksinya mengemban angka penuh.
+  const correctedIds = periodSlips.length
+    ? new Set(
+        (
+          await prisma.payroll.findMany({
+            where: { correctsPayrollId: { in: periodSlips.map((s) => s.id) } },
+            select: { correctsPayrollId: true },
+          })
+        )
+          .map((c) => c.correctsPayrollId)
+          .filter((v): v is number => v !== null),
+      )
+    : new Set<number>()
   const commitments = summarizeOpenCommitments({
     purchaseOrders: openPos.map((po) => ({
       status: po.status,
       items: po.items.map((i) => ({ qty: Number(i.qty), receivedQty: Number(i.receivedQty), unitPrice: Number(i.unitPrice) })),
     })),
     payrollPeriod: lastPayroll?.period ?? null,
-    payrollNetTotal: Number(payrollNet?._sum.netSalary ?? 0),
+    payrollNetTotal: sumProjectionPayrollNet(periodSlips, correctedIds),
   })
 
   const rows = projectCash(opening, now, months, receivables, payables)

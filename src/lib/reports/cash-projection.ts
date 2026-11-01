@@ -83,6 +83,32 @@ export function summarizeOpenCommitments(input: {
   }
 }
 
+/**
+ * Status slip yang boleh jadi basis estimasi gaji proyeksi kas — selaras
+ * kontrak laporan payroll (`payroll-reports-data`: RECOGNISED_PAYROLL_STATUSES
+ * = approved/paid). Filter negatif `{ not: "cancelled" }` ikut mengakui draft
+ * (belum final) dan `rejected` dari approval generik; tidak ada penulis
+ * produksi yang menulis `cancelled`, jadi filter itu hanya pintu lolos.
+ */
+export const PAYROLL_PROJECTION_STATUSES = ["approved", "paid"] as const
+
+/**
+ * Jumlah netSalary satu periode gaji dari slip mentah (satu baris per slip:
+ * id + penunjuk koreksi). Slip asal yang sudah digantikan koreksi dibuang —
+ * jurnalnya sudah di-reverse dan slip koreksi mengemban angka penuh
+ * (R8-SDM-02, pola `payroll-reports-data`). Penunjuk koreksi dibaca tanpa
+ * filter periode: asal tetap terbuang walau koreksinya lahir di periode lain.
+ */
+export function sumProjectionPayrollNet(
+  periodSlips: readonly { id: number; netSalary: unknown }[],
+  correctorSlipIds: ReadonlySet<number>,
+): number {
+  const total = periodSlips
+    .filter((slip) => !correctorSlipIds.has(slip.id))
+    .reduce((sum, slip) => sum + Number(slip.netSalary ?? 0), 0)
+  return safeAdd(0, total, 2)
+}
+
 /** CashFlowItems for outstanding sales invoices: remainder is NET of completed
  * return credit (canonical outstanding = grandTotal - paidAmount - returnCredit),
  * so a fully returned unpaid invoice does not overstate projected cash inflow. */
