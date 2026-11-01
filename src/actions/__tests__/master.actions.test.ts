@@ -1178,6 +1178,13 @@ describe("PaymentTerm Actions", () => {
     const res = await actions.deletePaymentTerm(1)
     expect(res?.success).toBe(true)
   })
+  it("regression round 19: deletePaymentTerm menolak term yang hanya dipakai pelanggan", async () => {
+    mocks.prismaMock.customer.count.mockResolvedValueOnce(3)
+    const res = await actions.deletePaymentTerm(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("3 pelanggan")
+    expect(mocks.prismaMock.paymentTerm.delete).not.toHaveBeenCalled()
+  })
 })
 
 describe("Brand Actions", () => {
