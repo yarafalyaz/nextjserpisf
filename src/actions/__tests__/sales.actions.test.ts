@@ -1007,9 +1007,47 @@ describe("Sales Invoice Actions", () => {
     expect(updateCall.paymentStatus).toBe("paid")
   })
 
+  it("updateSalesInvoice menolak item nonaktif pada baris ganti (paritas create)", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", paidAmount: 0 })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 1, unitOfMeasure: "PCS", isService: false, name: "Item Mati", isActive: false, deletedAt: null }])
+    const payload = {
+      customerId: 1,
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100, discount: 0 }]),
+    }
+    const res = await actions.updateSalesInvoice(1, fdMap(payload))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif; tidak dapat difaktur")
+    expect(mocks.prismaMock.salesInvoiceItem.createMany).not.toHaveBeenCalled()
+  })
+  it("updateSalesInvoice menolak item terhapus (deletedAt) pada baris ganti", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", paidAmount: 0 })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 1, unitOfMeasure: "PCS", isService: false, name: "Item Hapus", isActive: true, deletedAt: new Date() }])
+    const payload = {
+      customerId: 1,
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100, discount: 0 }]),
+    }
+    const res = await actions.updateSalesInvoice(1, fdMap(payload))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak ditemukan")
+    expect(mocks.prismaMock.salesInvoiceItem.createMany).not.toHaveBeenCalled()
+  })
+  it("updateSalesInvoice menolak item fiktif (baris tak ada di master)", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", paidAmount: 0 })
+    mocks.prismaMock.item.findMany.mockResolvedValue([])
+    const payload = {
+      customerId: 1,
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 999, qty: 1, unitPrice: 100, discount: 0 }]),
+    }
+    const res = await actions.updateSalesInvoice(1, fdMap(payload))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak ditemukan")
+  })
   it("R6IE-07: updateSalesInvoice membekukan uom dan isService dari master item", async () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", paidAmount: 0 })
-    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 1, unitOfMeasure: "JAM", isService: true }])
+    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 1, unitOfMeasure: "JAM", isService: true, name: "Jasa", isActive: true, deletedAt: null }])
     const payload = {
       customerId: 1,
       date: "2026-06-12",

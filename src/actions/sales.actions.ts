@@ -3739,13 +3739,23 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
       })
 
       // R6IE-07: baris hasil edit juga dibekukan dari master yang dipilih.
+      // Paritas create R6IE-07: baris ber-itemId wajib menunjuk master HIDUP —
+      // item soft-delete lolos FK, dan master hilang dulu jatuh diam-diam ke
+      // snapshot null (uom/isService null yang berisiko ekspor pajak menolak
+      // tanpa nama). Baris bebas (itemId null) tak tersentuh. Dinilai dalam
+      // tx sebelum deleteMany: penolakan me-rollback edit penuh.
       const itemIds = [...new Set(items.map((item) => item.itemId).filter((id): id is number => id != null))]
       const masterById = new Map<number, { unitOfMeasure: string; isService: boolean }>()
       if (itemIds.length > 0) {
         const masters = await tx.item.findMany({
           where: { id: { in: itemIds } },
-          select: { id: true, unitOfMeasure: true, isService: true },
+          select: { id: true, unitOfMeasure: true, isService: true, name: true, isActive: true, deletedAt: true },
         })
+        for (const itemId of itemIds) {
+          const master = masters.find((m) => m.id === itemId)
+          if (!master || master.deletedAt) throw new Error(`Item #${itemId} tidak ditemukan`)
+          if (!master.isActive) throw new Error(`Item ${master.name} tidak aktif; tidak dapat difaktur`)
+        }
         for (const master of masters) masterById.set(master.id, master)
       }
 
