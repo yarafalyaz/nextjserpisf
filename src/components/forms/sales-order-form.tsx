@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -40,6 +40,7 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [customerOptions, setCustomerOptions] = useState(customers)
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const { guardCreditReason, appendCreditReason, applyCreditResult, creditGatePanel } = useCreditGateBlocked()
 
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<SalesOrderInput>({
@@ -68,8 +69,12 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
           if (value !== undefined && value !== null && value !== "") formData.append(key, String(value))
         })
         appendCreditReason(formData)
+        // Key stabil per intent create: retry sesudah respons hilang mengirim
+        // key sama; sukses ganti key supaya create berikutnya tidak ditolak.
+        if (!order?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
         const result = order?.id ? await updateSalesOrder(order.id, formData) : await createSalesOrder(formData)
         if (result.success) {
+          if (!order?.id) idempotencyKeyRef.current = crypto.randomUUID()
           applyCreditResult(result)
           showSuccess(order?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
           router.push(`/penjualan/pesanan/${result.slug ?? result.id}`)

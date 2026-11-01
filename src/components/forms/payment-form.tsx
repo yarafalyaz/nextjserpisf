@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition, type BaseSyntheticEvent } from "react";
+import { useRef, useState, useTransition, type BaseSyntheticEvent } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { salesPaymentSchema, type SalesPaymentInput } from "@/lib/validations/form.schemas"
@@ -66,6 +66,7 @@ export function PaymentForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [accountOptions, setAccountOptions] = useState(accounts);
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
 
   const {
     register,
@@ -126,6 +127,9 @@ export function PaymentForm({
         const attachmentIdsValue = nativeFormData.get("attachmentIds");
         if (attachmentIdsValue)
           formData.append("attachmentIds", attachmentIdsValue as string);
+        // Key stabil per intent create: retry sesudah respons hilang mengirim
+        // key sama; sukses ganti key supaya create berikutnya tidak ditolak.
+        if (!payment?.id) formData.set("idempotencyKey", idempotencyKeyRef.current);
         const result = payment?.id
           ? await updateSalesPayment(payment.id, formData)
           : await createSalesPayment(formData);
@@ -133,6 +137,7 @@ export function PaymentForm({
           showError(result.error || "Gagal menyimpan data");
           return;
         }
+        if (!payment?.id) idempotencyKeyRef.current = crypto.randomUUID();
         showSuccess(
           payment?.id
             ? "Data berhasil diperbarui"
