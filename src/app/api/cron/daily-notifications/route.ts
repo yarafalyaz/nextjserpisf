@@ -244,3 +244,6 @@ export async function POST(request: Request) {
     return apiError("INTERNAL_ERROR", "Terjadi kesalahan server")
   }
 }
+
+/** Vercel Cron memakai GET; gerbang secret method-agnostic. Lihat auto-reject-quotations. */
+export const GET = POST

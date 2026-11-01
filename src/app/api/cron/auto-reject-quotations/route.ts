@@ -106,3 +106,10 @@ export async function POST(request: Request) {
     return apiError("INTERNAL_ERROR", "Tugas cron gagal dijalankan")
   }
 }
+
+/**
+ * Vercel Cron memanggil path terjadwal dengan GET; gerbang secret di POST
+ * method-agnostic (header Authorization), jadi GET mendelegasi persis.
+ * Deployment standalone tetap memakai POST dari pemicu eksternal.
+ */
+export const GET = POST
