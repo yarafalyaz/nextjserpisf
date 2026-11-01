@@ -25,6 +25,9 @@ const mocks = vi.hoisted(() => {
       salesReturn: {
         update: vi.fn().mockResolvedValue({ id: 1 }),
       },
+      salesInvoice: {
+        findUnique: vi.fn().mockResolvedValue({ customerId: 1 })
+      },
       salesInvoiceItem: {
         findMany: vi.fn().mockResolvedValue([{ itemId: 1, qty: 5, unitPrice: 100 }])
       }

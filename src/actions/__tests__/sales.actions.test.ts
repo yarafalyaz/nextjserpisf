@@ -1133,8 +1133,9 @@ describe("Sales Return Actions", () => {
     vi.clearAllMocks()
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.generateDocNumMock.mockResolvedValue("SR-001")
-    // Faktur rujukan retur pada fixture ini berstatus posted (bisa diretur).
-    mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "posted" })
+    // Faktur rujukan retur pada fixture ini berstatus posted (bisa diretur)
+    // dan milik customer 1 (payload retur memakai customerId 1).
+    mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "posted", customerId: 1 })
     // Bacaan qty terfaktur DALAM tx (cap over-return dari baris terkunci):
     // default besar per barang supaya tes happy-path lama tetap di bawah cap
     // (format qty terbesar yang dipakai tes = "2.000" -> 2000).
@@ -1257,7 +1258,7 @@ describe("Sales Return Actions", () => {
       }
       return null
     })
-    mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "posted" })
+    mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "posted", customerId: 1 })
     mocks.prismaMock.salesInvoiceItem.findMany
       .mockResolvedValueOnce([{ itemId: 1, unitPrice: 100, qty: 10, uom: "pcs" }])
       .mockResolvedValueOnce([])
@@ -1326,6 +1327,29 @@ describe("Sales Return Actions", () => {
     expect(res?.success).toBe(true)
     const arg = mocks.prismaMock.salesReturn.create.mock.calls.at(-1)![0]
     expect(arg.data.items.create[0].qty).toBe(2000)
+  })
+
+  // Retur tertaut faktur mengurangi piutang FAKTUR itu, tetapi header retur
+  // tercatat atas customer payload. Tanpa guard, retur bisa menempel ke
+  // faktur customer lain: kredit hilang dari statement kedua customer.
+  it("createSalesReturn menolak faktur milik customer lain", async () => {
+    mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "posted", customerId: 99 })
+    const items = JSON.stringify([{ itemId: 1, qty: 1 }])
+    const res = await actions.createSalesReturn(fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("customer lain")
+    expect(mocks.prismaMock.salesReturn.create).not.toHaveBeenCalled()
+  })
+
+  it("updateSalesReturn menolak faktur milik customer lain", async () => {
+    mocks.prismaMock.salesReturn.findUnique.mockResolvedValue({ status: "draft" })
+    mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "posted", customerId: 99 })
+    const items = JSON.stringify([{ itemId: 1, qty: 1 }])
+    const res = await actions.updateSalesReturn(1, fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("customer lain")
+    expect(mocks.prismaMock.salesReturnItem.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.salesReturn.update).not.toHaveBeenCalled()
   })
 
   // F-004 §3: nomor + tanggal nota retur pajak ditulis apa adanya (sebelumnya

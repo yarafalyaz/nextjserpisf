@@ -2625,10 +2625,16 @@ export async function createSalesReturn(formData: FormData) {
       // Status faktur juga dicek ulang dari baris terkunci (void konkuren).
       const freshInvoice = await tx.salesInvoice.findUnique({
         where: { id: invoiceId },
-        select: { status: true },
+        select: { status: true, customerId: true },
       })
       if (!freshInvoice || !(RETURNABLE_INVOICE_STATUSES as readonly string[]).includes(freshInvoice.status)) {
         throw new Error(`Faktur berstatus '${freshInvoice?.status ?? "tidak ditemukan"}' tidak bisa diretur`)
+      }
+      // Retur mengurangi piutang faktur ini; header atas customer lain membuat
+      // kredit hilang dari statement kedua customer. Dinilai dari baris
+      // terkunci, bukan payload.
+      if (freshInvoice.customerId !== v.customerId) {
+        throw new Error("Faktur yang dipilih milik customer lain, tidak bisa diretur untuk customer ini")
       }
       const freshInvItems = await tx.salesInvoiceItem.findMany({
         where: { salesInvoiceId: invoiceId, itemId: { in: returnItemIds.length ? returnItemIds : [-1] } },
@@ -4099,6 +4105,15 @@ export async function updateSalesReturn(id: number, formData: FormData) {
     }
     if (updInvoiceId) {
       await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${updInvoiceId} FOR UPDATE`
+
+      // Sama dengan createSalesReturn: faktur customer lain tak bisa ditempel.
+      const txInvoice = await tx.salesInvoice.findUnique({
+        where: { id: updInvoiceId },
+        select: { customerId: true },
+      })
+      if (!txInvoice || txInvoice.customerId !== input.customerId) {
+        throw new Error("Faktur yang dipilih milik customer lain, tidak bisa diretur untuk customer ini")
+      }
 
       const txInvItems = await tx.salesInvoiceItem.findMany({
         where: { salesInvoiceId: updInvoiceId, itemId: { in: updReturnIds.length ? updReturnIds : [-1] } },
