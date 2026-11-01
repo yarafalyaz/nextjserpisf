@@ -509,6 +509,27 @@ describe("Quotation Actions", () => {
       .join(" ")
     expect(lockSql).toContain("quotations")
   })
+  it("updateQuotation mengunci baris faktur sebelum count pelunasan dalam tx (regresi snapshot)", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "converted", customerId: 1, documentNo: "Q-001" })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ id: 1, status: "converted", revisionNumber: 3 })
+
+    await actions.updateQuotation(1, fdQuotation({ customerId: 1, sections: [], discount: 0, tax: 0 }))
+
+    const rawCalls = mocks.prismaMock.$executeRaw.mock.calls as unknown[][]
+    const sqlOf = (c: unknown[]) => {
+      const first = c[0] as { strings?: string[] } | unknown
+      if (Array.isArray(first)) return first.join("?")
+      return (first as { strings?: string[] })?.strings?.join("?") ?? ""
+    }
+    const invoiceLockIdx = rawCalls.findIndex((c) => /sales_invoices/i.test(sqlOf(c)))
+    expect(invoiceLockIdx).toBeGreaterThanOrEqual(0)
+    expect(sqlOf(rawCalls[invoiceLockIdx])).toMatch(/for update/i)
+    const countMock = mocks.prismaMock.salesPayment.count as ReturnType<typeof vi.fn>
+    // Count terakhir = penilaian ulang dalam tx (count pertama milik cek luar).
+    expect(mocks.prismaMock.$executeRaw.mock.invocationCallOrder[invoiceLockIdx]).toBeLessThan(
+      countMock.mock.invocationCallOrder.at(-1) ?? Number.POSITIVE_INFINITY,
+    )
+  })
 })
 
 describe("Down Payment Actions", () => {

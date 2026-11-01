@@ -726,6 +726,13 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
     if (lockedQuotation.status === "cancelled") {
       throw new Error("Penawaran yang sudah dibatalkan tidak bisa diedit")
     }
+    // Kunci baris faktur terkait sebelum count pelunasan: createSalesPayment
+    // mengunci baris sales_invoices yang sama, jadi count di bawah menilai
+    // keadaan sesudah pembayaran konkuren commit. Tanpa kunci ini count
+    // adalah snapshot read yang tidak melihat pembayaran yang commit di
+    // tengah edit (penawaran ter-edit di bawah faktur yang sudah lunas).
+    // Faktur baru dari konfirmasi DP tertahan kunci quotation di atas.
+    await tx.$executeRaw`SELECT id FROM sales_invoices WHERE quotation_id = ${quotationId} ORDER BY id FOR UPDATE`
     if (await quotationHasRealSettlement(quotationId, tx as never)) {
       throw new Error("Penawaran sudah ada pelunasan, item tidak bisa diubah lagi")
     }
