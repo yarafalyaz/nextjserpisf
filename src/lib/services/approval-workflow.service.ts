@@ -90,6 +90,11 @@ const STALE_ON_EDIT_TYPES = new Set([
   "VendorPayment",
   "StockAdjustment",
   "SalesInvoice",
+  // Asset: approval lahir saat createAsset, tetapi disposeAsset hanya
+  // menggerbang assertApproved — tanpa ikut daftar basi, edit material
+  // sesudah approval final (harga/tanggal/kategori) tetap lolos disposal
+  // berbekal persetujuan atas fakta yang sudah tidak berlaku.
+  "Asset",
 ]);
 
 /** Model dokumen untuk cek kebasian; null = tipe tidak mendukung cek ini. */
