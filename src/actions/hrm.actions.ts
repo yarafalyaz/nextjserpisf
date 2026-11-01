@@ -4030,6 +4030,39 @@ async function timesheetContextGuard(v: {
   return null;
 }
 
+/**
+ * Cap 24 jam per karyawan per hari kalender atas SEMUA baris timesheet:
+ * skema hanya membatasi per baris (satu sesi), jadi dua baris 24 jam
+ * melahirkan 48 jam/hari yang masuk biaya proyek/WO. Dinilai dalam tx
+ * sesudah baris karyawan dikunci FOR UPDATE — penulis timesheet karyawan
+ * yang sama terserialkan, agregat tidak bisa lolos lewat race.
+ */
+async function assertTimesheetDailyHoursTx(
+  tx: TxClient,
+  employeeId: number,
+  date: Date,
+  addHours: number,
+  excludeId: number | null,
+): Promise<void> {
+  if (typeof tx.$executeRaw === "function") {
+    await tx.$executeRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
+  }
+  const agg = await tx.timesheet.aggregate({
+    where: {
+      employeeId,
+      date,
+      ...(excludeId != null ? { id: { not: excludeId } } : {}),
+    },
+    _sum: { hours: true },
+  });
+  const total = Number(agg._sum.hours ?? 0) + addHours;
+  if (total > 24 + 0.0001) {
+    throw new Error(
+      `Total jam karyawan pada tanggal ini akan menjadi ${total} jam — melebihi 24 jam per hari.`,
+    );
+  }
+}
+
 export async function createTimesheet(formData: FormData) {
   try {
     const user = await requirePermission("create_timesheets");
@@ -4054,6 +4087,7 @@ export async function createTimesheet(formData: FormData) {
       }
       const freshError = await timesheetContextGuard(v, tx);
       if (freshError) throw new Error(freshError.error);
+      await assertTimesheetDailyHoursTx(tx, v.employeeId, wibDateToUtcMidnight(v.date), v.hours, null);
       return tx.timesheet.create({
         data: {
           slug: await nextSlug("timesheet", `lembar-waktu-${v.date}`),
@@ -5818,6 +5852,7 @@ export async function updateTimesheet(id: number, formData: FormData) {
       if (freshError) throw new Error(freshError.error);
       const pulled = await timesheetPulledError(id, tx);
       if (pulled) throw new Error(pulled.error);
+      await assertTimesheetDailyHoursTx(tx, v.employeeId, wibDateToUtcMidnight(v.date), v.hours, id);
       return tx.timesheet.update({
         where: { id },
         data: {

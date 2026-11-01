@@ -37,7 +37,7 @@ const mocks = vi.hoisted(() => {
   }
 
   const prismaMock = {
-    timesheet: buildModelMock(),
+    timesheet: { ...buildModelMock(), aggregate: vi.fn().mockResolvedValue({ _sum: { hours: 0 } }) },
     productionCost: { ...buildModelMock(), findMany: vi.fn().mockResolvedValue([]) },
     employeeLoan: buildModelMock(),
     leaveRequest: buildModelMock(),
@@ -950,6 +950,38 @@ describe("Timesheet Actions", () => {
       activity: "Coding",
     }))
     expect(res?.success).toBe(true)
+  })
+
+  it("createTimesheet menolak bila total jam karyawan pada tanggal itu melewati 24", async () => {
+    prismaMock.timesheet.aggregate.mockResolvedValue({ _sum: { hours: 20 } })
+    const res = await actions.createTimesheet(fd({
+      employeeId: "1",
+      projectId: "1",
+      date: "2026-06-12",
+      hours: "8",
+      activity: "Coding",
+    }))
+    expect(res?.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toMatch(/24 jam/)
+    expect(prismaMock.timesheet.create).not.toHaveBeenCalled()
+    prismaMock.timesheet.aggregate.mockReset()
+    prismaMock.timesheet.aggregate.mockResolvedValue({ _sum: { hours: 0 } })
+  })
+
+  it("updateTimesheet menolak bila total jam sesudah edit melewati 24", async () => {
+    prismaMock.timesheet.aggregate.mockResolvedValue({ _sum: { hours: 21 } })
+    const res = await actions.updateTimesheet(1, fd({
+      employeeId: "1",
+      projectId: "1",
+      date: "2026-06-12",
+      hours: "4",
+      activity: "Review",
+    }))
+    expect(res?.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toMatch(/24 jam/)
+    expect(prismaMock.timesheet.update).not.toHaveBeenCalled()
+    prismaMock.timesheet.aggregate.mockReset()
+    prismaMock.timesheet.aggregate.mockResolvedValue({ _sum: { hours: 0 } })
   })
 
   it("updateTimesheet succeeds", async () => {
