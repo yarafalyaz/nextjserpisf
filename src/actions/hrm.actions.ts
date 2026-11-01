@@ -1095,6 +1095,7 @@ export async function createLeaveRequest(formData: FormData) {
 
     const scope = await getHrScope(user);
     await assertHrEmployeeAccess(scope, employeeId);
+    await assertLiveEmployee(employeeId);
     const startDate = wibDateToUtcMidnight(v.startDate);
     const endDate = wibDateToUtcMidnight(v.endDate);
 
@@ -4708,6 +4709,7 @@ export async function createAttendance(formData: FormData) {
 
     const scope = await getHrScope(user);
     await assertHrEmployeeAccess(scope, v.employeeId);
+    await assertLiveEmployee(v.employeeId);
 
     let lateMinutes = 0;
     const attendance = await prisma.$transaction(async (tx) => {
@@ -4769,9 +4771,12 @@ export async function updateAttendance(id: number, formData: FormData) {
 
     const scope = await getHrScope(user);
     await assertHrEmployeeAccess(scope, existing.employeeId);
-    // Karyawan baru (bila dipindah) juga harus dalam jangkauan akses.
+    // Karyawan baru (bila dipindah) juga harus dalam jangkauan akses
+    // dan hidup: memindahkan absensi = penanaman ke master baru.
+    // Baris yang tetap pada karyawan sama tidak dinilai ulang.
     if (v.employeeId !== existing.employeeId) {
       await assertHrEmployeeAccess(scope, v.employeeId);
+      await assertLiveEmployee(v.employeeId);
     }
 
     let lateMinutes = 0;
@@ -5369,6 +5374,11 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
     const employeeId = v.employeeId;
 
     await assertHrEmployeeAccess(scope, employeeId);
+    // Pemindahan ke karyawan lain = penanaman ke master baru: target wajib
+    // hidup. Baris yang tetap pada karyawan sama tidak dinilai ulang.
+    if (v.employeeId !== existing.employeeId) {
+      await assertLiveEmployee(employeeId);
+    }
 
     const startDate = wibDateToUtcMidnight(v.startDate);
     const endDate = wibDateToUtcMidnight(v.endDate);

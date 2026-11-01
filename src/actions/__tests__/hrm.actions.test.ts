@@ -331,6 +331,7 @@ describe("Leave Request Actions", () => {
     prismaMock.employee.findUnique.mockResolvedValue({
       id: 1, departmentId: null, joinDate: new Date("2020-01-01"),
     })
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
   })
 
   it("createLeaveRequest validates form", async () => {
@@ -360,6 +361,37 @@ describe("Leave Request Actions", () => {
     }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("Tanggal mulai tidak boleh melebihi tanggal selesai")
+  })
+
+  it("putaran 38: cuti baru untuk karyawan mati/terhapus ditolak sebelum tulis", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await actions.createLeaveRequest(fd({
+      employeeId: "1",
+      startDate: "2026-06-15",
+      endDate: "2026-06-20",
+      type: "annual",
+      reason: "vacation",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Karyawan tidak ditemukan atau tidak aktif")
+    expect(prismaMock.leaveRequest.create).not.toHaveBeenCalled()
+    expect(prismaMock.employee.findFirst).toHaveBeenCalledWith({
+      where: { id: 1, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+  })
+
+  it("putaran 38: pindah cuti ke karyawan mati/terhapus ditolak sebelum tulis", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await actions.updateLeaveRequest(1, fd({
+      employeeId: "2",
+      type: "annual",
+      startDate: "2026-06-15",
+      endDate: "2026-06-20",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Karyawan tidak ditemukan atau tidak aktif")
+    expect(prismaMock.leaveRequest.update).not.toHaveBeenCalled()
   })
 
   it("updateLeaveRequest fails if startDate is after endDate", async () => {
@@ -2486,7 +2518,7 @@ describe("Absensi Actions", () => {
     restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.employee.findUnique.mockResolvedValue(karyawanDengan([JADWAL_PAGI]))
-    prismaMock.employee.findFirst.mockResolvedValue(null)
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
     prismaMock.workSchedule.findFirst.mockResolvedValue(null)
     prismaMock.attendance.create.mockResolvedValue({ id: 7 })
     prismaMock.attendance.findUniqueOrThrow.mockResolvedValue({
@@ -2497,6 +2529,30 @@ describe("Absensi Actions", () => {
     prismaMock.attendance.delete.mockResolvedValue({})
     // Gerbang slip-final putaran 16: default tanpa slip final.
     prismaMock.payroll.findFirst.mockResolvedValue(null)
+  })
+
+  it("putaran 38: absensi baru untuk karyawan mati/terhapus ditolak sebelum tulis", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await actions.createAttendance(fd({ ...dataAbsensi, checkIn: "08:05" }))
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("Karyawan tidak ditemukan atau tidak aktif")
+    expect(prismaMock.attendance.create).not.toHaveBeenCalled()
+    expect(prismaMock.employee.findFirst).toHaveBeenCalledWith({
+      where: { id: 1, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+  })
+
+  it("putaran 38: pindah absensi ke karyawan mati/terhapus ditolak sebelum tulis", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await actions.updateAttendance(7, fd({ ...dataAbsensi, employeeId: "2", checkIn: "08:05" }))
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("Karyawan tidak ditemukan atau tidak aktif")
+    expect(prismaMock.attendance.update).not.toHaveBeenCalled()
+    expect(prismaMock.employee.findFirst).toHaveBeenCalledWith({
+      where: { id: 2, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
   })
 
   it("regresi putaran 16: createAttendance menolak tanggal dalam slip final", async () => {
