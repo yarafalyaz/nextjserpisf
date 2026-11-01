@@ -17,6 +17,7 @@ import { getSystemSettings } from "@/lib/utils/settings"
 import { REPORT_JOURNAL_STATUSES } from "@/lib/services/report-aggregation.service"
 import { formatAccounting } from "@/lib/utils/format"
 import { loadSptPeriodRowsForRange, type SptPeriodRow } from "@/lib/reports/spt-read-model-data"
+import { isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface TaxSimpleReport {
@@ -119,7 +120,7 @@ export async function loadVatReconciliation(period: Period): Promise<TaxSimpleRe
         status: { in: ["posted", "partial", "paid"] },
         deletedAt: null,
       },
-      select: { tax: true },
+      select: { tax: true, taxInvoiceNumber: true },
     }),
     loadReturnVatAmounts(period),
   ])
@@ -128,7 +129,14 @@ export async function loadVatReconciliation(period: Period): Promise<TaxSimpleRe
     inputEntries,
     docOutputAmounts: salesInvoices.map((inv) => inv.taxAmount),
     docReturnVatAmounts: returnVatAmounts,
-    docInputAmounts: vendorBills.map((bill) => bill.tax),
+    // Bill tax>0 tanpa nomor faktur pajak valid tidak punya kaki PPN
+    // Masukan di jurnal (accounting.hook) dan nol di read-model SPT —
+    // sisi dokumen harus nol juga, kalau tidak selisih palsu permanen.
+    docInputAmounts: vendorBills.map((bill) =>
+      Number(bill.tax) > 0 && !isValidVendorTaxInvoiceNumber(bill.taxInvoiceNumber ?? null)
+        ? 0
+        : bill.tax,
+    ),
   })
   const { bookOutput, bookInput, docOutput, docInput } = recon
   const position = buildVatPosition(bookOutput, bookInput)

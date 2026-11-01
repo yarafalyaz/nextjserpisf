@@ -70,6 +70,38 @@ describe("loadVatInvoices return deduction period (round 18)", () => {
     expect(feb.report.returnDeduction.vat).toBe(550_000)
   })
 
+  it("regression round 18: bill tanpa nomor faktur pajak valid tampil PPN masukan 0", async () => {
+    mocks.vendorBill.findMany.mockResolvedValue([
+      {
+        id: 5,
+        documentNo: "BILL-5",
+        taxInvoiceNumber: null,
+        date: new Date("2026-02-10T00:00:00.000Z"),
+        subtotal: 100_000_000,
+        discountAmount: 0,
+        tax: 11_000_000,
+        grandTotal: 111_000_000,
+        vendor: { name: "PT Vendor", npwp: "01.234" },
+        vendorId: 3,
+      },
+      {
+        id: 6,
+        documentNo: "BILL-6",
+        taxInvoiceNumber: "010.006-26.00000001",
+        date: new Date("2026-02-11T00:00:00.000Z"),
+        subtotal: 10_000_000,
+        discountAmount: 0,
+        tax: 1_100_000,
+        grandTotal: 11_100_000,
+        vendor: { name: "PT Vendor", npwp: "01.234" },
+        vendorId: 3,
+      },
+    ])
+    const feb = await loadVatInvoices(period)
+    expect(feb.report.input.vat).toBe(1_100_000)
+    expect(feb.report.input.count).toBe(2)
+  })
+
   it("query retur mengambil kandidat dari tanggal retur ATAU tanggal nota", async () => {
     mocks.salesReturn.findMany.mockResolvedValue([])
     await loadVatInvoices(period)

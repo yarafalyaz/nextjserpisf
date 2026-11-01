@@ -32,6 +32,7 @@ import {
   type VatReturnDeductionInput,
 } from "@/lib/reports/vat-invoices"
 import { buildChainHeads } from "@/lib/tax/spt-read-model"
+import { isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice"
 import { safeAdd, safeSubtract, type SafeMathInput } from "@/lib/utils/math"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
@@ -249,7 +250,14 @@ export async function loadVatInvoices(period: {
   const inputDocs = applyChainHeads(vendorBills, taxInvoices, "vendorBillId", (bill, head) => ({
     ...bill,
     dppShown: head ? head.dpp : vatDpp(bill.subtotal, bill.discountAmount),
-    vatShown: head ? head.taxAmount : Number(bill.tax),
+    // Tanpa TaxInvoice, PPN bill hanya bisa dikreditkan bila nomor faktur
+    // pajaknya valid — jurnal melewati kaki PPN Masukan selain itu
+    // (accounting.hook), read-model SPT menolkannya juga.
+    vatShown: head
+      ? head.taxAmount
+      : isValidVendorTaxInvoiceNumber(bill.taxInvoiceNumber ?? null)
+        ? Number(bill.tax)
+        : 0,
     totalShown: head ? chainHeadTotal(head) : Number(bill.grandTotal),
   }))
 
