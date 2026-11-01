@@ -60,6 +60,21 @@ function isValidDateOnlyString(value: string): boolean {
   return isValidCalendarDay(Number(match[1]), Number(match[2]), Number(match[3]))
 }
 
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/
+
+/**
+ * Parse `YYYY-MM-DD` + akhiran waktu secara ketat; null untuk tanggal yang
+ * tidak valid. Hari mustahil (2026-02-31) ditolak — BUKAN bergeser ke bulan
+ * berikutnya seperti hasil `new Date(...)` mentah (yang bukan NaN). Bentuk
+ * non-`YYYY-MM-DD` tetap diserahkan ke parser Date (guard NaN).
+ */
+export function parseStrictDateOnly(raw: string, suffix: string): Date | null {
+  const m = DATE_ONLY.exec(raw)
+  if (m && !isValidCalendarDay(Number(m[1]), Number(m[2]), Number(m[3]))) return null
+  const parsed = new Date(`${raw}T${suffix}`)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
 export function buildReportPeriodSlug(start: Date, end: Date): string {
   const sameDay = start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth() && start.getDate() === end.getDate()
   if (sameDay) return `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`

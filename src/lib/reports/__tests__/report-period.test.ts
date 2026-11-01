@@ -4,6 +4,7 @@ import {
   formatPeriodLabel,
   looksLikePeriodSlug,
   parseReportPeriod,
+  parseStrictDateOnly,
   reportPeriodFromRoute,
   splitReportSegments,
 } from "../report-period"
@@ -299,5 +300,26 @@ describe("formatPeriodLabel", () => {
   it("uses 'Per' for a single day and 'Periode' for a range", () => {
     expect(formatPeriodLabel({ start: new Date(2026, 9, 12), end: new Date(2026, 9, 12) })).toContain("Per 12")
     expect(formatPeriodLabel({ start: new Date(2026, 9, 1), end: new Date(2026, 9, 31) })).toContain("Periode")
+  })
+})
+
+describe("parseStrictDateOnly (putaran 21)", () => {
+  it("menolak hari mustahil yang oleh Date mentah digeser ke bulan berikut", () => {
+    expect(parseStrictDateOnly("2026-02-31", "23:59:59.999")).toBeNull()
+    expect(parseStrictDateOnly("2026-02-30", "00:00:00")).toBeNull()
+    expect(parseStrictDateOnly("2026-04-31", "00:00:00")).toBeNull()
+    expect(parseStrictDateOnly("2026-13-01", "00:00:00")).toBeNull()
+  })
+
+  it("menerima hari nyata termasuk kabisat, dengan akhiran waktu utuh", () => {
+    const leap = parseStrictDateOnly("2028-02-29", "23:59:59.999")
+    expect(leap).not.toBeNull()
+    expect(leap?.getDate()).toBe(29)
+    expect(leap?.getHours()).toBe(23)
+    expect(parseStrictDateOnly("2026-10-31", "00:00:00")?.getDate()).toBe(31)
+  })
+
+  it("menolak sampah non-tanggal lewat guard NaN", () => {
+    expect(parseStrictDateOnly("abc", "00:00:00")).toBeNull()
   })
 })

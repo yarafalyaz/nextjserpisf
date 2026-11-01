@@ -14,7 +14,7 @@
 
 import { parseStatementOptions } from "@/lib/reports/statement-display"
 import type { ReportPdfKey } from "@/lib/reports/report-export"
-import { formatPeriodLabel, type ReportPeriod } from "@/lib/reports/report-period"
+import { formatPeriodLabel, parseStrictDateOnly, type ReportPeriod } from "@/lib/reports/report-period"
 import type { StatementTable } from "@/lib/reports/statement-table"
 import type { TableDocument } from "@/lib/pdf/engine/types"
 import {
@@ -259,18 +259,7 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
       // Hari mustahil kalender (2026-02-31 -> 3 Mar) BUKAN NaN, jadi dia
       // diperiksa terhadap jumlah hari bulan itu sebelum diterima;
       // mustahil -> tetap periode slug.
-      const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/
-      const queryDate = (raw: string, suffix: string) => {
-        const m = DATE_ONLY.exec(raw)
-        if (m) {
-          const year = Number(m[1])
-          const month = Number(m[2])
-          const day = Number(m[3])
-          if (month < 1 || month > 12 || day < 1 || day > new Date(year, month, 0).getDate()) return null
-        }
-        const parsed = new Date(`${raw}T${suffix}`)
-        return Number.isNaN(parsed.getTime()) ? null : parsed
-      }
+      const queryDate = (raw: string, suffix: string) => parseStrictDateOnly(raw, suffix)
       const start = (search.tanggalMulai ? queryDate(search.tanggalMulai, "00:00:00") : null) ?? period.start
       // Akhir hari penuh (.999) sama dengan layar — jurnal pukul 23:59:59.500
       // tidak boleh tampil di layar tapi hilang di PDF (B9).
@@ -335,9 +324,10 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     subtitle: "Daftar Saldo per Akun",
     async load({ period, search }) {
       // Tanggal pembanding adalah parameter tersendiri, bukan bagian periode.
-      // Akhir hari penuh (.999) sama dengan layar (B9).
-      const compareRaw = search.pembanding ? new Date(`${search.pembanding}T23:59:59.999`) : null
-      const compareDate = compareRaw && !Number.isNaN(compareRaw.getTime()) ? compareRaw : null
+      // Akhir hari penuh (.999) sama dengan layar (B9). Parse ketat: hari
+      // mustahil (2026-02-31) bergeser ke 3 Mar dan BUKAN NaN, jadi guard
+      // NaN saja menerimanya sebagai tanggal lain dari yang diketik.
+      const compareDate = search.pembanding ? parseStrictDateOnly(search.pembanding, "23:59:59.999") : null
 
       const report = await loadTrialBalanceReport(new Date(period.end), compareDate)
       return {

@@ -13,7 +13,7 @@ import {
   parseStatementOptions,
   STATEMENT_OPTIONS_COOKIE,
 } from "@/lib/reports/statement-display"
-import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
+import { parseStrictDateOnly, reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
 import { loadTrialBalanceReport } from "@/lib/reports/trial-balance-data"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 
@@ -49,9 +49,10 @@ export default async function TrialBalancePage({
   // query lama tetap dibaca supaya tautan sebelum perpindahan tidak jadi tautan mati.
   const compareValue = splitReportSegments(params.segments ?? []).filters.pembanding ?? search.pembanding
   // Akhir hari penuh (.999) sama dengan layar & registry PDF — jurnal pukul
-  // 23:59:59.500 tidak boleh hilang dari salah satu sisi (B9).
-  const compareRaw = compareValue ? new Date(`${compareValue}T23:59:59.999`) : null
-  const compareDate = compareRaw && !Number.isNaN(compareRaw.getTime()) ? compareRaw : null
+  // 23:59:59.500 tidak boleh hilang dari salah satu sisi (B9). Parse ketat:
+  // hari mustahil (2026-02-31) bergeser ke 3 Mar dan BUKAN NaN, jadi guard
+  // NaN saja menerima tanggal lain dari yang diketik pengguna.
+  const compareDate = compareValue ? parseStrictDateOnly(compareValue, "23:59:59.999") : null
 
   // Baris tabel disusun sekali di sini dan dipakai bersama layar + engine PDF.
   const report = await loadTrialBalanceReport(asOfDate, compareDate)
