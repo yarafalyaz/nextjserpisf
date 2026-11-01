@@ -76,7 +76,10 @@ beforeEach(() => {
   mocks.requirePermission.mockResolvedValue({ id: 7 })
   mocks.generateDocumentNumber.mockResolvedValue("PAJAK-0001")
   mocks.assertPeriodOpen.mockResolvedValue(undefined)
-  mocks.accountFindMany.mockResolvedValue([{ id: 101 }, { id: 102 }])
+  mocks.accountFindMany.mockResolvedValue([
+    { id: 101, isActive: true, deletedAt: null, type: "LIABILITY", reportGroup: "BANK" },
+    { id: 102, isActive: true, deletedAt: null, type: "ASSET", reportGroup: "BANK" },
+  ])
   mocks.taxTypeFindUnique.mockResolvedValue(null)
   mocks.taxPaymentCreate.mockResolvedValue({ id: 1 })
   mocks.journalCreate.mockResolvedValue({ id: 9 })
@@ -155,5 +158,42 @@ describe("createTaxPayment masa pajak", () => {
     await createTaxPayment(form(base))
     const data = mocks.taxPaymentCreate.mock.calls[0][0].data
     expect(data.date).toEqual(new Date(Date.UTC(2026, 8, 15)))
+  })
+})
+
+describe("createTaxPayment akun hidup + tipe", () => {
+  it("menolak akun utang pajak nonaktif dalam tx sebelum jurnal", async () => {
+    mocks.accountFindMany.mockReset().mockResolvedValue([
+      { id: 101, isActive: false, deletedAt: null, type: "LIABILITY", reportGroup: "BANK" },
+      { id: 102, isActive: true, deletedAt: null, type: "ASSET", reportGroup: "BANK" },
+    ])
+    const res = await createTaxPayment(form(base))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toMatch(/tidak aktif/)
+    expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("menolak akun pembayaran bukan kas/bank (reportGroup bukan BANK)", async () => {
+    mocks.accountFindMany.mockReset().mockResolvedValue([
+      { id: 101, isActive: true, deletedAt: null, type: "LIABILITY", reportGroup: "BANK" },
+      { id: 102, isActive: true, deletedAt: null, type: "ASSET", reportGroup: "AR" },
+    ])
+    const res = await createTaxPayment(form(base))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toMatch(/kas\/bank/)
+    expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("menolak akun utang pajak bukan LIABILITY atau sudah terhapus lunak", async () => {
+    mocks.accountFindMany.mockReset().mockResolvedValue([
+      { id: 101, isActive: true, deletedAt: null, type: "INCOME", reportGroup: "INC" },
+      { id: 102, isActive: true, deletedAt: new Date(2026, 0, 1), type: "ASSET", reportGroup: "BANK" },
+    ])
+    const res = await createTaxPayment(form(base))
+    expect(res.success).toBe(false)
+    expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
 })

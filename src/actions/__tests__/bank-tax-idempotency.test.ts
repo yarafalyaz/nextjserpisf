@@ -88,10 +88,14 @@ beforeEach(() => {
   mocks.transferCreate.mockResolvedValue({ id: 1, slug: "btf-1" })
   mocks.journalCreate.mockResolvedValue({ id: 9 })
   // Transfer bank menilai akun penuh dalam tx (putaran 22): hidup + BANK.
-  mocks.accountFindMany.mockResolvedValue([
-    { id: 101, isActive: true, deletedAt: null, reportGroup: "BANK", type: "ASSET" },
-    { id: 102, isActive: true, deletedAt: null, reportGroup: "BANK", type: "ASSET" },
-  ])
+  // Pajak menilai akun penuh juga: 101 utang (LIABILITY), 102 kas/bank (BANK).
+  const accountCatalog: Record<number, Record<string, unknown>> = {
+    101: { id: 101, isActive: true, deletedAt: null, reportGroup: "BANK", type: "LIABILITY" },
+    102: { id: 102, isActive: true, deletedAt: null, reportGroup: "BANK", type: "ASSET" },
+  }
+  mocks.accountFindMany.mockImplementation(async (args: { where?: { id?: { in?: number[] } } }) =>
+    (args?.where?.id?.in ?? []).map((id) => accountCatalog[id]).filter(Boolean),
+  )
   mocks.taxTypeFindUnique.mockResolvedValue(null)
   mocks.taxPaymentCreate.mockResolvedValue({ id: 1 })
   mocks.prisma = mocks.prismaBank

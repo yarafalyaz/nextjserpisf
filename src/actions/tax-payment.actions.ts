@@ -60,12 +60,26 @@ export async function createTaxPayment(formData: FormData): Promise<TaxPaymentAc
     await assertPeriodOpen(date)
 
     const [accounts, taxType] = await Promise.all([
-      prisma.account.findMany({ where: { id: { in: [taxAccountId, paymentAccountId] } }, select: { id: true } }),
+      prisma.account.findMany({ where: { id: { in: [taxAccountId, paymentAccountId] } }, select: { id: true, isActive: true, deletedAt: true, type: true, reportGroup: true } }),
       taxTypeId
         ? prisma.withholdingTaxType.findUnique({ where: { id: taxTypeId }, select: { name: true, isActive: true, deletedAt: true } })
         : Promise.resolve(null),
     ])
     if (accounts.length !== 2) return { success: false, error: "Akun yang dipilih tidak ditemukan." }
+    if (accounts.some((account) => account.deletedAt != null)) {
+      return { success: false, error: "Akun yang dipilih sudah dihapus." }
+    }
+    if (accounts.some((account) => !account.isActive)) {
+      return { success: false, error: "Akun yang dipilih tidak aktif." }
+    }
+    const outerTax = accounts.find((a) => a.id === taxAccountId)
+    const outerPay = accounts.find((a) => a.id === paymentAccountId)
+    if (outerTax?.type !== "LIABILITY") {
+      return { success: false, error: "Akun utang pajak bukan akun kewajiban (LIABILITY)." }
+    }
+    if (outerPay?.reportGroup !== "BANK") {
+      return { success: false, error: "Akun pembayaran bukan rekening kas/bank (grup laporan BANK)." }
+    }
     if (taxTypeId && !taxType) return { success: false, error: "Jenis pemotongan tidak ditemukan." }
     // R8-PAJAK-08: pembayaran pajak untuk jenis nonaktif/terhapus ditolak.
     if (taxType && (taxType.deletedAt != null || taxType.isActive === false)) {
@@ -106,11 +120,32 @@ export async function createTaxPayment(formData: FormData): Promise<TaxPaymentAc
           throw new Error("Jenis pemotongan nonaktif atau sudah dihapus.")
         }
       }
+      // Nilai ulang akun DI DALAM tx di bawah kunci baris (pola bank-transfer):
+      // cek luar hanyalah snapshot — akun yang dinonaktifkan/dihapus sesudah
+      // picker dimuat, atau akun salah jenis dari panggilan langsung, tidak
+      // boleh menerima jurnal POSTED setoran. taxAccount wajib LIABILITY,
+      // paymentAccount wajib kas/bank (reportGroup BANK) sesuai halaman tambah.
+      const sortedAccountIds = [taxAccountId, paymentAccountId].sort((a, b) => a - b)
+      await tx.$executeRaw`SELECT id FROM accounts WHERE id IN (${Prisma.join(sortedAccountIds)}) FOR UPDATE`
       const freshAccounts = await tx.account.findMany({
         where: { id: { in: [taxAccountId, paymentAccountId] } },
-        select: { id: true },
+        select: { id: true, isActive: true, deletedAt: true, type: true, reportGroup: true },
       })
       if (freshAccounts.length !== 2) throw new Error("Akun yang dipilih tidak ditemukan.")
+      if (freshAccounts.some((account) => account.deletedAt != null)) {
+        throw new Error("Akun yang dipilih sudah dihapus.")
+      }
+      if (freshAccounts.some((account) => !account.isActive)) {
+        throw new Error("Akun yang dipilih tidak aktif.")
+      }
+      const freshTax = freshAccounts.find((a) => a.id === taxAccountId)
+      const freshPay = freshAccounts.find((a) => a.id === paymentAccountId)
+      if (freshTax?.type !== "LIABILITY") {
+        throw new Error("Akun utang pajak bukan akun kewajiban (LIABILITY).")
+      }
+      if (freshPay?.reportGroup !== "BANK") {
+        throw new Error("Akun pembayaran bukan rekening kas/bank (grup laporan BANK).")
+      }
 
       const payment = await tx.taxPayment.create({
         data: {
