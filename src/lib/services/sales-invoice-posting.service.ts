@@ -53,7 +53,22 @@ export async function reverseSalesInvoicePostingTx(
   // STOK-01: antrean atribusi lot per item dari baris faktur (batchAllocations
   // yang disimpan posting, urut baris = urut OUT move dibuat). Baris lama
   // tanpa atribusi → antrean kosong → pulih tanpa lot seperti perilaku lama.
-  type LotAlloc = { batchNumber: string | null; warehouseId: number | null; qty: number }
+  // STOK-09: alokasi tersimpan boleh membawa metadata lahir asal
+  // (sourceAgeAt/expiryDate/manufacturingDate, ditulis posting sesudah fix
+  // ini). Alokasi lama tanpa metadata → null → perilaku pulih lama persis.
+  type LotAlloc = {
+    batchNumber: string | null
+    warehouseId: number | null
+    qty: number
+    sourceAgeAt: Date | null
+    expiryDate: Date | null
+    manufacturingDate: Date | null
+  }
+  const toDateOrNull = (value: unknown): Date | null => {
+    if (value == null) return null
+    const d = value instanceof Date ? value : new Date(String(value))
+    return Number.isFinite(d.getTime()) ? d : null
+  }
   const lotQueueByItem = new Map<number, LotAlloc[]>()
   if (typeof tx.salesInvoiceItem?.findMany === "function" && outMoves.length > 0) {
     const invLines = await tx.salesInvoiceItem.findMany({
@@ -64,8 +79,21 @@ export async function reverseSalesInvoicePostingTx(
     for (const line of invLines) {
       if (line.itemId == null || !Array.isArray(line.batchAllocations)) continue
       const queue = lotQueueByItem.get(line.itemId) ?? []
-      for (const a of line.batchAllocations as LotAlloc[]) {
-        if (a && Number(a.qty) > 0) queue.push({ batchNumber: a.batchNumber ?? null, warehouseId: a.warehouseId ?? null, qty: Number(a.qty) })
+      for (const a of line.batchAllocations as (LotAlloc & {
+        sourceAgeAt?: unknown
+        expiryDate?: unknown
+        manufacturingDate?: unknown
+      })[]) {
+        if (a && Number(a.qty) > 0) {
+          queue.push({
+            batchNumber: a.batchNumber ?? null,
+            warehouseId: a.warehouseId ?? null,
+            qty: Number(a.qty),
+            sourceAgeAt: toDateOrNull(a.sourceAgeAt),
+            expiryDate: toDateOrNull(a.expiryDate),
+            manufacturingDate: toDateOrNull(a.manufacturingDate),
+          })
+        }
       }
       lotQueueByItem.set(line.itemId, queue)
     }
@@ -93,7 +121,7 @@ export async function reverseSalesInvoicePostingTx(
   // consumption attribution the posting stored on the invoice lines
   // (batchAllocations). Sisa yang tak teratribusi (baris lama tanpa catatan)
   // pulih sebagai layer tanpa batch seperti sebelumnya.
-  const allocationsByMove: Array<Array<{ batchNumber: string | null; warehouseId: number | null; qty: number }>> = []
+  const allocationsByMove: Array<Array<LotAlloc>> = []
 
   for (const m of outMoves) {
     const qty = Number(m.qty)
@@ -121,10 +149,10 @@ export async function reverseSalesInvoicePostingTx(
     // PENCIPTA layer), sehingga lot tak pernah pulih saat void. Antrean per
     // item dikonsumsi berurutan sebanyak qty move ini; sisa tanpa catatan
     // lot pulih sebagai layer tanpa batch seperti sebelumnya.
-    const allocations: Array<{ batchNumber: string | null; warehouseId: number | null; qty: number }> = []
+    const allocations: Array<LotAlloc> = []
     {
       let remaining = qty
-      const byLot = new Map<string, { batchNumber: string | null; warehouseId: number | null; qty: number }>()
+      const byLot = new Map<string, LotAlloc>()
       const queue = lotQueueByItem.get(m.itemId) ?? []
       while (remaining > 0 && queue.length > 0) {
         const head = queue[0]
@@ -137,17 +165,31 @@ export async function reverseSalesInvoicePostingTx(
         const existing = byLot.get(key)
         if (existing) {
           existing.qty = Math.round((existing.qty + take) * 100) / 100
+          existing.sourceAgeAt =
+            existing.sourceAgeAt && head.sourceAgeAt
+              ? new Date(Math.min(existing.sourceAgeAt.getTime(), head.sourceAgeAt.getTime()))
+              : (existing.sourceAgeAt ?? head.sourceAgeAt)
         } else {
           byLot.set(key, {
             batchNumber: head.batchNumber,
             warehouseId: head.warehouseId ?? m.warehouseId,
             qty: take,
+            sourceAgeAt: head.sourceAgeAt,
+            expiryDate: head.expiryDate,
+            manufacturingDate: head.manufacturingDate,
           })
         }
       }
       allocations.push(...byLot.values())
       if (remaining > 0) {
-        allocations.push({ batchNumber: null, warehouseId: m.warehouseId, qty: remaining })
+        allocations.push({
+          batchNumber: null,
+          warehouseId: m.warehouseId,
+          qty: remaining,
+          sourceAgeAt: null,
+          expiryDate: null,
+          manufacturingDate: null,
+        })
       }
     }
     allocationsByMove.push(allocations)
@@ -170,6 +212,7 @@ export async function reverseSalesInvoicePostingTx(
           remaining: Number(m.qty),
           unitCost: m.cost as never,
           batchNumber: null as string | null,
+          sourceCreatedAt: null as Date | null,
         }]
       }
       return allocs.map((a) => ({
@@ -181,6 +224,8 @@ export async function reverseSalesInvoicePostingTx(
         remaining: a.qty,
         unitCost: m.cost as never,
         batchNumber: a.batchNumber,
+        // STOK-09: umur asal lapisan yang dikonsumsi, BUKAN tanggal void.
+        sourceCreatedAt: a.batchNumber ? a.sourceAgeAt : null,
       }))
     })
     if (layerRows.length > 0) {
@@ -209,6 +254,10 @@ export async function reverseSalesInvoicePostingTx(
               batchNumber: alloc.batchNumber,
               warehouseId: alloc.warehouseId,
               qty: alloc.qty,
+              // STOK-09: tanggal lahir lot asal — tanpa ini lot pulih tak
+              // punya expiry dan stok kedaluwarsa bisa lolos FEFO sesudah void.
+              expiryDate: alloc.expiryDate,
+              manufacturingDate: alloc.manufacturingDate,
             },
           })
         }

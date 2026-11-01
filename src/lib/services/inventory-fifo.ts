@@ -18,6 +18,20 @@ export type ConsumedLayer = {
   warehouseId: number | null
   qty: number
   unitCost: number
+  /**
+   * STOK-09: umur FIFO lapisan asal (COALESCE(sourceCreatedAt, createdAt)).
+   * Disimpan pada alokasi faktur supaya void memulihkan lapisan dengan umur
+   * asal — tanpa ini lapisan pulihan lahir "muda" dari tanggal void dan
+   * FIFO penjualan berikutnya mengambil lot yang salah. Optional: konsumen
+   * lama tak wajib membacanya.
+   */
+  sourceAgeAt?: Date | null
+  /**
+   * STOK-09: tanggal lahir baris ItemBatch asal, untuk membuat ulang lot
+   * yang sudah terhapus saat void. Kosong bila tak ditemukan.
+   */
+  expiryDate?: Date | null
+  manufacturingDate?: Date | null
 }
 
 /** Cost consumed plus the lot/serial attribution needed to mirror the movement. */
@@ -518,6 +532,22 @@ export async function consumeFifoLayers(
 
   // Umur FIFO tertua yang benar-benar ikut terambil (untuk transfer).
   let sourceAgeAt: Date | null = null
+  // STOK-09: tanggal lahir lot asal per (batch|gudang), dibaca dari baris
+  // ItemBatch yang didekremen panggilan ini. Void factur meneruskan expiry
+  // ini saat membuat ulang lot yang sudah terhapus.
+  const batchDatesByKey = new Map<string, { expiryDate: Date | null; manufacturingDate: Date | null }>()
+  if (batchConsumption.size > 0) {
+    const dateRows = await tx.itemBatch.findMany({
+      where: { itemId, batchNumber: { in: Array.from(batchConsumption.keys()).map((k) => k.split("|")[0]) } },
+      select: { batchNumber: true, warehouseId: true, expiryDate: true, manufacturingDate: true },
+    })
+    for (const row of dateRows) {
+      batchDatesByKey.set(`${row.batchNumber}|${row.warehouseId}`, {
+        expiryDate: row.expiryDate ?? null,
+        manufacturingDate: row.manufacturingDate ?? null,
+      })
+    }
+  }
   const consumedLayers: ConsumedLayer[] = []
   for (const { layer, consume } of consumptions) {
     if (consume <= 0) continue
@@ -525,11 +555,19 @@ export async function consumeFifoLayers(
     if (age && (sourceAgeAt === null || age.getTime() < sourceAgeAt.getTime())) {
       sourceAgeAt = age
     }
+    const batchKey = layer.batchNumber ? `${layer.batchNumber}|${layer.warehouseId ?? ""}` : null
     consumedLayers.push({
       batchNumber: layer.batchNumber ?? null,
       warehouseId: layer.warehouseId ?? null,
       qty: consume,
       unitCost: Number(layer.unitCost !== undefined ? layer.unitCost : (layer as any).unit_cost),
+      sourceAgeAt: age ?? null,
+      ...(batchKey
+        ? {
+            expiryDate: batchDatesByKey.get(batchKey)?.expiryDate ?? null,
+            manufacturingDate: batchDatesByKey.get(batchKey)?.manufacturingDate ?? null,
+          }
+        : {}),
     })
   }
 

@@ -250,6 +250,41 @@ describe("inventory-fifo", () => {
       expect(sqlText).toContain("COALESCE(source_created_at, created_at)");
     });
 
+    it("STOK-09: consumedLayers memuat umur lapisan asal + tanggal lahir lot", async () => {
+      const layerAge = new Date("2026-01-10T00:00:00Z")
+      const layerCreated = new Date("2026-02-01T00:00:00Z")
+      const expiry = new Date("2026-12-31T00:00:00Z")
+      const mfg = new Date("2026-01-05T00:00:00Z")
+      const tx = mockTx({
+        layers: [
+          { id: 1, remaining: 10, unitCost: 100, batchNumber: "BATCH-A", warehouseId: 5, createdAt: layerCreated, sourceCreatedAt: layerAge } as never,
+        ],
+        batches: [
+          { id: 99, batchNumber: "BATCH-A", qty: 10, warehouseId: 5, expiryDate: expiry } as never,
+        ],
+      })
+      ;(tx.itemBatch.findMany as never) = vi.fn(async ({ select }: { select?: Record<string, unknown> }) =>
+        select?.expiryDate !== undefined
+          ? [{ batchNumber: "BATCH-A", warehouseId: 5, expiryDate: expiry, manufacturingDate: mfg }]
+          : [{ id: 99, batchNumber: "BATCH-A", qty: 10, warehouseId: 5, expiryDate: expiry }],
+      ) as never
+      tx.$executeRaw = vi.fn(async () => 0) as never
+
+      const result = await consumeFifoLayers(tx, { itemId: 1, warehouseId: 5, qty: 4 })
+
+      expect(result.consumedLayers).toEqual([
+        expect.objectContaining({
+          batchNumber: "BATCH-A",
+          warehouseId: 5,
+          qty: 4,
+          unitCost: 100,
+          sourceAgeAt: layerAge,
+          expiryDate: expiry,
+          manufacturingDate: mfg,
+        }),
+      ])
+    })
+
     it("consumes from a single layer (oldest first)", async () => {
       const tx = mockTx({
         layers: [{ id: 1, remaining: 100, unitCost: 5, batchNumber: null }],

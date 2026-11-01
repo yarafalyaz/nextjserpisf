@@ -178,7 +178,53 @@ describe("reverseSalesInvoicePostingTx", () => {
     await reverseSalesInvoicePostingTx(client as never, 7)
 
     expect(itemBatchCreate).toHaveBeenCalledWith({
-      data: { itemId: 10, batchNumber: "LOT-A", warehouseId: 2, qty: 5 },
+      data: { itemId: 10, batchNumber: "LOT-A", warehouseId: 2, qty: 5, expiryDate: null, manufacturingDate: null },
+    })
+  })
+
+  it("STOK-09: layer pulih mewarisi umur lapisan asal dan lot lahir ulang mewarisi expiry", async () => {
+    stockMoveFindMany.mockResolvedValue([
+      { id: 1, itemId: 10, warehouseId: 2, qty: 5, cost: 100 },
+    ])
+    salesInvoiceItemFindMany.mockResolvedValue([
+      {
+        itemId: 10,
+        serialNumbers: null,
+        batchAllocations: [{
+          batchNumber: "LOT-EXP",
+          warehouseId: 2,
+          qty: 5,
+          unitCost: 100,
+          sourceAgeAt: "2026-01-10T00:00:00.000Z",
+          expiryDate: "2026-12-31T00:00:00.000Z",
+          manufacturingDate: "2026-01-05T00:00:00.000Z",
+        }],
+      },
+    ])
+    itemBatchFindFirst.mockResolvedValue(null)
+
+    await reverseSalesInvoicePostingTx(client as never, 7)
+
+    expect(inventoryLayerCreateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            batchNumber: "LOT-EXP",
+            qtyIn: 5,
+            sourceCreatedAt: new Date("2026-01-10T00:00:00.000Z"),
+          }),
+        ]),
+      }),
+    )
+    expect(itemBatchCreate).toHaveBeenCalledWith({
+      data: {
+        itemId: 10,
+        batchNumber: "LOT-EXP",
+        warehouseId: 2,
+        qty: 5,
+        expiryDate: new Date("2026-12-31T00:00:00.000Z"),
+        manufacturingDate: new Date("2026-01-05T00:00:00.000Z"),
+      },
     })
   })
 
