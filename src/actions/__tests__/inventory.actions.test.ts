@@ -498,6 +498,54 @@ describe("Material Issue Actions", () => {
     expect(mocks.prismaMock.materialIssueItem.deleteMany).not.toHaveBeenCalled();
     expect(mocks.prismaMock.materialIssue.update).not.toHaveBeenCalled();
   });
+  it("completeMaterialIssue menolak item yang dinonaktifkan di antara create dan complete (titik posting menilai ulang hidup)", async () => {
+    // Create menilai hidup; master dinonaktifkan sesudah draft lahir.
+    // Titik posting (complete) adalah saat stok/jurnal lahir — item mati
+    // tidak boleh mengeluarkan stok. Klaim dikembalikan ke draft.
+    seedDraft(mocks.prismaMock.materialIssue, { items: [{ itemId: 9 }] });
+    mocks.prismaMock.materialIssue.findUnique.mockResolvedValue({ warehouseId: 1, items: [{ itemId: 9 }] });
+    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 9, name: "Item Mati", isActive: false }]);
+
+    const res = await actions.completeMaterialIssue(1);
+
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("tidak aktif");
+    expect(matIssueHook).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.materialIssue.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "draft" } }),
+    );
+  });
+  it("completeMaterialIssue memuat header+baris MI dari bacaan dalam tx untuk gerbang hidup posting", async () => {
+    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", items: [], workOrderId: 42,
+    });
+    mocks.prismaMock.materialIssue.findUnique.mockResolvedValue({ warehouseId: 1, items: [{ itemId: 1 }] });
+    mocks.prismaMock.productionOrderMaterial.aggregate.mockResolvedValue({
+      _sum: { actualQty: 0 },
+    });
+
+    const res = await actions.completeMaterialIssue(1);
+
+    expect(res?.success).toBe(true);
+    const gauge = mocks.prismaMock.materialIssue.findUnique.mock.calls.find(
+      (c: any) => (c[0] as any)?.select?.items != null,
+    );
+    expect(gauge).toBeTruthy();
+    expect((gauge![0] as any).where).toEqual({ id: 1 });
+  });
+  it("updateMaterialIssue menolak item yang dinonaktifkan (dokumen bebas menilai ulang hidup di dalam tx)", async () => {
+    seedDraft(mocks.prismaMock.materialIssue);
+    // Bacaan terkunci (findUnique di dalam tx) status draft — beforeEach
+    // clearAllMocks menelan mockResolvedValue biasa dari seed.
+    mocks.prismaMock.materialIssue.findUnique.mockResolvedValue({ status: "draft" });
+    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 1, name: "Item Mati", isActive: false }]);
+
+    const res = await actions.updateMaterialIssue(1, miFd());
+
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("tidak aktif");
+    expect(mocks.prismaMock.materialIssue.update).not.toHaveBeenCalled();
+  });
   it("completeMaterialIssue succeeds", async () => {
     seedDraft(mocks.prismaMock.materialIssue, { items: [] });
     const res = await actions.completeMaterialIssue(1);

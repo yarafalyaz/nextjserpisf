@@ -1238,6 +1238,23 @@ export async function completeMaterialIssue(issueId: number) {
             );
           }
         }
+        // Titik posting: master dinonaktifkan/dihapus di antara create dan
+        // complete tidak boleh mengeluarkan stok + jurnal. Dinilai ulang DI
+        // DALAM tx dari baris MI yang diklaim (bukan payload) — dokumen
+        // turunan terikat sumber tidak digerbang di create, tetapi posting
+        // adalah peristiwa stok pertama kali, jadi gerbang hidup berlaku
+        // di sini untuk semua MI. Lemparan di sini menggulung tx dan klaim
+        // dikembalikan ke draft oleh catch di bawah (pola guard di atas).
+        const liveIssue = await tx.materialIssue.findUnique({
+          where: { id: issueId },
+          select: { warehouseId: true, items: { select: { itemId: true } } },
+        });
+        const liveWarehouseId = liveIssue?.warehouseId ?? issue.warehouseId;
+        const liveItemIds = (liveIssue?.items ?? []).map((it) => Number(it.itemId));
+        if (liveWarehouseId != null) {
+          await assertWarehousesExistAndActive(tx, [liveWarehouseId]);
+        }
+        await assertItemsExistAndActive(tx, liveItemIds);
         // Hook creates Stock Moves OUT per item + Accounting journal
         await onMaterialIssueStock(issueId, Number(user.id), tx);
         // F-2026-10-22-072-S (Q-IP-1): MI proyek tanpa WO melahirkan
@@ -2197,6 +2214,13 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
       if (latest && latest.status !== "draft") {
         throw new Error("Hanya material issue draft yang dapat diedit");
       }
+
+      // Dokumen bebas: master ditukar saat edit wajib hidup (pola create —
+      // createMaterialIssue menilai di dalam tx); baris lama tidak dinilai,
+      // hanya payload baru. Tanpa ini edit bisa menanam item/gudang mati
+      // yang lalu diselesaikan (complete menilai ulang pula di titik posting).
+      await assertWarehousesExistAndActive(tx, [v.warehouseId]);
+      await assertItemsExistAndActive(tx, miItems.map((it) => Number(it.itemId)));
 
       await tx.materialIssueItem.deleteMany({ where: { materialIssueId: id } });
       // F-008: baris lahir ulang saat update draft -> snapshot beku ulang.
