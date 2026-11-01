@@ -86,7 +86,7 @@ describe("onExpenseApprovedSyncPettyCash balance guard", () => {
       paidFromAccountId: 10,
       date: new Date(),
     })
-    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama" })
+    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama", isActive: true, deletedAt: null })
     mocks.pettyCashFindFirst.mockResolvedValue(null)
     mocks.pettyCashFindMany.mockResolvedValue([
       { id: 99, type: "OUT", amount: 1000, balanceBefore: 0, balanceAfter: 0 },
@@ -95,6 +95,36 @@ describe("onExpenseApprovedSyncPettyCash balance guard", () => {
     await expect(onExpenseApprovedSyncPettyCash(1, 99)).rejects.toThrow(
       /Saldo kas kecil menjadi negatif/
     )
+  })
+
+  it("putaran 51: akun sumber kas kecil nonaktif → approve ditolak, kas kecil tidak dibuat", async () => {
+    mocks.expenseFindUniqueOrThrow.mockResolvedValue({
+      id: 3,
+      documentNo: "EXP-003",
+      status: "draft",
+      amount: 400,
+      paidFromAccountId: 10,
+      date: new Date(),
+    })
+    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama", isActive: false, deletedAt: null })
+
+    await expect(onExpenseApprovedSyncPettyCash(3, 99)).rejects.toThrow(/tidak aktif\/terhapus/)
+    expect(mocks.pettyCashCreate).not.toHaveBeenCalled()
+  })
+
+  it("putaran 51: akun sumber kas kecil terhapus → approve ditolak, kas kecil tidak dibuat", async () => {
+    mocks.expenseFindUniqueOrThrow.mockResolvedValue({
+      id: 4,
+      documentNo: "EXP-004",
+      status: "draft",
+      amount: 400,
+      paidFromAccountId: 10,
+      date: new Date(),
+    })
+    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama", isActive: true, deletedAt: new Date() })
+
+    await expect(onExpenseApprovedSyncPettyCash(4, 99)).rejects.toThrow(/tidak aktif\/terhapus/)
+    expect(mocks.pettyCashCreate).not.toHaveBeenCalled()
   })
 
   it("succeeds when there is sufficient balance", async () => {
@@ -106,7 +136,7 @@ describe("onExpenseApprovedSyncPettyCash balance guard", () => {
       paidFromAccountId: 10,
       date: new Date(),
     })
-    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama" })
+    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama", isActive: true, deletedAt: null })
     mocks.pettyCashFindFirst.mockResolvedValue(null)
     mocks.pettyCashFindMany.mockResolvedValue([
       { id: 100, type: "IN", amount: 1000, balanceBefore: 0, balanceAfter: 1000 },
@@ -127,7 +157,7 @@ describe("onExpenseApprovedSyncPettyCash balance guard", () => {
       paidFromAccountId: 10,
       date: new Date(),
     })
-    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama" })
+    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama", isActive: true, deletedAt: null })
     mocks.pettyCashFindFirst.mockResolvedValue(null)
     mocks.pettyCashFindMany.mockResolvedValue([
       { id: 1, documentNo: "PC-1", type: "IN", amount: 1000, balanceBefore: 0, balanceAfter: 0 },
@@ -172,7 +202,7 @@ describe("onExpenseApprovedSyncPettyCash race + period + deteksi akun", () => {
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
       id: 4, documentNo: "EXP-004", amount: 100, paidFromAccountId: 10, status: "draft", date: new Date(),
     })
-    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama" })
+    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama", isActive: true, deletedAt: null })
     mocks.pettyCashFindFirst.mockResolvedValue(null)
     mocks.pettyCashFindMany.mockResolvedValue([
       { id: 100, type: "IN", amount: 1000, balanceBefore: 0, balanceAfter: 1000 },
@@ -192,7 +222,7 @@ describe("onExpenseApprovedSyncPettyCash race + period + deteksi akun", () => {
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
       id: 10, documentNo: "EXP-010", amount: 100, paidFromAccountId: 10, status: "draft", date: new Date(),
     })
-    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama" })
+    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama", isActive: true, deletedAt: null })
     mocks.pettyCashFindFirst.mockResolvedValue(null)
     mocks.pettyCashFindMany.mockResolvedValue([
       { id: 100, type: "IN", amount: 1000, balanceBefore: 0, balanceAfter: 1000 },
@@ -212,7 +242,7 @@ describe("onExpenseApprovedSyncPettyCash race + period + deteksi akun", () => {
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
       id: 5, documentNo: "EXP-005", amount: 100, paidFromAccountId: 10, status: "draft", date,
     })
-    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama" })
+    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama", isActive: true, deletedAt: null })
     mocks.pettyCashFindFirst.mockResolvedValue(null)
     mocks.pettyCashFindMany.mockResolvedValue([
       { id: 100, type: "IN", amount: 1000, balanceBefore: 0, balanceAfter: 1000 },
@@ -228,7 +258,7 @@ describe("onExpenseApprovedSyncPettyCash race + period + deteksi akun", () => {
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
       id: 6, documentNo: "EXP-006", amount: 100, paidFromAccountId: 10, status: "draft", date: new Date(2020, 0, 1),
     })
-    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama" })
+    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama", isActive: true, deletedAt: null })
     mocks.assertPeriodOpen.mockRejectedValue(new Error("Periode akuntansi sudah ditutup"))
 
     await expect(onExpenseApprovedSyncPettyCash(6, 99)).rejects.toThrow(/Periode akuntansi sudah ditutup/)
@@ -240,7 +270,7 @@ describe("onExpenseApprovedSyncPettyCash race + period + deteksi akun", () => {
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
       id: 7, documentNo: "EXP-007", amount: 100, paidFromAccountId: 42, status: "draft", date: new Date(),
     })
-    mocks.accountFindUnique.mockResolvedValue({ id: 42, name: "Kas Operasional" })
+    mocks.accountFindUnique.mockResolvedValue({ id: 42, name: "Kas Operasional", isActive: true, deletedAt: null })
     mocks.pettyCashFindFirst.mockResolvedValue(null)
     mocks.pettyCashFindMany.mockResolvedValue([
       { id: 100, type: "IN", amount: 1000, balanceBefore: 0, balanceAfter: 1000 },
@@ -255,7 +285,7 @@ describe("onExpenseApprovedSyncPettyCash race + period + deteksi akun", () => {
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
       id: 8, documentNo: "EXP-008", amount: 100, paidFromAccountId: 10, status: "draft", date: new Date(),
     })
-    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama" })
+    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama", isActive: true, deletedAt: null })
 
     await onExpenseApprovedSyncPettyCash(8, 99)
     expect(mocks.pettyCashCreate).not.toHaveBeenCalled()
@@ -265,7 +295,7 @@ describe("onExpenseApprovedSyncPettyCash race + period + deteksi akun", () => {
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
       id: 9, documentNo: "EXP-009", amount: 100, paidFromAccountId: 10, status: "draft", date: new Date(),
     })
-    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama" })
+    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama", isActive: true, deletedAt: null })
     mocks.pettyCashFindFirst.mockResolvedValue(null)
     // Mock DB jujur: findMany menghormati where — record void (77) & deleted (78)
     // tidak dikembalikan query ber-where, jadi tak masuk records/update.

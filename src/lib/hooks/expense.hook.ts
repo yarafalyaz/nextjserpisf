@@ -48,6 +48,7 @@ export async function onExpenseApprovedSyncPettyCash(
 
     const paidFromAccount = await tx.account.findUnique({
       where: { id: expense.paidFromAccountId },
+      select: { id: true, name: true, isActive: true, deletedAt: true },
     });
     if (!paidFromAccount) {
       console.warn(
@@ -72,6 +73,15 @@ export async function onExpenseApprovedSyncPettyCash(
         `[expense.hook] expense ${expense.documentNo ?? expenseId} bukan dari akun kas kecil (akun: ${paidFromAccount.name}) — sinkron dilewati`
       );
       return;
+    }
+
+    // Putaran 51: akun kas kecil sumber yang sudah nonaktif/terhapus bukan
+    // skip senyap — baris OUT tidak akan pernah lahir dan subledger kas kecil
+    // tak selaras GL. Tolak keras; expense non-kas-kecil tetap skip by-design.
+    if (!paidFromAccount.isActive || paidFromAccount.deletedAt !== null) {
+      throw new Error(
+        `Sinkronisasi kas kecil: akun tidak aktif/terhapus atau tidak ditemukan (id: ${paidFromAccount.id}). Pilih ulang akun sebelum posting.`,
+      );
     }
 
     // Period gate sebelum create: expense bertanggal periode tertutup ditolak
