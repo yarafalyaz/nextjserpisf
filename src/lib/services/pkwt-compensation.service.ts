@@ -190,6 +190,12 @@ export async function approvePkwtCompensationEvent(
       `Peristiwa kompensasi PKWT berstatus '${event.status}' — hanya draft yang dapat disetujui.`,
     )
   }
+  // Pemisahan tugas fail-closed (pola salary adjustment): nominal dibekukan
+  // untuk payroll, jadi pembuat tidak boleh menyetujui peristiwanya sendiri;
+  // createdBy kosong berarti maker-checker tidak dapat dibuktikan.
+  if (event.createdBy == null || Number(event.createdBy) === Number(userId)) {
+    throw new Error("Peristiwa kompensasi PKWT tidak boleh disetujui oleh pembuatnya sendiri (pemisahan tugas).")
+  }
   // Peristiwa berharga wajib mapping siap sebelum dibekukan untuk dibayar.
   await resolvePkwtMapping(client)
   // Klaim atomik dari draft: bacaan di atas bisa basi — pembayaran konkuren

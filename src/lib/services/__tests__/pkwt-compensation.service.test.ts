@@ -148,7 +148,7 @@ describe("E132-2/4 mapping fail-closed + persetujuan", () => {
     client.systemSetting.findFirst.mockResolvedValue({
       pkwtCompensationExpenseAccountId: null, pkwtCompensationPayableAccountId: null,
     })
-    client.pkwtCompensationEvent.findUnique.mockResolvedValue({ id: 7, status: "draft" })
+    client.pkwtCompensationEvent.findUnique.mockResolvedValue({ id: 7, status: "draft", createdBy: 99 })
     await expect(approvePkwtCompensationEvent(client, 7, 1)).rejects.toThrow("Mapping akun kompensasi PKWT belum lengkap")
   })
 
@@ -160,9 +160,23 @@ describe("E132-2/4 mapping fail-closed + persetujuan", () => {
     await expect(resolvePkwtMapping(client)).rejects.toThrow("dilarang untuk kompensasi PKWT")
   })
 
+  it("regression round 17: pembuat tidak boleh menyetujui peristiwa PKWT sendiri", async () => {
+    const client = baseClient()
+    client.pkwtCompensationEvent.findUnique.mockResolvedValue({ id: 7, status: "draft", createdBy: 1 })
+    await expect(approvePkwtCompensationEvent(client, 7, 1)).rejects.toThrow("pemisahan tugas")
+    expect(client.pkwtCompensationEvent.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("regression round 17: createdBy kosong fail-closed untuk persetujuan PKWT", async () => {
+    const client = baseClient()
+    client.pkwtCompensationEvent.findUnique.mockResolvedValue({ id: 7, status: "draft", createdBy: null })
+    await expect(approvePkwtCompensationEvent(client, 7, 1)).rejects.toThrow("pemisahan tugas")
+    expect(client.pkwtCompensationEvent.updateMany).not.toHaveBeenCalled()
+  })
+
   it("klaim approve kalah (peristiwa sudah paid): ditolak, update polos tidak dipanggil", async () => {
     const client = baseClient()
-    client.pkwtCompensationEvent.findUnique.mockResolvedValue({ id: 7, status: "draft" })
+    client.pkwtCompensationEvent.findUnique.mockResolvedValue({ id: 7, status: "draft", createdBy: 99 })
     client.pkwtCompensationEvent.updateMany.mockResolvedValue({ count: 0 })
     await expect(approvePkwtCompensationEvent(client, 7, 1)).rejects.toThrow(/berstatus|disetujui/)
     expect(client.pkwtCompensationEvent.update).not.toHaveBeenCalled()
