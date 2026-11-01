@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   rows: [] as Record<string, unknown>[],
   customerDeletedAt: null as Date | null,
   updates: [] as Record<string, unknown>[],
+  claimCount: 1,
+  lockCalls: [] as unknown[][],
 }))
 
 vi.mock("@/lib/auth/permissions", () => ({
@@ -35,14 +37,31 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     $transaction: vi.fn(async (fn: (tx: unknown) => unknown) =>
       fn({
+        $executeRaw: vi.fn(async (...a: unknown[]) => {
+          mocks.lockCalls.push(a)
+          return 1
+        }),
         creditOverride: {
           findUnique: vi.fn(
             async ({ where }: { where: { id: number } }) =>
               mocks.rows.find((r) => r.id === where.id) ?? null,
           ),
+          findUniqueOrThrow: vi.fn(
+            async ({ where }: { where: { id: number } }) =>
+              mocks.rows.find((r) => r.id === where.id) ?? { id: where.id },
+          ),
           update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
             mocks.updates.push(data)
             return { id: 44, ...data }
+          }),
+          updateMany: vi.fn(async ({ where, data }: { where: { id: number; status: string }; data: Record<string, unknown> }) => {
+            const row = mocks.rows.find((r) => r.id === where.id)
+            if (!row || row.status !== where.status || mocks.claimCount === 0) {
+              return { count: 0 }
+            }
+            mocks.updates.push(data)
+            Object.assign(row, data)
+            return { count: 1 }
           }),
         },
         customer: {
@@ -93,6 +112,8 @@ describe("credit-override.actions (F-2026-10-25-035-B)", () => {
     vi.clearAllMocks()
     mocks.rows = [{ ...pendingRow }]
     mocks.updates = []
+    mocks.claimCount = 1
+    mocks.lockCalls = []
     mocks.customerDeletedAt = null
     mocks.requirePermission.mockResolvedValue({
       id: "9",
@@ -139,6 +160,20 @@ describe("credit-override.actions (F-2026-10-25-035-B)", () => {
     expect(res.success).toBe(true)
     expect(mocks.updates[0].status).toBe("rejected")
     expect(mocks.updates[0].decisionReason).toBe("Limit belum layak naik")
+  })
+
+  it("regression round 19: klaim kondisional kalah (approve vs reject konkuren) -> tertolak jujur", async () => {
+    mocks.claimCount = 0
+    const res = await approveCreditOverride(44)
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toContain("sudah tidak pending")
+    expect(mocks.updates).toHaveLength(0)
+    expect(mocks.lockCalls.length).toBeGreaterThan(0)
+
+    mocks.rows = [{ ...pendingRow }]
+    const resReject = await rejectCreditOverride(44, "Tidak layak")
+    expect(resReject.success).toBe(false)
+    expect(mocks.updates).toHaveLength(0)
   })
 
   it("approve rekod bukan pending -> tertolak", async () => {

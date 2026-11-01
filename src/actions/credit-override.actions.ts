@@ -120,6 +120,13 @@ export async function approveCreditOverride(overrideId: number) {
     const user = await requirePermission("approve_credit_overrides")
     const now = new Date()
     const result = await prisma.$transaction(async (tx) => {
+      // Kunci baris SEBELUM bacaan pertama tx, lalu klaim kondisional:
+      // cek pending atas bacaan plain adalah snapshot REPEATABLE READ —
+      // approve dan reject konkuren sama-sama lolos, penulis terakhir
+      // menang, dua-duanya sukses dan log aktivitas bertentangan.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM credit_overrides WHERE id = ${overrideId} FOR UPDATE`
+      }
       const row = await tx.creditOverride.findUnique({ where: { id: overrideId } })
       if (!row) throw new Error("Permintaan override tidak ditemukan")
       if (deriveCreditOverrideStatus(row, now) !== "pending") {
@@ -136,8 +143,8 @@ export async function approveCreditOverride(overrideId: number) {
       if (!customer || customer.deletedAt != null) {
         throw new Error("Pelanggan sudah diarsipkan; override gugur")
       }
-      return tx.creditOverride.update({
-        where: { id: overrideId },
+      const claimed = await tx.creditOverride.updateMany({
+        where: { id: overrideId, status: "pending" },
         data: {
           status: "approved",
           decidedBy: Number(user.id),
@@ -146,6 +153,10 @@ export async function approveCreditOverride(overrideId: number) {
           expiresAt: creditOverrideExpiryWib(now),
         },
       })
+      if (claimed.count === 0) {
+        throw new Error("Permintaan override sudah tidak pending")
+      }
+      return tx.creditOverride.findUniqueOrThrow({ where: { id: overrideId } })
     })
     await logActivity("approve", "CreditOverride", result.id, `Menyetujui override batas kredit #${result.id}`)
     revalidatePath("/penjualan/pesanan")
@@ -167,6 +178,10 @@ export async function rejectCreditOverride(overrideId: number, reason: string) {
     }
     const now = new Date()
     const result = await prisma.$transaction(async (tx) => {
+      // Kunci baris + klaim kondisional, pola approveCreditOverride.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM credit_overrides WHERE id = ${overrideId} FOR UPDATE`
+      }
       const row = await tx.creditOverride.findUnique({ where: { id: overrideId } })
       if (!row) throw new Error("Permintaan override tidak ditemukan")
       if (deriveCreditOverrideStatus(row, now) !== "pending") {
@@ -175,8 +190,8 @@ export async function rejectCreditOverride(overrideId: number, reason: string) {
       if (row.requestedBy === Number(user.id)) {
         throw new Error("Penolak tidak boleh sama dengan peminta override (pemisahan tugas)")
       }
-      return tx.creditOverride.update({
-        where: { id: overrideId },
+      const claimed = await tx.creditOverride.updateMany({
+        where: { id: overrideId, status: "pending" },
         data: {
           status: "rejected",
           decidedBy: Number(user.id),
@@ -184,6 +199,10 @@ export async function rejectCreditOverride(overrideId: number, reason: string) {
           decisionReason: trimmed,
         },
       })
+      if (claimed.count === 0) {
+        throw new Error("Permintaan override sudah tidak pending")
+      }
+      return tx.creditOverride.findUniqueOrThrow({ where: { id: overrideId } })
     })
     await logActivity("reject", "CreditOverride", result.id, `Menolak override batas kredit #${result.id}`)
     revalidatePath("/penjualan/pesanan")
