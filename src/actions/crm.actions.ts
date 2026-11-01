@@ -324,9 +324,13 @@ export async function convertLead(leadId: number) {
       // create duplicate customers. The FOR UPDATE serialises them; the loser
       // sees customerId already set and aborts.
       await tx.$queryRaw`SELECT id FROM leads WHERE id = ${leadId} FOR UPDATE`
+      // Putaran 40: SEMUA field penentu dibaca ulang dari baris terkunci —
+      // sebelumnya hanya customerId/status/deletedAt, sehingga customer
+      // lahir dari kontak snapshot luar tx (updateLead konkuren hilang)
+      // dan guard pemilik memakai assignedTo basi (rep lama tetap bisa
+      // mengonversi lead yang sudah dipindah).
       const fresh = await tx.lead.findUniqueOrThrow({
         where: { id: leadId },
-        select: { customerId: true, status: true, deletedAt: true },
       })
       if (fresh.customerId) {
         throw new Error("Lead sudah dikonversi menjadi pelanggan.")
@@ -337,16 +341,19 @@ export async function convertLead(leadId: number) {
       if (fresh.deletedAt) {
         throw new Error("Lead tidak ditemukan")
       }
+      if (!isAdmin && fresh.assignedTo !== Number(user.id)) {
+        throw new Error("Anda hanya dapat mengonversi lead yang ditugaskan kepada Anda.")
+      }
       if (!(CONVERTIBLE_STATUSES as readonly string[]).includes(fresh.status)) {
         throw new Error("Lead belum dapat dikonversi. Status minimal harus 'qualified'.")
       }
       const created = await tx.customer.create({
         data: {
-          name: lead.company || lead.name,
-          contactPerson: lead.contactName ?? lead.name,
-          email: lead.email,
-          phone: lead.phone,
-          address: lead.address,
+          name: fresh.company || fresh.name,
+          contactPerson: fresh.contactName ?? fresh.name,
+          email: fresh.email,
+          phone: fresh.phone,
+          address: fresh.address,
           code,
           isActive: true,
         },

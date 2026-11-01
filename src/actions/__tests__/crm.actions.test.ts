@@ -340,6 +340,39 @@ describe("CRM Actions - Next redirect errors are re-thrown", () => {
     expect(res.success).toBe(false)
     expect(mocks.prismaMock.customer.create).not.toHaveBeenCalled()
   })
+
+  it("putaran 40: convertLead memakai field kontak dari baris terkunci, bukan snapshot luar", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce({ id: 3, permissions: ["edit_leads", "manage_leads"], roles: ["admin"] })
+    // Snapshot luar tx: kontak lama. Baris terkunci (updateLead konkuren
+    // menang duluan): kontak baru — customer wajib lahir dari yang baru.
+    mocks.prismaMock.lead.findUniqueOrThrow
+      .mockResolvedValueOnce({
+        id: 1, status: "qualified", assignedTo: 7, customerId: null,
+        company: "PT Lama", name: "Lead", contactName: "Budi Lama", email: "lama@x.id", phone: "0800", address: "Jl Lama",
+      })
+      .mockResolvedValueOnce({
+        id: 1, status: "qualified", customerId: null, deletedAt: null,
+        company: "PT Baru", name: "Lead", contactName: "Budi Baru", email: "baru@x.id", phone: "0900", address: "Jl Baru",
+      })
+    const res = await actions.convertLead(1)
+    expect(res.success).toBe(true)
+    const createArg = mocks.prismaMock.customer.create.mock.calls.at(-1)?.[0]
+    expect(createArg.data.name).toBe("PT Baru")
+    expect(createArg.data.contactPerson).toBe("Budi Baru")
+    expect(createArg.data.email).toBe("baru@x.id")
+  })
+
+  it("putaran 40: convertLead menilai ulang kepemilikan dari baris terkunci", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce({ id: 3, permissions: ["edit_leads"], roles: ["sales"] })
+    // Rep 3 pemilik di snapshot luar; lead dipindah ke rep 7 sebelum kunci.
+    mocks.prismaMock.lead.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "qualified", assignedTo: 3, customerId: null })
+      .mockResolvedValueOnce({ id: 1, status: "qualified", assignedTo: 7, customerId: null, deletedAt: null })
+    const res = await actions.convertLead(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/ditugaskan kepada Anda/i)
+    expect(mocks.prismaMock.customer.create).not.toHaveBeenCalled()
+  })
 })
 
 describe("addLeadActivity guard + scheduledAt (round4 #5)", () => {
