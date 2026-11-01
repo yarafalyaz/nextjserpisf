@@ -1642,6 +1642,40 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     expect(res?.error).toContain("approved/accepted")
   })
 
+  // Dokumen turunan memakai dasar komersial dokumen sumber (item, cap,
+  // credit gate); header atas customer lain memisahkan dasar itu dari
+  // pemilik piutang.
+  it("createSalesOrder menolak penawaran milik customer lain", async () => {
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({
+      id: 50, status: "accepted", validUntil: null, customerId: 99,
+      subtotal: 1000, discount: 0, tax: 0, grandTotal: 1000, sections: [],
+    })
+    const res = await actions.createSalesOrder(fdMap({ customerId: "7", date: "2026-06-12", quotationId: "50" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("customer lain")
+    expect(mocks.prismaMock.salesOrder.create).not.toHaveBeenCalled()
+  })
+
+  it("createSalesInvoice menolak SO milik customer lain", async () => {
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ status: "confirmed", customerId: 99, salesEmployeeId: null, quotationId: null })
+    const res = await actions.createSalesInvoice(
+      fdMap({ customerId: "7", date: "2026-06-12", salesOrderId: "9" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("customer lain")
+    expect(mocks.prismaMock.salesInvoice.create).not.toHaveBeenCalled()
+  })
+
+  it("createSalesInvoice menolak penawaran langsung milik customer lain", async () => {
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ salesEmployeeId: null, customerId: 99 })
+    const res = await actions.createSalesInvoice(
+      fdMap({ customerId: "7", date: "2026-06-12", quotationId: "50" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("customer lain")
+    expect(mocks.prismaMock.salesInvoice.create).not.toHaveBeenCalled()
+  })
+
   // Tanpa penawaran, pesanan tetap boleh dibuat kosong (item diisi belakangan).
   it("createSalesOrder tanpa penawaran tidak membuat item", async () => {
     const res = await actions.createSalesOrder(fdMap({ customerId: "1", date: "2026-06-12" }))
@@ -1654,7 +1688,7 @@ describe("Sales Order Actions (legacy happy paths)", () => {
   // bukan header bertotal 0 yang harus diketik ulang.
   it("createSalesInvoice menyimpan item dan menghitung totalnya", async () => {
     mocks.generateDocNumMock.mockResolvedValue("INV-001")
-    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ status: "confirmed" })
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ status: "confirmed", customerId: 7 })
     const items = JSON.stringify([
       { itemId: 11, qty: 2, unitPrice: 300, discount: 0 },
       { itemId: 12, qty: 1, unitPrice: 400, discount: 50 },
@@ -1713,7 +1747,7 @@ describe("Sales Order Actions (legacy happy paths)", () => {
   // dari lookup kategori price-list (field dipilih keduanya).
   it("R8-JB-09: createSalesInvoice menurunkan dueDate dari termin pelanggan bila form tak mengisi", async () => {
     mocks.generateDocNumMock.mockResolvedValue("INV-JB09")
-    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ status: "confirmed" })
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ status: "confirmed", customerId: 7 })
     mocks.prismaMock.customer.findUnique.mockImplementation(async (args: any) =>
       args.select && "paymentTerm" in args.select ? { paymentTerm: { days: 30, isActive: true } } : { customerCategoryId: null })
     const res = await actions.createSalesInvoice(fdMap({ customerId: "7", date: "2026-06-12", salesOrderId: "9", items: "[]" }))
@@ -1727,7 +1761,7 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     // SO di dalam assertInvoiceWithinSalesOrderCap tidak menyegarkannya.
     // Dua pembuatan bersamaan atas SO sama bisa sama-sama lolos cap bila
     // bacaan SO terjadi sebelum kunci — kunci wajib di awal tx.
-    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ status: "confirmed" })
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ status: "confirmed", customerId: 7 })
     const res = await actions.createSalesInvoice(fdMap({ customerId: "7", date: "2026-06-12", salesOrderId: "9", items: "[]" }))
     expect(res?.success).toBe(true)
     const lockSqls = (mocks.prismaMock as any).$executeRaw.mock.calls.map((c: unknown[]) => {
@@ -1775,7 +1809,7 @@ describe("Sales Order Actions (legacy happy paths)", () => {
   // kategori pelanggan; baris hasil konversi SO mempertahankan harga SO.
   it("createSalesInvoice menolak pesanan konsep (gerbang DELIVERABLE_ORDER_STATUSES)", async () => {
     mocks.generateDocNumMock.mockResolvedValue("INV-004")
-    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ status: "draft" })
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ status: "draft", customerId: 7 })
     const res = await actions.createSalesInvoice(
       fdMap({ customerId: "7", date: "2026-06-12", salesOrderId: "9", items: "[]" }),
     )
@@ -1784,7 +1818,7 @@ describe("Sales Order Actions (legacy happy paths)", () => {
   })
   it("createSalesInvoice menerapkan price-list untuk baris form langsung, bukan baris konversi SO", async () => {
     mocks.generateDocNumMock.mockResolvedValue("INV-003")
-    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ status: "confirmed" })
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ status: "confirmed", customerId: 7 })
     mocks.prismaMock.customer.findUnique.mockResolvedValue({ customerCategoryId: 7 })
     mocks.prismaMock.customerPriceList.findMany.mockResolvedValue([
       { customerCategoryId: 7, itemId: 11, price: 90000, effectiveDate: null, isActive: true },

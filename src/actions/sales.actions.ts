@@ -1172,6 +1172,11 @@ export async function createSalesOrder(formData: FormData) {
       })
       if (quotation) {
         quotationSalesEmployeeId = quotation.salesEmployeeId
+        // Item/total disalin dari penawaran ini; header atas customer lain
+        // memisahkan dasar komersial itu dari pemilik piutang.
+        if (quotation.customerId !== v.customerId) {
+          throw new Error("Penawaran yang dipilih milik customer lain, tidak bisa dikonversi untuk customer ini")
+        }
         // Gerbang yang sama dengan convertQuotationToOrder: jalur form tidak
         // boleh menjadi jalan pintas mengonversi penawaran konsep/ditolak/
         // kedaluwarsa yang jalur resminya menolak.
@@ -2041,9 +2046,14 @@ export async function createSalesInvoice(formData: FormData) {
     if (v.salesOrderId) {
       const so = await tx.salesOrder.findUnique({
         where: { id: v.salesOrderId },
-        select: { status: true, salesEmployeeId: true, quotationId: true },
+        select: { status: true, salesEmployeeId: true, quotationId: true, customerId: true },
       })
       if (!so) throw new Error("Pesanan Penjualan tidak ditemukan")
+      // Cap kumulatif dinilai terhadap SO ini; faktur atas customer lain
+      // memakai cap itu untuk piutang customer yang salah.
+      if (so.customerId !== v.customerId) {
+        throw new Error("Pesanan Penjualan yang dipilih milik customer lain, tidak bisa difaktur untuk customer ini")
+      }
       if (!(DELIVERABLE_ORDER_STATUSES as readonly string[]).includes(so.status)) {
         throw new Error(
           `Pesanan Penjualan berstatus '${so.status}' belum bisa difaktur (harus ${DELIVERABLE_ORDER_STATUS_LABELS})`,
@@ -2060,8 +2070,11 @@ export async function createSalesInvoice(formData: FormData) {
     } else if (v.quotationId) {
       const q = await tx.quotation.findUnique({
         where: { id: v.quotationId },
-        select: { salesEmployeeId: true },
+        select: { salesEmployeeId: true, customerId: true },
       })
+      if (q && q.customerId !== v.customerId) {
+        throw new Error("Penawaran yang dipilih milik customer lain, tidak bisa difaktur untuk customer ini")
+      }
       inheritedSalesEmployeeId = q?.salesEmployeeId ?? null
     }
 
