@@ -1783,6 +1783,21 @@ describe("Vendor Payment Actions", () => {
     mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1 })
   })
 
+  it("regresi putaran 32: updateVendorPayment menolak tagihan target vendor lain", async () => {
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.vendorBill.findFirst.mockResolvedValue(null)
+    const res = await actions.updateVendorPayment(1, fdMap({
+      vendorId: "1",
+      amount: "1200",
+      paymentDate: "2026-06-12",
+      paymentMethod: "cash",
+      vendorBillId: "77"
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Tagihan tidak ditemukan untuk vendor ini")
+    expect(mocks.prismaMock.vendorPayment.update).not.toHaveBeenCalled()
+  })
+
   it("confirmVendorPayment succeeds", async () => {
     const res = await actions.confirmVendorPayment(1)
     expect(res?.success).toBe(true)

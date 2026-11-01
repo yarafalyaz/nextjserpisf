@@ -4157,6 +4157,23 @@ export async function updateVendorPayment(id: number, formData: FormData) {
         select: { id: true },
       });
       if (!liveVendor) throw new Error("Vendor tidak ditemukan atau tidak aktif");
+      // Target tagihan ditulis ulang di sini: wajib divalidasi seperti
+      // create (milik vendor yang sama, belum lunas/batal, bukan konsep).
+      // Tanpa ini edit menyimpan tautan menyesatkan yang baru tertahan
+      // di confirm — draft tampak sah tetapi tak pernah bisa diposting.
+      if (v.vendorBillId != null) {
+        const target = await tx.vendorBill.findFirst({
+          where: { id: v.vendorBillId, vendorId: v.vendorId, deletedAt: null },
+          select: { id: true, status: true },
+        });
+        if (!target) throw new Error("Tagihan tidak ditemukan untuk vendor ini");
+        if (target.status === "paid" || target.status === "cancelled") {
+          throw new Error("Tagihan sudah lunas atau dibatalkan");
+        }
+        if (target.status === "draft") {
+          throw new Error("Tagihan masih konsep — konfirmasi dulu sebelum dibayar");
+        }
+      }
       const paymentDate = wibDateToUtcMidnight(v.paymentDate);
       const updated = await tx.vendorPayment.update({
         where: { id },
