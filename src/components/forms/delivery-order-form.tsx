@@ -120,6 +120,7 @@ export function DeliveryOrderForm({ salesOrders, defaultSalesOrderId, deliveryOr
               // terbawa ke pesanan lain.
               if (!isEdit) setItemRows(rowsForOrder(salesOrders, next))
             }}
+            disabled={isEdit}
             placeholder="Cari pesanan penjualan..."
             options={salesOrders.map((so) => ({ value: String(so.id), label: `${so.documentNo} - ${so.customer.name}` }))}
           />

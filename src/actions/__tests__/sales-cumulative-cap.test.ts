@@ -364,12 +364,16 @@ describe("BUG-10 updateDeliveryOrder: gerbang status", () => {
     expect(mocks.prismaMock.deliveryOrder.update).not.toHaveBeenCalled()
   })
 
-  it("pindah ke SO konsep ditolak sama seperti create", async () => {
+  it("pindah ke SO lain ditolak (dulu: gerbang status tujuan)", async () => {
+    // Ganti isi putaran 44: pindah SO kini ditolak NAMUN gerbang pindah
+    // berjalan sebelum SO tujuan dibaca, jadi pesannya gerbang pindah.
+    // Baris terikat SO asal; penolakan pindah murni (SO tujuan sah) di
+    // test regresi putaran 44 di bawah.
     mocks.prismaMock.deliveryOrder.findUniqueOrThrow.mockResolvedValue({ status: "draft", documentNo: "DO-1", salesOrderId: 1 })
     mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ customerId: 7, status: "draft", documentNo: "SO-2" })
     const res = await actions.updateDeliveryOrder(5, fdMap({ salesOrderId: 2, date: "2026-06-12" }))
     expect(res?.success).toBe(false)
-    expect(res?.error).toContain("Surat jalan hanya bisa")
+    expect(res?.error).toContain("tidak bisa dipindah ke Pesanan Penjualan lain")
     expect(mocks.prismaMock.deliveryOrder.update).not.toHaveBeenCalled()
   })
 
@@ -380,5 +384,21 @@ describe("BUG-10 updateDeliveryOrder: gerbang status", () => {
     const res = await actions.updateDeliveryOrder(5, fdMap({ salesOrderId: 1, date: "2026-06-12" }))
     expect(res?.success).toBe(true)
     expect(mocks.prismaMock.deliveryOrder.update).toHaveBeenCalled()
+  })
+
+  // Regresi putaran 44: edit draft memindah salesOrderId hanya menulis
+  // header — baris DeliveryOrderItem tetap menunjuk baris SO asal
+  // (salesOrderItemId tanpa FK), cap kirim melewati baris yang tak
+  // dikenal SO tujuan, dan laporan Pemenuhan membaca terkirim dari
+  // salesOrderItemId, bukan dari header. Surat jalan wajib tetap di SO
+  // asalnya; pindah SO = hapus + buat baru.
+  it("regresi putaran 44: pindah SO draft ditolak karena baris terikat SO asal", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.deliveryOrder.findUniqueOrThrow.mockResolvedValue({ status: "draft", documentNo: "DO-1", salesOrderId: 1 })
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ customerId: 7, status: "confirmed", documentNo: "SO-2" })
+    const res = await actions.updateDeliveryOrder(5, fdMap({ salesOrderId: 2, date: "2026-06-12" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak bisa dipindah ke Pesanan Penjualan lain")
+    expect(mocks.prismaMock.deliveryOrder.update).not.toHaveBeenCalled()
   })
 })

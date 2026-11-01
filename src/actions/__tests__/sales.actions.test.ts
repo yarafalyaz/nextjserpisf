@@ -2297,7 +2297,8 @@ describe("Delivery Order Actions (legacy happy paths)", () => {
   })
   it("updateDeliveryOrder succeeds", async () => {
     mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ customerId: 1 })
-    mocks.prismaMock.deliveryOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "DO-1" })
+    // Putaran 44: baris terkunci membawa salesOrderId untuk menolak pindah SO.
+    mocks.prismaMock.deliveryOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "DO-1", salesOrderId: 1 })
     const res = await actions.updateDeliveryOrder(1, fdMap({ salesOrderId: "1", date: "2026-06-12" }))
     expect(res?.success).toBe(true)
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_delivery_orders")

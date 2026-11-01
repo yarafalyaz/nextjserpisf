@@ -4422,11 +4422,23 @@ export async function updateDeliveryOrder(id: number, formData: FormData) {
     }
     const existing = await tx.deliveryOrder.findUniqueOrThrow({
       where: { id },
-      select: { status: true, documentNo: true },
+      select: { status: true, documentNo: true, salesOrderId: true },
     })
     if (existing.status === "shipped" || existing.status === "delivered") {
       throw new Error(
         `Surat jalan ${existing.documentNo} berstatus "${existing.status}" tidak dapat diubah; hanya surat jalan konsep yang bisa diedit.`,
+      )
+    }
+    // Putaran 44: surat jalan TIDAK bisa pindah SO — barisnya menunjuk
+    // baris SO asal lewat salesOrderItemId (tanpa FK ke SalesOrderItem),
+    // form edit memang tak mengirim baris ("Baris barang tidak diubah dari
+    // halaman ini"), dan cap kirim melewati baris yang tak dikenal SO
+    // tujuan — memindah header saja membuat laporan Pemenuhan mencatat
+    // terkirim di SO asal sementara header menunjuk SO tujuan. Yang
+    // butuh SO lain: hapus surat jalan konsep ini, buat baru.
+    if (v.salesOrderId !== existing.salesOrderId) {
+      throw new Error(
+        `Surat jalan ${existing.documentNo} tidak bisa dipindah ke Pesanan Penjualan lain karena barisnya terikat pesanan asal. Hapus surat jalan ini dan buat baru untuk pesanan yang benar.`,
       )
     }
 
