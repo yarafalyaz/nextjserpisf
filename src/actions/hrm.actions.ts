@@ -5315,10 +5315,20 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
       await tx.$queryRaw`SELECT id FROM overtime_requests WHERE id = ${id} FOR UPDATE`;
       const current = await tx.overtimeRequest.findUniqueOrThrow({
         where: { id },
-        select: { status: true },
+        select: { status: true, employeeId: true },
       });
       if (current.status !== "pending") {
         throw new Error("Hanya pengajuan lembur berstatus menunggu yang dapat diedit");
+      }
+      // Serialisasi cap per karyawan seperti create (lihat catatan di
+      // createOvertimeRequest): kunci baris overtime sendiri tidak
+      // menserialkan dua edit baris berbeda yang sama-sama pindah ke
+      // karyawan target — snapshot cap masing-masing lolos, commit
+      // keduanya menembus cap PP 35/2021. Urutan kunci global:
+      // overtime_requests dulu (di atas), lalu employees.
+      const employeeIds = [...new Set([current.employeeId, v.employeeId])].sort((a, b) => a - b);
+      for (const employeeId of employeeIds) {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
       }
 
       // Gerbang batas yang sama dengan create (syarat vonis K2-S1):

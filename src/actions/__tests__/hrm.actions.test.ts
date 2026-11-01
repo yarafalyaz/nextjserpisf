@@ -799,6 +799,31 @@ describe("Overtime Request Actions", () => {
     const res = await actions.deleteOvertimeRequest(1)
     expect(res?.success).toBe(true)
   })
+
+  it("regresi putaran 16: updateOvertimeRequest mengunci baris employees target sebelum cek cap", async () => {
+    // Create mengunci employees (tes di atas); update dulu hanya mengunci
+    // baris overtime sendiri — dua edit baris berbeda yang pindah ke
+    // karyawan sama sama-sama lolos snapshot cap, commit menembus 4 jam.
+    const res = await actions.updateOvertimeRequest(1, fd({
+      employeeId: "1",
+      date: "2026-06-12",
+      hours: "3",
+    }))
+    expect(res?.success).toBe(true)
+    const lockCalls = (prismaMock as any).$executeRaw.mock.calls
+      .map((c: unknown[], i: number) => {
+        const first = c[0] as { strings?: string[] } | string[] | undefined
+        const sql = Array.isArray(first)
+          ? first.join("?")
+          : ((first as { strings?: string[] } | undefined)?.strings?.join("?") ?? "")
+        return { sql, order: (prismaMock as any).$executeRaw.mock.invocationCallOrder[i] }
+      })
+      .filter((c: { sql: string }) => c.sql.includes("employees") && c.sql.includes("FOR UPDATE"))
+    expect(lockCalls).toHaveLength(1)
+    expect(lockCalls[0].order).toBeLessThan(
+      prismaMock.overtimeRequest.findMany.mock.invocationCallOrder[0],
+    )
+  })
 })
 
 describe("Employee Loan Actions", () => {
