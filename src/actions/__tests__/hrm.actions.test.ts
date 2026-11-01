@@ -1217,6 +1217,11 @@ describe("Payroll Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     restoreTerBracketMock()
+    // onPayrollPaid menilai akun settings hidup (putaran 38): fixture
+    // akun hidup mengembalikan semua id yang diminta.
+    ;(prismaMock as any).account = {
+      findMany: vi.fn(async (args: any) => (args?.where?.id?.in ?? []).map((id: number) => ({ id }))),
+    }
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.employee.findUnique.mockResolvedValue({
       id: 1, basicSalary: 5000000, employeeLoan: [],
@@ -1783,6 +1788,9 @@ describe("markPayrollPaid edge cases", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     restoreTerBracketMock()
+    ;(prismaMock as any).account = {
+      findMany: vi.fn(async (args: any) => (args?.where?.id?.in ?? []).map((id: number) => ({ id }))),
+    }
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
   })
 
@@ -3231,6 +3239,9 @@ describe("TASK-018 regresi payroll (bulk TER, gerbang, final, plafon, pinjaman)"
     // Describe t_a92d0da1 di atas mengganti $transaction/$queryRaw dengan tx
     // minimal — pulihkan perilaku default mock untuk tes-tes ini.
     prismaMock.$queryRaw.mockResolvedValue([{ id: 1 }])
+    ;(prismaMock as any).account = {
+      findMany: vi.fn(async (args: any) => (args?.where?.id?.in ?? []).map((id: number) => ({ id }))),
+    }
     prismaMock.$transaction.mockImplementation(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
       return Promise.all(ops)

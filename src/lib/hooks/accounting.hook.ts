@@ -3444,6 +3444,22 @@ export async function onPayrollPaid(
 
   await assertPeriodOpen(payroll.paymentDate ?? new Date(), txClient);
 
+  // Akun settings wajib hidup saat uang bergerak (preseden jalur loan
+  // di hook ini + penilaian akun titik posting putaran 30-37): akun
+  // dinonaktifkan/dihapus sesudah konfigurasi tak boleh menerima jurnal
+  // POSTED baru. Dinilai atas akun yang BENAR-BENAR dipakai slip ini.
+  await assertAccountsExist(
+    db,
+    [
+      settings.salaryExpenseAccountId,
+      settings.payrollBankAccountId,
+      ...(statutory > 0 ? [settings.salariesPayableAccountId] : []),
+      ...(loanDeduction > 0 ? [settings.employeeReceivableAccountId] : []),
+      ...(otherWithheld > 0 ? [settings.salariesPayableAccountId] : []),
+    ],
+    "Pembayaran gaji",
+  );
+
   // F-2026-10-24-132-V Putusan 5: baris kompensasi PKWT di slip ini memecah
   // kaki debit — snapshot baris menentukan akun (210207 terakrual / 600028
   // belum terakrual), BUKAN tebakan hook. Tanpa baris: debitTotal utuh ke

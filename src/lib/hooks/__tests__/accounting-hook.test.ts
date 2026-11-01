@@ -2611,6 +2611,32 @@ describe("onPayrollPaid", () => {
     expect(mocks.payrollFindUniqueOrThrow).not.toHaveBeenCalled();
   });
 
+  it("putaran 38: akun settings nonaktif/terhapus ditolak sebelum jurnal dibuat", async () => {
+    mocks.payrollFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      netSalary: 1000,
+      grossSalary: 1000,
+      bpjsHealthEmployee: 0,
+      bpjsEmploymentEmployee: 0,
+      pph21: 0,
+      paymentDate: new Date(),
+      documentNo: "PAY-1",
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    // Akun bank payroll (105) tidak lagi hidup; beban (630) masih ada.
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? [];
+      return ids.filter((id) => id !== 105).map((id) => ({ id }));
+    });
+    await expect(onPayrollPaid(1)).rejects.toThrow(/Pembayaran gaji: akun tidak aktif/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+    expect(mocks.accountFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ isActive: true, deletedAt: null }),
+      }),
+    );
+  });
+
   it("menolak posting ganda saat jurnal aktif sudah ada (fail-closed, bukan senyap)", async () => {
     // HR-BR-005 E-HRCR-6 + 135-V E135-5: jurnal AKTIF = tolak berisik;
     // console.info konteks dicatat sebelum throw (guard idempotency-logging).
