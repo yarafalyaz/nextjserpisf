@@ -10,6 +10,7 @@ interface JournalEntryInput {
   credit: number
   memo?: string
   costCenterId?: number | null
+  profitCenterId?: number | null
 }
 
 interface CreateJournalInput {
@@ -138,6 +139,7 @@ export class JournalService {
             credit: entry.credit,
             memo: entry.memo ?? null,
             costCenterId: entry.costCenterId ?? null,
+            profitCenterId: entry.profitCenterId ?? null,
           })),
         })
 
@@ -207,13 +209,17 @@ export class JournalService {
           throw new Error(`Jurnal ${original.journalNumber} sudah di-reverse.`)
         }
 
-        // Create reversal entries (swap debit/credit)
+        // Create reversal entries (swap debit/credit). Putaran 50:
+        // profitCenterId ikut disalin (pola accounting.hook:355) — tanpa
+        // itu laporan pusat laba tak netral sesudah reversal: asal tetap
+        // terbebani, lawan jatuh ke "Tanpa Pusat Laba".
         const reversalEntries: JournalEntryInput[] = original.entries.map((e) => ({
           accountId: e.accountId,
           debit: Number(e.credit),
           credit: Number(e.debit),
           memo: `Reversal: ${e.memo ?? ''}`.trim(),
           costCenterId: e.costCenterId ?? null,
+          profitCenterId: e.profitCenterId ?? null,
         }))
 
         // Create reversal journal. Date it to the ORIGINAL's transactionDate so
@@ -243,6 +249,7 @@ export class JournalService {
             credit: entry.credit,
             memo: entry.memo ?? null,
             costCenterId: entry.costCenterId ?? null,
+            profitCenterId: entry.profitCenterId ?? null,
           })),
         })
 

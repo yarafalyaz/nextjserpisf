@@ -465,6 +465,34 @@ describe("JournalService", () => {
       });
     });
 
+    it("regresi putaran 50: reversal menyalin profitCenterId + costCenterId entri asal", async () => {
+      const { service, spies } = buildService();
+      spies.journalFindUniqueOrThrow.mockResolvedValue({
+        id: 1,
+        journalNumber: "JRN-1",
+        status: "POSTED",
+        type: "sales",
+        totalDebit: 100,
+        totalCredit: 100,
+        entries: [
+          { accountId: 1, debit: 100, credit: 0, memo: "AR", costCenterId: 7, profitCenterId: 11 },
+          { accountId: 2, debit: 0, credit: 100, memo: "Revenue", costCenterId: null, profitCenterId: 12 },
+        ],
+      });
+      spies.journalCreate.mockResolvedValue({ id: 2, journalNumber: "REV-1" });
+      spies.journalEntryCreateMany.mockResolvedValue({ count: 2 });
+      spies.journalUpdate.mockResolvedValue({});
+
+      await service.reverseJournal(1, "REV-1", 42);
+
+      expect(spies.journalEntryCreateMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({ accountId: 1, profitCenterId: 11, costCenterId: 7 }),
+          expect.objectContaining({ accountId: 2, profitCenterId: 12, costCenterId: null }),
+        ],
+      });
+    });
+
     it("R1: reverse ditolak saat periode asli terkunci (assertPeriodOpen melempar)", async () => {
       const { assertPeriodOpen } = await import("@/lib/services/period-lock.service");
       vi.mocked(assertPeriodOpen).mockRejectedValueOnce(new Error("Periode akuntansi sudah ditutup"));
