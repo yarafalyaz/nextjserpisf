@@ -206,6 +206,18 @@ describe("issueSalesLateFee (E93-1..5)", () => {
     expect(tx.journalEntry.createMany).not.toHaveBeenCalled()
   })
 
+  it("kunci baris sales_invoices (FOR UPDATE) sebelum findFirst faktur — basis denda dari baris terkunci", async () => {
+    const res = await actions.issueSalesLateFee(fd(issueFd))
+    expect(res.success).toBe(true)
+    const queryRaw = mocks.tx.$queryRaw as ReturnType<typeof vi.fn>
+    const findFirst = tx.salesInvoice.findFirst as ReturnType<typeof vi.fn>
+    expect(queryRaw).toHaveBeenCalled()
+    const sql = queryRaw.mock.calls.map((c) => Array.from(c[0] as TemplateStringsArray).join("?")).join(" ")
+    expect(sql).toContain("sales_invoices")
+    expect(sql).toContain("FOR UPDATE")
+    expect(queryRaw.mock.invocationCallOrder[0]).toBeLessThan(findFirst.mock.invocationCallOrder[0])
+  })
+
   it("E93-5: replay idempoten → satu dokumen, satu jurnal (hasil awal dikembalikan)", async () => {
     mocks.claimMock.mockResolvedValue({
       replayed: true,
@@ -388,6 +400,42 @@ describe("reverseSalesLateFee (E93-6 waiver)", () => {
     expect(upd.data.status).toBe("reversed")
     // jurnal reversal dibuat (baris dibalik oleh reverseJournalsByReferenceTx)
     expect(tx.journal.create).toHaveBeenCalled()
+  })
+
+  it("kunci baris sales_late_fees (FOR UPDATE) sebelum findFirst doc — reversal serialize lawan pembayaran", async () => {
+    tx.salesLateFee.findFirst.mockResolvedValue({
+      id: 55,
+      documentNo: "001/LF/YRA/10/2026",
+      salesInvoiceId: 10,
+      customerId: 3,
+      termId: 7,
+      date: new Date(2026, 9, 11),
+      dueReferenceDate: DUE,
+      overdueDays: 10,
+      basisAmount: 6_000_000,
+      ratePercentPerDay: 0.1,
+      flatAmountPerDay: null,
+      capAmount: null,
+      amount: 60_000,
+      paidAmount: 0,
+      status: "posted",
+      reversesId: null,
+      reversedBy: null,
+    })
+    tx.journal.findMany.mockResolvedValue([])
+    tx.journal.findFirst.mockResolvedValue(null)
+    tx.salesLateFee.create.mockResolvedValue({ id: 56, documentNo: "002/LF/YRA/10/2026" })
+    const res = await actions.reverseSalesLateFee(
+      fd({ salesLateFeeId: "55", reason: "Waiver", idempotencyKey: "latefee-rev-lock-001" }),
+    )
+    expect(res.success).toBe(true)
+    const queryRaw = mocks.tx.$queryRaw as ReturnType<typeof vi.fn>
+    const findFirst = tx.salesLateFee.findFirst as ReturnType<typeof vi.fn>
+    expect(queryRaw).toHaveBeenCalled()
+    const sql = queryRaw.mock.calls.map((c) => Array.from(c[0] as TemplateStringsArray).join("?")).join(" ")
+    expect(sql).toContain("sales_late_fees")
+    expect(sql).toContain("FOR UPDATE")
+    expect(queryRaw.mock.invocationCallOrder[0]).toBeLessThan(findFirst.mock.invocationCallOrder[0])
   })
 })
 

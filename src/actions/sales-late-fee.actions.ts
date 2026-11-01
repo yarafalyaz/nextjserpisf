@@ -162,6 +162,11 @@ export async function issueSalesLateFee(formData: FormData): Promise<LateFeeActi
         return { id: prev?.id ?? 0, documentNo: prev?.documentNo, replayed: true as const }
       }
 
+      // Kunci baris faktur dulu: createSalesPayment mengunci baris yang sama,
+      // jadi basis denda (paidAmount/status) dibaca dari keadaan committed
+      // terbaru — tanpa kunci, pembayaran yang commit di tengah membuat
+      // saldo yang sudah dibayar ikut didenda dari snapshot basi.
+      await tx.$queryRaw`SELECT id FROM sales_invoices WHERE id = ${salesInvoiceId} FOR UPDATE`
       const invoice = await tx.salesInvoice.findFirst({
         where: { id: salesInvoiceId, deletedAt: null },
         select: {
@@ -390,6 +395,12 @@ export async function reverseSalesLateFee(formData: FormData): Promise<LateFeeAc
         return { id: prev?.id ?? 0, documentNo: prev?.documentNo }
       }
 
+      // Kunci baris dokumen denda dulu — pasangan serialisasi paySalesLateFee
+      // yang mengunci baris sama. Tanpa kunci, pembayaran yang commit di
+      // tengah tx reversal tak terlihat snapshot: jurnal akrual dibalik
+      // penuh sementara jurnal pembayaran baru tak dibalik, dokumen berakhir
+      // reversed ber-paidAmount > 0 (GL drift sebesar pembayaran bersamaan).
+      await tx.$queryRaw`SELECT id FROM sales_late_fees WHERE id = ${salesLateFeeId} FOR UPDATE`
       const doc = await tx.salesLateFee.findFirst({
         where: { id: salesLateFeeId, deletedAt: null },
         include: { reversedBy: { select: { id: true } } },
