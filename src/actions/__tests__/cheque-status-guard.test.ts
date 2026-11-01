@@ -100,8 +100,19 @@ describe("deleteCheque tetap soft-delete", () => {
   it("menghapus pending lewat deletedAt", async () => {
     const res = await deleteCheque(1)
     expect(res.success).toBe(true)
-    expect(mocks.chequeUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ deletedAt: expect.any(Date) }) }),
-    )
+    expect(mocks.chequeUpdateMany).toHaveBeenCalledWith({
+      where: { id: 1, deletedAt: null },
+      data: { deletedAt: expect.any(Date) },
+    })
+    expect(mocks.chequeUpdate).not.toHaveBeenCalled()
+  })
+
+  it("soft-delete memakai klaim kondisional deletedAt null; klaim kalah ditolak", async () => {
+    mocks.chequeUpdateMany.mockResolvedValue({ count: 0 })
+    const res = await deleteCheque(1)
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toContain("sudah terhapus")
+    expect(mocks.chequeUpdate).not.toHaveBeenCalled()
+    expect(mocks.logActivity).not.toHaveBeenCalled()
   })
 })

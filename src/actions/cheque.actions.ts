@@ -153,7 +153,16 @@ export async function deleteCheque(id: number) {
     await assertPeriodOpen(cheque.dueDate)
 
     // Soft delete: register giro ikut audit trail, jadi barisnya tidak dihapus fisik.
-    await prisma.cheque.update({ where: { id }, data: { deletedAt: new Date() } })
+    // Klaim kondisional atas deletedAt: snapshot di atas bisa basi (baris baru
+    // saja ter-soft-delete oleh request lain) — update tak bersyarat akan
+    // menimpa deletedAt diam-diam dan melaporkan sukses palsu.
+    const claimed = await prisma.cheque.updateMany({
+      where: { id, deletedAt: null },
+      data: { deletedAt: new Date() },
+    })
+    if (claimed.count === 0) {
+      return { success: false, error: "Giro/cek sudah terhapus oleh pengguna lain — muat ulang halaman." }
+    }
 
     await logActivity("delete", "Cheque", id, `Menghapus ${cheque.documentNo}`)
     revalidatePath(REVALIDATE)
