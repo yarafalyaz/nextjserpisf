@@ -2862,7 +2862,21 @@ export async function shipDeliveryOrder(id: number) {
   // transaksi dengan baris SO terkunci — dua surat jalan atas SO yang sama
   // yang dikirim bersamaan tidak boleh sama-sama lolos lalu bersama-sama
   // menembus qty dipesan (pola kunci PO di verifikasi penerimaan beli).
+  // Peek salesOrderId di luar tx HANYA untuk menentukan kunci pertama:
+  // bacaan plain pertama di dalam tx membentuk snapshot REPEATABLE READ,
+  // jadi kunci SO wajib diraih sebelum bacaan tx apa pun — kalau tidak,
+  // cap membaca snapshot basi dan tak melihat kiriman rival yang commit
+  // selama kunci ditunggu (pola createSalesInvoice). Status akhir dinilai
+  // ulang dari baris terkunci di bawah.
+  const peek = await prisma.deliveryOrder.findUniqueOrThrow({
+    where: { id },
+    select: { salesOrderId: true },
+  })
+
   await prisma.$transaction(async (tx) => {
+    if (peek.salesOrderId) {
+      await tx.$queryRaw`SELECT id FROM sales_orders WHERE id = ${peek.salesOrderId} FOR UPDATE`
+    }
     const existing = await tx.deliveryOrder.findUniqueOrThrow({
       where: { id },
       select: { status: true, documentNo: true, salesOrderId: true },
@@ -2884,7 +2898,6 @@ export async function shipDeliveryOrder(id: number) {
     }
 
     if (existing.salesOrderId) {
-      await tx.$queryRaw`SELECT id FROM sales_orders WHERE id = ${existing.salesOrderId} FOR UPDATE`
       const ownItems = await tx.deliveryOrderItem.findMany({
         where: { deliveryOrderId: id },
         select: { salesOrderItemId: true, itemId: true, qty: true, unit: true },

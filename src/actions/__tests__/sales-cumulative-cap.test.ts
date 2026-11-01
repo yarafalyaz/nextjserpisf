@@ -229,6 +229,28 @@ describe("BUG-03 shipDeliveryOrder: cap ditegakkan saat klaim kirim", () => {
     expect(res?.success).toBe(true)
     expect(mocks.prismaMock.deliveryOrder.updateMany).toHaveBeenCalled()
   })
+
+  it("regression round 18: kunci SO diraih sebelum bacaan tx pertama (snapshot tak basi)", async () => {
+    mocks.prismaMock.deliveryOrderItem.findMany.mockImplementation(async (args: any) =>
+      args?.where?.deliveryOrderId === 9
+        ? [{ salesOrderItemId: 11, itemId: 5, qty: 7, unit: null }]
+        : [{ salesOrderItemId: 11, qty: 3 }],
+    )
+    const res = await actions.shipDeliveryOrder(9)
+    expect(res?.success).toBe(true)
+    const lockCall = (mocks.prismaMock.$queryRaw.mock.calls as unknown[][])[0]?.[0] as
+      | { sql?: string; strings?: string[] }
+      | string[]
+    const sql = Array.isArray(lockCall) ? lockCall.join("?") : (lockCall?.sql ?? lockCall?.strings?.join("?") ?? "")
+    expect(sql).toContain("sales_orders")
+    expect(sql).toContain("FOR UPDATE")
+    const lockOrder = mocks.prismaMock.$queryRaw.mock.invocationCallOrder[0]
+    const firstReadOrder = Math.min(
+      ...mocks.prismaMock.deliveryOrder.findUniqueOrThrow.mock.invocationCallOrder.slice(-1),
+      mocks.prismaMock.deliveryOrderItem.count.mock.invocationCallOrder[0],
+    )
+    expect(lockOrder).toBeLessThan(firstReadOrder)
+  })
 })
 
 describe("BUG-06 createSalesInvoice: cap kumulatif terhadap SO", () => {
