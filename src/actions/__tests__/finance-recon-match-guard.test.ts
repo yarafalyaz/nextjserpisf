@@ -192,8 +192,19 @@ describe("R-04 parent lock sebelum cek completedMatch", () => {
 
     await deleteBankStatementLine(11)
     // R-12: lock-header di antara reread-line dan lock-parent (baris ->
-    // header -> rekonsiliasi).
-    expect(order).toEqual(["lock-line", "reread-line", "lock-header", "lock-parent", "check"])
+    // header -> rekonsiliasi). Putaran 20 menambah cek draft-use kedua
+    // sesudah guard completed karena bankStatementLineId bare-int tanpa FK.
+    expect(order).toEqual([
+      "lock-line",
+      "reread-line",
+      "lock-header",
+      "lock-parent",
+      "check",
+      "check",
+    ])
+    expect(mocks.guards.prismaMock.bankStatementLine.delete).toHaveBeenCalledWith({
+      where: { id: 11 },
+    })
   })
 
   it("match: kunci BARIS sebelum induk, hubungan dibaca ulang sesudah lock", async () => {
