@@ -54,7 +54,8 @@ export async function markVendorPaymentsTransferred(formData: FormData): Promise
       await tx.$executeRaw`SELECT id FROM vendor_payments WHERE id IN (${Prisma.join(sortedIds)}) AND deleted_at IS NULL ORDER BY id FOR UPDATE`
       await assertPeriodOpen(date, tx)
       return tx.vendorPayment.updateMany({
-        where: { id: { in: selection.ids }, deletedAt: null, transferredAt: null },
+        // Pembayaran reversed tak pernah ditandai terkirim (putaran 43).
+        where: { id: { in: selection.ids }, deletedAt: null, transferredAt: null, status: { not: "reversed" } },
         data: { transferredAt: date, transferReference: reference },
       })
     })

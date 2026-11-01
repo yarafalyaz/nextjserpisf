@@ -96,6 +96,16 @@ describe("klaim kondisional mark/unmark (regresi saling timpa)", () => {
     expect(where.deletedAt).toBeNull()
   })
 
+  it("regresi putaran 43: mark mengecualikan pembayaran reversed dari klaim", async () => {
+    mocks.prismaMock.vendorPayment.updateMany.mockResolvedValue({ count: 1 })
+
+    const res = await actions.markVendorPaymentsTransferred(fd(base, ["10"]))
+
+    expect(res).toEqual({ success: true, updated: 1 })
+    const where = mocks.prismaMock.vendorPayment.updateMany.mock.calls.at(-1)![0].where
+    expect(where.status).toEqual({ not: "reversed" })
+  })
+
   it("mark saat semua sudah ditransfer -> error jujur, bukan sukses semu", async () => {
     mocks.prismaMock.vendorPayment.updateMany.mockResolvedValue({ count: 0 })
 

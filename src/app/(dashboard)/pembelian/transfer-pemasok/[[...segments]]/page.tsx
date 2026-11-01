@@ -89,6 +89,9 @@ export default async function VendorTransferPage({
   const payments = await prisma.vendorPayment.findMany({
     where: {
       deletedAt: null,
+      // Pembayaran reversed tidak pernah dieksekusi: tidak tampil sebagai
+      // instruksi transfer (putaran 43).
+      status: { not: "reversed" },
       // Draft IKUT disertakan: daftar ini instruksi transfer (uang belum dikirim), dan
       // pembayaran yang belum dieksekusi justru draft. `confirmVendorPayment` ada di aksi
       // tetapi belum tersambung ke UI mana pun, jadi menyaring draft membuat daftar ini

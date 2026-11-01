@@ -2524,6 +2524,11 @@ export async function reverseVendorPayment(
           reversedAt: new Date(),
           reversedBy: userId,
           reversalReason: cleanReason,
+          // Pembayaran yang dibalik tidak jadi terkirim (putaran 43):
+          // penanda transfer dibersihkan supaya daftar instruksi tidak
+          // menampilkan uang reversed sebagai sudah ditransfer.
+          transferredAt: null,
+          transferReference: null,
         },
       });
 

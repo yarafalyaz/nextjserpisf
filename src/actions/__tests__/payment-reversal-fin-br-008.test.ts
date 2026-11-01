@@ -171,7 +171,11 @@ describe("FIN-BR-008 reverseVendorPayment", () => {
     })
 
     // Dokumen asal tetap ada, status reversed + histori alasan.
+    // Regresi putaran 43: penanda transfer ikut dibersihkan — pembayaran
+    // reversed tidak lagi tampil "sudah ditransfer" di daftar instruksi.
     const payUpdate = mocks.prismaMock.vendorPayment.update.mock.calls[0][0]
+    expect(payUpdate.data.transferredAt).toBeNull()
+    expect(payUpdate.data.transferReference).toBeNull()
     expect(payUpdate.data.status).toBe("reversed")
     expect(payUpdate.data.reversalReason).toBe(REASON)
     expect(payUpdate.data.reversedBy).toBe(7)
