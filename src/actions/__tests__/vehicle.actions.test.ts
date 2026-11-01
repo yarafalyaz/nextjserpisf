@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => {
       if (typeof ops === "function") return ops(prismaMock)
       return Promise.all(ops)
     }),
+    $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
   }
 
   return {
@@ -101,6 +102,32 @@ describe("Vehicle Variant Actions", () => {
     mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce(null)
     const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", vehicleModelId: 1 }))
     expect(res?.success).toBe(true)
+  })
+  it("createVehicleVariant mengunci baris model sebelum cek duplikat (race regresi)", async () => {
+    // Tanpa unique (vehicleModelId, name) di DB, cek findFirst lepas
+    // membiarkan dua create konkuren membuat varian nama sama. Kunci baris
+    // model induk di dalam tx menyerialkan cek-tulis per model.
+    mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce(null)
+    const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", vehicleModelId: 1 }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+    expect(mocks.prismaMock.$queryRaw).toHaveBeenCalled()
+    const arg = mocks.prismaMock.$queryRaw.mock.calls[0][0] as unknown
+    const sql = Array.isArray(arg)
+      ? arg.join("?")
+      : ((arg as { sql?: string; strings?: string[] }).sql ??
+        (arg as { strings?: string[] }).strings?.join("?") ??
+        "")
+    expect(sql).toMatch(/FROM vehicle_models[\s\S]*FOR UPDATE/)
+    expect(mocks.prismaMock.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.prismaMock.vehicleVariant.findFirst.mock.invocationCallOrder[0],
+    )
+  })
+  it("createVehicleVariant menolak duplikat yang terlihat di bawah kunci tanpa create", async () => {
+    mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce({ id: 9 })
+    const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", vehicleModelId: 1 }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.vehicleVariant.create).not.toHaveBeenCalled()
   })
   it("deleteVehicleVariant succeeds", async () => {
     const res = await actions.deleteVehicleVariant(1)

@@ -251,24 +251,32 @@ export async function createVehicleVariant(formData: FormData) {
 
     const { name, vehicleModelId, drivetrain, transmission } = parsed.data;
 
-    const duplicate = await prisma.vehicleVariant.findFirst({
-      where: { vehicleModelId, name },
+    // Serialisasi per model: schema tak punya @@unique(vehicleModelId, name),
+    // jadi cek duplikat WAJIB di dalam tx sesudah kunci baris model induk —
+    // dua create konkuren terserialkan dan cek kedua melihat baris pertama.
+    const outcome = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM vehicle_models WHERE id = ${vehicleModelId} FOR UPDATE`;
+      const duplicate = await tx.vehicleVariant.findFirst({
+        where: { vehicleModelId, name },
+      });
+      if (duplicate) return { duplicate: true as const };
+      const variant = await tx.vehicleVariant.create({
+        data: {
+          vehicleModelId,
+          name,
+          drivetrain: drivetrain ?? null,
+          transmission: transmission ?? null,
+        },
+      });
+      return { variant };
     });
-    if (duplicate) {
+    if ("duplicate" in outcome) {
       return {
         success: false,
         error: `Varian "${name}" sudah ada untuk model ini.`,
       };
     }
-
-    const variant = await prisma.vehicleVariant.create({
-      data: {
-        vehicleModelId,
-        name,
-        drivetrain: drivetrain ?? null,
-        transmission: transmission ?? null,
-      },
-    });
+    const variant = outcome.variant;
 
     revalidatePath(`/kendaraan/model/${vehicleModelId}/ubah`);
     revalidatePath("/kendaraan/model");
