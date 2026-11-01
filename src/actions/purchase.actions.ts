@@ -4646,6 +4646,19 @@ export async function voidVendorBill(id: number) {
           "Tagihan ini punya bukti potong aktif. Revoke bukti potongnya terlebih dahulu sebelum membatalkan.",
         );
       }
+      // Putaran 48 (sama kelasnya dengan bupot di atas): bill ber-faktur
+      // masukan aktif tidak bisa di-void diam-diam — faktur masukan yang
+      // sudah terbit (apalagi sudah dikreditkan) akan tetap masuk SPT
+      // sebagai kredit pajak atas pembelian yang sudah batal. Batalkan
+      // fakturnya dulu lewat jalur faktur pajak.
+      const activeInputInvoiceCount = await tx.taxInvoice.count({
+        where: { vendorBillId: id, direction: "in", djpStatus: { notIn: ["cancelled", "replaced"] } },
+      });
+      if (activeInputInvoiceCount > 0) {
+        throw new Error(
+          "Tagihan ini punya faktur pajak masukan aktif. Batalkan faktur pajaknya terlebih dahulu sebelum membatalkan.",
+        );
+      }
       billSlug = fresh.slug;
 
       await reverseJournalsByReferenceTx(

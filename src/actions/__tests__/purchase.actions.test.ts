@@ -1891,6 +1891,18 @@ describe("Vendor Bill Actions", () => {
     }
   })
 
+  it("regresi putaran 48: void bill ber-faktur masukan aktif ditolak", async () => {
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", payments: [] })
+    mocks.prismaMock.taxInvoice.count.mockResolvedValue(1)
+    try {
+      const res = await actions.voidVendorBill(1)
+      expect(res?.success).toBe(false)
+      expect(String(res?.error)).toMatch(/faktur/i)
+    } finally {
+      mocks.prismaMock.taxInvoice.count.mockResolvedValue(0)
+    }
+  })
+
   it("deleteVendorBill succeeds", async () => {
     const res = await actions.deleteVendorBill(1)
     expect(res?.success).toBe(true)

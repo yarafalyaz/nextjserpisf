@@ -757,6 +757,25 @@ export async function creditInputInvoice(input: CreditInputInvoiceInput): Promis
       if (inv.djpStatus === "rejected") throw definitive("Faktur ditolak DJP tidak bisa dikreditkan")
       if (inv.djpStatus === "draft") throw definitive("Faktur draft belum terbit tidak bisa dikreditkan")
       if (inv.creditStatus === "credited") throw definitive("Faktur ini sudah dikreditkan — duplikat kredit ditolak")
+      // Putaran 48: bill tertaut dinilai ulang hidup di titik kredit (pola
+      // gerbang sumber issue): void bill tidak menyentuh baris faktur, jadi
+      // tanpa ini FP masukan atas pembelian yang sudah batal tetap
+      // kreditabel dan masuk SPT. Bill tertaut kini juga tidak bisa
+      // di-void selama faktur aktif (voidVendorBill), tetapi warisan lama
+      // dan jalur hapus lain tetap harus gagal di sini.
+      if (inv.vendorBillId != null) {
+        const bill = await tx.vendorBill.findUnique({
+          where: { id: inv.vendorBillId },
+          select: { status: true, deletedAt: true },
+        })
+        if (!bill) throw definitive("Tagihan vendor tertaut tidak ditemukan — faktur tidak bisa dikreditkan")
+        if (bill.deletedAt != null || bill.status === "cancelled") {
+          throw definitive("Tagihan vendor tertaut sudah batal/terhapus — faktur masukan tidak bisa dikreditkan")
+        }
+        if (!(RECOGNISED_AP_STATUSES as readonly string[]).includes(bill.status)) {
+          throw definitive("Tagihan vendor tertaut belum terposting — faktur masukan tidak bisa dikreditkan")
+        }
+      }
       if (input.nonCreditableReason) {
         if (!(NON_CREDITABLE_REASONS as readonly string[]).includes(input.nonCreditableReason)) {
           throw definitive(`Alasan non-kreditabel "${input.nonCreditableReason}" tidak dikenal`)

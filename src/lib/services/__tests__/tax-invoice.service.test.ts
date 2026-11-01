@@ -607,6 +607,14 @@ describe("creditInputInvoice guards", () => {
     expect(String(r.error)).toMatch(/sudah dikreditkan/)
   })
 
+  it("regresi putaran 48: kredit ditolak bila bill tertaut sudah batal/terhapus", async () => {
+    mocks.vendorBillFindUnique.mockResolvedValue({ vendorId: 5, status: "cancelled", deletedAt: null })
+    const r = await creditInputInvoice({ id: 7, creditPeriod: "2026-01", idempotencyKey: key() })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/batal/)
+    expect(mocks.taxInvoiceUpdate).not.toHaveBeenCalled()
+  })
+
   it("R8-PAJAK-05: replaced/draft/rejected ditolak, bukan dikreditkan", async () => {
     const cases: [string, RegExp][] = [
       ["replaced", /sudah diganti/],
