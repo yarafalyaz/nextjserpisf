@@ -670,6 +670,26 @@ describe("Goods Receipt Actions", () => {
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_goods_receipts")
   })
 
+  it("regresi putaran 22: updateGoodsReceipt snapshot qtyOrdered diagregasi dari baris PO duplikat (STOK-18 di edit)", async () => {
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      status: "ordered",
+      items: [
+        { itemId: 1, qty: 5 },
+        { itemId: 1, qty: 5 },
+      ],
+    })
+    const res = await actions.updateGoodsReceipt(1, fdMap({
+      purchaseOrderId: "1",
+      warehouseId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 6, unitCost: 1000 }])
+    }))
+    expect(res?.success).toBe(true)
+    const createArg = mocks.prismaMock.goodsReceiptItem.createMany.mock.calls.at(-1)?.[0] as any
+    expect(createArg?.data?.[0]).toEqual(expect.objectContaining({ itemId: 1, qtyOrdered: 10 }))
+  })
+
   it("verifyGoodsReceipt succeeds", async () => {
     mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValue({
       id: 1, status: "draft", purchaseOrderId: 1, items: [{ itemId: 1, qty: 5, unitCost: 1000 }]

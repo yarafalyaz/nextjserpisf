@@ -3733,9 +3733,13 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
           `Penerimaan barang hanya bisa dibuat dari PO berstatus 'approved', 'ordered', atau 'partial_received' (status saat ini: '${poForItems.status}').`,
         );
       }
-      const orderedQtyByItem = new Map<number, number>(
-        poForItems.items.map((i) => [i.itemId, Number(i.qty)]),
-      );
+      // STOK-18 di edit (putaran 22): agregasi baris PO duplikat seperti
+      // create — Map langsung menimpa sehingga snapshot qtyOrdered hanya
+      // baris terakhir, bukan total pesanan.
+      const orderedQtyByItem = new Map<number, number>();
+      for (const i of poForItems.items) {
+        orderedQtyByItem.set(i.itemId, (orderedQtyByItem.get(i.itemId) ?? 0) + Number(i.qty));
+      }
       // Membership check: aggregate per item so a duplicate line can't pass two
       // independent checks.
       const submittedQtyByItem = new Map<number, number>();
