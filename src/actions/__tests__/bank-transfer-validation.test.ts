@@ -22,10 +22,12 @@ const mocks = vi.hoisted(() => {
   const transferCreate = vi.fn()
   const transferUpdate = vi.fn()
   const journalCreate = vi.fn()
+  const journalEntryFindManyInTx = vi.fn()
 
   const tx: Record<string, unknown> = {
     bankTransfer: { create: transferCreate, update: transferUpdate },
     journal: { create: journalCreate },
+    journalEntry: { findMany: journalEntryFindManyInTx },
     account: { findMany: accountFindManyInTx },
     $executeRaw: vi.fn(async () => 1),
   }
@@ -62,6 +64,7 @@ const mocks = vi.hoisted(() => {
     transferCreate,
     transferUpdate,
     journalCreate,
+    journalEntryFindManyInTx,
     prismaBank,
     accountFindMany,
     taxTypeFindUnique,
@@ -108,6 +111,8 @@ beforeEach(() => {
   ])
   mocks.transferCreate.mockResolvedValue({ id: 1, slug: "btf-1" })
   mocks.journalCreate.mockResolvedValue({ id: 9 })
+  // Saldo buku rekening asal secara bawaan cukup besar untuk happy path.
+  mocks.journalEntryFindManyInTx.mockResolvedValue([{ debit: 100_000_000, credit: 0 }])
 })
 
 describe("createBankTransfer zod validation", () => {
@@ -180,6 +185,38 @@ describe("createBankTransfer akun hidup + tipe (putaran 22)", () => {
     expect(String((res as { error: string }).error)).toMatch(/bukan rekening kas\/bank/)
     expect(mocks.transferCreate).not.toHaveBeenCalled()
     expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  // Regresi putaran 45: transfer tak mengecek saldo buku rekening asal —
+  // jurnal POSTED Dr tujuan / Cr asal lahir dari rekening yang saldonya
+  // tidak cukup (preseden AUD-02 petty cash IN). Pasangan POSTED+REVERSED
+  // wajib dihitung agar reversal tidak menggelembungkan saldo.
+  it("regresi putaran 45: menolak transfer melebihi saldo buku rekening asal", async () => {
+    mocks.journalEntryFindManyInTx.mockResolvedValue([{ debit: 500_000, credit: 0 }])
+    const res = await createBankTransfer(form(baseTransfer))
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toMatch(/Saldo rekening asal tidak mencukupi/)
+    expect(mocks.journalEntryFindManyInTx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          journal: expect.objectContaining({ status: { in: ["POSTED", "REVERSED"] } }),
+        }),
+      }),
+    )
+    expect(mocks.transferCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 45: saldo asal pas untuk amount+biaya tetap lolos", async () => {
+    mocks.journalEntryFindManyInTx.mockResolvedValue([{ debit: 1_005_000, credit: 0 }])
+    mocks.accountCount.mockResolvedValue(3)
+    mocks.accountFindManyInTx.mockResolvedValue([
+      { id: 101, isActive: true, deletedAt: null, reportGroup: "BANK", type: "ASSET" },
+      { id: 102, isActive: true, deletedAt: null, reportGroup: "BANK", type: "ASSET" },
+      { id: 610, isActive: true, deletedAt: null, reportGroup: "EXPS", type: "EXPENSE" },
+    ])
+    const res = await createBankTransfer(form({ ...baseTransfer, adminFee: "5000", feeAccountId: "610" }))
+    expect(res.success).toBe(true)
   })
 
   it("menolak akun biaya nonaktif saat adminFee > 0", async () => {

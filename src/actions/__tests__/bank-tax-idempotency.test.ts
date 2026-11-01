@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
   const transferCreate = vi.fn()
   const transferUpdate = vi.fn()
   const journalCreate = vi.fn()
+  const journalEntryFindMany = vi.fn()
   const accountFindMany = vi.fn()
   const taxTypeFindUnique = vi.fn()
   const taxPaymentCreate = vi.fn()
@@ -30,6 +31,7 @@ const mocks = vi.hoisted(() => {
     bankTransfer: { create: transferCreate, update: transferUpdate },
     taxPayment: { create: taxPaymentCreate, update: taxPaymentUpdate },
     journal: { create: journalCreate },
+    journalEntry: { findMany: journalEntryFindMany },
     account: { count: accountCount, findMany: accountFindMany },
     withholdingTaxType: { findUnique: taxTypeFindUnique },
     $executeRaw: vi.fn(async () => 0),
@@ -46,7 +48,7 @@ const mocks = vi.hoisted(() => {
   return {
     requirePermission, logActivity, revalidatePath, generateDocumentNumber,
     assertPeriodOpen, checkIdempotency, accountCount, transferCreate,
-    transferUpdate, journalCreate, prismaBank, prismaTax, txBank, txTax,
+    transferUpdate, journalCreate, journalEntryFindMany, prismaBank, prismaTax, txBank, txTax,
     accountFindMany, taxTypeFindUnique, taxPaymentCreate, taxPaymentUpdate,
     prisma: prismaBank,
   }
@@ -87,6 +89,8 @@ beforeEach(() => {
   mocks.accountCount.mockResolvedValue(2)
   mocks.transferCreate.mockResolvedValue({ id: 1, slug: "btf-1" })
   mocks.journalCreate.mockResolvedValue({ id: 9 })
+  // Saldo buku rekening asal cukup untuk happy path (cek saldo putaran 45).
+  mocks.journalEntryFindMany.mockResolvedValue([{ debit: 100_000_000, credit: 0 }])
   // Transfer bank menilai akun penuh dalam tx (putaran 22): hidup + BANK.
   // Pajak menilai akun penuh juga: 101 utang (LIABILITY), 102 kas/bank (BANK).
   const accountCatalog: Record<number, Record<string, unknown>> = {

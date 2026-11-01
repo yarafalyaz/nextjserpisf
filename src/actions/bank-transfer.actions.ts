@@ -15,6 +15,7 @@ import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import { bankTransferSchema } from "@/lib/validations/finance.schemas"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
 
 const REVALIDATE = "/keuangan/transfer-bank"
@@ -115,6 +116,27 @@ export async function createBankTransfer(formData: FormData) {
         if (feeAccount.type !== "EXPENSE") {
           throw new Error("Akun biaya admin harus akun beban (EXPENSE).")
         }
+      }
+
+      // Saldo buku rekening asal dinilai di dalam tx sesudah baris akun
+      // terkunci (pola AUD-02 petty cash): pasangan POSTED+REVERSED net-zero
+      // wajib ikut, kalau tidak reversal menggelembungkan saldo dan transfer
+      // berikutnya lolos dari rekening yang sebenarnya tidak cukup.
+      const sourceEntries = await tx.journalEntry.findMany({
+        where: {
+          accountId: fromAccountId,
+          journal: { status: { in: ["POSTED", "REVERSED"] }, deletedAt: null },
+        },
+        select: { debit: true, credit: true },
+      })
+      const sourceBalance = sourceEntries.reduce(
+        (s, e) => safeSubtract(safeAdd(s, Number(e.debit), 2), Number(e.credit), 2),
+        0,
+      )
+      if (sourceBalance < totalMovement) {
+        throw new Error(
+          `Saldo rekening asal tidak mencukupi: tersedia ${sourceBalance.toLocaleString("id-ID")}, dibutuhkan ${totalMovement.toLocaleString("id-ID")}`,
+        )
       }
 
       const created = await tx.bankTransfer.create({
