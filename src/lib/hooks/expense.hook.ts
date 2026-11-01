@@ -92,6 +92,19 @@ export async function onExpenseApprovedSyncPettyCash(
     // Nomor dokumen baru diambil hanya sesudah lolos cek akun/periode/duplikat:
     // DocumentSequenceService.next menaikkan counter atomik, jadi mengambilnya
     // sebelum cek akan membuang nomor urut tiap expense non-kas-kecil/duplikat.
+    // Gap-lock tabel kas kecil sebelum create + recalc rantai: penulis
+    // rantai lain (createPettyCash/updatePettyCash/deletePettyCash di
+    // finance.actions) mengambil kunci yang sama. Tanpa ini dua approval
+    // expense berbeda (masing-masing hanya mengunci baris expensenya)
+    // membaca snapshot rantai sendiri-sendiri lalu menimpa balanceBefore/
+    // balanceAfter absolut per baris — rantai final milik penulis terakhir
+    // dan cek negatif dinilai atas rantai tak lengkap. Urutan kunci:
+    // expense dulu (di atas), lalu petty_cash; jalur finance tidak pernah
+    // mengunci expense, jadi tak ada siklus kunci.
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM petty_cash FOR UPDATE`;
+    }
+
     const documentNo = await generateDocumentNumber("PC");
 
     await tx.pettyCash.create({

@@ -188,6 +188,25 @@ describe("onExpenseApprovedSyncPettyCash race + period + deteksi akun", () => {
     expect(mocks.queryRaw.mock.invocationCallOrder[0]).toBeLessThan(mocks.pettyCashFindFirst.mock.invocationCallOrder[0])
   })
 
+  it("gap-lock petty_cash (FOR UPDATE) sebelum create — recalc rantai serialize lawan penulis kas kecil lain", async () => {
+    mocks.expenseFindUniqueOrThrow.mockResolvedValue({
+      id: 10, documentNo: "EXP-010", amount: 100, paidFromAccountId: 10, status: "draft", date: new Date(),
+    })
+    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama" })
+    mocks.pettyCashFindFirst.mockResolvedValue(null)
+    mocks.pettyCashFindMany.mockResolvedValue([
+      { id: 100, type: "IN", amount: 1000, balanceBefore: 0, balanceAfter: 1000 },
+    ])
+
+    await onExpenseApprovedSyncPettyCash(10, 99)
+
+    expect(mocks.executeRaw).toHaveBeenCalled()
+    const sql = mocks.executeRaw.mock.calls.map((c) => String((c[0] as { strings?: string[] })?.strings?.join("?") ?? (Array.isArray(c[0]) ? (c[0] as unknown[]).join("") : c[0]))).join(" ")
+    expect(sql).toContain("petty_cash")
+    expect(sql).toContain("FOR UPDATE")
+    expect(mocks.executeRaw.mock.invocationCallOrder[0]).toBeLessThan(mocks.pettyCashCreate.mock.invocationCallOrder[0])
+  })
+
   it("assertPeriodOpen dipanggil dengan tanggal expense di dalam tx sebelum create", async () => {
     const date = new Date(2026, 0, 15)
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
