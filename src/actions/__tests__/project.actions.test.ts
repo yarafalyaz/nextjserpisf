@@ -297,7 +297,9 @@ describe("Project Stages Extended Branches", () => {
     ])
     mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 99, status: "pending" })
     await actions.syncProjectStatus(1)
-    expect(mocks.prismaMock.workOrder.update).toHaveBeenCalledWith(expect.objectContaining({
+    // Putaran 25: transisi WO lewat klaim bersyarat, bukan update polos.
+    expect(mocks.prismaMock.workOrder.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 99, status: { in: ["pending", "draft"] } },
       data: expect.objectContaining({ status: "in_progress" })
     }))
   })
@@ -393,6 +395,39 @@ describe("Project Stages Extended Branches", () => {
     delete mocks.prismaMock.qcInspection
   })
 
+  it("syncProjectStatus menurunkan WO yang dibaca hidup hanya lewat klaim bersyarat (putaran 25)", async () => {
+    // Cabang tengah (tahap dibuka ulang) dan cabang semua-pending memakai
+    // update polos sesudah baca snapshot: completeWorkOrder yang commit di
+    // jendelanya ditimpa completed -> in_progress / -> pending.
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "completed", workOrderId: 99 })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([
+      { status: "in_progress" }, { status: "pending" },
+    ])
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 99, status: "pending" })
+    mocks.prismaMock.workOrder.updateMany.mockResolvedValueOnce({ count: 0 })
+    await actions.syncProjectStatus(1)
+    expect(mocks.prismaMock.workOrder.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.workOrder.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 99, status: { in: ["pending", "draft"] } },
+      data: expect.objectContaining({ status: "in_progress" }),
+    }))
+    // Klaim kalah race: item WO tidak ikut digerakkan.
+    expect(mocks.prismaMock.workOrderItem.updateMany).not.toHaveBeenCalled()
+
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "in_progress", workOrderId: 99 })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([
+      { status: "pending" }, { status: "pending" },
+    ])
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 99, status: "in_progress" })
+    mocks.prismaMock.workOrder.updateMany.mockResolvedValueOnce({ count: 0 })
+    await actions.syncProjectStatus(1)
+    expect(mocks.prismaMock.workOrder.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.workOrder.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 99, status: "in_progress" },
+      data: expect.objectContaining({ status: "pending" }),
+    }))
+  })
+
   it("syncProjectStatus menyelesaikan WO in_progress lewat klaim bersyarat saat QC bersih", async () => {
     mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "active", workOrderId: 99 })
     mocks.prismaMock.projectStage.findMany.mockResolvedValue([{ status: "completed" }])
@@ -412,6 +447,8 @@ describe("Project Stages Extended Branches", () => {
     expect(mocks.prismaMock.workOrderItem.updateMany).toHaveBeenCalled()
     delete mocks.prismaMock.nonconformance
     delete mocks.prismaMock.qcInspection
+    // Antrean Once klaim habis; jangan bocor ke test berikut.
+    mocks.prismaMock.workOrder.updateMany.mockReset().mockResolvedValue({ count: 1 })
   })
 })
 
@@ -836,8 +873,11 @@ describe("syncProjectStatus extended branches", () => {
     mocks.prismaMock.projectStage.findMany.mockResolvedValue([{ status: "completed" }, { status: "pending" }])
     mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 99, status: "draft" })
     await actions.syncProjectStatus(1)
-    expect(mocks.prismaMock.workOrder.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: "in_progress" }) })
+    expect(mocks.prismaMock.workOrder.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 99, status: { in: ["pending", "draft"] } },
+        data: expect.objectContaining({ status: "in_progress" }),
+      })
     )
   })
   it("reopens a completed project to in_progress and clears endDate when a stage reverts", async () => {
@@ -866,8 +906,11 @@ describe("syncProjectStatus extended branches", () => {
     expect(mocks.prismaMock.project.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "active", endDate: null }) })
     )
-    expect(mocks.prismaMock.workOrder.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: "pending", endDate: null }) })
+    expect(mocks.prismaMock.workOrder.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 99, status: "in_progress" },
+        data: expect.objectContaining({ status: "pending", endDate: null }),
+      })
     )
   })
   it("in_progress branch where WO lookup returns null (no WO update)", async () => {

@@ -636,14 +636,19 @@ async function syncProjectStatusTx(projectId: number, tx: TxClient) {
     if (project.workOrderId) {
       const wo = await tx.workOrder.findUnique({ where: { id: project.workOrderId } })
       if (wo && (wo.status === "pending" || wo.status === "draft")) {
-        await tx.workOrder.update({
-          where: { id: project.workOrderId },
+        // Klaim bersyarat, bukan update polos: completeWorkOrder yang
+        // commit sesudah baca snapshot di atas tidak ditimpa
+        // completed -> in_progress (item hanya ikut bila klaim menang).
+        const claim = await tx.workOrder.updateMany({
+          where: { id: project.workOrderId, status: { in: ["pending", "draft"] } },
           data: { status: "in_progress", endDate: null },
         })
-        await tx.workOrderItem.updateMany({
-          where: { workOrderId: project.workOrderId, status: { in: ["pending"] } },
-          data: { status: "in_progress" },
-        })
+        if (claim.count === 1) {
+          await tx.workOrderItem.updateMany({
+            where: { workOrderId: project.workOrderId, status: { in: ["pending"] } },
+            data: { status: "in_progress" },
+          })
+        }
       }
     }
   } else {
@@ -657,16 +662,20 @@ async function syncProjectStatusTx(projectId: number, tx: TxClient) {
     if (project.workOrderId) {
       const wo = await tx.workOrder.findUnique({ where: { id: project.workOrderId } })
       // Putaran 22: hanya WO yang sedang berjalan yang kembali ke pending;
-      // WO final tak disentuh (lihat cabang in_progress di atas).
+      // WO final tak disentuh (lihat cabang in_progress di atas). Klaim
+      // bersyarat: completeWorkOrder yang commit sesudah baca snapshot
+      // tidak ditimpa completed -> pending (item hanya ikut bila menang).
       if (wo && wo.status === "in_progress") {
-        await tx.workOrder.update({
-          where: { id: project.workOrderId },
+        const claim = await tx.workOrder.updateMany({
+          where: { id: project.workOrderId, status: "in_progress" },
           data: { status: "pending", endDate: null },
         })
-        await tx.workOrderItem.updateMany({
-          where: { workOrderId: project.workOrderId, status: { in: ["in_progress"] } },
-          data: { status: "pending" },
-        })
+        if (claim.count === 1) {
+          await tx.workOrderItem.updateMany({
+            where: { workOrderId: project.workOrderId, status: { in: ["in_progress"] } },
+            data: { status: "pending" },
+          })
+        }
       }
     }
   }
