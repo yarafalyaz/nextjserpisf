@@ -171,6 +171,15 @@ beforeEach(() => {
 })
 
 describe("F-027 master komponen", () => {
+  it("regresi putaran 47: cek nama aktif dan create komponen berjalan dalam satu transaksi bergap-lock", async () => {
+    const res = await actions.createPayrollComponent(fd({ name: "Transport", kind: "earning", recurrence: "fixed", isTaxable: "true" }))
+    expect(res.success).toBe(true)
+    expect(prismaMock.$transaction).toHaveBeenCalled()
+    expect(prismaMock.payrollComponent.create).toHaveBeenCalled()
+    // Tanpa kunci tabel, dua create konkuren sama-sama membaca "belum ada"
+    // dari snapshot lalu dua baris aktif bernama sama lahir.
+    expect(prismaMock.$executeRaw).toHaveBeenCalled()
+  })
   it("nama aktif ganda beda kapital ditolak", async () => {
     prismaMock.payrollComponent.findFirst.mockResolvedValue({ id: 99 })
     const res = await actions.createPayrollComponent(fd({ name: "Transport", kind: "earning", recurrence: "fixed", isTaxable: "true" }))

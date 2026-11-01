@@ -351,8 +351,12 @@ async function assertLiveEmployee(employeeId: number): Promise<void> {
   if (!live) throw new Error("Karyawan tidak ditemukan atau tidak aktif");
 }
 
-async function assertActiveComponentNameAvailable(normalizedName: string, excludeId?: number): Promise<void> {
-  const dup = await prisma.payrollComponent.findFirst({
+async function assertActiveComponentNameAvailable(
+  client: Pick<typeof prisma, "payrollComponent">,
+  normalizedName: string,
+  excludeId?: number,
+): Promise<void> {
+  const dup = await client.payrollComponent.findFirst({
     where: {
       normalizedName,
       isActive: true,
@@ -368,13 +372,23 @@ export async function createPayrollComponent(formData: FormData) {
     const user = await requirePermission("create_employees"); await requirePayrollComponentAdmin("create_employees");
     const v = parseComponentForm(formData);
     const normalizedName = v.name.toLowerCase();
-    await assertActiveComponentNameAvailable(normalizedName);
     if (v.accountId != null) {
       const account = await prisma.account.findUnique({ where: { id: v.accountId }, select: { id: true } });
       if (!account) throw new Error("Akun komponen gaji tidak ditemukan");
     }
-    const created = await prisma.payrollComponent.create({
-      data: { ...v, normalizedName, createdBy: Number(user.id), updatedBy: Number(user.id) },
+    // Cek nama aktif + create dalam satu tx bergap-lock tabel (pola
+    // assertActiveWorkCenterNameAvailable): @@index tanpa unik DB, jadi
+    // cek di luar tx membaca snapshot dan dua create konkuren melahirkan
+    // dua komponen aktif bernama sama — lookup findFirst "komisi
+    // penjualan" di addPayrollCommissionLine lalu ambigu.
+    const created = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM payroll_components FOR UPDATE`;
+      }
+      await assertActiveComponentNameAvailable(tx, normalizedName);
+      return tx.payrollComponent.create({
+        data: { ...v, normalizedName, createdBy: Number(user.id), updatedBy: Number(user.id) },
+      });
     });
     revalidatePath("/sdm/penggajian");
     return { success: true, id: created.id };
@@ -395,14 +409,19 @@ export async function updatePayrollComponent(id: number, formData: FormData) {
     const normalizedName = v.name.toLowerCase();
     const rawActive = formData.get("isActive");
     const isActive = rawActive == null ? existing.isActive : rawActive === "true";
-    if (isActive) await assertActiveComponentNameAvailable(normalizedName, id);
     if (v.accountId != null) {
       const account = await prisma.account.findUnique({ where: { id: v.accountId }, select: { id: true } });
       if (!account) throw new Error("Akun komponen gaji tidak ditemukan");
     }
-    const updated = await prisma.payrollComponent.update({
-      where: { id },
-      data: { ...v, normalizedName, isActive, updatedBy: Number(user.id) },
+    const updated = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM payroll_components FOR UPDATE`;
+      }
+      if (isActive) await assertActiveComponentNameAvailable(tx, normalizedName, id);
+      return tx.payrollComponent.update({
+        where: { id },
+        data: { ...v, normalizedName, isActive, updatedBy: Number(user.id) },
+      });
     });
     revalidatePath("/sdm/penggajian");
     return { success: true, id: updated.id };
@@ -564,10 +583,15 @@ export async function setPayrollComponentActive(id: number, isActive: boolean) {
     if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Komponen gaji tidak valid");
     const existing = await prisma.payrollComponent.findUnique({ where: { id } });
     if (!existing) throw new Error("Komponen gaji tidak ditemukan");
-    if (isActive) await assertActiveComponentNameAvailable(existing.normalizedName, id);
-    const updated = await prisma.payrollComponent.update({
-      where: { id },
-      data: { isActive, updatedBy: Number(user.id) },
+    const updated = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM payroll_components FOR UPDATE`;
+      }
+      if (isActive) await assertActiveComponentNameAvailable(tx, existing.normalizedName, id);
+      return tx.payrollComponent.update({
+        where: { id },
+        data: { isActive, updatedBy: Number(user.id) },
+      });
     });
     revalidatePath("/sdm/penggajian");
     return { success: true, id: updated.id };
