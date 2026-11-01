@@ -581,3 +581,28 @@ Vonis GUGUR putaran ini (jangan diangkat lagi tanpa bukti baru):
 - Lane E #6 `notifyUsersIfNew`/`notifyUsersIfNewBatch` findMany→createMany tanpa unique komposit: race hanya menghasilkan notifikasi dobel bila dua run cron paralel; kode sudah menandai sadar `ponytail:` (upgrade path = kolom dedupe-key unik). Dampak rendah, fix benar butuh migrasi schema — diterima.
 - Kandidat PKP settings dan setup first-run: gugur saat verifikasi (recheck terkunci dalam transaksi sudah ada).
 - Lane F lain yang gugur putaran-putaran sebelumnya tetap gugur: `reviseWorkOrderItems` baris duplikat per item = desain sah; timesheet vs pull ProductionCost; ProductionCost sesudah WO closed; quick-add find-or-create per-situs; delete-guard master sekelas `deleteRack`.
+
+### Lanjutan putaran 11 (2026-11-01) — lane penjualan+pembelian dan keuangan+pajak (agent read-only, verifikasi sesi utama)
+
+Lane penjualan+pembelian — 4 fix:
+
+1. `654df9786` fix(penjualan): `postInvoice` menilai bridge garansi + cap kumulatif SO dari snapshot faktur luar transaksi; `updateSalesInvoice` mengunci baris yang sama dan bisa mengganti `salesOrderId` selama status masih draft/approved — cap dinilai atas SO lama sementara hook posting membaca baris segar. Fix: kunci baris faktur `FOR UPDATE` di awal tx, baca ulang segar, nilai ulang status, pakai baris terkunci untuk bridge/cap/nomor. 10/10 + 215/215.
+2. `9e7fa91ca` fix(pembelian): `deleteGoodsReceipt` menghitung ulang `received_qty` + status PO dari snapshot tanpa kunci PO; verify/create GR sibling mengunci baris PO — GR terverifikasi yang commit di tengah tak terlihat snapshot, `received_qty` tertimpa kurang, status mundur ke `ordered`, `cancelPurchaseOrder` lalu lolos atas PO berstok masuk. Fix: kunci PO sesudah kunci GR (urutan GR lalu PO) sebelum rekomputasi. 11/11 + seluruh suite actions 3139 passed.
+3. `139d2101a` fix(penjualan): `issueSalesLateFee` menghitung basis denda dari snapshot faktur tanpa kunci (pembayaran faktur yang commit di tengah membuat saldo lunas ikut didenda); `reverseSalesLateFee` membaca dokumen + daftar pembayaran tanpa kunci lawan `paySalesLateFee` yang mengunci (pembayaran bersamaan tak ikut dibalik, dokumen `reversed` ber-`paidAmount > 0`, GL drift). Fix: kunci `sales_invoices` sebelum baca faktur; kunci `sales_late_fees` sebelum baca dokumen. 15/15.
+4. `f64ca481d` fix(pembelian): gerbang status PR di `createPurchaseOrder` membaca baris PR plain dalam tx; dua create konkuren dari PR sama sama-sama lolos dari snapshot sama (hook status memang mengunci PR, tetapi hanya sesudah PO lahir). Fix: kunci baris PR sebelum gerbang dibaca. Cap kumulatif qty PR terhadap PO draft TIDAK diubah — keputusan desain bisnis. 225/225.
+
+CI lane penjualan+pembelian: `654df9786`, `9e7fa91ca`, `139d2101a`, `f64ca481d` **completed success**.
+
+Lane keuangan+pajak — 5 fix (sesi sama, dicatat di sini supaya satu putaran utuh):
+
+5. `8f84833d3` fix(keuangan): `postYearEndClosing` membaca `systemSetting` lewat `findFirst` sebelum `assertPeriodOpen` mengambil kunci — snapshot REPEATABLE READ terbentuk di bacaan pertama, poster kedua tetap membaca anti-dobel basi (`existing=null`), jurnal penutup dobel; sabuk P2002 mati sejak kunci unik aktif memuat `journal_number`. Fix: kunci `system_settings FOR UPDATE` sebagai bacaan pertama tx, bulan fiskal dari baris terkunci. 16/16.
+6. `dca49169f` fix(pajak): `issueTaxInvoice` tanpa kunci dokumen sumber — dua terbit konkuren (nomor + key beda) sama-sama create, cermin nomor kepala tertimpa; FP pelunasan membaca Sigma FP UM dari snapshot tanpa kunci quotation. Fix: kunci `sales_invoices`/`vendor_bills` tertaut; kunci `quotations` sebelum Sigma FP UM; `issueDownPaymentTaxInvoice` mengunci `quotations` sesudah DP. Urutan DP → quotation kedua jalur. 38/38.
+7. `7af667d88` fix(keuangan): `onExpenseApprovedSyncPettyCash` hanya mengunci baris expense sendiri lalu menulis ulang saldo absolut seluruh rantai dari snapshot — dua approval expense berbeda menimpa baris bersama, cek negatif atas rantai tak lengkap. Fix: gap-lock `petty_cash FOR UPDATE` sesudah kunci expense (penulis rantai finance sudah memakai kunci sama). 16/16.
+8. `27ed9074a` fix(pajak): `createTaxAssessment` memanggil `assertPeriodOpen` tanpa tx sebelum create (tutup-periode di antaranya lolos) dan nomor ketetapan tanpa cek dupe (dua baris bernomor sama, eksposur register dobel). Fix: gerbang periode di dalam tx + cek nomor sesudah gap-lock `tax_assessments`. 15/15 gabungan.
+9. `ecacaad0b` fix(keuangan): `deleteCheque` update tak bersyarat dari snapshot — baris baru ter-soft-delete lawan ditimpa diam-diam dengan sukses palsu. Fix: klaim `updateMany({ where: { id, deletedAt: null } })`, count 0 ditolak. 19/19.
+
+Vonis GUGUR putaran ini (jangan diangkat lagi tanpa bukti baru):
+
+- Lima kandidat awal agent penjualan+pembelian gugur saat verifikasi sesi utama: `deletePurchaseOrder` sudah transaksi kunci PO + nilai ulang semua guard; `deletePurchaseReturn` sudah klaim `deleteMany` status draft; `updateServiceOrderItem`, `deleteServiceOrder`, `updateAssignDriverLogisticsJob` mengacu model `ServiceOrder`/`LogisticsJob` yang TIDAK ADA di schema maupun kode (halusinasi agent — pelajaran: kandidat wajib dibuktikan terhadap schema dulu).
+- Sapuan delete polos sesi utama lintas modul (aset, project, finance, hrm, master): semua lokasi bernilai sudah berkunci/klaim/guard-di-bawah-kunci; sisa kelas count-then-delete master dangkal (SetNull) — kelas yang sama dan sudah berulang kali divonis diterima risikonya.
+- Kandidat agent yang dibuang agent sendiri terkonfirmasi: `JournalService.reverseJournal` tak reachable produksi; `deleteProfitCenter` tanpa penulis konkuren.
