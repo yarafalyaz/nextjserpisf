@@ -337,12 +337,17 @@ export async function updateUserWarehouses(userId: number, warehouseIds: number[
     }
     const cleanIds = parsed.data
 
-    // Setiap id harus gudang yang benar-benar ada. Tanpa pemeriksaan ini, id
-    // asing (mis. permintaan yang dibuat tangan) akan menulis baris penugasan
-    // yang tidak memberi akses apa pun: halaman pengguna menampilkan gudangnya,
-    // tetapi `getWarehouseScope` tetap menolak — tampak diatur padahal tidak.
+    // Setiap id harus gudang yang benar-benar ada, aktif, dan belum terhapus.
+    // Tanpa pemeriksaan ini, id asing (mis. permintaan yang dibuat tangan) akan
+    // menulis baris penugasan yang tidak memberi akses apa pun: halaman pengguna
+    // menampilkan gudangnya, tetapi `getWarehouseScope` tetap menolak — tampak
+    // diatur padahal tidak. Gudang nonaktif/terhapus sama tidak gunanya:
+    // picker halaman hanya menawarkan gudang aktif, dan penugasan ke gudang
+    // mati menulis ruang lingkup yang tidak pernah bisa dipakai.
     if (cleanIds.length > 0) {
-      const found = await prisma.warehouse.count({ where: { id: { in: cleanIds } } })
+      const found = await prisma.warehouse.count({
+        where: { id: { in: cleanIds }, isActive: true, deletedAt: null },
+      })
       if (found !== cleanIds.length) {
         return { error: "Ada gudang yang tidak ditemukan" }
       }

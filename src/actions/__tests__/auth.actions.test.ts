@@ -786,7 +786,9 @@ describe("updateUserWarehouses", () => {
     warehouseCountMock.mockResolvedValue(2)
     userUpdateMock.mockResolvedValue({ id: 3 })
     await updateUserWarehouses(3, [5, 5, 2])
-    expect(warehouseCountMock).toHaveBeenCalledWith({ where: { id: { in: [5, 2] } } })
+    expect(warehouseCountMock).toHaveBeenCalledWith({
+      where: { id: { in: [5, 2] }, isActive: true, deletedAt: null },
+    })
     const arg = userUpdateMock.mock.calls[0][0]
     expect(arg.data.userWarehouses.create).toEqual([{ warehouseId: 5 }, { warehouseId: 2 }])
   })
@@ -806,6 +808,19 @@ describe("updateUserWarehouses", () => {
     warehouseCountMock.mockResolvedValue(1)
     const res = await updateUserWarehouses(3, [5, 999])
     expect(res).toEqual({ error: "Ada gudang yang tidak ditemukan" })
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("menolak gudang nonaktif/terhapus walau barisnya ada (count berkondisi hidup)", async () => {
+    // Gudang id 5 ada tetapi nonaktif: count berkondisi isActive+deletedAt
+    // mengembalikan 1 untuk permintaan [5, 2] -> tolak tanpa menulis penugasan
+    // ke gudang mati yang tidak memberi akses berguna.
+    warehouseCountMock.mockResolvedValue(1)
+    const res = await updateUserWarehouses(3, [5, 2])
+    expect(res).toEqual({ error: "Ada gudang yang tidak ditemukan" })
+    expect(warehouseCountMock).toHaveBeenCalledWith({
+      where: { id: { in: [5, 2] }, isActive: true, deletedAt: null },
+    })
     expect(userUpdateMock).not.toHaveBeenCalled()
   })
 
