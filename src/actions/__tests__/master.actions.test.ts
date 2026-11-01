@@ -57,6 +57,9 @@ const mocks = vi.hoisted(() => {
     taxGroupTax: buildModelMock(),
     paymentTerm: buildModelMock(),
     brand: buildModelMock(),
+    itemGroup: buildModelMock(),
+    rack: buildModelMock(),
+    rackRow: buildModelMock(),
     customerCategory: buildModelMock(),
     stockMovement: buildModelMock(),
     itemStock: buildModelMock(),
@@ -441,6 +444,38 @@ describe("Item Actions", () => {
   it("deleteItem succeeds", async () => {
     const res = await actions.deleteItem(1)
     expect(res?.success).toBe(true)
+  })
+  // Regresi putaran 50: referensi master item wajib HIDUP saat ditulis —
+  // vendor/gudang nonaktif/terhapus dari UI basi tidak boleh lahir sebagai
+  // default item; rak harus milik gudang default, baris milik rak default.
+  it("createItem menolak vendor default nonaktif", async () => {
+    mocks.prismaMock.vendor.findUnique.mockResolvedValue({ id: 9, isActive: false, deletedAt: null })
+    const res = await actions.createItem(fdMap({ name: "Item Vendor Mati", cost: "100", price: "200", vendorId: 9 }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/vendor/i)
+    expect(mocks.prismaMock.item.create).not.toHaveBeenCalled()
+  })
+  it("createItem menolak rak di luar gudang default", async () => {
+    mocks.prismaMock.warehouse.findUnique.mockResolvedValue({ id: 2, isActive: true, deletedAt: null })
+    mocks.prismaMock.rack.findUnique.mockResolvedValue({ id: 3, warehouseId: 99 })
+    const res = await actions.createItem(fdMap({ name: "Item Rak Asing", cost: "100", price: "200", defaultWarehouseId: 2, defaultRackId: 3 }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/rak/i)
+    expect(mocks.prismaMock.item.create).not.toHaveBeenCalled()
+  })
+  it("updateItem menolak tautan berpindah ke gudang nonaktif", async () => {
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ isScrapSaleItem: false, defaultSalesTaxId: null, defaultPurchaseTaxId: null, defaultDppPercent: null, defaultWarehouseId: 1 })
+    mocks.prismaMock.warehouse.findUnique.mockResolvedValue({ id: 77, isActive: false, deletedAt: null })
+    const res = await actions.updateItem(1, fdMap({ name: "Item Pindah Gudang Mati", cost: "100", price: "200", defaultWarehouseId: 77 }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/gudang/i)
+    expect(mocks.prismaMock.item.update).not.toHaveBeenCalled()
+  })
+  it("updateItem membiarkan tautan gudang tersimpan tidak berubah tanpa menilai ulang", async () => {
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ isScrapSaleItem: false, defaultSalesTaxId: null, defaultPurchaseTaxId: null, defaultDppPercent: null, defaultWarehouseId: 77 })
+    const res = await actions.updateItem(1, fdMap({ name: "Item Gudang Sama", cost: "100", price: "200", defaultWarehouseId: 77 }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.warehouse.findUnique).not.toHaveBeenCalled()
   })
   // F-2026-10-25-042-V (vonis Q-ITX-1): default pajak per item.
   it("createItem menyimpan default pajak sah + audit metadata", async () => {

@@ -646,6 +646,63 @@ async function checkItemTaxReferences(taxDefaults: { defaultSalesTaxId: number |
   return null
 }
 
+/**
+ * Penjaga rujukan master item (putaran 50): kategori/merek/grup/vendor/
+ * gudang/rak/baris rak yang ditunjuk WAJIB ada — dan aktif + belum
+ * terhapus untuk model yang punya siklus hidup itu. Model tanpa
+ * isActive/deletedAt (kategori, merek, rak, baris rak) hanya ditolak bila
+ * tidak ada sama sekali (FK memakai baris yang benar-benar hilang).
+ * Rak/baris rak juga wajib konsisten: rak milik gudang default, baris
+ * milik rak default — konsumen retur memakai defaultWarehouseId item
+ * untuk menulis stok, tautan yang salah pasangan menulis ke gudang lain.
+ * Kembalikan pesan error atau null bila sah.
+ */
+async function checkItemMasterReferences(refs: {
+  categoryId?: number | null
+  groupId?: number | null
+  brandId?: number | null
+  vendorId?: number | null
+  defaultWarehouseId?: number | null
+  defaultRackId?: number | null
+  defaultRackRowId?: number | null
+}): Promise<string | null> {
+  if (refs.categoryId != null) {
+    const category = await prisma.itemCategory.findUnique({ where: { id: refs.categoryId }, select: { id: true } });
+    if (!category) return "Kategori item tidak ditemukan di master kategori. Pilih kategori yang ada atau segarkan formulir.";
+  }
+  if (refs.groupId != null) {
+    const group = await prisma.itemGroup.findUnique({ where: { id: refs.groupId }, select: { id: true, isActive: true } });
+    if (!group || !group.isActive) return "Grup item tidak ditemukan atau nonaktif di master grup. Pilih grup aktif atau kosongkan.";
+  }
+  if (refs.brandId != null) {
+    const brand = await prisma.brand.findUnique({ where: { id: refs.brandId }, select: { id: true } });
+    if (!brand) return "Merek item tidak ditemukan di master merek. Pilih merek yang ada atau segarkan formulir.";
+  }
+  if (refs.vendorId != null) {
+    const vendor = await prisma.vendor.findUnique({ where: { id: refs.vendorId }, select: { id: true, isActive: true, deletedAt: true } });
+    if (!vendor || !vendor.isActive || vendor.deletedAt !== null) return "Vendor default item tidak ditemukan, nonaktif, atau terhapus di master vendor. Pilih vendor aktif.";
+  }
+  if (refs.defaultWarehouseId != null) {
+    const warehouse = await prisma.warehouse.findUnique({ where: { id: refs.defaultWarehouseId }, select: { id: true, isActive: true, deletedAt: true } });
+    if (!warehouse || !warehouse.isActive || warehouse.deletedAt !== null) return "Gudang default item tidak ditemukan, nonaktif, atau terhapus di master gudang. Pilih gudang aktif.";
+  }
+  if (refs.defaultRackId != null) {
+    const rack = await prisma.rack.findUnique({ where: { id: refs.defaultRackId }, select: { id: true, warehouseId: true } });
+    if (!rack) return "Rak default item tidak ditemukan di master rak. Pilih rak yang ada.";
+    if (refs.defaultWarehouseId != null && rack.warehouseId !== refs.defaultWarehouseId) {
+      return "Rak default item tidak mengarah ke gudang default yang dipilih. Pilih rak milik gudang default.";
+    }
+  }
+  if (refs.defaultRackRowId != null) {
+    const row = await prisma.rackRow.findUnique({ where: { id: refs.defaultRackRowId }, select: { id: true, rackId: true } });
+    if (!row) return "Baris rak default item tidak ditemukan di master baris rak. Pilih baris rak yang ada.";
+    if (refs.defaultRackId != null && row.rackId !== refs.defaultRackId) {
+      return "Baris rak default item tidak berada di rak default yang dipilih. Pilih baris rak milik rak default.";
+    }
+  }
+  return null
+}
+
 export async function createItem(formData: FormData) {
   try {
     await requirePermission("create_items");
@@ -674,6 +731,11 @@ export async function createItem(formData: FormData) {
     }
     const taxRefError = await checkItemTaxReferences(taxDefaults);
     if (taxRefError) return { success: false, error: taxRefError };
+
+    // Putaran 50: rujukan master item wajib hidup sejak lahir (pola sama
+    // penjaga pajak di atas) — item baru tak boleh membawa default mati.
+    const masterRefError = await checkItemMasterReferences(v);
+    if (masterRefError) return { success: false, error: masterRefError };
 
     const itemSettings = await getSystemSettings();
     let sku = v.sku || null;
@@ -846,7 +908,19 @@ export async function updateItem(itemId: number, formData: FormData) {
     // tidak lolos diam-diam saat form tidak mengirim field pajak.
     const storedItem = await prisma.item.findUnique({
       where: { id: itemId },
-      select: { isScrapSaleItem: true, defaultSalesTaxId: true, defaultPurchaseTaxId: true, defaultDppPercent: true },
+      select: {
+        isScrapSaleItem: true,
+        defaultSalesTaxId: true,
+        defaultPurchaseTaxId: true,
+        defaultDppPercent: true,
+        categoryId: true,
+        groupId: true,
+        brandId: true,
+        vendorId: true,
+        defaultWarehouseId: true,
+        defaultRackId: true,
+        defaultRackRowId: true,
+      },
     });
     const taxDefaults = pickTaxDefaultFields(formData, v, storedItem);
     taxDefaults.isScrapSaleItem = taxDefaults.isScrapSaleItem || (v.isScrapSaleItem ?? false);
@@ -857,6 +931,23 @@ export async function updateItem(itemId: number, formData: FormData) {
     }
     const taxRefError = await checkItemTaxReferences(taxDefaults);
     if (taxRefError) return { success: false, error: taxRefError };
+
+    // Putaran 50: pada UPDATE rujukan hanya dinilai ulang bila tautan
+    // BERPINDAH dari baris tersimpan (keputusan cakupan repo) — baris lama
+    // yang master-nya kemudian nonaktif tidak membuat item tak tersimpan.
+    // Konsistensi rak↔gudang dinilai atas pasangan efektif sesudah update.
+    if (storedItem) {
+      const changedRefs: Parameters<typeof checkItemMasterReferences>[0] = {};
+      if ((v.categoryId ?? null) !== storedItem.categoryId) changedRefs.categoryId = v.categoryId ?? null;
+      if ((v.groupId ?? null) !== storedItem.groupId) changedRefs.groupId = v.groupId ?? null;
+      if ((v.brandId ?? null) !== storedItem.brandId) changedRefs.brandId = v.brandId ?? null;
+      if ((v.vendorId ?? null) !== storedItem.vendorId) changedRefs.vendorId = v.vendorId ?? null;
+      if ((v.defaultWarehouseId ?? null) !== storedItem.defaultWarehouseId) changedRefs.defaultWarehouseId = v.defaultWarehouseId ?? null;
+      if ((v.defaultRackId ?? null) !== storedItem.defaultRackId) changedRefs.defaultRackId = v.defaultRackId ?? null;
+      if ((v.defaultRackRowId ?? null) !== storedItem.defaultRackRowId) changedRefs.defaultRackRowId = v.defaultRackRowId ?? null;
+      const masterRefError = await checkItemMasterReferences(changedRefs);
+      if (masterRefError) return { success: false, error: masterRefError };
+    }
     const storedPercent = decimalToNumber(storedItem?.defaultDppPercent);
     const taxDefaultChanged =
       taxDefaults.defaultSalesTaxId !== (storedItem?.defaultSalesTaxId ?? null) ||
