@@ -888,6 +888,24 @@ describe("Vendor Bill Actions", () => {
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_vendor_bills")
   })
 
+  it("regresi putaran 22: updateVendorBill menolak vendor berbeda dari vendor PO", async () => {
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({
+      vendorId: 2, documentNo: "PO-001", isService: false,
+    })
+    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })
+    const res = await actions.updateVendorBill(1, fdMap({
+      vendorId: "1",
+      purchaseOrderId: "1",
+      date: "2026-06-12",
+      subtotal: "1200",
+      tax: "0",
+      grandTotal: "1200",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak sesuai dengan vendor PO")
+    expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled()
+  })
+
   it("confirmVendorBill succeeds", async () => {
     // Needs 3-way match
     mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])

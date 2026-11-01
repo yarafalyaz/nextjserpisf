@@ -3511,6 +3511,18 @@ export async function updateVendorBill(id: number, formData: FormData) {
 
       if (v.purchaseOrderId) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
+        // Putaran 22: identitas vendor diulang dari create — edit draft tak
+        // boleh memindah tagihan PO vendor A ke vendor B (AP lahir membaca
+        // bill.vendorId saat posting). Guard create di createVendorBill.
+        const po = await tx.purchaseOrder.findUniqueOrThrow({
+          where: { id: v.purchaseOrderId },
+          select: { vendorId: true, documentNo: true },
+        });
+        if (po.vendorId !== v.vendorId) {
+          throw new Error(
+            `Vendor tagihan tidak sesuai dengan vendor PO ${po.documentNo}.`,
+          );
+        }
         // F-2026-10-28-157-V Putusan 1+3 di edit (titik kedua): sama seperti
         // create — guard per-baris + referensi termin atas input baru.
         assertTermsReference(v.terms);
