@@ -1124,6 +1124,30 @@ describe("createAsset / updateAsset", () => {
     expect(prismaMock.journal.create).not.toHaveBeenCalled()
   })
 
+  it("putaran 37: menolak aset lahir disposed (pelepasan hanya lewat aksi dispose)", async () => {
+    const res = await createAsset(fd({
+      name: "Laptop",
+      code: "LAP-01",
+      purchasePrice: "0",
+      status: "disposed",
+    }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toMatch(/aktif/)
+    expect(prismaMock.asset.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 37: menolak aset lahir status sampah tak terdaftar", async () => {
+    const res = await createAsset(fd({
+      name: "Laptop",
+      code: "LAP-01",
+      purchasePrice: "0",
+      status: "nganggur-aja",
+    }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toMatch(/aktif/)
+    expect(prismaMock.asset.create).not.toHaveBeenCalled()
+  })
+
   it("putaran 37: menolak perolehan berharga bila akun perolehan nonaktif/terhapus", async () => {
     prismaMock.account.findMany.mockResolvedValueOnce([])
     const res = await createAsset(fd({

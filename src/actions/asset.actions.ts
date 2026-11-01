@@ -880,6 +880,17 @@ export async function createAsset(formData: FormData) {
     const acquisitionDate = data.purchaseDate
       ? wibDateToUtcMidnight(data.purchaseDate)
       : new Date();
+    // Aset hanya boleh LAHIR "active" (vonis F-2026-10-23-117-V): disposed
+    // hanya lewat disposeAsset (jurnal pelepasan), held_for_sale hanya lewat
+    // klasifikasi terstruktur, string lain tak terdaftar. Lahir disposed =
+    // buntu permanen (dispose/update menolak, cron tak menyusutkan).
+    if (data.status != null && data.status !== "" && data.status !== "active") {
+      return {
+        success: false,
+        error:
+          "Aset baru wajib berstatus aktif; pelepasan dan klasifikasi dimiliki-untuk-dijual memakai aksi khususnya.",
+      };
+    }
     // Tipe/model harus milik merek yang dipilih: tanpa cek ini ID model merek
     // lain bisa dikirim manual (form dirancang berjenjang, tapi aksi yang
     // memutuskan — UI bisa dilewati lewat URL/param).
