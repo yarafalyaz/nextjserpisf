@@ -42,6 +42,7 @@ describe("resolvePurchaseReturnWarehouse fallback chain", () => {
 function makeTx(overrides: {
   receiptItemFindMany?: ReturnType<typeof vi.fn>
   warehouseFindFirst?: ReturnType<typeof vi.fn>
+  warehouseFindMany?: ReturnType<typeof vi.fn>
   itemFindMany?: ReturnType<typeof vi.fn>
   status?: string
 } = {}) {
@@ -79,7 +80,11 @@ function makeTx(overrides: {
     taxInvoice: { findFirst: vi.fn().mockResolvedValue(null) },
     stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
     goodsReceiptItem: { findMany: spies.receiptItemFindMany },
-    warehouse: { findFirst: spies.warehouseFindFirst },
+    warehouse: {
+      findFirst: spies.warehouseFindFirst,
+      // Putaran 51: gudang sumber gerak keluar dinilai ulang hidup; default hidup.
+      findMany: overrides.warehouseFindMany ?? vi.fn().mockResolvedValue([{ id: 2, name: "Gudang B", isActive: true }]),
+    },
     item: { findMany: spies.itemFindMany },
     systemSetting: { findFirst: spies.settingFindFirst },
   }
@@ -114,6 +119,28 @@ describe("purchase return PO row lock (race cap kumulatif)", () => {
     })
     delete (tx as Record<string, unknown>).$queryRaw
     await expect(onPurchaseReturnProcessed(7, 9, tx as never)).resolves.toBeUndefined()
+  })
+})
+
+describe("purchase return — gudang sumber mati (putaran 51)", () => {
+  it("gudang asal penerimaan nonaktif → retur ditolak, FIFO tidak dikonsumsi", async () => {
+    const { spies } = makeTx({
+      warehouseFindMany: vi.fn().mockResolvedValue([{ id: 2, name: "Gudang B", isActive: false }]),
+    })
+
+    await expect(onPurchaseReturnProcessed(7, 9)).rejects.toThrow(/tidak aktif/)
+    expect(mocks.consumeFifoLayers).not.toHaveBeenCalled()
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+  })
+
+  it("gudang asal penerimaan terhapus (deletedAt) → retur ditolak, FIFO tidak dikonsumsi", async () => {
+    const { spies } = makeTx({
+      warehouseFindMany: vi.fn().mockResolvedValue([]),
+    })
+
+    await expect(onPurchaseReturnProcessed(7, 9)).rejects.toThrow(/tidak ditemukan/)
+    expect(mocks.consumeFifoLayers).not.toHaveBeenCalled()
+    expect(spies.moveCreate).not.toHaveBeenCalled()
   })
 })
 

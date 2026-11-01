@@ -71,6 +71,12 @@ function baseTx(spies: ReturnType<typeof makeSpies>) {
   return {
     $queryRaw: vi.fn().mockResolvedValue([]),
     $executeRaw: spies.executeRaw,
+    // Putaran 51: hook stok kini menilai gudang hidup; default semua hidup.
+    warehouse: {
+      findMany: vi.fn().mockImplementation(async (args: any) =>
+        (args?.where?.id?.in ?? []).map((id: number) => ({ id, name: `Gudang ${id}`, isActive: true })),
+      ),
+    },
     stockMove: { findFirst: vi.fn().mockResolvedValue(null), create: spies.moveCreate },
     item: { findMany: vi.fn().mockResolvedValue([itemRow]) },
     itemSerial: { findMany: vi.fn().mockResolvedValue([]), updateMany: vi.fn().mockResolvedValue({ count: 0 }), createMany: vi.fn().mockResolvedValue({ count: 0 }) },

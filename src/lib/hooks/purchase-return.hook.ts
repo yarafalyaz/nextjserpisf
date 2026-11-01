@@ -6,6 +6,7 @@ import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { toBaseFactor } from "@/lib/services/uom.service";
 import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot";
+import { assertWarehousesExistAndActive } from "@/lib/services/material-request.service";
 
 /**
  * Purchase Return Hook - Observer pattern replacement.
@@ -137,6 +138,27 @@ export async function onPurchaseReturnProcessed(
         activeItems.map((it) => it.itemId),
         activeItems.map((it) => it.goodsReceiptItemId ?? 0),
       );
+
+    // Putaran 51: gudang sumber gerak keluar tiap baris (rantai receipt →
+    // default item → fallback) dinilai ulang HIDUP di dalam tx sebelum FIFO
+    // dikonsumsi. Baris tanpa resolusi tetap lolos ke error "tidak
+    // ditemukan" di loop. Ini juga menutup fallback anyWarehouse: gudang
+    // terhapus tak lagi bisa jadi sumber retur.
+    const resolvedWarehouseIds = [...new Set(
+      activeItems
+        .map((it) => {
+          // Resolusi persis loop di bawah: baris tertaut didahulukan.
+          const receipt =
+            (it.goodsReceiptItemId != null ? receiptById.get(it.goodsReceiptItemId) : undefined) ??
+            receiptByItem.get(it.itemId);
+          return receipt?.warehouseId ?? receipt?.goodsReceipt?.warehouseId ??
+            resolvePurchaseReturnWarehouse(it.itemId, receiptByItem, defaultWarehouseByItem, activeWarehouseId, anyWarehouseId);
+        })
+        .filter((id): id is number => id != null),
+    )];
+    if (resolvedWarehouseIds.length > 0) {
+      await assertWarehousesExistAndActive(tx as never, resolvedWarehouseIds);
+    }
 
     // Create Stock Move OUT per item (goods returned to vendor)
     if (activeItems.length > 0) {
