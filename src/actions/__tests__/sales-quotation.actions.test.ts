@@ -15,6 +15,13 @@ vi.mock("@/lib/auth/permissions", () => ({
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     customerVehicle: { findFirst: (...a: unknown[]) => vehicleFindFirstMock(...a) },
+    // Dokumen baru menolak customer/item nonaktif-terhapus: master hidup.
+    customer: { findFirst: vi.fn(async () => ({ id: 10, name: "PT Q", isActive: true })) },
+    item: {
+      findMany: vi.fn(async (args: any) =>
+        (args?.where?.id?.in ?? []).map((id: number) => ({ id, name: `Item ${id}`, isActive: true, deletedAt: null })),
+      ),
+    },
     $transaction: (...a: unknown[]) => transactionMock(...a),
   },
 }))

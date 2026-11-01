@@ -24,6 +24,8 @@ vi.mock("@/lib/db/prisma", () => ({
       findFirst: vi.fn(),
     },
     customerVehicle: { findFirst: vi.fn() },
+    // Dokumen baru menolak customer nonaktif-terhapus: master hidup.
+    customer: { findFirst: vi.fn(async () => ({ id: 3, name: "PT A", isActive: true })) },
     $transaction: (...a: unknown[]) => transactionMock(...a),
   },
 }))
