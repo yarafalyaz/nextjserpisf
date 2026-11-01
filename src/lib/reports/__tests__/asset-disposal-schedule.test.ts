@@ -66,6 +66,36 @@ describe("buildAssetDisposals", () => {
     expect(result.count).toBe(1)
   })
 
+  it("impairment POSTED sebelum pelepasan masuk nilai buku dan laba/rugi jadwal", () => {
+    // Beli 50jt, susut 4jt, impairment 10jt, jual 40jt → buku 36jt, laba 4jt.
+    const result = buildAssetDisposals({
+      assets: [asset()],
+      entries: [
+        depreciation(3, 2_000_000, new Date(2026, 8, 30)),
+        depreciation(3, 2_000_000, new Date(2026, 9, 20)),
+        disposal(3, 40_000_000, new Date(2026, 9, 20)),
+      ],
+      journals: [
+        {
+          assetId: 3,
+          referenceType: "ASSET_CHANGE_EVENT",
+          date: new Date(2026, 9, 1),
+          grossDelta: 0,
+          accumulatedDelta: 0,
+          impairmentDelta: 10_000_000,
+        },
+      ],
+      ...PERIOD,
+    })
+    expect(result.totals).toEqual({
+      cost: 50_000_000,
+      accumulated: 4_000_000,
+      bookValue: 36_000_000,
+      proceeds: 40_000_000,
+      gainLoss: 4_000_000,
+    })
+  })
+
   it("memakai akumulasi sampai TANGGAL PELEPASAN masing-masing aset", () => {
     // Beban November tidak boleh ikut: aset sudah dilepas 20 Oktober.
     const result = buildAssetDisposals({

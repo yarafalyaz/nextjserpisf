@@ -19,9 +19,12 @@ import { formatAccounting, formatDate } from "@/lib/utils/format"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import {
   accumulatedDepreciationByAsset,
+  deltasOf,
+  eventDeltasByAsset,
   DISPOSAL_TYPE,
   type AssetLedgerAsset,
   type AssetLedgerEntry,
+  type AssetLedgerJournal,
 } from "@/lib/reports/asset-ledger"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -41,6 +44,8 @@ export interface AssetDisposalReportInput {
   assets: AssetLedgerAsset[]
   /** Seluruh riwayat aset (penyusutan + pelepasan). */
   entries: AssetLedgerEntry[]
+  /** Jurnal peristiwa POSTED per aset (lihat `asset-register.ts`). */
+  journals?: readonly AssetLedgerJournal[]
   /** Awal periode (inklusif). */
   start: Date
   /** Akhir periode (inklusif). */
@@ -94,12 +99,17 @@ export function buildAssetDisposals(input: AssetDisposalReportInput): AssetDispo
 
   const lines = disposals
     .map(({ entry, asset }) => {
-      const cost = Number(asset.purchaseCost)
-      // Akumulasi sampai TANGGAL PELEPASAN masing-masing aset, bukan sekali di
-      // akhir periode: aset yang dilepas 10 Oktober tidak boleh memakai beban
-      // penyusutan November.
-      const accumulated = accumulatedDepreciationByAsset(entries, entry.date).get(asset.id) ?? 0
-      const bookValue = safeSubtract(cost, accumulated, 2)
+      // Bruto/akumulasi/impairment dinilai sampai TANGGAL PELEPASAN aset
+      // itu (peristiwa sesudah pelepasan tidak mengubah laba/rugi yang
+      // sudah terjadi) — dasar yang sama dengan disposeAsset (jurnal POSTED).
+      const deltas = deltasOf(eventDeltasByAsset(input.journals, entry.date), asset.id)
+      const cost = safeAdd(Number(asset.purchaseCost), deltas.gross, 2)
+      const accumulated = safeAdd(
+        accumulatedDepreciationByAsset(entries, entry.date).get(asset.id) ?? 0,
+        deltas.accumulated,
+        2,
+      )
+      const bookValue = safeSubtract(safeSubtract(cost, accumulated, 2), deltas.impairment, 2)
       const proceeds = Number(entry.amount ?? 0)
       return { asset, date: entry.date, cost, accumulated, bookValue, proceeds, gainLoss: safeSubtract(proceeds, bookValue, 2) }
     })

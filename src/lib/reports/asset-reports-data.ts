@@ -27,15 +27,20 @@ import {
 import { asOfLabelOf } from "@/lib/reports/statement-data"
 import { formatDayMonthYear } from "@/lib/utils/format"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
-import type { AssetLedgerAsset, AssetLedgerEntry } from "@/lib/reports/asset-ledger"
+import type {
+  AssetLedgerAsset,
+  AssetLedgerEntry,
+  AssetLedgerJournal,
+} from "@/lib/reports/asset-ledger"
 
 interface AssetLedger {
   assets: AssetLedgerAsset[]
   entries: AssetLedgerEntry[]
+  journals: AssetLedgerJournal[]
 }
 
 async function loadAssetLedger(historyUntil: Date): Promise<AssetLedger> {
-  const [assets, entries] = await Promise.all([
+  const [assets, entries, eventJournals, settings] = await Promise.all([
     prisma.asset.findMany({
       select: {
         id: true,
@@ -44,7 +49,14 @@ async function loadAssetLedger(historyUntil: Date): Promise<AssetLedger> {
         purchaseDate: true,
         purchaseCost: true,
         status: true,
-        category: { select: { name: true } },
+        category: {
+          select: {
+            name: true,
+            assetAccountId: true,
+            accumulatedDepreciationAccountId: true,
+            accumulatedImpairmentAccountId: true,
+          },
+        },
       },
       orderBy: { code: "asc" },
     }),
@@ -53,7 +65,76 @@ async function loadAssetLedger(historyUntil: Date): Promise<AssetLedger> {
       select: { assetId: true, type: true, amount: true, date: true },
       orderBy: { date: "asc" },
     }),
+    // Jurnal peristiwa POSTED: revaluasi/impairment/reklasifikasi tidak
+    // menulis AssetHistory, jadi register/mutasi/pelepasan wajib membacanya
+    // dari jurnal (sumber nilai buku tunggal F-2026-10-22-062-V) — pola
+    // query yang sama dengan rekonsiliasi. POSTED-saja (TASK-022).
+    prisma.journal.findMany({
+      where: {
+        deletedAt: null,
+        status: "POSTED",
+        referenceType: ASSET_CHANGE_EVENT_TYPE,
+        transactionDate: { lte: historyUntil },
+      },
+      select: {
+        referenceType: true,
+        referenceId: true,
+        transactionDate: true,
+        entries: { select: { accountId: true, debit: true, credit: true } },
+      },
+      orderBy: { transactionDate: "asc" },
+    }),
+    prisma.systemSetting.findFirst({
+      select: { accumulatedDepreciationAccountId: true },
+    }),
   ])
+
+  const envAssetAccount = Number.parseInt(process.env.FIXED_ASSET_ACCOUNT_ID || "0") || null
+  const envAccumAccount =
+    Number.parseInt(process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID || "0") || null
+  const accountsByAsset = new Map(
+    assets.map((asset) => [
+      asset.id,
+      {
+        fixedAssetAccountId: asset.category?.assetAccountId ?? envAssetAccount,
+        accumulatedDepreciationAccountId:
+          asset.category?.accumulatedDepreciationAccountId ??
+          settings?.accumulatedDepreciationAccountId ??
+          envAccumAccount,
+        accumulatedImpairmentAccountId: asset.category?.accumulatedImpairmentAccountId ?? null,
+      },
+    ]),
+  )
+
+  const journals: AssetLedgerJournal[] = []
+  for (const journal of eventJournals) {
+    if (journal.referenceId == null || !journal.referenceType) continue
+    const accounts = accountsByAsset.get(journal.referenceId)
+    if (!accounts) continue
+    let grossDelta = 0
+    let accumulatedNet = 0
+    let impairmentNetCredit = 0
+    for (const line of journal.entries) {
+      const net = Number(line.debit) - Number(line.credit)
+      if (line.accountId === accounts.fixedAssetAccountId) grossDelta += net
+      if (line.accountId === accounts.accumulatedDepreciationAccountId) accumulatedNet += net
+      if (
+        accounts.accumulatedImpairmentAccountId != null &&
+        line.accountId === accounts.accumulatedImpairmentAccountId
+      ) {
+        impairmentNetCredit += -net
+      }
+    }
+    journals.push({
+      assetId: journal.referenceId,
+      referenceType: journal.referenceType,
+      date: journal.transactionDate,
+      grossDelta,
+      // Akumulasi tampil selalu >= 0: neto debit peristiwa mengurangi.
+      accumulatedDelta: -accumulatedNet,
+      impairmentDelta: Math.max(0, impairmentNetCredit),
+    })
+  }
 
   return {
     assets: assets.map((asset) => ({
@@ -71,6 +152,7 @@ async function loadAssetLedger(historyUntil: Date): Promise<AssetLedger> {
       amount: Number(entry.amount ?? 0),
       date: entry.date,
     })),
+    journals,
   }
 }
 
@@ -94,6 +176,7 @@ export async function loadAssetRegister(
     register: buildAssetRegister({
       assets: ledger.assets,
       entries: ledger.entries,
+      journals: ledger.journals,
       asOf: asOfDate,
       includeDisposed,
     }),
@@ -119,7 +202,13 @@ export async function loadAssetMovement(period: {
     formatDayMonthYear(date)
 
   return {
-    movement: buildAssetMovement({ ...ledger, start: period.start, end: period.end }),
+    movement: buildAssetMovement({
+      assets: ledger.assets,
+      entries: ledger.entries,
+      journals: ledger.journals,
+      start: period.start,
+      end: period.end,
+    }),
     periodLabel: `Periode ${short(period.start)} – ${short(period.end)}`,
     periodCaption: `Periode ${short(period.start)} – ${short(period.end)}`,
   }
@@ -328,7 +417,13 @@ export async function loadAssetDisposals(period: {
     formatDayMonthYear(date)
 
   return {
-    disposal: buildAssetDisposals({ ...ledger, start: period.start, end: period.end }),
+    disposal: buildAssetDisposals({
+      assets: ledger.assets,
+      entries: ledger.entries,
+      journals: ledger.journals,
+      start: period.start,
+      end: period.end,
+    }),
     periodLabel: `Periode ${short(period.start)} – ${short(period.end)}`,
     periodCaption: `Periode ${short(period.start)} – ${short(period.end)}`,
   }

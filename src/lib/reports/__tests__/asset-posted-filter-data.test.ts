@@ -11,7 +11,7 @@ import { Prisma } from "@prisma/client"
 const mocks = vi.hoisted(() => ({
   prismaMock: {
     asset: { findMany: vi.fn() },
-    assetHistory: { groupBy: vi.fn() },
+    assetHistory: { groupBy: vi.fn(), findMany: vi.fn() },
     journal: { findMany: vi.fn() },
     systemSetting: { findFirst: vi.fn() },
   },
@@ -24,6 +24,7 @@ import {
   loadAssetJournalBookRows,
   loadDepreciationDifference,
 } from "../depreciation-difference-data"
+import { loadAssetRegister } from "../asset-reports-data"
 
 const dec = (v: number) => new Prisma.Decimal(v)
 
@@ -41,6 +42,7 @@ beforeEach(() => {
   delete process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID
   mocks.prismaMock.asset.findMany.mockResolvedValue([])
   mocks.prismaMock.assetHistory.groupBy.mockResolvedValue([])
+  mocks.prismaMock.assetHistory.findMany.mockResolvedValue([])
   mocks.prismaMock.journal.findMany.mockResolvedValue([])
   mocks.prismaMock.systemSetting.findFirst.mockResolvedValue(null)
 })
@@ -138,6 +140,51 @@ describe("penjaga POSTED loader laporan aset (t_d34601a0)", () => {
     expect(JSON.stringify(journalWhere)).toContain("ASSET_CHANGE_EVENT")
     expect(reconciliation.rows[0].journalBookValue.toNumber()).toBe(1300)
     expect(reconciliation.rows[0].findings.map((f) => f.kind)).not.toContain("value-mismatch")
+  })
+
+  it("loadAssetRegister: jurnal peristiwa POSTED masuk register (revaluasi menaikkan buku)", async () => {
+    mocks.prismaMock.asset.findMany.mockResolvedValue([
+      {
+        id: 1,
+        code: "AST-1",
+        name: "Mesin",
+        purchaseDate: new Date(2026, 0, 1),
+        purchaseCost: dec(1000),
+        status: "active",
+        category: {
+          name: "Mesin",
+          assetAccountId: 10,
+          accumulatedDepreciationAccountId: 20,
+          accumulatedImpairmentAccountId: 30,
+        },
+      },
+    ])
+    mocks.prismaMock.assetHistory.findMany.mockResolvedValue([
+      { assetId: 1, type: "depreciation", amount: dec(300), date: new Date(2026, 5, 30) },
+    ])
+    mocks.prismaMock.journal.findMany.mockResolvedValue([
+      {
+        // Revaluasi naik ke 1300: Dr aset 300, Dr akumulasi 300, Cr surplus 600.
+        referenceType: "ASSET_CHANGE_EVENT",
+        referenceId: 1,
+        transactionDate: new Date(2026, 7, 1),
+        entries: [
+          { accountId: 10, debit: dec(300), credit: dec(0) },
+          { accountId: 20, debit: dec(300), credit: dec(0) },
+          { accountId: 40, debit: dec(0), credit: dec(600) },
+        ],
+      },
+    ])
+
+    const { register } = await loadAssetRegister(new Date(2026, 9, 31, 23, 59, 59, 999), false)
+
+    const journalWhere = mocks.prismaMock.journal.findMany.mock.calls[0][0].where
+    expect(journalWhere).toEqual(
+      expect.objectContaining({ status: "POSTED", deletedAt: null, referenceType: "ASSET_CHANGE_EVENT" }),
+    )
+    expect(register.totalCost).toBe(1300)
+    expect(register.totalAccumulatedDepreciation).toBe(0)
+    expect(register.totalBookValue).toBe(1300)
   })
 
   it("loadAssetJournalBookRows: kueri jurnal POSTED + bookValue jurnal 700", async () => {

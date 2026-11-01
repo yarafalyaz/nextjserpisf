@@ -95,9 +95,14 @@ describe("buildAssetRegister", () => {
   })
 
   it("menyembunyikan aset yang sudah dilepas, dan menghitungnya terpisah", () => {
+    // Pelepasan selalu menulis AssetHistory type=disposal (disposeAsset);
+    // posisi per tanggal dinilai dari tanggal itu, bukan status snapshot.
+    const disposalEntries = [
+      { type: "disposal", assetId: 2, amount: 5_000_000, date: new Date(2026, 8, 15) },
+    ]
     const withoutDisposed = buildAssetRegister({
       assets: [asset(), asset({ id: 2, code: "AST-002", status: "disposed" })],
-      entries: [],
+      entries: disposalEntries,
       asOf: AS_OF,
     })
     expect(withoutDisposed.assetCount).toBe(1)
@@ -105,7 +110,7 @@ describe("buildAssetRegister", () => {
 
     const withDisposed = buildAssetRegister({
       assets: [asset(), asset({ id: 2, code: "AST-002", status: "disposed" })],
-      entries: [],
+      entries: disposalEntries,
       asOf: AS_OF,
       includeDisposed: true,
     })
@@ -124,6 +129,99 @@ describe("buildAssetRegister", () => {
     })
 
     expect(table.rows.map(rowSummary)[1]).toBe("data:AST-001|100.000.000|40.000.000|60.000.000")
+  })
+
+  it("revaluasi POSTED menaikkan bruto dan menutup akumulasi di register (ASSET_CHANGE_EVENT)", () => {
+    // Beli 100jt, susut 20jt, revaluasi naik: Dr aset 20jt + Dr akumulasi 20jt.
+    const { totalCost, totalAccumulatedDepreciation, totalBookValue } = buildAssetRegister({
+      assets: [asset()],
+      entries: [
+        { type: "depreciation", assetId: 1, amount: 20_000_000, date: new Date(2026, 5, 30) },
+      ],
+      journals: [
+        {
+          assetId: 1,
+          referenceType: "ASSET_CHANGE_EVENT",
+          date: new Date(2026, 7, 1),
+          grossDelta: 20_000_000,
+          accumulatedDelta: -20_000_000,
+          impairmentDelta: 0,
+        },
+      ],
+      asOf: AS_OF,
+    })
+    expect(totalCost).toBe(120_000_000)
+    expect(totalAccumulatedDepreciation).toBe(0)
+    expect(totalBookValue).toBe(120_000_000)
+  })
+
+  it("impairment POSTED mengurangi nilai buku register tanpa mengubah bruto/akumulasi", () => {
+    const { totalCost, totalAccumulatedDepreciation, totalBookValue } = buildAssetRegister({
+      assets: [asset()],
+      entries: [
+        { type: "depreciation", assetId: 1, amount: 20_000_000, date: new Date(2026, 5, 30) },
+      ],
+      journals: [
+        {
+          assetId: 1,
+          referenceType: "ASSET_CHANGE_EVENT",
+          date: new Date(2026, 7, 1),
+          grossDelta: 0,
+          accumulatedDelta: 0,
+          impairmentDelta: 30_000_000,
+        },
+      ],
+      asOf: AS_OF,
+    })
+    expect(totalCost).toBe(100_000_000)
+    expect(totalAccumulatedDepreciation).toBe(20_000_000)
+    expect(totalBookValue).toBe(50_000_000)
+  })
+
+  it("jurnal peristiwa sesudah asOf tidak masuk register historis", () => {
+    const { totalBookValue } = buildAssetRegister({
+      assets: [asset()],
+      entries: [
+        { type: "depreciation", assetId: 1, amount: 20_000_000, date: new Date(2026, 5, 30) },
+      ],
+      journals: [
+        {
+          assetId: 1,
+          referenceType: "ASSET_CHANGE_EVENT",
+          date: new Date(2026, 11, 1),
+          grossDelta: 20_000_000,
+          accumulatedDelta: -20_000_000,
+          impairmentDelta: 0,
+        },
+      ],
+      asOf: AS_OF,
+    })
+    expect(totalBookValue).toBe(80_000_000)
+  })
+
+  it("aset dilepas sesudah asOf tetap tampil di register historis (status snapshot kini tidak membuang)", () => {
+    // Dilepas 15 Nov 2026; register per 31 Okt 2026 wajib masih menampilkannya.
+    const { assetCount, disposedCount, totalBookValue } = buildAssetRegister({
+      assets: [asset({ status: "disposed" })],
+      entries: [
+        { type: "depreciation", assetId: 1, amount: 20_000_000, date: new Date(2026, 5, 30) },
+        { type: "disposal", assetId: 1, amount: 60_000_000, date: new Date(2026, 10, 15) },
+      ],
+      asOf: AS_OF,
+    })
+    expect(assetCount).toBe(1)
+    expect(disposedCount).toBe(0)
+    expect(totalBookValue).toBe(80_000_000)
+  })
+
+  it("aset dilepas sebelum asOf disembunyikan walau status kolom belum disposed", () => {
+    const { assetCount, disposedCount } = buildAssetRegister({
+      assets: [asset({ status: "active" })],
+      entries: [{ type: "disposal", assetId: 1, amount: 60_000_000, date: new Date(2026, 9, 15) }],
+      asOf: AS_OF,
+    })
+    expect(assetCount).toBe(0)
+    expect(disposedCount).toBe(1)
   })
 
   it("memakai label 'Tanpa Kategori' dan tanda hubung untuk tanggal yang kosong", () => {

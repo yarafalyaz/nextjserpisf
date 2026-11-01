@@ -17,9 +17,13 @@ import { statusLabel } from "@/lib/utils/status-labels"
 import {
   accumulatedDepreciationByAsset,
   categoryLabelOf,
+  deltasOf,
+  disposalDateByAsset,
+  eventDeltasByAsset,
   UNCATEGORISED_LABEL,
   type AssetLedgerAsset,
   type AssetLedgerEntry,
+  type AssetLedgerJournal,
 } from "@/lib/reports/asset-ledger"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -45,6 +49,12 @@ export interface AssetRegisterInput {
   assets: AssetLedgerAsset[]
   /** Seluruh riwayat aset; entri non-penyusutan diabaikan. */
   entries: AssetLedgerEntry[]
+  /**
+   * Jurnal peristiwa POSTED (`ASSET_CHANGE_EVENT`) per aset; loader
+   * menghitung delta bruto/akumulasi/impairment dari baris jurnal.
+   * Tanpa ini (pemanggil lama) angka persis seperti sebelum field ada.
+   */
+  journals?: readonly AssetLedgerJournal[]
   /** Tanggal posisi laporan (inklusif, sampai akhir hari). */
   asOf: Date
   /** Sertakan aset yang sudah dilepas (nilai buku 0) — bawaan: tidak. */
@@ -80,12 +90,15 @@ export function buildAssetRegister(input: AssetRegisterInput): AssetRegisterResu
   const includeDisposed = Boolean(input.includeDisposed)
 
   const accumulatedByAsset = accumulatedDepreciationByAsset(input.entries, input.asOf)
+  const eventDeltas = eventDeltasByAsset(input.journals, input.asOf)
+  const disposalDates = disposalDateByAsset(input.entries)
 
   let disposedCount = 0
   let hasNegativeBookValue = false
 
   interface Line {
     asset: AssetRegisterAsset
+    cost: number
     accumulated: number
     bookValue: number
   }
@@ -95,18 +108,26 @@ export function buildAssetRegister(input: AssetRegisterInput): AssetRegisterResu
   for (const asset of input.assets) {
     if (asset.purchaseDate && asset.purchaseDate.getTime() > asOfTime) continue
 
-    const isDisposed = asset.status === "disposed"
-    if (isDisposed && !includeDisposed) {
+    // Posisi per tanggal dinilai dari TANGGAL pelepasan, bukan status
+    // snapshot hari ini: aset dilepas sesudah `asOf` masih di buku pada
+    // `asOf`; aset yang history-nya sudah dilepas sebelum `asOf` sudah
+    // keluar walau kolom status belum berubah.
+    const disposalDate = disposalDates.get(asset.id)
+    const isDisposedAt = disposalDate != null && disposalDate.getTime() <= asOfTime
+    if (isDisposedAt && !includeDisposed) {
       disposedCount += 1
       continue
     }
 
-    const cost = Number(asset.purchaseCost)
-    // Akumulasi tetap diambil dari riwayat (bukan dipaksa = harga perolehan saat
-    // aset dilepas): yang tampil adalah nilai buku PADA saat pelepasan, bukan nol.
-    const accumulated = accumulatedByAsset.get(asset.id) ?? 0
+    const deltas = deltasOf(eventDeltas, asset.id)
+    const cost = safeAdd(Number(asset.purchaseCost), deltas.gross, 2)
+    // Akumulasi = riwayat penyusutan + penyesuaian peristiwa (revaluasi
+    // menutup akumulasi lewat debit → delta negatif); impairment kontra
+    // terpisah mengurangi nilai buku tanpa mengubah bruto/akumulasi.
+    const accumulated = safeAdd(accumulatedByAsset.get(asset.id) ?? 0, deltas.accumulated, 2)
+    const bookValue = safeSubtract(safeSubtract(cost, accumulated, 2), deltas.impairment, 2)
     const category = categoryLabelOf(asset)
-    const line: Line = { asset, accumulated, bookValue: safeSubtract(cost, accumulated, 2) }
+    const line: Line = { asset, cost, accumulated, bookValue }
     if (line.bookValue < -0.005) hasNegativeBookValue = true
 
     byCategory.set(category, [...(byCategory.get(category) ?? []), line])
@@ -132,7 +153,7 @@ export function buildAssetRegister(input: AssetRegisterInput): AssetRegisterResu
     rows.push({ kind: "group", label: category })
 
     for (const line of lines) {
-      const cost = Number(line.asset.purchaseCost)
+      const cost = line.cost
       categoryCost = safeAdd(categoryCost, cost, 2)
       categoryAccumulated = safeAdd(categoryAccumulated, line.accumulated, 2)
       categoryBookValue = safeAdd(categoryBookValue, line.bookValue, 2)

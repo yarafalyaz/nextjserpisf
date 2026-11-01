@@ -19,11 +19,14 @@ import { formatAccounting } from "@/lib/utils/format"
 import {
   accumulatedDepreciationByAsset,
   categoryLabelOf,
+  deltasOf,
   disposalDateByAsset,
+  eventDeltasByAsset,
   isOnBookAt,
   DEPRECIATION_TYPE,
   type AssetLedgerAsset,
   type AssetLedgerEntry,
+  type AssetLedgerJournal,
 } from "@/lib/reports/asset-ledger"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
@@ -43,6 +46,8 @@ export interface AssetMovementInput {
   assets: AssetLedgerAsset[]
   /** Seluruh riwayat aset (penyusutan + pelepasan). */
   entries: AssetLedgerEntry[]
+  /** Jurnal peristiwa POSTED per aset (lihat `asset-register.ts`). */
+  journals?: readonly AssetLedgerJournal[]
   /** Awal periode (inelusif). */
   start: Date
   /** Akhir periode (inklusif). */
@@ -60,6 +65,8 @@ export interface AssetMovementResult {
   opening: AssetMovementTotals
   additions: AssetMovementTotals
   depreciation: AssetMovementTotals
+  /** Delta jurnal peristiwa POSTED dalam periode (nol bila tidak ada). */
+  changes: AssetMovementTotals
   disposals: AssetMovementTotals
   closing: AssetMovementTotals
   /** Saldo akhir menurut pergerakan = saldo akhir menurut data. */
@@ -99,7 +106,32 @@ export function buildAssetMovement(input: AssetMovementInput): AssetMovementResu
 
   const accumulatedToDate = accumulatedDepreciationByAsset(entries, end)
   const accumulatedBefore = accumulatedDepreciationByAsset(entries, beforeStart)
+  const eventToDate = eventDeltasByAsset(input.journals, end)
+  const eventBefore = eventDeltasByAsset(input.journals, beforeStart)
   const disposalDates = disposalDateByAsset(entries)
+
+  // Tripel efektif satu aset pada satu cutoff: bruto kolom + delta bruto
+  // peristiwa, akumulasi history + delta akumulasi, impairment kontra
+  // sebagai pengurang nilai buku terpisah.
+  const tripleAt = (
+    asset: AssetLedgerAsset,
+    accumulated: Map<number, number>,
+    events: Map<number, ReturnType<typeof deltasOf>>,
+  ) => {
+    const deltas = deltasOf(events, asset.id)
+    const cost = safeAdd(Number(asset.purchaseCost), deltas.gross, 2)
+    const accum = safeAdd(accumulated.get(asset.id) ?? 0, deltas.accumulated, 2)
+    return { cost, accum, impairment: deltas.impairment }
+  }
+  const addTriple = (target: AssetMovementTotals, t: { cost: number; accum: number; impairment: number }) => {
+    target.cost = safeAdd(target.cost, t.cost, 2)
+    target.accumulated = safeAdd(target.accumulated, t.accum, 2)
+    target.bookValue = safeAdd(
+      target.bookValue,
+      safeSubtract(safeSubtract(t.cost, t.accum, 2), t.impairment, 2),
+      2,
+    )
+  }
 
   const categoryOf = new Map(assets.map((asset) => [asset.id, categoryLabelOf(asset)]))
 
@@ -113,7 +145,7 @@ export function buildAssetMovement(input: AssetMovementInput): AssetMovementResu
     if (!isOnBookAt(asset, disposalDates.get(asset.id), beforeStart)) continue
     const category = categoryOf.get(asset.id) ?? ""
     const bucket = openingByCategory.get(category) ?? emptyTotals()
-    addTo(bucket, Number(asset.purchaseCost), accumulatedBefore.get(asset.id) ?? 0)
+    addTriple(bucket, tripleAt(asset, accumulatedBefore, eventBefore))
     openingByCategory.set(category, bucket)
   }
 
@@ -182,6 +214,41 @@ export function buildAssetMovement(input: AssetMovementInput): AssetMovementResu
     cells: [amount(depreciation.accumulated), amount(depreciation.bookValue)],
   })
 
+  // ── Perubahan nilai (peristiwa): delta jurnal peristiwa dalam periode ────
+  // Revaluasi/impairment/reklasifikasi tidak menulis AssetHistory; tanpa
+  // blok ini saldo akhir menurut pergerakan tidak menutup ke data.
+  const changes = emptyTotals()
+  const changesByCategory = new Map<string, AssetMovementTotals>()
+  for (const asset of assets) {
+    const atEnd = deltasOf(eventToDate, asset.id)
+    const before = deltasOf(eventBefore, asset.id)
+    const grossDelta = safeSubtract(atEnd.gross, before.gross, 2)
+    const accumDelta = safeSubtract(atEnd.accumulated, before.accumulated, 2)
+    const impairmentDelta = safeSubtract(atEnd.impairment, before.impairment, 2)
+    if (grossDelta === 0 && accumDelta === 0 && impairmentDelta === 0) continue
+    // Aset yang diperoleh dalam periode: bruto awalnya masuk Penambahan
+    // sebesar kolom; deltasnya tetap pergerakan sesudah perolehan.
+    const category = categoryOf.get(asset.id) ?? ""
+    const bucket = changesByCategory.get(category) ?? emptyTotals()
+    addTriple(bucket, { cost: grossDelta, accum: accumDelta, impairment: impairmentDelta })
+    changesByCategory.set(category, bucket)
+  }
+  if (changesByCategory.size > 0) {
+    rows.push({ kind: "group", label: "Perubahan Nilai (Peristiwa)" })
+    for (const category of [...changesByCategory.keys()].sort(sortId)) {
+      const bucket = changesByCategory.get(category) ?? emptyTotals()
+      changes.cost = safeAdd(changes.cost, bucket.cost, 2)
+      changes.accumulated = safeAdd(changes.accumulated, bucket.accumulated, 2)
+      changes.bookValue = safeAdd(changes.bookValue, bucket.bookValue, 2)
+      rows.push({ kind: "data", cells: [category, ...cellsOf(bucket.cost, bucket.accumulated, bucket.bookValue)] })
+    }
+    rows.push({
+      kind: "total",
+      label: "Jumlah Perubahan Nilai",
+      cells: cellsOf(changes.cost, changes.accumulated, changes.bookValue),
+    })
+  }
+
   // ── Pelepasan: per aset yang dilepas dalam periode ─────────────────────────
   const disposals = emptyTotals()
   rows.push({ kind: "group", label: "Pelepasan" })
@@ -194,15 +261,17 @@ export function buildAssetMovement(input: AssetMovementInput): AssetMovementResu
     .sort(byCode)
 
   for (const asset of disposalsInPeriod) {
-    const cost = Number(asset.purchaseCost)
-    // Akumulasi saat pelepasan = akumulasi sampai akhir periode (tidak ada
-    // penyusutan setelah pelepasan, jadi angka ini = saat tanggal pelepasan).
-    const accumulated = accumulatedToDate.get(asset.id) ?? accumulatedBefore.get(asset.id) ?? 0
+    const t = tripleAt(asset, accumulatedToDate, eventToDate)
     // Nilai yang keluar dari buku ditampilkan negatif.
-    addTo(disposals, -cost, -accumulated)
+    addTriple(disposals, { cost: -t.cost, accum: -t.accum, impairment: -t.impairment })
     rows.push({
       kind: "data",
-      cells: [`${asset.code} ${asset.name}`, amount(-cost), amount(-accumulated), amount(-(cost - accumulated))],
+      cells: [
+        `${asset.code} ${asset.name}`,
+        amount(-t.cost),
+        amount(-t.accum),
+        amount(-safeSubtract(safeSubtract(t.cost, t.accum, 2), t.impairment, 2)),
+      ],
     })
   }
   rows.push({
@@ -213,15 +282,27 @@ export function buildAssetMovement(input: AssetMovementInput): AssetMovementResu
 
   // ── Saldo akhir: hasil pergerakan, diperiksa terhadap data ─────────────────
   const closing: AssetMovementTotals = {
-    cost: safeAdd(safeAdd(opening.cost, additions.cost, 2), safeAdd(depreciation.cost, disposals.cost, 2), 2),
+    cost: safeAdd(
+      safeAdd(safeAdd(opening.cost, additions.cost, 2), safeAdd(depreciation.cost, disposals.cost, 2), 2),
+      changes.cost,
+      2,
+    ),
     accumulated: safeAdd(
-      safeAdd(opening.accumulated, additions.accumulated, 2),
-      safeAdd(depreciation.accumulated, disposals.accumulated, 2),
+      safeAdd(
+        safeAdd(opening.accumulated, additions.accumulated, 2),
+        safeAdd(depreciation.accumulated, disposals.accumulated, 2),
+        2,
+      ),
+      changes.accumulated,
       2,
     ),
     bookValue: safeAdd(
-      safeAdd(opening.bookValue, additions.bookValue, 2),
-      safeAdd(depreciation.bookValue, disposals.bookValue, 2),
+      safeAdd(
+        safeAdd(opening.bookValue, additions.bookValue, 2),
+        safeAdd(depreciation.bookValue, disposals.bookValue, 2),
+        2,
+      ),
+      changes.bookValue,
       2,
     ),
   }
@@ -233,7 +314,7 @@ export function buildAssetMovement(input: AssetMovementInput): AssetMovementResu
     if (!isOnBookAt(asset, disposalDates.get(asset.id), end)) continue
     const category = categoryOf.get(asset.id) ?? ""
     const bucket = closingByCategory.get(category) ?? emptyTotals()
-    addTo(bucket, Number(asset.purchaseCost), accumulatedToDate.get(asset.id) ?? 0)
+    addTriple(bucket, tripleAt(asset, accumulatedToDate, eventToDate))
     closingByCategory.set(category, bucket)
   }
   for (const bucket of closingByCategory.values()) addTo(closingByData, bucket.cost, bucket.accumulated)
@@ -271,6 +352,7 @@ export function buildAssetMovement(input: AssetMovementInput): AssetMovementResu
     opening,
     additions,
     depreciation,
+    changes,
     disposals,
     closing,
     isTiedOut,

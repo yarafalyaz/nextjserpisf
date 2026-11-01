@@ -124,6 +124,28 @@ describe("buildAssetMovement", () => {
     expect(result.disposalCount).toBe(1)
   })
 
+  it("reklasifikasi bruto POSTED menggeser saldo akhir mutasi dan tetap tie-out", () => {
+    const f = fixture()
+    // Reklasifikasi masuk +20jt bruto pada A tanggal 10 Okt (dalam periode).
+    const result = buildAssetMovement({
+      ...f,
+      journals: [
+        {
+          assetId: 1,
+          referenceType: "ASSET_CHANGE_EVENT",
+          date: new Date(2026, 9, 10),
+          grossDelta: 20_000_000,
+          accumulatedDelta: 0,
+          impairmentDelta: 0,
+        },
+      ],
+      ...PERIOD,
+    })
+    expect(result.closing.cost).toBe(195_000_000)
+    expect(result.closing.bookValue).toBe(184_000_000)
+    expect(result.isTiedOut).toBe(true)
+  })
+
   it("memakai akumulasi sampai tanggal pelepasan, bukan sampai akhir periode", () => {
     const { assets } = fixture()
     const entries = fixture().entries.filter(

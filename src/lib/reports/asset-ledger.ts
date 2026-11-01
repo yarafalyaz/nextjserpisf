@@ -44,6 +44,61 @@ export interface AssetLedgerEntry {
   date: Date
 }
 
+/**
+ * Delta jurnal peristiwa POSTED (`ASSET_CHANGE_EVENT`) satu aset, dihitung
+ * loader dari baris jurnal POSTED pada akun kategori aset itu — pola
+ * `journalBookValue` (`sumEventNetOnAccount`). Revaluasi/impairment/
+ * reklasifikasi TIDAK menulis `AssetHistory`, jadi tanpa delta ini register,
+ * mutasi, dan jadwal pelepasan membeku di angka pra-peristiwa sementara
+ * rekonsiliasi/depreciation-difference/detail aset sudah memakai jurnal.
+ */
+export interface AssetLedgerJournal {
+  assetId: number
+  referenceType: string
+  date: Date
+  /** Neto (debit − kredit) akun Aset Tetap pada jurnal peristiwa. */
+  grossDelta: number
+  /**
+   * Penyesuaian akumulasi bertanda terhadap akumulasi history: negatif
+   * mengurangi akumulasi (revaluasi menutup akumulasi lewat debit).
+   */
+  accumulatedDelta: number
+  /** Kontra impairment neto kredit (mengurangi nilai buku, bukan bruto). */
+  impairmentDelta: number
+}
+
+export interface AssetEventDeltas {
+  gross: number
+  accumulated: number
+  impairment: number
+}
+
+/** Total delta peristiwa per aset sampai `cutoff` (inklusif). */
+export function eventDeltasByAsset(
+  journals: readonly AssetLedgerJournal[] | undefined,
+  cutoff: Date,
+): Map<number, AssetEventDeltas> {
+  const totals = new Map<number, AssetEventDeltas>()
+  if (!journals) return totals
+  const cutoffTime = cutoff.getTime()
+  for (const journal of journals) {
+    if (journal.referenceType !== "ASSET_CHANGE_EVENT") continue
+    if (journal.date.getTime() > cutoffTime) continue
+    const current = totals.get(journal.assetId) ?? { gross: 0, accumulated: 0, impairment: 0 }
+    current.gross = safeAdd(current.gross, journal.grossDelta, 2)
+    current.accumulated = safeAdd(current.accumulated, journal.accumulatedDelta, 2)
+    current.impairment = safeAdd(current.impairment, journal.impairmentDelta, 2)
+    totals.set(journal.assetId, current)
+  }
+  return totals
+}
+
+const ZERO_DELTAS: AssetEventDeltas = { gross: 0, accumulated: 0, impairment: 0 }
+
+export function deltasOf(map: Map<number, AssetEventDeltas>, assetId: number): AssetEventDeltas {
+  return map.get(assetId) ?? ZERO_DELTAS
+}
+
 export function categoryLabelOf(asset: Pick<AssetLedgerAsset, "categoryName">): string {
   return asset.categoryName?.trim() || UNCATEGORISED_LABEL
 }
