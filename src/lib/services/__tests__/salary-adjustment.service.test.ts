@@ -44,7 +44,12 @@ describe("salary adjustments", () => {
       { id: 1, newBaseSalary: 4_500_000 },
       { id: 2, newBaseSalary: 5_250_000 },
     ])
-    employeeFindUniqueOrThrow.mockResolvedValue({ baseSalary: 4_000_000 })
+    employeeFindUniqueOrThrow.mockResolvedValue({
+      baseSalary: 4_000_000,
+      isActive: true,
+      deletedAt: null,
+      employmentEndedAt: null,
+    })
 
     const applied = await applyDueSalaryAdjustments(7, new Date("2026-02-01"))
 
@@ -95,5 +100,24 @@ describe("salary adjustments", () => {
     const applied = await applyDueSalaryAdjustments(7, new Date("2026-02-01"))
     expect(applied).toBe(0)
     expect(employeeUpdate).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 47: karyawan nonaktif saat jatuh tempo — master tidak ditulis, baris dibatalkan", async () => {
+    adjustmentFindMany.mockResolvedValue([{ id: 3, newBaseSalary: 6_000_000 }])
+    employeeFindUniqueOrThrow.mockResolvedValue({
+      baseSalary: 4_000_000,
+      isActive: false,
+      deletedAt: null,
+      employmentEndedAt: new Date("2026-01-15"),
+    })
+    const applied = await applyDueSalaryAdjustments(7, new Date("2026-02-01"))
+    expect(applied).toBe(0)
+    expect(employeeUpdate).not.toHaveBeenCalled()
+    expect(adjustmentUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 3 },
+        data: expect.objectContaining({ status: "cancelled" }),
+      }),
+    )
   })
 })

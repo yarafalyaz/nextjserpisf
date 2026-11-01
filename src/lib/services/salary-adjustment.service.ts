@@ -33,8 +33,21 @@ export async function applyDueSalaryAdjustments(
 
     const employee = await tx.employee.findUniqueOrThrow({
       where: { id: employeeId },
-      select: { baseSalary: true },
+      select: { baseSalary: true, isActive: true, deletedAt: true, employmentEndedAt: true },
     })
+    // Hidup dinilai ulang di bawah kunci baris: karyawan yang mati sesudah
+    // persetujuan tidak boleh menerima kenaikan ke master. Baris jatuh tempo
+    // dibatalkan (pola sweep Q-SA-3/EC-SA-2 di getSalaryAdjustments) supaya
+    // tidak menggantung scheduled selamanya; master tidak ditulis.
+    if (!employee.isActive || employee.deletedAt != null || employee.employmentEndedAt != null) {
+      for (const adj of due) {
+        await tx.salaryAdjustment.update({
+          where: { id: adj.id },
+          data: { status: "cancelled", decidedAt: new Date() },
+        })
+      }
+      return 0
+    }
     let current = Number(employee.baseSalary)
     for (const adj of due) {
       // Snapshot gaji-sebelum diperbarui ke nilai berjalan supaya riwayat
