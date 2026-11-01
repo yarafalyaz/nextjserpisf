@@ -24,6 +24,7 @@ const bomRevisionFindUniqueMock = vi.fn()
 const bomRevisionUpdateMock = vi.fn()
 const bomRevisionUpdateManyMock = vi.fn()
 const bomRevisionDeleteMock = vi.fn()
+const bomRevisionDeleteManyMock = vi.fn()
 
 const generateDocumentNumberMock = vi.fn()
 
@@ -57,6 +58,7 @@ vi.mock("@/lib/db/prisma", () => {
       update: (...a: unknown[]) => bomRevisionUpdateMock(...a),
       updateMany: (...a: unknown[]) => bomRevisionUpdateManyMock(...a),
       delete: (...a: unknown[]) => bomRevisionDeleteMock(...a),
+      deleteMany: (...a: unknown[]) => bomRevisionDeleteManyMock(...a),
     },
   }
   prisma.$transaction = vi.fn((cb: unknown) =>
@@ -88,7 +90,7 @@ beforeEach(() => {
     productFindUniqueOrThrowMock, itemFindManyMock, productionOrderCreateMock,
     productMaterialFindManyMock, bomRevisionFindFirstMock, bomRevisionCreateMock,
     bomRevisionFindUniqueMock, bomRevisionUpdateMock, bomRevisionUpdateManyMock,
-    bomRevisionDeleteMock, generateDocumentNumberMock,
+    bomRevisionDeleteMock, bomRevisionDeleteManyMock, generateDocumentNumberMock,
   ]) m.mockReset()
 
   requirePermissionMock.mockResolvedValue({ id: 5 })
@@ -247,14 +249,42 @@ describe("deleteBomRevision", () => {
   it("deletes an unused draft", async () => {
     bomRevisionFindUniqueMock.mockResolvedValue({
       id: 1, status: "draft", productId: 9,
-      _count: { productionOrders: 0, workOrders: 0, fitmentRules: 0 },
+      _count: { productionOrders: 0, workOrders: 0, fitmentRules: 0, changeRequestsFrom: 0, changeRequestsTo: 0 },
     })
-    bomRevisionDeleteMock.mockResolvedValue({})
+    bomRevisionDeleteManyMock.mockResolvedValue({ count: 1 })
 
     const res = await deleteBomRevision(1)
 
     expect(res.success).toBe(true)
-    expect(bomRevisionDeleteMock).toHaveBeenCalledWith({ where: { id: 1 } })
+    expect(bomRevisionDeleteManyMock).toHaveBeenCalledWith({ where: { id: 1, status: "draft" } })
+    expect(bomRevisionDeleteMock).not.toHaveBeenCalled()
+  })
+
+  it("menolak bila klaim hapus draft kalah dari transisi status konkuren", async () => {
+    bomRevisionFindUniqueMock.mockResolvedValue({
+      id: 1, status: "draft", productId: 9,
+      _count: { productionOrders: 0, workOrders: 0, fitmentRules: 0, changeRequestsFrom: 0, changeRequestsTo: 0 },
+    })
+    bomRevisionDeleteManyMock.mockResolvedValue({ count: 0 })
+
+    const res = await deleteBomRevision(1)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah berubah status")
+    expect(bomRevisionDeleteMock).not.toHaveBeenCalled()
+  })
+
+  it("menolak draft yang dirujuk pengajuan ganti revisi", async () => {
+    bomRevisionFindUniqueMock.mockResolvedValue({
+      id: 1, status: "draft", productId: 9,
+      _count: { productionOrders: 0, workOrders: 0, fitmentRules: 0, changeRequestsFrom: 1, changeRequestsTo: 0 },
+    })
+
+    const res = await deleteBomRevision(1)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("pengajuan ganti revisi")
+    expect(bomRevisionDeleteManyMock).not.toHaveBeenCalled()
   })
 })
 

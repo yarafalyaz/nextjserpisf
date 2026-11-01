@@ -1093,6 +1093,19 @@ describe("Production Order Actions", () => {
     mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await actions.deleteProductionOrder(1)
     expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.productionOrder.deleteMany).toHaveBeenCalledWith({
+      where: { id: 1, status: { in: ["draft", "pending"] } },
+    })
+    expect(mocks.prismaMock.productionOrder.delete).not.toHaveBeenCalled()
+  })
+
+  it("deleteProductionOrder menolak bila klaim status kalah dari transisi konkuren", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.productionOrder.deleteMany.mockResolvedValue({ count: 0 })
+    const res = await actions.deleteProductionOrder(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/sudah berubah status/i)
+    expect(mocks.prismaMock.productionOrder.delete).not.toHaveBeenCalled()
   })
 
   it("deleteProductionOrder fails when not draft/pending", async () => {
@@ -1683,6 +1696,19 @@ describe("Work Order Actions", () => {
     mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await actions.deleteWorkOrder(1)
     expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.workOrder.deleteMany).toHaveBeenCalledWith({
+      where: { id: 1, status: { in: ["pending", "draft"] } },
+    })
+    expect(mocks.prismaMock.workOrder.delete).not.toHaveBeenCalled()
+  })
+
+  it("deleteWorkOrder menolak bila klaim status kalah dari transisi konkuren", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.workOrder.deleteMany.mockResolvedValue({ count: 0 })
+    const res = await actions.deleteWorkOrder(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/sudah berubah status/i)
+    expect(mocks.prismaMock.workOrder.delete).not.toHaveBeenCalled()
   })
 
   it("deleteWorkOrder fails when not draft/pending", async () => {

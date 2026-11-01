@@ -618,7 +618,15 @@ export async function deleteBomRevision(id: number) {
         id: true,
         status: true,
         productId: true,
-        _count: { select: { productionOrders: true, workOrders: true, fitmentRules: true } },
+        _count: {
+          select: {
+            productionOrders: true,
+            workOrders: true,
+            fitmentRules: true,
+            changeRequestsFrom: true,
+            changeRequestsTo: true,
+          },
+        },
       },
     });
     if (!revision) return { success: false, error: "Revisi BOM tidak ditemukan" };
@@ -633,8 +641,21 @@ export async function deleteBomRevision(id: number) {
         error: "Revisi BOM sudah dipakai oleh perintah kerja/produksi atau aturan kompatibilitas kendaraan dan tidak dapat dihapus.",
       };
     }
+    // BomRevisionChangeRequest.from/toRevisionId tanpa onDelete: cek snapshot
+    // saja membuat hapus berlomba dengan pembuatan pengajuan lalu gagal P2003.
+    if (revision._count.changeRequestsFrom > 0 || revision._count.changeRequestsTo > 0) {
+      return {
+        success: false,
+        error: "Revisi BOM sudah dipakai oleh pengajuan ganti revisi dan tidak dapat dihapus.",
+      };
+    }
 
-    await prisma.bomRevision.delete({ where: { id } });
+    // Klaim kondisional: submit/approve/release konkuren yang commit lebih
+    // dulu membuat count 0 — revisi non-draft tidak terhapus dari bacaan basi.
+    const claim = await prisma.bomRevision.deleteMany({ where: { id, status: "draft" } });
+    if (claim.count === 0) {
+      return { success: false, error: "Revisi BOM sudah berubah status; muat ulang halaman." };
+    }
     await logActivity("delete", "BomRevision", id, `Menghapus revisi BOM #${id}`);
     revalidatePath("/produksi/bom-revisi");
     revalidatePath(`/produksi/products/${revision.productId}`);
@@ -2126,7 +2147,14 @@ export async function deleteWorkOrder(id: number) {
       );
     }
 
-    await prisma.workOrder.delete({ where: { id } });
+    // Klaim kondisional: transisi status konkuren yang commit lebih dulu
+    // membuat count 0 — WO non-pending/draft tidak terhapus dari bacaan basi.
+    const claim = await prisma.workOrder.deleteMany({
+      where: { id, status: { in: ["pending", "draft"] } },
+    });
+    if (claim.count === 0) {
+      throw new Error("Work Order sudah berubah status; muat ulang halaman.");
+    }
 
     await logActivity(
       "delete",
@@ -2156,7 +2184,14 @@ export async function deleteProductionOrder(id: number) {
       );
     }
 
-    await prisma.productionOrder.delete({ where: { id } });
+    // Klaim kondisional: transisi status konkuren yang commit lebih dulu
+    // membuat count 0 — PO non-draft/pending tidak terhapus dari bacaan basi.
+    const claim = await prisma.productionOrder.deleteMany({
+      where: { id, status: { in: ["draft", "pending"] } },
+    });
+    if (claim.count === 0) {
+      throw new Error("Perintah Produksi sudah berubah status; muat ulang halaman.");
+    }
 
     await logActivity(
       "delete",
