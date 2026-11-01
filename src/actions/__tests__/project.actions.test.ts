@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => {
   })
 
   const prismaMock: any = {
+    customer: buildModelMock(),
+    customerVehicle: buildModelMock(),
+    costCenter: buildModelMock(),
     project: buildModelMock(),
     projectLog: buildModelMock(),
     projectStage: buildModelMock(),
@@ -39,6 +42,7 @@ const mocks = vi.hoisted(() => {
     quotation: buildModelMock(),
 
     $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
+    $executeRaw: vi.fn().mockResolvedValue(0),
 
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
@@ -80,6 +84,14 @@ function fdMap(payload: Record<string, string | number | null | undefined>): For
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: 1, permissions: ["manage_projects"], roles: ["super_admin"] })
+  // Master hidup untuk helper gerbang proyek; test yang butuh master mati
+  // menimpa mock ini eksplisit.
+  mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 1 })
+  mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue({ id: 1 })
+  mocks.prismaMock.workOrder.findFirst.mockResolvedValue({ id: 1 })
+  mocks.prismaMock.costCenter.findFirst.mockResolvedValue({ id: 1 })
+  // Baca ulang proyek di dalam tx updateProject: default proyek ada.
+  mocks.prismaMock.project.findUnique.mockResolvedValue({ id: 1, customerVehicleId: null })
 })
 
 describe("Project Actions Error Paths", () => {
@@ -98,6 +110,28 @@ describe("Project Actions Error Paths", () => {
     expect(res?.success).toBe(true)
     const arg = mocks.prismaMock.project.create.mock.calls.at(-1)?.[0]
     expect(arg.data.startDate.toISOString()).toBe("2026-02-28T00:00:00.000Z")
+  })
+  it("createProject menolak pelanggan mati dan kendaraan milik pelanggan lain tanpa menulis (putaran 25)", async () => {
+    mocks.prismaMock.customer.findFirst.mockResolvedValue(null)
+    const res = await actions.createProject(fdMap({ customerId: 9, name: "P", customerVehicleId: 3 }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Pelanggan tidak ditemukan")
+    expect(mocks.prismaMock.project.create).not.toHaveBeenCalled()
+
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 9 })
+    mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue(null)
+    const res2 = await actions.createProject(fdMap({ customerId: 9, name: "P", customerVehicleId: 3 }))
+    expect(res2?.success).toBe(false)
+    expect(String(res2?.error)).toContain("Kendaraan pelanggan tidak ditemukan")
+    expect(mocks.prismaMock.project.create).not.toHaveBeenCalled()
+  })
+  it("updateProject menolak pusat biaya nonaktif dari baris terkunci tanpa menulis (putaran 25)", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue({ customerVehicleId: null })
+    mocks.prismaMock.costCenter.findFirst.mockResolvedValue(null)
+    const res = await actions.updateProject(1, fdMap({ customerId: 1, name: "P", costCenterId: 7 }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Pusat biaya tidak ditemukan")
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
   })
   it("createTask rejects fictional dueDate 2026-02-30 without writing", async () => {
     const res = await actions.createTask(fdMap({ projectId: 1, name: "T", dueDate: "2026-02-30" }))
@@ -1178,7 +1212,7 @@ describe("addProjectLog", () => {
   })
 
   it("menolak proyek yang tidak ada dengan pesan yang terbaca", async () => {
-    // findUnique default mock mengembalikan null.
+    mocks.prismaMock.project.findUnique.mockResolvedValue(null)
     const res = await actions.addProjectLog(404, fdMap({ action: "Catatan" }))
     expect(res).toEqual({ success: false, error: "Proyek tidak ditemukan" })
     expect(mocks.prismaMock.projectLog.create).not.toHaveBeenCalled()

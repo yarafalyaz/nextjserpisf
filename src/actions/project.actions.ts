@@ -32,6 +32,65 @@ import {
 
 // ==================== PROJECT ACTIONS ====================
 
+/**
+ * Master yang dirujuk proyek wajib hidup dan konsisten. Picker form
+ * menyaring master aktif, jadi tanpa gerbang ini payload langsung bisa
+ * menunjuk pelanggan/kendaraan/kendaraan milik pelanggan lain, perintah
+ * kerja terhapus (sinkron status akan menggerakkan WO itu), atau pusat
+ * biaya nonaktif. Dipakai create (dokumen baru) dan update (menilai ulang
+ * master yang dikirim form); nilai lama yang tidak dikirim form tidak
+ * dinilai, supaya proyek warisan master yang kini nonaktif tidak terkunci.
+ */
+async function assertProjectMasterRefsLive(
+  client: TxClient | typeof prisma,
+  refs: {
+    customerId: number
+    customerVehicleId?: number | null
+    workOrderId?: number | null
+    costCenterId?: number | null
+  },
+): Promise<void> {
+  const customer = await client.customer.findFirst({
+    where: { id: refs.customerId, deletedAt: null, isActive: true },
+    select: { id: true },
+  })
+  if (!customer) {
+    throw new Error("Pelanggan tidak ditemukan, tidak aktif, atau sudah dihapus")
+  }
+  if (refs.customerVehicleId != null) {
+    const vehicle = await client.customerVehicle.findFirst({
+      where: {
+        id: refs.customerVehicleId,
+        customerId: refs.customerId,
+        deletedAt: null,
+        isActive: true,
+      },
+      select: { id: true },
+    })
+    if (!vehicle) {
+      throw new Error("Kendaraan pelanggan tidak ditemukan, tidak aktif, atau bukan milik pelanggan terpilih")
+    }
+  }
+  if (refs.workOrderId != null) {
+    const workOrder = await client.workOrder.findFirst({
+      where: { id: refs.workOrderId, deletedAt: null },
+      select: { id: true },
+    })
+    if (!workOrder) {
+      throw new Error("Perintah kerja tidak ditemukan atau sudah dihapus")
+    }
+  }
+  if (refs.costCenterId != null) {
+    const costCenter = await client.costCenter.findFirst({
+      where: { id: refs.costCenterId, isActive: true },
+      select: { id: true },
+    })
+    if (!costCenter) {
+      throw new Error("Pusat biaya tidak ditemukan atau tidak aktif")
+    }
+  }
+}
+
 export async function createProject(formData: FormData) {
   try {
   const parsed = parseFormData(createProjectSchema, formData)
@@ -39,6 +98,7 @@ export async function createProject(formData: FormData) {
   const { data } = parsed
 
   const user = await requirePermission("create_projects")
+  await assertProjectMasterRefsLive(prisma, data)
   const documentNo = await generateDocumentNumber("PRJ")
 
   const project = await prisma.project.create({
@@ -86,28 +146,59 @@ export async function updateProject(projectId: number, formData: FormData) {
   // it must be fully approved before allowing edits.
   await assertApproved("Project", projectId)
 
-  await prisma.project.update({
-    where: { id: projectId },
-    data: {
-      slug: await nextSlug("project", data.name, { excludeId: projectId }),
-      name: data.name,
-      description: data.description ?? null,
+  // Master dinilai ulang dan ditulis dalam satu tx di bawah kunci baris
+  // proyek: penilaian hidup bukan snapshot sebelum pengguna lain
+  // menonaktifkan/menghapus master di jendela antaranya.
+  // Kendaraan yang TIDAK dikirim form dipertahankan apa adanya (form selalu
+  // mengirim pilihannya; kunci kendaraan<->pelanggan membuat kendaraan tidak
+  // bisa dipindahkan diam-diam saat pelanggan diganti).
+  const nextSlugValue = await nextSlug("project", data.name, { excludeId: projectId })
+
+  await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE`
+    }
+    const fresh = await tx.project.findUnique({
+      where: { id: projectId },
+      select: { customerVehicleId: true },
+    })
+    if (!fresh) throw new Error("Proyek tidak ditemukan")
+
+    const nextVehicleId =
+      data.customerVehicleId !== undefined
+        ? data.customerVehicleId
+        : fresh.customerVehicleId
+
+    await assertProjectMasterRefsLive(tx, {
       customerId: data.customerId,
-      customerVehicleId: data.customerVehicleId ?? null,
-      // workOrderId tidak punya input di form proyek (ia tautan sistem dari alur
-      // perintah kerja), jadi menulis `?? null` menghapus tautan itu setiap kali
-      // proyek disimpan — dan sinkronisasi status WO bergantung pada kolom ini.
-      // Hanya tulis bila payload memang memuatnya.
+      customerVehicleId: nextVehicleId,
       ...(data.workOrderId !== undefined ? { workOrderId: data.workOrderId } : {}),
-      // Cost center must be written here too: the edit form renders the
-      // "Pusat Biaya" select (project-form.tsx) and the create path already
-      // persists it. Omitting it made the change silently no-op while the UI
-      // reported success, which also corrupted profit-center reporting.
       costCenterId: data.costCenterId ?? null,
-      startDate: data.startDate ? wibDateToUtcMidnight(data.startDate) : null,
-      endDate: data.endDate ? wibDateToUtcMidnight(data.endDate) : null,
-      notes: data.notes ?? null,
-    },
+    })
+
+    await tx.project.update({
+      where: { id: projectId },
+      data: {
+        slug: nextSlugValue,
+        name: data.name,
+        description: data.description ?? null,
+        customerId: data.customerId,
+        customerVehicleId: nextVehicleId,
+        // workOrderId tidak punya input di form proyek (ia tautan sistem dari alur
+        // perintah kerja), jadi menulis `?? null` menghapus tautan itu setiap kali
+        // proyek disimpan — dan sinkronisasi status WO bergantung pada kolom ini.
+        // Hanya tulis bila payload memang memuatnya.
+        ...(data.workOrderId !== undefined ? { workOrderId: data.workOrderId } : {}),
+        // Cost center must be written here too: the edit form renders the
+        // "Pusat Biaya" select (project-form.tsx) and the create path already
+        // persists it. Omitting it made the change silently no-op while the UI
+        // reported success, which also corrupted profit-center reporting.
+        costCenterId: data.costCenterId ?? null,
+        startDate: data.startDate ? wibDateToUtcMidnight(data.startDate) : null,
+        endDate: data.endDate ? wibDateToUtcMidnight(data.endDate) : null,
+        notes: data.notes ?? null,
+      },
+    })
   })
 
   await logActivity("update", "Project", projectId, "Memperbarui proyek")
