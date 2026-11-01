@@ -440,11 +440,10 @@ export async function assignEmployeePayrollComponent(formData: FormData) {
     if (effectiveTo != null && effectiveTo < effectiveFrom) {
       throw new Error("Tanggal selesai penugasan tidak boleh sebelum tanggal mulai");
     }
-    const [employee, component] = await Promise.all([
-      prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } }),
+    const [, component] = await Promise.all([
+      assertLiveEmployee(employeeId),
       prisma.payrollComponent.findUnique({ where: { id: componentId } }),
     ]);
-    if (!employee) throw new Error("Karyawan tidak ditemukan");
     if (!component) throw new Error("Komponen gaji tidak ditemukan");
     if (!component.isActive) throw new Error("Komponen gaji nonaktif tidak boleh ditugaskan");
     if (component.recurrence !== "fixed") {
@@ -523,6 +522,9 @@ export async function updateEmployeePayrollComponent(id: number, formData: FormD
     }
     const rawActive = formData.get("isActive");
     const isActive = rawActive == null ? existing.isActive : rawActive === "true";
+    // Penugasan aktif menunjuk karyawan wajib hidup; menonaktifkan
+    // penugasan karyawan mati tetap sah (pembersihan).
+    if (isActive) await assertLiveEmployee(existing.employeeId);
     // Kunci baris karyawan lalu (bila aktif) cek irisan ulang dalam tx yang
     // sama dengan update — alasan sama dengan jalur buat penugasan.
     const updated = await prisma.$transaction(async (tx) => {
