@@ -26,6 +26,17 @@ const mocks = vi.hoisted(() => {
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     materialIssueItem: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    // Dokumen baru menolak master nonaktif/terhapus — fixture hidup.
+    warehouse: {
+      findMany: vi.fn(async (args: any) =>
+        (args?.where?.id?.in ?? []).map((id: number) => ({ id, name: `Gudang ${id}`, isActive: true })),
+      ),
+    },
+    item: {
+      findMany: vi.fn(async (args: any) =>
+        (args?.where?.id?.in ?? []).map((id: number) => ({ id, name: `Item ${id}`, isActive: true })),
+      ),
+    },
     // F-2026-10-21-009-V: guard tutup-job membaca status WO pada create MI.
     workOrder: { findUnique: vi.fn().mockResolvedValue({ status: "in_progress" }) },
   }

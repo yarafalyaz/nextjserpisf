@@ -128,6 +128,16 @@ const expectSuccess = (res: any) => expect(res?.success).toBe(true)
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["super_admin"] });
+  // Dokumen inventaris baru menolak master nonaktif/terhapus — fixture hidup
+  // (id selain 1/2 dianggap tidak ada, seperti baris terhapus di DB).
+  mocks.prismaMock.warehouse.findMany.mockImplementation(async (args: any) =>
+    (args?.where?.id?.in ?? []).filter((id: number) => id === 1 || id === 2)
+      .map((id: number) => ({ id, name: `Gudang ${id}`, isActive: true })),
+  );
+  mocks.prismaMock.item.findMany.mockImplementation(async (args: any) =>
+    (args?.where?.id?.in ?? []).filter((id: number) => id === 1 || id === 2)
+      .map((id: number) => ({ id, name: `Item ${id}`, isActive: true })),
+  );
 });
 
 describe("Stock Adjustment Actions", () => {
@@ -1656,7 +1666,7 @@ describe("remnant (P1-5)", () => {
     fd.set("date", "2026-06-13");
     const res = await actions.createStocktakeSession(fd);
     expect(res.success).toBe(false);
-    expect(String((res as { error?: string }).error ?? "")).toMatch(/Gudang tidak ditemukan/);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/Gudang #999 tidak ditemukan/);
     expect(mocks.prismaMock.stocktakeSession.create).not.toHaveBeenCalled();
   });
 
@@ -1839,4 +1849,55 @@ describe("remnant (P1-5)", () => {
       expect(mocks.prismaMock.stocktakeSession.create).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("master hidup dokumen inventaris baru", () => {
+  const liveWarehouses = (rows: Array<{ id: number; name: string; isActive: boolean }>) =>
+    mocks.prismaMock.warehouse.findMany.mockImplementation(async (args: any) =>
+      rows.filter((r) => (args?.where?.id?.in ?? []).includes(r.id)),
+    );
+  const liveItems = (rows: Array<{ id: number; name: string; isActive: boolean }>) =>
+    mocks.prismaMock.item.findMany.mockImplementation(async (args: any) =>
+      rows.filter((r) => (args?.where?.id?.in ?? []).includes(r.id)),
+    );
+
+  it("createStockAdjustment menolak item nonaktif", async () => {
+    liveWarehouses([{ id: 1, name: "Utama", isActive: true }]);
+    liveItems([{ id: 1, name: "Busi", isActive: false }]);
+    const res = await actions.createStockAdjustment(saFd());
+    expect(res?.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/tidak aktif/);
+    expect(mocks.prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+  });
+
+  it("createInventoryTransfer menolak gudang tujuan terhapus", async () => {
+    // findMany helper menyaring deletedAt: null di DB; baris terhapus tak kembali.
+    liveWarehouses([{ id: 1, name: "Utama", isActive: true }]);
+    liveItems([{ id: 1, name: "Busi", isActive: true }]);
+    const res = await actions.createInventoryTransfer(transferFd());
+    expect(res?.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/tidak ditemukan/);
+    expect(mocks.prismaMock.inventoryTransfer.create).not.toHaveBeenCalled();
+  });
+
+  it("createMaterialIssue menolak item terhapus", async () => {
+    liveWarehouses([{ id: 1, name: "Utama", isActive: true }]);
+    liveItems([]);
+    const res = await actions.createMaterialIssue(miFd());
+    expect(res?.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/tidak ditemukan/);
+    expect(mocks.prismaMock.materialIssue.create).not.toHaveBeenCalled();
+  });
+
+  it("createStocktakeSession menolak gudang nonaktif", async () => {
+    mocks.prismaMock.warehouse.findUnique.mockResolvedValue({ id: 1 });
+    liveWarehouses([{ id: 1, name: "Utama", isActive: false }]);
+    const fd = new FormData();
+    fd.set("warehouseId", "1");
+    fd.set("date", "2026-06-13");
+    const res = await actions.createStocktakeSession(fd);
+    expect(res.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/tidak aktif/);
+    expect(mocks.prismaMock.stocktakeSession.create).not.toHaveBeenCalled();
+  });
 });

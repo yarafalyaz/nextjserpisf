@@ -21,7 +21,11 @@ import {
   onTransferReceived as onInventoryTransferReceived,
 } from "@/lib/hooks/inventory-transfer.hook";
 import { onMaterialIssueCompleted as onMaterialIssueStock, resolveMaterialIssueScrapSnapshots } from "@/lib/hooks/material-issue.hook";
-import { refreshMaterialRequestFulfillmentTx } from "@/lib/services/material-request.service";
+import {
+  assertItemsExistAndActive,
+  assertWarehousesExistAndActive,
+  refreshMaterialRequestFulfillmentTx,
+} from "@/lib/services/material-request.service";
 import {
   TRANSFER_SHORTAGE_REASON,
   buildShortageLines,
@@ -279,6 +283,9 @@ export async function createStockAdjustment(formData: FormData) {
       safeJsonParse<AdjustmentItemInput[]>(v.items ?? null) ?? []
     ).filter((it) => Number(it.itemId) > 0);
     assertUniqueAdjustmentItems(adjItems);
+    // Dokumen baru hanya untuk master hidup (pola material-request).
+    await assertWarehousesExistAndActive(prisma, [v.warehouseId]);
+    await assertItemsExistAndActive(prisma, adjItems.map((it) => Number(it.itemId)));
     const adjRows = adjItems.map(normalizeAdjustmentItem);
 
     // Fetch latest system quantity for each item in the warehouse to prevent
@@ -556,6 +563,9 @@ export async function createInventoryTransfer(formData: FormData) {
     const documentNo = await generateDocumentNumber("TRF");
 
     const transferItems = normalizeQtyItems(v.items);
+    // Dokumen baru hanya untuk master hidup (pola material-request).
+    await assertWarehousesExistAndActive(prisma, [v.sourceWarehouseId, v.destinationWarehouseId]);
+    await assertItemsExistAndActive(prisma, transferItems.map((it) => Number(it.itemId)));
 
     const transfer = await prisma.inventoryTransfer.create({
       data: {
@@ -1092,6 +1102,9 @@ export async function createMaterialIssue(formData: FormData) {
     }
 
     const issue = await prisma.$transaction(async (tx) => {
+      // Dokumen baru hanya untuk master hidup (pola material-request).
+      await assertWarehousesExistAndActive(tx, [v.warehouseId]);
+      await assertItemsExistAndActive(tx, miItems.map((it) => Number(it.itemId)));
       // WO-BR-004: satu WO hanya boleh punya satu MI aktif (draf/diproses/
       // selesai). MI batal tidak dihitung — sesudah batal satu MI pengganti
       // boleh lahir. Cek + lock + create atomik satu tx (pola
@@ -2458,8 +2471,8 @@ export async function createStocktakeSession(formData: FormData) {
     const notesRaw = (formData.get("notes") as string | null) ?? null;
     const notes = notesRaw ? notesRaw.slice(0, 1000) : null;
     await assertWarehouseIdInScope(user, warehouseId);
-    const warehouse = await prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { id: true } });
-    if (!warehouse) throw new Error("Gudang tidak ditemukan");
+    // Sesi baru hanya untuk gudang hidup (pola material-request).
+    await assertWarehousesExistAndActive(prisma, [warehouseId]);
     const parsedDate = dateOnly.safeParse(dateRaw);
     if (!parsedDate.success) throw new Error("Tanggal tidak valid");
     const sessionDate = wibDateToUtcMidnight(parsedDate.data);
