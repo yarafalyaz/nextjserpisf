@@ -4591,16 +4591,34 @@ export async function createAttendance(formData: FormData) {
     const scope = await getHrScope(user);
     await assertHrEmployeeAccess(scope, v.employeeId);
 
-    const data = await buildAttendanceData(v);
-    const attendance = await prisma.attendance.create({
-      data: { employeeId: v.employeeId, ...data },
+    let lateMinutes = 0;
+    const attendance = await prisma.$transaction(async (tx) => {
+      const data = await buildAttendanceData(v, tx);
+      lateMinutes = data.lateMinutes;
+      // Gerbang slip-final yang sama dengan persetujuan koreksi (013-V butir 8):
+      // tanggal dalam rentang slip approved/paid tidak boleh ditulis langsung,
+      // slip final tidak diubah tanpa jalur slip koreksi.
+      const date = wibDateToUtcMidnight(v.date);
+      const finalSlip = await tx.payroll.findFirst({
+        where: {
+          employeeId: v.employeeId,
+          status: { in: FINAL_PAYROLL_STATUSES },
+          startDate: { lte: date },
+          endDate: { gte: date },
+        },
+        select: { id: true },
+      });
+      if (finalSlip) throw new Error(ATTENDANCE_CORRECTION_FINAL_PAYROLL_MESSAGE);
+      return tx.attendance.create({
+        data: { employeeId: v.employeeId, ...data },
+      });
     });
 
     await logActivity(
       "create",
       "Attendance",
       attendance.id,
-      `Mencatat absensi karyawan #${v.employeeId} tanggal ${v.date} (${v.status}, terlambat ${data.lateMinutes} menit)`,
+      `Mencatat absensi karyawan #${v.employeeId} tanggal ${v.date} (${v.status}, terlambat ${lateMinutes} menit)`,
     );
     revalidatePath("/sdm/absensi");
     return { success: true as const, id: attendance.id };
@@ -4628,7 +4646,7 @@ export async function updateAttendance(id: number, formData: FormData) {
 
     const existing = await prisma.attendance.findUniqueOrThrow({
       where: { id: attendanceId },
-      select: { employeeId: true },
+      select: { employeeId: true, date: true },
     });
 
     const scope = await getHrScope(user);
@@ -4638,17 +4656,40 @@ export async function updateAttendance(id: number, formData: FormData) {
       await assertHrEmployeeAccess(scope, v.employeeId);
     }
 
-    const data = await buildAttendanceData(v);
-    await prisma.attendance.update({
-      where: { id: attendanceId },
-      data: { employeeId: v.employeeId, ...data },
+    let lateMinutes = 0;
+    await prisma.$transaction(async (tx) => {
+      const data = await buildAttendanceData(v, tx);
+      lateMinutes = data.lateMinutes;
+      // Gerbang slip-final dua sisi: tanggal asal maupun tanggal tujuan
+      // (karyawan/tanggal bisa berpindah lewat edit) tidak boleh menyentuh
+      // rentang slip approved/paid.
+      const pairs: Array<{ employeeId: number; date: Date }> = [
+        { employeeId: existing.employeeId, date: existing.date },
+        { employeeId: v.employeeId, date: data.date },
+      ];
+      for (const pair of pairs) {
+        const finalSlip = await tx.payroll.findFirst({
+          where: {
+            employeeId: pair.employeeId,
+            status: { in: FINAL_PAYROLL_STATUSES },
+            startDate: { lte: pair.date },
+            endDate: { gte: pair.date },
+          },
+          select: { id: true },
+        });
+        if (finalSlip) throw new Error(ATTENDANCE_CORRECTION_FINAL_PAYROLL_MESSAGE);
+      }
+      await tx.attendance.update({
+        where: { id: attendanceId },
+        data: { employeeId: v.employeeId, ...data },
+      });
     });
 
     await logActivity(
       "update",
       "Attendance",
       attendanceId,
-      `Mengubah absensi karyawan #${v.employeeId} tanggal ${v.date} (${v.status}, terlambat ${data.lateMinutes} menit)`,
+      `Mengubah absensi karyawan #${v.employeeId} tanggal ${v.date} (${v.status}, terlambat ${lateMinutes} menit)`,
     );
     revalidatePath("/sdm/absensi");
     return { success: true as const };
@@ -4671,10 +4712,24 @@ export async function deleteAttendance(id: number) {
     const attendanceId = requirePositiveId(id, "absensi");
     const existing = await prisma.attendance.findUniqueOrThrow({
       where: { id: attendanceId },
-      select: { employeeId: true },
+      select: { employeeId: true, date: true },
     });
     await assertHrEmployeeAccess(await getHrScope(user), existing.employeeId);
-    await prisma.attendance.delete({ where: { id: attendanceId } });
+    await prisma.$transaction(async (tx) => {
+      // Gerbang slip-final: hapus langsung tanggal dalam slip approved/paid
+      // mengubah dasar slip final sama seperti tulis langsung.
+      const finalSlip = await tx.payroll.findFirst({
+        where: {
+          employeeId: existing.employeeId,
+          status: { in: FINAL_PAYROLL_STATUSES },
+          startDate: { lte: existing.date },
+          endDate: { gte: existing.date },
+        },
+        select: { id: true },
+      });
+      if (finalSlip) throw new Error(ATTENDANCE_CORRECTION_FINAL_PAYROLL_MESSAGE);
+      await tx.attendance.delete({ where: { id: attendanceId } });
+    });
     await logActivity("delete", "Attendance", id, `Menghapus absensi #${id}`);
     revalidatePath("/sdm/absensi");
     return { success: true as const };

@@ -2347,9 +2347,38 @@ describe("Absensi Actions", () => {
     prismaMock.employee.findFirst.mockResolvedValue(null)
     prismaMock.workSchedule.findFirst.mockResolvedValue(null)
     prismaMock.attendance.create.mockResolvedValue({ id: 7 })
-    prismaMock.attendance.findUniqueOrThrow.mockResolvedValue({ employeeId: 1 })
+    prismaMock.attendance.findUniqueOrThrow.mockResolvedValue({
+      employeeId: 1,
+      date: new Date("2026-08-17T00:00:00.000Z"),
+    })
     prismaMock.attendance.update.mockResolvedValue({})
     prismaMock.attendance.delete.mockResolvedValue({})
+    // Gerbang slip-final putaran 16: default tanpa slip final.
+    prismaMock.payroll.findFirst.mockResolvedValue(null)
+  })
+
+  it("regresi putaran 16: createAttendance menolak tanggal dalam slip final", async () => {
+    prismaMock.payroll.findFirst.mockResolvedValue({ id: 9 })
+    const res = await actions.createAttendance(fd({ ...dataAbsensi, checkIn: "08:05" }))
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("slip gaji final")
+    expect(prismaMock.attendance.create).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 16: updateAttendance menolak tanggal dalam slip final", async () => {
+    prismaMock.payroll.findFirst.mockResolvedValue({ id: 9 })
+    const res = await actions.updateAttendance(7, fd({ ...dataAbsensi, checkIn: "08:05" }))
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("slip gaji final")
+    expect(prismaMock.attendance.update).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 16: deleteAttendance menolak tanggal dalam slip final", async () => {
+    prismaMock.payroll.findFirst.mockResolvedValue({ id: 9 })
+    const res = await actions.deleteAttendance(7)
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("slip gaji final")
+    expect(prismaMock.attendance.delete).not.toHaveBeenCalled()
   })
 
   it("createAttendance menyimpan tanggal tengah malam UTC dan jam sebagai instan UTC", async () => {
