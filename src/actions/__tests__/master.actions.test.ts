@@ -102,6 +102,45 @@ import * as actions from "../master.actions"
 import { LEAD_LOST_REASON_CATEGORIES } from "@/lib/reports/lead-lost-reason"
 import { Prisma as RealPrisma } from "@prisma/client"
 
+describe("deleteCustomerCategory guard rujukan harga/komisi (putaran 21)", () => {
+  beforeEach(() => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.customerPriceList.count.mockResolvedValue(0)
+    mocks.prismaMock.customerCommissionRate.count.mockResolvedValue(0)
+  })
+
+  it("kategori masih punya baris daftar harga -> ditolak, soft-delete tidak jalan", async () => {
+    mocks.prismaMock.customerPriceList.count.mockResolvedValue(3)
+    const res: any = await actions.deleteCustomerCategory(7)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("3 baris daftar harga")
+    expect(mocks.prismaMock.customerCategory.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.customer.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("kategori masih punya tarif komisi -> ditolak", async () => {
+    mocks.prismaMock.customerCommissionRate.count.mockResolvedValue(2)
+    const res: any = await actions.deleteCustomerCategory(7)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("2 tarif komisi")
+    expect(mocks.prismaMock.customerCategory.update).not.toHaveBeenCalled()
+  })
+
+  it("kategori tanpa rujukan -> soft-delete jalan, pelanggan dilepas", async () => {
+    const res: any = await actions.deleteCustomerCategory(7)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.customer.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { customerCategoryId: 7 } }),
+    )
+    expect(mocks.prismaMock.customerCategory.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 7 },
+        data: expect.objectContaining({ isActive: false, deletedAt: expect.any(Date) }),
+      }),
+    )
+  })
+})
+
 describe("FK fiktif customerCategoryId/paymentTermId (repro)", () => {
   it("createCustomer tolak customerCategoryId fiktif", async () => {
     const res = await actions.createCustomer(fdMap({ name: "X", customerCategoryId: "999999" }))

@@ -3758,20 +3758,49 @@ export async function deleteCustomerCategory(id: number) {
   try {
     const user = await requirePermission("delete_customers");
 
-    await prisma.$transaction([
-      prisma.customer.updateMany({
+    // Daftar harga per kategori + tarif komisi menunjuk kategori ini lewat
+    // relasi FK (Cascade hanya berlaku pada HARD delete). Soft-delete di
+    // bawah melepaskan pelanggan dari kategorinya, tapi kedua master itu
+    // tetap menunjuk kategori mati: daftar harga yatim tidak pernah bisa
+    // dipakai/dikelola dari kategori yang sudah hilang, dan tarif komisi
+    // menggantung tanpa pemilik yang bisa menutup masa tarifnya. Karena itu
+    // hapus ditolak selama masih ada keduanya — konsisten guard di
+    // deleteAssetGroup/Category/Brand. Hitungan di dalam tx bersama klaim
+    // soft-delete supaya pembuat baris konkuren tidak lolos sesudah cek.
+    const blocked = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM customer_categories WHERE id = ${id} FOR UPDATE`;
+      }
+      const [priceRows, rateRows] = await Promise.all([
+        tx.customerPriceList.count({ where: { customerCategoryId: id } }),
+        tx.customerCommissionRate.count({ where: { customerCategoryId: id } }),
+      ]);
+      if (priceRows > 0 || rateRows > 0) {
+        return { priceRows, rateRows };
+      }
+      await tx.customer.updateMany({
         where: { customerCategoryId: id },
         data: {
         updatedBy: Number(user.id), customerCategoryId: null },
-      }),
-      prisma.customerCategory.update({
+      });
+      await tx.customerCategory.update({
         where: { id },
         data: {
           isActive: false,
           deletedAt: new Date(),
         },
-      }),
-    ]);
+      });
+      return null;
+    });
+    if (blocked) {
+      const parts: string[] = [];
+      if (blocked.priceRows > 0) parts.push(`${blocked.priceRows} baris daftar harga`);
+      if (blocked.rateRows > 0) parts.push(`${blocked.rateRows} tarif komisi`);
+      return {
+        success: false,
+        error: `Kategori masih dipakai ${parts.join(" dan ")}. Hapus atau pindahkan dulu sebelum menghapus kategori.`,
+      };
+    }
 
     revalidatePath("/master/kategori-pelanggan");
     await logActivity("delete", "CustomerCategory", id, "Menghapus kategori pelanggan");
