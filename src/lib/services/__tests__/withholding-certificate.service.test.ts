@@ -25,8 +25,13 @@ const mocks = vi.hoisted(() => {
   const executeRaw = vi.fn()
 
   const systemSettingFindFirst = vi.fn()
-  const billFindUnique = vi.fn(async () => ({ id: 42, status: "posted", deletedAt: null }))
-  const paymentFindUnique = vi.fn(async () => ({ id: 88, status: "posted" }))
+  const billFindUnique = vi.fn(async () => ({
+    id: 42, status: "posted", deletedAt: null,
+    withholdingAmount: 200_000, withholdingTypeId: 3, documentNo: "VB-001",
+  }))
+  const paymentFindUnique = vi.fn(async () => ({
+    id: 88, status: "posted", withholdingAmount: 200_000, withholdingTypeId: 3,
+  }))
   const tx: Record<string, unknown> = {
     withholdingCertificate: {
       findFirst: certFindFirst,
@@ -113,8 +118,16 @@ beforeEach(() => {
   })
   mocks.certUpdate.mockResolvedValue({})
   mocks.executeRaw.mockResolvedValue(1)
-  mocks.billFindUnique.mockResolvedValue({ id: 42, status: "posted", deletedAt: null })
-  mocks.paymentFindUnique.mockResolvedValue({ id: 88, status: "posted" })
+  // Default dokumen sumber DENGAN potongan tercatat (kaki jurnal sumber
+  // ada) — revoke ber-jurnal adalah kasus normal; kasus tanpa kaki sumber
+  // ditimpa eksplisit per test di describe putaran 22.
+  mocks.billFindUnique.mockResolvedValue({
+    id: 42, status: "posted", deletedAt: null,
+    withholdingAmount: 200_000, withholdingTypeId: 3, documentNo: "VB-001",
+  })
+  mocks.paymentFindUnique.mockResolvedValue({
+    id: 88, status: "posted", withholdingAmount: 200_000, withholdingTypeId: 3,
+  })
 })
 
 function key() {
@@ -185,7 +198,9 @@ describe("issueWithholdingCertificate guards", () => {
   })
 
   it("bupot atas pembayaran yang sudah dibalik ditolak", async () => {
-    mocks.paymentFindUnique.mockResolvedValue({ id: 88, status: "reversed" })
+    mocks.paymentFindUnique.mockResolvedValue({
+      id: 88, status: "reversed", withholdingAmount: 200_000, withholdingTypeId: 3,
+    })
     const r = await issueWithholdingCertificate({
       direction: "withheld_from_us", certificateNumber: "BP-Y",
       withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Langganan",
@@ -342,6 +357,57 @@ describe("issueWithholdingCertificate guards", () => {
     })
     expect(r.success).toBe(false)
     expect(String(r.error)).toMatch(/tidak dikenal/)
+  })
+})
+
+describe("revokeWithholdingCertificate tanpa kaki sumber (putaran 22)", () => {
+  it("bupot tanpa tautan direvoke tanpa jurnal lawan (register saja dibatalkan)", async () => {
+    mocks.certFindUniqueOrThrow.mockResolvedValue({
+      id: 16, status: "issued", direction: "we_withhold", certificateNumber: "BP-YATIM",
+      withholdingDate: new Date(2026, 0, 10), withholdingTypeId: 3, withheldAmount: 200_000,
+      vendorBillId: null, salesPaymentId: null,
+    })
+    const r = await revokeWithholdingCertificate({ id: 16, idempotencyKey: key(), userId: 5 })
+    expect(r.success).toBe(true)
+    expect(mocks.certUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "revoked" }) }),
+    )
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("bupot tertaut beban tunai (sumber tanpa potongan tercatat) direvoke tanpa jurnal lawan", async () => {
+    mocks.certFindUniqueOrThrow.mockResolvedValue({
+      id: 16, status: "issued", direction: "we_withhold", certificateNumber: "BP-CASH",
+      withholdingDate: new Date(2026, 0, 10), withholdingTypeId: 3, withheldAmount: 200_000,
+      vendorBillId: 42, salesPaymentId: null,
+    })
+    mocks.billFindUnique.mockResolvedValue({
+      id: 42, status: "posted", deletedAt: null,
+      withholdingAmount: 0, withholdingTypeId: null as unknown as number, documentNo: "VB-CASH-1",
+    })
+    const r = await revokeWithholdingCertificate({ id: 16, idempotencyKey: key(), userId: 5 })
+    expect(r.success).toBe(true)
+    expect(mocks.certUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "revoked" }) }),
+    )
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("bupot atas bill dengan potongan tanpa baris TaxInvoice tetap direvoke dengan jurnal lawan", async () => {
+    mocks.certFindUniqueOrThrow.mockResolvedValue({
+      id: 16, status: "issued", direction: "we_withhold", certificateNumber: "BP-OK",
+      withholdingDate: new Date(2026, 0, 10), withholdingTypeId: 3, withheldAmount: 200_000,
+      vendorBillId: 42, salesPaymentId: null,
+    })
+    mocks.billFindUnique.mockResolvedValue({
+      id: 42, status: "posted", deletedAt: null,
+      withholdingAmount: 200_000, withholdingTypeId: 3, documentNo: "VB-OK-1",
+    })
+    const r = await revokeWithholdingCertificate({ id: 16, idempotencyKey: key(), userId: 5 })
+    expect(r.success).toBe(true)
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(1)
+    const journal = mocks.journalCreate.mock.calls[0][0].data
+    expect(journal.referenceType).toBe("WithholdingCertificate")
   })
 })
 

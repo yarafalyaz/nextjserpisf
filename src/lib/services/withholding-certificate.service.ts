@@ -175,6 +175,10 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
       if (input.vendorBillId != null && input.salesPaymentId != null) {
         throw definitive("Bupot hanya boleh tertaut ke satu dokumen sumber")
       }
+      // Bupot tanpa tautan memang legal (register manual, placeholder form
+      // "-- Tanpa tautan --"); konsekuensinya dipegang revoke: tanpa kaki
+      // potongan di jurnal sumber, revoke tidak memposting jurnal lawan
+      // (lihat revokeWithholdingCertificate putaran 22).
       if (input.vendorBillId != null) {
         if (input.direction !== "we_withhold") {
           throw definitive("Bupot atas tagihan vendor wajib arah we_withhold (kita yang memotong)")
@@ -343,6 +347,30 @@ export async function revokeWithholdingCertificate(input: RevokeWithholdingInput
       await tx.$queryRaw`SELECT id FROM withholding_certificates WHERE id = ${input.id} FOR UPDATE`
       const cert = await tx.withholdingCertificate.findUniqueOrThrow({ where: { id: input.id } })
       if (cert.status === "revoked") throw definitive("Bupot ini sudah revoked")
+      // Putaran 22: jurnal lawan hanya sah bila efek potongan benar-benar
+      // lahir di jurnal sumber. Bupot tanpa tautan (register manual legal)
+      // dan bupot atas dokumen tanpa potongan tercatat tidak pernah
+      // menaikkan akun Hutang PPh/PPh dimuka — memposting lawan akan
+      // mengurangi saldo pajak tanpa dasar. Kasus itu revoke cukup
+      // membatalkan register (status revoked, tanpa jurnal).
+      let sourceHasWithholdingLeg = false
+      if (cert.direction === "we_withhold" && cert.vendorBillId != null) {
+        const bill = await tx.vendorBill.findUnique({
+          where: { id: cert.vendorBillId },
+          select: { withholdingAmount: true, withholdingTypeId: true },
+        })
+        sourceHasWithholdingLeg = !!bill
+          && Number(bill.withholdingAmount ?? 0) > 0
+          && bill.withholdingTypeId === cert.withholdingTypeId
+      } else if (cert.direction === "withheld_from_us" && cert.salesPaymentId != null) {
+        const payment = await tx.salesPayment.findUnique({
+          where: { id: cert.salesPaymentId },
+          select: { withholdingAmount: true, withholdingTypeId: true },
+        })
+        sourceHasWithholdingLeg = !!payment
+          && Number(payment.withholdingAmount ?? 0) > 0
+          && payment.withholdingTypeId === cert.withholdingTypeId
+      }
       await assertPeriodOpen(cert.withholdingDate, tx as never)
       const amount = Number(cert.withheldAmount)
       if (!(amount > 0)) throw definitive("Nominal potongan bupot tidak valid untuk revoke")
@@ -376,6 +404,12 @@ export async function revokeWithholdingCertificate(input: RevokeWithholdingInput
         )
       }
       await tx.withholdingCertificate.update({ where: { id: cert.id }, data: { status: "revoked" } })
+      if (!sourceHasWithholdingLeg) {
+        // Tanpa kaki sumber tak ada yang dibalik; nomor jurnal/jurnal lawan
+        // dilewati agar saldo pajak tidak berubah tanpa dasar.
+        await bindIdempotencyKey(tx as never, input.idempotencyKey, "WithholdingCertificate", cert.id)
+        return
+      }
       // Hanya efek potongan yang dibalik; jurnal dokumen sumber utuh.
       const journalNo = await generateDocumentNumber("JRN")
       const journalSlug = await nextTxSlug(tx as never, "journal", journalNo)
