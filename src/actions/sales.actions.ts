@@ -818,6 +818,28 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
       throw new Error("Penawaran sudah ada pelunasan, item tidak bisa diubah lagi")
     }
 
+    // Gerbang hidup payload edit (paritas createQuotation): seluruh tree item
+    // ditulis ulang lalu disebar resyncOnEdit ke SO/faktur draft, dan
+    // QuotationItem.itemId tanpa FK. Edit boleh mempertahankan baris lama
+    // apa adanya, tetapi item mati/fiktif tak boleh DITANAM edit ini. Customer
+    // hanya dinilai bila payload mengganti pihak: relink ke pihak lain
+    // melahirkan dokumen untuk pihak itu; pihak lama tetap non-gerbang
+    // (komentar assertCustomerLiveForNewDocument).
+    const updItemIds = [
+      ...new Set(
+        ((data.sections || []) as Array<{ items?: Array<{ itemId?: unknown }> }>).flatMap((section) =>
+          (section.items || [])
+            .map((item) => (item.itemId ? Number(item.itemId) : null))
+            .filter((id): id is number => id != null && Number.isFinite(id) && id > 0),
+        ),
+      ),
+    ]
+    if (updItemIds.length > 0) await assertItemsExistAndActive(tx, updItemIds)
+    const newCustomerId = data.customerId ? Number(data.customerId) : null
+    if (newCustomerId != null && newCustomerId !== quotation.customerId) {
+      await assertCustomerLiveForNewDocument(tx, newCustomerId)
+    }
+
     // Replace sections + items wholesale: the edit form sends the full section
     // tree, so delete the existing rows and recreate from the payload. Item IDs
     // are not referenced elsewhere (resyncOnEdit re-reads + re-flattens), so

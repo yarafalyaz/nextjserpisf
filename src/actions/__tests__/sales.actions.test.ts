@@ -534,6 +534,47 @@ describe("Quotation Actions", () => {
     // acting user id so a posted invoice can be reversed + re-posted.
     expect(mocks.resyncOnEditMock).toHaveBeenCalledWith(1, expect.any(Number))
   })
+  it("updateQuotation menolak item nonaktif (edit tak boleh tanam item mati lalu resync)", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", customerId: 1 })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ id: 1, status: "draft", revisionNumber: 3 })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 5, name: "Item Mati", isActive: false }])
+    const res = await actions.updateQuotation(1, fdQuotation({
+      ...basicPayload,
+      sections: [{ name: "Jasa", items: [{ itemId: 5, qty: 2, unitPrice: 1000, discount: 0, total: 2000 }] }],
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.quotationSection.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.quotation.update).not.toHaveBeenCalled()
+  })
+  it("updateQuotation menolak item fiktif (QuotationItem.itemId tanpa FK)", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", customerId: 1 })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ id: 1, status: "draft", revisionNumber: 3 })
+    mocks.prismaMock.item.findMany.mockResolvedValue([])
+    const res = await actions.updateQuotation(1, fdQuotation({
+      ...basicPayload,
+      sections: [{ name: "Jasa", items: [{ itemId: 999, qty: 1, unitPrice: 1000, discount: 0, total: 1000 }] }],
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak ditemukan")
+    expect(mocks.prismaMock.quotation.update).not.toHaveBeenCalled()
+  })
+  it("updateQuotation menolak relink ke customer nonaktif (pihak baru = dokumen baru)", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", customerId: 1 })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ id: 1, status: "draft", revisionNumber: 3, customerId: 1 })
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 2, name: "PT Mati", isActive: false })
+    const res = await actions.updateQuotation(1, fdQuotation({ ...basicPayload, customerId: 2 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.quotation.update).not.toHaveBeenCalled()
+  })
+  it("updateQuotation tetap bisa edit bila customer LAMA kini nonaktif (dokumen lama tak digerbang)", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", customerId: 1 })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ id: 1, status: "draft", revisionNumber: 3, customerId: 1 })
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 1, name: "PT Mati", isActive: false })
+    const res = await actions.updateQuotation(1, fdQuotation({ customerId: 1, sections: [], discount: 0, tax: 0 }))
+    expect(res?.success).toBe(true)
+  })
   it("updateQuotation fails on invalid json", async () => {
     const res = await actions.updateQuotation(1, fdMap({ data: "invalid json" }))
     expect(res?.success).toBe(false)
