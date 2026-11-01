@@ -178,6 +178,11 @@ export async function consumeReservationsForMaterialIssueTx(
   for (const item of input.items) {
     const qty = Number(item.qty)
     if (qty <= 0) continue
+    // Dua MI berbeda untuk WO yang sama terserialisasi oleh klaim per dokumen
+    // saja, bukan per WO: kunci baris reservasi aktif SEBELUM dibaca, agar
+    // qtyConsumed dinilai dari versi terbaru dan tidak tertimpa absolut oleh
+    // penyelesaian MI konkuren (cadangan hidup lagi, stok tercatat dobel).
+    await tx.$queryRaw`SELECT id FROM stock_reservations WHERE work_order_id = ${input.workOrderId} AND item_id = ${item.itemId} AND warehouse_id = ${input.warehouseId} AND status = 'active' ORDER BY id FOR UPDATE`
     // STOK-07: konsumsi SEMUA reservasi aktif item+gudang ini berurutan
     // (WO multi-baris material sama melahirkan beberapa reservasi).
     // findFirst tunggal menyisakan reservasi kedua aktif selamanya dan

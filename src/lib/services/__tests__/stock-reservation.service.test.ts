@@ -12,9 +12,11 @@ const findFirstMock = vi.fn()
 const findManyMock = vi.fn()
 const updateMock = vi.fn()
 const updateManyMock = vi.fn()
+const queryRawMock = vi.fn()
 
 function txMock() {
   return {
+    $queryRaw: queryRawMock,
     stockReservation: {
       findFirst: findFirstMock,
       findMany: findManyMock,
@@ -37,6 +39,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   updateMock.mockResolvedValue({})
   updateManyMock.mockResolvedValue({ count: 1 })
+  queryRawMock.mockResolvedValue([{ id: 3 }])
 })
 
 describe("consumeReservationsForMaterialIssueTx", () => {
@@ -83,6 +86,29 @@ describe("consumeReservationsForMaterialIssueTx", () => {
     )
     expect(Number(updateMock.mock.calls[0][0].data.qtyConsumed)).toBe(2)
     expect(out.get(10)).toBe(3)
+  })
+
+  it("mengunci baris reservasi aktif sebelum membacanya (serial dua MI satu WO)", async () => {
+    findManyMock.mockResolvedValue([{
+      id: 3,
+      qtyReserved: new Prisma.Decimal("10.00"),
+      qtyConsumed: new Prisma.Decimal("0.00"),
+    }])
+    await consumeReservationsForMaterialIssueTx(txMock(), {
+      workOrderId: 9,
+      warehouseId: 5,
+      items: [{ itemId: 10, qty: 4 }],
+    })
+    const sqlOf = (c: unknown[]) => {
+      const a = c[0] as { sql?: string; strings?: string[] } | string[]
+      return Array.isArray(a) ? a.join("?") : (a?.sql ?? a?.strings?.join("?") ?? "")
+    }
+    const lockIdx = queryRawMock.mock.calls.findIndex((c) => sqlOf(c).includes("stock_reservations"))
+    expect(lockIdx).toBeGreaterThanOrEqual(0)
+    expect(sqlOf(queryRawMock.mock.calls[lockIdx])).toContain("FOR UPDATE")
+    expect(queryRawMock.mock.invocationCallOrder[lockIdx]).toBeLessThan(
+      findManyMock.mock.invocationCallOrder[0],
+    )
   })
 
   it("STOK-07: dua reservasi aktif 6+6, MI 10 -> konsumsi 6 dan 4, tanpa sisa unreserved", async () => {
