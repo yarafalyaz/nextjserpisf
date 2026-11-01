@@ -1,5 +1,6 @@
 import type { PermissionName } from "@/lib/setup/base-data"
 import "server-only"
+import { Prisma } from "@prisma/client"
 import { hasPermission } from "@/lib/auth/permissions"
 import { auth } from "@/lib/auth/auth"
 import { prisma } from "@/lib/db/prisma"
@@ -52,6 +53,17 @@ const ATTACHMENT_PARENT: Record<string, { model: string; foreignKey: string }> =
   tax_dispute_step: { model: "taxAssessment", foreignKey: "assessmentId" },
 }
 
+// Putaran 51: model referensi lampiran yang PUNYA kolom deletedAt, dibaca
+// dari DMMF skema (preseden bulk.actions.ts) — bukan daftar tangan. Prisma
+// menolak select field yang tidak ada pada model, jadi select deletedAt
+// hanya boleh dikirim ke model yang benar-benar punya kolom itu; 16 dari
+// 30 model referensi lampiran tidak punya (SalesPayment, Expense, dst).
+const MODELS_WITH_DELETED_AT = new Set(
+  Prisma.dmmf.datamodel.models
+    .filter((m) => m.fields.some((f) => f.name === "deletedAt"))
+    .map((m) => m.name.charAt(0).toLowerCase() + m.name.slice(1)),
+)
+
 // F-2026-10-24-096-S: model induk foto tahap/inspeksi.
 for (const [type, model] of Object.entries({
   customer_vehicle: "customerVehicle",
@@ -85,14 +97,16 @@ async function canAccessAttachmentWithPermission(
   const model = (prisma as any)[modelKey]
   if (!model?.findUnique) return false
   // R6PA-02: dokumen induk soft-deleted tidak boleh lagi melayani lampiran
-  // (unduh/daftar/tulis). Model tanpa kolom deletedAt menjawab undefined,
-  // yang lolos cek ini — hanya baris benar-benar terhapus yang ditolak.
+  // (unduh/daftar/tulis). Model tanpa kolom deletedAt tidak ikut dinilai —
+  // select-nya tidak boleh memuat deletedAt (Prisma menolak field tak ada).
   const parent = ATTACHMENT_PARENT[referenceType]
   const document = await model.findUnique({
     where: { id: referenceId },
-    select: parent
-      ? { id: true, deletedAt: true, [parent.foreignKey]: true }
-      : { id: true, deletedAt: true },
+    select: {
+      id: true,
+      ...(MODELS_WITH_DELETED_AT.has(modelKey) ? { deletedAt: true } : {}),
+      ...(parent ? { [parent.foreignKey]: true } : {}),
+    },
   })
   if (!document || document.deletedAt) return false
 
@@ -103,7 +117,10 @@ async function canAccessAttachmentWithPermission(
     if (!parentModel?.findUnique) return false
     const parentDoc = await parentModel.findUnique({
       where: { id: document[parent.foreignKey] },
-      select: { id: true, deletedAt: true },
+      select: {
+        id: true,
+        ...(MODELS_WITH_DELETED_AT.has(parent.model) ? { deletedAt: true } : {}),
+      },
     })
     if (!parentDoc || parentDoc.deletedAt) return false
   }

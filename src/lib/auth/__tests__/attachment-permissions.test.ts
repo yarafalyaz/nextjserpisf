@@ -7,6 +7,13 @@ vi.mock("server-only", () => ({}))
 
 const hasPermissionMock = vi.fn()
 const documentFindUniqueMock = vi.fn()
+// Prisma asli menolak select field yang tidak ada di model; mock delegate
+// biasa menelan select apa pun sehingga kelas bug ini tak terlihat.
+const noDeletedAtFindUniqueMock = vi.fn(async (...callArgs: any[]) => {
+  const args = callArgs[0]
+  if (args?.select?.deletedAt) throw new Error("Unknown field `deletedAt` for select statement on model `SalesPayment`")
+  return { id: 1 }
+})
 const taxDocumentFindUniqueMock = vi.fn()
 const taxParentFindUniqueMock = vi.fn()
 const authMock = vi.fn()
@@ -21,6 +28,7 @@ vi.mock("@/lib/auth/auth", () => ({
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     salesInvoice: { findUnique: (...a: unknown[]) => documentFindUniqueMock(...a) },
+    salesPayment: { findUnique: (...a: unknown[]) => noDeletedAtFindUniqueMock(...a) },
     vendorBill: { findUnique: (...a: unknown[]) => documentFindUniqueMock(...a) },
     stockAdjustment: { findUnique: (...a: unknown[]) => documentFindUniqueMock(...a) },
     warrantyClaim: { findUnique: (...a: unknown[]) => documentFindUniqueMock(...a) },
@@ -102,6 +110,14 @@ describe("canAccessAttachment", () => {
     authMock.mockResolvedValue({ user: { id: 1, roles: ["warehouse_user"] } })
     warehouseAssignmentsMock.mockResolvedValue([{ warehouseId: 4 }])
     await expect(canAccessAttachment("stock_adjustment", 1)).resolves.toBe(true)
+  })
+
+  it("regresi putaran 51: model tanpa kolom deletedAt (SalesPayment) tidak melempar select Prisma", async () => {
+    hasPermissionMock.mockResolvedValue(true)
+    await expect(canAccessAttachment("sales_payment", 1)).resolves.toBe(true)
+    expect(noDeletedAtFindUniqueMock).toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.not.objectContaining({ deletedAt: true }) }),
+    )
   })
 
   it("memakai izin lihat klaim garansi untuk lampiran bukti WarrantyClaim", async () => {
