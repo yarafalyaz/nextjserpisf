@@ -265,6 +265,38 @@ describe("F-027 penugasan", () => {
     expect(lockOrder).toBeLessThan(prismaMock.employeePayrollComponent.findFirst.mock.invocationCallOrder[1])
   })
 
+  it("penugasan: tanggal mulai mustahil 2026-02-30 ditolak tanpa tulis (putaran 22)", async () => {
+    prismaMock.employee.findUnique.mockResolvedValue({ id: 7 })
+    prismaMock.payrollComponent.findUnique.mockResolvedValue({ id: 3, isActive: true, recurrence: "fixed" })
+    const res = await actions.assignEmployeePayrollComponent(fd({
+      employeeId: "7", componentId: "3", defaultAmount: "500000", effectiveFrom: "2026-02-30",
+    }))
+    expect(res.success).toBe(false)
+    expect(prismaMock.employeePayrollComponent.create).not.toHaveBeenCalled()
+  })
+
+  it("penugasan: tanggal selesai mustahil 2026-02-30 ditolak tanpa tulis (putaran 22)", async () => {
+    prismaMock.employee.findUnique.mockResolvedValue({ id: 7 })
+    prismaMock.payrollComponent.findUnique.mockResolvedValue({ id: 3, isActive: true, recurrence: "fixed" })
+    const res = await actions.assignEmployeePayrollComponent(fd({
+      employeeId: "7", componentId: "3", defaultAmount: "500000", effectiveFrom: "2026-05-01", effectiveTo: "2026-02-30",
+    }))
+    expect(res.success).toBe(false)
+    expect(prismaMock.employeePayrollComponent.create).not.toHaveBeenCalled()
+  })
+
+  it("ubah penugasan: tanggal mulai mustahil 2026-02-30 ditolak tanpa tulis (putaran 22)", async () => {
+    prismaMock.employeePayrollComponent.findUnique.mockResolvedValue({
+      id: 21, employeeId: 7, componentId: 3, defaultAmount: 400000,
+      effectiveFrom: new Date("2026-05-01T00:00:00.000Z"), effectiveTo: null, isActive: true,
+    })
+    const res = await actions.updateEmployeePayrollComponent(21, fd({
+      defaultAmount: "500000", effectiveFrom: "2026-02-30", isActive: "true",
+    }))
+    expect(res.success).toBe(false)
+    expect(prismaMock.employeePayrollComponent.update).not.toHaveBeenCalled()
+  })
+
   it("ubah penugasan: irisan yang muncul di bacaan dalam tx ditolak (kunci mendahului cek ulang)", async () => {
     prismaMock.employeePayrollComponent.findUnique.mockResolvedValue({
       id: 21, employeeId: 7, componentId: 3, defaultAmount: 400000,

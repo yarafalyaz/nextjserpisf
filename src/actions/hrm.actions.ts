@@ -414,6 +414,14 @@ export async function assignEmployeePayrollComponent(formData: FormData) {
       throw new Error("Nominal penugasan komponen gaji tidak boleh negatif");
     }
     if (!effectiveFromRaw) throw new Error("Tanggal mulai penugasan wajib diisi");
+    // wibDateToUtcMidnight menggulir 2026-02-30 ke 2 Mar — tolak tanggal
+    // kalender fiktif lewat dateOnly (pola jalur tanggal lain file ini).
+    if (!dateOnly.safeParse(effectiveFromRaw).success) {
+      throw new Error("Tanggal mulai penugasan tidak valid");
+    }
+    if (effectiveToRaw && !dateOnly.safeParse(effectiveToRaw).success) {
+      throw new Error("Tanggal selesai penugasan tidak valid");
+    }
     const effectiveFrom = wibDateToUtcMidnight(effectiveFromRaw);
     const effectiveTo = effectiveToRaw ? wibDateToUtcMidnight(effectiveToRaw) : null;
     if (effectiveTo != null && effectiveTo < effectiveFrom) {
@@ -487,6 +495,12 @@ export async function updateEmployeePayrollComponent(id: number, formData: FormD
     }
     const effectiveFromRaw = String(formData.get("effectiveFrom") ?? "").trim();
     const effectiveToRaw = String(formData.get("effectiveTo") ?? "").trim();
+    if (effectiveFromRaw && !dateOnly.safeParse(effectiveFromRaw).success) {
+      throw new Error("Tanggal mulai penugasan tidak valid");
+    }
+    if (effectiveToRaw && !dateOnly.safeParse(effectiveToRaw).success) {
+      throw new Error("Tanggal selesai penugasan tidak valid");
+    }
     const effectiveFrom = effectiveFromRaw ? wibDateToUtcMidnight(effectiveFromRaw) : existing.effectiveFrom;
     const effectiveTo = formData.get("effectiveTo") == null
       ? existing.effectiveTo
