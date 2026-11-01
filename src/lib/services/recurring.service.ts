@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db/prisma"
+import { prisma, type TxClient } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { nextSlug } from "@/lib/utils/slug-db"
 import { safeAdd } from "@/lib/utils/math"
@@ -80,7 +80,8 @@ export function validateRecurringTemplate(type: string, template: RecurringTempl
   return `Jenis transaksi berulang "${type}" tidak dikenal`
 }
 
-type RecurringDb = Pick<typeof prisma, "journal" | "expense">
+type RecurringDb = Pick<typeof prisma, "journal" | "expense"> &
+  Partial<Pick<TxClient, "$queryRaw">>
 
 /** Creates the scheduled document as a DRAFT and returns a human summary. */
 async function generateDocument(
@@ -99,7 +100,10 @@ async function generateDocument(
     // never be posted (`postJournal` re-checks the lock), so it would be a trap.
     // Failing here is loud and retryable: nextRunDate is only advanced after a
     // successful run, so the occurrence stays due until the period is reopened.
-    await assertPeriodOpen(date)
+    // Cek lewat tx klaim bila ada: bacaan periodLockDate mengambil kunci
+    // system_settings FOR UPDATE, jadi tutup-periode tak bisa menyelip di
+    // antara cek ini dan journal.create (draft jebakan + jadwal sudah maju).
+    await assertPeriodOpen(date, db.$queryRaw ? (db as TxClient) : undefined)
 
     // Idempotency: one schedule = one journal per document date. If the journal is
     // already there (e.g. the process died between the create and the schedule
@@ -143,8 +147,10 @@ async function generateDocument(
   if (schedule.type === "expense") {
     // Gated seperti jalur journal & createExpense biasa: draft tanggal tertutup
     // takkan bisa diproses onExpenseApproved (assertPeriodOpen lagi di hook),
-    // jadi gagal keras di sini dan jadwal tetap due untuk retry.
-    await assertPeriodOpen(date)
+    // jadi gagal keras di sini dan jadwal tetap due untuk retry. Sama seperti
+    // cabang journal: cek lewat tx klaim agar terserialisasi terhadap
+    // tutup-periode.
+    await assertPeriodOpen(date, db.$queryRaw ? (db as TxClient) : undefined)
 
     const documentNo = await generateDocumentNumber("EXP")
     await db.expense.create({

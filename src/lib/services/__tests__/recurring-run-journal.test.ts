@@ -250,6 +250,41 @@ describe("runDueRecurring — journal output", () => {
   })
 })
 
+describe("runDueRecurring — cek periode lewat kunci baris settings (race regresi)", () => {
+  // Lawan: closeAccountingPeriod mengunci system_settings FOR UPDATE lalu set
+  // periodLockDate. Cek periode cron WAJIB mengambil kunci yang sama lewat tx
+  // klaimnya; bacaan findFirst tanpa kunci bisa commit sebelum penutupan lalu
+  // draft lahir di periode yang baru ditutup (jadwal pun sudah maju).
+  function lockedSql(): string {
+    const prismaMock = mocks.prisma as unknown as { $queryRaw: ReturnType<typeof vi.fn> }
+    return prismaMock.$queryRaw.mock.calls
+      .map((call: unknown[]) => {
+        const arg = call[0] as { sql?: string; strings?: string[] } | string[]
+        if (Array.isArray(arg)) return arg.join("?")
+        return arg?.sql ?? arg?.strings?.join("?") ?? ""
+      })
+      .join("\n")
+  }
+
+  it("jalur journal menilai periode lewat $queryRaw FOR UPDATE di tx klaim", async () => {
+    mocks.scheduleFindMany.mockResolvedValue([journalSchedule()])
+
+    const result = await runDueRecurring(new Date(2026, 9, 17), 1)
+
+    expect(result.errors).toEqual([])
+    expect(lockedSql()).toMatch(/system_settings[\s\S]*FOR UPDATE/)
+  })
+
+  it("jalur expense menilai periode lewat $queryRaw FOR UPDATE di tx klaim", async () => {
+    mocks.scheduleFindMany.mockResolvedValue([expenseSchedule()])
+
+    const result = await runDueRecurring(new Date(2026, 9, 17), 1)
+
+    expect(result.errors).toEqual([])
+    expect(lockedSql()).toMatch(/system_settings[\s\S]*FOR UPDATE/)
+  })
+})
+
 describe("runDueRecurring — bookkeeping terikat klaim (race regresi)", () => {
   it("lastResult gagal TIDAK menimpa pemenang: penulisan gagal terikat {id, nextRunDate}", async () => {
     // Pemenang sudah memajukan nextRunDate; run kalah yang gagal membuat
