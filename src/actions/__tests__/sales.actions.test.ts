@@ -830,6 +830,80 @@ describe("Sales Order Actions", () => {
     expect(res?.error).toContain("tidak ditemukan")
     expect(mocks.prismaMock.salesOrder.create).not.toHaveBeenCalled()
   })
+
+  // Regresi putaran 44: updateSalesOrder menulis customerId/quotationId
+  // payload langsung — pindah customer/quotation tanpa satu pun gerbang
+  // create (customer hidup hanya bila berpindah; quotation wajib milik SO
+  // ini/satu-SO-per-quotation/customer cocok/status accepted-approval/
+  // belum kedaluwarsa). Kurangnya gerbang ini menanam SO salah pihak dan
+  // quotation ganda; item baru di createMany juga lolos tanpa penilaian
+  // master hidup walau SalesOrderItem.itemId bare Int tanpa FK.
+  it("regresi putaran 44: updateSalesOrder menolak pindah customer nonaktif", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", customerId: 9, quotationId: null })
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 1, name: "PT Mati", isActive: false })
+    const res = await actions.updateSalesOrder(1, fdMap({ customerId: 1, date: "2026-06-12" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 44: updateSalesOrder menolak pindah ke penawaran milik customer lain", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", customerId: 1, quotationId: 5 })
+    mocks.prismaMock.salesOrder.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ customerId: 2, status: "accepted", validUntil: null })
+    const res = await actions.updateSalesOrder(1, fdMap({ customerId: 1, date: "2026-06-12", quotationId: 8 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("milik customer lain")
+    expect(mocks.prismaMock.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 44: updateSalesOrder menolak pindah ke penawaran yang sudah punya SO lain", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", customerId: 1, quotationId: 5 })
+    mocks.prismaMock.salesOrder.findFirst.mockResolvedValue({ documentNo: "SO-9" })
+    const res = await actions.updateSalesOrder(1, fdMap({ customerId: 1, date: "2026-06-12", quotationId: 8 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("sudah memiliki Pesanan Penjualan SO-9")
+    expect(mocks.prismaMock.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 44: updateSalesOrder menolak pindah ke penawaran belum diterima", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", customerId: 1, quotationId: 5 })
+    mocks.prismaMock.salesOrder.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ customerId: 1, status: "sent", validUntil: null })
+    const res = await actions.updateSalesOrder(1, fdMap({ customerId: 1, date: "2026-06-12", quotationId: 8 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Hanya penawaran approved/accepted")
+    expect(mocks.prismaMock.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 44: updateSalesOrder menolak ganti baris ke item nonaktif", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", customerId: 1, quotationId: null })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 5, name: "Item Mati", isActive: false, deletedAt: null }])
+    const res = await actions.updateSalesOrder(
+      1,
+      fdMap({ customerId: 1, date: "2026-06-12", items: JSON.stringify([{ itemId: 5, qty: 1, unitPrice: 100 }]) }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.salesOrderItem.createMany).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 44: updateSalesOrder tak menilai ulang tautan yang tidak berpindah", async () => {
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", customerId: 9, quotationId: 5 })
+    mocks.prismaMock.customer.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ customerId: 2, status: "sent", validUntil: null })
+    const res = await actions.updateSalesOrder(
+      1,
+      fdMap({ customerId: 9, date: "2026-06-12", quotationId: 5 }),
+    )
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.salesOrder.update).toHaveBeenCalled()
+  })
 })
 
 describe("Sales Invoice Actions", () => {

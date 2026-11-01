@@ -3515,6 +3515,41 @@ export async function updateSalesOrder(id: number, formData: FormData) {
       throw new Error("Sales Order sudah ada pelunasan, item tidak bisa diubah lagi")
     }
 
+    // Putaran 44: tautan payload dinilai seperti create, hanya bila
+    // BERPINDAH dari baris terkunci — customer hidup; quotation dikunci
+    // lalu satu-SO-per-quotation, milik customer SO hasil edit, status
+    // accepted/approved, belum kedaluwarsa. Tanpa ini edit draft bisa
+    // menanam SO salah pihak atau menaut penawaran ganda/kedaluwarsa.
+    if (v.customerId !== existing.customerId) {
+      await assertCustomerLiveForNewDocument(tx, v.customerId)
+    }
+    const effectiveQuotationId = v.quotationId ?? existing.quotationId
+    if (effectiveQuotationId != null && effectiveQuotationId !== existing.quotationId) {
+      await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${effectiveQuotationId} FOR UPDATE`
+      const alreadyConverted = await tx.salesOrder.findFirst({
+        where: { quotationId: effectiveQuotationId, id: { not: id } },
+        select: { documentNo: true },
+      })
+      if (alreadyConverted) {
+        throw new Error(
+          `Penawaran ini sudah memiliki Pesanan Penjualan ${alreadyConverted.documentNo}`,
+        )
+      }
+      const quotation = await tx.quotation.findUnique({
+        where: { id: effectiveQuotationId },
+        select: { customerId: true, status: true, validUntil: true },
+      })
+      if (!quotation) throw new Error("Penawaran tidak ditemukan")
+      if (quotation.customerId !== v.customerId) {
+        throw new Error("Penawaran yang dipilih milik customer lain, tidak bisa dikonversi untuk customer ini")
+      }
+      if (!["accepted", "approved"].includes(quotation.status)) {
+        throw new Error("Hanya penawaran approved/accepted yang dapat dikonversi")
+      }
+      assertQuotationNotExpired(quotation.validUntil)
+      await assertApproved("Quotation", effectiveQuotationId)
+    }
+
     // Fix #1: UPDATE bukan CREATE, dan jangan generate documentNo baru
     const updated = await tx.salesOrder.update({
       where: { id },
@@ -3560,6 +3595,22 @@ export async function updateSalesOrder(id: number, formData: FormData) {
         }
       }
       await tx.salesOrderItem.deleteMany({ where: { salesOrderId: id } })
+
+      // Putaran 44: SalesOrderItem.itemId bare Int tanpa FK — master mati
+      // lolos senyap ke baris baru dan mengalir ke DO/faktur. Nilai hidup
+      // sebelum createMany (paritas createSalesInvoice/updateSalesInvoice).
+      const itemIds = [...new Set(items.map((item) => item.itemId).filter((itemId): itemId is number => itemId != null))]
+      if (itemIds.length > 0) {
+        const masters = await tx.item.findMany({
+          where: { id: { in: itemIds } },
+          select: { id: true, name: true, isActive: true, deletedAt: true },
+        })
+        for (const itemId of itemIds) {
+          const master = masters.find((m) => m.id === itemId)
+          if (!master || master.deletedAt) throw new Error(`Item #${itemId} tidak ditemukan`)
+          if (!master.isActive) throw new Error(`Item ${master.name} tidak aktif; tidak dapat dipesan`)
+        }
+      }
 
       if (items.length > 0) {
         await tx.salesOrderItem.createMany({
