@@ -55,6 +55,7 @@ const mocks = vi.hoisted(() => {
     withholdingCertificate: buildModelMock(),
     withholdingTaxType: buildModelMock(),
     employee: buildModelMock(),
+    taxInvoice: buildModelMock(),
     financialIdempotencyKey: buildModelMock(),
     userWarehouse: buildModelMock(),
     approvalWorkflow: buildModelMock(),
@@ -1508,6 +1509,44 @@ describe("Vendor Bill Actions", () => {
     expect(arg.data.goodsReceiptId).toBe(77)
     mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValue(null)
     mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValue([])
+  })
+
+  // Regresi putaran 43: nomor faktur pajak tempel yang sama pada dua bill
+  // vendor yang sama mengkreditkan PPN Masukan dua kali (hook membaca
+  // nomor tempel valid tanpa register). Create menolak nomor yang sudah
+  // dipakai bill vendor sama non-cancelled lain.
+  it("regresi putaran 43: createVendorBill menolak nomor faktur tempel duplikat vendor sama", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.vendorBill.findFirst.mockResolvedValue({ id: 7, documentNo: "BILL-007" })
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "5000",
+      tax: "550",
+      grandTotal: "5550",
+      taxInvoiceNumber: "010.000-26.12345678",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("sudah dipakai tagihan BILL-007")
+    expect(mocks.prismaMock.vendorBill.create).not.toHaveBeenCalled()
+    mocks.prismaMock.vendorBill.findFirst.mockResolvedValue(null)
+  })
+
+  it("regresi putaran 43: createVendorBill menolak nomor yang sudah jadi kepala register bill lain", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.taxInvoice.findFirst.mockResolvedValue({ id: 3 })
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "5000",
+      tax: "550",
+      grandTotal: "5550",
+      taxInvoiceNumber: "010.000-26.99999999",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("sudah terdaftar sebagai faktur masukan")
+    expect(mocks.prismaMock.vendorBill.create).not.toHaveBeenCalled()
+    mocks.prismaMock.taxInvoice.findFirst.mockResolvedValue(null)
   })
 
   // R8-JB-09: dueDate tak terisi diturunkan dari termin master vendor.

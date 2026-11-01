@@ -522,6 +522,53 @@ async function assertGrBillingWithinReceived(
  * refused into an already-finished HPP instead of hanging WIP.
  */
 /**
+ * Nomor faktur pajak tempel (free-text di bill) tidak boleh ganda
+ * (putaran 43): tanpa baris register TaxInvoice, hook posting mengkreditkan
+ * PPN Masukan dari nomor tempel valid — nomor yang sama pada dua bill
+ * vendor yang sama (atau sudah menjadi kepala register bill lain)
+ * mengkreditkan faktur pemasok yang sama dua kali. Register menegakkan
+ * duplikat per vendor+nomor (tax-invoice.service); titik tempel meniru di
+ * bawah kunci baris vendor pemanggil (serialisasi cek-then-tulis).
+ * Nomor tak-valid memang tidak dikreditkan hook, jadi tidak dijaga.
+ */
+async function assertVendorTaxInvoiceNumberFreeTx(
+  tx: Prisma.TransactionClient,
+  params: { vendorId: number; taxInvoiceNumber: string | null | undefined; excludeBillId?: number },
+): Promise<void> {
+  const number = (params.taxInvoiceNumber ?? "").trim();
+  if (!isValidVendorTaxInvoiceNumber(number)) return;
+  const dupeBill = await tx.vendorBill.findFirst({
+    where: {
+      vendorId: params.vendorId,
+      taxInvoiceNumber: number,
+      status: { not: "cancelled" },
+      deletedAt: null,
+      ...(params.excludeBillId ? { id: { not: params.excludeBillId } } : {}),
+    },
+    select: { id: true, documentNo: true },
+  });
+  if (dupeBill) {
+    throw new Error(
+      `Nomor faktur pajak "${number}" sudah dipakai tagihan ${dupeBill.documentNo} vendor yang sama — satu faktur pemasok tidak boleh dikreditkan dua kali.`,
+    );
+  }
+  const dupeRegister = await tx.taxInvoice.findFirst({
+    where: {
+      direction: "in",
+      taxInvoiceNumber: number,
+      djpStatus: { not: "cancelled" },
+      ...(params.excludeBillId ? { vendorBillId: { not: params.excludeBillId } } : {}),
+    },
+    select: { id: true },
+  });
+  if (dupeRegister) {
+    throw new Error(
+      `Nomor faktur pajak "${number}" sudah terdaftar sebagai faktur masukan tagihan lain — tidak boleh ditempel di sini.`,
+    );
+  }
+}
+
+/**
  * Pasangan PO↔GR bill wajib konsisten (putaran 43): GR menunjuk PO-nya
  * sendiri (`GoodsReceipt.purchaseOrderId`), jadi bill yang menautkan
  * keduanya harus menunjuk PO yang sama — tanpa ini bill hanya-GR (PO
@@ -1826,6 +1873,13 @@ export async function createVendorBill(formData: FormData) {
       // Vendor mati tak boleh melahirkan tagihan (paritas create PO
       // putaran 22): picker menyembunyikannya, server wajib menolak.
       await assertLiveVendorTx(tx, v.vendorId);
+      // Serialisasi guard nomor faktur tempel atas vendor ini + penilaian
+      // duplikatnya (putaran 43) — sebelum dokumen lahir.
+      await tx.$executeRaw`SELECT id FROM vendors WHERE id = ${v.vendorId} FOR UPDATE`;
+      await assertVendorTaxInvoiceNumberFreeTx(tx, {
+        vendorId: v.vendorId,
+        taxInvoiceNumber: v.taxInvoiceNumber,
+      });
       // F-2026-10-24-133-V Putusan 2/4: penanda L3 pada notes menjadikan
       // tagihan ini biaya telat NON-JOB sesudah WO closed. Wajib tanpa
       // tautan PO/GR (tautan = jalur L1/L2), WO closed, alasan tertulis,
@@ -3776,6 +3830,14 @@ export async function updateVendorBill(id: number, formData: FormData) {
       // Edit draft bisa memindah vendor: target baru wajib vendor hidup
       // (gerbang kesamaan PO di bawah hanya berlaku bila bill ber-PO).
       await assertLiveVendorTx(tx, v.vendorId);
+      // Nomor faktur tempel hasil edit dinilai duplikatnya (putaran 43),
+      // terserialisasi atas baris vendor seperti create.
+      await tx.$executeRaw`SELECT id FROM vendors WHERE id = ${v.vendorId} FOR UPDATE`;
+      await assertVendorTaxInvoiceNumberFreeTx(tx, {
+        vendorId: v.vendorId,
+        taxInvoiceNumber: v.taxInvoiceNumber,
+        excludeBillId: id,
+      });
 
       // F-2026-10-24-133-V (temuan QA E133 atas PR #714): edit draft bertanda
       // L3 mengulang penjaga create/confirm yang sama — WO closed+alasan,
@@ -4428,6 +4490,16 @@ export async function setVendorBillTaxInvoiceNumber(
             : `Masa kredit ${creditPeriod} mendahului masa faktur ${invoicePeriod} — nomor tidak bisa dikreditkan.`,
         );
       }
+
+      // Nomor tempel dinilai duplikatnya SEBELUM jurnal dibalik (putaran
+      // 43): bill posted tidak boleh memakai nomor bill vendor lain atau
+      // kepala register bill lain — kredit PPN ganda.
+      await tx.$executeRaw`SELECT id FROM vendors WHERE id = ${fresh.vendorId} FOR UPDATE`;
+      await assertVendorTaxInvoiceNumberFreeTx(tx, {
+        vendorId: fresh.vendorId,
+        taxInvoiceNumber: clean,
+        excludeBillId: id,
+      });
 
       // Jurnal ulang WAJIB dalam periode terbuka: reversal posted asal
       // (assertPeriodOpen atas tanggal jurnal asal di dalam tx) lalu posting
