@@ -1177,3 +1177,52 @@ Vonis GUGUR / tidak diubah (jangan diangkat ulang tanpa bukti baru):
 - MR tertaut WO `closed`: daftar `MATERIAL_REQUEST_WO_BLOCKED_STATUSES = [completed, cancelled]` adalah keputusan desain Q-MR-5 terdokumentasi ("WO tertaut hanya penanda"); memperluas ke closed = kebijakan bisnis, bukan patch sepihak. Catatan terbuka bila user memutuskan closed membekukan permintaan material.
 
 Catatan bersih agent putaran 36 (jangan diangkat ulang): PO confirm/start klaim atomik; completeProductionOrder satu tx; start/complete WO; close/reopen/cancel PO/WO; QC checklist/inspection/NCR; BOM revision create/update/delete + change request (selain rilis #6); production cost selain vendor; MR create/update/transisi (selain transfer #4); MRP/planning tanpa jalur tulis. Insiden lokal: tsc pertama merah `customerNpwpGate` — client Prisma container basi, ditutup `prisma generate` (bukan bug kode).
+
+## Putaran 37 — aset jalur TULIS non-depresiasi (5 fix, 0 vonis)
+
+Pola bersama: jalur tulis aset mempercayai ID/status hasil resolusi lama tanpa
+penilaian ulang hidup di titik tulis. Semua fix menilai ulang di dalam tx
+berkunci (atau gerbang lahir), pola baku putaran 22-36.
+
+1. `2fd088705` fix(asset): jurnal perolehan/pelepasan menolak akun mati —
+   `getAssetGlAccounts` hanya menilai ID > 0; `assetCategoryAccountError`
+   hanya menolak fiktif/terhapus. Fix: `assertAccountsExist(tx, ...)` dalam
+   tx createAsset (akun perolehan) + disposeAsset (akun unik dari entri
+   `buildAssetDisposalEntries`, throw menggulung klaim status); kategori
+   menambah `isActive: true`. Regression 3 (kategori nonaktif, perolehan
+   mati, pelepasan mati). Batch 349.
+2. `05f94c960` fix(asset): transfer aset menolak karyawan mati —
+   `fromEmployeeId`/`toEmployeeId` bare-int tanpa relasi FK ditulis mentah.
+   Helper lokal `assertLiveTransferEmployees` dalam tx create + update
+   (pola `assertLiveRequester`). Regression 2. Batch 351.
+3. `cf7dc16e5` fix(asset): transfer aset menolak aset non-aktif — create
+   mengunci aset tanpa baca status; update relink bebas. Status tujuan
+   wajib `active` sesudah kunci; aset asal dinilai bila revert menulis
+   lokasinya. Regression 2. Batch 353.
+4. `d41e632b3` fix(asset): aset baru wajib lahir berstatus aktif —
+   `assetSchema.status` bebas; lahir `disposed` = buntu permanen, status
+   sampah tak disusutkan cron. Create menolak selain kosong/`active`
+   (vonis F-2026-10-23-117-V). Regression 2. Batch 355.
+5. `d67ef1e6a` fix(asset): update transfer membaca ulang baris transfer
+   dalam tx — snapshot `oldTransfer` luar tx basi terhadap relink
+   konkuren; kunci baris `asset_transfers` + baca segar, revert mengikuti
+   baris segar, aset ketiga dikunci sebelum disentuh. Regression 1.
+   Batch 356.
+
+Daftar bersih agent putaran 37 (jangan diangkat ulang tanpa bukti baru):
+tanggal mustahil aset (dateOnly + refine kalender); angka negatif/overflow
+(skema min 0, Decimal gagal berisik + rollback); peristiwa perubahan aset +
+reklasifikasi + reversal (kunci + requireRoleAccount hidup/grup + anti-replay
+P2002); hapus grup/kategori/merek/aset (kunci + hitungan dalam tx); relink
+updateAsset (parameter beku F-118-V, model-merek dinilai ulang, harga
+terkunci bila jurnal ada); inti disposeAsset (klaim kondisional + nilai buku
+jurnal POSTED terkunci) selain penilaian akun fix #1; upsertAssetUsageRecord
+(baca ulang terkunci, unik skema); generateAssetFiscalYearRows idempoten
+(unik + skipDuplicates, wilayah vonis fiskal lama); jadwal perawatan aset
+tidak punya jalur tulis; kategori/brand/grup fiktif createAsset kena FK DB
+berisik; disposalDate/purchaseDate relatif = calon lemah diabaikan.
+
+Catatan insiden: fixture `account.findMany.mockResolvedValue([])` persisten
+meracuni 8 test sesudahnya — diganti `mockResolvedValueOnce` (pola
+vi.clearAllMocks tidak membuang implementasi). Satu run vitest gagal muat
+config sesaat (ESM/CJS), rerun hijau — flake host, bukan kode.
