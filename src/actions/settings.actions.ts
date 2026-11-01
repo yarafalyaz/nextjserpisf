@@ -149,14 +149,12 @@ export async function updateSystemSettings(formData: FormData) {
         }
         return v
       })(),
-      companyPkpEffectiveFrom: (() => {
-        if (!has("companyPkpEffectiveFrom")) return undefined
-        const v = formData.get("companyPkpEffectiveFrom")
-        if (!v || String(v).trim() === "") return null
-        const d = new Date(String(v))
-        if (Number.isNaN(d.getTime())) throw new Error("Tanggal mulai kewajiban PKP tidak valid.")
-        return d
-      })(),
+      // Nilai dari skema (dateOnly + tengah malam UTC): parse manual
+      // `new Date(String(v))` lama hanya menjaga NaN, jadi 2026-02-30
+      // bergeser diam-diam ke 2 Mar dan tersimpan sebagai awal kewajiban.
+      companyPkpEffectiveFrom: has("companyPkpEffectiveFrom")
+        ? parsed.data.companyPkpEffectiveFrom
+        : undefined,
       companyPkpSource: strNull("companyPkpSource"),
       companyLogo: strNull("companyLogo"),
       companyLogoDark: strNull("companyLogoDark"),

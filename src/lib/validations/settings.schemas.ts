@@ -1,5 +1,7 @@
 import { z } from "zod"
 import "./zod-locale";
+import { dateOnly } from "@/lib/validations/finance.schemas";
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 
 const optionalString = (max = 255) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
@@ -55,9 +57,12 @@ export const updateSystemSettingsSchema = z.object({
   // Form kirim string kosong untuk "belum diisi" — normalkan ke null
   // supaya coerce.date tidak mengubah "" menjadi Invalid Date.
   companyPkpStatus: z.enum(["non_pkp", "pkp", "unknown"]).nullable().optional(),
+  // Hari mustahil (2026-02-30) ditolak dateOnly; z.coerce.date lama
+  // menggulirkannya ke 2 Mar. Konversi ke tengah malam UTC hari WIB sama
+  // seperti jalur aksi lain.
   companyPkpEffectiveFrom: z.preprocess(
     (v) => (v === "" || v == null ? null : v),
-    z.coerce.date().nullable().optional(),
+    dateOnly.transform((value) => wibDateToUtcMidnight(value)).nullable().optional(),
   ),
   companyPkpSource: optionalNullString(),
   companyLogo: optionalNullString(500),

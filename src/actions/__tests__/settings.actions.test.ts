@@ -145,6 +145,20 @@ describe("updateSystemSettings gerbang PKP tanpa tanggal (F-2026-10-25-015-V)", 
     )
     expect(mocks.updateMock).toHaveBeenCalledTimes(1)
   })
+
+  it("(d) tanggal mustahil 2026-02-30 ditolak skema, tanpa update DB", async () => {
+    const fdMustahil = fd({ companyPkpStatus: "pkp", companyPkpEffectiveFrom: "2026-02-30" })
+    await expect(updateSystemSettings(fdMustahil)).rejects.toThrow(/tidak valid/i)
+    expect(mocks.updateMock).not.toHaveBeenCalled()
+  })
+
+  it("(e) tanggal sah tersimpan sebagai tengah malam UTC hari WIB", async () => {
+    await expect(
+      updateSystemSettings(fd({ companyPkpStatus: "pkp", companyPkpEffectiveFrom: "2025-01-01" })),
+    ).rejects.toThrow("NEXT_REDIRECT")
+    const data = mocks.updateMock.mock.calls.at(-1)![0].data
+    expect((data.companyPkpEffectiveFrom as Date).toISOString()).toBe("2025-01-01T00:00:00.000Z")
+  })
 })
 
 // t_de3aba0b (temuan QA 28 Okt 2026): lima mapping akun yang dibaca jalur uang
