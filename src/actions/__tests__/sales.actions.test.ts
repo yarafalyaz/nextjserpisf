@@ -772,6 +772,13 @@ describe("Sales Order Actions", () => {
     }
     expect(mocks.prismaMock.salesOrder.update).not.toHaveBeenCalled()
   })
+  it("regresi putaran 49: updateSalesOrder menolak SO approved — persetujuan manual bukan status boleh-edit", async () => {
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved" })
+    const res = await actions.updateSalesOrder(1, fdMap({ customerId: 1, date: "2026-06-12" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak bisa diubah")
+    expect(mocks.prismaMock.salesOrder.update).not.toHaveBeenCalled()
+  })
   it("updateSalesOrder menolak bila faktur turunan sudah posted (G5 GL-BR-003)", async () => {
     mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     mocks.prismaMock.salesInvoice.findFirst.mockResolvedValueOnce({ id: 9 })

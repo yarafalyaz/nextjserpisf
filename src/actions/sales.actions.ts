@@ -3496,11 +3496,16 @@ export async function updateSalesOrder(id: number, formData: FormData) {
     }
     const existing = await tx.salesOrder.findUniqueOrThrow({ where: { id } })
     // GL-BR-003 K1 (AC-GL-005): dokumen posted/final immutable — edit SO hanya
-    // draft/approved. SO tidak punya status posted sendiri, jadi tolak semua
-    // final: sent/confirmed/processing/partial/completed/cancelled. Di luar
-    // itu, edit terkunci bila faktur turunan sudah posted atau berpelunasan
-    // nyata (jalur koreksi sah: retur/void, bukan edit SO).
-    const SO_FINAL_STATUSES = ["sent", "confirmed", "processing", "partial", "completed", "cancelled"] as const
+    // draft. SO tidak punya status posted sendiri, jadi tolak semua final:
+    // sent/confirmed/processing/partial/completed/cancelled. Putaran 49:
+    // `approved` yang dicapai lewat tombol persetujuan manual ikut ditolak —
+    // persetujuan menempel pada isi yang disetujui, dan tanpa cek basi
+    // (SalesOrder bukan workflow yang bisa dikonfigurasi) edit material
+    // atasnya akan tetap dikirim/difaktur seolah isi baru ikut disetujui.
+    // Edit draft tidak berubah. Di luar status, edit terkunci bila faktur
+    // turunan sudah posted atau berpelunasan nyata (jalur koreksi sah:
+    // retur/void, bukan edit SO).
+    const SO_FINAL_STATUSES = ["approved", "sent", "confirmed", "processing", "partial", "completed", "cancelled"] as const
     if ((SO_FINAL_STATUSES as readonly string[]).includes(existing.status)) {
       throw new Error(`Sales Order berstatus '${existing.status}' tidak bisa diubah; hanya draf/disertai yang bisa diedit.`)
     }
