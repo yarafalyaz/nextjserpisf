@@ -1801,6 +1801,16 @@ describe('Coverage Hardening Edge Cases', () => {
     expect(lockSqls.some((s: string) => s.includes("employees") && s.includes("FOR UPDATE"))).toBe(true)
   })
 
+  it('regression round 18: updateEmployee mengunci baris atasan baru juga (anti siklus silang A<->B)', async () => {
+    mocks.prismaMock.employee.findUnique.mockReset()
+    mocks.prismaMock.employee.findUnique.mockResolvedValue({ userId: null, managerId: null })
+    const res = await actions.updateEmployee(1, fdMap({ name: "A", joinDate: "2026-06-13", managerId: "2" }))
+    expect(res?.success).toBe(true)
+    const lockValues = (mocks.prismaMock.$executeRaw.mock.calls as unknown[][]).map((c) => c[1])
+    expect(lockValues).toContain(1)
+    expect(lockValues).toContain(2)
+  })
+
   it('updateEmployee - update synced user success', async () => {
     mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: 1 })
     mocks.prismaMock.user.findUnique.mockResolvedValueOnce(null) // no clash

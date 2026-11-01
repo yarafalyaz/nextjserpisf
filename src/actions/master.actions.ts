@@ -1612,7 +1612,16 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       // bisa sama-sama lolos dan meninggalkan User yatim aktif (userId
       // @unique menahan tautan kedua, bukan pembuatan user-nya) atau siklus
       // atasan timbal-balik. Nilai ulang keduanya dari baris terkunci.
-      await tx.$executeRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
+      // Kunci baris target DAN baris atasan baru, urut id (pola updateAccount):
+      // hanya mengunci target membiarkan dua update silang A->B dan B->A
+      // sama-sama lolos walk rantai dari snapshot masing-masing, commit
+      // menjadi siklus atasan 2-node permanen di pohon organisasi.
+      const lockIds = [...new Set(
+        employeeFields.managerId != null ? [employeeId, employeeFields.managerId] : [employeeId],
+      )].sort((a, b) => a - b);
+      for (const lockId of lockIds) {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${lockId} FOR UPDATE`;
+      }
       const lockedCurrent = await tx.employee.findUnique({
         where: { id: employeeId },
         select: { userId: true },
