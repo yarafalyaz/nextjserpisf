@@ -162,9 +162,16 @@ async function assertCanModifyEmployeeTarget(
  * reflect reality and an empty list yields PREFIX-0001) while protecting
  * referential integrity for masters tied to transactions.
  *
- * Safe by schema design: no transaction->master relation uses onDelete: Cascade,
- * so a hard delete can never wipe transactional data — it is always Restricted
- * (or SetNull for nullable, non-historical links such as Task.assignedTo).
+ * Safe by schema design for TRANSACTIONAL data: no transaction->master
+ * relation uses onDelete: Cascade, so a hard delete can never wipe
+ * transactional data — it is always Restricted (or SetNull for nullable,
+ * non-historical links such as Task.assignedTo).
+ *
+ * Master-to-master satellites DO use Cascade (VendorItemPrice,
+ * CustomerPriceList, ItemWarehouseSetting, UomConversion, VehicleFitmentRule,
+ * ItemSubstitute): a hard delete would succeed and silently wipe those
+ * reference rows. Callers must pass `cascadeCounts` — when any satellite row
+ * exists, the helper goes straight to soft-delete so the satellite survives.
  *
  * The soft-delete fallback also clears `isActive`. A row that keeps isActive=true
  * while deletedAt is set stays visible in every picker and list that filters by
@@ -173,7 +180,17 @@ async function assertCanModifyEmployeeTarget(
 async function hardDeleteOrSoftDelete(
   hardDelete: () => Promise<unknown>,
   softDelete: () => Promise<unknown>,
+  cascadeCounts: (() => Promise<number>)[] = [],
 ): Promise<void> {
+  // ponytail: counts read outside a row lock — a satellite row created in the
+  // same instant as the delete can still be cascade-wiped. Add a master-row
+  // FOR UPDATE tx (pattern deleteProject) when satellite creation grows locks.
+  for (const countSatellite of cascadeCounts) {
+    if ((await countSatellite()) > 0) {
+      await softDelete();
+      return;
+    }
+  }
   try {
     await hardDelete();
   } catch (e) {
@@ -2883,6 +2900,7 @@ export async function deleteVendor(id: number) {
           data: {
         updatedBy: Number(user.id), deletedAt: new Date(), isActive: false },
         }),
+      [() => prisma.vendorItemPrice.count({ where: { vendorId: id } })],
     );
 
     revalidatePath("/master/vendor");
@@ -2903,6 +2921,17 @@ export async function deleteItem(id: number) {
       () => prisma.item.delete({ where: { id } }),
       () =>
         prisma.item.update({ where: { id }, data: { deletedAt: new Date(), isActive: false } }),
+      [
+        () => prisma.vendorItemPrice.count({ where: { itemId: id } }),
+        () => prisma.customerPriceList.count({ where: { itemId: id } }),
+        () => prisma.itemWarehouseSetting.count({ where: { itemId: id } }),
+        () => prisma.uomConversion.count({ where: { itemId: id } }),
+        () => prisma.vehicleFitmentRule.count({ where: { itemId: id } }),
+        () =>
+          prisma.itemSubstitute.count({
+            where: { OR: [{ itemId: id }, { substituteItemId: id }] },
+          }),
+      ],
     );
 
     revalidatePath("/master/barang");
@@ -2926,6 +2955,7 @@ export async function deleteWarehouse(id: number) {
           where: { id },
           data: { deletedAt: new Date(), isActive: false },
         }),
+      [() => prisma.itemWarehouseSetting.count({ where: { warehouseId: id } })],
     );
 
     revalidatePath("/master/gudang");

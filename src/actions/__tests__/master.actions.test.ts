@@ -56,6 +56,12 @@ const mocks = vi.hoisted(() => {
     user: buildModelMock(),
     uomConversion: buildModelMock(),
     unitOfMeasure: buildModelMock(),
+    // Satelit Cascade master (guard hardDeleteOrSoftDelete).
+    vendorItemPrice: buildModelMock(),
+    customerPriceList: buildModelMock(),
+    itemWarehouseSetting: buildModelMock(),
+    vehicleFitmentRule: buildModelMock(),
+    itemSubstitute: buildModelMock(),
 
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
@@ -1924,6 +1930,35 @@ describe('Coverage Hardening Edge Cases', () => {
     const res = await actions.deleteVendor(1)
     expect(res?.success).toBe(true)
     expect(mocks.prismaMock.vendor.update).toHaveBeenCalled()
+  })
+
+  it('deleteVendor - harga vendor (Cascade) memaksa soft-delete tanpa hard delete', async () => {
+    mocks.prismaMock.vendorItemPrice.count.mockResolvedValue(3)
+    const res = await actions.deleteVendor(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vendor.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vendor.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1 }, data: expect.objectContaining({ isActive: false }) }),
+    )
+    mocks.prismaMock.vendorItemPrice.count.mockResolvedValue(0)
+  })
+
+  it('deleteItem - satelit Cascade (konversi satuan) memaksa soft-delete', async () => {
+    mocks.prismaMock.uomConversion.count.mockResolvedValue(2)
+    const res = await actions.deleteItem(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.item.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.item.update).toHaveBeenCalled()
+    mocks.prismaMock.uomConversion.count.mockResolvedValue(0)
+  })
+
+  it('deleteWarehouse - pengaturan stok gudang (Cascade) memaksa soft-delete', async () => {
+    mocks.prismaMock.itemWarehouseSetting.count.mockResolvedValue(1)
+    const res = await actions.deleteWarehouse(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.warehouse.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.warehouse.update).toHaveBeenCalled()
+    mocks.prismaMock.itemWarehouseSetting.count.mockResolvedValue(0)
   })
 
   it('deleteItem - soft delete', async () => {
