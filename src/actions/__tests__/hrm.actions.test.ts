@@ -2668,6 +2668,26 @@ describe("Absensi Actions", () => {
     mocks.hrScopeOverride.current = null
   })
 
+  it("createPkwtEvent menolak segmen mulai mustahil (putaran 20)", async () => {
+    ;(prismaMock as any).pkwtCompensationEvent = { create: vi.fn() }
+    const res = await actions.createPkwtEvent(fd({
+      employeeId: "1", segmentStart: "2026-02-30", segmentEnd: "2026-06-30",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/tanggal/i)
+    expect((prismaMock as any).pkwtCompensationEvent.create).not.toHaveBeenCalled()
+  })
+
+  it("createPkwtEvent menolak segmen akhir mustahil (putaran 20)", async () => {
+    ;(prismaMock as any).pkwtCompensationEvent = { create: vi.fn() }
+    const res = await actions.createPkwtEvent(fd({
+      employeeId: "1", segmentStart: "2026-01-01", segmentEnd: "2026-04-31",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/tanggal/i)
+    expect((prismaMock as any).pkwtCompensationEvent.create).not.toHaveBeenCalled()
+  })
+
   it("round2 residual: approvePkwtEvent team scope menolak peristiwa karyawan di luar tim", async () => {
     mocks.hrScopeOverride.current = { kind: "team", employeeId: 1, memberIds: [1, 2] }
     ;(prismaMock as any).pkwtCompensationEvent = (prismaMock as any).pkwtCompensationEvent ?? { findUnique: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) }

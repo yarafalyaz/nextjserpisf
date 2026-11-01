@@ -5561,6 +5561,10 @@ export async function recordEmployeeLoanCashRepayment(formData: FormData) {
       throw new Error("Akun kas/bank penerima setoran wajib diisi (BR-LOAN-07)");
     }
     if (!repaymentDateRaw) throw new Error("Tanggal setoran wajib diisi (BR-LOAN-07)");
+    // `wibDateToUtcMidnight` menggulirkan 2026-02-30 ke Maret — tolak dulu.
+    if (!dateOnly.safeParse(repaymentDateRaw).success) {
+      throw new Error("Tanggal setoran tidak valid (BR-LOAN-07)");
+    }
     if (!notes) throw new Error("Bukti/alasan setoran wajib diisi (BR-LOAN-07)");
 
     const repaymentDate = wibDateToUtcMidnight(repaymentDateRaw);
@@ -5651,6 +5655,10 @@ export async function writeOffEmployeeLoan(formData: FormData) {
     const reason = String(formData.get("reason") ?? "").trim();
     if (!Number.isSafeInteger(loanId) || loanId <= 0) throw new Error("Pinjaman tidak valid");
     if (!writeOffDateRaw) throw new Error("Tanggal write-off wajib diisi (BR-LOAN-08)");
+    // `wibDateToUtcMidnight` menggulirkan 2026-02-30 ke Maret — tolak dulu.
+    if (!dateOnly.safeParse(writeOffDateRaw).success) {
+      throw new Error("Tanggal write-off tidak valid (BR-LOAN-08)");
+    }
     if (!reason) throw new Error("Alasan write-off wajib diisi (BR-LOAN-08)");
 
     const writeOffDate = wibDateToUtcMidnight(writeOffDateRaw);
@@ -6038,6 +6046,10 @@ export async function getEmployeeLifecycleAttention() {
 function parsePkwtDate(value: FormDataEntryValue | null, label: string): Date {
   const s = typeof value === "string" ? value.trim() : "";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) throw new Error(`Tanggal ${label} peristiwa PKWT wajib YYYY-MM-DD`);
+  // Regex hanya cocok bentuk; 2026-02-30 tetap harus ditolak.
+  if (!dateOnly.safeParse(s).success) {
+    throw new Error(`Tanggal ${label} peristiwa PKWT tidak valid`);
+  }
   return wibDateToUtcMidnight(s);
 }
 

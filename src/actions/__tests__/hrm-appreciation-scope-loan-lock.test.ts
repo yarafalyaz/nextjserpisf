@@ -216,6 +216,26 @@ describe("BUGHUNT #10 — kunci baris pinjaman dalam tx", () => {
     expect(mocks.onWrittenOffMock).toHaveBeenCalled()
   })
 
+  it("setoran: tanggal kalender mustahil ditolak, nol dokumen (putaran 20)", async () => {
+    const res = await recordEmployeeLoanCashRepayment(
+      fd({ loanId: "3", amount: "100000", cashAccountId: "100", repaymentDate: "2026-02-30", notes: "setor tunai" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/tanggal/i)
+    expect(mocks.tx.employeeLoanRepayment.create).not.toHaveBeenCalled()
+    expect(mocks.tx.employeeLoan.update).not.toHaveBeenCalled()
+  })
+
+  it("write-off: tanggal kalender mustahil ditolak, nol dokumen (putaran 20)", async () => {
+    const res = await writeOffEmployeeLoan(
+      fd({ loanId: "3", writeOffDate: "2026-02-30", reason: "tak tertagih" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/tanggal/i)
+    expect(mocks.tx.employeeLoanWriteOff.create).not.toHaveBeenCalled()
+    expect(mocks.tx.employeeLoan.update).not.toHaveBeenCalled()
+  })
+
   it("write-off: status paid_off hasil balapan konkuren ditolak, nol dokumen", async () => {
     mocks.tx.employeeLoan.findUniqueOrThrow.mockImplementation(async () => {
       mocks.order.push("txLoanRead")
