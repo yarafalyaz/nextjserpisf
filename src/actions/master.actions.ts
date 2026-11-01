@@ -2740,9 +2740,11 @@ export async function createTaxGroup(formData: FormData) {
     const parsedTaxIds = rawTaxIds.map((id) => safeId(id));
     if (parsedTaxIds.some((id) => id === null) || parsedTaxIds.length === 0) throw new Error("Kelompok pajak wajib berisi minimal satu pajak yang valid");
     const taxIds = [...new Set(parsedTaxIds as number[])];
-    // tax_group_taxes.tax_id tanpa FK DB: cek pajak ada & belum terhapus pra-tulis,
-    // kalau tidak baris yatim lolos dan kelompok tampil kosong/rusak.
-    const foundTaxes = await prisma.tax.findMany({ where: { id: { in: taxIds }, deletedAt: null }, select: { id: true } });
+    // tax_group_taxes.tax_id ber-FK Restrict: pajak tidak ada ditolak FK,
+    // tetapi pajak NONAKTIF lolos. Cek pajak ada, aktif, & belum terhapus
+    // pra-tulis — sesuai pesan error di bawah — kalau tidak kelompok memuat
+    // pajak mati yang tidak pernah boleh dipakai dokumen.
+    const foundTaxes = await prisma.tax.findMany({ where: { id: { in: taxIds }, isActive: true, deletedAt: null }, select: { id: true } });
     if (foundTaxes.length !== taxIds.length) throw new Error("Pajak dalam kelompok tidak ditemukan atau nonaktif");
 
     const taxGroup = await prisma.taxGroup.create({
@@ -2778,7 +2780,7 @@ export async function updateTaxGroup(id: number, formData: FormData) {
     const parsedTaxIds = rawTaxIds.map((t) => safeId(t));
     if (parsedTaxIds.some((id) => id === null) || parsedTaxIds.length === 0) throw new Error("Kelompok pajak wajib berisi minimal satu pajak yang valid");
     const taxIds = [...new Set(parsedTaxIds as number[])];
-    const foundTaxes = await prisma.tax.findMany({ where: { id: { in: taxIds }, deletedAt: null }, select: { id: true } });
+    const foundTaxes = await prisma.tax.findMany({ where: { id: { in: taxIds }, isActive: true, deletedAt: null }, select: { id: true } });
     if (foundTaxes.length !== taxIds.length) throw new Error("Pajak dalam kelompok tidak ditemukan atau nonaktif");
     await prisma.$transaction([
       prisma.taxGroupTax.deleteMany({ where: { taxGroupId: id } }),

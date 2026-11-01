@@ -40,7 +40,13 @@ beforeEach(() => {
   mocks.prismaMock.taxGroup.create.mockResolvedValue({ id: 1 })
   mocks.prismaMock.taxGroup.update.mockResolvedValue({ id: 1 })
   mocks.prismaMock.taxGroupTax.deleteMany.mockResolvedValue({ count: 1 })
-  mocks.prismaMock.tax.findMany.mockImplementation(async ({ where }: any) => where.id.in.filter((id: number) => id === 1).map((id: number) => ({ id })))
+  // DB semu: pajak 1 aktif-hidup; pajak 2 ADA tetapi nonaktif (isActive false,
+  // deletedAt null) — hanya lolos bila query produksi tidak menyaring isActive.
+  mocks.prismaMock.tax.findMany.mockImplementation(async ({ where }: any) =>
+    where.id.in
+      .filter((id: number) => id === 1 || (id === 2 && where.isActive !== true))
+      .map((id: number) => ({ id })),
+  )
   mocks.prismaMock.$transaction.mockImplementation(async (ops: any) => Array.isArray(ops) ? Promise.all(ops) : ops(mocks.prismaMock))
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
@@ -69,8 +75,22 @@ describe("TaxGroup taxIds wajib ada & aktif", () => {
   it("create lolos bila semua pajak ada", async () => {
     const res = await actions.createTaxGroup(fd("Grup", ["1"]))
     expect(res.success).toBe(true)
-    expect(mocks.prismaMock.tax.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: { in: [1] }, deletedAt: null }) }))
+    expect(mocks.prismaMock.tax.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: { in: [1] }, isActive: true, deletedAt: null }) }))
     expect(mocks.prismaMock.taxGroup.create).toHaveBeenCalled()
+  })
+
+  it("create tolak pajak nonaktif tanpa create", async () => {
+    const res = await actions.createTaxGroup(fd("Grup", ["2"]))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toMatch(/tidak ditemukan atau nonaktif/)
+    expect(mocks.prismaMock.taxGroup.create).not.toHaveBeenCalled()
+  })
+
+  it("update tolak pajak nonaktif tanpa deleteMany/update", async () => {
+    const res = await actions.updateTaxGroup(1, fd("Grup", ["2"]))
+    expect(res.success).toBe(false)
+    expect(mocks.prismaMock.taxGroupTax.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.taxGroup.update).not.toHaveBeenCalled()
   })
 
   it("create dedup taxIds duplikat", async () => {
