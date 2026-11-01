@@ -6193,9 +6193,12 @@ export async function approveEmployeeRoster(id: number) {
     const rosterId = requirePositiveId(id, "roster");
     const loaded = await prisma.employeeRoster.findUnique({
       where: { id: rosterId },
-      select: { employeeId: true, status: true },
+      select: { employeeId: true, status: true, createdBy: true },
     });
     if (!loaded) throw new Error("Roster tidak ditemukan");
+    if (loaded.createdBy === Number(user.id)) {
+      throw new Error("Pembuat roster tidak boleh menyetujui roster yang ia buat sendiri");
+    }
     const scope = await getHrScope(user);
     await assertHrEmployeeAccess(scope, loaded.employeeId);
     const approverId = await rosterApproverEmployeeId(user.id);
@@ -6227,9 +6230,12 @@ export async function rejectEmployeeRoster(id: number) {
     const rosterId = requirePositiveId(id, "roster");
     const loaded = await prisma.employeeRoster.findUnique({
       where: { id: rosterId },
-      select: { employeeId: true, status: true },
+      select: { employeeId: true, status: true, createdBy: true },
     });
     if (!loaded) throw new Error("Roster tidak ditemukan");
+    if (loaded.createdBy === Number(user.id)) {
+      throw new Error("Pembuat roster tidak boleh menolak roster yang ia buat sendiri");
+    }
     const scope = await getHrScope(user);
     await assertHrEmployeeAccess(scope, loaded.employeeId);
 

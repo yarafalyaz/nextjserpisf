@@ -2800,6 +2800,26 @@ describe("Employee Roster Actions", () => {
     expect(args.data.approvedAt).toBeInstanceOf(Date)
   })
 
+  it("approveEmployeeRoster menolak pembuat roster (maker-checker)", async () => {
+    prismaMock.employeeRoster.findUnique.mockResolvedValue({
+      employeeId: 7, status: "draft", createdBy: 1,
+    })
+    const res = await actions.approveEmployeeRoster(5)
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toMatch(/membuat sendiri|sendiri/i)
+    expect(prismaMock.employeeRoster.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("rejectEmployeeRoster menolak pembuat roster (maker-checker)", async () => {
+    prismaMock.employeeRoster.findUnique.mockResolvedValue({
+      employeeId: 7, status: "draft", createdBy: 1,
+    })
+    const res = await actions.rejectEmployeeRoster(5)
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toMatch(/membuat sendiri|sendiri/i)
+    expect(prismaMock.employeeRoster.updateMany).not.toHaveBeenCalled()
+  })
+
   it("approveEmployeeRoster menolak self-approve", async () => {
     prismaMock.employee.findFirst.mockResolvedValue({ id: 7 })
     const res = await actions.approveEmployeeRoster(5)
