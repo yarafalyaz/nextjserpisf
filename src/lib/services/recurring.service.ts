@@ -224,9 +224,14 @@ export async function runDueRecurring(
       // Klaim atomik + dokumen dalam SATU tx (pola sama runRecurringNow):
       // klaim nextRunDate lama dulu; count 0 = eksekusi lain sudah menang,
       // lewati tanpa dokumen. Dokumen gagal = klaim ikut rollback.
+      // Syarat isActive/deletedAt: scan due berjalan di luar tx, jadi hapus
+      // atau nonaktifkan konkuren sesudah scan tidak memajukan nextRunDate
+      // dan klaim {id, nextRunDate} saja tetap cocok — dokumen DRAFT akan
+      // lahir untuk jadwal yang sudah mati. Mengikat status hidup ke klaim
+      // membuat jadwal mati kalah klaim dan dilewati.
       const label = await prisma.$transaction(async (tx) => {
         const claimed = await tx.recurringTransaction.updateMany({
-          where: { id: schedule.id, nextRunDate: runDate },
+          where: { id: schedule.id, nextRunDate: runDate, isActive: true, deletedAt: null },
           data: {
             lastRunAt: asOf,
             runCount: { increment: 1 },

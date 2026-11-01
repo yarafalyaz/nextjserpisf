@@ -180,7 +180,7 @@ describe("runDueRecurring — klaim atomik nextRunDate (race regresi)", () => {
 
     expect(mocks.scheduleUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 5, nextRunDate: new Date(2026, 9, 17) },
+        where: { id: 5, nextRunDate: new Date(2026, 9, 17), isActive: true, deletedAt: null },
       }),
     )
     expect(mocks.expenseCreate).not.toHaveBeenCalled()
@@ -197,6 +197,26 @@ describe("runDueRecurring — klaim atomik nextRunDate (race regresi)", () => {
     expect(result.errors).toEqual([])
     expect(mocks.expenseCreate).toHaveBeenCalledTimes(1)
     expect(result.generated).toHaveLength(1)
+  })
+
+  it("klaim terikat isActive + deletedAt: jadwal dinonaktifkan/dihapus sesudah scan kalah klaim", async () => {
+    // Scan membaca isActive/deletedAt sekali di luar tx; hapus/nonaktifkan
+    // konkuren sesudah scan tidak memajukan nextRunDate, jadi syarat klaim lama
+    // {id, nextRunDate} tetap cocok dan dokumen lahir untuk jadwal mati.
+    mocks.scheduleFindMany.mockResolvedValue([expenseSchedule()])
+    mocks.scheduleUpdateMany.mockResolvedValue({ count: 0 })
+    mocks.expenseCreate.mockResolvedValue({ id: 7 })
+
+    const result = await runDueRecurring(new Date(2026, 9, 17), 1)
+
+    expect(mocks.scheduleUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 5, nextRunDate: new Date(2026, 9, 17), isActive: true, deletedAt: null },
+      }),
+    )
+    expect(mocks.expenseCreate).not.toHaveBeenCalled()
+    expect(result.generated).toEqual([])
+    expect(result.errors).toEqual([])
   })
 })
 
