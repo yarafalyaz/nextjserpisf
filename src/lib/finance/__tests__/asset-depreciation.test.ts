@@ -199,4 +199,19 @@ describe("computeMonthlyDepreciation — clamp residu (F62-8)", () => {
     expect(r.status).toBe("skip")
     if (r.status === "skip") expect(r.reason).toBe("no-basis")
   })
+
+  it("regresi putaran 15: declining_balance tanpa tarif -> skip no-basis, BUKAN fallback garis lurus", () => {
+    const r = computeMonthlyDepreciation(
+      base({
+        purchaseCost: 120_000_000,
+        bookValue: 120_000_000,
+        residualValue: 0,
+        depreciationMethod: "declining_balance",
+        categoryDepreciationRate: null,
+        categoryUsefulLife: 5,
+      }),
+    )
+    expect(r.status).toBe("skip")
+    if (r.status === "skip") expect(r.reason).toBe("no-basis")
+  })
 })

@@ -118,9 +118,13 @@ export function computeMonthlyDepreciation(
   const life = input.categoryUsefulLife ?? null
 
   let monthly: Prisma.Decimal | null = null
-  if (method === "declining_balance" && rate && rate.gt(0)) {
-    // Saldo menurun: nilai buku x tarif tahunan / 12.
-    monthly = bookValue.mul(rate).div(100).div(12)
+  if (method === "declining_balance") {
+    // Saldo menurun WAJIB tarif: tanpa tarif kategori tak ada basis yang sah.
+    // Fallback diam-diam ke garis lurus (cabang lama) menyusutkan aset
+    // bernama saldo menurun memakai formula lain tanpa ada yang menyadarinya.
+    if (rate && rate.gt(0)) {
+      monthly = bookValue.mul(rate).div(100).div(12)
+    }
   } else if (life && life > 0) {
     // Garis lurus atas dasar terdepresiasi: (perolehan - residu) / bulan umur.
     monthly = purchaseCost.sub(floor).div(life * 12)
