@@ -402,6 +402,15 @@ export async function syncProjectStatus(projectId: number) {
   // the same tx body (no state to roll back), and the result is only used to
   // gate the WO update; the in-tx writes are still atomic with each other.
   await prisma.$transaction(async (tx) => {
+    // Kunci baris proyek SEBELUM bacaan pertama tx: tanpa kunci, snapshot
+    // stage basi dari sync ini bisa menimpa proyek yang baru saja completed
+    // oleh updateProjectStageProgress konkuren kembali ke in_progress
+    // (endDate null, WO/items diturunkan). Pemanggil internal sudah
+    // mengunci proyek lebih dulu — entry publik ini wajib sama.
+    const projectRows = await tx.$queryRaw<Array<{ id: number }>>`
+      SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE
+    `
+    if (projectRows.length === 0) throw new Error("Proyek tidak ditemukan")
     await syncProjectStatusTx(projectId, tx)
   })
 }

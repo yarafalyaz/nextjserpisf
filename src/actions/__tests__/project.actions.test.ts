@@ -278,6 +278,19 @@ describe("Project Stages Extended Branches", () => {
       data: expect.objectContaining({ status: "completed" })
     }))
   })
+  it("regression round 18: syncProjectStatus mengunci baris proyek sebelum bacaan tx pertama", async () => {
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, workOrderId: null })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([{ status: "completed" }])
+    await actions.syncProjectStatus(1)
+    const lockCall = mocks.prismaMock.$queryRaw.mock.calls.at(-1)?.[0] as
+      | { sql?: string; strings?: string[] } | string[]
+    const sql = Array.isArray(lockCall) ? lockCall.join("?") : (lockCall?.sql ?? lockCall?.strings?.join("?") ?? "")
+    expect(sql).toContain("projects")
+    expect(sql).toContain("FOR UPDATE")
+    const lockOrder = mocks.prismaMock.$queryRaw.mock.invocationCallOrder.at(-1) ?? 0
+    const readOrder = mocks.prismaMock.project.findUniqueOrThrow.mock.invocationCallOrder.at(-1) ?? 0
+    expect(lockOrder).toBeLessThan(readOrder)
+  })
   it("syncProjectStatus sets in_progress when some stages completed/in_progress", async () => {
     mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "pending", workOrderId: null })
     mocks.prismaMock.projectStage.findMany.mockResolvedValue([
