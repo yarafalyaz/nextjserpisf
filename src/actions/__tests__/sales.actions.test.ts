@@ -936,17 +936,69 @@ describe("Sales Invoice Actions", () => {
   })
   it("updateSalesInvoice menolak pindah SO header tanpa cap (putaran 21)", async () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
-      id: 1, status: "draft", quotationId: null, salesOrderId: 10, paidAmount: 0, grandTotal: 500,
+      id: 1, status: "draft", customerId: 1, quotationId: null, salesOrderId: 10, paidAmount: 0, grandTotal: 500,
     })
     mocks.prismaMock.salesInvoiceItem.findMany.mockResolvedValue([{ itemId: 5, qty: 2, uom: null }])
-    // SO tujuan: nilai pesanan 400, belum tertagih -> kandidat 500 melebihi.
-    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ documentNo: "SO-2", grandTotal: 400, quotationId: null })
+    // SO tujuan: milik customer faktur + bisa-difaktur (gerbang pasangan
+    // putaran 44), lalu nilai pesanan 400, belum tertagih -> kandidat 500 melebihi.
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ documentNo: "SO-2", grandTotal: 400, quotationId: null, customerId: 1, status: "approved" })
     mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([])
     const res = await actions.updateSalesInvoice(1, fdMap({ customerId: 1, date: "2026-06-12", salesOrderId: 20 }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("melebihi nilai Pesanan Penjualan")
     // Cap menilai di dalam tx: baris tersimpan faktur dibaca untuk kandidat.
     expect(mocks.prismaMock.salesInvoiceItem.findMany).toHaveBeenCalled()
+  })
+
+  // Regresi putaran 44: edit faktur draft memindah salesOrderId menilai nilai/
+  // qty terhadap SO tujuan tetapi TIDAK pernah memeriksa SO tujuan milik
+  // customer faktur atau berstatus bisa-difaktur — pasangan SO milik customer
+  // lain lolos bila angka muat, piutang tercatat ke pihak salah (create
+  // menolak keduanya sejak lama).
+  it("regresi putaran 44: updateSalesInvoice menolak pindah SO milik customer lain", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", customerId: 1, quotationId: null, salesOrderId: 10, paidAmount: 0, grandTotal: 0,
+    })
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ customerId: 999, status: "approved" })
+    const res = await actions.updateSalesInvoice(1, fdMap({ customerId: 1, date: "2026-06-12", salesOrderId: 20 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("milik customer lain")
+    expect(mocks.prismaMock.salesInvoice.update).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 44: updateSalesInvoice menolak pindah ke SO belum bisa difaktur", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", customerId: 1, quotationId: null, salesOrderId: 10, paidAmount: 0, grandTotal: 0,
+    })
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ customerId: 1, status: "draft" })
+    const res = await actions.updateSalesInvoice(1, fdMap({ customerId: 1, date: "2026-06-12", salesOrderId: 20 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("belum bisa difaktur")
+    expect(mocks.prismaMock.salesInvoice.update).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 44: updateSalesInvoice menolak pindah customer nonaktif", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", customerId: 5, quotationId: null, salesOrderId: null, paidAmount: 0, grandTotal: 0,
+    })
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 1, name: "PT Mati", isActive: false })
+    const res = await actions.updateSalesInvoice(1, fdMap({ customerId: 1, date: "2026-06-12" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.salesInvoice.update).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 44: updateSalesInvoice tak menilai ulang customer yang tidak berpindah", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", customerId: 1, quotationId: null, salesOrderId: null, paidAmount: 0, grandTotal: 0,
+    })
+    mocks.prismaMock.customer.findFirst.mockResolvedValue(null)
+    const res = await actions.updateSalesInvoice(1, fdMap({ customerId: 1, date: "2026-06-12" }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.salesInvoice.update).toHaveBeenCalled()
   })
   it("updateSalesInvoice menolak edit posted: arahkan retur/void (G1 GL-BR-003, tanpa reverse+repost)", async () => {
     const posting = await import("@/lib/services/sales-invoice-posting.service")

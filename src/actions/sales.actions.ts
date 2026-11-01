@@ -3676,6 +3676,29 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
     }
     // K1: guard di atas sudah menolak non-draft/non-approved, jadi faktur di
     // sini tidak pernah posted — tidak ada reverse+repost di jalur edit.
+    // Putaran 44: pasangan tautan hasil edit dinilai seperti create —
+    // customer dinilai hidup hanya bila BERPINDAH (baris terkunci), dan
+    // SO tujuan wajib milik customer faktur + berstatus bisa-difaktur,
+    // dinilai di dalam tx ini; pelanggan yang dinonaktifkan sesudah
+    // faktur lahir tak boleh memblokir edit faktur lama mereka.
+    if (v.customerId !== existingInvoice.customerId) {
+      await assertCustomerLiveForNewDocument(tx, v.customerId)
+    }
+    if (v.salesOrderId) {
+      const targetSo = await tx.salesOrder.findUnique({
+        where: { id: v.salesOrderId },
+        select: { status: true, customerId: true },
+      })
+      if (!targetSo) throw new Error("Pesanan Penjualan tidak ditemukan")
+      if (targetSo.customerId !== v.customerId) {
+        throw new Error("Pesanan Penjualan yang dipilih milik customer lain, tidak bisa difaktur untuk customer ini")
+      }
+      if (!(DELIVERABLE_ORDER_STATUSES as readonly string[]).includes(targetSo.status)) {
+        throw new Error(
+          `Pesanan Penjualan berstatus '${targetSo.status}' belum bisa difaktur (harus ${DELIVERABLE_ORDER_STATUS_LABELS})`,
+        )
+      }
+    }
     // R8-JB-09: pola sama seperti createInvoice — dueDate kosong diturunkan
     // dari termin pelanggan yang berlaku pada faktur hasil edit.
     const customerTerm = await tx.customer.findUnique({

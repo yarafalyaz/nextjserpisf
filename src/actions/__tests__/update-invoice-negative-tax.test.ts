@@ -46,7 +46,13 @@ vi.mock("@/lib/db/prisma", () => {
       ]),
     },
     // R8-JB-09: update menoleh termin pelanggan saat menghitung dueDate.
-    customer: { findUnique: vi.fn().mockResolvedValue(null) },
+    // Putaran 44: customer dinilai hidup hanya bila berpindah dari baris
+    // terkunci — fixture ini tidak memuat customerId terkunci (undefined),
+    // jadi payload "8" dianggap berpindah dan gerbang hidup berjalan.
+    customer: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue({ id: 8, name: "PT X", isActive: true }),
+    },
   }
   return { prisma: mockPrisma }
 })
