@@ -63,30 +63,35 @@ export async function updateVacancy(id: number, formData: FormData) {
   try {
     await requirePermission("edit_recruitments");
 
-    const existing = await prisma.jobVacancy.findFirst({
-      where: { id, deletedAt: null },
-    });
-    if (!existing) return { success: false as const, error: "Lowongan tidak ditemukan" };
-    if (existing.status === "closed") {
-      return { success: false as const, error: "Lowongan yang sudah ditutup tidak dapat diubah" };
-    }
-
     const parsed = parseFormData(vacancySchema, formData);
     if (!parsed.success) return { success: false as const, error: parsed.error };
     const v = parsed.data;
 
-    await prisma.jobVacancy.update({
-      where: { id },
-      data: {
-        title: v.title,
-        departmentId: v.departmentId ?? null,
-        positionId: v.positionId ?? null,
-        description: v.description ?? null,
-        requirements: v.requirements ?? null,
-        location: v.location ?? null,
-        employmentType: v.employmentType ?? null,
-        quota: v.quota,
-      },
+    // Kunci baris dulu, status dibaca ulang segar: tanpa ini tutup lowongan
+    // konkuren (setVacancyStatus) bisa kalah dari edit yang menilai snapshot
+    // luar tx, menulis ke lowongan yang sudah closed.
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM job_vacancies WHERE id = ${id} FOR UPDATE`;
+      const existing = await tx.jobVacancy.findFirst({
+        where: { id, deletedAt: null },
+      });
+      if (!existing) throw new Error("Lowongan tidak ditemukan");
+      if (existing.status === "closed") {
+        throw new Error("Lowongan yang sudah ditutup tidak dapat diubah");
+      }
+      await tx.jobVacancy.update({
+        where: { id },
+        data: {
+          title: v.title,
+          departmentId: v.departmentId ?? null,
+          positionId: v.positionId ?? null,
+          description: v.description ?? null,
+          requirements: v.requirements ?? null,
+          location: v.location ?? null,
+          employmentType: v.employmentType ?? null,
+          quota: v.quota,
+        },
+      });
     });
 
     await logActivity("update", "JobVacancy", id, `Memperbarui lowongan ${v.title}`);
@@ -101,27 +106,29 @@ export async function setVacancyStatus(id: number, status: "open" | "closed") {
   try {
     await requirePermission("edit_recruitments");
 
-    const existing = await prisma.jobVacancy.findFirst({
-      where: { id, deletedAt: null },
-    });
-    if (!existing) return { success: false as const, error: "Lowongan tidak ditemukan" };
+    // Kunci baris yang sama dengan updateVacancy: transisi dinilai dari
+    // bacaan segar di bawah kunci, bukan snapshot luar tx.
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM job_vacancies WHERE id = ${id} FOR UPDATE`;
+      const existing = await tx.jobVacancy.findFirst({
+        where: { id, deletedAt: null },
+      });
+      if (!existing) throw new Error("Lowongan tidak ditemukan");
 
-    const allowed =
-      (existing.status === "draft" && status === "open") ||
-      (existing.status === "open" && status === "closed");
-    if (!allowed) {
-      return {
-        success: false as const,
-        error: `Lowongan berstatus ${existing.status} tidak dapat menjadi ${status}`,
-      };
-    }
+      const allowed =
+        (existing.status === "draft" && status === "open") ||
+        (existing.status === "open" && status === "closed");
+      if (!allowed) {
+        throw new Error(`Lowongan berstatus ${existing.status} tidak dapat menjadi ${status}`);
+      }
 
-    await prisma.jobVacancy.update({
-      where: { id },
-      data: {
-        status,
-        ...(status === "open" ? { openedAt: new Date() } : { closedAt: new Date() }),
-      },
+      await tx.jobVacancy.update({
+        where: { id },
+        data: {
+          status,
+          ...(status === "open" ? { openedAt: new Date() } : { closedAt: new Date() }),
+        },
+      });
     });
 
     await logActivity("update", "JobVacancy", id, `Lowongan menjadi ${status}`);

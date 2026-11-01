@@ -12,6 +12,10 @@ const employeeCreate = vi.fn()
 
 const txMock = {
   $executeRaw: vi.fn(async () => 1),
+  jobVacancy: {
+    findFirst: (...a: unknown[]) => vacancyFindFirst(...a),
+    update: (...a: unknown[]) => vacancyUpdate(...a),
+  },
   jobApplicant: {
     create: (...a: unknown[]) => applicantCreate(...a),
     findFirst: (...a: unknown[]) => applicantFindFirst(...a),
@@ -58,6 +62,7 @@ import {
   hireApplicant,
   moveApplicantStage,
   setVacancyStatus,
+  updateVacancy,
 } from "../recruitment.actions"
 
 function form(entries: Record<string, string>): FormData {
@@ -182,6 +187,28 @@ describe("recruitment actions", () => {
     vacancyFindFirst.mockResolvedValue({ id: 3, status: "draft" })
     const res = await setVacancyStatus(3, "closed")
     expect(res.success).toBe(false)
+    expect(vacancyUpdate).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 16: updateVacancy mengunci baris job_vacancies sebelum cek status", async () => {
+    vacancyFindFirst.mockResolvedValue({ id: 3, status: "open" })
+    const res = await updateVacancy(3, form({ title: "Welder", quota: "2" }))
+    expect(res.success).toBe(true)
+    const lockCall = (txMock.$executeRaw.mock.calls as unknown[][])[0]?.[0] as { sql?: string; strings?: string[] } | string[]
+    const sql = Array.isArray(lockCall) ? lockCall.join("?") : (lockCall?.sql ?? lockCall?.strings?.join("?") ?? "")
+    expect(sql).toContain("job_vacancies")
+    expect(sql).toContain("FOR UPDATE")
+    const lockOrder = txMock.$executeRaw.mock.invocationCallOrder[0]
+    const readOrder = (vacancyFindFirst.mock as { invocationCallOrder: number[] }).invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(readOrder)
+    expect(vacancyUpdate).toHaveBeenCalledTimes(1)
+  })
+
+  it("regresi putaran 16: updateVacancy menolak lowongan yang dibaca ulang sudah closed", async () => {
+    vacancyFindFirst.mockResolvedValue({ id: 3, status: "closed" })
+    const res = await updateVacancy(3, form({ title: "Welder", quota: "2" }))
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toMatch(/sudah ditutup/)
     expect(vacancyUpdate).not.toHaveBeenCalled()
   })
 })
