@@ -89,7 +89,18 @@ function wireJournalTx(order: string[]) {
     modelName: "journal",
     findUniqueOrThrow: journalFindUniqueOrThrowMock,
     updateMany: journalUpdateManyMock,
-    extra: { systemSetting: { findFirst: vi.fn().mockResolvedValue(null) } },
+    extra: {
+      systemSetting: { findFirst: vi.fn().mockResolvedValue(null) },
+      // Gerbang akun induk titik posting (putaran 45): akun entri hidup dan
+      // bukan induk. assertAccountsExist sendiri termock via hook factory.
+      account: {
+        findMany: vi.fn(async (args: any) =>
+          args?.select?._count
+            ? [{ id: 100, _count: { children: 0 } }, { id: 200, _count: { children: 0 } }]
+            : [{ id: 100 }, { id: 200 }],
+        ),
+      },
+    },
   })
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
 }
