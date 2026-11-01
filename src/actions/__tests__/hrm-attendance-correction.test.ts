@@ -349,6 +349,20 @@ describe("approveAttendanceCorrection", () => {
     expect(res.success).toBe(false)
     expect(prismaMock.attendance.update).not.toHaveBeenCalled()
   })
+
+  it("mengunci baris attendances sebelum membaca rekod untuk cek konflik EC-1", async () => {
+    const res = await actions.approveAttendanceCorrection(5)
+    expect(res.success).toBe(true)
+    const sqlOf = (c: unknown[]) => {
+      const a = c[0] as { sql?: string; strings?: string[] } | string[]
+      return Array.isArray(a) ? a.join("?") : (a?.sql ?? a?.strings?.join("?") ?? "")
+    }
+    const lockIdx = prismaMock.$queryRaw.mock.calls.findIndex((c: unknown[]) => sqlOf(c).includes("attendances"))
+    expect(lockIdx).toBeGreaterThanOrEqual(0)
+    expect(prismaMock.$queryRaw.mock.invocationCallOrder[lockIdx]).toBeLessThan(
+      prismaMock.attendance.findUnique.mock.invocationCallOrder[0],
+    )
+  })
 })
 
 describe("reject/cancel AttendanceCorrection", () => {

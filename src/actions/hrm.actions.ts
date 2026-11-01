@@ -4857,6 +4857,11 @@ export async function approveAttendanceCorrection(id: number) {
         throw new Error("Pengajuan koreksi absensi sudah diproses atau status tidak valid");
       }
 
+      // Kunci baris absensi berjalan SEBELUM dibaca: updateAttendance tanpa
+      // kunci tidak bisa commit di tengah transaksi ini, sehingga cek konflik
+      // EC-1 menilai versi terbaru, bukan snapshot basi yang lalu ditimpa.
+      await tx.$queryRaw`SELECT id FROM attendances WHERE employee_id = ${loaded.employeeId} AND date = ${loaded.date} FOR UPDATE`;
+
       const current = await tx.attendance.findUnique({
         where: { employeeId_date: { employeeId: loaded.employeeId, date: loaded.date } },
         select: {
