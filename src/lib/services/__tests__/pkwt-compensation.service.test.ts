@@ -23,6 +23,7 @@ import {
   createPkwtCompensationEvent,
   approvePkwtCompensationEvent,
   buildPkwtPayrollLineData,
+  markPkwtEventPaid,
   resolvePkwtMapping,
   runPkwtMonthlyAccrual,
 } from "../pkwt-compensation.service"
@@ -278,5 +279,24 @@ describe("E132-2 akrual bulanan agregat", () => {
     const res = await runPkwtMonthlyAccrual(client, "2026-03", 1)
     expect(res.accruedCount).toBe(0)
     expect(res.journalId).toBeNull()
+  })
+})
+
+describe("putaran 38: markPkwtEventPaid klaim kondisional", () => {
+  it("klaim menang: updateMany berpredikat status approved, update buta tak dipakai", async () => {
+    const client = baseClient()
+    await markPkwtEventPaid(client, 7, 99)
+    expect(client.pkwtCompensationEvent.updateMany).toHaveBeenCalledWith({
+      where: { id: 7, status: "approved" },
+      data: { status: "paid", paidPayrollId: 99 },
+    })
+    expect(client.pkwtCompensationEvent.update).not.toHaveBeenCalled()
+  })
+
+  it("klaim kalah (peristiwa bukan approved) -> throw, tx pemanggil rollback", async () => {
+    const client = baseClient()
+    client.pkwtCompensationEvent.updateMany.mockResolvedValue({ count: 0 })
+    await expect(markPkwtEventPaid(client, 7, 99)).rejects.toThrow(/bukan 'approved'/)
+    expect(client.pkwtCompensationEvent.update).not.toHaveBeenCalled()
   })
 })

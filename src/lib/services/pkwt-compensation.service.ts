@@ -443,10 +443,21 @@ export async function markPkwtEventPaid(
   eventId: number,
   payrollId: number,
 ) {
-  return client.pkwtCompensationEvent.update({
-    where: { id: eventId },
+  // Klaim kondisional seperti approve di file ini (bukan update buta):
+  // peristiwa dibaca dari slip yang status-nya bisa berubah lewat jalur
+  // lain; menulis paid atas status non-approved akan menghidupkan/
+  // menimpa transisi yang tak pernah terjadi. count 0 = kalah klaim,
+  // pemanggil (tx bayar slip) wajib rollback.
+  const claim = await client.pkwtCompensationEvent.updateMany({
+    where: { id: eventId, status: "approved" },
     data: { status: "paid", paidPayrollId: payrollId },
   })
+  if (claim.count === 0) {
+    throw new Error(
+      `Peristiwa kompensasi PKWT #${eventId} bukan 'approved' — penandaan paid ditolak.`,
+    )
+  }
+  return client.pkwtCompensationEvent.findUnique({ where: { id: eventId } })
 }
 
 export { planSegmentAccruals }
