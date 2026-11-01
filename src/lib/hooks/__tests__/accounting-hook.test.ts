@@ -367,12 +367,15 @@ describe("deleteJournalByReference", () => {
 
   it("deletes entries and journals when found", async () => {
     mocks.findMany
-      .mockResolvedValueOnce([{ id: 1 }, { id: 2 }])
+      .mockResolvedValueOnce([
+        { id: 1, status: "DRAFT" },
+        { id: 2, status: "DRAFT" },
+      ])
       .mockResolvedValueOnce([]); // no reversal journals reference these
     await deleteJournalByReference("VendorBill", 100);
     expect(mocks.findMany).toHaveBeenCalledWith({
       where: { referenceType: "VendorBill", referenceId: 100 },
-      select: { id: true, status: true, transactionDate: true },
+      select: { id: true, status: true, transactionDate: true, referenceType: true, referenceId: true },
     });
     expect(mocks.deleteManyEntries).toHaveBeenCalledWith({
       where: { journalId: { in: [1, 2] } },
@@ -385,14 +388,16 @@ describe("deleteJournalByReference", () => {
   it("cascades to reversal journals that reference the deleted journal", async () => {
     mocks.findMany
       .mockResolvedValueOnce([
-        { id: 1, status: "POSTED", transactionDate: new Date("2026-06-09") },
-      ]) // original journal
-      .mockResolvedValueOnce([{ id: 9 }]) // reversal referencing journal 1
+        { id: 1, status: "REVERSED", transactionDate: new Date("2026-06-09"), referenceType: "VendorBill", referenceId: 100 },
+      ]) // original journal, already reversed
+      .mockResolvedValueOnce([
+        { id: 9, status: "POSTED", transactionDate: new Date("2026-06-09"), referenceType: "Journal", referenceId: 1 },
+      ]) // reversal referencing journal 1
       .mockResolvedValueOnce([]); // no reversal of the reversal — chain ends
     await deleteJournalByReference("VendorBill", 100);
     expect(mocks.findMany).toHaveBeenNthCalledWith(2, {
       where: { referenceType: "Journal", referenceId: { in: [1] } },
-      select: { id: true, status: true, transactionDate: true },
+      select: { id: true, status: true, transactionDate: true, referenceType: true, referenceId: true },
     });
     // Both the original and its reversal are removed together; leaving the
     // reversal behind would strand a POSTED, one-sided GL entry.
@@ -474,7 +479,7 @@ describe("deleteJournalByReference", () => {
       journal: {
         findMany: vi
           .fn()
-          .mockResolvedValueOnce([{ id: 7, status: "POSTED", transactionDate: new Date("2026-06-09") }])
+          .mockResolvedValueOnce([{ id: 7, status: "DRAFT", transactionDate: new Date("2026-06-09") }])
           .mockResolvedValueOnce([]),
         deleteMany: vi.fn(),
       },
@@ -490,7 +495,7 @@ describe("deleteJournalByReference", () => {
         referenceType: { in: ["SalesInvoice", "COGS"] },
         referenceId: { in: [10, 11] },
       },
-      select: { id: true, status: true, transactionDate: true },
+      select: { id: true, status: true, transactionDate: true, referenceType: true, referenceId: true },
     });
     expect(tx.journalEntry.deleteMany).toHaveBeenCalledWith({
       where: { journalId: { in: [7] } },
@@ -533,18 +538,23 @@ describe("deleteJournalByReference", () => {
   });
 
   it("deletes the whole reversal chain, not just one level", async () => {
-    // Chain: J1 (original) <- J2 (reversal of J1) <- J3 (reversal of J2). All
-    // three are POSTED; deleting J1 must remove J2 and J3 too, otherwise J3 is
-    // stranded as a one-sided POSTED entry.
+    // Chain: J1 (original) <- J2 (reversal of J1) <- J3 (reversal of J2).
+    // J1 REVERSED, J2 POSTED lawan J1, J3 POSTED lawan J2 — himpunan
+    // tertutup (neto GL nol); deleting J1 must remove J2 and J3 too,
+    // otherwise J3 is stranded as a one-sided POSTED entry.
     const tx = {
       journal: {
         findMany: vi
           .fn()
           .mockResolvedValueOnce([
-            { id: 1, status: "POSTED", transactionDate: new Date("2026-06-09") },
+            { id: 1, status: "REVERSED", transactionDate: new Date("2026-06-09"), referenceType: "VendorBill", referenceId: 100 },
           ]) // originals
-          .mockResolvedValueOnce([{ id: 2 }]) // reversals of J1
-          .mockResolvedValueOnce([{ id: 3 }]) // reversals of J2
+          .mockResolvedValueOnce([
+            { id: 2, status: "POSTED", transactionDate: new Date("2026-06-09"), referenceType: "Journal", referenceId: 1 },
+          ]) // reversals of J1
+          .mockResolvedValueOnce([
+            { id: 3, status: "POSTED", transactionDate: new Date("2026-06-09"), referenceType: "Journal", referenceId: 2 },
+          ]) // reversals of J2
           .mockResolvedValueOnce([]), // end of chain
         deleteMany: vi.fn(),
       },
@@ -554,7 +564,7 @@ describe("deleteJournalByReference", () => {
 
     expect(tx.journal.findMany).toHaveBeenNthCalledWith(3, {
       where: { referenceType: "Journal", referenceId: { in: [2] } },
-      select: { id: true, status: true, transactionDate: true },
+      select: { id: true, status: true, transactionDate: true, referenceType: true, referenceId: true },
     });
     expect(tx.journalEntry.deleteMany).toHaveBeenCalledWith({
       where: { journalId: { in: [1, 2, 3] } },
@@ -562,6 +572,26 @@ describe("deleteJournalByReference", () => {
     expect(tx.journal.deleteMany).toHaveBeenCalledWith({
       where: { id: { in: [1, 2, 3] } },
     });
+  });
+
+  it("regresi putaran 16: jurnal POSTED dokumen tanpa lawan ditolak hard-delete", async () => {
+    const tx = {
+      journal: {
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([
+            { id: 5, status: "POSTED", transactionDate: new Date("2026-06-09"), referenceType: "DownPayment", referenceId: 71 },
+          ])
+          .mockResolvedValueOnce([]),
+        deleteMany: vi.fn(),
+      },
+      journalEntry: { deleteMany: vi.fn() },
+    };
+    await expect(
+      deleteJournalByReferenceTx(tx as any, "DownPayment", 71),
+    ).rejects.toThrow(/tidak dapat dihapus/);
+    expect(tx.journalEntry.deleteMany).not.toHaveBeenCalled();
+    expect(tx.journal.deleteMany).not.toHaveBeenCalled();
   });
 });
 

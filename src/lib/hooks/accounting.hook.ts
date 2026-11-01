@@ -140,7 +140,7 @@ export async function deleteJournalByReferenceTx(
         ? { in: referenceId }
         : referenceId,
     },
-    select: { id: true, status: true, transactionDate: true },
+    select: { id: true, status: true, transactionDate: true, referenceType: true, referenceId: true },
   });
   if (journals.length === 0) return;
 
@@ -165,6 +165,15 @@ export async function deleteJournalByReferenceTx(
   };
   await assertCascadePeriodOpen(journals);
 
+  // Kontrak helper (putaran 16): himpunan terhapus harus TERTUTUP terhadap
+  // rantai reversal — DRAFT bebas; POSTED hanya bila jurnal lawannya
+  // (referenceType "Journal", referenceId = id ini) ikut terhapus; REVERSED
+  // hanya bila asalnya ikut terhapus. Di luar itu hard-delete menghapus
+  // efek GL hidup tanpa reversal (mis. jurnal POSTED uang muka Dr Kas /
+  // Cr Kewajiban UMP lewat cascade deleteQuotation) — tolak dan arahkan
+  // caller mereversal dulu lewat reverseJournalsByReferenceTx.
+  const allRows = [...journals];
+
   let journalIds = journals.map((j) => j.id);
 
   // Cascade to reversal journals (transitively). reverseJournal() creates a
@@ -179,7 +188,7 @@ export async function deleteJournalByReferenceTx(
   while (frontier.length > 0) {
     const reversals = await tx.journal.findMany({
       where: { referenceType: "Journal", referenceId: { in: frontier } },
-      select: { id: true, status: true, transactionDate: true },
+      select: { id: true, status: true, transactionDate: true, referenceType: true, referenceId: true },
     });
     await assertCascadePeriodOpen(reversals);
     const next: number[] = [];
@@ -187,11 +196,41 @@ export async function deleteJournalByReferenceTx(
       if (!seen.has(r.id)) {
         seen.add(r.id);
         next.push(r.id);
+        allRows.push(r);
       }
     }
     if (next.length === 0) break;
     journalIds = [...journalIds, ...next];
     frontier = next;
+  }
+
+  // Penegakan kontrak di atas, dinilai dari himpunan LENGKAP (jangkar +
+  // kaskade). Select kini membawa referenceType/referenceId tiap baris,
+  // jadi pasangan reversal terbaca langsung: baris "Journal" menunjuk
+  // asal yang ia balik.
+  const companions = new Set<number>();
+  const pointedTo = new Set<number>();
+  for (const row of allRows as Array<{ id: number; referenceType?: string; referenceId?: number | null }>) {
+    if (row.referenceType === "Journal" && row.referenceId != null) {
+      companions.add(row.id);
+      pointedTo.add(row.referenceId);
+    }
+  }
+  const offenders = allRows.filter((row) => {
+    // Ejaan warisan huruf kecil dinormalkan; status tak dikenal fail-closed.
+    const status = row.status.toUpperCase();
+    if (status === "DRAFT") return false;
+    // POSTED sah hanya sebagai jurnal lawan (baris "Journal") atau asal
+    // yang lawannya ikut terhapus (pointedTo). POSTED dokumen polos tanpa
+    // lawan dalam himpunan = efek GL hidup yang akan hilang senyap.
+    if (status === "POSTED") return !companions.has(row.id) && !pointedTo.has(row.id);
+    if (status === "REVERSED") return !pointedTo.has(row.id);
+    return true;
+  });
+  if (offenders.length > 0) {
+    throw new Error(
+      `Jurnal ${offenders.map((j) => `#${j.id} (${j.status})`).join(", ")} sudah terposting dan tidak dapat dihapus — gunakan pembalikan (reversal) agar histori buku besar tetap utuh.`,
+    );
   }
 
   await tx.journalEntry.deleteMany({
