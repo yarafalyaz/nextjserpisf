@@ -460,15 +460,30 @@ export async function deleteCustomer(customerId: number) {
   try {
     const user = await requirePermission("delete_customers");
 
-    await hardDeleteOrSoftDelete(
-      () => prisma.customer.delete({ where: { id: customerId } }),
-      () =>
-        prisma.customer.update({
-          where: { id: customerId },
-          data: {
-        updatedBy: Number(user.id), deletedAt: new Date(), isActive: false },
-        }),
-    );
+    // Lead.customerId / CrmTicket.customerId Int polos tanpa relasi FK:
+    // hard delete pelanggan yang hanya dirujuk CRM lolos P2003 dan
+    // meninggalkan customerId mati (lead terkonversi terbaca terkonversi
+    // tetapi targetnya hilang). Dirujuk CRM -> langsung soft-delete.
+    const [leadRefs, ticketRefs] = await Promise.all([
+      prisma.lead.count({ where: { customerId: customerId } }),
+      prisma.crmTicket.count({ where: { customerId: customerId } }),
+    ]);
+    if (leadRefs > 0 || ticketRefs > 0) {
+      await prisma.customer.update({
+        where: { id: customerId },
+        data: { updatedBy: Number(user.id), deletedAt: new Date(), isActive: false },
+      });
+    } else {
+      await hardDeleteOrSoftDelete(
+        () => prisma.customer.delete({ where: { id: customerId } }),
+        () =>
+          prisma.customer.update({
+            where: { id: customerId },
+            data: {
+          updatedBy: Number(user.id), deletedAt: new Date(), isActive: false },
+          }),
+      );
+    }
 
     revalidatePath("/master/pelanggan");
     await logActivity("delete", "Customer", customerId, "Menghapus pelanggan");

@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => {
     department: buildModelMock(),
     position: buildModelMock(),
     lead: buildModelMock(),
+    crmTicket: buildModelMock(),
     leadActivity: buildModelMock(),
     bank: buildModelMock(),
     bankStatement: buildModelMock(),
@@ -216,6 +217,19 @@ describe("Customer Actions", () => {
   it("deleteCustomer succeeds", async () => {
     const res = await actions.deleteCustomer(1)
     expect(res?.success).toBe(true)
+  })
+  it("regression round 19: deleteCustomer dirujuk lead/tiket CRM -> soft-delete, bukan hard delete yatim", async () => {
+    // Lead.customerId / CrmTicket.customerId Int polos tanpa FK: hard
+    // delete lolos P2003 dan meninggalkan customerId mati (lead terkonversi
+    // terbaca terkonversi tetapi target hilang).
+    mocks.prismaMock.lead.count.mockResolvedValueOnce(2)
+    const res = await actions.deleteCustomer(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.customer.delete).not.toHaveBeenCalled()
+    const softArg = mocks.prismaMock.customer.update.mock.calls.at(-1)![0]
+    expect(softArg.where).toEqual({ id: 1 })
+    expect(softArg.data.deletedAt).toBeInstanceOf(Date)
+    expect(softArg.data.isActive).toBe(false)
   })
 })
 
