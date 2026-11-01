@@ -2213,6 +2213,28 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     expect(res?.error).toContain("void")
     expect(mocks.prismaMock.salesOrder.delete).not.toHaveBeenCalled()
   })
+  it("putaran 51: deleteQuotation hanya mengakui faktur terposting sebagai hidup (rejected/approved tak memblokir)", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    const res = await actions.deleteQuotation(1)
+    expect(res?.success).toBe(true)
+    const liveQuery = mocks.prismaMock.salesInvoice.findMany.mock.calls[0]![0] as any
+    expect(liveQuery.where.status).toEqual({ in: ["posted", "partial", "paid"] })
+  })
+  it("putaran 51: deleteSalesOrder hanya mengakui faktur terposting sebagai hidup", async () => {
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    const res = await actions.deleteSalesOrder(1)
+    expect(res?.success).toBe(true)
+    const liveQuery = mocks.prismaMock.salesInvoice.findMany.mock.calls[0]![0] as any
+    expect(liveQuery.where.status).toEqual({ in: ["posted", "partial", "paid"] })
+  })
+  it("putaran 51: updateSalesOrder menolak edit bila faktur turunan terposting lewat klaim positif", async () => {
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.salesInvoice.findFirst.mockResolvedValueOnce({ id: 9 })
+    const res = await actions.updateSalesOrder(1, fdMap({ customerId: "1", date: "2026-06-12" }))
+    expect(res?.success).toBe(false)
+    const linkedQuery = mocks.prismaMock.salesInvoice.findFirst.mock.calls.at(-1)![0] as any
+    expect(linkedQuery.where.status).toEqual({ in: ["posted", "partial", "paid"] })
+  })
 })
 
 describe("Sales Invoice Actions (legacy happy paths)", () => {

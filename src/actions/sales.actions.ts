@@ -25,6 +25,7 @@ import { isLostReasonCategoryKey } from "@/lib/reports/quotation-outcome"
 import { quotationHasRealSettlement, salesOrderHasRealSettlement } from "@/lib/services/sales-settlement.service"
 import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-difference"
 import { computeProgressInvoiceCandidate, computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
+import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
 import { commissionSnapshotForPaid } from "@/lib/services/commission-snapshot"
 import { loadReturnCreditByInvoiceIdWithClient } from "@/lib/reports/return-credit"
@@ -3133,7 +3134,11 @@ export async function deleteQuotation(id: number) {
     const liveInvoices = await tx.salesInvoice.findMany({
       where: {
         OR: [{ quotationId: id }, { salesOrderId: { in: salesOrderIds.length ? salesOrderIds : [-1] } }],
-        status: { notIn: ["draft", "cancelled"] },
+        // Putaran 51: filter positif kanonis (document-status.ts) — klaim
+        // negatif lama ikut mengakui approved/rejected hasil workflow generik
+        // yang belum terposting (tanpa jurnal/stok), sehingga penawaran tak
+        // pernah bisa dihapus walau faktur turunannya tak terposting.
+        status: { in: [...RECOGNISED_AR_STATUSES] },
       },
       select: { id: true },
     })
@@ -3510,7 +3515,7 @@ export async function updateSalesOrder(id: number, formData: FormData) {
       throw new Error(`Sales Order berstatus '${existing.status}' tidak bisa diubah; hanya draf/disertai yang bisa diedit.`)
     }
     const linkedPostedInvoice = await tx.salesInvoice.findFirst({
-      where: { salesOrderId: id, status: { notIn: ["draft", "approved", "cancelled"] } },
+      where: { salesOrderId: id, status: { in: [...RECOGNISED_AR_STATUSES] } },
       select: { id: true },
     })
     if (linkedPostedInvoice) {
@@ -4663,7 +4668,9 @@ export async function deleteSalesOrder(id: number) {
     // P3 vonis F-2026-10-28-121-V: cascade menolak bila ada faktur turunan hidup
     // (non-draft/non-cancelled) — dilarang hapus diam-diam, arahkan void dulu.
     const liveInvoices = await tx.salesInvoice.findMany({
-      where: { salesOrderId: id, status: { notIn: ["draft", "cancelled"] } },
+      // Putaran 51: filter positif kanonis — approved/rejected workflow
+      // generik belum terposting dan tidak boleh memblokir hapus draf.
+      where: { salesOrderId: id, status: { in: [...RECOGNISED_AR_STATUSES] } },
       select: { id: true },
     })
     if (liveInvoices.length > 0) {
