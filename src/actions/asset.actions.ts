@@ -1144,6 +1144,7 @@ export async function updateAsset(id: number, formData: FormData) {
         where: { id },
         select: {
           purchaseCost: true,
+          purchaseDate: true,
           status: true,
           categoryId: true,
           depreciationMethod: true,
@@ -1166,6 +1167,24 @@ export async function updateAsset(id: number, formData: FormData) {
         if (lockedAcquisitionJournal) {
           throw new Error(
             "Harga perolehan tidak dapat diubah karena akuisisi aset sudah tercatat di GL. Gunakan pelepasan (disposal) atau jurnal koreksi.",
+          );
+        }
+      }
+      // Tanggal perolehan adalah jangkar mesin: SYD menurunkan bulan ke-k
+      // darinya, tahun fiskal mulai darinya, cron menyaring masa darinya.
+      // Menggesernya sesudah jurnal perolehan POSTED menulis ulang beban
+      // masa depan dan tahun fiskal tanpa peristiwa — bekukan seperti
+      // harga perolehan. Echo tanggal sama (atau tetap kosong) lolos.
+      const nextPurchaseDate = data.purchaseDate ? wibDateToUtcMidnight(data.purchaseDate) : null;
+      const lockedPurchaseTime = lockedAsset.purchaseDate ? lockedAsset.purchaseDate.getTime() : null;
+      if ((nextPurchaseDate ? nextPurchaseDate.getTime() : null) !== lockedPurchaseTime) {
+        const lockedAcquisitionJournal = await tx.journal.findFirst({
+          where: { referenceType: "ASSET_ACQUISITION", referenceId: id },
+          select: { id: true },
+        });
+        if (lockedAcquisitionJournal) {
+          throw new Error(
+            "Tanggal perolehan tidak dapat diubah karena akuisisi aset sudah tercatat di GL. Koreksi hanya lewat jurnal koreksi atau pelepasan (disposal).",
           );
         }
       }

@@ -1522,6 +1522,25 @@ describe("createAsset / updateAsset", () => {
     expect(prismaMock.asset.update).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 47: updateAsset menolak ubah tanggal perolehan sesudah jurnal perolehan POSTED", async () => {
+    prismaMock.asset.findUniqueOrThrow.mockResolvedValue({ purchaseCost: 1000, status: "active" })
+    prismaMock.asset.findUnique.mockResolvedValue({
+      purchaseCost: 1000, status: "active", categoryId: null,
+      depreciationMethod: "straight_line", usefulLifeMonths: null, residualValue: 0,
+      purchaseDate: new Date("2025-01-10T00:00:00.000Z"),
+    })
+    prismaMock.journal.findFirst.mockResolvedValue({ id: 1 })
+    const res = await updateAsset(100, fd({
+      name: "Laptop",
+      purchasePrice: "1000",
+      purchaseDate: "2024-06-10",
+    }))
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Tanggal perolehan/)
+    expect(prismaMock.asset.update).not.toHaveBeenCalled()
+    prismaMock.journal.findFirst.mockResolvedValue(null)
+  })
+
   it("regresi putaran 47: updateAsset menolak masuk held_for_sale tanpa 5 fakta klasifikasi", async () => {
     prismaMock.asset.findUniqueOrThrow.mockResolvedValue({ purchaseCost: 1000, status: "active" })
     prismaMock.asset.findUnique.mockResolvedValue({
