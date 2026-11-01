@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => {
     create: vi.fn().mockResolvedValue({ id: 1 }),
     createMany: vi.fn().mockResolvedValue({ count: 1 }),
     update: vi.fn().mockResolvedValue({}),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
   })
 
   const prismaMock: any = {
@@ -251,6 +252,48 @@ describe("createInvoiceExchange ambang lunas FIN-BR-006 (Rp1 kanonis)", () => {
     expect(mocks.prismaMock.invoiceExchange.create).not.toHaveBeenCalled()
   })
 })
+describe("invoiceExchange gerbang periode dalam tx (putaran 17)", () => {
+  it("create menolak bila periode tertutup saat dinilai ulang di dalam tx", async () => {
+    mocks.assertPeriodMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Periode akuntansi sudah ditutup"))
+    const res = await actions.createInvoiceExchange(fd(base))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah ditutup")
+    expect(mocks.assertPeriodMock.mock.calls.some((c: unknown[]) => c[1] === mocks.prismaMock)).toBe(true)
+    expect(mocks.prismaMock.invoiceExchange.create).not.toHaveBeenCalled()
+  })
+
+  it("delete menilai ulang periode dari baris terkunci sebelum soft-delete", async () => {
+    mocks.prismaMock.invoiceExchange.findFirst.mockResolvedValue({
+      id: 11,
+      documentNo: "TKF-9",
+      date: new Date("2026-10-20T00:00:00.000Z"),
+    })
+    const res = await actions.deleteInvoiceExchange(11)
+    expect(res.success).toBe(true)
+    expect(mocks.assertPeriodMock.mock.calls.some((c: unknown[]) => c[1] === mocks.prismaMock)).toBe(true)
+    expect(mocks.prismaMock.invoiceExchange.updateMany).toHaveBeenCalledWith({
+      where: { id: 11, deletedAt: null },
+      data: { deletedAt: expect.any(Date) },
+    })
+  })
+
+  it("delete menolak bila periode tertutup saat dinilai ulang di dalam tx", async () => {
+    mocks.prismaMock.invoiceExchange.findFirst.mockResolvedValue({
+      id: 11,
+      documentNo: "TKF-9",
+      date: new Date("2026-10-20T00:00:00.000Z"),
+    })
+    mocks.assertPeriodMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Periode akuntansi sudah ditutup"))
+    const res = await actions.deleteInvoiceExchange(11)
+    expect(res.success).toBe(false)
+    expect(mocks.prismaMock.invoiceExchange.updateMany).not.toHaveBeenCalled()
+  })
+})
+
 describe("createInvoiceExchange ID non-desimal murni", () => {
   it("menolak ID non-desimal murni (0x10/1e3/0b101/spasi) — bukan ID faktur 10/16/1000", async () => {
     for (const weird of ["0x10", "1e3", "0b101", " 10", "+10", "10.0"]) {

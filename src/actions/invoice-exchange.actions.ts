@@ -141,6 +141,12 @@ export async function createInvoiceExchange(formData: FormData): Promise<Invoice
     const documentNo = await generateDocumentNumber("TKF", "simple")
 
     const created = await prisma.$transaction(async (tx) => {
+      // Gerbang periode otoritatif di dalam tx: assertPeriodOpen(tx)
+      // mengunci baris system_settings, jadi tutup periode yang commit
+      // sesudah cek luar tetap terlihat sebelum dokumen lahir.
+      await assertPeriodOpen(date, tx)
+      if (dueDate) await assertPeriodOpen(dueDate, tx)
+
       // Kunci baris faktur lalu putuskan ulang di dalam tx: cek di luar tx
       // tidak menahan dua submit bersamaan (atau pembayaran bersamaan) —
       // keduanya lolos, faktur yang sama tercatat diserahkan dua kali dan
@@ -237,8 +243,25 @@ export async function deleteInvoiceExchange(id: number): Promise<InvoiceExchange
 
     await assertPeriodOpen(exchange.date)
 
-    await prisma.invoiceExchange.update({ where: { id }, data: { deletedAt: new Date() } })
-    await logActivity("delete", "InvoiceExchange", id, `Menghapus tukar faktur ${exchange.documentNo}`)
+    const deleted = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM invoice_exchanges WHERE id = ${id} FOR UPDATE`
+      const locked = await tx.invoiceExchange.findFirst({
+        where: { id, deletedAt: null },
+        select: { id: true, documentNo: true, date: true },
+      })
+      if (!locked) return null
+      // Nilai ulang periode dari baris terkunci: tutup periode yang commit
+      // sesudah assert luar tidak boleh dilewati soft-delete ini.
+      await assertPeriodOpen(locked.date, tx)
+      const claimed = await tx.invoiceExchange.updateMany({
+        where: { id, deletedAt: null },
+        data: { deletedAt: new Date() },
+      })
+      return claimed.count === 1 ? locked : null
+    })
+    if (!deleted) return { success: false, error: "Tukar faktur tidak ditemukan." }
+
+    await logActivity("delete", "InvoiceExchange", id, `Menghapus tukar faktur ${deleted.documentNo}`)
     revalidatePath(REVALIDATE)
 
     return { success: true, id }
