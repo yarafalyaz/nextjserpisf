@@ -148,9 +148,16 @@ describe("POST /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () =>
     )
     mocks.journalFindFirst.mockResolvedValue(null)
     mocks.journalCreate.mockResolvedValue({})
-    // Bacaan ulang UOP dalam tx: default meniru snapshot luar tes lama
-    // (aset aktif, jurnal perolehan sama, record dari fixture per-tes).
-    mocks.assetFindUniqueTx.mockResolvedValue(null)
+    // Bacaan ulang dalam tx (semua metode): default meniru snapshot luar
+    // tes lama (aset aktif, jurnal perolehan sama, record per-tes).
+    mocks.assetFindUniqueTx.mockResolvedValue({
+      status: "active",
+      residualValue: D(0),
+      totalEstimatedUnits: null,
+      usefulLifeMonths: null,
+      purchaseDate: new Date(2026, 0, 1),
+      currentValue: D(950),
+    })
     mocks.journalFindManyTx.mockResolvedValue(acquisitionJournals())
     mocks.assetUsageRecordFindFirst.mockResolvedValue(null)
     mocks.txQueryRaw.mockResolvedValue([{ id: 1 }])
@@ -368,6 +375,39 @@ describe("POST /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () =>
     expect(json.processed).toBe(0)
     expect(json.errors).toBe(0)
     expect(json.errorDetails).toEqual([])
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.assetUpdate).not.toHaveBeenCalled()
+    expect(mocks.assetHistoryCreate).not.toHaveBeenCalled()
+  })
+
+  it("aset non-UOP yang disposed di jendela scan->tx: dilewati di bawah kunci, nol jurnal/currentValue", async () => {
+    mocks.assetFindMany.mockResolvedValue([assetRow()])
+    mocks.journalFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(acquisitionJournals())
+    // Baca ulang DI BAWAH kunci: status sudah disposed oleh disposeAsset,
+    // dan daftar jurnal segar memuat ASSET_DISPOSAL POSTED.
+    mocks.assetFindUniqueTx.mockResolvedValue({
+      status: "disposed",
+      residualValue: D(0),
+      totalEstimatedUnits: null,
+      usefulLifeMonths: null,
+      purchaseDate: new Date(2026, 0, 1),
+      currentValue: D(0),
+    })
+    mocks.journalFindManyTx.mockResolvedValue([
+      ...acquisitionJournals(),
+      {
+        referenceType: "ASSET_DISPOSAL",
+        referenceId: 1,
+        entries: [{ accountId: 900, debit: D(0), credit: D(1000) }],
+      },
+    ])
+
+    const res = await POST(makeReq())
+    const json = await res.json()
+    expect(json.processed).toBe(0)
+    expect(json.errors).toBe(0)
     expect(mocks.journalCreate).not.toHaveBeenCalled()
     expect(mocks.assetUpdate).not.toHaveBeenCalled()
     expect(mocks.assetHistoryCreate).not.toHaveBeenCalled()

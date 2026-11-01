@@ -300,74 +300,99 @@ export async function POST(request: Request) {
           })
           if (alreadyPosted) return "skipped-posted" as const
 
-          // UOP: unit aktual dibaca ulang DI BAWAH kunci baris aset dan
-          // beban dihitung ulang dari nilai buku jurnal yang sama.
-          // Snapshot luar tx bisa dikoreksi operator lewat
-          // upsertAssetUsageRecord (yang kini memegang kunci aset yang
-          // sama) sesudah daftar toProcess dibentuk — memakai angka
-          // basi memposting beban dari unit yang sudah tidak berlaku.
+          // Nilai segar dibaca ulang DI BAWAH kunci baris aset untuk SEMUA
+          // metode: scan + hitung luar adalah snapshot — disposeAsset
+          // mengunci baris yang sama, jadi disposal yang commit di jendela
+          // terlihat di sini (status bukan active atau jurnal ASSET_DISPOSAL
+          // POSTED) dan aset itu dilewati. Tanpa ini jalur non-UOP memposting
+          // jurnal penyusutan atas aset disposed dan menimpa currentValue
+          // dari 0 kembali ke nilai basi. Cabang UOP juga memakai bacaan
+          // segar yang sama (unit aktual bisa dikoreksi operator lewat
+          // upsertAssetUsageRecord sesudah daftar toProcess dibentuk).
+          const analytical = isAnalyticalDepreciationMethod(asset.depreciationMethod)
+          const freshAsset = await tx.asset.findUnique({
+            where: { id: asset.id },
+            select: {
+              status: true,
+              residualValue: true,
+              totalEstimatedUnits: true,
+              usefulLifeMonths: true,
+              purchaseDate: true,
+            },
+          })
+          if (!freshAsset || freshAsset.status !== "active") return "skipped-posted" as const
+          const freshJournals = await tx.journal.findMany({
+            where: {
+              referenceId: asset.id,
+              status: "POSTED",
+              deletedAt: null,
+              OR: [
+                { referenceType: "ASSET_ACQUISITION" },
+                { referenceType: "ASSET_DISPOSAL" },
+                { referenceType: { startsWith: "ASSET_DEPRECIATION_" } },
+              ],
+            },
+            select: {
+              referenceType: true,
+              entries: { select: { accountId: true, debit: true, credit: true } },
+            },
+          })
+          if (freshJournals.some((j) => j.referenceType === "ASSET_DISPOSAL")) {
+            return "skipped-posted" as const
+          }
+          const freshBook = journalBookValue(
+            freshJournals.map((j) => ({
+              referenceType: j.referenceType ?? "",
+              lines: j.entries.map((e) => ({
+                accountId: e.accountId,
+                debit: e.debit,
+                credit: e.credit,
+              })),
+            })),
+            {
+              fixedAssetAccountId:
+                asset.category?.assetAccountId ??
+                (envAccount("FIXED_ASSET_ACCOUNT_ID") || null),
+              accumulatedDepreciationAccountId: accumulatedAccountId || null,
+            },
+          )
+
           let effectiveDepreciation = monthlyDepreciation
           let effectiveBookValue = newBookValue
-          if (asset.depreciationMethod === "units_of_production") {
-            const freshAsset = await tx.asset.findUnique({
-              where: { id: asset.id },
-              select: {
-                status: true,
-                residualValue: true,
-                totalEstimatedUnits: true,
-                usefulLifeMonths: true,
-                purchaseDate: true,
-              },
-            })
-            const freshRecord = await tx.assetUsageRecord.findFirst({
-              where: { assetId: asset.id, periodYear: year, periodMonth: month },
-              select: { actualUnits: true },
-            })
-            const freshJournals = await tx.journal.findMany({
-              where: {
-                referenceId: asset.id,
-                status: "POSTED",
-                deletedAt: null,
-                OR: [
-                  { referenceType: "ASSET_ACQUISITION" },
-                  { referenceType: "ASSET_DISPOSAL" },
-                  { referenceType: { startsWith: "ASSET_DEPRECIATION_" } },
-                ],
-              },
-              select: {
-                referenceType: true,
-                entries: { select: { accountId: true, debit: true, credit: true } },
-              },
-            })
-            const freshBook = journalBookValue(
-              freshJournals.map((j) => ({
-                referenceType: j.referenceType ?? "",
-                lines: j.entries.map((e) => ({
-                  accountId: e.accountId,
-                  debit: e.debit,
-                  credit: e.credit,
-                })),
-              })),
-              {
-                fixedAssetAccountId:
-                  asset.category?.assetAccountId ??
-                  (envAccount("FIXED_ASSET_ACCOUNT_ID") || null),
-                accumulatedDepreciationAccountId: accumulatedAccountId || null,
-              },
-            )
+          if (analytical) {
+            const freshRecord =
+              asset.depreciationMethod === "units_of_production"
+                ? await tx.assetUsageRecord.findFirst({
+                    where: { assetId: asset.id, periodYear: year, periodMonth: month },
+                    select: { actualUnits: true },
+                  })
+                : null
             const freshResult = resolveAnalyticalAssetStatus({
               depreciationMethod: asset.depreciationMethod,
-              status: freshAsset?.status ?? asset.status,
+              status: freshAsset.status,
               purchaseCost: freshBook.grossCostPosted,
               bookValue: freshBook.bookValue,
-              residualValue: freshAsset?.residualValue ?? asset.residualValue,
-              totalEstimatedUnits: freshAsset?.totalEstimatedUnits ?? asset.totalEstimatedUnits,
-              usefulLifeMonths: freshAsset?.usefulLifeMonths ?? asset.usefulLifeMonths,
+              residualValue: freshAsset.residualValue ?? asset.residualValue,
+              totalEstimatedUnits: freshAsset.totalEstimatedUnits ?? asset.totalEstimatedUnits,
+              usefulLifeMonths: freshAsset.usefulLifeMonths ?? asset.usefulLifeMonths,
               actualUnits: freshRecord?.actualUnits ?? null,
-              purchaseDate: freshAsset?.purchaseDate ?? asset.purchaseDate,
+              purchaseDate: freshAsset.purchaseDate ?? asset.purchaseDate,
               periodYear: year,
               periodMonth: month,
               alreadyPosted: false,
+            })
+            if (freshResult.status !== "computed") return "skipped-posted" as const
+            effectiveDepreciation = freshResult.amount
+            effectiveBookValue = freshBook.bookValue.sub(freshResult.amount)
+          } else {
+            if (!freshBook.hasAcquisitionJournal) return "skipped-posted" as const
+            const freshResult = computeMonthlyDepreciation({
+              purchaseCost: freshBook.grossCostPosted,
+              bookValue: freshBook.bookValue,
+              residualValue: freshAsset.residualValue ?? asset.residualValue,
+              depreciationMethod: asset.depreciationMethod,
+              categoryDepreciationRate: asset.category?.depreciationRate ?? null,
+              categoryUsefulLife: asset.category?.usefulLife ?? null,
             })
             if (freshResult.status !== "computed") return "skipped-posted" as const
             effectiveDepreciation = freshResult.amount
