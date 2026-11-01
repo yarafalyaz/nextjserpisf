@@ -26,7 +26,12 @@ const MODULE_MAP: Record<string, { model: string; modelType: string; revalidate:
   "penjualan/faktur": { model: "salesInvoice", modelType: "SalesInvoice", revalidate: "/penjualan/faktur" },
   "pembelian/permintaan": { model: "purchaseRequest", modelType: "PurchaseRequest", revalidate: "/pembelian/permintaan" },
   "pembelian/pesanan": { model: "purchaseOrder", modelType: "PurchaseOrder", revalidate: "/pembelian/pesanan" },
-  "pembelian/tagihan": { model: "vendorBill", modelType: "VendorBill", revalidate: "/pembelian/tagihan" },
+  // "pembelian/tagihan" SENGAJA tidak terdaftar: persetujuan tagihan vendor
+  // adalah posting (confirmVendorBill) — jurnal AP + balanceDue lahir di
+  // sana. Tombol status generik di sini hanya membalik status ke approved
+  // tanpa jurnal dan tanpa balanceDue, sesudah itu Konfirmasi hilang
+  // (draft-only) dan Bayar terkunci (balanceDue 0): tagihan terkunci
+  // permanen. Halaman detail pun sengaja tanpa <StatusActions> generik.
   // Cuti & Lembur TIDAK punya kolom `createdBy` (pemiliknya karyawan, lewat
   // employeeId). Meminta kolom itu ke Prisma melempar validation error sehingga
   // tombol Setujui selalu 500 — flag ini yang mencegahnya, dan dijaga oleh

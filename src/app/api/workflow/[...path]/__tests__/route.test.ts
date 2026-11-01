@@ -145,6 +145,13 @@ describe("POST /api/workflow/[...path]", () => {
     expect(res.status).toBe(404)
   })
 
+  it("regresi putaran 16: tagihan vendor tidak terdaftar — approve generik tanpa jurnal/balanceDue ditolak 404", async () => {
+    mocks.authFn.mockResolvedValue(adminSession)
+    const res = await POST(makeReq(), makeParams(["pembelian", "tagihan", "5", "approve"]))
+    expect(res.status).toBe(404)
+    expect(mocks.updateMany).not.toHaveBeenCalled()
+  })
+
   it("returns 403 when user lacks permission and is not super_admin", async () => {
     mocks.authFn.mockResolvedValue({ user: { id: 2, roles: ["staff"], permissions: [] } })
     const res = await POST(makeReq(), makeParams(["penjualan", "penawaran", "1", "approve"]))
