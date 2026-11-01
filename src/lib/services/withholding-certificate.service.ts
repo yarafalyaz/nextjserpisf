@@ -111,6 +111,46 @@ function assertArticle(article: string): WithholdingArticle {
   return article as WithholdingArticle
 }
 
+/**
+ * Penilaian ulang akun jurnal dalam tx: kunci baris terurut
+ * `SELECT id FROM accounts ... FOR UPDATE`, lalu akun wajib ada +
+ * isActive + deletedAt null, opsional tipe/grup sesuai titik tulis
+ * (pola createTaxPayment tax-payment.actions). Baris akun yang tidak
+ * terkunci mengembalikan undefined agar nol penolakan palsu.
+ */
+async function assertJournalAccountsLive(
+  tx: TxClient,
+  requirements: { id: number; type?: string; reportGroup?: string; label: string }[],
+): Promise<void> {
+  const ids = [...new Set(requirements.map((r) => r.id))].sort((a, b) => a - b)
+  if (ids.length === 0) return
+  const raw = tx as { $executeRaw?: unknown }
+  if (typeof raw.$executeRaw === "function") {
+    await tx.$executeRaw`SELECT id FROM accounts WHERE id IN (${Prisma.join(ids)}) FOR UPDATE`
+  }
+  const accounts = await tx.account.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, isActive: true, deletedAt: true, type: true, reportGroup: true },
+  })
+  if (accounts.length !== ids.length) throw definitive("Akun yang dipilih tidak ditemukan.")
+  for (const req of requirements) {
+    const account = accounts.find((a) => a.id === req.id)
+    if (!account) throw definitive("Akun yang dipilih tidak ditemukan.")
+    if (account.deletedAt != null) throw definitive("Akun yang dipilih sudah dihapus.")
+    if (!account.isActive) throw definitive("Akun yang dipilih tidak aktif.")
+    if (req.type && account.type !== req.type) {
+      throw definitive(`${req.label} bukan akun ${req.type} (tipe akun: ${account.type}).`)
+    }
+    if (req.reportGroup && account.reportGroup !== req.reportGroup) {
+      throw definitive(
+        req.reportGroup === "BANK"
+          ? `${req.label} bukan akun kas/bank (grup laporan BANK).`
+          : `${req.label} bukan grup ${req.reportGroup}.`,
+      )
+    }
+  }
+}
+
 export interface IssueWithholdingInput {
   direction: "we_withhold" | "withheld_from_us"
   certificateNumber: string
@@ -413,6 +453,14 @@ export async function revokeWithholdingCertificate(input: RevokeWithholdingInput
             : "Akun Piutang Usaha belum dikonfigurasi untuk revoke bupot",
         )
       }
+      // Kaki sumber asli ada, jadi jurnal lawan benar-benar lahir — nilai
+      // ulang dua akun tujuannya hidup di titik tulis (pola posting).
+      if (sourceHasWithholdingLeg) {
+        await assertJournalAccountsLive(tx as never, [
+          { id: withholdingAccountId, label: "Akun pajak bupot" },
+          { id: counterAccountId, label: "Akun lawan bupot" },
+        ])
+      }
       await tx.withholdingCertificate.update({ where: { id: cert.id }, data: { status: "revoked" } })
       if (!sourceHasWithholdingLeg) {
         // Tanpa kaki sumber tak ada yang dibalik; nomor jurnal/jurnal lawan
@@ -540,11 +588,13 @@ export async function settleWithholdingTax(input: SettleWithholdingInput): Promi
       if (taxAccountId === input.paymentAccountId) {
         throw definitive("Akun utang pajak dan kas/bank tidak boleh sama")
       }
-      const accounts = await tx.account.findMany({
-        where: { id: { in: [taxAccountId, input.paymentAccountId] } },
-        select: { id: true },
-      })
-      if (accounts.length !== 2) throw definitive("Akun utang pajak / kas-bank tidak ditemukan")
+      // Gerbang titik setor (pola createTaxPayment): akun wajib hidup +
+      // grup dinilai ulang dalam tx berkunci — akun yang mati/dihapus
+      // sesudah picker dimuat tidak menerima jurnal POSTED.
+      await assertJournalAccountsLive(tx as never, [
+        { id: taxAccountId, type: "LIABILITY", label: "Akun utang pajak" },
+        { id: input.paymentAccountId, reportGroup: "BANK", label: "Akun pembayaran setor pajak" },
+      ])
       const paymentSlug = await nextTxSlug(tx as never, "taxPayment", documentNo)
       const journalSlug = await nextTxSlug(tx as never, "journal", journalNo)
       const payment = await tx.taxPayment.create({

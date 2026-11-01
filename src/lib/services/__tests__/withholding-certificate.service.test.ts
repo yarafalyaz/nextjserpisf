@@ -108,7 +108,18 @@ beforeEach(() => {
   mocks.typeFindMany.mockResolvedValue([
     { code: "PPH42-SEWA", objectCode: "28-403-02", rate: 10 },
   ])
-  mocks.accountFindMany.mockResolvedValue([{ id: 501 }, { id: 102 }])
+  // Kontrak gerbang putaran 35: akun dinilai hidup/tipe dalam tx — default
+  // dua baris sehat (501 utang pajak LIABILITY; 102 kas-bank BANK).
+  mocks.accountFindMany.mockImplementation(async (arg: { where?: { id?: { in?: number[] } } }) => {
+    const ids = arg?.where?.id?.in ?? [501, 102]
+    const kind = (id: number) =>
+      id === 501 ? { type: "LIABILITY", reportGroup: "LIABILITY" }
+      : id === 102 ? { type: "ASSET", reportGroup: "BANK" }
+      : id === 210 ? { type: "LIABILITY", reportGroup: "LIABILITY" }
+      : id === 110 ? { type: "ASSET", reportGroup: "RECEIVABLE" }
+      : { type: "ASSET", reportGroup: "BANK" }
+    return ids.map((id) => ({ id, isActive: true, deletedAt: null, ...kind(id) }))
+  })
   mocks.taxPaymentCreate.mockResolvedValue({ id: 9 })
   mocks.taxPaymentUpdate.mockResolvedValue({})
   mocks.journalCreate.mockResolvedValue({ id: 11 })
@@ -133,6 +144,64 @@ beforeEach(() => {
 function key() {
   return `test-key-${Math.random().toString(36).slice(2, 10)}-ab`
 }
+
+// regresi putaran 35: akun setor/revoke bupot dinilai hidup + grup di dalam tx
+describe("gerbang akun setor/revoke bupot (putaran 35)", () => {
+  const baseCert = {
+    id: 16,
+    status: "issued",
+    direction: "we_withhold",
+    certificateNumber: "BP-001",
+    withholdingDate: new Date(2026, 0, 10),
+    withholdingTypeId: 3,
+    withheldAmount: 200_000,
+    vendorBillId: 42,
+    salesPaymentId: null,
+  }
+
+  it("settle menolak akun utang pajak nonaktif", async () => {
+    mocks.accountFindMany.mockResolvedValue([
+      { id: 501, isActive: false, deletedAt: null, type: "LIABILITY", reportGroup: "LIABILITY" },
+      { id: 102, isActive: true, deletedAt: null, type: "ASSET", reportGroup: "BANK" },
+    ])
+    const r = await settleWithholdingTax({
+      withholdingTypeId: 3, period: "2026-01", paymentAccountId: 102,
+      amount: 200_000, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/tidak aktif/)
+    expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("settle menolak akun bayar bukan grup BANK", async () => {
+    mocks.accountFindMany.mockResolvedValue([
+      { id: 501, isActive: true, deletedAt: null, type: "LIABILITY", reportGroup: "LIABILITY" },
+      { id: 102, isActive: true, deletedAt: null, type: "EXPENSE", reportGroup: "EXPENSE" },
+    ])
+    const r = await settleWithholdingTax({
+      withholdingTypeId: 3, period: "2026-01", paymentAccountId: 102,
+      amount: 200_000, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/kas\/bank/)
+    expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("revoke menolak akun hutang PPh terhapus (jurnal lawan tak ditulis)", async () => {
+    mocks.certFindUniqueOrThrow.mockResolvedValue(baseCert)
+    mocks.accountFindMany.mockResolvedValue([
+      { id: 501, isActive: true, deletedAt: new Date(2026, 0, 5), type: "LIABILITY", reportGroup: "LIABILITY" },
+      { id: 210, isActive: true, deletedAt: null, type: "LIABILITY", reportGroup: "LIABILITY" },
+    ])
+    const r = await revokeWithholdingCertificate({ id: 16, idempotencyKey: key(), userId: 5 })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/dihapus/)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.certUpdate).not.toHaveBeenCalled()
+  })
+})
 
 describe("issueWithholdingCertificate guards", () => {
   it("snapshot pasal+kode+tarif+DPP dari master saat terbit", async () => {
