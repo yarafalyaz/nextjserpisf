@@ -6,10 +6,13 @@
  * kolom itu — bukan dengan menjumlahkan ulang seluruh penerimaan, yang akan
  * membuka peluang laporan dan pesanan menampilkan angka berbeda.
  *
- * Status pesanan yang masuk: `approved`, `ordered`, `received`, `verified`,
- * `completed`. Draft dan pending belum dipesan ke pemasok (menampilkannya membuat
+ * Status pesanan yang masuk: `approved`, `ordered`, `partial_received`,
+ * `received`, `completed`. Draft dan pending belum dipesan ke pemasok (menampilkannya membuat
  * barang yang belum pernah dipesan terlihat seperti pesanan yang belum datang),
- * sedangkan rejected/cancelled memang bukan komitmen.
+ * sedangkan rejected/cancelled memang bukan komitmen. `partial_received`
+ * adalah populasi inti laporan ini — status itulah yang ditulis jalur
+ * penerimaan (`goods-receipt.hook`, buat GR) selama penerimaan belum penuh;
+ * `verified` adalah status GoodsReceipt, bukan PurchaseOrder.
  */
 
 import { prisma } from "@/lib/db/prisma"
@@ -20,7 +23,7 @@ import {
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 
 /** Status pesanan yang berarti komitmen ke pemasok. */
-const COMMITTED_PO_STATUSES = ["approved", "ordered", "received", "verified", "completed"]
+const COMMITTED_PO_STATUSES = ["approved", "ordered", "partial_received", "received", "completed"]
 
 export interface PurchaseOutstandingReport {
   outstanding: PurchaseOutstandingResult
