@@ -2187,6 +2187,71 @@ export async function onSalesReturnCompleted(
     const creditTotal = safeAdd(priceTotal, returnVatTotal, 2);
     const totalAmount = creditTotal + costTotal;
 
+    // Putaran 16: kredit Piutang KUMULATIF (pola cabang scrap di atas) —
+    // cabang ini dulu mengkredit Piutang sebesar creditTotal retur ini saja
+    // dan menilai status/relief tanpa kredit retur sebelumnya. Dua retur
+    // atas satu faktur (mis. 1000, dibayar 600, retur 300 + 300) menulis
+    // Cr Piutang 300 kedua kalinya walau sisa hanya 100: GL Piutang neto
+    // negatif, status tetap partial padahal kanonis lunas, kelebihan tak
+    // pernah menjadi CustomerCredit. Faktur sudah dikunci FOR UPDATE di
+    // blok F-004, jadi bacaan prior di sini serial terhadap retur lain.
+    let receivableCredit = creditTotal;
+    let excessCredit = 0;
+    let priorReturnCredit = 0;
+    const dpLiabilityAccountId =
+      (settings as { customerDownPaymentAccountId?: number | null }).customerDownPaymentAccountId ?? null;
+    if (linkedToInvoice && priceTotal > 0 && salesReturn.salesInvoiceId != null) {
+      const invForCap = await tx.salesInvoice.findUniqueOrThrow({
+        where: { id: salesReturn.salesInvoiceId },
+        select: { grandTotal: true, paidAmount: true },
+      });
+      const priorReturns = await tx.salesReturn.findMany({
+        where: {
+          salesInvoiceId: salesReturn.salesInvoiceId,
+          status: "completed",
+          id: { not: returnId },
+        },
+        select: { id: true },
+      });
+      if (priorReturns.length > 0) {
+        const priorJournals = await tx.journal.findMany({
+          where: {
+            referenceType: "SalesReturn",
+            referenceId: { in: priorReturns.map((r) => r.id) },
+            status: "POSTED",
+            deletedAt: null,
+          },
+          select: {
+            entries: {
+              where: { accountId: settings.salesReceivableAccountId! },
+              select: { credit: true },
+            },
+          },
+        });
+        for (const j of priorJournals) {
+          for (const e of j.entries) {
+            priorReturnCredit = safeAdd(priorReturnCredit, Number(e.credit), 2);
+          }
+        }
+      }
+      const outstanding = Math.max(
+        0,
+        safeSubtract(
+          safeSubtract(Number(invForCap.grandTotal), priorReturnCredit, 2),
+          Number(invForCap.paidAmount),
+          2,
+        ),
+      );
+      receivableCredit = Math.min(creditTotal, outstanding);
+      excessCredit = safeSubtract(creditTotal, receivableCredit, 2);
+      if (excessCredit > 0 && !dpLiabilityAccountId) {
+        throw new Error(
+          "Akun kewajiban UMP (210102) belum dikonfigurasi untuk kelebihan retur penjualan di atas sisa faktur — " +
+            "kelebihan tidak boleh mengkredit Piutang melebihi outstanding maupun Kas tanpa pengeluaran kas.",
+        );
+      }
+    }
+
     const journal = await tx.journal.create({
       data: {
         journalNumber,
@@ -2215,22 +2280,33 @@ export async function onSalesReturnCompleted(
       memo: string;
     }[] = [];
     if (linkedToInvoice && priceTotal > 0) {
-      entryRows.push(
-        {
-          journalId: journal.id,
-          accountId: settings.salesReturnAccountId!,
-          debit: priceTotal,
-          credit: 0,
-          memo: "Retur Penjualan",
-        },
-        {
+      entryRows.push({
+        journalId: journal.id,
+        accountId: settings.salesReturnAccountId!,
+        debit: priceTotal,
+        credit: 0,
+        memo: "Retur Penjualan",
+      });
+      // Cr Piutang hanya sebatas sisa kumulatif; kelebihan retur adalah
+      // liabilitas ke pelanggan (akun UMP), bukan kredit Piutang negatif.
+      if (receivableCredit > 0) {
+        entryRows.push({
           journalId: journal.id,
           accountId: settings.salesReceivableAccountId!,
           debit: 0,
-          credit: creditTotal,
+          credit: receivableCredit,
           memo: "Pengurangan Piutang (Retur)",
-        },
-      );
+        });
+      }
+      if (excessCredit > 0) {
+        entryRows.push({
+          journalId: journal.id,
+          accountId: dpLiabilityAccountId!,
+          debit: 0,
+          credit: excessCredit,
+          memo: "Kelebihan Retur Penjualan ke Kredit Pelanggan",
+        });
+      }
       if (returnVatTotal > 0) {
         entryRows.push({
           journalId: journal.id,
@@ -2283,27 +2359,39 @@ export async function onSalesReturnCompleted(
           documentNo: true,
         },
       });
-      const returnCreditSen = Math.round(creditTotal * 100);
+      // returnCredit jurnal ini = kaki Cr Piutang yang benar-benar tertulis
+      // (receivableCredit), dan penilaian kumulatif: total terbayar valid =
+      // kas + kredit retur sebelumnya + retur ini (selaras loader kanonis).
+      const returnCreditSen = Math.round(receivableCredit * 100);
+      const priorSen = Math.round(priorReturnCredit * 100);
       // FIN-BR-006: lunas dari outstanding valid (grandTotalAsal − paid −
-      // returnCredit jurnal ini) dalam toleransi Rp1. isSettled menerima
+      // returnCredit kumulatif) dalam toleransi Rp1. isSettled menerima
       // total kewajiban + total terbayar valid (kas + kredit retur), bukan
       // sisa outstanding sebagai grandTotal — sisa <= Rp1 saja akan selalu
       // salah terklasifikasi partial (grandTotal <= 0 tak pernah lunas).
       const invStatus: "posted" | "partial" | "paid" =
         isSettled(
           Number(inv.grandTotal),
-          safeAdd(Number(inv.paidAmount), returnCreditSen / 100, 2),
+          safeAdd(
+            safeAdd(Number(inv.paidAmount), priorReturnCredit, 2),
+            returnCreditSen / 100,
+            2,
+          ),
         )
           ? "paid"
           : Number(inv.paidAmount) > 0 ||
+              priorReturnCredit > 0 ||
               returnCreditSen > 0
             ? "partial"
             : "posted";
       const paidSen = Math.round(Number(inv.paidAmount) * 100);
       const grandSen = Math.round(Number(inv.grandTotal) * 100);
       if (Number.isFinite(grandSen) && Number.isFinite(paidSen)) {
-        const reliefSen = Math.min(returnCreditSen, Math.max(grandSen - paidSen, 0));
-        const excessSen = returnCreditSen - reliefSen;
+        const reliefSen = Math.min(
+          returnCreditSen,
+          Math.max(grandSen - paidSen - priorSen, 0),
+        );
+        const excessSen = Math.round(excessCredit * 100);
         await tx.salesInvoice.update({
           where: { id: salesReturn.salesInvoiceId },
           data: {

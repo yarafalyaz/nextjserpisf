@@ -19,7 +19,10 @@ const mocks = vi.hoisted(() => ({
     inventoryAccountId: 130 as number | null,
     purchasePayableAccountId: 210 as number | null,
     purchaseReturnAccountId: 220 as number | null,
+    customerDownPaymentAccountId: 240 as number | null,
   },
+  priorReturnsFindMany: vi.fn(),
+  priorJournalsFindMany: vi.fn(),
   salesReturnFind: vi.fn(),
   purchaseReturnFind: vi.fn(),
   invoiceFindUnique: vi.fn(),
@@ -83,7 +86,12 @@ function salesTx(invoice: Record<string, unknown>) {
       update: mocks.invoiceUpdate,
     },
     taxInvoice: { findFirst: vi.fn().mockResolvedValue(null) },
-    journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
+    salesReturn: { findMany: mocks.priorReturnsFindMany },
+    journal: {
+      findFirst: mocks.journalFindFirst,
+      findMany: mocks.priorJournalsFindMany,
+      create: mocks.journalCreate,
+    },
     journalEntry: { createMany: mocks.entryCreateMany },
     customerCredit: { findFirst: mocks.creditFindFirst, create: mocks.creditCreate },
   }
@@ -131,6 +139,8 @@ describe("TASK-011 BUG-04 — subledger retur selaras GL", () => {
     mocks.itemFindMany.mockResolvedValue([{ id: 60, isScrapSaleItem: false }])
     mocks.stockMoveFindMany.mockResolvedValue([])
     mocks.entryCreateMany.mockResolvedValue({ count: 5 })
+    mocks.priorReturnsFindMany.mockResolvedValue([])
+    mocks.priorJournalsFindMany.mockResolvedValue([])
   })
 
   it("retur jual faktur ber-PPN: jurnal memuat Dr PPN Keluaran, Cr Piutang = DPP+PPN", async () => {
@@ -251,6 +261,50 @@ describe("TASK-011 BUG-04 — subledger retur selaras GL", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           customerId: 99, sourceType: "SalesReturn", sourceId: 4, receivedAmount: 100,
+        }),
+      }),
+    )
+  })
+
+  it("regresi putaran 16: retur kedua kumulatif — Cr Piutang dibatasi sisa, kelebihan jadi CustomerCredit, status paid", async () => {
+    mocks.salesReturnFind.mockResolvedValue({
+      id: 5,
+      documentNo: "SR-5",
+      salesInvoiceId: 59,
+      date: new Date("2026-10-02T00:00:00Z"),
+      items: [{ id: 904, itemId: 60, qty: 3, price: 100, cost: 60 }],
+    })
+    mocks.invoiceFindUnique.mockResolvedValue({ id: 59, items: [{ itemId: 60, qty: 3 }] })
+    // Faktur 1000, kas 600, retur pertama sudah Cr Piutang 300 (jurnal POSTED).
+    // Sisa valid = 100. Retur kedua 300 → Cr Piutang 100 saja, 200 kelebihan.
+    const invoice = {
+      subtotal: 1000, discount: 0, taxAmount: 0,
+      grandTotal: 1000, paidAmount: 600, customerId: 99, documentNo: "INV-5",
+    }
+    mocks.priorReturnsFindMany.mockResolvedValue([{ id: 77 }])
+    mocks.priorJournalsFindMany.mockResolvedValue([{ entries: [{ credit: 300 }] }])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(salesTx(invoice)))
+
+    await onSalesReturnCompleted(5, 7)
+
+    const rows = mocks.entryCreateMany.mock.calls[0][0].data as any[]
+    const leg = (accountId: number, side: "debit" | "credit") =>
+      rows.filter((r) => r.accountId === accountId).reduce((s, r) => s + Number(r[side]), 0)
+    expect(leg(110, "credit")).toBe(100)
+    expect(leg(240, "credit")).toBe(200)
+    const debit = rows.reduce((s, r) => s + Number(r.debit), 0)
+    const credit = rows.reduce((s, r) => s + Number(r.credit), 0)
+    expect(debit).toBe(credit)
+    expect(mocks.invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 59 },
+        data: expect.objectContaining({ paidAmount: 600, status: "paid", paymentStatus: "paid" }),
+      }),
+    )
+    expect(mocks.creditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          customerId: 99, sourceType: "SalesReturn", sourceId: 5, receivedAmount: 200,
         }),
       }),
     )
