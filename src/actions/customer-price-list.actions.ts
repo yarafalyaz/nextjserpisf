@@ -61,20 +61,29 @@ export async function createCustomerPriceList(formData: FormData): Promise<Custo
       }
     }
 
-    const duplicate = await prisma.customerPriceList.findFirst({
-      where: { customerCategoryId: data.customerCategoryId, itemId: data.itemId, minQty: data.minQty, effectiveDate: data.effectiveDate },
-      select: { id: true },
+    // Serialisasi per item: unique DB tak menahan tuple ber-NULL (kategori /
+    // tanggal efektif kosong), jadi cek duplikat WAJIB di dalam tx sesudah
+    // kunci baris items — dua create konkuren untuk item sama terserialkan
+    // dan cek kedua melihat baris pertama (bukan snapshot lepas).
+    const outcome = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM items WHERE id = ${data.itemId} FOR UPDATE`
+      const duplicate = await tx.customerPriceList.findFirst({
+        where: { customerCategoryId: data.customerCategoryId, itemId: data.itemId, minQty: data.minQty, effectiveDate: data.effectiveDate },
+        select: { id: true },
+      })
+      if (duplicate) return { duplicate: true as const }
+      const created = await tx.customerPriceList.create({
+        data: { ...data, createdBy: Number(user.id) },
+      })
+      return { created }
     })
-    if (duplicate) {
+    if ("duplicate" in outcome) {
       return {
         success: false,
         error: "Harga untuk kategori, barang, minimal qty, dan tanggal efektif itu sudah ada. Ubah baris yang ada.",
       }
     }
-
-    const created = await prisma.customerPriceList.create({
-      data: { ...data, createdBy: Number(user.id) },
-    })
+    const created = outcome.created
 
     await logActivity("create", "CustomerPriceList", created.id, "Menambah daftar harga pelanggan")
     revalidatePath(REVALIDATE)
@@ -97,15 +106,21 @@ export async function updateCustomerPriceList(id: number, formData: FormData): P
     if (!parsed.success) return { success: false, error: parsed.error }
     const data = priceListData(parsed.data)
 
-    const duplicate = await prisma.customerPriceList.findFirst({
-      where: { customerCategoryId: data.customerCategoryId, itemId: data.itemId, minQty: data.minQty, effectiveDate: data.effectiveDate, id: { not: id } },
-      select: { id: true },
+    // Serialisasi per item sama seperti create: cek duplikat + update dalam
+    // satu tx sesudah kunci baris items, dinilai dari bacaan terkunci.
+    const outcome = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM items WHERE id = ${data.itemId} FOR UPDATE`
+      const duplicate = await tx.customerPriceList.findFirst({
+        where: { customerCategoryId: data.customerCategoryId, itemId: data.itemId, minQty: data.minQty, effectiveDate: data.effectiveDate, id: { not: id } },
+        select: { id: true },
+      })
+      if (duplicate) return { duplicate: true as const }
+      await tx.customerPriceList.update({ where: { id }, data })
+      return { updated: true as const }
     })
-    if (duplicate) {
+    if ("duplicate" in outcome) {
       return { success: false, error: "Sudah ada baris lain dengan kategori, barang, minimal qty, dan tanggal efektif yang sama." }
     }
-
-    await prisma.customerPriceList.update({ where: { id }, data })
 
     await logActivity("update", "CustomerPriceList", id, "Mengubah daftar harga pelanggan")
     revalidatePath(REVALIDATE)
