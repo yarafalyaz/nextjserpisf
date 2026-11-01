@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { auth } from "@/lib/auth/auth";
 import { onEmployeeLoanDisbursed } from "@/lib/hooks/accounting.hook";
 import { onExpenseApprovedSyncPettyCash } from "@/lib/hooks/expense.hook";
+import { recalcPurchaseRequestStatus } from "@/lib/hooks/purchase-order.hook";
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/services/activity-log.service"
 import { assertCSRF } from "@/lib/security/csrf";
@@ -481,6 +482,17 @@ export async function approveStep(approvalId: number, formData: FormData) {
             // pencairan tidak pernah terbit dua kali dari jalur ini.
             await onEmployeeLoanDisbursed(approval.referenceId, approvedBy ?? undefined, tx);
           }
+          if (approval.referenceType === "PurchaseOrder") {
+            // Putaran 51: flip draft→approved mengubah PO jadi komitmen PR —
+            // tanpa hitung ulang, PR macet approved/partial_ordered selamanya.
+            const po = await tx.purchaseOrder.findUniqueOrThrow({
+              where: { id: approval.referenceId },
+              select: { purchaseRequestId: true },
+            });
+            if (po.purchaseRequestId) {
+              await recalcPurchaseRequestStatus(po.purchaseRequestId, tx);
+            }
+          }
           if (approval.referenceType === "Expense") {
             // Deferred until after commit (see expenseToSync above).
             expenseToSync = approval.referenceId;
@@ -645,6 +657,17 @@ export async function rejectStep(approvalId: number, formData: FormData) {
             where: { id: approval.referenceId },
             data,
           });
+        }
+        if (approval.referenceType === "PurchaseOrder") {
+          // Putaran 51: PO rejected berhenti menutupi PR (coverage putaran
+          // ini mengecualikan rejected) — hitung ulang agar PR turun kembali.
+          const po = await tx.purchaseOrder.findUniqueOrThrow({
+            where: { id: approval.referenceId },
+            select: { purchaseRequestId: true },
+          });
+          if (po.purchaseRequestId) {
+            await recalcPurchaseRequestStatus(po.purchaseRequestId, tx);
+          }
         }
       }
     });

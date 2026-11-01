@@ -52,6 +52,7 @@ const mocks = vi.hoisted(() => {
     logActivityMock: vi.fn(),
     authMock: vi.fn(),
     syncPettyCashMock: vi.fn().mockResolvedValue(undefined),
+    recalcPrMock: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -65,6 +66,9 @@ vi.mock("@/lib/hooks/accounting.hook", () => ({
 }));
 vi.mock("@/lib/hooks/expense.hook", () => ({
   onExpenseApprovedSyncPettyCash: (...a: unknown[]) => mocks.syncPettyCashMock(...a),
+}));
+vi.mock("@/lib/hooks/purchase-order.hook", () => ({
+  recalcPurchaseRequestStatus: (...a: unknown[]) => mocks.recalcPrMock(...a),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }));
 vi.mock("@/lib/services/activity-log.service", () => ({
@@ -223,6 +227,22 @@ describe("Approval Progression Actions", () => {
     mocks.prismaMock.vendorBill.updateMany.mockResolvedValue({ count: 0 });
     await expect(actions.rejectStep(1, fdMap({ notes: "NO" }))).rejects.toThrow(/draft/);
     expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled();
+  });
+
+  it("putaran 51: approve PurchaseOrder menghitung ulang status PR tertaut", async () => {
+    seedApproval({ referenceType: "PurchaseOrder", referenceId: 9 });
+    mocks.prismaMock.purchaseOrder = buildModelMockLocal();
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 9, purchaseRequestId: 77 });
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expect(mocks.recalcPrMock).toHaveBeenCalledWith(77, expect.anything());
+  });
+
+  it("putaran 51: reject PurchaseOrder menghitung ulang status PR tertaut", async () => {
+    seedApproval({ referenceType: "PurchaseOrder", referenceId: 9 });
+    mocks.prismaMock.purchaseOrder = buildModelMockLocal();
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 9, purchaseRequestId: 77 });
+    await actions.rejectStep(1, fdMap({ notes: "NO" }));
+    expect(mocks.recalcPrMock).toHaveBeenCalledWith(77, expect.anything());
   });
 
   it("rejects approval records whose workflow has no steps", async () => {
