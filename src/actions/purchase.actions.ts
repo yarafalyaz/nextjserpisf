@@ -2521,6 +2521,13 @@ export async function processPurchaseReturn(returnId: number) {
       throw new Error("Purchase return hanya bisa diproses dari status draft");
     }
 
+    // Pemisahan tugas (pola completeSalesReturn BR-SR-01): memproses retur =
+    // stok keluar + jurnal, jadi penyelesai != pembuat. createdBy null
+    // (baris legacy) boleh diproses penyetuju berizin.
+    if (purchaseReturn.createdBy != null && Number(purchaseReturn.createdBy) === Number(user.id)) {
+      throw new Error("Retur pembelian tidak boleh diproses oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin approve_purchase_returns.");
+    }
+
     // Scope gudang: hook mengeluarkan stok FIFO dari gudang hasil resolusi bersama
     // (receipt ?? default ?? active ?? any). Cek tiap item atas HASIL resolusi itu,
     // bukan hanya baris penerimaan — item tanpa GR verified/completed tetap jatuh

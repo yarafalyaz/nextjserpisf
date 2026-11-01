@@ -1733,6 +1733,17 @@ describe("Purchase Return Actions", () => {
     expect(res?.error).toContain("Gudang retur pembelian tidak ditemukan")
   })
 
+  it("regresi putaran 16: processPurchaseReturn menolak pembuat sendiri (pemisahan tugas)", async () => {
+    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", createdBy: 1, items: [{ itemId: 1, qty: 3 }], purchaseOrderId: 1
+    })
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
+    const res = await actions.processPurchaseReturn(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("pemisahan tugas")
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
   it("processPurchaseReturn succeeds when receipt warehouse is within user scope", async () => {
     mockDraftReturn()
     mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([
