@@ -295,6 +295,18 @@ describe("Quotation Actions", () => {
     const res = await actions.createQuotation(fdMap({ data: "invalid json" }))
     expect(res?.success).toBe(false)
   })
+  it("createQuotation menolak tanggal mustahil 2026-02-30 (tidak digulirkan ke Maret)", async () => {
+    const res = await actions.createQuotation(fdQuotation({ ...basicPayload, date: "2026-02-30" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Tanggal tidak valid/)
+    expect(mocks.prismaMock.quotation.create).not.toHaveBeenCalled()
+  })
+  it("createQuotation menolak validUntil mustahil 2026-04-31", async () => {
+    const res = await actions.createQuotation(fdQuotation({ ...basicPayload, validUntil: "2026-04-31" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Tanggal tidak valid/)
+    expect(mocks.prismaMock.quotation.create).not.toHaveBeenCalled()
+  })
   it("createQuotation fails on mismatched vehicle", async () => {
     mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue(null)
     const res = await actions.createQuotation(fdQuotation({ ...basicPayload, customerVehicleId: 1 }))
@@ -451,6 +463,12 @@ describe("Quotation Actions", () => {
   })
 
   // === updateQuotation ===
+  it("updateQuotation menolak tanggal mustahil 2026-02-30 sebelum mutasi", async () => {
+    const res = await actions.updateQuotation(1, fdQuotation({ ...basicPayload, date: "2026-02-30" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Tanggal tidak valid/)
+    expect(mocks.prismaMock.quotation.update).not.toHaveBeenCalled()
+  })
   it("updateQuotation fails if converted", async () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "converted" })
     const res = await actions.updateQuotation(1, fdMap({}))

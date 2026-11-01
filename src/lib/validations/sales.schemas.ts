@@ -39,6 +39,22 @@ export const updateQuotationSchema = z.object({
   notes: optionalString(500),
 });
 
+/**
+ * Tanggal quotation dari payload JSON mentah (`safeJsonParse as any`).
+ * `createQuotation`/`updateQuotation` tidak mem-parse seluruh payload dengan
+ * skema, jadi tanggal divalidasi terpisah di sini — tanpa ini "2026-02-30"
+ * lolos dan `wibDateToUtcMidnight` menggulirkannya diam-diam ke 2 Mar.
+ * `date` wajib pada create; pada update keduanya opsional.
+ */
+export const quotationDatesSchema = z.object({
+  date: dateOnly,
+  validUntil: optionalDate,
+});
+export const quotationDatesUpdateSchema = z.object({
+  date: optionalDate,
+  validUntil: optionalDate,
+});
+
 // ==================== DOWN PAYMENT ====================
 
 export const createDownPaymentSchema = z.object({

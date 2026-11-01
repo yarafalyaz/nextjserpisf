@@ -35,7 +35,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse } from "@/lib/utils/safe-parse"
 import { parseFormData } from "@/lib/validations/parse-form"
-import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, updateDeliveryOrderSchema, createSalesReturnSchema, updateDownPaymentSchema, updateSalesOrderSchema, updateSalesInvoiceSchema, updateSalesPaymentSchema, updateSalesReturnSchema, DELIVERABLE_ORDER_STATUSES, DELIVERABLE_ORDER_STATUS_LABELS, RETURNABLE_INVOICE_STATUSES } from "@/lib/validations/sales.schemas"
+import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, updateDeliveryOrderSchema, createSalesReturnSchema, updateDownPaymentSchema, updateSalesOrderSchema, updateSalesInvoiceSchema, updateSalesPaymentSchema, updateSalesReturnSchema, quotationDatesSchema, quotationDatesUpdateSchema, DELIVERABLE_ORDER_STATUSES, DELIVERABLE_ORDER_STATUS_LABELS, RETURNABLE_INVOICE_STATUSES } from "@/lib/validations/sales.schemas"
 import {
   assessCreditGateInTx,
   assertCreditGatePassed,
@@ -243,6 +243,14 @@ export async function createQuotation(formData: FormData) {
   const raw = formData.get("data") as string
   const data = safeJsonParse(raw) as any
   if (!data) throw new Error("Data penawaran tidak valid")
+
+  // Payload JSON mentah tak melewati skema penuh: tanggal wajib divalidasi
+  // kalender di sini, atau "2026-02-30" digulirkan wibDateToUtcMidnight ke
+  // 2 Mar diam-diam.
+  const parsedDates = quotationDatesSchema.safeParse({ date: data.date, validUntil: data.validUntil })
+  if (!parsedDates.success) {
+    throw new Error(parsedDates.error.issues[0]?.message ?? "Tanggal penawaran tidak valid")
+  }
 
   const documentNo = await generateDocumentNumber("QUO")
   const slug = await nextSlug("quotation", documentNo)
@@ -679,6 +687,13 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
   const raw = formData.get("data") as string
   const data = safeJsonParse(raw) as any
   if (!data) return { success: false, error: "Data penawaran tidak valid" }
+
+  // Sama seperti createQuotation: tanggal payload mentah divalidasi kalender
+  // sebelum wibDateToUtcMidnight menggulirkan hari mustahil diam-diam.
+  const parsedDates = quotationDatesUpdateSchema.safeParse({ date: data.date, validUntil: data.validUntil })
+  if (!parsedDates.success) {
+    return { success: false, error: parsedDates.error.issues[0]?.message ?? "Tanggal penawaran tidak valid" }
+  }
 
   const quotation = await prisma.quotation.findUniqueOrThrow({
     where: { id: quotationId },
