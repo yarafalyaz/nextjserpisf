@@ -348,6 +348,17 @@ describe("F-027 penugasan", () => {
 })
 
 describe("F-027 tarikan generate", () => {
+  it("putaran 38: slip baru untuk karyawan mati/terhapus ditolak", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await actions.processPayroll(fd({
+      employeeId: "7", period: "2026-05", startDate: "2026-05-01", endDate: "2026-05-31",
+      baseSalary: "5000000", allowances: "0", deductions: "0",
+    }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("Karyawan tidak ditemukan atau tidak aktif")
+    expect(prismaMock.payroll.create).not.toHaveBeenCalled()
+  })
+
   it("AC-1: 2 penugasan tetap tertarik persis, allowances 800rb (processPayroll)", async () => {
     prismaMock.employeePayrollComponent.findMany.mockResolvedValue([
       assignment(21, 3, "Transport", 500000),

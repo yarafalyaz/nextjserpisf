@@ -55,7 +55,10 @@ vi.mock("@/lib/db/prisma", () => {
       // F-2026-10-21-027: tanpa penugasan komponen pada fixture ini.
       employeePayrollComponent: { findMany: vi.fn().mockResolvedValue([]) },
       payrollComponentLine: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
-      employee: { findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a) },
+      employee: {
+        findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a),
+        findFirst: vi.fn().mockResolvedValue({ id: 5 }),
+      },
       employeeLoan: { findMany: vi.fn().mockResolvedValue([]) },
       approvalWorkflow: { findFirst: vi.fn().mockResolvedValue(null) },
       approval: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({}) },

@@ -228,6 +228,25 @@ describe("AC-HRS-1/4: processPayroll menegakkan cakupan HR sebelum menulis", () 
   })
 })
 
+describe("putaran 38: updatePayroll menolak pindah slip ke karyawan mati", () => {
+  it("target karyawan baru nonaktif/terhapus ditolak sebelum tulis", async () => {
+    requirePermissionMock.mockResolvedValue(userSessions().finance)
+    payrollFindUniqueOrThrowMock.mockResolvedValue({ id: 1, status: "draft", employeeId: 9 })
+    employeeFindFirstMock.mockResolvedValue(null)
+    const res = await updatePayroll(
+      1,
+      form({ employeeId: "2", period: "2026-05", startDate: "2026-05-01", endDate: "2026-05-31" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Karyawan tidak ditemukan atau tidak aktif")
+    expect(payrollUpdateManyMock).not.toHaveBeenCalled()
+    expect(employeeFindFirstMock).toHaveBeenCalledWith({
+      where: { id: 2, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+  })
+})
+
 describe("AC-HRS-2: populasi generateBulkPayroll disaring cakupan HR", () => {
   it("self: query populasi (panggilan pertama) membawa saringan id milik sendiri", async () => {
     requirePermissionMock.mockResolvedValue(userSessions().staff)

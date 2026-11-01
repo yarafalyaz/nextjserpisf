@@ -2903,6 +2903,10 @@ export async function processPayroll(formData: FormData) {
     // Ditegakkan SEBELUM nomor dokumen dibangkitkan supaya penolakan tidak
     // membakar nomor urut PAYROLL (lubang penomoran yang tak bisa dijelaskan).
     await assertPayrollInHrScope(await getHrScope(user), employeeId);
+    // Slip baru hanya untuk karyawan hidup — generate massal sudah
+    // menyaring populasi isActive/deletedAt; jalur tunggal disamakan.
+    // (Gerbang berhenti tetap employmentEndedAt di bawah, bukan ini.)
+    await assertLiveEmployee(employeeId);
 
     const documentNo = await generateDocumentNumber("PAYROLL");
 
@@ -3164,6 +3168,10 @@ export async function updatePayroll(id: number, formData: FormData) {
     // karyawan luar cakupan ke dalam jangkauan baca.
     if (updateEmployeeId !== existing.employeeId) {
       await assertPayrollInHrScope(scope, updateEmployeeId);
+      // Pemindahan slip = penanaman ke master baru: target wajib hidup.
+      // Slip yang tetap pada karyawan sama tidak dinilai ulang (edit slip
+      // karyawan yang baru dinonaktifkan tetap sah sampai gerbang final).
+      if (updateEmployeeId != null) await assertLiveEmployee(updateEmployeeId);
     }
     const updateLifecycle = updateEmployeeId
       ? await prisma.employee.findUnique({
