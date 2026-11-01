@@ -1419,6 +1419,41 @@ describe("Vendor Payment Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("regression round 18: confirmVendorPayment menolak pembuat sendiri dan menilai ulang approval dalam tx", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", vendorId: 1, amount: 500, createdBy: 1,
+    })
+    const res = await actions.confirmVendorPayment(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("pemisahan tugas")
+    expect(mocks.prismaMock.vendorPayment.update).not.toHaveBeenCalled()
+
+    mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", vendorId: 1, amount: 500, createdBy: 2,
+    })
+    mocks.prismaMock.vendorBill.findMany.mockResolvedValueOnce([{ id: 10, balanceDue: 500, paidAmount: 0, grandTotal: 500 }])
+    const { allocatePaymentToBills } = await import("@/lib/finance/payment-allocation")
+    vi.mocked(allocatePaymentToBills).mockReset()
+    vi.mocked(allocatePaymentToBills).mockReturnValueOnce([{ vendorBillId: 10, amount: 500 }])
+    const ok = await actions.confirmVendorPayment(1)
+    expect(ok?.success).toBe(true)
+    const approval = await import("@/lib/services/approval-workflow.service")
+    expect(vi.mocked(approval.assertApproved).mock.calls.at(-1)).toEqual(["VendorPayment", 1, mocks.prismaMock])
+  })
+
+  it("regression round 18: confirmVendorBill menolak pembuat sendiri", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", purchaseOrderId: null, vendorId: 9, createdBy: 1,
+      subtotal: 100, tax: 0, grandTotal: 100, withholdingAmount: 0, withholdingTypeId: null,
+    })
+    const res = await actions.confirmVendorBill(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("pemisahan tugas")
+    expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled()
+  })
+
   it("deleteVendorPayment succeeds", async () => {
     const res = await actions.deleteVendorPayment(1)
     expect(res?.success).toBe(true)
@@ -2375,6 +2410,9 @@ describe("Purchase Actions Additional Branch Coverage", () => {
   it("confirmVendorPayment fails if amount exceeds open bills balance", async () => {
     mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", vendorId: 1, amount: 2000 })
     mocks.prismaMock.vendorBill.findMany.mockResolvedValueOnce([{ id: 10, balanceDue: 500 }])
+    const { allocatePaymentToBills } = await import("@/lib/finance/payment-allocation")
+    vi.mocked(allocatePaymentToBills).mockReset()
+    vi.mocked(allocatePaymentToBills).mockReturnValueOnce([{ vendorBillId: 10, amount: 500 }])
     const res = await actions.confirmVendorPayment(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("melebihi total tagihan terutang vendor")

@@ -1967,6 +1967,12 @@ export async function confirmVendorBill(billId: number) {
       if (fresh.status !== "draft") {
         throw new Error("Tagihan hanya bisa diposting dari status draft");
       }
+      // Pemisahan tugas: posting tagihan = pengakuan utang + jurnal, jadi
+      // poster != pembuat (pola processPurchaseReturn). createdBy null
+      // (legacy) tetap boleh diposting penyetuju berizin.
+      if (fresh.createdBy != null && Number(fresh.createdBy) === Number(user.id)) {
+        throw new Error("Tagihan vendor tidak boleh diposting oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin approve_vendor_bills.");
+      }
 
       // F-2026-10-24-133-V Putusan 1(a)/4: tagihan L3 wajib (masih) tanpa
       // tautan PO/GR, WO closed, tidak duplikat, dan akun beban dari
@@ -2286,6 +2292,15 @@ export async function confirmVendorPayment(paymentId: number) {
       if (freshPayment.status !== "draft") {
         throw new Error("Pembayaran hanya bisa dikonfirmasi dari status draft");
       }
+      // Pemisahan tugas: assertApproved tanpa baris Approval lolos diam-diam,
+      // jadi pembuat bisa mengonfirmasi pembayarannya sendiri. createdBy null
+      // (legacy) tetap boleh; mirror pola processPurchaseReturn.
+      if (freshPayment.createdBy != null && Number(freshPayment.createdBy) === Number(user.id)) {
+        throw new Error("Pembayaran vendor tidak boleh dikonfirmasi oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin approve_vendor_payments.");
+      }
+      // Approval window can reopen after the outside-tx assertApproved (edit
+      // opens a fresh pending approval); re-check inside the row lock.
+      await assertApproved("VendorPayment", paymentId, tx);
 
       await tx.vendorPayment.update({
         where: { id: paymentId },
