@@ -98,6 +98,20 @@ describe("CRM Ticket Actions", () => {
     const res = await actions.updateTicket(1, fdMap({}))
     expect(res?.success).toBe(false)
   })
+  it("createTicket menolak customerId gaib/mati tanpa menulis (putaran 25)", async () => {
+    mocks.prismaMock.customer.findFirst.mockResolvedValue(null)
+    const res = await actions.createTicket(fdMap({ subject: "Tiket", customerId: 999999 }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Pelanggan tidak ditemukan")
+    expect(mocks.prismaMock.crmTicket.create).not.toHaveBeenCalled()
+  })
+  it("updateTicket menolak customerId gaib/mati dari baris terkunci tanpa menulis (putaran 25)", async () => {
+    mocks.prismaMock.customer.findFirst.mockResolvedValue(null)
+    const res = await actions.updateTicket(1, fdMap({ subject: "Tiket", customerId: 999999 }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Pelanggan tidak ditemukan")
+    expect(mocks.prismaMock.crmTicket.update).not.toHaveBeenCalled()
+  })
   it("updateTicket mengisi firstResponseAt saat keluar dari open", async () => {
     mocks.prismaMock.crmTicket.findFirst.mockResolvedValueOnce(null)
     mocks.prismaMock.crmTicket.findUnique.mockResolvedValueOnce({ status: "open", firstResponseAt: null, resolvedAt: null })

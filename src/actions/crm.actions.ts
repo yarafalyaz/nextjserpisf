@@ -38,6 +38,26 @@ async function hardDeleteOrSoftDelete(
 
 // ==================== CRM TICKET ACTIONS ====================
 
+/**
+ * CrmTicket.customerId bare Int? tanpa relasi Customer: id gaib atau
+ * pelanggan ter-soft-delete/nonaktif tersimpan senyap dan detail tiket
+ * merender tautan pelanggan hantu. Bila payload memang mengirim
+ * customerId, baris pelanggan wajib hidup (pola dokumen baru penjualan).
+ */
+async function assertTicketCustomerLive(
+  client: { customer: { findFirst: typeof prisma.customer.findFirst } },
+  customerId: number | null | undefined,
+): Promise<void> {
+  if (customerId == null) return
+  const customer = await client.customer.findFirst({
+    where: { id: customerId, deletedAt: null, isActive: true },
+    select: { id: true },
+  })
+  if (!customer) {
+    throw new Error("Pelanggan tidak ditemukan, tidak aktif, atau sudah dihapus")
+  }
+}
+
 export async function createTicket(formData: FormData) {
   try {
   const user = await requirePermission("create_tickets")
@@ -47,6 +67,8 @@ export async function createTicket(formData: FormData) {
     return { success: false, error: parsed.error }
   }
   const data = parsed.data
+
+  await assertTicketCustomerLive(prisma, data.customerId)
 
   const { generateDocumentNumber } = await import("@/lib/utils/document-number")
   const ticketNumber = await generateDocumentNumber("TKT", "simple")
@@ -109,6 +131,7 @@ export async function updateTicket(id: number, formData: FormData) {
     })
     if (!existing) throw new Error("Tiket tidak ditemukan")
     if (existing.deletedAt) throw new Error("Tiket sudah dihapus dan tidak dapat diubah")
+    await assertTicketCustomerLive(tx, data.customerId)
 
     return tx.crmTicket.update({
       where: { id },
