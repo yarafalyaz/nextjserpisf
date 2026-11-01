@@ -704,6 +704,10 @@ export async function createJournal(formData: FormData) {
 
     // Wrap header + entries in a single transaction to prevent orphan journals
     const journal = await prisma.$transaction(async (tx) => {
+      // Kunci idempotensi per submit create (pola createExpense/
+      // createPettyCash): submit ulang/retry dengan key sama ditolak di
+      // dalam tx, bukan melahirkan DRAFT duplikat.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
       await assertPeriodOpen(txDate, tx);
       const j = await tx.journal.create({
         data: {

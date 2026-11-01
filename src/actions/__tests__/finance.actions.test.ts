@@ -299,6 +299,28 @@ describe("Bank Statement Line Actions", () => {
     expect(mocks.prismaMock.journal.create).toHaveBeenCalled()
   })
 
+  // Regresi putaran 45: createJournal tak memasang kunci idempotensi (pola
+  // createExpense/createPettyCash) — submit ulang/retry membuat DRAFT
+  // duplikat yang masing-masing bisa diposting terpisah.
+  it("regresi putaran 45: createJournal menolak kunci idempotensi duplikat segar", async () => {
+    mocks.prismaMock.idempotencyKey = {
+      create: vi.fn().mockRejectedValue(Object.assign(new Error("dup"), { code: "P2002" })),
+      findUnique: vi.fn().mockResolvedValue({ createdAt: new Date() }),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    }
+    const entries = JSON.stringify([
+      { accountId: 1, debit: 100, credit: 0, memo: "" },
+      { accountId: 2, debit: 0, credit: 100, memo: "" },
+    ])
+    const res = await (actions as any).createJournal(
+      fdMap({ transactionDate: "2026-06-13", description: "t", type: "GENERAL", entries, idempotencyKey: "key-45" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(String(res?.error ?? "")).toMatch(/duplikat/i)
+    expect(mocks.prismaMock.journal.create).not.toHaveBeenCalled()
+    delete mocks.prismaMock.idempotencyKey
+  })
+
   it("createBankStatementLine memetakan type credit ke kolom credit saja", async () => {
     mocks.prismaMock.bankStatementLine.create.mockResolvedValue({ id: 11 })
 

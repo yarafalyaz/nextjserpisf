@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { createJournal, updateJournal } from "@/actions/finance.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload"
@@ -24,9 +24,16 @@ interface JournalFormProps {
 
 interface JournalEntry { accountId: number; debit: number; credit: number; memo: string; profitCenterId?: number; costCenterId?: number }
 
+function newIdempotencyKey(): string {
+  return crypto.randomUUID()
+}
+
 export function JournalForm({ accounts, profitCenters = [], costCenters = [], journal }: JournalFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Satu key stabil per intent create: retry/error pakai key sama, sukses
+  // ganti baru supaya create berikutnya tidak ditolak sebagai duplikat.
+  const idempotencyKeyRef = useRef<string>(newIdempotencyKey())
   const [entries, setEntries] = useState<JournalEntry[]>(
     journal?.entries && journal.entries.length > 0
       ? journal.entries.map((e) => ({
@@ -86,8 +93,10 @@ export function JournalForm({ accounts, profitCenters = [], costCenters = [], jo
         const nativeFormData = new FormData(e.currentTarget)
         const attachmentIdsValue = nativeFormData.get("attachmentIds")
         if (attachmentIdsValue) formData.append("attachmentIds", attachmentIdsValue as string)
+        if (!journal?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
         const result = journal?.id ? await updateJournal(journal.id, formData) : await createJournal(formData)
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        if (!journal?.id) idempotencyKeyRef.current = newIdempotencyKey()
         showSuccess(journal?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/keuangan/jurnal")
         router.refresh()
