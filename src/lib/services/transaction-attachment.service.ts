@@ -115,7 +115,7 @@ export interface PhotoTransitionRow {
 type PhotoTx = {
   transactionAttachment: {
     findUnique: (args: unknown) => Promise<PhotoTransitionRow | null>
-    update: (args: unknown) => Promise<unknown>
+    updateMany: (args: unknown) => Promise<{ count: number }>
   }
 }
 
@@ -141,10 +141,14 @@ export async function verifyPhotoAttachmentTx(
   if (category === "handover" && row.uploadedBy != null && row.uploadedBy === input.verifiedBy) {
     throw new Error("Foto serah terima tidak boleh diverifikasi oleh pengunggahnya sendiri")
   }
-  await tx.transactionAttachment.update({
-    where: { id: row.id },
+  // Klaim kondisional: bacaan di atas adalah snapshot tx, jadi verifikator
+  // konkuren bisa sama-sama lolos cek; hanya yang pertama menulis yang menang
+  // (atribusi verifikator tidak tertimpa).
+  const claimed = await tx.transactionAttachment.updateMany({
+    where: { id: row.id, verifiedBy: null },
     data: { verifiedBy: input.verifiedBy, verifiedAt: input.now ?? new Date() },
   })
+  if (claimed.count === 0) throw new Error("Foto sudah terverifikasi")
 }
 
 export async function publishPhotoAttachmentTx(
@@ -158,8 +162,11 @@ export async function publishPhotoAttachmentTx(
   if (category !== "intake" && category !== "progress" && category !== "handover") {
     throw new Error("Kategori foto ini tidak boleh ditandai terbit")
   }
-  await tx.transactionAttachment.update({
-    where: { id: row.id },
+  // Klaim kondisional sama seperti verifikasi: penerbit konkuren kedua kalah
+  // klaim dan atribusi penerbit pertama tidak tertimpa.
+  const claimed = await tx.transactionAttachment.updateMany({
+    where: { id: row.id, publishedBy: null },
     data: { publishedBy: input.publishedBy, publishedAt: input.now ?? new Date() },
   })
+  if (claimed.count === 0) throw new Error("Foto sudah ditandai terbit")
 }

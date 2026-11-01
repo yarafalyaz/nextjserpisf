@@ -132,22 +132,31 @@ describe("deleteTransactionAttachmentsTx", () => {
 })
 
 describe("verify/publish foto F-096-S", () => {
-  function photoTx(row: Record<string, unknown> | null) {
-    const update = vi.fn().mockResolvedValue({})
+  function photoTx(row: Record<string, unknown> | null, claimCount = 1) {
+    const updateMany = vi.fn().mockResolvedValue({ count: claimCount })
     const findUnique = vi.fn().mockResolvedValue(row)
-    return { tx: { transactionAttachment: { findUnique, update } }, update }
+    return { tx: { transactionAttachment: { findUnique, updateMany } }, updateMany }
   }
   const base = { id: 5, photoCategory: "progress", uploadedBy: 3, verifiedBy: null, publishedBy: null }
 
-  it("verifikasi menulis verifiedBy/At", async () => {
-    const { tx, update } = photoTx({ ...base })
+  it("verifikasi menulis verifiedBy/At lewat klaim verifiedBy masih null", async () => {
+    const { tx, updateMany } = photoTx({ ...base })
     await verifyPhotoAttachmentTx(tx as never, { attachmentId: 5, verifiedBy: 7, now: new Date(0) })
-    expect(update).toHaveBeenCalledWith({ where: { id: 5 }, data: { verifiedBy: 7, verifiedAt: new Date(0) } })
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: 5, verifiedBy: null },
+      data: { verifiedBy: 7, verifiedAt: new Date(0) },
+    })
   })
 
   it("pengunggah tidak boleh verifikasi foto handover sendiri (BR-PHOTO-06 default)", async () => {
-    const { tx } = photoTx({ ...base, photoCategory: "handover" })
+    const { tx, updateMany } = photoTx({ ...base, photoCategory: "handover" })
     await expect(verifyPhotoAttachmentTx(tx as never, { attachmentId: 5, verifiedBy: 3 })).rejects.toThrow(/pengunggahnya sendiri/)
+    expect(updateMany).not.toHaveBeenCalled()
+  })
+
+  it("verifikasi kalah klaim (verifikator konkuren menang) ditolak, atribusi tak tertimpa", async () => {
+    const { tx } = photoTx({ ...base }, 0)
+    await expect(verifyPhotoAttachmentTx(tx as never, { attachmentId: 5, verifiedBy: 7 })).rejects.toThrow(/sudah terverifikasi/)
   })
 
   it("terbit menolak foto belum terverifikasi dan kategori defect", async () => {
@@ -155,5 +164,14 @@ describe("verify/publish foto F-096-S", () => {
     await expect(publishPhotoAttachmentTx(a.tx as never, { attachmentId: 5, publishedBy: 8 })).rejects.toThrow(/terverifikasi/)
     const b = photoTx({ ...base, photoCategory: "defect", verifiedBy: 7 })
     await expect(publishPhotoAttachmentTx(b.tx as never, { attachmentId: 5, publishedBy: 8 })).rejects.toThrow(/tidak boleh ditandai terbit/)
+  })
+
+  it("terbit kalah klaim (penerbit konkuren menang) ditolak, atribusi tak tertimpa", async () => {
+    const { tx, updateMany } = photoTx({ ...base, verifiedBy: 7 }, 0)
+    await expect(publishPhotoAttachmentTx(tx as never, { attachmentId: 5, publishedBy: 8 })).rejects.toThrow(/sudah ditandai terbit/)
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: 5, publishedBy: null },
+      data: { publishedBy: 8, publishedAt: expect.any(Date) },
+    })
   })
 })
