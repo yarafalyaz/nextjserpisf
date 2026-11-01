@@ -514,7 +514,7 @@ describe("Asset Category Actions", () => {
     expect(String(res?.error)).toMatch(/Akun Aset Tetap/)
     expect(prismaMock.assetCategory.create).not.toHaveBeenCalled()
     expect(prismaMock.account.findMany).toHaveBeenCalledWith({
-      where: { id: { in: [999] }, deletedAt: null },
+      where: { id: { in: [999] }, isActive: true, deletedAt: null },
       select: { id: true },
     })
   })
@@ -526,7 +526,7 @@ describe("Asset Category Actions", () => {
     expect(String(res?.error)).toMatch(/Akun Laba\/Rugi Pelepasan/)
     expect(prismaMock.assetCategory.update).not.toHaveBeenCalled()
     expect(prismaMock.account.findMany).toHaveBeenCalledWith({
-      where: { id: { in: [888] }, deletedAt: null },
+      where: { id: { in: [888] }, isActive: true, deletedAt: null },
       select: { id: true },
     })
   })
@@ -539,6 +539,15 @@ describe("Asset Category Actions", () => {
     expect(res?.success).toBe(false)
     expect(String(res?.error)).toMatch(/Akun Beban Penyusutan/)
     expect(prismaMock.assetCategory.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 37: MENOLAK akun GL nonaktif saat simpan kategori", async () => {
+    prismaMock.account.findMany.mockResolvedValueOnce([])
+    const res = await createAssetCategory(fd({ name: "Komputer", assetAccountId: "999" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/Akun Aset Tetap/)
+    expect(prismaMock.assetCategory.create).not.toHaveBeenCalled()
+    expect(prismaMock.account.findMany.mock.calls[0][0].where.isActive).toBe(true)
   })
 
   it("creates category and redirects", async () => {
@@ -1038,6 +1047,25 @@ describe("createAsset / updateAsset", () => {
     expect(String(res.error)).toContain("akun Kas/Bank")
     expect(prismaMock.asset.create).not.toHaveBeenCalled()
     expect(prismaMock.journal.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 37: menolak perolehan berharga bila akun perolehan nonaktif/terhapus", async () => {
+    prismaMock.account.findMany.mockResolvedValueOnce([])
+    const res = await createAsset(fd({
+      name: "Laptop",
+      code: "LAP-01",
+      purchasePrice: "1000",
+    }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toMatch(/Perolehan aset: akun tidak aktif/)
+    expect(prismaMock.journal.create).not.toHaveBeenCalled()
+    const accountArgs = prismaMock.account.findMany.mock.calls.at(-1)![0]
+    expect(accountArgs.where).toEqual({
+      id: { in: [200, 201] },
+      isActive: true,
+      deletedAt: null,
+    })
+    expect(prismaMock.asset.create).toHaveBeenCalledTimes(1)
   })
 
   it("aset purchaseCost = 0 tetap boleh lahir tanpa akun perolehan dan tanpa jurnal", async () => {
@@ -1654,6 +1682,26 @@ describe("disposeAsset", () => {
     const res = await disposeAsset(fd({ assetId: "100", proceeds: "700" }))
     expect(res.success).toBe(true)
     expect(prismaMock.journal.create).toHaveBeenCalled()
+  })
+
+  it("putaran 37: menolak pelepasan bila akun dari entri terbit sudah mati", async () => {
+    prismaMock.journal.findFirst.mockResolvedValue({ id: 1 })
+    process.env.FIXED_ASSET_ACCOUNT_ID = "200"
+    process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID = "201"
+    process.env.ASSET_DISPOSAL_GAINLOSS_ACCOUNT_ID = "202"
+    process.env.ASSET_CASH_ACCOUNT_ID = "203"
+    prismaMock.account.findMany.mockResolvedValueOnce([])
+
+    const res = await disposeAsset(fd({ assetId: "100", proceeds: "700" }))
+
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toMatch(/Pelepasan aset: akun tidak aktif/)
+    expect(prismaMock.asset.updateMany).toHaveBeenCalled()
+    expect(prismaMock.journal.create).not.toHaveBeenCalled()
+    const accountArgs = prismaMock.account.findMany.mock.calls.at(-1)![0]
+    expect(accountArgs.where.isActive).toBe(true)
+    expect(accountArgs.where.deletedAt).toBeNull()
+    expect(new Set(accountArgs.where.id.in)).toEqual(new Set([200, 201, 202, 203]))
   })
 
   it("penjaga POSTED: gainLoss dari jurnal POSTED, bukan currentValue basi (t_d34601a0)", async () => {

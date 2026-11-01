@@ -30,6 +30,7 @@ import {
   reverseAssetChangeEvent,
 } from "@/lib/services/asset-change-event.service";
 import { Prisma } from "@prisma/client";
+import { assertAccountsExist } from "@/lib/hooks/accounting.hook";
 import { buildAssetDisposalEntries } from "@/lib/finance/asset-disposal";
 import { buildFiscalYearRows } from "@/lib/finance/asset-fiscal-balance";
 import { resolveFiscalGroup } from "@/lib/finance/asset-fiscal-groups";
@@ -120,11 +121,13 @@ async function assetCategoryAccountError(v: {
     [v.accumulatedImpairmentAccountId, "Akun Akumulasi Penurunan Nilai tidak ditemukan"],
   ]
   // Satu query massal menggantikan s.d. 7 findFirst serial; urutan slots
-  // dipertahankan untuk prioritas pesan error pertama.
+  // dipertahankan untuk prioritas pesan error pertama. Akun nonaktif juga
+  // ditolak di simpan kategori — bukan cuma fiktif/terhapus — supaya pemetaan
+  // tidak lahir menunjuk akun mati yang baru gagal di jurnal aset.
   const ids = [...new Set(slots.map(([id]) => id).filter((id): id is number => id != null))]
   const found = ids.length
     ? await prisma.account.findMany({
-        where: { id: { in: ids }, deletedAt: null },
+        where: { id: { in: ids }, isActive: true, deletedAt: null },
         select: { id: true },
       })
     : []
@@ -902,6 +905,9 @@ export async function createAsset(formData: FormData) {
       // Depreciation) have an offsetting gross asset balance on the balance sheet,
       // and lets disposal reverse a complete, balanced asset lifecycle.
       if (purchaseCost > 0 && gl.fixedAsset && gl.cashBank) {
+        // Akun perolehan bisa mati antara pemetaan kategori disimpan dan
+        // aset dibuat; gerbang keberadaan saja lolos akun nonaktif/terhapus.
+        await assertAccountsExist(tx, [gl.fixedAsset, gl.cashBank], "Perolehan aset");
         // Periode akuntansi harus masih terbuka: perolehan aset memposting jurnal GL
         // bertanggal `acquisitionDate`, jadi tidak boleh masuk periode yang sudah ditutup.
         await assertPeriodOpen(acquisitionDate, tx);
@@ -1319,6 +1325,14 @@ export async function disposeAsset(formData: FormData) {
 
         const totalDebit = built.reduce((s, e) => safeAdd(s, e.debit, 0), 0);
         const totalCredit = built.reduce((s, e) => safeAdd(s, e.credit, 0), 0);
+        // Akun pelepasan dinilai dari entri yang benar-benar terbit: akun
+        // mati antara perolehan dan pelepasan harus menolak + rollback klaim
+        // status, bukan menempel di jurnal POSTED.
+        await assertAccountsExist(
+          tx,
+          [...new Set(built.map((e) => e.accountId))],
+          "Pelepasan aset",
+        );
 
         // Pelepasan juga memposting jurnal GL bertanggal `disposalDate` — tolak bila
         // periodenya sudah ditutup (perilaku sama dengan perolehan di atas).
