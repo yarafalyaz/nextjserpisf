@@ -14,7 +14,17 @@ export function createWorkOrderMocks() {
     ...m,
     mockAuth: () => ({ requirePermission: m.requirePermissionMock }),
     mockPrisma: () => ({
-      prisma: { workOrder: { findUniqueOrThrow: m.woFindUniqueOrThrow }, $transaction: m.transactionMock },
+      prisma: {
+        workOrder: { findUniqueOrThrow: m.woFindUniqueOrThrow },
+        // Gerbang hidup penulis WO (putaran 36): customer hidup + item hidup.
+        customer: { findFirst: vi.fn().mockResolvedValue({ id: 1 }) },
+        item: {
+          findMany: vi.fn().mockImplementation(async (args: any) =>
+            (args?.where?.id?.in ?? []).map((id: number) => ({ id, name: `Item ${id}`, isActive: true })),
+          ),
+        },
+        $transaction: m.transactionMock,
+      },
     }),
     mockActivity: () => ({ logActivity: m.logActivityMock }),
     mockCache: () => ({ revalidatePath: m.revalidateMock }),

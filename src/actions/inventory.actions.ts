@@ -1294,6 +1294,27 @@ export async function completeMaterialIssue(issueId: number) {
 
 // ==================== WORK ORDER ACTIONS ====================
 
+/**
+ * Gerbang hidup penulis WO: customer wajib aktif & belum terhapus (FK hanya
+ * menolak fiktif — nonaktif lolos); baris item dinilai lewat
+ * assertItemsExistAndActive karena WorkOrderItem.itemId bare Int tanpa
+ * relasi sehingga item mati tak tertolak FK sama sekali.
+ */
+async function assertLiveWorkOrderRefs(
+  db: typeof prisma | Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  customerId: number,
+  itemIds: readonly number[],
+): Promise<void> {
+  const customer = await db.customer.findFirst({
+    where: { id: customerId, isActive: true, deletedAt: null },
+    select: { id: true },
+  });
+  if (!customer) {
+    throw new Error("Pelanggan tidak ditemukan atau sudah nonaktif — pilih ulang pelanggan.");
+  }
+  await assertItemsExistAndActive(db as never, itemIds);
+}
+
 export async function createWorkOrder(formData: FormData) {
   try {
     const user = await requirePermission("create_work_orders");
@@ -1309,6 +1330,7 @@ export async function createWorkOrder(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("WO");
     const items = normalizeWorkOrderItems(v.items ?? null);
+    await assertLiveWorkOrderRefs(prisma, v.customerId, items.map((i) => i.itemId));
 
     const wo = await prisma.workOrder.create({
       data: {
@@ -1483,6 +1505,10 @@ export async function updateWorkOrder(id: number, formData: FormData) {
     }
 
     const items = normalizeWorkOrderItems(v.items ?? null);
+    // Baris ditulis ulang total di bawah (deleteMany+createMany = penanaman
+    // baris baru) dan header menulis customerId — keduanya dinilai hidup
+    // sebelum tx, pola gerbang create dokumen bebas.
+    await assertLiveWorkOrderRefs(prisma, v.customerId, items.map((i) => i.itemId));
 
     await prisma.$transaction(async (tx) => {
       // Re-verify status inside the transaction (TOCTOU guard): two concurrent
@@ -1700,6 +1726,9 @@ export async function reviseWorkOrderItems(input: {
       }
 
       if (v.newItems.length > 0) {
+        // Baris baru revisi = kelahiran baris: item wajib hidup, dinilai di
+        // dalam tx (klaim status WO sudah mengunci urutan revisi).
+        await assertItemsExistAndActive(tx, v.newItems.map((i) => i.itemId));
         await tx.workOrderItem.createMany({
           data: v.newItems.map((i) => ({
             workOrderId: v.workOrderId,

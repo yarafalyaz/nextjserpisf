@@ -23,6 +23,12 @@ const tx = {
     updateMany: (...a: unknown[]) => woiUpdateMany(...a),
     createMany: (...a: unknown[]) => woiCreateMany(...a),
   },
+  // Gerbang hidup baris baru revisi (putaran 36): item hidup.
+  item: {
+    findMany: vi.fn().mockImplementation(async (args: any) =>
+      (args?.where?.id?.in ?? []).map((id: number) => ({ id, name: `Item ${id}`, isActive: true })),
+    ),
+  },
   materialIssueItem: { findMany: (...a: unknown[]) => miItemFindMany(...a) },
   stockReservation: { updateMany: (...a: unknown[]) => srUpdateMany(...a) },
 }

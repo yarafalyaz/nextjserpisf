@@ -49,6 +49,13 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     // workOrder.findFirst dipakai nextSlug (delegate slug bernama sama).
     workOrder: { findUniqueOrThrow: m.woFindUniqueOrThrow, findFirst: vi.fn().mockResolvedValue(null) },
+    // Gerbang hidup penulis WO (putaran 36): customer hidup + item hidup.
+    customer: { findFirst: vi.fn().mockResolvedValue({ id: 1 }) },
+    item: {
+      findMany: vi.fn().mockImplementation(async (args: any) =>
+        (args?.where?.id?.in ?? []).map((id: number) => ({ id, name: `Item ${id}`, isActive: true })),
+      ),
+    },
     activityLog: { create: m.activityLogCreate },
     $transaction: m.transactionMock,
   },

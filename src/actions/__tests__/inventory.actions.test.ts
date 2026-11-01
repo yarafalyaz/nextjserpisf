@@ -45,6 +45,7 @@ const mocks = vi.hoisted(() => {
     inventoryLayer: { ...buildModelMock(), groupBy: vi.fn().mockResolvedValue([]) },
     warehouse: buildModelMock(),
     userWarehouse: buildModelMock(),
+    customer: buildModelMock(),
     item: buildModelMock(),
     stockMove: {
       ...buildModelMock(),
@@ -135,9 +136,11 @@ beforeEach(() => {
       .map((id: number) => ({ id, name: `Gudang ${id}`, isActive: true })),
   );
   mocks.prismaMock.item.findMany.mockImplementation(async (args: any) =>
-    (args?.where?.id?.in ?? []).filter((id: number) => id === 1 || id === 2)
+    (args?.where?.id?.in ?? []).filter((id: number) => id === 1 || id === 2 || id === 5)
       .map((id: number) => ({ id, name: `Item ${id}`, isActive: true })),
   );
+  // Penulis WO menilai customer hidup (putaran 36) — fixture pelanggan aktif.
+  mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 1 });
 });
 
 describe("Stock Adjustment Actions", () => {
