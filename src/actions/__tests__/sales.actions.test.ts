@@ -826,6 +826,20 @@ describe("Sales Invoice Actions", () => {
       .find((arg) => arg?.data && "quotationId" in arg.data)
     expect(headerUpdate?.data?.quotationId).toBe(77)
   })
+  it("updateSalesInvoice menolak pindah SO header tanpa cap (putaran 21)", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", quotationId: null, salesOrderId: 10, paidAmount: 0, grandTotal: 500,
+    })
+    mocks.prismaMock.salesInvoiceItem.findMany.mockResolvedValue([{ itemId: 5, qty: 2, uom: null }])
+    // SO tujuan: nilai pesanan 400, belum tertagih -> kandidat 500 melebihi.
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ documentNo: "SO-2", grandTotal: 400, quotationId: null })
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([])
+    const res = await actions.updateSalesInvoice(1, fdMap({ customerId: 1, date: "2026-06-12", salesOrderId: 20 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("melebihi nilai Pesanan Penjualan")
+    // Cap menilai di dalam tx: baris tersimpan faktur dibaca untuk kandidat.
+    expect(mocks.prismaMock.salesInvoiceItem.findMany).toHaveBeenCalled()
+  })
   it("updateSalesInvoice menolak edit posted: arahkan retur/void (G1 GL-BR-003, tanpa reverse+repost)", async () => {
     const posting = await import("@/lib/services/sales-invoice-posting.service")
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", documentNo: "INV-1" })

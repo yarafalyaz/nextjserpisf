@@ -3525,7 +3525,13 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
       where: { id: v.customerId },
       select: { paymentTerm: { select: { days: true, isActive: true } } },
     })
-    // Update header
+    // Update header. Memindah salesOrderId ke SO lain menilai cap kumulatif
+    // SO tujuan di dalam tx yang sama (assertInvoiceWithinSalesOrderCap
+    // mengunci baris SO tujuan lebih dulu) dan hanya bila tujuan berubah —
+    // cap di cabang item di bawah hanya jalan bila item ikut dikirim, jadi
+    // tanpa ini edit header murni memindah faktur draft ke SO yang sudah
+    // tertagih penuh tanpa satu pun penilaian. Baris dinilai dari baris
+    // tersimpan faktur ini (belum diganti pada titik ini).
     const invoice = await tx.salesInvoice.update({
       where: { id },
       data: {
@@ -3550,6 +3556,23 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
         notes: v.notes ?? null,
       },
     })
+
+    if (items === null && v.salesOrderId && v.salesOrderId !== existingInvoice.salesOrderId) {
+      const storedLines = await tx.salesInvoiceItem.findMany({
+        where: { salesInvoiceId: id },
+        select: { itemId: true, qty: true, uom: true },
+      })
+      await assertInvoiceWithinSalesOrderCap(tx, {
+        salesOrderId: v.salesOrderId,
+        excludeInvoiceId: id,
+        candidateGrandTotal: Number(existingInvoice.grandTotal),
+        candidateLines: storedLines.map((line) => ({
+          itemId: line.itemId,
+          qty: Number(line.qty),
+          uom: line.uom ?? null,
+        })),
+      })
+    }
 
     // If items provided, replace all items and recalculate totals
     if (items !== null) {
