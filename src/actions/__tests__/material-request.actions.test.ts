@@ -311,6 +311,28 @@ describe("createTransferFromMaterialRequest (AC-MR-2/3)", () => {
     expect(mocks.txMock.inventoryTransfer.create).not.toHaveBeenCalled()
   })
 
+  // Putaran 36: sisa MR ditulis jadi baris transfer tanpa menilai item —
+  // item dinonaktifkan/dihapus antara persetujuan MR dan buat transfer
+  // lahir sebagai baris transfer mati. Gudang sudah dinilai (:398), item
+  // belum. Create transfer biasa menilai item (inventory.actions:568).
+  it("putaran 36: item sisa nonaktif menolak buat transfer", async () => {
+    approvedTx()
+    mocks.txMock.item.findMany.mockResolvedValue([{ id: 1, name: "Oli", isActive: false }])
+    const res = await createTransferFromMaterialRequest(1)
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toMatch(/Oli tidak aktif/)
+    expect(mocks.txMock.inventoryTransfer.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 36: item sisa terhapus menolak buat transfer", async () => {
+    approvedTx()
+    mocks.txMock.item.findMany.mockResolvedValue([])
+    const res = await createTransferFromMaterialRequest(1)
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toMatch(/Item #1 tidak ditemukan/)
+    expect(mocks.txMock.inventoryTransfer.create).not.toHaveBeenCalled()
+  })
+
   it("transfer kedua hanya sisa sesudah received pertama (AC-MR-3)", async () => {
     approvedTx({ status: "terpenuhi_sebagian" })
     mocks.txMock.inventoryTransfer.findMany.mockResolvedValue([

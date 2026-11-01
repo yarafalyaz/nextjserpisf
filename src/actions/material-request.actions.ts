@@ -417,6 +417,10 @@ export async function createTransferFromMaterialRequest(id: number, formData?: F
       })
       const remaining = lines.filter((l) => l.remainingQty > 0.0001)
       if (remaining.length === 0) throw new Error("Semua baris permintaan sudah terpenuhi")
+      // Baris transfer lahir di sini dari sisa MR: item wajib hidup saat
+      // transfer dibuat (bisa mati antara persetujuan MR dan buat transfer).
+      // Create transfer biasa menilai item; jalur MR melewatinya (putaran 36).
+      await assertItemsExistAndActive(tx, remaining.map((l) => l.itemId))
 
       const documentNo = await generateDocumentNumber("TRF")
       const transfer = await tx.inventoryTransfer.create({
