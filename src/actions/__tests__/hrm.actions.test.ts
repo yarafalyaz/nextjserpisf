@@ -42,6 +42,9 @@ const mocks = vi.hoisted(() => {
     employeeLoan: buildModelMock(),
     leaveRequest: buildModelMock(),
     overtimeRequest: buildModelMock(),
+    // Eksistensi proyek pada jalur lembur: default ada; test putaran 38
+    // menimpa findUnique ke null untuk projectId fiktif.
+    project: { findUnique: vi.fn().mockResolvedValue({ id: 1 }) },
     appreciation: buildModelMock(),
     payroll: buildModelMock(),
     // F-2026-10-21-027: model komponen gaji (mock kosong = tanpa penugasan).
@@ -509,8 +512,12 @@ describe("Overtime Request Actions", () => {
     prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "pending", hours: 2, date: new Date("2026-06-12T00:00:00Z"), calculatedValue: null, employee: { baseSalary: 5_000_000 } })
     prismaMock.overtimeRequest.update.mockResolvedValue({})
     prismaMock.overtimeRequest.delete.mockResolvedValue({})
-    // Default: akun penyetuju tidak tertaut ke karyawan subjek (admin murni).
-    prismaMock.employee.findFirst.mockResolvedValue(null)
+    // Default: gerbang hidup (assertLiveEmployee, predikat isActive/
+    // deletedAt) HIDUP; pencarian approver (predikat userId, self-approve)
+    // tak tertaut → null seperti fixture lama.
+    prismaMock.employee.findFirst.mockImplementation(async (args: { where?: { isActive?: boolean } }) =>
+      args?.where?.isActive ? { id: 1 } : null,
+    )
   })
 
   it("createOvertimeRequest validates form", async () => {
@@ -525,6 +532,54 @@ describe("Overtime Request Actions", () => {
       hours: "2",
     }))
     expect(res?.success).toBe(true)
+  })
+
+  it("putaran 38: lembur baru untuk karyawan mati/terhapus ditolak sebelum tulis", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await actions.createOvertimeRequest(fd({
+      employeeId: "1",
+      date: "2026-06-12",
+      hours: "2",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Karyawan tidak ditemukan atau tidak aktif")
+    expect(prismaMock.overtimeRequest.create).not.toHaveBeenCalled()
+    expect(prismaMock.employee.findFirst).toHaveBeenCalledWith({
+      where: { id: 1, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+  })
+
+  it("putaran 38: pindah lembur pending ke karyawan mati/terhapus ditolak sebelum tulis", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await actions.updateOvertimeRequest(1, fd({
+      employeeId: "2",
+      date: "2026-06-12",
+      hours: "3",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Karyawan tidak ditemukan atau tidak aktif")
+    expect(prismaMock.overtimeRequest.updateMany).not.toHaveBeenCalled()
+    expect(prismaMock.employee.findFirst).toHaveBeenCalledWith({
+      where: { id: 2, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+  })
+
+  it("putaran 38: lembur ke proyek tidak ditemukan ditolak di create dan update", async () => {
+    (prismaMock.project.findUnique as any).mockResolvedValue(null)
+    const created = await actions.createOvertimeRequest(fd({
+      employeeId: "1", projectId: "999", date: "2026-06-12", hours: "2",
+    }))
+    expect(created?.success).toBe(false)
+    expect(created?.error).toContain("Proyek tidak ditemukan")
+    expect(prismaMock.overtimeRequest.create).not.toHaveBeenCalled()
+    const updated = await actions.updateOvertimeRequest(1, fd({
+      employeeId: "1", projectId: "999", date: "2026-06-12", hours: "3",
+    }))
+    expect(updated?.success).toBe(false)
+    expect(updated?.error).toContain("Proyek tidak ditemukan")
+    expect(prismaMock.overtimeRequest.updateMany).not.toHaveBeenCalled()
   })
 
   it("createOvertimeRequest locks the employee row before the PP 35/2021 cap check", async () => {

@@ -1209,6 +1209,20 @@ export async function createOvertimeRequest(formData: FormData) {
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
     await assertHrEmployeeAccess(scope, v.employeeId);
+    await assertLiveEmployee(v.employeeId);
+    // projectId fiktif tak boleh tersimpan mentah: picker tidak pernah
+    // menawarkannya, jadi ID tak dikenal = input rusak/dimanipulasi.
+    // Status proyek SENGAJA tidak dinilai terminal: model Project tanpa
+    // isActive dan siklus hidupnya membuktikan sebaliknya (proyek
+    // completed sah aktif/di-edit ulang, project.actions.ts) — preseden
+    // vonis putaran 32 (projectId tagihan) berlaku juga di sini.
+    if (v.projectId != null) {
+      const project = await prisma.project.findUnique({
+        where: { id: v.projectId },
+        select: { id: true },
+      });
+      if (!project) throw new Error(`Proyek tidak ditemukan (id: ${v.projectId}).`);
+    }
 
     const overtime = await prisma.$transaction(async (tx) => {
       // Serialisasi per karyawan: findMany cap di bawah adalah snapshot read
@@ -5484,7 +5498,7 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
     // pending-only guard.
     const existing = await prisma.overtimeRequest.findUniqueOrThrow({
       where: { id },
-      select: { status: true, employeeId: true },
+      select: { status: true, employeeId: true, projectId: true },
     });
     await assertHrEmployeeAccess(scope, existing.employeeId);
     if (existing.status !== "pending") {
@@ -5503,6 +5517,21 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
     await assertHrEmployeeAccess(scope, v.employeeId);
+    // Pindah ke karyawan lain = penanaman ke master baru: target wajib
+    // hidup; baris yang tetap pada karyawan sama tidak dinilai ulang.
+    if (v.employeeId !== existing.employeeId) {
+      await assertLiveEmployee(v.employeeId);
+    }
+    // projectId dinilai ulang hanya bila BERUBAH (preseden relink):
+    // edit jam lembur pending yang proyeknya sudah terhapus tidak
+    // ikut tertolak. Eksistensi saja — status proyek tidak terminal.
+    if (v.projectId != null && v.projectId !== existing.projectId) {
+      const project = await prisma.project.findUnique({
+        where: { id: v.projectId },
+        select: { id: true },
+      });
+      if (!project) throw new Error(`Proyek tidak ditemukan (id: ${v.projectId}).`);
+    }
 
     const overtime = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM overtime_requests WHERE id = ${id} FOR UPDATE`;
