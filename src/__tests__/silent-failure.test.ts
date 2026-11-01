@@ -367,6 +367,7 @@ const ALLOWED_COMMENT_ONLY: Record<string, string> = {
   "src/lib/auth/auth.ts": "menelan error di jalur auth agar alur login tak putus (niatnya tertulis di blok)",
   "src/lib/db/backup.ts": "pembersihan / daftar berkas best-effort; R2 boleh tak terkonfigurasi, hasil lokal tetap dikembalikan",
   "src/lib/pdf/engine/render.ts": "logo tak terbaca cukup dilewati — kop tetap tercetak (niatnya tertulis di blok)",
+  "src/lib/pdf/engine/logo.ts": "nilai origin/assetBaseUrl rusak sengaja diabaikan dari allowlist SSRF logo; asal itu tak pernah di-fetch, bukan kegagalan yang ditelan",
 }
 
 /** Jumlah persis pelanggaran per berkas untuk tiap daftar alasan di bawah
@@ -379,6 +380,7 @@ const ALLOWED_COMMENT_ONLY_COUNTS: Record<string, number> = {
   "src/lib/auth/auth.ts": 1,
   "src/lib/db/backup.ts": 4,
   "src/lib/pdf/engine/render.ts": 1,
+  "src/lib/pdf/engine/logo.ts": 1,
 }
 const ALLOWED_CONSOLE_ONLY_COUNTS: Record<string, number> = {
   "scripts/clear-all-data.ts": 1,

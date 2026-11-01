@@ -498,5 +498,4 @@ export async function POST(request: Request) {
   }
 }
 
-/** Vercel Cron memakai GET; gerbang secret method-agnostic. Lihat auto-reject-quotations. */
-export const GET = POST
+/** POST saja — lihat catatan di auto-reject-quotations (cron-method-guard). */

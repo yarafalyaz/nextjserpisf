@@ -108,8 +108,8 @@ export async function POST(request: Request) {
 }
 
 /**
- * Vercel Cron memanggil path terjadwal dengan GET; gerbang secret di POST
- * method-agnostic (header Authorization), jadi GET mendelegasi persis.
- * Deployment standalone tetap memakai POST dari pemicu eksternal.
+ * Sengaja POST saja: trigger cron bermutasi sedangkan GET bisa terpanggil
+ * tak sengaja oleh prefetcher/crawler/monitor (dijaga cron-method-guard).
+ * vercel.json mati — produksi Docker memicu POST; bila deploy Vercel
+ * diaktifkan kembali, ubah guard itu secara sadar, bukan diam-diam di sini.
  */
-export const GET = POST
