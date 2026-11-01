@@ -40,6 +40,8 @@ export interface SalesProcessLine {
   invoiceCount: number
   invoiced: number
   paid: number
+  /** Kredit retur POSTED: sisa kanonis = invoiced − paid − returnCredit. */
+  returnCredit?: number
 }
 
 export interface SalesProcessResult {
@@ -81,7 +83,11 @@ export function buildSalesProcessHistory(lines: SalesProcessLine[]): SalesProces
   }
 
   const rows: TableRow[] = sorted.map((line) => {
-    const outstanding = safeSubtract(line.invoiced, line.paid, 2)
+    const outstanding = safeSubtract(
+      safeSubtract(line.invoiced, line.paid, 2),
+      line.returnCredit ?? 0,
+      2,
+    )
     totals.invoiced = safeAdd(totals.invoiced, line.invoiced, 2)
     totals.paid = safeAdd(totals.paid, line.paid, 2)
     totals.outstanding = safeAdd(totals.outstanding, outstanding, 2)

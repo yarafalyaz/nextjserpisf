@@ -40,6 +40,8 @@ export interface PurchaseProcessLine {
   billCount: number
   billed: number
   paid: number
+  /** Sisa kanonis Σ VendorBill.balanceDue (neto PPh + relief retur). */
+  outstandingDue?: number
 }
 
 export interface PurchaseProcessResult {
@@ -81,7 +83,10 @@ export function buildPurchaseProcessHistory(lines: PurchaseProcessLine[]): Purch
   }
 
   const rows: TableRow[] = sorted.map((line) => {
-    const outstanding = safeSubtract(line.billed, line.paid, 2)
+    const outstanding =
+      line.outstandingDue != null
+        ? safeSubtract(line.outstandingDue, 0, 2)
+        : safeSubtract(line.billed, line.paid, 2)
     totals.billed = safeAdd(totals.billed, line.billed, 2)
     totals.paid = safeAdd(totals.paid, line.paid, 2)
     totals.outstanding = safeAdd(totals.outstanding, outstanding, 2)

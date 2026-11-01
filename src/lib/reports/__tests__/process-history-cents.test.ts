@@ -47,6 +47,50 @@ describe("process history presisi sen", () => {
     expect(r.totals.outstanding).toBe(4.08)
   })
 
+  it("builder sales: sisa dikurangi kredit retur — lunas lewat retur tidak ditandai unpaid", () => {
+    const r = buildSalesProcessHistory([
+      {
+        orderNo: "SO-R",
+        date: new Date("2026-10-05T00:00:00Z"),
+        customerName: "Toko",
+        status: "confirmed",
+        deliveryCount: 1,
+        invoiceCount: 1,
+        invoiced: 1_000_000,
+        paid: 400_000,
+        returnCredit: 600_000,
+      },
+    ])
+    expect(r.totals.outstanding).toBe(0)
+    expect(r.totals.invoicedUnpaid).toBe(0)
+  })
+
+  it("builder purchase: sisa memakai balanceDue kanonis, bukan billed − paid", () => {
+    const r = buildPurchaseProcessHistory([
+      {
+        orderNo: "PO-R",
+        date: new Date("2026-10-05T00:00:00Z"),
+        vendorName: "Vendor",
+        status: "confirmed",
+        requestNo: null,
+        receiptCount: 1,
+        billCount: 1,
+        billed: 1_000_000,
+        paid: 400_000,
+        outstandingDue: 0,
+      },
+    ])
+    expect(r.totals.outstanding).toBe(0)
+    expect(r.totals.billedUnpaid).toBe(0)
+  })
+
+  it("loader purchase: sumBillAmounts menjumlah balanceDue presisi sen", () => {
+    const r = sumBillAmounts(
+      Array.from({ length: 17 }, () => ({ grandTotal: 0.37, paidAmount: 0.13, balanceDue: 0.24 })),
+    )
+    expect(r.outstandingDue).toBe(4.08)
+  })
+
   it("builder purchase: totals 17 baris sen persis", () => {
     const lines = Array.from({ length: 17 }, (_, i) => ({
       orderNo: `PO-${i}`,

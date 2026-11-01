@@ -1,9 +1,15 @@
 /**
  * Pemuatan data untuk laporan **Histori Proses Pembelian**.
+ *
+ * Hanya tagihan recognised (posted/partial/paid, tidak terhapus) yang
+ * dihitung: draft/cancelled bukan utang. Sisa builder memakai Σ
+ * `VendorBill.balanceDue` tersimpan (neto PPh + relief retur), bukan
+ * hitung ulang grandTotal − paidAmount dari kop.
  */
 
 import { prisma } from "@/lib/db/prisma"
 import { sumMoney } from "@/lib/reports/aging-amounts"
+import { RECOGNISED_AP_STATUSES } from "@/lib/reports/document-status"
 import {
   buildPurchaseProcessHistory,
   type PurchaseProcessLine,
@@ -11,13 +17,14 @@ import {
 } from "@/lib/reports/purchase-process-history"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 
-/** Σ grandTotal/paidAmount tagihan, presisi sen (bukan float mentah). */
+/** Σ grandTotal/paidAmount/balanceDue tagihan, presisi sen (bukan float mentah). */
 export function sumBillAmounts(
-  bills: readonly { grandTotal: unknown; paidAmount: unknown }[],
-): { billed: number; paid: number } {
+  bills: readonly { grandTotal: unknown; paidAmount: unknown; balanceDue?: unknown }[],
+): { billed: number; paid: number; outstandingDue: number } {
   return {
     billed: sumMoney(bills.map((b) => b.grandTotal as never)),
     paid: sumMoney(bills.map((b) => b.paidAmount as never)),
+    outstandingDue: sumMoney(bills.map((b) => (b.balanceDue ?? 0) as never)),
   }
 }
 
@@ -40,7 +47,10 @@ export async function loadPurchaseProcessHistory(period: {
       vendor: { select: { name: true } },
       purchaseRequest: { select: { documentNo: true } },
       goodsReceipts: { select: { id: true } },
-      vendorBills: { select: { grandTotal: true, paidAmount: true } },
+      vendorBills: {
+        where: { status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null },
+        select: { grandTotal: true, paidAmount: true, balanceDue: true },
+      },
     },
     orderBy: { date: "desc" },
   })
