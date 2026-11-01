@@ -1458,6 +1458,20 @@ describe("deleteAsset", () => {
     expect(prismaMock.asset.delete).not.toHaveBeenCalled()
   })
 
+  it("regression round 18: count mencakup 4 tipe jurnal dan delete di dalam tx sesudah kunci baris", async () => {
+    prismaMock.journal.count.mockResolvedValue(0)
+    const res = await deleteAsset(100)
+    expect(res.success).toBe(true)
+    const countArgs = prismaMock.journal.count.mock.calls[0][0]
+    const types = JSON.stringify(countArgs)
+    expect(types).toContain("ASSET_CHANGE_EVENT")
+    expect(types).toContain("ASSET_DISPOSAL")
+    expect(countArgs.where.referenceId).toBe(100)
+    const lockOrder = prismaMock.$executeRaw.mock.invocationCallOrder.at(-1) ?? 0
+    const countOrder = prismaMock.journal.count.mock.invocationCallOrder.at(-1) ?? 0
+    expect(lockOrder).toBeLessThan(countOrder)
+  })
+
   it("handles error on journal count (caught error path)", async () => {
     prismaMock.journal.count.mockRejectedValue(new Error("db err"))
     const res = await deleteAsset(100)

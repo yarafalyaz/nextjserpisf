@@ -505,34 +505,45 @@ export async function deleteAsset(id: number) {
   try {
     await requirePermission("delete_assets");
 
-    // Depreciation AND acquisition both post GL journals keyed by polymorphic
-    // reference (referenceType "ASSET_DEPRECIATION_YYYYMM" or "ASSET_ACQUISITION",
-    // referenceId = asset.id) with NO database FK, so a raw delete would orphan
-    // those journals in the GL while removing the asset subledger record. An asset
-    // that has recognised value in the GL carries financial history and must be
-    // DISPOSED, not hard-deleted. Refuse deletion when ANY acquisition or
-    // depreciation journal exists (fail-closed; mirrors the vehicle/role delete
-    // guards). Reversing legitimate GL postings here would be more destructive
-    // than refusing.
-    const glJournals = await prisma.journal.count({
-      where: {
-        OR: [
-          { referenceType: { startsWith: "ASSET_DEPRECIATION" } },
-          { referenceType: "ASSET_ACQUISITION" },
-        ],
-        referenceId: id,
-      },
+    // Depreciation, acquisition, disposal, and change events all post GL
+    // journals keyed by polymorphic reference (referenceId = asset.id) with
+    // NO database FK, so a raw delete would orphan those journals in the GL
+    // while removing the asset subledger record. An asset that has recognised
+    // value in the GL carries financial history and must be DISPOSED, not
+    // hard-deleted. Refuse deletion when ANY such journal exists
+    // (fail-closed; mirrors the vehicle/role delete guards). Reversing
+    // legitimate GL postings here would be more destructive than refusing.
+    // Baris aset dikunci DULU lalu jumlah jurnal dinilai dari bacaan tx:
+    // cek luar-tx lama juga melewatkan ASSET_CHANGE_EVENT/ASSET_DISPOSAL,
+    // dan disposal/cron/peristiwa perubahan konkuren bisa menerbitkan
+    // jurnal sesudah count=0 tetapi sebelum delete — jurnal POSTED yatim.
+    const glJournals = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM assets WHERE id = ${id} FOR UPDATE`;
+      }
+      const count = await tx.journal.count({
+        where: {
+          referenceId: id,
+          OR: [
+            { referenceType: "ASSET_ACQUISITION" },
+            { referenceType: "ASSET_DISPOSAL" },
+            { referenceType: { startsWith: "ASSET_DEPRECIATION" } },
+            { referenceType: "ASSET_CHANGE_EVENT" },
+          ],
+        },
+      });
+      if (count > 0) return count;
+      // AssetHistory + AssetTransfer cascade on delete (FK onDelete: Cascade).
+      await tx.asset.delete({ where: { id } });
+      return 0;
     });
     if (glJournals > 0) {
       return {
         success: false,
         error:
-          "Aset tidak bisa dihapus karena sudah memiliki jurnal GL (akuisisi/penyusutan). Gunakan fitur pelepasan/disposal aset, bukan hapus.",
+          "Aset tidak bisa dihapus karena sudah memiliki jurnal GL (akuisisi/penyusutan/peristiwa perubahan/pelepasan). Gunakan fitur pelepasan/disposal aset, bukan hapus.",
       };
     }
-
-    // AssetHistory + AssetTransfer cascade on delete (FK onDelete: Cascade).
-    await prisma.asset.delete({ where: { id } });
 
     await logActivity("delete", "Asset", id, "Menghapus aset");
     revalidatePath("/aset");
