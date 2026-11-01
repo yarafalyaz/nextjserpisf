@@ -1288,6 +1288,40 @@ describe("Vendor Bill Actions", () => {
     expect(accounting.deleteJournalByReferenceTx).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 43: updateVendorBill draft tidak menyinkronkan HPP jasa (sync HPP hanya titik pengakuan)", async () => {
+    // Fixture: bill draft tertaut PO jasa dg WO; edit mengubah nominal.
+    // Pra-fix updateVendorBill memanggil syncServicePoCostFromBills walau
+    // status masih draft — ProductionCost produksi ditulis dari bill belum
+    // diakui. Agregat sync membaca bill non-cancelled termasuk draft.
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", purchaseOrderId: 9, goodsReceiptId: null,
+    })
+    mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue({
+      id: 9, isService: true, workOrderId: 55, documentNo: "PO-SVC-9", grandTotal: 777000,
+    })
+    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0, subtotal: 0 } })
+    const res = await actions.updateVendorBill(1, fdMap({
+      vendorId: "1",
+      purchaseOrderId: "9",
+      date: "2026-06-12",
+      subtotal: "777000",
+      tax: "0",
+      grandTotal: "777000",
+    }))
+    expect(res?.success).toBe(true)
+    // Edit draft murni: jalur HPP jasa (ProductionCost) tidak boleh ditulis.
+    // Assertion sempit pada _sum.grandTotal membedakan agregat sync-HPP dari
+    // agregat reservasi plafon 3-way match (yang menjumlah subtotal dan SAH
+    // berjalan pada edit draft).
+    expect(
+      mocks.prismaMock.vendorBill.aggregate.mock.calls.some(
+        (c: any[]) => c[0]?._sum?.grandTotal === true,
+      ),
+    ).toBe(false)
+    expect(mocks.prismaMock.productionCost.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.productionCost.create).not.toHaveBeenCalled()
+  })
+
   // GR senilai 100 (1 × 100) sudah ditagih 60 lewat baris penerimaan 501.
   const setupGrBill = (billedSubtotal: number) => {
     mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValue({

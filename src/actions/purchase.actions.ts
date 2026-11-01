@@ -535,8 +535,12 @@ async function syncServicePoCostFromBills(
   });
   if (!po || !po.isService || po.workOrderId == null) return null;
 
+  // Hanya bill TERAKUI yang masuk HPP: draft belum menjadi utang (P0-2),
+  // jadi mengagregasi draft dari edit draft menulis ProductionCost dari
+  // dokumen yang belum diposting. Status diakui = posted/partial/paid
+  // (kanonis RECOGNISED_AP_STATUSES).
   const agg = await tx.vendorBill.aggregate({
-    where: { purchaseOrderId, status: { notIn: ["cancelled"] } },
+    where: { purchaseOrderId, status: { in: ["posted", "partial", "paid"] } },
     _sum: { grandTotal: true },
   });
   const billedTotal = Number(agg._sum.grandTotal ?? 0);
@@ -3686,7 +3690,6 @@ export async function updateVendorBill(id: number, formData: FormData) {
       throw new Error("Hanya tagihan draft yang dapat diedit");
     }
 
-    let costWarning: string | undefined;
     const slug = await nextSlug("vendorBill", existingBill.documentNo, { excludeId: id });
 
     // Lock the PO + re-run the 3-way match BEFORE persisting the edit, mirroring
@@ -3878,15 +3881,10 @@ export async function updateVendorBill(id: number, formData: FormData) {
       // status masih "draft", sehingga satu kali edit langsung mengakui
       // Dr Clearing/Beban Cr Hutang sebelum tagihan diposting.
 
-      // The bill's PO link or amount may have changed — resync the old and new
-      // service PO subcontract costs so HPP stays exact.
-      const noticeOld = await syncServicePoCostFromBills(tx, existingBill.purchaseOrderId, Number(user.id));
-      const noticeNew =
-        updated.purchaseOrderId != null && updated.purchaseOrderId !== existingBill.purchaseOrderId
-          ? await syncServicePoCostFromBills(tx, updated.purchaseOrderId, Number(user.id))
-          : null;
-      const warnings = [noticeOld, noticeNew].filter((n) => n != null).map((n) => n.text);
-      if (warnings.length > 0) costWarning = warnings.join(" ");
+      // Draft edit tidak menyinkronkan HPP jasa: bill ini belum diakui
+      // (P0-2). Sync terjadi di titik pengakuan (confirm), void, dan hapus
+      // dokumen yang sebelumnya terakui. Edit yang memindah PO dari bill
+      // terakui tidak mungkin di sini — hanya draft yang bisa diedit.
 
       return updated;
     });
@@ -3898,7 +3896,7 @@ export async function updateVendorBill(id: number, formData: FormData) {
       `Memperbarui tagihan vendor #${bill.id}`,
     );
     revalidatePath("/pembelian/tagihan");
-    return costWarning ? { success: true, id: bill.id, slug, warning: costWarning } : { success: true, id: bill.id, slug };
+    return { success: true, id: bill.id, slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateVendorBill]", getErrorMessage(e) || e);
