@@ -2442,7 +2442,7 @@ export async function deleteCostCenter(id: number) {
     // dan delete di snapshot yang sama.
     await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT id FROM cost_centers WHERE id = ${id} FOR UPDATE`;
-      const [children, payrolls, materialIssues, projects, expenses, journalEntries] = await Promise.all([
+      const [children, payrolls, materialIssues, projects, expenses, journalEntries, vendorBills, vendorBillItems] = await Promise.all([
         tx.costCenter.count({ where: { parentId: id } }),
         tx.payroll.count({ where: { costCenterId: id } }),
         tx.materialIssue.count({ where: { costCenterId: id } }),
@@ -2451,6 +2451,10 @@ export async function deleteCostCenter(id: number) {
         // JournalEntry.costCenterId bare-int tanpa relasi: hard delete
         // sukses meninggalkan entri yatim yang tak bisa direkonstruksi.
         tx.journalEntry.count({ where: { costCenterId: id } }),
+        // VendorBill/VendorBillItem.costCenterId juga bare-int tanpa relasi:
+        // hard delete meninggalkan tagihan/baris yatim dan laporan biaya hilang.
+        tx.vendorBill.count({ where: { costCenterId: id } }),
+        tx.vendorBillItem.count({ where: { costCenterId: id } }),
       ]);
       const usages = [
         children > 0 ? `${children} pusat biaya anak` : null,
@@ -2459,6 +2463,8 @@ export async function deleteCostCenter(id: number) {
         projects > 0 ? `${projects} proyek` : null,
         expenses > 0 ? `${expenses} pengeluaran` : null,
         journalEntries > 0 ? `${journalEntries} entri jurnal` : null,
+        vendorBills > 0 ? `${vendorBills} tagihan vendor` : null,
+        vendorBillItems > 0 ? `${vendorBillItems} baris tagihan vendor` : null,
       ].filter((u): u is string => u !== null);
       if (usages.length > 0) {
         throw new Error(`Pusat biaya masih digunakan (${usages.join(", ")}). Lepaskan dulu sebelum menghapus.`);

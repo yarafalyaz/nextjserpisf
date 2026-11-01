@@ -31,6 +31,8 @@ const mocks = vi.hoisted(() => {
     bankReconciliation: buildModelMock(),
     bankReconciliationLine: buildModelMock(),
     costCenter: buildModelMock(),
+    vendorBill: buildModelMock(),
+    vendorBillItem: buildModelMock(),
     profitCenter: buildModelMock(),
     account: buildModelMock(),
     accountingPeriod: buildModelMock(),
@@ -1410,6 +1412,16 @@ describe("Cost Center Actions", () => {
     const res = await (actions as any).deleteCostCenter(1)
     expect(res?.success).toBe(false)
     expect(String(res?.error)).toContain("2 entri jurnal")
+    expect(mocks.prismaMock.costCenter.delete).not.toHaveBeenCalled()
+  })
+
+  it("deleteCostCenter menolak bila dirujuk tagihan vendor tanpa menghapus (putaran 25)", async () => {
+    mocks.prismaMock.vendorBill.count.mockResolvedValueOnce(2)
+    mocks.prismaMock.vendorBillItem.count.mockResolvedValueOnce(3)
+    const res = await (actions as any).deleteCostCenter(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("2 tagihan vendor")
+    expect(String(res?.error)).toContain("3 baris tagihan vendor")
     expect(mocks.prismaMock.costCenter.delete).not.toHaveBeenCalled()
   })
 })
