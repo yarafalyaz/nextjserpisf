@@ -751,3 +751,27 @@ Keputusan kebijakan putaran ini (dicatat agar tak diadili ulang):
 
 - SoD dokumen uang: `createdBy` null legacy BOLEH untuk payroll/RAB/pengeluaran (pola dokumen sales/purchase), FAIL-CLOSED hanya PKWT mengikuti preseden salary adjustment. Menyamakan keduanya keputusan desain tersendiri.
 - Kandidat kredit masa/status kreditabel (`creditPeriod`/`creditStatus`/`creditablePercent`) pada daftar Faktur PPN sisi masukan tidak diubah: daftar itu laporan dokumen bernilai kepala rantai; posisi masa kredit adalah domain read-model SPT yang sudah benar. Yang diperbaiki putaran 18 hanya bill tanpa nomor valid (nol di jurnal + SPT, tapi penuh di dua laporan dokumen).
+
+### Putaran 18 (2026-11-01) — lane keuangan/pajak + penjualan/pembelian + aset/CRM/proyek/master (agent read-only, verifikasi sesi utama)
+
+Dua belas fix:
+
+1. `31187613c` fix(keuangan): posting jurnal dan approve pengeluaran menolak pembuat sendiri — jurnal sistem lahir POSTED dari hook; DRAFT hanya manual + recurring, jadi gerbang `createdBy === user.id` di dalam tx terkunci tak memblokir jalur sah. Klaim reimbursement dikecualikan (SoD claimant-vs-approver BR-RB-07 sudah ada). 184/184; terkait 434/434.
+2. `3813143b0` fix(laporan): pengurang retur daftar Faktur PPN memakai masa nota retur — pola `loadReturnVatAmounts` (OR tanggal retur/nota + filter efektif JS). Test loader baru. 14/14; terkait 73/73.
+3. `9491c496f` fix(laporan): PPN masukan dokumen nol bila nomor faktur pajak tidak valid — `tax-summary-data` + `vat-invoices-data` selaras jurnal hook + read-model SPT (`isValidVendorTaxInvoiceNumber`); dokumen tetap tampil. 51/51; terkait 78/78.
+4. `9a6c2ade5` fix(penjualan): kunci SO surat jalan sebelum bacaan pertama transaksi — peek `salesOrderId` di luar tx, `sales_orders FOR UPDATE` pernyataan pertama tx; locking re-read saja tidak menyegarkan snapshot REPEATABLE READ. 15/15; terkait 195/195.
+5. `114fb6869` fix(pembelian): cap retur pembelian menilai retur lampau dalam qty dasar — `alreadyReturnedByItem` menjumlah `Number(r.qty)` mentah sementara diterima+kandidat berbasis dasar: retur 10 BOX terbaca 10 terhadap diterima 120 PCS, sisa semu 110 membuka retur berlebih (132 > 120 lolos). Kini faktor GR tertaut / receipt pertama per item, konvensi yang sama dengan `returnBaseItems`. 230/230.
+6. `4e0eca731` fix(pembelian): konfirmasi tagihan dan pembayaran vendor menolak pembuat sendiri — `confirmVendorPayment` juga menilai ulang `assertApproved(..., tx)` di bawah kunci baris (edit membuka pengajuan pending baru sesudah commit luar). `createdBy` null legacy boleh, pola `processPurchaseReturn`. VendorBill tetap BUKAN tipe workflow generik (vonis `defabbc7f`). 232/232.
+7. `94f8316fa` fix(pembelian): void tagihan menolak pengurangan non-kas yang tak terpantau — kredit vendor + relief retur menurunkan `balanceDue` tanpa `paidAmount` dan alokasi kredit per tagihan tidak tercatat; void hanya me-reverse jurnal, kredit terpakai hangus permanen. Fail-closed bila `grandTotal − withholding − paidAmount − balanceDue > Rp1`, pesan selesaikan manual. 239/239 gabungan.
+8. `23e47fad4` fix(aset): hapus aset menilai empat tipe jurnal dalam transaksi berkunci — sebelumnya hanya DEPRECIATION/ACQUISITION di luar tx; jurnal `ASSET_CHANGE_EVENT`/`ASSET_DISPOSAL` yatim di GL sesudah baris aset cascade hilang. Kunci `assets FOR UPDATE`, count 4 tipe, delete dalam tx. 121/121.
+9. `915c052fe` fix(proyek): sync status publik mengunci baris proyek sebelum membaca — snapshot stage basi menimpa proyek `completed` kembali `in_progress` (endDate null, WO/items turun). Pemanggil internal sudah berkunci; entry publik kini sama. 120/120.
+10. `3947fde99` fix(master): update karyawan mengunci baris atasan baru anti siklus silang — walk `assertManagerChainAcyclic` dalam tx hanya dilindungi kunci baris target; update silang A→B + B→A commit siklus 2-node. Kini kunci target + atasan urut id, pola `updateAccount`. 293/293.
+11. `d9f3f04f6` fix(master): update kategori barang menilai rantai induk dalam transaksi berkunci — walk anti-siklus luar tx + update tak kondisional; update silang A.parent=B, B.parent=A membentuk pohon bersiklus. Seluruh validasi+walk+wulis masuk tx kunci urut id. 294/294.
+12. `eede4db12` fix(proyek): update tugas menilai ulang kepemilikan dari baris terkunci — guard atas snapshot luar tx; reassignment manager di antara cek dan update membuat update staff basi menimpa `assignedTo`. Kedua guard dinilai ulang sesudah `tasks FOR UPDATE`. 121/121.
+
+CI: `31187613c`, `3813143b0`, `9491c496f`, `9a6c2ade5`, `114fb6869` **completed success**; `4e0eca731`, `94f8316fa`, `23e47fad4`, `915c052fe`, `3947fde99`, `d9f3f04f6`, `eede4db12` dipoll sesudah log ini.
+
+Vonis GUGUR putaran ini (jangan diangkat lagi tanpa bukti baru):
+
+- Timing/persen kreditabel (`creditPeriod`/`creditStatus`/`creditablePercent`) pada daftar Faktur PPN: domain read-model SPT, bukan daftar dokumen bernilai kepala rantai (lanjutan keputusan putaran 17).
+- Pemulihan otomatis kredit vendor saat void tagihan: jumlah kredit khusus tagihan tidak tercatat (tak ada model alokasi kredit→bill; `allocatedAmount` agregat) dan selisih `balanceDue` bercampur relief retur langsung. Menebak FIFO historis menolak lebih buruk daripada fail-closed fix 7 — rekonstruksi butuh skema alokasi baru, keputusan desain tersendiri.
