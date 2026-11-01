@@ -44,6 +44,8 @@ export interface JobBillingInvoiceInput {
   status: string
   grandTotal: number
   paidAmount: number
+  /** Kredit retur POSTED faktur ini (derivation return-credit.ts). */
+  returnCredit?: number
   deletedAt: Date | null
 }
 
@@ -98,7 +100,7 @@ export interface JobBillingSummary {
   sudahDibayar: number
   /** nilaiBerjalan − sudahDitagih (bisa negatif = overbilled). */
   sisaBelumDitagih: number
-  /** sudahDitagih − sudahDibayar. */
+  /** sudahDitagih − sudahDibayar − kredit retur POSTED. */
   sisaBelumDibayar: number
   /** Σ DownPayment confirmed — kas diterima, bukan tagihan. */
   uangMukaDiterima: number
@@ -133,7 +135,14 @@ export function buildJobBillingSummary(input: JobBillingSummaryInput): JobBillin
   const nilaiBerjalan = round2(input.nilaiBerjalan)
   const sudahDitagih = safeSum(billed.map((i) => i.grandTotal), 2)
   const sudahDibayar = safeSum(billed.map((i) => i.paidAmount), 2)
-  const sisaBelumDibayar = safeSubtract(sudahDitagih, sudahDibayar, 2)
+  // Sisa kanonis mengurangi kredit retur: faktur lunas lewat retur tidak
+  // boleh tampil masih harus dibayar (sisaEfektif ikut mewarisi koreksi).
+  const kreditRetur = safeSum(billed.map((i) => i.returnCredit ?? 0), 2)
+  const sisaBelumDibayar = safeSubtract(
+    safeSubtract(sudahDitagih, sudahDibayar, 2),
+    kreditRetur,
+    2,
+  )
 
   const openCredits = (input.openCustomerCredits ?? [])
     .map((c) => ({

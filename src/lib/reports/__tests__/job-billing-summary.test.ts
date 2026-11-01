@@ -57,6 +57,20 @@ describe("buildJobBillingSummary — kriteria (c) feature-checker F-2026-10-20-0
     expect(s.billedInvoices.map((i) => i.id)).toEqual([1, 2])
   })
 
+  it("kredit retur mengurangi sisa belum dibayar — lunas lewat retur sisa nol", () => {
+    const s = buildJobBillingSummary({
+      quotationId: 9,
+      quotationDocumentNo: "Q-0009",
+      nilaiBerjalan: 40_000_000,
+      invoices: [
+        inv({ id: 1, grandTotal: 40_000_000, paidAmount: 15_000_000, returnCredit: 25_000_000, status: "partial" }),
+      ],
+      confirmedDownPayments: [],
+    })
+    expect(s.sisaBelumDibayar).toBe(0)
+    expect(s.sisaEfektif).toBe(0)
+  })
+
   it("tanpa invoice: sisa penuh = nilaiBerjalan, DP tidak mengurangi sisa tagihan", () => {
     const s = buildJobBillingSummary({
       quotationId: 9,

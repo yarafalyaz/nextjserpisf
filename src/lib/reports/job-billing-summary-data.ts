@@ -22,8 +22,10 @@
 
 import { prisma } from "@/lib/db/prisma"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
+import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
 import {
   buildJobBillingSummary,
+  isBilledInvoice,
   type JobBillingSummary,
 } from "@/lib/reports/job-billing-summary"
 
@@ -166,6 +168,20 @@ export async function loadJobBillingSummary(
     byId.set(inv.id, inv)
   }
 
+  const billedIds = [...byId.values()]
+    .filter((inv) =>
+      isBilledInvoice({
+        id: inv.id,
+        documentNo: "",
+        status: String(inv.status),
+        grandTotal: 0,
+        paidAmount: 0,
+        deletedAt: inv.deletedAt,
+      }),
+    )
+    .map((inv) => inv.id)
+  const returnCreditByInvoice = await loadReturnCreditByInvoiceId(billedIds)
+
   const summary = buildJobBillingSummary({
     quotationId: quotation.id,
     quotationDocumentNo: quotation.documentNo,
@@ -176,6 +192,7 @@ export async function loadJobBillingSummary(
       status: String(inv.status),
       grandTotal: Number(inv.grandTotal),
       paidAmount: Number(inv.paidAmount),
+      returnCredit: returnCreditByInvoice.get(inv.id) ?? 0,
       deletedAt: inv.deletedAt,
     })),
     confirmedDownPayments: confirmedDownPayments.map((d) => ({

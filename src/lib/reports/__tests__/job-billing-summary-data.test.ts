@@ -20,6 +20,9 @@ const mocks = vi.hoisted(() => {
     salesInvoice: { findMany: vi.fn().mockResolvedValue([]) },
     downPayment: { findMany: vi.fn().mockResolvedValue([]) },
     customerCredit: { findMany: vi.fn().mockResolvedValue([]) },
+    salesReturn: { findMany: vi.fn().mockResolvedValue([]) },
+    journal: { findMany: vi.fn().mockResolvedValue([]) },
+    systemSetting: { findFirst: vi.fn().mockResolvedValue({ salesReceivableAccountId: 110 }) },
   }
   return { prismaMock }
 })
@@ -50,6 +53,9 @@ beforeEach(() => {
   mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([])
   mocks.prismaMock.downPayment.findMany.mockResolvedValue([])
   mocks.prismaMock.customerCredit.findMany.mockResolvedValue([])
+  mocks.prismaMock.salesReturn.findMany.mockReset().mockResolvedValue([])
+  mocks.prismaMock.journal.findMany.mockReset().mockResolvedValue([])
+  mocks.prismaMock.systemSetting.findFirst.mockReset().mockResolvedValue({ salesReceivableAccountId: 110 })
 })
 
 describe("loadJobBillingSummary — verifikasi (c) F-2026-10-20-03", () => {
@@ -58,6 +64,23 @@ describe("loadJobBillingSummary — verifikasi (c) F-2026-10-20-03", () => {
 
     await expect(loadJobBillingSummary(404)).resolves.toBeNull()
     expect(mocks.prismaMock.salesInvoice.findMany).not.toHaveBeenCalled()
+  })
+
+  it("kredit retur POSTED mengurangi sisa belum dibayar loader", async () => {
+    // Tanpa salesOrder/workOrder jembatan lain dilewati, jadi cukup nilai
+    // default — antrean Once yang tak terkonsumsi akan bocor ke test berikut.
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      inv({ id: 7, grandTotal: 40_000_000, paidAmount: 15_000_000 }),
+    ])
+    mocks.prismaMock.salesReturn.findMany.mockResolvedValue([{ id: 71, salesInvoiceId: 7 }])
+    mocks.prismaMock.journal.findMany.mockResolvedValue([
+      { referenceId: 71, entries: [{ credit: 25_000_000 }] },
+    ])
+
+    const s = await loadJobBillingSummary(9)
+
+    expect(s?.sisaBelumDibayar).toBe(0)
+    expect(s?.sisaEfektif).toBe(0)
   })
 
   it("invoice sama dari jembatan langsung + salesOrder terhitung SEKALI", async () => {
