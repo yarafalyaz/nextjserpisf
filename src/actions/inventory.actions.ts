@@ -1112,6 +1112,10 @@ export async function createMaterialIssue(formData: FormData) {
       // melahirkan MI ganda.
       if (v.workOrderId) {
         await tx.$executeRaw`SELECT id FROM work_orders WHERE id = ${v.workOrderId} FOR UPDATE`;
+        // F-009-V dinilai ulang DI DALAM tx sesudah kunci baris WO: cek
+        // pra-tx adalah snapshot — WO yang ditutup di jendela cek->tulis
+        // tidak boleh melahirkan MI draft beku di job closed.
+        await assertJobCostMutable({ workOrderId: v.workOrderId }, "dibuatkan pengeluaran materialnya", tx as never);
         const existingMi = await tx.materialIssue.findFirst({
           where: {
             workOrderId: v.workOrderId,

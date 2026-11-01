@@ -571,6 +571,19 @@ describe("Material Issue Actions", () => {
     expect(res?.success).toBe(false);
     expect(res?.error).toContain("sudah berubah status");
   });
+  it("regresi putaran 24: createMaterialIssue menolak WO yang ditutup di jendela cek luar ke tx", async () => {
+    // Baca luar (pra-tx) melihat WO masih aktif; bacaan dalam tx sesudah
+    // kunci baris melihat closed — MI tidak boleh lahir.
+    mocks.prismaMock.workOrder.findUnique
+      .mockResolvedValueOnce({ status: "in_progress" })
+      .mockResolvedValueOnce({ status: "closed" });
+    const res = await actions.createMaterialIssue(miFd({ workOrderId: 42 }));
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("ditutup");
+    expect(mocks.prismaMock.materialIssue.create).not.toHaveBeenCalled();
+    mocks.prismaMock.workOrder.findUnique.mockReset();
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue(null);
+  });
   // WO-BR-004: form Inventaris menolak MI kedua untuk WO yang sama.
   it("createMaterialIssue menolak WO yang sudah punya MI aktif", async () => {
     mocks.prismaMock.materialIssue.findFirst.mockResolvedValueOnce({
