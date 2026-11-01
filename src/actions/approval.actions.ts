@@ -668,14 +668,23 @@ export async function reopenApproval(approvalId: number) {
 
       await assertHrScopeForApproval(tx, approval.referenceType, approval.referenceId, user);
 
-      // Reset source document status to draft/prior
+      // Reset source document status to draft/prior — klaim kondisional:
+      // count 0 berarti dokumen tidak lagi 'rejected' (pindah jalur oleh
+      // aksi lain sesudah approval ini lahir). Membiarkannya lolos akan
+      // menciptakan approval pending kedua tanpa reset dokumen (state
+      // yatim: dua alur, dokumen tak tersentuh). Gagal berisik + rollback.
       const modelKey = refType.charAt(0).toLowerCase() + refType.slice(1);
       const docModel = (tx as any)[modelKey];
       if (docModel?.updateMany) {
-        await docModel.updateMany({
+        const reset = await docModel.updateMany({
           where: { id: refId, status: "rejected" },
           data: { status: "draft" },
         });
+        if (reset.count === 0) {
+          throw new Error(
+            `Dokumen ${refType} #${refId} tidak lagi berstatus ditolak — dibuka ulang dibatalkan; muat ulang dokumen.`,
+          );
+        }
       }
 
       // Import here to avoid circular dep top-level

@@ -979,10 +979,29 @@ describe("HR scope jalur approval generik (round2 temuan 2)", () => {
     );
   });
 
+  it("putaran 38: reopenApproval dokumen non-rejected TIDAK mereset DOC ke draft", async () => {
+    // Approval rejected dibaca di dalam tx terkunci, tetapi status DOKUMEN
+    // dinilai requestApprovalIfConfigured: reset rejected->draft wajib jadi
+    // klaim (predikat status) — count 0 berarti dokumen pindah jalur oleh
+    // aksi lain (mis. workflow kedua) dan reopen wajib gagal berisik,
+    // BUKAN menciptakan approval pending kedua tanpa reset.
+    silenceConsole();
+    seedApproval({ status: "rejected", referenceType: "PurchaseRequest", referenceId: 5, requestedBy: 2 });
+    mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 10 }]);
+    mocks.prismaMock.purchaseRequest.updateMany.mockResolvedValue({ count: 0 });
+    const res: any = await actions.reopenApproval(1);
+    expect(res.success).toBe(false);
+    expect(String(res.error)).toContain("tidak lagi berstatus ditolak");
+    expect(mocks.prismaMock.approval.create).not.toHaveBeenCalled();
+  });
+
   it("R6WN-04: reopenApproval tanpa workflow aktif gagal jujur, bukan sukses semu", async () => {
     silenceConsole();
     seedApproval({ status: "rejected", referenceType: "PurchaseRequest", referenceId: 5, requestedBy: 2 });
     // Tanpa workflow aktif terkunci -> approval baru tidak terbentuk.
+    // Reset dokumen lolos klaim (predikat rejected, count default 1)
+    // supaya jalur yang diuji tetap "tak ada workflow".
+    mocks.prismaMock.purchaseRequest.updateMany.mockResolvedValue({ count: 1 });
     mocks.prismaMock.$queryRaw.mockResolvedValue([]);
     const res: any = await actions.reopenApproval(1);
     expect(res.success).toBe(false);
