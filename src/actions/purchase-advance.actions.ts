@@ -60,13 +60,14 @@ export async function createPurchaseAdvance(formData: FormData): Promise<Purchas
     await assertPeriodOpen(date)
 
     const [vendor, accounts] = await Promise.all([
-      prisma.vendor.findFirst({ where: { id: vendorId, deletedAt: null }, select: { id: true, name: true } }),
+      prisma.vendor.findFirst({ where: { id: vendorId, deletedAt: null }, select: { id: true, name: true, isActive: true, deletedAt: true } }),
       prisma.account.findMany({
         where: { id: { in: [paymentAccountId, advanceAccountId] } },
         select: { id: true, type: true, reportGroup: true, isActive: true, deletedAt: true },
       }),
     ])
     if (!vendor) return { success: false, error: "Pemasok tidak ditemukan." }
+    if (!vendor.isActive) return { success: false, error: "Pemasok tidak aktif." }
     if (accounts.length !== 2) return { success: false, error: "Akun yang dipilih tidak ditemukan." }
     // R8-KEU-03: direct call bisa memilih akun nonaktif/terhapus atau bukan
     // kelompok yang dijanjikan label form; daftar pilihan halaman sudah
@@ -100,6 +101,33 @@ export async function createPurchaseAdvance(formData: FormData): Promise<Purchas
       // Penjaga periode otoritatif di DALAM tx (pola void): cek luar hanya
       // fast-fail; tutup-periode tidak bisa menyelip di antara cek dan tulis.
       await assertPeriodOpen(date, tx)
+
+      // Nilai ulang vendor + akun DI DALAM tx di bawah kunci baris (pola
+      // bank-transfer/setor pajak): cek luar R8-KEU-03 adalah snapshot —
+      // vendor/akun yang dinonaktifkan atau diubah jenisnya di jendela
+      // cek->tulis tidak boleh menerima jurnal POSTED uang muka.
+      await tx.$executeRaw`SELECT id FROM vendors WHERE id = ${vendorId} FOR UPDATE`
+      const freshVendor = await tx.vendor.findFirst({
+        where: { id: vendorId, deletedAt: null },
+        select: { id: true, isActive: true, deletedAt: true },
+      })
+      if (!freshVendor) throw new Error("Pemasok tidak ditemukan.")
+      if (!freshVendor.isActive) throw new Error("Pemasok tidak aktif.")
+      const sortedAccountIds = [paymentAccountId, advanceAccountId].sort((a, b) => a - b)
+      await tx.$executeRaw`SELECT id FROM accounts WHERE id IN (${Prisma.join(sortedAccountIds)}) FOR UPDATE`
+      const freshAccounts = await tx.account.findMany({
+        where: { id: { in: [paymentAccountId, advanceAccountId] } },
+        select: { id: true, type: true, reportGroup: true, isActive: true, deletedAt: true },
+      })
+      if (freshAccounts.length !== 2) throw new Error("Akun yang dipilih tidak ditemukan.")
+      if (freshAccounts.some((account) => !account.isActive || account.deletedAt)) {
+        throw new Error("Akun yang dipilih nonaktif atau sudah dihapus.")
+      }
+      const freshPayment = freshAccounts.find((account) => account.id === paymentAccountId)
+      const freshAdvance = freshAccounts.find((account) => account.id === advanceAccountId)
+      if (freshPayment?.reportGroup !== "BANK" || freshAdvance?.type !== "ASSET") {
+        throw new Error("Akun kas/bank atau akun uang muka tidak sesuai.")
+      }
 
       const advance = await tx.purchaseAdvance.create({
         data: {

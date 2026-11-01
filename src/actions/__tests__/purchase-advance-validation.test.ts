@@ -26,6 +26,9 @@ const mocks = vi.hoisted(() => {
   const tx: Record<string, unknown> = {
     purchaseAdvance: { create: advanceCreate, update: advanceUpdate },
     journal: { create: journalCreate },
+    vendor: { findFirst: vendorFindFirst },
+    account: { findMany: accountFindMany },
+    $executeRaw: vi.fn(async () => 0),
   }
 
   const prismaMock: Record<string, unknown> = {
@@ -80,7 +83,7 @@ beforeEach(() => {
   mocks.requirePermission.mockResolvedValue({ id: 7 })
   mocks.generateDocumentNumber.mockResolvedValue("DP-0001")
   mocks.assertPeriodOpen.mockResolvedValue(undefined)
-  mocks.vendorFindFirst.mockResolvedValue({ id: 11, name: "Vendor A" })
+  mocks.vendorFindFirst.mockResolvedValue({ id: 11, name: "Vendor A", isActive: true, deletedAt: null })
   mocks.accountFindMany.mockResolvedValue([
     { id: 101, type: "ASSET", reportGroup: "BANK", isActive: true, deletedAt: null },
     { id: 102, type: "ASSET", reportGroup: "OCAS", isActive: true, deletedAt: null },
@@ -158,7 +161,7 @@ describe("createPurchaseAdvance zod validation", () => {
     mocks.requirePermission.mockResolvedValue({ id: 7 })
     mocks.generateDocumentNumber.mockResolvedValue("DP-0001")
     mocks.assertPeriodOpen.mockResolvedValue(undefined)
-    mocks.vendorFindFirst.mockResolvedValue({ id: 11, name: "Vendor A" })
+    mocks.vendorFindFirst.mockResolvedValue({ id: 11, name: "Vendor A", isActive: true, deletedAt: null })
     mocks.accountFindMany.mockResolvedValue([
       { id: 101, type: "ASSET", reportGroup: "BANK", isActive: true, deletedAt: null },
       { id: 102, type: "ASSET", reportGroup: "OCAS", isActive: true, deletedAt: null },
@@ -181,6 +184,46 @@ describe("createPurchaseAdvance zod validation", () => {
     expect(String((res as { error: string }).error)).toContain("nonaktif atau sudah dihapus")
     expect(mocks.checkIdempotency).not.toHaveBeenCalled()
     expect(mocks.advanceCreate).not.toHaveBeenCalled()
+  })
+
+  it("menolak vendor nonaktif (panggilan langsung / dinonaktifkan sesudah form dimuat)", async () => {
+    mocks.vendorFindFirst.mockReset().mockResolvedValue({ id: 11, name: "Vendor A", isActive: false, deletedAt: null })
+    const res = await createPurchaseAdvance(form(base))
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toMatch(/tidak aktif/)
+    expect(mocks.advanceCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("menolak bila vendor dinonaktifkan di antara cek luar dan tx (penilaian ulang berkunci)", async () => {
+    mocks.vendorFindFirst
+      .mockReset()
+      .mockResolvedValueOnce({ id: 11, name: "Vendor A", isActive: true, deletedAt: null })
+      .mockResolvedValue({ id: 11, name: "Vendor A", isActive: false, deletedAt: null })
+    const res = await createPurchaseAdvance(form(base))
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toMatch(/tidak aktif/)
+    expect(mocks.advanceCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("menolak bila akun pembayaran dinonaktifkan di antara cek luar dan tx", async () => {
+    mocks.accountFindMany
+      .mockReset()
+      .mockResolvedValueOnce([
+        { id: 101, type: "ASSET", reportGroup: "BANK", isActive: true, deletedAt: null },
+        { id: 102, type: "ASSET", reportGroup: "OCAS", isActive: true, deletedAt: null },
+      ])
+      .mockResolvedValue([
+        { id: 101, type: "ASSET", reportGroup: "BANK", isActive: false, deletedAt: null },
+        { id: 102, type: "ASSET", reportGroup: "OCAS", isActive: true, deletedAt: null },
+      ])
+    const res = await createPurchaseAdvance(form(base))
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toMatch(/nonaktif|tidak aktif/)
+    expect(mocks.advanceCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    mocks.accountFindMany.mockReset()
   })
 
   it("R8-KEU-03: akun pembayaran bukan BANK atau uang muka bukan ASSET ditolak", async () => {
