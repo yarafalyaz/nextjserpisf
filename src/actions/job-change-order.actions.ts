@@ -38,6 +38,7 @@ import {
   reduceReservationsForWorkOrderItemTx,
   releaseReservationsForReplacedItemsTx,
 } from "@/lib/services/stock-reservation.service"
+import { assertItemsExistAndActive } from "@/lib/services/material-request.service"
 import {
   assertChangeOrderTransition,
   assertLinesNotLocked,
@@ -564,6 +565,14 @@ export async function applyJobChangeOrder(changeOrderId: number) {
         include: { items: { orderBy: { sortOrder: "asc" } } },
       })
       if (!co) throw new Error("Change order tidak ditemukan")
+
+      // Baris tambah adalah kelahiran QuotationItem + WorkOrderItem: item
+      // master wajib hidup saat terapkan (bisa mati antara buat CO dan
+      // terapkan). itemId <= 0 = baris jasa (QuotationItem null) tetap sah.
+      const addedItemIds = co.items
+        .filter((l) => l.action === "tambah" && l.itemId > 0)
+        .map((l) => l.itemId)
+      if (addedItemIds.length > 0) await assertItemsExistAndActive(tx, addedItemIds)
 
       // (2) Kunci baris WO + quotation (hindari revisi quotation lain
       // menyela antara baca grandTotal dan tulis grandTotal baru).

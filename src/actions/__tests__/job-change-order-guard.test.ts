@@ -34,6 +34,7 @@ const txExecuteMock = vi.fn()
 const srFindManyMock = vi.fn()
 const srUpdateMock = vi.fn()
 const srUpdateManyMock = vi.fn()
+const itemFindManyMock = vi.fn()
 
 function makeTx() {
   return {
@@ -57,6 +58,7 @@ function makeTx() {
       update: (...a: unknown[]) => woItemUpdateMock(...a),
     },
     materialIssueItem: { findMany: (...a: unknown[]) => miItemFindManyMock(...a) },
+    item: { findMany: (...a: unknown[]) => itemFindManyMock(...a) },
     stockReservation: {
       findMany: (...a: unknown[]) => srFindManyMock(...a),
       update: (...a: unknown[]) => srUpdateMock(...a),
@@ -208,6 +210,7 @@ beforeEach(() => {
     woItemUpdateMock, miItemFindManyMock, qSectionFindManyMock, qFindFirstMock,
     qHistoryCreateMock, qItemCreateMock, qItemUpdateMock, qItemDeleteMock, qUpdateMock,
     queryRawMock, txExecuteMock, srFindManyMock, srUpdateMock, srUpdateManyMock,
+    itemFindManyMock,
   ]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 5 })
   nextSlugMock.mockResolvedValue("co-slug")
@@ -232,6 +235,10 @@ beforeEach(() => {
   srFindManyMock.mockResolvedValue([])
   srUpdateMock.mockResolvedValue({})
   srUpdateManyMock.mockResolvedValue({ count: 0 })
+  // Gerbang hidup baris tambah terapkan (putaran 36): item hidup default.
+  itemFindManyMock.mockImplementation(async (args: any) =>
+    (args?.where?.id?.in ?? []).map((id: number) => ({ id, name: `Item ${id}`, isActive: true })),
+  )
   createDifferenceInvoiceMock.mockResolvedValue({ success: true, id: 900 })
   createRevisionDownCreditMock.mockResolvedValue({ success: false, error: "Tidak ada kredit" })
 })
@@ -455,6 +462,58 @@ describe("applyJobChangeOrder — klaim + uang existing", () => {
     expect(arg.where).toEqual({ id: 88 })
     expect(Number(arg.data.qtyReserved)).toBe(1)
     expect(srUpdateManyMock).not.toHaveBeenCalled()
+  })
+
+  // Putaran 36: baris tambah membawa itemId master (jasa = 0/negatif ->
+  // QuotationItem null sah). Item mati/fiktif yang lolos create CO tidak
+  // boleh lahir sebagai QuotationItem/WorkOrderItem saat terapkan.
+  it("baris tambah item nonaktif: terapkan ditolak, tak ada baris lahir", async () => {
+    coFindUniqueMock.mockResolvedValue({
+      ...CO_APPROVED,
+      items: [{
+        id: 772, workOrderItemId: null, itemId: 300, action: "tambah",
+        description: "Bullbar", uom: "pcs", qtyBefore: null, qtyAfter: 1,
+        costAfter: 7000, unitPriceBefore: null, unitPriceAfter: 7000, discountAfter: 0,
+      }],
+    })
+    itemFindManyMock.mockResolvedValue([{ id: 300, name: "Bullbar", isActive: false }])
+    const r = await applyJobChangeOrder(77)
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/Bullbar tidak aktif/)
+    expect(qItemCreateMock).not.toHaveBeenCalled()
+    expect(woItemCreateMock).not.toHaveBeenCalled()
+    expect(qUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("baris tambah item fiktif: terapkan ditolak", async () => {
+    coFindUniqueMock.mockResolvedValue({
+      ...CO_APPROVED,
+      items: [{
+        id: 772, workOrderItemId: null, itemId: 300, action: "tambah",
+        description: "Bullbar", uom: "pcs", qtyBefore: null, qtyAfter: 1,
+        costAfter: 7000, unitPriceBefore: null, unitPriceAfter: 7000, discountAfter: 0,
+      }],
+    })
+    itemFindManyMock.mockResolvedValue([])
+    const r = await applyJobChangeOrder(77)
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/Item #300 tidak ditemukan/)
+    expect(woItemCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("baris tambah jasa (itemId 0) tetap terapkan: QuotationItem item null", async () => {
+    coFindUniqueMock.mockResolvedValue({
+      ...CO_APPROVED,
+      items: [{
+        id: 772, workOrderItemId: null, itemId: 0, action: "tambah",
+        description: "Jasa setting", uom: null, qtyBefore: null, qtyAfter: 1,
+        costAfter: 7000, unitPriceBefore: null, unitPriceAfter: 7000, discountAfter: 0,
+      }],
+    })
+    const r = await applyJobChangeOrder(77)
+    expect(r.success).toBe(true)
+    const qArg = qItemCreateMock.mock.calls[0][0]
+    expect(qArg.data.itemId).toBeNull()
   })
 
   it("baris ter-issue sesudah disetujui: hapus juga ditolak di terapkan (bukan hanya ubah)", async () => {
