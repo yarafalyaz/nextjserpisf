@@ -41,6 +41,7 @@ const client = {
 import {
   assertWorkOrderQcCleared,
   assertProductionOrderQcCleared,
+  assertGoodsReceiptQcCleared,
   assertWorkOrderVehicleIntakeRecorded,
   raiseNonconformanceFromInspection,
 } from "@/lib/services/qc.service"
@@ -56,6 +57,26 @@ beforeEach(() => {
   generateDocumentNumberMock.mockResolvedValue("NCR-0001")
   queryRawMock.mockReset()
   queryRawMock.mockResolvedValue([])
+})
+
+describe("assertGoodsReceiptQcCleared (putaran 20)", () => {
+  it("blocks verification when an open NCR exists on the goods receipt", async () => {
+    nonconformanceCountMock.mockResolvedValue(2)
+
+    await expect(assertGoodsReceiptQcCleared(5, client as never)).rejects.toThrow(/nonconformance/i)
+
+    const arg = nonconformanceCountMock.mock.calls[0][0]
+    expect(arg.where.referenceType).toBe("GoodsReceipt")
+    expect(arg.where.referenceId).toBe(5)
+    expect(arg.where.status.in).toEqual(["open", "rework", "rejected"])
+  })
+
+  it("passes when no QC records exist (opt-in QC)", async () => {
+    nonconformanceCountMock.mockResolvedValue(0)
+    qcInspectionFindManyMock.mockResolvedValue([])
+
+    await expect(assertGoodsReceiptQcCleared(5, client as never)).resolves.toBeUndefined()
+  })
 })
 
 describe("assertWorkOrderQcCleared", () => {

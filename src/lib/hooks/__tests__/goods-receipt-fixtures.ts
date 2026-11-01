@@ -26,6 +26,10 @@ export function buildGoodsReceiptTx(spies: Record<string, any>, overrides: Recor
       findMany: spies.itemSerialFindMany ?? vi.fn().mockResolvedValue([]),
     },
     systemSetting: { findFirst: spies.systemSettingFindFirst },
+    // Gerbang QC GR (putaran 20): default tanpa record QC (opt-in lolos);
+    // berkas tes yang menguji blokir meng-override count-nya.
+    nonconformance: { count: spies.ncrCount ?? vi.fn().mockResolvedValue(0) },
+    qcInspection: { findMany: spies.qcFindMany ?? vi.fn().mockResolvedValue([]) },
   }
   return { ...tx, ...overrides }
 }

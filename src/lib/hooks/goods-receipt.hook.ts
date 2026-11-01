@@ -8,6 +8,7 @@ import { createInLayer } from "@/lib/services/inventory-fifo";
 import { allocateLandedCost } from "@/lib/services/landed-cost.service";
 import { getGlobalCostingMethod, resolveCostingMethod } from "@/lib/services/costing-method.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { assertGoodsReceiptQcCleared } from "@/lib/services/qc.service";
 import { PurchaseStatus, Status } from "@/lib/constants";
 
 /**
@@ -57,6 +58,12 @@ export async function onGoodsReceiptVerified(
     // otherwise stock receipts can back-date GL into a closed period that the
     // AR/AP/expense paths already block.
     await assertPeriodOpen(goodsReceipt.date, tx);
+
+    // Gerbang QC (opt-in, pola WO/PO): NCR terbuka atas GR ini memblokir
+    // verifikasi — inspeksi incoming gagal menaikkan NCR open otomatis,
+    // jadi barang cacat tidak masuk stok selama NCR belum ditutup. Gate
+    // mengunci baris GR yang sama (sudah terkunci di atas) di dalam tx ini.
+    await assertGoodsReceiptQcCleared(goodsReceiptId, tx);
 
     // ─── 1. Auto-generate document number if not set ─────────────────────
     if (!goodsReceipt.documentNo) {

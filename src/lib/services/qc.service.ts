@@ -74,6 +74,19 @@ export async function assertProductionOrderQcCleared(
 }
 
 /**
+ * Gate verifikasi Goods Receipt: NCR terbuka atas GR memblokir penerimaan
+ * masuk stok. Inspeksi incoming gagal menaikkan NCR open otomatis, jadi
+ * NCR adalah sinyal blokirnya; tanpa record QC, GR lolos (opt-in QC sama
+ * seperti WO/PO).
+ */
+export async function assertGoodsReceiptQcCleared(
+  goodsReceiptId: number,
+  client: TxClient | typeof prisma = prisma,
+): Promise<void> {
+  return assertQcCleared("GoodsReceipt", goodsReceiptId, "GR", client)
+}
+
+/**
  * Kunci baris dokumen referensi QC di dalam tx pemanggil (FOR UPDATE),
  * supaya penilai gate dan pencipta inspeksi/NCR terserialisasi pada baris
  * dokumen yang sama: completion/close mengunci baris ini lebih dulu, dan

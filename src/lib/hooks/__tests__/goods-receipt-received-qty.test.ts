@@ -95,6 +95,9 @@ function wireTx(opts: {
     itemBatch: { findFirst: spies.itemBatchFindFirst, create: spies.itemBatchCreate, update: spies.itemBatchUpdate },
     itemSerial: { createMany: spies.itemSerialCreateMany },
     systemSetting: { findFirst: spies.systemSettingFindFirst },
+    // Gerbang QC GR (putaran 20): tanpa record QC, opt-in lolos.
+    nonconformance: { count: vi.fn().mockResolvedValue(0) },
+    qcInspection: { findMany: vi.fn().mockResolvedValue([]) },
   };
   mocks.transaction.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx));
   return { spies };

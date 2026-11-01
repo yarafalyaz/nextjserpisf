@@ -118,6 +118,24 @@ beforeEach(() => {
   mocks.onGoodsReceipt.mockResolvedValue(undefined)
 })
 
+describe("onGoodsReceiptVerified QC gate (putaran 20)", () => {
+  it("NCR terbuka atas GR memblokir verifikasi sebelum stok masuk", async () => {
+    const { spies, tx } = wireTx({
+      poId: 50,
+      poItems: [{ itemId: 7, qty: 10 }],
+      priorGrItems: [],
+      grItems: [{ itemId: 7, qty: 5 }],
+    })
+    tx.nonconformance.count.mockResolvedValue(1)
+
+    await expect(onGoodsReceiptVerified(100, 1)).rejects.toThrow(/nonconformance/i)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+    expect(spies.grUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "verified" }) }),
+    )
+  })
+})
+
 describe("onGoodsReceiptVerified over-receipt guard", () => {
   it("throws when cumulative received exceeds ordered qty", async () => {
     // PO ordered 10 of item 7; a prior verified GR received 8; this GR adds 5
