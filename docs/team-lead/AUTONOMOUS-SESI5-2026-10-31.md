@@ -555,3 +555,29 @@ bisa gagal di data legacy beda format.
 Vonis GUGUR: `deleteRack`/`deleteRackRow` cek-referensi-luar-tx lalu delete polos — kelas yang sama dengan delete-guard master 9 lokasi (gugur putaran 6): FK `Item.defaultRackId/defaultRackRowId` `onDelete: SetNull`, dampak maksimal lokasi default hilang tanpa efek stok/finansial; risiko diterima, jangan diangkat lagi tanpa bukti jahitan konkret baru.
 
 CI: head `019e53ea4`/`141ff1300`/`ff00ff537` SUCCESS; head putaran 9 (`21614afc1`..`745ccdc26`) dipantau interval 120 detik.
+
+### Lanjutan putaran 10 (2026-11-01) — lane F produksi/aset + lane E pengaturan/SDM (agent read-only, verifikasi sesi utama)
+
+Lane F (produksi/aset):
+
+1. `bff48a9c0` fix(laporan): WIP Aging mengurangi `releasedCost` dua kali — penulis rilis menurunkan `totalActualCost` tersimpan menjadi sisa pool per rilis parsial dan mengakumulasi `releasedCost` terpisah; builder lama menghitung `totalActualCost − releasedCost`. Fix: sisa WIP = `totalActualCost` tersimpan. Builder 9/9 (termasuk loader).
+2. `4a7ff5c38` fix(produksi): `syncServicePurchaseOrderCost`/`syncReworkCostToOrder` membaca status PO di luar kunci lalu menulis biaya absolut — PO yang ditutup/dibatalkan di tengah tetap menerima biaya. Fix: baca ulang status di bawah kunci baris PO sebelum menulis delta.
+3. `a744c876c` fix(aset): `createAssetTransfer`/`deleteAssetTransfer`/`updateAssetTransfer` membaca himpunan transfer terakhir dari snapshot lalu menulis `asset.location` absolut — dua transfer konkuren menimpa lokasi satu sama lain. Fix: kunci baris `assets FOR UPDATE` di awal transaksi (aset lama+baru urut id pada update). 116/116.
+4. `87babb7f3` fix(produksi): `deleteBomRevision`/`deleteWorkOrder`/`deleteProductionOrder` cek status luar transaksi lalu `delete` by-id — transisi konkuren (submit/approve/release, confirm/start) yang commit lebih dulu tetap terhapus dari snapshot basi. Fix: klaim atomik `deleteMany({ where: { id, status: … } })`, count 0 = tolak. `deleteBomRevision` juga kini menghitung `changeRequestsFrom/changeRequestsTo` (`BomRevisionChangeRequest` tanpa onDelete → P2003 mentah dari snapshot basi). 156/156 gabungan.
+5. `bdaca6f70` fix(produksi): `calculateStandardCost` membaca `Product.materials` + `Item.standardCost` di luar transaksi lalu menulis total absolut — `updateProduct` ganti BOM / `updateItem` ubah biaya standar yang commit di tengah tertimpa rollup basi. Fix: baca-hitung-tulis dalam transaksi kunci baris `products FOR UPDATE`. 133/133.
+
+Lane E (pengaturan/SDM):
+
+6. `d0226d83b` fix(pengaturan): guard super_admin terakhir hanya berjalan untuk demote-diri-sendiri (`Number(actor.id) === userId`) — dua super_admin terakhir saling menurunkan target berbeda tanpa kunci bersama, keduanya commit, nol super_admin tersisa. Fix: untuk target mana pun, bila hasil akhir mencabut `super_admin`, kunci semua baris user super_admin `FOR UPDATE` lalu baca ulang target + hitung sisa. 63/63 saat commit.
+7. `8e00c69fc` fix(pengaturan): `ApprovalWorkflowStep.roleId` bare `Int?` tanpa FK — `deleteRole` menolak role terpakai langkah dari snapshot, `createApprovalWorkflow`/`updateApprovalWorkflow` menulis langkah tanpa kunci bersama; langkah baru bisa terbit sesudah cek delete. Fix: penulis workflow dan `deleteRole` berbagi kunci baris `roles FOR UPDATE`; guard dinilai ulang di bawah kunci. 101/101 gabungan.
+8. `a1cdcfc98` fix(pengaturan): `updateRecurringTransaction` membaca `nextRunDate` luar transaksi lalu menulisnya kembali bila `startDate` tak berubah — runner yang commit di tengah (membuat dokumen + memajukan jadwal) tertimpa tanggal lama, occurrence sama terbit dua kali. Fix: klaim kondisional `updateMany({ where: { id, nextRunDate: existing.nextRunDate } })` sama seperti runner; count 0 = tolak. 14/14 gabungan.
+9. `eb359a17d` fix(sdm): route preview denda keterlambatan membangun tanggal `new Date(y, m-1, d)` lokal proses — di TZ WIB `2026-01-31` menjadi `2026-01-30T17:00:00Z`, batas eksklusif service memotong hari terakhir. Fix: `wibDateToUtcMidnight` + validasi hari kalender nyata. 14/14.
+10. `48cfa177d` fix(pengaturan): `toggleUserActive` mengunci baris user dan membaca ulang `isActive`, tetapi guard peran target masih snapshot `assertCanModifyTarget` luar transaksi — non-super_admin bisa menonaktifkan target yang baru dipromosikan menjadi super_admin. Fix: peran target dibaca dari bacaan terkunci; tolak bila target kini super_admin dan actor bukan. 64/64.
+
+CI merah transien putaran ini — satu akar: sesudah `bff48a9c0`, test kartu `wip-aging-card.test.tsx` masih mengharapkan `Rp 600.000` dari rumus lama padahal builder benar menghasilkan `Rp 1.000.000`. Run `bff48a9c0`, `4a7ff5c38`, `a744c876c`, `eb359a17d`, `a1cdcfc98`, `8e00c69fc`, `d0226d83b`, `48cfa177d` semuanya merah hanya pada test itu (job lain hijau). Fix `073e2cf8b`: harapan test diselaraskan + prose rumus lama dibersihkan di halaman/kartu/ekspor WIP. Bukti penutup: `073e2cf8b`, `87babb7f3`, `bdaca6f70` **completed success** (semua job).
+
+Vonis GUGUR putaran ini (jangan diangkat lagi tanpa bukti baru):
+
+- Lane E #6 `notifyUsersIfNew`/`notifyUsersIfNewBatch` findMany→createMany tanpa unique komposit: race hanya menghasilkan notifikasi dobel bila dua run cron paralel; kode sudah menandai sadar `ponytail:` (upgrade path = kolom dedupe-key unik). Dampak rendah, fix benar butuh migrasi schema — diterima.
+- Kandidat PKP settings dan setup first-run: gugur saat verifikasi (recheck terkunci dalam transaksi sudah ada).
+- Lane F lain yang gugur putaran-putaran sebelumnya tetap gugur: `reviseWorkOrderItems` baris duplikat per item = desain sah; timesheet vs pull ProductionCost; ProductionCost sesudah WO closed; quick-add find-or-create per-situs; delete-guard master sekelas `deleteRack`.
