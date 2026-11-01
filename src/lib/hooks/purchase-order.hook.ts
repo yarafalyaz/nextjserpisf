@@ -67,7 +67,12 @@ export async function onPurchaseOrderCreated(
   }
 }
 
-/** Coverage PR dari PO non-cancelled/non-draft (query bersama dua jalur). */
+/**
+ * Coverage PR dari PO berkomitmen (query bersama dua jalur). Himpunan
+ * pengecualian sama dengan COMMITTED_PO_STATUSES laporan outstanding:
+ * draft belum dipesan, rejected/cancelled bukan komitmen — PO rejected
+ * yang tetap dihitung membuat PR macet ordered selamanya (putaran 51).
+ */
 async function computePrCoverage(
   tx: any,
   purchaseRequestId: number,
@@ -80,7 +85,7 @@ async function computePrCoverage(
     where: {
       purchaseOrder: {
         purchaseRequestId,
-        status: { notIn: [Status.CANCELLED, Status.DRAFT] },
+        status: { notIn: [Status.CANCELLED, Status.DRAFT, Status.REJECTED] },
       },
     },
   });

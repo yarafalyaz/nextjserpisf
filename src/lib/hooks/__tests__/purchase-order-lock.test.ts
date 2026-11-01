@@ -190,6 +190,22 @@ describe("recalcPurchaseRequestStatus (putaran 16)", () => {
     })
   })
 
+  it("coverage mengecualikan PO rejected selain draft/cancelled (putaran 51)", async () => {
+    const { spies, tx } = wireTx({
+      poId: 200, prId: 99, prStatus: "ordered",
+      prItems: [{ itemId: 7, qty: 10 }], allPoItems: [],
+    })
+    await recalcPurchaseRequestStatus(99, tx as never)
+    expect(spies.poItemFindMany).toHaveBeenCalledWith({
+      where: {
+        purchaseOrder: {
+          purchaseRequestId: 99,
+          status: { notIn: ["cancelled", "draft", "rejected"] },
+        },
+      },
+    })
+  })
+
   it("status non-coverage (rejected) tidak disentuh", async () => {
     const { spies, tx } = wireTx({
       poId: 200, prId: 99, prStatus: "rejected",
