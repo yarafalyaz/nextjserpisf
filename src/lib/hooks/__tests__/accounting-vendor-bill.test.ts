@@ -48,6 +48,12 @@ function wireVendorBillTx() {
       journal: { create: mocks.journalCreate, findFirst: mocks.journalFindFirst },
       vendorBill: { findUnique: mocks.vendorBillFindUniqueOrThrow },
       taxInvoice: { findFirst: mocks.taxInvoiceFindFirst },
+      // Putaran 50: assertAccountsExist menilai akun hidup — echo semua id.
+      account: {
+        findMany: vi.fn(async (args: any) =>
+          (args.where.id.in as number[]).map((id) => ({ id })),
+        ),
+      },
     } as unknown as TxClient)
   )
 }

@@ -61,6 +61,12 @@ function dpTx() {
     downPayment: { findUniqueOrThrow: mocks.dpFindUniqueOrThrow, update: mocks.dpUpdate },
     tax: { findMany: mocks.taxFindMany },
     journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
+    // Putaran 50: assertAccountsExist menilai akun hidup — echo semua id.
+    account: {
+      findMany: vi.fn(async (args: any) =>
+        (args.where.id.in as number[]).map((id) => ({ id })),
+      ),
+    },
   }
 }
 

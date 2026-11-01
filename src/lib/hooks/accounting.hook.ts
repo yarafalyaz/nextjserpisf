@@ -2095,6 +2095,51 @@ export async function onSalesReturnCompleted(
         );
       }
       const journalNumber = await generateJournalNumber(tx, "SR", returnId);
+      const scrapEntrySpecs: {
+        accountId: number;
+        debit: number;
+        credit: number;
+        memo: string;
+      }[] = [
+        {
+          accountId: settings.scrapSaleIncomeAccountId!,
+          debit: dppTotal,
+          credit: 0,
+          memo: "Pengurang Pendapatan Lain-lain Besi Tua (Retur)",
+        },
+      ];
+      if (vatTotal > 0) {
+        scrapEntrySpecs.push({
+          accountId: settings.salesTaxAccountId!,
+          debit: vatTotal,
+          credit: 0,
+          memo: "PPN Keluaran (Retur Besi Tua)",
+        });
+      }
+      if (receivableCredit > 0) {
+        scrapEntrySpecs.push({
+          accountId: settings.salesReceivableAccountId!,
+          debit: 0,
+          credit: receivableCredit,
+          memo: "Pengurangan Piutang (Retur Besi Tua)",
+        });
+      }
+      if (excessCredit > 0) {
+        scrapEntrySpecs.push({
+          accountId: dpLiabilityAccountId!,
+          debit: 0,
+          credit: excessCredit,
+          memo: "Kelebihan Retur Besi Tua ke Kredit Pelanggan",
+        });
+      }
+      // Putaran 50: gerbang hidup akun terpakai SEBELUM jurnal lahir
+      // (pola jalur faktur) — scrap dinilai grupnya saja di cabang faktur,
+      // akun lain tidak.
+      await assertAccountsExist(
+        tx,
+        scrapEntrySpecs.map((e) => e.accountId),
+        "Posting retur penjualan besi tua",
+      );
       const journal = await tx.journal.create({
         data: {
           journalNumber,
@@ -2109,49 +2154,9 @@ export async function onSalesReturnCompleted(
           createdBy: userId ?? null,
         },
       });
-      const scrapEntryRows: {
-        journalId: number;
-        accountId: number;
-        debit: number;
-        credit: number;
-        memo: string;
-      }[] = [
-        {
-          journalId: journal.id,
-          accountId: settings.scrapSaleIncomeAccountId!,
-          debit: dppTotal,
-          credit: 0,
-          memo: "Pengurang Pendapatan Lain-lain Besi Tua (Retur)",
-        },
-      ];
-      if (vatTotal > 0) {
-        scrapEntryRows.push({
-          journalId: journal.id,
-          accountId: settings.salesTaxAccountId!,
-          debit: vatTotal,
-          credit: 0,
-          memo: "PPN Keluaran (Retur Besi Tua)",
-        });
-      }
-      if (receivableCredit > 0) {
-        scrapEntryRows.push({
-          journalId: journal.id,
-          accountId: settings.salesReceivableAccountId!,
-          debit: 0,
-          credit: receivableCredit,
-          memo: "Pengurangan Piutang (Retur Besi Tua)",
-        });
-      }
-      if (excessCredit > 0) {
-        scrapEntryRows.push({
-          journalId: journal.id,
-          accountId: dpLiabilityAccountId!,
-          debit: 0,
-          credit: excessCredit,
-          memo: "Kelebihan Retur Besi Tua ke Kredit Pelanggan",
-        });
-      }
-      await tx.journalEntry.createMany({ data: scrapEntryRows });
+      await tx.journalEntry.createMany({
+        data: scrapEntrySpecs.map((e) => ({ journalId: journal.id, ...e })),
+      });
       // Subledger CustomerCredit untuk kelebihan (idempoten per retur,
       // pola jalur non-scrap): bisa dialokasi ke faktur lain / di-refund.
       if (
@@ -2270,6 +2275,77 @@ export async function onSalesReturnCompleted(
       }
     }
 
+    // Dr. Retur Penjualan (DPP) + Dr. PPN Keluaran (PPN snapshot) +
+    // Cr. Piutang (DPP+PPN) + Dr. Persediaan (cost) + Cr. Retur Penjualan
+    // (cost) — batch eliminates sequential tx.journalEntry.create
+    // round-trips. The price/AR legs are only included when the return is
+    // tied to an invoice (see `linkedToInvoice`).
+    const entrySpecs: {
+      accountId: number;
+      debit: number;
+      credit: number;
+      memo: string;
+    }[] = [];
+    if (linkedToInvoice && priceTotal > 0) {
+      entrySpecs.push({
+        accountId: settings.salesReturnAccountId!,
+        debit: priceTotal,
+        credit: 0,
+        memo: "Retur Penjualan",
+      });
+      // Cr Piutang hanya sebatas sisa kumulatif; kelebihan retur adalah
+      // liabilitas ke pelanggan (akun UMP), bukan kredit Piutang negatif.
+      if (receivableCredit > 0) {
+        entrySpecs.push({
+          accountId: settings.salesReceivableAccountId!,
+          debit: 0,
+          credit: receivableCredit,
+          memo: "Pengurangan Piutang (Retur)",
+        });
+      }
+      if (excessCredit > 0) {
+        entrySpecs.push({
+          accountId: dpLiabilityAccountId!,
+          debit: 0,
+          credit: excessCredit,
+          memo: "Kelebihan Retur Penjualan ke Kredit Pelanggan",
+        });
+      }
+      if (returnVatTotal > 0) {
+        entrySpecs.push({
+          accountId: settings.salesTaxAccountId!,
+          debit: returnVatTotal,
+          credit: 0,
+          memo: "PPN Keluaran (Retur)",
+        });
+      }
+    }
+    if (costTotal > 0) {
+      entrySpecs.push(
+        {
+          accountId: settings.inventoryAccountId!,
+          debit: costTotal,
+          credit: 0,
+          memo: "Persediaan Masuk (Retur)",
+        },
+        {
+          accountId: settings.salesReturnAccountId!,
+          debit: 0,
+          credit: costTotal,
+          memo: "HPP Retur Masuk Kembali",
+        },
+      );
+    }
+    // Putaran 50: semua akun yang benar-benar dipakai entri dinilai hidup
+    // SEBELUM jurnal lahir (mapping bisa menunjuk akun mati sesudah
+    // konfigurasi; tanpa ini jurnal POSTED menunjuk akun mati).
+    if (entrySpecs.length > 0) {
+      await assertAccountsExist(
+        tx,
+        entrySpecs.map((e) => e.accountId),
+        "Posting retur penjualan",
+      );
+    }
     const journal = await tx.journal.create({
       data: {
         journalNumber,
@@ -2284,76 +2360,9 @@ export async function onSalesReturnCompleted(
         createdBy: userId ?? null,
       },
     });
-
-    // Dr. Retur Penjualan (DPP) + Dr. PPN Keluaran (PPN snapshot) +
-    // Cr. Piutang (DPP+PPN) + Dr. Persediaan (cost) + Cr. Retur Penjualan
-    // (cost) — batch eliminates sequential tx.journalEntry.create
-    // round-trips. The price/AR legs are only included when the return is
-    // tied to an invoice (see `linkedToInvoice`).
-    const entryRows: {
-      journalId: number;
-      accountId: number;
-      debit: number;
-      credit: number;
-      memo: string;
-    }[] = [];
-    if (linkedToInvoice && priceTotal > 0) {
-      entryRows.push({
-        journalId: journal.id,
-        accountId: settings.salesReturnAccountId!,
-        debit: priceTotal,
-        credit: 0,
-        memo: "Retur Penjualan",
-      });
-      // Cr Piutang hanya sebatas sisa kumulatif; kelebihan retur adalah
-      // liabilitas ke pelanggan (akun UMP), bukan kredit Piutang negatif.
-      if (receivableCredit > 0) {
-        entryRows.push({
-          journalId: journal.id,
-          accountId: settings.salesReceivableAccountId!,
-          debit: 0,
-          credit: receivableCredit,
-          memo: "Pengurangan Piutang (Retur)",
-        });
-      }
-      if (excessCredit > 0) {
-        entryRows.push({
-          journalId: journal.id,
-          accountId: dpLiabilityAccountId!,
-          debit: 0,
-          credit: excessCredit,
-          memo: "Kelebihan Retur Penjualan ke Kredit Pelanggan",
-        });
-      }
-      if (returnVatTotal > 0) {
-        entryRows.push({
-          journalId: journal.id,
-          accountId: settings.salesTaxAccountId!,
-          debit: returnVatTotal,
-          credit: 0,
-          memo: "PPN Keluaran (Retur)",
-        });
-      }
-    }
-    if (costTotal > 0) {
-      entryRows.push(
-        {
-          journalId: journal.id,
-          accountId: settings.inventoryAccountId!,
-          debit: costTotal,
-          credit: 0,
-          memo: "Persediaan Masuk (Retur)",
-        },
-        {
-          journalId: journal.id,
-          accountId: settings.salesReturnAccountId!,
-          debit: 0,
-          credit: costTotal,
-          memo: "HPP Retur Masuk Kembali",
-        },
-      );
-    }
-    await tx.journalEntry.createMany({ data: entryRows });
+    await tx.journalEntry.createMany({
+      data: entrySpecs.map((e) => ({ journalId: journal.id, ...e })),
+    });
 
     // F-2026-10-28-123-V Putusan 0.2 (grandTotalAsal beku) via 155-S:
     // jurnal di atas mengkredit Piutang (GL), pengurang kanonisnya adalah
@@ -2594,6 +2603,14 @@ export async function onPurchaseReturnProcessed(
       );
     }
 
+    // Putaran 50: gerbang hidup akun terpakai sebelum jurnal lahir —
+    // mapping bisa menunjuk akun mati sesudah konfigurasi, dan relief
+    // hutang/persediaan tak boleh masuk akun nonaktif (pola faktur).
+    await assertAccountsExist(
+      tx,
+      entries.map((e) => e.accountId),
+      "Posting retur pembelian",
+    );
     const journal = await tx.journal.create({
       data: {
         journalNumber,
@@ -2879,6 +2896,18 @@ export async function onDownPaymentReceived(
       receivable: settings.salesReceivableAccountId ?? 0,
     } as const;
 
+    const receiptLines = buildDownPaymentReceiptLines({
+      amount: Number(dp.amount),
+      snapshot,
+    });
+    // Putaran 50: gerbang hidup akun terpakai (kas/kewajiban UMP/PPN
+    // Keluaran), dinilai atas baris yang benar-benar lahir — akun 0
+    // penanda "tak terpakai" disaring helper (pola faktur penjualan).
+    await assertAccountsExist(
+      tx,
+      receiptLines.map((line) => accountByKey[line.account]),
+      "Posting uang muka pelanggan",
+    );
     await tx.journal.create({
       data: {
         journalNumber,
@@ -2892,7 +2921,7 @@ export async function onDownPaymentReceived(
         totalCredit: dp.amount,
         createdBy: userId,
         entries: {
-          create: buildDownPaymentReceiptLines({ amount: Number(dp.amount), snapshot }).map((line) => ({
+          create: receiptLines.map((line) => ({
             accountId: accountByKey[line.account],
             debit: line.debit,
             credit: line.credit,
@@ -3172,6 +3201,32 @@ export async function onVendorBillPosted(
       }
     }
 
+    const billCreditEntries = [
+      ...(latestWithholding > 0 && withholdingAccountId
+        ? [
+            {
+              accountId: withholdingAccountId,
+              debit: 0,
+              credit: latestWithholding,
+              memo: `PPh dipotong — ${b.withholdingType?.name ?? "PPh"}`,
+            },
+          ]
+        : []),
+      {
+        accountId: settings.purchasePayableAccountId!,
+        debit: 0,
+        credit: latestGrandTotal - latestWithholding,
+        memo: "Accounts Payable",
+      },
+    ];
+    // Putaran 50: gerbang hidup atas semua akun yang dipakai jurnal ini
+    // (clearing/PPN Masukan/beban/Hutang PPh/Hutang Usaha) sebelum lahir —
+    // mapping bisa menunjuk akun mati sesudah konfigurasi (pola faktur).
+    await assertAccountsExist(
+      tx,
+      [...latestDebitEntries, ...billCreditEntries].map((e) => e.accountId),
+      "Posting tagihan vendor",
+    );
     await tx.journal.create({
       data: {
         journalNumber,
@@ -3185,25 +3240,7 @@ export async function onVendorBillPosted(
         totalCredit: b.grandTotal,
         createdBy: userId,
         entries: {
-          create: [
-            ...latestDebitEntries,
-            ...(latestWithholding > 0 && withholdingAccountId
-              ? [
-                  {
-                    accountId: withholdingAccountId,
-                    debit: 0,
-                    credit: latestWithholding,
-                    memo: `PPh dipotong — ${b.withholdingType?.name ?? "PPh"}`,
-                  },
-                ]
-              : []),
-            {
-              accountId: settings.purchasePayableAccountId!,
-              debit: 0,
-              credit: latestGrandTotal - latestWithholding,
-              memo: "Accounts Payable",
-            },
-          ],
+          create: [...latestDebitEntries, ...billCreditEntries],
         },
       },
     });

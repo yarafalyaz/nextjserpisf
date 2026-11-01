@@ -76,6 +76,12 @@ import { onSalesReturnCompleted, onPurchaseReturnProcessed } from "../accounting
 function salesTx(invoice: Record<string, unknown>) {
   return {
     $queryRaw: vi.fn().mockResolvedValue([]),
+    // Putaran 50: assertAccountsExist menilai akun hidup — echo semua id.
+    account: {
+      findMany: vi.fn(async (args: any) =>
+        (args.where.id.in as number[]).map((id) => ({ id })),
+      ),
+    },
     systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.settings) },
     salesReturnItem: {
       findMany: vi.fn().mockResolvedValue([]),
@@ -99,6 +105,12 @@ function salesTx(invoice: Record<string, unknown>) {
 
 function purchaseTx(_bill: Record<string, unknown> | null) {
   return {
+    // Putaran 50: assertAccountsExist menilai akun hidup — echo semua id.
+    account: {
+      findMany: vi.fn(async (args: any) =>
+        (args.where.id.in as number[]).map((id) => ({ id })),
+      ),
+    },
     systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.settings) },
     stockMove: { findMany: mocks.stockMoveFindMany },
     journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
@@ -113,6 +125,12 @@ function purchaseTxWithLock() {
   const queryRaw = vi.fn().mockResolvedValue([])
   return {
     $queryRaw: queryRaw,
+    // Putaran 50: assertAccountsExist menilai akun hidup — echo semua id.
+    account: {
+      findMany: vi.fn(async (args: any) =>
+        (args.where.id.in as number[]).map((id) => ({ id })),
+      ),
+    },
     systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.settings) },
     stockMove: { findMany: mocks.stockMoveFindMany },
     journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },

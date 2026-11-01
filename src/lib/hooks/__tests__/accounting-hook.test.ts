@@ -1614,6 +1614,35 @@ describe("onPettyCashCreated", () => {
 });
 
 describe("onSalesReturnCompleted", () => {
+  it("regresi putaran 50: akun retur/piutang mati menolak posting sebelum jurnal lahir", async () => {
+    vi.clearAllMocks();
+    mockAllAccountsExist();
+    mocks.systemSettings.salesReturnAccountId = 420;
+    mocks.systemSettings.salesReceivableAccountId = 110;
+    mocks.systemSettings.inventoryAccountId = 130;
+    mocks.itemFindMany.mockResolvedValue([{ id: 60, isScrapSaleItem: true }]);
+    // Retur dagang (tanpa faktur): akun 420/130/110 dipakai entri dagang.
+    mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "SR-DAGANG",
+      salesInvoiceId: null,
+      status: "draft",
+      date: new Date("2026-10-02"),
+      items: [{ id: 900, itemId: 60, qty: 2, price: 2000000, cost: 750000 }],
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    // Akun 420 (retur) seolah dinonaktifkan/dihapus sesudah mapping.
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? [];
+      return ids.filter((id) => id !== 420).map((id) => ({ id }));
+    });
+    wireSalesReturnTx();
+    await expect(onSalesReturnCompleted(1, 999)).rejects.toThrow(/tidak aktif\/terhapus/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+    mockAllAccountsExist();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockAllAccountsExist();
