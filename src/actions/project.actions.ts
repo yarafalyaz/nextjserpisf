@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { computeProjectStatus } from "@/lib/services/project-status"
+import { assertWorkOrderQcCleared } from "@/lib/services/qc.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
 import type { TxClient } from "@/lib/db/prisma"
 import { parseFormData } from "@/lib/validations/parse-form"
@@ -493,20 +494,41 @@ async function syncProjectStatusTx(projectId: number, tx: TxClient) {
     // Sync linked WorkOrder — only auto-complete it if its materials were actually
     // issued (a completed Material Issue exists), mirroring completeWorkOrder's
     // guard. Otherwise leave the WO open; the project can still be marked completed.
+    // Putaran 22: WO final (completed/closed/cancelled) tak pernah ditimpa —
+    // statusnya adalah hasil gerbang penyelesaian resmi (QC, klaim status).
+    // WO hidup hanya maju lewat klaim bersyarat sesudah gate QC yang sama;
+    // QC belum bersih berarti WO tetap terbuka dan progres tahap tetap
+    // commit (pola auto-close F-020), bukan penyelesaian paksa.
     if (project.workOrderId) {
-      const issuedMi = await tx.materialIssue.findFirst({
-        where: { workOrderId: project.workOrderId, status: "completed" },
-        select: { id: true },
+      const wo = await tx.workOrder.findUnique({
+        where: { id: project.workOrderId },
+        select: { status: true },
       })
-      if (issuedMi) {
-        await tx.workOrder.update({
-          where: { id: project.workOrderId },
-          data: { status: "completed", endDate: new Date() },
+      if (wo && (wo.status === "in_progress" || wo.status === "pending")) {
+        const issuedMi = await tx.materialIssue.findFirst({
+          where: { workOrderId: project.workOrderId, status: "completed" },
+          select: { id: true },
         })
-        await tx.workOrderItem.updateMany({
-          where: { workOrderId: project.workOrderId },
-          data: { status: "completed" },
-        })
+        if (issuedMi) {
+          let qcCleared = true
+          try {
+            await assertWorkOrderQcCleared(project.workOrderId, tx)
+          } catch {
+            qcCleared = false
+          }
+          if (qcCleared) {
+            const claim = await tx.workOrder.updateMany({
+              where: { id: project.workOrderId, status: { in: ["in_progress", "pending"] } },
+              data: { status: "completed", endDate: new Date() },
+            })
+            if (claim.count === 1) {
+              await tx.workOrderItem.updateMany({
+                where: { workOrderId: project.workOrderId },
+                data: { status: "completed" },
+              })
+            }
+          }
+        }
       }
     }
   } else if (inProgress > 0 || completed > 0) {
@@ -517,16 +539,18 @@ async function syncProjectStatusTx(projectId: number, tx: TxClient) {
         data: { status: "in_progress", endDate: null },
       })
     }
-    // Sync linked WorkOrder to in_progress if still pending or completed
+    // Sync linked WorkOrder to in_progress only from live pre-start states.
+    // Putaran 22: WO completed/closed/cancelled tak diturunkan oleh progres
+    // tahap dibuka ulang — penyelesaian resmi tak boleh dibangkitkan diam-diam.
     if (project.workOrderId) {
       const wo = await tx.workOrder.findUnique({ where: { id: project.workOrderId } })
-      if (wo && (wo.status === "pending" || wo.status === "draft" || wo.status === "completed")) {
+      if (wo && (wo.status === "pending" || wo.status === "draft")) {
         await tx.workOrder.update({
           where: { id: project.workOrderId },
           data: { status: "in_progress", endDate: null },
         })
         await tx.workOrderItem.updateMany({
-          where: { workOrderId: project.workOrderId, status: { in: ["pending", "completed"] } },
+          where: { workOrderId: project.workOrderId, status: { in: ["pending"] } },
           data: { status: "in_progress" },
         })
       }
@@ -541,13 +565,15 @@ async function syncProjectStatusTx(projectId: number, tx: TxClient) {
     }
     if (project.workOrderId) {
       const wo = await tx.workOrder.findUnique({ where: { id: project.workOrderId } })
-      if (wo && (wo.status === "in_progress" || wo.status === "completed")) {
+      // Putaran 22: hanya WO yang sedang berjalan yang kembali ke pending;
+      // WO final tak disentuh (lihat cabang in_progress di atas).
+      if (wo && wo.status === "in_progress") {
         await tx.workOrder.update({
           where: { id: project.workOrderId },
           data: { status: "pending", endDate: null },
         })
         await tx.workOrderItem.updateMany({
-          where: { workOrderId: project.workOrderId, status: { in: ["in_progress", "completed"] } },
+          where: { workOrderId: project.workOrderId, status: { in: ["in_progress"] } },
           data: { status: "pending" },
         })
       }
