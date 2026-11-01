@@ -171,9 +171,14 @@ export async function requestApprovalIfConfigured(
   return prisma.$transaction((tx) => request(tx))
 }
 
-export async function assertApproved(referenceType: string, referenceId: number): Promise<void> {
-  if (!prisma.approval) return
-  const approval = await prisma.approval.findFirst({
+export async function assertApproved(
+  referenceType: string,
+  referenceId: number,
+  txClient?: any,
+): Promise<void> {
+  const db = txClient ?? prisma
+  if (!db.approval) return
+  const approval = await db.approval.findFirst({
     where: { referenceType, referenceId },
     orderBy: { id: "desc" },
   })
@@ -183,7 +188,7 @@ export async function assertApproved(referenceType: string, referenceId: number)
     // dokumen tidak menggerbang posting isi baru. Edit mengharapkan
     // requestApprovalIfConfigured (dipanggil action update) sudah membuka
     // pengajuan pending baru; di sini sisa lubangnya ditutup.
-    const docModel = staleCheckModel(prisma as any, referenceType)
+    const docModel = staleCheckModel(db as any, referenceType)
     if (docModel?.findUnique && approval.completedAt) {
       const doc = await docModel.findUnique({
         where: { id: referenceId },

@@ -296,5 +296,17 @@ describe("approval-workflow.service", () => {
         "Dokumen masih menunggu persetujuan"
       );
     });
+
+    it("regresi putaran 16: txClient membaca approval dari tx, bukan prisma global", async () => {
+      mocks.findFirstApproval.mockResolvedValue({ id: 1, status: "approved", completedAt: null });
+      const txFindFirst = vi.fn().mockResolvedValue({ id: 2, status: "pending" });
+      const tx = { approval: { findFirst: txFindFirst }, journal: { findUnique: mocks.docFindUnique } };
+      await expect(assertApproved("Journal", 7, tx)).rejects.toThrow("Dokumen masih menunggu persetujuan");
+      expect(txFindFirst).toHaveBeenCalledWith({
+        where: { referenceType: "Journal", referenceId: 7 },
+        orderBy: { id: "desc" },
+      });
+      expect(mocks.findFirstApproval).not.toHaveBeenCalled();
+    });
   });
 });

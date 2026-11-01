@@ -757,6 +757,13 @@ export async function postJournal(journalId: number) {
         throw new Error("Jurnal sudah diposting atau sedang diproses");
       }
 
+      // Gerbang workflow dinilai ULANG di dalam tx terkunci: updateJournal
+      // membuka pengajuan pending baru sesudah approval final (R6WN-01) dan
+      // edit itu tak mengunci baris jurnal ini, jadi assertApproved di luar
+      // tx bisa membaca approval lama "approved" lalu posting isi yang
+      // belum disetujui pengajuan barunya.
+      await assertApproved("Journal", journalId, tx);
+
       // R-09: baca lock-date dalam tx yang sama (tanpa tx, tutup periode bisa
       // selip di antara cek dan klaim).
       await assertPeriodOpen(journal.transactionDate, tx);

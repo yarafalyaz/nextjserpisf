@@ -2150,6 +2150,20 @@ describe("Status guard branches", () => {
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/Journal hanya bisa di-post dari status DRAFT/i)
   })
+
+  it("regresi putaran 16: postJournal menilai ulang approval di dalam tx dengan tx diteruskan", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", transactionDate: new Date("2024-01-01"), entries: [{ accountId: 1, debit: 1000, credit: 0 }, { accountId: 2, debit: 0, credit: 1000 }] })
+    const wf = await import("@/lib/services/approval-workflow.service") as any
+    const res = await actions.postJournal(1)
+    expect(res.success).toBe(true)
+    const calls = (wf.assertApproved as any).mock.calls
+    expect(calls.length).toBeGreaterThanOrEqual(2)
+    const inTx = calls.find((c: unknown[]) => c[0] === "Journal" && c[1] === 1 && c[2] != null)
+    expect(inTx).toBeDefined()
+    expect((inTx[2] as { journal?: unknown }).journal).toBeDefined()
+    expect((inTx[2] as { $executeRaw?: unknown }).$executeRaw).toBeDefined()
+  })
 })
 
 describe("Journal validation edge cases", () => {
