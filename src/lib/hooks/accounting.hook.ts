@@ -68,9 +68,9 @@ export function assertJournalClaimRef(referenceType: unknown, referenceId: unkno
 
 /**
  * Akun jurnal bare-int tanpa FK fisik (tax/transfer/expense/petty/payment):
- * ID basi (akun dihapus) lolos FK lalu jurnal menunjuk akun hantu. Guard ini
- * fail-closed di action/hook: tiap accountId yang dipakai entri dicek
- * existensinya via prisma.account; hilang satu = tolak sebelum tulis.
+ * ID basi (akun dihapus/nonaktif) lolos FK lalu jurnal POSTED menunjuk akun
+ * mati. Guard ini fail-closed di action/hook: tiap accountId yang dipakai
+ * entri wajib ada, aktif, dan belum terhapus; gagal satu = tolak sebelum tulis.
  */
 export async function assertAccountsExist(
   db: TxClient,
@@ -79,10 +79,13 @@ export async function assertAccountsExist(
 ): Promise<void> {
   const ids = [...new Set(accountIds.filter((v): v is number => typeof v === "number" && Number.isInteger(v) && v > 0))];
   if (ids.length === 0) return;
-  const found = await db.account.findMany({ where: { id: { in: ids } }, select: { id: true } });
+  const found = await db.account.findMany({
+    where: { id: { in: ids }, isActive: true, deletedAt: null },
+    select: { id: true },
+  });
   if (found.length !== ids.length) {
     const missing = ids.filter((id) => !found.some((f) => f.id === id));
-    throw new Error(`${label}: akun tidak ditemukan (id: ${missing.join(", ")}). Pilih ulang akun sebelum posting.`);
+    throw new Error(`${label}: akun tidak aktif/terhapus atau tidak ditemukan (id: ${missing.join(", ")}). Pilih ulang akun sebelum posting.`);
   }
 }
 

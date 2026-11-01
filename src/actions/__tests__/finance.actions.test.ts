@@ -148,6 +148,7 @@ beforeEach(() => {
   // Guard akun bare-int: default semua account.count = ada (1); tiap tes boleh
   // override ke 0 untuk kasus akun-hilang.
   mocks.prismaMock.account.count.mockReset().mockResolvedValue(1)
+  mocks.prismaMock.account.findFirst.mockReset().mockResolvedValue({ id: 1, isActive: true, deletedAt: null })
 })
 
 describe("Bank Statement Actions", () => {
@@ -790,6 +791,33 @@ describe("Expense Actions", () => {
     }))
     expect(res?.success).toBe(true)
   })
+  it("createExpense menolak akun nonaktif/terhapus sebelum tulis (putaran 25)", async () => {
+    mocks.prismaMock.account.findFirst.mockResolvedValue(null)
+    const res = await (actions as any).createExpense(fdMap({
+      accountId: 1,
+      amount: 1000,
+      date: "2026-06-13"
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("tidak aktif/terhapus atau tidak ditemukan")
+    expect(mocks.prismaMock.account.findFirst).toHaveBeenCalledWith({
+      where: { id: 1, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+    expect(mocks.prismaMock.expense.create).not.toHaveBeenCalled()
+  })
+  it("updateExpense menolak akun nonaktif/terhapus sebelum tulis (putaran 25)", async () => {
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.account.findFirst.mockResolvedValue(null)
+    const res = await (actions as any).updateExpense(1, fdMap({
+      accountId: 1,
+      amount: 1200,
+      date: "2026-06-13"
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("tidak aktif/terhapus atau tidak ditemukan")
+    expect(mocks.prismaMock.expense.update).not.toHaveBeenCalled()
+  })
   it("updateExpense rejects non-positive amount (Zod parity with create)", async () => {
     mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await (actions as any).updateExpense(1, fdMap({
@@ -1024,6 +1052,28 @@ describe("Petty Cash Actions", () => {
       date: "2026-06-13"
     }))
     expect(res?.success).toBe(true)
+  })
+  it("createPettyCash menolak akun nonaktif/terhapus sebelum tulis (putaran 25)", async () => {
+    mocks.prismaMock.account.findFirst.mockResolvedValue(null)
+    const res = await (actions as any).createPettyCash(fdMap({
+      type: "OUT", amount: 100, date: "2026-06-13", accountId: 777,
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("tidak aktif/terhapus atau tidak ditemukan")
+    expect(mocks.prismaMock.account.findFirst).toHaveBeenCalledWith({
+      where: { id: 777, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+    expect(mocks.prismaMock.pettyCash.create).not.toHaveBeenCalled()
+  })
+  it("updatePettyCash menolak akun nonaktif/terhapus sebelum tulis (putaran 25)", async () => {
+    mocks.prismaMock.account.findFirst.mockResolvedValue(null)
+    const res = await (actions as any).updatePettyCash(1, fdMap({
+      type: "OUT", amount: 500, date: "2026-06-13", accountId: 777,
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("tidak aktif/terhapus atau tidak ditemukan")
+    expect(mocks.prismaMock.pettyCash.update).not.toHaveBeenCalled()
   })
   it("R8-KEU-08: updatePettyCash menolak jurnal POSTED yang muncul di dalam tx (guard luar basi)", async () => {
     // Guard luar findFirst POSTED tetap null (belum posting saat cek), tapi di

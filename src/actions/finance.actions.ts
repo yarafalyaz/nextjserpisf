@@ -843,11 +843,14 @@ export async function createExpense(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("EXP");
 
-    // Akun bare-int tanpa FK: tolak ID basi sebelum tulis (fail-closed).
+    // Akun bare-int tanpa FK: tolak akun mati/ID basi sebelum tulis.
     for (const aid of [v.accountId, v.paidFromAccountId]) {
       if (aid != null) {
-        const ok = await prisma.account.count({ where: { id: aid } });
-        if (!ok) return { success: false, error: `Akun tidak ditemukan (id: ${aid}). Pilih ulang akun sebelum menyimpan.` };
+        const ok = await prisma.account.findFirst({
+          where: { id: aid, isActive: true, deletedAt: null },
+          select: { id: true },
+        });
+        if (!ok) return { success: false, error: `Akun tidak aktif/terhapus atau tidak ditemukan (id: ${aid}). Pilih ulang akun sebelum menyimpan.` };
       }
     }
 
@@ -1332,10 +1335,13 @@ export async function createPettyCash(formData: FormData) {
 
     const idempotencyKey = formData.get("idempotencyKey") as string | null;
 
-    // Akun bare-int tanpa FK (PettyCash.accountId): tolak ID basi (fail-closed).
+    // Akun bare-int tanpa FK (PettyCash.accountId): tolak akun mati/ID basi.
     if (v.accountId != null) {
-      const ok = await prisma.account.count({ where: { id: v.accountId } });
-      if (!ok) return { success: false, error: `Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.` };
+      const ok = await prisma.account.findFirst({
+        where: { id: v.accountId, isActive: true, deletedAt: null },
+        select: { id: true },
+      });
+      if (!ok) return { success: false, error: `Akun tidak aktif/terhapus atau tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.` };
     }
 
     const pettyCash = await prisma.$transaction(async (tx) => {
@@ -2718,11 +2724,14 @@ export async function updateExpense(id: number, formData: FormData) {
       );
     }
 
-    // Akun bare-int tanpa FK: tolak ID basi sebelum tulis (fail-closed).
+    // Akun bare-int tanpa FK: tolak akun mati/ID basi sebelum tulis.
     for (const aid of [v.accountId, v.paidFromAccountId]) {
       if (aid != null) {
-        const ok = await prisma.account.count({ where: { id: aid } });
-        if (!ok) throw new Error(`Akun tidak ditemukan (id: ${aid}). Pilih ulang akun sebelum menyimpan.`);
+        const ok = await prisma.account.findFirst({
+          where: { id: aid, isActive: true, deletedAt: null },
+          select: { id: true },
+        });
+        if (!ok) throw new Error(`Akun tidak aktif/terhapus atau tidak ditemukan (id: ${aid}). Pilih ulang akun sebelum menyimpan.`);
       }
     }
 
@@ -2868,10 +2877,13 @@ export async function updatePettyCash(id: number, formData: FormData) {
     const type = v.type;
     const amount = v.amount;
 
-    // Akun bare-int tanpa FK (PettyCash.accountId): tolak ID basi (fail-closed).
+    // Akun bare-int tanpa FK (PettyCash.accountId): tolak akun mati/ID basi.
     if (v.accountId != null) {
-      const ok = await prisma.account.count({ where: { id: v.accountId } });
-      if (!ok) throw new Error(`Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.`);
+      const ok = await prisma.account.findFirst({
+        where: { id: v.accountId, isActive: true, deletedAt: null },
+        select: { id: true },
+      });
+      if (!ok) throw new Error(`Akun tidak aktif/terhapus atau tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.`);
     }
 
     const pettyCash = await prisma.$transaction(async (tx) => {

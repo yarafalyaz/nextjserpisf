@@ -2856,7 +2856,10 @@ describe("assertJournalClaimRef (UNIQUE NULL-bypass gate)", () => {
 describe("assertAccountsExist (akun bare-int fail-closed)", () => {
   const fakeDb = (existing: number[]) => ({
     account: {
-      findMany: async (args: any) => existing.filter((id) => args.where.id.in.includes(id)).map((id) => ({ id })),
+      findMany: async (args: any) => {
+        expect(args.where).toMatchObject({ isActive: true, deletedAt: null });
+        return existing.filter((id) => args.where.id.in.includes(id)).map((id) => ({ id }));
+      },
     },
   });
   it("lolos bila semua akun ada", async () => {
@@ -2864,6 +2867,9 @@ describe("assertAccountsExist (akun bare-int fail-closed)", () => {
   });
   it("menolak bila satu akun hilang", async () => {
     await expect(assertAccountsExist(fakeDb([10]) as any, [10, 99], "Uji")).rejects.toThrow(/99/);
+  });
+  it("menolak akun nonaktif/terhapus walau barisnya masih ada (putaran 25)", async () => {
+    await expect(assertAccountsExist(fakeDb([10]) as any, [10, 99], "Uji")).rejects.toThrow(/tidak aktif\/terhapus atau tidak ditemukan.*99/);
   });
   it("hook menolak posting expense bila akun basi", async () => {
     const { onExpenseApproved: fn } = await import("../accounting.hook");
