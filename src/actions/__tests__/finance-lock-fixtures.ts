@@ -107,7 +107,12 @@ export function financeApprovalFactory() {
   return { requestApprovalIfConfigured: vi.fn(), assertApproved: vi.fn() }
 }
 export function financeAccountingHookFactory() {
-  return { onExpenseApproved: vi.fn(), onPettyCashCreated: vi.fn() }
+  return {
+    onExpenseApproved: vi.fn(),
+    onPettyCashCreated: vi.fn(),
+    // Gerbang titik posting jurnal (putaran 34): default lolos.
+    assertAccountsExist: vi.fn().mockResolvedValue(undefined),
+  }
 }
 export function financeExpenseHookFactory() {
   return { onExpenseApprovedSyncPettyCash: vi.fn() }

@@ -78,6 +78,16 @@ vi.mock("@/lib/hooks/accounting.hook", () => ({
   onExpenseApproved: vi.fn().mockResolvedValue({}),
   onPettyCashCreated: vi.fn().mockResolvedValue({}),
   reverseJournalsByReferenceTx: vi.fn().mockResolvedValue(undefined),
+  // Tiru kontrak produksi assertAccountsExist: hanya id hidup lolos.
+  assertAccountsExist: vi.fn(async (db: any, ids: (number | null | undefined)[], label: string) => {
+    const wanted = [...new Set(ids.filter((v): v is number => typeof v === "number" && v > 0))]
+    if (wanted.length === 0) return
+    const found: { id: number }[] = await db.account.findMany({ where: { id: { in: wanted }, isActive: true, deletedAt: null }, select: { id: true } })
+    if (found.length !== wanted.length) {
+      const missing = wanted.filter((id) => !found.some((f) => f.id === id))
+      throw new Error(`${label}: akun tidak aktif/terhapus atau tidak ditemukan (id: ${missing.join(", ")}). Pilih ulang akun sebelum posting.`)
+    }
+  }),
 }))
 vi.mock("@/lib/hooks/expense.hook", () => ({
   onExpenseApprovedSyncPettyCash: vi.fn().mockResolvedValue({}),
@@ -138,6 +148,15 @@ beforeEach(() => {
     if (typeof ops === "function") return ops(mocks.prismaMock)
     return Promise.all(ops)
   })
+
+  // Akun hidup default untuk gerbang titik posting jurnal (putaran 34);
+  // test akun mati menimpanya dengan mockResolvedValue.
+  mocks.prismaMock.account.findMany.mockImplementation(
+    async (arg: { where?: { id?: { in?: number[] } } }) => {
+      const ids = arg?.where?.id?.in ?? [1, 2]
+      return ids.map((id) => ({ id }))
+    },
+  )
 
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
   mocks.assertPeriodOpenMock.mockReset().mockResolvedValue({})
@@ -2290,6 +2309,32 @@ describe("Status guard branches", () => {
     expect(inTx).toBeDefined()
     expect((inTx[2] as { journal?: unknown }).journal).toBeDefined()
     expect((inTx[2] as { $executeRaw?: unknown }).$executeRaw).toBeDefined()
+  })
+
+  // Regresi putaran 34: titik posting wajib menilai akun hidup — draft lahir
+  // atas akun yang kemudian dinonaktifkan lolos POSTED (pola gerbang titik
+  // posting putaran 30/32), dan pusat biaya/laba fiktif (bare-int tanpa FK)
+  // tersimpan senyap lalu laporan per-pusat kehilangan atribusi.
+  it("regresi putaran 34: postJournal menolak akun nonaktif di entri", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 9 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", createdBy: 1, transactionDate: new Date("2024-01-01"), entries: [{ accountId: 1, debit: 1000, credit: 0 }, { accountId: 2, debit: 0, credit: 1000 }] })
+    // Akun 2 mati: hanya akun 1 yang ditemukan hidup.
+    mocks.prismaMock.account.findMany.mockResolvedValue([{ id: 1 }])
+    const res = await actions.postJournal(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/tidak aktif/i)
+    expect(mocks.prismaMock.journal.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 34: postJournal menolak pusat biaya fiktif", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 9 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", createdBy: 1, transactionDate: new Date("2024-01-01"), entries: [{ accountId: 1, debit: 1000, credit: 0, costCenterId: 99999 }, { accountId: 2, debit: 0, credit: 1000, profitCenterId: null }] })
+    mocks.prismaMock.account.findMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
+    mocks.prismaMock.costCenter.findMany.mockResolvedValue([])
+    const res = await actions.postJournal(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Pusat biaya tidak ditemukan/i)
+    expect(mocks.prismaMock.journal.updateMany).not.toHaveBeenCalled()
   })
 
   it("regression round 18: postJournal menolak pembuat jurnal sendiri", async () => {

@@ -12,6 +12,7 @@ import {
   onReimbursementClaimApproved,
   onReimbursementClaimPaid,
   REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE,
+  assertAccountsExist,
   reverseJournalsByReferenceTx,
 } from "@/lib/hooks/accounting.hook";
 import {
@@ -803,6 +804,39 @@ export async function postJournal(journalId: number) {
         throw new Error(
           `Journal tidak balance: Debit ${totalDebit} vs Credit ${totalCredit}`,
         );
+      }
+
+      // Titik pengakuan: akun/pusat dinilai hidup di sini — draft lahir atas
+      // akun yang kemudian dinonaktifkan tidak boleh POSTED (pola
+      // assertAccountsExist hook posting). costCenterId/profitCenterId
+      // bare-int tanpa FK: id fiktif tersimpan senyap dan laporan per-pusat
+      // kehilangan atribusi; CostCenter juga punya isActive.
+      await assertAccountsExist(tx, journal.entries.map((e) => e.accountId), "Jurnal manual");
+      const costCenterIds = [
+        ...new Set(journal.entries.map((e) => e.costCenterId).filter((v): v is number => typeof v === "number" && v > 0)),
+      ];
+      if (costCenterIds.length > 0) {
+        const found = await tx.costCenter.findMany({
+          where: { id: { in: costCenterIds }, isActive: true },
+          select: { id: true },
+        });
+        if (found.length !== costCenterIds.length) {
+          const missing = costCenterIds.filter((id) => !found.some((f) => f.id === id));
+          throw new Error(`Pusat biaya tidak ditemukan atau tidak aktif (id: ${missing.join(", ")}). Pilih ulang pusat biaya sebelum posting.`);
+        }
+      }
+      const profitCenterIds = [
+        ...new Set(journal.entries.map((e) => e.profitCenterId).filter((v): v is number => typeof v === "number" && v > 0)),
+      ];
+      if (profitCenterIds.length > 0) {
+        const found = await tx.profitCenter.findMany({
+          where: { id: { in: profitCenterIds } },
+          select: { id: true },
+        });
+        if (found.length !== profitCenterIds.length) {
+          const missing = profitCenterIds.filter((id) => !found.some((f) => f.id === id));
+          throw new Error(`Pusat laba tidak ditemukan (id: ${missing.join(", ")}). Pilih ulang pusat laba sebelum posting.`);
+        }
       }
 
       const claim = await tx.journal.updateMany({
