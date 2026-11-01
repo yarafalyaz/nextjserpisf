@@ -4136,6 +4136,23 @@ export async function voidVendorBill(id: number) {
           "Hapus pembayaran tagihan ini terlebih dahulu sebelum membatalkan.",
         );
       }
+      // Kredit vendor / relief retur menurunkan balanceDue TANPA paidAmount
+      // (applyOpenVendorCreditsToBill, relief retur di accounting.hook) dan
+      // alokasi kredit per tagihan tidak tercatat di mana pun. Void hanya
+      // me-reverse jurnal tagihan — kredit yang terpakai tetap "used",
+      // hangus permanen sementara GL-nya hidup lagi. Jumlah pastinya tidak
+      // dapat direkonstruksi, jadi tolak fail-closed daripada menebak
+      // pemulihan.
+      const nonCashReduction =
+        Number(fresh.grandTotal ?? 0) -
+        Number(fresh.withholdingAmount ?? 0) -
+        Number(fresh.paidAmount ?? 0) -
+        Number(fresh.balanceDue ?? 0);
+      if (nonCashReduction > SETTLEMENT_TOLERANCE_IDR) {
+        throw new Error(
+          "Tagihan ini sudah berkurang/lunas lewat kredit vendor atau relief retur (bukan pembayaran kas). Pembatalan akan menghanguskan kredit tersebut — selesaikan secara manual bersama admin keuangan sebelum membatalkan.",
+        );
+      }
       // R8-PAJAK-07: bill ber-bupot aktif tidak bisa di-void diam-diam —
       // bupot harus di-revoke dulu lewat jalur bupot (pola pembayaran
       // penjualan yang menolak), bukan ditinggal menghantui laporan

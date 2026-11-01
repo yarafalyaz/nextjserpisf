@@ -3215,6 +3215,21 @@ describe("BUGHUNT round3 #6-7 kunci baris + klaim status pembelian", () => {
     })
   })
 
+  it("regression round 18: voidVendorBill menolak tagihan lunas lewat kredit vendor (paidAmount 0, balanceDue turun non-kas)", async () => {
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "paid", paidAmount: 0, grandTotal: 1000000, withholdingAmount: 0,
+      balanceDue: 0, purchaseOrderId: null, slug: "bill-1",
+    })
+    mocks.reverseJournalsByReferenceTxMock.mockClear()
+
+    const res = await actions.voidVendorBill(1)
+
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("kredit vendor atau relief retur")
+    expect(mocks.reverseJournalsByReferenceTxMock).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled()
+  })
+
   it("voidVendorBill menolak bila baca ulang dalam tx menemukan paidAmount > 0 (kalah race vs pembayaran)", async () => {
     mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValueOnce({
       id: 1, status: "posted", paidAmount: 250000, purchaseOrderId: null, slug: "bill-1",
