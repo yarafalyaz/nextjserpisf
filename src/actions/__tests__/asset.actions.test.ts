@@ -1059,6 +1059,10 @@ describe("createAsset / updateAsset", () => {
       purchaseCost: 1000,
       status: "active",
     })
+    prismaMock.asset.findUnique.mockResolvedValue({
+      purchaseCost: 1000, status: "active", categoryId: null,
+      depreciationMethod: "straight_line", usefulLifeMonths: null, residualValue: 0,
+    })
     prismaMock.assetBrand.findUnique.mockResolvedValue({
       id: 5,
       name: "HP",
@@ -1155,6 +1159,10 @@ describe("createAsset / updateAsset", () => {
       id: 100,
       purchaseCost: 1000,
       status: "active",
+    })
+    prismaMock.asset.findUnique.mockResolvedValue({
+      purchaseCost: 1000, status: "active", categoryId: null,
+      depreciationMethod: "straight_line", usefulLifeMonths: null, residualValue: 0,
     })
     prismaMock.assetBrandModel.findUnique.mockResolvedValue({ assetBrandId: 5 })
     await updateAsset(100, fd({
@@ -1272,7 +1280,10 @@ describe("createAsset / updateAsset", () => {
   it("updates asset and skips GL check when cost unchanged", async () => {
     prismaMock.asset.findUniqueOrThrow.mockResolvedValue({ purchaseCost: 1000, status: "active" })
     // Bacaan terkunci di dalam tx melihat harga yang sama.
-    prismaMock.asset.findUnique.mockResolvedValue({ purchaseCost: 1000, status: "active" })
+    prismaMock.asset.findUnique.mockResolvedValue({
+      purchaseCost: 1000, status: "active", categoryId: null,
+      depreciationMethod: "straight_line", usefulLifeMonths: null, residualValue: 0,
+    })
     const res = await updateAsset(100, fd({
       name: "Laptop V2",
       purchasePrice: "1000",
@@ -1295,6 +1306,10 @@ describe("createAsset / updateAsset", () => {
 
   it("allows cost change when no acquisition journal", async () => {
     prismaMock.asset.findUniqueOrThrow.mockResolvedValue({ purchaseCost: 1000 })
+    prismaMock.asset.findUnique.mockResolvedValue({
+      purchaseCost: 1000, status: "active", categoryId: null,
+      depreciationMethod: "straight_line", usefulLifeMonths: null, residualValue: 0,
+    })
     prismaMock.journal.findFirst.mockResolvedValue(null)
     const res = await updateAsset(100, fd({
       name: "X",
@@ -1353,6 +1368,70 @@ describe("createAsset / updateAsset", () => {
       return (first as { strings?: string[] } | undefined)?.strings?.join("?") ?? ""
     })
     expect(lockSqls.some((s: string) => s.includes("assets") && s.includes("FOR UPDATE"))).toBe(true)
+  })
+
+  it("regresi putaran 15: updateAsset menolak perubahan parameter berjalan tanpa peristiwa", async () => {
+    prismaMock.asset.findUniqueOrThrow.mockResolvedValue({
+      id: 100, purchaseCost: 1000, status: "active",
+    })
+    prismaMock.asset.findUnique.mockResolvedValue({
+      id: 100, purchaseCost: 1000, status: "active",
+      categoryId: 3, depreciationMethod: "straight_line",
+      usefulLifeMonths: null, residualValue: new Prisma.Decimal(0),
+    })
+
+    const res = await updateAsset(100, fd({
+      name: "Laptop Ubah",
+      purchasePrice: "1000",
+      depreciationMethod: "declining_balance",
+    }))
+
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Peristiwa Perubahan Aset")
+    expect(prismaMock.asset.update).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 15: updateAsset menolak pindah kategori tanpa reklasifikasi", async () => {
+    prismaMock.asset.findUniqueOrThrow.mockResolvedValue({
+      id: 100, purchaseCost: 1000, status: "active",
+    })
+    prismaMock.asset.findUnique.mockResolvedValue({
+      id: 100, purchaseCost: 1000, status: "active",
+      categoryId: 3, depreciationMethod: "straight_line",
+      usefulLifeMonths: null, residualValue: new Prisma.Decimal(0),
+    })
+
+    const res = await updateAsset(100, fd({
+      name: "Laptop Ubah",
+      purchasePrice: "1000",
+      categoryId: "9",
+    }))
+
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("kategori")
+    expect(prismaMock.asset.update).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 15: echo parameter sama persis tetap lolos updateAsset", async () => {
+    prismaMock.asset.update.mockReset().mockResolvedValue({})
+    prismaMock.asset.findUniqueOrThrow.mockResolvedValue({
+      id: 100, purchaseCost: 1000, status: "active",
+    })
+    prismaMock.asset.findUnique.mockResolvedValue({
+      id: 100, purchaseCost: 1000, status: "active",
+      categoryId: 3, depreciationMethod: "straight_line",
+      usefulLifeMonths: null, residualValue: new Prisma.Decimal(0),
+    })
+
+    const res = await updateAsset(100, fd({
+      name: "Laptop Sama",
+      purchasePrice: "1000",
+      categoryId: "3",
+      depreciationMethod: "straight_line",
+    }))
+
+    expect(res?.success).toBe(true)
+    expect(prismaMock.asset.update).toHaveBeenCalled()
   })
 })
 

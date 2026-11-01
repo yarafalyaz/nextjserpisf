@@ -1005,7 +1005,14 @@ export async function updateAsset(id: number, formData: FormData) {
       await tx.$executeRaw`SELECT id FROM assets WHERE id = ${id} FOR UPDATE`;
       const lockedAsset = await tx.asset.findUnique({
         where: { id },
-        select: { purchaseCost: true, status: true },
+        select: {
+          purchaseCost: true,
+          status: true,
+          categoryId: true,
+          depreciationMethod: true,
+          usefulLifeMonths: true,
+          residualValue: true,
+        },
       });
       if (!lockedAsset) throw new Error("Aset tidak ditemukan.");
       if (lockedAsset.status === "disposed" && nextStatus !== "disposed") {
@@ -1023,6 +1030,28 @@ export async function updateAsset(id: number, formData: FormData) {
             "Harga perolehan tidak dapat diubah karena akuisisi aset sudah tercatat di GL. Gunakan pelepasan (disposal) atau jurnal koreksi.",
           );
         }
+      }
+      // Parameter berjalan (kategori/metode/masa manfaat/residu) HANYA
+      // berubah lewat peristiwa perubahan aset F-115 (izin manage_assets,
+      // alasan terstruktur, tanggal efektif, jurnal reklasifikasi bila
+      // kategori berpindah). Edit form bebas di sini (izin edit_assets)
+      // mengubah basis cron berikutnya tanpa jejak AssetChangeEvent.
+      // Echo nilai sama persis tetap lolos.
+      const frozenChanges: string[] = [];
+      if ((data.categoryId ?? null) !== lockedAsset.categoryId) frozenChanges.push("kategori");
+      if ((data.depreciationMethod || "straight_line") !== lockedAsset.depreciationMethod) {
+        frozenChanges.push("metode penyusutan");
+      }
+      if ((data.usefulLifeMonths ?? null) !== lockedAsset.usefulLifeMonths) {
+        frozenChanges.push("masa manfaat");
+      }
+      if (Number(data.residualValue ?? 0) !== Number(lockedAsset.residualValue)) {
+        frozenChanges.push("nilai residu");
+      }
+      if (frozenChanges.length > 0) {
+        throw new Error(
+          `Perubahan ${frozenChanges.join(", ")} wajib melalui Peristiwa Perubahan Aset (reklasifikasi/perubahan metode/estimasi) agar tercatat dengan alasan dan tanggal efektif.`,
+        );
       }
       await tx.asset.update({
       where: { id },
