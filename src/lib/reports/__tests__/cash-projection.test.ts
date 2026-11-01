@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { projectCash, buildPayableProjectionItems, summarizeOpenCommitments } from "../cash-projection"
+import { projectCash, buildReceivableProjectionItems, buildPayableProjectionItems, summarizeOpenCommitments } from "../cash-projection"
 
 describe("projectCash", () => {
   const from = new Date(2026, 9, 1) // Oct 2026
@@ -34,6 +34,22 @@ describe("projectCash", () => {
   it("returns a flat line when there are no flows", () => {
     const rows = projectCash(250, from, 2, [], [])
     expect(rows.map((r) => r.closing)).toEqual([250, 250])
+  })
+
+  it("regression round 17: receivable items are NET of return credit", () => {
+    const due = new Date(2026, 9, 15)
+    const items = buildReceivableProjectionItems(
+      [
+        { id: 1, dueDate: due, grandTotal: 100, paidAmount: 0 },
+        { id: 2, dueDate: due, grandTotal: 100, paidAmount: 25 },
+        { id: 3, dueDate: null, grandTotal: 100, paidAmount: 0 },
+      ],
+      new Map([
+        [1, 100],
+        [2, 40],
+      ]),
+    )
+    expect(items).toEqual([{ dueDate: due, amount: 35 }])
   })
 
   it("payable items are NET of withholding (F-48): bruto overstates outflow", () => {

@@ -6,7 +6,8 @@ import { sumEntriesByAccount } from '@/lib/services/report-aggregation.service'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
 import { safeAdd, safeSubtract } from '@/lib/utils/math'
-import { projectCash, buildPayableProjectionItems, summarizeOpenCommitments } from '@/lib/reports/cash-projection'
+import { projectCash, buildReceivableProjectionItems, buildPayableProjectionItems, summarizeOpenCommitments } from '@/lib/reports/cash-projection'
+import { loadReturnCreditByInvoiceId } from '@/lib/reports/return-credit'
 import { RECOGNISED_AP_STATUSES, RECOGNISED_AR_STATUSES } from '@/lib/reports/document-status'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -49,7 +50,7 @@ export default async function CashProjectionPage({
     sumEntriesByAccount({ date: { lte: now } }),
     prisma.salesInvoice.findMany({
       where: { status: { in: [...RECOGNISED_AR_STATUSES] }, deletedAt: null, dueDate: { not: null } },
-      select: { dueDate: true, grandTotal: true, paidAmount: true },
+      select: { id: true, dueDate: true, grandTotal: true, paidAmount: true },
     }),
     prisma.vendorBill.findMany({
       where: { status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null, dueDate: { not: null } },
@@ -75,9 +76,8 @@ export default async function CashProjectionPage({
       }, 0)
     : 0
 
-  const receivables = invoices
-    .map((inv) => ({ dueDate: inv.dueDate as Date, amount: safeSubtract(inv.grandTotal, inv.paidAmount, 2) }))
-    .filter((row) => row.amount > 0)
+  const returnCreditByInvoiceId = await loadReturnCreditByInvoiceId(invoices.map((inv) => inv.id))
+  const receivables = buildReceivableProjectionItems(invoices, returnCreditByInvoiceId)
   // Sisa utang NETO potongan PPh (grandTotal - withholding - paid), selaras
   // aging/payables-summary; bruto menaikkan proyeksi kas keluar tagihan ber-PPh.
   const payables = buildPayableProjectionItems(bills)

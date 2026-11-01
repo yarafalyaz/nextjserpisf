@@ -33,6 +33,13 @@ export interface PayableProjectionBill {
   balanceDue?: unknown
 }
 
+export interface ReceivableProjectionInvoice {
+  id: number
+  dueDate: Date | null
+  grandTotal: unknown
+  paidAmount: unknown
+}
+
 /**
  * Komitmen kas yang belum tertagih (F-2026-10-20-48(b)).
  *
@@ -74,6 +81,26 @@ export function summarizeOpenCommitments(input: {
     estimatedPayrollAmount: safeAdd(0, input.payrollNetTotal, 2),
     total: safeAdd(openPurchaseAmount, input.payrollNetTotal, 2),
   }
+}
+
+/** CashFlowItems for outstanding sales invoices: remainder is NET of completed
+ * return credit (canonical outstanding = grandTotal - paidAmount - returnCredit),
+ * so a fully returned unpaid invoice does not overstate projected cash inflow. */
+export function buildReceivableProjectionItems(
+  invoices: readonly ReceivableProjectionInvoice[],
+  returnCreditByInvoiceId: ReadonlyMap<number, number>,
+): CashFlowItem[] {
+  return invoices
+    .filter((invoice): invoice is ReceivableProjectionInvoice & { dueDate: Date } => invoice.dueDate != null)
+    .map((invoice) => ({
+      dueDate: invoice.dueDate,
+      amount: safeSubtract(
+        safeSubtract(Number(invoice.grandTotal ?? 0), Number(invoice.paidAmount ?? 0), 2),
+        returnCreditByInvoiceId.get(invoice.id) ?? 0,
+        2,
+      ),
+    }))
+    .filter((row) => row.amount > 0)
 }
 
 /** CashFlowItems for outstanding vendor bills: remainder is NET of withholding
