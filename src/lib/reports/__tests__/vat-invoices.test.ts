@@ -169,6 +169,22 @@ describe("buildVatInvoiceList", () => {
     expect(texts(result)).toContain("SR-001")
   })
 
+  it("baris Posisi PPN neto terhadap pengurang retur di semua kolom (DPP + PPN = Total)", () => {
+    const result = buildVatInvoiceList({
+      output: [invoice()], // keluaran DPP 10jt / PPN 1,1jt / total 11,1jt
+      input: [invoice({ documentNo: "BILL-001", counterparty: "PT Pemasok", dpp: 2_000_000, vat: 220_000, total: 2_220_000 })],
+      returnDeductions: [
+        { date: new Date(2026, 9, 6), documentNo: "SR-001", sourceDocumentNo: "INV-001", counterparty: "PT Pelanggan", dpp: 5_000_000, vat: 550_000 },
+      ],
+    })
+    const posisi = result.table.rows.find((row) => row.kind === "total" && row.grand)
+    expect(posisi).toBeDefined()
+    if (posisi?.kind !== "total") throw new Error("baris posisi tidak ditemukan")
+    // Neto: DPP (10jt − 5jt retur) − 2jt masukan = 3jt; PPN (1,1jt − 550rb) − 220rb = 330rb;
+    // Total 11,1jt − 5,55jt retur − 2,22jt masukan = 3,33jt; wajib 3jt + 330rb = 3,33jt.
+    expect(posisi.cells).toEqual(["3.000.000", "330.000", "3.330.000"])
+  })
+
   it("tanpa retur: pengurang nol dan posisi = keluaran", () => {
     const result = buildVatInvoiceList({ output: [invoice()], input: [] })
     expect(result.returnDeduction.count).toBe(0)

@@ -250,10 +250,14 @@ export function buildVatInvoiceList(input: {
     kind: "total",
     grand: true,
     label: "Posisi PPN (Keluaran − Masukan)",
+    // Pengurang retur mengurangi keluaran di SEMUA kolom: tanpa itu sel DPP
+    // dan Total tetap kotor sementara sel PPN sudah neto, sehingga baris ini
+    // tidak rekonsiliasi (DPP + PPN !== Total). Keluaran neto = keluaran −
+    // retur, lalu dikurangi masukan — sama seperti `netVat` di sel PPN.
     cells: [
-      amount(safeSubtract(output.dpp, inputGroup.dpp, 2)),
+      amount(safeSubtract(safeSubtract(output.dpp, returnDeduction.dpp, 2), inputGroup.dpp, 2)),
       amount(netVat),
-      amount(safeSubtract(output.total, inputGroup.total, 2)),
+      amount(safeSubtract(safeSubtract(output.total, returnDeduction.total, 2), inputGroup.total, 2)),
     ],
   })
 
