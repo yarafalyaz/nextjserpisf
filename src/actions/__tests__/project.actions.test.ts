@@ -31,6 +31,8 @@ const mocks = vi.hoisted(() => {
     approvalWorkflow: buildModelMock(),
     approvalWorkflowStep: buildModelMock(),
     approval: buildModelMock(),
+    pettyCash: buildModelMock(),
+    vendorBill: buildModelMock(),
     user: buildModelMock(),
     notification: buildModelMock(),
     projectItem: buildModelMock(),
@@ -337,6 +339,42 @@ describe("Project Actions", () => {
     })
     const res = await actions.deleteProject(1)
     expect(res?.success).toBe(false)
+  })
+  it("deleteProject menolak saat lock ulang menemukan kas kecil/tagihan vendor (putaran 20)", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue({
+      id: 1,
+      _count: {
+        workOrders: 0,
+        timesheets: 0,
+        tasks: 0,
+        overtimeRequests: 0,
+        pettyCash: 1,
+        vendorBills: 2,
+      },
+    })
+    const res = await actions.deleteProject(1)
+    expect(res?.success).toBe(false)
+    expect(res.error).toMatch(/kas kecil: 1/)
+    expect(res.error).toMatch(/tagihan vendor: 2/)
+    expect(mocks.prismaMock.project.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.project.deleteMany).not.toHaveBeenCalled()
+  })
+  it("deleteProject memakai klaim kondisional", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue({
+      id: 1,
+      _count: {
+        workOrders: 0,
+        timesheets: 0,
+        tasks: 0,
+        overtimeRequests: 0,
+        pettyCash: 0,
+        vendorBills: 0,
+      },
+    })
+    mocks.prismaMock.project.deleteMany.mockResolvedValueOnce({ count: 0 })
+    const res = await actions.deleteProject(1)
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.project.delete).not.toHaveBeenCalled()
   })
   it("deleteProject fails if not found", async () => {
     mocks.prismaMock.project.findUnique.mockResolvedValue(null)
@@ -1452,11 +1490,22 @@ describe("RAB F-030 — A7 ganti sumber terkunci + deleteProject ber-RAB", () =>
 
   it("deleteProject proyek ber-RAB tetap lolos: Restrict tahap tidak memblokir cascade dari Project", async () => {
     mocks.prismaMock.project.findUnique.mockResolvedValue({
-      _count: { workOrders: 0, timesheets: 0, tasks: 0, overtimeRequests: 0 },
+      _count: {
+        workOrders: 0,
+        timesheets: 0,
+        tasks: 0,
+        overtimeRequests: 0,
+        pettyCash: 0,
+        vendorBills: 0,
+      },
     })
-    mocks.prismaMock.project.delete.mockResolvedValue({})
+    mocks.prismaMock.project.deleteMany.mockResolvedValue({ count: 1 })
     const res = await actions.deleteProject(10)
     expect(res?.success).toBe(true)
-    expect(mocks.prismaMock.project.delete).toHaveBeenCalledWith({ where: { id: 10 } })
+    expect(mocks.prismaMock.project.deleteMany).toHaveBeenCalledWith({ where: { id: 10 } })
+    expect(mocks.prismaMock.project.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.approval.deleteMany).toHaveBeenCalledWith({
+      where: { referenceType: "Project", referenceId: 10 },
+    })
   })
 })

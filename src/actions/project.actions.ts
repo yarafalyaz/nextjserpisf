@@ -126,36 +126,71 @@ export async function deleteProject(id: number) {
   try {
   await requirePermission("delete_projects")
 
-  // Integrity guard: refuse to delete a project that still has real
-  // cross-module work attached. timesheets.projectId is a required FK
-  // (onDelete: Restrict) so a raw delete throws a generic error; workOrders /
-  // tasks / overtimeRequests represent logged work/documents that must not
-  // vanish silently. (items/stages/logs are project-intrinsic and cascade by
-  // design.) Mirrors deleteVehicle's in-use guard.
-  const project = await prisma.project.findUnique({
-    where: { id },
-    select: {
-      _count: {
-        select: { workOrders: true, timesheets: true, tasks: true, overtimeRequests: true },
+  // Integrity guard wajib dinilai dari baris terkunci: snapshot _count di
+  // luar tx membuat penulis yang commit di jendela check-delete lolos ke
+  // delete polos (P2003 Restrict mentah). PettyCash/VendorBill.projectId
+  // adalah FK Restrict default dan Approval polimorfik tidak punya FK sama
+  // sekali, jadi ketiganya ikut dijaga/dibersihkan dalam tx yang sama.
+  // (items/stages/logs adalah project-intrinsic dan cascade by design.)
+  const guard = await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM projects WHERE id = ${id} FOR UPDATE`
+    }
+
+    const project = await tx.project.findUnique({
+      where: { id },
+      select: {
+        _count: {
+          select: {
+            workOrders: true,
+            timesheets: true,
+            tasks: true,
+            overtimeRequests: true,
+            pettyCash: true,
+            vendorBills: true,
+          },
+        },
       },
-    },
+    })
+    if (!project) return { missing: true as const }
+
+    const {
+      workOrders,
+      timesheets,
+      tasks,
+      overtimeRequests,
+      pettyCash,
+      vendorBills,
+    } = project._count
+    const counts = { workOrders, timesheets, tasks, overtimeRequests, pettyCash, vendorBills }
+    if (Object.values(counts).some((count) => count > 0)) {
+      return { counts }
+    }
+
+    // Klaim atomik: dua delete bersamaan tidak sama-sama melaporkan sukses.
+    const claim = await tx.project.deleteMany({ where: { id } })
+    if (claim.count === 0) return { missing: true as const }
+
+    // Approval polimorfik tak punya FK jadi ikut dibersihkan hanya sesudah
+    // klaim proyek menang (pola deleteLeaveRequest).
+    await tx.approval.deleteMany({
+      where: { referenceType: "Project", referenceId: id },
+    })
+    return null
   })
-  if (!project) {
+  if (guard?.missing) {
     return { success: false, error: "Proyek tidak ditemukan" }
   }
-  const { workOrders, timesheets, tasks, overtimeRequests } = project._count
-  const dependents = workOrders + timesheets + tasks + overtimeRequests
-  if (dependents > 0) {
+  if (guard?.counts) {
+    const { workOrders, timesheets, tasks, overtimeRequests, pettyCash, vendorBills } = guard.counts
     return {
       success: false,
       error:
         "Proyek tidak dapat dihapus karena masih memiliki data terkait " +
-        `(work order: ${workOrders}, lembar waktu: ${timesheets}, tugas: ${tasks}, lembur: ${overtimeRequests}). ` +
+        `(work order: ${workOrders}, lembar waktu: ${timesheets}, tugas: ${tasks}, lembur: ${overtimeRequests}, kas kecil: ${pettyCash}, tagihan vendor: ${vendorBills}). ` +
         "Hapus atau pindahkan data tersebut terlebih dahulu.",
     }
   }
-
-  await prisma.project.delete({ where: { id } })
 
   await logActivity("delete", "Project", id, "Menghapus proyek")
   revalidatePath("/proyek")
