@@ -23,6 +23,7 @@ import { resolveAssetAcquisition } from "@/lib/finance/asset-acquisition"
 import { AssetCronDisposition, AssetUseStatus } from "../_components/asset-use-status"
 import { classifyCronDisposition } from "@/lib/finance/asset-use-status"
 import { ASSET_DEPRECIATION_PREFIX } from "@/lib/reports/asset-journal"
+import { journalBookValue } from "@/lib/finance/asset-book-value"
 import { isAnalyticalDepreciationMethod } from "@/lib/finance/asset-depreciation"
 import { loadAssetAnalyticalStatuses } from "@/lib/reports/asset-analytical-status-data"
 import { AssetAnalyticalStatus } from "../_components/asset-analytical-status"
@@ -86,7 +87,7 @@ export default async function AssetDetailPage({
   // `assetBrandModelId` bare int tanpa relasi — resolve manual. Dua query
   // paralel, masing-masing nullable (merek/tipe bisa dihapus guardnya... merek
   // justru DITOLAK hapusnya bila dipakai, jadi ini murni defensif).
-  const [brand, brandModel, postedDepreciation] = await Promise.all([
+  const [brand, brandModel, postedDepreciation, lifecycleJournals, postedChangeEvents] = await Promise.all([
     asset.assetBrandId
       ? prisma.assetBrand.findUnique({ where: { id: asset.assetBrandId }, select: { name: true } })
       : null,
@@ -102,9 +103,59 @@ export default async function AssetDetailPage({
       },
       _sum: { totalDebit: true },
     }),
+    // Putaran 24: label "Nilai Buku (jurnal POSTED)" wajib nilai tercatat
+    // jurnal penuh (journalBookValue: perolehan + peristiwa perubahan −
+    // akumulasi − pelepasan − kontra impairment), bukan purchaseCost −
+    // Σ header penyusutan yang mengabaikan revaluasi/impairment/disposal.
+    // Pola pemuatan sama dengan loadPostedFacts service peristiwa.
+    prisma.journal.findMany({
+      where: {
+        referenceId: asset.id,
+        status: "POSTED",
+        deletedAt: null,
+        OR: [
+          { referenceType: "ASSET_ACQUISITION" },
+          { referenceType: "ASSET_DISPOSAL" },
+          { referenceType: { startsWith: ASSET_DEPRECIATION_PREFIX } },
+        ],
+      },
+      select: {
+        referenceType: true,
+        entries: { select: { accountId: true, debit: true, credit: true } },
+      },
+    }),
+    prisma.assetChangeEvent.findMany({
+      where: { assetId: asset.id, status: "POSTED", journalId: { not: null } },
+      select: { journalId: true },
+    }),
   ])
-  const postedBookValue =
-    Number(asset.purchaseCost) - Number(postedDepreciation._sum.totalDebit ?? 0)
+  const postedEventJournalIds = postedChangeEvents.map((e) => e.journalId).filter((id): id is number => id != null)
+  const postedEventJournals = postedEventJournalIds.length
+    ? await prisma.journal.findMany({
+        where: { id: { in: postedEventJournalIds }, status: "POSTED", deletedAt: null },
+        select: {
+          referenceType: true,
+          entries: { select: { accountId: true, debit: true, credit: true } },
+        },
+      })
+    : []
+  const posted = journalBookValue(
+    [...lifecycleJournals, ...postedEventJournals].map((j) => ({
+      referenceType: j.referenceType ?? "",
+      lines: j.entries.map((e) => ({ accountId: e.accountId, debit: e.debit, credit: e.credit })),
+    })),
+    {
+      fixedAssetAccountId: asset.category?.assetAccountId ?? null,
+      accumulatedDepreciationAccountId: asset.category?.accumulatedDepreciationAccountId ?? null,
+      accumulatedImpairmentAccountId: asset.category?.accumulatedImpairmentAccountId ?? null,
+    },
+  )
+  // Aset berjurnal memakai nilai tercatat jurnal; aset legacy tanpa jurnal
+  // perolehan tidak punya angka jurnal — tampilkan basis lama agar halaman
+  // tidak mengarang nol (pola hasAcquisitionJournal di rekonsiliasi).
+  const postedBookValue = posted.hasAcquisitionJournal
+    ? Number(posted.bookValue)
+    : Number(asset.purchaseCost) - Number(postedDepreciation._sum.totalDebit ?? 0)
   const cronDisposition = classifyCronDisposition({
     status: asset.status,
     idleActive: false,
