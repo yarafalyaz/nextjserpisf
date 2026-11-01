@@ -281,6 +281,39 @@ describe("issueWithholdingCertificate guards", () => {
     )
   })
 
+  it("regresi putaran 48: bupot atas bill — DPP x tarif wajib cocok dengan potongan tercatat bill", async () => {
+    // Bill tercatat berpotongan 200_000 (2% x 10jt); bupot diajukan atas DPP
+    // 5jt -> potong 100_000. Tanpa pencocokan, bukti potong ke DJP tidak sama
+    // dengan kaki potongan di GL dan revoke nanti melahirkan jurnal lawan
+    // sebesar snapshot bupot (miring dari jurnal sumber).
+    const r = await issueWithholdingCertificate({
+      direction: "we_withhold", certificateNumber: "BP-MISMATCH",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Maklon",
+      withholdingTypeId: 3, dpp: 5_000_000, vendorBillId: 42, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/tidak cocok/)
+    expect(mocks.certCreate).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 48: bupot atas pembayaran — jenis PPh wajib cocok dengan jenis tercatat", async () => {
+    mocks.typeFindUniqueOrThrow.mockResolvedValue({
+      id: 3, code: "PPh23-JASA", article: "PPh23", objectCode: "24-104-01",
+      rate: 2, liabilityAccountId: 501, receivableAccountId: 502,
+    })
+    mocks.paymentFindUnique.mockResolvedValue({
+      id: 88, status: "posted", withholdingAmount: 200_000, withholdingTypeId: 99,
+    })
+    const r = await issueWithholdingCertificate({
+      direction: "withheld_from_us", certificateNumber: "BP-TIPE",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Langganan",
+      withholdingTypeId: 3, dpp: 10_000_000, salesPaymentId: 88, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/tidak cocok/)
+    expect(mocks.certCreate).not.toHaveBeenCalled()
+  })
+
   it("bupot atas pembayaran yang sudah dibalik ditolak", async () => {
     mocks.paymentFindUnique.mockResolvedValue({
       id: 88, status: "reversed", withholdingAmount: 200_000, withholdingTypeId: 3,
@@ -488,6 +521,32 @@ describe("revokeWithholdingCertificate tanpa kaki sumber (putaran 22)", () => {
     expect(mocks.certUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "revoked" }) }),
     )
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 48: revoke ditolak bila nominal bupot != potongan tercatat bill (mismatch warisan)", async () => {
+    mocks.certFindUniqueOrThrow.mockResolvedValue({
+      id: 16, status: "issued", direction: "we_withhold", certificateNumber: "BP-WARISAN",
+      withholdingDate: new Date(2026, 0, 10), withholdingTypeId: 3, withheldAmount: 150_000,
+      vendorBillId: 42, salesPaymentId: null,
+    })
+    const r = await revokeWithholdingCertificate({ id: 16, idempotencyKey: key(), userId: 5 })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/tidak cocok/)
+    expect(mocks.certUpdate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 48: revoke ditolak bila nominal bupot != potongan tercatat pembayaran", async () => {
+    mocks.certFindUniqueOrThrow.mockResolvedValue({
+      id: 16, status: "issued", direction: "withheld_from_us", certificateNumber: "BP-WARISAN2",
+      withholdingDate: new Date(2026, 0, 10), withholdingTypeId: 3, withheldAmount: 150_000,
+      vendorBillId: null, salesPaymentId: 88,
+    })
+    const r = await revokeWithholdingCertificate({ id: 16, idempotencyKey: key(), userId: 5 })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/tidak cocok/)
+    expect(mocks.certUpdate).not.toHaveBeenCalled()
     expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
 

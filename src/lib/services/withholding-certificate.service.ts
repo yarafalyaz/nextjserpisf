@@ -220,6 +220,12 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
       // "-- Tanpa tautan --"); konsekuensinya dipegang revoke: tanpa kaki
       // potongan di jurnal sumber, revoke tidak memposting jurnal lawan
       // (lihat revokeWithholdingCertificate putaran 22).
+      // Putaran 48: bila dokumen tertaut tercatat berpotongan, jenis +
+      // nominal bupot wajib sama dengan yang tercatat di sumber — bupot
+      // adalah bukti atas potongan yang sudah terjadi di GL, bukan angka
+      // bebas; tanpa ini bukti ke DJP beda dari kaki potongan dan revoke
+      // melahirkan jurnal lawan sebesar snapshot yang miring.
+      let recordedWithholding: { amount: number; typeId: number | null } | null = null
       if (input.vendorBillId != null) {
         if (input.direction !== "we_withhold") {
           throw definitive("Bupot atas tagihan vendor wajib arah we_withhold (kita yang memotong)")
@@ -230,7 +236,7 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         await tx.$executeRaw`SELECT id FROM vendor_bills WHERE id = ${input.vendorBillId} FOR UPDATE`
         const bill = await tx.vendorBill.findUnique({
           where: { id: input.vendorBillId },
-          select: { id: true, status: true, deletedAt: true },
+          select: { id: true, status: true, deletedAt: true, withholdingAmount: true, withholdingTypeId: true },
         })
         if (!bill) throw definitive("Tagihan vendor tertaut tidak ditemukan")
         if (bill.deletedAt != null || bill.status === "cancelled") {
@@ -252,6 +258,7 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         if (activeDupe) {
           throw definitive(`Tagihan ini sudah punya bupot aktif "${activeDupe.certificateNumber}" — cabut dulu sebelum terbit baru`)
         }
+        recordedWithholding = { amount: Number(bill.withholdingAmount ?? 0), typeId: bill.withholdingTypeId ?? null }
       }
       if (input.salesPaymentId != null) {
         if (input.direction !== "withheld_from_us") {
@@ -260,7 +267,7 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         await tx.$executeRaw`SELECT id FROM sales_payments WHERE id = ${input.salesPaymentId} FOR UPDATE`
         const payment = await tx.salesPayment.findUnique({
           where: { id: input.salesPaymentId },
-          select: { id: true, status: true },
+          select: { id: true, status: true, withholdingAmount: true, withholdingTypeId: true },
         })
         if (!payment) throw definitive("Pembayaran pelanggan tertaut tidak ditemukan")
         if (payment.status === "reversed") {
@@ -273,6 +280,7 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         if (activeDupe) {
           throw definitive(`Pembayaran ini sudah punya bupot aktif "${activeDupe.certificateNumber}" — cabut dulu sebelum terbit baru`)
         }
+        recordedWithholding = { amount: Number(payment.withholdingAmount ?? 0), typeId: payment.withholdingTypeId ?? null }
       }
       // R8-PAJAK-08: jenis nonaktif/terhapus tidak boleh melahirkan bupot.
       const type = await tx.withholdingTaxType.findUniqueOrThrow({ where: { id: input.withholdingTypeId } })
@@ -329,6 +337,19 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         throw definitive(`Fasilitas "${facility}" tidak dikenal (SKB|PP23|DTP)`)
       }
       const computed = computeWithheld(input.dpp, tariff)
+      // Putaran 48 (lanjutan): pencocokan nominal+jenis terhadap potongan
+      // tercatat sumber. Fasilitas (SKB/PP23/DTP — potong 0 sah) dan sumber
+      // tanpa potongan tercatat (kaki potongan belum lahir) dikecualikan,
+      // sama seperti cabang revoke register-saja putaran 22.
+      if (recordedWithholding != null && recordedWithholding.amount > 0 && !facility) {
+        const certAmount = computed.withheldAmount
+        const amountMatches = Math.abs(certAmount - recordedWithholding.amount) < 0.005
+        if (!amountMatches || recordedWithholding.typeId !== type.id) {
+          throw definitive(
+            "Nominal/jenis potongan bupot tidak cocok dengan potongan tercatat pada dokumen sumber — bupot membuktikan potongan yang tercatat, bukan angka baru.",
+          )
+        }
+      }
       const created = await tx.withholdingCertificate.create({
         data: {
           slug: await nextTxSlug(tx as never, "withholdingCertificate", `bupot-${number}`),
@@ -404,6 +425,7 @@ export async function revokeWithholdingCertificate(input: RevokeWithholdingInput
       // mengurangi saldo pajak tanpa dasar. Kasus itu revoke cukup
       // membatalkan register (status revoked, tanpa jurnal).
       let sourceHasWithholdingLeg = false
+      let sourceWithholdingAmount: number | null = null
       if (cert.direction === "we_withhold" && cert.vendorBillId != null) {
         const bill = await tx.vendorBill.findUnique({
           where: { id: cert.vendorBillId },
@@ -412,6 +434,7 @@ export async function revokeWithholdingCertificate(input: RevokeWithholdingInput
         sourceHasWithholdingLeg = !!bill
           && Number(bill.withholdingAmount ?? 0) > 0
           && bill.withholdingTypeId === cert.withholdingTypeId
+        if (bill) sourceWithholdingAmount = Number(bill.withholdingAmount ?? 0)
       } else if (cert.direction === "withheld_from_us" && cert.salesPaymentId != null) {
         const payment = await tx.salesPayment.findUnique({
           where: { id: cert.salesPaymentId },
@@ -420,6 +443,7 @@ export async function revokeWithholdingCertificate(input: RevokeWithholdingInput
         sourceHasWithholdingLeg = !!payment
           && Number(payment.withholdingAmount ?? 0) > 0
           && payment.withholdingTypeId === cert.withholdingTypeId
+        if (payment) sourceWithholdingAmount = Number(payment.withholdingAmount ?? 0)
       }
       await assertPeriodOpen(cert.withholdingDate, tx as never)
       const amount = Number(cert.withheldAmount)
@@ -430,6 +454,18 @@ export async function revokeWithholdingCertificate(input: RevokeWithholdingInput
       // nominal bupot vs sumber, jurnal lawan nol tak boleh lahir.
       if (sourceHasWithholdingLeg && !(amount > 0)) {
         throw definitive("Nominal potongan bupot tidak cocok dengan dokumen sumber untuk revoke")
+      }
+      // Putaran 48: jurnal lawan memakai snapshot bupot, jadi nominalnya
+      // wajib sama dengan potongan tercatat sumber. Bupot warisan yang
+      // lahir sebelum pencocokan di titik terbit bisa menyimpang — revoke
+      // dengan jurnal lawan sebesar snapshot akan menggerakkan Hutang
+      // PPh/PPh dimuka dengan angka yang tak pernah masuk dari sumber.
+      if (
+        sourceHasWithholdingLeg
+        && sourceWithholdingAmount != null
+        && Math.abs(amount - sourceWithholdingAmount) >= 0.005
+      ) {
+        throw definitive("Nominal potongan bupot tidak cocok dengan potongan tercatat pada dokumen sumber untuk revoke")
       }
       // Akun efek potongan dari master jenis (fail-closed, pola terbit):
       // we_withhold memakai liabilityAccountId; withheld_from_us memakai
