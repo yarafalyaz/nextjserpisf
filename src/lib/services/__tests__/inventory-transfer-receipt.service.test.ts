@@ -231,4 +231,23 @@ describe("inventory-transfer-receipt.service (F-2026-10-22-081-S)", () => {
     expect(shortage[1]).toMatchObject({ transferItemId: 12, remainingQty: 5, unitCost: 2500 })
     expect(shortage[1].serialNumbers).toEqual(["SN-2"])
   })
+
+  it("regresi putaran 48: shortage baris duplikat item sama — serial sudah diterima di baris lain tidak tercatat hilang", () => {
+    // Process menyimpan atribusi serial FIFO hanya pada baris duplikat
+    // pertama (21); penerimaan bisa mendaftarkan serial pada baris kedua
+    // (22) karena validator menilai pool per item. Rekonstruksi per baris
+    // lama tetap menaruh SN-2 sebagai hilang padahal sudah tiba.
+    const dupLines: TransferLineState[] = [
+      { id: 21, itemId: 3, qty: 2, receivedQty: 1, serialNumbers: ["SN-1", "SN-2"] },
+      { id: 22, itemId: 3, qty: 2, receivedQty: 1, serialNumbers: [] },
+    ]
+    const shortage = buildShortageLines(
+      dupLines,
+      new Map([[22, ["SN-2"]]]),
+      new Map([[3, 1000]]),
+    )
+    expect(shortage).toHaveLength(2)
+    const allSerials = shortage.flatMap((s) => s.serialNumbers)
+    expect(allSerials).toEqual(["SN-1"])
+  })
 })

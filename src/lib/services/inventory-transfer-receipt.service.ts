@@ -412,16 +412,42 @@ export function buildShortageLines(
   alreadyReceivedSerialsByLine: ReadonlyMap<number, readonly string[]>,
   carriedCostByItem: ReadonlyMap<number, number>,
 ): ShortageLine[] {
+  // Serial dinilai per POOL item, bukan per baris (pola validateReceiptLines):
+  // atribusi FIFO process hanya disimpan pada baris duplikat pertama,
+  // sedangkan penerimaan bisa mendaftarkan serial pada baris mana pun
+  // untuk item yang sama. Rekonstruksi per baris akan menaruh serial yang
+  // sudah tiba (terdaftar di baris duplikat lain) sebagai serial hilang
+  // pada dokumen penutupan. Pool sisa item dilekatkan ke baris bersisa
+  // pertama item itu; baris duplikat berikutnya tanpa serial.
+  const shippedPoolByItem = new Map<number, string[]>()
+  const receivedPoolByItem = new Map<number, Set<string>>()
+  for (const line of lines) {
+    const shipped = shippedPoolByItem.get(line.itemId) ?? []
+    for (const serial of line.serialNumbers ?? []) {
+      if (!shipped.includes(serial)) shipped.push(serial)
+    }
+    shippedPoolByItem.set(line.itemId, shipped)
+    const received = receivedPoolByItem.get(line.itemId) ?? new Set<string>()
+    for (const serial of alreadyReceivedSerialsByLine.get(line.id) ?? []) received.add(serial)
+    receivedPoolByItem.set(line.itemId, received)
+  }
   const shortage: ShortageLine[] = []
+  const serialPoolAttached = new Set<number>()
   for (const line of lines) {
     const remaining = remainingQty(line)
     if (remaining <= EPSILON) continue
     const unitCost = carriedCostByItem.get(line.itemId) ?? 0
+    let serialNumbers: string[] = []
+    if (!serialPoolAttached.has(line.itemId)) {
+      serialPoolAttached.add(line.itemId)
+      const received = receivedPoolByItem.get(line.itemId) ?? new Set<string>()
+      serialNumbers = (shippedPoolByItem.get(line.itemId) ?? []).filter((s) => !received.has(s))
+    }
     shortage.push({
       transferItemId: line.id,
       itemId: line.itemId,
       remainingQty: remaining,
-      serialNumbers: remainingSerials(line, alreadyReceivedSerialsByLine.get(line.id) ?? []),
+      serialNumbers,
       unitCost,
       value: safeMultiply(remaining, unitCost, 2),
     })
