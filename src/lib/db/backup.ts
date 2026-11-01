@@ -240,20 +240,30 @@ export async function deleteBackup(filename: string): Promise<void> {
   }
 }
 
-/** Delete all existing auto-snapshot backups (keeps the manual ones). */
-export async function pruneAutoSnapshots(): Promise<void> {
+/**
+ * Delete existing auto-snapshot backups (keeps manual ones).
+ * `keepFilename` mengecualikan satu snapshot — pemanggil restore membuat
+ * snapshot baru lalu prune: tanpa pengecualian, prune menghapus snapshot
+ * yang BARU dibuat itu juga (lokal + cloud) dan jaring pengaman restore
+ * hilang sebelum operasi destruktif berjalan (putaran 51).
+ */
+export async function pruneAutoSnapshots(keepFilename?: string): Promise<void> {
   if (existsSync(BACKUP_DIR)) {
     const files = await readdir(BACKUP_DIR)
     await Promise.all(
       files
-        .filter((f) => f.startsWith("backup-autosnap-") && f.endsWith(".sql"))
+        .filter((f) => f.startsWith("backup-autosnap-") && f.endsWith(".sql") && f !== keepFilename)
         .map((f) => unlink(path.join(BACKUP_DIR, f)).catch(() => {}))
     )
   }
   // Prune cloud auto-snapshots too
   try {
     const keys = await listCloudKeys(`${CLOUD_PREFIX}backup-autosnap-`)
-    await Promise.all(keys.map((k) => deleteFromCloud(k).catch(() => {})))
+    await Promise.all(
+      keys
+        .filter((k) => k !== `${CLOUD_PREFIX}${keepFilename}`)
+        .map((k) => deleteFromCloud(k).catch(() => {})),
+    )
   } catch {
     /* ignore */
   }

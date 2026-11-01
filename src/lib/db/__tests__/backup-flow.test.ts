@@ -307,6 +307,24 @@ describe("pruneAutoSnapshots", () => {
     expect(storageMocks.deleteFromCloud).toHaveBeenCalledWith("backups/backup-autosnap-x.sql")
   })
 
+  it("regresi putaran 51: snapshot pengecualian (baru dibuat pre-restore) tidak ikut terhapus", async () => {
+    fsMocks.existsSync.mockReturnValue(true)
+    fsMocks.readdir.mockResolvedValue([
+      "backup-autosnap-20260612-101530.sql",
+      "backup-autosnap-20260611-101530.sql",
+    ])
+    storageMocks.listCloudKeys.mockResolvedValue([
+      "backups/backup-autosnap-20260612-101530.sql",
+      "backups/backup-autosnap-20260611-101530.sql",
+    ])
+    await pruneAutoSnapshots("backup-autosnap-20260612-101530.sql")
+    const unlinked = fsMocks.unlink.mock.calls.map((c) => c[0] as string)
+    expect(unlinked.some((p) => p.includes("20260612-101530"))).toBe(false)
+    expect(unlinked.some((p) => p.includes("20260611-101530"))).toBe(true)
+    expect(storageMocks.deleteFromCloud).not.toHaveBeenCalledWith("backups/backup-autosnap-20260612-101530.sql")
+    expect(storageMocks.deleteFromCloud).toHaveBeenCalledWith("backups/backup-autosnap-20260611-101530.sql")
+  })
+
   it("swallows cloud list errors", async () => {
     fsMocks.existsSync.mockReturnValue(false)
     storageMocks.listCloudKeys.mockRejectedValue(new Error("R2 down"))

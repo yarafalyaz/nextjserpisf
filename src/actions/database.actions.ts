@@ -62,7 +62,9 @@ export async function restoreDatabaseBackup(
       // snapshot gagal = restore destruktif DIBATALKAN (bukan sekadar pesan).
       // Urutan lama menghapus jaring pengaman terakhir lalu tetap restore.
       const snap = await createBackup("autosnap")
-      await pruneAutoSnapshots()
+      // Putaran 51: snapshot baru dikecualikan dari prune — pola lama
+      // menghapus snapshot itu juga, jaring pengaman tak pernah ada.
+      await pruneAutoSnapshots(snap.filename)
       safetyNet = ` Snapshot otomatis: ${snap.filename}.`
     }
     await restoreBackup(safeFilename)
