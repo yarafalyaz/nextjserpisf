@@ -105,6 +105,23 @@ type GrItemInput = {
  * `parsePurchaseOrderItems` dipakai create+update PO; `parseGrItems`
  * dipakai create+update GR (satu sumber per dokumen, pola retur).
  */
+/**
+ * Vendor hidup untuk dokumen pembelian yang lahir/diubah/diakui.
+ * Create PO dan jalur pembayaran sudah menegakkan pola ini satu-satu;
+ * helper supaya create/update/confirm tagihan + update PO memakai
+ * penilaian yang sama (vendor nonaktif/soft-deleted ditolak bernama).
+ */
+async function assertLiveVendorTx(
+  tx: Prisma.TransactionClient,
+  vendorId: number,
+): Promise<void> {
+  const liveVendor = await tx.vendor.findFirst({
+    where: { id: vendorId, isActive: true, deletedAt: null },
+    select: { id: true },
+  });
+  if (!liveVendor) throw new Error("Vendor tidak ditemukan atau tidak aktif");
+}
+
 function parsePoGrItemId(raw: unknown): number | null {
   const itemId = parseLocaleNumber(raw as string | number | null | undefined);
   return itemId === null || itemId <= 0 ? null : itemId;
@@ -1683,6 +1700,9 @@ export async function createVendorBill(formData: FormData) {
     if (withholdingError) throw new Error(withholdingError);
 
     const bill = await prisma.$transaction(async (tx) => {
+      // Vendor mati tak boleh melahirkan tagihan (paritas create PO
+      // putaran 22): picker menyembunyikannya, server wajib menolak.
+      await assertLiveVendorTx(tx, v.vendorId);
       // F-2026-10-24-133-V Putusan 2/4: penanda L3 pada notes menjadikan
       // tagihan ini biaya telat NON-JOB sesudah WO closed. Wajib tanpa
       // tautan PO/GR (tautan = jalur L1/L2), WO closed, alasan tertulis,
@@ -2041,6 +2061,9 @@ export async function confirmVendorBill(billId: number) {
       if (fresh.createdBy != null && Number(fresh.createdBy) === Number(user.id)) {
         throw new Error("Tagihan vendor tidak boleh diposting oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin approve_vendor_bills.");
       }
+      // Titik pengakuan: vendor yang nonaktif/terhapus sesudah draft lahir
+      // tidak boleh jadi utang + jurnal (paritas penilaian ulang bank-transfer).
+      await assertLiveVendorTx(tx, fresh.vendorId);
 
       // F-2026-10-24-133-V Putusan 1(a)/4: tagihan L3 wajib (masih) tanpa
       // tautan PO/GR, WO closed, tidak duplikat, dan akun beban dari
@@ -3461,6 +3484,9 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
       });
       if (latest && latest.status !== "draft")
         throw new Error("Hanya PO draft yang dapat diedit");
+      // Edit draft bisa memindah vendor: target baru wajib vendor hidup
+      // (create menegakkan ini sejak putaran 22, edit belum).
+      await assertLiveVendorTx(tx, v.vendorId);
       // Edit menulis ulang seluruh baris: item mati/fiktif ditolak bernama
       // sebelum deleteMany menghapus baris lama.
       if (poItems.length > 0) {
@@ -3586,6 +3612,9 @@ export async function updateVendorBill(id: number, formData: FormData) {
       });
       if (latestBill && latestBill.status !== "draft")
         throw new Error("Hanya tagihan draft yang dapat diedit");
+      // Edit draft bisa memindah vendor: target baru wajib vendor hidup
+      // (gerbang kesamaan PO di bawah hanya berlaku bila bill ber-PO).
+      await assertLiveVendorTx(tx, v.vendorId);
 
       // F-2026-10-24-133-V (temuan QA E133 atas PR #714): edit draft bertanda
       // L3 mengulang penjaga create/confirm yang sama — WO closed+alasan,

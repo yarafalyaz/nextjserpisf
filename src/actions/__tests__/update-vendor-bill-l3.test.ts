@@ -105,6 +105,8 @@ beforeEach(() => {
   h.tx.workOrder.findUnique.mockResolvedValue({ id: 7, documentNo: "WO-0007", status: "closed" });
   h.tx.activityLog.findMany.mockResolvedValue([]);
   h.tx.vendor.findUnique.mockResolvedValue({ paymentTerm: null });
+  // Gerbang vendor hidup (putaran 32): default vendor aktif.
+  h.tx.vendor.findFirst.mockResolvedValue({ id: 3 });
   h.tx.activityLog.create.mockResolvedValue({});
   h.tx.journal.findFirst.mockResolvedValue(null);
 });

@@ -688,6 +688,20 @@ describe("Purchase Order Actions", () => {
     expect(mocks.prismaMock.purchaseOrderItem.deleteMany).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 32: updatePurchaseOrder menolak vendor nonaktif", async () => {
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.purchaseOrderItem.deleteMany.mockClear()
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue(null)
+    const res = await actions.updatePurchaseOrder(1, fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 5, unitPrice: 1000, discount: 0 }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.purchaseOrderItem.deleteMany).not.toHaveBeenCalled()
+  })
+
   it("regresi putaran 16: cancelPurchaseOrder menghitung ulang status PR tertaut", async () => {
     const hook = await import("@/lib/hooks/purchase-order.hook") as any
     ;(hook.recalcPurchaseRequestStatus as any).mockClear()
@@ -794,6 +808,9 @@ describe("Vendor Bill Actions", () => {
     mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     // PO-linked bills now validate the bill vendor against the PO vendor.
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, vendorId: 1, documentNo: "PO-001", isService: false })
+    // Gerbang vendor hidup (putaran 32): default vendor aktif; test penolakan
+    // menimpanya ke null.
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1 })
     // Gerbang item hidup (putaran 32): baris fixture tanpa override wajib
     // terlihat aktif; test dengan override mockResolvedValue menang sesudah ini.
     mocks.prismaMock.item.findMany.mockImplementation(async (arg: any) => {
@@ -875,6 +892,46 @@ describe("Vendor Bill Actions", () => {
     // Gerbang berjalan di dalam tx sesudah header lahir — rollback menghapusnya,
     // jadi yang diassert adalah baris item tidak pernah ditulis.
     expect(mocks.prismaMock.vendorBillItem.createMany).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 32: createVendorBill menolak vendor nonaktif", async () => {
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue(null)
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "1000",
+      tax: "0",
+      grandTotal: "1000",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.vendorBill.create).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 32: updateVendorBill menolak vendor nonaktif bebas (tanpa PO)", async () => {
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue(null)
+    const res = await actions.updateVendorBill(1, fdMap({
+      vendorId: "2",
+      date: "2026-06-12",
+      subtotal: "1000",
+      tax: "0",
+      grandTotal: "1000",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 32: confirmVendorBill menolak vendor yang sudah nonaktif", async () => {
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", vendorId: 5, purchaseOrderId: null, createdBy: 99,
+      notes: null, subtotal: 1000, tax: 0, grandTotal: 1000, withholdingAmount: 0, withholdingTypeId: null,
+    })
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue(null)
+    const res = await actions.confirmVendorBill(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled()
   })
 
   it("createVendorBill computes each line total as subtotal + tax", async () => {

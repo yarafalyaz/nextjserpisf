@@ -40,6 +40,7 @@ const mocks = vi.hoisted(() => {
     // R8-JB-09: create/update menoleh termin vendor saat menghitung dueDate.
     vendor: {
       findUnique: vi.fn().mockResolvedValue({ paymentTerm: null }),
+      findFirst: vi.fn().mockResolvedValue({ id: 3 }),
     },
   };
 

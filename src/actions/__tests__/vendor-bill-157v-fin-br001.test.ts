@@ -72,6 +72,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["super_admin"] })
   mocks.generateDocNumMock.mockResolvedValue("DOC-001")
+  // Gerbang vendor hidup (putaran 32): default vendor aktif.
+  mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1 })
   mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
   mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({
     id: 1, vendorId: 1, documentNo: "PO-001", isService: false,
