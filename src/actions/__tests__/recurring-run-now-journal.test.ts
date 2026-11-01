@@ -170,11 +170,30 @@ describe("runRecurringNow — klaim atomik nextRunDate (race regresi)", () => {
     expect(res.success).toBe(true)
     expect(mocks.scheduleUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 42, nextRunDate: schedule.nextRunDate },
+        where: { id: 42, nextRunDate: schedule.nextRunDate, isActive: true, deletedAt: null },
         data: expect.objectContaining({ runCount: { increment: 1 } }),
       }),
     )
     expect(mocks.expenseCreate).toHaveBeenCalledTimes(1)
+  })
+
+  it("klaim terikat status hidup: jadwal dinonaktifkan/dihapus sesudah baca kalah klaim (putaran 22)", async () => {
+    mocks.scheduleFindUnique.mockResolvedValue({
+      ...schedule,
+      type: "expense",
+      template: JSON.stringify({ accountId: 620, paidFromAccountId: 110, amount: 500000 }),
+    })
+    mocks.scheduleUpdateMany.mockResolvedValue({ count: 0 })
+
+    const res = await runRecurringNow(42)
+
+    expect(res.success).toBe(true)
+    expect(mocks.scheduleUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ isActive: true, deletedAt: null }),
+      }),
+    )
+    expect(mocks.expenseCreate).not.toHaveBeenCalled()
   })
 
   it("klaim kalah (count 0, eksekusi lain sudah memajukan jadwal) TIDAK membuat expense kedua", async () => {

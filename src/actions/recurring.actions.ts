@@ -175,8 +175,11 @@ export async function runRecurringNow(id: number) {
       // dimajukan oleh eksekusi yang masih melihat nextRunDate lama. Klaim di
       // dalam tx yang sama dengan pembuatan dokumen — dokumen gagal = klaim
       // ikut rollback; klaim kalah (count 0) = tidak ada dokumen kedua.
+      // Putaran 22: klaim terikat status hidup juga (pola runDueRecurring
+      // putaran 20) — hapus/nonaktifkan konkuren yang tak mengubah
+      // nextRunDate tak boleh kalah oleh klaim ini.
       const claimed = await tx.recurringTransaction.updateMany({
-        where: { id, nextRunDate: schedule.nextRunDate },
+        where: { id, nextRunDate: schedule.nextRunDate, isActive: true, deletedAt: null },
         data: {
           lastRunAt: now,
           runCount: { increment: 1 },
