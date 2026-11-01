@@ -124,6 +124,7 @@ describe("vendor biaya hidup (putaran 36)", () => {
 
   it("update vendor yang sama tidak berubah tetap lolos walau kini nonaktif", async () => {
     costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: null, workOrderId: 10, amount: 100, vendorId: 3 })
+    woFindUniqueMock.mockResolvedValue({ id: 10, status: "in_progress" })
     vendorFindUniqueMock.mockResolvedValue({ id: 3, isActive: false, deletedAt: null })
     const res = await updateProductionCost(5, fd({ category: "other", amount: 300, vendorId: 3 }))
     expect(res.success).toBe(true)
@@ -264,6 +265,38 @@ describe("createProductionCost", () => {
     expect(res.success).toBe(false)
     expect(res.error).toContain("completed")
     expect(costCreateMock).not.toHaveBeenCalled()
+  })
+
+  it.each(["completed", "cancelled"])("regresi putaran 50: create biaya WO-only ke WO %s ditolak", async (status) => {
+    woFindUniqueMock.mockResolvedValue({ id: 7, status })
+
+    const res = await createProductionCost(fd({ workOrderId: 7, category: "service", amount: 50000 }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain(status)
+    expect(costCreateMock).not.toHaveBeenCalled()
+  })
+
+  it.each(["completed", "cancelled"])("regresi putaran 50: update biaya WO-only pada WO %s ditolak", async (status) => {
+    costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: null, workOrderId: 10, amount: 100, vendorId: null })
+    woFindUniqueMock.mockResolvedValue({ id: 10, status })
+
+    const res = await updateProductionCost(5, fd({ category: "other", amount: 300 }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain(status)
+    expect(costUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it.each(["completed", "cancelled"])("regresi putaran 50: delete biaya WO-only pada WO %s ditolak", async (status) => {
+    costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: null, workOrderId: 10, amount: 100 })
+    woFindUniqueMock.mockResolvedValue({ id: 10, status })
+
+    const res = await deleteProductionCost(5)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain(status)
+    expect(costDeleteMock).not.toHaveBeenCalled()
   })
 
   it("refuses when neither order nor work order is given", async () => {

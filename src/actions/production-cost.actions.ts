@@ -20,6 +20,28 @@ import { assertJobCostMutable } from "@/lib/services/job-closeout.service"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { safeMultiply, safeRound } from "@/lib/utils/math"
 
+/**
+ * Putaran 50: baris WO-only dulu hanya dicek ada — WO completed/cancelled
+ * tetap bisa ditambah/diubah/dihapus biayanya, asimetris terhadap baris
+ * ber-PO (mutableOrderError) dan pull timesheet WO (closedWorkOrderError
+ * menolak completed/cancelled/closed). Biaya yang masuk sesudah klaim
+ * garansi closed + E2 terposting tak pernah terjurnal ulang. Status
+ * closed tetap diurus assertJobCostMutable di dalam tx.
+ */
+function mutableWorkOrderError(
+  wo: { status: string } | null,
+  verb: "ditambahkan" | "diubah" | "dihapus",
+): { success: false; error: string } | null {
+  if (!wo) return { success: false, error: "Perintah kerja tidak ditemukan" }
+  if (wo.status === "completed" || wo.status === "cancelled") {
+    return {
+      success: false,
+      error: `Biaya tidak dapat ${verb} pada perintah kerja berstatus '${wo.status}'.`,
+    }
+  }
+  return null
+}
+
 /** Production orders keep their cost locked once completed/cancelled. */
 function mutableOrderError(
   order: { status: string; completedQty?: unknown } | null,
@@ -108,9 +130,14 @@ export async function createProductionCost(formData: FormData) {
     if (v.workOrderId) {
       const wo = await prisma.workOrder.findUnique({
         where: { id: v.workOrderId },
-        select: { id: true },
+        select: { id: true, status: true },
       })
-      if (!wo) return { success: false, error: "Perintah kerja tidak ditemukan" }
+      if (!v.productionOrderId) {
+        const invalidWo = mutableWorkOrderError(wo, "ditambahkan")
+        if (invalidWo) return invalidWo
+      } else if (!wo) {
+        return { success: false, error: "Perintah kerja tidak ditemukan" }
+      }
     }
     if (v.vendorId) {
       const vendor = await prisma.vendor.findUnique({
@@ -216,6 +243,14 @@ export async function updateProductionCost(id: number, formData: FormData) {
       const invalid = mutableOrderError(order, "diubah")
       if (invalid) return invalid
     }
+    if (!existing.productionOrderId && existing.workOrderId) {
+      const wo = await prisma.workOrder.findUnique({
+        where: { id: existing.workOrderId },
+        select: { id: true, status: true },
+      })
+      const invalidWo = mutableWorkOrderError(wo, "diubah")
+      if (invalidWo) return invalidWo
+    }
 
     await prisma.$transaction(async (tx) => {
       // Kunci baris biaya lalu baca ulang amount SEBELUM hitung delta:
@@ -287,6 +322,14 @@ export async function deleteProductionCost(id: number) {
       })
       const invalid = mutableOrderError(order, "dihapus")
       if (invalid) return invalid
+    }
+    if (!existing.productionOrderId && existing.workOrderId) {
+      const wo = await prisma.workOrder.findUnique({
+        where: { id: existing.workOrderId },
+        select: { id: true, status: true },
+      })
+      const invalidWo = mutableWorkOrderError(wo, "dihapus")
+      if (invalidWo) return invalidWo
     }
 
     await prisma.$transaction(async (tx) => {
