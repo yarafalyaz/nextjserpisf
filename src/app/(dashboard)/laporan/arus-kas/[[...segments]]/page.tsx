@@ -18,7 +18,7 @@ import {
   STATEMENT_OPTIONS_COOKIE,
 } from "@/lib/reports/statement-display";
 import { reportPeriodFromRoute } from "@/lib/reports/report-period";
-import { buildCashFlowTotals, classifyJournal, foldActivities } from "@/lib/finance/cash-flow";
+import { buildCashFlowTotals, classifyJournal, foldActivities, unclassifiedCashMovement } from "@/lib/finance/cash-flow";
 import { safeAdd, safeSubtract } from "@/lib/utils/math";
 
 import type { Metadata } from "next";
@@ -148,6 +148,13 @@ export default async function CashFlowPage({
     { key: "investing", label: "Arus Kas dari Aktivitas Investasi", value: activity.investing },
     { key: "financing", label: "Arus Kas dari Aktivitas Pendanaan", value: activity.financing },
   ];
+  // Paritas PDF (ledger-cash-data): mutasi kas tanpa klasifikasi aktivitas
+  // (jurnal kas murni) tampil sebagai baris sendiri; tanpa baris ini tiga
+  // aktivitas tidak menjumlah ke Kenaikan/(Penurunan) Kas Bersih di layar.
+  const unclassified = unclassifiedCashMovement(activity, netCashFlow);
+  if (unclassified !== 0) {
+    activityRows.push({ key: "unclassified", label: "Mutasi Kas Tak Terklasifikasi", value: unclassified });
+  }
 
   const periodLabel = `Periode ${formatDate(startDate, { format: "short" })} – ${formatDate(endDate, { format: "short" })}`;
   const amount = (value: number) => formatAccounting(value, { zeroDash: false });

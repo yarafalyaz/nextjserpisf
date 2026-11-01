@@ -3,6 +3,7 @@ import {
   classifyCounterpart,
   classifyJournal,
   foldActivities,
+  unclassifiedCashMovement,
   type JournalLine,
 } from "@/lib/finance/cash-flow"
 
@@ -133,5 +134,24 @@ describe("foldActivities", () => {
     ])
     const net = totals.operating + totals.investing + totals.financing
     expect(net).toBe(400)
+  })
+})
+
+describe("unclassifiedCashMovement", () => {
+  it("jurnal kas murni (classifyJournal null) tampil sebagai selisih tak terklasifikasi", () => {
+    // Operasi terklasifikasi 3jt; neto semua entri kas 10jt (ada jurnal kas
+    // murni 7jt tanpa counterpart non-kas) → tak terklasifikasi 7jt.
+    const totals = foldActivities([{ activity: "operating", cashDelta: 3_000_000 }, null])
+    expect(unclassifiedCashMovement(totals, 10_000_000)).toBe(7_000_000)
+  })
+
+  it("nol bila semua mutasi terklasifikasi (transfer antar-kas neto nol)", () => {
+    const totals = foldActivities([{ activity: "operating", cashDelta: 3_000_000 }, null])
+    expect(unclassifiedCashMovement(totals, 3_000_000)).toBe(0)
+  })
+
+  it("sen persis: tidak drift float", () => {
+    const totals = foldActivities([{ activity: "operating", cashDelta: 0.1 }])
+    expect(unclassifiedCashMovement(totals, 0.3)).toBe(0.2)
   })
 })

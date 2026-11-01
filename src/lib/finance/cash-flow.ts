@@ -115,6 +115,23 @@ export function foldActivities(
   return totals
 }
 
+/**
+ * Mutasi kas yang tidak terklasifikasi ke aktivitas mana pun: neto semua
+ * entri akun kas dikurangi neto tiga aktivitas. Jurnal kas tanpa counterpart
+ * non-kas (`classifyJournal` null, mis. jurnal kas murni) mutasi kasnya nyata
+ * tetapi tidak masuk aktivitas; PDF menampilkannya sebagai baris "Mutasi Kas
+ * Tak Terklasifikasi" (`ledger-cash-data.ts`) — layar wajib baris yang sama
+ * supaya subtotal aktivitas bisa dijumlahkan ke kenaikan kas bersih.
+ */
+export function unclassifiedCashMovement(activities: ActivityTotals, netCashFlow: number): number {
+  const activityNet = safeAdd(
+    safeAdd(activities.operating, activities.investing, 2),
+    activities.financing,
+    2,
+  )
+  return safeSubtract(netCashFlow, activityNet, 2)
+}
+
 export interface CashFlowEntryInput {
   debit: number
   credit: number
