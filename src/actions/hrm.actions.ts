@@ -6252,6 +6252,12 @@ export async function rejectEmployeeRoster(id: number) {
     }
     const scope = await getHrScope(user);
     await assertHrEmployeeAccess(scope, loaded.employeeId);
+    // Putaran 22: penolakan adalah keputusan atas dokumen juga — pemilik
+    // roster tak boleh menolak rosternya sendiri (approve sudah menjaga).
+    const rejecterId = await rosterApproverEmployeeId(user.id);
+    if (rejecterId === loaded.employeeId) {
+      throw new Error("Penolak tidak boleh menolak rosternya sendiri");
+    }
 
     const claim = await prisma.employeeRoster.updateMany({
       where: { id: rosterId, status: "draft" },

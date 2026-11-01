@@ -2820,6 +2820,14 @@ describe("Employee Roster Actions", () => {
     expect(prismaMock.employeeRoster.updateMany).not.toHaveBeenCalled()
   })
 
+  it("rejectEmployeeRoster menolak penolakan roster diri sendiri (putaran 22)", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 7 })
+    const res = await actions.rejectEmployeeRoster(5)
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("sendiri")
+    expect(prismaMock.employeeRoster.updateMany).not.toHaveBeenCalled()
+  })
+
   it("approveEmployeeRoster menolak self-approve", async () => {
     prismaMock.employee.findFirst.mockResolvedValue({ id: 7 })
     const res = await actions.approveEmployeeRoster(5)
