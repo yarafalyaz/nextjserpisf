@@ -410,6 +410,21 @@ describe("replaceTaxInvoice guards", () => {
     )
   })
 
+  it("regresi putaran 48: pengganti FP uang muka mewarisi downPaymentId asal", async () => {
+    mocks.taxInvoiceFindUniqueOrThrow.mockResolvedValue({ ...oldInvoice, downPaymentId: 3 })
+    const r = await replaceTaxInvoice({
+      replacesId: 7, taxInvoiceNumber: "010.001-26.00000009",
+      taxInvoiceDate: new Date(2026, 2, 5), sellingPrice: 6_000_000,
+      replaceReason: "salah DPP", idempotencyKey: key(),
+    })
+    expect(r.success).toBe(true)
+    const data = mocks.taxInvoiceCreate.mock.calls[0][0].data
+    // Tanpa warisan ini pengganti yatim: cek satu-FP-UM-aktif dan Sigma
+    // FP UM pelunasan menyaring lewat relasi downPayment, jadi DP bisa
+    // punya FP UM aktif kedua dan selisih pelunasan dobel PPN.
+    expect(data.downPaymentId).toBe(3)
+  })
+
   it("nomor seri pengganti beda dari asal ditolak", async () => {
     mocks.taxInvoiceFindUniqueOrThrow.mockResolvedValue(oldInvoice)
     const r = await replaceTaxInvoice({

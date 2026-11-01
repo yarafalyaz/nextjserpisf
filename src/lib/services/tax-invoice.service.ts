@@ -591,6 +591,11 @@ export async function replaceTaxInvoice(input: ReplaceTaxInvoiceInput): Promise<
           djpStatus: "draft",
           salesInvoiceId: old.salesInvoiceId,
           vendorBillId: old.vendorBillId,
+          // FP UM: pengganti wajib mewarisi tautan DP asal — tanpa itu
+          // pengganti yatim lolos cek satu-FP-UM-aktif dan Sigma FP UM
+          // pelunasan (keduanya menyaring lewat relasi downPayment),
+          // sehingga DP bisa punya FP UM aktif kedua.
+          downPaymentId: old.downPaymentId,
           vendorId: old.vendorId,
           replacesId: old.id,
           replaceReason: input.replaceReason.trim(),
