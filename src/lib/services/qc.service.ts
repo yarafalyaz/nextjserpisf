@@ -111,6 +111,37 @@ export async function lockQcReferenceRow(
   }
 }
 
+/**
+ * Guard hapus dokumen referensi QC: inspeksi dan NCR dirujuk polimorfik
+ * (referenceType/referenceId) TANPA FK, jadi menghapus dokumen yang masih
+ * punya catatan QC meninggalkannya yatim — dan id autoincrement yang
+ * terpakai ulang akan mewarisi inspeksi/NCR hantu dokumen lama (gate
+ * `assertQcCleared` dokumen baru membaca NCR terbuka yatim itu).
+ * Sembarang status dihitung: inspeksi selalu lahir `passed`/`failed` dan
+ * NCR tertutup tetap jejak audit, jadi catatan apa pun memblokir hapus —
+ * beda dari gate penyelesaian yang hanya peduli NCR terbuka + final.
+ * Wajib dipanggil DI DALAM tx penghapus sesudah baris referensi dikunci
+ * (`lockQcReferenceRow`, kunci yang sama dengan pencipta inspeksi/NCR),
+ * supaya inspeksi baru tidak bisa menyelinap di antara hitung dan klaim.
+ */
+export async function assertQcReferenceUnreferenced(
+  referenceType: string,
+  referenceId: number,
+  client: TxClient | typeof prisma,
+): Promise<void> {
+  await lockQcReferenceRow(referenceType, referenceId, client)
+  const referenceFilter = { referenceType, referenceId }
+  const [inspections, ncrs] = await Promise.all([
+    client.qcInspection.count({ where: referenceFilter }),
+    client.nonconformance.count({ where: referenceFilter }),
+  ])
+  if (inspections > 0 || ncrs > 0) {
+    throw new Error(
+      `Dokumen tidak dapat dihapus karena masih memiliki catatan QC (inspeksi: ${inspections}, NCR: ${ncrs}). Catatan QC adalah jejak audit dan tidak ikut terhapus.`,
+    )
+  }
+}
+
 async function assertQcCleared(
   referenceType: string,
   referenceId: number,

@@ -50,6 +50,8 @@ const mocks = vi.hoisted(() => {
     projectStage: buildModelMock(),
     project: buildModelMock(),
     qcChecklist: buildModelMock(),
+    qcInspection: buildModelMock(),
+    nonconformance: buildModelMock(),
 
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
@@ -108,6 +110,24 @@ vi.mock("@/lib/services/qc.service", () => ({
   assertWorkOrderQcCleared: vi.fn().mockResolvedValue(undefined),
   assertProductionOrderQcCleared: vi.fn().mockResolvedValue(undefined),
   assertWorkOrderVehicleIntakeRecorded: vi.fn().mockResolvedValue(undefined),
+  // Implementasi inline setara service: lock no-op pada mock, lalu hitung
+  // inspeksi/NCR polimorfik dan tolak bila ada — supaya regresi delete
+  // ber-QC merah terhadap kode lama (tanpa panggilan helper) tetap bermakna.
+  assertQcReferenceUnreferenced: async (
+    referenceType: string,
+    referenceId: number,
+    client: any,
+  ) => {
+    const [inspections, ncrs] = await Promise.all([
+      client.qcInspection.count({ where: { referenceType, referenceId } }),
+      client.nonconformance.count({ where: { referenceType, referenceId } }),
+    ])
+    if (inspections > 0 || ncrs > 0) {
+      throw new Error(
+        `Dokumen tidak dapat dihapus karena masih memiliki catatan QC (inspeksi: ${inspections}, NCR: ${ncrs}).`,
+      )
+    }
+  },
 }))
 vi.mock("@/lib/auth/warehouse-scope", () => ({
   getWarehouseScope: (...args: any[]) => mocks.warehouseScopeMock(...args),
@@ -1801,6 +1821,37 @@ describe("Work Order Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toMatch(/sudah berubah status/i)
     expect(mocks.prismaMock.workOrder.delete).not.toHaveBeenCalled()
+  })
+
+  it("deleteWorkOrder menolak WO yang masih punya inspeksi QC (polimorfik tanpa FK)", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.qcInspection.count.mockResolvedValue(2)
+    mocks.prismaMock.nonconformance.count.mockResolvedValue(0)
+    const res = await actions.deleteWorkOrder(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/catatan QC/i)
+    expect(mocks.prismaMock.workOrder.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.workOrder.delete).not.toHaveBeenCalled()
+  })
+
+  it("deleteWorkOrder menolak WO yang masih punya NCR tertutup sekalipun", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.qcInspection.count.mockResolvedValue(0)
+    mocks.prismaMock.nonconformance.count.mockResolvedValue(1)
+    const res = await actions.deleteWorkOrder(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/catatan QC/i)
+    expect(mocks.prismaMock.workOrder.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it("deleteProductionOrder menolak PO yang masih punya catatan QC", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.qcInspection.count.mockResolvedValue(1)
+    mocks.prismaMock.nonconformance.count.mockResolvedValue(0)
+    const res = await actions.deleteProductionOrder(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/catatan QC/i)
+    expect(mocks.prismaMock.productionOrder.deleteMany).not.toHaveBeenCalled()
   })
 
   it("deleteWorkOrder fails when not draft/pending", async () => {

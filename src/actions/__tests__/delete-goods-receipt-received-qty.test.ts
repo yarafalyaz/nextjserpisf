@@ -44,6 +44,8 @@ const mocks = vi.hoisted(() => {
       count: vi.fn().mockResolvedValue(0),
       findUnique: vi.fn().mockResolvedValue({ status: "draft" }),
     },
+    qcInspection: { count: vi.fn().mockResolvedValue(0) },
+    nonconformance: { count: vi.fn().mockResolvedValue(0) },
     purchaseOrder: {
       update: vi.fn(),
     },
@@ -80,6 +82,25 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }));
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: mocks.requirePermissionMock }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: vi.fn() }));
+// Guard QC polimorfik: implementasi inline setara service nyata (hitung
+// inspeksi/NCR atas tx) supaya regresi GR ber-QC bermakna terhadap action.
+vi.mock("@/lib/services/qc.service", () => ({
+  assertQcReferenceUnreferenced: async (
+    referenceType: string,
+    referenceId: number,
+    client: any,
+  ) => {
+    const [inspections, ncrs] = await Promise.all([
+      client.qcInspection.count({ where: { referenceType, referenceId } }),
+      client.nonconformance.count({ where: { referenceType, referenceId } }),
+    ]);
+    if (inspections > 0 || ncrs > 0) {
+      throw new Error(
+        `Dokumen tidak dapat dihapus karena masih memiliki catatan QC (inspeksi: ${inspections}, NCR: ${ncrs}).`,
+      );
+    }
+  },
+}));
 
 /** Panggilan $executeRaw penulisan received_qty PER BARIS PO (nilai, id baris). */
 function receivedQtyWrites() {
@@ -107,6 +128,10 @@ describe("deleteGoodsReceipt menghitung ulang receivedQty PO", () => {
     mocks.txMock.goodsReceipt.count.mockResolvedValue(0);
     mocks.txMock.goodsReceipt.findUnique.mockResolvedValue({ status: "draft" });
     mocks.txMock.goodsReceiptItem.findMany.mockResolvedValue([]);
+    // Default eksplisit: vi.clearAllMocks tidak membuang implementasi dari
+    // test sebelumnya (regresi QC memasang count 1).
+    mocks.txMock.qcInspection.count.mockResolvedValue(0);
+    mocks.txMock.nonconformance.count.mockResolvedValue(0);
   });
 
   it("menolak bila GR terverifikasi sesudah cek draft di luar tx (balapan verify)", async () => {
@@ -121,6 +146,17 @@ describe("deleteGoodsReceipt menghitung ulang receivedQty PO", () => {
     expect(String((res as any)?.error)).toMatch(/draft/);
     expect(mocks.txMock.goodsReceipt.delete).not.toHaveBeenCalled();
     expect(mocks.txMock.stockMove.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("menolak GR draft yang masih punya inspeksi incoming (catatan QC polimorfik)", async () => {
+    mocks.txMock.qcInspection.count.mockResolvedValue(1);
+
+    const res = await deleteGoodsReceipt(1);
+
+    expect(res?.success).toBe(false);
+    expect(String((res as any)?.error)).toMatch(/catatan QC/i);
+    expect(mocks.txMock.goodsReceipt.delete).not.toHaveBeenCalled();
+    expect(mocks.txMock.goodsReceiptItem.deleteMany).not.toHaveBeenCalled();
   });
 
   it("menjalankan rekomputasi dari penerimaan yang tersisa, per PO", async () => {

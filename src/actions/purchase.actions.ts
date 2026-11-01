@@ -45,6 +45,7 @@ import { computeBillLineAmounts, isValidTermsReference, manualBillHeader, resolv
 import { allocatePaymentToBills } from "@/lib/finance/payment-allocation";
 import { SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status";
 import { applyOpenVendorCreditsToBill } from "@/lib/services/vendor-credit.service";
+import { assertQcReferenceUnreferenced } from "@/lib/services/qc.service";
 import { syncServicePurchaseOrderCost } from "@/lib/services/production-cost.service";
 import {
   GOODS_RECEIPT_JOURNAL_REF_TYPE,
@@ -2930,6 +2931,12 @@ export async function deleteGoodsReceipt(id: number) {
       if (!locked || locked.status !== "draft") {
         throw new Error("Hanya penerimaan barang draft yang dapat dihapus");
       }
+
+      // Catatan QC polimorfik (inspeksi incoming/NCR) tanpa FK: GR
+      // ber-catatan QC tidak boleh terhapus — catatan yatim akan mewarisi
+      // id GR yang terpakai ulang. Dinilai sesudah baris GR dikunci di atas,
+      // kunci yang sama dengan pencipta inspeksi (createQcInspection).
+      await assertQcReferenceUnreferenced("GoodsReceipt", id, tx);
 
       // 1. Reverse all stock moves + inventory layers + qty_on_hand created by this GR
       const stockMoves = await tx.stockMove.findMany({

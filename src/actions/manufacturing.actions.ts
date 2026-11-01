@@ -25,6 +25,7 @@ import {
   assertWorkOrderQcCleared,
   assertProductionOrderQcCleared,
   assertWorkOrderVehicleIntakeRecorded,
+  assertQcReferenceUnreferenced,
 } from "@/lib/services/qc.service";
 import { recordProductionGenealogy } from "@/lib/services/production-genealogy.service";
 import { createWarrantyCoveragesForWorkOrder } from "@/lib/services/warranty.service";
@@ -2176,10 +2177,15 @@ export async function deleteWorkOrder(id: number) {
       );
     }
 
-    // Klaim kondisional: transisi status konkuren yang commit lebih dulu
-    // membuat count 0 — WO non-pending/draft tidak terhapus dari bacaan basi.
-    const claim = await prisma.workOrder.deleteMany({
-      where: { id, status: { in: ["pending", "draft"] } },
+    // Inspeksi/NCR QC dirujuk polimorfik tanpa FK: WO ber-catatan QC tidak
+    // boleh terhapus, atau catatan itu yatim dan mewarisi id yang terpakai
+    // ulang. Dinilai di dalam tx sesudah baris WO dikunci — kunci yang sama
+    // dengan pencipta inspeksi — lalu klaim kondisional di tx yang sama.
+    const claim = await prisma.$transaction(async (tx) => {
+      await assertQcReferenceUnreferenced("WorkOrder", id, tx);
+      return tx.workOrder.deleteMany({
+        where: { id, status: { in: ["pending", "draft"] } },
+      });
     });
     if (claim.count === 0) {
       throw new Error("Work Order sudah berubah status; muat ulang halaman.");
@@ -2213,10 +2219,13 @@ export async function deleteProductionOrder(id: number) {
       );
     }
 
-    // Klaim kondisional: transisi status konkuren yang commit lebih dulu
-    // membuat count 0 — PO non-draft/pending tidak terhapus dari bacaan basi.
-    const claim = await prisma.productionOrder.deleteMany({
-      where: { id, status: { in: ["draft", "pending"] } },
+    // Sama seperti deleteWorkOrder: catatan QC polimorfik tanpa FK dinilai
+    // di dalam tx sesudah baris PO dikunci, sebelum klaim kondisional.
+    const claim = await prisma.$transaction(async (tx) => {
+      await assertQcReferenceUnreferenced("ProductionOrder", id, tx);
+      return tx.productionOrder.deleteMany({
+        where: { id, status: { in: ["draft", "pending"] } },
+      });
     });
     if (claim.count === 0) {
       throw new Error("Perintah Produksi sudah berubah status; muat ulang halaman.");

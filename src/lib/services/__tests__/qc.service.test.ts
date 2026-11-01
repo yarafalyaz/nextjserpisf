@@ -43,6 +43,7 @@ import {
   assertProductionOrderQcCleared,
   assertGoodsReceiptQcCleared,
   assertWorkOrderVehicleIntakeRecorded,
+  assertQcReferenceUnreferenced,
   raiseNonconformanceFromInspection,
 } from "@/lib/services/qc.service"
 
@@ -76,6 +77,55 @@ describe("assertGoodsReceiptQcCleared (putaran 20)", () => {
     qcInspectionFindManyMock.mockResolvedValue([])
 
     await expect(assertGoodsReceiptQcCleared(5, client as never)).resolves.toBeUndefined()
+  })
+})
+
+describe("assertQcReferenceUnreferenced (putaran 20)", () => {
+  beforeEach(() => {
+    nonconformanceCountMock.mockResolvedValue(0)
+    qcInspectionCountMock.mockReset()
+    qcInspectionCountMock.mockResolvedValue(0)
+  })
+
+  it("lolos bila tak ada inspeksi maupun NCR atas referensi", async () => {
+    await expect(
+      assertQcReferenceUnreferenced("WorkOrder", 9, client as never),
+    ).resolves.toBeUndefined()
+    expect(qcInspectionCountMock).toHaveBeenCalledWith({
+      where: { referenceType: "WorkOrder", referenceId: 9 },
+    })
+    expect(nonconformanceCountMock).toHaveBeenCalledWith({
+      where: { referenceType: "WorkOrder", referenceId: 9 },
+    })
+  })
+
+  it("menolak bila inspeksi ada, status apa pun (bukan hanya final/open)", async () => {
+    qcInspectionCountMock.mockResolvedValue(1)
+
+    await expect(
+      assertQcReferenceUnreferenced("ProductionOrder", 4, client as never),
+    ).rejects.toThrow(/catatan QC/i)
+  })
+
+  it("menolak bila hanya NCR yang ada (inspeksi 0)", async () => {
+    nonconformanceCountMock.mockResolvedValue(3)
+
+    await expect(
+      assertQcReferenceUnreferenced("GoodsReceipt", 7, client as never),
+    ).rejects.toThrow(/inspeksi: 0, NCR: 3/)
+  })
+
+  it("mengunci baris referensi sebelum menghitung (kunci sama dengan pencipta inspeksi)", async () => {
+    const order: string[] = []
+    queryRawMock.mockImplementation(async () => { order.push("lock"); return [] })
+    qcInspectionCountMock.mockImplementation(async () => { order.push("count"); return 0 })
+
+    await assertQcReferenceUnreferenced("WorkOrder", 9, client as never)
+
+    expect(order[0]).toBe("lock")
+    const sql = JSON.stringify(queryRawMock.mock.calls[0])
+    expect(sql).toContain("work_orders")
+    expect(sql).toContain("FOR UPDATE")
   })
 })
 

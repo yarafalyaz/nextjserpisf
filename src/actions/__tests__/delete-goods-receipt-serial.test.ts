@@ -38,6 +38,9 @@ const mocks = vi.hoisted(() => {
       // seperti fixture luar; test balapan menimpanya per kasus.
       findUnique: vi.fn().mockResolvedValue({ status: "draft" }),
     },
+    // Guard QC polimorfik delete: default tanpa catatan QC.
+    qcInspection: { count: vi.fn().mockResolvedValue(0) },
+    nonconformance: { count: vi.fn().mockResolvedValue(0) },
     purchaseOrder: {
       update: vi.fn(),
     },
@@ -74,6 +77,11 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: mocks.requirePermissionMock }))
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: vi.fn() }))
+// Guard delete ber-QC langsung memakai service nyata atas txMock.
+vi.mock("@/lib/services/qc.service", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/services/qc.service")>()
+  return { assertQcReferenceUnreferenced: actual.assertQcReferenceUnreferenced }
+})
 
 describe("deleteGoodsReceipt with Serial Numbers", () => {
   beforeEach(() => {

@@ -24,6 +24,9 @@ const mocks = vi.hoisted(() => {
     purchaseOrderItem: buildModelMock(),
     goodsReceipt: buildModelMock(),
     goodsReceiptItem: buildModelMock(),
+    // Guard delete GR ber-QC: count polimorfik, default 0.
+    qcInspection: buildModelMock(),
+    nonconformance: buildModelMock(),
     vendorBill: buildModelMock(),
     vendorBillItem: buildModelMock(),
     vendorPayment: buildModelMock(),
