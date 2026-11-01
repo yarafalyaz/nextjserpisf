@@ -33,7 +33,7 @@ import {
   payloadFingerprint,
 } from "@/lib/services/financial-idempotency.service";
 import { onGoodsReceiptVerified } from "@/lib/hooks/goods-receipt.hook";
-import { onPurchaseOrderCreated } from "@/lib/hooks/purchase-order.hook";
+import { onPurchaseOrderCreated, recalcPurchaseRequestStatus } from "@/lib/hooks/purchase-order.hook";
 import { onPurchaseReturnProcessed as onPurchaseReturnStock, resolvePurchaseReturnWarehouse, loadPurchaseReturnWarehouseContext } from "@/lib/hooks/purchase-return.hook";
 import { notificationService } from "@/lib/services/notification.service";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
@@ -1135,6 +1135,12 @@ export async function cancelPurchaseOrder(poId: number) {
         where: { id: poId },
         data: { status: "cancelled" },
       });
+
+      // Putaran 16: PR dihitung ulang dari coverage PO yang masih hidup —
+      // tanpa ini PR macet ordered/partial_ordered sesudah PO-nya batal.
+      if (po.purchaseRequestId) {
+        await recalcPurchaseRequestStatus(po.purchaseRequestId, tx);
+      }
     });
 
     await logActivity(
@@ -2762,12 +2768,12 @@ export async function deletePurchaseOrder(id: number) {
         await tx.goodsReceipt.delete({ where: { id: gr.id } });
       }
 
-      // 2. Revert PurchaseRequest status back to 'approved' if linked
+      // 2. Putaran 16: hitung ULANG status PR dari coverage PO tersisa —
+      // revert keras ke 'approved' menimpa ordered/partial_ordered sah dari
+      // PO lain. PO terhapus berstatus draft (tak pernah menyumbang
+      // coverage), jadi hasil = status turunan coverage saat ini.
       if (lockedPo.purchaseRequestId) {
-        await tx.purchaseRequest.update({
-          where: { id: lockedPo.purchaseRequestId },
-          data: { status: "approved" },
-        });
+        await recalcPurchaseRequestStatus(lockedPo.purchaseRequestId, tx);
       }
 
       // 3. Delete PO items

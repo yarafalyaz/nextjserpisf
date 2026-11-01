@@ -105,6 +105,7 @@ vi.mock("@/lib/hooks/goods-receipt.hook", () => ({
 }))
 vi.mock("@/lib/hooks/purchase-order.hook", () => ({
   onPurchaseOrderCreated: vi.fn().mockResolvedValue({}),
+  recalcPurchaseRequestStatus: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock("@/lib/hooks/purchase-return.hook", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/hooks/purchase-return.hook")>();
@@ -603,6 +604,15 @@ describe("Purchase Order Actions", () => {
   it("cancelPurchaseOrder succeeds", async () => {
     const res = await actions.cancelPurchaseOrder(1)
     expect(res?.success).toBe(true)
+  })
+
+  it("regresi putaran 16: cancelPurchaseOrder menghitung ulang status PR tertaut", async () => {
+    const hook = await import("@/lib/hooks/purchase-order.hook") as any
+    ;(hook.recalcPurchaseRequestStatus as any).mockClear()
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved", purchaseRequestId: 9 })
+    const res = await actions.cancelPurchaseOrder(1)
+    expect(res?.success).toBe(true)
+    expect(hook.recalcPurchaseRequestStatus).toHaveBeenCalledWith(9, expect.anything())
   })
 })
 
@@ -1765,6 +1775,18 @@ describe("Purchase Return Actions", () => {
     mocks.prismaMock.vendorBill.count.mockResolvedValue(0)
     const res = await actions.deletePurchaseOrder(1)
     expect(res?.success).toBe(true)
+  })
+  it("regresi putaran 16: deletePurchaseOrder menghitung ulang status PR, bukan revert keras", async () => {
+    const hook = await import("@/lib/hooks/purchase-order.hook") as any
+    ;(hook.recalcPurchaseRequestStatus as any).mockClear()
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "draft", goodsReceipts: [], purchaseRequestId: 9 })
+      .mockResolvedValueOnce({ id: 1, status: "draft", goodsReceipts: [], purchaseRequestId: 9 })
+    mocks.prismaMock.vendorBill.count.mockResolvedValue(0)
+    const res = await actions.deletePurchaseOrder(1)
+    expect(res?.success).toBe(true)
+    expect(hook.recalcPurchaseRequestStatus).toHaveBeenCalledWith(9, expect.anything())
+    expect(mocks.prismaMock.purchaseRequest.update).not.toHaveBeenCalled()
   })
   it("deletePurchaseOrder fails if active bills exist", async () => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft", goodsReceipts: [] })

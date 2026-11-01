@@ -22,7 +22,7 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: { $transaction: (fn: (t: unknown) => Promise<unknown>) => mocks.transaction(fn) },
 }))
 
-import { onPurchaseOrderCreated } from "@/lib/hooks/purchase-order.hook"
+import { onPurchaseOrderCreated, recalcPurchaseRequestStatus } from "@/lib/hooks/purchase-order.hook"
 
 function wireTx(opts: {
   poId: number
@@ -162,6 +162,52 @@ describe("onPurchaseOrderCreated status transitions", () => {
       where: { id: 99 },
       data: { status: "partial_ordered" },
     })
+  })
+})
+
+describe("recalcPurchaseRequestStatus (putaran 16)", () => {
+  it("PR ordered turun ke approved bila coverage hilang (PO batal)", async () => {
+    const { spies, tx } = wireTx({
+      poId: 200, prId: 99, prStatus: "ordered",
+      prItems: [{ itemId: 7, qty: 10 }], allPoItems: [],
+    })
+    await recalcPurchaseRequestStatus(99, tx as never)
+    expect(spies.prUpdate).toHaveBeenCalledWith({
+      where: { id: 99 },
+      data: { status: "approved" },
+    })
+  })
+
+  it("PR ordered turun ke partial_ordered bila coverage tersisa sebagian", async () => {
+    const { spies, tx } = wireTx({
+      poId: 200, prId: 99, prStatus: "ordered",
+      prItems: [{ itemId: 7, qty: 10 }], allPoItems: [{ itemId: 7, qty: 4 }],
+    })
+    await recalcPurchaseRequestStatus(99, tx as never)
+    expect(spies.prUpdate).toHaveBeenCalledWith({
+      where: { id: 99 },
+      data: { status: "partial_ordered" },
+    })
+  })
+
+  it("status non-coverage (rejected) tidak disentuh", async () => {
+    const { spies, tx } = wireTx({
+      poId: 200, prId: 99, prStatus: "rejected",
+      prItems: [{ itemId: 7, qty: 10 }], allPoItems: [],
+    })
+    await recalcPurchaseRequestStatus(99, tx as never)
+    expect(spies.prUpdate).not.toHaveBeenCalled()
+  })
+
+  it("mengunci baris PR FOR UPDATE sebelum membaca status", async () => {
+    const { lockCalls, tx } = wireTx({
+      poId: 200, prId: 99, prStatus: "partial_ordered",
+      prItems: [{ itemId: 7, qty: 10 }], allPoItems: [{ itemId: 7, qty: 10 }],
+    })
+    await recalcPurchaseRequestStatus(99, tx as never)
+    expect(lockCalls[0]).toBe(
+      "SELECT id FROM purchase_requests WHERE id = __SQL_FRAGMENT__ FOR UPDATE"
+    )
   })
 })
 
