@@ -122,6 +122,24 @@ async function assertLiveVendorTx(
   if (!liveVendor) throw new Error("Vendor tidak ditemukan atau tidak aktif");
 }
 
+/**
+ * Jenis PPh hidup bila tagihan merujuknya: picker hanya menawarkan jenis
+ * aktif, tetapi withholdingGuard cuma menilai ada-id + nominal — jenis
+ * yang dinonaktifkan sesudah draft lahir (atau payload buatan tangan)
+ * lolos dan confirm melahirkan jurnal Hutang PPh dari jenis mati.
+ */
+async function assertLiveWithholdingTypeTx(
+  tx: Prisma.TransactionClient,
+  withholdingTypeId: number | null | undefined,
+): Promise<void> {
+  if (withholdingTypeId == null) return;
+  const liveType = await tx.withholdingTaxType.findFirst({
+    where: { id: withholdingTypeId, isActive: true, deletedAt: null },
+    select: { id: true },
+  });
+  if (!liveType) throw new Error("Jenis PPh tidak ditemukan atau tidak aktif");
+}
+
 function parsePoGrItemId(raw: unknown): number | null {
   const itemId = parseLocaleNumber(raw as string | number | null | undefined);
   return itemId === null || itemId <= 0 ? null : itemId;
@@ -1749,6 +1767,7 @@ export async function createVendorBill(formData: FormData) {
       Number(billHeader.grandTotal),
     );
     if (withholdingError) throw new Error(withholdingError);
+    await assertLiveWithholdingTypeTx(prisma, v.withholdingTypeId ?? null);
 
     const bill = await prisma.$transaction(async (tx) => {
       // Vendor mati tak boleh melahirkan tagihan (paritas create PO
@@ -2208,6 +2227,8 @@ export async function confirmVendorBill(billId: number) {
         Number(fresh.grandTotal),
       );
       if (withholdingError) throw new Error(withholdingError);
+      // Titik pengakuan: jenis PPh tawanan bisa mati sesudah draft lahir.
+      await assertLiveWithholdingTypeTx(tx, fresh.withholdingTypeId ?? null);
 
       await tx.vendorBill.update({
         where: { id: billId },
@@ -3669,6 +3690,7 @@ export async function updateVendorBill(id: number, formData: FormData) {
       Number(billHeader.grandTotal),
     );
     if (withholdingError) throw new Error(withholdingError);
+    await assertLiveWithholdingTypeTx(prisma, v.withholdingTypeId ?? null);
 
     const bill = await prisma.$transaction(async (tx) => {
       // Kunci baris bill lebih dulu, lalu nilai status dari baca ulang di

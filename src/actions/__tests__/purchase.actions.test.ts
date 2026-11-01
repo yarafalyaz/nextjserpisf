@@ -53,6 +53,8 @@ const mocks = vi.hoisted(() => {
     uomConversion: buildModelMock(),
     transactionAttachment: buildModelMock(),
     withholdingCertificate: buildModelMock(),
+    withholdingTaxType: buildModelMock(),
+    employee: buildModelMock(),
     financialIdempotencyKey: buildModelMock(),
     userWarehouse: buildModelMock(),
     approvalWorkflow: buildModelMock(),
@@ -1004,6 +1006,38 @@ describe("Vendor Bill Actions", () => {
     expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled()
   })
 
+  // Regresi putaran 32 #6(b): jenis PPh tawanan — picker hanya menawarkan
+  // jenis aktif, tetapi payload dibuat tangan (atau jenis dinonaktifkan
+  // sesudah draft lahir) lolos withholdingGuard (hanya cek ada-id +
+  // nominal) dan confirm melahirkan jurnal Hutang PPh dari jenis mati.
+  it("regresi putaran 32: createVendorBill menolak jenis PPh nonaktif", async () => {
+    mocks.prismaMock.withholdingTaxType.findFirst.mockResolvedValue(null)
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "1000",
+      tax: "0",
+      grandTotal: "1000",
+      withholdingTypeId: "9",
+      withholdingAmount: "20",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.vendorBill.create).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 32: confirmVendorBill menolak jenis PPh yang sudah nonaktif", async () => {
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", vendorId: 5, purchaseOrderId: null, createdBy: 99,
+      notes: null, subtotal: 1000, tax: 0, grandTotal: 1000, withholdingAmount: 20, withholdingTypeId: 9,
+    })
+    mocks.prismaMock.withholdingTaxType.findFirst.mockResolvedValue(null)
+    const res = await actions.confirmVendorBill(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled()
+  })
+
   it("createVendorBill computes each line total as subtotal + tax", async () => {
     mocks.prismaMock.item.findMany.mockResolvedValue([
       { id: 9, sku: "S", name: "Item", unitOfMeasure: null, isActive: true, deletedAt: null },
@@ -1461,6 +1495,8 @@ describe("Vendor Bill Actions", () => {
   it("confirmVendorBill isi balanceDue NETO (grandTotal − withholding, P0-2)", async () => {
     mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
     mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })
+    // Gerbang jenis PPh hidup (putaran 32 #6): fixture wajib jenis aktif.
+    mocks.prismaMock.withholdingTaxType.findFirst.mockResolvedValue({ id: 4 })
     mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
       id: 1, status: "draft", purchaseOrderId: null, vendorId: 3,
       grandTotal: 1000000, withholdingAmount: 100000, withholdingTypeId: 4,
