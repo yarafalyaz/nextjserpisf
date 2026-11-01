@@ -21,6 +21,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { RECOGNISED_AP_STATUSES } from "@/lib/reports/document-status"
 import { safeAdd } from "@/lib/utils/math"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { sumNetForAccount } from "@/lib/services/report-aggregation.service"
@@ -76,8 +77,13 @@ export async function loadReceivedNotBilled(period: {
         where: {
           goodsReceiptItemId: { in: lineIds },
           // Lihat catatan 3 di atas: draft belum menjurnal (draft murni), jadi
-          // hanya tagihan terposting (posted/partial/paid) yang dikurangkan.
-          vendorBill: { status: { notIn: ["draft", "cancelled"] } },
+          // hanya tagihan terposting yang dikurangkan. Filter wajib POSITIF
+          // (posted/partial/paid = RECOGNISED_AP_STATUSES): filter negatif
+          // notIn draft/cancelled ikut mengakui `approved` dari approval
+          // generik atas bill draft, yang belum punya jurnal AP/GRNI dan
+          // belum punya balanceDue — sisa dokumen menyusut palsu terhadap
+          // saldo buku besar.
+          vendorBill: { status: { in: [...RECOGNISED_AP_STATUSES] } },
         },
         select: { goodsReceiptItemId: true, subtotal: true },
       })

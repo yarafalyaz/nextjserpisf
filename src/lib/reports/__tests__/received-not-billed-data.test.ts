@@ -44,6 +44,7 @@ vi.mock("@/lib/db/prisma", () => ({
         return mocks.billedRows.filter((row) => {
           if (status?.not !== undefined) return row.vendorBill.status !== status.not;
           if (Array.isArray(status?.notIn)) return !status.notIn.includes(row.vendorBill.status);
+          if (Array.isArray(status?.in)) return status.in.includes(row.vendorBill.status);
           return true;
         });
       },
@@ -118,6 +119,22 @@ describe("loadReceivedNotBilled", () => {
     expect(report.totals.receipts).toBe(1);
   });
 
+  it("tidak mengurangkan tagihan approved (persetujuan belum menjurnal AP/GRNI)", async () => {
+    mocks.billedRows.push({
+      goodsReceiptItemId: 502, subtotal: 100, vendorBill: { status: "approved" },
+    } as never);
+    try {
+      const { report } = await loadReceivedNotBilled(PERIOD);
+
+      // approved lahir dari approval generik atas bill draft — jurnal AP/GRNI
+      // baru lahir di confirmVendorBill, jadi sisa 502 tetap 300 penuh.
+      expect(report.totals.receivedValue).toBe(300);
+      expect(report.totals.outstandingValue).toBe(300);
+    } finally {
+      mocks.billedRows.pop();
+    }
+  });
+
   it("memakai filter posted saja (mengecualikan draft dan cancelled)", async () => {
     await loadReceivedNotBilled(PERIOD);
 
@@ -125,7 +142,7 @@ describe("loadReceivedNotBilled", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           goodsReceiptItemId: { in: [501, 502] },
-          vendorBill: { status: { notIn: ["draft", "cancelled"] } },
+          vendorBill: { status: { in: ["posted", "partial", "paid"] } },
         }),
       }),
     );
