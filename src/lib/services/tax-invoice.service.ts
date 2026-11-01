@@ -187,6 +187,17 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
         return
       }
       await assertPeriodOpen(input.taxInvoiceDate, tx as never)
+      // Serialisasi per dokumen sumber: kunci baris faktur/tagihan tertaut
+      // sebelum bacaan apa pun atasnya. Dua terbit konkuren (nomor dan
+      // idempotency-key beda) atas dokumen sama tanpa kunci membaca
+      // snapshot masing-masing dan sama-sama create; kunci membuat
+      // cek dupe + cermin nomor kepala rantai dinilai atas baris segar.
+      if (input.salesInvoiceId != null) {
+        await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${input.salesInvoiceId} FOR UPDATE`
+      }
+      if (input.vendorBillId != null) {
+        await tx.$executeRaw`SELECT id FROM vendor_bills WHERE id = ${input.vendorBillId} FOR UPDATE`
+      }
       // F-2026-10-25-004-V: FP pelunasan atas faktur ber-FP UM tertaut
       // WAJIB snapshot SELISIH (dokumen penuh - Sigma FP UM aktif pada
       // quotation yang sama) supaya SPT tidak dobel. Tanpa FP UM
@@ -197,6 +208,11 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
           select: { quotationId: true },
         })
         if (linkedInvoice?.quotationId != null) {
+          // Kunci baris quotation sebelum Sigma FP UM dibaca: FP UM
+          // (issueDownPaymentTaxInvoice) mengunci quotation yang sama,
+          // jadi FP UM yang commit di tengah tidak luput dari snapshot
+          // selisih pelunasan. Urutan kunci: invoice -> quotation.
+          await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${linkedInvoice.quotationId} FOR UPDATE`
           const fpUmRows = await tx.taxInvoice.findMany({
             where: {
               direction: "out",
@@ -365,6 +381,12 @@ export async function issueDownPaymentTaxInvoice(
         include: { customer: { select: { name: true, taxId: true, taxpayerName: true, nitku: true, taxAddress: true, address: true, email: true } } },
       })
       if (!dp) throw definitive(`Uang muka #${input.downPaymentId} tidak ditemukan`)
+      // Kunci quotation induk sesudah DP: FP pelunasan atas quotation sama
+      // mengunci baris ini juga, supaya Sigma FP UM pada settlement tidak
+      // membaca snapshot sebelum FP UM ini commit. Urutan: DP -> quotation.
+      if (dp.quotationId != null) {
+        await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${dp.quotationId} FOR UPDATE`
+      }
       if (dp.status !== "confirmed") {
         throw definitive("FP uang muka hanya terbit untuk uang muka berstatus confirmed (terutang saat penerimaan terverifikasi)")
       }

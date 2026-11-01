@@ -90,6 +90,39 @@ function key() {
 }
 
 describe("issueTaxInvoice guards", () => {
+  it("kunci baris dokumen sumber (sales_invoices/vendor_bills) sebelum bacaan tertaut", async () => {
+    const events: string[] = []
+    mocks.prisma.$transaction = ((fn: (tx: unknown) => unknown) => {
+      const tx = mocks.tx as Record<string, unknown>
+      tx.$executeRaw = vi.fn((...a: unknown[]) => {
+        const sql = String((a[0] as { strings?: string[] })?.strings?.join("?") ?? a[0])
+        if (sql.includes("sales_invoices")) events.push("lock-si")
+        if (sql.includes("vendor_bills")) events.push("lock-vb")
+        return Promise.resolve(1)
+      })
+      return fn(tx)
+    }) as never
+    mocks.salesInvoiceFindUnique.mockImplementation(() => { events.push("read-si"); return Promise.resolve(null) })
+
+    const out = await issueTaxInvoice({
+      direction: "out", taxInvoiceNumber: "010.000-26.1", taxInvoiceDate: new Date(2026, 0, 10),
+      sellingPrice: 1_000_000, salesInvoiceId: 42,
+      counterpartyTaxId: "0123456789123456", counterpartyName: "PT Uji", counterpartyNitku: "0123456789123456000000",
+      idempotencyKey: key(),
+    })
+    expect(out.success).toBe(true)
+    expect(events[0]).toBe("lock-si")
+    expect(events.indexOf("read-si")).toBeGreaterThan(0)
+
+    events.length = 0
+    const inn = await issueTaxInvoice({
+      direction: "in", taxInvoiceNumber: "010.000-26.2", taxInvoiceDate: new Date(2026, 0, 10),
+      sellingPrice: 1_000_000, vendorBillId: 9, vendorId: 5, idempotencyKey: key(),
+    })
+    expect(inn.success).toBe(true)
+    expect(events).toContain("lock-vb")
+  })
+
   it("F-002(d): duplikat (vendor,nomor) masukan non-batal ditolak definitif", async () => {
     mocks.taxInvoiceFindFirst.mockImplementation(({ where }: { where: Record<string, unknown> }) => {
       if (where.vendorId != null) return Promise.resolve({ id: 9 })
@@ -529,6 +562,31 @@ describe("issueDownPaymentTaxInvoice (F-2026-10-25-004-V)", () => {
     expect(data.direction).toBe("out")
     expect(data.buyerAddress).toBe("Alamat Pajak DP")
     expect(data.buyerEmail).toBe("dp@example.test")
+  })
+
+  it("kunci baris quotations sesudah kunci DP (serial lawan FP pelunasan se-quotation)", async () => {
+    const events: string[] = []
+    mocks.prisma.$transaction = ((fn: (tx: unknown) => unknown) => {
+      const tx = mocks.tx as Record<string, unknown>
+      tx.$executeRaw = vi.fn((...a: unknown[]) => {
+        const sql = String((a[0] as { strings?: string[] })?.strings?.join("?") ?? a[0])
+        if (sql.includes("down_payments")) events.push("lock-dp")
+        return Promise.resolve(1)
+      })
+      tx.$queryRaw = vi.fn((...a: unknown[]) => {
+        const sql = String((a[0] as { strings?: string[] })?.strings?.join("?") ?? a[0])
+        if (sql.includes("quotations")) events.push("lock-q")
+        return Promise.resolve([{ id: 1 }])
+      })
+      return fn(tx)
+    }) as never
+    mocks.dpFindUnique.mockResolvedValue({ ...dpRow, quotationId: 77 })
+
+    const r = await issueDownPaymentTaxInvoice({
+      downPaymentId: 3, taxInvoiceNumber: "040.000-26.00000003", idempotencyKey: key(),
+    })
+    expect(r.success).toBe(true)
+    expect(events).toEqual(["lock-dp", "lock-q"])
   })
 
   it("DP bukan confirmed ditolak", async () => {
