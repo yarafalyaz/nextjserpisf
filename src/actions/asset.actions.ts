@@ -1041,6 +1041,7 @@ export async function updateAsset(id: number, formData: FormData) {
           depreciationMethod: true,
           usefulLifeMonths: true,
           residualValue: true,
+          totalEstimatedUnits: true,
         },
       });
       if (!lockedAsset) throw new Error("Aset tidak ditemukan.");
@@ -1081,6 +1082,29 @@ export async function updateAsset(id: number, formData: FormData) {
         throw new Error(
           `Perubahan ${frozenChanges.join(", ")} wajib melalui Peristiwa Perubahan Aset (reklasifikasi/perubahan metode/estimasi) agar tercatat dengan alasan dan tanggal efektif.`,
         );
+      }
+      // Parameter analitis F-118: revisi total estimasi unit sah SEBELUM
+      // jurnal masa analitis pertama lahir (inti analitis: "Revisi
+      // parameter = edit kolom sebelum jurnal masa itu lahir"). Sesudah
+      // jurnal penyusutan analitis POSTED, mengubah basis akan menulis
+      // ulang beban masa depan tanpa peristiwa — tolak. Mengosongkan
+      // tetap bebas (mesin menolak berisik, bukan menulis ulang).
+      const nextTotalUnits = data.totalEstimatedUnits ?? null;
+      const lockedTotalUnits = lockedAsset.totalEstimatedUnits != null ? Number(lockedAsset.totalEstimatedUnits) : null;
+      if (nextTotalUnits != null && nextTotalUnits !== lockedTotalUnits) {
+        const postedAnalytical = await tx.journal.findFirst({
+          where: {
+            referenceType: { startsWith: "ASSET_DEPRECIATION_" },
+            referenceId: id,
+            status: "POSTED",
+          },
+          select: { id: true },
+        });
+        if (postedAnalytical) {
+          throw new Error(
+            "Total estimasi unit tidak dapat diubah karena penyusutan analitis aset sudah tercatat di GL. Koreksi hanya lewat peristiwa perubahan estimasi.",
+          );
+        }
       }
       await tx.asset.update({
       where: { id },

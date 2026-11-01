@@ -1318,6 +1318,26 @@ describe("createAsset / updateAsset", () => {
     expect(generateDocNumMock).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 24: updateAsset menolak ubah totalEstimatedUnits sesudah jurnal analitis POSTED", async () => {
+    prismaMock.asset.findUniqueOrThrow.mockResolvedValue({ purchaseCost: 1000, status: "active" })
+    prismaMock.asset.findUnique.mockResolvedValue({
+      purchaseCost: 1000, status: "active", categoryId: null,
+      depreciationMethod: "units_of_production", usefulLifeMonths: null, residualValue: 0,
+      totalEstimatedUnits: 10000,
+    })
+    prismaMock.journal.findFirst.mockResolvedValue({ id: 1 })
+    const res = await updateAsset(100, fd({
+      name: "Mesin Produksi",
+      purchasePrice: "1000",
+      depreciationMethod: "units_of_production",
+      totalEstimatedUnits: "5000",
+    }))
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Total estimasi unit/)
+    expect(prismaMock.asset.update).not.toHaveBeenCalled()
+    prismaMock.journal.findFirst.mockResolvedValue(null)
+  })
+
   it("updates asset and skips GL check when cost unchanged", async () => {
     prismaMock.asset.findUniqueOrThrow.mockResolvedValue({ purchaseCost: 1000, status: "active" })
     // Bacaan terkunci di dalam tx melihat harga yang sama.
