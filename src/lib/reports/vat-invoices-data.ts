@@ -179,13 +179,20 @@ export async function loadVatInvoices(period: {
     }),
     prisma.salesReturn.findMany({
       where: {
-        date: { gte: period.start, lte: period.end },
         status: "completed",
         salesInvoiceId: { not: null },
+        // Masa pengurang = masa nota retur bila ada (returnDeductionPeriod,
+        // sama seperti read-model SPT): ambil kandidat dari kedua tanggal,
+        // saring masa efektif di memori sesudah muat.
+        OR: [
+          { date: { gte: period.start, lte: period.end } },
+          { taxReturnNoteDate: { gte: period.start, lte: period.end } },
+        ],
       },
       select: {
         documentNo: true,
         date: true,
+        taxReturnNoteDate: true,
         salesInvoiceId: true,
         salesInvoice: {
           select: { documentNo: true, subtotal: true, discount: true, taxAmount: true, customer: { select: { name: true } } },
@@ -218,8 +225,13 @@ export async function loadVatInvoices(period: {
     }),
   ])
 
+  const periodReturns = salesReturns.filter((ret) => {
+    const effective = ret.taxReturnNoteDate ?? ret.date
+    return effective.getTime() >= period.start.getTime() && effective.getTime() <= period.end.getTime()
+  })
+
   const salesReturnByInvoice = new Map<number, ReturnRef>()
-  for (const ret of salesReturns) {
+  for (const ret of periodReturns) {
     if (ret.salesInvoiceId == null) continue
     salesReturnByInvoice.set(ret.salesInvoiceId, {
       documentNo: ret.documentNo,
@@ -265,14 +277,15 @@ export async function loadVatInvoices(period: {
     returnRef: purchaseReturnByBill.get(bill.documentNo) ?? null,
   }))
 
-  // Pengurang masa retur (F-2026-10-20-61): baris per retur pada masa tanggal
-  // retur; faktur asal bisa dari masa lain. Retur tanpa faktur asal (tanpa
+  // Pengurang masa retur (F-2026-10-20-61): baris per retur pada masa
+  // efektif nota retur (taxReturnNoteDate ?? tanggal retur, pola SPT);
+  // faktur asal bisa dari masa lain. Retur tanpa faktur asal (tanpa
   // salesInvoiceId) tidak ikut — query di atas mewajibkannya; PPN-retur 0 bila
   // faktur asal tanpa PPN (vonis Salsa). Nilai dari SNAPSHOT beku
   // returnDpp/returnVat (konsisten read-model SPT); baris legacy tanpa
   // snapshot dihitung ulang dari qty×price beku baris retur. Retur
   // ber-nota kredit: belum ada model SalesCreditNote di repo.
-  const returnDeductions: VatReturnDeductionInput[] = salesReturns.map((ret) => {
+  const returnDeductions: VatReturnDeductionInput[] = periodReturns.map((ret) => {
     let dpp = 0
     let vat = 0
     for (const item of ret.items) {
@@ -296,7 +309,7 @@ export async function loadVatInvoices(period: {
       vat += r.vat
     }
     return {
-      date: ret.date,
+      date: ret.taxReturnNoteDate ?? ret.date,
       documentNo: ret.documentNo,
       sourceDocumentNo: ret.salesInvoice?.documentNo ?? null,
       counterparty: ret.salesInvoice?.customer.name ?? "–",
