@@ -707,7 +707,7 @@ export async function createJournal(formData: FormData) {
 
 export async function postJournal(journalId: number) {
   try {
-    await requirePermission("post_journals");
+    const user = await requirePermission("post_journals");
 
     // F-01: baca awal hanya untuk validasi cepat (UX). Kebenaran
     // diputus di dalam transaksi terkunci di bawah — snapshot ini tak
@@ -755,6 +755,14 @@ export async function postJournal(journalId: number) {
       });
       if (journal.status !== "DRAFT") {
         throw new Error("Jurnal sudah diposting atau sedang diproses");
+      }
+
+      // Pemisahan tugas: tanpa workflow terkonfigurasi assertApproved
+      // lolos tanpa baris Approval, jadi pembuat bisa memposting jurnal
+      // manualnya sendiri (pola approvePayroll). createdBy null (legacy/
+      // sistem) tetap boleh — jurnal sistem lahir POSTED, tak lewat sini.
+      if (journal.createdBy != null && Number(journal.createdBy) === Number(user.id)) {
+        throw new Error("Jurnal tidak boleh diposting oleh pembuatnya sendiri (pemisahan tugas) — minta pengguna lain yang berizin post_journals.");
       }
 
       // Gerbang workflow dinilai ULANG di dalam tx terkunci: updateJournal
@@ -979,6 +987,14 @@ export async function approveExpense(expenseId: number) {
       const locked = await tx.expense.findUniqueOrThrow({ where: { id: expenseId } });
       if (locked.status !== "draft" && locked.status !== "approved") {
         throw new Error("Expense hanya bisa di-approve dari status draft");
+      }
+
+      // Pemisahan tugas non-klaim: klaim sudah dijaga SoD claimant vs
+      // approver employee (BR-RB-07); non-klaim tanpa workflow hanya
+      // gerbang ini — pembuat tak boleh menyetujui pengeluarannya sendiri
+      // (pola approvePayroll). createdBy null legacy tetap boleh.
+      if (!isClaim && locked.createdBy != null && Number(locked.createdBy) === Number(user.id)) {
+        throw new Error("Pengeluaran tidak boleh disetujui oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin approve_expenses.");
       }
 
       await onExpenseApprovedSyncPettyCash(expenseId, Number(user.id), tx);

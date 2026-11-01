@@ -2164,6 +2164,24 @@ describe("Status guard branches", () => {
     expect((inTx[2] as { journal?: unknown }).journal).toBeDefined()
     expect((inTx[2] as { $executeRaw?: unknown }).$executeRaw).toBeDefined()
   })
+
+  it("regression round 18: postJournal menolak pembuat jurnal sendiri", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", createdBy: 1, transactionDate: new Date("2024-01-01"), entries: [{ accountId: 1, debit: 1000, credit: 0 }, { accountId: 2, debit: 0, credit: 1000 }] })
+    const res = await actions.postJournal(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/pemisahan tugas/i)
+    expect(mocks.prismaMock.journal.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("regression round 18: approveExpense non-klaim menolak pembuat sendiri", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: 1, isReimbursementClaim: false })
+    const res = await actions.approveExpense(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/pemisahan tugas/i)
+    expect(mocks.prismaMock.expense.updateMany).not.toHaveBeenCalled()
+  })
 })
 
 describe("Journal validation edge cases", () => {
