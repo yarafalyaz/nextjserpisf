@@ -700,3 +700,30 @@ Keterbatasan diterima putaran ini (dicatat, bukan ditunda diam-diam):
 
 - Peristiwa reklasifikasi yang memindahkan kategori membuat akun kategori berjalan berbeda dari akun saat jurnal lampau ditulis; loader menilai akun kategori berjalan (pola existing). Akuntansi per-akun-lama butuh snapshot akun per peristiwa — di luar cakupan.
 - Pasangan WO/Project yatim dari konfirmasi DP sebelum fix 5 tidak diperbaiki mundur (butuh keputusan data historis).
+
+### Putaran 16 (2026-11-01) — lane SDM + keuangan/pajak + penjualan/pembelian/pengaturan (agent read-only, verifikasi sesi utama)
+
+Empat belas fix:
+
+1. `d7efa3876` fix(sdm): edit lembur mengunci baris karyawan sebelum cek cap PP 35/2021 — cap statutori dinilai dari bacaan terkunci, bukan snapshot luar.
+2. `bc38b4b9f` fix(sdm): sasaran dan ulasan kinerja hanya pada siklus aktif — tulis pada siklus `draft`/`closed` ditolak; gerbang satu titik di `ensureReview` menutup submit/finalize sekaligus.
+3. `1c164aec3` fix(sdm): edit lowongan dan transisi status berbagi kunci baris `job_vacancies FOR UPDATE` dengan baca ulang status di dalam tx (pola `moveApplicantStage`).
+4. `e137d9ef0` fix(sdm): jalur absensi langsung (create/update/delete) tunduk gerbang slip final koreksi yang sama dengan jalur koreksi — tanggal dalam Payroll `approved`/`paid` menolak mutasi langsung.
+5. `7b4158c16` fix(sdm): edit/hapus timesheet berbagi kunci baris `timesheets` dengan penarik biaya produksi — arah SDM dari race penarik (sudah berkunci sejak putaran lama) ditutup; `ProductionCost.sourceTimesheetId` tanpa FK/unik, kunci baris satu-satunya serialisasi.
+6. `b7b1ef477` fix(keuangan): hard-delete jurnal menolak jurnal terposting tanpa lawan — kontrak `deleteJournalByReferenceTx` menjadi himpunan tertutup terhadap rantai reversal (DRAFT bebas; POSTED hanya asal/lawan yang ikut; REVERSED hanya bila lawannya ikut; status tak dikenal fail-closed). Jalur DP terposting lewat `deleteQuotation` kini gagal jujur, bukan GL yatim senyap.
+7. `73b344b7f` fix(keuangan): reversal jurnal mengunci baris `journals` asal (id menaik) lalu menilai status dari bacaan segar — reversal ganda konkuren tertutup di helper, bukan hanya di pemanggil rajin.
+8. `8c645827e` fix(pajak): gerbang periode upaya dan putusan sengketa masuk transaksi — `assertPeriodOpen(..., tx)` sebagai baris pertama tx, pola `createTaxAssessment`.
+9. `a22501327` fix(keuangan): `postJournal` menilai ulang approval di dalam tx terkunci — `assertApproved` menerima `txClient` opsional; race post-lolos-cek-approved lalu edit membuka pengajuan pending baru tertutup. Sisa jendela diterima: pending dari `requestApprovalIfConfigured` di luar tx edit tak diserialkan selain lewat kunci baris jurnal.
+10. `c325b5a66` test(sdm): mock `$queryRaw` kunci baris timesheet di suite konteks WO — penutup merah CI di bawah (test-only, produksi benar).
+11. `defabbc7f` fix(pembelian): tagihan vendor dicabut dari tombol status workflow generik — approve via `/api/workflow/pembelian/tagihan/...` hanya membalik status tanpa jurnal AP dan tanpa `balanceDue`, mengunci tagihan permanen; persetujuan tagihan adalah posting `confirmVendorBill`. Catatan lanjutan: `approveStep` generik masih mengenal VendorBill untuk inbox lintas tipe; tak ada action yang membuka approval VendorBill dan `confirmVendorBill` tidak digerbang `assertApproved` — menilai ulang jalur itu keputusan desain tersendiri.
+12. `1d240ac0d` fix(penjualan): retur non-scrap mengkredit Piutang sebatas sisa kumulatif faktur — menyamai cabang scrap: Cr Piutang dicap `grandTotal − priorReturnCredit − paidAmount`, kelebihan menjadi Cr akun UMP + `CustomerCredit`, status dinilai dari total terbayar kumulatif selaras loader kanonis. `a8e25fb9d` menghapus variabel mati sesudahnya.
+13. `301f9ca1d` fix(pembelian): proses retur pembelian menolak pembuat sendiri — pemisahan tugas pola `completeSalesReturn` (BR-SR-01); `createdBy` null legacy tetap boleh.
+14. `cb5384f9f` fix(pembelian): status PR dihitung ulang saat PO dibatalkan/dihapus — helper `recalcPurchaseRequestStatus` (kunci PR, coverage diekstrak `computePrCoverage` bersama jalur create yang tak berubah perilaku); `deletePurchaseOrder` tak lagi revert keras ke `approved`.
+
+CI: `d7efa3876`, `bc38b4b9f`, `1c164aec3`, `e137d9ef0`, `defabbc7f`, `c325b5a66`, `1d240ac0d`, `a8e25fb9d`, `301f9ca1d`, `cb5384f9f` **completed success**. Head `7b4158c16`, `73b344b7f`, `8c645827e`, `a22501327` **completed failure** dengan akar tunggal `timesheet-work-order.test.ts` (tx mock tanpa `$queryRaw` untuk kunci baris fix 5 — file pemanggil kedua tak dijalankan lokal; penguat aturan yang sama seperti putaran 15), tertutup `c325b5a66`.
+
+Vonis GUGUR putaran ini (jangan diangkat lagi tanpa bukti baru):
+
+- Laporan multi-periode/pusat-laba groupBy jurnal tanpa `deletedAt: null`: tidak ada writer `Journal.deletedAt` di produksi (hanya baca defensif dan hard-delete fisik) — tak ada baris lunak terhapus yang bisa bocor. Dormant.
+- `updateRole` cek super_admin + grant di luar tx: guard izin berbasis `actor.permissions` dari sesi adalah model `requirePermission` repo-wide; tak ada jalur eskalasi konkret (semua penulisnya pemegang `manage_roles` sah), sisa risiko hanya lost-update antar admin sah — menambal satu action tak menutup kelasnya dan tak proporsional.
+- `cheque.actions` gerbang periode di luar tx: ketiga action non-GL, transisi/hapus sudah klaim kondisional `updateMany`, tak ada tx untuk menampung gerbang; sisa jendela snapshot mikro tak proporsional (pola vonis `completeReconciliation` putaran 14).
