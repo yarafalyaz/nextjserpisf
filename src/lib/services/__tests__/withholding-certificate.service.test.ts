@@ -165,6 +165,21 @@ describe("issueWithholdingCertificate guards", () => {
     expect(mocks.certCreate).not.toHaveBeenCalled()
   })
 
+  it("bupot atas bill yang belum terposting ditolak — daftar diakui hanya posted/partial/paid", async () => {
+    mocks.billFindUnique.mockResolvedValue({
+      id: 42, status: "draft", deletedAt: null,
+      withholdingAmount: 0, withholdingTypeId: 3, documentNo: "VB-DRAFT",
+    })
+    const r = await issueWithholdingCertificate({
+      direction: "we_withhold", certificateNumber: "BP-DRAFT",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Maklon",
+      withholdingTypeId: 3, dpp: 10_000_000, vendorBillId: 42, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/belum terposting/)
+    expect(mocks.certCreate).not.toHaveBeenCalled()
+  })
+
   it("arah tak cocok dokumen tertaut ditolak (bill + withheld_from_us)", async () => {
     const r = await issueWithholdingCertificate({
       direction: "withheld_from_us", certificateNumber: "BP-X",

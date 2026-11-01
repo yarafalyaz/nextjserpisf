@@ -38,6 +38,7 @@ import {
   WITHHOLDING_ARTICLES,
 } from "@/lib/tax/withholding-certificate"
 import { taxPeriodFromDate } from "@/lib/tax/tax-invoice"
+import { RECOGNISED_AP_STATUSES } from "@/lib/reports/document-status"
 import { isValidBillingCode, isValidNtpn } from "@/lib/tax/tax-liability"
 
 const SCOPE_ISSUE: IdemScope = "withholding_issue"
@@ -194,6 +195,15 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         if (!bill) throw definitive("Tagihan vendor tertaut tidak ditemukan")
         if (bill.deletedAt != null || bill.status === "cancelled") {
           throw definitive("Tagihan vendor tertaut sudah batal/terhapus — bupot tidak bisa diterbitkan")
+        }
+        // Hanya bill diakui (posted/partial/paid — RECOGNISED_AP_STATUSES)
+        // yang boleh melahirkan bupot: draft/approved belum punya jurnal AP
+        // maupun kaki potongan dari confirmVendorBill, dan picker form
+        // memang hanya menawarkan bill diakui. Tanpa ini bupot draft bisa
+        // dikirim langsung ke action dan masuk laporan Bukti Potong
+        // sebelum kewajiban diakui.
+        if (!(RECOGNISED_AP_STATUSES as readonly string[]).includes(bill.status)) {
+          throw definitive("Tagihan vendor tertaut belum terposting — bupot hanya untuk tagihan posted/partial/paid")
         }
         const activeDupe = await tx.withholdingCertificate.findFirst({
           where: { vendorBillId: input.vendorBillId, status: { not: "revoked" } },

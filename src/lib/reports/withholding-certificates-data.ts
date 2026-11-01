@@ -10,6 +10,7 @@
 
 import { prisma } from "@/lib/db/prisma"
 import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
+import { RECOGNISED_AP_STATUSES } from "@/lib/reports/document-status"
 import {
   purchaseDpp,
   serializeWithholdingCertificatesCsv,
@@ -78,12 +79,16 @@ export async function loadWithholdingCertificateInputs(
   // R8-PAJAK-07: bupot dari dokumen sumber yang sudah batal/di-void/terhapus
   // dikeluarkan dari laporan (potongannya sudah dibalik bersama dokumen
   // sumber). Baris fallback bill sendiri sudah berstatus posted/partial/paid.
+  // Sisi bill wajib diakui penuh (posted/partial/paid): bupot yang lahir
+  // sebelum gerbang terbit diperketat bisa tertaut ke bill yang tidak
+  // pernah terposting — potongannya belum jadi kewajiban dan tidak boleh
+  // ikut total Bukti Potong.
   const liveCertificates = certificates.filter((cert) => {
     if (cert.vendorBillId != null) {
       return (
         cert.vendorBill != null &&
         cert.vendorBill.deletedAt == null &&
-        cert.vendorBill.status !== "cancelled"
+        (RECOGNISED_AP_STATUSES as readonly string[]).includes(cert.vendorBill.status)
       )
     }
     if (cert.salesPaymentId != null) {

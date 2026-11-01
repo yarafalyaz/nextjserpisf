@@ -160,7 +160,7 @@ describe("loadWithholdingCertificatesCsv (F-35a)", () => {
       article: "PPh23", objectCode: "24-104-01", dpp: 900, tariff: 2, withheldAmount: 18,
       vendorBillId: 5, salesPaymentId: null,
       withholdingType: { code: "PPh 23", name: "Jasa" },
-      vendorBill: { documentNo: "VB-001" }, salesPayment: null,
+      vendorBill: { documentNo: "VB-001", status: "posted", deletedAt: null }, salesPayment: null,
     }] as never)
 
     const out = await loadWithholdingCertificatesCsv({ start: new Date(2026, 0, 1), end: new Date(2026, 0, 31) })
@@ -168,6 +168,22 @@ describe("loadWithholdingCertificatesCsv (F-35a)", () => {
     expect(out.csv).toContain('"BP-77"')
     expect(out.csv).toContain("24-104-01")
     expect(out.purchaseWithheld).toBe(18)
+  })
+
+  it("bupot tertaut bill draft tidak ikut laporan — sumber wajib diakui posted/partial/paid", async () => {
+    vb.mockResolvedValue([] as never)
+    sp.mockResolvedValue([] as never)
+    wc.mockResolvedValue([{
+      direction: "we_withhold", certificateNumber: "BP-DRAFT", withholdingDate: new Date(2026, 0, 12),
+      counterpartyName: "PT Maklon", counterpartyTaxId: "02.111",
+      article: "PPh23", objectCode: "24-104-01", dpp: 900, tariff: 2, withheldAmount: 18,
+      vendorBillId: 7, salesPaymentId: null,
+      withholdingType: { code: "PPh 23", name: "Jasa" },
+      vendorBill: { documentNo: "VB-DRAFT", status: "draft", deletedAt: null }, salesPayment: null,
+    }] as never)
+
+    const inputs = await loadWithholdingCertificateInputs({ start: new Date(2026, 0, 1), end: new Date(2026, 0, 31) })
+    expect(inputs).toHaveLength(0)
   })
 
   it("R8-PAJAK-07: bupot dari bill yang dibatalkan tidak ikut laporan", async () => {
