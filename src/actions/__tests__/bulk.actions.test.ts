@@ -175,6 +175,10 @@ describe("Bulk Actions", () => {
       "position",
       "tax",
       "approval",
+      // Metode bayar/kirim: dokumen merujuk lewat `code` string polos;
+      // delete tunggal menolak selama kode masih dipakai.
+      "paymentMethod",
+      "shippingMethod",
     ] as const) {
       const result = await bulkDelete(model, [1])
       expect(result.success).toBe(false)

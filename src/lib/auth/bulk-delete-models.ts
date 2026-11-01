@@ -215,6 +215,11 @@ export const BULK_DELETE_REQUIRES_INDIVIDUAL = new Set<BulkDeleteModel>([
   "paymentTerm",
   "position",
   "tax",
+  // Metode bayar/kirim dirujuk dokumen lewat `code` string polos (tanpa FK):
+  // delete tunggal menolak selama kode masih dipakai; delete massal mentah
+  // memutus resolusi nama dokumen lama diam-diam.
+  "paymentMethod",
+  "shippingMethod",
   // Baris approval adalah status workflow, bukan master data: hapus massal
   // approval pending menghapus keputusan yang sedang berjalan tanpa guard.
   "approval",

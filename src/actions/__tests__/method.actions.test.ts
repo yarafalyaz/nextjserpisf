@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
     revalidateMock: vi.fn(),
     logActivityMock: vi.fn(),
     settingsMock: vi.fn().mockResolvedValue({}),
+    countMock: vi.fn().mockResolvedValue(0),
     prismaMock: {
       paymentMethod: buildModelMock(),
       shippingMethod: buildModelMock(),
@@ -26,7 +27,16 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: {
+    ...mocks.prismaMock,
+    quotation: { count: mocks.countMock },
+    downPayment: { count: mocks.countMock },
+    salesPayment: { count: mocks.countMock },
+    salesLateFeePayment: { count: mocks.countMock },
+    vendorPayment: { count: mocks.countMock },
+  },
+}))
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: any) => mocks.requirePermissionMock(...a) }))
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: mocks.logActivityMock }))
@@ -47,7 +57,52 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
   mocks.settingsMock.mockResolvedValue({})
+  mocks.countMock.mockResolvedValue(0)
   vi.spyOn(console, "error").mockImplementation(() => {})
+})
+
+describe("guard kode metode dirujuk dokumen (putaran 21)", () => {
+  it("deletePaymentMethod ditolak bila kode masih dipakai dokumen", async () => {
+    mocks.prismaMock.paymentMethod.findUnique.mockResolvedValue({ code: "CASH" })
+    mocks.countMock.mockResolvedValue(4)
+    const res = await actions.deletePaymentMethod(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("masih dipakai")
+    expect(mocks.prismaMock.paymentMethod.delete).not.toHaveBeenCalled()
+  })
+
+  it("deletePaymentMethod jalan bila kode bebas rujukan", async () => {
+    mocks.prismaMock.paymentMethod.findUnique.mockResolvedValue({ code: "CASH" })
+    const res = await actions.deletePaymentMethod(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.paymentMethod.delete).toHaveBeenCalledTimes(1)
+  })
+
+  it("updatePaymentMethod ganti kode ditolak bila kode lama dipakai", async () => {
+    mocks.prismaMock.paymentMethod.findUnique.mockResolvedValue({ code: "CASH" })
+    mocks.countMock.mockResolvedValue(2)
+    const res = await actions.updatePaymentMethod(1, fdMap({ name: "Tunai", code: "CASH2" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("masih dipakai")
+    expect(mocks.prismaMock.paymentMethod.update).not.toHaveBeenCalled()
+  })
+
+  it("updatePaymentMethod rename nama saja (kode sama) tetap jalan walau dipakai", async () => {
+    mocks.prismaMock.paymentMethod.findUnique.mockResolvedValue({ code: "CASH" })
+    mocks.countMock.mockResolvedValue(2)
+    const res = await actions.updatePaymentMethod(1, fdMap({ name: "Tunai Baru", code: "CASH" }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.paymentMethod.update).toHaveBeenCalledTimes(1)
+  })
+
+  it("deleteShippingMethod ditolak bila kode dipakai penawaran", async () => {
+    mocks.prismaMock.shippingMethod.findUnique.mockResolvedValue({ code: "KIRIM" })
+    mocks.countMock.mockResolvedValue(1)
+    const res = await actions.deleteShippingMethod(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("masih dipakai")
+    expect(mocks.prismaMock.shippingMethod.delete).not.toHaveBeenCalled()
+  })
 })
 
 describe("Payment Method Actions", () => {

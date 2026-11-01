@@ -30,6 +30,21 @@ interface MethodConfig {
   listPath: string
   messages: { create: string; update: string; delete: string }
   actionName: { create: string; update: string; delete: string }
+  /** Penghitung dokumen yang menyimpan `code` sebagai string polos. */
+  countCodeUsers: (code: string) => Promise<number>
+}
+
+/**
+ * Dokumen menyimpan kode metode sebagai string polos (tanpa FK): resolusi
+ * nama berjalan lewat map code->name (`method.service`) dan print route
+ * `findUnique({ where: { code } })`. Hapus baris master atau ganti `code`
+ * memutus resolusi itu diam-diam — dokumen lama jatuh ke label statis/kode
+ * mentah. Guard sama seperti `deleteUom`: tolak selama kode masih dirujuk.
+ */
+async function assertMethodCodeUnused(cfg: MethodConfig, code: string): Promise<string | null> {
+  const used = await cfg.countCodeUsers(code)
+  if (used === 0) return null
+  return `${cfg.entity === "PaymentMethod" ? "Metode pembayaran" : "Metode pengiriman"} masih dipakai ${used} dokumen — tidak dapat dihapus atau diganti kodenya. Nonaktifkan saja bila tidak dipakai lagi.`
 }
 
 async function createMethod(cfg: MethodConfig, formData: FormData, skipPermission = false) {
@@ -74,6 +89,15 @@ async function updateMethod(cfg: MethodConfig, id: number, formData: FormData, u
     const parsed = parseFormData(cfg.schemas.update, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
 
+    // Ganti `code` = memutus rujukan string dokumen lama (lihat
+    // assertMethodCodeUnused). Rename `name` aman: resolusi membaca nama
+    // berjalan dari master. Kode tak berubah -> guard dilewati.
+    const existing = await cfg.model.findUnique({ where: { id }, select: { code: true } })
+    if (existing && parsed.data.code !== existing.code) {
+      const blocked = await assertMethodCodeUnused(cfg, existing.code)
+      if (blocked) return { success: false, error: blocked }
+    }
+
     await cfg.model.update({
       where: { id },
       data: {
@@ -97,6 +121,11 @@ async function updateMethod(cfg: MethodConfig, id: number, formData: FormData, u
 async function deleteMethod(cfg: MethodConfig, id: number, skipPermission = false) {
   try {
     if (!skipPermission) await requirePermission(cfg.permissions.delete)
+    const existing = await cfg.model.findUnique({ where: { id }, select: { code: true } })
+    if (existing) {
+      const blocked = await assertMethodCodeUnused(cfg, existing.code)
+      if (blocked) return { success: false, error: blocked }
+    }
     await cfg.model.delete({ where: { id } })
     await logActivity("delete", cfg.entity, id, cfg.messages.delete)
     revalidatePath(cfg.listPath)
@@ -131,6 +160,16 @@ const paymentMethodConfig: MethodConfig = {
     update: "updatePaymentMethod",
     delete: "deletePaymentMethod",
   },
+  countCodeUsers: async (code) => {
+    const [quotations, downPayments, salesPayments, lateFeePayments, vendorPayments] = await Promise.all([
+      prisma.quotation.count({ where: { paymentMethod: code } }),
+      prisma.downPayment.count({ where: { paymentMethod: code } }),
+      prisma.salesPayment.count({ where: { paymentMethod: code } }),
+      prisma.salesLateFeePayment.count({ where: { paymentMethod: code } }),
+      prisma.vendorPayment.count({ where: { paymentMethod: code } }),
+    ])
+    return quotations + downPayments + salesPayments + lateFeePayments + vendorPayments
+  },
 }
 
 const shippingMethodConfig: MethodConfig = {
@@ -156,6 +195,8 @@ const shippingMethodConfig: MethodConfig = {
     update: "updateShippingMethod",
     delete: "deleteShippingMethod",
   },
+  countCodeUsers: async (code) =>
+    prisma.quotation.count({ where: { shippingMethod: code } }),
 }
 
 // ==================== PAYMENT METHOD ====================
