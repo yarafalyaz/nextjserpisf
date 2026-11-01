@@ -1623,6 +1623,10 @@ describe("remnant (P1-5)", () => {
     // (parsing unitCost/uom) tetap teruji apa adanya.
     mocks.prismaMock.item.findUnique.mockResolvedValue({ id: 1, category: { remnantMinMeasure: 100 } });
     mocks.prismaMock.warehouse.findUnique.mockResolvedValue({ id: 1 });
+    // createRemnant memverifikasi baris sumber nyata: default sumber sah
+    // (test penolakan menimpa findUnique ini per test).
+    mocks.prismaMock.materialIssueItem.findUnique.mockResolvedValue({ id: 42, itemId: 1, qty: 10 });
+    mocks.prismaMock.remnant.aggregate.mockResolvedValue({ _sum: { qty: 0 } });
   });
 
   const usableFd = (over: Record<string, string> = {}) => {
@@ -1638,6 +1642,32 @@ describe("remnant (P1-5)", () => {
     for (const [k, v] of Object.entries(over)) fd.set(k, v);
     return fd;
   };
+
+  it("createRemnant menolak sumber issue fiktif (sourceId tanpa baris nyata)", async () => {
+    mocks.prismaMock.materialIssueItem.findUnique.mockResolvedValue(null);
+    const res = await actions.createRemnant(usableFd());
+    expect(res.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/tidak ditemukan/);
+    expect(mocks.prismaMock.remnant.create).not.toHaveBeenCalled();
+  });
+
+  it("createRemnant menolak sumber milik item lain", async () => {
+    mocks.prismaMock.materialIssueItem.findUnique.mockResolvedValue({ id: 42, itemId: 9, qty: 10 });
+    const res = await actions.createRemnant(usableFd());
+    expect(res.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/item lain/);
+    expect(mocks.prismaMock.remnant.create).not.toHaveBeenCalled();
+  });
+
+  it("createRemnant menolak qty kumulatif melebihi qty baris sumber", async () => {
+    mocks.prismaMock.materialIssueItem.findUnique.mockResolvedValue({ id: 42, itemId: 1, qty: 3 });
+    mocks.prismaMock.remnant.aggregate.mockResolvedValue({ _sum: { qty: 2 } });
+    const res = await actions.createRemnant(usableFd());
+    expect(res.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/melebihi/);
+    expect(mocks.prismaMock.remnant.create).not.toHaveBeenCalled();
+    mocks.prismaMock.remnant.aggregate.mockResolvedValue({ _sum: {} });
+  });
 
   it("createRemnant menolak unitCost negatif bukan diam-diam 0", async () => {
     const fd = new FormData();

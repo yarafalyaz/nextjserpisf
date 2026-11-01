@@ -2868,22 +2868,60 @@ export async function createRemnant(formData: FormData) {
     });
     if (usableError) throw new Error(usableError);
     const documentNo = await generateDocumentNumber("RMN");
-    const remnant = await prisma.remnant.create({
-      data: {
-        documentNo,
-        itemId,
-        warehouseId,
-        qty,
-        uom: cap(formData.get("uom"), 32),
-        dimensions,
-        sourceType,
-        sourceId,
-        unitCost: unitCostRaw,
-        status: "usable",
-        remnantMinMeasureSnapshot: minMeasureSnapshot,
-        measuredSize,
-        createdBy: Number(user.id),
-      },
+    // sourceId bare-int tanpa FK: buktikan baris sumber ada, milik item yang
+    // sama, dan Σ remnant atas sumber itu + qty baru tak melebihi qty sumber.
+    // Klaim dibungkus tx dengan kunci baris sumber FOR UPDATE — tanpa itu dua
+    // create konkuren sama-sama membaca Σ lama dan cap tembus (lost update).
+    // Status selain "scrapped" dihitung: consumed tetap sisa fisik dari
+    // sumber yang sama, bukan kuota baru.
+    const remnant = await prisma.$transaction(async (tx) => {
+      let sourceQty: number
+      if (sourceType === "material_issue_item") {
+        await tx.$executeRaw`SELECT id FROM material_issue_items WHERE id = ${sourceId} FOR UPDATE`;
+        const src = await tx.materialIssueItem.findUnique({
+          where: { id: sourceId ?? 0 },
+          select: { itemId: true, qty: true },
+        });
+        if (!src) throw new Error("Baris issue sumber tidak ditemukan");
+        if (src.itemId !== itemId) throw new Error("Baris issue sumber milik item lain");
+        sourceQty = Number(src.qty)
+      } else {
+        await tx.$executeRaw`SELECT id FROM production_order_materials WHERE id = ${sourceId} FOR UPDATE`;
+        const src = await tx.productionOrderMaterial.findUnique({
+          where: { id: sourceId ?? 0 },
+          select: { itemId: true, qty: true },
+        });
+        if (!src) throw new Error("Baris material sumber tidak ditemukan");
+        if (src.itemId !== itemId) throw new Error("Baris material sumber milik item lain");
+        sourceQty = Number(src.qty)
+      }
+      const claimed = await tx.remnant.aggregate({
+        where: { sourceType, sourceId, status: { not: "scrapped" } },
+        _sum: { qty: true },
+      });
+      const claimedQty = Number(claimed._sum.qty ?? 0)
+      if (claimedQty + qty > sourceQty + 0.0001) {
+        throw new Error(
+          `Qty sisa kumulatif (${claimedQty + qty}) melebihi qty baris sumber (${sourceQty})`,
+        )
+      }
+      return tx.remnant.create({
+        data: {
+          documentNo,
+          itemId,
+          warehouseId,
+          qty,
+          uom: cap(formData.get("uom"), 32),
+          dimensions,
+          sourceType,
+          sourceId,
+          unitCost: unitCostRaw,
+          status: "usable",
+          remnantMinMeasureSnapshot: minMeasureSnapshot,
+          measuredSize,
+          createdBy: Number(user.id),
+        },
+      });
     });
     await logActivity("create", "Remnant", remnant.id, `Sisa ${documentNo} (${qty})`);
     revalidatePath("/inventaris/sisa");
