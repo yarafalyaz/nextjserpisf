@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
   const generateDocumentNumber = vi.fn()
   const assertPeriodOpen = vi.fn()
   const accountCount = vi.fn()
+  const accountFindManyInTx = vi.fn()
   const transferCreate = vi.fn()
   const transferUpdate = vi.fn()
   const journalCreate = vi.fn()
@@ -25,6 +26,8 @@ const mocks = vi.hoisted(() => {
   const tx: Record<string, unknown> = {
     bankTransfer: { create: transferCreate, update: transferUpdate },
     journal: { create: journalCreate },
+    account: { findMany: accountFindManyInTx },
+    $executeRaw: vi.fn(async () => 1),
   }
 
   const prismaBank: Record<string, unknown> = {
@@ -55,6 +58,7 @@ const mocks = vi.hoisted(() => {
     generateDocumentNumber,
     assertPeriodOpen,
     accountCount,
+    accountFindManyInTx,
     transferCreate,
     transferUpdate,
     journalCreate,
@@ -97,6 +101,11 @@ beforeEach(() => {
   mocks.generateDocumentNumber.mockResolvedValue("BTF-0001")
   mocks.assertPeriodOpen.mockResolvedValue(undefined)
   mocks.accountCount.mockResolvedValue(2)
+  // Default: kedua rekening BANK hidup; akun biaya EXPENSE hidup.
+  mocks.accountFindManyInTx.mockResolvedValue([
+    { id: 101, isActive: true, deletedAt: null, reportGroup: "BANK", type: "ASSET" },
+    { id: 102, isActive: true, deletedAt: null, reportGroup: "BANK", type: "ASSET" },
+  ])
   mocks.transferCreate.mockResolvedValue({ id: 1, slug: "btf-1" })
   mocks.journalCreate.mockResolvedValue({ id: 9 })
 })
@@ -134,5 +143,55 @@ describe("createBankTransfer zod validation", () => {
     expect(res.success).toBe(true)
     const data = mocks.transferCreate.mock.calls[0][0].data
     expect(data.date).toEqual(new Date(Date.UTC(2026, 8, 15)))
+  })
+})
+
+describe("createBankTransfer akun hidup + tipe (putaran 22)", () => {
+  it("menolak rekening asal nonaktif walau picker hanya menawarkan akun hidup", async () => {
+    mocks.accountFindManyInTx.mockResolvedValue([
+      { id: 101, isActive: false, deletedAt: null, reportGroup: "BANK", type: "ASSET" },
+      { id: 102, isActive: true, deletedAt: null, reportGroup: "BANK", type: "ASSET" },
+    ])
+    const res = await createBankTransfer(form(baseTransfer))
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toMatch(/tidak aktif/)
+    expect(mocks.transferCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("menolak rekening tujuan terhapus lunak", async () => {
+    mocks.accountFindManyInTx.mockResolvedValue([
+      { id: 101, isActive: true, deletedAt: null, reportGroup: "BANK", type: "ASSET" },
+      { id: 102, isActive: true, deletedAt: new Date(2026, 0, 1), reportGroup: "BANK", type: "ASSET" },
+    ])
+    const res = await createBankTransfer(form(baseTransfer))
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toMatch(/sudah dihapus|tidak aktif/)
+    expect(mocks.transferCreate).not.toHaveBeenCalled()
+  })
+
+  it("menolak rekening asal bukan BANK (salah tipe)", async () => {
+    mocks.accountFindManyInTx.mockResolvedValue([
+      { id: 101, isActive: true, deletedAt: null, reportGroup: "EXPS", type: "EXPENSE" },
+      { id: 102, isActive: true, deletedAt: null, reportGroup: "BANK", type: "ASSET" },
+    ])
+    const res = await createBankTransfer(form(baseTransfer))
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toMatch(/bukan rekening kas\/bank/)
+    expect(mocks.transferCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("menolak akun biaya nonaktif saat adminFee > 0", async () => {
+    mocks.accountCount.mockResolvedValue(3)
+    mocks.accountFindManyInTx.mockResolvedValue([
+      { id: 101, isActive: true, deletedAt: null, reportGroup: "BANK", type: "ASSET" },
+      { id: 102, isActive: true, deletedAt: null, reportGroup: "BANK", type: "ASSET" },
+      { id: 610, isActive: false, deletedAt: null, reportGroup: "EXPS", type: "EXPENSE" },
+    ])
+    const res = await createBankTransfer(form({ ...baseTransfer, adminFee: "5000", feeAccountId: "610" }))
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toMatch(/tidak aktif/)
+    expect(mocks.transferCreate).not.toHaveBeenCalled()
   })
 })

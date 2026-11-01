@@ -82,6 +82,41 @@ export async function createBankTransfer(formData: FormData) {
       // fast-fail; tutup-periode tidak bisa menyelip di antara cek dan tulis.
       await assertPeriodOpen(date, tx)
 
+      // Putaran 22: nilai ulang akun DI DALAM tx berkunci baris accounts.
+      // Cek luar hanya hitung eksistensi; akun bisa dinonaktifkan/dihapus
+      // sesudah picker dimuat, dan akun bukan kas/bank (asal/tujuan) atau
+      // bukan beban (biaya) tidak boleh menerima jurnal POSTED.
+      const sortedAccountIds = [...new Set(accountIds)].sort((a, b) => a - b)
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM accounts WHERE id IN (${Prisma.join(sortedAccountIds)}) FOR UPDATE`
+      }
+      const liveAccounts = await tx.account.findMany({
+        where: { id: { in: sortedAccountIds } },
+        select: { id: true, isActive: true, deletedAt: true, reportGroup: true, type: true },
+      })
+      const byId = new Map(liveAccounts.map((a) => [a.id, a]))
+      for (const accountId of sortedAccountIds) {
+        const account = byId.get(accountId)
+        if (!account || account.deletedAt != null) {
+          throw new Error("Rekening/akun terpilih sudah dihapus atau tidak ditemukan.")
+        }
+        if (!account.isActive) {
+          throw new Error("Rekening/akun terpilih tidak aktif.")
+        }
+      }
+      for (const accountId of [fromAccountId, toAccountId]) {
+        const account = byId.get(accountId)!
+        if (account.reportGroup !== "BANK") {
+          throw new Error("Rekening asal/tujuan bukan rekening kas/bank (grup laporan BANK).")
+        }
+      }
+      if (feeAccountId) {
+        const feeAccount = byId.get(feeAccountId)!
+        if (feeAccount.type !== "EXPENSE") {
+          throw new Error("Akun biaya admin harus akun beban (EXPENSE).")
+        }
+      }
+
       const created = await tx.bankTransfer.create({
         data: {
           documentNo,
