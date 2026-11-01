@@ -113,8 +113,14 @@ export async function createProductionCost(formData: FormData) {
       if (!wo) return { success: false, error: "Perintah kerja tidak ditemukan" }
     }
     if (v.vendorId) {
-      const vendor = await prisma.vendor.findUnique({ where: { id: v.vendorId }, select: { id: true } })
+      const vendor = await prisma.vendor.findUnique({
+        where: { id: v.vendorId },
+        select: { id: true, isActive: true, deletedAt: true },
+      })
       if (!vendor) return { success: false, error: "Vendor tidak ditemukan" }
+      if (vendor.deletedAt != null || !vendor.isActive) {
+        return { success: false, error: "Vendor biaya tidak aktif atau sudah dihapus — pilih ulang vendor." }
+      }
     }
 
     const cost = await prisma.$transaction(async (tx) => {
@@ -185,13 +191,21 @@ export async function updateProductionCost(id: number, formData: FormData) {
 
     const existing = await prisma.productionCost.findUnique({
       where: { id },
-      select: { id: true, productionOrderId: true, workOrderId: true, amount: true },
+      select: { id: true, productionOrderId: true, workOrderId: true, amount: true, vendorId: true },
     })
     if (!existing) return { success: false, error: "Biaya tidak ditemukan" }
 
-    if (v.vendorId) {
-      const vendor = await prisma.vendor.findUnique({ where: { id: v.vendorId }, select: { id: true } })
+    // Hanya relink vendor yang dinilai hidup; vendor lama tak berubah
+    // (kini nonaktif) tidak memblokir edit biaya lain.
+    if (v.vendorId && v.vendorId !== existing.vendorId) {
+      const vendor = await prisma.vendor.findUnique({
+        where: { id: v.vendorId },
+        select: { id: true, isActive: true, deletedAt: true },
+      })
       if (!vendor) return { success: false, error: "Vendor tidak ditemukan" }
+      if (vendor.deletedAt != null || !vendor.isActive) {
+        return { success: false, error: "Vendor biaya tidak aktif atau sudah dihapus — pilih ulang vendor." }
+      }
     }
 
     if (existing.productionOrderId) {

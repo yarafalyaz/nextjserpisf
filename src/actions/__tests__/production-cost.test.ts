@@ -95,6 +95,42 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
 
+describe("vendor biaya hidup (putaran 36)", () => {
+  it("create menolak vendor nonaktif", async () => {
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress", documentNo: "MO-1", completedQty: 0 })
+    vendorFindUniqueMock.mockResolvedValue({ id: 3, isActive: false, deletedAt: null })
+    const res = await createProductionCost(fd({ productionOrderId: 1, category: "other", amount: 1000, vendorId: 3 }))
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Vendor/)
+    expect(costCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("create menolak vendor terhapus", async () => {
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress", documentNo: "MO-1", completedQty: 0 })
+    vendorFindUniqueMock.mockResolvedValue({ id: 3, isActive: true, deletedAt: new Date() })
+    const res = await createProductionCost(fd({ productionOrderId: 1, category: "other", amount: 1000, vendorId: 3 }))
+    expect(res.success).toBe(false)
+    expect(costCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("update menolak relink ke vendor nonaktif", async () => {
+    costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: null, workOrderId: 10, amount: 100, vendorId: 2 })
+    vendorFindUniqueMock.mockResolvedValue({ id: 3, isActive: false, deletedAt: null })
+    const res = await updateProductionCost(5, fd({ category: "other", amount: 300, vendorId: 3 }))
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Vendor/)
+    expect(costUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("update vendor yang sama tidak berubah tetap lolos walau kini nonaktif", async () => {
+    costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: null, workOrderId: 10, amount: 100, vendorId: 3 })
+    vendorFindUniqueMock.mockResolvedValue({ id: 3, isActive: false, deletedAt: null })
+    const res = await updateProductionCost(5, fd({ category: "other", amount: 300, vendorId: 3 }))
+    expect(res.success).toBe(true)
+    expect(vendorFindUniqueMock).not.toHaveBeenCalled()
+  })
+})
+
 describe("kunci periode hari-ini (F-2026-10-20-24a)", () => {
   const LOCKED = new Error("Periode akuntansi sudah ditutup sampai 31/10/2026.")
 
