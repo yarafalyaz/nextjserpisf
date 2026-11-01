@@ -57,12 +57,26 @@ export async function createTaxAssessment(formData: FormData): Promise<TaxDisput
 
     const sentAt = v.sentAt ? wibDateToUtcMidnight(v.sentAt) : null
     const receivedAt = v.receivedAt ? wibDateToUtcMidnight(v.receivedAt) : null
-    if (sentAt) await assertPeriodOpen(sentAt)
 
     const idempotencyKey = formData.get("idempotencyKey") as string | null
 
     const created = await prisma.$transaction(async (tx) => {
       await checkIdempotency(idempotencyKey, tx, user.id)
+      // Gerbang periode DI DALAM tx: assertPeriodOpen(tx) mengunci baris
+      // system_settings, jadi tutup-periode yang commit sesudah cek luar
+      // tidak lagi lolos. Nomor ketetapan juga dicek di bawah gap-lock
+      // tabel — tanpa keduanya dua submit konkuren bernomor sama (key
+      // idempotency beda) melahirkan dua baris ketetapan dan eksposur
+      // disengketakan terhitung dobel di register.
+      if (sentAt) await assertPeriodOpen(sentAt, tx as never)
+      await tx.$executeRaw`SELECT id FROM tax_assessments FOR UPDATE`
+      const dupe = await tx.taxAssessment.findFirst({
+        where: { assessmentNumber: v.assessmentNumber, deletedAt: null },
+        select: { id: true },
+      })
+      if (dupe) {
+        throw new Error(`Nomor ketetapan "${v.assessmentNumber}" sudah terdaftar. Periksa register sengketa pajak.`)
+      }
       const documentNo = v.assessmentNumber
       return tx.taxAssessment.create({
         data: {
