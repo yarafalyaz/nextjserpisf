@@ -25,7 +25,9 @@ const CATEGORY_PERMISSIONS: Partial<Record<UploadCategory, PermissionName | null
  */
 export async function POST(req: NextRequest) {
   const session = await auth()
-  if (!session?.user?.id) {
+  // Kategori avatars tanpa gerbang permission, jadi user nonaktif ditolak
+  // di sini secara eksplisit (pola R7PB-02), bukan hanya kategori berizin.
+  if (!session?.user?.id || session.user.isActive === false) {
     return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
   try {

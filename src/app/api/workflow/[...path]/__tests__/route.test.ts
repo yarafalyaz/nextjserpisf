@@ -118,6 +118,18 @@ describe("POST /api/workflow/[...path]", () => {
     expect(res.status).toBe(401)
   })
 
+  it("rejects deactivated user even with super_admin role (putaran 19)", async () => {
+    // JWT callback mengosongkan roles/permissions user nonaktif, tetapi cek
+    // ini tidak boleh bergantung pada kekosongan itu: sesi stale apa pun
+    // dengan isActive=false ditolak sebelum modul/izin dinilai.
+    mocks.authFn.mockResolvedValue({
+      user: { id: 1, isActive: false, roles: ["super_admin"], permissions: [] },
+    })
+    const res = await POST(makeReq(), makeParams(["penjualan", "penawaran", "1", "approve"]))
+    expect(res.status).toBe(401)
+    expect(mocks.updateMany).not.toHaveBeenCalled()
+  })
+
   it("returns 400 when path too short", async () => {
     mocks.authFn.mockResolvedValue(adminSession)
     const res = await POST(makeReq(), makeParams(["a", "b"]))

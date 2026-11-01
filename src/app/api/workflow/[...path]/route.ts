@@ -67,9 +67,12 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
-  // Auth check — reject unauthenticated requests
+  // Auth check — reject unauthenticated requests. User nonaktif ditolak
+  // eksplisit (pola R7PB-02): route ini menilai roles/permissions dari sesi
+  // mentah, jadi tidak boleh bergantung pada JWT callback yang kebetulan
+  // mengosongkannya.
   const session = await auth()
-  if (!session?.user) {
+  if (!session?.user || session.user.isActive === false) {
     return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
 

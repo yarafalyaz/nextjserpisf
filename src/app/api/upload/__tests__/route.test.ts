@@ -46,6 +46,14 @@ describe("POST /api/upload", () => {
     expect(res.status).toBe(401)
   })
 
+  it("returns 401 when user deactivated, even for permission-free avatars (putaran 19)", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 1, isActive: false } })
+    const file = new File(["test"], "test.png", { type: "image/png" })
+    const res = await POST(makeReq({ file, category: "avatars" }))
+    expect(res.status).toBe(401)
+    expect(mocks.uploadToStorage).not.toHaveBeenCalled()
+  })
+
   it("returns 400 when no file provided", async () => {
     const res = await POST(makeReq({ category: "avatars" })) // missing 'file'
     expect(res.status).toBe(400)
