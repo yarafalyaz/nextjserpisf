@@ -558,6 +558,10 @@ export async function updateAssetBrand(id: number, formData: FormData) {
     const slug = await nextSlug("assetBrand", data.name, { excludeId: id });
     const desiredNames = [...new Map(data.models.map((name) => [name.trim().toLowerCase(), name])).values()];
     await prisma.$transaction(async (tx) => {
+      // Kunci baris brand DULU: schema tak punya @@unique(assetBrandId, name),
+      // jadi dua update konkuren wajib terserialkan sebelum diff dibaca —
+      // tanpa kunci keduanya menyimpulkan nama sama harus dibuat.
+      await tx.$queryRaw`SELECT id FROM asset_brands WHERE id = ${id} FOR UPDATE`;
       const existing = await tx.assetBrandModel.findMany({
         where: { assetBrandId: id },
         select: { id: true, name: true },

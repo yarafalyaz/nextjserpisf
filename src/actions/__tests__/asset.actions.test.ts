@@ -328,6 +328,29 @@ describe("Asset Brand Actions", () => {
     })
   })
 
+  it("update merek mengunci baris asset_brands sebelum membaca model (race regresi)", async () => {
+    // Tanpa unique (assetBrandId, name), dua update konkuren sama-sama
+    // membaca existing kosong lalu createMany nama sama. Kunci baris brand
+    // menyerialkan diff per brand.
+    prismaMock.assetBrandModel.findMany.mockResolvedValueOnce([{ id: 7, name: "ProBook 450" }])
+    prismaMock.asset.count.mockResolvedValue(0)
+    await expect(
+      updateAssetBrand(20, fd({ name: "HP", models: "ProBook 450\nZBook 15" })),
+    ).rejects.toThrow("NEXT_REDIRECT")
+
+    expect(prismaMock.$queryRaw).toHaveBeenCalled()
+    const arg = prismaMock.$queryRaw.mock.calls[0][0] as unknown
+    const sql = Array.isArray(arg)
+      ? arg.join("?")
+      : ((arg as { sql?: string; strings?: string[] }).sql ??
+        (arg as { strings?: string[] }).strings?.join("?") ??
+        "")
+    expect(sql).toMatch(/FROM asset_brands[\s\S]*FOR UPDATE/)
+    expect(prismaMock.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      prismaMock.assetBrandModel.findMany.mock.invocationCallOrder[0],
+    )
+  })
+
   it("round4: update merek MENOLAK hapus tipe yang masih dipakai aset (bare id yatim dicegah)", async () => {
     prismaMock.assetBrandModel.findMany.mockResolvedValueOnce([
       { id: 7, name: "ProBook 450" },
