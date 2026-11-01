@@ -215,6 +215,12 @@ export async function updateProduct(id: number, formData: FormData) {
     // then run with an empty list (qty 0), silently producing empty
     // production orders.
     await prisma.$transaction(async (tx) => {
+      // Kunci baris produk sebelum menukar BOM: penulis bersama
+      // (calculateStandardCost, createBomRevision) mengunci baris yang
+      // sama sebelum membaca BOM — tanpa kunci ini hitungan rollup dari
+      // BOM lama bisa menimpa standardCost sesudah BOM baru commit, dan
+      // snapshot revisi bisa lahir dari BOM basi (pola keduanya).
+      await tx.$queryRaw`SELECT id FROM products WHERE id = ${id} FOR UPDATE`;
       await tx.product.update({
         where: { id },
         data: {

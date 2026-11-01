@@ -214,6 +214,33 @@ describe("Product Actions", () => {
     }))
   })
 
+  it("updateProduct mengunci baris produk sebelum menukar BOM (serial lawan calculateStandardCost/createBomRevision)", async () => {
+    const events: string[] = []
+    mocks.prismaMock.$queryRaw.mockImplementation(async (...a: any[]) => {
+      const first = a[0]
+      const sql = Array.isArray(first) ? first.join("?") : ((first as any)?.strings?.join("?") ?? String(first ?? ""))
+      if (/products/i.test(sql) && /for update/i.test(sql)) events.push("lock")
+      return [{ id: 1 }]
+    })
+    mocks.prismaMock.product.update.mockImplementation(async () => {
+      events.push("update")
+      return { id: 1 }
+    })
+
+    const fd = fdMap({ name: "Product Test Update", code: "PROD-2" })
+    fd.append("materialItemId", "1")
+    fd.append("materialQty", "2")
+
+    const res = await actions.updateProduct(1, fd)
+
+    expect(res?.success).toBe(true)
+    // Kunci baris produk wajib mendahului tukar BOM: penulis bersama
+    // (calculateStandardCost, createBomRevision) mengunci baris yang sama
+    // sebelum membaca BOM — tanpa kunci ini hitungan dari BOM lama bisa
+    // menimpa standardCost sesudah BOM baru commit.
+    expect(events).toEqual(["lock", "update"])
+  })
+
   it("updateProduct handles validation error", async () => {
     const res = await actions.updateProduct(1, new FormData())
     expect(res?.success).toBe(false)
