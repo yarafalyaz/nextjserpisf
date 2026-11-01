@@ -978,3 +978,17 @@ Daftar bersih agent (terkonfirmasi/dijadikan pegangan sesi utama, jangan diangka
 Catatan keterjangkauan GRNI: `VendorBill` tidak ada di `APPROVAL_MODEL_TYPES` dan tidak ada pemanggil `requestApprovalIfConfigured("VendorBill")`, tetapi `APPROVE_CLAIMS`/`REJECT_CLAIMS`/`APPROVED_BY_MODELS` di `approval.actions.ts` memuat VendorBill — jadi status `approved` terjangkau lewat baris approval warisan/manual, dan filter laporan tetap wajib positif terlepas dari seberapa sempit jalurnya.
 
 CI putaran 26: verifikasi akhir head `524109dd3` (memuat seluruh putaran) — lihat entri poll sesudah commit log ini.
+
+## Putaran 27 — penjualan/pembelian/keuangan baca (1 fix, 1 vonis)
+
+Agent read-only lane baca penjualan/pembelian/keuangan: 1 kandidat kuat terverifikasi + 1 lemah gugur.
+
+1. `7a97aac72` fix(laporan): pengurang komisi hanya dari retur atas faktur lunas — loader rekap komisi mengambil semua retur `completed` tertaut faktur tanpa menyaring status faktur asal, padahal basis komisi hanya faktur `paid`. Retur sah atas faktur posted/partial, jadi retur completed atas faktur tak pernah lunas melahirkan pengurang hantu (baris penjual `invoiceCount` 0, neto negatif tanpa basis). Loader target penjualan untuk dokumen yang sama sudah menuntut faktur asal paid + `deletedAt: null`. Saringan relasi ditambah di `where` induk (relasi opsional — saringan di `select` hanya men-null-kan). Neto negatif AC-KT-9 atas faktur yang pernah lunas tetap tampil. File test loader baru: 4 merah → hijau; keluarga komisi 28/28; batch pemanggil + guard 200/200.
+
+Vonis GUGUR putaran ini:
+
+- Neraca memuat akun nonaktif di total tetapi tidak di baris (`statement-data.ts:79-98`): GUGUR sebagai bug aktif — tidak ada jalur aplikasi yang melahirkan akun nonaktif bersaldo: `updateAccount` tidak pernah menulis `isActive`, tidak ada `deleteAccount`, akun lahir aktif. Hanya terjangkau data eksternal/seed — inkonsistensi struktural; mengubah cakupan total neraca = keputusan tampilan akuntansi, tidak dipatch sepihak.
+
+Daftar bersih agent (jangan diangkat ulang tanpa bukti baru): filter status laporan AR/AP/aging/collection/customer-statement/ledger-cash/profitability/analytics positif `RECOGNISED_*`; `discount-exposure` memuat `approved/sent` by-design terdokumentasi (Q-DX-3); uang muka pembelian aman karena `void` selalu dibarengi `deletedAt`; sen/pembulatan builder pajak konsisten; rasio bagi-nol ter-guard null; tidak ada agregat uang terpotong `take`; tanggal `dateOnly` + WIB konsisten di cakupan.
+
+CI putaran 27: head `7a97aac72` — lihat poll sesudah commit log ini.
