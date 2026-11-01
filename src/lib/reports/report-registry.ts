@@ -256,12 +256,25 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
       // Tanggal query tak valid (mis. tanggalMulai=abc atau 2026-02-31) jatuh
       // ke periode slug, bukan Invalid Date yang meledak jadi 500 di loader
       // (BUGHUNT round3; pola guard NaN `pembanding` di neraca-saldo).
-      const startRaw = search.tanggalMulai ? new Date(`${search.tanggalMulai}T00:00:00`) : null
-      const start = startRaw && !Number.isNaN(startRaw.getTime()) ? startRaw : period.start
+      // Hari mustahil kalender (2026-02-31 -> 3 Mar) BUKAN NaN, jadi dia
+      // diperiksa terhadap jumlah hari bulan itu sebelum diterima;
+      // mustahil -> tetap periode slug.
+      const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/
+      const queryDate = (raw: string, suffix: string) => {
+        const m = DATE_ONLY.exec(raw)
+        if (m) {
+          const year = Number(m[1])
+          const month = Number(m[2])
+          const day = Number(m[3])
+          if (month < 1 || month > 12 || day < 1 || day > new Date(year, month, 0).getDate()) return null
+        }
+        const parsed = new Date(`${raw}T${suffix}`)
+        return Number.isNaN(parsed.getTime()) ? null : parsed
+      }
+      const start = (search.tanggalMulai ? queryDate(search.tanggalMulai, "00:00:00") : null) ?? period.start
       // Akhir hari penuh (.999) sama dengan layar — jurnal pukul 23:59:59.500
       // tidak boleh tampil di layar tapi hilang di PDF (B9).
-      const endRaw = search.tanggalSelesai ? new Date(`${search.tanggalSelesai}T23:59:59.999`) : null
-      const end = endRaw && !Number.isNaN(endRaw.getTime()) ? endRaw : period.end
+      const end = (search.tanggalSelesai ? queryDate(search.tanggalSelesai, "23:59:59.999") : null) ?? period.end
       const costCenterId = search.costCenterId ? Number(search.costCenterId) : null
 
       const report = await loadIncomeStatementByCostCenter({
