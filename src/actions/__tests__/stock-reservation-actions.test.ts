@@ -18,6 +18,8 @@ const miCountMock = vi.fn()
 const poCountMock = vi.fn()
 const srFindFirstMock = vi.fn()
 const srCreateMock = vi.fn()
+const srFindManyMock = vi.fn()
+const layerAggregateMock = vi.fn()
 const scopeMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
@@ -36,8 +38,11 @@ vi.mock("@/lib/db/prisma", () => {
     stockReservation: {
       updateMany: (...a: unknown[]) => srUpdateManyMock(...a),
       findFirst: (...a: unknown[]) => srFindFirstMock(...a),
+      findMany: (...a: unknown[]) => srFindManyMock(...a),
       create: (...a: unknown[]) => srCreateMock(...a),
     },
+    inventoryLayer: { aggregate: (...a: unknown[]) => layerAggregateMock(...a) },
+    $executeRaw: vi.fn().mockResolvedValue(1),
     $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
     $transaction: vi.fn((cb: unknown) =>
       typeof cb === "function" ? (cb as (tx: unknown) => unknown)(prisma) : Promise.all(cb as unknown[]),
@@ -69,6 +74,8 @@ beforeEach(() => {
   miCountMock.mockResolvedValue(0)
   poCountMock.mockResolvedValue(0)
   srUpdateManyMock.mockResolvedValue({ count: 1 })
+  srFindManyMock.mockResolvedValue([])
+  layerAggregateMock.mockResolvedValue({ _sum: { remaining: 100 } })
   scopeMock.mockResolvedValue({ kind: "all" })
 })
 
@@ -205,5 +212,36 @@ describe("reserveStockForWorkOrder (AC-RES-5)", () => {
       }),
     )
     expect(requirePermissionMock).toHaveBeenCalledWith("edit_work_orders")
+  })
+
+  it("regression round 17: klaim aktif WO lain mengurangi qtyReserved dan membuka shortage", async () => {
+    woFindUniqueOrThrowMock.mockResolvedValue({ id: 9, status: "in_progress", startDate: new Date(), endDate: null })
+    woiFindFirstMock.mockResolvedValue({ id: 41, itemId: 10, qty: 50, status: "in_progress" })
+    srFindFirstMock.mockResolvedValue(null)
+    miItemAggregateMock.mockResolvedValue({ _sum: { qty: 0 } })
+    // On-hand 100, WO lain mengklaim aktif 80 -> hanya 20 bisa direservasi.
+    layerAggregateMock.mockResolvedValue({ _sum: { remaining: 100 } })
+    srFindManyMock.mockResolvedValue([{ qtyReserved: 80, qtyConsumed: 0 }])
+    srCreateMock.mockResolvedValue({ id: 99, itemId: 10 })
+    const res = await reserveStockForWorkOrder({ workOrderId: 9, workOrderItemId: 41, warehouseId: 5, qty: 50 })
+    expect(res.success).toBe(true)
+    const data = srCreateMock.mock.calls[0][0].data
+    expect(Number(data.qtyReserved)).toBe(20)
+    expect(Number(data.shortageQty)).toBe(30)
+  })
+
+  it("regression round 17: stok cukup penuh -> shortage 0 seperti sebelumnya", async () => {
+    woFindUniqueOrThrowMock.mockResolvedValue({ id: 9, status: "in_progress", startDate: new Date(), endDate: null })
+    woiFindFirstMock.mockResolvedValue({ id: 41, itemId: 10, qty: 10, status: "in_progress" })
+    srFindFirstMock.mockResolvedValue(null)
+    miItemAggregateMock.mockResolvedValue({ _sum: { qty: 0 } })
+    layerAggregateMock.mockResolvedValue({ _sum: { remaining: 100 } })
+    srFindManyMock.mockResolvedValue([{ qtyReserved: 30, qtyConsumed: 10 }])
+    srCreateMock.mockResolvedValue({ id: 99, itemId: 10 })
+    const res = await reserveStockForWorkOrder({ workOrderId: 9, workOrderItemId: 41, warehouseId: 5, qty: 10 })
+    expect(res.success).toBe(true)
+    const data = srCreateMock.mock.calls[0][0].data
+    expect(Number(data.qtyReserved)).toBe(10)
+    expect(Number(data.shortageQty)).toBe(0)
   })
 })

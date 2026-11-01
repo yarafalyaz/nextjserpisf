@@ -29,7 +29,7 @@ import {
 import { recordProductionGenealogy } from "@/lib/services/production-genealogy.service";
 import { createWarrantyCoveragesForWorkOrder } from "@/lib/services/warranty.service";
 import { createInstalledPartsForWorkOrder } from "@/lib/services/installed-part.service";
-import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
+import { availableQty, consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { resolveMaterialIssueScrapSnapshots } from "@/lib/hooks/material-issue.hook";
 import {
   classifyScrapLine,
@@ -2963,15 +2963,37 @@ export async function reserveStockForWorkOrder(input: {
       if (input.qty > remainingNeed + 1e-9) {
         throw new Error("Qty reservasi melebihi sisa kebutuhan baris perintah kerja.");
       }
+      // Ketersediaan dinilai seperti jalur start (stock-reservation.service):
+      // kunci baris item menserialkan antar-WO, lalu klaim aktif WO lain
+      // dibaca ulang sebagai locking read dan on-hand dari lapisan FIFO.
+      // Tanpa ini reservasi manual menulis qtyReserved penuh + shortage 0
+      // atas stok yang sudah diklaim WO lain (klaim aktif > on-hand).
+      await tx.$queryRaw`SELECT id FROM items WHERE id = ${line.itemId} FOR UPDATE`;
+      await tx.$executeRaw`SELECT id FROM stock_reservations WHERE item_id = ${line.itemId} AND warehouse_id = ${input.warehouseId} AND status = 'active' FOR UPDATE`;
+      const others = await tx.stockReservation.findMany({
+        where: {
+          itemId: line.itemId,
+          warehouseId: input.warehouseId,
+          status: "active",
+          workOrderId: { not: input.workOrderId },
+        },
+        select: { qtyReserved: true, qtyConsumed: true },
+      });
+      const othersClaimed = others.reduce(
+        (sum, r) => sum + Math.max(0, Number(r.qtyReserved) - Number(r.qtyConsumed)),
+        0,
+      );
+      const onHand = await availableQty(tx, line.itemId, input.warehouseId);
+      const qtyReserved = Math.min(input.qty, Math.max(0, onHand - othersClaimed));
       return tx.stockReservation.create({
         data: {
           workOrderId: input.workOrderId,
           workOrderItemId: line.id,
           itemId: line.itemId,
           warehouseId: input.warehouseId,
-          qtyReserved: new Prisma.Decimal(input.qty),
+          qtyReserved: new Prisma.Decimal(qtyReserved),
           qtyConsumed: new Prisma.Decimal(0),
-          shortageQty: new Prisma.Decimal(0),
+          shortageQty: new Prisma.Decimal(Math.max(0, remainingNeed - qtyReserved)),
           status: "active",
           expiresAt: reservationExpiresAt(wo.startDate ?? new Date(), wo.endDate),
           createdBy: Number(user.id),
