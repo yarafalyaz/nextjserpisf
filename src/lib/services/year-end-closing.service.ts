@@ -113,13 +113,16 @@ export async function postYearEndClosing(fiscalYear: number, userId?: number): P
 
   try {
     return await prisma.$transaction(async (tx) => {
-      // Baca pengaturan mentah dulu untuk tanggal penutup; baris yang sama
-      // dikunci FOR UPDATE oleh assertPeriodOpen(tx) tepat sesudahnya, dan
-      // semua bacaan sesudah titik ini memakai tx (snapshot terkunci).
-      const rawSettings = await tx.systemSetting.findFirst({
-        select: { fiscalYearStartMonth: true },
-      })
-      const fiscalYearStartMonth = rawSettings?.fiscalYearStartMonth ?? 1
+      // Kunci baris system_settings FOR UPDATE HARUS jadi bacaan pertama tx:
+      // snapshot REPEATABLE READ terbentuk pada bacaan pertama, jadi kunci
+      // yang diambil sesudah findFirst tidak menyegarkan snapshot — poster
+      // kedua yang menunggu kunci tetap membaca anti-dobel dari snapshot
+      // lama (existing=null) dan jurnal penutup terposting dobel. Kunci di
+      // sini juga serialisasi lawan assertPeriodOpen penulis lain.
+      const lockedRows = await tx.$queryRaw<Array<{ id: number; period_lock_date: Date | string | null; fiscal_year_start_month: number | null }>>`
+        SELECT id, period_lock_date, fiscal_year_start_month FROM system_settings ORDER BY id LIMIT 1 FOR UPDATE
+      `
+      const fiscalYearStartMonth = lockedRows[0]?.fiscal_year_start_month ?? 1
       const { start, end } = fiscalYearPeriod(fiscalYear, fiscalYearStartMonth)
 
       // (2) Kunci baris system_settings FOR UPDATE + periode tanggal penutup terbuka.

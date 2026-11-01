@@ -89,6 +89,18 @@ beforeEach(() => {
 })
 
 describe("postYearEndClosing", () => {
+  it("kunci system_settings (FOR UPDATE) diambil SEBELUM bacaan pertama tx (snapshot anti-dobel segar)", async () => {
+    await postYearEndClosing(2025, 3)
+    const lockIdx = mocks.queryRaw.mock.calls.findIndex((c: unknown[]) => {
+      const sql = Array.isArray(c[0]) ? (c[0] as unknown[]).join("") : String((c[0] as { strings?: string[] })?.strings?.join("?") ?? c[0])
+      return sql.includes("system_settings") && sql.includes("FOR UPDATE")
+    })
+    expect(lockIdx).toBeGreaterThanOrEqual(0)
+    const lockOrder = mocks.queryRaw.mock.invocationCallOrder[lockIdx]
+    const firstReadOrder = mocks.settingsFindFirst.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(firstReadOrder)
+  })
+
   it("E121-1: setting kosong -> ditolak, nol jurnal", async () => {
     mocks.settingsFindFirst.mockResolvedValue({ fiscalYearStartMonth: 1, retainedEarningsAccountId: null })
     await expect(postYearEndClosing(2025, 3)).rejects.toThrow("Akun laba ditahan belum dipetakan di Pengaturan.")
@@ -128,7 +140,9 @@ describe("postYearEndClosing", () => {
   })
 
   it("E121-5: tahun fiskal mulai Juli -> tanggal penutup 30 Jun tahun berikut, bukan 31 Des", async () => {
-    mocks.settingsFindFirst.mockResolvedValue({ fiscalYearStartMonth: 7, retainedEarningsAccountId: 7 })
+    // Bulan fiskal kini dibaca dari baris system_settings yang dikunci
+    // FOR UPDATE (bacaan pertama tx), bukan findFirst terpisah.
+    mocks.queryRaw.mockResolvedValue([{ id: 1, period_lock_date: null, fiscal_year_start_month: 7 }])
     await postYearEndClosing(2025, 3)
     const created = mocks.journalCreate.mock.calls[0][0].data
     expect((created.transactionDate as Date).toISOString()).toBe("2026-06-30T23:59:59.999Z")
