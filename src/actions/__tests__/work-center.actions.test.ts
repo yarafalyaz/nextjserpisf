@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
   const prismaMock: Record<string, unknown> = {
     workCenter: model(),
     workOrderOperation: model(),
+    $executeRaw: vi.fn().mockResolvedValue(1),
     $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(prismaMock)),
   }
   return {
@@ -80,6 +81,25 @@ describe("createWorkCenter", () => {
     )
     expect(r).toMatchObject({ success: false })
     expect(wc().create).not.toHaveBeenCalled()
+  })
+
+  it("gap-lock work_centers sebelum cek duplikat (create konkuren nama sama terserialisasi)", async () => {
+    const r = await createWorkCenter(
+      form({ name: "Las", capacityHoursPerDay: "8", parallelStations: "1" }),
+    )
+    expect(r).toMatchObject({ success: true })
+    const execRaw = mocks.prismaMock.$executeRaw as ReturnType<typeof vi.fn>
+    const sql = execRaw.mock.calls
+      .map((c) => {
+        const a = c[0] as { strings?: string[] } | string[]
+        return Array.isArray(a) ? a.join("?") : (a?.strings?.join("?") ?? "")
+      })
+      .join(" ")
+    expect(sql).toContain("work_centers")
+    expect(sql).toContain("FOR UPDATE")
+    expect(execRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      wc().findMany.mock.invocationCallOrder[0],
+    )
   })
 
   it("kapasitas tidak positif ditolak validasi", async () => {

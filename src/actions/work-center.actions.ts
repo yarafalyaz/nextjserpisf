@@ -37,6 +37,12 @@ async function assertActiveWorkCenterNameAvailable(
   name: string,
   excludeId?: number,
 ): Promise<string> {
+  // Serialisasi penulis nama aktif: partial-unique tidak tersedia di MySQL
+  // (hanya @@index), jadi cek-tulis wajib di bawah gap-lock tabel — tanpa
+  // ini dua tx konkuren sama-sama membaca snapshot "belum ada" dan dua
+  // baris aktif bernormalizedName sama lahir. Pola gap-lock yang sama
+  // dengan penulis rantai petty_cash/tax_assessments.
+  await tx.$executeRaw`SELECT id FROM work_centers FOR UPDATE`
   const existing = await tx.workCenter.findMany({
     where: { normalizedName: normalizeWorkCenterName(name), isActive: true },
     select: { id: true, normalizedName: true, isActive: true },
