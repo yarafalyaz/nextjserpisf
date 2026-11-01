@@ -1410,8 +1410,15 @@ export async function createPettyCash(formData: FormData) {
       if (type === "IN" && settings.cashBankAccountId) {
         const sourceId = settings.cashBankAccountId;
         await tx.$queryRaw`SELECT id FROM accounts WHERE id = ${sourceId} FOR UPDATE`;
+        // Konvensi GL repo (report-aggregation.service.ts REPORT_JOURNAL_STATUSES):
+        // jurnal asal REVERSED + jurnal lawan POSTED berpasangan net-zero. Hanya
+        // POSTED terhitung → asal (kredit sumber) terbuang, lawan (debit
+        // sumber) terhitung → saldo sumber menggelembung sebesar reversal.
         const sourceEntries = await tx.journalEntry.findMany({
-          where: { accountId: sourceId, journal: { status: "POSTED" } },
+          where: {
+            accountId: sourceId,
+            journal: { status: { in: ["POSTED", "REVERSED"] }, deletedAt: null },
+          },
         });
         const sourceBalance = sourceEntries.reduce(
           (s, e) => safeSubtract(safeAdd(s, Number(e.debit), 2), Number(e.credit), 2),

@@ -980,6 +980,26 @@ describe("Petty Cash Actions", () => {
     expect(res?.success).toBe(true)
     expect(mocks.prismaMock.pettyCash.create).toHaveBeenCalled()
   })
+  // Regresi putaran 45: saldo sumber dihitung dari jurnal POSTED saja; jurnal
+  // asal REVERSED yang sudah dibayar jurnal lawan POSTED tersisihkan, saldo
+  // sumber terlihat lebih besar sebesar nominal reversal → IN berikutnya
+  // melebihi kas/bank riil lolos. Konvensi GL repo: pasangan POSTED+REVERSED
+  // (net-zero) wajib ikut dihitung.
+  it("regresi putaran 45: createPettyCash IN menghitung saldo sumber dari POSTED+REVERSED", async () => {
+    const res = await (actions as any).createPettyCash(fdMap({
+      type: "IN",
+      amount: 1000,
+      date: "2026-06-13"
+    }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.journalEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          journal: expect.objectContaining({ status: { in: ["POSTED", "REVERSED"] } }),
+        }),
+      }),
+    )
+  })
   it("createPettyCash IN mengunci akun sumber sebelum membaca saldo jurnal", async () => {
     const res = await (actions as any).createPettyCash(fdMap({
       type: "IN",
