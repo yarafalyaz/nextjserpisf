@@ -3156,7 +3156,42 @@ export async function deleteQuotation(id: number) {
         select: { id: true, workOrders: { select: { id: true } } },
       })
       const orphanProjectIds = projects.filter((p) => p.workOrders.length === 0).map((p) => p.id)
-      if (orphanProjectIds.length) await tx.project.deleteMany({ where: { id: { in: orphanProjectIds } } })
+      // Proyek yatim (WO penawaran habis) hanya boleh musnah bila penjaga
+      // deleteProject lolos juga: timesheets/tasks/overtime/pettyCash/
+      // vendorBills masih merujuk proyek lepas dari WO mana pun — hapus
+      // mentah gagal Restrict mentah atau me-null-kan atribusi. Approval
+      // polimorfik proyek ikut dibersihkan sesudah hapus, seperti
+      // deleteProject, supaya tak ada langkah persetujuan hantu.
+      for (const orphanId of orphanProjectIds) {
+        const orphan = await tx.project.findUnique({
+          where: { id: orphanId },
+          select: {
+            _count: {
+              select: {
+                timesheets: true,
+                tasks: true,
+                overtimeRequests: true,
+                pettyCash: true,
+                vendorBills: true,
+              },
+            },
+          },
+        })
+        const counts = orphan?._count
+        if (counts && (counts.timesheets > 0 || counts.tasks > 0 || counts.overtimeRequests > 0 || counts.pettyCash > 0 || counts.vendorBills > 0)) {
+          throw new Error(
+            "Penawaran tidak bisa dihapus: proyek terkait masih memiliki data " +
+            `(lembar waktu: ${counts.timesheets}, tugas: ${counts.tasks}, lembur: ${counts.overtimeRequests}, kas kecil: ${counts.pettyCash}, tagihan vendor: ${counts.vendorBills}). ` +
+            "Hapus atau pindahkan data proyek tersebut terlebih dahulu."
+          )
+        }
+      }
+      if (orphanProjectIds.length) {
+        await tx.project.deleteMany({ where: { id: { in: orphanProjectIds } } })
+        await tx.approval.deleteMany({
+          where: { referenceType: "Project", referenceId: { in: orphanProjectIds } },
+        })
+      }
     }
 
     // Reverse the GL journal of every Down Payment tied to this quotation

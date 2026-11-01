@@ -21,7 +21,8 @@ const tx = {
   // Putaran 24: guard catatan QC polimorfik atas WO turunan; default kosong.
   qcInspection: { count: vi.fn().mockResolvedValue(0) },
   nonconformance: { count: vi.fn().mockResolvedValue(0) },
-  project: { findMany: vi.fn(), deleteMany: vi.fn() },
+  project: { findUnique: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn() },
+  approval: { deleteMany: vi.fn() },
   downPayment: { findMany: vi.fn(), deleteMany: vi.fn() },
   quotationSection: { findMany: vi.fn(), deleteMany: vi.fn() },
   quotationItem: { deleteMany: vi.fn() },
@@ -79,10 +80,32 @@ describe("deleteQuotation shared project guard", () => {
 
   it("still deletes a project owned only by this quotation's work orders", async () => {
     tx.project.findMany.mockResolvedValue([{ id: 7, workOrders: [] }])
+    tx.project.findUnique.mockResolvedValue({
+      _count: { workOrders: 0, timesheets: 0, tasks: 0, overtimeRequests: 0, pettyCash: 0, vendorBills: 0 },
+    })
 
     const result = await deleteQuotation(5)
 
     expect(result.success).toBe(true)
     expect(tx.project.deleteMany).toHaveBeenCalledWith({ where: { id: { in: [7] } } })
+    // Approval polimorfik proyek ikut dibersihkan sesudah proyek dihapus.
+    expect(tx.approval.deleteMany).toHaveBeenCalledWith({
+      where: { referenceType: "Project", referenceId: { in: [7] } },
+    })
+  })
+
+  it("menolak bila proyek yatim masih punya tugas/timesheet/vendor bill (putaran 25)", async () => {
+    tx.project.findMany.mockResolvedValue([{ id: 7, workOrders: [] }])
+    tx.project.findUnique.mockResolvedValue({
+      _count: { workOrders: 0, timesheets: 1, tasks: 2, overtimeRequests: 0, pettyCash: 0, vendorBills: 1 },
+    })
+
+    const result = await deleteQuotation(5)
+
+    expect(result.success).toBe(false)
+    expect(String(result.error)).toContain("tugas: 2")
+    expect(String(result.error)).toContain("tagihan vendor: 1")
+    expect(tx.project.deleteMany).not.toHaveBeenCalled()
+    expect(tx.quotation.delete).not.toHaveBeenCalled()
   })
 })
