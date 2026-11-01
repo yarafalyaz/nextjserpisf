@@ -107,6 +107,7 @@ import {
 import { loadEmployeeLifecycleAttention } from "@/lib/reports/employee-lifecycle-data";
 import {
   allocateLoanRepayment,
+  totalAllocated,
   evaluateLoanBudgetGuard,
   loanBudgetGuardMessage,
 } from "@/lib/reports/employee-loan-repayment";
@@ -3513,6 +3514,19 @@ export async function markPayrollPaid(payrollId: number) {
           })),
           Number(payroll.loanDeduction),
         );
+        // Jurnal onPayrollPaid mengkredit Piutang sebesar snapshot slip PENUH
+        // (TASK-018) — potongan gaji karyawan benar-benar sudah terjadi.
+        // Bila sisa pinjaman aktif kini di bawah snapshot (disetor tunai /
+        // ditulis-off sesudah slip terbit), alokasi < jurnal dan subledger
+        // menyimpang dari GL selamanya. Tolak bayar berisik di dalam tx:
+        // klaim status ikut rollback, slip tetap approved dan dapat dibayar
+        // sesudah pinjaman/koreksi diselesaikan — bukan jurnal dipangkas.
+        const appliedTotal = totalAllocated(allocations);
+        if (appliedTotal < Number(payroll.loanDeduction) - 0.005) {
+          throw new Error(
+            `Sisa pinjaman aktif karyawan (Rp${appliedTotal.toLocaleString("id-ID")} dapat dialokasikan) di bawah potongan pinjaman slip (Rp${Number(payroll.loanDeduction).toLocaleString("id-ID")}) — pembayaran ditolak agar jurnal Piutang dan subledger pinjaman tidak menyimpang. Selesaikan setoran/tulis-off pinjaman atau buat slip koreksi lebih dulu.`,
+          );
+        }
         const updates: Promise<unknown>[] = [];
         for (const alloc of allocations) {
           updates.push(

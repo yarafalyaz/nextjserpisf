@@ -57,7 +57,9 @@ beforeEach(() => {
     grossSalary: 5000000, lateDeduction: 0, deductions: 0,
   })
   payrollUpdateManyMock.mockResolvedValue({ count: 1 })
-  loanFindManyMock.mockResolvedValue([])
+  loanFindManyMock.mockResolvedValue([
+    { id: 9, loanDate: new Date(2026, 0, 1), remainingAmount: 1000 },
+  ])
   txQueryRawMock.mockResolvedValue([{ id: 1, period_lock_date: null }])
 })
 
@@ -101,7 +103,7 @@ describe("markPayrollPaid concurrency guard", () => {
   })
 
   it("mengunci baris pinjaman karyawan sebelum membaca daftar aktif (serial lawan setoran/write-off)", async () => {
-    loanFindManyMock.mockResolvedValue([{ id: 9, loanDate: new Date(2026, 0, 1), remainingAmount: 900 }])
+    loanFindManyMock.mockResolvedValue([{ id: 9, loanDate: new Date(2026, 0, 1), remainingAmount: 1000 }])
     const result = await markPayrollPaid(1)
     expect(result.success).toBe(true)
     const sqlOf = (c: unknown[]) => {
@@ -135,8 +137,33 @@ describe("markPayrollPaid concurrency guard", () => {
       loanDeduction: 2000000, grossSalary: 5000000,
       lateDeduction: 500000, deductions: 0,
     })
+    loanFindManyMock.mockResolvedValue([
+      { id: 9, loanDate: new Date(2026, 0, 1), remainingAmount: 2000000 },
+    ])
     const result = await markPayrollPaid(1)
     expect(result.success).toBe(true)
     expect(payrollUpdateManyMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("menolak bayar bila sisa pinjaman aktif di bawah snapshot slip (jurnal akan mengkredit Piutang penuh)", async () => {
+    // Slip approved potongan Rp1.000; pinjaman disetor tunai/ditulis-off
+    // sesudahnya menyisakan Rp400 aktif. onPayrollPaid mengkredit Piutang
+    // sebesar snapshot penuh, jadi bayar harus ditolak — bukan jurnal
+    // mengambang tanpa subledger (roll back klaim status dalam tx).
+    loanFindManyMock.mockResolvedValue([{ id: 9, loanDate: new Date(2026, 0, 1), remainingAmount: 400 }])
+    const result = await markPayrollPaid(1)
+    expect(result.success).toBe(false)
+    expect(String(result.error)).toMatch(/subledger|pinjaman aktif/)
+    expect(onPayrollPaidMock).not.toHaveBeenCalled()
+  })
+
+  it("penuh: alokasi mencapai snapshot -> bayar lolos dan jurnal diposting", async () => {
+    loanFindManyMock.mockResolvedValue([
+      { id: 9, loanDate: new Date(2026, 0, 1), remainingAmount: 600 },
+      { id: 10, loanDate: new Date(2026, 1, 1), remainingAmount: 400 },
+    ])
+    const result = await markPayrollPaid(1)
+    expect(result.success).toBe(true)
+    expect(onPayrollPaidMock).toHaveBeenCalledTimes(1)
   })
 })
