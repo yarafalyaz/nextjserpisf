@@ -103,9 +103,12 @@ async function callerEmployeeId(userId: string): Promise<number | null> {
 async function assertEmployeeUsable(employeeId: number): Promise<void> {
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId },
-    select: { id: true, deletedAt: true },
+    select: { id: true, deletedAt: true, isActive: true },
   })
   if (!employee || employee.deletedAt != null) throw new Error("Karyawan tidak ditemukan")
+  // SP untuk karyawan nonaktif tidak punya penerima proses (pola
+  // assertLiveEmployee dokumen SDM lain).
+  if (employee.isActive === false) throw new Error("Karyawan tidak aktif")
 }
 
 /** Rekod issued karyawan untuk rantai jenjang (pembatal dikecualikan builder). */

@@ -342,9 +342,11 @@ function parseComponentForm(formData: FormData): {
 /**
  * Karyawan target dokumen SDM wajib hidup (ada + isActive + belum
  * soft-delete). Scope HR menilai akses, bukan kehidupan master.
+ * `client` supaya titik tulis dalam tx bisa menilai di bawah kunci baris
+ * karyawan yang sama (kunci FOR UPDATE tidak menyegarkan snapshot tx).
  */
-async function assertLiveEmployee(employeeId: number): Promise<void> {
-  const live = await prisma.employee.findFirst({
+async function assertLiveEmployee(employeeId: number, client: Pick<typeof prisma, "employee"> = prisma): Promise<void> {
+  const live = await client.employee.findFirst({
     where: { id: employeeId, isActive: true, deletedAt: null },
     select: { id: true },
   });
@@ -4150,6 +4152,9 @@ export async function createTimesheet(formData: FormData) {
       const freshError = await timesheetContextGuard(v, tx);
       if (freshError) throw new Error(freshError.error);
       await assertTimesheetDailyHoursTx(tx, v.employeeId, wibDateToUtcMidnight(v.date), v.hours, null);
+      // Hidup dinilai di bawah kunci baris karyawan (diambil cap harian):
+      // jam tidak menempel ke karyawan yang mati sesudah cek luar.
+      await assertLiveEmployee(v.employeeId, tx);
       return tx.timesheet.create({
         data: {
           slug: await nextSlug("timesheet", `lembar-waktu-${v.date}`),
@@ -5942,6 +5947,10 @@ export async function updateTimesheet(id: number, formData: FormData) {
       const pulled = await timesheetPulledError(id, tx);
       if (pulled) throw new Error(pulled.error);
       await assertTimesheetDailyHoursTx(tx, v.employeeId, wibDateToUtcMidnight(v.date), v.hours, id);
+      // Pemindahan ke karyawan lain = penanaman ke master baru: target wajib
+      // hidup, dinilai di bawah kunci baris karyawan target. Baris yang tetap
+      // pada karyawan sama tidak dinilai ulang (pola updateAttendance).
+      if (v.employeeId !== existing.employeeId) await assertLiveEmployee(v.employeeId, tx);
       return tx.timesheet.update({
         where: { id },
         data: {
@@ -5979,8 +5988,10 @@ export async function createAppreciation(formData: FormData) {
     const v = parsed.data;
 
     // HR scope: apresiasi = bonus yang dibayar payroll; karyawan luar
-    // scope tidak boleh dibuatkan (BUGHUNT #9).
+    // scope tidak boleh dibuatkan (BUGHUNT #9). Hidup: apresiasi untuk
+    // karyawan mati akan masuk bruto slip lewat estimasi payroll.
     await assertHrEmployeeAccess(await getHrScope(user), v.employeeId);
+    await assertLiveEmployee(v.employeeId);
 
     const appreciation = await prisma.appreciation.create({
       data: {
@@ -6029,6 +6040,8 @@ export async function updateAppreciation(formData: FormData) {
     await assertHrEmployeeAccess(scope, existing.employeeId);
     if (v.employeeId !== existing.employeeId) {
       await assertHrEmployeeAccess(scope, v.employeeId);
+      // Pemindahan = penanaman ke master baru: target wajib hidup.
+      await assertLiveEmployee(v.employeeId);
     }
 
     const appreciation = await prisma.appreciation.update({

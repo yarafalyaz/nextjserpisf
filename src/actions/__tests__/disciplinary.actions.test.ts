@@ -158,6 +158,20 @@ describe("createDisciplinaryRecord", () => {
     expect(mocks.recCreate).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 47: SP untuk karyawan nonaktif DITOLAK (gerbang hidup)", async () => {
+    mocks.employeeFindUnique.mockResolvedValue({ id: 1, deletedAt: null, isActive: false })
+    const r = await createDisciplinaryRecord({
+      employeeId: 1,
+      level: "sp1",
+      violationCategory: "mangkir tanpa keterangan berulang",
+      violationDate: "2026-01-05",
+      description: "Uraian",
+      regulationReference: null,
+    })
+    expect(r.success).toBe(false)
+    expect(mocks.recCreate).not.toHaveBeenCalled()
+  })
+
   it("AC-DISC-5: scope self tidak dapat mengajukan untuk karyawan lain", async () => {
     mocks.getHrScope.mockResolvedValue({ kind: "self", employeeId: 99 })
     const r = await createDisciplinaryRecord({

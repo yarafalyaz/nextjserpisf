@@ -137,6 +137,30 @@ describe("BUGHUNT #9 — appreciation HR scope", () => {
     expect(mocks.prismaMock.appreciation.update).toHaveBeenCalled()
   })
 
+  it("regresi putaran 47: create untuk karyawan nonaktif/terhapus ditolak (gerbang hidup), nol create", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
+    // Gerbang hidup menilai where {id, isActive, deletedAt}: karyawan mati
+    // -> null. Query scope (where userId) tetap aktor hidup.
+    mocks.prismaMock.employee.findFirst.mockImplementation(async (args: { where?: Record<string, unknown> }) =>
+      args?.where?.isActive === true ? null : { id: 7, departmentId: 3 },
+    )
+    const res = await createAppreciation(fd({ employeeId: "7", date: "2026-06-12", amount: "500000" }))
+    expect(res?.success).toBe(false)
+    if (!res?.success) expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.appreciation.create).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 47: update memindah ke karyawan nonaktif ditolak, nol update", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
+    mocks.prismaMock.employee.findFirst.mockImplementation(async (args: { where?: Record<string, unknown> }) =>
+      args?.where?.isActive === true ? null : { id: 7, departmentId: 3 },
+    )
+    const res = await updateAppreciation(fd({ id: "1", employeeId: "99", date: "2026-06-12", amount: "1" }))
+    expect(res?.success).toBe(false)
+    if (!res?.success) expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.appreciation.update).not.toHaveBeenCalled()
+  })
+
   it("delete baris karyawan luar scope ditolak, nol delete", async () => {
     mocks.prismaMock.appreciation.findUniqueOrThrow.mockResolvedValue({ employeeId: 99 })
     const res = await deleteAppreciation(1)

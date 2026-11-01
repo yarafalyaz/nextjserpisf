@@ -60,6 +60,8 @@ beforeEach(() => {
   mocks.prismaMock.timesheet.create.mockResolvedValue({ id: 1 })
   mocks.prismaMock.timesheet.update.mockResolvedValue({ id: 1 })
   mocks.prismaMock.timesheet.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1 })
+  // Gerbang hidup karyawan (putaran 47): default karyawan hidup.
+  mocks.prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
   mocks.prismaMock.productionCost.findMany.mockResolvedValue([])
   mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 7, status: "in_progress" })
   mocks.prismaMock.task.findUnique.mockResolvedValue({ id: 9, projectId: 3 })
@@ -155,6 +157,14 @@ describe("createTimesheet konteks (F-2026-10-21-019)", () => {
     const exact = await createTimesheet(fd({ ...BASE, workOrderId: "7", hours: "24" }))
     expect(exact.success).toBe(true)
   })
+
+  it("regresi putaran 47: karyawan nonaktif/terhapus ditolak (gerbang hidup), nol create", async () => {
+    mocks.prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await createTimesheet(fd({ ...BASE, workOrderId: "7" }))
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.timesheet.create).not.toHaveBeenCalled()
+  })
 })
 
 describe("updateTimesheet konteks (F-2026-10-21-019)", () => {
@@ -193,6 +203,15 @@ describe("updateTimesheet konteks (F-2026-10-21-019)", () => {
 
     expect(res.success).toBe(false)
     expect(res.error).toContain("closed")
+    expect(mocks.prismaMock.timesheet.update).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 47: edit memindah ke karyawan nonaktif ditolak, nol update", async () => {
+    // Existing milik karyawan 1; kiriman pindah ke karyawan 2 yang mati.
+    mocks.prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await updateTimesheet(1, fd({ ...BASE, employeeId: "2", workOrderId: "7" }))
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toContain("tidak aktif")
     expect(mocks.prismaMock.timesheet.update).not.toHaveBeenCalled()
   })
 })
