@@ -280,6 +280,16 @@ describe("Stock Adjustment Actions", () => {
     });
   });
 
+  it("deleteStockAdjustment menolak draft hasil posting opname (sesi posted menunjuk ke sini)", async () => {
+    seedDraft(mocks.prismaMock.stockAdjustment);
+    mocks.prismaMock.stocktakeSession.count.mockResolvedValue(1);
+    const res = await actions.deleteStockAdjustment(1);
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("opname");
+    expect(mocks.prismaMock.stockAdjustment.deleteMany).not.toHaveBeenCalled();
+    mocks.prismaMock.stocktakeSession.count.mockResolvedValue(0);
+  });
+
   it("deleteStockAdjustment menolak bila klaim kondisional kalah balapan (status berubah)", async () => {
     seedDraft(mocks.prismaMock.stockAdjustment);
     mocks.prismaMock.stockAdjustment.deleteMany.mockResolvedValue({ count: 0 });

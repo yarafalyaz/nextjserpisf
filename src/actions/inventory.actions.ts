@@ -1901,6 +1901,18 @@ export async function deleteStockAdjustment(id: number) {
       throw new Error("Hanya stock adjustment draft yang dapat dihapus");
     }
 
+    // Draft hasil posting opname adalah satu-satunya jejak selisih sesi itu:
+    // sesi sudah "posted" dan tak bisa diposting ulang, jadi menghapus draft
+    // ini menghilangkan selisih senyap dan meninggalkan adjustmentId yatim.
+    // Penunjuk hanya lahir bersama adjustment-nya (posting satu tx), jadi
+    // hitungan sebelum klaim bebas race menunjuk id yang sedang dihapus.
+    const stocktakeRefs = await prisma.stocktakeSession.count({
+      where: { adjustmentId: id },
+    });
+    if (stocktakeRefs > 0) {
+      throw new Error("Penyesuaian hasil posting opname tidak dapat dihapus; proses atau biarkan draft-nya");
+    }
+
     // Klaim kondisional: process konkuren yang commit lebih dulu membuat
     // count 0 — dokumen non-draft tidak ikut terhapus dari bacaan basi.
     const claim = await prisma.stockAdjustment.deleteMany({
