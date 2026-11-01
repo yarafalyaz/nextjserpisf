@@ -880,6 +880,24 @@ describe("Lead Actions", () => {
     expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
   })
 
+  it("createLead menolak assignedTo pengguna nonaktif (kolom bare-int tanpa FK)", async () => {
+    mocks.prismaMock.user = mocks.prismaMock.user ?? { findFirst: vi.fn() }
+    mocks.prismaMock.user.findFirst = vi.fn().mockResolvedValue(null)
+    const res = await actions.createLead(fdMap({ name: "test", assignedTo: "999" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Pengguna penugasan tidak ditemukan atau tidak aktif")
+    expect(mocks.prismaMock.lead.create).not.toHaveBeenCalled()
+  })
+  it("updateLead menolak assignedTo pengguna nonaktif", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({ id: 1, assignedTo: 1, deletedAt: null, status: "new" })
+    mocks.prismaMock.user = mocks.prismaMock.user ?? { findFirst: vi.fn() }
+    mocks.prismaMock.user.findFirst = vi.fn().mockResolvedValue(null)
+    const res = await actions.updateLead(1, fdMap({ name: "test", assignedTo: "999" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Pengguna penugasan tidak ditemukan atau tidak aktif")
+    expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
+  })
+
   it("updateLead menolak edit pemilik lama bila lead di-assign ulang di jendela guard->tx (putaran 25)", async () => {
     // Sales id 2 pemilik sah di snapshot luar; admin meng-assign ulang ke
     // 7 dan commit sebelum tx mulai. Bacaan segar harus menolak edit ini,

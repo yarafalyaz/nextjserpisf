@@ -2109,6 +2109,26 @@ function leadExpectedCloseDate(
   return value ? wibDateToUtcMidnight(value) : null;
 }
 
+/**
+ * Lead.assignedTo bare Int? tanpa relasi User: id gaib/nonaktif tersimpan
+ * senyap dan lead ter-assign ke hantu. Bila payload mengirim assignedTo,
+ * pengguna wajib ada dan aktif — User tidak punya deletedAt, isActive
+ * status hidupnya (pola assertTicketCustomerLive di crm.actions).
+ */
+async function assertAssignedUserLive(
+  client: { user: { findFirst: typeof prisma.user.findFirst } },
+  assignedTo: number | null | undefined,
+): Promise<void> {
+  if (assignedTo == null) return;
+  const user = await client.user.findFirst({
+    where: { id: assignedTo, isActive: true },
+    select: { id: true },
+  });
+  if (!user) {
+    throw new Error("Pengguna penugasan tidak ditemukan atau tidak aktif");
+  }
+}
+
 export async function createLead(formData: FormData) {
   try {
     const actor = await requirePermission("create_leads");
@@ -2124,6 +2144,8 @@ export async function createLead(formData: FormData) {
       throw new Error(parsed.error);
     }
     const v = parsed.data;
+
+    await assertAssignedUserLive(prisma, v.assignedTo);
 
     // F-2026-10-24-141-S Model C (Q-DUP-1): kandidat cocok -> TIDAK simpan
     // dulu; kembalikan peringatan. Alasan wajib divalidasi server (BR-DUP-06).
@@ -2277,6 +2299,9 @@ export async function updateLead(id: number, formData: FormData) {
         "Anda tidak memiliki izin untuk mengubah penugasan (assignee) lead.",
       );
     }
+    // assertAssignedUserLive menilai newAssignedTo di DALAM tx sesudah guard
+    // segar (di bawah), supaya penolakan izin selalu menang atas penolakan
+    // eksistensi target.
 
     // F-2026-10-24-141-S Q-DUP-3: cek duplikat di edit — self-excluded,
     // HANYA bila phone/email berubah dari nilai tersimpan (normalisasi
@@ -2337,6 +2362,7 @@ export async function updateLead(id: number, formData: FormData) {
           "Anda tidak memiliki izin untuk mengubah penugasan (assignee) lead.",
         );
       }
+      await assertAssignedUserLive(tx, newAssignedTo);
       const freshLostCheck = validateLeadLostTransition({
         fromStatus: fresh.status,
         toStatus: v.status ?? null,

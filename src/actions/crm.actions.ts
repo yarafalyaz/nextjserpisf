@@ -58,6 +58,26 @@ async function assertTicketCustomerLive(
   }
 }
 
+/**
+ * Lead.assignedTo / CrmTicket.assignedTo bare Int? tanpa relasi User: id
+ * gaib/nonaktif tersimpan senyap dan tiket/lead ter-assign ke hantu (tidak
+ * ada yang bisa mengerjakannya). Bila payload mengirim assignedTo, pengguna
+ * wajib ada dan aktif — User tidak punya deletedAt, isActive status hidupnya.
+ */
+async function assertAssignedUserLive(
+  client: { user: { findFirst: typeof prisma.user.findFirst } },
+  assignedTo: number | null | undefined,
+): Promise<void> {
+  if (assignedTo == null) return
+  const user = await client.user.findFirst({
+    where: { id: assignedTo, isActive: true },
+    select: { id: true },
+  })
+  if (!user) {
+    throw new Error("Pengguna penugasan tidak ditemukan atau tidak aktif")
+  }
+}
+
 export async function createTicket(formData: FormData) {
   try {
   const user = await requirePermission("create_tickets")
@@ -69,6 +89,7 @@ export async function createTicket(formData: FormData) {
   const data = parsed.data
 
   await assertTicketCustomerLive(prisma, data.customerId)
+  await assertAssignedUserLive(prisma, data.assignedTo)
 
   const { generateDocumentNumber } = await import("@/lib/utils/document-number")
   const ticketNumber = await generateDocumentNumber("TKT", "simple")
@@ -132,6 +153,7 @@ export async function updateTicket(id: number, formData: FormData) {
     if (!existing) throw new Error("Tiket tidak ditemukan")
     if (existing.deletedAt) throw new Error("Tiket sudah dihapus dan tidak dapat diubah")
     await assertTicketCustomerLive(tx, data.customerId)
+    await assertAssignedUserLive(tx, data.assignedTo)
 
     return tx.crmTicket.update({
       where: { id },

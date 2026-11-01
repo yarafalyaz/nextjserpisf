@@ -139,6 +139,20 @@ describe("CRM Ticket Actions", () => {
       expect(data.resolvedAt).toBeNull()
     }
   })
+  it("createTicket menolak assignedTo pengguna nonaktif (kolom bare-int tanpa FK)", async () => {
+    mocks.prismaMock.user = { findFirst: vi.fn().mockResolvedValue(null) }
+    const res = await actions.createTicket(fdMap({ subject: "Tiket", assignedTo: 999 }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Pengguna penugasan tidak ditemukan atau tidak aktif")
+    expect(mocks.prismaMock.crmTicket.create).not.toHaveBeenCalled()
+  })
+  it("updateTicket menolak assignedTo pengguna nonaktif dalam tx terkunci", async () => {
+    mocks.prismaMock.user = { findFirst: vi.fn().mockResolvedValue(null) }
+    const res = await actions.updateTicket(1, fdMap({ subject: "Tiket", assignedTo: 999 }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Pengguna penugasan tidak ditemukan atau tidak aktif")
+    expect(mocks.prismaMock.crmTicket.update).not.toHaveBeenCalled()
+  })
   it("updateTicket handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     // Sekali pakai dari tes sebelumnya tidak mengambang (clearAllMocks tidak
