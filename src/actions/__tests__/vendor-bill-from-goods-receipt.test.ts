@@ -130,6 +130,7 @@ beforeEach(() => {
     id: 77,
     documentNo: "GR-077",
     status: "verified",
+    purchaseOrderId: 50,
     purchaseOrder: { vendorId: 3 },
   });
   mocks.txMock.goodsReceipt.findMany.mockResolvedValue([
@@ -210,7 +211,8 @@ describe("createVendorBill dari penerimaan (segmen penerimaan/<slug>)", () => {
       id: 77,
       documentNo: "GR-077",
       status: "draft",
-      purchaseOrder: { vendorId: 3 },
+      purchaseOrderId: 50,
+    purchaseOrder: { vendorId: 3 },
     });
 
     const res = await createVendorBill(billFromGr());
@@ -225,6 +227,7 @@ describe("createVendorBill dari penerimaan (segmen penerimaan/<slug>)", () => {
       id: 77,
       documentNo: "GR-077",
       status: "verified",
+      purchaseOrderId: 50,
       purchaseOrder: { vendorId: 9 },
     });
 

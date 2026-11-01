@@ -1427,6 +1427,60 @@ describe("Vendor Bill Actions", () => {
     expect(mocks.prismaMock.vendorBill.create).toHaveBeenCalled()
   })
 
+  // Regresi putaran 43: pasangan PO↔GR — create hanya memeriksa vendor PO
+  // dan vendor GR terpisah; bill bisa menautkan PO 5 dengan GR milik PO 9
+  // (vendor sama) dan hook posting menggolongkan goodsBased dari GR atas
+  // PO yang salah. Pasangan kini wajib konsisten; PO kosong diturunkan.
+  it("regresi putaran 43: createVendorBill menolak pasangan PO/GR tak konsisten", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValue({
+      id: 77, documentNo: "GR-077", status: "verified",
+      purchaseOrderId: 9,
+      purchaseOrder: { vendorId: 1 },
+    })
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      purchaseOrderId: "5",
+      goodsReceiptId: "77",
+      date: "2026-06-12",
+      subtotal: "100",
+      tax: "0",
+      grandTotal: "100",
+      items: JSON.stringify([{ itemId: 7, qty: 1, unitPrice: 100 }]),
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("bukan milik PO tagihan ini")
+    expect(mocks.prismaMock.vendorBill.create).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 43: createVendorBill hanya-GR menurunkan PO dari GR", async () => {
+    mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValue({
+      id: 77, documentNo: "GR-077", status: "verified",
+      purchaseOrderId: 9,
+      purchaseOrder: { vendorId: 1 },
+    })
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValue([
+      { id: 501, itemId: 7, qty: 1, unitCost: 100 },
+    ])
+    mocks.prismaMock.vendorBillItem.aggregate.mockResolvedValue({ _sum: { subtotal: 0 } })
+    mocks.prismaMock.vendorBill.create.mockResolvedValue({ id: 1 })
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      goodsReceiptId: "77",
+      date: "2026-06-12",
+      subtotal: "100",
+      tax: "0",
+      grandTotal: "100",
+      items: JSON.stringify([{ itemId: 7, qty: 1, unitPrice: 100 }]),
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.vendorBill.create.mock.calls.at(-1)![0]
+    expect(arg.data.purchaseOrderId).toBe(9)
+    expect(arg.data.goodsReceiptId).toBe(77)
+    mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValue(null)
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValue([])
+  })
+
   // R8-JB-09: dueDate tak terisi diturunkan dari termin master vendor.
   it("R8-JB-09: createVendorBill menurunkan dueDate dari termin vendor bila form tak mengisi", async () => {
     mocks.prismaMock.vendor.findUnique.mockResolvedValue({ paymentTerm: { days: 14, isActive: true } })

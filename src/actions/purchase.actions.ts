@@ -521,6 +521,37 @@ async function assertGrBillingWithinReceived(
  * vendor bill still posts, but the operator must see that the late cost was
  * refused into an already-finished HPP instead of hanging WIP.
  */
+/**
+ * Pasangan PO↔GR bill wajib konsisten (putaran 43): GR menunjuk PO-nya
+ * sendiri (`GoodsReceipt.purchaseOrderId`), jadi bill yang menautkan
+ * keduanya harus menunjuk PO yang sama — tanpa ini bill hanya-GR (PO
+ * kosong, GR milik PO lain) lolos dan hook posting menggolongkan
+ * `goodsBased` dari hitungan GR atas PO yang salah. Bila payload hanya
+ * mengirim GR, PO diturunkan dari GR (alur "Buat Tagihan dari
+ * Penerimaan"). Baris GR dibaca di bawah kunci pemanggil.
+ */
+async function assertBillPoGrPairTx(
+  tx: Prisma.TransactionClient,
+  params: { purchaseOrderId: number | null; goodsReceiptId: number | null },
+): Promise<{ purchaseOrderId: number | null; gr: { documentNo: string; status: string; vendorId: number } | null }> {
+  if (!params.goodsReceiptId) return { purchaseOrderId: params.purchaseOrderId, gr: null };
+  await tx.$executeRaw`SELECT id FROM goods_receipts WHERE id = ${params.goodsReceiptId} FOR UPDATE`;
+  const gr = await tx.goodsReceipt.findUnique({
+    where: { id: params.goodsReceiptId },
+    select: { documentNo: true, status: true, purchaseOrderId: true, purchaseOrder: { select: { vendorId: true } } },
+  });
+  if (!gr) throw new Error("Penerimaan barang yang ditagih tidak ditemukan.");
+  if (params.purchaseOrderId != null && gr.purchaseOrderId !== params.purchaseOrderId) {
+    throw new Error(
+      `Penerimaan ${gr.documentNo} bukan milik PO tagihan ini — pasangan PO/penerimaan tidak konsisten.`,
+    );
+  }
+  return {
+    purchaseOrderId: params.purchaseOrderId ?? gr.purchaseOrderId,
+    gr: { documentNo: gr.documentNo, status: gr.status, vendorId: gr.purchaseOrder.vendorId },
+  };
+}
+
 type ServicePoCostNotice = { productionOrderIds: number[]; text: string };
 
 async function syncServicePoCostFromBills(
@@ -1813,8 +1844,17 @@ export async function createVendorBill(formData: FormData) {
         });
       }
 
-      if (v.purchaseOrderId) {
-        await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
+      // Pasangan PO↔GR dinilai SEBELUM gerbang PO/3-way (putaran 43): GR
+      // dikunci, pasangan wajib konsisten, dan PO kosong diturunkan dari
+      // GR supaya 3-way match + hook posting membaca PO yang benar.
+      const pair = await assertBillPoGrPairTx(tx, {
+        purchaseOrderId: v.purchaseOrderId ?? null,
+        goodsReceiptId: v.goodsReceiptId ?? null,
+      });
+      const effectivePoId = pair.purchaseOrderId;
+
+      if (effectivePoId) {
+        await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${effectivePoId} FOR UPDATE`;
 
         // Integrity: a PO-linked bill (goods OR service) must belong to the
         // SAME vendor as the bill, otherwise AP would be recognised against the
@@ -1823,7 +1863,7 @@ export async function createVendorBill(formData: FormData) {
         // service bill can never be booked to a different vendor than the one on
         // the PO it settles.
         const po = await tx.purchaseOrder.findUniqueOrThrow({
-          where: { id: v.purchaseOrderId },
+          where: { id: effectivePoId },
           select: { vendorId: true, documentNo: true, isService: true },
         });
         if (po.vendorId !== v.vendorId) {
@@ -1834,10 +1874,10 @@ export async function createVendorBill(formData: FormData) {
 
         // F-2026-10-28-157-V Putusan 1+3: guard per-baris + referensi termin.
         assertTermsReference(v.terms);
-        await assertBillLinePricesWithinReference(tx, v.purchaseOrderId, v.items);
+        await assertBillLinePricesWithinReference(tx, effectivePoId, v.items);
       }
 
-      await assertThreeWayMatch(tx, v.purchaseOrderId ?? null, billHeader.subtotal);
+      await assertThreeWayMatch(tx, effectivePoId, billHeader.subtotal);
 
       // "Buat Tagihan dari Penerimaan" (`?grId=`): tautkan tagihan ke penerimaan
       // yang ditagih. Tanpa ini `VendorBill.goodsReceiptId` /
@@ -1845,19 +1885,8 @@ export async function createVendorBill(formData: FormData) {
       // "Penerimaan Barang" di halaman tagihan selalu "—" dan laporan Diterima
       // Belum Ditagih (GR/IR) membaca 0 untuk setiap baris penerimaan.
       let grLineQueues: GrLineQueues | undefined;
-      if (v.goodsReceiptId) {
-        const gr = await tx.goodsReceipt.findUnique({
-          where: { id: v.goodsReceiptId },
-          select: {
-            id: true,
-            documentNo: true,
-            status: true,
-            purchaseOrder: { select: { vendorId: true } },
-          },
-        });
-        if (!gr) {
-          throw new Error("Penerimaan barang yang ditagih tidak ditemukan.");
-        }
+      if (pair.gr) {
+        const gr = pair.gr;
         // Penerimaan draft belum menambah stok maupun membersihkan akun clearing,
         // jadi menagihnya akan mencocokkan tagihan dengan penerimaan yang tidak ada.
         if (gr.status !== PurchaseStatus.VERIFIED && gr.status !== Status.COMPLETED) {
@@ -1867,13 +1896,13 @@ export async function createVendorBill(formData: FormData) {
         }
         // Sama seperti penjagaan vendor PO di atas: AP tidak boleh diakui untuk
         // vendor lain daripada yang menerima barangnya.
-        if (gr.purchaseOrder.vendorId !== v.vendorId) {
+        if (gr.vendorId !== v.vendorId) {
           throw new Error(
             `Vendor tagihan tidak sesuai dengan vendor penerimaan ${gr.documentNo}.`,
           );
         }
 
-        grLineQueues = await loadGrLineQueues(tx, gr.id);
+        grLineQueues = await loadGrLineQueues(tx, v.goodsReceiptId!);
 
         // Guard tagih-ganda per-GR (BUG-09): tagihan yang sudah ada
         // (non-cancelled) DITAMBAH tagihan baru ini tidak boleh melebihi nilai
@@ -1882,7 +1911,7 @@ export async function createVendorBill(formData: FormData) {
         // Σ `VendorBillItem.subtotal` yang dijumlah penjaga untuk tagihan lama.
         await assertGrBillingWithinReceived(
           tx,
-          gr.id,
+          v.goodsReceiptId!,
           gr.documentNo,
           safeSubtract(billHeader.subtotal, billHeader.discountAmount, 2),
         );
@@ -1899,7 +1928,7 @@ export async function createVendorBill(formData: FormData) {
           documentNo,
           slug,
           vendorId: v.vendorId,
-          purchaseOrderId: v.purchaseOrderId ?? null,
+          purchaseOrderId: effectivePoId,
           goodsReceiptId: v.goodsReceiptId ?? null,
           projectId: v.projectId ?? null,
           withholdingTypeId: v.withholdingTypeId ?? null,
@@ -2156,6 +2185,20 @@ export async function confirmVendorBill(billId: number) {
       // Titik pengakuan: vendor yang nonaktif/terhapus sesudah draft lahir
       // tidak boleh jadi utang + jurnal (paritas penilaian ulang bank-transfer).
       await assertLiveVendorTx(tx, fresh.vendorId);
+      // Pasangan PO↔GR tersimpan ditegakkan ulang di titik pengakuan
+      // (putaran 43): draft warisan yang pasangannya inkonsisten tidak
+      // boleh lahir sebagai utang; PO kosong diturunkan dari GR.
+      const pair = await assertBillPoGrPairTx(tx, {
+        purchaseOrderId: fresh.purchaseOrderId,
+        goodsReceiptId: fresh.goodsReceiptId,
+      });
+      if (pair.purchaseOrderId !== fresh.purchaseOrderId) {
+        await tx.vendorBill.update({
+          where: { id: billId },
+          data: { purchaseOrderId: pair.purchaseOrderId },
+        });
+        fresh.purchaseOrderId = pair.purchaseOrderId;
+      }
 
       // F-2026-10-24-133-V Putusan 1(a)/4: tagihan L3 wajib (masih) tanpa
       // tautan PO/GR, WO closed, tidak duplikat, dan akun beban dari
@@ -3726,7 +3769,7 @@ export async function updateVendorBill(id: number, formData: FormData) {
       }
       const latestBill = await tx.vendorBill.findUnique({
         where: { id },
-        select: { status: true },
+        select: { status: true, goodsReceiptId: true },
       });
       if (latestBill && latestBill.status !== "draft")
         throw new Error("Hanya tagihan draft yang dapat diedit");
@@ -3755,13 +3798,22 @@ export async function updateVendorBill(id: number, formData: FormData) {
         });
       }
 
-      if (v.purchaseOrderId) {
-        await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
+      // Pasangan PO↔GR dinilai ulang atas GR tersimpan (putaran 43): GR
+      // tidak berubah lewat edit, jadi PO hasil edit wajib tetap milik GR
+      // itu; PO kosong diturunkan dari GR seperti create.
+      const pair = await assertBillPoGrPairTx(tx, {
+        purchaseOrderId: v.purchaseOrderId ?? null,
+        goodsReceiptId: latestBill?.goodsReceiptId ?? existingBill.goodsReceiptId,
+      });
+      const effectivePoId = pair.purchaseOrderId;
+
+      if (effectivePoId) {
+        await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${effectivePoId} FOR UPDATE`;
         // Putaran 22: identitas vendor diulang dari create — edit draft tak
         // boleh memindah tagihan PO vendor A ke vendor B (AP lahir membaca
         // bill.vendorId saat posting). Guard create di createVendorBill.
         const po = await tx.purchaseOrder.findUniqueOrThrow({
-          where: { id: v.purchaseOrderId },
+          where: { id: effectivePoId },
           select: { vendorId: true, documentNo: true },
         });
         if (po.vendorId !== v.vendorId) {
@@ -3772,12 +3824,12 @@ export async function updateVendorBill(id: number, formData: FormData) {
         // F-2026-10-28-157-V Putusan 1+3 di edit (titik kedua): sama seperti
         // create — guard per-baris + referensi termin atas input baru.
         assertTermsReference(v.terms);
-        await assertBillLinePricesWithinReference(tx, v.purchaseOrderId, v.items);
+        await assertBillLinePricesWithinReference(tx, effectivePoId, v.items);
       }
 
       await assertThreeWayMatch(
         tx,
-        v.purchaseOrderId ?? null,
+        effectivePoId,
         billHeader.subtotal,
         id,
       );
@@ -3817,7 +3869,7 @@ export async function updateVendorBill(id: number, formData: FormData) {
         data: {
           slug,
           vendorId: v.vendorId,
-          purchaseOrderId: v.purchaseOrderId ?? null,
+          purchaseOrderId: effectivePoId,
           projectId: v.projectId ?? null,
           withholdingTypeId: v.withholdingTypeId ?? null,
           withholdingAmount: v.withholdingAmount ?? 0,
