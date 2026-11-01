@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => {
     vendorPayment: {
       findMany: vi.fn(),
       updateMany: vi.fn(),
+      count: vi.fn(),
     },
   }
   return {
@@ -41,6 +42,7 @@ beforeEach(() => {
     { id: 10, documentNo: "VP-10" },
   ])
   mocks.prismaMock.vendorPayment.updateMany.mockResolvedValue({ count: 1 })
+  mocks.prismaMock.vendorPayment.count.mockReset().mockResolvedValue(1)
 })
 
 describe("markVendorPaymentsTransferred Zod validation", () => {
@@ -77,5 +79,59 @@ describe("markVendorPaymentsTransferred Zod validation", () => {
     expect(res.success).toBe(true)
     const data = mocks.prismaMock.vendorPayment.updateMany.mock.calls.at(-1)![0].data
     expect(data.transferReference).toBe("TRF-123")
+  })
+})
+
+describe("klaim kondisional mark/unmark (regresi saling timpa)", () => {
+  it("mark hanya mengklaim baris transferredAt null; updated dari count klaim", async () => {
+    mocks.prismaMock.vendorPayment.updateMany.mockResolvedValue({ count: 1 })
+
+    const res = await actions.markVendorPaymentsTransferred(fd(base, ["10", "11"]))
+
+    expect(res).toEqual({ success: true, updated: 1 })
+    const where = mocks.prismaMock.vendorPayment.updateMany.mock.calls.at(-1)![0].where
+    expect(where.transferredAt).toBeNull()
+    expect(where.deletedAt).toBeNull()
+  })
+
+  it("mark saat semua sudah ditransfer -> error jujur, bukan sukses semu", async () => {
+    mocks.prismaMock.vendorPayment.updateMany.mockResolvedValue({ count: 0 })
+
+    const res = await actions.markVendorPaymentsTransferred(fd(base))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah ditandai")
+  })
+
+  it("mark saat baris tidak ada -> tidak ditemukan", async () => {
+    mocks.prismaMock.vendorPayment.updateMany.mockResolvedValue({ count: 0 })
+    mocks.prismaMock.vendorPayment.count.mockResolvedValue(0)
+
+    const res = await actions.markVendorPaymentsTransferred(fd(base))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak ditemukan")
+  })
+
+  it("unmark hanya mengklaim baris yang sedang ditandai", async () => {
+    mocks.prismaMock.vendorPayment.findMany.mockResolvedValue([{ transferredAt: new Date("2026-10-20T00:00:00Z") }])
+    mocks.prismaMock.vendorPayment.updateMany.mockResolvedValue({ count: 1 })
+
+    const res = await actions.unmarkVendorPaymentsTransferred(fd({}, ["10"]))
+
+    expect(res).toEqual({ success: true, updated: 1 })
+    const arg = mocks.prismaMock.vendorPayment.updateMany.mock.calls.at(-1)![0]
+    expect(arg.where.transferredAt).toEqual({ not: null })
+    expect(arg.data).toEqual({ transferredAt: null, transferReference: null })
+  })
+
+  it("unmark saat belum ada yang ditandai -> error jujur", async () => {
+    mocks.prismaMock.vendorPayment.findMany.mockResolvedValue([{ transferredAt: null }])
+    mocks.prismaMock.vendorPayment.updateMany.mockResolvedValue({ count: 0 })
+
+    const res = await actions.unmarkVendorPaymentsTransferred(fd({}, ["10"]))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("belum ditandai")
   })
 })

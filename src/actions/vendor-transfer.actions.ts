@@ -42,27 +42,33 @@ export async function markVendorPaymentsTransferred(formData: FormData): Promise
 
     const reference = parsed.data.reference?.trim() || null
 
-    // Hanya pembayaran yang benar-benar ada (dan belum dihapus) yang boleh ditandai.
-    const payments = await prisma.vendorPayment.findMany({
-      where: { id: { in: selection.ids }, deletedAt: null },
-      select: { id: true, documentNo: true },
-    })
-    if (payments.length === 0) return { success: false, error: "Pembayaran yang dipilih tidak ditemukan." }
-
-    await prisma.vendorPayment.updateMany({
-      where: { id: { in: payments.map((payment) => payment.id) } },
+    // Klaim kondisional: hanya baris yang BELUM ditransfer yang boleh
+    // ditandai. Tanpa syarat ini, unmark koreksi yang commit di tengah
+    // tertimpa mark dari snapshot basi (pembayaran terkirim tampil belum
+    // ditransfer -> instruksi transfer kedua), dan `updated` melaporkan
+    // jumlah snapshot, bukan jumlah yang benar-benar berubah.
+    const result = await prisma.vendorPayment.updateMany({
+      where: { id: { in: selection.ids }, deletedAt: null, transferredAt: null },
       data: { transferredAt: date, transferReference: reference },
     })
+    if (result.count === 0) {
+      const anyExists = await prisma.vendorPayment.count({
+        where: { id: { in: selection.ids }, deletedAt: null },
+      })
+      return anyExists === 0
+        ? { success: false, error: "Pembayaran yang dipilih tidak ditemukan." }
+        : { success: false, error: "Semua pembayaran yang dipilih sudah ditandai ditransfer." }
+    }
 
     await logActivity(
       "update",
       "VendorPayment",
-      payments[0].id,
-      `Menandai ${payments.length} pembayaran vendor sudah ditransfer (${reference ?? "tanpa referensi"})`,
+      selection.ids[0],
+      `Menandai ${result.count} pembayaran vendor sudah ditransfer (${reference ?? "tanpa referensi"})`,
     )
     revalidatePath(REVALIDATE)
 
-    return { success: true, updated: payments.length }
+    return { success: true, updated: result.count }
   } catch (error) {
     if (isNextRedirectError(error)) throw error
     console.error("markVendorPaymentsTransferred failed:", error)
@@ -88,11 +94,21 @@ export async function unmarkVendorPaymentsTransferred(formData: FormData): Promi
       if (row.transferredAt) await assertPeriodOpen(row.transferredAt)
     }
 
+    // Klaim kondisional arah sebaliknya: hanya baris yang SEDANG ditandai
+    // yang boleh dibatalkan tandanya — mark baru yang commit sesudah
+    // findMany period-lock di atas tidak boleh terhapus oleh unmark basi.
     const result = await prisma.vendorPayment.updateMany({
-      where: { id: { in: selection.ids }, deletedAt: null },
+      where: { id: { in: selection.ids }, deletedAt: null, transferredAt: { not: null } },
       data: { transferredAt: null, transferReference: null },
     })
-    if (result.count === 0) return { success: false, error: "Pembayaran yang dipilih tidak ditemukan." }
+    if (result.count === 0) {
+      const anyExists = await prisma.vendorPayment.count({
+        where: { id: { in: selection.ids }, deletedAt: null },
+      })
+      return anyExists === 0
+        ? { success: false, error: "Pembayaran yang dipilih tidak ditemukan." }
+        : { success: false, error: "Semua pembayaran yang dipilih belum ditandai ditransfer." }
+    }
 
     await logActivity("update", "VendorPayment", selection.ids[0], `Membatalkan penanda transfer ${result.count} pembayaran`)
     revalidatePath(REVALIDATE)
