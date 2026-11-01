@@ -469,6 +469,15 @@ describe("reverseSalesLateFee (E93-6 waiver)", () => {
 })
 
 describe("createCustomerLateFeeTerm (P2a)", () => {
+  it("regresi putaran 24: tanggal mustahil 2026-02-30 ditolak, tidak bergulir ke 2 Mar", async () => {
+    const res = await actions.createCustomerLateFeeTerm(
+      fd({ customerId: "3", ratePercentPerDay: "0.1", effectiveFrom: "2026-02-30" }),
+    )
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("wajib diisi")
+    expect(tx.customerLateFeeTerm.create).not.toHaveBeenCalled()
+  })
+
   it("dua basis tarif → ditolak; satu basis → tersimpan bertanggal efektif", async () => {
     const bad = await actions.createCustomerLateFeeTerm(
       fd({ customerId: "3", ratePercentPerDay: "0.1", flatAmountPerDay: "1000", effectiveFrom: "2026-01-01" }),

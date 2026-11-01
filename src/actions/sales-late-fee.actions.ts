@@ -36,6 +36,8 @@ import {
   onSalesLateFeePosted,
   reverseSalesLateFeeJournalTx,
 } from "@/lib/hooks/sales-late-fee.hook"
+import { dateOnly } from "@/lib/validations/finance.schemas"
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 
 const REVALIDATE = "/penjualan/antrean-penagihan"
 
@@ -56,8 +58,12 @@ function parseId(raw: unknown): number | null {
 function parseDate(raw: unknown): Date | null {
   const str = String(raw ?? "").trim()
   if (!str) return null
-  const d = new Date(str)
-  return Number.isNaN(d.getTime()) ? null : d
+  // Konvensi repo (dateOnly): nilai dulu sebagai tanggal kalender nyata —
+  // `new Date("2026-02-30")` bergulir diam-diam ke 2 Mar dan tanggal efektif
+  // denda tercatat lain dari yang diketik operator.
+  const parsed = dateOnly.safeParse(str)
+  if (!parsed.success) return null
+  return wibDateToUtcMidnight(parsed.data)
 }
 
 function parseMoney(raw: unknown): number | null {
