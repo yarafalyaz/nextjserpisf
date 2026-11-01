@@ -49,6 +49,9 @@ const mocks = vi.hoisted(() => {
       createMany: vi.fn().mockResolvedValue({ count: 0 }),
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
+    employee: {
+      findFirst: vi.fn().mockResolvedValue({ id: 1 }),
+    },
     asset: {
       update: vi.fn(),
       delete: vi.fn(),
@@ -972,6 +975,43 @@ describe("Asset Transfer Actions", () => {
       toLocation: "Branch2",
       transferDate: "2026-06-12",
     }))).rejects.toThrow(redirectErr)
+  })
+
+  it("putaran 37: menolak transfer ke karyawan tujuan mati/fiktif", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await createAssetTransfer(fd({
+      assetId: "5",
+      toLocation: "HQ",
+      toEmployeeId: "77",
+      transferDate: "2026-06-12",
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/Karyawan.*tidak ditemukan atau tidak aktif/)
+    expect(prismaMock.assetTransfer.create).not.toHaveBeenCalled()
+    expect(prismaMock.employee.findFirst).toHaveBeenCalledWith({
+      where: { id: 77, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+  })
+
+  it("putaran 37: menolak relink transfer ke karyawan asal mati", async () => {
+    prismaMock.assetTransfer.findUniqueOrThrow.mockResolvedValue({
+      id: 30,
+      assetId: 5,
+      fromLocation: "OldLoc",
+      toLocation: "Branch1",
+    })
+    prismaMock.assetTransfer.update.mockResolvedValue({ id: 30 })
+    prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await updateAssetTransfer(30, fd({
+      assetId: "5",
+      fromEmployeeId: "88",
+      toLocation: "Branch2",
+      transferDate: "2026-06-12",
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/Karyawan.*tidak ditemukan atau tidak aktif/)
+    expect(prismaMock.assetTransfer.update).not.toHaveBeenCalled()
   })
 })
 

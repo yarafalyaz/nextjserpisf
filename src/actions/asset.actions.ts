@@ -299,6 +299,27 @@ export async function createAssetBrand(formData: FormData) {
 
 // ==================== ASSET TRANSFER ACTIONS ====================
 
+/**
+ * AssetTransfer.fromEmployeeId/toEmployeeId bare-int tanpa relasi FK:
+ * karyawan fiktif/nonaktif/terhapus dari payload buatan tangan tersimpan
+ * senyap. Nilai di dalam tx (db = tx) pola assertLiveRequester.
+ */
+async function assertLiveTransferEmployees(
+  db: Prisma.TransactionClient,
+  employeeIds: readonly (number | null | undefined)[],
+): Promise<void> {
+  for (const employeeId of employeeIds) {
+    if (employeeId == null) continue
+    const live = await db.employee.findFirst({
+      where: { id: employeeId, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+    if (!live) {
+      throw new Error(`Karyawan #${employeeId} tidak ditemukan atau tidak aktif — pilih ulang karyawan.`)
+    }
+  }
+}
+
 export async function createAssetTransfer(formData: FormData) {
   try {
     const user = await requirePermission("create_asset_transfers");
@@ -326,6 +347,7 @@ export async function createAssetTransfer(formData: FormData) {
         // (transferDate, id)) yang menentukan lokasi akhir. Kunci yang
         // sama dipakai updateAsset/disposeAsset/peristiwa aset.
         await tx.$executeRaw`SELECT id FROM assets WHERE id = ${data.assetId} FOR UPDATE`;
+        await assertLiveTransferEmployees(tx, [data.fromEmployeeId, data.toEmployeeId]);
         const created = await tx.assetTransfer.create({
           data: {
             slug,
@@ -756,6 +778,7 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
           }
         }
 
+        await assertLiveTransferEmployees(tx, [data.fromEmployeeId, data.toEmployeeId]);
         const updated = await tx.assetTransfer.update({
           where: { id },
           data: {
