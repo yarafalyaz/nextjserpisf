@@ -57,6 +57,9 @@ vi.mock("@/lib/db/prisma", () => {
     },
     systemSetting: { findFirst: (...a: unknown[]) => settingFindFirstMock(...a) },
     $queryRaw: vi.fn().mockResolvedValue([{ id: 10 }]),
+    // Putaran 15: service reservasi mengunci baris items + membaca ulang
+    // reservasi lawan sebagai LOCKING READ lewat $executeRaw di dalam tx.
+    $executeRaw: vi.fn().mockResolvedValue(0),
     $transaction: vi.fn((cb: unknown) =>
       typeof cb === "function" ? (cb as (tx: unknown) => unknown)(prisma) : Promise.all(cb as unknown[]),
     ),
