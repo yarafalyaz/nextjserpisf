@@ -2850,6 +2850,21 @@ export async function updateTaxGroup(id: number, formData: FormData) {
 
 // ==================== PAYMENT TERM ACTIONS ====================
 
+// Putaran 50: kode + hari termin divalidasi server. Sebelumnya kode
+// mentah (bisa kosong — hanya @unique DB yang menahan) dan days lewat
+// safeNumber ?? 0: negatif lolos, non-angka senyap jadi 0. Termin korup
+// membuat dokumen turunan kehilangan jatuh tempo (konsumen menolak
+// termDays < 0 menjadi null) alih-alih ditolak saat master disimpan.
+function parsePaymentTermFields(formData: FormData): { code: string; days: number } {
+  const code = ((formData.get("code") as string | null) ?? "").trim();
+  if (!code) throw new Error("Kode syarat pembayaran wajib diisi.");
+  const days = safeNumber(formData.get("days"));
+  if (days == null || !Number.isInteger(days) || days < 0) {
+    throw new Error("Hari syarat pembayaran wajib bilangan bulat 0 atau lebih.");
+  }
+  return { code, days };
+}
+
 export async function createPaymentTerm(formData: FormData) {
   try {
     const user = await requirePermission("create_payment_terms");
@@ -2861,12 +2876,13 @@ export async function createPaymentTerm(formData: FormData) {
     }
 
 
+    const fields = parsePaymentTermFields(formData);
     const paymentTerm = await prisma.paymentTerm.create({
       data: {
         name: requireString(formData.get("name"), "name"),
         slug: await nextSlug("paymentTerm", requireString(formData.get("name"), "name")),
-        code: formData.get("code") as string,
-        days: safeNumber(formData.get("days")) ?? 0,
+        code: fields.code,
+        days: fields.days,
         isActive: true,
         createdBy: Number(user.id),
       },
@@ -2891,14 +2907,15 @@ export async function updatePaymentTerm(id: number, formData: FormData) {
   try {
     const user = await requirePermission("edit_payment_terms");
 
+    const fields = parsePaymentTermFields(formData);
     await prisma.paymentTerm.update({
       where: { id },
       data: {
         updatedBy: Number(user.id),
         name: requireString(formData.get("name"), "name"),
         slug: await nextSlug("paymentTerm", requireString(formData.get("name"), "name"), { excludeId: id }),
-        code: formData.get("code") as string,
-        days: safeNumber(formData.get("days")) ?? 0,
+        code: fields.code,
+        days: fields.days,
       },
     });
 

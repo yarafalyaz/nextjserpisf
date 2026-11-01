@@ -1371,12 +1371,24 @@ describe("TaxGroup Actions", () => {
 
 describe("PaymentTerm Actions", () => {
   it("createPaymentTerm succeeds", async () => {
-    const res = await actions.createPaymentTerm(fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
+    const res = await actions.createPaymentTerm(fdMap({ name: "test", code: "test", days: "30", type: "test", rate: "10" }))
     expect(res?.success).toBe(true)
   })
   it("updatePaymentTerm succeeds", async () => {
-    const res = await actions.updatePaymentTerm(1, fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
+    const res = await actions.updatePaymentTerm(1, fdMap({ name: "test", code: "test", days: "30", type: "test", rate: "10" }))
     expect(res?.success).toBe(true)
+  })
+  it("regresi putaran 50: createPaymentTerm menolak days negatif / kode kosong / days non-angka", async () => {
+    const neg = await actions.createPaymentTerm(fdMap({ name: "NETX", code: "NETX", days: "-5" }))
+    expect(neg?.success).toBe(false)
+    expect(String(neg?.error)).toMatch(/hari/i)
+    const noCode = await actions.createPaymentTerm(fdMap({ name: "NETY", code: "  ", days: "30" }))
+    expect(noCode?.success).toBe(false)
+    expect(String(noCode?.error)).toMatch(/kode/i)
+    const badDays = await actions.updatePaymentTerm(1, fdMap({ name: "test", code: "test", days: "abc" }))
+    expect(badDays?.success).toBe(false)
+    expect(mocks.prismaMock.paymentTerm.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.paymentTerm.update).not.toHaveBeenCalled()
   })
   it("deletePaymentTerm succeeds", async () => {
     const res = await actions.deletePaymentTerm(1)
