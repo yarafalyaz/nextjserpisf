@@ -25,9 +25,10 @@ export async function GET() {
         hasPermission("view_items"),
         hasPermission("view_sales_invoices"),
         hasPermission("view_attendance"),
-        Promise.resolve(
-          user.roles.includes("super_admin") || user.roles.includes("admin"),
-        ),
+        // Putaran 51: umpan aktivitas global = data yang sama dengan
+        // endpoint log aktivitas — gerbangnya permission manage_settings,
+        // bukan nama role (seed menahan manage_settings dari role admin).
+        hasPermission("manage_settings"),
       ]);
     // Approval totals span all modules. Don't reveal the global queue count to
     // users who can only see their own module data.

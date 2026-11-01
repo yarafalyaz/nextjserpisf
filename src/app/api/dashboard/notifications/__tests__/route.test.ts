@@ -98,6 +98,18 @@ describe("GET /api/dashboard/notifications recent activities", () => {
     expect(result.recentActivities.map((a: { id: number }) => a.id)).toEqual([1])
   })
 
+  it("regresi putaran 51: role admin tanpa manage_settings tidak menerima umpan aktivitas global", async () => {
+    mocks.hasPermission.mockImplementation((perm: unknown) => Promise.resolve(perm !== "manage_settings"))
+    mocks.authFn.mockResolvedValue({ user: { id: 7, isActive: true, roles: ["admin"], permissions: [] } })
+    mocks.activityLogFindMany.mockResolvedValue([logRow(1, "SalesOrder", 6)])
+
+    const result = await (await GET()).json()
+
+    expect(result.recentActivities).toEqual([])
+    expect(mocks.activityLogFindMany).not.toHaveBeenCalled()
+    expect(mocks.hasPermission).toHaveBeenCalledWith("manage_settings")
+  })
+
   it("memberi label nomor dokumen + href pada aktivitas yang hidup", async () => {
     mocks.activityLogFindMany.mockResolvedValue([logRow(1, "SalesOrder", 6)])
 
