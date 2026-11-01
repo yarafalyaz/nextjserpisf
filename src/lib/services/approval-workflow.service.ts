@@ -81,9 +81,7 @@ async function notifyNewApprovalStep(db: any, workflowId: number, approval: Appr
  * R6WN-01: tipe yang isinya bisa diedit sesudah approval final (dokumen tetap
  * draft/approved-editable, posting digerbang assertApproved). Untuk tipe ini
  * approval `approved` menjadi BASI begitu dokumen berubah
- * (`updatedAt > approval.completedAt`) dan harus diajukan ulang; tipe lain
- * (mis. Quotation) status dokumennya sendiri yang berubah final, jadi tidak
- * ikut aturan basi ini.
+ * (`updatedAt > approval.completedAt`) dan harus diajukan ulang.
  */
 const STALE_ON_EDIT_TYPES = new Set([
   "Journal",
@@ -95,6 +93,12 @@ const STALE_ON_EDIT_TYPES = new Set([
   // sesudah approval final (harga/tanggal/kategori) tetap lolos disposal
   // berbekal persetujuan atas fakta yang sudah tidak berlaku.
   "Asset",
+  // Quotation: approval final mem-flip draft/sent -> approved, tetapi
+  // updateQuotation tetap mengizinkan edit status approved (customer,
+  // sections/items, total) dan konversi hanya menggerbang
+  // assertApproved — tanpa ikut daftar basi, SalesOrder lahir dari isi
+  // yang tidak pernah disetujui dalam bentuk finalnya.
+  "Quotation",
 ]);
 
 /** Model dokumen untuk cek kebasian; null = tipe tidak mendukung cek ini. */

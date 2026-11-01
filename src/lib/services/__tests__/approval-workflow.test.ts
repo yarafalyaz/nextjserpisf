@@ -29,6 +29,7 @@ vi.mock("@/lib/db/prisma", () => {
       stockAdjustment: docModelMock,
       salesInvoice: docModelMock,
       asset: docModelMock,
+      quotation: docModelMock,
       approvalWorkflowStep: { findMany: mocks.findWorkflowSteps },
       user: { findFirst: mocks.findFirstUser, findMany: mocks.findManyUsers },
       notification: { createMany: mocks.createManyNotifications },
@@ -44,6 +45,7 @@ vi.mock("@/lib/db/prisma", () => {
         stockAdjustment: docModelMock,
         salesInvoice: docModelMock,
         asset: docModelMock,
+        quotation: docModelMock,
         approvalWorkflowStep: { findMany: mocks.findWorkflowSteps },
         user: { findFirst: mocks.findFirstUser, findMany: mocks.findManyUsers },
         notification: { createMany: mocks.createManyNotifications },
@@ -164,17 +166,41 @@ describe("approval-workflow.service", () => {
       expect(mocks.createApproval).not.toHaveBeenCalled();
     });
 
-    it("R6WN-01: tipe non-basi (Quotation) tidak dicek updatedAt-nya", async () => {
+    it("R6WN-01: tipe non-basi tidak dicek updatedAt-nya", async () => {
       mocks.findFirstWorkflow.mockResolvedValue({ id: 10 });
       mocks.findFirstApproval.mockResolvedValue({
         id: 1, status: "approved", completedAt: new Date("2026-10-01T00:00:00Z"),
       });
 
-      const result = await requestApprovalIfConfigured("Quotation", 5);
+      const result = await requestApprovalIfConfigured("PurchaseRequest", 5);
 
       expect(result).toBe(false);
       expect(mocks.docFindUnique).not.toHaveBeenCalled();
       expect(mocks.createApproval).not.toHaveBeenCalled();
+    });
+
+    it("regresi putaran 49: penawaran diedit sesudah approval final — assertApproved menolak (approval basi)", async () => {
+      mocks.findFirstApproval.mockResolvedValue({
+        id: 1, status: "approved", completedAt: new Date("2026-10-01T00:00:00Z"),
+      });
+      mocks.docFindUnique.mockResolvedValue({ updatedAt: new Date("2026-10-02T00:00:00Z") });
+      await expect(assertApproved("Quotation", 7)).rejects.toThrow(
+        "Dokumen berubah sesudah persetujuan final",
+      );
+    });
+
+    it("regresi putaran 49: penawaran diedit sesudah approval final membuka pengajuan baru", async () => {
+      mocks.findFirstWorkflow.mockResolvedValue({ id: 10 });
+      mocks.findFirstApproval.mockResolvedValue({
+        id: 1, status: "approved", completedAt: new Date("2026-10-01T00:00:00Z"),
+      });
+      mocks.docFindUnique.mockResolvedValue({ updatedAt: new Date("2026-10-02T00:00:00Z") });
+      mocks.createApproval.mockResolvedValue({ id: 2, status: "pending" });
+      const result = await requestApprovalIfConfigured("Quotation", 5);
+      expect(result).toBe(true);
+      expect(mocks.createApproval).toHaveBeenCalledWith({
+        data: expect.objectContaining({ referenceType: "Quotation", referenceId: 5, status: "pending" }),
+      });
     });
 
     it("regresi putaran 47: aset diedit sesudah approval create final — assertApproved menolak (approval basi)", async () => {
