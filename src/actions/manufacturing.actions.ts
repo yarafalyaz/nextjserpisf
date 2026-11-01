@@ -258,29 +258,37 @@ export async function calculateStandardCost(productId: number) {
   try {
     await requirePermission("edit_products");
 
-    const product = await prisma.product.findUniqueOrThrow({
-      where: { id: productId },
-      include: { materials: true },
-    });
+    // Baca BOM + biaya item lalu tulis rollup dalam satu transaksi berkunci
+    // baris produk. updateProduct mengganti BOM lewat baris produk yang sama;
+    // tanpa kunci ini hitungan dari BOM lama bisa menimpa standardCost sesudah
+    // BOM baru commit.
+    const total = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM products WHERE id = ${productId} FOR UPDATE`;
+      const product = await tx.product.findUniqueOrThrow({
+        where: { id: productId },
+        include: { materials: true },
+      });
 
-    const itemIds = product.materials.map((m) => m.itemId);
-    const items = itemIds.length
-      ? await prisma.item.findMany({
-          where: { id: { in: itemIds } },
-          select: { id: true, standardCost: true },
-        })
-      : [];
-    const costMap = new Map(items.map((i) => [i.id, Number(i.standardCost)]));
+      const itemIds = product.materials.map((m) => m.itemId);
+      const items = itemIds.length
+        ? await tx.item.findMany({
+            where: { id: { in: itemIds } },
+            select: { id: true, standardCost: true },
+          })
+        : [];
+      const costMap = new Map(items.map((i) => [i.id, Number(i.standardCost)]));
 
-    const total = product.materials.reduce(
-      (sum, m) =>
-        safeAdd(sum, safeMultiply(costMap.get(m.itemId) ?? 0, Number(m.qty), 2), 2),
-      0,
-    );
+      const computed = product.materials.reduce(
+        (sum, m) =>
+          safeAdd(sum, safeMultiply(costMap.get(m.itemId) ?? 0, Number(m.qty), 2), 2),
+        0,
+      );
 
-    await prisma.product.update({
-      where: { id: productId },
-      data: { standardCost: total },
+      await tx.product.update({
+        where: { id: productId },
+        data: { standardCost: computed },
+      });
+      return computed;
     });
 
     // Persisted rollup is rendered by the product pages, so refresh them. Wired

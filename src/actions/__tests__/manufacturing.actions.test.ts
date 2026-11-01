@@ -199,6 +199,35 @@ describe("Product Actions", () => {
     expect(res?.success).toBe(false)
   })
 
+  it("calculateStandardCost membaca BOM dan biaya item dari transaksi berkunci produk", async () => {
+    const events: string[] = []
+    mocks.prismaMock.$queryRaw.mockImplementation(async () => {
+      events.push("lock")
+      return [{ id: 1 }]
+    })
+    mocks.prismaMock.product.findUniqueOrThrow.mockImplementation(async () => {
+      events.push("product")
+      return { id: 1, materials: [{ itemId: 7, qty: 2 }] }
+    })
+    mocks.prismaMock.item.findMany.mockImplementation(async () => {
+      events.push("items")
+      return [{ id: 7, standardCost: 150 }]
+    })
+    mocks.prismaMock.product.update.mockImplementation(async () => {
+      events.push("update")
+      return { id: 1 }
+    })
+
+    const res = await actions.calculateStandardCost(1)
+
+    expect(res).toEqual({ success: true, standardCost: 300 })
+    expect(events).toEqual(["lock", "product", "items", "update"])
+    expect(mocks.prismaMock.product.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { standardCost: 300 },
+    })
+  })
+
   // Material itemId / vehicleBrandId / vehicleModelId lolos format-only:
   // item fiktif/terhapus/nonaktif -> P2003 mentah; brand/model fiktif ->
   // SetNull diam-diam putus tautan; model dari brand lain merusak fitment.
