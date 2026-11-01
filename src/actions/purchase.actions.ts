@@ -2997,6 +2997,14 @@ export async function deleteGoodsReceipt(id: number) {
       // explicit console.warn (never silent; throwing would break the sales
       // quick-add UoM flow, see uom.service).
       if (gr.purchaseOrderId) {
+        // Kunci baris PO sebelum rekomputasi: verify/create GR sibling dan
+        // penulis PO lain mengunci baris PO yang sama (goods-receipt.hook,
+        // createGoodsReceipt). Tanpa kunci ini, GR terverifikasi yang commit
+        // di tengah tx tak terlihat snapshot REPEATABLE READ — received_qty
+        // tertimpa kurang dan status PO bisa mundur ke ordered, lalu
+        // cancelPurchaseOrder lolos atas PO yang stoknya sudah masuk.
+        // Urutan kunci: GR dulu (di atas), lalu PO — sama dengan delete PO.
+        await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${gr.purchaseOrderId} FOR UPDATE`;
         const poLines = await tx.purchaseOrderItem.findMany({
           where: { purchaseOrderId: gr.purchaseOrderId },
           orderBy: { id: "asc" },

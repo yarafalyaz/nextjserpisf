@@ -177,6 +177,23 @@ describe("deleteGoodsReceipt menghitung ulang receivedQty PO", () => {
     });
   });
 
+  it("mengunci baris PO sebelum rekomputasi received_qty (serial lawan verify GR sibling)", async () => {
+    const events: string[] = [];
+    mocks.txMock.$executeRaw.mockImplementation((...a: unknown[]) => {
+      const sql = Array.isArray(a[0]) ? (a[0] as string[]).join("") : String(a[0]);
+      if (sql.includes("purchase_orders") && sql.includes("FOR UPDATE")) events.push("po-lock");
+      if (sql.includes("purchase_order_items") && sql.includes("received_qty")) events.push("recompute");
+      return Promise.resolve(1);
+    });
+    mocks.txMock.purchaseOrderItem.findMany.mockResolvedValue([{ id: 11, itemId: 7, qty: 10 }]);
+
+    const res = await deleteGoodsReceipt(1);
+
+    expect(res?.success).toBe(true);
+    expect(events).toEqual(["po-lock", "recompute"]);
+    mocks.txMock.$executeRaw.mockReset();
+  });
+
   it("tidak menyentuh baris PO bila penerimaannya tidak terkait PO", async () => {
     mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValue({
       id: 2,
