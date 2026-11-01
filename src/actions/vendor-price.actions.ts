@@ -24,6 +24,23 @@ function toMoney(value: number): Prisma.Decimal {
 }
 
 /**
+ * Harga rujukan wajib menunjuk master hidup: FK hanya menolak id gaib
+ * (error DB mentah), vendor/item nonaktif atau soft-deleted lolos senyap.
+ */
+async function assertLiveVendorItem(vendorId: number, itemId: number): Promise<void> {
+  const liveVendor = await prisma.vendor.findFirst({
+    where: { id: vendorId, isActive: true, deletedAt: null },
+    select: { id: true },
+  })
+  if (!liveVendor) throw new Error("Vendor tidak ditemukan atau tidak aktif")
+  const liveItem = await prisma.item.findFirst({
+    where: { id: itemId, isActive: true, deletedAt: null },
+    select: { id: true },
+  })
+  if (!liveItem) throw new Error("Barang tidak ditemukan atau tidak aktif")
+}
+
+/**
  * Menyimpan satu baris harga pemasok.
  *
  * Kombinasi (pemasok, barang, min. qty) unik — duplikat ditolak dengan pesan yang
@@ -36,6 +53,8 @@ export async function createVendorPrice(formData: FormData): Promise<VendorPrice
     const parsed = parseFormData(vendorPriceSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
     const v = parsed.data
+
+    await assertLiveVendorItem(v.vendorId, v.itemId)
 
     const duplicate = await prisma.vendorItemPrice.findFirst({
       where: { vendorId: v.vendorId, itemId: v.itemId, minQty: toMoney(v.minQty) },
@@ -80,6 +99,8 @@ export async function updateVendorPrice(id: number, formData: FormData): Promise
     const parsed = parseFormData(vendorPriceSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
     const v = parsed.data
+
+    await assertLiveVendorItem(v.vendorId, v.itemId)
 
     const duplicate = await prisma.vendorItemPrice.findFirst({
       where: { vendorId: v.vendorId, itemId: v.itemId, minQty: toMoney(v.minQty), id: { not: id } },

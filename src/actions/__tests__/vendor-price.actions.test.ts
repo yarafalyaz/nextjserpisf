@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => {
 
   const prismaMock: any = {
     vendorItemPrice: buildModelMock(),
+    vendor: buildModelMock(),
+    item: buildModelMock(),
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
       return Promise.all(ops)
@@ -56,6 +58,9 @@ const base = { vendorId: "1", itemId: "7", price: "50000", effectiveDate: "" }
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["super_admin"] })
+  // Gerbang master hidup (putaran 32 #6): default vendor + item aktif.
+  mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1 })
+  mocks.prismaMock.item.findFirst.mockResolvedValue({ id: 7 })
 })
 
 describe("Vendor Price minQty id-ID", () => {
@@ -130,6 +135,36 @@ describe("Vendor Price validasi Zod", () => {
   it("updateVendorPrice menolak minQty 0, tanpa menyentuh DB", async () => {
     mocks.prismaMock.vendorItemPrice.findUnique.mockResolvedValueOnce({ id: 1 })
     const res = await actions.updateVendorPrice(1, fdMap({ ...base, minQty: "0" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.vendorItemPrice.update).not.toHaveBeenCalled()
+  })
+
+  // Regresi putaran 32 #6(d): harga pemasok menunjuk vendor/item — FK hanya
+  // menolak id gaib dengan error DB mentah; vendor/item nonaktif atau
+  // soft-deleted lolos senyap dan harga yatim tampil di daftar rujukan.
+  it("regresi putaran 32: createVendorPrice menolak vendor nonaktif", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue(null)
+    const res = await actions.createVendorPrice(fdMap({ ...base, minQty: "1" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.vendorItemPrice.create).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 32: createVendorPrice menolak item nonaktif", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.item.findFirst.mockResolvedValue(null)
+    const res = await actions.createVendorPrice(fdMap({ ...base, minQty: "1" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.vendorItemPrice.create).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 32: updateVendorPrice menolak item nonaktif", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.vendorItemPrice.findUnique.mockResolvedValueOnce({ id: 1 })
+    mocks.prismaMock.item.findFirst.mockResolvedValue(null)
+    const res = await actions.updateVendorPrice(1, fdMap({ ...base, minQty: "1" }))
     expect(res?.success).toBe(false)
     expect(mocks.prismaMock.vendorItemPrice.update).not.toHaveBeenCalled()
   })
