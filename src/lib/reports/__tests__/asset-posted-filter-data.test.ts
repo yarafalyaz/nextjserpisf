@@ -87,6 +87,59 @@ describe("penjaga POSTED loader laporan aset (t_d34601a0)", () => {
     expectPostedAssetJournalWhere()
   })
 
+  it("regresi putaran 15: loader memuat ASSET_CHANGE_EVENT — revaluasi menaikkan buku rekonsiliasi", async () => {
+    mocks.prismaMock.asset.findMany.mockResolvedValue([
+      {
+        id: 1,
+        code: "AST-1",
+        name: "Mesin",
+        purchaseCost: dec(1000),
+        currentValue: dec(1300),
+        status: "active",
+        category: {
+          name: "Mesin",
+          assetAccountId: 10,
+          accumulatedDepreciationAccountId: 20,
+          accumulatedImpairmentAccountId: 30,
+        },
+      },
+    ])
+    mocks.prismaMock.assetHistory.groupBy.mockResolvedValue([
+      { assetId: 1, _sum: { amount: dec(300) } },
+    ])
+    mocks.prismaMock.journal.findMany.mockResolvedValue([
+      {
+        referenceType: "ASSET_ACQUISITION",
+        referenceId: 1,
+        entries: [{ accountId: 10, debit: dec(1000), credit: dec(0) }],
+      },
+      {
+        referenceType: "ASSET_DEPRECIATION_202601",
+        referenceId: 1,
+        entries: [{ accountId: 20, debit: dec(0), credit: dec(300) }],
+      },
+      {
+        // Revaluasi naik ke 1300: tutup akumulasi 300, naikkan bruto 300.
+        referenceType: "ASSET_CHANGE_EVENT",
+        referenceId: 1,
+        entries: [
+          { accountId: 20, debit: dec(300), credit: dec(0) },
+          { accountId: 10, debit: dec(300), credit: dec(0) },
+          { accountId: 40, debit: dec(0), credit: dec(600) },
+        ],
+      },
+    ])
+
+    const { reconciliation } = await loadAssetReconciliation()
+
+    expectPostedAssetJournalWhere()
+    // Filter kueri wajib memuat cabang peristiwa, bukan hanya 3 jenis lama.
+    const journalWhere = mocks.prismaMock.journal.findMany.mock.calls[0][0].where
+    expect(JSON.stringify(journalWhere)).toContain("ASSET_CHANGE_EVENT")
+    expect(reconciliation.rows[0].journalBookValue.toNumber()).toBe(1300)
+    expect(reconciliation.rows[0].findings.map((f) => f.kind)).not.toContain("value-mismatch")
+  })
+
   it("loadAssetJournalBookRows: kueri jurnal POSTED + bookValue jurnal 700", async () => {
     mocks.prismaMock.asset.findMany.mockResolvedValue([
       {

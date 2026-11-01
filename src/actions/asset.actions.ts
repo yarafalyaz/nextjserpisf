@@ -51,6 +51,7 @@ type AssetGlCategory = {
   assetAccountId?: number | null
   accumulatedDepreciationAccountId?: number | null
   gainLossAccountId?: number | null
+  accumulatedImpairmentAccountId?: number | null
 } | null
 
 async function getAssetGlAccounts(category?: AssetGlCategory) {
@@ -73,6 +74,7 @@ async function getAssetGlAccounts(category?: AssetGlCategory) {
       env("ACCUMULATED_DEPRECIATION_ACCOUNT_ID"),
     ),
     gainLoss: first(category?.gainLossAccountId, null, env("ASSET_DISPOSAL_GAINLOSS_ACCOUNT_ID")),
+    accumImpairment: first(category?.accumulatedImpairmentAccountId, null),
   };
 }
 
@@ -1102,7 +1104,12 @@ export async function disposeAsset(formData: FormData) {
     const category = asset.categoryId
       ? await prisma.assetCategory.findUnique({
           where: { id: asset.categoryId },
-          select: { assetAccountId: true, accumulatedDepreciationAccountId: true, gainLossAccountId: true },
+          select: {
+            assetAccountId: true,
+            accumulatedDepreciationAccountId: true,
+            gainLossAccountId: true,
+            accumulatedImpairmentAccountId: true,
+          },
         })
       : null;
     const gl = await getAssetGlAccounts(category);
@@ -1131,6 +1138,7 @@ export async function disposeAsset(formData: FormData) {
             { referenceType: "ASSET_ACQUISITION" },
             { referenceType: "ASSET_DISPOSAL" },
             { referenceType: { startsWith: "ASSET_DEPRECIATION_" } },
+            { referenceType: "ASSET_CHANGE_EVENT" },
           ],
         },
         select: {
@@ -1146,6 +1154,8 @@ export async function disposeAsset(formData: FormData) {
         {
           fixedAssetAccountId: gl.fixedAsset || null,
           accumulatedDepreciationAccountId: gl.accumDep || null,
+          accumulatedImpairmentAccountId:
+            category?.accumulatedImpairmentAccountId ?? null,
         },
       );
       const grossCostTx = lockedPosted.hasAcquisitionJournal
@@ -1204,6 +1214,9 @@ export async function disposeAsset(formData: FormData) {
         if (!gl.accumDep) missing.push("akun Akumulasi Penyusutan");
         if (!gl.gainLoss) missing.push("akun Laba/Rugi Pelepasan");
         if (proceeds > 0 && !gl.cashBank) missing.push("akun Kas/Bank");
+        if (lockedPosted.accumulatedImpairmentPosted.gt(0) && !gl.accumImpairment) {
+          missing.push("akun Akumulasi Penurunan Nilai");
+        }
         if (missing.length > 0) {
           throw new Error(
             `Akun pelepasan aset belum dipetakan: ${missing.join(", ")}. ` +
@@ -1219,6 +1232,7 @@ export async function disposeAsset(formData: FormData) {
           proceeds,
           assetName: lockedAsset.name,
           accounts: gl,
+          accumulatedImpairment: lockedPosted.accumulatedImpairmentPosted.toNumber(),
         });
 
         const totalDebit = built.reduce((s, e) => safeAdd(s, e.debit, 0), 0);

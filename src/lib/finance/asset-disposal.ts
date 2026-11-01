@@ -18,6 +18,8 @@ export interface AssetDisposalAccounts {
   cashBank: number
   accumDep: number
   gainLoss: number
+  /** Akun kontra akumulasi penurunan nilai (opsional; wajib bila impairment > 0). */
+  accumImpairment?: number
 }
 
 export interface AssetDisposalEntry {
@@ -33,6 +35,8 @@ export interface BuildAssetDisposalParams {
   proceeds: number
   assetName: string
   accounts: AssetDisposalAccounts
+  /** Kontra impairment POSTED yang ikut dibalik (Dr) saat pelepasan. */
+  accumulatedImpairment?: number
 }
 
 /**
@@ -42,8 +46,13 @@ export interface BuildAssetDisposalParams {
  */
 export function buildAssetDisposalEntries(params: BuildAssetDisposalParams): AssetDisposalEntry[] {
   const { grossCost, bookValue, proceeds, assetName, accounts } = params
+  const accumulatedImpairment = params.accumulatedImpairment ?? 0
+  if (accumulatedImpairment > 0 && !accounts.accumImpairment) {
+    throw new Error("Akun akumulasi penurunan nilai belum dipetakan untuk membalik impairment saat pelepasan aset.")
+  }
 
-  const accumulatedDep = grossCost - bookValue // depreciation booked so far
+  // bookValue sudah neto impairment, jadi gross − book = penyusutan + impairment.
+  const accumulatedDep = grossCost - bookValue - accumulatedImpairment // depreciation booked so far
   const gainLoss = proceeds - bookValue // positive = gain, negative = loss
   const round = (n: number) => Math.round(n * 100) / 100
 
@@ -54,6 +63,9 @@ export function buildAssetDisposalEntries(params: BuildAssetDisposalParams): Ass
   }
   if (accumulatedDep > 0) {
     entries.push({ accountId: accounts.accumDep, debit: round(accumulatedDep), credit: 0, memo: `Penghapusan akumulasi penyusutan - ${assetName}` })
+  }
+  if (accumulatedImpairment > 0) {
+    entries.push({ accountId: accounts.accumImpairment!, debit: round(accumulatedImpairment), credit: 0, memo: `Penghapusan akumulasi penurunan nilai - ${assetName}` })
   }
   // Remove the asset at gross cost.
   entries.push({ accountId: accounts.fixedAsset, debit: 0, credit: round(grossCost), memo: `Penghapusan aset tetap - ${assetName}` })

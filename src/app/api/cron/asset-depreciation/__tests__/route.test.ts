@@ -242,6 +242,7 @@ describe("POST /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () =>
       { referenceType: "ASSET_ACQUISITION" },
       { referenceType: "ASSET_DISPOSAL" },
       { referenceType: { startsWith: "ASSET_DEPRECIATION_" } },
+      { referenceType: "ASSET_CHANGE_EVENT" },
     ])
   })
 

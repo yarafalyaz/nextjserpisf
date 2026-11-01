@@ -20,22 +20,25 @@ import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 export const ASSET_ACQUISITION_TYPE = "ASSET_ACQUISITION"
 export const ASSET_DISPOSAL_TYPE = "ASSET_DISPOSAL"
 export const ASSET_DEPRECIATION_PREFIX = "ASSET_DEPRECIATION_"
+export const ASSET_CHANGE_EVENT_TYPE = "ASSET_CHANGE_EVENT"
 
 /** Apakah jurnal ini milik modul aset tetap? */
 export function isAssetJournalReference(referenceType: string): boolean {
   return (
     referenceType === ASSET_ACQUISITION_TYPE ||
     referenceType === ASSET_DISPOSAL_TYPE ||
+    referenceType === ASSET_CHANGE_EVENT_TYPE ||
     referenceType.startsWith(ASSET_DEPRECIATION_PREFIX)
   )
 }
 
-export type AssetJournalKind = "Perolehan" | "Penyusutan" | "Pelepasan"
+export type AssetJournalKind = "Perolehan" | "Penyusutan" | "Pelepasan" | "Perubahan"
 
 /** Label jenis jurnal; `null` bila jurnalnya bukan jurnal aset. */
 export function assetJournalKind(referenceType: string): AssetJournalKind | null {
   if (referenceType === ASSET_ACQUISITION_TYPE) return "Perolehan"
   if (referenceType === ASSET_DISPOSAL_TYPE) return "Pelepasan"
+  if (referenceType === ASSET_CHANGE_EVENT_TYPE) return "Perubahan"
   if (referenceType.startsWith(ASSET_DEPRECIATION_PREFIX)) return "Penyusutan"
   return null
 }

@@ -45,7 +45,11 @@ export interface AssetReconciliationInput {
   /** Σ AssetHistory type=depreciation (cache riwayat). */
   historyDepreciationTotal: Prisma.Decimal | number | string
   status: string
-  categoryAccounts: { fixedAssetAccountId: number | null; accumulatedDepreciationAccountId: number | null }
+  categoryAccounts: {
+    fixedAssetAccountId: number | null
+    accumulatedDepreciationAccountId: number | null
+    accumulatedImpairmentAccountId?: number | null
+  }
   /** Jurnal POSTED aset ini saja (disaring loader). */
   journals: AssetJournalInput[]
 }

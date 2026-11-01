@@ -18,6 +18,7 @@ import { journalBookValue, type AssetJournalInput } from "@/lib/finance/asset-bo
 import type { FiscalYearRow } from "@/lib/finance/asset-fiscal-balance"
 import {
   ASSET_ACQUISITION_TYPE,
+  ASSET_CHANGE_EVENT_TYPE,
   ASSET_DEPRECIATION_PREFIX,
   ASSET_DISPOSAL_TYPE,
 } from "@/lib/reports/asset-journal"
@@ -65,13 +66,13 @@ export async function loadAssetJournalBookRows(): Promise<AssetJournalBookRow[]>
       where: { status: { not: "disposed" } },
       select: {
         id: true, code: true, name: true, purchaseDate: true, purchaseCost: true,
-        category: { select: { name: true, taxGroupCode: true, taxTypeListed: true, taxDjpDetermination: true, fiscalMethod: true, assetAccountId: true, accumulatedDepreciationAccountId: true } },
+        category: { select: { name: true, taxGroupCode: true, taxTypeListed: true, taxDjpDetermination: true, fiscalMethod: true, assetAccountId: true, accumulatedDepreciationAccountId: true, accumulatedImpairmentAccountId: true } },
         fiscalYearRows: { orderBy: { taxYear: "asc" } },
       },
       orderBy: { code: "asc" },
     }),
     prisma.journal.findMany({
-      where: { deletedAt: null, status: "POSTED", OR: [{ referenceType: ASSET_ACQUISITION_TYPE }, { referenceType: ASSET_DISPOSAL_TYPE }, { referenceType: { startsWith: ASSET_DEPRECIATION_PREFIX } }] },
+      where: { deletedAt: null, status: "POSTED", OR: [{ referenceType: ASSET_ACQUISITION_TYPE }, { referenceType: ASSET_DISPOSAL_TYPE }, { referenceType: { startsWith: ASSET_DEPRECIATION_PREFIX } }, { referenceType: ASSET_CHANGE_EVENT_TYPE }] },
       select: { referenceType: true, referenceId: true, entries: { select: { accountId: true, debit: true, credit: true } } },
     }),
     prisma.systemSetting.findFirst({ select: { accumulatedDepreciationAccountId: true } }),
@@ -89,6 +90,7 @@ export async function loadAssetJournalBookRows(): Promise<AssetJournalBookRow[]>
     const posted = journalBookValue(journalsByAsset.get(asset.id) ?? [], {
       fixedAssetAccountId: asset.category?.assetAccountId ?? envAssetAccount,
       accumulatedDepreciationAccountId: asset.category?.accumulatedDepreciationAccountId ?? settings?.accumulatedDepreciationAccountId ?? envAccumAccount,
+      accumulatedImpairmentAccountId: asset.category?.accumulatedImpairmentAccountId ?? null,
     })
     return {
       id: asset.id, code: asset.code, name: asset.name,
@@ -165,6 +167,7 @@ export async function loadDepreciationDifference(): Promise<DepreciationDifferen
             fiscalMethod: true,
             assetAccountId: true,
             accumulatedDepreciationAccountId: true,
+            accumulatedImpairmentAccountId: true,
           },
         },
         fiscalYearRows: { orderBy: { taxYear: "asc" } },
@@ -179,6 +182,7 @@ export async function loadDepreciationDifference(): Promise<DepreciationDifferen
           { referenceType: ASSET_ACQUISITION_TYPE },
           { referenceType: ASSET_DISPOSAL_TYPE },
           { referenceType: { startsWith: ASSET_DEPRECIATION_PREFIX } },
+          { referenceType: ASSET_CHANGE_EVENT_TYPE },
         ],
       },
       select: {
@@ -217,6 +221,8 @@ export async function loadDepreciationDifference(): Promise<DepreciationDifferen
         asset.category?.accumulatedDepreciationAccountId ??
         settings?.accumulatedDepreciationAccountId ??
         envAccumAccount,
+      accumulatedImpairmentAccountId:
+        asset.category?.accumulatedImpairmentAccountId ?? null,
     })
     return {
       code: asset.code,

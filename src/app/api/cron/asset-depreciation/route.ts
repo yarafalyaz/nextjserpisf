@@ -126,6 +126,9 @@ export async function POST(request: Request) {
                 { referenceType: "ASSET_ACQUISITION" },
                 { referenceType: "ASSET_DISPOSAL" },
                 { referenceType: { startsWith: "ASSET_DEPRECIATION_" } },
+                // Jurnal peristiwa (revaluasi/restatement/reklasifikasi)
+                // wajib ikut: tanpa ini nilai buku membeku pra-peristiwa.
+                { referenceType: "ASSET_CHANGE_EVENT" },
               ],
             },
             select: {
@@ -201,6 +204,8 @@ export async function POST(request: Request) {
         {
           fixedAssetAccountId: fixedAssetAccountId || null,
           accumulatedDepreciationAccountId: accounts.accumulatedAccountId || null,
+          accumulatedImpairmentAccountId:
+            category?.accumulatedImpairmentAccountId ?? null,
         },
       )
       if (!posted.hasAcquisitionJournal) {
@@ -330,6 +335,7 @@ export async function POST(request: Request) {
                 { referenceType: "ASSET_ACQUISITION" },
                 { referenceType: "ASSET_DISPOSAL" },
                 { referenceType: { startsWith: "ASSET_DEPRECIATION_" } },
+                { referenceType: "ASSET_CHANGE_EVENT" },
               ],
             },
             select: {
@@ -354,6 +360,8 @@ export async function POST(request: Request) {
                 asset.category?.assetAccountId ??
                 (envAccount("FIXED_ASSET_ACCOUNT_ID") || null),
               accumulatedDepreciationAccountId: accumulatedAccountId || null,
+              accumulatedImpairmentAccountId:
+                asset.category?.accumulatedImpairmentAccountId ?? null,
             },
           )
 

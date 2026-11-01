@@ -77,4 +77,37 @@ describe("buildAssetDisposalEntries", () => {
     const { debit, credit } = sum(entries)
     expect(Math.abs(debit - credit)).toBeLessThanOrEqual(0.01)
   })
+
+  it("regresi putaran 15: disposal membalik kontra impairment terpisah dari akumulasi penyusutan", () => {
+    // bruto 120jt, penyusutan 20jt, impairment 15jt -> buku 85jt; jual 85jt impas
+    const withImpair = { ...accounts, accumImpairment: 105 }
+    const entries = buildAssetDisposalEntries({
+      grossCost: 120_000_000,
+      bookValue: 85_000_000,
+      proceeds: 85_000_000,
+      assetName: "Mesin",
+      accounts: withImpair,
+      accumulatedImpairment: 15_000_000,
+    })
+    const { debit, credit } = sum(entries)
+    expect(debit).toBeCloseTo(credit, 2)
+    // Kas 85 + AkumPenyusutan 20 + AkumImpairment 15 = Cr Aset 120
+    expect(debit).toBeCloseTo(120_000_000, 2)
+    expect(entries.find((e) => e.accountId === accounts.accumDep)?.debit).toBeCloseTo(20_000_000, 2)
+    expect(entries.find((e) => e.accountId === 105)?.debit).toBeCloseTo(15_000_000, 2)
+    expect(entries.find((e) => e.accountId === accounts.gainLoss)).toBeUndefined()
+  })
+
+  it("regresi putaran 15: impairment tanpa akun terpetakan ditolak, bukan diam-diam bocor", () => {
+    expect(() =>
+      buildAssetDisposalEntries({
+        grossCost: 120_000_000,
+        bookValue: 85_000_000,
+        proceeds: 85_000_000,
+        assetName: "Mesin",
+        accounts,
+        accumulatedImpairment: 15_000_000,
+      }),
+    ).toThrow(/penurunan nilai/i)
+  })
 })

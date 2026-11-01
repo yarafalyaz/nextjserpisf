@@ -21,6 +21,7 @@ import {
 import { ANALYTICAL_DEPRECIATION_METHODS } from "@/lib/finance/asset-depreciation"
 import {
   ASSET_ACQUISITION_TYPE,
+  ASSET_CHANGE_EVENT_TYPE,
   ASSET_DEPRECIATION_PREFIX,
   ASSET_DISPOSAL_TYPE,
 } from "@/lib/reports/asset-journal"
@@ -76,7 +77,11 @@ export async function loadAssetAnalyticalStatuses(
         productionUnitName: true,
         usefulLifeMonths: true,
         category: {
-          select: { assetAccountId: true, accumulatedDepreciationAccountId: true },
+          select: {
+            assetAccountId: true,
+            accumulatedDepreciationAccountId: true,
+            accumulatedImpairmentAccountId: true,
+          },
         },
         usageRecords: {
           where: { periodYear, periodMonth },
@@ -109,6 +114,7 @@ export async function loadAssetAnalyticalStatuses(
         { referenceType: ASSET_ACQUISITION_TYPE },
         { referenceType: ASSET_DISPOSAL_TYPE },
         { referenceType: { startsWith: ASSET_DEPRECIATION_PREFIX } },
+        { referenceType: ASSET_CHANGE_EVENT_TYPE },
       ],
     },
     select: {
@@ -152,6 +158,8 @@ export async function loadAssetAnalyticalStatuses(
       {
         fixedAssetAccountId: fixedAssetAccountId || null,
         accumulatedDepreciationAccountId: accumulatedAccountId || null,
+        accumulatedImpairmentAccountId:
+          asset.category?.accumulatedImpairmentAccountId ?? null,
       },
     )
     const usage = asset.usageRecords[0] ?? null

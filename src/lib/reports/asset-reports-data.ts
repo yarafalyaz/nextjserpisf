@@ -19,6 +19,7 @@ import { buildAssetHistory, type AssetHistoryResult } from "@/lib/reports/asset-
 import {
   buildAssetJournal,
   ASSET_ACQUISITION_TYPE,
+  ASSET_CHANGE_EVENT_TYPE,
   ASSET_DEPRECIATION_PREFIX,
   ASSET_DISPOSAL_TYPE,
   type AssetJournalResult,
@@ -264,6 +265,7 @@ export async function loadAssetJournal(period: {
         { referenceType: ASSET_ACQUISITION_TYPE },
         { referenceType: ASSET_DISPOSAL_TYPE },
         { referenceType: { startsWith: ASSET_DEPRECIATION_PREFIX } },
+        { referenceType: ASSET_CHANGE_EVENT_TYPE },
       ],
     },
     select: {

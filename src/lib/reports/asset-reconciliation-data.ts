@@ -16,6 +16,7 @@ import {
 } from "@/lib/reports/asset-reconciliation"
 import {
   ASSET_ACQUISITION_TYPE,
+  ASSET_CHANGE_EVENT_TYPE,
   ASSET_DEPRECIATION_PREFIX,
   ASSET_DISPOSAL_TYPE,
 } from "@/lib/reports/asset-journal"
@@ -39,6 +40,7 @@ export async function loadAssetReconciliation(): Promise<AssetReconciliationRepo
             name: true,
             assetAccountId: true,
             accumulatedDepreciationAccountId: true,
+            accumulatedImpairmentAccountId: true,
           },
         },
       },
@@ -64,6 +66,7 @@ export async function loadAssetReconciliation(): Promise<AssetReconciliationRepo
           { referenceType: ASSET_ACQUISITION_TYPE },
           { referenceType: ASSET_DISPOSAL_TYPE },
           { referenceType: { startsWith: ASSET_DEPRECIATION_PREFIX } },
+          { referenceType: ASSET_CHANGE_EVENT_TYPE },
         ],
       },
       select: {
@@ -113,6 +116,8 @@ export async function loadAssetReconciliation(): Promise<AssetReconciliationRepo
         asset.category?.accumulatedDepreciationAccountId ??
         settings?.accumulatedDepreciationAccountId ??
         envAccumAccount,
+      accumulatedImpairmentAccountId:
+        asset.category?.accumulatedImpairmentAccountId ?? null,
     },
     journals: journalsByAsset.get(asset.id) ?? [],
   }))
