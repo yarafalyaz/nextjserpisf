@@ -1937,6 +1937,14 @@ async function autoCreateDeliveryOrder(workOrderId: number, userId: number, txCl
  */
 async function syncProjectStatus(projectId: number, txClient?: TxClient) {
   const db = txClient ?? prisma;
+  // Kunci baris proyek sebelum bacaan proyek di dalam tx penyelesaian WO:
+  // tanpa kunci, status proyek bisa tertimpa hasil hitung dari bacaan lain
+  // yang berjalan bersamaan (kembar versi publik project.actions sudah
+  // mengunci; jalur manufacturing ini sempat tertinggal). Mock tx uji tanpa
+  // $executeRaw dilewati lewat guard typeof (pola hooks repo).
+  if (txClient && typeof txClient.$executeRaw === "function") {
+    await txClient.$executeRaw`SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE`;
+  }
   const project = await db.project.findUniqueOrThrow({
     where: { id: projectId },
     select: { status: true, endDate: true },

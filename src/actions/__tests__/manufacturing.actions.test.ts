@@ -1749,6 +1749,41 @@ describe("Work Order Actions", () => {
     }))
   })
 
+  it("regresi putaran 47: completeWorkOrder mengunci baris proyek sebelum sinkron status proyek", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "in_progress", items: [{ id: 1 }], projectId: 50 })
+      .mockResolvedValueOnce({
+        id: 1, documentNo: "WO-1", customerId: 5, quotationId: null,
+        items: [{ id: 10, itemId: 1, qty: 0, description: null }],
+        customer: null
+      } as any)
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({ id: 1, status: "completed" })
+    mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ status: "in_progress", endDate: null })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([
+      { id: 1, status: "completed" },
+      { id: 2, status: "completed" }
+    ])
+
+    const res = await actions.completeWorkOrder(1)
+    expect(res?.success).toBe(true)
+    // Kunci baris proyek (FOR UPDATE atas projects) wajib ada dan mendahului
+    // bacaan proyek di dalam tx penyelesaian WO. Deteksi raw mengikuti pola
+    // regression round 18 di project.actions.test.ts (argumen = Sql object /
+    // array strings).
+    const rawMocks = [mocks.prismaMock.$executeRaw, mocks.prismaMock.$queryRaw]
+    let lockOrder = Number.POSITIVE_INFINITY
+    for (const m of rawMocks) {
+      m.mock.calls.forEach((c: unknown[], i: number) => {
+        const first = c[0] as { sql?: string; strings?: string[] } | string[] | undefined
+        const sql = Array.isArray(first) ? first.join("?") : (first?.sql ?? first?.strings?.join("?") ?? "")
+        if (sql.includes("FROM projects")) lockOrder = Math.min(lockOrder, m.mock.invocationCallOrder[i])
+      })
+    }
+    expect(lockOrder).toBeLessThan(Number.POSITIVE_INFINITY)
+    expect(lockOrder).toBeLessThan(mocks.prismaMock.project.findUniqueOrThrow.mock.invocationCallOrder[0])
+  })
+
   it("completeWorkOrder syncs project status - in progress", async () => {
     mocks.prismaMock.workOrder.findUniqueOrThrow
       .mockResolvedValueOnce({ id: 1, status: "in_progress", items: [{ id: 1 }], projectId: 50 })
