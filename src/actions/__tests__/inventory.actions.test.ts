@@ -239,6 +239,26 @@ describe("Stock Adjustment Actions", () => {
     expect(res?.success).toBe(true);
     expect(mocks.prismaMock.stockAdjustment.update).toHaveBeenCalledTimes(1);
   });
+  // Regresi putaran 33: edit adjustment menulis ulang seluruh baris = penanaman
+  // baris baru dokumen bebas (preseden updateMaterialIssue) — master mati/fiktif
+  // wajib ditolak sebelum deleteMany menghapus baris lama.
+  it("regresi putaran 33: updateStockAdjustment menolak item fiktif tanpa menghapus baris lama", async () => {
+    seedDraft(mocks.prismaMock.stockAdjustment);
+    const res = await actions.updateStockAdjustment(
+      1,
+      saFd({ items: itemsJson([{ itemId: 999, newQty: 5, unitCost: 100 }]) }),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("tidak ditemukan");
+    expect(mocks.prismaMock.stockAdjustmentItem.deleteMany).not.toHaveBeenCalled();
+  });
+  it("regresi putaran 33: updateStockAdjustment menolak gudang fiktif", async () => {
+    seedDraft(mocks.prismaMock.stockAdjustment);
+    const res = await actions.updateStockAdjustment(1, saFd({ warehouseId: 999 }));
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("tidak ditemukan");
+    expect(mocks.prismaMock.stockAdjustmentItem.deleteMany).not.toHaveBeenCalled();
+  });
   it("processStockAdjustment succeeds", async () => {
     seedDraft(mocks.prismaMock.stockAdjustment, { items: [] });
     const res = await actions.processStockAdjustment(1);
@@ -344,6 +364,25 @@ describe("Inventory Transfer Actions", () => {
     const res = await actions.updateInventoryTransfer(1, transferFd());
     expect(res?.success).toBe(true);
     expect(mocks.prismaMock.inventoryTransfer.update).toHaveBeenCalledTimes(1);
+  });
+  // Regresi putaran 33: edit transfer menulis ulang header gudang + baris —
+  // gudang tujuan/item mati/fiktif wajib ditolak sebelum baris lama terhapus.
+  it("regresi putaran 33: updateInventoryTransfer menolak gudang tujuan fiktif tanpa menghapus baris lama", async () => {
+    seedDraft(mocks.prismaMock.inventoryTransfer);
+    const res = await actions.updateInventoryTransfer(1, transferFd({ destinationWarehouseId: 999 }));
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("tidak ditemukan");
+    expect(mocks.prismaMock.inventoryTransferItem.deleteMany).not.toHaveBeenCalled();
+  });
+  it("regresi putaran 33: updateInventoryTransfer menolak item fiktif tanpa menghapus baris lama", async () => {
+    seedDraft(mocks.prismaMock.inventoryTransfer);
+    const res = await actions.updateInventoryTransfer(
+      1,
+      transferFd({ items: itemsJson([{ itemId: 999, qty: 10 }]) }),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("tidak ditemukan");
+    expect(mocks.prismaMock.inventoryTransferItem.deleteMany).not.toHaveBeenCalled();
   });
   it("STOK-20: status berubah processed di dalam tx -> update gagal, item tidak dihapus", async () => {
     seedDraft(mocks.prismaMock.inventoryTransfer);

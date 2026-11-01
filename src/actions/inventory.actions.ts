@@ -2122,6 +2122,12 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
       if (latest && latest.status !== "draft") {
         throw new Error("Hanya stock adjustment draft yang dapat diedit");
       }
+      // Dokumen bebas: master ditukar saat edit wajib hidup (pola create +
+      // updateMaterialIssue); baris lama tidak dinilai, hanya payload baru.
+      // Tanpa ini edit menanam item/gudang mati yang lalu diproses hook
+      // menjadi StockMove + jurnal.
+      await assertWarehousesExistAndActive(tx, [warehouseId]);
+      await assertItemsExistAndActive(tx, itemIds);
       await tx.stockAdjustmentItem.deleteMany({
         where: { stockAdjustmentId: id },
       });
@@ -2311,6 +2317,11 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
       if (latest && latest.status !== "draft") {
         throw new Error("Hanya transfer draft yang dapat diedit");
       }
+      // Dokumen bebas: master ditukar saat edit wajib hidup (pola create +
+      // updateMaterialIssue); tanpa ini transfer bisa diarahkan ke gudang
+      // tujuan mati / item mati lalu receive menghidupkan stok di sana.
+      await assertWarehousesExistAndActive(tx, [v.sourceWarehouseId, v.destinationWarehouseId]);
+      await assertItemsExistAndActive(tx, transferItems.map((it) => it.itemId));
       await tx.inventoryTransferItem.deleteMany({
         where: { inventoryTransferId: id },
       });
