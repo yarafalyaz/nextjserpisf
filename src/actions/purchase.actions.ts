@@ -3998,17 +3998,26 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
       }
       const latestStatus = await tx.goodsReceipt.findUnique({
         where: { id },
-        select: { status: true },
+        select: { status: true, purchaseOrderId: true },
       });
       if (latestStatus && latestStatus.status !== "draft")
         throw new Error("Hanya GR draft yang dapat diedit");
+      const previousPoId = latestStatus?.purchaseOrderId ?? null;
       // Lock the (possibly new) PO and re-apply the SAME guards the create path
       // enforces: the PO must be in a receivable status, and every submitted line
       // must belong to the PO. Without these, an edit could re-point a draft GR at
       // a draft/cancelled PO or add an item that is not on the PO — the verification
       // over-receive guard only iterates the PO's own lines, so an off-PO item is
       // never capped and unordered stock is received.
-      await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
+      // Pindah PO (putaran 43): kunci kedua baris PO terurut naik (pola kunci
+      // global anti-deadlock) supaya rekomputasi status di bawah berlomba
+      // aman dengan penulis PO lain.
+      const poIdsToLock = [
+        ...new Set([previousPoId, v.purchaseOrderId].filter((x): x is number => x != null)),
+      ].sort((a, b) => a - b);
+      for (const poId of poIdsToLock) {
+        await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${poId} FOR UPDATE`;
+      }
       const poForItems = await tx.purchaseOrder.findUniqueOrThrow({
         where: { id: v.purchaseOrderId },
         select: { status: true, items: { select: { itemId: true, qty: true } } },
@@ -4073,6 +4082,29 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
               goodsReceiptId: id,
               ...goodsReceiptItemData(i, orderedQtyByItem),
             })),
+        });
+      }
+
+      // Pindah PO (putaran 43): status kedua PO dihitung ulang mengikuti
+      // semantik create/delete — PO baru ditandai receiving-in-progress
+      // (createGoodsReceipt), PO lama yang kehilangan GR terakhirnya
+      // kembali "ordered" (deleteGoodsReceipt menghitung SEMUA status GR).
+      // PO lama yang masih punya GR lain dibiarkan: statusnya dibentuk
+      // GR-GR itu, dan GR yang pindah berstatus draft sehingga tidak
+      // menyumbang receivedQty.
+      if (previousPoId != null && previousPoId !== v.purchaseOrderId) {
+        const remainingCount = await tx.goodsReceipt.count({
+          where: { purchaseOrderId: previousPoId },
+        });
+        if (remainingCount === 0) {
+          await tx.purchaseOrder.update({
+            where: { id: previousPoId },
+            data: { status: "ordered" },
+          });
+        }
+        await tx.purchaseOrder.update({
+          where: { id: v.purchaseOrderId },
+          data: { status: "partial_received" },
         });
       }
 

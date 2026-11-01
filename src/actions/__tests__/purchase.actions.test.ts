@@ -884,6 +884,35 @@ describe("Goods Receipt Actions", () => {
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_goods_receipts")
   })
 
+  // Regresi putaran 43: edit draft GR bisa memindah purchaseOrderId tanpa
+  // menyentuh status PO — PO lama tetap partial_received (memblokir batal
+  // PO selamanya) dan PO baru tak pernah ditandai receiving. Kini kedua
+  // status dihitung ulang dalam tx yang sama: PO lama tanpa GR tersisa
+  // kembali ordered (semantik deleteGoodsReceipt), PO baru partial_received
+  // (semantik createGoodsReceipt).
+  it("regresi putaran 43: updateGoodsReceipt memindah PO menghitung ulang status kedua PO", async () => {
+    mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValue({ status: "draft", purchaseOrderId: 10 })
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 20, status: "ordered", items: [{ itemId: 1, qty: 10 }] })
+    mocks.prismaMock.goodsReceipt.count.mockResolvedValue(0)
+    mocks.prismaMock.purchaseOrder.update.mockClear()
+    const res = await actions.updateGoodsReceipt(1, fdMap({
+      purchaseOrderId: "20",
+      warehouseId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 6, unitCost: 1000 }])
+    }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.purchaseOrder.update).toHaveBeenCalledWith({
+      where: { id: 10 },
+      data: { status: "ordered" },
+    })
+    expect(mocks.prismaMock.purchaseOrder.update).toHaveBeenCalledWith({
+      where: { id: 20 },
+      data: { status: "partial_received" },
+    })
+    mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValue({ status: "draft" })
+  })
+
   it("regresi putaran 22: updateGoodsReceipt snapshot qtyOrdered diagregasi dari baris PO duplikat (STOK-18 di edit)", async () => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({
       id: 1,
