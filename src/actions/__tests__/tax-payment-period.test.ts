@@ -19,9 +19,13 @@ const mocks = vi.hoisted(() => {
   const journalCreate = vi.fn()
   const taxPaymentUpdate = vi.fn()
 
+  const executeRaw = vi.fn(async () => 0)
   const tx: Record<string, unknown> = {
     taxPayment: { create: taxPaymentCreate, update: taxPaymentUpdate },
     journal: { create: journalCreate },
+    account: { findMany: accountFindMany },
+    withholdingTaxType: { findUnique: taxTypeFindUnique },
+    $executeRaw: executeRaw,
   }
 
   const prisma: Record<string, unknown> = {
@@ -38,6 +42,7 @@ const mocks = vi.hoisted(() => {
     assertPeriodOpen,
     accountFindMany,
     taxTypeFindUnique,
+    executeRaw,
     taxPaymentCreate,
     journalCreate,
     prisma,
@@ -119,6 +124,31 @@ describe("createTaxPayment masa pajak", () => {
     void period
     const empty = await createTaxPayment(form({ ...noPeriod, period: "" }))
     expect(empty.success).toBe(true)
+  })
+
+  it("regresi: jenis dinonaktifkan di antara cek luar dan tx -> ditolak dalam tx, nol tulis", async () => {
+    // Bacaan luar (global) masih aktif; bacaan dalam tx (sesudah kunci
+    // baris) sudah nonaktif — penilaian ulang dalam tx wajib menolak.
+    mocks.taxTypeFindUnique
+      .mockReset()
+      .mockResolvedValueOnce({ name: "PPh 21", isActive: true, deletedAt: null })
+      .mockResolvedValue({ name: "PPh 21", isActive: false, deletedAt: null })
+
+    const res = await createTaxPayment(form({ ...base, taxTypeId: "5" }))
+
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("nonaktif")
+    expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    const lockSql = (mocks.executeRaw.mock.calls as unknown[][])
+      .map((c) => {
+        const first = c[0] as { strings?: string[] } | unknown
+        if (Array.isArray(first)) return first.join("?")
+        return (first as { strings?: string[] })?.strings?.join("?") ?? ""
+      })
+      .join(" ")
+    expect(lockSql).toMatch(/withholding_tax_types/i)
+    expect(lockSql).toMatch(/for update/i)
   })
 
   it("happy path: tanggal tersimpan sebagai tengah malam UTC", async () => {

@@ -30,6 +30,9 @@ const mocks = vi.hoisted(() => {
     bankTransfer: { create: transferCreate, update: transferUpdate },
     taxPayment: { create: taxPaymentCreate, update: taxPaymentUpdate },
     journal: { create: journalCreate },
+    account: { count: accountCount, findMany: accountFindMany },
+    withholdingTaxType: { findUnique: taxTypeFindUnique },
+    $executeRaw: vi.fn(async () => 0),
   }
   const prismaBank: Record<string, unknown> = {
     account: { count: accountCount, findMany: accountFindMany },

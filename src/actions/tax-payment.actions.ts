@@ -91,6 +91,27 @@ export async function createTaxPayment(formData: FormData): Promise<TaxPaymentAc
       // fast-fail; tutup-periode tidak bisa menyelip di antara cek dan tulis.
       await assertPeriodOpen(date, tx)
 
+      // Nilai ulang R8-PAJAK-08 di DALAM tx di bawah kunci baris: cek luar
+      // adalah snapshot lepas, jadi jenis pajak yang dinonaktifkan/dihapus
+      // (atau akun yang hilang) di antara cek dan create tetap melahirkan
+      // TaxPayment + jurnal POSTED untuk jenis nonaktif.
+      if (taxTypeId) {
+        await tx.$executeRaw`SELECT id FROM withholding_tax_types WHERE id = ${taxTypeId} FOR UPDATE`
+        const freshType = await tx.withholdingTaxType.findUnique({
+          where: { id: taxTypeId },
+          select: { isActive: true, deletedAt: true },
+        })
+        if (!freshType) throw new Error("Jenis pemotongan tidak ditemukan.")
+        if (freshType.deletedAt != null || freshType.isActive === false) {
+          throw new Error("Jenis pemotongan nonaktif atau sudah dihapus.")
+        }
+      }
+      const freshAccounts = await tx.account.findMany({
+        where: { id: { in: [taxAccountId, paymentAccountId] } },
+        select: { id: true },
+      })
+      if (freshAccounts.length !== 2) throw new Error("Akun yang dipilih tidak ditemukan.")
+
       const payment = await tx.taxPayment.create({
         data: {
           // R8-PAJAK-09: slug dicek lewat tx (nextSlug global tidak melihat
