@@ -152,8 +152,10 @@ beforeEach(() => {
   // Akun hidup default untuk gerbang titik posting jurnal (putaran 34);
   // test akun mati menimpanya dengan mockResolvedValue.
   mocks.prismaMock.account.findMany.mockImplementation(
-    async (arg: { where?: { id?: { in?: number[] } } }) => {
+    async (arg: { where?: { id?: { in?: number[] } }; select?: { _count?: unknown } }) => {
       const ids = arg?.where?.id?.in ?? [1, 2]
+      // Query gerbang akun induk (putaran 45) meminta _count.children.
+      if (arg?.select?._count) return ids.map((id) => ({ id, _count: { children: 0 } }))
       return ids.map((id) => ({ id }))
     },
   )
@@ -2380,11 +2382,32 @@ describe("Status guard branches", () => {
   it("regresi putaran 34: postJournal menolak pusat biaya fiktif", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 9 })
     mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", createdBy: 1, transactionDate: new Date("2024-01-01"), entries: [{ accountId: 1, debit: 1000, credit: 0, costCenterId: 99999 }, { accountId: 2, debit: 0, credit: 1000, profitCenterId: null }] })
-    mocks.prismaMock.account.findMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
+    mocks.prismaMock.account.findMany.mockImplementation(async (args: any) => {
+      if (args?.select?._count) return [{ id: 1, _count: { children: 0 } }, { id: 2, _count: { children: 0 } }]
+      return [{ id: 1 }, { id: 2 }]
+    })
     mocks.prismaMock.costCenter.findMany.mockResolvedValue([])
     const res = await actions.postJournal(1)
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/Pusat biaya tidak ditemukan/i)
+    expect(mocks.prismaMock.journal.updateMany).not.toHaveBeenCalled()
+  })
+
+  // Regresi putaran 45: akun induk (punya anak) bisa diposting lewat jurnal
+  // manual — gerbang posting hanya assertAccountsExist (ada+aktif). Preseden
+  // repo menolak akun induk untuk posting (warranty-journal.service.ts);
+  // saldo induk terkubur dan laporan rollup/skontro tidak konsisten.
+  it("regresi putaran 45: postJournal menolak akun induk di entri", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 9 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", createdBy: 1, transactionDate: new Date("2024-01-01"), entries: [{ accountId: 1, debit: 1000, credit: 0 }, { accountId: 2, debit: 0, credit: 1000 }] })
+    mocks.prismaMock.account.findMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
+    mocks.prismaMock.account.findMany.mockImplementation(async (args: any) => {
+      if (args?.select?._count) return [{ id: 1, _count: { children: 3 } }, { id: 2, _count: { children: 0 } }]
+      return [{ id: 1 }, { id: 2 }]
+    })
+    const res = await actions.postJournal(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/akun induk/i)
     expect(mocks.prismaMock.journal.updateMany).not.toHaveBeenCalled()
   })
 

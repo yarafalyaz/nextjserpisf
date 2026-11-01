@@ -830,6 +830,18 @@ export async function postJournal(journalId: number) {
       // bare-int tanpa FK: id fiktif tersimpan senyap dan laporan per-pusat
       // kehilangan atribusi; CostCenter juga punya isActive.
       await assertAccountsExist(tx, journal.entries.map((e) => e.accountId), "Jurnal manual");
+      // Akun induk (punya anak) bukan akun terposting: saldo terkubur di
+      // header COA dan rollup laporan tak konsisten antar format — preseden
+      // penolakan di warranty-journal.service.ts (assertPostableAccount).
+      const journalAccountIds = [...new Set(journal.entries.map((e) => e.accountId))];
+      const withChildren = await tx.account.findMany({
+        where: { id: { in: journalAccountIds } },
+        select: { id: true, _count: { select: { children: true } } },
+      });
+      const parentIds = withChildren.filter((a) => a._count.children > 0).map((a) => a.id);
+      if (parentIds.length > 0) {
+        throw new Error(`Jurnal manual: akun induk tidak bisa diposting (id: ${parentIds.join(", ")}). Pilih akun anak yang terposting.`);
+      }
       const costCenterIds = [
         ...new Set(journal.entries.map((e) => e.costCenterId).filter((v): v is number => typeof v === "number" && v > 0)),
       ];
