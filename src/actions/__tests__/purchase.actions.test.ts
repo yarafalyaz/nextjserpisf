@@ -366,6 +366,25 @@ describe("Purchase Order Actions", () => {
     expect(vi.mocked(onPurchaseOrderCreated)).toHaveBeenCalled()
   })
 
+  it("createPurchaseOrder mengunci baris PR sebelum membaca gerbang status", async () => {
+    mocks.prismaMock.purchaseRequest.findUnique.mockResolvedValue({ status: "approved", documentNo: "PR-042" })
+    const res = await actions.createPurchaseOrder(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      purchaseRequestId: "42",
+      items: JSON.stringify([{ itemId: 1, qty: 5, unitPrice: 1000, discount: 0 }])
+    }))
+    expect(res?.success).toBe(true)
+    const lockIdx = mocks.prismaMock.$queryRaw.mock.calls.findIndex((c: unknown[]) => {
+      const sql = Array.isArray(c[0]) ? (c[0] as unknown[]).join("") : String((c[0] as { strings?: string[] })?.strings?.join("?") ?? c[0])
+      return sql.includes("purchase_requests") && sql.includes("FOR UPDATE")
+    })
+    expect(lockIdx).toBeGreaterThanOrEqual(0)
+    const lockOrder = mocks.prismaMock.$queryRaw.mock.invocationCallOrder[lockIdx]
+    const readOrder = mocks.prismaMock.purchaseRequest.findUnique.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(readOrder)
+  })
+
   it("createPurchaseOrder menolak PR konsep (gerbang status PR di server)", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.purchaseRequest.findUnique.mockResolvedValue({ status: "draft", documentNo: "PR-042" })

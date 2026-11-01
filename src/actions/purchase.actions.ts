@@ -862,6 +862,12 @@ export async function createPurchaseOrder(formData: FormData) {
       // menawarkan approved/partial_ordered; server menegakkannya juga supaya
       // URL basi ke PR konsep/ditolak tidak melahirkan PO tanpa persetujuan.
       if (v.purchaseRequestId) {
+        // Kunci baris PR sebelum gerbang status: hook onPurchaseOrderCreated
+        // mengunci baris yang sama sesudah PO lahir. Tanpa kunci di sini dua
+        // create konkuren dari PR sama membaca snapshot REPEATABLE READ yang
+        // sama dan sama-sama lolos gerbang; kunci membuat gerbang + hook
+        // terserialisasi per PR.
+        await tx.$queryRaw`SELECT id FROM purchase_requests WHERE id = ${v.purchaseRequestId} FOR UPDATE`;
         const pr = await tx.purchaseRequest.findUnique({
           where: { id: v.purchaseRequestId },
           select: { status: true, documentNo: true },
