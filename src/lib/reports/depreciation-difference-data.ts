@@ -36,6 +36,7 @@ export interface AssetJournalBookRow {
   id: number
   code: string
   name: string
+  status: string | null
   categoryName: string | null
   purchaseDate: Date | null
   purchaseCost: number
@@ -65,7 +66,7 @@ export async function loadAssetJournalBookRows(): Promise<AssetJournalBookRow[]>
     prisma.asset.findMany({
       where: { status: { not: "disposed" } },
       select: {
-        id: true, code: true, name: true, purchaseDate: true, purchaseCost: true,
+        id: true, code: true, name: true, status: true, purchaseDate: true, purchaseCost: true,
         category: { select: { name: true, taxGroupCode: true, taxTypeListed: true, taxDjpDetermination: true, fiscalMethod: true, assetAccountId: true, accumulatedDepreciationAccountId: true, accumulatedImpairmentAccountId: true } },
         fiscalYearRows: { orderBy: { taxYear: "asc" } },
       },
@@ -94,6 +95,7 @@ export async function loadAssetJournalBookRows(): Promise<AssetJournalBookRow[]>
     })
     return {
       id: asset.id, code: asset.code, name: asset.name,
+      status: asset.status ?? null,
       categoryName: asset.category?.name ?? null,
       purchaseDate: asset.purchaseDate ?? null,
       purchaseCost: Number(asset.purchaseCost),
@@ -149,6 +151,7 @@ export async function loadDepreciationDifference(): Promise<DepreciationDifferen
         id: true,
         code: true,
         name: true,
+        status: true,
         purchaseDate: true,
         purchaseCost: true,
         currentValue: true,
@@ -227,6 +230,7 @@ export async function loadDepreciationDifference(): Promise<DepreciationDifferen
     return {
       code: asset.code,
       name: asset.name,
+      status: asset.status ?? null,
       categoryName: asset.category?.name ?? null,
       purchaseCost: Number(asset.purchaseCost),
       // Dasar jurnal; legacy belum-berjurnal jatuh ke cache hanya untuk

@@ -28,6 +28,7 @@
 import {
   computeMonthlyDepreciation,
 } from "@/lib/finance/asset-depreciation"
+import { isRegisteredAssetUseStatus } from "@/lib/finance/asset-use-status"
 import {
   fiscalDepreciationForYear,
   type FiscalBalanceRejection,
@@ -95,6 +96,8 @@ export interface DepreciationAssetInput {
   code: string
   name: string
   categoryName: string | null
+  /** Status pakai aset (`active`/`held_for_sale`/`disposed`); opsional supaya pemanggil lama tetap jujur aktif. */
+  status?: string | null
   purchaseCost: number
   /**
    * Nilai buku SEBELUM periode ini — wajib dasar jurnal POSTED
@@ -150,8 +153,15 @@ function assetLabel(asset: DepreciationAssetInput): string {
   return asset.code ? `${asset.code} ${asset.name}` : asset.name
 }
 
-/** Penyusutan akuntansi setahun penuh (12 × penyusutan bulanan). */
+/**
+ * Penyusutan akuntansi setahun penuh (12 × penyusutan bulanan).
+ * Gerbang status sama dengan cron (`classifyCronDisposition`):
+ * `held_for_sale` berhenti komersial (fiskal tetap dihitung terpisah),
+ * status tak terdaftar fail-closed 0 — bukan dihitung seolah aktif.
+ */
 export function accountingAnnualDepreciation(asset: DepreciationAssetInput): number {
+  const status = asset.status ?? "active"
+  if (!isRegisteredAssetUseStatus(status) || status === "held_for_sale") return 0
   const monthly = computeMonthlyDepreciation({
     purchaseCost: asset.purchaseCost,
     bookValue: asset.bookValue,

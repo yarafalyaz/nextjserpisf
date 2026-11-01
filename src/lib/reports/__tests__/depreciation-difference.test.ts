@@ -59,6 +59,18 @@ describe("accountingAnnualDepreciation", () => {
     // 12.000.000 / 5 tahun / 12 = 200.000/bulan → 2.400.000/tahun.
     expect(accountingAnnualDepreciation(asset())).toBe(2_400_000)
   })
+
+  it("held_for_sale: komersial berhenti (0), fiskal tetap dihitung (E117-4)", () => {
+    // Cron skip komersial untuk held_for_sale tetapi fiskal lanjut;
+    // laporan perbedaan wajib memakai gerbang yang sama, bukan 12x setahun.
+    const held = asset({ status: "held_for_sale", taxGroupCode: "GROUP_1" })
+    expect(accountingAnnualDepreciation(held)).toBe(0)
+    expect(fiscalAnnualDepreciation(held, 2024)).not.toBeNull()
+  })
+
+  it("status tak terdaftar: komersial 0 (fail-closed), bukan dihitung seolah aktif", () => {
+    expect(accountingAnnualDepreciation(asset({ status: "status-ngawur" }))).toBe(0)
+  })
 })
 
 describe("fiscalAnnualDepreciation", () => {
