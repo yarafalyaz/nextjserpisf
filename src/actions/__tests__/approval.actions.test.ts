@@ -157,6 +157,14 @@ beforeEach(() => {
     roles: ["super_admin"],
   });
   mocks.authMock.mockResolvedValue({ user: { id: "1", roles: ["super_admin"], permissions: [] } });
+  // Mock ringan findMany kembali []; fixture workflow harus menyatakan approver
+  // yang dirujuknya supaya guard eksistensi hidup tidak menganggapnya yatim.
+  mocks.prismaMock.role.findMany.mockImplementation(async ({ where }: any) =>
+    (where?.id?.in ?? []).map((id: number) => ({ id })),
+  );
+  mocks.prismaMock.user.findMany.mockImplementation(async ({ where }: any) =>
+    (where?.id?.in ?? []).map((id: number) => ({ id })),
+  );
 });
 
 describe("Approval Progression Actions", () => {
@@ -256,6 +264,31 @@ describe("Approval Workflow CRUD", () => {
     expect(res?.success).toBe(true)
     expect(events).toEqual(["lock-role", "create-workflow"])
   });
+
+  it("createApprovalWorkflow menolak role approver yang tidak ada", async () => {
+    mocks.prismaMock.role.findMany.mockResolvedValueOnce([{ id: 1 }])
+    const res = await actions.createApprovalWorkflow(wfFd([{ name: "Step1", roleId: 999999 }]))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Peran approver tidak ditemukan")
+    expect(mocks.prismaMock.approvalWorkflow.create).not.toHaveBeenCalled()
+  })
+
+  it("createApprovalWorkflow menolak user approver yang tidak ada", async () => {
+    mocks.prismaMock.user.findMany.mockResolvedValueOnce([])
+    const res = await actions.createApprovalWorkflow(wfFd([{ name: "Step1", userId: 999999 }]))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Pengguna approver tidak ditemukan")
+    expect(mocks.prismaMock.approvalWorkflow.create).not.toHaveBeenCalled()
+  })
+
+  it("updateApprovalWorkflow menolak user approver yang tidak ada tanpa mengganti langkah", async () => {
+    mocks.prismaMock.user.findMany.mockResolvedValueOnce([])
+    const res = await actions.updateApprovalWorkflow(1, wfFd([{ name: "Step1", userId: 999999 }]))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Pengguna approver tidak ditemukan")
+    expect(mocks.prismaMock.approvalWorkflowStep.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.approvalWorkflow.update).not.toHaveBeenCalled()
+  })
 
   it("createApprovalWorkflow succeeds", async () => {
     const res = await actions.createApprovalWorkflow(wfFd([{ name: "Step1", roleId: 1 }]));

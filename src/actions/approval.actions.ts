@@ -89,6 +89,27 @@ async function lockReferencedRoles(tx: any, roleIds: number[]): Promise<void> {
   }
 }
 
+async function assertWorkflowApproversExist(tx: any, steps: readonly WorkflowStepInput[]): Promise<void> {
+  const roleIds = [...new Set(steps.map((s) => s.roleId).filter((id): id is number => typeof id === "number" && Number.isInteger(id) && id > 0))].sort((a, b) => a - b);
+  if (roleIds.length > 0) {
+    const roles = await tx.role.findMany({ where: { id: { in: roleIds } }, select: { id: true } });
+    const found = new Set(roles.map((r: { id: number }) => r.id));
+    const missing = roleIds.filter((id) => !found.has(id));
+    if (missing.length > 0) {
+      throw new Error(`Peran approver tidak ditemukan: ${missing.join(", ")}`);
+    }
+  }
+  const userIds = [...new Set(steps.map((s) => s.userId).filter((id): id is number => typeof id === "number" && Number.isInteger(id) && id > 0))].sort((a, b) => a - b);
+  if (userIds.length > 0) {
+    const users = await tx.user.findMany({ where: { id: { in: userIds }, isActive: true }, select: { id: true } });
+    const found = new Set(users.map((u: { id: number }) => u.id));
+    const missing = userIds.filter((id) => !found.has(id));
+    if (missing.length > 0) {
+      throw new Error(`Pengguna approver tidak ditemukan: ${missing.join(", ")}`);
+    }
+  }
+}
+
 const HR_REFERENCE_TYPES = new Set(["Payroll", "EmployeeLoan", "LeaveRequest", "OvertimeRequest"]);
 const HR_REFERENCE_MODELS: Record<string, string> = {
   Payroll: "payroll",
@@ -715,6 +736,7 @@ export async function createApprovalWorkflow(formData: FormData) {
         tx,
         steps.map((s) => Number(s.roleId)),
       );
+      await assertWorkflowApproversExist(tx, steps);
       return tx.approvalWorkflow.create({
         data: {
           name,
@@ -777,6 +799,7 @@ export async function updateApprovalWorkflow(id: number, formData: FormData) {
         tx,
         steps.map((s) => Number(s.roleId)),
       );
+      await assertWorkflowApproversExist(tx, steps);
       const pendingCount = await tx.approval.count({
         where: { workflowId: id, status: "pending" },
       });
