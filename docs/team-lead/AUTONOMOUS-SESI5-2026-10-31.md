@@ -775,3 +775,25 @@ Vonis GUGUR putaran ini (jangan diangkat lagi tanpa bukti baru):
 
 - Timing/persen kreditabel (`creditPeriod`/`creditStatus`/`creditablePercent`) pada daftar Faktur PPN: domain read-model SPT, bukan daftar dokumen bernilai kepala rantai (lanjutan keputusan putaran 17).
 - Pemulihan otomatis kredit vendor saat void tagihan: jumlah kredit khusus tagihan tidak tercatat (tak ada model alokasi kredit→bill; `allocatedAmount` agregat) dan selisih `balanceDue` bercampur relief retur langsung. Menebak FIFO historis menolak lebih buruk daripada fail-closed fix 7 — rekonstruksi butuh skema alokasi baru, keputusan desain tersendiri.
+
+### Putaran 19 (2026-11-01) — lane API/cron/auth + CRM/pengaturan/master-sisa (agent read-only, verifikasi sesi utama)
+
+Sembilan fix + satu perbaikan test:
+
+1. `855784615` fix(garansi): keputusan klaim menolak pembuat klaim sendiri — `decideWarrantyClaim` membaca `createdBy` dan menolak `decisionBy === createdBy` (null legacy boleh, pola SoD repo); transisi sudah atomik via `claimWarrantyClaimUpdate`, celahnya murni SoD. 48/48; terkait 199/199.
+2. `887a6910c` fix(penjualan): keputusan override kredit memakai klaim kondisional berkunci — approve/reject menilai status dari snapshot plain lalu update tanpa syarat; konkuren sama-sama lolos, penulis terakhir menang. Kini kunci baris `credit_overrides FOR UPDATE` + `updateMany` syarat `status: "pending"`, count 0 ditolak. SoD peminta≠pemutus dipertahankan. 144/144 gabungan.
+3. `92c19143f` fix(master): hapus syarat pembayaran menghitung pemakai pelanggan juga — guard lama hanya `vendor.count`; `Customer.paymentTermId` FK `ON DELETE SET NULL`, term khusus pelanggan lolos hapus dan termin kredit pelanggan menjadi NULL senyap. 295/295.
+4. `7aeb12d46` fix(pengaturan): kunci baris singleton sebelum menyimpan pengaturan — `updateSystemSettings`/`updateStorageSettings` findFirst plain + update tanpa syarat: lost update antar admin dan validasi PKP atas snapshot basi. Keduanya kini tx dengan kunci `system_settings FOR UPDATE` (pola period-close); `periodLockDate` tetap tak ditulis jalur ini (R-09). 43/43 gabungan.
+5. `8971c5760` fix(api): filter log aktivitas menolak hari kalender mustahil — guard hanya NaN; `2026-02-31` bergeser senyap ke 3 Mar dan lolos. String `YYYY-MM-DD` kini diperiksa terhadap hari bulan (kabisat inklusif); bentuk lain tetap `new Date`. 8/8.
+6. `7f2a8a5dc` fix(laporan): override tanggal PDF pusat biaya menolak hari mustahil — guard NaN yang sama di `report-registry`; `2026-02-31` menggantikan periode slug yang sudah divalidasi ketat di layar. Komentar lama yang mengklaim jatuh ke slug salah. 41/41 + 64/64 terkait.
+7. `ae484bd59` fix(auth): route workflow dan upload menolak user nonaktif — kandidat 7 route menyempit ke 2: `/api/workflow` (menilai roles/permissions sesi mentah + bypass super_admin) dan `/api/upload` kategori `avatars` (permission null). Keduanya menolak `isActive === false` di gerbang sesi, pola R7PB-02. 69/69 gabungan.
+8. `968171dcb` fix(crm): hapus lead dan tiket beranak memakai soft-delete — `LeadActivity.lead`/`CrmTicketComment.ticket` onDelete Cascade: hard delete memusnahkan histori tanpa memicu fallback P2003. Beranak langsung soft-delete; daftar/detail CRM sudah menyembunyikan `deletedAt`. 45/45 + 136/136.
+9. `8a710c748` fix(master): hapus pelanggan dirujuk CRM memakai soft-delete — `Lead.customerId`/`CrmTicket.customerId` Int polos tanpa FK; hard delete lolos dan meninggalkan customerId mati (lead terkonversi kehilangan target). Dirujuk CRM langsung soft-delete. 296/296.
+10. `8a0177a91` test(master): mock pelanggan pada suite hapus syarat pembayaran — penutup insiden CI di bawah.
+
+CI: `855784615`, `887a6910c`, `8a0177a91` **completed success**. Head `92c19143f` s/d `8a710c748` **completed failure** dengan akar tunggal `delete-payment-term.test.ts` (mock prisma tanpa `customer.count` untuk guard fix 3; CI full-suite per head sehingga kegagalan menular ke run head yang lebih baru dari fix tetapi lebih lama dari perbaikan — pola putaran 15/16: grep SEMUA file test pemanggil sebelum commit), tertutup `8a0177a91`.
+
+Vonis GUGUR putaran ini (jangan diangkat lagi tanpa bukti baru):
+
+- Kandidat user-nonaktif 7 route (pdf/print/attachments/upload-attachments dst.): tertutup `hasPermission`/`canAccessAttachment` yang menolak `isActive === false`; tidak disentuh. Helper bersama `requireActiveSession()` ditolak — konvensi repo adalah cek satu baris per route (R7PB-02 di tiga tempat).
+- Semua cron `isValidCronRequest` fail-closed timing-safe; workflow route klaim kondisional + maker-checker + HR scope; upload/download magic-byte + traversal berlapis; print/PDF permission fail-closed; DocumentSequence upsert atomik; approval generik berkunci + klaim count + SoD; `convertLead` berkunci; scan-then-create warehouse/rack tertahan unique constraint — diverifikasi aman oleh agent dan tak ditemukan bantahan saat verifikasi titik.
