@@ -54,7 +54,7 @@ describe("WipAgingCard F-2026-10-20-72", () => {
     const text = container.textContent ?? ""
     expect(container.querySelector('[aria-label="Umur WIP Berjalan"]')).not.toBeNull()
     expect(text).toContain("1 order produksi berjalan")
-    expect(text).toContain("Rp 600.000")
+    expect(text).toContain("Rp 1.000.000")
     expect(text).toContain("PO-0001")
     expect(text).not.toContain("PO-0002")
     expect(text).toContain("31-60 hari")

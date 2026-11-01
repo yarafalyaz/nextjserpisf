@@ -1,7 +1,7 @@
 /** Loader + tabel PDF laporan Umur WIP (F-2026-10-20-72, tahap frontend).
  *
  * Snapshot per tanggal akhir periode: order produksi berjalan pada `asOf`,
- * sisa WIP = totalActualCost − releasedCost (builder murni `wip-aging.ts`).
+ * sisa WIP = totalActualCost tersimpan (builder murni `wip-aging.ts`).
  * Saldo GL akun WIP sengaja tidak dibandingkan di sini — saldo GL memuat
  * jurnal WIP jalur lain; halaman menampilkannya sebagai pembanding terpisah
  * bila tersedia, bukan syarat laporan.
@@ -101,8 +101,8 @@ export function buildWipAgingTable(result: WipAgingLoadResult): TableDocument["t
     {
       kind: "notice",
       text:
-        "Sisa WIP per order = total biaya aktual − biaya yang sudah dirilis ke persediaan barang jadi " +
-        "(dijepit minimal 0). Umur dihitung dari tanggal mulai order (jatuh ke tanggal buat bila kosong) " +
+        "Sisa WIP per order = total biaya aktual tersimpan (sisa pool sesudah rilis parsial; " +
+        "dijepit minimal 0). Umur dihitung dari tanggal mulai order (jatuh ke tanggal buat bila kosong) " +
         "sampai tanggal acuan. Total laporan adalah jumlah sisa WIP order berjalan; selisih terhadap saldo " +
         "GL akun WIP bukan galat — saldo GL juga memuat jurnal WIP dari jalur lain.",
     },

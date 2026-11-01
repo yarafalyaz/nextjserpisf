@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "Umur WIP Berjalan" }
 /**
  * F-2026-10-20-72 (tahap frontend): umur WIP per order produksi berjalan.
  * Snapshot per tanggal akhir periode dari builder read-only `getWipAging`
- * (PR #238): sisa WIP = totalActualCost − releasedCost, ember umur
+ * (PR #238): sisa WIP = totalActualCost tersimpan, ember umur
  * 0-30/31-60/61-90/>90 hari. UI tidak menghitung ulang sisa/umur.
  */
 export default async function WipAgingPage({

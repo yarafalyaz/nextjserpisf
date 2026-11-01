@@ -17,7 +17,7 @@ import { ReportCardShell } from "./report-card-shell"
  * F-2026-10-20-72 (tahap frontend): umur WIP per order produksi berjalan.
  *
  * Data dari builder read-only `buildWipAging` + loader `getWipAging`
- * (PR #238): sisa WIP = totalActualCost − releasedCost per order berjalan,
+ * (PR #238): sisa WIP = totalActualCost tersimpan per order berjalan,
  * ember umur 0-30/31-60/61-90/>90 hari. Komponen ini murni presentasi —
  * tidak menghitung ulang biaya dan tidak menyentuh jurnal.
  */

@@ -2,9 +2,8 @@
  * Laporan umur WIP (F-2026-10-20-72, sub-bagian aman tanpa model baru).
  *
  * Order produksi yang masih berjalan menahan biaya di akun WIP sebesar
- * `totalActualCost − releasedCost` (sisa yang belum dirilis ke persediaan
- * barang jadi — rumus yang sama dengan penyelesaian parsial di
- * manufacturing.actions). Laporan ini membuat order menggantung terlihat:
+ * `totalActualCost` tersimpan (sisa pool yang belum dirilis ke persediaan
+ * barang jadi; penulis rilis sudah menurunkannya per rilis parsial). Laporan ini membuat order menggantung terlihat:
  * umur hari sejak tanggal mulai, sisa WIP per order, dan ember umur
  * 0-30 / 31-60 / 61-90 / >90 hari.
  *
@@ -67,7 +66,7 @@ export interface WipAgingOrder {
   completionPercent: number
   totalActualCost: number
   releasedCost: number
-  /** totalActualCost − releasedCost, dijepit >= 0. */
+  /** totalActualCost tersimpan (sisa pool), dijepit >= 0. */
   wipAmount: number
 }
 
