@@ -339,6 +339,18 @@ function parseComponentForm(formData: FormData): {
   };
 }
 
+/**
+ * Karyawan target dokumen SDM wajib hidup (ada + isActive + belum
+ * soft-delete). Scope HR menilai akses, bukan kehidupan master.
+ */
+async function assertLiveEmployee(employeeId: number): Promise<void> {
+  const live = await prisma.employee.findFirst({
+    where: { id: employeeId, isActive: true, deletedAt: null },
+    select: { id: true },
+  });
+  if (!live) throw new Error("Karyawan tidak ditemukan atau tidak aktif");
+}
+
 async function assertActiveComponentNameAvailable(normalizedName: string, excludeId?: number): Promise<void> {
   const dup = await prisma.payrollComponent.findFirst({
     where: {
@@ -3946,6 +3958,7 @@ export async function createEmployeeLoan(formData: FormData) {
       }
     }
     await assertHrEmployeeAccess(scope, employeeId);
+    await assertLiveEmployee(employeeId);
 
     const totalAmount = v.totalAmount;
 
@@ -5562,6 +5575,9 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
 
     await assertHrEmployeeAccess(scope, existing.employeeId);
     await assertHrEmployeeAccess(scope, employeeId);
+    // Target baru = penanaman baru: picker ubah hanya saring deletedAt,
+    // karyawan nonaktif lolos (pola dokumen bebas putaran 31-34).
+    await assertLiveEmployee(employeeId);
 
     const loan = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM employee_loans WHERE id = ${id} FOR UPDATE`;

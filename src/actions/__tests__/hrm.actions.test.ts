@@ -856,6 +856,9 @@ describe("Employee Loan Actions", () => {
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.employeeLoan.create.mockResolvedValue({ id: 1 })
     prismaMock.employeeLoan.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "pending" })
+    // Gerbang hidup karyawan pinjaman (putaran 34): default hidup; test
+    // karyawan mati menimpanya dengan null.
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
     prismaMock.systemSetting.findFirst.mockResolvedValue({ id: 1 })
     prismaMock.journal.findMany.mockResolvedValue([])
   })
@@ -899,6 +902,35 @@ describe("Employee Loan Actions", () => {
   it("deleteEmployeeLoan removes record", async () => {
     const res = await actions.deleteEmployeeLoan(1)
     expect(res?.success).toBe(true)
+  })
+
+  // Regresi putaran 34: karyawan nonaktif/soft-delete ditolak saat buat/edit
+  // pinjaman — create hanya menilai scope, picker ubah hanya saring
+  // deletedAt; titik pengakuan hook pencairan juga menilai ulang.
+  it("regresi putaran 34: createEmployeeLoan menolak karyawan nonaktif", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await actions.createEmployeeLoan(fd({
+      employeeId: "1",
+      loanDate: "2026-06-12",
+      totalAmount: "1000000",
+      monthlyInstallment: "100000",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/tidak ditemukan atau tidak aktif/i)
+    expect(prismaMock.employeeLoan.create).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 34: updateEmployeeLoan menolak karyawan target nonaktif", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await actions.updateEmployeeLoan(1, fd({
+      employeeId: "1",
+      loanDate: "2026-06-12",
+      totalAmount: "2000000",
+      monthlyInstallment: "400000",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/tidak ditemukan atau tidak aktif/i)
+    expect(prismaMock.employeeLoan.updateMany).not.toHaveBeenCalled()
   })
 
   it("round2: team scope tidak bisa create pinjaman non-self untuk karyawan di luar tim", async () => {

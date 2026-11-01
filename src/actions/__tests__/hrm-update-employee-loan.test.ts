@@ -72,6 +72,8 @@ describe("updateEmployeeLoan bug verification", () => {
     // "admin" is in hr-scope's ALL_ACCESS_ROLES, so scope is `all` and the edit is
     // not restricted to the caller's own employee row.
     mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
+    // Gerbang hidup karyawan target edit (putaran 34): default hidup.
+    mocks.prismaMock.employee.findFirst.mockResolvedValue({ id: 2 })
     mocks.prismaMock.$queryRaw.mockResolvedValue([])
     mocks.txDelegates.$queryRaw.mockResolvedValue([])
     mocks.prismaMock.employeeLoan.updateMany.mockResolvedValue({ count: 1 })

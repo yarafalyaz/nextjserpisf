@@ -66,6 +66,8 @@ const mocks = vi.hoisted(() => ({
   paymentFindUniqueOrThrow: vi.fn(),
   repaymentFindUniqueOrThrow: vi.fn(),
   writeOffFindUniqueOrThrow: vi.fn(),
+  loanFindUniqueOrThrow: vi.fn(),
+  employeeFindFirst: vi.fn(),
   orderFindUniqueOrThrow: vi.fn(),
   adjustmentFindUniqueOrThrow: vi.fn(),
   workOrderFindUniqueOrThrow: vi.fn(),
@@ -178,6 +180,12 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     employeeLoanWriteOff: {
       findUniqueOrThrow: (...a: unknown[]) => mocks.writeOffFindUniqueOrThrow(...a),
+    },
+    employeeLoan: {
+      findUniqueOrThrow: (...a: unknown[]) => mocks.loanFindUniqueOrThrow(...a),
+    },
+    employee: {
+      findFirst: (...a: unknown[]) => mocks.employeeFindFirst(...a),
     },
   },
 }));
@@ -3172,6 +3180,65 @@ describe("gerbang akun 210209 klaim reimbursement (t_5c6d55f3)", () => {
     const where = mocks.journalFindFirst.mock.calls[0]?.[0]?.where;
     expect(where.status).toEqual({ not: "REVERSED" });
     expect(where.deletedAt).toBeNull();
+  });
+});
+
+/**
+ * Regresi putaran 34: pencairan pinjaman adalah titik pengakuan uang keluar —
+ * karyawan yang dinonaktifkan/soft-delete sesudah pinjaman dibuat tidak
+ * boleh menerima pencairan, dan akun settings wajib hidup (repayment/
+ * write-off file sama sudah memakai assertAccountsExist; pencairan tidak).
+ */
+describe("putaran 34: onEmployeeLoanDisbursed gerbang karyawan + akun hidup", () => {
+  function buildDisburseTx() {
+    return {
+      systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
+      employeeLoan: { findUniqueOrThrow: mocks.loanFindUniqueOrThrow },
+      employee: { findFirst: mocks.employeeFindFirst },
+      account: { findMany: mocks.accountFindMany, findFirst: mocks.accountFindFirst },
+      journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
+      journalEntry: journalEntryBranch(),
+    };
+  }
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAllAccountsExist();
+    mocks.systemSettings.employeeReceivableAccountId = 140;
+    mocks.systemSettings.payrollBankAccountId = 105;
+    mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    mocks.assertPeriodOpen.mockResolvedValue(undefined);
+    mocks.loanFindUniqueOrThrow.mockResolvedValue({ id: 3, employeeId: 42, totalAmount: 500000, loanDate: new Date("2026-10-29") });
+    mocks.employeeFindFirst.mockResolvedValue({ id: 42 });
+  });
+
+  it("karyawan nonaktif/terhapus -> tolak, nol jurnal", async () => {
+    const { onEmployeeLoanDisbursed } = await import("../accounting.hook");
+    mocks.employeeFindFirst.mockResolvedValue(null);
+    wireTransaction(buildDisburseTx);
+    await expect(onEmployeeLoanDisbursed(3, 7)).rejects.toThrow(/tidak ditemukan atau tidak aktif/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  it("akun settings mati -> tolak, nol jurnal", async () => {
+    const { onEmployeeLoanDisbursed } = await import("../accounting.hook");
+    // Akun 105 tak ditemukan hidup oleh assertAccountsExist.
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? [];
+      return ids.filter((id) => id !== 105).map((id) => ({ id }));
+    });
+    wireTransaction(buildDisburseTx);
+    await expect(onEmployeeLoanDisbursed(3, 7)).rejects.toThrow(/tidak aktif\/terhapus/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  it("kontrol positif: karyawan + akun hidup -> jurnal pencairan terposting", async () => {
+    const { onEmployeeLoanDisbursed } = await import("../accounting.hook");
+    wireTransaction(buildDisburseTx);
+    await onEmployeeLoanDisbursed(3, 7);
+    expect(mocks.journalCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ referenceType: "EmployeeLoan", status: "POSTED" }) }),
+    );
   });
 });
 

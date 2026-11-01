@@ -3736,6 +3736,25 @@ export async function onEmployeeLoanDisbursed(
   const amount = Number(loan.totalAmount);
   if (amount <= 0) return;
 
+  // Titik pengakuan uang keluar: karyawan yang dinonaktifkan/soft-delete
+  // sesudah pinjaman dibuat tidak boleh menerima pencairan (uang nyata
+  // keluar via klaim approval pending->active). Pola gerbang titik posting
+  // putaran 30/32/34; employmentEndedAt tidak dinilai (kebijakan HR).
+  const liveEmployee = await db.employee.findFirst({
+    where: { id: loan.employeeId, isActive: true, deletedAt: null },
+    select: { id: true },
+  });
+  if (!liveEmployee) {
+    throw new Error("Karyawan penerima pinjaman tidak ditemukan atau tidak aktif — pencairan ditolak");
+  }
+  // Akun settings wajib hidup: repayment/write-off di file ini sudah lewat
+  // assertAccountsExist, pencairan sebelumnya tidak (inkonsistensi).
+  await assertAccountsExist(
+    db,
+    [settings.employeeReceivableAccountId, settings.payrollBankAccountId],
+    "Pencairan pinjaman karyawan",
+  );
+
   const existing = await db.journal.findFirst({
     where: { referenceType: "EmployeeLoan", referenceId: loanId },
   });
