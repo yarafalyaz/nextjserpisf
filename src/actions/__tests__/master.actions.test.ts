@@ -1277,7 +1277,7 @@ describe("Tax Actions", () => {
 
 describe("ItemByScan Actions", () => {
   it("lookupItemByScan succeeds", async () => {
-    mocks.prismaMock.barcode.findUnique.mockResolvedValue({ itemId: 42 })
+    mocks.prismaMock.barcode.findUnique.mockResolvedValue({ itemId: 42, item: { slug: "item-x", isActive: true, deletedAt: null } })
     const res = await actions.lookupItemByScan("test")
     expect(res?.success).toBe(true)
   })
@@ -1285,12 +1285,22 @@ describe("ItemByScan Actions", () => {
   it("lookupItemByScan mengembalikan slug barang (URL kanonik scan)", async () => {
     mocks.prismaMock.barcode.findUnique.mockResolvedValueOnce({
       itemId: 42,
-      item: { slug: "busi-iridium" },
+      item: { slug: "busi-iridium", isActive: true, deletedAt: null },
     })
     const res = await actions.lookupItemByScan("8991234567890")
     expect(res?.success).toBe(true)
     expect(res?.id).toBe(42)
     expect(res?.slug).toBe("busi-iridium")
+  })
+
+  it("lookupItemByScan menolak barcode milik item terhapus", async () => {
+    mocks.prismaMock.barcode.findUnique.mockResolvedValueOnce({
+      itemId: 42,
+      item: { slug: "busi-mati", isActive: true, deletedAt: new Date() },
+    })
+    const res = await actions.lookupItemByScan("8990000000000")
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/tidak ditemukan/i)
   })
 
   it("lookupItemByScan via SKU mengembalikan slug barang", async () => {
@@ -1305,12 +1315,27 @@ describe("ItemByScan Actions", () => {
 
 describe("Barcode Actions", () => {
   it("createBarcode succeeds", async () => {
-    mocks.prismaMock.item.findUnique.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ id: 1, isActive: true, deletedAt: null })
     const res = await actions.createBarcode(fdMap({ barcode: "1234567890", itemId: "1" }))
     expect(res?.success).toBe(true)
   })
+  // Regresi putaran 50: barcode untuk item nonaktif/terhapus ditolak —
+  // barcode yatim ke item mati membuat scan menunjuk barang tak terpakai.
+  it("createBarcode menolak item nonaktif", async () => {
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ id: 5, isActive: false, deletedAt: null })
+    const res = await actions.createBarcode(fdMap({ barcode: "1234567890", itemId: "5" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/nonaktif|terhapus/i)
+    expect(mocks.prismaMock.barcode.create).not.toHaveBeenCalled()
+  })
+  it("updateBarcode menolak item terhapus", async () => {
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ id: 5, isActive: true, deletedAt: new Date() })
+    const res = await actions.updateBarcode(1, fdMap({ barcode: "1234567890", itemId: "5" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.barcode.update).not.toHaveBeenCalled()
+  })
   it("updateBarcode succeeds", async () => {
-    mocks.prismaMock.item.findUnique.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ id: 1, isActive: true, deletedAt: null })
     mocks.prismaMock.barcode.findUniqueOrThrow.mockResolvedValue({ id: 1 })
     const res = await actions.updateBarcode(1, fdMap({ barcode: "1234567890", itemId: "1" }))
     expect(res?.success).toBe(true)

@@ -2778,9 +2778,13 @@ export async function lookupItemByScan(
 
     const byBarcode = await prisma.barcode.findUnique({
       where: { barcode: code },
-      select: { itemId: true, item: { select: { slug: true } } },
+      select: { itemId: true, item: { select: { slug: true, isActive: true, deletedAt: true } } },
     });
-    if (byBarcode) return { success: true, id: byBarcode.itemId, slug: byBarcode.item?.slug ?? null };
+    // Putaran 50: barcode yatim ke item nonaktif/terhapus dibaca "tidak
+    // ditemukan" — scan tidak boleh mendarat di barang tak terpakai.
+    if (byBarcode && byBarcode.item?.isActive && byBarcode.item.deletedAt === null) {
+      return { success: true, id: byBarcode.itemId, slug: byBarcode.item?.slug ?? null };
+    }
 
     const bySku = await prisma.item.findFirst({
       where: { sku: code, deletedAt: null },
@@ -2807,11 +2811,13 @@ export async function createBarcode(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    // Putaran 50: barcode hanya untuk item hidup (pola gerbang rujukan).
     const item = await prisma.item.findUnique({
       where: { id: v.itemId },
-      select: { id: true },
+      select: { id: true, isActive: true, deletedAt: true },
     });
     if (!item) return { success: false, error: "Barang tidak ditemukan" };
+    if (!item.isActive || item.deletedAt !== null) return { success: false, error: "Barang nonaktif atau terhapus — barcode hanya dapat dibuat untuk barang aktif." };
 
     const barcodeEntry = await prisma.barcode.create({
       data: {
@@ -2840,11 +2846,13 @@ export async function updateBarcode(id: number, formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    // Putaran 50: barcode hanya untuk item hidup (pola gerbang rujukan).
     const item = await prisma.item.findUnique({
       where: { id: v.itemId },
-      select: { id: true },
+      select: { id: true, isActive: true, deletedAt: true },
     });
     if (!item) return { success: false, error: "Barang tidak ditemukan" };
+    if (!item.isActive || item.deletedAt !== null) return { success: false, error: "Barang nonaktif atau terhapus — barcode hanya dapat dibuat untuk barang aktif." };
 
     await prisma.barcode.update({
       where: { id },
