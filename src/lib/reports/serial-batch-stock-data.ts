@@ -6,6 +6,13 @@
  * Jumlah barang yang mengaktifkan pelacakan ikut dihitung supaya laporan bisa
  * membedakan "pelacakan belum dipakai" dari "pelacakan aktif tapi belum ada
  * catatan" — lihat `serial-batch-stock.ts`.
+ *
+ * Hanya POSISI yang tampil: seri `available`/`reserved` (seri `used` sudah
+ * terpakai/keluar gudang — ditandai FIFO saat penjualan; `sold`/`damaged`
+ * dan status lain juga bukan posisi), batch dengan `qty > 0` (lot habis
+ * tidak dihapus FIFO tetapi bukan stok), dan hanya barang hidup — sama
+ * seperti penyebut `trackedItems` dan loader stok kembar
+ * (slow-moving/min-stock).
  */
 
 import { prisma } from "@/lib/db/prisma"
@@ -44,7 +51,11 @@ export async function loadSerialBatchStock(options: {
 
   const [serials, batches, trackedItems] = await Promise.all([
     prisma.itemSerial.findMany({
-      where: { ...warehouseWhere },
+      where: {
+        ...warehouseWhere,
+        status: { in: ["available", "reserved"] },
+        item: { isActive: true, deletedAt: null },
+      },
       select: {
         serialNumber: true,
         status: true,
@@ -54,7 +65,11 @@ export async function loadSerialBatchStock(options: {
       orderBy: { serialNumber: "asc" },
     }),
     prisma.itemBatch.findMany({
-      where: { ...warehouseWhere },
+      where: {
+        ...warehouseWhere,
+        qty: { gt: 0 },
+        item: { isActive: true, deletedAt: null },
+      },
       select: {
         batchNumber: true,
         qty: true,
