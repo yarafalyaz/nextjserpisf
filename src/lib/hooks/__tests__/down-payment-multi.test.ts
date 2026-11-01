@@ -123,6 +123,22 @@ describe("onDownPaymentConfirmed — multi-DP support", () => {
     expectPaymentData(mocks, { salesInvoiceId: 100, amount: 500, paymentMethod: "down_payment" })
   })
 
+  it("mengunci baris faktur sebelum membaca payment existing (regresi paidAmount tertimpa)", async () => {
+    const dp2 = buildDp({ id: 2, amount: 500, status: "draft", docNo: "DP-2" })
+    const tx = buildTx(dp2, 100)
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(2, 1)
+
+    const queryRaw = (tx as unknown as { $queryRaw: ReturnType<typeof vi.fn> }).$queryRaw
+    const lockCalls = queryRaw.mock.calls
+      .map((c, i) => ({ sql: (c[0] as string[]).join("?"), order: queryRaw.mock.invocationCallOrder[i] }))
+      .filter((c) => /sales_invoices/i.test(c.sql))
+    expect(lockCalls).toHaveLength(1)
+    expect(lockCalls[0].sql).toMatch(/for update/i)
+    expect(lockCalls[0].order).toBeLessThan(mocks.salesPaymentFindMany.mock.invocationCallOrder[0])
+  })
+
   it("marks the subsequent DP as CONFIRMED", async () => {
     await runDp2()
 

@@ -153,6 +153,14 @@ async function onDownPaymentConfirmedInner(
     }
 
     if (existingInv) {
+      // Kunci baris faktur sebelum membaca prePaid/daftar payment:
+      // createSalesPayment dan recalc sales-payment.hook mengunci baris yang
+      // sama. Tanpa kunci ini, pembayaran manual yang commit di tengah
+      // membuat alokasi dihitung dari snapshot basi lalu paidAmount ditulis
+      // absolut menimpa total yang benar (pembayaran dobel terhitung /
+      // status lunas hilang). Urutan kunci dp -> quotation -> invoice;
+      // createSalesPayment hanya mengunci invoice, jadi tidak ada siklus.
+      await tx.$queryRaw`SELECT id FROM sales_invoices WHERE id = ${existingInv.id} FOR UPDATE`;
       // P0-1 (review): DP lanjutan hanya boleh menambah SalesPayment untuk DP
       // INI — dan idempoten: DP yang sama di-retry tidak boleh membuat baris
       // kedua. Penandanya = notes berisi nomor dokumen DP (relasi otoritatif
