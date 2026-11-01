@@ -82,6 +82,24 @@ export async function createBankStatement(formData: FormData) {
     const bankStatement = await prisma.$transaction(async (tx) => {
       const stmtDate = wibDateToUtcMidnight(v.date);
       await assertPeriodOpen(stmtDate, tx);
+      // accountId/bankId bare-int tanpa FK: header lahir untuk akun
+      // nonaset/mati atau bank fiktif lalu seluruh rantai koran/rekon
+      // yatim. Picker menawarkan isActive + type ASSET dan bank aktif;
+      // gerbang dalam tx menyamakan kontrak itu (pola dokumen bebas).
+      const liveAccount = await tx.account.findFirst({
+        where: { id: v.accountId, isActive: true, deletedAt: null, type: "ASSET" },
+        select: { id: true },
+      });
+      if (!liveAccount) {
+        throw new Error("Akun rekening koran tidak ditemukan, tidak aktif atau bukan akun aset");
+      }
+      if (v.bankId != null) {
+        const liveBank = await tx.bank.findFirst({
+          where: { id: v.bankId, isActive: true },
+          select: { id: true },
+        });
+        if (!liveBank) throw new Error("Bank tidak ditemukan atau tidak aktif");
+      }
       return tx.bankStatement.create({
         data: {
           accountId: v.accountId,

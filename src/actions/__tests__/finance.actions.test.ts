@@ -181,6 +181,22 @@ describe("Bank Statement Actions", () => {
     expect(res?.success).toBe(true)
     expect(mocks.assertPeriodOpenMock).toHaveBeenCalled()
   })
+
+  // Regresi putaran 34: accountId/bankId bare-int tanpa FK — header lahir
+  // untuk akun nonaset/mati atau bank fiktif; picker hanya menawarkan
+  // isActive + type ASSET dan bank aktif tetapi action tak menilai.
+  it("regresi putaran 34: createBankStatement menolak akun nonaset/mati", async () => {
+    mocks.prismaMock.account.findFirst.mockResolvedValue(null)
+    const res = await (actions as any).createBankStatement(fdMap({
+      accountId: 999999,
+      date: "2026-06-13",
+      openingBalance: 1000,
+      closingBalance: 2000,
+    }))
+    expect(res?.success).toBe(false)
+    expect(res.error).toMatch(/bukan akun aset/i)
+    expect(mocks.prismaMock.bankStatement.create).not.toHaveBeenCalled()
+  })
 })
 
 /**
