@@ -178,6 +178,7 @@ describe("releaseBomRevision", () => {
     bomRevisionFindUniqueMock.mockResolvedValue({
       id: 1, revisionNo: 2, productId: 9, materials: [{ itemId: 1, qty: 1 }],
     })
+    itemFindManyMock.mockResolvedValue([{ id: 1, name: "Busi", isActive: true }])
     bomRevisionUpdateManyMock
       .mockResolvedValueOnce({ count: 1 }) // single atomic claim for this id
       .mockResolvedValueOnce({ count: 1 }) // supersede the other released one
@@ -191,6 +192,35 @@ describe("releaseBomRevision", () => {
     const supersede = bomRevisionUpdateManyMock.mock.calls[1][0]
     expect(supersede.where).toEqual({ productId: 9, status: "released", id: { not: 1 } })
     expect(supersede.data.status).toBe("superseded")
+  })
+
+  // Putaran 36: rilis tidak menilai ulang komponen — item dinonaktifkan
+  // antara approve dan rilis membekukan revisi berisi item mati; PO
+  // berikutnya meng-snapshot item mati itu. Klaim harus rollback.
+  it("menolak rilis bila komponen sudah nonaktif (klaim rollback)", async () => {
+    bomRevisionFindUniqueMock.mockResolvedValue({
+      id: 1, revisionNo: 2, productId: 9, materials: [{ itemId: 1, qty: 1 }],
+    })
+    bomRevisionUpdateManyMock.mockResolvedValue({ count: 1 })
+    itemFindManyMock.mockResolvedValue([{ id: 1, name: "Busi", isActive: false }])
+
+    const res = await releaseBomRevision(1)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Busi tidak aktif/)
+  })
+
+  it("menolak rilis bila komponen sudah terhapus", async () => {
+    bomRevisionFindUniqueMock.mockResolvedValue({
+      id: 1, revisionNo: 2, productId: 9, materials: [{ itemId: 1, qty: 1 }],
+    })
+    bomRevisionUpdateManyMock.mockResolvedValue({ count: 1 })
+    itemFindManyMock.mockResolvedValue([])
+
+    const res = await releaseBomRevision(1)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Item #1 tidak ditemukan/)
   })
 
   it("fails when the atomic approved claim is lost (draft not yet approved)", async () => {

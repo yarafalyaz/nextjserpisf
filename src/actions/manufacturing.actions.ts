@@ -32,6 +32,7 @@ import { createWarrantyCoveragesForWorkOrder } from "@/lib/services/warranty.ser
 import { createInstalledPartsForWorkOrder } from "@/lib/services/installed-part.service";
 import { availableQty, consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { resolveMaterialIssueScrapSnapshots } from "@/lib/hooks/material-issue.hook";
+import { assertItemsExistAndActive } from "@/lib/services/material-request.service";
 import {
   classifyScrapLine,
   validateScrapInput,
@@ -601,6 +602,12 @@ export async function releaseBomRevision(id: number) {
       if (claimed.count === 0) {
         return { success: false as const, error: "Hanya revisi berstatus disetujui yang dapat dirilis." };
       }
+
+      // Komponen dinilai ulang di dalam tx sesudah klaim: item yang mati
+      // antara approve dan rilis tidak boleh membeku sebagai revisi
+      // released (PO berikutnya meng-snapshot item mati). Throw di sini
+      // menggulung klaim + supersede.
+      await assertItemsExistAndActive(tx, revision.materials.map((m) => m.itemId));
 
       // Supersede any other released revision for the same product.
       await tx.bomRevision.updateMany({
