@@ -26,7 +26,7 @@ vi.mock("@/lib/db/prisma", () => ({
       update: vi.fn(),
       updateMany: vi.fn(),
     },
-    customerVehicle: { update: vi.fn() },
+    customerVehicle: { update: vi.fn(), updateMany: vi.fn() },
     vendor: { findUnique: vi.fn() },
     purchaseReturn: { findUnique: vi.fn() },
     transactionAttachment: { count: vi.fn() },
@@ -60,6 +60,7 @@ beforeEach(() => {
   p.warrantyCoverage.findMany.mockResolvedValue([])
   p.warrantyCoverage.create.mockResolvedValue({})
   p.customerVehicle.update.mockResolvedValue({})
+  p.customerVehicle.updateMany.mockReset().mockResolvedValue({ count: 1 })
   mockClaimWrite()
 })
 
@@ -193,10 +194,22 @@ describe("klaim di luar masa (F-021 AC2): manual, BUKAN auto-reject", () => {
       prisma as never,
     )) as unknown as { status: string }
     expect(claim.status).toBe("intake")
-    expect(p.customerVehicle.update).toHaveBeenCalledWith({
-      where: { id: 7 },
+    expect(p.customerVehicle.updateMany).toHaveBeenCalledWith({
+      where: { id: 7, OR: [{ lastOdometerKm: null }, { lastOdometerKm: { lt: 50000 } }] },
       data: { lastOdometerKm: 50000 },
     })
+    expect(p.customerVehicle.update).not.toHaveBeenCalled()
+
+    // Regresi putaran 15: odometer lapor DI BAWAH tercatat (typo 10.000 atas
+    // 100.000) — klaim tetap lahir dengan angka lapornya, registry tak mundur
+    // karena klaim kondisi lt tak terpenuhi (count 0 ditelan diam-diam).
+    p.customerVehicle.updateMany.mockResolvedValue({ count: 0 })
+    const claimTypo = (await createWarrantyClaim(
+      { coverageId: 5, reportedAt: new Date("2026-10-21T00:00:00Z"), odometerKm: 10000, complaint: "Typo odometer" },
+      prisma as never,
+    )) as unknown as { odometerKm: number }
+    expect(claimTypo.odometerKm).toBe(10000)
+    expect(p.customerVehicle.update).not.toHaveBeenCalled()
     // assess hanya memberi fakta; tidak menyentuh status.
     const facts = assessWarrantyEligibility({
       coverage: expiredCoverage,

@@ -344,10 +344,20 @@ export async function createWarrantyClaim(
     select: { id: true, customerVehicleId: true },
   })
   if (!coverage) throw new Error("Cakupan garansi tidak ditemukan.")
-  // Odometer lapor = odometer terakhir kendaraan yang diketahui.
+  // Odometer lapor maju-tercatat: registry hanya boleh MAJU. Typo klaim
+  // (10.000 atas tercatat 100.000) sebelumnya menimpa lastOdometerKm
+  // mentah-mentah — antrean pengingat servis membaca mundur 90.000 km
+  // ("sisa 40.000" atas target yang sudah terlewat) dan batas km garansi
+  // berubah dari tercapai menjadi belum. Klaim tetap lahir dengan angka
+  // lapornya; hanya PENULISAN registry yang diklaim kondisional.
+  // Kondisional juga menahan race klaim ganda (klaim odometer lebih
+  // rendah yang commit belakangan tak bisa memundurkan klaim lebih tinggi).
   if (input.odometerKm != null) {
-    await client.customerVehicle.update({
-      where: { id: coverage.customerVehicleId },
+    await client.customerVehicle.updateMany({
+      where: {
+        id: coverage.customerVehicleId,
+        OR: [{ lastOdometerKm: null }, { lastOdometerKm: { lt: input.odometerKm } }],
+      },
       data: { lastOdometerKm: input.odometerKm },
     })
   }
