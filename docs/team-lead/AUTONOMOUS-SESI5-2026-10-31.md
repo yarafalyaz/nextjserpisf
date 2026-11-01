@@ -1386,11 +1386,11 @@ Daftar bersih agent putaran 46 (jangan diangkat ulang tanpa bukti baru): `conver
 
 Diperiksa, tidak diangkat: `updateLead` menulis slug via prisma global dari dalam tx (tabrakan P2002 kasar, bukan korupsi senyap); slug tiket dihitung luar tx (hanya basi); kelas probabilitas/weighted pipeline (repo melarang mengarang kolom — BR-LF-08).
 
-## Putaran 47 — aset/SDM/proyek (16 fix, 3 vonis/gugur, 1 catatan terbuka)
+## Putaran 47 — aset/SDM/proyek (15 fix, 3 vonis/gugur, 1 catatan terbuka)
 
 Tiga agent audit read-only (aset, SDM, proyek) melaporkan kandidat + daftar bersih. Semua diverifikasi sesi utama terhadap kode aktual + `prisma/schema.prisma` + dokumen backlog; kandidat lembur SDM gugur total sesudah verifikasi (lihat vonis).
 
-### Aset (5 fix)
+### Aset (6 fix)
 1. `76d45773c` fix(finance): reversal generik menolak jurnal siklus aset — `reverseJournal` membiarkan jurnal `ASSET_ACQUISITION`/`ASSET_DISPOSAL`/`ASSET_CHANGE_EVENT`/`ASSET_DEPRECIATION_*` dibalik lewat jurnal umum; pembaca aset hanya membaca jurnal POSTED ber-referenceType aset sedangkan reversal lahir sebagai `referenceType: "Journal"`, sehingga nilai buku aset tak pernah kembali. Fix: tolak di dalam tx sesudah baca ulang terkunci. Hijau 8/8, batch 1023/1023.
 2. `9b466b20b` fix(asset): reversal peristiwa aset wajib urutan LIFO — `reverseAssetChangeEvent` membiarkan peristiwa lama dibalik selagi peristiwa POSTED lebih baru ada, menimpa keadaan aset. Fix: tolak bila ada peristiwa POSTED lebih baru (urutan `effectiveDate, id`). Hijau 6/6, batch 280/280.
 3. `2b04fbfcd` fix(asset): updateAsset menolak status tak terdaftar dan held_for_sale bebas — status bebas bisa menulis nilai di luar `ASSET_USE_STATUSES` dan masuk `held_for_sale` tanpa klasifikasi terstruktur 5 fakta F-117. Fix: status berubah wajib terdaftar; masuk `held_for_sale` dari status lain ditolak. Hijau 137/137 saat itu.
@@ -1406,7 +1406,7 @@ Tiga agent audit read-only (aset, SDM, proyek) melaporkan kandidat + daftar bers
 11. `fd6d18774` fix(finance): klaim reimbursement karyawan berhenti ditolak saat approve dan bayar — create klaim hanya menolak `employmentEndedAt` saat klaim lahir; pengaju yang berhenti/nonaktif sesudahnya tetap bisa di-approve dan dibayar. Fix: `assertClaimantPayable` (helper lokal non-ekspor) dinilai ulang dalam tx di `approveExpense` dan `markExpensePaid`. Hijau 19/19, batch 602/602.
 12. `aa72f116b` fix(hr): peristiwa kompensasi PKWT menolak karyawan terhapus — create hanya menolak `deletedAt`, approve tidak menilai pemilik sama sekali. Fix: create menolak nonaktif; approve menilai ulang pemilik. `employmentEndedAt` sengaja TIDAK digerbang (kompensasi adalah hak atas segmen kontrak yang sudah berakhir); akrual bulanan tidak disentuh (vonis 38-K7). Hijau 21/21, batch 239/239.
 
-### Proyek (4 fix)
+### Proyek (3 fix)
 13. `5996f7350` fix(project): sinkron status proyek manufacturing mengunci baris proyek — kembar manufacturing `syncProjectStatus` membaca proyek+stages lalu update tanpa kunci, sedangkan versi publik sudah mengunci; penyelesaian WO konkuren bisa menimpa status/`endDate` proyek. Fix: `SELECT id FROM projects ... FOR UPDATE` sebagai pernyataan pertama helper bila client adalah tx (guard `typeof` untuk mock). Merah 1/1; hijau manufacturing 147/147, batch 398/398.
 14. `c195d838e` fix(project): usulan revisi RAB kedua ditolak selagi usulan lain terbuka — `proposeProjectBudgetRevision` tak memeriksa usulan terbuka; UI hanya menampilkan terbaru tetapi apply menerima logId mana pun, jadi usulan basi bisa diterapkan sesudah yang lebih muda (`budgetRevisionNo` naik dua kali). Fix: `findOpenRevisionProposal` (definisi terbuka yang sama dengan pembaca RSC) digerbang di dalam tx yang sudah mengunci baris proyek. Merah 1/1; hijau project 141/141, batch 310/310.
 15. `5a5e91aef` fix(project): create proyek dan tugas atomik dengan kunci idempotency — createProject lepas langkah (proyek yatim tanpa stages; proyek kembar saat respons hilang); createTask cek-then-write di luar tx tanpa key. Fix: satu tx (kunci idempotency → penilaian master/tautan dalam tx → create → stages bawaan ikut tx), slug lewat `nextSlugWithClient`, kedua form mengirim key `useRef` stabil per niat buat (pola createTicket). Merah 2/2; hijau project 143/143, batch 318/318.
