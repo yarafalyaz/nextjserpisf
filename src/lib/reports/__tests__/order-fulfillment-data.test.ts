@@ -80,6 +80,13 @@ describe("loadOrderFulfillment", () => {
     expect(where.date).toEqual({ gte: period.start, lte: period.end })
   })
 
+  it("putaran 41: query pesanan mengecualikan baris terhapus lunak (deletedAt: null)", async () => {
+    await loadOrderFulfillment(period)
+
+    const where = mocks.prismaMock.salesOrder.findMany.mock.calls[0][0].where
+    expect(where.deletedAt).toBeNull()
+  })
+
   it("menghitung terkirim dari baris surat jalan (pesanan jadi terkirim sebagian)", async () => {
     mocks.prismaMock.deliveryOrderItem.findMany.mockResolvedValue([{ salesOrderItemId: 11, qty: 4 }])
 

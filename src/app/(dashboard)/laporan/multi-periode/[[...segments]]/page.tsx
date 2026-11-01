@@ -59,6 +59,9 @@ export default async function MultiPeriodReportPage({
         where: {
           journal: {
             status: { in: ['POSTED', 'REVERSED'] },
+            // deletedAt: null — kontrak defensif laporan (report-aggregation.service
+            // buildWhere); jurnal terhapus lunak tidak ikut agregat.
+            deletedAt: null,
             transactionDate:
               statement === 'neraca' ? { lte: column.end } : { gte: column.start, lte: column.end },
           },

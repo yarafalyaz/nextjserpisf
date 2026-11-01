@@ -41,14 +41,15 @@ export default async function ProfitCenterIncomePage({
   const { start: startDate, end: endDate } = period
 
   // Aggregate in SQL, grouped by profit center + account type, so we never pull
-  // the whole ledger into Node. Only POSTED/REVERSED journals count (a reversal
-  // is its own POSTED journal, so the pair nets to zero).
+  // the whole ledger into Node. Only POSTED/REVERSED, non-deleted journals count
+  // (a reversal is its own POSTED journal, so the pair nets to zero) — seperti
+  // kontrak laporan buildWhere report-aggregation.service.
   const [profitCenters, grouped] = await Promise.all([
     prisma.profitCenter.findMany({ orderBy: { code: "asc" } }),
     prisma.journalEntry.groupBy({
       by: ["profitCenterId", "accountId"],
       where: {
-        journal: { status: { in: ["POSTED", "REVERSED"] }, transactionDate: { gte: startDate, lte: endDate } },
+        journal: { status: { in: ["POSTED", "REVERSED"] }, deletedAt: null, transactionDate: { gte: startDate, lte: endDate } },
         account: { type: { in: ["REVENUE", "EXPENSE"] } },
       },
       _sum: { debit: true, credit: true },

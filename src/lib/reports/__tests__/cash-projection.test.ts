@@ -117,4 +117,16 @@ describe("projectCash", () => {
     expect(page).toContain("PAYROLL_PROJECTION_STATUSES")
     expect(page).toContain("sumProjectionPayrollNet")
   })
+
+  it("putaran 41: agregat jurnal pusat-laba & multi-periode mengecualikan jurnal terhapus lunak", () => {
+    // Kedua halaman menghitung groupBy jurnal langsung (bukan loader), jadi
+    // guard sumber ini mencegah deletedAt diam-diam hilang dari filter lagi.
+    for (const file of [
+      "src/app/(dashboard)/laporan/pusat-laba/[[...segments]]/page.tsx",
+      "src/app/(dashboard)/laporan/multi-periode/[[...segments]]/page.tsx",
+    ]) {
+      const page = readFileSync(resolve(process.cwd(), file), "utf8")
+      expect(page).toContain("deletedAt: null")
+    }
+  })
 })

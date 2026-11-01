@@ -83,7 +83,9 @@ export async function loadReceivedNotBilled(period: {
           // generik atas bill draft, yang belum punya jurnal AP/GRNI dan
           // belum punya balanceDue — sisa dokumen menyusut palsu terhadap
           // saldo buku besar.
-          vendorBill: { status: { in: [...RECOGNISED_AP_STATUSES] } },
+          // deletedAt: null — kontrak defensif laporan yang sama dengan
+          // seluruh laporan AP lain (bill terhapus lunak tak ikut pengurang).
+          vendorBill: { status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null },
         },
         select: { goodsReceiptItemId: true, subtotal: true },
       })

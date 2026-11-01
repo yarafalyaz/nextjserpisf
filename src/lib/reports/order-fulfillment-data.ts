@@ -42,6 +42,9 @@ export async function loadOrderFulfillment(period: {
     where: {
       date: { gte: period.start, lte: period.end },
       status: { in: FULFILLABLE_ORDER_STATUSES },
+      // deletedAt: null — kontrak defensif laporan (report-aggregation.service
+      // buildWhere): baris terhapus lunak tidak boleh ikut populasi diam-diam.
+      deletedAt: null,
     },
     select: {
       id: true,

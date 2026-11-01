@@ -142,7 +142,19 @@ describe("loadReceivedNotBilled", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           goodsReceiptItemId: { in: [501, 502] },
-          vendorBill: { status: { in: ["posted", "partial", "paid"] } },
+          vendorBill: { status: { in: ["posted", "partial", "paid"] }, deletedAt: null },
+        }),
+      }),
+    );
+  });
+
+  it("putaran 41: query tagihan pengurang mengecualikan bill terhapus lunak (deletedAt: null)", async () => {
+    await loadReceivedNotBilled(PERIOD);
+
+    expect(mocks.vendorBillItemFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          vendorBill: expect.objectContaining({ deletedAt: null }),
         }),
       }),
     );
