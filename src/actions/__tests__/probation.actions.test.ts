@@ -22,8 +22,11 @@ const mocks = vi.hoisted(() => ({
   requestCreate: vi.fn(),
   requestUpdate: vi.fn(),
   requestUpdateMany: vi.fn(),
+  requestFindManyTx: vi.fn(),
   requestCount: vi.fn(),
   transaction: vi.fn(),
+  executeRaw: vi.fn(),
+  reviewFindFirstTx: vi.fn(),
   logActivity: vi.fn(),
 }))
 
@@ -96,11 +99,20 @@ beforeEach(() => {
   mocks.getHrScope.mockResolvedValue({ kind: "all" })
   mocks.logActivity.mockResolvedValue(undefined)
   mocks.employeeFindFirst.mockResolvedValue({ id: 99 }) // pemanggil = Employee 99
+  mocks.executeRaw.mockResolvedValue(1)
+  mocks.reviewFindFirstTx.mockResolvedValue(null)
+  mocks.requestFindManyTx.mockResolvedValue([])
   mocks.transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
-      probationReview: { update: mocks.reviewUpdate, updateMany: mocks.reviewUpdateMany },
+      $executeRaw: mocks.executeRaw,
+      probationReview: {
+        update: mocks.reviewUpdate,
+        updateMany: mocks.reviewUpdateMany,
+        findFirst: mocks.reviewFindFirstTx,
+      },
       employee: { update: mocks.employeeUpdate, findUnique: mocks.employeeFindUnique },
       contractDecisionRequest: {
+        findMany: mocks.requestFindManyTx,
         updateMany: mocks.requestUpdateMany,
         update: mocks.requestUpdate,
         count: mocks.requestCount,
@@ -345,6 +357,15 @@ describe("submit + approve + apply", () => {
     }
   }
 
+  // Transaksi kontrak kini membaca baris request lewat findMany tx (sesudah
+  // raw lock): antrean pertama = baris request, sisanya = panggilan lanjutan.
+  function setupTxRequestRow(row: Record<string, unknown>, extra: Record<string, unknown> = {}) {
+    // mockReset: antrean *Once sisa test sebelumnya tidak dibuang clearAllMocks.
+    mocks.requestFindManyTx.mockReset()
+    mocks.requestFindManyTx.mockResolvedValueOnce([row]).mockResolvedValueOnce([{ reason: "Perlu", ...extra }]).mockResolvedValue([])
+    return row
+  }
+
   it("F-2: create menurunkan finalReviewId dari review final submitted", async () => {
     mocks.employeeFindUnique.mockResolvedValue(
       employeeRow({
@@ -411,6 +432,7 @@ describe("submit + approve + apply", () => {
 
   it.each(["submitted", "draft"])("F-3: apply dari status %s ditolak", async (status) => {
     mocks.requestFindUnique.mockResolvedValue(submittedRequest({ status }))
+    setupTxRequestRow(submittedRequest({ status }))
     const r = await applyContractDecisionRequest(3)
     expect(r.success).toBe(false)
     if (!r.success) expect(r.error).toMatch(/sesudah disetujui/)
@@ -420,6 +442,14 @@ describe("submit + approve + apply", () => {
 
   it("F-3: klaim atomik apply count=0 ditolak walau status terbaca approved", async () => {
     mocks.requestFindUnique.mockResolvedValue(submittedRequest({ status: "approved" }))
+    setupTxRequestRow(submittedRequest({ status: "approved" }))
+    mocks.employeeFindUnique.mockResolvedValue(
+      employeeRow({
+        employmentStatus: "PKWT",
+        contractStartDate: d("2025-03-01"),
+        contractEndDate: d("2026-02-28"),
+      }),
+    )
     mocks.requestUpdateMany.mockResolvedValue({ count: 0 })
     const r = await applyContractDecisionRequest(3)
     expect(r.success).toBe(false)
@@ -428,7 +458,8 @@ describe("submit + approve + apply", () => {
   })
 
   it("submit: maks 1 submitted per karyawan", async () => {
-    mocks.requestFindUnique.mockResolvedValue({ ...submittedRequest({ status: "draft" }), reason: "Perlu" })
+    setupTxRequestRow(submittedRequest({ status: "draft" }), { reason: "Perlu" })
+    mocks.requestFindUnique.mockResolvedValue(submittedRequest({ status: "draft" }))
     mocks.employeeFindUnique.mockResolvedValue(
       employeeRow({
         employmentStatus: "PKWT",
@@ -436,7 +467,6 @@ describe("submit + approve + apply", () => {
         contractEndDate: d("2026-02-28"),
       }),
     )
-    mocks.requestFindMany.mockResolvedValue([])
     mocks.requestCount.mockResolvedValue(1)
     const r = await submitContractDecisionRequest(3)
     expect(r.success).toBe(false)
@@ -453,6 +483,7 @@ describe("submit + approve + apply", () => {
 
   it("approve lolos untuk pihak ketiga scope all", async () => {
     mocks.requestFindUnique.mockResolvedValue(submittedRequest())
+    setupTxRequestRow(submittedRequest())
     mocks.employeeFindUnique.mockResolvedValue(
       employeeRow({
         employmentStatus: "PKWT",
@@ -460,13 +491,14 @@ describe("submit + approve + apply", () => {
         contractEndDate: d("2026-02-28"),
       }),
     )
-    mocks.requestFindMany.mockResolvedValue([])
+    mocks.requestCount.mockResolvedValue(0)
     mocks.requestUpdateMany.mockResolvedValue({ count: 1 })
     expect(await approveContractDecisionRequest(3)).toEqual({ success: true })
   })
 
   it("BR-PROB-10: apply memakai tanggal approved persis, bukan payload", async () => {
     mocks.requestFindUnique.mockResolvedValue(submittedRequest({ status: "approved" }))
+    setupTxRequestRow(submittedRequest({ status: "approved" }))
     mocks.employeeFindUnique.mockResolvedValue(
       employeeRow({
         employmentStatus: "PKWT",
@@ -487,10 +519,65 @@ describe("submit + approve + apply", () => {
     })
   })
 
+  it("submit mengunci baris employees sebelum menilai jumlah submitted", async () => {
+    mocks.requestFindUnique.mockResolvedValue(submittedRequest({ status: "draft" }))
+    setupTxRequestRow(submittedRequest({ status: "draft" }))
+    mocks.employeeFindUnique.mockResolvedValue(
+      employeeRow({
+        employmentStatus: "PKWT",
+        contractStartDate: d("2025-03-01"),
+        contractEndDate: d("2026-02-28"),
+      }),
+    )
+    mocks.requestCount.mockResolvedValue(0)
+    mocks.requestUpdateMany.mockResolvedValue({ count: 1 })
+    expect(await submitContractDecisionRequest(3)).toEqual({ success: true })
+    const sqlOf = (c: unknown[]) => {
+      const a = c[0] as { sql?: string; strings?: string[] } | string[]
+      return Array.isArray(a) ? a.join("?") : (a?.sql ?? a?.strings?.join("?") ?? "")
+    }
+    const employeeLockIdx = mocks.executeRaw.mock.calls.findIndex((c) => sqlOf(c).includes("employees"))
+    expect(employeeLockIdx).toBeGreaterThanOrEqual(0)
+    expect(mocks.executeRaw.mock.invocationCallOrder[employeeLockIdx]).toBeLessThan(
+      mocks.requestCount.mock.invocationCallOrder[0],
+    )
+  })
+
+  it("apply ditolak bila akhir yang disetujui lebih pendek dari akhir berjalan", async () => {
+    mocks.requestFindUnique.mockResolvedValue(submittedRequest({ status: "approved" }))
+    setupTxRequestRow(submittedRequest({ status: "approved", proposedContractEndDate: d("2026-08-31") }))
+    mocks.employeeFindUnique.mockResolvedValue(
+      employeeRow({
+        employmentStatus: "PKWT",
+        contractStartDate: d("2025-03-01"),
+        contractEndDate: d("2027-02-28"),
+      }),
+    )
+    mocks.requestUpdateMany.mockResolvedValue({ count: 1 })
+    const r = await applyContractDecisionRequest(3)
+    expect(r.success).toBe(false)
+    if (!r.success) expect(r.error).toMatch(/lebih pendek/)
+    expect(mocks.employeeUpdate).not.toHaveBeenCalled()
+  })
+
+  it("convert ditolak di apply bila karyawan sudah bukan PKWT", async () => {
+    mocks.requestFindUnique.mockResolvedValue(
+      submittedRequest({ status: "approved", kind: "convert_pkwtt", proposedContractEndDate: null }),
+    )
+    setupTxRequestRow(submittedRequest({ status: "approved", kind: "convert_pkwtt", proposedContractEndDate: null }))
+    mocks.employeeFindUnique.mockResolvedValue(employeeRow({ employmentStatus: "PKWTT", probationEndDate: null }))
+    mocks.requestUpdateMany.mockResolvedValue({ count: 1 })
+    const r = await applyContractDecisionRequest(3)
+    expect(r.success).toBe(false)
+    if (!r.success) expect(r.error).toMatch(/hanya untuk karyawan Kontrak/)
+    expect(mocks.employeeUpdate).not.toHaveBeenCalled()
+  })
+
   it("convert_pkwtt TIDAK membuka probation (probationEndDate utuh)", async () => {
     mocks.requestFindUnique.mockResolvedValue(
       submittedRequest({ status: "approved", kind: "convert_pkwtt", proposedContractEndDate: null }),
     )
+    setupTxRequestRow(submittedRequest({ status: "approved", kind: "convert_pkwtt", proposedContractEndDate: null }))
     mocks.employeeFindUnique.mockResolvedValue(
       employeeRow({ employmentStatus: "PKWT", probationEndDate: null }),
     )

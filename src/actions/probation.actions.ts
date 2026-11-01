@@ -18,6 +18,7 @@
 
 import { revalidatePath } from "next/cache"
 
+import type { Prisma } from "@prisma/client"
 import { requirePermission } from "@/lib/auth/permissions"
 import { assertHrEmployeeAccess, getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope"
 import { prisma } from "@/lib/db/prisma"
@@ -343,8 +344,12 @@ async function loadFinalReview(employeeId: number, employee: { joinDate: Date; p
   })
 }
 
-async function appliedPkwtSegments(employeeId: number) {
-  const rows = await prisma.contractDecisionRequest.findMany({
+type AppliedSegmentsClient = {
+  contractDecisionRequest: Pick<Prisma.TransactionClient["contractDecisionRequest"], "findMany">
+}
+
+async function appliedPkwtSegments(employeeId: number, client: AppliedSegmentsClient = prisma) {
+  const rows = await client.contractDecisionRequest.findMany({
     where: { employeeId, status: "applied", kind: "extend_pkwt" },
     select: { appliedFromStartDate: true, appliedEndDate: true },
   })
@@ -352,6 +357,95 @@ async function appliedPkwtSegments(employeeId: number) {
     .filter((r) => r.appliedFromStartDate != null && r.appliedEndDate != null)
     .map((r) => ({ start: r.appliedFromStartDate as Date, end: r.appliedEndDate as Date }))
 }
+
+type ContractRequestForDecision = NonNullable<Awaited<ReturnType<typeof loadRequestForDecision>>>
+
+type ContractDecisionTransaction = {
+  $executeRaw: Prisma.TransactionClient["$executeRaw"]
+  employee: {
+    findUnique: Prisma.TransactionClient["employee"]["findUnique"]
+    update: Prisma.TransactionClient["employee"]["update"]
+  }
+  contractDecisionRequest: {
+    count: Prisma.TransactionClient["contractDecisionRequest"]["count"]
+    findMany: Prisma.TransactionClient["contractDecisionRequest"]["findMany"]
+    update: Prisma.TransactionClient["contractDecisionRequest"]["update"]
+    updateMany: Prisma.TransactionClient["contractDecisionRequest"]["updateMany"]
+  }
+}
+
+async function lockEmployeeForContractDecision(
+  tx: Pick<ContractDecisionTransaction, "$executeRaw">,
+  employeeId: number,
+) {
+  await tx.$executeRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`
+}
+
+async function lockContractRequestRowsForEmployee(tx: ContractDecisionTransaction, employeeId: number) {
+  await tx.$executeRaw`SELECT id FROM contract_decision_requests WHERE employee_id = ${employeeId} ORDER BY id FOR UPDATE`
+}
+
+async function lockContractRequestForDecision(
+  tx: ContractDecisionTransaction,
+  requestId: number,
+): Promise<ContractRequestForDecision> {
+  const [fresh] = await tx.contractDecisionRequest.findMany({
+    where: { id: requestId },
+    select: {
+      id: true,
+      employeeId: true,
+      kind: true,
+      proposedContractEndDate: true,
+      requestedBy: true,
+      status: true,
+      finalReviewId: true,
+      finalReview: { select: { reviewerEmployeeId: true } },
+    },
+    orderBy: { id: "asc" },
+    take: 1,
+  })
+  if (!fresh) throw new Error("Pengajuan tidak ditemukan")
+  return fresh
+}
+
+function assertContractDecisionKindUsable(
+  request: Pick<ContractRequestForDecision, "kind">,
+) {
+  if (request.kind !== "extend_pkwt" && request.kind !== "convert_pkwtt" && request.kind !== "end_contract") {
+    throw new Error("Jenis keputusan kontrak tidak valid")
+  }
+}
+
+async function loadEmployeeForContractDecision(tx: ContractDecisionTransaction, employeeId: number) {
+  return tx.employee.findUnique({
+    where: { id: employeeId },
+    select: {
+      id: true,
+      name: true,
+      employmentStatus: true,
+      joinDate: true,
+      probationEndDate: true,
+      contractStartDate: true,
+      contractEndDate: true,
+      employmentEndedAt: true,
+      deletedAt: true,
+    },
+  })
+}
+
+async function assertNoOtherSubmittedContractDecision(
+  tx: ContractDecisionTransaction,
+  requestId: number,
+  employeeId: number,
+) {
+  const active = await tx.contractDecisionRequest.count({
+    where: { employeeId, status: "submitted", id: { not: requestId } },
+  })
+  if (active > 0) {
+    throw new Error("Sudah ada pengajuan keputusan kontrak yang menunggu persetujuan untuk karyawan ini")
+  }
+}
+
 
 export async function createContractDecisionRequest(input: ContractDecisionFormInput): Promise<ActionResult> {
   try {
@@ -424,34 +518,46 @@ export async function submitContractDecisionRequest(requestId: number): Promise<
   try {
     const user = await requirePermission("edit_employees")
     if (!Number.isSafeInteger(requestId) || requestId <= 0) throw new Error("Pengajuan tidak valid")
-    const request = await prisma.contractDecisionRequest.findUnique({
+    const requestPeek = await prisma.contractDecisionRequest.findUnique({
       where: { id: requestId },
-      select: { id: true, employeeId: true, kind: true, proposedContractEndDate: true, reason: true, status: true },
+      select: { id: true, employeeId: true },
     })
-    if (!request) throw new Error("Pengajuan tidak ditemukan")
+    if (!requestPeek) throw new Error("Pengajuan tidak ditemukan")
     const scope = await getHrScope(user)
-    await assertHrEmployeeAccess(scope, request.employeeId)
-    if (request.status !== "draft") throw new Error("Pengajuan hanya dapat diajukan dari status draft")
-    requireText(request.reason, "Alasan pengajuan keputusan kontrak wajib diisi")
-
-    const employee = await loadEmployeeForProbation(request.employeeId)
-    assertEmployeeUsable(employee)
-    if (request.kind === "extend_pkwt") {
-      const guard = evaluatePkwtCumulative({
-        kind: "extend_pkwt",
-        appliedSegments: await appliedPkwtSegments(request.employeeId),
-        currentStart: employee.contractStartDate,
-        currentEnd: employee.contractEndDate,
-        proposedEnd: request.proposedContractEndDate,
-      })
-      if (!guard.allowed) throw new Error(guard.message)
-    }
+    await assertHrEmployeeAccess(scope, requestPeek.employeeId)
 
     await prisma.$transaction(async (tx) => {
-      const active = await tx.contractDecisionRequest.count({
-        where: { employeeId: request.employeeId, status: "submitted" },
+      await lockEmployeeForContractDecision(tx, requestPeek.employeeId)
+      await lockContractRequestRowsForEmployee(tx, requestPeek.employeeId)
+      const request = await lockContractRequestForDecision(tx, requestId)
+      if (request.employeeId !== requestPeek.employeeId) throw new Error("Pengajuan tidak ditemukan")
+      if (request.status !== "draft") throw new Error("Pengajuan hanya dapat diajukan dari status draft")
+      assertContractDecisionKindUsable(request)
+
+      const [reasonRow] = await tx.contractDecisionRequest.findMany({
+        where: { id: requestId },
+        select: { reason: true, proposedContractEndDate: true, kind: true },
+        orderBy: { id: "asc" },
+        take: 1,
       })
-      if (active > 0) throw new Error("Sudah ada pengajuan keputusan kontrak yang menunggu persetujuan untuk karyawan ini")
+      if (!reasonRow) throw new Error("Pengajuan tidak ditemukan")
+      requireText(reasonRow.reason, "Alasan pengajuan keputusan kontrak wajib diisi")
+
+      await assertNoOtherSubmittedContractDecision(tx, requestId, request.employeeId)
+
+      const employee = await loadEmployeeForContractDecision(tx, request.employeeId)
+      assertEmployeeUsable(employee)
+      if (request.kind === "extend_pkwt") {
+        const guard = evaluatePkwtCumulative({
+          kind: "extend_pkwt",
+          appliedSegments: await appliedPkwtSegments(request.employeeId, tx),
+          currentStart: employee.contractStartDate,
+          currentEnd: employee.contractEndDate,
+          proposedEnd: request.proposedContractEndDate,
+        })
+        if (!guard.allowed) throw new Error(guard.message)
+      }
+
       const claim = await tx.contractDecisionRequest.updateMany({
         where: { id: requestId, status: "draft" },
         data: { status: "submitted" },
@@ -506,30 +612,56 @@ export async function approveContractDecisionRequest(requestId: number): Promise
   try {
     const user = await requirePermission("approve_contracts")
     if (!Number.isSafeInteger(requestId) || requestId <= 0) throw new Error("Pengajuan tidak valid")
-    const request = await loadRequestForDecision(requestId)
-    if (!request) throw new Error("Pengajuan tidak ditemukan")
-    await assertContractApprover(user.id, user.roles, request)
-    if (request.status !== "submitted") throw new Error("Pengajuan hanya dapat disetujui dari status diajukan")
-
-    // BR-PROB-08 ditegakkan ulang SEBELUM persetujuan disimpan (Q-PROB-6).
-    if (request.kind === "extend_pkwt") {
-      const employee = await loadEmployeeForProbation(request.employeeId)
-      assertEmployeeUsable(employee)
-      const guard = evaluatePkwtCumulative({
-        kind: "extend_pkwt",
-        appliedSegments: await appliedPkwtSegments(request.employeeId),
-        currentStart: employee.contractStartDate,
-        currentEnd: employee.contractEndDate,
-        proposedEnd: request.proposedContractEndDate,
-      })
-      if (!guard.allowed) throw new Error(guard.message)
-    }
-
-    const claim = await prisma.contractDecisionRequest.updateMany({
-      where: { id: requestId, status: "submitted" },
-      data: { status: "approved", decidedBy: Number(user.id), decidedAt: new Date(), rejectionReason: null },
+    const requestPeek = await prisma.contractDecisionRequest.findUnique({
+      where: { id: requestId },
+      select: { id: true, employeeId: true },
     })
-    if (claim.count === 0) throw new Error("Pengajuan hanya dapat disetujui dari status diajukan")
+    if (!requestPeek) throw new Error("Pengajuan tidak ditemukan")
+    const approver = await assertContractApprover(user.id, user.roles, await loadRequestForDecision(requestId).then((r) => {
+      if (!r) throw new Error("Pengajuan tidak ditemukan")
+      return r
+    }))
+
+    await prisma.$transaction(async (tx) => {
+      await lockEmployeeForContractDecision(tx, requestPeek.employeeId)
+      await lockContractRequestRowsForEmployee(tx, requestPeek.employeeId)
+      const fresh = await lockContractRequestForDecision(tx, requestId)
+      if (fresh.employeeId !== requestPeek.employeeId) throw new Error("Pengajuan tidak ditemukan")
+      if (fresh.status !== "submitted") throw new Error("Pengajuan hanya dapat disetujui dari status diajukan")
+      if (fresh.requestedBy === approver) {
+        throw new Error("Penyetuju tidak boleh menyetujui pengajuan yang diajukan sendiri")
+      }
+      if (fresh.finalReview && fresh.finalReview.reviewerEmployeeId === approver) {
+        throw new Error("Penyetuju tidak boleh sama dengan penilai evaluasi final yang dirujuk pengajuan ini")
+      }
+      assertContractDecisionKindUsable(fresh)
+      await assertNoOtherSubmittedContractDecision(tx, requestId, fresh.employeeId)
+
+      const employee = await loadEmployeeForContractDecision(tx, fresh.employeeId)
+      assertEmployeeUsable(employee)
+      if (fresh.kind === "extend_pkwt") {
+        const guard = evaluatePkwtCumulative({
+          kind: "extend_pkwt",
+          appliedSegments: await appliedPkwtSegments(fresh.employeeId, tx),
+          currentStart: employee.contractStartDate,
+          currentEnd: employee.contractEndDate,
+          proposedEnd: fresh.proposedContractEndDate,
+        })
+        if (!guard.allowed) throw new Error(guard.message)
+      } else if (fresh.kind === "convert_pkwtt") {
+        if (employee.employmentStatus !== "PKWT") {
+          throw new Error("Konversi ke PKWTT hanya untuk karyawan Kontrak (PKWT)")
+        }
+      } else if (employee.employmentStatus !== "PKWT") {
+        throw new Error("Keputusan kontrak hanya untuk karyawan Kontrak (PKWT)")
+      }
+
+      const claim = await tx.contractDecisionRequest.updateMany({
+        where: { id: requestId, status: "submitted" },
+        data: { status: "approved", decidedBy: Number(user.id), decidedAt: new Date(), rejectionReason: null },
+      })
+      if (claim.count === 0) throw new Error("Pengajuan hanya dapat disetujui dari status diajukan")
+    })
     await logActivity("approve", "ContractDecisionRequest", requestId, "Menyetujui pengajuan keputusan kontrak")
     revalidatePath(REVALIDATE)
     return { success: true }
@@ -543,16 +675,35 @@ export async function rejectContractDecisionRequest(requestId: number, reason: s
     const user = await requirePermission("approve_contracts")
     if (!Number.isSafeInteger(requestId) || requestId <= 0) throw new Error("Pengajuan tidak valid")
     const cleanReason = requireText(reason, "Alasan penolakan wajib diisi")
+    const requestPeek = await prisma.contractDecisionRequest.findUnique({
+      where: { id: requestId },
+      select: { id: true, employeeId: true },
+    })
+    if (!requestPeek) throw new Error("Pengajuan tidak ditemukan")
     const request = await loadRequestForDecision(requestId)
     if (!request) throw new Error("Pengajuan tidak ditemukan")
-    await assertContractApprover(user.id, user.roles, request)
-    if (request.status !== "submitted") throw new Error("Pengajuan hanya dapat ditolak dari status diajukan")
+    const approver = await assertContractApprover(user.id, user.roles, request)
 
-    const claim = await prisma.contractDecisionRequest.updateMany({
-      where: { id: requestId, status: "submitted" },
-      data: { status: "rejected", decidedBy: Number(user.id), decidedAt: new Date(), rejectionReason: cleanReason },
+    await prisma.$transaction(async (tx) => {
+      await lockEmployeeForContractDecision(tx, requestPeek.employeeId)
+      await lockContractRequestRowsForEmployee(tx, requestPeek.employeeId)
+      const fresh = await lockContractRequestForDecision(tx, requestId)
+      if (fresh.employeeId !== requestPeek.employeeId) throw new Error("Pengajuan tidak ditemukan")
+      if (fresh.status !== "submitted") throw new Error("Pengajuan hanya dapat ditolak dari status diajukan")
+      if (fresh.requestedBy === approver) {
+        throw new Error("Penyetuju tidak boleh menyetujui pengajuan yang diajukan sendiri")
+      }
+      if (fresh.finalReview && fresh.finalReview.reviewerEmployeeId === approver) {
+        throw new Error("Penyetuju tidak boleh sama dengan penilai evaluasi final yang dirujuk pengajuan ini")
+      }
+      await assertNoOtherSubmittedContractDecision(tx, requestId, fresh.employeeId)
+
+      const claim = await tx.contractDecisionRequest.updateMany({
+        where: { id: requestId, status: "submitted" },
+        data: { status: "rejected", decidedBy: Number(user.id), decidedAt: new Date(), rejectionReason: cleanReason },
+      })
+      if (claim.count === 0) throw new Error("Pengajuan hanya dapat ditolak dari status diajukan")
     })
-    if (claim.count === 0) throw new Error("Pengajuan hanya dapat ditolak dari status diajukan")
     await logActivity("reject", "ContractDecisionRequest", requestId, "Menolak pengajuan keputusan kontrak")
     revalidatePath(REVALIDATE)
     return { success: true }
@@ -604,33 +755,81 @@ export async function applyContractDecisionRequest(requestId: number): Promise<A
   try {
     const user = await requirePermission("edit_employees")
     if (!Number.isSafeInteger(requestId) || requestId <= 0) throw new Error("Pengajuan tidak valid")
-    const request = await prisma.contractDecisionRequest.findUnique({
+    const requestPeek = await prisma.contractDecisionRequest.findUnique({
       where: { id: requestId },
-      select: { id: true, employeeId: true, kind: true, proposedContractEndDate: true, status: true },
+      select: { id: true, employeeId: true },
     })
-    if (!request) throw new Error("Pengajuan tidak ditemukan")
+    if (!requestPeek) throw new Error("Pengajuan tidak ditemukan")
     const scope = await getHrScope(user)
-    await assertHrEmployeeAccess(scope, request.employeeId)
+    await assertHrEmployeeAccess(scope, requestPeek.employeeId)
     if (scope.kind === "self") throw new Error("Anda tidak dapat menerapkan keputusan kontrak untuk diri sendiri")
-    if (request.status !== "approved") throw new Error("Pengajuan hanya dapat diterapkan sesudah disetujui")
 
     const me = await callerEmployeeId(user.id)
 
     await prisma.$transaction(async (tx) => {
+      await lockEmployeeForContractDecision(tx, requestPeek.employeeId)
+      await lockContractRequestRowsForEmployee(tx, requestPeek.employeeId)
+      const request = await lockContractRequestForDecision(tx, requestId)
+      if (request.employeeId !== requestPeek.employeeId) throw new Error("Pengajuan tidak ditemukan")
+      if (request.status !== "approved") throw new Error("Pengajuan hanya dapat diterapkan sesudah disetujui")
+      assertContractDecisionKindUsable(request)
+
+      const employee = await loadEmployeeForContractDecision(tx, request.employeeId)
+      assertEmployeeUsable(employee)
+      const appliedSegments = await appliedPkwtSegments(request.employeeId, tx)
+
+      // Penjaga apply menilai ulang dari data terkunci agar dua approval lama
+      // tidak dapat diterapkan tumpang tindih lalu ditelan sebagai segmen
+      // terapan (spec §9 edge: maks 1 submitted tidak lagi cukup).
+      if (request.kind === "extend_pkwt") {
+        const guard = evaluatePkwtCumulative({
+          kind: "extend_pkwt",
+          appliedSegments,
+          currentStart: employee.contractStartDate,
+          currentEnd: employee.contractEndDate,
+          proposedEnd: request.proposedContractEndDate,
+        })
+        if (!guard.allowed) throw new Error(guard.message)
+        if (employee.employmentEndedAt != null) throw new Error("Karyawan sudah berhenti bekerja")
+        if (employee.employmentStatus !== "PKWT") {
+          throw new Error("Perpanjangan PKWT hanya untuk karyawan Kontrak (PKWT)")
+        }
+        if (employee.contractEndDate != null && request.proposedContractEndDate != null) {
+          const appliedEndKey = [
+            request.proposedContractEndDate.getUTCFullYear(),
+            request.proposedContractEndDate.getUTCMonth(),
+            request.proposedContractEndDate.getUTCDate(),
+          ].join("-")
+          const currentEndKey = [
+            employee.contractEndDate.getUTCFullYear(),
+            employee.contractEndDate.getUTCMonth(),
+            employee.contractEndDate.getUTCDate(),
+          ].join("-")
+          if (appliedEndKey < currentEndKey) {
+            throw new Error("Tanggal akhir kontrak yang disetujui lebih pendek dari tanggal akhir kontrak berjalan")
+          }
+        }
+      } else if (request.kind === "convert_pkwtt") {
+        if (employee.employmentEndedAt != null) throw new Error("Karyawan sudah berhenti bekerja")
+        if (employee.employmentStatus !== "PKWT") {
+          throw new Error("Konversi ke PKWTT hanya untuk karyawan Kontrak (PKWT)")
+        }
+      } else if (request.kind === "end_contract") {
+        if (employee.employmentStatus !== "PKWT") {
+          throw new Error("Keputusan kontrak hanya untuk karyawan Kontrak (PKWT)")
+        }
+      }
+
       const claim = await tx.contractDecisionRequest.updateMany({
         where: { id: requestId, status: "approved" },
         data: { status: "applied", appliedAt: new Date(), appliedBy: me },
       })
       if (claim.count === 0) throw new Error("Pengajuan hanya dapat diterapkan sesudah disetujui")
 
-      const employee = await tx.employee.findUnique({
-        where: { id: request.employeeId },
-        select: { contractStartDate: true, probationEndDate: true },
-      })
-      if (!employee) throw new Error("Karyawan tidak ditemukan")
-
       if (request.kind === "extend_pkwt") {
         if (!request.proposedContractEndDate) throw new Error("Tanggal akhir kontrak yang disetujui tidak ditemukan")
+        if (!employee.contractStartDate) throw new Error("Tanggal mulai kontrak berjalan tidak ditemukan")
+
         await tx.contractDecisionRequest.update({
           where: { id: requestId },
           data: {
@@ -651,7 +850,12 @@ export async function applyContractDecisionRequest(requestId: number): Promise<A
       }
       // end_contract: tanpa timpa tanggal/status berhenti (F-085-S).
     })
-    await logActivity("update", "ContractDecisionRequest", requestId, `Menerapkan keputusan kontrak ${request.kind}`)
+    const appliedKind = await prisma.contractDecisionRequest.findUnique({
+      where: { id: requestId },
+      select: { kind: true },
+    })
+    const kindForLog = appliedKind?.kind ?? ""
+    await logActivity("update", "ContractDecisionRequest", requestId, `Menerapkan keputusan kontrak ${kindForLog}`)
     revalidatePath(REVALIDATE)
     return { success: true }
   } catch (e) {
