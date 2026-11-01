@@ -2333,6 +2333,8 @@ export async function deletePettyCash(id: number, reason?: string) {
       if (record.deletedAt || record.status === "void") {
         throw new Error("Transaksi kas kecil ini sudah dibatalkan.");
       }
+      // Sesudah gap-lock: expense terhapus konkuren tak menghidupkan kembali.
+      await assertPettyCashNotExpenseSync(tx, record);
       documentNo = record.documentNo;
 
       // V-P5/P6-3: cek periode atas tanggal asal DI DALAM tx (cek luar-tx
@@ -2763,6 +2765,31 @@ export async function updateExpense(id: number, formData: FormData) {
   }
 }
 
+/**
+ * Baris sinkronisasi expense (hook `onExpenseApprovedSyncPettyCash`) membawa
+ * nomor dokumen expense di `referenceNo` dan TIDAK punya jurnal "PettyCash" —
+ * GL-nya jurnal "Expense". Jalur generik kas kecil (ubah/void) harus menolak:
+ * edit memposting pengeluaran kedua lewat onPettyCashCreated sedangkan void
+ * hanya mereverse jurnal "PettyCash" (no-op), sehingga jurnal Expense tetap
+ * POSTED dan subledger lepas dari GL. Koreksi dilakukan pada expense-nya.
+ * Lookup terbalik bersifat unik: `Expense.documentNo` terindeks.
+ */
+async function assertPettyCashNotExpenseSync(
+  client: PettyCashTx | typeof prisma,
+  row: { referenceNo: string | null } | null,
+): Promise<void> {
+  if (!row?.referenceNo) return;
+  const expense = await client.expense.findFirst({
+    where: { documentNo: row.referenceNo },
+    select: { id: true },
+  });
+  if (expense) {
+    throw new Error(
+      "Transaksi kas kecil ini tercatat otomatis dari expense terposting — ubah atau batalkan dari expense asal, bukan dari kas kecil.",
+    );
+  }
+}
+
 export async function updatePettyCash(id: number, formData: FormData) {
   "use server";
 
@@ -2825,8 +2852,9 @@ export async function updatePettyCash(id: number, formData: FormData) {
       // stable (slug is derived from the immutable document number).
       const existingPettyCash = await tx.pettyCash.findUniqueOrThrow({
         where: { id },
-        select: { documentNo: true, status: true, deletedAt: true },
+        select: { documentNo: true, status: true, deletedAt: true, referenceNo: true },
       });
+      await assertPettyCashNotExpenseSync(tx, existingPettyCash);
       // Guard luar bisa basi: void konkuren yang menang kunci lebih dulu
       // tidak boleh diedit kembali — jurnal asal ter-void lolos guard
       // deletePettyCashJournal sehingga baris void mendapat jurnal baru.

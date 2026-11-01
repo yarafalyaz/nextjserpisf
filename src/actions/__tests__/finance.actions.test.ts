@@ -1059,6 +1059,21 @@ describe("Petty Cash Actions", () => {
     expect(res?.error).toMatch(/Validasi gagal/)
     expect(mocks.prismaMock.pettyCash.update).not.toHaveBeenCalled()
   })
+  it("updatePettyCash menolak baris sinkronisasi expense (GL di jurnal Expense)", async () => {
+    // Baris OUT sinkronisasi onExpenseApprovedSyncPettyCash tak punya jurnal
+    // "PettyCash"; GL-nya jurnal "Expense". Edit generik memposting OUT kedua.
+    mocks.prismaMock.expense.findFirst.mockResolvedValue({ id: 7 })
+    mocks.prismaMock.pettyCash.findUniqueOrThrow.mockResolvedValue({
+      id: 1, documentNo: "PC-01", referenceNo: "EXP-0001", status: "posted", deletedAt: null,
+    })
+    const res = await (actions as any).updatePettyCash(1, fdMap({
+      type: "OUT", amount: 500, date: "2026-06-13"
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/expense/i)
+    expect(mocks.prismaMock.pettyCash.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.journal.deleteMany).not.toHaveBeenCalled()
+  })
   it("deletePettyCash tanpa alasan ditolak sebelum mutasi (GL-BR-003 P6 void beralasan)", async () => {
     // Kontrak void: alasan wajib; tanpa alasan = tolak sebelum mutasi apa pun.
     const res = await (actions as any).deletePettyCash(1)
@@ -1693,6 +1708,19 @@ describe("Additional Branches", () => {
     expect(mocks.prismaMock.journal.delete).not.toHaveBeenCalled()
     expect(mocks.prismaMock.journalEntry.deleteMany).not.toHaveBeenCalled()
     expect(mocks.logActivityMock).toHaveBeenCalledWith("void", "PettyCash", 1, expect.stringContaining("PC-01"))
+  })
+
+  it("deletePettyCash menolak baris sinkronisasi expense (reversal PettyCash tak membalik jurnal Expense)", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.expense.findFirst.mockResolvedValue({ id: 7 })
+    mocks.prismaMock.pettyCash.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "posted", documentNo: "PC-01", referenceNo: "EXP-0001",
+      date: new Date("2026-09-15"), transactionDate: null,
+    })
+    const res = await actions.deletePettyCash(1, "Salah input, koreksi via void")
+    expect(res.success).toBe(false)
+    expect(String(res?.error ?? "")).toMatch(/expense/i)
+    expect(mocks.prismaMock.pettyCash.update).not.toHaveBeenCalled()
   })
 })
 
