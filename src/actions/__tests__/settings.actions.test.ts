@@ -5,10 +5,34 @@ const mocks = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   updateMock: vi.fn(),
   logActivityMock: vi.fn(),
+  lockCalls: [] as unknown[][],
+  pkpFromOnLockedRead: undefined as string | Date | null | undefined,
+  findFirstOrder: [] as string[],
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
-  prisma: { systemSetting: { findFirst: mocks.findFirstMock, update: mocks.updateMock } },
+  prisma: {
+    systemSetting: { findFirst: mocks.findFirstMock, update: mocks.updateMock },
+    $transaction: vi.fn(async (fn: (tx: unknown) => unknown) =>
+      fn({
+        $executeRaw: vi.fn(async (...a: unknown[]) => {
+          mocks.lockCalls.push(a)
+          mocks.findFirstOrder.push("lock")
+          return 1
+        }),
+        systemSetting: {
+          findFirst: vi.fn(async () => {
+            mocks.findFirstOrder.push("txFindFirst")
+            const base = (await mocks.findFirstMock()) ?? {}
+            return mocks.pkpFromOnLockedRead !== undefined
+              ? { ...base, companyPkpEffectiveFrom: mocks.pkpFromOnLockedRead }
+              : base
+          }),
+          update: mocks.updateMock,
+        },
+      }),
+    ),
+  },
 }))
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: any) => mocks.requirePermissionMock(...a),
@@ -35,6 +59,9 @@ beforeEach(() => {
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
   mocks.findFirstMock.mockResolvedValue({ id: 9 })
   mocks.updateMock.mockResolvedValue({})
+  mocks.lockCalls = []
+  mocks.pkpFromOnLockedRead = undefined
+  mocks.findFirstOrder = []
 })
 
 describe("updateSystemSettings validasi Zod field tertulis", () => {
@@ -273,5 +300,25 @@ describe("updateSystemSettings lima mapping akun — baca-balik penyimpanan (t_3
     for (const kunci of KOLOM_MAPPING) {
       expect(baris[kunci], `${kunci} harus terbaca null setelah dikosongkan`).toBeNull()
     }
+  })
+})
+
+describe("updateSystemSettings kunci baris singleton (putaran 19)", () => {
+  it("kunci system_settings FOR UPDATE sebelum bacaan + validasi PKP atas baris terkunci", async () => {
+    // Baca luar (peek) tanpa tanggal; baris terkunci sudah punya tanggal dari
+    // admin lain. Tanpa kunci, validasi PKP menilai snapshot basi -> ditolak.
+    mocks.findFirstMock.mockResolvedValue({ id: 9, companyPkpStatus: "pkp" })
+    mocks.pkpFromOnLockedRead = new Date("2025-01-01T00:00:00.000Z")
+
+    await expect(
+      updateSystemSettings(fd({ companyPkpStatus: "pkp" })),
+    ).rejects.toThrow("NEXT_REDIRECT")
+
+    expect(mocks.lockCalls.length).toBeGreaterThan(0)
+    const lockSql = JSON.stringify(mocks.lockCalls[0])
+    expect(lockSql).toContain("system_settings")
+    expect(mocks.findFirstOrder[0]).toBe("lock")
+    expect(mocks.findFirstOrder[1]).toBe("txFindFirst")
+    expect(mocks.updateMock).toHaveBeenCalledTimes(1)
   })
 })

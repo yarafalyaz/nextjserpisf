@@ -18,7 +18,19 @@ export async function updateSystemSettings(formData: FormData) {
     throw new Error(parsed.error)
   }
 
-  const settings = await prisma.systemSetting.findFirst()
+  // Tujuan redirect dihitung SEBELUM tx: helper str() hidup di dalam tx.
+  const redirectRaw = formData.get("_redirectTo")
+
+  // Kunci baris singleton SEBELUM bacaan konsisten pertama tx: dulu
+  // findFirst plain + update tanpa syarat — dua admin konkuren saling
+  // menimpa seluruh field ter-render (lost update) dan validasi PKP
+  // menilai tanggal yang sudah diubah admin lain. Pola sama dengan
+  // lockPeriodSettingRow di period-close.actions.ts.
+  const settingsId = await prisma.$transaction(async (tx) => {
+  if (typeof tx.$executeRaw === "function") {
+    await tx.$executeRaw`SELECT id FROM system_settings ORDER BY id LIMIT 1 FOR UPDATE`
+  }
+  const settings = await tx.systemSetting.findFirst()
   if (!settings) throw new Error("Pengaturan sistem tidak ditemukan")
 
   function has(key: string): boolean {
@@ -109,7 +121,7 @@ export async function updateSystemSettings(formData: FormData) {
     }
   }
 
-  await prisma.systemSetting.update({
+  await tx.systemSetting.update({
     where: { id: settings.id },
     data: {
       // Company Info
@@ -331,11 +343,13 @@ export async function updateSystemSettings(formData: FormData) {
       assetFiscalRevaluationFinalTaxRatePercent: decimalNull("assetFiscalRevaluationFinalTaxRatePercent"),
     },
   })
+  return settings.id
+  })
 
   revalidatePath("/pengaturan")
-  await logActivity("update", "SystemSetting", settings.id, "Memperbarui pengaturan sistem")
+  await logActivity("update", "SystemSetting", settingsId, "Memperbarui pengaturan sistem")
   const { safeInternalPath } = await import("@/lib/utils/safe-redirect")
-  const redirectTo = safeInternalPath(str("_redirectTo"), "/pengaturan")
+  const redirectTo = safeInternalPath(redirectRaw != null ? String(redirectRaw) : null, "/pengaturan")
   redirect(redirectTo)
 
   } catch (e: unknown) {
@@ -360,9 +374,6 @@ export async function updateStorageSettings(formData: FormData) {
       throw new Error(parsed.error)
     }
 
-    const settings = await prisma.systemSetting.findFirst()
-    if (!settings) throw new Error("Pengaturan sistem tidak ditemukan")
-
     const get = (key: string) => {
       const v = formData.get(key)
       return v !== null ? String(v).trim() : ""
@@ -376,22 +387,33 @@ export async function updateStorageSettings(formData: FormData) {
     const r2Bucket = get("r2Bucket") || null
     const newSecret = get("r2SecretAccessKey")
 
-    await prisma.systemSetting.update({
-      where: { id: settings.id },
-      data: {
-        storageDriver: driver,
-        storageFallbackLocal: fallbackLocal,
-        assetBaseUrl,
-        r2AccountId,
-        r2AccessKeyId,
-        r2Bucket,
-        // Only overwrite the secret when a new value is provided
-        ...(newSecret ? { r2SecretAccessKey: newSecret } : {}),
-      },
+    // Singleton sama dengan updateSystemSettings: kunci baris di dalam tx
+    // supaya simpan penyimpanan tidak menimpa simpan pengaturan umum yang
+    // konkuren (dan sebaliknya).
+    const settingsId = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM system_settings ORDER BY id LIMIT 1 FOR UPDATE`
+      }
+      const settings = await tx.systemSetting.findFirst()
+      if (!settings) throw new Error("Pengaturan sistem tidak ditemukan")
+      await tx.systemSetting.update({
+        where: { id: settings.id },
+        data: {
+          storageDriver: driver,
+          storageFallbackLocal: fallbackLocal,
+          assetBaseUrl,
+          r2AccountId,
+          r2AccessKeyId,
+          r2Bucket,
+          // Only overwrite the secret when a new value is provided
+          ...(newSecret ? { r2SecretAccessKey: newSecret } : {}),
+        },
+      })
+      return settings.id
     })
 
     revalidatePath("/pengaturan/penyimpanan")
-    await logActivity("update", "SystemSetting", settings.id, "Memperbarui konfigurasi penyimpanan/CDN")
+    await logActivity("update", "SystemSetting", settingsId, "Memperbarui konfigurasi penyimpanan/CDN")
     redirect("/pengaturan/penyimpanan")
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e

@@ -30,6 +30,14 @@ vi.mock("@/lib/db/prisma", () => ({
       findFirst: (...a: unknown[]) => mocks.findFirst(...a),
       update: (...a: unknown[]) => mocks.update(...a),
     },
+    $transaction: async (fn: (tx: unknown) => unknown) =>
+      fn({
+        $executeRaw: vi.fn(async () => 1),
+        systemSetting: {
+          findFirst: (...a: unknown[]) => mocks.findFirst(...a),
+          update: (...a: unknown[]) => mocks.update(...a),
+        },
+      }),
   },
 }))
 vi.mock("@/lib/auth/permissions", () => ({
