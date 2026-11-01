@@ -67,7 +67,7 @@ function makeTx() {
     $executeRaw: async () => 1,
     account: {
       findMany: async ({ where }: { where: { id: { in: number[] } } }) =>
-        where.id.in.map((id: number) => ({ id })),
+        where.id.in.map((id: number) => ({ id, isActive: true, deletedAt: null, _count: { children: 0 } })),
     },
     journal: {
       create: async ({ data }: { data: Omit<FakeJournal, "id"> }) => {

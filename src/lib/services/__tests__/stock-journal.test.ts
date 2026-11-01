@@ -43,7 +43,7 @@ const ACCOUNT_TYPE_BY_ID: Record<number, string> = {
 };
 const accountFindMany = vi.fn(
   async ({ where }: { where: { id: { in: number[] } } }) =>
-    where.id.in.map((id) => ({ id, type: ACCOUNT_TYPE_BY_ID[id] ?? "EXPENSE" })),
+    where.id.in.map((id) => ({ id, type: ACCOUNT_TYPE_BY_ID[id] ?? "EXPENSE", isActive: true, deletedAt: null, _count: { children: 0 } })),
 );
 const tx = { account: { findMany: accountFindMany } } as never;
 

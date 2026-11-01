@@ -131,9 +131,75 @@ describe("JournalService", () => {
       ).rejects.toThrow("Akun tidak ditemukan: 2");
     });
 
+    // Regresi putaran 45: createJournal lahir POSTED hanya dengan cek
+    // eksistensi — akun nonaktif/terhapus/induk lolos, jadi jalur stok
+    // (mapping settings mentah) tetap memposting ke akun mati.
+    it("regresi putaran 45: menolak akun nonaktif", async () => {
+      const { service, spies } = buildService();
+      spies.accountFindMany.mockResolvedValue([
+        { id: 1, isActive: true, deletedAt: null, _count: { children: 0 } },
+        { id: 2, isActive: false, deletedAt: null, _count: { children: 0 } },
+      ]);
+      await expect(
+        service.createJournal({
+          journalNumber: "JRN-1",
+          transactionDate: new Date(),
+          type: "stock",
+          entries: [
+            { accountId: 1, debit: 100, credit: 0 },
+            { accountId: 2, debit: 0, credit: 100 },
+          ],
+        })
+      ).rejects.toThrow(/tidak aktif\/terhapus.*2/);
+      expect(spies.journalCreate).not.toHaveBeenCalled();
+    });
+
+    it("regresi putaran 45: menolak akun terhapus (soft-delete)", async () => {
+      const { service, spies } = buildService();
+      spies.accountFindMany.mockResolvedValue([
+        { id: 1, isActive: true, deletedAt: null, _count: { children: 0 } },
+        { id: 2, isActive: true, deletedAt: new Date(), _count: { children: 0 } },
+      ]);
+      await expect(
+        service.createJournal({
+          journalNumber: "JRN-1",
+          transactionDate: new Date(),
+          type: "stock",
+          entries: [
+            { accountId: 1, debit: 100, credit: 0 },
+            { accountId: 2, debit: 0, credit: 100 },
+          ],
+        })
+      ).rejects.toThrow(/tidak aktif\/terhapus.*2/);
+      expect(spies.journalCreate).not.toHaveBeenCalled();
+    });
+
+    it("regresi putaran 45: menolak akun induk", async () => {
+      const { service, spies } = buildService();
+      spies.accountFindMany.mockResolvedValue([
+        { id: 1, isActive: true, deletedAt: null, _count: { children: 2 } },
+        { id: 2, isActive: true, deletedAt: null, _count: { children: 0 } },
+      ]);
+      await expect(
+        service.createJournal({
+          journalNumber: "JRN-1",
+          transactionDate: new Date(),
+          type: "stock",
+          entries: [
+            { accountId: 1, debit: 100, credit: 0 },
+            { accountId: 2, debit: 0, credit: 100 },
+          ],
+        })
+      ).rejects.toThrow(/Akun induk.*1/);
+      expect(spies.journalCreate).not.toHaveBeenCalled();
+    });
+
     it("creates a balanced journal with entries", async () => {
       const { service, spies } = buildService();
-      spies.accountFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      spies.accountFindMany.mockResolvedValue([
+        { id: 1, isActive: true, deletedAt: null, _count: { children: 0 } },
+        { id: 2, isActive: true, deletedAt: null, _count: { children: 0 } },
+      ]);
       spies.journalCreate.mockResolvedValue({ id: 99, journalNumber: "JRN-1" });
       spies.journalEntryCreateMany.mockResolvedValue({ count: 2 });
 
@@ -174,7 +240,10 @@ describe("JournalService", () => {
       // cost-center report (pusat-laba, anggaran-vs-realisasi) silently lost the
       // realisasi into the "no cost center" bucket.
       const { service, spies } = buildService();
-      spies.accountFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      spies.accountFindMany.mockResolvedValue([
+        { id: 1, isActive: true, deletedAt: null, _count: { children: 0 } },
+        { id: 2, isActive: true, deletedAt: null, _count: { children: 0 } },
+      ]);
       spies.journalCreate.mockResolvedValue({ id: 7, journalNumber: "JRN-CC" });
       spies.journalEntryCreateMany.mockResolvedValue({ count: 2 });
 
@@ -198,7 +267,10 @@ describe("JournalService", () => {
 
     it("writes through an existing transaction without opening a nested transaction", async () => {
       const { spies, tx } = buildService();
-      spies.accountFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      spies.accountFindMany.mockResolvedValue([
+        { id: 1, isActive: true, deletedAt: null, _count: { children: 0 } },
+        { id: 2, isActive: true, deletedAt: null, _count: { children: 0 } },
+      ]);
       spies.journalCreate.mockResolvedValue({ id: 33, journalNumber: "JRN-TX" });
       spies.journalEntryCreateMany.mockResolvedValue({ count: 2 });
       const service = new JournalService(tx as never);
@@ -219,7 +291,10 @@ describe("JournalService", () => {
 
     it("accepts tiny floating-point imbalance within epsilon", async () => {
       const { service, spies } = buildService();
-      spies.accountFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      spies.accountFindMany.mockResolvedValue([
+        { id: 1, isActive: true, deletedAt: null, _count: { children: 0 } },
+        { id: 2, isActive: true, deletedAt: null, _count: { children: 0 } },
+      ]);
       spies.journalCreate.mockResolvedValue({ id: 1, journalNumber: "JRN-1" });
       spies.journalEntryCreateMany.mockResolvedValue({ count: 2 });
 
@@ -240,7 +315,10 @@ describe("JournalService", () => {
       const { assertPeriodOpen } = await import("@/lib/services/period-lock.service");
       vi.mocked(assertPeriodOpen).mockRejectedValueOnce(new Error("Periode akuntansi sudah ditutup"));
       const { service, spies } = buildService();
-      spies.accountFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      spies.accountFindMany.mockResolvedValue([
+        { id: 1, isActive: true, deletedAt: null, _count: { children: 0 } },
+        { id: 2, isActive: true, deletedAt: null, _count: { children: 0 } },
+      ]);
 
       await expect(
         service.createJournal({

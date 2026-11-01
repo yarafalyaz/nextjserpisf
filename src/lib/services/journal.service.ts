@@ -86,17 +86,31 @@ export class JournalService {
 
     const persist = async (tx: Prisma.TransactionClient) => {
         await assertPeriodOpen(input.transactionDate, tx)
-        // Validate all account IDs exist
+        // Validate all account IDs exist AND are postable: jurnal lahir
+        // POSTED langsung, jadi titik ini titik pengakuan — akun nonaktif/
+        // terhapus/induk ditolak seperti di titik posting lain (pola
+        // assertAccountsExist + assertPostableAccount warranty). Tanpa ini
+        // jalur stok (mapping settings mentah) memposting ke akun mati.
         const accountIds = [...new Set(input.entries.map((e) => e.accountId))]
         const accounts = await tx.account.findMany({
           where: { id: { in: accountIds } },
-          select: { id: true },
+          select: { id: true, isActive: true, deletedAt: true, _count: { select: { children: true } } },
         })
 
         if (accounts.length !== accountIds.length) {
           const foundIds = accounts.map((a) => a.id)
           const missingIds = accountIds.filter((id) => !foundIds.includes(id))
           throw new Error(`Akun tidak ditemukan: ${missingIds.join(', ')}`)
+        }
+        const deadIds = accounts
+          .filter((a) => a.isActive !== true || a.deletedAt != null)
+          .map((a) => a.id)
+        if (deadIds.length > 0) {
+          throw new Error(`Akun tidak aktif/terhapus atau tidak ditemukan (id: ${deadIds.join(', ')}). Pilih ulang akun sebelum posting.`)
+        }
+        const parentIds = accounts.filter((a) => a._count.children > 0).map((a) => a.id)
+        if (parentIds.length > 0) {
+          throw new Error(`Akun induk tidak bisa diposting (id: ${parentIds.join(', ')}). Pilih akun anak yang terposting.`)
         }
 
         // Create journal header

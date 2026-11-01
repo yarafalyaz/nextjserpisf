@@ -89,7 +89,7 @@ function createFakeClient() {
     },
     account: {
       findMany: async ({ where }: { where: { id: { in: number[] } } }) =>
-        where.id.in.map((id) => ({ id })),
+        where.id.in.map((id) => ({ id, isActive: true, deletedAt: null, _count: { children: 0 } })),
     },
     journal: {
       findFirst: async ({
