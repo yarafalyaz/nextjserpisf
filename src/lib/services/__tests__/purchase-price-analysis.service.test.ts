@@ -25,10 +25,12 @@ function receipt(
   vendorId: number | null,
   vendorName: string,
   lines: { itemId: number; qty: number; unitCost: number }[],
+  purchaseOrderId = 500 + id,
 ) {
   return {
     id,
     date,
+    purchaseOrderId,
     purchaseOrder: { vendorId, vendor: vendorId ? { name: vendorName } : null },
     items: lines,
   }
@@ -85,11 +87,45 @@ describe("buildPurchasePriceAnalysis", () => {
     expect(poItemFindManyMock).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          purchaseOrderId: { in: [501, 502] },
           OR: [
             { itemId: 20, purchaseOrder: { vendorId: 100 } },
             { itemId: 21, purchaseOrder: { vendorId: 200 } },
           ],
         },
+      }),
+    )
+  })
+
+  it("putaran 41: avgListingUnitPrice tertimbang qty baris PO, bukan rata-rata per baris", async () => {
+    grFindManyMock.mockResolvedValue([
+      receipt(1, new Date(2026, 0, 5), 100, "Toko A", [{ itemId: 20, qty: 100, unitCost: 130 }]),
+    ])
+    itemFindManyMock.mockResolvedValue([{ id: 20, sku: "SKU-20", name: "Barang", unitOfMeasure: "PCS" }])
+    poItemFindManyMock.mockResolvedValue([
+      { itemId: 20, qty: 100, unitPrice: 120, purchaseOrderId: 501, purchaseOrder: { vendorId: 100 } },
+      { itemId: 20, qty: 1, unitPrice: 60, purchaseOrderId: 501, purchaseOrder: { vendorId: 100 } },
+    ])
+
+    const res = await buildPurchasePriceAnalysis({ startDate: new Date(2026, 0, 1), endDate: new Date() })
+
+    // Tertimbang: (100*120 + 1*60)/101 = 119.41. Rata-rata polos lama = 90.
+    expect(res.rows[0].avgListingUnitPrice).toBe(119.41)
+    expect(res.rows[0].landedUplift).toBe(10.59)
+  })
+
+  it("putaran 41: query listing menyaring purchaseOrderId ke PO receipt terpilih", async () => {
+    grFindManyMock.mockResolvedValue([
+      receipt(3, new Date(2026, 0, 7), 100, "Toko A", [{ itemId: 20, qty: 10, unitCost: 100 }], 777),
+    ])
+    itemFindManyMock.mockResolvedValue([{ id: 20, sku: "SKU-20", name: "Barang", unitOfMeasure: "PCS" }])
+
+    await buildPurchasePriceAnalysis({ startDate: new Date(2026, 0, 1), endDate: new Date() })
+
+    expect(poItemFindManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ purchaseOrderId: { in: [777] } }),
+        select: expect.objectContaining({ qty: true }),
       }),
     )
   })
@@ -103,8 +139,8 @@ describe("buildPurchasePriceAnalysis", () => {
     ])
     itemFindManyMock.mockResolvedValue([{ id: 20, sku: "SKU-20", name: "Barang", unitOfMeasure: "PCS" }])
     poItemFindManyMock.mockResolvedValue([
-      { itemId: 20, unitPrice: 90, purchaseOrder: { vendorId: 100 } },
-      { itemId: 20, unitPrice: 110, purchaseOrder: { vendorId: 200 } },
+      { itemId: 20, qty: 10, unitPrice: 90, purchaseOrderId: 501, purchaseOrder: { vendorId: 100 } },
+      { itemId: 20, qty: 10, unitPrice: 110, purchaseOrderId: 502, purchaseOrder: { vendorId: 200 } },
     ])
 
     const res = await buildPurchasePriceAnalysis({ startDate: new Date(2026, 0, 1), endDate: new Date() })

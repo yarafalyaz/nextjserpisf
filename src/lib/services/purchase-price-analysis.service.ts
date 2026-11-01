@@ -67,6 +67,7 @@ export async function buildPurchasePriceAnalysis(opts: {
     select: {
       id: true,
       date: true,
+      purchaseOrderId: true,
       purchaseOrder: { select: { vendorId: true, vendor: { select: { name: true } } } },
       items: {
         select: {
@@ -136,25 +137,29 @@ export async function buildPurchasePriceAnalysis(opts: {
     }
   }
 
-  // Resolve listing prices: PO listing price hanya untuk pasangan
-  // (item, vendor) yang benar-benar punya receipt grup ini — PO item dari
-  // vendor lain tidak pernah terbaca (grouping di bawah menyaringnya juga).
+  // Resolve listing prices: dokumentasi di atas menjanjikan "PO listing
+  // price for the POs referenced by these receipts" — jadi PO item dibatasi
+  // ke PO yang benar-benar melahirkan receipt terpilih (bukan semua PO
+  // sepanjang masa untuk pasangan item/vendor), dan rata-rata listing
+  // tertimbang qty baris PO seperti sisi landed, bukan rata-rata per baris.
   const groupKeys = [...groups.values()] as Array<{ itemId: number; vendorId: number | null }>
+  const poIds = [...new Set(receipts.map((r) => r.purchaseOrderId))]
   const poListPrices = await prisma.purchaseOrderItem.findMany({
     where: {
+      purchaseOrderId: { in: poIds },
       OR: groupKeys.map((g) => ({
         itemId: g.itemId,
         ...(g.vendorId ? { purchaseOrder: { vendorId: g.vendorId } } : {}),
       })),
     },
-    select: { itemId: true, unitPrice: true, purchaseOrder: { select: { vendorId: true } } },
+    select: { itemId: true, qty: true, unitPrice: true, purchaseOrder: { select: { vendorId: true } } },
   })
   const listingByItemVendor = new Map<string, { qty: number; value: number }>()
   for (const p of poListPrices) {
     const key = `${p.itemId}::${p.purchaseOrder.vendorId ?? "none"}`
     const cur = listingByItemVendor.get(key) ?? { qty: 0, value: 0 }
-    cur.qty += 1
-    cur.value += Number(p.unitPrice)
+    cur.qty += Number(p.qty)
+    cur.value += Number(p.qty) * Number(p.unitPrice)
     listingByItemVendor.set(key, cur)
   }
 
