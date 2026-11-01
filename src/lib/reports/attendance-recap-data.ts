@@ -13,7 +13,11 @@
  * periode, EC-6; departemen null = "Tanpa departemen", EC-7) digabung
  * karyawan yang punya baris Attendance/LeaveRequest dalam periode —
  * karyawan tanpa data tampil kosong jujur (ember rekod 0), bukan
- * hilang dan bukan angka karangan.
+ * hilang dan bukan angka karangan. Karyawan terhapus lunak BUKAN
+ * populasi (sama seperti loader saldo cuti/siklus hidup): baris
+ * hantunya hanya akan membaca "tanpa rekod" penuh; fakta historisnya
+ * tetap terbaca lewat query Attendance/LeaveRequest bila masih dalam
+ * scope lewat jalur lain, tetapi tidak dibangkitkan sebagai orang.
  *
  * Definisi hari kerja diturunkan di sini mengikuti precedence existing
  * `attendance-summary.service.ts` persis (jadwal karyawan > departemen >
@@ -113,6 +117,7 @@ export async function loadAttendanceRecap(
   const period = { gte: rangeStart, lte: rangeEnd }
 
   const employeeWhere: Record<string, unknown> = {
+    deletedAt: null,
     ...hrEmployeeScopeWhere(scope),
   }
   if (filters.departmentId != null) {

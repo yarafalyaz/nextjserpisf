@@ -55,7 +55,7 @@ describe("loadAttendanceRecap — rantai loader F-044-S", () => {
   it("scope all: semua where tanpa kunci scope; select tanpa baseSalary; periode kolom date", async () => {
     await loadAttendanceRecap({ kind: "all" }, PERIOD, TODAY)
     const empArg = mocks.employeeFindMany.mock.calls[0][0]
-    expect(empArg.where).toEqual({})
+    expect(empArg.where).toEqual({ deletedAt: null })
     expect(JSON.stringify(empArg.select)).not.toContain("baseSalary")
     const attArg = mocks.attendanceFindMany.mock.calls[0][0]
     expect(attArg.where.date.gte).toEqual(d("2026-10-05"))
@@ -69,14 +69,14 @@ describe("loadAttendanceRecap — rantai loader F-044-S", () => {
     const scope: HrScope = { kind: "self", employeeId: -1 }
     mocks.employeeFindMany.mockResolvedValue([])
     await loadAttendanceRecap(scope, PERIOD, TODAY)
-    expect(mocks.employeeFindMany.mock.calls[0][0].where).toEqual({ id: -1 })
+    expect(mocks.employeeFindMany.mock.calls[0][0].where).toEqual({ deletedAt: null, id: -1 })
     expect(mocks.attendanceFindMany.mock.calls[0][0].where.employeeId).toBe(-1)
     expect(mocks.leaveFindMany.mock.calls[0][0].where.employeeId).toBe(-1)
   })
 
   it("scope department: employee by departmentId; attendance/leave lewat relasi employee", async () => {
     await loadAttendanceRecap({ kind: "department", departmentId: 10, employeeId: 7 }, PERIOD, TODAY)
-    expect(mocks.employeeFindMany.mock.calls[0][0].where).toEqual({ departmentId: 10 })
+    expect(mocks.employeeFindMany.mock.calls[0][0].where).toEqual({ deletedAt: null, departmentId: 10 })
     expect(mocks.attendanceFindMany.mock.calls[0][0].where.employee).toEqual({ departmentId: 10 })
   })
 
@@ -151,5 +151,19 @@ describe("loadAttendanceRecap — rantai loader F-044-S", () => {
     expect(recap.employees).toHaveLength(1)
     expect(recap.employees[0].recordCount).toBe(0)
     expect(recap.employees[0].noRecordDays).toBe(3)
+  })
+
+  it("karyawan terhapus lunak tidak tampil sebagai baris hantu populasi", async () => {
+    const rows = [
+      employeeRow({ id: 1, deletedAt: null }),
+      employeeRow({ id: 2, name: "Almarhum", deletedAt: d("2026-09-01") }),
+    ]
+    // Mock meniru semantik where deletedAt Prisma.
+    mocks.employeeFindMany.mockImplementation(async (args: any) =>
+      args?.where?.deletedAt === null ? rows.filter((r) => (r as any).deletedAt === null) : rows,
+    )
+    const recap = await loadAttendanceRecap({ kind: "all" }, PERIOD, TODAY)
+    expect(mocks.employeeFindMany.mock.calls[0][0].where).toEqual({ deletedAt: null })
+    expect(recap.employees.map((e) => e.employeeId)).toEqual([1])
   })
 })
