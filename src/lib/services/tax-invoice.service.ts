@@ -274,6 +274,15 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
             select: { id: true },
           })
           if (!vendor) throw definitive(`Faktur masukan: vendor #${input.vendorId} tidak ditemukan atau tidak aktif`)
+        } else {
+          // Putaran 48: cabang tanpa bill dulu melompati penilaian vendor
+          // sama sekali (hanya dupe per vendor), jadi FP masukan bisa
+          // terbit atas vendor nonaktif/terhapus lewat submit langsung.
+          const vendor = await tx.vendor.findFirst({
+            where: { id: input.vendorId, isActive: true, deletedAt: null },
+            select: { id: true },
+          })
+          if (!vendor) throw definitive(`Faktur masukan: vendor #${input.vendorId} tidak ditemukan atau tidak aktif`)
         }
         const dupeVendor = await tx.taxInvoice.findFirst({
           where: { direction: "in", vendorId: input.vendorId, taxInvoiceNumber: number, djpStatus: { not: "cancelled" } },

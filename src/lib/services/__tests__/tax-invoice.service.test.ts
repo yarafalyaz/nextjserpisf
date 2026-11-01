@@ -194,6 +194,18 @@ describe("issueTaxInvoice guards", () => {
     expect(events).toContain("lock-vb")
   })
 
+  it("regresi putaran 48: FP masukan standalone (tanpa bill) atas vendor mati ditolak", async () => {
+    mocks.vendorFindFirst.mockResolvedValue(null)
+    const r = await issueTaxInvoice({
+      direction: "in", taxInvoiceNumber: "010.001-26.00000077",
+      taxInvoiceDate: new Date(2026, 0, 10), sellingPrice: 12_000_000,
+      vendorId: 5, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/tidak ditemukan atau tidak aktif/)
+    expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+  })
+
   it("F-002(d): duplikat (vendor,nomor) masukan non-batal ditolak definitif", async () => {
     mocks.taxInvoiceFindFirst.mockImplementation(({ where }: { where: Record<string, unknown> }) => {
       if (where.vendorId != null) return Promise.resolve({ id: 9 })
