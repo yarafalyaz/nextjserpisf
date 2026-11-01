@@ -155,15 +155,16 @@ export async function bulkDelete(model: ModelName, ids: number[]) {
     // selectable for new documents and visible in lists.
     const hasIsActive = schemaModel.fields.some((field) => field.name === "isActive")
 
-    if (hasSoftDelete) {
-      await prismaModel.updateMany({
-        where: { id: { in: safeIds } },
-        data: { deletedAt: new Date(), ...(hasIsActive ? { isActive: false } : {}) },
-      })
-    } else {
-      await prismaModel.deleteMany({
-        where: { id: { in: safeIds } },
-      })
+    const result = hasSoftDelete
+      ? await prismaModel.updateMany({
+          where: { id: { in: safeIds }, deletedAt: null },
+          data: { deletedAt: new Date(), ...(hasIsActive ? { isActive: false } : {}) },
+        })
+      : await prismaModel.deleteMany({
+          where: { id: { in: safeIds } },
+        })
+    if (result.count === 0) {
+      return { success: false, message: "Tidak ada data yang berhasil dihapus" }
     }
 
     const path = modelRevalidateMap[model]
@@ -179,10 +180,10 @@ export async function bulkDelete(model: ModelName, ids: number[]) {
       "delete",
       model,
       0,
-      `Hapus massal ${safeIds.length} data ${model} (id: ${safeIds.slice(0, 50).join(", ")}${safeIds.length > 50 ? ", …" : ""})`,
+      `Hapus massal ${result.count} dari ${safeIds.length} data ${model} (id: ${safeIds.slice(0, 50).join(", ")}${safeIds.length > 50 ? ", …" : ""})`,
     )
 
-    return { success: true, message: `${safeIds.length} data berhasil dihapus` }
+    return { success: true, message: `${result.count} data berhasil dihapus` }
   } catch (error) {
     console.error("[bulkDelete]", error)
     return { success: false, message: "Gagal menghapus data. Mungkin ada relasi yang terkait." }

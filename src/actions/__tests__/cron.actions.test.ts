@@ -31,6 +31,8 @@ beforeEach(() => {
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
   global.fetch = mocks.fetchMock
   mocks.fetchMock.mockResolvedValue({
+    ok: true,
+    status: 200,
     json: vi.fn().mockResolvedValue({ success: true, message: "OK" })
   })
 })
@@ -71,6 +73,37 @@ describe("Cron Actions", () => {
     } finally {
       if (prevS === undefined) delete process.env.CRON_SECRET
       else process.env.CRON_SECRET = prevS
+    }
+  })
+
+  it("runCronTask prefers CRON_SECRET like the route validator and rejects an HTTP failure", async () => {
+    const prevS = process.env.CRON_SECRET
+    const prevC = process.env.CRON_CREDENTIAL
+    const prevU = process.env.NEXTAUTH_URL
+    process.env.CRON_SECRET = SECRET
+    process.env.CRON_CREDENTIAL = "different-credential"
+    process.env.NEXTAUTH_URL = URL
+    mocks.fetchMock.mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: vi.fn().mockResolvedValue({ error: { message: "Tidak terotorisasi" } }),
+    })
+    try {
+      await expect(actions.runCronTask("cleanup")).rejects.toThrow(/HTTP 401/)
+      expect(mocks.fetchMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: { Authorization: `Bearer ${SECRET}` },
+        }),
+      )
+      expect(logActivityMock).not.toHaveBeenCalled()
+    } finally {
+      if (prevS === undefined) delete process.env.CRON_SECRET
+      else process.env.CRON_SECRET = prevS
+      if (prevC === undefined) delete process.env.CRON_CREDENTIAL
+      else process.env.CRON_CREDENTIAL = prevC
+      if (prevU === undefined) delete process.env.NEXTAUTH_URL
+      else process.env.NEXTAUTH_URL = prevU
     }
   })
 

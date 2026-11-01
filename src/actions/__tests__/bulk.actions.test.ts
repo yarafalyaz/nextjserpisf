@@ -211,9 +211,28 @@ describe("Bulk Actions", () => {
     // isActive is cleared as well: pickers and lists filter by isActive alone, so a
     // soft-deleted row that stayed active kept being offered for new documents.
     expect(mocks.prismaMock.vendor.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: [1] } },
+      where: { id: { in: [1] }, deletedAt: null },
       data: { deletedAt: expect.any(Date), isActive: false }
     })
+  })
+  it("reports only rows the delete actually changed", async () => {
+    mocks.prismaMock.customer.deleteMany.mockResolvedValueOnce({ count: 1 })
+    const res = await bulkDelete("customer", [1, 2])
+    expect(res?.success).toBe(true)
+    expect(res?.message).toMatch(/^1 data berhasil dihapus/)
+    expect(logActivityMock).toHaveBeenCalledWith(
+      "delete",
+      "customer",
+      0,
+      expect.stringContaining("Hapus massal 1 dari 2 data customer"),
+    )
+  })
+  it("fails when the conditional delete changed no rows", async () => {
+    mocks.prismaMock.customer.deleteMany.mockResolvedValueOnce({ count: 0 })
+    const res = await bulkDelete("customer", [1])
+    expect(res?.success).toBe(false)
+    expect(res?.message).toMatch(/Tidak ada data yang berhasil dihapus/)
+    expect(logActivityMock).not.toHaveBeenCalled()
   })
   it("bulkDelete catches and logs errors during deletion", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})

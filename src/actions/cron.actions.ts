@@ -22,7 +22,8 @@ export async function runCronTask(task: string) {
     throw new Error(`Task tidak diizinkan: ${task}`)
   }
 
-  const cronEnv = process.env["CRON_CREDENTIAL"] || process.env["CRON_SECRET"]
+  // Selaras validator route (`lib/security/cron`): CRON_SECRET didahulukan.
+  const cronEnv = process.env.CRON_SECRET || process.env["CRON_CREDENTIAL"]
   if (!cronEnv) {
     throw new Error("Credential cron belum di-set")
   }
@@ -33,6 +34,9 @@ export async function runCronTask(task: string) {
     headers: { Authorization: `Bearer ${cronEnv}` },
     cache: "no-store",
   })
+  if (!res.ok) {
+    throw new Error(`Task cron gagal dijalankan (HTTP ${res.status})`)
+  }
 
   const data = await res.json()
 
