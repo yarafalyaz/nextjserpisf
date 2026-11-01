@@ -477,6 +477,8 @@ describe("Overtime Request Actions", () => {
     prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "pending", hours: 2, date: new Date("2026-06-12T00:00:00Z"), calculatedValue: null, employee: { baseSalary: 5_000_000 } })
     prismaMock.overtimeRequest.update.mockResolvedValue({})
     prismaMock.overtimeRequest.delete.mockResolvedValue({})
+    // Default: akun penyetuju tidak tertaut ke karyawan subjek (admin murni).
+    prismaMock.employee.findFirst.mockResolvedValue(null)
   })
 
   it("createOvertimeRequest validates form", async () => {
@@ -572,6 +574,27 @@ describe("Overtime Request Actions", () => {
     const res = await actions.approveOvertime(1)
     expect(res?.success).toBe(true)
     // No recompute / no overwrite of the existing value or approver.
+    expect(prismaMock.overtimeRequest.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("approveOvertime menolak penyetuju yang adalah karyawan subjek (self-approve)", async () => {
+    // Akun HR tertaut ke employeeId 1 = subjek lembur: scope department lolos
+    // akses, tetapi menyetujui lembur sendiri dilarang (pola koreksi absensi).
+    requirePermissionMock.mockResolvedValue({ id: 9, roles: ["kepala_bengkel"] })
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 1, departmentId: 5 })
+    prismaMock.employee.findUnique.mockResolvedValue({ departmentId: 5 })
+    const res = await actions.approveOvertime(1)
+    expect(res?.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toMatch(/lemburnya sendiri/)
+    expect(prismaMock.overtimeRequest.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("approveOvertime menolak scope self walau izin approve ada", async () => {
+    requirePermissionMock.mockResolvedValue({ id: 9, roles: ["staff"] })
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 1, departmentId: 5 })
+    const res = await actions.approveOvertime(1)
+    expect(res?.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toMatch(/tidak memiliki akses menyetujui lembur/)
     expect(prismaMock.overtimeRequest.updateMany).not.toHaveBeenCalled()
   })
 

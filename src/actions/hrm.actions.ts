@@ -1258,13 +1258,27 @@ export async function approveOvertime(overtimeId: number) {
       where: { id: overtimeId },
       include: { employee: { select: { baseSalary: true, paymentFrequency: true } } },
     });
+    // SoD (pola assertAttendanceCorrectionApprover): scope self tidak pernah
+    // menyetujui, dan akun yang tertaut ke karyawan subjek tidak boleh
+    // menyetujui lemburnya sendiri. approveStep generik hanya menegakkan
+    // maker-checker per langkah workflow; jalur manual ini adalah gerbang
+    // terakhir karena nilai payroll dihitung di sini. Akun tanpa tautan
+    // karyawan (admin/HR murni) tetap sah — tidak ada karyawan yang sama.
+    const scope = await getHrScope(user);
+    if (scope.kind === "self") {
+      throw new Error("Anda tidak memiliki akses menyetujui lembur");
+    }
+    await assertHrEmployeeAccess(scope, ot.employeeId);
+    const approverEmployeeId = await callerEmployeeIdForCorrection(user.id);
+    if (approverEmployeeId != null && approverEmployeeId === ot.employeeId) {
+      throw new Error("Penyetuju tidak boleh menyetujui pengajuan lemburnya sendiri");
+    }
     // Jalur manual (route workflow tanpa workflow aktif + server action
     // langsung) wajib scope sama dengan approveStep generik: tanpa ini
     // pemegang approve_overtime_requests bisa menghitung/menyetujui lembur
     // karyawan di luar team/department/self-nya. Workflow-approved lolos
     // karena approveStep sudah cek scope sebelum flip; cek ulang di sini
     // idempoten untuk aktor sama.
-    await assertHrEmployeeAccess(await getHrScope(user), ot.employeeId);
     // A document reachable here is either:
     //   • "pending"  — no multi-level workflow configured; this manual approval
     //     is the only gate, so it must compute the value AND flip the status, or
