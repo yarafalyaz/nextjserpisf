@@ -3065,6 +3065,26 @@ export async function deleteDepartment(id: number) {
       );
     }
 
+    // Guard: referens lain yang hapus mentah rusak senyap — JobVacancy.
+    // departmentId ON DELETE SET NULL (lowongan lepas dari departemennya),
+    // CostCenter.departmentId bare-int tanpa FK (pusat biaya yatim),
+    // DepartmentHoliday onDelete Cascade (hari libur departemen musnah).
+    const [jobVacancies, costCenters, holidays] = await Promise.all([
+      prisma.jobVacancy.count({ where: { departmentId: id } }),
+      prisma.costCenter.count({ where: { departmentId: id } }),
+      prisma.departmentHoliday.count({ where: { departmentId: id } }),
+    ]);
+    const usages = [
+      jobVacancies > 0 ? `${jobVacancies} lowongan` : null,
+      costCenters > 0 ? `${costCenters} pusat biaya` : null,
+      holidays > 0 ? `${holidays} hari libur departemen` : null,
+    ].filter((u): u is string => u !== null);
+    if (usages.length > 0) {
+      throw new Error(
+        `Departemen masih dirujuk oleh ${usages.join(", ")}. Hapus atau pindahkan dulu sebelum menghapus.`,
+      );
+    }
+
     await prisma.department.delete({ where: { id } });
 
     revalidatePath("/master/karyawan");
@@ -3092,6 +3112,28 @@ export async function deletePosition(id: number) {
     });
     if (empCount > 0) {
       throw new Error(`Jabatan masih memiliki ${empCount} karyawan aktif`);
+    }
+
+    // Guard: referens lain yang hapus mentah rusak senyap — JobVacancy.
+    // positionId ON DELETE SET NULL (lowongan tanpa jabatan: pelamar yang
+    // diterima melahirkan karyawan tanpa jabatan), PositionCompetency dan
+    // SuccessionCandidate onDelete Cascade (syarat kompetensi dan rencana
+    // suksesi jabatan kritis musnah tanpa jejak). Position tak punya
+    // deletedAt, jadi soft-delete bukan jalan keluar — tolak.
+    const [jobVacancies, competencies, successionCandidates] = await Promise.all([
+      prisma.jobVacancy.count({ where: { positionId: id } }),
+      prisma.positionCompetency.count({ where: { positionId: id } }),
+      prisma.successionCandidate.count({ where: { positionId: id } }),
+    ]);
+    const usages = [
+      jobVacancies > 0 ? `${jobVacancies} lowongan` : null,
+      competencies > 0 ? `${competencies} syarat kompetensi` : null,
+      successionCandidates > 0 ? `${successionCandidates} kandidat suksesi` : null,
+    ].filter((u): u is string => u !== null);
+    if (usages.length > 0) {
+      throw new Error(
+        `Jabatan masih dirujuk oleh ${usages.join(", ")}. Hapus atau pindahkan dulu sebelum menghapus.`,
+      );
     }
 
     await prisma.position.delete({ where: { id } });

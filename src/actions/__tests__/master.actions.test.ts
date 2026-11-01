@@ -48,6 +48,11 @@ const mocks = vi.hoisted(() => {
     },
     barcode: buildModelMock(),
     activityLog: buildModelMock(),
+    jobVacancy: buildModelMock(),
+    costCenter: buildModelMock(),
+    departmentHoliday: buildModelMock(),
+    positionCompetency: buildModelMock(),
+    successionCandidate: buildModelMock(),
     taxGroup: buildModelMock(),
     taxGroupTax: buildModelMock(),
     paymentTerm: buildModelMock(),
@@ -785,6 +790,21 @@ describe("Department Actions", () => {
     expect(res?.error).toMatch(/jabatan/i)
     expect(mocks.prismaMock.department.delete).not.toHaveBeenCalled()
   })
+
+  it("deleteDepartment menolak bila dirujuk lowongan, pusat biaya, atau hari libur tanpa menghapus (putaran 25)", async () => {
+    // job_vacancies.department_id ON DELETE SET NULL; cost_centers.
+    // department_id bare-int tanpa FK; department_holidays ON DELETE
+    // CASCADE — hapus mentah me-null-kan/memusnahkan ketiganya senyap.
+    mocks.prismaMock.jobVacancy.count.mockResolvedValueOnce(2)
+    mocks.prismaMock.costCenter.count.mockResolvedValueOnce(3)
+    mocks.prismaMock.departmentHoliday.count.mockResolvedValueOnce(5)
+    const res = await actions.deleteDepartment(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("2 lowongan")
+    expect(String(res?.error)).toContain("3 pusat biaya")
+    expect(String(res?.error)).toContain("5 hari libur departemen")
+    expect(mocks.prismaMock.department.delete).not.toHaveBeenCalled()
+  })
 })
 
 describe("Position Actions", () => {
@@ -799,6 +819,21 @@ describe("Position Actions", () => {
   it("deletePosition succeeds", async () => {
     const res = await actions.deletePosition(1)
     expect(res?.success).toBe(true)
+  })
+
+  it("deletePosition menolak bila dirujuk lowongan atau satelit kompetensi/suksesi tanpa menghapus (putaran 25)", async () => {
+    // job_vacancies.position_id ON DELETE SET NULL; position_competencies/
+    // succession_candidates ON DELETE CASCADE — hapus mentah me-null-kan
+    // lowongan dan memusnahkan rencana suksesi jabatan kritis senyap.
+    mocks.prismaMock.jobVacancy.count.mockResolvedValueOnce(1)
+    mocks.prismaMock.positionCompetency.count.mockResolvedValueOnce(4)
+    mocks.prismaMock.successionCandidate.count.mockResolvedValueOnce(2)
+    const res = await actions.deletePosition(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("1 lowongan")
+    expect(String(res?.error)).toContain("4 syarat kompetensi")
+    expect(String(res?.error)).toContain("2 kandidat suksesi")
+    expect(mocks.prismaMock.position.delete).not.toHaveBeenCalled()
   })
 })
 
