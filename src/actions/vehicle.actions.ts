@@ -971,8 +971,25 @@ export async function updateCustomerVehicleServiceSchedule(
     }
 
     const updatedBy = Number(user.id);
-    await prisma.customerVehicle.update({
-      where: { id },
+    // Putaran 50: tulis sebagai klaim kondisional atas odometer TERCATAT
+    // SAAT INI. Bacaan di atas bisa basi — klaim garansi yang commit di
+    // antaranya menaikkan lastOdometerKm secara kondisional; update polos
+    // menulis jadwal dengan target yang sudah terlewat (lost update).
+    // count 0 = odometer sudah melewati target (atau baris terhapus):
+    // baca ulang untuk pesan angka nyata, jangan tulis.
+    const claimed = await prisma.customerVehicle.updateMany({
+      where: {
+        id,
+        deletedAt: null,
+        ...(nextServiceKm != null
+          ? {
+              OR: [
+                { lastOdometerKm: null },
+                { lastOdometerKm: { lt: nextServiceKm } },
+              ],
+            }
+          : {}),
+      },
       data: {
         nextServiceDate: nextServiceDate ? wibDateToUtcMidnight(nextServiceDate) : null,
         nextServiceKm: nextServiceKm ?? null,
@@ -981,6 +998,22 @@ export async function updateCustomerVehicleServiceSchedule(
         nextServiceUpdatedAt: new Date(),
       },
     });
+    if (claimed.count === 0) {
+      const fresh = await prisma.customerVehicle.findFirst({
+        where: { id, deletedAt: null },
+        select: { lastOdometerKm: true },
+      });
+      if (!fresh) {
+        return { success: false, error: "Kendaraan pelanggan tidak ditemukan" };
+      }
+      return {
+        success: false,
+        error:
+          `Km servis berikutnya (${(nextServiceKm ?? 0).toLocaleString("id-ID")}) harus lebih besar ` +
+          `dari odometer terakhir tercatat (${(fresh.lastOdometerKm ?? 0).toLocaleString("id-ID")} km). ` +
+          `Periksa kembali jadwal yang dicatat.`,
+      };
+    }
 
     revalidatePath(`/master/pelanggan/${existing.customerId}/kendaraan`);
     await logActivity(

@@ -675,7 +675,7 @@ describe("updateCustomerVehicleServiceSchedule guard km (021-S)", () => {
       fdMap({ nextServiceKm: 60000 }),
     )
     expect(res?.success).toBe(true)
-    expect(mocks.prismaMock.customerVehicle.update).toHaveBeenCalledTimes(1)
+    expect(mocks.prismaMock.customerVehicle.updateMany).toHaveBeenCalledTimes(1)
   })
 
   it("odometer belum tercatat -> km berapa pun diterima (guard hanya bila ada acuan)", async () => {
@@ -688,7 +688,22 @@ describe("updateCustomerVehicleServiceSchedule guard km (021-S)", () => {
       fdMap({ nextServiceKm: 1000 }),
     )
     expect(res?.success).toBe(true)
-    expect(mocks.prismaMock.customerVehicle.update).toHaveBeenCalledTimes(1)
+    expect(mocks.prismaMock.customerVehicle.updateMany).toHaveBeenCalledTimes(1)
+  })
+
+  it("regresi putaran 50: odometer naik sesudah dibaca -> klaim kondisional menolak jadwal basi", async () => {
+    mocks.prismaMock.customerVehicle.findFirst
+      .mockResolvedValueOnce(existing)
+      .mockResolvedValueOnce({ ...existing, lastOdometerKm: 65000 })
+    mocks.prismaMock.customerVehicle.updateMany.mockResolvedValue({ count: 0 })
+    const res = await actions.updateCustomerVehicleServiceSchedule(
+      5,
+      fdMap({ nextServiceKm: 60000 }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("65.000")
+    expect(mocks.prismaMock.customerVehicle.update).not.toHaveBeenCalled()
+    mocks.prismaMock.customerVehicle.updateMany.mockResolvedValue({ count: 1 })
   })
 })
 
@@ -712,7 +727,7 @@ describe("updateCustomerVehicleServiceSchedule perilaku aksi (021-S)", () => {
       fdMap({ nextServiceDate: "2020-01-15" }),
     )
     expect(res?.success).toBe(true)
-    const arg = mocks.prismaMock.customerVehicle.update.mock.calls[0][0]
+    const arg = mocks.prismaMock.customerVehicle.updateMany.mock.calls[0][0]
     expect(arg.data.nextServiceDate).toBeInstanceOf(Date)
     expect(arg.data.nextServiceDate.toISOString().slice(0, 10)).toBe("2020-01-15")
   })
@@ -721,7 +736,7 @@ describe("updateCustomerVehicleServiceSchedule perilaku aksi (021-S)", () => {
     mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue(existing)
     const res = await actions.updateCustomerVehicleServiceSchedule(5, fdMap({}))
     expect(res?.success).toBe(true)
-    const arg = mocks.prismaMock.customerVehicle.update.mock.calls[0][0]
+    const arg = mocks.prismaMock.customerVehicle.updateMany.mock.calls[0][0]
     expect(arg.data.nextServiceDate).toBeNull()
     expect(arg.data.nextServiceKm).toBeNull()
     expect(arg.data.nextServiceNote).toBeNull()
