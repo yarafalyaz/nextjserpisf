@@ -388,14 +388,22 @@ export async function createTransferFromMaterialRequest(id: number, formData?: F
       assertWarehouseAccessMulti(scope, [request.sourceWarehouseId, request.requesterWarehouseId])
       await assertWarehousesExistAndActive(tx, [request.sourceWarehouseId, request.requesterWarehouseId])
 
+      // Sisa dari receivedQty kumulatif atas SEMUA transfer tertaut yang
+      // sudah dikirim (BR-TP-13, pola refreshMaterialRequestFulfillmentTx):
+      // transfer partially_received/processed sudah menyerap sebagian qty —
+      // menghitung hanya received penuh + qty terkirim melebih-lebihkan
+      // sisa (dobel kirim) atau menolkan sisa sah sesudah shortage-close.
       const receivedTransfers = await tx.inventoryTransfer.findMany({
-        where: { materialRequestId: id, status: "received" },
-        select: { items: { select: { itemId: true, qty: true } } },
+        where: {
+          materialRequestId: id,
+          status: { in: ["processed", "partially_received", "received"] },
+        },
+        select: { items: { select: { itemId: true, receivedQty: true } } },
       })
       const { lines } = deriveMaterialRequestFulfillment({
         requested: request.items.map((i) => ({ itemId: i.itemId, qty: Number(i.qty) })),
         receivedLines: receivedTransfers.flatMap((t) =>
-          t.items.map((i) => ({ itemId: i.itemId, qty: Number(i.qty) })),
+          t.items.map((i) => ({ itemId: i.itemId, qty: Number(i.receivedQty) })),
         ),
       })
       const remaining = lines.filter((l) => l.remainingQty > 0.0001)

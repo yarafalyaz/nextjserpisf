@@ -302,7 +302,34 @@ describe("createTransferFromMaterialRequest (AC-MR-2/3)", () => {
   it("transfer kedua hanya sisa sesudah received pertama (AC-MR-3)", async () => {
     approvedTx({ status: "terpenuhi_sebagian" })
     mocks.txMock.inventoryTransfer.findMany.mockResolvedValue([
-      { items: [{ itemId: 1, qty: 4 }] },
+      { items: [{ itemId: 1, receivedQty: 4 }] },
+    ])
+    const res = await createTransferFromMaterialRequest(1)
+    expect(res.success).toBe(true)
+    const data = mocks.txMock.inventoryTransfer.create.mock.calls[0][0].data
+    expect(data.items.create).toEqual([{ itemId: 1, qty: 6 }])
+  })
+
+  it("regression round 17: sisa memakai receivedQty, bukan qty terkirim (parsial tidak dobel kirim)", async () => {
+    approvedTx({ status: "terpenuhi_sebagian" })
+    // Transfer A kirim 10 baru diterima 4 (partially_received): sisa 6.
+    // Baris mock memuat qty terkirim 10 — kode lama akan membaca 10.
+    mocks.txMock.inventoryTransfer.findMany.mockResolvedValue([
+      { items: [{ itemId: 1, qty: 10, receivedQty: 4 }] },
+    ])
+    const res = await createTransferFromMaterialRequest(1)
+    expect(res.success).toBe(true)
+    const data = mocks.txMock.inventoryTransfer.create.mock.calls[0][0].data
+    expect(data.items.create).toEqual([{ itemId: 1, qty: 6 }])
+    // Query wajib mencakup transfer terkirim parsial, bukan hanya received.
+    const where = mocks.txMock.inventoryTransfer.findMany.mock.calls[0][0].where
+    expect(where.status).toEqual({ in: ["processed", "partially_received", "received"] })
+  })
+
+  it("regression round 17: shortage-closed (received, receivedQty < qty) tetap menyisakan qty sah", async () => {
+    approvedTx({ status: "terpenuhi_sebagian" })
+    mocks.txMock.inventoryTransfer.findMany.mockResolvedValue([
+      { items: [{ itemId: 1, qty: 10, receivedQty: 4 }] },
     ])
     const res = await createTransferFromMaterialRequest(1)
     expect(res.success).toBe(true)
