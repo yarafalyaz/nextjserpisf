@@ -723,6 +723,31 @@ describe("Sales Order Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("Validasi gagal")
   })
+  it("updateSalesOrder menolak ganti item bila surat jalan merujuk baris SO (putaran 21)", async () => {
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.salesOrderItem.findMany.mockResolvedValue([{ id: 11 }])
+    mocks.prismaMock.deliveryOrderItem.count.mockResolvedValue(2)
+    const res = await actions.updateSalesOrder(
+      1,
+      fdMap({ customerId: 1, date: "2026-06-12", items: JSON.stringify([{ itemId: 5, qty: 1, unitPrice: 100 }]) }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("surat jalan")
+    expect(mocks.prismaMock.salesOrderItem.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.salesOrderItem.createMany).not.toHaveBeenCalled()
+  })
+  it("updateSalesOrder ganti item jalan bila belum ada surat jalan", async () => {
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.salesOrderItem.findMany.mockResolvedValue([{ id: 11 }])
+    mocks.prismaMock.deliveryOrderItem.count.mockResolvedValue(0)
+    const res = await actions.updateSalesOrder(
+      1,
+      fdMap({ customerId: 1, date: "2026-06-12", items: JSON.stringify([{ itemId: 5, qty: 1, unitPrice: 100 }]) }),
+    )
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.salesOrderItem.deleteMany).toHaveBeenCalledTimes(1)
+    expect(mocks.prismaMock.salesOrderItem.createMany).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe("Sales Invoice Actions", () => {

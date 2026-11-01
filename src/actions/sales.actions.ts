@@ -3378,6 +3378,30 @@ export async function updateSalesOrder(id: number, formData: FormData) {
     // clamped to >= 0 so a tampered client cannot persist a negative line that
     // would later flow into delivery/invoice.
     if (items !== null) {
+      // DeliveryOrderItem.salesOrderItemId adalah bare Int tanpa FK: hapus +
+      // buat ulang baris SO mengyatimkan rujukan surat jalan berjalan, dan cap
+      // pengiriman kumulatif + laporan Pemenuhan membaca qty terkirim per ID
+      // baris — baris baru mulai dari 0 sehingga pesanan bisa dikirim dobel.
+      // Status SO boleh diedit (draft/approved) bukan berarti belum ada surat
+      // jalan: DO draft pun sudah memesan porsi baris. Tolak ganti baris
+      // selama ada rujukan surat jalan non-batal; edit header tetap bebas.
+      const referencedLines = await tx.salesOrderItem.findMany({
+        where: { salesOrderId: id },
+        select: { id: true },
+      })
+      if (referencedLines.length > 0) {
+        const doRefs = await tx.deliveryOrderItem.count({
+          where: {
+            salesOrderItemId: { in: referencedLines.map((l) => l.id) },
+            deliveryOrder: { status: { not: "cancelled" } },
+          },
+        })
+        if (doRefs > 0) {
+          throw new Error(
+            "Item pesanan tidak bisa diganti: sudah ada surat jalan yang merujuk baris pesanan ini. Batalkan surat jalannya dulu.",
+          )
+        }
+      }
       await tx.salesOrderItem.deleteMany({ where: { salesOrderId: id } })
 
       if (items.length > 0) {
