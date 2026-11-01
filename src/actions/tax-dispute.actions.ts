@@ -77,6 +77,23 @@ export async function createTaxAssessment(formData: FormData): Promise<TaxDisput
       if (dupe) {
         throw new Error(`Nomor ketetapan "${v.assessmentNumber}" sudah terdaftar. Periksa register sengketa pajak.`)
       }
+      // Tautan opsional dinilai dari baris hidup: FK SetNull menolak id
+      // fiktif mentah di DB, tetapi setor void/terhapus dan faktur
+      // batal/diganti memberi konteks palsu pada register sengketa.
+      if (v.taxPaymentId != null) {
+        const payment = await tx.taxPayment.findFirst({
+          where: { id: v.taxPaymentId, deletedAt: null, NOT: { status: "void" } },
+          select: { id: true },
+        })
+        if (!payment) throw new Error("Setoran pajak tertaut tidak ditemukan atau sudah dibatalkan.")
+      }
+      if (v.taxInvoiceId != null) {
+        const invoice = await tx.taxInvoice.findFirst({
+          where: { id: v.taxInvoiceId, djpStatus: { notIn: ["cancelled", "replaced"] } },
+          select: { id: true },
+        })
+        if (!invoice) throw new Error("Faktur pajak tertaut tidak ditemukan atau sudah batal/diganti.")
+      }
       const documentNo = v.assessmentNumber
       return tx.taxAssessment.create({
         data: {

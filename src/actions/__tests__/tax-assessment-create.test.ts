@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   executeRaw: vi.fn(),
   txAssessmentCreate: vi.fn(),
   txAssessmentFindFirst: vi.fn(),
+  txTaxPaymentFindFirst: vi.fn(),
+  txTaxInvoiceFindFirst: vi.fn(),
 }))
 
 vi.mock("@/lib/auth/permissions", () => ({
@@ -26,6 +28,8 @@ vi.mock("@/lib/db/prisma", () => {
       create: mocks.txAssessmentCreate,
       findFirst: mocks.txAssessmentFindFirst,
     },
+    taxPayment: { findFirst: mocks.txTaxPaymentFindFirst },
+    taxInvoice: { findFirst: mocks.txTaxInvoiceFindFirst },
     financialIdempotencyKey: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
   }
   return {
@@ -60,6 +64,9 @@ beforeEach(() => {
   mocks.executeRaw.mockResolvedValue(1)
   mocks.txAssessmentFindFirst.mockResolvedValue(null)
   mocks.txAssessmentCreate.mockResolvedValue({ id: 3, assessmentNumber: "SKPKB-001/2026" })
+  // Gerbang tautan hidup (putaran 35): default dokumen tertaut sehat.
+  mocks.txTaxPaymentFindFirst.mockResolvedValue({ id: 11, status: "posted", deletedAt: null })
+  mocks.txTaxInvoiceFindFirst.mockResolvedValue({ id: 12, djpStatus: "approved" })
 })
 
 describe("createTaxAssessment gerbang periode + nomor dobel", () => {
@@ -89,5 +96,22 @@ describe("createTaxAssessment gerbang periode + nomor dobel", () => {
     expect(mocks.executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.txAssessmentFindFirst.mock.invocationCallOrder[0],
     )
+  })
+
+  // regresi putaran 35: tautan opsional dinilai dari dokumen hidup dalam tx
+  it("tolak tautan setor void/terhapus", async () => {
+    mocks.txTaxPaymentFindFirst.mockResolvedValue(null)
+    const res = await createTaxAssessment(fd({ ...base, taxPaymentId: "11" }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toMatch(/Setoran pajak tertaut tidak ditemukan/)
+    expect(mocks.txAssessmentCreate).not.toHaveBeenCalled()
+  })
+
+  it("tolak tautan faktur batal", async () => {
+    mocks.txTaxInvoiceFindFirst.mockResolvedValue(null)
+    const res = await createTaxAssessment(fd({ ...base, taxInvoiceId: "12" }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toMatch(/Faktur pajak tertaut tidak ditemukan/)
+    expect(mocks.txAssessmentCreate).not.toHaveBeenCalled()
   })
 })
