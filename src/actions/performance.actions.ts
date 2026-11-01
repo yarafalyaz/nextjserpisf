@@ -24,6 +24,26 @@ function resultError(e: unknown, tag: string) {
   return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
 }
 
+/**
+ * Siklus hidup siklus penilaian: draft -> active -> closed. Penulisan
+ * sasaran/ulasan hanya sah pada siklus ACTIVE; tanpa gerbang ini sasaran
+ * dan skor final tetap bisa lahir pada siklus yang sudah ditutup.
+ */
+async function findActiveCycleOrError(cycleId: number) {
+  const cycle = await prisma.performanceCycle.findFirst({
+    where: { id: cycleId, deletedAt: null },
+    select: { status: true },
+  });
+  if (!cycle) return { ok: false as const, error: "Siklus penilaian tidak ditemukan" };
+  if (cycle.status !== "active") {
+    return {
+      ok: false as const,
+      error: `Siklus penilaian berstatus ${cycle.status}; sasaran dan ulasan hanya dapat ditulis pada siklus aktif`,
+    };
+  }
+  return { ok: true as const };
+}
+
 // ==================== SIKLUS ====================
 
 export async function createPerformanceCycle(formData: FormData) {
@@ -116,6 +136,9 @@ export async function upsertPerformanceGoal(formData: FormData, goalId?: number)
       // Pemilik baru (bila berubah) sudah dicek di atas via v.employeeId.
     }
 
+    const cycleGate = await findActiveCycleOrError(v.cycleId);
+    if (!cycleGate.ok) return { success: false as const, error: cycleGate.error };
+
     const data = {
       cycleId: v.cycleId,
       employeeId: v.employeeId,
@@ -145,11 +168,13 @@ export async function deletePerformanceGoal(goalId: number) {
     const actor = await requirePermission("edit_performance");
     const goal = await prisma.performanceGoal.findUnique({
       where: { id: goalId },
-      select: { employeeId: true },
+      select: { employeeId: true, cycleId: true },
     });
     if (!goal) return { success: false as const, error: "Sasaran tidak ditemukan" };
     const scope = await getHrScope(actor);
     await assertHrEmployeeAccess(scope, goal.employeeId);
+    const cycleGate = await findActiveCycleOrError(goal.cycleId);
+    if (!cycleGate.ok) return { success: false as const, error: cycleGate.error };
     await prisma.performanceGoal.delete({ where: { id: goalId } });
     revalidatePath("/sdm/kinerja");
     return { success: true as const };
@@ -161,6 +186,8 @@ export async function deletePerformanceGoal(goalId: number) {
 // ==================== ULASAN ====================
 
 async function ensureReview(cycleId: number, employeeId: number, createdBy: number) {
+  const cycleGate = await findActiveCycleOrError(cycleId);
+  if (!cycleGate.ok) throw new Error(cycleGate.error);
   const existing = await prisma.performanceReview.findFirst({
     where: { cycleId, employeeId },
   });

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   reviewFindFirst: vi.fn(),
   reviewUpdateMany: vi.fn(),
   goalFindMany: vi.fn(),
+  cycleFindFirst: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -21,6 +22,7 @@ vi.mock("@/lib/db/prisma", () => ({
       updateMany: mocks.reviewUpdateMany,
     },
     performanceGoal: { findMany: mocks.goalFindMany },
+    performanceCycle: { findFirst: mocks.cycleFindFirst },
   },
 }))
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: mocks.requirePermission }))
@@ -46,6 +48,7 @@ beforeEach(() => {
   })
   mocks.reviewUpdateMany.mockResolvedValue({ count: 1 })
   mocks.goalFindMany.mockResolvedValue([])
+  mocks.cycleFindFirst.mockResolvedValue({ status: "active" })
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
 
@@ -90,5 +93,25 @@ describe("klaim transisi ulasan kinerja", () => {
   it("finalize lolos memakai skor atasan dari bacaan", async () => {
     const res = await finalizeReview(1, 2)
     expect(res).toMatchObject({ success: true, finalScore: 80 })
+  })
+
+  it("regresi putaran 16: siklus closed menolak submit dan finalisasi ulasan", async () => {
+    mocks.cycleFindFirst.mockResolvedValue({ status: "closed" })
+    const selfRes = await submitSelfReview(1, 2, 75)
+    expect(selfRes.success).toBe(false)
+    if (!selfRes.success) expect(selfRes.error).toMatch(/siklus aktif/)
+    const mgrRes = await submitManagerReview(1, 2, { managerScore: 90 })
+    expect(mgrRes.success).toBe(false)
+    const finRes = await finalizeReview(1, 2)
+    expect(finRes.success).toBe(false)
+    expect(mocks.reviewUpdateMany).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 16: siklus draft menolak submit ulasan", async () => {
+    mocks.cycleFindFirst.mockResolvedValue({ status: "draft" })
+    const res = await submitSelfReview(1, 2, 75)
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toMatch(/siklus aktif/)
+    expect(mocks.reviewUpdateMany).not.toHaveBeenCalled()
   })
 })

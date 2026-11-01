@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   goalCreate: vi.fn(),
   employeeFindFirst: vi.fn(),
   employeeFindUnique: vi.fn(),
+  cycleFindFirst: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -19,6 +20,7 @@ vi.mock("@/lib/db/prisma", () => ({
       findFirst: mocks.employeeFindFirst,
       findUnique: mocks.employeeFindUnique,
     },
+    performanceCycle: { findFirst: mocks.cycleFindFirst },
   },
 }))
 
@@ -49,6 +51,7 @@ beforeEach(() => {
   mocks.employeeFindFirst.mockResolvedValue({ id: 7, departmentId: 1 })
   mocks.goalCreate.mockResolvedValue({ id: 99, title: "Sasaran" })
   mocks.goalUpdate.mockResolvedValue({ id: 5, title: "Sasaran" })
+  mocks.cycleFindFirst.mockResolvedValue({ status: "active" })
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
 
@@ -91,5 +94,20 @@ describe("BUGHUNT round3 MEDIUM: upsertPerformanceGoal update cek pemilik existi
     expect(res.success).toBe(true)
     expect(mocks.goalFindUnique).not.toHaveBeenCalled()
     expect(mocks.goalCreate).toHaveBeenCalledTimes(1)
+  })
+
+  it("regresi putaran 16: siklus closed menolak tulis sasaran", async () => {
+    mocks.cycleFindFirst.mockResolvedValue({ status: "closed" })
+    const res = await upsertPerformanceGoal(fd("7"))
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toMatch(/siklus aktif/)
+    expect(mocks.goalCreate).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 16: siklus draft menolak tulis sasaran", async () => {
+    mocks.cycleFindFirst.mockResolvedValue({ status: "draft" })
+    const res = await upsertPerformanceGoal(fd("7"))
+    expect(res.success).toBe(false)
+    expect(mocks.goalCreate).not.toHaveBeenCalled()
   })
 })

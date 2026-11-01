@@ -77,6 +77,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   actor.roles = ["karyawan"]
   actor.permissions = []
+  // Gerbang siklus putaran 16: tulis ulasan hanya pada siklus aktif.
+  cycleFindFirst.mockResolvedValue({ status: "active" })
 })
 
 describe("performance scoring", () => {
