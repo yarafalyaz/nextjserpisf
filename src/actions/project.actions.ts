@@ -1144,6 +1144,13 @@ function parseRevisionPayload(raw: string): RevisionPayload {
   if (!hasContractChange && changes.length === 0) {
     throw new Error("Perubahan revisi wajib memuat minimal satu perubahan baris atau kontrak.")
   }
+  // Nilai kontrak manual wajib positif (preseden manualContractSchema):
+  // kontrak <= 0 merusak invarian evaluateBudgetLock dan tercatat sah
+  // di log revisi lama->baru. Parser dipakai propose DAN apply, jadi
+  // usulan warisan bernilai negatif juga tertolak saat diterapkan.
+  if (typeof obj.contractAmount === "number" && !(obj.contractAmount > 0)) {
+    throw new Error("Nilai kontrak harus lebih dari 0.")
+  }
   return {
     changes,
     contractAmount: typeof obj.contractAmount === "number" ? obj.contractAmount : undefined,

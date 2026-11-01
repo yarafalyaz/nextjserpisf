@@ -1502,6 +1502,44 @@ describe("RAB proyek F-2026-10-21-030", () => {
     )
   })
 
+  it("putaran 39: usulan revisi menolak contractAmount negatif sebelum log lahir", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({ budgetLockedAt: new Date(2026, 9, 20) }),
+    )
+    const payload = JSON.stringify({
+      changes: [{ type: "create", data: { qty: 1, cost: 1000 } }],
+      contractAmount: -5000000,
+    })
+    const res = await actions.proposeProjectBudgetRevision(
+      10,
+      fdMap({ reason: "Kontrak negatif", changes: payload }),
+    )
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Nilai kontrak harus lebih dari 0")
+    expect(mocks.prismaMock.projectLog.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 39: terapkan revisi menolak contractAmount negatif warisan", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({ budgetLockedAt: new Date(2026, 9, 20), budgetRevisionNo: 1, contractAmount: 2000 }),
+    )
+    mocks.prismaMock.projectLog.findFirst.mockResolvedValue({
+      id: 31,
+      notes: "Kontrak negatif warisan",
+      userId: 2,
+      details: {
+        reason: "Kontrak negatif warisan",
+        changes: [{ type: "create", data: { qty: 1, cost: 1000 } }],
+        contractAmount: { old: 2000, new: -5000000 },
+      },
+    })
+    mocks.prismaMock.projectLog.findMany.mockResolvedValue([])
+    const res = await actions.applyProjectBudgetRevision(10, 31)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Nilai kontrak harus lebih dari 0")
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
+  })
+
   it("createProjectBudgetItem menolak itemId gaib/mati tanpa menulis (putaran 25)", async () => {
     mocks.prismaMock.project.findUnique.mockResolvedValue(unlockedProject())
     mocks.prismaMock.item.findFirst.mockResolvedValue(null)
