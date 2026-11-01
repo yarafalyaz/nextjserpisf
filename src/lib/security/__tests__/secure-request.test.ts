@@ -18,18 +18,43 @@ function req(headers: Record<string, string>, url = "http://localhost:4101/") {
 }
 
 describe("isSecureRequest", () => {
-  it("trusts x-forwarded-proto from a TLS-terminating proxy", () => {
-    expect(isSecureRequest(req({ "x-forwarded-proto": "https" }))).toBe(true)
-    expect(isSecureRequest(req({ "x-forwarded-proto": "http" }))).toBe(false)
+  // x-forwarded-proto hanya dipercaya di balik proxy tepercaya (TRUSTED_PROXY=1),
+  // pola yang sama dengan getClientIp()/assertCSRF(). Tanpa gerbang itu klien
+  // langsung bisa memalsukan skema: nama cookie sesi yang dicari getToken
+  // berubah (__Secure- vs polos) dan HSTS hilang dari responsnya sendiri.
+  it("ignores x-forwarded-proto without TRUSTED_PROXY", () => {
+    delete process.env.TRUSTED_PROXY
+    expect(isSecureRequest(req({ "x-forwarded-proto": "https" }))).toBe(false)
+    expect(isSecureRequest(req({ "x-forwarded-proto": "http" }, "https://erp.example.com/"))).toBe(true)
+  })
+
+  it("trusts x-forwarded-proto from a TLS-terminating proxy under TRUSTED_PROXY", () => {
+    process.env.TRUSTED_PROXY = "1"
+    try {
+      expect(isSecureRequest(req({ "x-forwarded-proto": "https" }))).toBe(true)
+      expect(isSecureRequest(req({ "x-forwarded-proto": "http" }))).toBe(false)
+    } finally {
+      delete process.env.TRUSTED_PROXY
+    }
   })
 
   it("uses the first value of a comma-separated chain", () => {
-    expect(isSecureRequest(req({ "x-forwarded-proto": "https, http" }))).toBe(true)
-    expect(isSecureRequest(req({ "x-forwarded-proto": "HTTP, HTTPS" }))).toBe(false)
+    process.env.TRUSTED_PROXY = "1"
+    try {
+      expect(isSecureRequest(req({ "x-forwarded-proto": "https, http" }))).toBe(true)
+      expect(isSecureRequest(req({ "x-forwarded-proto": "HTTP, HTTPS" }))).toBe(false)
+    } finally {
+      delete process.env.TRUSTED_PROXY
+    }
   })
 
   it("ignores surrounding whitespace and casing", () => {
-    expect(isSecureRequest(req({ "x-forwarded-proto": " HTTPS " }))).toBe(true)
+    process.env.TRUSTED_PROXY = "1"
+    try {
+      expect(isSecureRequest(req({ "x-forwarded-proto": " HTTPS " }))).toBe(true)
+    } finally {
+      delete process.env.TRUSTED_PROXY
+    }
   })
 
   it("falls back to the request URL scheme", () => {

@@ -19,10 +19,16 @@ type RequestLike = {
 
 /** True when the request reached the app over TLS. */
 export function isSecureRequest(req: RequestLike): boolean {
-  // Behind a proxy (Cloudflare / nginx) the original scheme arrives here; take
-  // the first entry since `x-forwarded-proto` may be a comma-separated chain.
-  const forwarded = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase()
-  if (forwarded) return forwarded === "https"
+  // Behind a trusted proxy (Cloudflare / nginx) the original scheme arrives
+  // here; take the first entry since `x-forwarded-proto` may be a
+  // comma-separated chain. The header is honored only under the same
+  // TRUSTED_PROXY opt-in that gates getClientIp()/assertCSRF() — otherwise a
+  // direct client could spoof the scheme and shift which session cookie name
+  // getToken looks for (__Secure- vs plain) on its own requests.
+  if (process.env.TRUSTED_PROXY === "1") {
+    const forwarded = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase()
+    if (forwarded) return forwarded === "https"
+  }
 
   const protocol = req.nextUrl?.protocol
   if (protocol) return protocol === "https:"
