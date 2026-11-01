@@ -50,7 +50,10 @@ export const purchaseOrderSchema = z.object({
   isService: z
     .union([z.boolean(), z.literal("true"), z.literal("false"), z.literal("on")])
     .optional()
-    .transform((v) => v === true || v === "true" || v === "on"),
+    // Absen tetap undefined (bukan false): updatePurchaseOrder membedakan
+    // "form tak mengirim flag" dari "operator mematikan toggle" supaya
+    // klien lama tak membalik PO jasa menjadi PO barang (putaran 43).
+    .transform((v) => (v === undefined ? undefined : v === true || v === "true" || v === "on")),
   date: dateOnly,
   expectedDate: optionalDateOnly,
   paymentTerm: optionalString(200),

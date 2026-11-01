@@ -51,6 +51,11 @@ interface PurchaseOrderFormProps {
     // mengirim nilai lamanya — kalau tidak, submit menulis `?? null` dan
     // tautan Permintaan Pembelian serta Perkiraan Pengiriman hilang senyap.
     purchaseRequestId?: number | null;
+    // PO jasa subkontrak dari work order: toggle mewarisi nilai lama dan
+    // tautan WO dikirim ulang saat submit (tak ada UI pelepas tautan) —
+    // tanpa keduanya edit biasa memutus mirror HPP jasa.
+    isService?: boolean;
+    workOrderId?: number | null;
     expectedDate?: string | null;
     items?: Array<{
       itemId: number;
@@ -107,7 +112,7 @@ export function PurchaseOrderForm({
   // submit). Retry/error pakai key sama; sukses ganti key baru.
   const idempotencyKeyRef = useRef<string>(newIdempotencyKey());
   const [vendorOptions, setVendorOptions] = useState(vendors);
-  const [isService, setIsService] = useState<boolean>((order as any)?.isService ?? false);
+  const [isService, setIsService] = useState<boolean>(order?.isService ?? false);
   const [linkedPR, setLinkedPR] = useState<{
     id: number;
     slug?: string | null;
@@ -267,6 +272,10 @@ export function PurchaseOrderForm({
         });
         formData.append("items", JSON.stringify(poItems.map(({ uid: _uid, ...rest }) => rest)));
         formData.append("isService", isService ? "true" : "false");
+        // Tautan work order PO jasa tidak punya UI pelepas: kirim ulang
+        // nilai lama supaya edit tidak memutus mirror HPP subkontrak.
+        if (order?.workOrderId != null)
+          formData.set("workOrderId", String(order.workOrderId));
         // P2 idempotency UI: key stabil per intent create; retry/error pakai
         // key sama, sukses ganti baru supaya create berikutnya tak ditolak.
         if (!order?.id) formData.set("idempotencyKey", idempotencyKeyRef.current);

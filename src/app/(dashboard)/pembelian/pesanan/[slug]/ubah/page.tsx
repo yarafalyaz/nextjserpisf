@@ -53,6 +53,8 @@ export default async function EditPage({
     notes: data.notes,
     paymentTerm: data.paymentTerm,
     purchaseRequestId: data.purchaseRequestId,
+    isService: data.isService,
+    workOrderId: data.workOrderId,
     expectedDate: data.expectedDate ? data.expectedDate.toISOString().split("T")[0] : null,
     shippingCost: Number(data.shippingCost),
     serviceFee: Number(data.serviceFee),

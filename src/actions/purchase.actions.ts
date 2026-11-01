@@ -1026,7 +1026,7 @@ export async function createPurchaseOrder(formData: FormData) {
           vendorId: v.vendorId,
           purchaseRequestId: v.purchaseRequestId ?? null,
           workOrderId: v.workOrderId ?? null,
-                    isService: v.isService,
+                    isService: v.isService ?? false,
           date: wibDateToUtcMidnight(v.date),
           expectedDate: v.expectedDate ? wibDateToUtcMidnight(v.expectedDate) : null,
           paymentTerm: v.paymentTerm ?? null,
@@ -3575,7 +3575,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
       await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${id} FOR UPDATE`;
       const latest = await tx.purchaseOrder.findUnique({
         where: { id },
-        select: { status: true },
+        select: { status: true, isService: true, workOrderId: true },
       });
       if (latest && latest.status !== "draft")
         throw new Error("Hanya PO draft yang dapat diedit");
@@ -3611,11 +3611,12 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
           slug,
           vendorId: v.vendorId,
           purchaseRequestId: v.purchaseRequestId ?? null,
-          // Form edit mengirim isService + workOrderId (toggle PO jasa):
-          // blok data lama membuang keduanya diam-diam sehingga flag lama
-          // menang di assertThreeWayMatch sesudah toggle diubah user.
-          workOrderId: v.workOrderId ?? null,
-          isService: v.isService,
+          // Form edit mengirim isService + workOrderId (toggle PO jasa).
+          // Payload eksplisit menang (preseden putaran 32); klien lama yang
+          // tidak mengirim keduanya tidak boleh memutus tautan WO PO jasa —
+          // mirror HPP jasa mensyaratkan flag + tautan itu (putaran 43).
+          workOrderId: v.workOrderId ?? latest?.workOrderId ?? null,
+          isService: v.isService ?? latest?.isService ?? false,
                     date: wibDateToUtcMidnight(v.date),
           expectedDate: v.expectedDate ? wibDateToUtcMidnight(v.expectedDate) : null,
           paymentTerm: v.paymentTerm ?? null,

@@ -247,4 +247,58 @@ describe("PurchaseOrderForm — a11y wiring", () => {
     unmount(root)
     container.remove()
   })
+
+  it("regresi putaran 43: form ubah mewarisi isService dari order (PO jasa tak berubah jadi PO barang)", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <PurchaseOrderForm
+          vendors={mockVendors}
+          items={mockItems}
+          order={{ id: 9, vendorId: 1, date: "2026-10-21", isService: true, workOrderId: 55, items: [{ itemId: 100, qty: 2, unitPrice: 1500 }] }}
+        />,
+      )
+    })
+
+    const toggle = container.querySelector("#isService") as HTMLInputElement | null
+    expect(toggle).toBeTruthy()
+    expect(toggle!.checked).toBe(true)
+
+    unmount(root)
+    container.remove()
+  })
+
+  it("regresi putaran 43: submit ubah mengirim workOrderId lama (tak memutus tautan WO)", async () => {
+    const { updatePurchaseOrder } = (await import("@/actions/purchase.actions")) as any
+    vi.mocked(updatePurchaseOrder).mockClear()
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <PurchaseOrderForm
+          vendors={mockVendors}
+          items={mockItems}
+          order={{ id: 9, vendorId: 1, date: "2026-10-21", isService: true, workOrderId: 55, items: [{ itemId: 100, qty: 2, unitPrice: 1500 }] }}
+        />,
+      )
+    })
+
+    const form = container.querySelector("form")!
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    })
+
+    expect(updatePurchaseOrder).toHaveBeenCalled()
+    const fd = vi.mocked(updatePurchaseOrder).mock.calls[0][1] as FormData
+    expect(fd.get("isService")).toBe("true")
+    expect(fd.get("workOrderId")).toBe("55")
+
+    unmount(root)
+    container.remove()
+  })
 })

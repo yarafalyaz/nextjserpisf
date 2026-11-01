@@ -771,6 +771,28 @@ describe("Purchase Order Actions", () => {
     expect(mocks.prismaMock.purchaseOrderItem.deleteMany).not.toHaveBeenCalled()
   })
 
+  // Regresi putaran 43: PO jasa dari work order — halaman/form edit tak pernah
+  // mengirim workOrderId, dan form lama mengirim isService=false karena
+  // halaman tak meneruskan nilai awal; server menulis keduanya dari payload
+  // sehingga tautan WO terputus dan mirror HPP jasa no-op permanen. Server
+  // kini mempertahankan flag/tautan dari baris terkunci bila payload kosong.
+  it("regresi putaran 43: update tanpa workOrderId mempertahankan tautan WO + flag jasa terkunci", async () => {
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", isService: true, workOrderId: 55 })
+    mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue({ status: "draft", isService: true, workOrderId: 55 })
+    const res = await actions.updatePurchaseOrder(1, fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 5, unitPrice: 1200, discount: 0 }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.purchaseOrder.update.mock.calls.at(-1)![0]
+    expect(arg.data.workOrderId).toBe(55)
+    expect(arg.data.isService).toBe(true)
+    // clearAllMocks tak membuang implementasi persisten: kembalikan default
+    // agar fixture PO jasa ini tak bocor ke test tagihan sesudahnya.
+    mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue(undefined)
+  })
+
   it("regresi putaran 32: updatePurchaseOrder menulis isService + workOrderId dari form", async () => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await actions.updatePurchaseOrder(1, fdMap({
