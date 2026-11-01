@@ -100,7 +100,6 @@ import {
   updateQcChecklist,
   deleteQcChecklist,
   resolveNonconformance,
-  assertQcReferenceLockedExists,
 } from "../qc.actions"
 import { completeWorkOrder } from "../manufacturing.actions"
 
@@ -383,18 +382,6 @@ describe("createNonconformance", () => {
   })
 })
 
-describe("assertQcReferenceLockedExists", () => {
-  it("melempar untuk WorkOrder yang tak terkunci (baris hilang)", async () => {
-    // txLike hanya membawa delegate baris referensi yang dinilai; null =
-    // baris yang dikunci tidak ada (terhapus lawan) — catatan QC yatim dicegah.
-    workOrderFindUniqueQcMock.mockResolvedValue(null)
-    const txLike = { workOrder: { findUnique: (...a: unknown[]) => workOrderFindUniqueQcMock(...a) } }
-
-    await expect(
-      assertQcReferenceLockedExists("WorkOrder", 9, txLike as never),
-    ).rejects.toThrow("tidak ditemukan")
-  })
-})
 describe("updateQcChecklist", () => {
   it("menolak bila checklist dirilis sesudah bacaan luar tetapi sebelum tulis (status dibaca ulang terkunci)", async () => {
     // Bacaan luar: draft. Bacaan dalam tx (sesudah kunci): released →

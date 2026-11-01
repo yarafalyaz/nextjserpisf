@@ -52,7 +52,7 @@ async function assertQcReferenceExists(referenceType: string, referenceId: numbe
  * yatim ke dokumen yang sudah terhapus; id autoincrement yang terpakai
  * ulang akan mewarisi catatan hantu itu (klaim assertQcReferenceUnreferenced).
  */
-export async function assertQcReferenceLockedExists(
+async function assertQcReferenceLockedExists(
   referenceType: string,
   referenceId: number,
   tx: TxClient,
