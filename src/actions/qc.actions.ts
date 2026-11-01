@@ -2,7 +2,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
-import { prisma } from "@/lib/db/prisma"
+import { prisma, TxClient } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { logActivity } from "@/lib/services/activity-log.service"
@@ -35,6 +35,35 @@ async function assertQcReferenceExists(referenceType: string, referenceId: numbe
         ? await prisma.productionOrder.findUnique({ where: { id: referenceId }, select: { id: true } })
         : referenceType === "GoodsReceipt"
           ? await prisma.goodsReceipt.findUnique({ where: { id: referenceId }, select: { id: true } })
+          : null
+  if (!found) {
+    throw new Error(`${QC_REFERENCE_LABEL[referenceType] ?? "Dokumen referensi"} #${referenceId} tidak ditemukan`)
+  }
+}
+
+/**
+ * Penilaian eksistensi DI DALAM tx sesudah baris referensi dikunci
+ * (`lockQcReferenceRow`): cek luar (`assertQcReferenceExists`) hanya
+ * fast-path — penghapus dokumen (deleteWorkOrder/deleteProductionOrder/
+ * deleteGoodsReceipt) mengunci baris yang sama, jadi penghapus yang
+ * commit di jendela cek->kunci membuat kunci mengembalikan nol baris dan
+ * bacaan konsisten di sini (snapshot transaksi terbentuk sesudah kunci)
+ * melihat baris hilang. Tanpa ini inspeksi/NCR polimorfik tanpa FK lahir
+ * yatim ke dokumen yang sudah terhapus; id autoincrement yang terpakai
+ * ulang akan mewarisi catatan hantu itu (klaim assertQcReferenceUnreferenced).
+ */
+export async function assertQcReferenceLockedExists(
+  referenceType: string,
+  referenceId: number,
+  tx: TxClient,
+) {
+  const found =
+    referenceType === "WorkOrder"
+      ? await tx.workOrder.findUnique({ where: { id: referenceId }, select: { id: true } })
+      : referenceType === "ProductionOrder"
+        ? await tx.productionOrder.findUnique({ where: { id: referenceId }, select: { id: true } })
+        : referenceType === "GoodsReceipt"
+          ? await tx.goodsReceipt.findUnique({ where: { id: referenceId }, select: { id: true } })
           : null
   if (!found) {
     throw new Error(`${QC_REFERENCE_LABEL[referenceType] ?? "Dokumen referensi"} #${referenceId} tidak ditemukan`)
@@ -311,6 +340,10 @@ export async function createQcInspection(formData: FormData) {
       // `failed` + NCR otomatis tidak bisa menyelinap sesudah gate dibaca
       // tetapi sebelum status dokumen terklaim selesai.
       await lockQcReferenceRow(v.referenceType, v.referenceId, tx)
+      // Penilaian eksistensi otoritatif: sesudah kunci baris referensi
+      // (penghapus mengunci baris yang sama), baris yang terhapus lawan
+      // membuat inspeksi polimorfik yatim — tolak sebelum menulis.
+      await assertQcReferenceLockedExists(v.referenceType, v.referenceId, tx)
       const inspection = await tx.qcInspection.create({
         data: {
           documentNo,
@@ -395,6 +428,9 @@ export async function createNonconformance(formData: FormData) {
     // penyelesaian dan dokumen selesai dengan NCR terbuka.
     const ncr = await prisma.$transaction(async (tx) => {
       await lockQcReferenceRow(v.referenceType, v.referenceId, tx)
+      // Penilaian eksistensi otoritatif sesudah kunci (pola createQcInspection):
+      // penghapus yang commit di jendela cek luar -> kunci menolak NCR yatim.
+      await assertQcReferenceLockedExists(v.referenceType, v.referenceId, tx)
       return tx.nonconformance.create({
         data: {
           documentNo,

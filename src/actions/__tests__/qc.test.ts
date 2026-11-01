@@ -100,6 +100,7 @@ import {
   updateQcChecklist,
   deleteQcChecklist,
   resolveNonconformance,
+  assertQcReferenceLockedExists,
 } from "../qc.actions"
 import { completeWorkOrder } from "../manufacturing.actions"
 
@@ -293,6 +294,33 @@ describe("createQcInspection", () => {
     expect(arg.data.results.create).toHaveLength(1)
     expect(arg.data.results.create[0].checklistItemId).toBe(1)
   })
+
+  it("dokumen referensi yang terhapus di antara cek luar dan kunci tidak melahirkan inspeksi yatim", async () => {
+    // Cek luar (assertQcReferenceExists): dokumen ada. Penghapus commit di
+    // jendela cek->kunci; kunci atas baris yang sudah hilang mengembalikan
+    // nol baris, jadi penilaian di bawah kunci menolak dan inspeksi TIDAK
+    // dibuat (catatan polimorfik tanpa FK tak boleh yatim).
+    qcChecklistFindUniqueMock.mockResolvedValue({
+      id: 5, status: "released", checklistType: "final",
+      items: [{ id: 1, isRequired: true }],
+    })
+    // Bacaan luar memanggil findUnique sekali ({ id: 9 }); sesudah kunci
+    // baris (lock mock) bacaan ulang mengembalikan null (baris terhapus).
+    workOrderFindUniqueQcMock.mockReset()
+    workOrderFindUniqueQcMock
+      .mockResolvedValueOnce({ id: 9 })
+      .mockResolvedValueOnce(null)
+
+    const res = await createQcInspection(inspectionForm({ rows: [{ id: 1, result: "pass" }] }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak ditemukan")
+    expect(qcInspectionCreateMock).not.toHaveBeenCalled()
+    // Penilaian ulang terjadi SESUDAH kunci baris referensi.
+    expect(lockQcReferenceRowMock.mock.invocationCallOrder[0]).toBeLessThan(
+      workOrderFindUniqueQcMock.mock.invocationCallOrder[1],
+    )
+  })
 })
 
 describe("createNonconformance", () => {
@@ -334,8 +362,39 @@ describe("createNonconformance", () => {
       nonconformanceCreateMock.mock.invocationCallOrder[0],
     )
   })
+
+  it("dokumen referensi yang terhapus di antara cek luar dan kunci tidak melahirkan NCR yatim", async () => {
+    productionOrderFindUniqueQcMock.mockReset()
+    productionOrderFindUniqueQcMock
+      .mockResolvedValueOnce({ id: 9 })
+      .mockResolvedValueOnce(null)
+
+    const res = await createNonconformance(fd({
+      referenceType: "ProductionOrder", referenceId: 9,
+      defectDescription: "cacat", responsibility: "internal", severity: "minor",
+    }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak ditemukan")
+    expect(nonconformanceCreateMock).not.toHaveBeenCalled()
+    expect(lockQcReferenceRowMock.mock.invocationCallOrder[0]).toBeLessThan(
+      productionOrderFindUniqueQcMock.mock.invocationCallOrder[1],
+    )
+  })
 })
 
+describe("assertQcReferenceLockedExists", () => {
+  it("melempar untuk WorkOrder yang tak terkunci (baris hilang)", async () => {
+    // txLike hanya membawa delegate baris referensi yang dinilai; null =
+    // baris yang dikunci tidak ada (terhapus lawan) — catatan QC yatim dicegah.
+    workOrderFindUniqueQcMock.mockResolvedValue(null)
+    const txLike = { workOrder: { findUnique: (...a: unknown[]) => workOrderFindUniqueQcMock(...a) } }
+
+    await expect(
+      assertQcReferenceLockedExists("WorkOrder", 9, txLike as never),
+    ).rejects.toThrow("tidak ditemukan")
+  })
+})
 describe("updateQcChecklist", () => {
   it("menolak bila checklist dirilis sesudah bacaan luar tetapi sebelum tulis (status dibaca ulang terkunci)", async () => {
     // Bacaan luar: draft. Bacaan dalam tx (sesudah kunci): released →
