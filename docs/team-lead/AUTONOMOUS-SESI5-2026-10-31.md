@@ -606,3 +606,46 @@ Vonis GUGUR putaran ini (jangan diangkat lagi tanpa bukti baru):
 - Lima kandidat awal agent penjualan+pembelian gugur saat verifikasi sesi utama: `deletePurchaseOrder` sudah transaksi kunci PO + nilai ulang semua guard; `deletePurchaseReturn` sudah klaim `deleteMany` status draft; `updateServiceOrderItem`, `deleteServiceOrder`, `updateAssignDriverLogisticsJob` mengacu model `ServiceOrder`/`LogisticsJob` yang TIDAK ADA di schema maupun kode (halusinasi agent — pelajaran: kandidat wajib dibuktikan terhadap schema dulu).
 - Sapuan delete polos sesi utama lintas modul (aset, project, finance, hrm, master): semua lokasi bernilai sudah berkunci/klaim/guard-di-bawah-kunci; sisa kelas count-then-delete master dangkal (SetNull) — kelas yang sama dan sudah berulang kali divonis diterima risikonya.
 - Kandidat agent yang dibuang agent sendiri terkonfirmasi: `JournalService.reverseJournal` tak reachable produksi; `deleteProfitCenter` tanpa penulis konkuren.
+
+### Lanjutan putaran 12 (2026-11-01) — lane inventaris+produksi dan SDM+aset+pengaturan (agent read-only, verifikasi sesi utama)
+
+Sepuluh kandidat agent, kesepuluh terverifikasi terhadap kode+schema dan difix:
+
+1. `998e3e0e3` fix(produksi): gate QC `assertQcCleared` membaca NCR/inspeksi plain sementara pencipta inspeksi/NCR (`createQcInspection`/`createNonconformance`) tidak berbagi kunci — serah terima bisa lolos sesaat sebelum NCR open commit. Fix: `lockQcReferenceRow` mengunci baris `work_orders`/`production_orders`/`goods_receipts FOR UPDATE`; gate dan kedua pencipta memakai kunci sama. 183/183.
+2. `df94a3b49` fix(produksi): cleanup yatim `syncServicePurchaseOrderCost` membuang baris yang baru membeku pada bacaan terkunci yang sama karena filter memakai snapshot awal. Fix: `frozenIds` = completed awal + `newlyFrozen` segar. 266/266.
+3. `4dc2f3c93` fix(produksi): `createBomRevision` menulis baris revisi dari material produk yang dibaca luar tx; `updateProduct` yang commit di tengah tak terlihat. Fix: sumber baris revisi dibaca ulang lewat `tx.product.findUniqueOrThrow` sesudah kunci produk. 134/134 + 194/194.
+4. `99e162057` fix(produksi): cek nama stasiun aktif (unik antar baris aktif, keputusan Q-LP-5 tanpa partial-unique di MySQL) membaca snapshot — dua create nama sama sama-sama lolos. Fix: gap-lock `SELECT id FROM work_centers FOR UPDATE` sebagai bacaan pertama helper. 9/9.
+5. `48e6b03bc` fix(aset): cron penyusutan hanya membaca ulang status segar untuk metode UOP; metode lain memakai snapshot — aset ter-dispose di tengah tetap terdepresiasi dari nilai basi. Fix: semua metode menilai `freshAsset`/`freshJournals` sesudah kunci baris aset. 138/138 gabungan.
+6. `9180592e6` fix(sdm): `markPayrollPaid`/`correctPaidPayroll` membaca daftar pinjaman aktif tanpa kunci lalu amortisasi absolut — dua pembayaran slip karyawan sama bisa mengonsumsi cicilan dua kali. Fix: kunci `employee_loans ... FOR UPDATE` per karyawan sebelum baca. Suite actions 3151 passed saat itu.
+7. `f102a0992` fix(sdm): keputusan kontrak PKWT (submit/approve/reject/apply) menilai guard dari snapshot luar tx; apply dobel bisa menulis segmen bukan yang disetujui, `contractEndDate` mundur last-writer-wins, konversi menelan perpanjangan. Fix: kunci baris `employees` + baris-baris `contract_decision_requests` karyawan, seluruh guard (SoD, kumulatif PKWT, arah tanggal, status PKWT berjalan) dinilai ulang di bawah kunci, klaim transisi tetap kondisional. 29/29; 3 regression merah tanpa fix.
+8. `78404de28` fix(sdm): `moveApplicantStage` memakai `stage` snapshot luar tx; `hireApplicant` mengunci baris yang sama dan set `hired` — tahap final bisa tertimpa `rejected` dari snapshot basi. Fix: peek luar diperkecil `{ id }`, kunci `job_applicants FOR UPDATE`, tahap + `fromStage` riwayat dari bacaan segar. 9/9.
+9. `95f50e3ca` fix(sdm): transisi ulasan kinerja `update` absolut dari status terbaca; finalisasi konkuren tertimpa submit self/manager. Fix: klaim `updateMany` bersyarat status (`not: "finalized"` untuk submit; status terbaca untuk finalize), count 0 ditolak. 16/16 gabungan; 5/5 test klaim merah tanpa fix.
+10. `dd8c00644` fix(sdm): `approveAttendanceCorrection` membandingkan snapshot terhadap bacaan tx tanpa kunci baris absensi — snapshot REPEATABLE READ bisa mendahului commit `updateAttendance`, tulis koreksi menimpa edit manual terbaru. Fix: kunci baris `attendances` (employeeId+date) sesudah klaim koreksi, sebelum cek konflik EC-1. 18/18 + 25/25.
+
+CI: kesepuluh head putaran 12 **completed success**.
+
+Vonis GUGUR putaran ini (jangan diangkat lagi tanpa bukti baru):
+
+- `deleteAsset` vs `disposeAsset`: delete dangkal tanpa penulis konkuren bernilai.
+- Rantai disiplin dobel: kalah prioritas, klaim yang ada menahan.
+- PKWT accrual: terhalang unique constraint + `assertPeriodOpen` dalam tx.
+- `correctPaidPayroll` assertPeriodOpen luar tx: penegakan otoritatif sudah di dalam tx.
+- `generateAssetFiscalYearRows`: `@@unique([assetId, taxYear])` + `skipDuplicates` menahan.
+- `updateRole` vs `deleteRole`: P2025/delete menang secara aman.
+- Komponen gaji dobel aktif: master-data dobel, bukan race tulis.
+
+### Lanjutan putaran 13 (2026-11-01) — lane laporan+API+auth (agent read-only, verifikasi sesi utama)
+
+Enam kandidat agent; tiga difix, satu difix sesudah verifikasi menemukan lawan nyata lain, satu menunggu pola sama, satu gugur:
+
+1. `eab780289` fix(inventaris): konsumsi reservasi WO tertimpa dua penyelesaian MI konkuren — klaim `completeMaterialIssue` hanya serial per dokumen, bukan per WO; hook MI membaca reservasi aktif plain. Fix: kunci baris `stock_reservations` aktif (WO+item+gudang) `FOR UPDATE` sebelum `findMany` di `consumeReservationsForMaterialIssueTx`. 14/14 + 209/209.
+2. `bcbb2160a` fix(api): DELETE lampiran meng-unlink berkas sebelum klaim — lampiran temp yang barusan diklaim dokumen oleh submit konkuren (`referenceId 0 → nyata`) ikut ter-unlink, berkas bukti dokumen hilang. Fix: `deleteMany` terikat `{id, uploadedBy, referenceType, referenceId}` terbaca dulu; unlink hanya sesudah klaim menang. 61/61 gabungan.
+3. `1933c582e` fix(sdm): persetujuan lembur dihitung ulang konkuren — cek idempotensi `calculatedValue > 0` dari snapshot luar; dua pemanggil lolos dan nilai+penyetuju pertama tertimpa. Fix: klaim akhir `updateMany` bersyarat `calculatedValue: null`; kalah klaim dengan nilai sudah terisi = no-op sukses idempotent. 180/180 gabungan.
+4. `6a934593a` fix(keuangan): cron transaksi berulang menulis draft ke periode tertutup — `generateDocument` memanggil `assertPeriodOpen(date)` tanpa tx (findFirst tanpa kunci) sementara tutup-periode mengunci `system_settings FOR UPDATE`; penutupan di antara cek dan create melahirkan draft jebakan dan jadwal maju di tx yang sama. Jalur manual `runRecurringNow` sudah meneruskan tx. Fix: teruskan client tx klaim lewat `RecurringDb` (`$queryRaw` opsional). 27/27 gabungan; 2 regression merah tanpa fix.
+5. `37e34789a` fix(api): verifikasi/terbit foto cek snapshot lalu `update` absolut — verifikator/penerbit konkuren kedua menimpa atribusi pertama (jejak BR-PHOTO-06/08 salah). Fix: klaim `updateMany { id, verifiedBy: null }` / `{ id, publishedBy: null }`, count 0 ditolak. 12/12; 2 regression merah tanpa fix.
+
+Vonis GUGUR putaran ini (jangan diangkat lagi tanpa bukti baru):
+
+- Batas gagal-login per-email dilewati burst konkuren: `peekRateLimit` sebelum bcrypt adalah desain disengaja (hanya kegagalan tercatat, login sukses tak mengunci pengguna sah); bcrypt cost-12 adalah backpressure CPU alami dan limit per-IP `proxy.ts` menahan satu sumber. Menghitung percobaan sebelum verifikasi mengubah semantik lockout tanpa bukti eksploitasi konkret — gugur.
+
+Catatan CI lima head putaran 13 (`eab780289`, `bcbb2160a`, `1933c582e`, `6a934593a`, `37e34789a`) menyusul pada entri poll berikutnya; head putaran 12 seluruhnya hijau.
