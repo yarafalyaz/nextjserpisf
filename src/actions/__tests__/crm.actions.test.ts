@@ -139,6 +139,18 @@ describe("CRM Ticket Actions", () => {
       expect(data.resolvedAt).toBeNull()
     }
   })
+  it("putaran 40: updateTicket tak menilai ulang tautan yang tidak berubah", async () => {
+    // Customer kini nonaktif, tetapi payload mengirim customerId yang sama
+    // dengan baris terkunci — edit subjek/status tidak boleh terkunci.
+    mocks.prismaMock.crmTicket.findUnique.mockResolvedValue({
+      id: 1, status: "open", firstResponseAt: null, resolvedAt: null, deletedAt: null,
+      customerId: 5, assignedTo: null,
+    })
+    mocks.prismaMock.customer.findFirst.mockResolvedValue(null)
+    const res = await actions.updateTicket(1, fdMap({ subject: "Tiket", customerId: 5 }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.customer.findFirst).not.toHaveBeenCalled()
+  })
   it("putaran 40: createTicket menolak prioritas di luar low/medium/high", async () => {
     const res = await actions.createTicket(fdMap({ subject: "Tiket", priority: "kritis" }))
     expect(res?.success).toBe(false)
