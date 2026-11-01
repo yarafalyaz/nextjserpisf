@@ -824,6 +824,27 @@ describe("updateProjectStageProgress status-transition branches", () => {
   })
 })
 
+describe("putaran 39: tahap dilewati wajib alasan", () => {
+  beforeEach(() => {
+    mocks.prismaMock.projectStage.findUniqueOrThrow.mockResolvedValue({ id: 1, projectId: 1, sortOrder: 1 })
+    mocks.prismaMock.projectStage.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, workOrderId: null })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([])
+  })
+  it("skipped tanpa notes ditolak, nol tulis", async () => {
+    const res = await actions.updateProjectStageProgress(1, 1, "skipped")
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("wajib diisi alasan")
+    expect(mocks.prismaMock.projectStage.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.projectStageProgress.create).not.toHaveBeenCalled()
+  })
+  it("skipped dengan notes lolos", async () => {
+    const res = await actions.updateProjectStageProgress(1, 1, "skipped", "Tidak relevan untuk proyek ini")
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.projectStage.update).toHaveBeenCalled()
+  })
+})
+
 describe("updateProjectStageProgress locking (round4 #4)", () => {
   beforeEach(() => {
     mocks.prismaMock.projectStage.findUniqueOrThrow.mockResolvedValue({ id: 1, projectId: 1, sortOrder: 1 })

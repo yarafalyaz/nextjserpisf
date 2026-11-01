@@ -400,6 +400,14 @@ export async function updateProjectStageProgress(
     throw new Error(`Status '${targetStatus}' tidak valid. Gunakan: ${validStatuses.join(", ")}`)
   }
 
+  // Melewati tahap mengubah dasar hitung progres (tahap skipped dihitung
+  // selesai) — wajib ada alasan tertulis, preseden WO operation
+  // evaluateWorkOrderOperationTransition. Tanpa ini lompatan tahap
+  // tercatat tanpa jejak di ProjectStageProgress.
+  if (targetStatus === "skipped" && !(notes ?? "").trim()) {
+    throw new Error("Tahap yang dilewati wajib diisi alasan (notes) — melewati tahap mengubah dasar hitung progres.")
+  }
+
   // ATOMICITY: the stage status flip + the cascading project/WO sync must
   // commit together. Previously the stage update landed and then syncProjectStatus
   // ran as a separate call — a failure in the sync (e.g. transient DB error,
