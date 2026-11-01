@@ -672,18 +672,42 @@ export async function updateTask(formData: FormData) {
     );
   }
 
-  await prisma.task.update({
-    where: { id: data.id },
-    data: {
-      slug: await nextSlug("task", data.name, { excludeId: data.id }),
-      projectId: data.projectId,
-      name: data.name,
-      description: data.description ?? null,
-      status: data.status ?? "pending",
-      assignedTo: data.assignedTo ?? null,
-      startDate: data.startDate ? wibDateToUtcMidnight(data.startDate) : null,
-      dueDate: data.dueDate ? wibDateToUtcMidnight(data.dueDate) : null,
-    },
+  // Tulis di dalam tx berkunci baris task, kepemilikan dinilai ulang dari
+  // baris terkunci: cek di atas membaca snapshot — manager yang menugaskan
+  // ulang tugas di antara cek dan update membuat update staff yang basi
+  // menimpa assignedTo (merebut kembali / mengosongkan penugasan).
+  const slug = await nextSlug("task", data.name, { excludeId: data.id })
+  await prisma.$transaction(async (tx) => {
+    if (typeof tx.$queryRaw === "function") {
+      const rows = await tx.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM tasks WHERE id = ${data.id} FOR UPDATE
+      `
+      if (rows.length === 0) throw new Error("Tugas tidak ditemukan.")
+    }
+    const locked = await tx.task.findUniqueOrThrow({ where: { id: data.id } })
+    if (!isManager && locked.assignedTo !== Number(actor.id)) {
+      throw new Error("Anda hanya dapat memperbarui tugas yang ditugaskan kepada Anda.")
+    }
+    if (
+      !isManager &&
+      data.assignedTo !== undefined &&
+      data.assignedTo !== locked.assignedTo
+    ) {
+      throw new Error("Hanya manager / super admin yang dapat mengubah penugasan tugas.")
+    }
+    await tx.task.update({
+      where: { id: data.id },
+      data: {
+        slug,
+        projectId: data.projectId,
+        name: data.name,
+        description: data.description ?? null,
+        status: data.status ?? "pending",
+        assignedTo: data.assignedTo ?? null,
+        startDate: data.startDate ? wibDateToUtcMidnight(data.startDate) : null,
+        dueDate: data.dueDate ? wibDateToUtcMidnight(data.dueDate) : null,
+      },
+    })
   })
 
   await logActivity("update", "Task", data.id, "Memperbarui tugas")

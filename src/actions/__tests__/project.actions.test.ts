@@ -407,6 +407,20 @@ describe("Task Actions", () => {
     const res = await actions.updateTask(fdMap({ id: 1, projectId: 1, name: "Task 1", status: "pending" }))
     expect(res?.success).toBe(true)
   })
+  it("regression round 18: updateTask menilai ulang kepemilikan dari baris terkunci (reassignment manager menang)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.requirePermissionMock.mockResolvedValue({ id: 99, permissions: [], roles: ["staff"] })
+    // Bacaan luar: tugas milik staff. Di bawah kunci: manager sudah
+    // menugaskan ulang ke orang lain — update basi wajib ditolak.
+    mocks.prismaMock.task.findUniqueOrThrow.mockReset()
+    mocks.prismaMock.task.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, assignedTo: 99 })
+      .mockResolvedValueOnce({ id: 1, assignedTo: 7 })
+    const res = await actions.updateTask(fdMap({ id: 1, projectId: 1, name: "Task 1", status: "pending" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("ditugaskan kepada Anda")
+    expect(mocks.prismaMock.task.update).not.toHaveBeenCalled()
+  })
   it("updateTask rejects when not assigned and not manager", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.requirePermissionMock.mockResolvedValue({ id: 99, permissions: [], roles: ["staff"] })
