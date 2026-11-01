@@ -39,6 +39,8 @@ const mocks = vi.hoisted(() => {
     leadActivity: buildModelMock(),
     bank: buildModelMock(),
     bankStatement: buildModelMock(),
+    bankReconciliation: buildModelMock(),
+    vendorPayment: buildModelMock(),
     tax: {
       ...buildModelMock(),
       // TaxGroup existence check: reflect requested ids as found rows.
@@ -1004,6 +1006,15 @@ describe("Bank Actions", () => {
     const res = await actions.deleteBank(1)
     expect(res?.success).toBe(false)
     expect(String(res?.error)).toContain("3 rekening koran")
+    expect(mocks.prismaMock.bank.delete).not.toHaveBeenCalled()
+  })
+  it("deleteBank menolak bila dipakai rekonsiliasi atau pembayaran vendor tanpa menghapus (putaran 25)", async () => {
+    mocks.prismaMock.bankReconciliation.count.mockResolvedValueOnce(2)
+    mocks.prismaMock.vendorPayment.count.mockResolvedValueOnce(4)
+    const res = await actions.deleteBank(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("2 rekonsiliasi bank")
+    expect(String(res?.error)).toContain("4 pembayaran vendor")
     expect(mocks.prismaMock.bank.delete).not.toHaveBeenCalled()
   })
 })

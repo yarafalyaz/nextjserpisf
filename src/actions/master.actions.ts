@@ -3110,14 +3110,23 @@ export async function deleteBank(id: number) {
   try {
     await requirePermission("delete_banks");
 
-    // Guard: BankStatement.bankId menunjuk ke sini (plain Int?, tanpa FK di
-    // skema) dan form mutasi bank memvalidasi bankId via bankStatementSchema —
-    // hapus mentah meninggalkan bank_id yatim yang tak bisa direkonstruksi.
-    const usedByStatements = await prisma.bankStatement.count({ where: { bankId: id } });
-    if (usedByStatements > 0) {
+    // Guard: BankStatement/BankReconciliation/VendorPayment.bankId menunjuk
+    // ke sini (plain Int?, tanpa FK di skema) — hapus mentah meninggalkan
+    // bank_id yatim yang tak bisa direkonstruksi.
+    const [usedByStatements, usedByReconciliations, usedByVendorPayments] = await Promise.all([
+      prisma.bankStatement.count({ where: { bankId: id } }),
+      prisma.bankReconciliation.count({ where: { bankId: id } }),
+      prisma.vendorPayment.count({ where: { bankId: id } }),
+    ]);
+    const usages = [
+      usedByStatements > 0 ? `${usedByStatements} rekening koran` : null,
+      usedByReconciliations > 0 ? `${usedByReconciliations} rekonsiliasi bank` : null,
+      usedByVendorPayments > 0 ? `${usedByVendorPayments} pembayaran vendor` : null,
+    ].filter((u): u is string => u !== null);
+    if (usages.length > 0) {
       return {
         success: false,
-        error: `Bank masih dipakai oleh ${usedByStatements} rekening koran. Hapus atau pindahkan dulu sebelum menghapus.`,
+        error: `Bank masih dipakai oleh ${usages.join(", ")}. Hapus atau pindahkan dulu sebelum menghapus.`,
       };
     }
 
