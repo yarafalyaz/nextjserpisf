@@ -85,4 +85,35 @@ describe("WithholdingTaxType akun FK wajib ada", () => {
     expect(res.error).toMatch(/dibayar dimuka/)
     expect(mocks.prismaMock.withholdingTaxType.update).not.toHaveBeenCalled()
   })
+
+  // regresi putaran 35: pasal + kode objek bisa ditulis (bupot mewajibkan pasal sah)
+  it("create menulis pasal + kode objek ke baris jenis", async () => {
+    const res = await actions.createWithholdingTaxType(
+      fd({ ...BASE, article: "PPh23", objectCode: "24-104-01" }),
+    )
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.withholdingTaxType.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ article: "PPh23", objectCode: "24-104-01" }),
+      }),
+    )
+  })
+
+  it("create menolak pasal tak dikenal", async () => {
+    const res = await actions.createWithholdingTaxType(fd({ ...BASE, article: "PPh99" }))
+    expect(res.success).toBe(false)
+    expect(mocks.prismaMock.withholdingTaxType.create).not.toHaveBeenCalled()
+  })
+
+  it("update menulis pasal + kode objek", async () => {
+    const res = await actions.updateWithholdingTaxType(
+      5, fd({ ...BASE, article: "PPh4(2)", objectCode: "28-403-02" }),
+    )
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.withholdingTaxType.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ article: "PPh4(2)", objectCode: "28-403-02" }),
+      }),
+    )
+  })
 })

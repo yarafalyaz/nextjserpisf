@@ -40,6 +40,8 @@ export default async function EditWithholdingTaxTypePage({ params }: { params: P
           code: taxType.code,
           name: taxType.name,
           rate: Number(taxType.rate),
+          article: taxType.article,
+          objectCode: taxType.objectCode,
           liabilityAccountId: taxType.liabilityAccountId,
           receivableAccountId: taxType.receivableAccountId,
           isActive: taxType.isActive,

@@ -23,7 +23,7 @@ describe("WithholdingTaxTypeForm — a11y wiring", () => {
       const root = mountInto(container, (
         <WithholdingTaxTypeForm
           accounts={[]}
-          taxType={{ id: 3, code: "PPH23", name: "PPh 23 — Jasa", rate: 2, liabilityAccountId: null, receivableAccountId: null, isActive: true }}
+          taxType={{ id: 3, code: "PPH23", name: "PPh 23 — Jasa", rate: 2, article: "PPh23", objectCode: "24-104-01", liabilityAccountId: null, receivableAccountId: null, isActive: true }}
         />
       ))
       expect(container.querySelector("form")!.getAttribute("aria-label")).toBe("Formulir ubah jenis pemotongan PPh")

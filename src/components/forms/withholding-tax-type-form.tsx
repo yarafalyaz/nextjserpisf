@@ -17,11 +17,18 @@ interface WithholdingTaxTypeFormProps {
     code: string
     name: string
     rate: number
+    article: string | null
+    objectCode: string | null
     liabilityAccountId: number | null
     receivableAccountId: number | null
     isActive: boolean
   }
 }
+
+const ARTICLE_OPTIONS = ["PPh21", "PPh22", "PPh23", "PPh4(2)", "PPh26", "PPh15"].map((a) => ({
+  value: a,
+  label: a,
+}))
 
 export function WithholdingTaxTypeForm({ accounts, taxType }: WithholdingTaxTypeFormProps) {
   const router = useRouter()
@@ -33,11 +40,14 @@ export function WithholdingTaxTypeForm({ accounts, taxType }: WithholdingTaxType
   const [receivableAccountId, setReceivableAccountId] = useState<string | null>(
     taxType?.receivableAccountId ? String(taxType.receivableAccountId) : null,
   )
+  const [article, setArticle] = useState<string | null>(taxType?.article ?? null)
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("isActive", isActive ? "true" : "false")
+    if (article) formData.set("article", article)
+    else formData.delete("article")
     if (liabilityAccountId) formData.set("liabilityAccountId", liabilityAccountId)
     if (receivableAccountId) formData.set("receivableAccountId", receivableAccountId)
 
@@ -76,6 +86,23 @@ export function WithholdingTaxTypeForm({ accounts, taxType }: WithholdingTaxType
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="rate">Tarif (%)</Label>
             <Input id="rate" name="rate" type="number" step="0.01" min="0" max="100" defaultValue={taxType ? String(taxType.rate) : "0"} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="article">Pasal PPh</Label>
+            <Combobox
+              id="article"
+              value={article}
+              onChange={setArticle}
+              placeholder="Pilih pasal..."
+              options={ARTICLE_OPTIONS}
+            />
+            <span className="text-xs text-muted-foreground">
+              Wajib diisi agar jenis ini bisa diterbitkan sebagai bukti potong.
+            </span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="objectCode">Kode Objek e-Bupot</Label>
+            <Input id="objectCode" name="objectCode" defaultValue={taxType?.objectCode ?? ""} placeholder="mis. 24-104-01" />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="liabilityAccountId">Akun Hutang PPh</Label>
