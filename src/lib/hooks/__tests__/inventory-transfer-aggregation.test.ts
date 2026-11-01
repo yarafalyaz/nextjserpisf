@@ -31,6 +31,10 @@ vi.mock("@/lib/db/prisma", () => ({
 import { onTransferProcessed, onTransferReceived } from "@/lib/hooks/inventory-transfer.hook"
 
 function wireTx(transferItems: Array<{ id?: number; itemId: number; qty: number; receivedQty?: number; serialNumbers?: unknown; batchAllocations?: unknown }>, status = "draft") {
+  const warehouseRows = [
+    { id: 1, name: "Gudang Asal", isActive: true },
+    { id: 2, name: "Gudang Tujuan", isActive: true },
+  ]
   const normalizedItems = transferItems.map((item, index) => ({ receivedQty: 0, ...item, id: item.id ?? index + 1 }))
   const spies = {
     queryRaw: vi.fn().mockResolvedValue([]),
@@ -72,6 +76,12 @@ function wireTx(transferItems: Array<{ id?: number; itemId: number; qty: number;
       create: spies.batchCreate,
     },
     stockMove: { findFirst: spies.moveFindFirst, findMany: spies.moveFindMany, create: spies.moveCreate },
+    // Putaran 51: receive menilai gudang tujuan hidup; default semua hidup.
+    warehouse: {
+      findMany: vi.fn().mockImplementation(async (args: any) =>
+        warehouseRows.filter((w) => (args?.where?.id?.in ?? []).includes(w.id)),
+      ),
+    },
   }
   mocks.transaction.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx))
   return { spies, tx }
@@ -192,6 +202,32 @@ describe("onTransferProcessed item aggregation", () => {
     await onTransferProcessed(100, 1, tx as any)
     expect(mocks.transaction).not.toHaveBeenCalled()
     expect(spies.moveCreate).toHaveBeenCalled()
+  })
+})
+
+describe("onTransferReceived — gudang tujuan mati (putaran 51)", () => {
+  it("gudang tujuan nonaktif → receive ditolak, tidak ada gerakan IN (jalur legacy)", async () => {
+    const { spies, tx } = wireTx([{ itemId: 7, qty: 3 }], "processed")
+    ;(tx.warehouse as any).findMany = vi.fn().mockResolvedValue([{ id: 2, name: "Gudang Tujuan", isActive: false }])
+    spies.moveFindFirst.mockResolvedValueOnce(null)
+
+    await expect(onTransferReceived(100, 1)).rejects.toThrow(/tidak aktif/)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+  })
+
+  it("gudang tujuan nonaktif → receive parsial ditolak, tidak ada gerakan IN", async () => {
+    const { spies, tx } = wireTx([
+      { id: 51, itemId: 7, qty: 3 } as never,
+    ], "processed")
+    ;(tx.warehouse as any).findMany = vi.fn().mockResolvedValue([{ id: 2, name: "Gudang Tujuan", isActive: false }])
+    spies.moveFindMany.mockResolvedValueOnce([{ itemId: 7, cost: 15 }])
+
+    await expect(onTransferReceived(100, 1, undefined, {
+      receivedDate: new Date("2026-03-01T00:00:00Z"),
+      idempotencyKey: "receipt-key-dest-mati",
+      lines: [{ transferItemId: 51, qty: 2 }],
+    })).rejects.toThrow(/tidak aktif/)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
   })
 })
 

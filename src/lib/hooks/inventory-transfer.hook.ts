@@ -16,6 +16,7 @@ import {
   type ReceiptLineInput,
   type TransferLineState,
 } from "@/lib/services/inventory-transfer-receipt.service";
+import { assertWarehousesExistAndActive } from "@/lib/services/material-request.service";
 
 const EPSILON = 0.0001;
 
@@ -402,6 +403,12 @@ export async function onTransferReceived(
       where: { id: transferId },
       include: { items: true },
     });
+
+    // Putaran 51: gudang TUJUAN dinilai ulang HIDUP sebelum gerakan IN apa
+    // pun (kedua jalur receive). Gudang tujuan yang dinonaktifkan/dihapus
+    // sesudah kirim tidak boleh menerima stok posted diam-diam. Gudang
+    // asal tidak digerbang: stok sudah keluar saat process.
+    await assertWarehousesExistAndActive(tx as never, [transfer.destinationWarehouseId]);
 
     if (receipt) {
       // Q-TP-1: periode dinilai per TANGGAL KEJADIAN, bukan tanggal kirim.
