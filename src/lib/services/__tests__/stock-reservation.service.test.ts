@@ -13,10 +13,12 @@ const findManyMock = vi.fn()
 const updateMock = vi.fn()
 const updateManyMock = vi.fn()
 const queryRawMock = vi.fn()
+const executeRawMock = vi.fn()
 
 function txMock() {
   return {
     $queryRaw: queryRawMock,
+    $executeRaw: executeRawMock,
     stockReservation: {
       findFirst: findFirstMock,
       findMany: findManyMock,
@@ -40,6 +42,7 @@ beforeEach(() => {
   updateMock.mockResolvedValue({})
   updateManyMock.mockResolvedValue({ count: 1 })
   queryRawMock.mockResolvedValue([{ id: 3 }])
+  executeRawMock.mockReset().mockResolvedValue(0)
 })
 
 describe("consumeReservationsForMaterialIssueTx", () => {
@@ -130,6 +133,94 @@ describe("consumeReservationsForMaterialIssueTx", () => {
 })
 
 describe("createReservationsForWorkOrderStartTx (BUGHUNT r3: ketersediaan batch)", () => {
+  function baseTx(overrides: {
+    items: { id: number; itemId: number; qty: number; status: string }[]
+    orderReservationRows?: (...args: unknown[]) => Promise<unknown>
+  }) {
+    return {
+      workOrder: {
+        findUniqueOrThrow: vi.fn(async () => ({
+          id: 9,
+          startDate: new Date(2026, 9, 22),
+          endDate: null,
+          createdAt: new Date(),
+          items: overrides.items,
+        })),
+      },
+      materialIssue: { findFirst: vi.fn(async () => ({ warehouseId: 5 })) },
+      item: {
+        findMany: vi.fn(async () =>
+          overrides.items.map((i) => ({ id: i.itemId, defaultWarehouseId: null })),
+        ),
+      },
+      materialIssueItem: { findMany: vi.fn(async () => []) },
+      inventoryLayer: {
+        aggregate: vi.fn(),
+        groupBy: vi.fn(async () => [
+          { itemId: 1, warehouseId: 5, _sum: { remaining: 100 } },
+        ]),
+      },
+      $queryRaw: queryRawMock,
+      $executeRaw: executeRawMock,
+    }
+  }
+
+  it("regresi putaran 15: kunci items terurut + reservasi lawan dibaca LOCKING sesudah kunci", async () => {
+    const sqlOf = (c: unknown[]) => {
+      const a = c[0] as { sql?: string; strings?: string[] } | string[]
+      return Array.isArray(a) ? a.join("?") : (a?.sql ?? a?.strings?.join("?") ?? "")
+    }
+    let reservationFindCalls = 0
+    findManyMock.mockImplementation(async () => {
+      reservationFindCalls += 1
+      if (reservationFindCalls < 3) return []
+      return [{
+        itemId: 1,
+        warehouseId: 5,
+        qtyReserved: new Prisma.Decimal("80.00"),
+        qtyConsumed: new Prisma.Decimal("0.00"),
+      }]
+    })
+    const createMock = vi.fn(async (a: unknown) => a)
+    const tx = {
+      ...baseTx({ items: [{ id: 41, itemId: 1, qty: 80, status: "pending" }] }),
+      stockReservation: { findMany: findManyMock, create: createMock },
+    } as never
+
+    const out = await createReservationsForWorkOrderStartTx(tx, { workOrderId: 9, createdBy: 7 })
+
+    expect(out.created).toBe(1)
+    expect(Number((createMock.mock.calls[0][0] as { data: { qtyReserved: unknown } }).data.qtyReserved)).toBe(20)
+    expect(Number((createMock.mock.calls[0][0] as { data: { shortageQty: unknown } }).data.shortageQty)).toBe(60)
+
+    const itemLockIdx = queryRawMock.mock.calls.findIndex((c) => sqlOf(c).includes("FROM items"))
+    expect(itemLockIdx).toBeGreaterThanOrEqual(0)
+    expect(sqlOf(queryRawMock.mock.calls[itemLockIdx])).toContain("FOR UPDATE")
+    expect(queryRawMock.mock.invocationCallOrder[itemLockIdx]).toBeLessThan(
+      findManyMock.mock.invocationCallOrder[0],
+    )
+    expect(executeRawMock.mock.calls).toHaveLength(1)
+    const freshLockSql = sqlOf(executeRawMock.mock.calls[0])
+    expect(freshLockSql).toContain("stock_reservations")
+    expect(freshLockSql).toContain("FOR UPDATE")
+    expect(executeRawMock.mock.invocationCallOrder[0]).toBeGreaterThan(
+      queryRawMock.mock.invocationCallOrder[itemLockIdx],
+    )
+  })
+
+  it("itemIds kosong: tidak ada kunci items, tidak ada fresh locking read", async () => {
+    findManyMock.mockResolvedValue([])
+    const tx = {
+      ...baseTx({ items: [{ id: 41, itemId: 1, qty: 0, status: "replaced" }] }),
+      stockReservation: { findMany: findManyMock, create: vi.fn() },
+    } as never
+
+    await createReservationsForWorkOrderStartTx(tx, { workOrderId: 9, createdBy: 7 })
+
+    expect(queryRawMock).not.toHaveBeenCalled()
+    expect(executeRawMock).not.toHaveBeenCalled()
+  })
+
   it("satu groupBy untuk semua pasangan gudang×item; nol aggregate serial; hasil rencana sama dengan per pasangan", async () => {
     const aggregateMock = vi.fn()
     const groupByMock = vi.fn(async () => [
@@ -160,8 +251,10 @@ describe("createReservationsForWorkOrderStartTx (BUGHUNT r3: ketersediaan batch)
       materialIssueItem: { findMany: vi.fn(async () => []) },
       stockReservation: { findMany: findManyMock, create: createMock },
       inventoryLayer: { aggregate: aggregateMock, groupBy: groupByMock },
+      $queryRaw: queryRawMock,
+      $executeRaw: executeRawMock,
     } as never
-    findManyMock.mockResolvedValue([])
+    findManyMock.mockReset().mockResolvedValue([])
 
     const out = await createReservationsForWorkOrderStartTx(tx, { workOrderId: 9, createdBy: 7 })
 

@@ -45,7 +45,18 @@ export async function createReservationsForWorkOrderStartTx(
   })
 
   const stockLines = wo.items.filter((i) => i.itemId > 0 && i.status !== "replaced")
-  const itemIds = [...new Set(stockLines.map((i) => i.itemId))]
+  const itemIds = [...new Set(stockLines.map((i) => i.itemId))].sort((a, b) => a - b)
+
+  // Serialisasi antar-WO: klaim start hanya menserialkan WO yang sama, jadi
+  // dua start WO berbeda untuk item yang sama bisa membaca reservasi aktif
+  // satu sama lain sebagai kosong dan over-reserve (2×80 atas on-hand 100).
+  // Kunci baris items terurut (pola material-issue/goods-receipt) menahan
+  // start lawan sampai tx ini commit; kunci items TIDAK menyegarkan snapshot
+  // REPEATABLE READ, jadi reservasi aktif lawan dibaca ulang sebagai
+  // LOCKING READ sesudahnya (baris yang ter-commit sebelum kunci terlihat).
+  for (const itemId of itemIds) {
+    await tx.$queryRaw`SELECT id FROM items WHERE id = ${itemId} FOR UPDATE`
+  }
   const [mi, items, issuedItems, otherActive, existingActive] = await Promise.all([
     tx.materialIssue.findFirst({
       where: { workOrderId: wo.id },
@@ -90,12 +101,35 @@ export async function createReservationsForWorkOrderStartTx(
     issuedByLine.set(row.workOrderItemId, (issuedByLine.get(row.workOrderItemId) ?? 0) + Number(row.qty))
   }
   const reservedByOthers = new Map<string, number>()
-  for (const row of otherActive) {
-    const key = `${row.itemId}:${row.warehouseId}`
-    reservedByOthers.set(
-      key,
-      (reservedByOthers.get(key) ?? 0) + Math.max(0, Number(row.qtyReserved) - Number(row.qtyConsumed)),
-    )
+  // Fresh locking re-read: ganti snapshot basi dengan baris ter-commit
+  // terkini. Update (consume/release oleh tx lain) sesudah bacaan ini tetap
+  // lolos — accepted: planReservationsAtStart membuka shortage, bukan
+  // menolak, jadi dampaknya hanya shortage lebih besar, bukan over-reserve.
+  if (itemIds.length) {
+    await tx.$executeRaw`SELECT id FROM stock_reservations WHERE item_id IN (${Prisma.join(itemIds)}) AND status = 'active' ORDER BY item_id, id FOR UPDATE`
+    const freshOthers = await tx.stockReservation.findMany({
+      where: {
+        itemId: { in: itemIds },
+        status: "active",
+        workOrderId: { not: wo.id },
+      },
+      select: { itemId: true, warehouseId: true, qtyReserved: true, qtyConsumed: true },
+    })
+    for (const row of freshOthers) {
+      const key = `${row.itemId}:${row.warehouseId}`
+      reservedByOthers.set(
+        key,
+        (reservedByOthers.get(key) ?? 0) + Math.max(0, Number(row.qtyReserved) - Number(row.qtyConsumed)),
+      )
+    }
+  } else {
+    for (const row of otherActive) {
+      const key = `${row.itemId}:${row.warehouseId}`
+      reservedByOthers.set(
+        key,
+        (reservedByOthers.get(key) ?? 0) + Math.max(0, Number(row.qtyReserved) - Number(row.qtyConsumed)),
+      )
+    }
   }
   const warehouses = new Set<number>()
   for (const line of stockLines) {
