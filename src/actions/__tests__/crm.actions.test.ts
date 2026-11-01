@@ -395,6 +395,20 @@ describe("CRM Actions - Next redirect errors are re-thrown", () => {
     expect(mocks.prismaMock.customer.create).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 46: convertLead mengisi slug pelanggan hasil konversi", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce({ id: 3, permissions: ["edit_leads", "manage_leads"], roles: ["admin"] })
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "qualified", assignedTo: 7, customerId: null,
+      company: "PT Baru Jaya", name: "Lead", contactName: "Budi", email: "baru@x.id", phone: "0900", address: "Jl Baru",
+    })
+    mocks.prismaMock.customer.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.customer.create.mockResolvedValue({ id: 44 })
+    const res = await actions.convertLead(1)
+    expect(res.success).toBe(true)
+    const createArg = mocks.prismaMock.customer.create.mock.calls.at(-1)?.[0]
+    expect(createArg.data.slug).toBe("pt-baru-jaya")
+  })
+
   it("putaran 40: convertLead memakai field kontak dari baris terkunci, bukan snapshot luar", async () => {
     mocks.requirePermissionMock.mockResolvedValueOnce({ id: 3, permissions: ["edit_leads", "manage_leads"], roles: ["admin"] })
     // Snapshot luar tx: kontak lama. Baris terkunci (updateLead konkuren

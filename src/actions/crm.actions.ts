@@ -9,7 +9,7 @@ import { redirect } from "next/navigation"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { createTicketSchema, updateTicketSchema, leadActivitySchema, ticketCommentSchema, CONVERTIBLE_STATUSES } from "@/lib/validations/crm.schemas"
-import { nextSlug } from "@/lib/utils/slug-db"
+import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 
@@ -380,9 +380,11 @@ export async function convertLead(leadId: number) {
       if (!(CONVERTIBLE_STATUSES as readonly string[]).includes(fresh.status)) {
         throw new Error("Lead belum dapat dikonversi. Status minimal harus 'qualified'.")
       }
+      const customerName = fresh.company || fresh.name
       const created = await tx.customer.create({
         data: {
-          name: fresh.company || fresh.name,
+          slug: await nextSlugWithClient(tx as never, "customer", customerName),
+          name: customerName,
           contactPerson: fresh.contactName ?? fresh.name,
           email: fresh.email,
           phone: fresh.phone,
