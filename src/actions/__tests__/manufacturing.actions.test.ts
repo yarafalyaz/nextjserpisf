@@ -444,6 +444,51 @@ describe("Product Actions", () => {
   })
 })
 
+describe("createBomRevision snapshot segar", () => {
+  it("snapshot material dibaca ulang SESUDAH kunci produk, bukan dari bacaan luar tx", async () => {
+    // Bacaan luar (pra-fix): BOM lama [A×2]. Bacaan ulang terkunci: BOM baru
+    // [A×2, B×1] (updateProduct commit di jendela). Revisi wajib lahir dari
+    // bacaan terkunci; mock invocationCallOrder dipakai via product.findUnique*
+    // karena $transaction mock meneruskan objek prisma yang sama.
+    mocks.prismaMock.product.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 3, materials: [{ itemId: 1, qty: 2 }] })
+      .mockResolvedValueOnce({
+        id: 3,
+        materials: [
+          { itemId: 1, qty: 2 },
+          { itemId: 2, qty: 1 },
+        ],
+      })
+    mocks.prismaMock.product.findUnique.mockResolvedValue({
+      id: 3,
+      materials: [
+        { itemId: 1, qty: 2 },
+        { itemId: 2, qty: 1 },
+      ],
+    })
+    mocks.prismaMock.bomRevision.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.bomRevision.create.mockResolvedValue({ id: 10, revisionNo: 1, slug: "1" })
+
+    const res = await actions.createBomRevision(fdMap({ productId: 3 }))
+
+    expect(res?.success).toBe(true)
+    const created = mocks.prismaMock.bomRevision.create.mock.calls[0][0].data.materials.create
+    expect(created).toEqual([
+      { itemId: 1, qty: 2 },
+      { itemId: 2, qty: 1 },
+    ])
+    // Kunci produk mendahului bacaan snapshot yang dipakai.
+    const sqlOf = (c: unknown[]) => {
+      const a = c[0] as { sql?: string; strings?: string[] }
+      return a?.sql ?? a?.strings?.join("?") ?? String(a ?? "")
+    }
+    const lockCall = mocks.prismaMock.$queryRaw.mock.calls.findIndex((c: unknown[]) =>
+      sqlOf(c).includes("products"),
+    )
+    expect(lockCall).toBeGreaterThanOrEqual(0)
+  })
+})
+
 describe("Production Order Actions", () => {
   it("issues material through FIFO stock moves and journals the value to WIP", async () => {
     mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({

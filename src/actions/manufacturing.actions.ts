@@ -322,9 +322,11 @@ export async function createBomRevision(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
-    const product = await prisma.product.findUniqueOrThrow({
+    // Eksistensi produk dicek murah di luar; isi snapshot TIDAK dipakai dari
+    // sini (lihat bacaan ulang terkunci di dalam tx).
+    await prisma.product.findUniqueOrThrow({
       where: { id: v.productId },
-      include: { materials: true },
+      select: { id: true },
     });
 
     const revision = await prisma.$transaction(async (tx) => {
@@ -332,6 +334,15 @@ export async function createBomRevision(formData: FormData) {
       // calls cannot read the same latest revisionNo and collide on the
       // (productId, revisionNo) unique constraint.
       await tx.$queryRaw`SELECT id FROM products WHERE id = ${v.productId} FOR UPDATE`;
+      // Snapshot BOM dibaca ULANG di bawah kunci: updateProduct menukar BOM
+      // lewat update baris produk yang sama, jadi BOM yang commit di antara
+      // bacaan luar dan kunci terlihat di sini. Pola sama calculateStandardCost
+      // — membaca dari snapshot luar membuat revisi lahir dengan isi BOM lama
+      // diam-diam (material hilang dari revisi yang dirilis).
+      const product = await tx.product.findUniqueOrThrow({
+        where: { id: v.productId },
+        include: { materials: true },
+      });
       const latest = await tx.bomRevision.findFirst({
         where: { productId: v.productId },
         orderBy: { revisionNo: "desc" },
