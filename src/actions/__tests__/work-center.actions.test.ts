@@ -128,6 +128,22 @@ describe("setWorkOrderOperationWorkCenter", () => {
     expect(wop().update).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 49: baris stasiun dikunci FOR UPDATE sebelum cek aktif pada penetapan", async () => {
+    wc().findUnique.mockResolvedValue({ id: 1, isActive: true })
+    const r = await setWorkOrderOperationWorkCenter(10, 7, 1)
+    expect(r).toMatchObject({ success: true })
+    const execRaw = mocks.prismaMock.$executeRaw as ReturnType<typeof vi.fn>
+    const lockIdx = execRaw.mock.calls.findIndex((c) => {
+      const a = c[0] as { strings?: string[] } | string[]
+      const sql = Array.isArray(a) ? a.join("?") : (a?.strings?.join("?") ?? "")
+      return /work_centers/i.test(sql) && /for update/i.test(sql)
+    })
+    expect(lockIdx).toBeGreaterThanOrEqual(0)
+    expect(execRaw.mock.invocationCallOrder[lockIdx]).toBeLessThan(
+      wc().findUnique.mock.invocationCallOrder[0],
+    )
+  })
+
   it("mengosongkan stasiun (null) tetap boleh tanpa cek master", async () => {
     const r = await setWorkOrderOperationWorkCenter(10, 7, null)
     expect(r).toMatchObject({ success: true })

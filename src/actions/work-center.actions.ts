@@ -175,6 +175,14 @@ export async function setWorkOrderOperationWorkCenter(
         throw new Error("Tahap tidak ditemukan pada perintah kerja ini.")
       }
       if (workCenterId != null) {
+        // Kunci baris stasiun lebih dulu (pola gap-lock nama di file ini):
+        // snapshot tx sudah terbentuk dari bacaan tahap di atas, jadi
+        // findUnique polos bisa membaca isActive basi dan penetapan lolos
+        // ke stasiun yang baru saja dinonaktifkan. Locking read menilai
+        // baris segar dan menserialkan lawan deactivate/update.
+        if (typeof tx.$executeRaw === "function") {
+          await tx.$executeRaw`SELECT id FROM work_centers WHERE id = ${workCenterId} FOR UPDATE`
+        }
         const center = await tx.workCenter.findUnique({
           where: { id: workCenterId },
           select: { id: true, isActive: true },
