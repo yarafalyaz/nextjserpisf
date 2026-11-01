@@ -512,6 +512,13 @@ export async function settleWithholdingTax(input: SettleWithholdingInput): Promi
         return
       }
       await assertPeriodOpen(date, tx as never)
+      // Putaran 22: kunci baris jenis SEBELUM baca (pola tax-payment.actions):
+      // bacaan plain dalam REPEATABLE READ membaca snapshot lama — jenis yang
+      // dinonaktifkan sesudah tx mulai tetap lolos. Kunci adalah locking read
+      // yang melihat baris terbaru dan menserialkan lawan penulis jenis.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM withholding_tax_types WHERE id = ${input.withholdingTypeId} FOR UPDATE`
+      }
       // R8-PAJAK-08: setor untuk jenis nonaktif/terhapus juga ditolak.
       const type = await tx.withholdingTaxType.findUniqueOrThrow({ where: { id: input.withholdingTypeId } })
       assertWithholdingTypeActive(type)

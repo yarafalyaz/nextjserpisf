@@ -647,6 +647,31 @@ describe("settleWithholdingTax", () => {
     expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
   })
 
+  it("settle menolak jenis yang dinonaktifkan sesudah baca awal — kunci baris jenis (putaran 22)", async () => {
+    mocks.typeFindUniqueOrThrow.mockResolvedValueOnce({
+      id: 3, code: "PPh23-JASA", article: "PPh23", objectCode: "24-104-01",
+      rate: 2, liabilityAccountId: 501, receivableAccountId: 502,
+      isActive: false, deletedAt: null,
+    })
+    const r = await settleWithholdingTax({
+      withholdingTypeId: 3, period: "2026-01", paymentAccountId: 102,
+      amount: 200_000, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/nonaktif/)
+    const lockSqls = mocks.executeRaw.mock.calls.map((c: unknown[]) => {
+      const first = c[0] as { strings?: string[] } | string[] | undefined
+      if (Array.isArray(first)) return first.join("?")
+      return (first as { strings?: string[] } | undefined)?.strings?.join("?") ?? ""
+    })
+    expect(lockSqls.some((s: string) => s.includes("withholding_tax_types") && s.includes("FOR UPDATE"))).toBe(true)
+    expect(mocks.executeRaw.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      mocks.typeFindUniqueOrThrow.mock.invocationCallOrder[0],
+    )
+    expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
   it("tanggal setor masa 2026-11 = tengah malam UTC 1 Nov (bukan 31 Okt lokal)", async () => {
     const r = await settleWithholdingTax({
       withholdingTypeId: 3, period: "2026-11", paymentAccountId: 102,
