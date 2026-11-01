@@ -13,7 +13,8 @@
  * persis pola detail existing — luar scope = `null` (tidak ditemukan),
  * bukan error bocor. Slip dimuat hanya milik karyawan pemilik pinjaman
  * yang sudah lolos scope, status persis `paid` dan `loanDeduction > 0`
- * (AC-LH-B5, EC-6).
+ * (AC-LH-B5, EC-6); slip asal yang sudah digantikan koreksi payroll
+ * (R8-SDM-02) dibuang — koreksinya yang tampil.
  *
  * Select TIDAK memuat baseSalary/grossSalary/netSalary/komponen gaji
  * (BR-LH-09): slip hanya membawa nomor dokumen, periode, tanggal, dan
@@ -71,6 +72,7 @@ export async function loadLoanInstallmentHistory(
     },
     select: {
       id: true,
+      correctsPayrollId: true,
       documentNo: true,
       period: true,
       startDate: true,
@@ -80,6 +82,24 @@ export async function loadLoanInstallmentHistory(
     },
     orderBy: [{ paymentDate: "asc" }, { startDate: "asc" }, { id: "asc" }],
   })
+
+  // R8-SDM-02: slip asal yang sudah digantikan koreksi tidak tampil —
+  // koreksinya (juga `paid`, potongan pinjaman penuh hasil amortisasi
+  // ulang) yang mengemban cicilannya; tanpa ini satu potongan ekonomis
+  // tampil dua baris. Penunjuk tanpa filter periode/karyawan.
+  const correctedIds = slips.length
+    ? new Set(
+        (
+          await prisma.payroll.findMany({
+            where: { correctsPayrollId: { in: slips.map((s) => s.id) } },
+            select: { correctsPayrollId: true },
+          })
+        )
+          .map((c) => c.correctsPayrollId)
+          .filter((v): v is number => v !== null),
+      )
+    : new Set<number>()
+  const liveSlips = slips.filter((s) => !correctedIds.has(s.id))
 
   const slipFrequency: PayrollFrequency =
     loan.employee.paymentFrequency === "WEEKLY" ? "WEEKLY" : "MONTHLY"
@@ -97,7 +117,7 @@ export async function loadLoanInstallmentHistory(
       weeklyInstallment:
         loan.weeklyInstallment === null ? null : Number(loan.weeklyInstallment),
     },
-    slips.map((s) => ({
+    liveSlips.map((s) => ({
       payrollId: s.id,
       documentNo: s.documentNo,
       period: s.period,

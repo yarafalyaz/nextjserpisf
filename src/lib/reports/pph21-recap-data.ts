@@ -100,11 +100,12 @@ function annualTable(recap: Pph21Recap, year: number): { columns: TableColumn[];
   return { columns: ANNUAL_COLUMNS, rows }
 }
 
-/** Satu-satunya query payroll jalur rekap+ekspor (F-028-I §I.2, AC-9). */
+/** Query payroll jalur rekap+ekspor (F-028-I §I.2, AC-9 satu sumber) + satu penunjuk koreksi read-only. */
 async function fetchPph21Slips(period: { start: Date; end: Date }): Promise<Pph21RecapSlipInput[]> {
   const payrolls = await prisma.payroll.findMany({
     where: { startDate: { gte: period.start, lte: period.end } },
     select: {
+      id: true, correctsPayrollId: true,
       employeeId: true, period: true, status: true, type: true,
       grossSalary: true, pph21: true, netSalary: true, statutorySnapshot: true,
       paymentDate: true, endDate: true,
@@ -118,7 +119,26 @@ async function fetchPph21Slips(period: { start: Date; end: Date }): Promise<Pph2
     },
     orderBy: [{ period: "asc" }, { id: "asc" }],
   })
-  return payrolls.map((p) => ({
+  // R8-SDM-02: slip asal yang sudah digantikan koreksi dibuang di
+  // loader (satu-satunya query jalur rekap+ekspor) — koreksi mengemban
+  // angka penuh; tanpa ini asal + koreksi dobel di bruto/PPh21/neto.
+  // Penunjuk dicari tanpa filter periode agar asal tetap terbuang
+  // walau koreksinya lahir di luar rentang.
+  const correctedIds = payrolls.length
+    ? new Set(
+        (
+          await prisma.payroll.findMany({
+            where: { correctsPayrollId: { in: payrolls.map((p) => p.id) } },
+            select: { correctsPayrollId: true },
+          })
+        )
+          .map((c) => c.correctsPayrollId)
+          .filter((v): v is number => v !== null),
+      )
+    : new Set<number>()
+  return payrolls
+    .filter((p) => !correctedIds.has(p.id))
+    .map((p) => ({
     employeeId: p.employeeId,
     employeeName: p.employee?.name ?? "Tanpa karyawan",
     npwp: p.employee?.npwp ?? null,
@@ -158,7 +178,7 @@ export async function loadPph21Recap(
 
 /**
  * Ekspor internal CSV Lapis 1 (F-028-I): jalur data SAMA dengan
- * `loadPph21Recap` (satu query `fetchPph21Slips`, builder sama) — bukan
+ * `loadPph21Recap` (loader `fetchPph21Slips` yang sama, builder sama) — bukan
  * query agregasi kedua. Hasil membawa bukti rekonsiliasi terstruktur;
  * pemanggil (UI/unduhan BOT 2) wajib mengarsipkannya bersama berkas.
  * Tanpa tabel/log baru: bukti hidup di hasil ini (§I.6, tanpa migrasi).

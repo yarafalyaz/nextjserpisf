@@ -120,6 +120,7 @@ describe("loadLoanInstallmentHistory — slip terbayar saja (AC-LH-B5, BR-LH-09)
     }
     expect(arg.select).toEqual({
       id: true,
+      correctsPayrollId: true,
       documentNo: true,
       period: true,
       startDate: true,
@@ -127,6 +128,25 @@ describe("loadLoanInstallmentHistory — slip terbayar saja (AC-LH-B5, BR-LH-09)
       paymentDate: true,
       loanDeduction: true,
     })
+  })
+
+  it("slip asal yang sudah dikoreksi tidak tampil dobel di histori cicilan (R8-SDM-02)", async () => {
+    const slipRow = (id: number, correctsPayrollId: number | null, period: string) => ({
+      id,
+      correctsPayrollId,
+      documentNo: `PAY-${period}`,
+      period,
+      startDate: d(`${period}-01`),
+      endDate: d(`${period}-28`),
+      paymentDate: d(`${period}-28`),
+      loanDeduction: dec("1000000.00"),
+    })
+    mocks.payrollFindMany
+      .mockResolvedValueOnce([slipRow(101, null, "2026-02"), slipRow(102, 101, "2026-03")])
+      .mockResolvedValueOnce([{ correctsPayrollId: 101 }])
+    const { history } = await loadLoanInstallmentHistory(11)
+    expect(history?.aggregateSlipRows).toHaveLength(1)
+    expect(history?.aggregateSlipRows[0].payrollId).toBe(102)
   })
 
   it("Decimal diteruskan ke builder; tahap 1 ledger kosong → ember = terbayar kini", async () => {

@@ -3,6 +3,8 @@
  *
  * Hanya slip berstatus **approved/paid** yang masuk hitungan (draft belum final);
  * jumlah draft dilaporkan terpisah agar tidak jadi "laporan kosong" yang ambigu.
+ * Slip asal yang sudah digantikan koreksi payroll (R8-SDM-02) juga dibuang —
+ * koreksinya yang mengemban angka penuh.
  * Filter memakai `startDate` slip supaya rentang bebas (bulan atau tahun) tetap benar.
  */
 
@@ -29,6 +31,8 @@ export async function loadPayrollRows(period: { start: Date; end: Date }): Promi
         status: { in: [...RECOGNISED_PAYROLL_STATUSES] },
       },
       select: {
+        id: true,
+        correctsPayrollId: true,
         period: true,
         status: true,
         baseSalary: true,
@@ -56,7 +60,28 @@ export async function loadPayrollRows(period: { start: Date; end: Date }): Promi
     }),
   ])
 
-  const rows: PayrollRowInput[] = payrolls.map((payroll) => ({
+  // R8-SDM-02: slip asal yang sudah digantikan koreksi (ada slip lain
+  // menunjuk correctsPayrollId = asal) TIDAK ikut baris — slip koreksi
+  // mengemban angka penuh yang benar di periode terbitnya (slip asal
+  // tetap `paid` tetapi jurnalnya sudah di-reverse). Sama seperti
+  // agregat service payroll (hrm.actions.ts). Query penunjuk tanpa
+  // filter periode: asal tetap terbuang walau koreksinya lahir di luar
+  // rentang laporan.
+  const correctedIds = payrolls.length
+    ? new Set(
+        (
+          await prisma.payroll.findMany({
+            where: { correctsPayrollId: { in: payrolls.map((p) => p.id) } },
+            select: { correctsPayrollId: true },
+          })
+        )
+          .map((c) => c.correctsPayrollId)
+          .filter((v): v is number => v !== null),
+      )
+    : new Set<number>()
+  const livePayrolls = payrolls.filter((p) => !correctedIds.has(p.id))
+
+  const rows: PayrollRowInput[] = livePayrolls.map((payroll) => ({
     employeeName: payroll.employee?.name ?? "Tanpa karyawan",
     npwp: payroll.employee?.npwp ?? null,
     baseSalary: Number(payroll.baseSalary),
@@ -76,7 +101,7 @@ export async function loadPayrollRows(period: { start: Date; end: Date }): Promi
   }))
 
   const duplicateEmployees = duplicateEmployeePeriods(
-    payrolls.map((payroll) => ({
+    livePayrolls.map((payroll) => ({
       employeeName: payroll.employee?.name ?? "Tanpa karyawan",
       period: payroll.period,
     })),

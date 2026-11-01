@@ -18,6 +18,7 @@ const D = (iso: string) => new Date(`${iso}T00:00:00.000Z`)
 const RANGE = { start: D("2026-01-01"), end: D("2026-12-31") }
 
 const row = (o: Record<string, unknown> = {}) => ({
+  id: 1, correctsPayrollId: null,
   employeeId: 1, period: "2026-01", status: "approved",
   grossSalary: 10_000_000, pph21: 200_000, netSalary: 9_000_000,
   statutorySnapshot: { pph21Ter: { method: "TER", periodKind: "monthly" } },
@@ -57,5 +58,21 @@ describe("loadPph21Recap", () => {
     expect(r.annualYear).toBe(2024)
     expect(r.annualTable.rows.some((x) => x.kind === "notice")).toBe(true)
     expect(r.periodTable.rows.some((x) => x.kind === "notice")).toBe(true)
+  })
+
+  it("slip asal yang sudah dikoreksi tidak dobel di rekap (R8-SDM-02)", async () => {
+    mocks.prismaMock.payroll.findMany
+      .mockResolvedValueOnce([
+        row({ id: 11, status: "paid", grossSalary: 6_000_000, pph21: 300_000, netSalary: 5_500_000 }),
+        row({ id: 12, correctsPayrollId: 11, status: "paid", grossSalary: 6_500_000, pph21: 325_000, netSalary: 6_000_000 }),
+      ])
+      .mockResolvedValueOnce([{ correctsPayrollId: 11 }])
+    const r = await loadPph21Recap(RANGE)
+    expect(r.recap.totals.slips).toBe(1)
+    expect(r.recap.totals.gross).toBe(6_500_000)
+    expect(r.recap.totals.pph21).toBe(325_000)
+    expect(mocks.prismaMock.payroll.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: { correctsPayrollId: { in: [11, 12] } } }),
+    )
   })
 })

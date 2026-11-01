@@ -213,6 +213,7 @@ describe("AC-9 wiring loader", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.prismaMock.payroll.findMany.mockResolvedValue([{
+      id: 1, correctsPayrollId: null,
       employeeId: 1, period: "2026-01", status: "approved", type: "REGULAR",
       grossSalary: 10_000_000, pph21: 200_000, netSalary: 9_800_000,
       statutorySnapshot: terSnap(), paymentDate: new Date("2026-01-31T00:00:00"), endDate: new Date("2026-01-31T00:00:00"),
@@ -220,16 +221,22 @@ describe("AC-9 wiring loader", () => {
     }])
   })
 
-  it("loadPph21Export: tepat 1x findMany payroll dengan select field ekspor", async () => {
+  it("loadPph21Export: satu sumber — findMany payroll agregasi hanya di loader rekap (query ke-2 hanya penunjuk koreksi R8-SDM-02, id/correctsPayrollId saja)", async () => {
     const { loadPph21Export } = await import("../pph21-recap-data")
     const r = await loadPph21Export({ start: new Date("2026-01-01"), end: new Date("2026-12-31") }, ["2026-01"])
-    expect(mocks.prismaMock.payroll.findMany).toHaveBeenCalledTimes(1)
-    expect(mocks.prismaMock.payroll.findMany).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.prismaMock.payroll.findMany).toHaveBeenCalledTimes(2)
+    expect(mocks.prismaMock.payroll.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({
       select: expect.objectContaining({
         type: true, paymentDate: true, endDate: true,
         employee: { select: expect.objectContaining({ idNumber: true, maritalStatus: true, dependents: true }) },
       }),
     }))
+    // AC-9: tidak ada query agregasi payroll kedua — penunjuk koreksi
+    // bukan agregasi (tidak memuat nominal/status apa pun).
+    expect(mocks.prismaMock.payroll.findMany).toHaveBeenNthCalledWith(2, {
+      where: { correctsPayrollId: { in: [1] } },
+      select: { correctsPayrollId: true },
+    })
     expect(r.ok).toBe(true)
     if (r.ok) expect(r.csv).toContain("1;2026;1;Andi;012345678091000;")
   })
