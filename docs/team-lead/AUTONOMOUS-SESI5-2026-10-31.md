@@ -648,4 +648,55 @@ Vonis GUGUR putaran ini (jangan diangkat lagi tanpa bukti baru):
 
 - Batas gagal-login per-email dilewati burst konkuren: `peekRateLimit` sebelum bcrypt adalah desain disengaja (hanya kegagalan tercatat, login sukses tak mengunci pengguna sah); bcrypt cost-12 adalah backpressure CPU alami dan limit per-IP `proxy.ts` menahan satu sumber. Menghitung percobaan sebelum verifikasi mengubah semantik lockout tanpa bukti eksploitasi konkret — gugur.
 
-Catatan CI lima head putaran 13 (`eab780289`, `bcbb2160a`, `1933c582e`, `6a934593a`, `37e34789a`) menyusul pada entri poll berikutnya; head putaran 12 seluruhnya hijau.
+Catatan CI lima head putaran 13: `eab780289` dan `bcbb2160a` **completed success**; `1933c582e` dan `37e34789a` **completed failure** dengan akar tunggal test basi pihak ketiga (`approval.actions.test.ts` masih mengharapkan perilaku pra-klaim pada persetujuan lembur) — produksi benar, tertutup oleh `9dfa33c66` di bawah.
+
+### Lanjutan putaran 13 (2026-11-01) — lane master+pengaturan (agent read-only, verifikasi sesi utama)
+
+Enam fix:
+
+1. `3f7aa0404` fix(pengaturan): `updateUserRoles` menilai ulang guard super_admin di bawah kunci baris `users` — dua edit peran konkuren bisa sama-sama melewati cek "super_admin terakhir" dari snapshot luar dan mencabut peran satu sama lain. 24/24 gabungan.
+2. `02bd28414` fix(master): cek duplikat `CustomerPriceList` terserialisasi per item — find-then-create tanpa unique constraint menghasilkan baris harga dobel untuk pasangan (item, tier) yang sama.
+3. `a2d8db9f1` fix(master): cek duplikat varian kendaraan terserialisasi per model — pola sama pada varian (model, nama varian).
+4. `32fe8c929` fix(master,keuangan): `updateAccount`/`updateCostCenter` menolak siklus induk di bawah kunci baris — walk rantai induk (pola `updateItemCategory` existing) kini di dalam tx terkunci, menutup race induk-saling-tukar.
+5. `e29a881f2` fix(aset): `updateAssetBrand` mengunci baris brand sebelum diff model — diff dari snapshot basi menimpa perubahan model konkuren.
+6. `cb4bf5641` fix(pengaturan): `createRole`/`updateRole` memetakan P2002 nama peran dobel ke error form, bukan error boundary mentah.
+
+CI: keenam head **completed failure** dengan akar tunggal yang sama seperti putaran 13 awal — test basi klaim lembur `approval.actions.test.ts` (diharapkan menimpa, produksi mengklaim nilai pertama). Tertutup oleh `9dfa33c66` test(sdm): selaraskan harapan klaim lembur workflow dengan klaim nilai pertama — CI **completed success** terverifikasi.
+
+### Putaran 14 (2026-11-01) — lane penjualan/pembelian/pajak/laporan (agent read-only, verifikasi sesi utama)
+
+Tujuh fix:
+
+1. `3e4863a91` fix(penjualan): denda piutang tidak mendenda sisa yang lunas lewat retur — basis denda menjadi `grandTotal − paidAmount − returnCredit`; action memuat kredit retur sesudah kunci baris faktur. 35/35 gabungan.
+2. `a4ee313ae` fix(penjualan): alokasi DP lanjutan mengunci baris faktur sebelum membaca pembayaran — `paidAmount` tak lagi tertimpa alokasi konkuren. 50/50 suite hook DP.
+3. `ccf561c9f` fix(laporan): histori proses hanya menghitung dokumen recognised (`RECOGNISED_AR_STATUSES`/`AP_STATUSES`, `deletedAt: null`) dan sisa kanonis (AR neto `returnCredit`, AP `VendorBill.balanceDue`). 20/20 gabungan.
+4. `22f5b64f3` fix(laporan): sisa tagihan pekerjaan dikurangi kredit retur pada `job-billing-summary`. 45/45 gabungan.
+5. `af8a8f560` fix(penjualan): edit penawaran mengunci baris faktur (`quotation_id … ORDER BY id FOR UPDATE`) sebelum menilai pelunasan. 199/199.
+6. `3052458ed` fix(pembelian): tandai/batalkan transfer vendor memakai klaim kondisional `updateMany` (`transferredAt` null/bukan-null), `updated` dari count klaim, pesan kosong jujur. 10/10.
+7. `7f8b6322b` fix(pajak): `createTaxPayment` menilai ulang jenis pajak dan akun di dalam tx (kunci `withholding_tax_types FOR UPDATE`, baca ulang `isActive`/`deletedAt`). 17/17 + 5/5.
+
+CI: ketujuh head **completed success**.
+
+Vonis GUGUR putaran ini (jangan diangkat lagi tanpa bukti baru):
+
+- `completeReconciliation` mensertifikasi scope basi: kode aktual sudah berkunci baris induk, gate status, tie-out GL, gate cakupan baris koran, klaim kondisional `status: "draft"`. Sisa lubang hanya jendela snapshot mikro; menutupnya butuh protokol kunci di semua penulis jurnal/baris koran — tidak proporsional.
+
+### Putaran 15 (2026-11-01) — lane produksi/inventaris + CRM/proyek/aset (agent read-only, verifikasi sesi utama)
+
+Delapan fix:
+
+1. `cf8cf3bf8` fix(produksi): start WO konkuren tidak lagi over-reserve stok yang sama — dua WO berbeda tak pernah berbagi kunci klaim; service kini mengunci baris `items` terurut lalu membaca ulang reservasi aktif lawan sebagai LOCKING READ (snapshot REPEATABLE READ tak disegarkan kunci). On-hand 100, dua WO butuh 80 → reservasi kedua terpotong 20 + shortage 60. 16/16 service; merah tanpa fix (`expected 80 to be 20`).
+2. `5d1f8e811` fix(inventaris): pulihan void faktur mewarisi umur FIFO dan expiry lot asal (STOK-09) — layer pulihan lahir tanpa `sourceCreatedAt` (berumur dari tanggal void) dan lot lahir ulang tanpa `expiryDate`. Metadata perjalanan kini disimpan di JSON `batchAllocations` existing (tanpa migrasi); COGS penjualan berikut tak lagi mengambil lot lebih muda dulu. 51/51 + 390/390 terkait.
+3. `5924f0c4f` fix(aset): `declining_balance` tanpa tarif kategori di-skip `no-basis`, bukan fallback garis lurus berlabel saldo menurun (buku 120jt sempat tersusut 2jt/bln garis lurus). 12/12.
+4. `c5b5542a6` fix(garansi): odometer lapor klaim tidak lagi memundurkan registry kendaraan — penulis `lastOdometerKm` satu-satunya di repo menimpa mentah; registry kini hanya maju lewat klaim kondisional `updateMany` (klaim sendiri tetap tercatat apa adanya, filosofi F-021). 47/47 gabungan.
+5. `df1700215` fix(penjualan): konfirmasi DP menautkan Project dan WorkOrder dua arah — WO lahir tanpa `projectId`, Project tanpa `workOrderId`/`customerVehicleId`, sehingga P/L proyek membaca 0 untuk pendapatan/biaya WO. Urutan lahir dibalik dalam tx sama. 127/127 gabungan.
+6. `00a2cde73` fix(aset): jurnal peristiwa perubahan aset (`ASSET_CHANGE_EVENT`) ikut nilai buku cron, disposal, dan laporan — `journalBookValue` membaca neto per akun (revaluasi/restatement/reklasifikasi) + kontra impairment terpisah; disposal membalik impairment eksplisit dan fail-closed tanpa akun. Tanpa ini disposal aset revaluasi mencatat laba semu dan menyisakan saldo yatim GL. 216/216 (12 file); merah tanpa fix 8 test.
+7. `9dc6bd0f1` fix(aset): perubahan parameter berjalan aset (kategori/metode/masa manfaat/residu) wajib lewat peristiwa perubahan — `updateAsset` berizin `edit_assets` menulis langsung, melewati jalur F-115 berizin `manage_assets`. Banding di bawah kunci baris; echo sama tetap lolos. 125/125.
+8. `05574a3b7` test(produksi): mock `$executeRaw` pada penjaga klaim start WO — penutup merah CI di bawah (test-only, produksi benar).
+
+CI: head `cf8cf3bf8`, `5d1f8e811`, `5924f0c4f`, `c5b5542a6`, `df1700215` **completed failure** dengan akar tunggal `work-order-start-lock.test.ts` yang tidak punya mock `$executeRaw` untuk kunci reservasi baru dari fix 1 (tak dijalankan lokal putaran itu — penguat aturan: ubah service bersama wajib grep + jalankan semua file test pemanggil). Penerusnya `05574a3b7`, `00a2cde73`, `9dc6bd0f1` **completed success** — seluruh putaran 15 hijau di head terakhir.
+
+Keterbatasan diterima putaran ini (dicatat, bukan ditunda diam-diam):
+
+- Peristiwa reklasifikasi yang memindahkan kategori membuat akun kategori berjalan berbeda dari akun saat jurnal lampau ditulis; loader menilai akun kategori berjalan (pola existing). Akuntansi per-akun-lama butuh snapshot akun per peristiwa — di luar cakupan.
+- Pasangan WO/Project yatim dari konfirmasi DP sebelum fix 5 tidak diperbaiki mundur (butuh keputusan data historis).
