@@ -1518,6 +1518,42 @@ describe("stocktake session (P1-5)", () => {
     expect(res.success).toBe(true);
   });
 
+  it("regresi putaran 48: saveStocktakeCounts menolak maju ke review bila masih ada baris belum dihitung", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({
+      warehouseId: 2,
+      status: "counting",
+    });
+    mocks.prismaMock.stocktakeSession.findUnique.mockResolvedValue({ status: "counting" });
+    mocks.prismaMock.stocktakeLine.findMany.mockResolvedValue([
+      { systemQty: 5, count1: 5, count2: null },
+      { systemQty: 7, count1: null, count2: null },
+    ]);
+    const fd = new FormData();
+    fd.set("counts", JSON.stringify([{ lineId: 1, count1: 5 }]));
+    const res = await actions.saveStocktakeCounts(1, fd);
+    expect(res.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/belum dihitung/);
+    expect(mocks.prismaMock.stocktakeSession.update).not.toHaveBeenCalled();
+  });
+
+  it("regresi putaran 48: postStocktakeSession menolak sesi approved yang masih punya baris belum dihitung", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({ warehouseId: 2 });
+    mocks.prismaMock.stocktakeSession.findUnique.mockResolvedValue({
+      id: 1,
+      warehouseId: 2,
+      documentNo: "OPN-1",
+      status: "approved",
+      lines: [
+        { itemId: 1, systemQty: 5, count1: 5, count2: null, batchNumbers: null, serialNumbers: null, item: { cost: 100, trackBatch: false, trackSerial: false } },
+        { itemId: 2, systemQty: 7, count1: null, count2: null, batchNumbers: null, serialNumbers: null, item: { cost: 100, trackBatch: false, trackSerial: false } },
+      ],
+    });
+    const res = await actions.postStocktakeSession(1);
+    expect(res.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/belum dihitung/);
+    expect(mocks.prismaMock.stocktakeSession.update).not.toHaveBeenCalled();
+  });
+
   it("approveStocktakeSession refuses self-approval (independence)", async () => {
     mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({
       id: 1,

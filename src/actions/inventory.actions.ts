@@ -2697,6 +2697,17 @@ export async function saveStocktakeCounts(id: number, formData: FormData) {
           count2: l.count2 == null ? null : Number(l.count2),
         })),
       );
+      // Sesi hanya boleh maju bila SEMUA baris terhitung: baris count1 null
+      // = belum dihitung (finalizeCounts melewatkannya), dan tanpa gerbang
+      // ini sesi bisa review → approved → posted dengan sebagian gudang
+      // tidak pernah diopname (stocktake-finalize: 0 adalah hitungan sah,
+      // null bukan).
+      const uncounted = lines.filter((l) => l.count1 == null).length;
+      if (uncounted > 0) {
+        throw new Error(
+          `Masih ada ${uncounted} baris yang belum dihitung — lengkapi seluruh hitungan sebelum sesi masuk tahap review.`,
+        );
+      }
       const pending = finals.filter((f) => f.needsRecount);
       await tx.stocktakeSession.update({
         where: { id },
@@ -2737,6 +2748,16 @@ export async function approveStocktakeSession(id: number) {
       }
       if (lockedSession.countedBy != null && Number(lockedSession.countedBy) === Number(user.id)) {
         throw new Error("Penyetuju harus independen — pencacah tidak boleh menyetujui sesi sendiri");
+      }
+      // Sesi review warisan bisa masih punya baris belum dihitung (masuk
+      // review sebelum gerbang kelengkapan save ada) — jangan setujui.
+      const uncounted = await tx.stocktakeLine.count({
+        where: { sessionId: id, count1: null },
+      });
+      if (uncounted > 0) {
+        throw new Error(
+          `Masih ada ${uncounted} baris yang belum dihitung — sesi tidak bisa disetujui sebelum seluruh baris dihitung.`,
+        );
       }
       await tx.stocktakeSession.update({
         where: { id },
@@ -2793,6 +2814,15 @@ export async function postStocktakeSession(id: number) {
           count2: l.count2 == null ? null : Number(l.count2),
         })),
       );
+      // Gerbang kelengkapan terakhir (warisan sesi yang masuk review
+      // sebelum gerbang ada / diubah langsung): baris belum dihitung
+      // tidak pernah boleh ikut posted.
+      const uncounted = session.lines.filter((l) => l.count1 == null).length;
+      if (uncounted > 0) {
+        throw new Error(
+          `Masih ada ${uncounted} baris yang belum dihitung — sesi tidak bisa diposting sebelum seluruh baris dihitung.`,
+        );
+      }
       const differing = finals.filter((f) => f.variance !== 0);
       if (differing.length === 0) {
         await tx.stocktakeSession.update({ where: { id }, data: { status: "posted" } });
