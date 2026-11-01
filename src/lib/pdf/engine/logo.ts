@@ -33,9 +33,30 @@ function bufferFromDataUrl(dataUrl: string): Buffer | null {
   }
 }
 
+/**
+ * Origin yang boleh di-fetch server untuk logo: origin app sendiri (logo
+ * lokal "/api/uploads/...") dan assetBaseUrl terkonfigurasi (CDN/R2 publik).
+ * companyLogo adalah string bebas dari pengaturan, tetapi fetch-nya dipicu
+ * user berizin lebih rendah lewat /api/pdf — tanpa allowlist ini nilai itu
+ * menjadi blind SSRF GET ke layanan internal setiap laporan dicetak.
+ */
+function allowedLogoOrigins(origin?: string, assetBaseUrl?: string): Set<string> {
+  const allowed = new Set<string>()
+  for (const candidate of [origin, assetBaseUrl, process.env.NEXT_PUBLIC_ASSET_BASE_URL]) {
+    if (!candidate) continue
+    try {
+      allowed.add(new URL(candidate).origin)
+    } catch {
+      // Nilai konfigurasi rusak: abaikan, jangan jadikan celah.
+    }
+  }
+  return allowed
+}
+
 export async function resolveDocumentLogo(
   logoUrl: string | null | undefined,
   origin?: string,
+  assetBaseUrl?: string | null,
 ): Promise<DocumentLogo | null> {
   if (!logoUrl) return null
 
@@ -47,8 +68,11 @@ export async function resolveDocumentLogo(
 
     const url = new URL(logoUrl, origin)
     if (url.protocol !== "http:" && url.protocol !== "https:") return null
+    if (!allowedLogoOrigins(origin, assetBaseUrl ?? undefined).has(url.origin)) return null
 
-    const response = await fetch(url, { cache: "no-store" })
+    // redirect: "manual" — respons 3xx ke host lain harus berhenti di sini,
+    // bukan melompati allowlist origin di atas.
+    const response = await fetch(url, { cache: "no-store", redirect: "manual" })
     if (!response.ok) return null
 
     const buffer = Buffer.from(await response.arrayBuffer())

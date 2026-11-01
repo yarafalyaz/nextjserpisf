@@ -62,7 +62,11 @@ async function buildDocumentParts(
   input: { printedBy?: string | null; origin?: string },
 ): Promise<{ letterhead: DocumentLetterhead; printFooter: string }> {
   const settings = await getSystemSettings()
-  const logo = await resolveDocumentLogo(settings.companyLogo, input.origin)
+  const logo = await resolveDocumentLogo(
+    settings.companyLogo,
+    input.origin,
+    (settings as { assetBaseUrl?: string | null }).assetBaseUrl,
+  )
   const letterhead = companyLetterhead(settings, logo)
 
   // Nama pencetak yang sama dengan nama perusahaan tidak perlu diulang di kaki
