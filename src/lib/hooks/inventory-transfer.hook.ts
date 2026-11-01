@@ -435,6 +435,11 @@ export async function onTransferReceived(
         itemId: it.itemId,
         qty: Number(it.qty),
         receivedQty: Number(it.receivedQty),
+        // Umur lapisan sumber wajib ikut: tanpa ini lapisan tujuan lahir
+        // berumur tanggal terima (urutan FIFO + laporan umur stok salah)
+        // walau nilai bawaan tetap benar. Jalur legacy membaca kolom ini
+        // langsung dari baris transfer; jalur parsial sempat tertinggal.
+        sourceLayerCreatedAt: it.sourceLayerCreatedAt ?? null,
         serialNumbers: parseStoredSerials(it.serialNumbers),
         batchAllocations: parseStoredBatchAllocations(it.batchAllocations),
         trackSerial: itemMetaById.get(it.itemId)?.trackSerial,
@@ -454,7 +459,7 @@ export async function onTransferReceived(
       for (const line of lines) {
         const state = lineById.get(line.transferItemId)!;
         const entry = entriesByItem.get(state.itemId) ?? { itemId: state.itemId, qty: 0, serials: [], batches: [] };
-        const srcAge = (state as { sourceLayerCreatedAt?: Date | null }).sourceLayerCreatedAt ?? null;
+        const srcAge = state.sourceLayerCreatedAt ?? null;
         if (srcAge && (!entry.sourceCreatedAt || srcAge.getTime() < entry.sourceCreatedAt.getTime())) {
           entry.sourceCreatedAt = srcAge;
         }

@@ -243,6 +243,26 @@ describe("onTransferReceived", () => {
     )
   })
 
+  it("regresi putaran 48: penerimaan parsial meneruskan umur sumber ke lapisan tujuan", async () => {
+    const srcAge = new Date("2026-01-01T00:00:00Z")
+    const { spies } = wireTx([
+      { id: 51, itemId: 7, qty: 3, sourceLayerCreatedAt: srcAge } as never,
+    ], "processed")
+    spies.moveFindMany.mockResolvedValueOnce([{ itemId: 7, cost: 15 }])
+    spies.moveCreate.mockResolvedValueOnce({ id: 900 })
+
+    await onTransferReceived(100, 1, undefined, {
+      receivedDate: new Date("2026-03-01T00:00:00Z"),
+      idempotencyKey: "receipt-key-1",
+      lines: [{ transferItemId: 51, qty: 2 }],
+    })
+
+    expect(mocks.createInLayer).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ itemId: 7, sourceCreatedAt: srcAge }),
+    )
+  })
+
   it("aggregates items and preserves exact cost basis from OUT moves", async () => {
     const { spies } = wireTx([
       { itemId: 7, qty: 3 },

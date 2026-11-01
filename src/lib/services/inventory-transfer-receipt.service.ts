@@ -36,6 +36,8 @@ export interface TransferLineState {
   itemId: number
   qty: number
   receivedQty: number
+  /** Umur lapisan FIFO sumber beku dari process (null = umur tak tercatat). */
+  sourceLayerCreatedAt?: Date | null
   /** Serial terkirim beku dari process (atribusi FIFO sumber). */
   serialNumbers?: readonly string[] | null
   /** Lot terkirim beku dari process (atribusi FIFO sumber). */
