@@ -162,10 +162,23 @@ describe("Vendor Price validasi Zod", () => {
 
   it("regresi putaran 32: updateVendorPrice menolak item nonaktif", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    mocks.prismaMock.vendorItemPrice.findUnique.mockResolvedValueOnce({ id: 1 })
+    // Putaran 43: gerbang hanya saat pasangan BERPINDAH — baris lama
+    // vendor 2, payload pindah ke vendor 1 dengan item nonaktif.
+    mocks.prismaMock.vendorItemPrice.findUnique.mockResolvedValueOnce({ id: 1, vendorId: 2, itemId: 7 })
     mocks.prismaMock.item.findFirst.mockResolvedValue(null)
     const res = await actions.updateVendorPrice(1, fdMap({ ...base, minQty: "1" }))
     expect(res?.success).toBe(false)
     expect(mocks.prismaMock.vendorItemPrice.update).not.toHaveBeenCalled()
+  })
+
+  // Regresi putaran 43: pasangan tak berubah tidak dinilai ulang — koreksi
+  // harga baris historis tetap bisa atas vendor/item yang kini nonaktif.
+  it("regresi putaran 43: updateVendorPrice tak menilai ulang pasangan yang tidak berpindah", async () => {
+    mocks.prismaMock.vendorItemPrice.findUnique.mockResolvedValueOnce({ id: 1, vendorId: 1, itemId: 7 })
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.item.findFirst.mockResolvedValue(null)
+    const res = await actions.updateVendorPrice(1, fdMap({ ...base, minQty: "1" }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vendorItemPrice.update).toHaveBeenCalled()
   })
 })

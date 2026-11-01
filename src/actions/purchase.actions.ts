@@ -987,6 +987,11 @@ export async function createPurchaseRequest(formData: FormData) {
     const documentNo = await generateDocumentNumber("PR");
     const slug = await nextSlug("purchaseRequest", documentNo);
     await assertLiveRequester(v.requestedBy);
+    // Vendor saran PR dinilai hidup (putaran 43): kolom bare-int tanpa FK,
+    // id nonaktif/fiktif tersimpan senyap tanpa gerbang ini.
+    if (v.vendorId != null) {
+      await assertLiveVendorTx(prisma, v.vendorId);
+    }
     const requestedBy = v.requestedBy || Number(user.id);
     const items = parsePurchaseRequestItems(v.items);
     // Baris PR bebas (bukan turunan dokumen lain): item mati/fiktif ditolak
@@ -3577,7 +3582,12 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
 
     const slug = await nextSlug("purchaseRequest", existingPr.documentNo, { excludeId: id });
 
-    await assertLiveRequester(v.requestedBy);
+    // Pemohon hanya dinilai bila BERPINDAH dari baris tersimpan (putaran
+    // 43): karyawan yang berhenti sesudah PR lahir tidak memblokir edit
+    // nominal PR draft miliknya.
+    if (v.requestedBy != null && v.requestedBy !== existingPr.requestedBy) {
+      await assertLiveRequester(v.requestedBy);
+    }
     const requestedBy = v.requestedBy || Number(user.id);
     // Parse sebelum transaksi: qty tak terbaca ditolak sebelum deleteMany
     // menghapus baris lama.
@@ -3596,10 +3606,14 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
       await tx.$executeRaw`SELECT id FROM purchase_requests WHERE id = ${id} FOR UPDATE`;
       const latestStatus = await tx.purchaseRequest.findUnique({
         where: { id },
-        select: { status: true },
+        select: { status: true, vendorId: true },
       });
       if (latestStatus && latestStatus.status !== "draft")
         throw new Error("Hanya PR draft yang dapat diedit");
+      // Vendor saran hanya dinilai hidup saat berpindah (putaran 43).
+      if (v.vendorId != null && v.vendorId !== (latestStatus?.vendorId ?? null)) {
+        await assertLiveVendorTx(tx, v.vendorId);
+      }
       await tx.purchaseRequestItem.deleteMany({
         where: { purchaseRequestId: id },
       });
@@ -3677,15 +3691,17 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
       await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${id} FOR UPDATE`;
       const latest = await tx.purchaseOrder.findUnique({
         where: { id },
-        select: { status: true, isService: true, workOrderId: true },
+        select: { status: true, isService: true, workOrderId: true, vendorId: true, purchaseRequestId: true },
       });
       if (latest && latest.status !== "draft")
         throw new Error("Hanya PO draft yang dapat diedit");
-      // Relink PR lewat edit memakai gerbang yang sama seperti create:
-      // kunci baris PR, lalu status wajib approved/partial_ordered. Tanpa
-      // ini PO draft bisa ditempel ke PR konsep/ditolak dan approval
-      // generik mem-flip-nya approved tanpa gerbang pembelian.
-      if (v.purchaseRequestId) {
+      // Gerbang tautan hanya saat BERPINDAH dari baris terkunci (preseden
+      // relink putaran 31-40): PR/vendor yang tidak berubah tidak dinilai
+      // ulang — status PR yang sudah maju (ordered) atau vendor yang
+      // dinonaktifkan sesudahnya tidak boleh memblokir edit nominal PO
+      // draft; titik pengakuan (confirm/verify) yang menilai ulang.
+      const prRelinked = (v.purchaseRequestId ?? null) !== (latest?.purchaseRequestId ?? null);
+      if (v.purchaseRequestId && prRelinked) {
         await tx.$queryRaw`SELECT id FROM purchase_requests WHERE id = ${v.purchaseRequestId} FOR UPDATE`;
         const pr = await tx.purchaseRequest.findUnique({
           where: { id: v.purchaseRequestId },
@@ -3698,9 +3714,9 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
           );
         }
       }
-      // Edit draft bisa memindah vendor: target baru wajib vendor hidup
-      // (create menegakkan ini sejak putaran 22, edit belum).
-      await assertLiveVendorTx(tx, v.vendorId);
+      if (latest && v.vendorId !== latest.vendorId) {
+        await assertLiveVendorTx(tx, v.vendorId);
+      }
       // Edit menulis ulang seluruh baris: item mati/fiktif ditolak bernama
       // sebelum deleteMany menghapus baris lama.
       if (poItems.length > 0) {
@@ -3815,7 +3831,12 @@ export async function updateVendorBill(id: number, formData: FormData) {
       Number(billHeader.grandTotal),
     );
     if (withholdingError) throw new Error(withholdingError);
-    await assertLiveWithholdingTypeTx(prisma, v.withholdingTypeId ?? null);
+    // Tipe potongan hanya dinilai hidup saat BERPINDAH (putaran 43):
+    // tipe yang dinonaktifkan sesudah draft lahir tidak memblokir edit
+    // nominal; titik pengakuan (confirm) menilai ulang.
+    if ((v.withholdingTypeId ?? null) !== (existingBill.withholdingTypeId ?? null)) {
+      await assertLiveWithholdingTypeTx(prisma, v.withholdingTypeId ?? null);
+    }
 
     const bill = await prisma.$transaction(async (tx) => {
       // Kunci baris bill lebih dulu, lalu nilai status dari baca ulang di
@@ -3828,13 +3849,16 @@ export async function updateVendorBill(id: number, formData: FormData) {
       }
       const latestBill = await tx.vendorBill.findUnique({
         where: { id },
-        select: { status: true, goodsReceiptId: true },
+        select: { status: true, goodsReceiptId: true, vendorId: true },
       });
       if (latestBill && latestBill.status !== "draft")
         throw new Error("Hanya tagihan draft yang dapat diedit");
-      // Edit draft bisa memindah vendor: target baru wajib vendor hidup
-      // (gerbang kesamaan PO di bawah hanya berlaku bila bill ber-PO).
-      await assertLiveVendorTx(tx, v.vendorId);
+      // Vendor hanya dinilai hidup saat BERPINDAH (putaran 43, preseden
+      // relink): vendor tak berubah yang dinonaktifkan sesudah draft
+      // lahir tidak memblokir edit nominal — confirm menilai ulang.
+      if (!latestBill || v.vendorId !== latestBill.vendorId) {
+        await assertLiveVendorTx(tx, v.vendorId);
+      }
       // Nomor faktur tempel hasil edit dinilai duplikatnya (putaran 43),
       // terserialisasi atas baris vendor seperti create.
       await tx.$executeRaw`SELECT id FROM vendors WHERE id = ${v.vendorId} FOR UPDATE`;
@@ -4315,7 +4339,10 @@ export async function updateVendorPayment(id: number, formData: FormData) {
       throw new Error("Hanya pembayaran draft yang dapat diedit");
     }
 
-    if (v.accountId != null) {
+    // Akun hanya dinilai hidup saat BERPINDAH (putaran 43): akun yang
+    // dinonaktifkan sesudah draft lahir tidak memblokir edit nominal —
+    // confirm menilai ulang di bawah kunci.
+    if (v.accountId != null && v.accountId !== (existingPayment.accountId ?? null)) {
       await assertCashBankAccountForVendorPayment(prisma, v.accountId)
     }
 
@@ -4342,12 +4369,17 @@ export async function updateVendorPayment(id: number, formData: FormData) {
         throw new Error("Hanya pembayaran draft yang dapat diedit");
       }
       // Putaran 22: edit tak boleh memindah pembayaran ke vendor
-      // soft-deleted/nonaktif (pola guard createPurchaseOrder).
-      const liveVendor = await tx.vendor.findFirst({
-        where: { id: v.vendorId, isActive: true, deletedAt: null },
-        select: { id: true },
-      });
-      if (!liveVendor) throw new Error("Vendor tidak ditemukan atau tidak aktif");
+      // soft-deleted/nonaktif (pola guard createPurchaseOrder). Putaran 43:
+      // hanya saat vendor BERPINDAH dari baris terkunci — vendor tak
+      // berubah yang dinonaktifkan sesudahnya tidak memblokir edit
+      // nominal; confirm menilai ulang.
+      if (v.vendorId !== freshPayment.vendorId) {
+        const liveVendor = await tx.vendor.findFirst({
+          where: { id: v.vendorId, isActive: true, deletedAt: null },
+          select: { id: true },
+        });
+        if (!liveVendor) throw new Error("Vendor tidak ditemukan atau tidak aktif");
+      }
       // Target tagihan ditulis ulang di sini: wajib divalidasi seperti
       // create (milik vendor yang sama, belum lunas/batal, bukan konsep).
       // Tanpa ini edit menyimpan tautan menyesatkan yang baru tertahan

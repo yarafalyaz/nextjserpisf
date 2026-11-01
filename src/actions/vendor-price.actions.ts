@@ -93,14 +93,22 @@ export async function updateVendorPrice(id: number, formData: FormData): Promise
   try {
     await requirePermission("edit_vendor_prices")
 
-    const existing = await prisma.vendorItemPrice.findUnique({ where: { id }, select: { id: true } })
+    const existing = await prisma.vendorItemPrice.findUnique({
+      where: { id },
+      select: { id: true, vendorId: true, itemId: true },
+    })
     if (!existing) return { success: false, error: "Harga pemasok tidak ditemukan." }
 
     const parsed = parseFormData(vendorPriceSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
     const v = parsed.data
 
-    await assertLiveVendorItem(v.vendorId, v.itemId)
+    // Pasangan vendor/item hanya dinilai hidup saat BERPINDAH (putaran
+    // 43): baris harga historis atas vendor/item yang kini nonaktif tetap
+    // bisa dikoreksi harganya.
+    if (v.vendorId !== existing.vendorId || v.itemId !== existing.itemId) {
+      await assertLiveVendorItem(v.vendorId, v.itemId)
+    }
 
     const duplicate = await prisma.vendorItemPrice.findFirst({
       where: { vendorId: v.vendorId, itemId: v.itemId, minQty: toMoney(v.minQty), id: { not: id } },
