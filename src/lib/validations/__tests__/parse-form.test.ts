@@ -49,24 +49,6 @@ describe("parseFormData", () => {
     }
   })
 
-  it("putaran 42: koersi '0' menjadi boolean false bila field berurutan", () => {
-    // SettingSwitch kirim hidden "0" lalu Switch "on"; saat switch mati FormData
-    // hanya berisi "0" untuk field boolean itu.
-    const fd = new FormData()
-    fd.append("active", "0")
-    const result = parseFormData(z.object({ active: z.boolean().optional() }), fd)
-    expect(result.success).toBe(true)
-    if (result.success) expect(result.data.active).toBe(false)
-  })
-
-  it("putaran 42: koersi '1' menjadi boolean true bila field berurutan", () => {
-    const fd = new FormData()
-    fd.append("active", "1")
-    const result = parseFormData(z.object({ active: z.boolean().optional() }), fd)
-    expect(result.success).toBe(true)
-    if (result.success) expect(result.data.active).toBe(true)
-  })
-
   it("putaran 42: nilai akhir menang — hidden 0 lalu on menjadi true", () => {
     const fd = new FormData()
     fd.append("active", "0")
@@ -74,6 +56,27 @@ describe("parseFormData", () => {
     const result = parseFormData(z.object({ active: z.boolean().optional() }), fd)
     expect(result.success).toBe(true)
     if (result.success) expect(result.data.active).toBe(true)
+  })
+
+  // Regresi CI putaran 42: koersi boolean "1"/"0" di formDataToObject merusak
+  // field non-boolean yang nilainya tepat "1" (FormData ekspor Coretax
+  // "taxInvoiceIds" satu faktur = "1" -> Boolean true -> Zod menolak string).
+  // String "1"/"0" kini dibiarkan apa adanya; field boolean menormalkan
+  // sendiri pada lapis skema, bukan pada lapis FormData bersama.
+  it("regresi putaran 42: field string bernilai tepat '1' tetap string '1'", () => {
+    const csvSchema = z.object({
+      ids: z.string().min(1).transform((v) => v.split(",")),
+    })
+    const result = parseFormData(csvSchema, makeFormData({ ids: "1" }))
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.ids).toEqual(["1"])
+  })
+
+  it("regresi putaran 42: field angka bernilai tepat '0' tetap nol", () => {
+    const numSchema = z.object({ qty: z.coerce.number().int().min(0) })
+    const result = parseFormData(numSchema, makeFormData({ qty: "0" }))
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.qty).toBe(0)
   })
 
   it("coerces 'on' to boolean true", () => {

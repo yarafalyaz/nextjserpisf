@@ -32,8 +32,14 @@ const nonNegativeDecimal = () =>
 const nonNegativeInt = () =>
   z.coerce.number().int().min(0).nullable().optional()
 
+// FormData saklar Radix: hidden "0" + "on" bila hidup, hanya "0" bila mati.
+// String "0"/"1" dinormalkan di sini; formDataToObject tidak boleh
+// mengkoersinya global karena field non-boolean bisa sah bernilai itu.
 const optionalBool = () =>
-  z.boolean().optional()
+  z.preprocess(
+    (v) => (v === "0" ? false : v === "1" ? true : v),
+    z.boolean().optional(),
+  )
 
 // ==================== SYSTEM SETTINGS ====================
 

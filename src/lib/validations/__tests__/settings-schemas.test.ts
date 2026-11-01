@@ -90,6 +90,15 @@ describe("updateSystemSettingsSchema", () => {
     ).toBe(false)
   })
 
+  it("putaran 42: toggle menerima string '0'/'1' dari saklar Radix (normalisasi skema)", () => {
+    expect(
+      updateSystemSettingsSchema.parse({ enableAutoItemCode: "0" }).enableAutoItemCode,
+    ).toBe(false)
+    expect(
+      updateSystemSettingsSchema.parse({ enableAutoItemCode: "1" }).enableAutoItemCode,
+    ).toBe(true)
+  })
+
   it("rejects quotationFooterNotes over 2000 chars", () => {
     expect(
       updateSystemSettingsSchema.safeParse({

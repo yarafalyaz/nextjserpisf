@@ -2,11 +2,16 @@ import type { ZodType } from "zod"
 import "./zod-locale";
 
 /**
- * Extracts all entries from a FormData object into a plain object,
- * coercing values as needed for Zod validation:
+ * Extracts all entries from a FormData object into a plain object.
  * - Empty strings → undefined
- * - "true"/"false" → boolean
- * - Numeric strings → number
+ * - "true"/"on"/"false"/"off" → boolean (eksklusif untuk field boolean)
+ * - Nilai lain dibiarkan string; skema memakai z.coerce.number() bila perlu.
+ *
+ * "1"/"0" sengaja TIDAK dikoersi di sini: field non-boolean bisa sah
+ * bernilai tepat itu (mis. CSV satu id "1" pada ekspor Coretax), dan koersi
+ * global merusaknya menjadi Boolean. Saklar Radix mengirim "0" lewat hidden
+ * + "on" bila hidup — kebutuhan boolean tertutup oleh normalisasi pada
+ * skema boolean itu sendiri, bukan pada lapis FormData bersama.
  */
 function formDataToObject(formData: FormData): Record<string, unknown> {
   const obj: Record<string, unknown> = {}
@@ -23,12 +28,12 @@ function formDataToObject(formData: FormData): Record<string, unknown> {
       return
     }
 
-    // Boolean coercion
-    if (trimmed === "true" || trimmed === "on" || trimmed === "1") {
+    // Boolean coercion — hanya literal yang tidak ambigu sebagai boolean.
+    if (trimmed === "true" || trimmed === "on") {
       obj[field] = true
       return
     }
-    if (trimmed === "false" || trimmed === "off" || trimmed === "0") {
+    if (trimmed === "false" || trimmed === "off") {
       obj[field] = false
       return
     }
