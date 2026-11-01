@@ -276,6 +276,31 @@ export async function reverseJournalsByReferenceTx(
   });
   if (journals.length === 0) return;
 
+  // Kunci baris jurnal asal dulu (id menaik = urutan global), lalu nilai
+  // status dari bacaan segar di bawah kunci: dua caller konkuren atas
+  // referensi sama (key generated active_reference_key memuat
+  // journal_number sehingga unik tak menahan reversal ganda) tidak lagi
+  // sama-sama melihat POSTED lalu sama-sama menerbitkan lawan; yang kedua
+  // melihat REVERSED dan skip. Pemanggil yang mengunci dokumen sumber
+  // tidak cukup — caller langsung helper ini tak selalu melakukannya.
+  const journalIds = journals.map((j) => j.id).sort((a, b) => a - b);
+  await tx.$executeRaw`SELECT id FROM journals WHERE id IN (${Prisma.join(journalIds)}) ORDER BY id FOR UPDATE`;
+  const freshById = new Map(
+    (
+      await tx.journal.findMany({
+        where: { id: { in: journalIds } },
+        select: { id: true, status: true, transactionDate: true },
+      })
+    ).map((row) => [row.id, row]),
+  );
+  for (const j of journals) {
+    const fresh = freshById.get(j.id);
+    if (fresh) {
+      j.status = fresh.status;
+      j.transactionDate = fresh.transactionDate;
+    }
+  }
+
   for (const j of journals) {
     // REVERSED sudah punya jurnal lawan POSTED (referenceType "Journal").
     // Lewati tanpa hapus: menghapus asli akan meninggalkan counterpart

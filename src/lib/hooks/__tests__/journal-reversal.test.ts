@@ -11,6 +11,7 @@ const journalDelete = vi.fn()
 const entryCreateMany = vi.fn()
 const entryDeleteMany = vi.fn()
 const periodOpen = vi.fn()
+const executeRaw = vi.fn()
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {},
@@ -25,6 +26,7 @@ vi.mock("@/lib/services/document-sequence.service", () => ({
 import { reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
 
 const tx = {
+  $executeRaw: (...a: unknown[]) => executeRaw(...a),
   journal: {
     findMany: (...a: unknown[]) => journalFindMany(...a),
     findFirst: (...a: unknown[]) => journalFindFirst(...a),
@@ -64,11 +66,14 @@ beforeEach(() => {
   entryCreateMany.mockResolvedValue({ count: 2 })
   entryDeleteMany.mockResolvedValue({ count: 0 })
   periodOpen.mockResolvedValue(undefined)
+  executeRaw.mockResolvedValue(1)
 })
 
 describe("reverseJournalsByReferenceTx (P1-7)", () => {
   it("creates a mirror entry and marks the original REVERSED", async () => {
-    journalFindMany.mockResolvedValue([POSTED])
+    journalFindMany
+      .mockResolvedValueOnce([POSTED])
+      .mockResolvedValueOnce([{ id: 5, status: "POSTED", transactionDate: POSTED.transactionDate }])
 
     await reverseJournalsByReferenceTx(tx as never, "SalesInvoice", 7, "void/edit faktur #7", 1)
 
@@ -99,7 +104,9 @@ describe("reverseJournalsByReferenceTx (P1-7)", () => {
   })
 
   it("is idempotent: skips journals that already have a reversal", async () => {
-    journalFindMany.mockResolvedValue([POSTED])
+    journalFindMany
+      .mockResolvedValueOnce([POSTED])
+      .mockResolvedValueOnce([{ id: 5, status: "POSTED", transactionDate: POSTED.transactionDate }])
     journalFindFirst.mockResolvedValue({ id: 77 })
 
     await reverseJournalsByReferenceTx(tx as never, "SalesInvoice", 7, "r", null)
@@ -109,7 +116,9 @@ describe("reverseJournalsByReferenceTx (P1-7)", () => {
   })
 
   it("refuses reversal when the original period is locked", async () => {
-    journalFindMany.mockResolvedValue([POSTED])
+    journalFindMany
+      .mockResolvedValueOnce([POSTED])
+      .mockResolvedValueOnce([{ id: 5, status: "POSTED", transactionDate: POSTED.transactionDate }])
     periodOpen.mockRejectedValue(new Error("Periode terkunci"))
 
     await expect(
@@ -120,7 +129,9 @@ describe("reverseJournalsByReferenceTx (P1-7)", () => {
 
   it("REVERSED journal is skipped, not deleted (counterpart must not be orphaned)", async () => {
     const REVERSED = { ...POSTED, status: "REVERSED" }
-    journalFindMany.mockResolvedValue([REVERSED])
+    journalFindMany
+      .mockResolvedValueOnce([REVERSED])
+      .mockResolvedValueOnce([{ id: 5, status: "REVERSED", transactionDate: POSTED.transactionDate }])
     // Even if the counterpart lookup would find the reversal, the status
     // branch alone must already skip — deleting the REVERSED original would
     // strand its POSTED counterpart as a one-sided GL balance.
@@ -136,7 +147,9 @@ describe("reverseJournalsByReferenceTx (P1-7)", () => {
 
   it("REVERSED without a found counterpart is still skipped, not deleted", async () => {
     const REVERSED = { ...POSTED, status: "REVERSED" }
-    journalFindMany.mockResolvedValue([REVERSED])
+    journalFindMany
+      .mockResolvedValueOnce([REVERSED])
+      .mockResolvedValueOnce([{ id: 5, status: "REVERSED", transactionDate: POSTED.transactionDate }])
     journalFindFirst.mockResolvedValue(null)
 
     await reverseJournalsByReferenceTx(tx as never, "SalesInvoice", 7, "void lagi", 1)
@@ -157,12 +170,37 @@ describe("reverseJournalsByReferenceTx (P1-7)", () => {
 
   it("DRAFT journal is still deleted (not yet in GL)", async () => {
     const DRAFT = { ...POSTED, status: "DRAFT" }
-    journalFindMany.mockResolvedValue([DRAFT])
+    journalFindMany
+      .mockResolvedValueOnce([DRAFT])
+      .mockResolvedValueOnce([{ id: 5, status: "DRAFT", transactionDate: POSTED.transactionDate }])
 
     await reverseJournalsByReferenceTx(tx as never, "SalesInvoice", 7, "edit draft", 1)
 
     expect(journalDelete).toHaveBeenCalledWith({ where: { id: 5 } })
     expect(entryDeleteMany).toHaveBeenCalledWith({ where: { journalId: 5 } })
     expect(journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 16: bacaan segar REVERSED di bawah kunci membatalkan reversal ganda", async () => {
+    // Caller pertama membaca POSTED di snapshot; caller kedua (pemenang
+    // kunci) sudah commit REVERSED. Bacaan segar sesudah FOR UPDATE wajib
+    // membuat caller kalah skip — tanpa itu dua jurnal lawan lahir.
+    journalFindMany
+      .mockResolvedValueOnce([POSTED])
+      .mockResolvedValueOnce([{ id: 5, status: "REVERSED", transactionDate: POSTED.transactionDate }])
+    journalFindFirst.mockResolvedValue(null)
+
+    await reverseJournalsByReferenceTx(tx as never, "SalesInvoice", 7, "void konkuren", 1)
+
+    expect(executeRaw).toHaveBeenCalledTimes(1)
+    const lockCall = (executeRaw.mock.calls as unknown[][])[0]?.[0] as { sql?: string; strings?: string[] } | string[]
+    const sql = Array.isArray(lockCall) ? lockCall.join("?") : (lockCall?.sql ?? lockCall?.strings?.join("?") ?? "")
+    expect(sql).toContain("journals")
+    expect(sql).toContain("FOR UPDATE")
+    expect(executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      journalFindFirst.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
+    )
+    expect(journalCreate).not.toHaveBeenCalled()
+    expect(journalUpdate).not.toHaveBeenCalled()
   })
 })

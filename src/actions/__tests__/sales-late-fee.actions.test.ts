@@ -29,6 +29,8 @@ const mocks = vi.hoisted(() => {
     salesReturn: model(),
     financialIdempotencyKey: model(),
     $queryRaw: vi.fn(async () => [{ id: 1, period_lock_date: null }]),
+    // Putaran 16: reverseJournalsByReferenceTx mengunci baris journals.
+    $executeRaw: vi.fn(async () => 1),
   }
   const prismaMock: Record<string, unknown> = {
     ...tx,
@@ -392,22 +394,28 @@ describe("reverseSalesLateFee (E93-6 waiver)", () => {
       reversesId: null,
       reversedBy: null,
     })
-    tx.journal.findMany.mockResolvedValue([
-      {
-        id: 900,
-        journalNumber: "LF/55/x",
-        transactionDate: new Date(2026, 9, 11),
-        description: "denda",
-        type: "GENERAL",
-        status: "POSTED",
-        totalDebit: 60_000,
-        totalCredit: 60_000,
-        entries: [
-          { accountId: 110, debit: 60_000, credit: 0, memo: "Piutang denda keterlambatan", costCenterId: null, profitCenterId: null },
-          { accountId: 410, debit: 0, credit: 60_000, memo: "Pendapatan denda keterlambatan", costCenterId: null, profitCenterId: null },
-        ],
-      },
-    ])
+    // Panggilan pertama = jurnal referensi; kedua = bacaan segar status
+    // sesudah kunci baris journals (putaran 16).
+    tx.journal.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 900,
+          journalNumber: "LF/55/x",
+          transactionDate: new Date(2026, 9, 11),
+          description: "denda",
+          type: "GENERAL",
+          status: "POSTED",
+          totalDebit: 60_000,
+          totalCredit: 60_000,
+          entries: [
+            { accountId: 110, debit: 60_000, credit: 0, memo: "Piutang denda keterlambatan", costCenterId: null, profitCenterId: null },
+            { accountId: 410, debit: 0, credit: 60_000, memo: "Pendapatan denda keterlambatan", costCenterId: null, profitCenterId: null },
+          ],
+        },
+      ])
+      .mockResolvedValueOnce([
+        { id: 900, status: "POSTED", transactionDate: new Date(2026, 9, 11) },
+      ])
     tx.journal.findFirst.mockResolvedValue(null)
     tx.salesLateFee.create.mockResolvedValue({ id: 56, documentNo: "002/LF/YRA/10/2026" })
     const res = await actions.reverseSalesLateFee(
