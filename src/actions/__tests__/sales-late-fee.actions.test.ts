@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
     account: model(),
     journal: model(),
     journalEntry: model(),
+    salesReturn: model(),
     financialIdempotencyKey: model(),
     $queryRaw: vi.fn(async () => [{ id: 1, period_lock_date: null }]),
   }
@@ -141,6 +142,10 @@ beforeEach(() => {
   )
   tx.journal.findFirst.mockResolvedValue(null)
   tx.journal.create.mockResolvedValue({ id: 900 })
+  // Loader kredit retur: default tanpa retur. mockReset eksplisit karena
+  // vi.clearAllMocks tidak membuang mockResolvedValue antar-test.
+  tx.salesReturn.findMany.mockReset().mockResolvedValue([])
+  tx.journal.findMany.mockReset().mockResolvedValue([])
 })
 
 describe("issueSalesLateFee (E93-1..5)", () => {
@@ -170,6 +175,22 @@ describe("issueSalesLateFee (E93-1..5)", () => {
     expect(res.success).toBe(true)
     expect(tx.salesInvoice.update).not.toHaveBeenCalled()
     expect(JSON.stringify(invoiceRow)).toBe(before)
+  })
+
+  it("retur POSTED melunasi sisa → denda ditolak, nol dokumen", async () => {
+    // Regresi: faktur Rp10jt dibayar Rp4jt lalu lunas lewat retur Rp6jt.
+    // Basis denda lama (grandTotal − paidAmount) mendenda sisa semu Rp6jt.
+    tx.salesReturn.findMany.mockResolvedValue([{ id: 77, salesInvoiceId: 10 }])
+    tx.journal.findMany.mockResolvedValue([
+      { referenceId: 77, entries: [{ credit: 6_000_000 }] },
+    ])
+
+    const res = await actions.issueSalesLateFee(fd(issueFd))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sisa piutang")
+    expect(tx.salesLateFee.create).not.toHaveBeenCalled()
+    expect(tx.journal.create).not.toHaveBeenCalled()
   })
 
   it("E93-1: syarat absen → ditolak, nol dokumen, nol jurnal", async () => {

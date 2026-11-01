@@ -29,6 +29,7 @@ import {
   payloadFingerprint,
 } from "@/lib/services/financial-idempotency.service"
 import { computeLateFeeAmount } from "@/lib/reports/late-fee"
+import { loadReturnCreditByInvoiceIdWithClient } from "@/lib/reports/return-credit"
 import { lateFeeStatusAfterPayment } from "@/lib/reports/late-fee"
 import {
   onSalesLateFeePaymentCreated,
@@ -203,6 +204,10 @@ export async function issueSalesLateFee(formData: FormData): Promise<LateFeeActi
       })
       if (!term) throw new Error("Syarat denda tidak ditemukan untuk pelanggan faktur ini.")
 
+      // Kredit retur dibaca di tx yang sama sesudah kunci faktur: faktur
+      // lunas lewat retur tidak boleh didenda atas sisa semu.
+      const returnCreditByInvoice = await loadReturnCreditByInvoiceIdWithClient(tx, [invoice.id])
+
       // Snapshot byte-sama faktur asal (E93-4): nilai dibaca SEBELUM tulis
       // dan tidak pernah ditulis balik oleh alur ini.
       const computed = computeLateFeeAmount({
@@ -210,6 +215,7 @@ export async function issueSalesLateFee(formData: FormData): Promise<LateFeeActi
           status: invoice.status,
           grandTotal: Number(invoice.grandTotal),
           paidAmount: Number(invoice.paidAmount),
+          returnCredit: returnCreditByInvoice.get(invoice.id) ?? 0,
           dueReferenceDate,
         },
         term: {

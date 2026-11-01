@@ -16,8 +16,7 @@
  * due acuan → tanggal terbit (basis tanggal lokal, bukan jam mentah).
  */
 
-import { receivableOutstanding } from "@/lib/reports/aging-amounts"
-import { safeRound } from "@/lib/utils/math"
+import { safeRound, safeSubtract } from "@/lib/utils/math"
 
 export const LATE_FEE_STATUSES = [
   "draft",
@@ -41,6 +40,8 @@ export interface LateFeeInvoiceSnapshot {
   status: string
   grandTotal: number
   paidAmount: number
+  /** Kredit retur POSTED (BR-RET-02): outstanding = grandTotal − paid − returnCredit. */
+  returnCredit?: number
   /** Due acuan BR-COL-03: exchange.dueDate bila ada else faktur.dueDate. */
   dueReferenceDate: Date | null
 }
@@ -109,7 +110,13 @@ export function computeLateFeeAmount(input: {
   if (invoice.status !== "posted" && invoice.status !== "partial") {
     throw new Error("Dokumen denda hanya untuk faktur yang sudah diposting dan belum lunas.")
   }
-  const basisAmount = receivableOutstanding(invoice.grandTotal, invoice.paidAmount)
+  // Piutang lunas lewat retur tidak boleh didenda: basis kanonis
+  // grandTotal − paidAmount − returnCredit (return-credit.ts, BR-RET-02).
+  const basisAmount = safeSubtract(
+    safeSubtract(invoice.grandTotal, invoice.paidAmount, 2),
+    invoice.returnCredit ?? 0,
+    2,
+  )
   if (basisAmount <= 0.005) {
     throw new Error("Dokumen denda ditolak: faktur tidak punya sisa piutang.")
   }

@@ -66,6 +66,26 @@ describe("F-2026-10-22-093-V builder denda (E93-1/E93-3 hitung)", () => {
     ).toThrow(/sisa piutang/)
   })
 
+  it("retur melunasi sisa → denda ditolak walau paidAmount belum penuh", () => {
+    expect(() =>
+      computeLateFeeAmount({
+        invoice: { ...invoice, grandTotal: 1_000_000, paidAmount: 400_000, returnCredit: 600_000 },
+        term: termRate,
+        asOf: new Date(2026, 9, 31),
+      }),
+    ).toThrow(/sisa piutang/)
+  })
+
+  it("basis denda dikurangi kredit retur parsial", () => {
+    const r = computeLateFeeAmount({
+      invoice: { ...invoice, returnCredit: 2_000_000 },
+      term: termRate,
+      asOf: new Date(2026, 9, 11),
+    })
+    expect(r.basisAmount).toBe(4_000_000)
+    expect(r.amount).toBe(40_000)
+  })
+
   it("hitung rate: basis sisa × %/hari × hari, presisi sen", () => {
     const r = computeLateFeeAmount({ invoice, term: termRate, asOf: new Date(2026, 9, 11) })
     expect(r.overdueDays).toBe(10)
