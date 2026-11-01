@@ -1025,7 +1025,7 @@ export async function issueMaterial(
       await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(itemIds)}) FOR UPDATE`;
       const itemRows = await tx.item.findMany({
         where: { id: { in: itemIds } },
-        select: { id: true, standardCost: true, purchasePrice: true, defaultWarehouseId: true },
+        select: { id: true, standardCost: true, purchasePrice: true, defaultWarehouseId: true, isActive: true, deletedAt: true },
       });
       const itemMap = new Map(itemRows.map((i) => [i.id, i]));
 
@@ -1060,6 +1060,12 @@ export async function issueMaterial(
       for (const [itemId, qty] of requested) {
         const itm = itemMap.get(itemId);
         if (!itm) throw new Error(`Item #${itemId} tidak ditemukan`);
+        // Jalur keluar: item yang dinonaktifkan/soft-delete tidak boleh
+        // diterbitkan (gudang sudah dinilai hidup di bawah; complete menilai
+        // item hasil hidup pula). Tanpa ini stok item mati terkonsumsi FIFO.
+        if (!itm.isActive || itm.deletedAt) {
+          throw new Error(`Item #${itemId} tidak aktif — tidak dapat diterbitkan ke produksi`);
+        }
         const warehouseId = itm.defaultWarehouseId && validWarehouseIds.has(itm.defaultWarehouseId)
           ? itm.defaultWarehouseId
           : fallbackWarehouse.id;

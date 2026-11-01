@@ -560,7 +560,7 @@ describe("Production Order Actions", () => {
       id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0,
     })
     mocks.prismaMock.item.findMany.mockResolvedValue([{
-      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5, isActive: true, deletedAt: null,
     }])
     mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
     mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
@@ -585,13 +585,49 @@ describe("Production Order Actions", () => {
     expect(mocks.prismaMock.$executeRaw).toHaveBeenCalledOnce()
   })
 
+  // Regresi putaran 33: issueMaterial menilai gudang hidup tetapi item payload
+  // tidak — item dinonaktifkan/soft-delete tetap terkonsumsi FIFO + jurnal.
+  it("regresi putaran 33: issueMaterial menolak item nonaktif", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0,
+    })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5, isActive: false, deletedAt: null,
+    }])
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
+
+    const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 3 }])
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak aktif")
+    expect(mocks.consumeFifoLayersMock).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 33: issueMaterial menolak item terhapus (soft-delete)", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0,
+    })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5, isActive: true, deletedAt: new Date("2026-10-01"),
+    }])
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
+
+    const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 3 }])
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak aktif")
+    expect(mocks.consumeFifoLayersMock).not.toHaveBeenCalled()
+  })
+
   it("STOK-17: PO issue menilai expiry per tanggal issue aktual, bukan startDate order", async () => {
     mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
       id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0,
       startDate: new Date("2026-09-01"), createdAt: new Date("2026-09-01"),
     })
     mocks.prismaMock.item.findMany.mockResolvedValue([{
-      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5, isActive: true, deletedAt: null,
     }])
     mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
     mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
@@ -611,7 +647,7 @@ describe("Production Order Actions", () => {
     })
     mocks.prismaMock.materialIssue.count.mockResolvedValue(0)
     mocks.prismaMock.item.findMany.mockResolvedValue([{
-      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5, isActive: true, deletedAt: null,
     }])
     mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
     mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
@@ -650,7 +686,7 @@ describe("Production Order Actions", () => {
     })
     mocks.prismaMock.materialIssue.count.mockResolvedValue(0)
     mocks.prismaMock.item.findMany.mockResolvedValue([{
-      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5, isActive: true, deletedAt: null,
     }])
     mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
     mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
@@ -674,7 +710,7 @@ describe("Production Order Actions", () => {
       id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0,
     })
     mocks.prismaMock.item.findMany.mockResolvedValue([{
-      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5, isActive: true, deletedAt: null,
     }])
     mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
     mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
@@ -714,7 +750,7 @@ describe("Production Order Actions", () => {
       id: 8, documentNo: "MO-008", status: "in_progress", totalActualCost: 42,
     })
     mocks.prismaMock.item.findMany.mockResolvedValue([{
-      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5, isActive: true, deletedAt: null,
     }])
     mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
     mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
@@ -748,7 +784,7 @@ describe("Production Order Actions", () => {
       id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0, workOrderId: null,
     })
     mocks.prismaMock.item.findMany.mockResolvedValue([{
-      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5, isActive: true, deletedAt: null,
     }])
     mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
     mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
@@ -784,7 +820,7 @@ describe("Production Order Actions", () => {
       id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0, workOrderId: null,
     })
     mocks.prismaMock.item.findMany.mockResolvedValue([{
-      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5, isActive: true, deletedAt: null,
     }])
     mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
     mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
