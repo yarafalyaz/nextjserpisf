@@ -17,7 +17,7 @@ import {
   type StatutoryParams,
   type TerBracket,
 } from "@/lib/services/payroll-statutory.service";
-import { prisma } from "@/lib/db/prisma";
+import { prisma, type TxClient } from "@/lib/db/prisma";
 import {
   approvePkwtCompensationEvent,
   buildPkwtPayrollLineData,
@@ -3975,12 +3975,12 @@ async function timesheetContextGuard(v: {
   projectId?: number | null;
   workOrderId?: number | null;
   taskId?: number | null;
-}): Promise<{ success: false; error: string } | null> {
+}, client: TxClient | typeof prisma = prisma): Promise<{ success: false; error: string } | null> {
   const xorError = timesheetContextError(v);
   if (xorError) return { success: false, error: xorError };
 
   if (v.workOrderId != null) {
-    const wo = await prisma.workOrder.findUnique({
+    const wo = await client.workOrder.findUnique({
       where: { id: v.workOrderId },
       select: { id: true, status: true },
     });
@@ -3990,7 +3990,7 @@ async function timesheetContextGuard(v: {
   }
 
   if (v.taskId != null) {
-    const task = await prisma.task.findUnique({
+    const task = await client.task.findUnique({
       where: { id: v.taskId },
       select: { id: true, projectId: true },
     });
@@ -4016,11 +4016,22 @@ export async function createTimesheet(formData: FormData) {
     const contextError = await timesheetContextGuard(v);
     if (contextError) return contextError;
 
-    const timesheet = await prisma.timesheet.create({
-      data: {
-        slug: await nextSlug("timesheet", `lembar-waktu-${v.date}`),
-        ...timesheetWriteData(v),
-      },
+    // Putaran 22: cek konteks WO dinilai ulang di dalam tx berkunci baris
+    // WO — complete/close/cancel konkuren mengunci baris yang sama, jadi
+    // bacaan segar menilai status final dan jam tak lahir menempel WO
+    // yang baru saja selesai (penarik biaya sesudahnya menolak pull).
+    const timesheet = await prisma.$transaction(async (tx) => {
+      if (v.workOrderId != null && typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM work_orders WHERE id = ${v.workOrderId} FOR UPDATE`;
+      }
+      const freshError = await timesheetContextGuard(v, tx);
+      if (freshError) throw new Error(freshError.error);
+      return tx.timesheet.create({
+        data: {
+          slug: await nextSlug("timesheet", `lembar-waktu-${v.date}`),
+          ...timesheetWriteData(v),
+        },
+      });
     });
 
     await logActivity(
@@ -5769,6 +5780,14 @@ export async function updateTimesheet(id: number, formData: FormData) {
     // jam terkunci HPP tetap bisa berubah sesudah ditarik.
     const timesheet = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM timesheets WHERE id = ${id} FOR UPDATE`;
+      // Putaran 22: konteks WO tujuan dinilai ulang sesudah kunci baris WO
+      // (sesudah kunci baris timesheet — urutan global timesheet -> WO sama
+      // dengan jalur create), agar edit/pindah tak menempel WO final.
+      if (v.workOrderId != null && typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM work_orders WHERE id = ${v.workOrderId} FOR UPDATE`;
+      }
+      const freshError = await timesheetContextGuard(v, tx);
+      if (freshError) throw new Error(freshError.error);
       const pulled = await timesheetPulledError(id, tx);
       if (pulled) throw new Error(pulled.error);
       return tx.timesheet.update({

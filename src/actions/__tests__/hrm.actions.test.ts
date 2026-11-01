@@ -956,6 +956,34 @@ describe("Timesheet Actions", () => {
     expect(mutasi()).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 22: createTimesheet menolak WO yang menjadi final sesudah cek luar", async () => {
+    ;(prismaMock as any).workOrder = { findUnique: vi.fn() }
+    ;(prismaMock as any).workOrder.findUnique
+      .mockResolvedValueOnce({ id: 9, status: "in_progress" })
+      .mockResolvedValue({ id: 9, status: "completed" })
+    const res = await actions.createTimesheet(fd({
+      employeeId: "1", workOrderId: "9", date: "2026-06-12", hours: "8", activity: "Rakit",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("completed")
+    expect(prismaMock.timesheet.create).not.toHaveBeenCalled()
+    delete (prismaMock as any).workOrder
+  })
+
+  it("regresi putaran 22: updateTimesheet menolak pindah ke WO yang menjadi final sesudah cek luar", async () => {
+    ;(prismaMock as any).workOrder = { findUnique: vi.fn() }
+    ;(prismaMock as any).workOrder.findUnique
+      .mockResolvedValueOnce({ id: 9, status: "in_progress" })
+      .mockResolvedValue({ id: 9, status: "closed" })
+    const res = await actions.updateTimesheet(1, fd({
+      employeeId: "1", workOrderId: "9", date: "2026-06-12", hours: "4", activity: "Review",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("closed")
+    expect(prismaMock.timesheet.update).not.toHaveBeenCalled()
+    delete (prismaMock as any).workOrder
+  })
+
   it.each([
     ["deleteTimesheet", async () => actions.deleteTimesheet(1)],
     ["updateTimesheet", async () => actions.updateTimesheet(1, fd({ employeeId: "1", projectId: "1", date: "2026-06-12", hours: "4", activity: "Review" }))],
