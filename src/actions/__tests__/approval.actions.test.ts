@@ -1067,7 +1067,9 @@ describe("BUGHUNT round3: klaim terminal Leave/Overtime/Loan + nilai lembur", ()
     await actions.approveStep(1, fdMap({ notes: "OK" }));
     expect(mocks.prismaMock.overtimeRequest.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 21, status: { in: ["pending", "approved"] } },
+        // Klaim nilai: hanya penghitung pertama (calculatedValue masih null)
+        // yang menulis — lihat 1933c582e.
+        where: { id: 21, status: { in: ["pending", "approved"] }, calculatedValue: null },
         data: expect.objectContaining({
           status: "approved",
           calculatedValue: 101156,
