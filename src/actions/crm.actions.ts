@@ -213,15 +213,22 @@ export async function deleteTicket(id: number) {
   // CrmTicketComment.ticket ber-onDelete Cascade: hard delete tiket beranak
   // TIDAK memicu P2003 — komentar ikut musnah senyap. Tiket berkomentar
   // langsung soft-delete; hard delete hanya untuk tiket tanpa komentar.
-  const commentCount = await prisma.crmTicketComment.count({ where: { ticketId: id } })
-  if (commentCount > 0) {
-    await prisma.crmTicket.update({ where: { id }, data: { deletedAt: new Date() } })
-  } else {
-    await hardDeleteOrSoftDelete(
-      () => prisma.crmTicket.delete({ where: { id } }),
-      () => prisma.crmTicket.update({ where: { id }, data: { deletedAt: new Date() } }),
-    )
-  }
+  // Putaran 40: hitungan + putusan di dalam tx berkunci baris tiket, dan
+  // addTicketComment mengunci baris yang sama sebelum menulis — komentar
+  // tak bisa menyelip di antara hitungan dan delete (cascade-musnah) atau
+  // lahir sesudah soft-delete (yatim di tiket tombstone).
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT id FROM crm_tickets WHERE id = ${id} FOR UPDATE`
+    const commentCount = await tx.crmTicketComment.count({ where: { ticketId: id } })
+    if (commentCount > 0) {
+      await tx.crmTicket.update({ where: { id }, data: { deletedAt: new Date() } })
+    } else {
+      await hardDeleteOrSoftDelete(
+        () => tx.crmTicket.delete({ where: { id } }),
+        () => tx.crmTicket.update({ where: { id }, data: { deletedAt: new Date() } }),
+      )
+    }
+  })
   revalidatePath("/crm/tickets")
   await logActivity("delete", "Ticket", id, "Menghapus tiket")
   return { success: true }
@@ -244,15 +251,20 @@ export async function deleteLead(id: number) {
   // LeadActivity.lead ber-onDelete Cascade: hard delete lead beraktivitas
   // TIDAK memicu P2003 — histori aktivitas ikut musnah senyap. Lead
   // beraktivitas langsung soft-delete; hard delete hanya tanpa aktivitas.
-  const activityCount = await prisma.leadActivity.count({ where: { leadId: id } })
-  if (activityCount > 0) {
-    await prisma.lead.update({ where: { id }, data: { deletedAt: new Date() } })
-  } else {
-    await hardDeleteOrSoftDelete(
-      () => prisma.lead.delete({ where: { id } }),
-      () => prisma.lead.update({ where: { id }, data: { deletedAt: new Date() } }),
-    )
-  }
+  // Putaran 40: sama seperti deleteTicket — kunci baris lead dalam tx
+  // sebelum hitungan; addLeadActivity mengunci baris yang sama.
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT id FROM leads WHERE id = ${id} FOR UPDATE`
+    const activityCount = await tx.leadActivity.count({ where: { leadId: id } })
+    if (activityCount > 0) {
+      await tx.lead.update({ where: { id }, data: { deletedAt: new Date() } })
+    } else {
+      await hardDeleteOrSoftDelete(
+        () => tx.lead.delete({ where: { id } }),
+        () => tx.lead.update({ where: { id }, data: { deletedAt: new Date() } }),
+      )
+    }
+  })
   revalidatePath("/crm/leads")
   await logActivity("delete", "Lead", id, "Menghapus lead")
   redirect("/crm/leads")
@@ -384,21 +396,27 @@ export async function addTicketComment(ticketId: number, formData: FormData) {
 
     // Tiket harus ada dan belum dihapus. Tanpa pemeriksaan ini, id yang salah
     // berakhir sebagai galat kunci asing Prisma yang tidak terbaca pemakai.
-    const ticket = await prisma.crmTicket.findFirst({
-      where: { id: ticketId, deletedAt: null },
-      select: { id: true },
-    })
-    if (!ticket) return { success: false, error: "Tiket tidak ditemukan" }
-
-    const comment = await prisma.crmTicketComment.create({
-      data: {
-        ticketId,
-        // Penulis dari SESI, bukan dari form: kalau id penulis datang dari form,
-        // komentar bisa ditulis atas nama orang lain.
-        userId: Number(user.id),
-        body: v.body,
-        isInternal: v.isInternal,
-      },
+    // Putaran 40: kunci baris tiket dalam tx sebelum menilai deletedAt —
+    // deleteTicket mengunci baris yang sama, jadi komentar tak bisa lahir
+    // di tiket yang sedang di-hard-delete (cascade-musnah) atau sesudah
+    // soft-delete (yatim di tombstone).
+    const comment = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM crm_tickets WHERE id = ${ticketId} FOR UPDATE`
+      const ticket = await tx.crmTicket.findFirst({
+        where: { id: ticketId, deletedAt: null },
+        select: { id: true },
+      })
+      if (!ticket) throw new Error("Tiket tidak ditemukan")
+      return tx.crmTicketComment.create({
+        data: {
+          ticketId,
+          // Penulis dari SESI, bukan dari form: kalau id penulis datang dari form,
+          // komentar bisa ditulis atas nama orang lain.
+          userId: Number(user.id),
+          body: v.body,
+          isInternal: v.isInternal,
+        },
+      })
     })
 
     revalidatePath("/crm/tickets")
@@ -430,31 +448,33 @@ export async function addLeadActivity(leadId: number, formData: FormData) {
     // Lead harus hidup + pemanggil pemilik/pemegang manage_leads/super_admin
     // (pola guard 484-499) — tanpa ini aktivitas bisa ditulis ke lead
     // terhapus/milik rep lain lalu muncul di antrean follow-up.
-    const lead = await prisma.lead.findFirst({
-      where: { id: leadId, deletedAt: null },
-      select: { id: true, assignedTo: true },
-    })
-    if (!lead) return { success: false, error: "Lead tidak ditemukan" }
-    const isAdmin =
-      user.permissions.includes("manage_leads") || user.roles.includes("super_admin")
-    if (!isAdmin && lead.assignedTo !== Number(user.id)) {
-      return {
-        success: false,
-        error: "Anda hanya dapat menambahkan aktivitas lead yang ditugaskan kepada Anda.",
+    // Putaran 40: kunci baris lead dalam tx sebelum menilai (deleteLead
+    // mengunci baris yang sama) — aktivitas tak bisa lahir di lead yang
+    // sedang di-hard-delete atau sesudah soft-delete.
+    const activity = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM leads WHERE id = ${leadId} FOR UPDATE`
+      const lead = await tx.lead.findFirst({
+        where: { id: leadId, deletedAt: null },
+        select: { id: true, assignedTo: true },
+      })
+      if (!lead) throw new Error("Lead tidak ditemukan")
+      const isAdmin =
+        user.permissions.includes("manage_leads") || user.roles.includes("super_admin")
+      if (!isAdmin && lead.assignedTo !== Number(user.id)) {
+        throw new Error("Anda hanya dapat menambahkan aktivitas lead yang ditugaskan kepada Anda.")
       }
-    }
-
-    const activity = await prisma.leadActivity.create({
-      data: {
-        leadId,
-        userId: Number(user.id),
-        type: v.type,
-        subject: v.subject,
-        description: v.description ?? null,
-        // scheduledAt kini string dateOnly tervalidasi; konversi tengah-malam
-        // UTC ala WIB (pola expectedCloseDate) supaya tanggal tak bergantung TZ.
-        scheduledAt: v.scheduledAt ? wibDateToUtcMidnight(v.scheduledAt) : null,
-      },
+      return tx.leadActivity.create({
+        data: {
+          leadId,
+          userId: Number(user.id),
+          type: v.type,
+          subject: v.subject,
+          description: v.description ?? null,
+          // scheduledAt kini string dateOnly tervalidasi; konversi tengah-malam
+          // UTC ala WIB (pola expectedCloseDate) supaya tanggal tak bergantung TZ.
+          scheduledAt: v.scheduledAt ? wibDateToUtcMidnight(v.scheduledAt) : null,
+        },
+      })
     })
 
     revalidatePath(`/crm/leads/${leadId}`)

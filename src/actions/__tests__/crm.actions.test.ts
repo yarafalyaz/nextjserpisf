@@ -219,6 +219,15 @@ describe("CRM Ticket Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
   })
+  it("putaran 40: deleteTicket mengunci baris tiket sebelum hitung komentar", async () => {
+    const res = await actions.deleteTicket(1)
+    expect(res?.success).toBe(true)
+    const lockCall = mocks.prismaMock.$executeRaw.mock.calls.at(-1)
+    expect(String(lockCall?.[0]?.join("?"))).toContain("crm_tickets")
+    const lockOrder = mocks.prismaMock.$executeRaw.mock.invocationCallOrder.at(-1)!
+    expect(lockOrder).toBeLessThan(mocks.prismaMock.crmTicketComment.count.mock.invocationCallOrder[0])
+    expect(lockOrder).toBeLessThan(mocks.prismaMock.crmTicket.delete.mock.invocationCallOrder[0])
+  })
 })
 
 describe("CRM Lead Actions", () => {
@@ -241,6 +250,14 @@ describe("CRM Lead Actions", () => {
     const res = await actions.deleteLead(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
+  })
+  it("putaran 40: deleteLead mengunci baris lead sebelum hitung aktivitas", async () => {
+    await expect(actions.deleteLead(1)).rejects.toThrow("NEXT_REDIRECT")
+    const lockCall = mocks.prismaMock.$executeRaw.mock.calls.at(-1)
+    expect(String(lockCall?.[0]?.join("?"))).toContain("leads")
+    const lockOrder = mocks.prismaMock.$executeRaw.mock.invocationCallOrder.at(-1)!
+    expect(lockOrder).toBeLessThan(mocks.prismaMock.leadActivity.count.mock.invocationCallOrder[0])
+    expect(lockOrder).toBeLessThan(mocks.prismaMock.lead.delete.mock.invocationCallOrder[0])
   })
 })
 
