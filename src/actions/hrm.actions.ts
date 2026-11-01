@@ -5125,8 +5125,11 @@ export async function deleteOvertimeRequest(id: number) {
  * membuat subledger biaya produksi tak bisa ditelusur. Hapus baris biaya
  * produksinya dulu bila memang perlu koreksi.
  */
-async function timesheetPulledError(id: number): Promise<{ success: false; error: string } | null> {
-  const used = (await prisma.productionCost.findMany({ where: { sourceTimesheetId: id }, select: { id: true } })).length;
+async function timesheetPulledError(
+  id: number,
+  client: PrismaTypes.TransactionClient | typeof prisma = prisma,
+): Promise<{ success: false; error: string } | null> {
+  const used = (await client.productionCost.findMany({ where: { sourceTimesheetId: id }, select: { id: true } })).length;
   if (used === 0) return null;
   return {
     success: false,
@@ -5144,10 +5147,17 @@ export async function deleteTimesheet(id: number) {
     });
     await assertHrEmployeeAccess(scope, timesheet.employeeId);
 
-    const pulled = await timesheetPulledError(id);
-    if (pulled) return pulled;
-
-    await prisma.timesheet.delete({ where: { id } });
+    // Cek ditarik + hapus dalam satu tx di bawah kunci baris timesheet yang
+    // SAMA dengan penarik ProductionCost (pullLaborCost*): tanpa kunci ini
+    // penarikan yang commit di antara cek luar dan hapus meninggalkan
+    // ProductionCost yatim menunjuk baris yang sudah terhapus (Sumber
+    // sourceTimesheetId tanpa FK, tanpa unique — pola ponytail penarik).
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM timesheets WHERE id = ${id} FOR UPDATE`;
+      const pulled = await timesheetPulledError(id, tx);
+      if (pulled) throw new Error(pulled.error);
+      await tx.timesheet.delete({ where: { id } });
+    });
 
     await logActivity("delete", "Timesheet", id, "Menghapus lembar waktu");
     revalidatePath("/sdm/lembar-waktu");
@@ -5709,9 +5719,6 @@ export async function updateTimesheet(id: number, formData: FormData) {
     });
     await assertHrEmployeeAccess(scope, existing.employeeId);
 
-    const pulled = await timesheetPulledError(id);
-    if (pulled) return pulled;
-
     // Validation parity with createTimesheet: route the same Zod schema so the
     // edit path cannot be used to write values the create-guard rejects (e.g.
     // negative/zero hours, blank employees, 1000+ char descriptions). Without
@@ -5726,12 +5733,21 @@ export async function updateTimesheet(id: number, formData: FormData) {
     const contextError = await timesheetContextGuard(v);
     if (contextError) return contextError;
 
-    const timesheet = await prisma.timesheet.update({
-      where: { id },
-      data: {
-        slug: await nextSlug("timesheet", "lembar-waktu", { excludeId: id }),
-        ...timesheetWriteData(v),
-      },
+    // Cek ditarik dibaca ulang DI DALAM tx di bawah kunci baris timesheet
+    // yang SAMA dengan penarik ProductionCost (pullLaborCost*): cek luar
+    // saja kalah dari penarikan yang commit di jendela cek->tulis, sehingga
+    // jam terkunci HPP tetap bisa berubah sesudah ditarik.
+    const timesheet = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM timesheets WHERE id = ${id} FOR UPDATE`;
+      const pulled = await timesheetPulledError(id, tx);
+      if (pulled) throw new Error(pulled.error);
+      return tx.timesheet.update({
+        where: { id },
+        data: {
+          slug: await nextSlug("timesheet", "lembar-waktu", { excludeId: id }),
+          ...timesheetWriteData(v),
+        },
+      });
     });
 
     await logActivity(

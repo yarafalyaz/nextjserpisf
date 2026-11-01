@@ -955,6 +955,22 @@ describe("Timesheet Actions", () => {
     expect(res?.error).toContain(`sudah ditarik menjadi ${jumlah} baris biaya produksi`)
     expect(mutasi()).not.toHaveBeenCalled()
   })
+
+  it.each([
+    ["deleteTimesheet", async () => actions.deleteTimesheet(1)],
+    ["updateTimesheet", async () => actions.updateTimesheet(1, fd({ employeeId: "1", projectId: "1", date: "2026-06-12", hours: "4", activity: "Review" }))],
+  ])("regresi putaran 16: %s mengunci baris timesheets sebelum cek ditarik", async (_nama, panggil) => {
+    prismaMock.productionCost.findMany.mockResolvedValue([])
+    const res = await panggil()
+    expect(res?.success).toBe(true)
+    const lockCall = prismaMock.$queryRaw.mock.calls[0]?.[0] as { sql?: string; strings?: string[] } | string[]
+    const sql = Array.isArray(lockCall) ? lockCall.join("?") : (lockCall?.sql ?? lockCall?.strings?.join("?") ?? "")
+    expect(sql).toContain("timesheets")
+    expect(sql).toContain("FOR UPDATE")
+    expect(prismaMock.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      prismaMock.productionCost.findMany.mock.invocationCallOrder[0],
+    )
+  })
 })
 
 describe("Appreciation Actions", () => {
