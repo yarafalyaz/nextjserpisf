@@ -675,6 +675,17 @@ export async function reverseAssetChangeEvent(input: {
       if (!lockedOriginal || lockedOriginal.status !== "POSTED") {
         throw new Error("Peristiwa sudah dibalik atau tidak POSTED.")
       }
+      // Builder peristiwa baru menolak aset disposed; reversal tidak lewat
+      // builder, jadi tanpa gerbang ini reversal revaluasi sesudah disposal
+      // memposting jurnal lawan dan menghidupkan kembali currentValue pada
+      // aset yang sudah dilepas (nilai buku jurnal bisa negatif).
+      const lockedAsset = await tx.asset.findUnique({
+        where: { id: original.assetId },
+        select: { status: true },
+      })
+      if (lockedAsset?.status === "disposed") {
+        throw new Error("Aset sudah dilepas (disposed); reversal peristiwa perubahan aset ditolak.")
+      }
 
       await assertSourceDocumentUnused(tx, input.sourceDocumentKey)
       await assertPeriodOpen(input.reversalDate, tx)

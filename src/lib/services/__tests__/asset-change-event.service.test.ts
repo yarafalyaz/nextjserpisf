@@ -17,6 +17,7 @@ const store = vi.hoisted(() => ({
   nextEventId: 101,
   seq: 0,
   assetUpdates: [] as Record<string, unknown>[],
+  assetStatus: "active",
 }))
 
 const ACCOUNTS: Record<number, { id: number; code: string; type: string; reportGroup: string | null; isActive: boolean }> = {
@@ -46,11 +47,11 @@ vi.mock("@/lib/db/prisma", () => {
     }),
     asset: {
       findUnique: vi.fn(async () => ({
-        id: 1, name: "Mesin A", code: "AST-1", status: "active", categoryId: 1,
+        id: 1, name: "Mesin A", code: "AST-1", status: store.assetStatus, categoryId: 1,
         depreciationMethod: "straight_line", residualValue: D(0), usefulLifeMonths: 60,
         category: CATEGORY,
       })),
-      findUniqueOrThrow: vi.fn(async () => ({ status: "active" })),
+      findUniqueOrThrow: vi.fn(async () => ({ status: store.assetStatus })),
       update: vi.fn(async (args: { data: Record<string, unknown> }) => { store.assetUpdates.push(args.data); return {} }),
     },
     assetCategory: { findUnique: vi.fn(async () => CATEGORY) },
@@ -148,6 +149,7 @@ beforeEach(() => {
   store.nextEventId = 101
   store.seq = 0
   store.assetUpdates = []
+  store.assetStatus = "active"
   lockCalls.length = 0
   seedAcquisition()
 })
@@ -236,6 +238,32 @@ describe("asset-change-event.service", () => {
       oj?.entries.map((e) => `${e.accountId}:${e.credit}/${e.debit}`).sort(),
     )
     expect(store.events.find((e) => e.id === up.eventId)?.status).toBe("REVERSED")
+  })
+
+  it("regresi putaran 24: reversal atas aset disposed ditolak (builder menolak disposed, reversal tak boleh memotong)", async () => {
+    const up = await postAssetChangeEvent({
+      assetId: 1,
+      request: {
+        kind: "REVALUATION_UP",
+        effectiveDate: new Date("2026-02-01"),
+        sourceDocumentKey: "APR-D1",
+        fairValue: 1300,
+        appraiserName: "KJPP Test",
+        appraiserReportRef: "LAP-D1",
+        revaluedClassName: "Mesin",
+      },
+    })
+    store.assetStatus = "disposed"
+    await expect(
+      reverseAssetChangeEvent({
+        eventId: up.eventId,
+        reversalDate: new Date("2026-03-01"),
+        sourceDocumentKey: "REV-D1",
+      }),
+    ).rejects.toThrow(/disposed/)
+    // Tidak ada jurnal lawan dan status peristiwa asal tetap POSTED.
+    expect(store.journals.filter((j) => j.referenceType === "ASSET_CHANGE_EVENT")).toHaveLength(1)
+    expect(store.events.find((e) => e.id === up.eventId)?.status).toBe("POSTED")
   })
 
   it("E111-S3: ketiga penulis mengunci baris aset sebelum membaca fakta POSTED", async () => {
