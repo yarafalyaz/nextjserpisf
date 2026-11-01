@@ -46,29 +46,37 @@ export async function createCheque(formData: FormData) {
     // assertPeriodOpen menerima Date, bukan string polos.
     const dueDate = wibDateToUtcMidnight(v.dueDate)
 
+    // Fast-fail luar tx; penilaian otoritatif (periode + akun hidup) diulang
+    // di dalam tx — tutup periode konkuren tak bisa menyelip di antara cek
+    // dan tulis, dan akun mati tak lolos hanya karena ID-nya ada.
     await assertPeriodOpen(dueDate)
-
-    if (accountId) {
-      const exists = await prisma.account.count({ where: { id: accountId } })
-      if (!exists) return { success: false, error: "Rekening bank yang dipilih tidak ditemukan." }
-    }
 
     const documentNo = await generateDocumentNumber("CHQ", "simple")
 
-    const cheque = await prisma.cheque.create({
-      data: {
-        documentNo,
-        type,
-        direction,
-        number,
-        accountId,
-        party,
-        amount: new Prisma.Decimal(amount.toFixed(2)),
-        dueDate,
-        notes,
-        status: "pending",
-        createdBy: Number(user.id),
-      },
+    const cheque = await prisma.$transaction(async (tx) => {
+      await assertPeriodOpen(dueDate, tx)
+      if (accountId) {
+        const live = await tx.account.findFirst({
+          where: { id: accountId, isActive: true, deletedAt: null },
+          select: { id: true },
+        })
+        if (!live) throw new Error(`Rekening bank tidak aktif/terhapus atau tidak ditemukan (id: ${accountId}). Pilih ulang rekening sebelum menyimpan.`)
+      }
+      return tx.cheque.create({
+        data: {
+          documentNo,
+          type,
+          direction,
+          number,
+          accountId,
+          party,
+          amount: new Prisma.Decimal(amount.toFixed(2)),
+          dueDate,
+          notes,
+          status: "pending",
+          createdBy: Number(user.id),
+        },
+      })
     })
 
     await logActivity("create", "Cheque", cheque.id, `Mencatat ${type} ${documentNo}`)

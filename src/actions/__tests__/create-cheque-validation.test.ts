@@ -13,12 +13,14 @@ const mocks = vi.hoisted(() => {
   const generateDocumentNumber = vi.fn()
   const assertPeriodOpen = vi.fn()
   const accountCount = vi.fn()
+  const accountFindFirst = vi.fn()
   const chequeCreate = vi.fn()
 
   const prisma: Record<string, unknown> = {
-    account: { count: accountCount },
+    account: { count: accountCount, findFirst: accountFindFirst },
     cheque: { create: chequeCreate },
   }
+  prisma.$transaction = (fn: (tx: unknown) => unknown) => fn(prisma)
 
   return {
     requirePermission,
@@ -27,6 +29,7 @@ const mocks = vi.hoisted(() => {
     generateDocumentNumber,
     assertPeriodOpen,
     accountCount,
+    accountFindFirst,
     chequeCreate,
     prisma,
   }
@@ -58,6 +61,7 @@ beforeEach(() => {
   mocks.generateDocumentNumber.mockResolvedValue("CHQ-001")
   mocks.assertPeriodOpen.mockResolvedValue(undefined)
   mocks.accountCount.mockResolvedValue(0)
+  mocks.accountFindFirst.mockResolvedValue({ id: 5 })
   mocks.chequeCreate.mockResolvedValue({ id: 1 })
 })
 
@@ -116,7 +120,27 @@ describe("createCheque zod validation", () => {
   it("happy path tetap menjaga kunci periode (assertPeriodOpen dipanggil)", async () => {
     const res = await createCheque(form(base))
     expect(res.success).toBe(true)
-    expect(mocks.assertPeriodOpen).toHaveBeenCalledOnce()
+    // Luar-tx fast-fail + penilaian ulang dalam tx (putaran 45).
+    expect(mocks.assertPeriodOpen).toHaveBeenCalledTimes(2)
+  })
+
+  // Regresi putaran 45: gerbang akun hanya count eksistensi — akun
+  // nonaktif/terhapus lolos sebagai rekening cek; assertPeriodOpen di luar
+  // transaksi pula (tutup periode konkuren bisa menyelip).
+  it("regresi putaran 45: menolak akun nonaktif walau akun ada", async () => {
+    mocks.accountCount.mockResolvedValue(1)
+    mocks.accountFindFirst.mockResolvedValue(null)
+    const res = await createCheque(form({ ...base, accountId: "5" }))
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toMatch(/tidak aktif\/terhapus/)
+    expect(mocks.chequeCreate).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 45: assertPeriodOpen dinilai ulang di dalam transaksi", async () => {
+    const res = await createCheque(form({ ...base, accountId: "5" }))
+    expect(res.success).toBe(true)
+    const txArgs = mocks.assertPeriodOpen.mock.calls.map((c: unknown[]) => c[1])
+    expect(txArgs.some((a: unknown) => a != null)).toBe(true)
   })
 
   it("validasi gagal tidak menyentuh kunci periode", async () => {
