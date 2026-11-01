@@ -519,6 +519,27 @@ describe("Bank Statement Line Actions", () => {
     })
   })
 
+  it("deleteBankStatementLine menolak baris yang dipakai item rekonsiliasi draft (putaran 20)", async () => {
+    mocks.prismaMock.bankStatementLine.findUnique.mockResolvedValue({
+      id: 11,
+      bankStatementId: 3,
+      date: new Date("2026-06-01"),
+    })
+    mocks.prismaMock.bankReconciliationItem.findMany
+      .mockResolvedValueOnce([{ bankReconciliationId: 9 }])
+      .mockResolvedValueOnce([{ bankReconciliationId: 9 }])
+    mocks.prismaMock.bankReconciliationItem.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 55 })
+
+    const res = await (actions as any).deleteBankStatementLine(11)
+
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("rekonsiliasi")
+    expect(mocks.prismaMock.bankReconciliationItem.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.bankStatementLine.delete).not.toHaveBeenCalled()
+  })
+
   it("menolak menghapus baris yang sudah masuk rekonsiliasi selesai", async () => {
     mocks.prismaMock.bankStatementLine.findUnique.mockResolvedValue({
       id: 11,

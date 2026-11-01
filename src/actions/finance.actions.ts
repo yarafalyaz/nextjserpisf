@@ -505,6 +505,20 @@ export async function deleteBankStatementLine(id: number) {
         "Baris yang sudah masuk rekonsiliasi selesai tidak dapat dihapus",
       );
 
+      // BankReconciliationItem.bankStatementLineId bare Int tanpa FK: hapus
+      // baris yang sudah dipakai item rekonsiliasi draft meninggalkannya
+      // yatim, lalu complete mensertifikasi kecocokan tanpa baris bank asal.
+      // Tolak eksplisit; lepas kecocokan dari layar rekonsiliasi dulu.
+      const draftUse = await tx.bankReconciliationItem.findFirst({
+        where: { bankStatementLineId: id },
+        select: { id: true },
+      });
+      if (draftUse) {
+        throw new Error(
+          "Baris rekening koran masih dipakai di rekonsiliasi. Lepaskan kecocokannya terlebih dahulu.",
+        );
+      }
+
       await tx.bankStatementLine.delete({ where: { id } });
       await recalcBankStatementTotals(tx, line.bankStatementId);
     });
