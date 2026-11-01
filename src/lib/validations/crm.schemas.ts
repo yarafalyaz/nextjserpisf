@@ -13,6 +13,21 @@ const optionalId = z.coerce.number().int().min(1).optional();
 
 // ==================== TICKET ====================
 
+/**
+ * Kosakata prioritas kanonis (BR-CRM-02): di luar low/medium/high tiket
+ * salah kelas SLA/antrean senyap (diperlakukan medium + tertanda tak
+ * dikenal oleh builder). Enum di sini membuat prioritas sampah mustahil
+ * lahir dari jalur form/API — baris lama tak tersentuh.
+ */
+const ticketPriority = z.preprocess(
+  (v) => (v === "" || v == null ? undefined : v),
+  z
+    .enum(["low", "medium", "high"], {
+      message: "Prioritas harus salah satu dari low, medium, high",
+    })
+    .optional(),
+);
+
 export const createTicketSchema = z.object({
   subject: z.string().min(1, "Subjek wajib diisi").max(255),
   description: optionalString(2000),
@@ -21,7 +36,7 @@ export const createTicketSchema = z.object({
   customerEmail: optionalString(255),
   customerPhone: optionalString(50),
   type: optionalString(100),
-  priority: optionalString(50),
+  priority: ticketPriority,
   assignedTo: optionalId,
 });
 
@@ -33,7 +48,7 @@ export const updateTicketSchema = z.object({
   customerEmail: optionalString(255),
   customerPhone: optionalString(50),
   type: optionalString(100),
-  priority: optionalString(50),
+  priority: ticketPriority,
   // Status round-trip: the edit form exposes a Status select so a support
   // agent can mark a ticket as resolved/closed. Without this field the form
   // posts the value, Zod strips it, and the action's data block never

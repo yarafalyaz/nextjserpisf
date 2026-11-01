@@ -45,7 +45,9 @@ describe("validations/crm.schemas", () => {
     }).success).toBe(true);
   });
   it("updateTicketSchema accepts resolutionNotes", () => {
-    expect(updateTicketSchema.safeParse({ subject: "X", resolutionNotes: "Sudah diperbaiki", customerName: "A", customerEmail: "B", customerPhone: "C", type: "D", priority: "E", assignedTo: 1, customerId: 1 }).success).toBe(true);
+    // priority kini enum kanonis low/medium/high (putaran 40) — fixture
+    // lama "E" adalah prioritas sampah yang memang harus tertolak.
+    expect(updateTicketSchema.safeParse({ subject: "X", resolutionNotes: "Sudah diperbaiki", customerName: "A", customerEmail: "B", customerPhone: "C", type: "D", priority: "high", assignedTo: 1, customerId: 1 }).success).toBe(true);
   });
   it("updateTicketSchema handles empty strings", () => {
     expect(updateTicketSchema.safeParse({

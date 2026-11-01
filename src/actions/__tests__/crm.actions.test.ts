@@ -139,6 +139,16 @@ describe("CRM Ticket Actions", () => {
       expect(data.resolvedAt).toBeNull()
     }
   })
+  it("putaran 40: createTicket menolak prioritas di luar low/medium/high", async () => {
+    const res = await actions.createTicket(fdMap({ subject: "Tiket", priority: "kritis" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.crmTicket.create).not.toHaveBeenCalled()
+  })
+  it("putaran 40: updateTicket menolak prioritas di luar low/medium/high", async () => {
+    const res = await actions.updateTicket(1, fdMap({ subject: "Tiket", priority: "urgent" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.crmTicket.update).not.toHaveBeenCalled()
+  })
   it("createTicket menolak assignedTo pengguna nonaktif (kolom bare-int tanpa FK)", async () => {
     mocks.prismaMock.user = { findFirst: vi.fn().mockResolvedValue(null) }
     const res = await actions.createTicket(fdMap({ subject: "Tiket", assignedTo: 999 }))
