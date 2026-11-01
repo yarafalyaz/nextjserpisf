@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client"
 import { prisma, TxClient } from "@/lib/db/prisma"
 
 /**
@@ -252,9 +253,20 @@ async function runRemovalInTx(
   reason: string,
   client: TxClient,
 ) {
-  // Kunci baris part sebagai pernyataan pertama tx, sebelum snapshot
-  // REPEATABLE READ terbentuk, lalu baca ulang cap di bawah kunci.
-  await client.$queryRaw`SELECT id FROM installed_parts WHERE id = ${input.installedPartId} FOR UPDATE`
+  // Kunci baris part DAN baris pengganti (bila ada) sebagai pernyataan
+  // pertama tx, sebelum snapshot REPEATABLE READ terbentuk, lalu baca ulang
+  // cap + status pengganti di bawah kunci. Tanpa kunci pengganti, status
+  // DILEPAS-nya dinilai dari snapshot: catat-lepas konkuren atas baris
+  // pengganti commit di jendela read→update dan tautan lahir ke part yang
+  // ternyata sudah dilepas. Id terurut naik = urutan kunci global konsisten.
+  const lockIds = [
+    input.installedPartId,
+    ...(input.replacedByInstalledPartId != null &&
+    input.replacedByInstalledPartId !== input.installedPartId
+      ? [input.replacedByInstalledPartId]
+      : []),
+  ].sort((a, b) => a - b)
+  await client.$queryRaw`SELECT id FROM installed_parts WHERE id IN (${Prisma.join(lockIds)}) FOR UPDATE`
   const part = await client.installedPart.findUnique({
     where: { id: input.installedPartId },
     select: { id: true, customerVehicleId: true, qty: true, qtyRemoved: true },

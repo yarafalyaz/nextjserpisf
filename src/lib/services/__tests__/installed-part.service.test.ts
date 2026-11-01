@@ -219,6 +219,34 @@ describe("recordInstalledPartRemoval (AC-IP-5)", () => {
     expect(Number((tx.installedPart.update.mock.calls[0] as any[])[0].data.qtyRemoved)).toBe(2)
   })
 
+  it("pengganti ikut dikunci dalam tx yang sama sebelum status DILEPAS dinilai", async () => {
+    const lockedArgs: unknown[] = []
+    const tx = {
+      $queryRaw: vi.fn(async (...a: unknown[]) => { lockedArgs.push(a); return [{ id: 1 }] }),
+      installedPart: {
+        findUnique: vi.fn(async (args: any) =>
+          args.where.id === 1
+            ? { id: 1, customerVehicleId: 7, qty: 1, qtyRemoved: 0 }
+            : { id: 2, customerVehicleId: 7, qty: 1, qtyRemoved: 0 },
+        ),
+        update: vi.fn(async () => ({ id: 1 })),
+      },
+    }
+    prismaTxMock.mockImplementation(async (cb: any) => cb(tx))
+    await recordInstalledPartRemoval(
+      { installedPartId: 1, qtyRemoved: 1, removalReason: "Ganti", removedById: 3, replacedByInstalledPartId: 2 },
+      prisma as never,
+    )
+    // Tanpa kunci atas baris pengganti, catat-lepas konkuren atas baris 2
+    // commit di jendela read→update: part 1 tertaut ke pengganti yang
+    // ternyata sudah DILEPAS pada commit.
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1)
+    const joined = JSON.stringify(lockedArgs)
+    expect(joined).toContain("1")
+    expect(joined).toContain("2")
+    expect(tx.installedPart.update).toHaveBeenCalledTimes(1)
+  })
+
   it("pengganti kendaraan lain / sudah DILEPAS ditolak; pengganti sah tertaut", async () => {
     p.installedPart.findUnique
       .mockResolvedValueOnce({ id: 1, customerVehicleId: 7, qty: 1, qtyRemoved: 0 })
