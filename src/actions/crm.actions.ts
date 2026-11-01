@@ -159,6 +159,13 @@ export async function updateTicket(id: number, formData: FormData) {
     })
     if (!existing) throw new Error("Tiket tidak ditemukan")
     if (existing.deletedAt) throw new Error("Tiket sudah dihapus dan tidak dapat diubah")
+    // closed = penutupan final: transisi KELUAR dari closed ditolak agar
+    // tiket terminal tidak bangkit tanpa jejak dan resolvedAt (dasar SLA)
+    // tidak terhapus. resolved→open/in_progress tetap jalur reopen sah,
+    // dan edit field dengan status tetap closed tidak digerbang.
+    if (existing.status === "closed" && data.status && data.status !== "closed") {
+      throw new Error("Tiket sudah ditutup final dan tidak dapat dibuka kembali. Buat tiket baru untuk isu lanjutan.")
+    }
     // Penilaian tautan hanya bila BERPINDAH dari baris terkunci (pola
     // relink putaran 36/38/39): payload update selalu mengirim ulang
     // tautan; menilai selalu mengunci edit tiket selamanya begitu
