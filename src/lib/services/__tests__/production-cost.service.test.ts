@@ -527,6 +527,33 @@ describe("syncServicePurchaseOrderCost", () => {
     expect(orderUpdateMock).not.toHaveBeenCalled()
   })
 
+  it("baris existing di order yang BARU membeku di bawah kunci ikut dibiarkan (bukan dibersihkan sebagai yatim)", async () => {
+    poFindUniqueMock.mockResolvedValue({ isService: true, workOrderId: 9, vendorId: 3 })
+    orderFindManyMock
+      // Snapshot awal: order 56 masih in_progress (belum beku).
+      .mockResolvedValueOnce([
+        { id: 55, status: "in_progress", qty: 10, completedQty: 0 },
+        { id: 56, status: "in_progress", qty: 10, completedQty: 0 },
+      ])
+      // Bacaan ulang terkunci: 56 released parsial oleh penulis lawan.
+      .mockResolvedValueOnce([
+        { id: 55, status: "in_progress", completedQty: 0 },
+        { id: 56, status: "in_progress", completedQty: 40 },
+      ])
+    // Baris subkontrak existing tertambat ke 56 (order yang baru membeku).
+    costFindManyMock.mockResolvedValue([{ id: 8, amount: 10000000, productionOrderId: 56 }])
+    costCreateMock.mockResolvedValue({ id: 9 })
+    orderFindUniqueMock.mockResolvedValue({ totalActualCost: 0 })
+    orderUpdateMock.mockResolvedValue({})
+
+    const res = await syncServicePurchaseOrderCost({ ...input, amount: 100 }, client as never)
+
+    expect(res.skippedProductionOrderIds).toContain(56)
+    // Baris historis di order beku TIDAK dihapus dan WIP-nya tidak dikredit.
+    expect(costDeleteMock).not.toHaveBeenCalled()
+    expect(orderUpdateMock.mock.calls.every((c) => c[0].where.id === 55)).toBe(true)
+  })
+
   it("F-71: leaves existing subcontract lines on a completed order untouched", async () => {
     poFindUniqueMock.mockResolvedValue({ isService: true, workOrderId: 9, vendorId: 3 })
     orderFindManyMock.mockResolvedValue([

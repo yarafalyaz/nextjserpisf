@@ -124,6 +124,13 @@ export async function syncServicePurchaseOrderCost(
   let skippedProductionOrderIds = allProductionOrders
     .filter((o) => completedIds.has(o.id))
     .map((o) => o.id)
+  // Set beku EFEKTIF: filter snapshot di atas ditambah order yang baru
+  // membeku pada baca-ulang terkunci di bawah. Filter baris existing wajib
+  // memakai set ini — memakai snapshot lama membuat baris subkontrak milik
+  // order yang baru saja membeku lolos sebagai "yatim" lalu dihapus +
+  // WIP-nya dikredit oleh loop cleanup, padahal order itu masih menyimpan
+  // sisa pool-nya (rilis akhir terbit dengan biaya kurang).
+  const frozenIds = new Set(completedIds)
   if (allProductionOrders.length === 0) {
     return { posted: 0, productionOrderIds: [], skippedProductionOrderIds: [] }
   }
@@ -150,6 +157,7 @@ export async function syncServicePurchaseOrderCost(
       if (newlyFrozen.size > 0) {
         productionOrders = productionOrders.filter((o) => !newlyFrozen.has(o.id))
         skippedProductionOrderIds = [...skippedProductionOrderIds, ...newlyFrozen]
+        for (const id of newlyFrozen) frozenIds.add(id)
       }
     }
   }
@@ -162,7 +170,7 @@ export async function syncServicePurchaseOrderCost(
       where: { purchaseOrderId: input.purchaseOrderId, category: "subcontract" },
       select: { id: true, amount: true, productionOrderId: true },
     })
-  ).filter((l) => l.productionOrderId == null || !completedIds.has(l.productionOrderId))
+  ).filter((l) => l.productionOrderId == null || !frozenIds.has(l.productionOrderId))
 
   if (desiredTotal === 0) {
     if (existingLines.length) {
