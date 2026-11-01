@@ -1314,6 +1314,17 @@ describe("Payroll Actions", () => {
     )
   })
 
+  it("regression round 17: approvePayroll menolak pembuat sendiri (pemisahan tugas)", async () => {
+    prismaMock.payroll.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, status: "draft", employeeId: 1, createdBy: 1,
+      statutorySnapshot: { fromFallback: false },
+    })
+    const res = await actions.approvePayroll(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("pemisahan tugas")
+    expect(prismaMock.payroll.updateMany).not.toHaveBeenCalled()
+  })
+
   it("markPayrollPaid updates status and posts journal", async () => {
     // Gaji positif + akun terkonfigurasi: baris ini harus benar-benar
     // membukukan jurnal, bukan berhenti di pemeriksaan akun yang baru.

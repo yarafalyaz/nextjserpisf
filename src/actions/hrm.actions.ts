@@ -3334,6 +3334,14 @@ export async function approvePayroll(payrollId: number) {
     // cakupan HR ditegakkan sebelum klaim status.
     await assertPayrollInHrScope(await getHrScope(user), payroll.employeeId ?? null);
 
+    // Pemisahan tugas (pola completeSalesReturn): finalisasi slip tidak
+    // boleh oleh pembuatnya sendiri bila workflow tidak dikonfigurasi —
+    // assertApproved lolos tanpa baris Approval. createdBy null (baris
+    // legacy) tetap boleh diputus penyetuju berizin.
+    if (payroll.createdBy != null && Number(payroll.createdBy) === Number(user.id)) {
+      throw new Error("Penggajian tidak boleh disetujui oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin process_payroll.");
+    }
+
     if (payroll.status !== "draft") {
       throw new Error("Payroll hanya bisa di-approve dari status draft");
     }
