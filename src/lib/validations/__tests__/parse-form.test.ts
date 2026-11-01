@@ -49,6 +49,33 @@ describe("parseFormData", () => {
     }
   })
 
+  it("putaran 42: koersi '0' menjadi boolean false bila field berurutan", () => {
+    // SettingSwitch kirim hidden "0" lalu Switch "on"; saat switch mati FormData
+    // hanya berisi "0" untuk field boolean itu.
+    const fd = new FormData()
+    fd.append("active", "0")
+    const result = parseFormData(z.object({ active: z.boolean().optional() }), fd)
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.active).toBe(false)
+  })
+
+  it("putaran 42: koersi '1' menjadi boolean true bila field berurutan", () => {
+    const fd = new FormData()
+    fd.append("active", "1")
+    const result = parseFormData(z.object({ active: z.boolean().optional() }), fd)
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.active).toBe(true)
+  })
+
+  it("putaran 42: nilai akhir menang — hidden 0 lalu on menjadi true", () => {
+    const fd = new FormData()
+    fd.append("active", "0")
+    fd.append("active", "on")
+    const result = parseFormData(z.object({ active: z.boolean().optional() }), fd)
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.active).toBe(true)
+  })
+
   it("coerces 'on' to boolean true", () => {
     const fd = makeFormData({ name: "X", active: "on" })
     const result = parseFormData(schema, fd)

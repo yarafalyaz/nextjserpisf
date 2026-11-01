@@ -24,11 +24,11 @@ function formDataToObject(formData: FormData): Record<string, unknown> {
     }
 
     // Boolean coercion
-    if (trimmed === "true" || trimmed === "on") {
+    if (trimmed === "true" || trimmed === "on" || trimmed === "1") {
       obj[field] = true
       return
     }
-    if (trimmed === "false" || trimmed === "off") {
+    if (trimmed === "false" || trimmed === "off" || trimmed === "0") {
       obj[field] = false
       return
     }
