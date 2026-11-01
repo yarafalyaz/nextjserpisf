@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => {
       updateMany: vi.fn(),
       count: vi.fn(),
     },
+    $transaction: vi.fn(async (fn: any) => fn(prismaMock)),
+    $executeRaw: vi.fn().mockResolvedValue(1),
   }
   return {
     requirePermissionMock: vi.fn(),
@@ -123,6 +125,25 @@ describe("klaim kondisional mark/unmark (regresi saling timpa)", () => {
     const arg = mocks.prismaMock.vendorPayment.updateMany.mock.calls.at(-1)![0]
     expect(arg.where.transferredAt).toEqual({ not: null })
     expect(arg.data).toEqual({ transferredAt: null, transferReference: null })
+  })
+
+  it("regression round 17: mark menilai ulang periode di dalam tx berkunci", async () => {
+    mocks.assertPeriodMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Periode akuntansi sudah ditutup"))
+    const res = await actions.markVendorPaymentsTransferred(fd(base))
+    expect(res.success).toBe(false)
+    expect(mocks.assertPeriodMock.mock.calls.some((c: unknown[]) => c[1] === mocks.prismaMock)).toBe(true)
+    expect(mocks.prismaMock.vendorPayment.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("regression round 17: unmark menilai periode dari baris terkunci di dalam tx", async () => {
+    mocks.prismaMock.vendorPayment.findMany.mockResolvedValue([{ transferredAt: new Date("2026-10-20T00:00:00Z") }])
+    mocks.assertPeriodMock.mockRejectedValueOnce(new Error("Periode akuntansi sudah ditutup"))
+    const res = await actions.unmarkVendorPaymentsTransferred(fd({}, ["10"]))
+    expect(res.success).toBe(false)
+    expect(mocks.assertPeriodMock.mock.calls.some((c: unknown[]) => c[1] === mocks.prismaMock)).toBe(true)
+    expect(mocks.prismaMock.vendorPayment.updateMany).not.toHaveBeenCalled()
   })
 
   it("unmark saat belum ada yang ditandai -> error jujur", async () => {

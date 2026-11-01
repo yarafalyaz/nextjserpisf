@@ -1,5 +1,6 @@
 "use server"
 
+import { Prisma } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 
 import { prisma } from "@/lib/db/prisma"
@@ -42,14 +43,20 @@ export async function markVendorPaymentsTransferred(formData: FormData): Promise
 
     const reference = parsed.data.reference?.trim() || null
 
-    // Klaim kondisional: hanya baris yang BELUM ditransfer yang boleh
-    // ditandai. Tanpa syarat ini, unmark koreksi yang commit di tengah
-    // tertimpa mark dari snapshot basi (pembayaran terkirim tampil belum
-    // ditransfer -> instruksi transfer kedua), dan `updated` melaporkan
-    // jumlah snapshot, bukan jumlah yang benar-benar berubah.
-    const result = await prisma.vendorPayment.updateMany({
-      where: { id: { in: selection.ids }, deletedAt: null, transferredAt: null },
-      data: { transferredAt: date, transferReference: reference },
+    // Klaim kondisional dalam tx berkunci: hanya baris yang BELUM
+    // ditransfer yang boleh ditandai. Tanpa syarat ini, unmark koreksi
+    // yang commit di tengah tertimpa mark dari snapshot basi (pembayaran
+    // terkirim tampil belum ditransfer -> instruksi transfer kedua), dan
+    // `updated` melaporkan jumlah snapshot, bukan jumlah yang berubah.
+    // Gerbang periode dinilai ulang di dalam tx sesudah kunci baris.
+    const result = await prisma.$transaction(async (tx) => {
+      const sortedIds = [...selection.ids].sort((a, b) => a - b)
+      await tx.$executeRaw`SELECT id FROM vendor_payments WHERE id IN (${Prisma.join(sortedIds)}) AND deleted_at IS NULL ORDER BY id FOR UPDATE`
+      await assertPeriodOpen(date, tx)
+      return tx.vendorPayment.updateMany({
+        where: { id: { in: selection.ids }, deletedAt: null, transferredAt: null },
+        data: { transferredAt: date, transferReference: reference },
+      })
     })
     if (result.count === 0) {
       const anyExists = await prisma.vendorPayment.count({
@@ -84,22 +91,25 @@ export async function unmarkVendorPaymentsTransferred(formData: FormData): Promi
     const selection = normalizeTransferSelection(formData.getAll("paymentIds").map((value) => String(value)))
     if (selection.error) return { success: false, error: selection.error }
 
-    // Koreksi penanda transfer tetap dijaga period-lock: ambil tanggal
-    // transfer tersimpan, tolak bila berada di periode tertutup.
-    const existing = await prisma.vendorPayment.findMany({
-      where: { id: { in: selection.ids }, deletedAt: null },
-      select: { transferredAt: true },
-    })
-    for (const row of existing) {
-      if (row.transferredAt) await assertPeriodOpen(row.transferredAt)
-    }
-
-    // Klaim kondisional arah sebaliknya: hanya baris yang SEDANG ditandai
-    // yang boleh dibatalkan tandanya — mark baru yang commit sesudah
-    // findMany period-lock di atas tidak boleh terhapus oleh unmark basi.
-    const result = await prisma.vendorPayment.updateMany({
-      where: { id: { in: selection.ids }, deletedAt: null, transferredAt: { not: null } },
-      data: { transferredAt: null, transferReference: null },
+    // Koreksi penanda transfer tetap dijaga period-lock, dinilai dari
+    // baris TERKUNCI di dalam tx: mark baru yang commit sesudah pembacaan
+    // luar tidak boleh lolos gerbang atau terhapus oleh unmark basi.
+    // Klaim kondisional arah sebaliknya tetap dipakai: hanya baris yang
+    // SEDANG ditandai yang boleh dibatalkan tandanya.
+    const result = await prisma.$transaction(async (tx) => {
+      const sortedIds = [...selection.ids].sort((a, b) => a - b)
+      await tx.$executeRaw`SELECT id FROM vendor_payments WHERE id IN (${Prisma.join(sortedIds)}) AND deleted_at IS NULL ORDER BY id FOR UPDATE`
+      const existing = await tx.vendorPayment.findMany({
+        where: { id: { in: selection.ids }, deletedAt: null },
+        select: { transferredAt: true },
+      })
+      for (const row of existing) {
+        if (row.transferredAt) await assertPeriodOpen(row.transferredAt, tx)
+      }
+      return tx.vendorPayment.updateMany({
+        where: { id: { in: selection.ids }, deletedAt: null, transferredAt: { not: null } },
+        data: { transferredAt: null, transferReference: null },
+      })
     })
     if (result.count === 0) {
       const anyExists = await prisma.vendorPayment.count({
