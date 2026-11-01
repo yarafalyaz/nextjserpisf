@@ -1034,6 +1034,29 @@ describe("Uom Actions", () => {
     expect(res?.success).toBe(false)
     expect(mocks.prismaMock.unitOfMeasure.update).not.toHaveBeenCalled()
   })
+  it("updateUom menolak rename simbol satuan yang dipakai barang (putaran 21)", async () => {
+    mocks.prismaMock.unitOfMeasure.findUnique.mockResolvedValue({ id: 1, name: "Piece", symbol: "PCS" })
+    mocks.prismaMock.item.count.mockResolvedValue(5)
+    const res = await actions.updateUom(1, fdMap({ name: "Piece", symbol: "PCSX", category: "barang" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("5 barang")
+    expect(mocks.prismaMock.unitOfMeasure.update).not.toHaveBeenCalled()
+  })
+  it("updateUom rename bebas bila satuan tidak dipakai barang", async () => {
+    mocks.prismaMock.unitOfMeasure.findUnique.mockResolvedValue({ id: 1, name: "Piece", symbol: "PCS" })
+    mocks.prismaMock.item.count.mockResolvedValue(0)
+    const res = await actions.updateUom(1, fdMap({ name: "Pieces", symbol: "PCSX", category: "barang" }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.unitOfMeasure.update).toHaveBeenCalledTimes(1)
+  })
+  it("updateUom tanpa rename kunci tidak menilai pemakaian barang", async () => {
+    mocks.prismaMock.unitOfMeasure.findUnique.mockResolvedValue({ id: 1, name: "Piece", symbol: "PCS" })
+    mocks.prismaMock.item.count.mockResolvedValue(5)
+    const res = await actions.updateUom(1, fdMap({ name: "Piece", symbol: "PCS", category: "jasa" }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.item.count).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.unitOfMeasure.update).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe("Tax Actions", () => {

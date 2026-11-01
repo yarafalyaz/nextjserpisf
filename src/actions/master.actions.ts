@@ -3602,6 +3602,25 @@ export async function updateUom(id: number, formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error }
     const { name, symbol, category } = parsed.data
 
+    // Item menyimpan satuan sebagai string bebas yang dicocokkan symbol/nama
+    // (lihat deleteUom). Rename symbol/nama satuan yang sedang dipakai
+    // memutus pencocokan itu diam-diam — barang lama kehilangan satuannya
+    // dan guard hapus sesudahnya menilai string baru lalu lolos. Karena itu
+    // rename kunci ditolak selama masih dipakai; ganti kategori tetap bebas.
+    const existing = await prisma.unitOfMeasure.findUnique({ where: { id } });
+    if (!existing) return { success: false, error: "Satuan tidak ditemukan" };
+    if (existing.symbol !== symbol || existing.name !== name) {
+      const usedByItems = await prisma.item.count({
+        where: { OR: [{ unitOfMeasure: existing.symbol }, { unitOfMeasure: existing.name }] },
+      });
+      if (usedByItems > 0) {
+        return {
+          success: false,
+          error: `Satuan dipakai oleh ${usedByItems} barang — nama/simbol tidak dapat diganti. Ubah satuan barangnya dulu.`,
+        };
+      }
+    }
+
     await prisma.unitOfMeasure.update({
       where: { id },
       data: {
