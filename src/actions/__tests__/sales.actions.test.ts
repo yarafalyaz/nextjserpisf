@@ -1159,6 +1159,33 @@ describe("Sales Payment Actions", () => {
     expect(mocks.prismaMock.transactionAttachment.updateMany).toHaveBeenCalled()
   })
 
+  it("createSalesPayment menolak akun penerima nonaktif / bukan kas-bank", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", grandTotal: 1000, paidAmount: 0, customerId: 3 })
+    mocks.prismaMock.account.findUnique.mockResolvedValue({ id: 55, isActive: false, deletedAt: null, reportGroup: "BANK" })
+    const res = await actions.createSalesPayment(fdMap({ salesInvoiceId: 1, amount: 100, paymentDate: "2026-06-12", paymentMethod: "cash", accountId: 55 }))
+    expect(res?.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toMatch(/tidak aktif/)
+    expect(mocks.prismaMock.salesPayment.create).not.toHaveBeenCalled()
+
+    mocks.prismaMock.account.findUnique.mockResolvedValue({ id: 55, isActive: true, deletedAt: null, reportGroup: "INTR" })
+    const res2 = await actions.createSalesPayment(fdMap({ salesInvoiceId: 1, amount: 100, paymentDate: "2026-06-12", paymentMethod: "cash", accountId: 55 }))
+    expect(res2?.success).toBe(false)
+    expect(String((res2 as { error?: string }).error)).toMatch(/kas\/bank/)
+    expect(mocks.prismaMock.salesPayment.create).not.toHaveBeenCalled()
+    mocks.prismaMock.account.findUnique.mockReset()
+  })
+
+  it("updateSalesPayment menolak akun penerima bukan kas-bank hidup", async () => {
+    mocks.prismaMock.salesPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, salesInvoiceId: 1, status: "posted", amount: 100, withholdingAmount: 0 })
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", grandTotal: 1000, paidAmount: 0, customerId: 3 })
+    mocks.prismaMock.account.findUnique.mockResolvedValue({ id: 55, isActive: true, deletedAt: new Date(2026, 0, 1), reportGroup: "BANK" })
+    const res = await actions.updateSalesPayment(1, fdMap({ salesInvoiceId: 1, amount: 100, paymentDate: "2026-06-12", paymentMethod: "cash", accountId: 55 }))
+    expect(res?.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toMatch(/sudah dihapus/)
+    expect(mocks.prismaMock.salesPayment.update).not.toHaveBeenCalled()
+    mocks.prismaMock.account.findUnique.mockReset()
+  })
+
   // === updateSalesPayment ===
   it("updateSalesPayment fails if amount 0", async () => {
     const res = await actions.updateSalesPayment(1, fdMap({ salesInvoiceId: 1, amount: 0, paymentDate: "2026-06-12", paymentMethod: "cash" }))

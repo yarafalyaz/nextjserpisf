@@ -102,7 +102,7 @@ export default async function CreatePaymentPage({
       orderBy: { createdAt: "desc" },
     }),
     prisma.account.findMany({
-      where: { isActive: true, type: "ASSET", code: { startsWith: "1" } },
+      where: { isActive: true, deletedAt: null, reportGroup: "BANK" },
       orderBy: { code: "asc" },
     }),
     getActivePaymentMethods(),

@@ -84,7 +84,7 @@ export default async function EditPage({
       include: { customer: { select: { name: true } } },
     }),
     prisma.account.findMany({
-      where: { type: "ASSET" },
+      where: { isActive: true, deletedAt: null, reportGroup: "BANK" },
       orderBy: { code: "asc" },
     }),
   ]);

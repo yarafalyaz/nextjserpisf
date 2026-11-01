@@ -115,6 +115,34 @@ async function assertCustomerLiveForNewDocument(
   }
 }
 
+/**
+ * Akun penerima pembayaran penjualan menjadi akun Dr kas/bank jurnal —
+ * wajib ada, hidup, dan grup laporan BANK (pola setor pajak/bank-transfer).
+ * Cek `count` exists saja membiarkan akun beban/persediaan/nonaktif
+ * menerima jurnal penerimaan dan kas tak pernah bertambah.
+ */
+async function assertCashBankAccountForPayment(
+  client: Prisma.TransactionClient | typeof prisma,
+  accountId: number,
+): Promise<void> {
+  const account = await client.account.findUnique({
+    where: { id: accountId },
+    select: { id: true, isActive: true, deletedAt: true, reportGroup: true },
+  })
+  if (!account) {
+    throw new Error(`Akun tidak ditemukan (id: ${accountId}). Pilih ulang akun sebelum menyimpan.`)
+  }
+  if (account.deletedAt != null) {
+    throw new Error("Akun penerima sudah dihapus. Pilih ulang akun sebelum menyimpan.")
+  }
+  if (!account.isActive) {
+    throw new Error("Akun penerima tidak aktif. Pilih ulang akun sebelum menyimpan.")
+  }
+  if (account.reportGroup !== "BANK") {
+    throw new Error("Akun penerima bukan rekening kas/bank (grup laporan BANK).")
+  }
+}
+
 // F-PRICELIST-01 tahap 1: terapkan daftar harga pelanggan ke baris dokumen
 // yang dibuat LANGSUNG dari form (bukan hasil konversi penawaran/pesanan —
 // baris hasil konversi sudah membawa harga dokumen sumbernya). Harga
@@ -2349,8 +2377,7 @@ export async function createSalesPayment(formData: FormData) {
     }
 
     if (v.accountId != null) {
-      const ok = await tx.account.count({ where: { id: v.accountId } })
-      if (!ok) throw new Error(`Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.`)
+      await assertCashBankAccountForPayment(tx, v.accountId)
     }
 
     const created = await tx.salesPayment.create({
@@ -3982,8 +4009,7 @@ export async function updateSalesPayment(id: number, formData: FormData) {
     }
 
     if (v.accountId != null) {
-      const ok = await tx.account.count({ where: { id: v.accountId } })
-      if (!ok) throw new Error(`Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.`)
+      await assertCashBankAccountForPayment(tx, v.accountId)
     }
 
     const updated = await tx.salesPayment.update({
