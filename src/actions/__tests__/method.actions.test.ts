@@ -105,6 +105,26 @@ describe("guard kode metode dirujuk dokumen (putaran 21)", () => {
   })
 })
 
+describe("reuse nama metode nonaktif (putaran 50)", () => {
+  it("createPaymentMethod menolak nama yang sudah ada tetapi nonaktif", async () => {
+    mocks.prismaMock.paymentMethod.findFirst.mockResolvedValue({ id: 7, slug: "transfer-lama", isActive: false })
+    const res = await actions.createPaymentMethod(fdMap({ name: "Transfer Lama" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("nonaktif")
+    expect(mocks.prismaMock.paymentMethod.create).not.toHaveBeenCalled()
+  })
+
+  it("createPaymentMethod tetap reuse nama aktif persis", async () => {
+    mocks.prismaMock.paymentMethod.findFirst.mockResolvedValue({ id: 7, slug: "transfer", isActive: true })
+    const res = await actions.createPaymentMethod(fdMap({ name: "Transfer" }))
+    expect(res?.success).toBe(true)
+    expect((res as any)?.id).toBe(7)
+    expect(mocks.prismaMock.paymentMethod.create).not.toHaveBeenCalled()
+    // clearAllMocks tidak membuang mockResolvedValue persisten — pulihkan.
+    mocks.prismaMock.paymentMethod.findFirst.mockResolvedValue(null)
+  })
+})
+
 describe("Payment Method Actions", () => {
   it("createPaymentMethod succeeds", async () => {
     const res = await actions.createPaymentMethod(fdMap({ name: "Cash", code: "CASH" }))

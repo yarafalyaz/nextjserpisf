@@ -53,8 +53,18 @@ async function createMethod(cfg: MethodConfig, formData: FormData, skipPermissio
 
     const rawName = (formData.get("name") as string | null)?.trim()
     if (rawName) {
-      const existing = await cfg.model.findFirst({ where: { name: rawName }, select: { id: true, slug: true } })
-      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+      const existing = await cfg.model.findFirst({ where: { name: rawName }, select: { id: true, slug: true, isActive: true } })
+      if (existing) {
+        // Putaran 50: reuse idempoten hanya untuk metode AKTIF. Metode
+        // nonaktif bernama sama tidak boleh terpilih diam-diam oleh
+        // quick-add — resolver aktif (method.service) tidak menawarkannya,
+        // jadi dokumen akan membawa kode metode yang tak bisa dipilih.
+        if (!existing.isActive) {
+          const label = cfg.entity === "PaymentMethod" ? "Metode pembayaran" : "Metode pengiriman"
+          return { success: false, error: `${label} "${rawName}" sudah ada tetapi nonaktif — aktifkan kembali dari master metode, jangan buat duplikat.` }
+        }
+        return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+      }
     }
 
     const parsed = parseFormData(cfg.schemas.create, formData)
