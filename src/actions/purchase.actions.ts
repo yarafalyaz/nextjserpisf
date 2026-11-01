@@ -1843,6 +1843,34 @@ export async function createVendorBill(formData: FormData) {
 
 // ==================== VENDOR PAYMENT ACTIONS ====================
 
+/**
+ * Akun pembayaran vendor adalah akun CREDIT jurnal konfirmasi
+ * (onVendorPaymentCreated). Wajib hidup + grup kas/bank (pola
+ * assertCashBankAccountForPayment penjualan): cek eksistensi saja membiarkan
+ * jurnal POSTED lahir dari akun nonaktif/terhapus/piutang.
+ */
+async function assertCashBankAccountForVendorPayment(
+  client: Prisma.TransactionClient | typeof prisma,
+  accountId: number,
+): Promise<void> {
+  const account = await client.account.findUnique({
+    where: { id: accountId },
+    select: { id: true, isActive: true, deletedAt: true, reportGroup: true },
+  })
+  if (!account) {
+    throw new Error(`Akun tidak ditemukan (id: ${accountId}). Pilih ulang akun sebelum menyimpan.`)
+  }
+  if (account.deletedAt != null) {
+    throw new Error("Akun pembayaran sudah dihapus. Pilih ulang akun sebelum menyimpan.")
+  }
+  if (!account.isActive) {
+    throw new Error("Akun pembayaran tidak aktif. Pilih ulang akun sebelum menyimpan.")
+  }
+  if (account.reportGroup !== "BANK") {
+    throw new Error("Akun pembayaran bukan rekening kas/bank (grup laporan BANK).")
+  }
+}
+
 export async function createVendorPayment(formData: FormData) {
   try {
     const user = await requirePermission("create_vendor_payments");
@@ -1878,15 +1906,20 @@ export async function createVendorPayment(formData: FormData) {
       targetBillId = target.id;
     }
 
-    // ATOMICITY: the payment row + the attachment pointer update must commit
-    // together. If the attachment updateMany fails after the payment is
-    // created, the user sees a payment without its supporting documents linked
-    // (or worse, the attachments stay orphaned with referenceId=0 and never get
-    // cleaned up). Wrapping both in one tx ties payment existence to the
-    // attachment linkage.
+    // Putaran 24: pembayaran baru hanya untuk vendor hidup (pola edit
+    // pembayaran + createPurchaseOrder); akun pembayaran eksplisit wajib
+    // kas/bank hidup — penilaian otoritatif ulang di konfirmasi.
+    const liveVendor = await prisma.vendor.findFirst({
+      where: { id: v.vendorId, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+    if (!liveVendor) return { success: false, error: "Vendor tidak ditemukan atau tidak aktif" }
     if (v.accountId != null) {
-      const ok = await prisma.account.count({ where: { id: v.accountId } })
-      if (!ok) return { success: false, error: `Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.` }
+      try {
+        await assertCashBankAccountForVendorPayment(prisma, v.accountId)
+      } catch (e) {
+        return { success: false, error: getErrorMessage(e, "Akun pembayaran tidak valid.") }
+      }
     }
 
     const payment = await prisma.$transaction(async (tx) => {
@@ -2311,6 +2344,23 @@ export async function confirmVendorPayment(paymentId: number) {
       // Approval window can reopen after the outside-tx assertApproved (edit
       // opens a fresh pending approval); re-check inside the row lock.
       await assertApproved("VendorPayment", paymentId, tx);
+
+      // Putaran 24: nilai ulang vendor + akun pembayaran DI DALAM tx di bawah
+      // kunci baris (pola uang muka/setor pajak): pembayaran draft yang
+      // vendornya dinonaktifkan/dihapus sesudah dibuat tidak boleh
+      // mengonfirmasi jurnal POSTED, dan akun kredit jurnal wajib tetap
+      // kas/bank hidup. accountId null jatuh ke akun kas/bank pengaturan
+      // saat jurnal — dinilai hook, bukan di sini.
+      await tx.$executeRaw`SELECT id FROM vendors WHERE id = ${freshPayment.vendorId} FOR UPDATE`;
+      const freshVendor = await tx.vendor.findFirst({
+        where: { id: freshPayment.vendorId, isActive: true, deletedAt: null },
+        select: { id: true },
+      })
+      if (!freshVendor) throw new Error("Vendor tidak ditemukan atau tidak aktif");
+      if (freshPayment.accountId != null) {
+        await tx.$executeRaw`SELECT id FROM accounts WHERE id = ${freshPayment.accountId} FOR UPDATE`;
+        await assertCashBankAccountForVendorPayment(tx, freshPayment.accountId)
+      }
 
       await tx.vendorPayment.update({
         where: { id: paymentId },
@@ -3936,8 +3986,7 @@ export async function updateVendorPayment(id: number, formData: FormData) {
     }
 
     if (v.accountId != null) {
-      const ok = await prisma.account.count({ where: { id: v.accountId } })
-      if (!ok) throw new Error(`Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.`)
+      await assertCashBankAccountForVendorPayment(prisma, v.accountId)
     }
 
     const slug = await nextSlug("vendorPayment", existingPayment.documentNo, { excludeId: id });

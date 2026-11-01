@@ -1375,6 +1375,12 @@ describe("Vendor Payment Actions", () => {
     mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     // Putaran 22: edit menolak vendor mati — default fixture vendor hidup.
     mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1 })
+    // Putaran 24: akun pembayaran wajib kas/bank hidup (mock tanpa delegate account).
+    ;(mocks.prismaMock as any).account = {
+      findUnique: vi.fn().mockResolvedValue({ id: 5, isActive: true, deletedAt: null, reportGroup: "BANK" }),
+      findMany: vi.fn().mockResolvedValue([{ id: 5, isActive: true, deletedAt: null, reportGroup: "BANK" }]),
+      count: vi.fn().mockResolvedValue(1),
+    }
   })
 
   it("createVendorPayment succeeds", async () => {
@@ -1385,6 +1391,79 @@ describe("Vendor Payment Actions", () => {
       paymentMethod: "cash"
     }))
     expect(res?.success).toBe(true)
+  })
+
+  it("regresi putaran 24: createVendorPayment menolak vendor nonaktif/terhapus", async () => {
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue(null)
+    const res = await actions.createVendorPayment(fdMap({
+      vendorId: "1",
+      amount: "1000",
+      paymentDate: "2026-06-12",
+      paymentMethod: "cash"
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.vendorPayment.create).not.toHaveBeenCalled()
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1 })
+  })
+
+  it("regresi putaran 24: createVendorPayment menolak akun nonaktif/bukan kas-bank", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    ;(mocks.prismaMock as any).account.findUnique.mockReset()
+    ;(mocks.prismaMock as any).account.findUnique.mockResolvedValueOnce({ id: 5, isActive: false, deletedAt: null, reportGroup: "BANK" })
+    const inactive = await actions.createVendorPayment(fdMap({
+      vendorId: "1", amount: "1000", paymentDate: "2026-06-12", paymentMethod: "transfer", accountId: "5",
+    }))
+    expect(inactive?.success).toBe(false)
+    expect(inactive?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.vendorPayment.create).not.toHaveBeenCalled()
+
+    ;(mocks.prismaMock as any).account.findUnique.mockResolvedValueOnce({ id: 5, isActive: true, deletedAt: null, reportGroup: "AREC" })
+    const wrongGroup = await actions.createVendorPayment(fdMap({
+      vendorId: "1", amount: "1000", paymentDate: "2026-06-12", paymentMethod: "transfer", accountId: "5",
+    }))
+    expect(wrongGroup?.success).toBe(false)
+    expect(wrongGroup?.error).toContain("kas/bank")
+    expect(mocks.prismaMock.vendorPayment.create).not.toHaveBeenCalled()
+    ;(mocks.prismaMock as any).account.findUnique.mockResolvedValue({ id: 5, isActive: true, deletedAt: null, reportGroup: "BANK" })
+  })
+
+  it("regresi putaran 24: updateVendorPayment menolak akun nonaktif/bukan kas-bank", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    ;(mocks.prismaMock as any).account.findUnique.mockReset()
+    ;(mocks.prismaMock as any).account.findUnique.mockResolvedValueOnce({ id: 5, isActive: false, deletedAt: null, reportGroup: "BANK" })
+    const res = await actions.updateVendorPayment(1, fdMap({
+      vendorId: "1", amount: "1200", paymentDate: "2026-06-12", paymentMethod: "transfer", accountId: "5",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.vendorPayment.update).not.toHaveBeenCalled()
+    ;(mocks.prismaMock as any).account.findUnique.mockResolvedValue({ id: 5, isActive: true, deletedAt: null, reportGroup: "BANK" })
+  })
+
+  it("regresi putaran 24: confirmVendorPayment menolak vendor mati dan akun pembayaran mati dalam tx", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", vendorId: 1, amount: 500, createdBy: 2, accountId: 5,
+    })
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue(null)
+    const deadVendor = await actions.confirmVendorPayment(1)
+    expect(deadVendor?.success).toBe(false)
+    expect(deadVendor?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.vendorPayment.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled()
+
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1 })
+    ;(mocks.prismaMock as any).account.findUnique.mockReset()
+    ;(mocks.prismaMock as any).account.findUnique.mockResolvedValueOnce({ id: 5, isActive: true, deletedAt: new Date(), reportGroup: "BANK" })
+    const deadAccount = await actions.confirmVendorPayment(1)
+    expect(deadAccount?.success).toBe(false)
+    expect(deadAccount?.error).toContain("sudah dihapus")
+    expect(mocks.prismaMock.vendorPayment.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled()
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1 })
+    ;(mocks.prismaMock as any).account.findUnique.mockResolvedValue({ id: 5, isActive: true, deletedAt: null, reportGroup: "BANK" })
+    mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
   })
 
   it("createVendorPayment persists the targeted bill", async () => {
