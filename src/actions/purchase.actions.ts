@@ -140,6 +140,23 @@ async function assertLiveWithholdingTypeTx(
   if (!liveType) throw new Error("Jenis PPh tidak ditemukan atau tidak aktif");
 }
 
+/**
+ * Pemohon PR menunjuk Employee lewat kolom bare-int tanpa FK: picker
+ * hanya menawarkan karyawan belum terhapus, tetapi id fiktif/nonaktif
+ * dari payload buatan tangan tersimpan senyap. Default (user login)
+ * tidak dinilai — hanya pemohon yang dipilih eksplisit.
+ */
+async function assertLiveRequester(
+  employeeId: number | null | undefined,
+): Promise<void> {
+  if (employeeId == null) return;
+  const liveEmployee = await prisma.employee.findFirst({
+    where: { id: employeeId, isActive: true, deletedAt: null },
+    select: { id: true },
+  });
+  if (!liveEmployee) throw new Error("Pemohon tidak ditemukan atau tidak aktif");
+}
+
 function parsePoGrItemId(raw: unknown): number | null {
   const itemId = parseLocaleNumber(raw as string | number | null | undefined);
   return itemId === null || itemId <= 0 ? null : itemId;
@@ -887,6 +904,7 @@ export async function createPurchaseRequest(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("PR");
     const slug = await nextSlug("purchaseRequest", documentNo);
+    await assertLiveRequester(v.requestedBy);
     const requestedBy = v.requestedBy || Number(user.id);
     const items = parsePurchaseRequestItems(v.items);
     // Baris PR bebas (bukan turunan dokumen lain): item mati/fiktif ditolak
@@ -3453,6 +3471,7 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
 
     const slug = await nextSlug("purchaseRequest", existingPr.documentNo, { excludeId: id });
 
+    await assertLiveRequester(v.requestedBy);
     const requestedBy = v.requestedBy || Number(user.id);
     // Parse sebelum transaksi: qty tak terbaca ditolak sebelum deleteMany
     // menghapus baris lama.

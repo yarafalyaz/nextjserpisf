@@ -334,6 +334,33 @@ describe("Purchase Request Actions", () => {
     expect(res?.error).toContain("tidak ditemukan")
     expect(mocks.prismaMock.purchaseRequestItem.deleteMany).not.toHaveBeenCalled()
   })
+
+  // Regresi putaran 32 #6(a): requestedBy bare-int tanpa FK menunjuk
+  // Employee — picker hanya menawarkan karyawan belum terhapus, tetapi
+  // payload buatan tangan dengan id fiktif/nonaktif tersimpan senyap.
+  it("regresi putaran 32: createPurchaseRequest menolak pemohon fiktif", async () => {
+    mocks.prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await actions.createPurchaseRequest(fdMap({
+      date: "2026-06-12",
+      title: "PR Test",
+      requestedBy: "999999",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.purchaseRequest.create).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 32: updatePurchaseRequest menolak pemohon nonaktif", async () => {
+    mocks.prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await actions.updatePurchaseRequest(1, fdMap({
+      date: "2026-06-12",
+      title: "PR Test",
+      requestedBy: "77",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.purchaseRequest.update).not.toHaveBeenCalled()
+  })
 })
 
 describe("Purchase Order Actions", () => {
