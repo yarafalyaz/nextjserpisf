@@ -246,6 +246,13 @@ export const updateSystemSettingsSchema = z.object({
   // diam-diam dan terbit denda selamanya fail-closed.
   lateFeeIncomeAccountId: optionalInt(),
 
+  // Accounting - Kompensasi PKWT (F-2026-10-24-132-V) + Penjualan Besi Tua
+  // (F-2026-10-24-135-V): tiga mapping ini ditulis aksi dari form; tanpa
+  // kunci skema ketiganya lolos tanpa validasi tipe/rentang sama sekali.
+  pkwtCompensationExpenseAccountId: optionalInt(),
+  pkwtCompensationPayableAccountId: optionalInt(),
+  scrapSaleIncomeAccountId: optionalInt(),
+
   // Internal
   _redirectTo: optionalString(500),
 })

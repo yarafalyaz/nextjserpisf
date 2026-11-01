@@ -57,6 +57,20 @@ describe("updateSystemSettingsSchema", () => {
     ).toBe(false)
   })
 
+  it("putaran 42: tiga mapping akun PKWT/scrap terdaftar di skema, bukan dibuang diam-diam", () => {
+    const result = updateSystemSettingsSchema.parse({
+      pkwtCompensationExpenseAccountId: 42,
+      pkwtCompensationPayableAccountId: null,
+      scrapSaleIncomeAccountId: 7,
+    })
+    expect(result.pkwtCompensationExpenseAccountId).toBe(42)
+    expect(result.pkwtCompensationPayableAccountId).toBeNull()
+    expect(result.scrapSaleIncomeAccountId).toBe(7)
+    expect(
+      updateSystemSettingsSchema.safeParse({ scrapSaleIncomeAccountId: "abc" }).success,
+    ).toBe(false)
+  })
+
   it("allows null for optionalInt fields", () => {
     const result = updateSystemSettingsSchema.parse({ fiscalYearStartMonth: null })
     expect(result.fiscalYearStartMonth).toBeNull()
