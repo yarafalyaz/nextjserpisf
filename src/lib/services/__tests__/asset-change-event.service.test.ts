@@ -113,7 +113,37 @@ vi.mock("@/lib/db/prisma", () => {
       }),
       findMany: vi.fn(async (args: { where: { assetId: number; status: string } }) =>
         store.events.filter((e) => e.assetId === args.where.assetId && e.status === args.where.status)),
-      findFirst: vi.fn(async () => null),
+      findFirst: vi.fn(async (args?: { where?: Record<string, unknown> }) => {
+        // findFirst generik untuk mock lama (rintangan surplus) = null. Query
+        // urutan reversal putaran 47 (assetId+status+OR tanggal/id) dinilai
+        // terhadap store supaya gerbangnya teruji, bukan selalu kosong.
+        const w = args?.where as
+          | { assetId?: number; status?: string; id?: { not: number }; OR?: Array<Record<string, unknown>> }
+          | undefined
+        if (!w || w.assetId == null || !Array.isArray(w.OR)) {
+          // Query reversal-sudah-ada putaran 47 (reversesEventId) dinilai juga.
+          const revOf = (w as { reversesEventId?: number } | undefined)?.reversesEventId
+          if (revOf != null) {
+            const hit = store.events.find((e) => e.reversesEventId === revOf)
+            return hit ? { id: hit.id } : null
+          }
+          return null
+        }
+        const notId = w.id?.not
+        const gtCond = w.OR.find((c) => "effectiveDate" in c) as { effectiveDate?: { gt?: Date } } | undefined
+        const eqCond = w.OR.find((c) => "id" in c) as { effectiveDate?: Date; id?: { gt?: number } } | undefined
+        const hit = store.events.find((e) => {
+          if (e.assetId !== w.assetId || e.status !== w.status) return false
+          if ("reversesEventId" in w && (w as { reversesEventId?: unknown }).reversesEventId == null && e.reversesEventId != null) return false
+          if (notId != null && e.id === notId) return false
+          const gt = gtCond?.effectiveDate?.gt
+          if (gt && e.effectiveDate > gt) return true
+          const eqDate = eqCond?.effectiveDate
+          const gtId = eqCond?.id?.gt
+          return eqDate != null && gtId != null && e.effectiveDate.getTime() === new Date(eqDate).getTime() && e.id > gtId
+        })
+        return hit ? { id: hit.id } : null
+      }),
       create: vi.fn(async (args: { data: Record<string, unknown> }) => {
         const row = { id: store.nextEventId++, status: "POSTED", ...args.data } as ERow
         store.events.push(row)
@@ -264,6 +294,39 @@ describe("asset-change-event.service", () => {
     // Tidak ada jurnal lawan dan status peristiwa asal tetap POSTED.
     expect(store.journals.filter((j) => j.referenceType === "ASSET_CHANGE_EVENT")).toHaveLength(1)
     expect(store.events.find((e) => e.id === up.eventId)?.status).toBe("POSTED")
+  })
+
+  it("regresi putaran 47: reversal peristiwa lama ditolak bila peristiwa POSTED lebih baru ada", async () => {
+    const first = await postAssetChangeEvent({ assetId: 1, request: impairmentReq("DOC-O1", 700) })
+    const second = await postAssetChangeEvent({ assetId: 1, request: impairmentReq("DOC-O2", 500) })
+    expect(second.journalId).not.toBeNull()
+
+    await expect(
+      reverseAssetChangeEvent({
+        eventId: first.eventId,
+        reversalDate: new Date("2026-03-01"),
+        sourceDocumentKey: "REV-O1",
+      }),
+    ).rejects.toThrow(/lebih baru/)
+
+    // Nol jurnal lawan, kedua peristiwa asal tetap POSTED.
+    expect(store.journals.filter((j) => j.referenceType === "ASSET_CHANGE_EVENT")).toHaveLength(2)
+    expect(store.events.find((e) => e.id === first.eventId)?.status).toBe("POSTED")
+    expect(store.events.find((e) => e.id === second.eventId)?.status).toBe("POSTED")
+
+    // Urutan LIFO sah: balik yang terbaru dulu, baru yang lama.
+    await reverseAssetChangeEvent({
+      eventId: second.eventId,
+      reversalDate: new Date("2026-03-02"),
+      sourceDocumentKey: "REV-O2",
+    })
+    await reverseAssetChangeEvent({
+      eventId: first.eventId,
+      reversalDate: new Date("2026-03-03"),
+      sourceDocumentKey: "REV-O1B",
+    })
+    expect(store.events.find((e) => e.id === first.eventId)?.status).toBe("REVERSED")
+    expect(store.events.find((e) => e.id === second.eventId)?.status).toBe("REVERSED")
   })
 
   it("E111-S3: ketiga penulis mengunci baris aset sebelum membaca fakta POSTED", async () => {

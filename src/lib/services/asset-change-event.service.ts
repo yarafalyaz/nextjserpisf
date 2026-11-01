@@ -670,9 +670,50 @@ export async function reverseAssetChangeEvent(input: {
       await lockAssetRow(tx, original.assetId)
       const lockedOriginal = await tx.assetChangeEvent.findUnique({
         where: { id: input.eventId },
-        select: { status: true },
+        select: { status: true, assetId: true, effectiveDate: true },
       })
       if (!lockedOriginal || lockedOriginal.status !== "POSTED") {
+        throw new Error("Peristiwa sudah dibalik atau tidak POSTED.")
+      }
+      // Urutan LIFO wajib (putaran 47): reversal menulis ulang efek BERJALAN
+      // (kategori/metode/estimasi/currentValue + rantai surplus) dari snapshot
+      // asal. Membalik peristiwa lama di atas peristiwa POSTED yang lebih baru
+      // menimpa efek peristiwa baru itu sementara jurnal lawan hanya membalik
+      // delta asal — saldo per-akun/rantai surplus korup senyap. Urutan waktu
+      // sama dengan posting: (effectiveDate, id). Peristiwa REVERSAL dikecuali-
+      // kan dari penghalang: ia membatalkan asalnya sendiri, bukan peristiwa
+      // berjalan yang menumpuk di atas asal.
+      const newerPosted = await tx.assetChangeEvent.findFirst({
+        where: {
+          assetId: lockedOriginal.assetId,
+          status: "POSTED",
+          id: { not: input.eventId },
+          reversesEventId: null,
+          OR: [
+            { effectiveDate: { gt: lockedOriginal.effectiveDate } },
+            {
+              effectiveDate: lockedOriginal.effectiveDate,
+              id: { gt: input.eventId },
+            },
+          ],
+        },
+        select: { id: true },
+      })
+      if (newerPosted) {
+        throw new Error(
+          "Peristiwa ini tidak dapat dibalik karena ada peristiwa perubahan yang lebih baru dan masih POSTED pada aset yang sama. Balik peristiwa terbaru terlebih dahulu.",
+        )
+      }
+      // Peristiwa reversal yang dibuat fungsi ini sendiri juga POSTED dan
+      // selalu lebih baru dari asal — ia membatalkan asal, bukan penghalang
+      // LIFO di atas. Asal yang sudah punya reversal tidak boleh dibalik
+      // kedua kali walau bacaan status asal basi di luar kunci (cek status
+      // di bawah kunci + gerbang ini bersama menolaknya).
+      const existingReversal = await tx.assetChangeEvent.findFirst({
+        where: { reversesEventId: input.eventId },
+        select: { id: true },
+      })
+      if (existingReversal) {
         throw new Error("Peristiwa sudah dibalik atau tidak POSTED.")
       }
       // Builder peristiwa baru menolak aset disposed; reversal tidak lewat
