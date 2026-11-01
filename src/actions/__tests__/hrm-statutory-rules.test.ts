@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   requirePermission: vi.fn(),
   ruleCreate: vi.fn(),
   ruleFindUniqueOrThrow: vi.fn(),
+  ruleFindMany: vi.fn(),
   ruleUpdate: vi.fn(),
   ruleDelete: vi.fn(),
   logActivity: vi.fn(),
@@ -14,16 +15,22 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => mocks.requirePermission(...a),
 }))
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    payrollStatutoryRule: {
-      create: (...a: unknown[]) => mocks.ruleCreate(...a),
-      findUniqueOrThrow: (...a: unknown[]) => mocks.ruleFindUniqueOrThrow(...a),
-      update: (...a: unknown[]) => mocks.ruleUpdate(...a),
-      delete: (...a: unknown[]) => mocks.ruleDelete(...a),
+vi.mock("@/lib/db/prisma", () => {
+  const ruleDelegate = {
+    create: (...a: unknown[]) => mocks.ruleCreate(...a),
+    findUniqueOrThrow: (...a: unknown[]) => mocks.ruleFindUniqueOrThrow(...a),
+    findMany: (...a: unknown[]) => mocks.ruleFindMany(...a),
+    update: (...a: unknown[]) => mocks.ruleUpdate(...a),
+    delete: (...a: unknown[]) => mocks.ruleDelete(...a),
+  }
+  const tx = { $executeRaw: vi.fn().mockResolvedValue(1), payrollStatutoryRule: ruleDelegate }
+  return {
+    prisma: {
+      payrollStatutoryRule: ruleDelegate,
+      $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx),
     },
-  },
-}))
+  }
+})
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 vi.mock("@/lib/services/activity-log.service", () => ({
   logActivity: (...a: unknown[]) => mocks.logActivity(...a),
@@ -60,6 +67,7 @@ beforeEach(() => {
   mocks.ruleCreate.mockImplementation(({ data }: { data: object }) =>
     Promise.resolve({ id: 3, ...data }),
   )
+  mocks.ruleFindMany.mockResolvedValue([])
   mocks.logActivity.mockResolvedValue(undefined)
 })
 
@@ -74,6 +82,31 @@ describe("statutory rule actions (P1-6)", () => {
         data: expect.objectContaining({ key: "bpjs_jp_ceiling", value: 11_000_000 }),
       }),
     )
+  })
+
+  it("regression round 17: rejects create overlapping a sibling window (inclusive end)", async () => {
+    mocks.ruleFindMany.mockResolvedValue([
+      { effectiveFrom: new Date("2026-06-01"), effectiveTo: new Date("2026-12-31") },
+    ])
+    const res = await createStatutoryRule(
+      fd({ key: "bpjs_jp_ceiling", value: "1", effectiveFrom: "2026-12-31", effectiveTo: "2027-06-01" }),
+    )
+    expect(res.success).toBe(false)
+    expect(mocks.ruleCreate).not.toHaveBeenCalled()
+  })
+
+  it("regression round 17: rejects close extending into the next sibling window", async () => {
+    mocks.ruleFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      key: "bpjs_jp_ceiling",
+      effectiveFrom: new Date("2024-01-01"),
+    })
+    mocks.ruleFindMany.mockResolvedValue([
+      { effectiveFrom: new Date("2026-06-01"), effectiveTo: null },
+    ])
+    const res = await closeStatutoryRule(1, fd({ effectiveTo: "2026-06-01" }))
+    expect(res.success).toBe(false)
+    expect(mocks.ruleUpdate).not.toHaveBeenCalled()
   })
 
   it("rejects an inverted period", async () => {

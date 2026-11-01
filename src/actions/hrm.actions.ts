@@ -5892,6 +5892,30 @@ export async function deleteAppreciation(id: number) {
 
 const STATUTORY_RULE_PATH = "/sdm/aturan-statutori";
 
+async function assertStatutoryRuleNoOverlap(
+  tx: any,
+  key: string,
+  from: Date,
+  to: Date | null,
+  excludeId?: number,
+) {
+  const siblings = await tx.payrollStatutoryRule.findMany({
+    where: { key, ...(excludeId ? { id: { not: excludeId } } : {}) },
+    select: { effectiveFrom: true, effectiveTo: true },
+  });
+  // effectiveTo INKLUSIF (konvensi seed/picker): irisan ada bila jendela
+  // saudara menyentuh jendela baru pada hari yang sama.
+  const toMs = to ? to.getTime() : Number.POSITIVE_INFINITY;
+  const overlaps = siblings.some((s: { effectiveFrom: Date; effectiveTo: Date | null }) => {
+    const sFrom = new Date(s.effectiveFrom).getTime();
+    const sTo = s.effectiveTo ? new Date(s.effectiveTo).getTime() : Number.POSITIVE_INFINITY;
+    return sFrom <= toMs && sTo >= from.getTime();
+  });
+  if (overlaps) {
+    throw new Error(`Aturan ${key} sudah memiliki baris yang tumpang tindih dengan periode ini`);
+  }
+}
+
 export async function createStatutoryRule(formData: FormData) {
   try {
     await requirePermission("create_payroll");
@@ -5903,14 +5927,21 @@ export async function createStatutoryRule(formData: FormData) {
     if (to && to <= from) {
       return { success: false as const, error: "Berlaku sampai harus setelah berlaku sejak" };
     }
-    const rule = await prisma.payrollStatutoryRule.create({
-      data: {
-        key: v.key,
-        value: v.value,
-        effectiveFrom: from,
-        effectiveTo: to,
-        source: v.source ?? null,
-      },
+    const rule = await prisma.$transaction(async (tx) => {
+      // Kunci seluruh tabel aturan (baris sedikit, tulis admin jarang):
+      // serialisasi cek-tumpang-tindih per key — tanpa ini dua create
+      // konkuren lolos bacaan snapshot yang sama.
+      await tx.$executeRaw`SELECT id FROM payroll_statutory_rules FOR UPDATE`;
+      await assertStatutoryRuleNoOverlap(tx, v.key, from, to);
+      return tx.payrollStatutoryRule.create({
+        data: {
+          key: v.key,
+          value: v.value,
+          effectiveFrom: from,
+          effectiveTo: to,
+          source: v.source ?? null,
+        },
+      });
     });
     await logActivity("create", "PayrollStatutoryRule", rule.id, `Aturan ${v.key} sejak ${v.effectiveFrom}`);
     revalidatePath(STATUTORY_RULE_PATH);
@@ -5934,13 +5965,21 @@ export async function closeStatutoryRule(id: number, formData: FormData) {
       return { success: false as const, error: "Tanggal tutup tidak valid" };
     }
     const to = wibDateToUtcMidnight(toRaw);
-    const rule = await prisma.payrollStatutoryRule.findUniqueOrThrow({ where: { id: ruleId } });
-    if (to <= new Date(rule.effectiveFrom)) {
-      return { success: false as const, error: "Tanggal tutup harus setelah berlaku sejak" };
-    }
-    await prisma.payrollStatutoryRule.update({
-      where: { id: ruleId },
-      data: { effectiveTo: to },
+    const rule = await prisma.$transaction(async (tx) => {
+      // Kunci tabel yang sama dengan createStatutoryRule: tanggal tutup
+      // dinilai ulang dari baris segar dan tak boleh menabrak baris
+      // berikutnya untuk key yang sama (effectiveTo inklusif).
+      await tx.$executeRaw`SELECT id FROM payroll_statutory_rules FOR UPDATE`;
+      const fresh = await tx.payrollStatutoryRule.findUniqueOrThrow({ where: { id: ruleId } });
+      if (to <= new Date(fresh.effectiveFrom)) {
+        throw new Error("Tanggal tutup harus setelah berlaku sejak");
+      }
+      await assertStatutoryRuleNoOverlap(tx, fresh.key, new Date(fresh.effectiveFrom), to, ruleId);
+      await tx.payrollStatutoryRule.update({
+        where: { id: ruleId },
+        data: { effectiveTo: to },
+      });
+      return fresh;
     });
     await logActivity("update", "PayrollStatutoryRule", ruleId, `Tutup aturan ${rule.key} per ${toRaw}`);
     revalidatePath(STATUTORY_RULE_PATH);
