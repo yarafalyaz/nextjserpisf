@@ -121,11 +121,24 @@ export const budgetRevisionProposalSchema = z.object({
 
 // ==================== Task ====================
 
+/**
+ * Kosakata status Task (PROJECT_TASK_KNOWN_STATUSES, BR-PTQ-01): status
+ * liar masuk ember "Status Tidak Dikenal" di antrean dan tak terhitung
+ * progres. Enum di sini membuat status sampah mustahil lahir dari jalur
+ * form/API — baris lama tak tersentuh.
+ */
+const taskStatus = z
+  .enum(["pending", "in_progress", "completed", "cancelled"], {
+    error: "Status tugas tidak valid",
+  })
+  .optional()
+  .default("pending")
+
 export const createTaskSchema = z.object({
   projectId: requiredId("Project"),
   name: requiredStr("Nama tugas wajib diisi"),
   description: optionalStr(1000),
-  status: z.string().optional().default("pending"),
+  status: taskStatus,
   assignedTo: optionalId,
   startDate: optionalDate,
   dueDate: optionalDate,
@@ -136,7 +149,7 @@ export const updateTaskSchema = z.object({
   projectId: requiredId("Project"),
   name: requiredStr("Nama tugas wajib diisi"),
   description: optionalStr(1000),
-  status: z.string().optional().default("pending"),
+  status: taskStatus,
   assignedTo: optionalId,
   startDate: optionalDate,
   dueDate: optionalDate,

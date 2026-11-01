@@ -771,6 +771,31 @@ export async function getProjectStageProgress(projectId: number) {
 
 // ==================== TASK ACTIONS ====================
 
+/**
+ * Tautan tugas wajib hidup saat lahir/berpindah: proyek harus ada
+ * (status proyek BUKAN gerbang — vonis putaran 32/38) dan penanggung
+ * harus karyawan hidup. FK DB menolak id gaib secara kasar (P2003),
+ * tetapi karyawan nonaktif/terhapus lolos senyap dan tugas menjadi
+ * milik hantu yang tak bisa dikerjakan siapa pun.
+ */
+async function assertLiveTaskRefs(
+  db: typeof prisma | TxClient,
+  refs: { projectId: number; assignedTo?: number | null },
+): Promise<void> {
+  const project = await db.project.findUnique({
+    where: { id: refs.projectId },
+    select: { id: true },
+  })
+  if (!project) throw new Error("Proyek tidak ditemukan")
+  if (refs.assignedTo != null) {
+    const employee = await db.employee.findFirst({
+      where: { id: refs.assignedTo, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+    if (!employee) throw new Error("Karyawan tidak ditemukan atau tidak aktif")
+  }
+}
+
 export async function createTask(formData: FormData) {
   try {
   const parsed = parseFormData(createTaskSchema, formData)
@@ -778,6 +803,7 @@ export async function createTask(formData: FormData) {
   const { data } = parsed
 
   await requirePermission("create_projects")
+  await assertLiveTaskRefs(prisma, data)
 
   const task = await prisma.task.create({
     data: {
@@ -855,6 +881,12 @@ export async function updateTask(formData: FormData) {
       data.assignedTo !== locked.assignedTo
     ) {
       throw new Error("Hanya manager / super admin yang dapat mengubah penugasan tugas.")
+    }
+    // Penilaian tautan hanya bila BERPINDAH dari baris terkunci (pola
+    // relink putaran 36/38): tugas lama pada proyek/karyawan yang kini
+    // berubah status tidak diganggu.
+    if (data.projectId !== locked.projectId || data.assignedTo !== locked.assignedTo) {
+      await assertLiveTaskRefs(tx, data)
     }
     await tx.task.update({
       where: { id: data.id },

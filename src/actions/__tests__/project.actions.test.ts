@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => {
     item: buildModelMock(),
     workOrder: buildModelMock(),
     workOrderItem: buildModelMock(),
+    employee: buildModelMock(),
     materialIssue: buildModelMock(),
     approvalWorkflow: buildModelMock(),
     approvalWorkflowStep: buildModelMock(),
@@ -94,6 +95,13 @@ beforeEach(() => {
   mocks.prismaMock.project.findUnique.mockResolvedValue({ id: 1, customerVehicleId: null })
   // Item hidup untuk baris RAB; test item gaib/mati menimpa eksplisit.
   mocks.prismaMock.item.findFirst.mockResolvedValue({ id: 1 })
+  // Karyawan hidup untuk penugasan tugas; default findUniqueOrThrow
+  // buildModelMock mewariskan projectId/assignedTo undefined — gerbang
+  // relink updateTask melihatnya sebagai "berpindah", jadi baris terkunci
+  // default dibuat konsisten dengan payload umum (proyek 1, tanpa
+  // penanggung) dan karyawan dianggap hidup.
+  mocks.prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
+  mocks.prismaMock.task.findUniqueOrThrow.mockResolvedValue({ id: 1, assignedTo: null, projectId: 1 })
 })
 
 describe("Project Actions Error Paths", () => {
@@ -619,6 +627,31 @@ describe("Task Actions", () => {
   it("deleteTask succeeds", async () => {
     const res = await actions.deleteTask(1)
     expect(res?.success).toBe(true)
+  })
+})
+
+describe("putaran 39: gerbang hidup Task", () => {
+  it("createTask menolak status di luar kosakata dikenal", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const res = await actions.createTask(fdMap({ projectId: 1, name: "Task 1", status: "done" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.task.create).not.toHaveBeenCalled()
+  })
+
+  it("createTask menolak assignedTo karyawan mati", async () => {
+    mocks.prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await actions.createTask(fdMap({ projectId: 1, name: "Task 1", assignedTo: 42 }))
+    expect(res?.success).toBe(false)
+    expect((res as any)?.error).toContain("tidak ditemukan atau tidak aktif")
+    expect(mocks.prismaMock.task.create).not.toHaveBeenCalled()
+  })
+
+  it("createTask menolak projectId fiktif senyap (bukan P2003 kasar)", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValueOnce(null)
+    const res = await actions.createTask(fdMap({ projectId: 999, name: "Task 1" }))
+    expect(res?.success).toBe(false)
+    expect((res as any)?.error).toContain("Proyek tidak ditemukan")
+    expect(mocks.prismaMock.task.create).not.toHaveBeenCalled()
   })
 })
 
