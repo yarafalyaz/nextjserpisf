@@ -104,6 +104,31 @@ export async function syncServicePurchaseOrderCost(
       skippedProductionOrderIds: allProductionOrders.map((o) => o.id),
     }
   }
+  // Baca ulang DI BAWAH kunci baris WO: snapshot di atas tak cukup —
+  // closeWorkOrder mengunci baris WO yang sama lalu mengklaim
+  // completed -> closed, jadi tutup yang commit di antara snapshot dan
+  // tulis terserialisasi di titik ini (sync menunggu kunci; sesudah
+  // close commit, baris terbaca closed). Status otoritatif WAJIB berasal
+  // dari bacaan terkunci itu sendiri: transaksi pemanggil bisa sudah
+  // membentuk snapshot REPEATABLE READ sebelum kunci diperoleh (locking
+  // read tidak membentuk/menyegarkan snapshot), jadi findUnique sesudah
+  // kunci tetap membaca nilai lama. Client tanpa $queryRaw atau baris
+  // tanpa status jatuh ke snapshot di atas; jalur produksi selalu punya
+  // $queryRaw dan WO yang terhubung selalu berstatus. Urutan kunci
+  // WO -> ProductionOrder meniru create/complete Material Issue; arah
+  // lawan issueMaterial (PO -> WO) sudah ada di repo tanpa siklus baru.
+  if (typeof client.$queryRaw === "function") {
+    const lockedWo = (await client.$queryRaw`SELECT status FROM work_orders WHERE id = ${po.workOrderId} FOR UPDATE`) as
+      | Array<{ status: string }>
+      | undefined
+    if (lockedWo?.[0]?.status === "closed") {
+      return {
+        posted: 0,
+        productionOrderIds: [],
+        skippedProductionOrderIds: allProductionOrders.map((o) => o.id),
+      }
+    }
+  }
   // F-2026-10-20-71: a completed order's HPP is final — `totalActualCost` was
   // zeroed and `releasedCost` frozen at completion (final release in
   // manufacturing.actions), so a late service bill must not re-open it: writing

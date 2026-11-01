@@ -625,4 +625,56 @@ describe("syncServicePurchaseOrderCost", () => {
     expect(costCreateMock).not.toHaveBeenCalled()
     expect(orderUpdateMock).not.toHaveBeenCalled()
   })
+
+  it("status WO dibaca ulang dari bacaan terkunci: tutup yang commit sesudah snapshot meng-skip sync", async () => {
+    // Snapshot pra-kunci: WO in_progress, PO anak in_progress → lolos filter.
+    // Close commit sesudahnya; sesudah baris WO dikunci status wajib
+    // terbaca closed dari bacaan terkunci itu sendiri (findUnique sesudah
+    // kunci masih membaca snapshot transaksi lama) dan sync dilewati tanpa
+    // baris/HPP/jurnal — baris existing pun dibiarkan utuh.
+    poFindUniqueMock.mockResolvedValue({ isService: true, workOrderId: 9, vendorId: 3 })
+    woFindUniqueMock.mockResolvedValue({ status: "in_progress" })
+    orderFindManyMock.mockResolvedValue([{ id: 55, status: "in_progress", qty: 10, completedQty: 0 }])
+    costFindManyMock.mockResolvedValue([{ id: 1, amount: 300000, productionOrderId: 55 }])
+    const sqlSeen: string[] = []
+    executeRawMock.mockImplementation((...a: unknown[]) => {
+      const first = a[0] as any
+      sqlSeen.push(Array.isArray(first) ? first.join("?") : (first?.strings?.join("?") ?? String(first ?? "")))
+      const joined = sqlSeen[sqlSeen.length - 1]
+      return Promise.resolve(/work_orders/i.test(joined) ? [{ status: "closed" }] : [])
+    })
+
+    const res = await syncServicePurchaseOrderCost(input, client as never)
+
+    expect(res).toEqual({ posted: 0, productionOrderIds: [], skippedProductionOrderIds: [55] })
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(costUpdateMock).not.toHaveBeenCalled()
+    expect(costDeleteMock).not.toHaveBeenCalled()
+    expect(orderUpdateMock).not.toHaveBeenCalled()
+    expect(absorbedMock).not.toHaveBeenCalled()
+    expect(sqlSeen.some((s) => /work_orders/i.test(s) && /for update/i.test(s))).toBe(true)
+  })
+
+  it("bacaan terkunci WO yang mengembalikan baris tanpa status jatuh ke snapshot (client tanpa raw query)", async () => {
+    // Client produksi punya $queryRaw; harness lain (fake DB-semantik,
+    // mock default) mengembalikan []/undefined. Status snapshot yang
+    // menentukan — sync tetap berjalan seperti sebelum kunci ditambah.
+    poFindUniqueMock.mockResolvedValue({ isService: true, workOrderId: 9, vendorId: 3 })
+    woFindUniqueMock.mockResolvedValue({ status: "in_progress" })
+    orderFindManyMock.mockResolvedValue([{ id: 55 }])
+    costFindManyMock.mockResolvedValue([])
+    costCreateMock.mockResolvedValue({ id: 1 })
+    orderFindUniqueMock.mockResolvedValue({ totalActualCost: 1000 })
+    orderUpdateMock.mockResolvedValue({})
+    executeRawMock.mockResolvedValue(undefined)
+
+    const res = await syncServicePurchaseOrderCost(input, client as never)
+
+    expect(res).toEqual({ posted: 500000, productionOrderIds: [55], skippedProductionOrderIds: [] })
+    expect(costCreateMock).toHaveBeenCalledTimes(1)
+    expect(orderUpdateMock).toHaveBeenCalledWith({
+      where: { id: 55 },
+      data: { totalActualCost: 501000 },
+    })
+  })
 })
