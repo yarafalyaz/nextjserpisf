@@ -1212,7 +1212,7 @@ export async function proposeProjectBudgetRevision(
   }
 }
 
-async function loadOpenRevisionProposal(tx: TxClient, projectId: number, proposalLogId: number) {
+async function loadOpenRevisionProposal(tx: TxClient, projectId: number, proposalLogId: number, deciderUserId?: number) {
   const proposal = await tx.projectLog.findFirst({
     where: { id: proposalLogId, projectId, action: "rab_revision_proposed" },
     select: { id: true, notes: true, details: true, userId: true },
@@ -1229,6 +1229,12 @@ async function loadOpenRevisionProposal(tx: TxClient, projectId: number, proposa
   if (alreadySettled) {
     throw new Error("Usulan revisi RAB ini sudah diputuskan (diterapkan atau ditolak).")
   }
+  // Pemisahan tugas (pola approveBomRevision): pengusul tidak boleh
+  // menerapkan/menolak usulannya sendiri — kunci anggaran terkunci
+  // kehilangan makna bila satu orang mengusulkan sekaligus memutus.
+  if (deciderUserId != null && proposal.userId != null && Number(proposal.userId) === deciderUserId) {
+    throw new Error("Usulan revisi RAB tidak boleh diputuskan oleh pengusulnya sendiri (pemisahan tugas) — minta pengguna lain yang berizin manage_projects.")
+  }
   return proposal
 }
 
@@ -1244,7 +1250,7 @@ export async function applyProjectBudgetRevision(projectId: number, proposalLogI
       if (project.budgetLockedAt === null) {
         throw new Error("Anggaran proyek belum terkunci — tidak ada revisi untuk diterapkan.")
       }
-      const proposal = await loadOpenRevisionProposal(tx, projectId, proposalLogId)
+      const proposal = await loadOpenRevisionProposal(tx, projectId, proposalLogId, Number(user.id))
       const details = (proposal.details ?? {}) as Record<string, unknown>
       const payload = parseRevisionPayload(
         JSON.stringify({
@@ -1410,7 +1416,7 @@ export async function rejectProjectBudgetRevision(
       if (project.budgetLockedAt === null) {
         throw new Error("Anggaran proyek belum terkunci — tidak ada revisi untuk ditolak.")
       }
-      await loadOpenRevisionProposal(tx, projectId, proposalLogId)
+      await loadOpenRevisionProposal(tx, projectId, proposalLogId, Number(user.id))
       await tx.projectLog.create({
         data: {
           projectId,

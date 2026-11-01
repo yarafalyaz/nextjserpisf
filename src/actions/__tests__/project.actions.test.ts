@@ -1267,6 +1267,24 @@ describe("RAB proyek F-2026-10-21-030", () => {
     expect(mocks.prismaMock.projectItem.delete).not.toHaveBeenCalled()
   })
 
+  it("regression round 17: pengusul tidak boleh menerapkan revisi RAB sendiri", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({ budgetLockedAt: new Date(2026, 9, 20), budgetRevisionNo: 1 }),
+    )
+    mocks.prismaMock.projectLog.findFirst.mockResolvedValue({
+      id: 31,
+      notes: "x",
+      userId: 1,
+      details: { reason: "x", changes: [{ type: "delete", projectItemId: 5 }] },
+    })
+    mocks.prismaMock.projectLog.findMany.mockResolvedValue([])
+    const res = await actions.applyProjectBudgetRevision(10, 31)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("pemisahan tugas")
+    expect(mocks.prismaMock.projectItem.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
+  })
+
   it("tolak revisi: kunci proyek FOR UPDATE sebelum cek usulan terbuka (round4 #3)", async () => {
     mocks.prismaMock.project.findUnique.mockResolvedValue(
       unlockedProject({ budgetLockedAt: new Date(2026, 9, 20) }),
@@ -1331,6 +1349,27 @@ describe("RAB proyek F-2026-10-21-030", () => {
     const logArg = mocks.prismaMock.projectLog.create.mock.calls.at(-1)?.[0]
     expect(logArg.data.action).toBe("rab_revision_rejected")
     expect(logArg.data.details.proposalLogId).toBe(31)
+  })
+
+  it("regression round 17: pengusul tidak boleh menolak revisi RAB sendiri", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({ budgetLockedAt: new Date(2026, 9, 20) }),
+    )
+    mocks.prismaMock.projectLog.findFirst.mockResolvedValue({
+      id: 31,
+      notes: "x",
+      userId: 1,
+      details: { reason: "x", changes: [{ type: "delete", projectItemId: 5 }] },
+    })
+    mocks.prismaMock.projectLog.findMany.mockResolvedValue([])
+    const res = await actions.rejectProjectBudgetRevision(
+      10,
+      31,
+      fdMap({ reason: "Belum perlu" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("pemisahan tugas")
+    expect(mocks.prismaMock.projectLog.create).not.toHaveBeenCalled()
   })
 })
 
