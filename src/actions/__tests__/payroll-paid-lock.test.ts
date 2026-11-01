@@ -6,6 +6,7 @@ const logActivityMock = vi.fn()
 const payrollFindUniqueOrThrowMock = vi.fn()
 const payrollUpdateManyMock = vi.fn()
 const loanFindManyMock = vi.fn()
+const txQueryRawMock = vi.fn().mockResolvedValue([{ id: 1, period_lock_date: null }])
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -23,7 +24,7 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     $transaction: async (cb: any) => cb({
       // assertPeriodOpen dalam tx baca kunci via $queryRaw (periode terbuka).
-      $queryRaw: vi.fn().mockResolvedValue([{ id: 1, period_lock_date: null }]),
+      $queryRaw: (...a: unknown[]) => txQueryRawMock(...a),
       $executeRaw: vi.fn().mockResolvedValue(1),
       payroll: { updateMany: (...a: unknown[]) => payrollUpdateManyMock(...a) },
       employeeLoan: {
@@ -57,6 +58,7 @@ beforeEach(() => {
   })
   payrollUpdateManyMock.mockResolvedValue({ count: 1 })
   loanFindManyMock.mockResolvedValue([])
+  txQueryRawMock.mockResolvedValue([{ id: 1, period_lock_date: null }])
 })
 
 describe("markPayrollPaid concurrency guard", () => {
@@ -96,6 +98,21 @@ describe("markPayrollPaid concurrency guard", () => {
     onPayrollPaidMock.mockRejectedValueOnce(new Error("Tautan bayar komisi ditolak: melebihi sisa"))
     const result = await markPayrollPaid(1)
     expect(result.success).toBe(false)
+  })
+
+  it("mengunci baris pinjaman karyawan sebelum membaca daftar aktif (serial lawan setoran/write-off)", async () => {
+    loanFindManyMock.mockResolvedValue([{ id: 9, loanDate: new Date(2026, 0, 1), remainingAmount: 900 }])
+    const result = await markPayrollPaid(1)
+    expect(result.success).toBe(true)
+    const sqlOf = (c: unknown[]) => {
+      const a = c[0] as { strings?: string[] } | string[]
+      return Array.isArray(a) ? a.join("?") : (a?.strings?.join("?") ?? "")
+    }
+    const loanLockIdx = txQueryRawMock.mock.calls.findIndex((c) => sqlOf(c).includes("employee_loans"))
+    expect(loanLockIdx).toBeGreaterThanOrEqual(0)
+    expect(txQueryRawMock.mock.invocationCallOrder[loanLockIdx]).toBeLessThan(
+      loanFindManyMock.mock.invocationCallOrder[0],
+    )
   })
 
   it("AC-LSV-2: menolak bayar bila potongan Pasal 63 slip tersimpan menembus 50% upah", async () => {

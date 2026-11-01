@@ -3443,6 +3443,12 @@ export async function markPayrollPaid(payrollId: number) {
       // F-2026-10-29-162-V): budget = snapshot slip, tertua-dulu, cap sisa,
       // Rp1 lunas. Dilarang duplikasi logika alokasi di sini.
       if (payroll.employeeId && Number(payroll.loanDeduction) > 0) {
+        // Serialisasi lawan penulis pinjaman sibling (setoran tunai /
+        // write-off mengunci baris pinjaman yang sama): kunci semua baris
+        // pinjaman karyawan urut id SEBELUM daftar aktif dibaca — tanpa ini
+        // alokasi dari snapshot menimpa setoran/write-off yang commit di
+        // jendela (sisa bangkit dari paid_off/written_off, subledger != GL).
+        await tx.$queryRaw`SELECT id FROM employee_loans WHERE employee_id = ${payroll.employeeId} ORDER BY id FOR UPDATE`;
         const activeLoans = await tx.employeeLoan.findMany({
           where: { employeeId: payroll.employeeId, status: "active" },
           orderBy: [{ loanDate: "asc" }, { id: "asc" }],
@@ -3621,6 +3627,10 @@ export async function correctPaidPayroll(
       const amortized = Number(fresh.loanDeduction) || 0;
       let restored = 0;
       if (fresh.employeeId != null && amortized > 0) {
+        // Kunci baris pinjaman karyawan (urut id) sebelum pulih/amortisasi
+        // ulang menilai sisa: penulis sibling (setoran/write-off) mengunci
+        // baris yang sama — tanpa kunci, snapshot basi menimpa hasil mereka.
+        await tx.$executeRaw`SELECT id FROM employee_loans WHERE employee_id = ${fresh.employeeId} ORDER BY id FOR UPDATE`;
         const loans = await tx.employeeLoan.findMany({
           where: { employeeId: fresh.employeeId },
           orderBy: [{ loanDate: "asc" }, { id: "asc" }],
