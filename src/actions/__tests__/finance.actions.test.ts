@@ -1185,12 +1185,27 @@ describe("Bank Reconciliation Actions", () => {
     expect(mocks.requirePermissionMock).not.toHaveBeenCalledWith("post_journals")
   })
   it("createBankReconciliation succeeds", async () => {
+    mocks.prismaMock.account.findFirst.mockResolvedValue({ id: 1 })
     const res = await (actions as any).createBankReconciliation(fdMap({
       accountId: 1,
       statementDate: "2026-06-13",
       statementBalance: 5000
     }))
     expect(res?.success).toBe(true)
+  })
+  // Regresi putaran 34: accountId bare-int tanpa FK — akun fiktif/nonaktif/
+  // non-ASSET lahir sebagai rekonsiliasi draft atas akun hantu; picker
+  // hanya menawarkan isActive + type ASSET tetapi action tak menilai.
+  it("regresi putaran 34: createBankReconciliation menolak akun nonaktif/fiktif", async () => {
+    mocks.prismaMock.account.findFirst.mockResolvedValue(null)
+    const res = await (actions as any).createBankReconciliation(fdMap({
+      accountId: 999999,
+      statementDate: "2026-06-13",
+      statementBalance: 5000
+    }))
+    expect(res?.success).toBe(false)
+    expect(res.error).toMatch(/tidak aktif atau bukan akun aset/i)
+    expect(mocks.prismaMock.bankReconciliation.create).not.toHaveBeenCalled()
   })
   it("matchReconciliationLine succeeds", async () => {
     mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", accountId: 10, periodStart: null, periodEnd: null })

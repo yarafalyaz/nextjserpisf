@@ -1502,6 +1502,18 @@ export async function createBankReconciliation(formData: FormData) {
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
+    // accountId bare-int tanpa FK: akun fiktif/nonaktif/terhapus/non-ASSET
+    // lahir sebagai rekonsiliasi atas akun hantu. Picker hanya menawarkan
+    // isActive + type ASSET; gerbang server menyamakan kontrak itu (dokumen
+    // bebas, pola create putaran 30-33).
+    const liveAccount = await prisma.account.findFirst({
+      where: { id: v.accountId, isActive: true, deletedAt: null, type: "ASSET" },
+      select: { id: true },
+    });
+    if (!liveAccount) {
+      throw new Error("Akun rekonsiliasi tidak ditemukan, tidak aktif atau bukan akun aset");
+    }
+
     const reconciliationNumber = await generateDocumentNumber("REC");
 
     const reconciliation = await prisma.bankReconciliation.create({
