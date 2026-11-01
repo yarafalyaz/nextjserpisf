@@ -1352,9 +1352,23 @@ export async function disposeAsset(formData: FormData) {
         },
         select: {
           referenceType: true,
+          transactionDate: true,
           entries: { select: { accountId: true, debit: true, credit: true } },
         },
       });
+      // Tanggal disposal tidak boleh mendahului jurnal POSTED terakhir:
+      // nilai buku dihitung dari SEMUA jurnal POSTED, jadi disposal
+      // backdate akan mendebit akumulasi yang pada tanggal itu belum ada
+      // dan mencatat pelepasan sebelum beban terakhirnya sendiri.
+      const lastJournalTime = lockedJournals.reduce(
+        (max, j) => Math.max(max, j.transactionDate.getTime()),
+        0,
+      );
+      if (lastJournalTime > 0 && disposalDate.getTime() < lastJournalTime) {
+        throw new Error(
+          "Tanggal pelepasan tidak boleh sebelum tanggal jurnal aset terakhir. Majukan tanggal pelepasan atau balik jurnal yang lebih baru lebih dulu.",
+        );
+      }
       const lockedPosted = journalBookValue(
         lockedJournals.map((j) => ({
           referenceType: j.referenceType ?? "",

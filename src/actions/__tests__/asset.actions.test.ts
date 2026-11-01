@@ -1914,10 +1914,12 @@ describe("disposeAsset", () => {
     prismaMock.journal.findMany.mockResolvedValue([
       {
         referenceType: "ASSET_ACQUISITION",
+        transactionDate: new Date("2025-01-10T00:00:00.000Z"),
         entries: [{ accountId: 200, debit: 1000, credit: 0 }],
       },
       {
         referenceType: "ASSET_DEPRECIATION_202601",
+        transactionDate: new Date("2026-01-31T00:00:00.000Z"),
         entries: [{ accountId: 201, debit: 0, credit: 300 }],
       },
     ])

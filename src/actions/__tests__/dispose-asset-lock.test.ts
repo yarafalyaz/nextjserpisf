@@ -118,8 +118,8 @@ describe("disposeAsset concurrency guard", () => {
     const { Prisma } = await import("@prisma/client")
     const D = (n: number) => new Prisma.Decimal(n)
     journalFindManyMock.mockResolvedValue([
-      { referenceType: "ASSET_ACQUISITION", entries: [{ accountId: 11, debit: D(1000), credit: D(0) }] },
-      { referenceType: "ASSET_DEPRECIATION_202601", entries: [{ accountId: 12, debit: D(0), credit: D(100) }] },
+      { referenceType: "ASSET_ACQUISITION", transactionDate: new Date("2026-01-05T00:00:00.000Z"), entries: [{ accountId: 11, debit: D(1000), credit: D(0) }] },
+      { referenceType: "ASSET_DEPRECIATION_202601", transactionDate: new Date("2026-01-10T00:00:00.000Z"), entries: [{ accountId: 12, debit: D(0), credit: D(100) }] },
     ])
     // documentSequence tidak di-mock global: nextAssetJournalNumber memakai
     // tx.documentSequence — tambahkan lewat wireTransaction default tidak ada;
@@ -134,6 +134,29 @@ describe("disposeAsset concurrency guard", () => {
     const historyArg = assetHistoryCreateMock.mock.calls[0][0]
     expect(historyArg.data.description).toContain("Nilai buku: 900")
     expect(historyArg.data.description).toContain("rugi: 900")
+  })
+
+  it("regresi putaran 47: tanggal disposal sebelum jurnal POSTED terakhir ditolak (backdate)", async () => {
+    const { Prisma } = await import("@prisma/client")
+    const D = (n: number) => new Prisma.Decimal(n)
+    journalFindManyMock.mockResolvedValue([
+      {
+        referenceType: "ASSET_ACQUISITION",
+        transactionDate: new Date("2026-01-10T00:00:00.000Z"),
+        entries: [{ accountId: 11, debit: D(1000), credit: D(0) }],
+      },
+      {
+        referenceType: "ASSET_DEPRECIATION_202606",
+        transactionDate: new Date("2026-06-30T00:00:00.000Z"),
+        entries: [{ accountId: 12, debit: D(0), credit: D(100) }],
+      },
+    ])
+    // disposalDate fixture 2026-01-15 < jurnal terakhir 2026-06-30.
+    const result = await disposeAsset(new FormData())
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/tanggal jurnal|sebelum/i)
+    expect(assetUpdateManyMock).not.toHaveBeenCalled()
+    expect(journalCreateMock).not.toHaveBeenCalled()
   })
 
   it("refuses disposing an asset already marked disposed (outer guard)", async () => {
