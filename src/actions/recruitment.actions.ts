@@ -176,6 +176,19 @@ export async function createApplicant(formData: FormData) {
     }
 
     const applicant = await prisma.$transaction(async (tx) => {
+      // Kunci baris lowongan yang sama dengan updateVacancy/setVacancyStatus,
+      // lalu baca ulang status: tutup lowongan yang commit sesudah cek luar
+      // tidak boleh tetap menerima pelamar baru.
+      await tx.$executeRaw`SELECT id FROM job_vacancies WHERE id = ${v.vacancyId} FOR UPDATE`;
+      const lockedVacancy = await tx.jobVacancy.findFirst({
+        where: { id: v.vacancyId, deletedAt: null },
+        select: { id: true, status: true },
+      });
+      if (!lockedVacancy) throw new Error("Lowongan tidak ditemukan");
+      if (lockedVacancy.status !== "open") {
+        throw new Error("Pelamar hanya dapat ditambah ke lowongan yang terbuka");
+      }
+
       const created = await tx.jobApplicant.create({
         data: {
           vacancyId: v.vacancyId,

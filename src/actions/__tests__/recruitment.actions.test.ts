@@ -106,6 +106,16 @@ describe("recruitment actions", () => {
     )
   })
 
+  it("regression round 17: rejects applicant when vacancy closed after outer check", async () => {
+    vacancyFindFirst
+      .mockResolvedValueOnce({ id: 3, status: "open" })
+      .mockResolvedValueOnce({ id: 3, status: "closed" })
+    const res = await createApplicant(form({ vacancyId: "3", name: "Budi" }))
+    expect(res.success).toBe(false)
+    expect(applicantCreate).not.toHaveBeenCalled()
+    expect(historyCreate).not.toHaveBeenCalled()
+  })
+
   it("refuses to move a stage directly to hired", async () => {
     const res = await moveApplicantStage(9, "hired")
     expect(res.success).toBe(false)
