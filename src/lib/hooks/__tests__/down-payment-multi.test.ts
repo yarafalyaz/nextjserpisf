@@ -262,4 +262,38 @@ describe("onDownPaymentConfirmed — ready-document notification batching", () =
       { type: "SalesInvoice", documentNo: "INV-X", context: "Dari DP DP-1" },
     ])
   })
+
+  it("regresi putaran 15: WO lahir membawa projectId dan Project.workOrderId terisi", async () => {
+    const dp = buildDp({ id: 1, amount: 600, status: "draft", docNo: "DP-1" })
+    const tx = buildTx(dp, 100) as any
+    tx.salesInvoice.findFirst = vi.fn().mockResolvedValue(null)
+    tx.workOrder.findFirst = mocks.workOrderFindFirst.mockResolvedValue(null)
+    tx.salesOrder.findFirst = mocks.salesOrderFindFirst.mockResolvedValue(null)
+    tx.downPayment.findMany = vi.fn().mockResolvedValue([{ amount: 600 }])
+    tx.product = { findMany: vi.fn().mockResolvedValue([]) }
+    tx.item = { findMany: vi.fn().mockResolvedValue([]) }
+    tx.workOrder.create = vi.fn().mockResolvedValue({ id: 1, documentNo: "WO-X" })
+    tx.project = {
+      create: vi.fn().mockResolvedValue({ id: 21 }),
+      update: vi.fn().mockResolvedValue({}),
+    }
+    tx.projectStage = { createMany: vi.fn().mockResolvedValue({ count: 0 }) }
+    tx.salesOrder.create = vi.fn().mockResolvedValue({ id: 2, documentNo: "SO-X" })
+    tx.salesInvoice.create = vi.fn().mockResolvedValue({ id: 3, documentNo: "INV-X" })
+    tx.quotation = { update: vi.fn() }
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(1, 1)
+
+    expect(tx.project.create).toHaveBeenCalledTimes(1)
+    const woData = tx.workOrder.create.mock.calls[0][0].data
+    expect(woData.projectId).toBe(21)
+    expect(tx.project.update).toHaveBeenCalledWith({
+      where: { id: 21 },
+      data: { workOrderId: 1 },
+    })
+    expect(tx.project.create.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.workOrder.create.mock.invocationCallOrder[0],
+    )
+  })
 })

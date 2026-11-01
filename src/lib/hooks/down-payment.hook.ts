@@ -532,19 +532,56 @@ async function onDownPaymentConfirmedInner(
       bomNotes += "\n[PERINGATAN] Catatan stok/BOM gagal dibuat otomatis — periksa ketersediaan material secara manual.\n";
     }
 
-    // ─── 1-3. Work Order + Project + Sales Order (SEKALI per quotation) ──
+    // ─── 1-3. Project + Work Order + Sales Order (SEKALI per quotation) ──
     // Dilewati bila sudah ada dari DP sebelumnya; invoice di bawah tetap
     // dievaluasi ambang setiap kali.
+    // Urutan Project dulu: WO wajib lahir MEMBAWA projectId dan
+    // Project.workOrderId wajib terisi — tanpa keduanya laporan P/L proyek
+    // (jembatan WO) buta (pendapatan/biaya WO tak teratribusi) dan sync
+    // tahap proyek <-> WO mati (project.actions hanya menyinkron lewat
+    // project.workOrderId; completeWorkOrder lewat wo.projectId).
     let workOrder = existingWO
     let salesOrder = existingSO
     if (!workOrder) {
-    // ─── 1. Create Work Order ─────────────────────────────────────────
+    // ─── 1. Create / reuse Project ────────────────────────────────────
+    // Pakai ulang proyek quotation bila sudah terhubung; jangan lahirkan
+    // proyek yatim kedua untuk quotation yang sama.
+    let linkedProjectId = quotation.projectId ?? null
+    if (!linkedProjectId) {
+      const prjDocNo = await generateDocumentNumber("PRJ");
+      const createdProject = await tx.project.create({
+        data: {
+          documentNo: prjDocNo,
+          name: `Project - ${quotation.customer?.name ?? ""} - ${dp.documentNo}`,
+          customerId: quotation.customerId,
+          customerVehicleId: quotation.customerVehicleId,
+          status: "active",
+          startDate: new Date(),
+          notes: `Otomatis dibuat dari DP ${dp.documentNo}. Quotation: ${quotation.documentNo}`,
+          createdBy: userId ?? null,
+        },
+      });
+      linkedProjectId = createdProject.id
+
+      // Initialize default project stages
+      await tx.projectStage.createMany({
+        data: [
+          { projectId: createdProject.id, name: "Persiapan", sortOrder: 1, status: Status.PENDING },
+          { projectId: createdProject.id, name: "Pengerjaan", sortOrder: 2, status: Status.PENDING },
+          { projectId: createdProject.id, name: "Quality Check", sortOrder: 3, status: Status.PENDING },
+          { projectId: createdProject.id, name: "Selesai", sortOrder: 4, status: Status.PENDING },
+        ],
+      });
+    }
+
+    // ─── 2. Create Work Order (membawa projectId) ─────────────────────
     const woDocNo = await generateDocumentNumber("WO");
 
     workOrder = await tx.workOrder.create({
       data: {
         documentNo: woDocNo,
         quotationId: quotation.id,
+        projectId: linkedProjectId,
         customerId: quotation.customerId,
         customerVehicleId: quotation.customerVehicleId,
         date: new Date(),
@@ -573,32 +610,15 @@ async function onDownPaymentConfirmedInner(
     // F-2026-10-22-063-S: snapshot PERINGATAN fitment baris WO turunan.
     await stampWorkOrderFitmentSnapshot(tx, workOrder.id);
 
-    // ─── 2. Create Project ───────────────────────────────────────────
-    const projectDocNo = await generateDocumentNumber("PRJ");
+    // Tautan balik proyek -> WO (sync tahap proyek membaca kolom ini).
+    if (linkedProjectId != null && typeof tx.project.update === "function") {
+      await tx.project.update({
+        where: { id: linkedProjectId },
+        data: { workOrderId: workOrder.id },
+      });
+    }
 
-    const project = await tx.project.create({
-      data: {
-        documentNo: projectDocNo,
-        name: `Project - ${quotation.customer?.name ?? ""} - ${woDocNo}`,
-        customerId: quotation.customerId,
-        status: "active",
-        startDate: new Date(),
-        notes: `Otomatis dibuat dari DP ${dp.documentNo}. Quotation: ${quotation.documentNo}`,
-        createdBy: userId ?? null,
-      },
-    });
-
-    // Initialize default project stages
-    await tx.projectStage.createMany({
-      data: [
-        { projectId: project.id, name: "Persiapan", sortOrder: 1, status: Status.PENDING },
-        { projectId: project.id, name: "Pengerjaan", sortOrder: 2, status: Status.PENDING },
-        { projectId: project.id, name: "Quality Check", sortOrder: 3, status: Status.PENDING },
-        { projectId: project.id, name: "Selesai", sortOrder: 4, status: Status.PENDING },
-      ],
-    });
-
-    } // end if (!workOrder): WO + Project dibuat bila WO belum ada
+    } // end if (!workOrder): Project + WO dibuat bila WO belum ada
 
     // ─── 3. Create Sales Order + Items (bila SO belum ada) ────────────
     if (!salesOrder) {
