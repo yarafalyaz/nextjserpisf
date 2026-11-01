@@ -1226,3 +1226,25 @@ Catatan insiden: fixture `account.findMany.mockResolvedValue([])` persisten
 meracuni 8 test sesudahnya — diganti `mockResolvedValueOnce` (pola
 vi.clearAllMocks tidak membuang implementasi). Satu run vitest gagal muat
 config sesaat (ESM/CJS), rerun hijau — flake host, bukan kode.
+
+## Putaran 38 — SDM jalur tulis lanjutan + approval (7 fix, 3 vonis)
+
+Agent audit SDM (9 kandidat + daftar bersih; `assertLiveEmployee` = isActive+deletedAt dipakai hanya di 2 dari ±40 titik tulis). Pola bersama: gerbang hidup hanya saat baris/tautan LAHIR atau BERPINDAH; dokumen lama pada karyawan sama tidak diganggu; titik akhir pembayaran final tidak dinilai isActive (gaji final karyawan berhenti tetap sah).
+
+1. `eac7ece1e` fix(hrm): penugasan komponen gaji menolak karyawan mati — `assignEmployeePayrollComponent` + `updateEmployeePayrollComponent`; update menilai hanya bila hasil akhir aktif (menonaktifkan penugasan karyawan mati tetap sah sebagai pembersihan).
+2. `a64709d74` fix(hrm): slip gaji baru/pindahan menolak karyawan mati — `processPayroll` + `updatePayroll` (hanya bila employeeId berubah). Keputusan: `buildPayrollWrite` tidak disentuh (recalc draft); `markPayrollPaid` tidak dinilai isActive — gerbang berhenti = `employmentEndedAt`.
+3. `ece77cc21` fix(hrm): absensi/cuti baru dan pindahan menolak karyawan mati — 4 situs (`createLeaveRequest`, `createAttendance`, `updateAttendance`, `updateLeaveRequest` relink-only). `createAttendanceCorrection` tidak disentuh (wilayah vonis berkunci + klaim).
+4. `ea29faa03` fix(hrm): lembur menolak karyawan mati dan proyek fiktif — karyawan hidup + eksistensi Project (bare findUnique). Status proyek BUKAN gerbang (lihat vonis).
+5. `261574bd8` fix(hrm): pembayaran gaji menolak akun settings mati — `onPayrollPaid` hanya cek non-null akun settings; fix `assertAccountsExist(db, …)` menilai hanya akun yang benar-benar dipakai slip (statutory/loan/otherWithheld bersyarat), sesudah `assertPeriodOpen`.
+6. `b6c92411d` fix(hrm): penyesuaian gaji menolak tanggal fiktif, gaji nol, karyawan mati — `dateOnly` (2027-02-30 tertolak; pengecualian terakhir SDM), `newBaseSalary <= 0`, recheck hidup dalam tx berkunci + gerbang approve. Reject/cancel tidak digerbang (pembersihan sah).
+7. `f5a749b20` fix(hrm): penandaan paid PKWT memakai klaim kondisional — `markPkwtEventPaid` update buta → `updateMany({ status: "approved" })` count 0 throw (pola approve di service sama); tx bayar slip rollback.
+8. `a5af35200` fix(approval): reopenApproval gagal bila dokumen tak lagi rejected — count klaim reset dokumen `rejected→draft` kini diperiksa; sebelumnya approval pending kedua lahir atas dokumen non-rejected (state yatim).
+
+Vonis GUGUR / tidak diubah (jangan diangkat ulang tanpa bukti baru):
+- Status proyek terminal sebagai gerbang tulis lembur/tagihan: tak ada status mati kanonis Project (completed sah diaktifkan ulang); selaras vonis putaran 32. Eksistensi proyek tetap digerbang (#4).
+- Menggerbang akun komponen gaji (`createPayrollComponent`/`updatePayrollComponent` hanya eksistensi): akun komponen belum dipakai jurnal ("belum dipakai jurnal" di skema) — dampak rendah, ditunda sampai dipakai posting.
+- Menyaring `isActive` di populasi `runPkwtMonthlyAccrual`: akrual karyawan berhenti/nonaktif wajib berlanjut menyetor utang kompensasi sampai slip final (preseden keputusan markPayrollPaid putaran 34/38); peristiwa lahir harus diselesaikan.
+
+Daftar bersih agent putaran 38 (jangan diangkat ulang tanpa bukti baru): pencairan pinjaman (gerbang hidup hook + assertAccountsExist); create/update pinjaman; generate payroll massal (populasi hidup + irisan terkunci + klaim unik); markPayrollPaid/correctPaidPayroll (klaim atomik, lock urut id); baris komponen slip (lock slip + klaim draft); persetujuan lembur (klaim penulis-pertama, basis as-of, SoD); koreksi absensi (berkunci + klaim, wilayah vonis); cuti (overlap + kuota tx berkunci, gerbang masa kerja fail-closed); aturan statutori (tabel berperiode fail-closed); roster/statutory rules/timesheet (klaim atomik, SoD, cap 24 jam); createPkwtCompensationEvent (karyawan terhapus ditolak, kunci baris, basis nol ditolak); skema tanggal SDM dateOnly (satu-satunya pengecualian penyesuaian gaji = fix #6).
+
+Catatan insiden: edit jangkar ganda sempat mendarat di fungsi salah (create vs update lembur) — terdeteksi dari test, ditutup jangkar unik. Fixture `mockResolvedValue` persisten bocor antar-test berulang (vi.clearAllMocks tidak membuang implementasi): R6WN-04 approval + 3 describe hrm delegate `account`. Error delegate `undefined` di test unit = fixture, bukan client basi (verifikasi `.prisma/client/index.d.ts` dulu).
