@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => {
     notification: buildModelMock(),
     projectItem: buildModelMock(),
     quotation: buildModelMock(),
+    idempotencyKey: buildModelMock(),
 
     $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
     $executeRaw: vi.fn().mockResolvedValue(0),
@@ -115,6 +116,21 @@ describe("Project Actions Error Paths", () => {
     expect(res?.success).toBe(false)
     expect(mocks.prismaMock.project.create).not.toHaveBeenCalled()
   })
+  it("regresi putaran 47: createProject dengan idempotencyKey duplikat ditolak tanpa proyek kedua", async () => {
+    // Key sudah tercatat segar (submit pertama masih/baru diproses):
+    // create melempar P2002 dan baris kunci lebih muda dari TTL.
+    mocks.prismaMock.idempotencyKey.create.mockRejectedValueOnce(
+      Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),
+    )
+    mocks.prismaMock.idempotencyKey.findUnique.mockResolvedValue({ createdAt: new Date() })
+    const res = await actions.createProject(
+      fdMap({ customerId: 1, name: "P", idempotencyKey: "key-putaran-47-proyek" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/duplikat/i)
+    expect(mocks.prismaMock.project.create).not.toHaveBeenCalled()
+  })
+
   it("createProject stores valid startDate as UTC midnight", async () => {
     const res = await actions.createProject(fdMap({ customerId: 1, name: "P", startDate: "2026-02-28" }))
     expect(res?.success).toBe(true)
@@ -143,6 +159,19 @@ describe("Project Actions Error Paths", () => {
     expect(String(res?.error)).toContain("Pusat biaya tidak ditemukan")
     expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
   })
+  it("regresi putaran 47: createTask dengan idempotencyKey duplikat ditolak tanpa tugas kedua", async () => {
+    mocks.prismaMock.idempotencyKey.create.mockRejectedValueOnce(
+      Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),
+    )
+    mocks.prismaMock.idempotencyKey.findUnique.mockResolvedValue({ createdAt: new Date() })
+    const res = await actions.createTask(
+      fdMap({ projectId: 1, name: "T", idempotencyKey: "key-putaran-47-tugas" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/duplikat/i)
+    expect(mocks.prismaMock.task.create).not.toHaveBeenCalled()
+  })
+
   it("createTask rejects fictional dueDate 2026-02-30 without writing", async () => {
     const res = await actions.createTask(fdMap({ projectId: 1, name: "T", dueDate: "2026-02-30" }))
     expect(res?.success).toBe(false)

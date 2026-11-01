@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { createTask, updateTask } from "@/actions/project.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -39,6 +39,9 @@ const statusOptions = [
 export function TaskForm({ projects, employees, task }: TaskFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Kunci anti submit-dobel: stabil per niat buat, dirotasi sesudah sukses,
+  // dipakai ulang saat retry/galat (pola ticket-form).
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [projectId, setProjectId] = useState<string | null>(task?.projectId ? String(task.projectId) : null)
   const [assignedTo, setAssignedTo] = useState<string | null>(task?.assignedTo ? String(task.assignedTo) : null)
   const [employeeOptions, setEmployeeOptions] = useState(employees)
@@ -49,11 +52,13 @@ export function TaskForm({ projects, employees, task }: TaskFormProps) {
       try {
         const formData = new FormData(e.currentTarget)
         if (task?.id) formData.set("id", String(task.id))
+        else formData.set("idempotencyKey", idempotencyKeyRef.current)
         const result = task?.id ? await updateTask(formData) : await createTask(formData)
         if (!result.success) {
           showError(result.error || "Gagal menyimpan data")
           return
         }
+        if (!task?.id) idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess(task?.id ? "Tugas berhasil diperbarui" : "Tugas berhasil ditambahkan")
         router.push("/proyek/tugas")
         router.refresh()

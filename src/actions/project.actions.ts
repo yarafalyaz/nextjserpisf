@@ -9,6 +9,8 @@ import { logActivity } from "@/lib/services/activity-log.service"
 import { computeProjectStatus } from "@/lib/services/project-status"
 import { assertWorkOrderQcCleared } from "@/lib/services/qc.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
+import { checkIdempotency } from "@/lib/utils/idempotency"
+import { nextSlugWithClient } from "@/lib/utils/slug-db"
 import type { TxClient } from "@/lib/db/prisma"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { nextSlug } from "@/lib/utils/slug-db"
@@ -98,29 +100,37 @@ export async function createProject(formData: FormData) {
   const { data } = parsed
 
   const user = await requirePermission("create_projects")
-  await assertProjectMasterRefsLive(prisma, data)
   const documentNo = await generateDocumentNumber("PRJ")
 
-  const project = await prisma.project.create({
-    data: {
-      slug: await nextSlug("project", data.name || documentNo),
-      name: data.name,
-      documentNo,
-      description: data.description ?? null,
-      customerId: data.customerId,
-      customerVehicleId: data.customerVehicleId ?? null,
-      workOrderId: data.workOrderId ?? null,
-      costCenterId: data.costCenterId ?? null,
-      startDate: data.startDate ? wibDateToUtcMidnight(data.startDate) : null,
-      endDate: data.endDate ? wibDateToUtcMidnight(data.endDate) : null,
-      notes: data.notes ?? null,
-      status: "active",
-      createdBy: Number(user.id),
-    },
+  // Satu tx untuk kunci idempotency + penilaian master + baris proyek +
+  // stages bawaan: kegagalan di tengah tidak meninggalkan proyek yatim
+  // tanpa stages, dan key tercatat lewat tx yang sama (rollback melepas
+  // key sehingga retry sesudah gagal tetap boleh). Tanpa key dari form =
+  // perilaku lama (backward compatible, pola createTicket/createLead).
+  const project = await prisma.$transaction(async (tx) => {
+    await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
+    await assertProjectMasterRefsLive(tx, data)
+    const created = await tx.project.create({
+      data: {
+        slug: await nextSlugWithClient(tx as never, "project", data.name || documentNo),
+        name: data.name,
+        documentNo,
+        description: data.description ?? null,
+        customerId: data.customerId,
+        customerVehicleId: data.customerVehicleId ?? null,
+        workOrderId: data.workOrderId ?? null,
+        costCenterId: data.costCenterId ?? null,
+        startDate: data.startDate ? wibDateToUtcMidnight(data.startDate) : null,
+        endDate: data.endDate ? wibDateToUtcMidnight(data.endDate) : null,
+        notes: data.notes ?? null,
+        status: "active",
+        createdBy: Number(user.id),
+      },
+    })
+    // Auto-initialize default project stages (ikut tx yang sama)
+    await doInitializeProjectStages(created.id, tx)
+    return created
   })
-
-  // Auto-initialize default project stages
-  await doInitializeProjectStages(project.id)
 
   await logActivity("create", "Project", project.id, "Membuat proyek")
   await requestApprovalIfConfigured("Project", project.id, Number(user.id));
@@ -307,13 +317,13 @@ const STAGE_STATUS_LABELS: Record<string, string> = {
   skipped: "Dilewati",
 }
 
-async function doInitializeProjectStages(projectId: number) {
+async function doInitializeProjectStages(projectId: number, txClient?: TxClient) {
   if (!Number.isSafeInteger(projectId) || projectId <= 0) {
     throw new Error("Project tidak valid")
   }
 
   let initialized = false
-  await prisma.$transaction(async (tx) => {
+  const runStages = async (tx: TxClient) => {
     // Lock the parent row so concurrent page loads cannot both observe an
     // empty stage list and insert duplicate defaults.
     const projectRows = await tx.$queryRaw<Array<{ id: number }>>`
@@ -341,7 +351,13 @@ async function doInitializeProjectStages(projectId: number) {
       })),
     })
     initialized = true
-  })
+  }
+
+  if (txClient) {
+    await runStages(txClient)
+  } else {
+    await prisma.$transaction(runStages)
+  }
 
   if (!initialized) return { success: true, message: "Stages already initialized" }
 
@@ -810,20 +826,27 @@ export async function createTask(formData: FormData) {
   if (!parsed.success) return { success: false, error: parsed.error }
   const { data } = parsed
 
-  await requirePermission("create_projects")
-  await assertLiveTaskRefs(prisma, data)
+  const user = await requirePermission("create_projects")
 
-  const task = await prisma.task.create({
-    data: {
-      slug: await nextSlug("task", data.name),
-      projectId: data.projectId,
-      name: data.name,
-      description: data.description ?? null,
-      status: data.status ?? "pending",
-      assignedTo: data.assignedTo ?? null,
-      startDate: data.startDate ? wibDateToUtcMidnight(data.startDate) : null,
-      dueDate: data.dueDate ? wibDateToUtcMidnight(data.dueDate) : null,
-    },
+  // Satu tx: kunci idempotency + penilaian tautan hidup + slug lewat tx +
+  // create. Cek-then-write sebelumnya berjalan di luar tx (proyek/karyawan
+  // bisa berubah di jendelanya) dan tanpa key form submit dobel melahirkan
+  // tugas kembar. Tanpa key = perilaku lama (pola createProject).
+  const task = await prisma.$transaction(async (tx) => {
+    await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
+    await assertLiveTaskRefs(tx, data)
+    return tx.task.create({
+      data: {
+        slug: await nextSlugWithClient(tx as never, "task", data.name),
+        projectId: data.projectId,
+        name: data.name,
+        description: data.description ?? null,
+        status: data.status ?? "pending",
+        assignedTo: data.assignedTo ?? null,
+        startDate: data.startDate ? wibDateToUtcMidnight(data.startDate) : null,
+        dueDate: data.dueDate ? wibDateToUtcMidnight(data.dueDate) : null,
+      },
+    })
   })
 
   await logActivity("create", "Task", task.id, "Membuat tugas")

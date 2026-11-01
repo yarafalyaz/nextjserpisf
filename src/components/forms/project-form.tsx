@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { createProject, updateProject } from "@/actions/project.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -44,6 +44,9 @@ export function ProjectForm({ customers, customerVehicles = [], costCenters = []
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!project
+  // Kunci anti submit-dobel: stabil per niat buat, dirotasi sesudah sukses,
+  // dipakai ulang saat retry/galat (pola ticket-form).
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
 
   const [customerId, setCustomerId] = useState(project?.customerId ? String(project.customerId) : "")
   const [customerVehicleId, setCustomerVehicleId] = useState(project?.customerVehicleId ? String(project.customerVehicleId) : "")
@@ -69,8 +72,10 @@ export function ProjectForm({ customers, customerVehicles = [], costCenters = []
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
+        if (!isEdit) formData.set("idempotencyKey", idempotencyKeyRef.current)
         const result = isEdit ? await updateProject(project!.id, formData) : await createProject(formData)
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        if (!isEdit) idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/proyek")
         router.refresh()
