@@ -119,6 +119,23 @@ export async function updateRole(id: number, formData: FormData): Promise<RoleFo
     return { success: false, error: `Nama peran "${name}" dicadangkan sistem dan tidak dapat dipakai.` }
   }
 
+  // Role dicadangkan (RESERVED_ROLE_NAMES) memberi akses lintas-cakupan berbasis
+  // NAMA di warehouse-scope/hr-scope. Mengganti namanya ke nama biasa atau
+  // mengosongkan izinnya mematikan akses itu untuk semua pemegangnya — DoS
+  // administratif yang lolos dari assertCanGrantPermissions (set kosong selalu
+  // lolos). Hanya super_admin yang boleh menyentuh rename/pengosongan; edit izin
+  // non-kosong oleh non-super tetap dibatasi grantErr di bawah.
+  const existingIsReserved = isReservedRoleName(existing?.name ?? "")
+  if (existingIsReserved && !actor.roles.includes("super_admin")) {
+    const newName = name.trim()
+    if (newName !== (existing?.name ?? newName)) {
+      return { success: false, error: `Peran sistem "${existing?.name}" tidak dapat diganti nama oleh non-super_admin.` }
+    }
+    if (permissionIds.length === 0) {
+      return { success: false, error: `Peran sistem "${existing?.name}" tidak dapat dikosongkan izinnya oleh non-super_admin.` }
+    }
+  }
+
   const grantErr = await assertCanGrantPermissions(actor, permissionIds)
   if (grantErr) {
     return { success: false, error: grantErr }

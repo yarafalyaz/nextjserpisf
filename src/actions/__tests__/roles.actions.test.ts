@@ -227,6 +227,29 @@ describe("updateRole validation", () => {
   })
 })
 
+describe("updateRole role sistem (putaran 42)", () => {
+  it("non-super_admin tidak dapat mengganti nama role admin", async () => {
+    roleFindUniqueMock.mockResolvedValue({ name: "admin" })
+    const res = await updateRole(3, fd({ name: "BukanAdmin", permissions: [] }))
+    expect(res).toMatchObject({ success: false, error: expect.stringMatching(/diganti nama/) })
+    expect(roleUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("non-super_admin tidak dapat mengosongkan izin role admin", async () => {
+    roleFindUniqueMock.mockResolvedValue({ name: "admin" })
+    const res = await updateRole(3, fd({ name: "admin", permissions: [] }))
+    expect(res).toMatchObject({ success: false, error: expect.stringMatching(/dikosongkan/) })
+    expect(roleUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("super_admin tetap dapat mengganti nama role admin", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    roleFindUniqueMock.mockResolvedValue({ name: "admin" })
+    await expect(updateRole(3, fd({ name: "Pengelola", permissions: [] }))).rejects.toThrow("NEXT_REDIRECT")
+    expect(roleUpdateMock).toHaveBeenCalled()
+  })
+})
+
 describe("updateRole least-privilege guard", () => {
   it("blocks attaching a permission the actor does not hold", async () => {
     permissionFindManyMock.mockResolvedValue([{ name: "approve_workflows" }])
