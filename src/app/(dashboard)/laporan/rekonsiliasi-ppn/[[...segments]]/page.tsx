@@ -8,6 +8,7 @@ import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { REPORT_JOURNAL_STATUSES } from "@/lib/services/report-aggregation.service"
 import { buildVatPosition, VAT_STATUS_LABELS } from "@/lib/reports/vat-reconciliation"
 import { getSystemSettings } from "@/lib/utils/settings"
+import { loadReturnVatAmounts } from "@/lib/reports/tax-summary-data"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
@@ -46,7 +47,7 @@ export default async function VatReconciliationPage({
   const inputAccountId = settings.purchaseTaxAccountId ?? null
   const mappingMissing = outputAccountId === null || inputAccountId === null
 
-  const [outputAccountEntries, inputAccountEntries, salesInvoices, vendorBills] = await Promise.all([
+  const [outputAccountEntries, inputAccountEntries, salesInvoices, vendorBills, returnVatAmounts] = await Promise.all([
     outputAccountId
       ? prisma.journalEntry.findMany({
           where: {
@@ -73,12 +74,14 @@ export default async function VatReconciliationPage({
       where: { date: { gte: startDate, lte: endDate }, status: { in: ["posted", "partial", "paid"] }, deletedAt: null },
       select: { tax: true },
     }),
+    loadReturnVatAmounts({ start: startDate, end: endDate }),
   ])
 
   // PPN Keluaran akunnya bersaldo kredit, PPN Masukan bersaldo debit.
   const bookOutput = outputAccountEntries.reduce((sum, e) => sum + Number(e.credit) - Number(e.debit), 0)
   const bookInput = inputAccountEntries.reduce((sum, e) => sum + Number(e.debit) - Number(e.credit), 0)
   const docOutput = salesInvoices.reduce((sum, inv) => sum + Number(inv.taxAmount), 0)
+    - returnVatAmounts.reduce((sum, amount) => sum + amount, 0)
   const docInput = vendorBills.reduce((sum, bill) => sum + Number(bill.tax), 0)
 
   const position = buildVatPosition(bookOutput, bookInput)

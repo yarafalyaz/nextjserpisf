@@ -537,7 +537,21 @@ describe("total trailing: BUGHUNT round3 #1 (leading blank geser kolom)", () => 
     const reconTotals = assertTrailing(recon.table)
     expect(reconTotals[0].cells).toHaveLength(1)
     expect(landed(recon.table, reconTotals[0])["Selisih"]).toBeDefined()
+  })
 
+  it("regression round 17: rekonsiliasi PPN document output net of return VAT on note-date period", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([{ taxAmount: 1000 }])
+    mocks.prismaMock.vendorBill.findMany.mockResolvedValue([])
+    mocks.prismaMock.salesReturn.findMany.mockResolvedValue([
+      { date: new Date(2026, 8, 20), taxReturnNoteDate: new Date(2026, 9, 2), items: [{ returnVat: 110 }] },
+      { date: new Date(2026, 9, 3), taxReturnNoteDate: new Date(2026, 10, 1), items: [{ returnVat: 999 }] },
+    ])
+    const recon = await loadVatReconciliation(period)
+    const outputRow = recon.table.rows.find((r) => r.kind === "data" && r.cells[0] === "PPN Keluaran")
+    expect(outputRow?.kind === "data" ? outputRow.cells : []).toEqual(["PPN Keluaran", "0", "890", "(890)"])
+  })
+
+  it("SPT rows still render after reconciliation regression", async () => {
     const sptRows = buildSptTableRows([
       {
         period: "2026-10",

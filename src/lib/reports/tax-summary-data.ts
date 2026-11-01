@@ -38,6 +38,35 @@ type Period = { start: Date; end: Date }
  * vendor bill yang dijaga penjaga `vendor-bill-discount-wiring` hidup
  * di `spt-read-model-data.ts`, bukan di sini.
  */
+/**
+ * PPN retur penjualan completed pada masa efektif nota retur
+ * (`taxReturnNoteDate`, fallback tanggal retur) — basis yang sama dengan
+ * pengurang SPT. Query OR memuat kandidat yang salah satu tanggalnya masuk
+ * rentang; filter JS memastikan tanggal efektifnya yang dipakai.
+ */
+export async function loadReturnVatAmounts(period: Period): Promise<number[]> {
+  const returns = await prisma.salesReturn.findMany({
+    where: {
+      status: "completed",
+      OR: [
+        { date: { gte: period.start, lte: period.end } },
+        { taxReturnNoteDate: { gte: period.start, lte: period.end } },
+      ],
+    },
+    select: {
+      date: true,
+      taxReturnNoteDate: true,
+      items: { select: { returnVat: true } },
+    },
+  })
+  return returns
+    .filter((ret) => {
+      const effective = ret.taxReturnNoteDate ?? ret.date
+      return effective.getTime() >= period.start.getTime() && effective.getTime() <= period.end.getTime()
+    })
+    .flatMap((ret) => ret.items.map((item) => Number(item.returnVat ?? 0)))
+}
+
 const RECON_COLUMNS: TableColumn[] = [
   { header: "Sisi", align: "left", width: 70 },
   { header: "Per Buku", align: "right", width: 44 },
@@ -49,7 +78,7 @@ export async function loadVatReconciliation(period: Period): Promise<TaxSimpleRe
   const settings = await getSystemSettings()
   const outputAccountId = settings.salesTaxAccountId ?? null
   const inputAccountId = settings.purchaseTaxAccountId ?? null
-  const [outputEntries, inputEntries, salesInvoices, vendorBills] = await Promise.all([
+  const [outputEntries, inputEntries, salesInvoices, vendorBills, returnVatAmounts] = await Promise.all([
     outputAccountId
       ? prisma.journalEntry.findMany({
           where: {
@@ -92,11 +121,13 @@ export async function loadVatReconciliation(period: Period): Promise<TaxSimpleRe
       },
       select: { tax: true },
     }),
+    loadReturnVatAmounts(period),
   ])
   const recon = buildVatReconciliationTotals({
     outputEntries,
     inputEntries,
     docOutputAmounts: salesInvoices.map((inv) => inv.taxAmount),
+    docReturnVatAmounts: returnVatAmounts,
     docInputAmounts: vendorBills.map((bill) => bill.tax),
   })
   const { bookOutput, bookInput, docOutput, docInput } = recon

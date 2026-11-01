@@ -29,11 +29,16 @@ export function buildVatReconciliationTotals(input: {
   outputEntries: readonly { debit: SafeMathInput; credit: SafeMathInput }[]
   inputEntries: readonly { debit: SafeMathInput; credit: SafeMathInput }[]
   docOutputAmounts: readonly SafeMathInput[]
+  docReturnVatAmounts?: readonly SafeMathInput[]
   docInputAmounts: readonly SafeMathInput[]
 }): VatReconciliationTotals {
   const bookOutput = input.outputEntries.reduce((s, e) => safeAdd(s, safeSubtract(e.credit, e.debit, 2), 2), 0)
   const bookInput = input.inputEntries.reduce((s, e) => safeAdd(s, safeSubtract(e.debit, e.credit, 2), 2), 0)
-  const docOutput = safeSum([...input.docOutputAmounts], 2)
+  const docOutput = safeSubtract(
+    safeSum([...input.docOutputAmounts], 2),
+    safeSum([...(input.docReturnVatAmounts ?? [])], 2),
+    2,
+  )
   const docInput = safeSum([...input.docInputAmounts], 2)
   return {
     bookOutput,

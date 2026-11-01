@@ -35,6 +35,18 @@ describe("tax-summary safe-math", () => {
     expect(totals.netDifference).toBe(0)
   })
 
+  it("regression round 17: document output VAT is net of sales return VAT", () => {
+    const totals = buildVatReconciliationTotals({
+      outputEntries: [{ credit: 1_000, debit: 110 }],
+      inputEntries: [],
+      docOutputAmounts: [1_000],
+      docReturnVatAmounts: [110],
+      docInputAmounts: [],
+    })
+    expect(totals.docOutput).toBe(890)
+    expect(totals.netDifference).toBe(0)
+  })
+
   it("total bukti potong PPh tanpa drift", () => {
     expect(buildWithholdingTotal([10_000_000.1, 10_000_000.1, 10_000_000.1])).toBe(30_000_000.3)
   })
