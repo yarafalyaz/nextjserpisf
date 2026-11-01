@@ -84,7 +84,7 @@ beforeEach(() => {
   mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { subtotal: 0 } })
   mocks.prismaMock.vendorBillItem.aggregate.mockResolvedValue({ _sum: { subtotal: 0 } })
   mocks.prismaMock.item.findMany.mockResolvedValue([
-    { id: 7, sku: "BRG-01", name: "Baut", unitOfMeasure: "PCS" },
+    { id: 7, sku: "BRG-01", name: "Baut", unitOfMeasure: "PCS", isActive: true, deletedAt: null },
   ])
 })
 

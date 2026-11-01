@@ -205,6 +205,9 @@ describe("Scope gudang penerimaan barang", () => {
 describe("Purchase Request Actions", () => {
   beforeEach(() => {
     mocks.prismaMock.purchaseRequest.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    // Gerbang item hidup (putaran 32): fixture baris memakai item 1 aktif.
+    mocks.prismaMock.item.findMany.mockImplementation(async (arg: any) =>
+      (arg?.where?.id?.in ?? []).map((id: number) => ({ id, name: `Item ${id}`, isActive: true, deletedAt: null })))
   })
 
   it("createPurchaseRequest succeeds", async () => {
@@ -263,6 +266,32 @@ describe("Purchase Request Actions", () => {
     const res = await actions.deletePurchaseRequest(1)
     expect(res?.success).toBe(true)
   })
+
+  it("regresi putaran 32: createPurchaseRequest menolak item nonaktif", async () => {
+    mocks.prismaMock.item.findMany.mockResolvedValue([
+      { id: 5, name: "Item Mati", isActive: false },
+    ])
+    const res = await actions.createPurchaseRequest(fdMap({
+      date: "2026-06-12",
+      title: "PR Test",
+      items: JSON.stringify([{ itemId: 5, qty: 10, notes: "" }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.purchaseRequest.create).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 32: updatePurchaseRequest menolak item fiktif tanpa menghapus baris lama", async () => {
+    mocks.prismaMock.item.findMany.mockResolvedValue([])
+    const res = await actions.updatePurchaseRequest(1, fdMap({
+      date: "2026-06-12",
+      title: "PR Test",
+      items: JSON.stringify([{ itemId: 999, qty: 10, notes: "" }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak ditemukan")
+    expect(mocks.prismaMock.purchaseRequestItem.deleteMany).not.toHaveBeenCalled()
+  })
 })
 
 describe("Purchase Order Actions", () => {
@@ -270,6 +299,12 @@ describe("Purchase Order Actions", () => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     // Putaran 22: create menolak vendor mati — default fixture vendor hidup.
     mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1 })
+    // Gerbang item hidup (putaran 32): echo id aktif untuk query ber-where.id.
+    mocks.prismaMock.item.findMany.mockImplementation(async (arg: any) => {
+      const ids = arg?.where?.id?.in
+      if (!ids) return []
+      return ids.map((id: number) => ({ id, name: `Item ${id}`, isActive: true, deletedAt: null }))
+    })
   })
 
   it("createPurchaseOrder succeeds", async () => {
@@ -625,6 +660,34 @@ describe("Purchase Order Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("regresi putaran 32: createPurchaseOrder menolak item nonaktif", async () => {
+    mocks.prismaMock.item.findMany.mockResolvedValue([
+      { id: 5, name: "Item Mati", isActive: false },
+    ])
+    const res = await actions.createPurchaseOrder(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 5, qty: 5, unitPrice: 1000, discount: 0 }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.purchaseOrder.create).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 32: updatePurchaseOrder menolak item fiktif tanpa menghapus baris lama", async () => {
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.purchaseOrderItem.deleteMany.mockClear()
+    mocks.prismaMock.item.findMany.mockResolvedValue([])
+    const res = await actions.updatePurchaseOrder(1, fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 999, qty: 5, unitPrice: 1000, discount: 0 }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak ditemukan")
+    expect(mocks.prismaMock.purchaseOrderItem.deleteMany).not.toHaveBeenCalled()
+  })
+
   it("regresi putaran 16: cancelPurchaseOrder menghitung ulang status PR tertaut", async () => {
     const hook = await import("@/lib/hooks/purchase-order.hook") as any
     ;(hook.recalcPurchaseRequestStatus as any).mockClear()
@@ -731,6 +794,13 @@ describe("Vendor Bill Actions", () => {
     mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     // PO-linked bills now validate the bill vendor against the PO vendor.
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, vendorId: 1, documentNo: "PO-001", isService: false })
+    // Gerbang item hidup (putaran 32): baris fixture tanpa override wajib
+    // terlihat aktif; test dengan override mockResolvedValue menang sesudah ini.
+    mocks.prismaMock.item.findMany.mockImplementation(async (arg: any) => {
+      const ids = arg?.where?.id?.in
+      if (!ids) return []
+      return ids.map((id: number) => ({ id, sku: `SKU-${id}`, name: `Item ${id}`, unitOfMeasure: "PCS", isActive: true, deletedAt: null }))
+    })
   })
 
   it("createVendorBill succeeds", async () => {
@@ -749,7 +819,7 @@ describe("Vendor Bill Actions", () => {
 
   it("createVendorBill persists the item lines (goods stay recorded)", async () => {
     mocks.prismaMock.item.findMany.mockResolvedValue([
-      { id: 7, sku: "BRG-01", name: "Baut", unitOfMeasure: "PCS" },
+      { id: 7, sku: "BRG-01", name: "Baut", unitOfMeasure: "PCS", isActive: true, deletedAt: null },
     ])
     const res = await actions.createVendorBill(fdMap({
       vendorId: "1",
@@ -788,9 +858,28 @@ describe("Vendor Bill Actions", () => {
     expect(mocks.prismaMock.vendorBillItem.createMany).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 32: createVendorBill menolak item nonaktif", async () => {
+    mocks.prismaMock.item.findMany.mockResolvedValue([
+      { id: 5, sku: "X", name: "Item Mati", unitOfMeasure: "PCS", isActive: false, deletedAt: null },
+    ])
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "1000",
+      tax: "0",
+      grandTotal: "1000",
+      items: JSON.stringify([{ itemId: 5, qty: 1, unitPrice: 1000, discountPercent: 0, taxPercent: 0 }]),
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    // Gerbang berjalan di dalam tx sesudah header lahir — rollback menghapusnya,
+    // jadi yang diassert adalah baris item tidak pernah ditulis.
+    expect(mocks.prismaMock.vendorBillItem.createMany).not.toHaveBeenCalled()
+  })
+
   it("createVendorBill computes each line total as subtotal + tax", async () => {
     mocks.prismaMock.item.findMany.mockResolvedValue([
-      { id: 9, sku: "S", name: "Item", unitOfMeasure: null },
+      { id: 9, sku: "S", name: "Item", unitOfMeasure: null, isActive: true, deletedAt: null },
     ])
     await actions.createVendorBill(fdMap({
       vendorId: "1",
@@ -809,7 +898,7 @@ describe("Vendor Bill Actions", () => {
 
   it("updateVendorBill replaces the item lines", async () => {
     mocks.prismaMock.item.findMany.mockResolvedValue([
-      { id: 7, sku: "BRG-01", name: "Baut", unitOfMeasure: "PCS" },
+      { id: 7, sku: "BRG-01", name: "Baut", unitOfMeasure: "PCS", isActive: true, deletedAt: null },
     ])
     const res = await actions.updateVendorBill(1, fdMap({
       vendorId: "1",
@@ -1059,7 +1148,7 @@ describe("Vendor Bill Actions", () => {
     mocks.prismaMock.vendorBillItem.aggregate.mockResolvedValue({ _sum: { subtotal: 0 } })
     mocks.prismaMock.vendorBill.create.mockResolvedValue({ id: 1 })
     mocks.prismaMock.item.findMany.mockResolvedValue([
-      { id: 7, sku: "BRG-01", name: "Baut", unitOfMeasure: "PCS" },
+      { id: 7, sku: "BRG-01", name: "Baut", unitOfMeasure: "PCS", isActive: true, deletedAt: null },
     ])
     const res = await actions.createVendorBill(fdMap({
       vendorId: "1",
@@ -2301,6 +2390,12 @@ describe("Purchase Actions Additional Branch Coverage", () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["super_admin"] })
     mocks.generateDocNumMock.mockResolvedValue("DOC-001")
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, vendorId: 1, documentNo: "PO-001", isService: false })
+    // Gerbang item hidup (putaran 32): echo id aktif untuk query ber-where.id.
+    mocks.prismaMock.item.findMany.mockImplementation(async (arg: any) => {
+      const ids = arg?.where?.id?.in
+      if (!ids) return []
+      return ids.map((id: number) => ({ id, name: `Item ${id}`, isActive: true, deletedAt: null }))
+    })
   })
 
   it("createVendorBill fails 3-way match (no GRs)", async () => {
@@ -3160,7 +3255,7 @@ describe("Vendor Bill header recompute (anti manipulasi klien)", () => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, vendorId: 1, documentNo: "PO-001", isService: false })
     mocks.prismaMock.vendorBill.create.mockResolvedValue({ id: 1 })
     mocks.prismaMock.vendorBill.update.mockResolvedValue({ id: 1 })
-    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 9, sku: "S", name: "Item", unitOfMeasure: null }])
+    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 9, sku: "S", name: "Item", unitOfMeasure: null, isActive: true, deletedAt: null }])
   })
   it("createVendorBill hitung ulang header dari baris, abaikan subtotal klien", async () => {
     const res = await actions.createVendorBill(fdMap({

@@ -56,6 +56,7 @@ import {
   requestApprovalIfConfigured,
 } from "@/lib/services/approval-workflow.service";
 import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service";
+import { assertItemsExistAndActive } from "@/lib/services/material-request.service";
 import { parseFormData } from "@/lib/validations/parse-form";
 import {
   L3_MSG,
@@ -803,6 +804,12 @@ export async function createPurchaseRequest(formData: FormData) {
     const slug = await nextSlug("purchaseRequest", documentNo);
     const requestedBy = v.requestedBy || Number(user.id);
     const items = parsePurchaseRequestItems(v.items);
+    // Baris PR bebas (bukan turunan dokumen lain): item mati/fiktif ditolak
+    // bernama — PurchaseRequestItem.itemId bare-int tanpa FK, jadi tanpa
+    // gerbang ini id gaib tersimpan senyap (paritas sisi jual putaran 31).
+    if (items.length > 0) {
+      await assertItemsExistAndActive(prisma, items.map((i) => i.itemId));
+    }
 
     const requestDateRaw = v.requestDate;
     const description = v.description ?? null;
@@ -898,6 +905,12 @@ export async function createPurchaseOrder(formData: FormData) {
         select: { id: true },
       });
       if (!liveVendor) throw new Error("Vendor tidak ditemukan atau tidak aktif");
+
+      // Baris PO bebas: item mati/fiktif ditolak bernama — PurchaseOrderItem
+      // .itemId bare-int tanpa FK, tanpa gerbang ini id gaib tersimpan senyap.
+      if (poItems.length > 0) {
+        await assertItemsExistAndActive(tx, poItems.map((i) => i.itemId));
+      }
 
       const created = await tx.purchaseOrder.create({
         data: {
@@ -1600,9 +1613,21 @@ async function persistVendorBillItems(
   const meta = ids.length
     ? await tx.item.findMany({
         where: { id: { in: ids } },
-        select: { id: true, sku: true, name: true, unitOfMeasure: true },
+        select: { id: true, sku: true, name: true, unitOfMeasure: true, isActive: true, deletedAt: true },
       })
     : [];
+  // Baris ber-itemId wajib master hidup: FK hanya menolak id gaib, item
+  // nonaktif/terhapus lolos. Tanpa baris ini meta hilang diam-diam dan bill
+  // menyimpan baris yatim (paritas sisi jual putaran 31). Baris bebas
+  // (itemId null) tidak dinilai.
+  const metaLive = new Map(meta.map((i) => [i.id, i]));
+  for (const id of ids) {
+    const m = metaLive.get(id);
+    if (!m || m.deletedAt) throw new Error(`Item #${id} tidak ditemukan`);
+    if (!m.isActive) {
+      throw new Error(`Item ${m.name} tidak aktif; tidak dapat ditagih`);
+    }
+  }
   const metaById = new Map<number, ItemMeta>(
     meta.map((i) => [
       i.id,
@@ -3337,6 +3362,12 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
     // Parse sebelum transaksi: qty tak terbaca ditolak sebelum deleteMany
     // menghapus baris lama.
     const items = parsePurchaseRequestItems(v.items);
+    // Edit menulis ulang seluruh baris (delete+create di tx) = penanaman
+    // baris baru, bukan retensi: item mati/fiktif ditolak bernama sebelum
+    // baris lama terhapus.
+    if (items.length > 0) {
+      await assertItemsExistAndActive(prisma, items.map((i) => i.itemId));
+    }
 
     const pr = await prisma.$transaction(async (tx) => {
       // Kunci baris PR dulu: recheck plain membaca snapshot tx (approver
@@ -3430,6 +3461,11 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
       });
       if (latest && latest.status !== "draft")
         throw new Error("Hanya PO draft yang dapat diedit");
+      // Edit menulis ulang seluruh baris: item mati/fiktif ditolak bernama
+      // sebelum deleteMany menghapus baris lama.
+      if (poItems.length > 0) {
+        await assertItemsExistAndActive(tx, poItems.map((i) => i.itemId));
+      }
       await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } });
       return tx.purchaseOrder.update({
         where: { id },

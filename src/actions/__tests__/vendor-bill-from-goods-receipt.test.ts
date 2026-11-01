@@ -33,8 +33,8 @@ const mocks = vi.hoisted(() => {
     },
     item: {
       findMany: vi.fn().mockResolvedValue([
-        { id: 7, sku: "SKU-7", name: "Barang 7", unitOfMeasure: "PCS" },
-        { id: 8, sku: "SKU-8", name: "Barang 8", unitOfMeasure: "PCS" },
+        { id: 7, sku: "SKU-7", name: "Barang 7", unitOfMeasure: "PCS", isActive: true, deletedAt: null },
+        { id: 8, sku: "SKU-8", name: "Barang 8", unitOfMeasure: "PCS", isActive: true, deletedAt: null },
       ]),
     },
     // R8-JB-09: create/update menoleh termin vendor saat menghitung dueDate.
