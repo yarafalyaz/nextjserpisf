@@ -3484,6 +3484,23 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
       });
       if (latest && latest.status !== "draft")
         throw new Error("Hanya PO draft yang dapat diedit");
+      // Relink PR lewat edit memakai gerbang yang sama seperti create:
+      // kunci baris PR, lalu status wajib approved/partial_ordered. Tanpa
+      // ini PO draft bisa ditempel ke PR konsep/ditolak dan approval
+      // generik mem-flip-nya approved tanpa gerbang pembelian.
+      if (v.purchaseRequestId) {
+        await tx.$queryRaw`SELECT id FROM purchase_requests WHERE id = ${v.purchaseRequestId} FOR UPDATE`;
+        const pr = await tx.purchaseRequest.findUnique({
+          where: { id: v.purchaseRequestId },
+          select: { status: true, documentNo: true },
+        });
+        if (!pr) throw new Error("Permintaan Pembelian tidak ditemukan");
+        if (!["approved", "partial_ordered"].includes(pr.status)) {
+          throw new Error(
+            `Permintaan Pembelian ${pr.documentNo} berstatus '${pr.status}' belum bisa dibuatkan pesanan (harus Disetujui/Sebagian Terpesan)`,
+          );
+        }
+      }
       // Edit draft bisa memindah vendor: target baru wajib vendor hidup
       // (create menegakkan ini sejak putaran 22, edit belum).
       await assertLiveVendorTx(tx, v.vendorId);
@@ -3499,6 +3516,11 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
           slug,
           vendorId: v.vendorId,
           purchaseRequestId: v.purchaseRequestId ?? null,
+          // Form edit mengirim isService + workOrderId (toggle PO jasa):
+          // blok data lama membuang keduanya diam-diam sehingga flag lama
+          // menang di assertThreeWayMatch sesudah toggle diubah user.
+          workOrderId: v.workOrderId ?? null,
+          isService: v.isService,
                     date: wibDateToUtcMidnight(v.date),
           expectedDate: v.expectedDate ? wibDateToUtcMidnight(v.expectedDate) : null,
           paymentTerm: v.paymentTerm ?? null,

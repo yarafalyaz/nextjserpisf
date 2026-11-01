@@ -702,6 +702,36 @@ describe("Purchase Order Actions", () => {
     expect(mocks.prismaMock.purchaseOrderItem.deleteMany).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 32: updatePurchaseOrder menulis isService + workOrderId dari form", async () => {
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    const res = await actions.updatePurchaseOrder(1, fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      isService: "true",
+      workOrderId: "9",
+      items: JSON.stringify([{ itemId: 1, qty: 5, unitPrice: 1000, discount: 0 }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.purchaseOrder.update.mock.calls.at(-1)![0]
+    expect(arg.data.isService).toBe(true)
+    expect(arg.data.workOrderId).toBe(9)
+  })
+
+  it("regresi putaran 32: updatePurchaseOrder menolak relink ke PR konsep", async () => {
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.purchaseOrderItem.deleteMany.mockClear()
+    mocks.prismaMock.purchaseRequest.findUnique.mockResolvedValue({ status: "draft", documentNo: "PR-001" })
+    const res = await actions.updatePurchaseOrder(1, fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      purchaseRequestId: "7",
+      items: JSON.stringify([{ itemId: 1, qty: 5, unitPrice: 1000, discount: 0 }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("belum bisa dibuatkan pesanan")
+    expect(mocks.prismaMock.purchaseOrderItem.deleteMany).not.toHaveBeenCalled()
+  })
+
   it("regresi putaran 16: cancelPurchaseOrder menghitung ulang status PR tertaut", async () => {
     const hook = await import("@/lib/hooks/purchase-order.hook") as any
     ;(hook.recalcPurchaseRequestStatus as any).mockClear()
