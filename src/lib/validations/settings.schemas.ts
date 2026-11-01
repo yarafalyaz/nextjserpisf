@@ -71,7 +71,12 @@ export const updateSystemSettingsSchema = z.object({
   companyLongitude: optionalDecimal(),
 
   // General
-  costingMethod: optionalString(50),
+  // Enum tertutup sama dengan resolver: getGlobalCostingMethod fail-closed
+  // melempar untuk nilai non-kosong selain FIFO/Average, jadi string bebas
+  // yang tersimpan di sini memblokir posting stok berikutnya. Form hanya
+  // menawarkan kedua nilai ini. "" tetap diterima (opsionalString) karena
+  // aksi memetakan kosong ke default "FIFO".
+  costingMethod: z.enum(["FIFO", "Average"]).optional().or(z.literal("")),
   fiscalYearStartMonth: boundedInt(1, 12),
   currencyCode: optionalString(10),
   currencySymbol: optionalString(10),

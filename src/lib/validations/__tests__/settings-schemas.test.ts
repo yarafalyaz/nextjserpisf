@@ -20,6 +20,15 @@ describe("updateSystemSettingsSchema", () => {
     expect(result.costingMethod).toBe("FIFO")
   })
 
+  it("menolak costingMethod di luar FIFO/Average (resolver global fail-closed)", () => {
+    expect(
+      updateSystemSettingsSchema.safeParse({ costingMethod: "LIFO" }).success,
+    ).toBe(false)
+    expect(
+      updateSystemSettingsSchema.safeParse({ costingMethod: "Average" }).success,
+    ).toBe(true)
+  })
+
   it("allows null for optionalNullString fields", () => {
     const result = updateSystemSettingsSchema.parse({ companyName: null })
     expect(result.companyName).toBeNull()
