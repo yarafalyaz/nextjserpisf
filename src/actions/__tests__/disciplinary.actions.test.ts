@@ -182,6 +182,25 @@ describe("approveDisciplinaryRecord", () => {
     expect(mocks.recUpdateMany).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 47: SP1 kedua ditolak saat SP1 lain sudah issued (rantai dihitung ulang dalam tx)", async () => {
+    mocks.recFindUnique.mockResolvedValue(recordRow({ workflowStatus: "pending_approval" }))
+    // SP1 lain untuk karyawan sama sudah terbit dan masih berlaku.
+    mocks.recFindMany.mockResolvedValue([
+      {
+        id: 4,
+        employeeId: 1,
+        level: "sp1",
+        workflowStatus: "issued",
+        violationDate: d("2025-12-20"),
+        issuedAt: d("2025-12-20"),
+        voidedAt: null,
+      },
+    ])
+    const r = await approveDisciplinaryRecord(5)
+    expect(r.success).toBe(false)
+    expect(mocks.recUpdateMany).not.toHaveBeenCalled()
+  })
+
   it("SP1 disetujui langsung terbit dengan nomor dokumen", async () => {
     mocks.recFindUnique.mockResolvedValue(recordRow({ workflowStatus: "pending_approval" }))
     const r = await approveDisciplinaryRecord(5)

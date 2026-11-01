@@ -351,20 +351,45 @@ export async function approveDisciplinaryRecord(recordId: number): Promise<Actio
         secondApproverEmployeeId: null,
       })
       if (!sod.allowed) throw new Error(sod.message)
-      const documentNo = await generateDocumentNumber("SP")
-      const claim = await prisma.employeeDisciplinaryRecord.updateMany({
-        where: { id: recordId, workflowStatus: "pending_approval", deletedAt: null },
-        data: {
-          workflowStatus: "issued",
-          approvedBy: me,
-          approvedAt: now,
-          issuedAt: now,
-          documentNo,
-        },
+      // Jalur biasa dulu hanya klaim status rekod sendiri: rantai jenjang
+      // bisa berubah sejak pengajuan diajukan (SP lain terbit lebih dulu),
+      // jadi jenjang dinilai ULANg di dalam tx sesaat sebelum terbit —
+      // simetri jalur SP3/first-final di bawah. Tanpa ini dua SP1 untuk
+      // karyawan sama bisa sama-sama terbit.
+      await prisma.$transaction(async (tx) => {
+        if (typeof tx.$executeRaw === "function") {
+          await tx.$executeRaw`SELECT id FROM employees WHERE id = ${record.employeeId} FOR UPDATE`
+        }
+        const fresh = await tx.employeeDisciplinaryRecord.findUnique({
+          where: { id: recordId },
+          select: RECORD_SELECT,
+        })
+        if (!fresh || fresh.workflowStatus !== "pending_approval") {
+          throw new Error("Pengajuan hanya dapat disetujui dari status menunggu persetujuan")
+        }
+        const records = await loadChainRecords(tx, fresh.employeeId)
+        assertLevelAllowed(
+          records,
+          fresh.employeeId,
+          fresh.violationDate,
+          fresh.level,
+          fresh.violationCategory,
+        )
+        const documentNo = await generateDocumentNumber("SP")
+        const claim = await tx.employeeDisciplinaryRecord.updateMany({
+          where: { id: recordId, workflowStatus: "pending_approval", deletedAt: null },
+          data: {
+            workflowStatus: "issued",
+            approvedBy: me,
+            approvedAt: now,
+            issuedAt: now,
+            documentNo,
+          },
+        })
+        if (claim.count === 0) {
+          throw new Error("Pengajuan hanya dapat disetujui dari status menunggu persetujuan")
+        }
       })
-      if (claim.count === 0) {
-        throw new Error("Pengajuan hanya dapat disetujui dari status menunggu persetujuan")
-      }
     } else if (record.approvedBy == null) {
       // Persetujuan pertama SP3/first-final: catat penyetuju pertama,
       // rekod tetap pending_approval menunggu penyetuju kedua.
