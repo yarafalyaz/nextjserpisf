@@ -63,7 +63,11 @@ function wireTx(overrides: {
     salesReturn: { findUniqueOrThrow: spies.returnFindUniqueOrThrow, update: spies.returnUpdate },
     salesInvoice: { findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 4, items: overrides.items }) },
     stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
-    warehouse: { findFirst: spies.warehouseFindFirst },
+    warehouse: {
+      findFirst: spies.warehouseFindFirst,
+      // Putaran 51: resolusi gudang dinilai ulang hidup; default semua hidup.
+      findMany: vi.fn().mockImplementation(async (args: any) => (args?.where?.id?.in ?? []).map((id: number) => ({ id, name: `Gudang ${id}`, isActive: true }))),
+    },
     item: { findMany: spies.itemFindMany },
     itemSerial: { findMany: spies.serialFindMany, updateMany: spies.serialUpdateMany },
     itemBatch: { findFirst: spies.batchFindFirst, create: spies.batchCreate, update: spies.batchUpdate },
@@ -76,6 +80,37 @@ function wireTx(overrides: {
   mocks.transaction.mockImplementation((fn: (t: typeof tx) => Promise<unknown>) => fn(tx))
   return { spies, tx }
 }
+
+describe("sales return — gudang default item mati (putaran 51)", () => {
+  it("gudang default item nonaktif → complete ditolak, tidak ada gerakan stok", async () => {
+    const { spies } = wireTx({
+      items: [{ itemId: 3, qty: 2, cost: 120 }],
+      itemRows: [{ id: 3, defaultWarehouseId: 5 }],
+      invoiceItemRows: [{ itemId: 3, uom: "BOX" }],
+      serialFindMany: vi.fn().mockResolvedValue([]),
+    })
+    spies.itemFindMany.mockResolvedValue([
+      { id: 3, defaultWarehouseId: 5, trackSerial: false, trackBatch: false, isProduct: true, name: "Busi", isActive: true },
+    ])
+    mocks.transaction.mockImplementation(async (fn: any) => fn({
+      $queryRaw: spies.queryRaw,
+      $executeRaw: spies.executeRaw,
+      salesReturn: { findUniqueOrThrow: spies.returnFindUniqueOrThrow, update: spies.returnUpdate },
+      stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
+      warehouse: { findFirst: spies.warehouseFindFirst, findMany: vi.fn().mockResolvedValue([{ id: 5, name: "Gudang Utama", isActive: false }]) },
+      item: { findMany: spies.itemFindMany },
+      salesInvoiceItem: { findMany: spies.invoiceItemFindMany },
+      itemSerial: { findMany: spies.serialFindMany, updateMany: spies.serialUpdateMany },
+      itemBatch: { findFirst: spies.batchFindFirst, create: spies.batchCreate, update: spies.batchUpdate },
+      systemSetting: { findFirst: spies.systemSettingFindFirst },
+      salesReturnItem: { findMany: vi.fn().mockResolvedValue([]) },
+      commissionPayable: { findFirst: vi.fn().mockResolvedValue(null) },
+    }))
+
+    await expect(onSalesReturnCompleted(7, 9)).rejects.toThrow(/tidak aktif/)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+  })
+})
 
 describe("sales return UoM", () => {
   it("returns 2 BOX as 24 base units and values the inventory layer per base unit", async () => {

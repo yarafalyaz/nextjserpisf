@@ -8,6 +8,7 @@ import { Status } from "@/lib/constants";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { reverseTx as reverseCommissionPayableTx } from "@/lib/services/commission-payable.service";
 import { toBaseFactor } from "@/lib/services/uom.service";
+import { assertWarehousesExistAndActive } from "@/lib/services/material-request.service";
 
 /** P1-1: normalisasi kolom identitas Json (array / koma-pisah / null). */
 function toCleanStrings(value: unknown): string[] {
@@ -145,6 +146,15 @@ export async function onSalesReturnCompleted(
       // 2. Lock all item rows in a single query (was N serial FOR UPDATE).
       const activeItemIds = activeItems.map((it) => it.itemId);
       await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(activeItemIds)}) FOR UPDATE`;
+
+      // Putaran 51: gudang tujuan tiap baris (default item → fallback aktif)
+      // dinilai ulang HIDUP di dalam tx sebelum stok masuk ditulis. Retur
+      // yang tercatat setelah gudang default dinonaktifkan tidak boleh
+      // mendaratkan stok ke gudang mati tanpa ada yang tahu.
+      await assertWarehousesExistAndActive(
+        tx as never,
+        [...new Set(activeItems.map((it) => warehouseByItem.get(it.itemId) ?? fallbackWarehouse.id))],
+      );
 
       let docIdx = 0;
       for (const item of activeItems) {
