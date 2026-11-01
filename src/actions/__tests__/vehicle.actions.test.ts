@@ -201,6 +201,13 @@ describe("Customer Vehicle Actions", () => {
     const res = await actions.updateCustomerVehicle(1, fdMap({ customerId: 1, variantId: 1, vehicleId: 1 }))
     expect(res?.success).toBe(true)
   })
+  it("updateCustomerVehicle memindahkan kepemilikan ke customerId baru yang valid", async () => {
+    mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({ id: 1, customerId: 1, vehicleId: 1 })
+    const res = await actions.updateCustomerVehicle(1, fdMap({ customerId: 2, variantId: 1, vehicleId: 1 }))
+    expect(res?.success).toBe(true)
+    const updateArg = mocks.prismaMock.customerVehicle.update.mock.calls.at(-1)![0] as any
+    expect(updateArg.data.customerId).toBe(2)
+  })
   it("updateCustomerVehicle fails validation", async () => {
     const res = await actions.updateCustomerVehicle(1, fdMap({}))
     expect(res?.success).toBe(false)

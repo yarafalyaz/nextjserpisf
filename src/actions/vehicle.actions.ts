@@ -798,6 +798,10 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
       await tx.customerVehicle.update({
         where: { id },
         data: {
+          // customerId divalidasi hidup oleh assertCustomerVehicleRefsExist di
+          // atas dan revalidatePath mengarah ke pemilik itu — wajib ikut
+          // tertulis, kalau tidak pindah kepemilikan hilang senyap.
+          customerId: d.customerId,
           vehicleId,
           plateNumber: d.plateNumber ?? null,
           color: d.color ?? null,
