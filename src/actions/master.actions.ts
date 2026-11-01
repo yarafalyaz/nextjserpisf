@@ -69,6 +69,7 @@ import {
 } from "@/lib/auth/field-visibility";
 import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope";
 import { nextSlug } from "@/lib/utils/slug-db";
+import { checkIdempotency } from "@/lib/utils/idempotency";
 import {
   normalizeNitku,
   normalizeNpwp,
@@ -2213,6 +2214,10 @@ export async function createLead(formData: FormData) {
       if (txWarning && !reasonCheck.ok) {
         return null;
       }
+      // Sesudah gerbang duplikat: percobaan yang berhenti di panel tidak
+      // boleh mengonsumsi key, tetapi retry submit yang benar-benar menulis
+      // lead harus tertahan sebagai duplikat.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, actor.id);
       const created = await tx.lead.create({ data });
       const effective = txWarning ?? preWarning;
       if (effective && reasonCheck.ok) {

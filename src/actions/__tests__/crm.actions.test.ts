@@ -75,6 +75,23 @@ beforeEach(() => {
 })
 
 describe("CRM Ticket Actions", () => {
+  it("regresi putaran 46: createTicket menolak kunci idempotensi duplikat segar", async () => {
+    mocks.prismaMock.idempotencyKey = {
+      create: vi.fn(async () => {
+        const err: any = new Error("unique")
+        err.code = "P2002"
+        throw err
+      }),
+      findUnique: vi.fn(async () => ({ createdAt: new Date() })),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+    }
+    const res = await actions.createTicket(fdMap({ subject: "Ticket Subject", idempotencyKey: "key-ticket-1" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Permintaan duplikat terdeteksi")
+    expect(mocks.prismaMock.crmTicket.create).not.toHaveBeenCalled()
+    delete mocks.prismaMock.idempotencyKey
+  })
+
   it("createTicket succeeds", async () => {
     const res = await actions.createTicket(fdMap({ subject: "Ticket Subject" }))
     expect(res?.success).toBe(true)

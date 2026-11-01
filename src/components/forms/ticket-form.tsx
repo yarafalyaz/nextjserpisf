@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { createTicket, updateTicket } from "@/actions/crm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
@@ -27,14 +27,17 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
   const [customerId, setCustomerId] = useState<string | null>(ticket?.customerId ? String(ticket.customerId) : null)
   const [customerOptions, setCustomerOptions] = useState(customers)
   const [assignedTo, setAssignedTo] = useState<string | null>(ticket?.assignedTo ? String(ticket.assignedTo) : null)
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
+        if (!ticket?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
         const result = ticket?.id ? await updateTicket(ticket.id, formData) : await createTicket(formData)
         if (result.success) {
+          if (!ticket?.id) idempotencyKeyRef.current = crypto.randomUUID()
           showSuccess(ticket?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
           router.push("/crm/tickets")
           router.refresh()

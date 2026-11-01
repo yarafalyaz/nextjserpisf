@@ -128,10 +128,12 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
   const [overrideReason, setOverrideReason] = useState("")
   const [overrideError, setOverrideError] = useState<string | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
 
   function submitForm(formData: FormData, withReason: string | null) {
     startTransition(async () => {
       try {
+        if (!isEdit) formData.set("idempotencyKey", idempotencyKeyRef.current)
         if (withReason) formData.set("duplicateOverrideReason", withReason)
         const result = isEdit ? await updateLead(lead!.id, formData) : await createLead(formData)
         if (result && !result.success) {

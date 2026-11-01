@@ -10,6 +10,7 @@ import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { createTicketSchema, updateTicketSchema, leadActivitySchema, ticketCommentSchema, CONVERTIBLE_STATUSES } from "@/lib/validations/crm.schemas"
 import { nextSlug } from "@/lib/utils/slug-db"
+import { checkIdempotency } from "@/lib/utils/idempotency"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 
 // Soft-delete helper, mirrors the convention in master.actions.ts: try hard
@@ -94,7 +95,9 @@ export async function createTicket(formData: FormData) {
   const { generateDocumentNumber } = await import("@/lib/utils/document-number")
   const ticketNumber = await generateDocumentNumber("TKT", "simple")
 
-  const ticket = await prisma.crmTicket.create({
+  const ticket = await prisma.$transaction(async (tx) => {
+    await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
+    return tx.crmTicket.create({
     data: {
       slug: await nextSlug("crmTicket", data.subject || ticketNumber),
       ticketNumber,
@@ -110,6 +113,7 @@ export async function createTicket(formData: FormData) {
       status: "open",
       createdBy: Number(user.id),
     },
+    })
   })
 
   revalidatePath("/crm/tickets")

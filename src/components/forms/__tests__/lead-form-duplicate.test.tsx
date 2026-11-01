@@ -199,6 +199,7 @@ describe("LeadForm — panel duplikat DUP-F1", () => {
       "Nomor sentral perusahaan, kontak orang berbeda",
     )
     expect(formData.get("name")).toBe("Budi Baru")
+    expect(formData.get("idempotencyKey")).toBeTruthy()
     expect(showSuccess).toHaveBeenCalled()
     act(() => root.unmount())
     container.remove()

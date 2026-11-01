@@ -890,6 +890,23 @@ describe("Lead Actions", () => {
     expect(mocks.prismaMock.lead.create).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 46: createLead menolak kunci idempotensi duplikat segar", async () => {
+    mocks.prismaMock.idempotencyKey = {
+      create: vi.fn(async () => {
+        const err: any = new Error("unique")
+        err.code = "P2002"
+        throw err
+      }),
+      findUnique: vi.fn(async () => ({ createdAt: new Date() })),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+    }
+    const res = await actions.createLead(fdMap({ name: "test", idempotencyKey: "key-lead-1" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Permintaan duplikat terdeteksi")
+    expect(mocks.prismaMock.lead.create).not.toHaveBeenCalled()
+    delete mocks.prismaMock.idempotencyKey
+  })
+
   it("createLead menolak assignedTo pengguna nonaktif (kolom bare-int tanpa FK)", async () => {
     mocks.prismaMock.user = mocks.prismaMock.user ?? { findFirst: vi.fn() }
     mocks.prismaMock.user.findFirst = vi.fn().mockResolvedValue(null)
