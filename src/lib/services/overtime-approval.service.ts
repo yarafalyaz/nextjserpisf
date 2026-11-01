@@ -99,8 +99,11 @@ export async function computeOvertimeApprovalValue(
     overtimeDate: new Date(ot.date).toISOString(),
   }
 
+  // Klaim nilai: hanya penulis pertama yang boleh mengisi calculatedValue.
+  // Status approved dari jalur workflow tetap match bagi dua pemanggil, jadi
+  // tanpa syarat ini penghitung kedua menimpa nilai + penyetuju pertama.
   return db.overtimeRequest.updateMany({
-    where: { id: ot.id, status: { in: ["pending", "approved"] } },
+    where: { id: ot.id, status: { in: ["pending", "approved"] }, calculatedValue: null },
     data: {
       status: "approved",
       approvedBy,

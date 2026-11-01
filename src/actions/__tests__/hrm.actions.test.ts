@@ -520,7 +520,7 @@ describe("Overtime Request Actions", () => {
     expect(assertApprovedMock).toHaveBeenCalledWith("OvertimeRequest", 1)
     expect(prismaMock.overtimeRequest.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 1, status: { in: ["pending", "approved"] } },
+        where: { id: 1, status: { in: ["pending", "approved"] }, calculatedValue: null },
       }),
     )
     // The manual approval must still compute the pay value.
@@ -551,6 +551,13 @@ describe("Overtime Request Actions", () => {
     expect(res?.success).toBe(true)
     const arg = prismaMock.overtimeRequest.updateMany.mock.calls[0][0]
     expect(arg.data.calculatedValue).toBeGreaterThan(0)
+  })
+
+  it("approveOvertime kalah klaim nilai dari penghitung konkuren = no-op sukses", async () => {
+    prismaMock.overtimeRequest.updateMany.mockResolvedValueOnce({ count: 0 })
+    prismaMock.overtimeRequest.findUnique.mockResolvedValue({ calculatedValue: 150000 })
+    const res = await actions.approveOvertime(1)
+    expect(res?.success).toBe(true)
   })
 
   it("approveOvertime is idempotent when the value is already computed", async () => {

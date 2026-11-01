@@ -86,6 +86,20 @@ describe("R8-SDM-06 basis lembur historis + lantai 75%", () => {
     )
   })
 
+  it("klaim hanya menulis bila calculatedValue masih null (satu penghitung menang)", async () => {
+    const { db, updateMany } = mockDb({ adjustments: [] })
+    const ot = {
+      id: 7,
+      employeeId: 3,
+      date: d("2026-09-10"),
+      hours: 3,
+      employee: { baseSalary: 4_000_000 },
+    }
+    await computeOvertimeApprovalValue(db, ot, 99)
+    const where = (updateMany.mock.calls[0][0] as { where?: unknown }).where
+    expect(where).toEqual(expect.objectContaining({ id: 7, calculatedValue: null }))
+  })
+
   it("karyawan WEEKLY: nominal mingguan dinormalisasi ke bulanan sebelum /173", async () => {
     const { db, updateMany } = mockDb({ adjustments: [] })
     const ot = {

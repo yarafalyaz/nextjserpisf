@@ -1277,6 +1277,15 @@ export async function approveOvertime(overtimeId: number) {
 
     const claim = await computeOvertimeApprovalValue(prisma, ot, Number(user.id));
     if (claim.count === 0) {
+      // Kalah klaim nilai dari penghitung konkuren = nilai sudah terisi;
+      // perlakukan sebagai idempotent no-op, bukan kegagalan persetujuan.
+      const fresh = await prisma.overtimeRequest.findUnique({
+        where: { id: overtimeId },
+        select: { calculatedValue: true },
+      });
+      if (fresh?.calculatedValue != null && Number(fresh.calculatedValue) > 0) {
+        return { success: true };
+      }
       throw new Error("Pengajuan lembur sudah diproses atau status tidak valid");
     }
 
