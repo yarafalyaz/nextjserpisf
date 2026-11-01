@@ -290,4 +290,12 @@ describe("wiring scope halaman + registry + PDF (ROUND5-SCOPE)", () => {
       expect(src(file), file).toContain("getWarehouseScope")
     }
   })
+
+  it("halaman umur-stok (layar) memakai rumus umur asal STOK-08/09 yang sama dengan loadStockAging", () => {
+    // Layar mengquery layer sendiri (bukan loader), jadi tanpa tes sumber ini
+    // layar bisa diam-diam kembali memakai createdAt layer tujuan — stok
+    // pindahan tampak lebih muda di layar daripada di PDF.
+    const page = src("src/app/(dashboard)/laporan/umur-stok/page.tsx")
+    expect(page).toContain("layer.sourceCreatedAt ?? layer.createdAt")
+  })
 })

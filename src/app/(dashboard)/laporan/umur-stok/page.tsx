@@ -47,7 +47,10 @@ export default async function StockAgingPage() {
   const now = new Date()
   interface Row { sku: string; name: string; category: string; uom: string; qty: number; ageDays: number; ageGroup: string }
   const rows: Row[] = layers.map(layer => {
-    const ageDays = Math.ceil((now.getTime() - new Date(layer.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+    // STOK-08/09 (kanonis loadStockAging sisi PDF): umur dari asal lapisan —
+    // transfer membawa sourceCreatedAt lapisan sumber. Tanpa ini layar memakai
+    // tanggal lahir layer tujuan dan stok pindahan tampak lebih muda dari PDF.
+    const ageDays = Math.ceil((now.getTime() - new Date(layer.sourceCreatedAt ?? layer.createdAt).getTime()) / (1000 * 60 * 60 * 24))
     return {
       sku: layer.item.sku, name: layer.item.name, category: layer.item.category?.name || '-',
       uom: layer.item.unitOfMeasure, qty: Number(layer.remaining), ageDays, ageGroup: getAgeGroup(ageDays),
