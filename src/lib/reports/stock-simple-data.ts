@@ -1,7 +1,9 @@
 /**
  * Pemuatan data laporan stok (umur, ringkasan, rekonsiliasi) — satu sumber layar & PDF.
  *
- * - Umur stok: lapisan FIFO bersisa, umur = hari sejak lapisan dibuat.
+ * - Umur stok: lapisan FIFO bersisa, umur = hari sejak lapisan lahir menurut
+ *   umur asal (COALESCE(sourceCreatedAt, createdAt), STOK-08/09 — sama
+ *   dengan urutan FIFO, supaya stok pindahan tidak terlihat lebih muda).
  * - Ringkasan stok: agregasi lapisan per gudang + per kategori (basis FIFO yang
  *   sama dengan Valuasi Stok — jangan memakai `qtyOnHand` untuk nilai).
  * - Rekonsiliasi stok: bandingkan master `qtyOnHand` vs total lapisan FIFO.
@@ -101,7 +103,9 @@ export async function loadStockAging(
   const now = new Date()
   const rows: TableRow[] = layers
     .map((layer) => {
-      const ageDays = Math.ceil((now.getTime() - new Date(layer.createdAt).getTime()) / 86_400_000)
+      // STOK-08/09: umur kanonis = umur asal lapisan (transfer membawa
+      // sourceCreatedAt lapisan sumber), bukan tanggal layer tujuan lahir.
+      const ageDays = Math.ceil((now.getTime() - new Date(layer.sourceCreatedAt ?? layer.createdAt).getTime()) / 86_400_000)
       return {
         sku: layer.item.sku,
         name: layer.item.name,

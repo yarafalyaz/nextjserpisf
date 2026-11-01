@@ -59,9 +59,13 @@ describe("cakupan gudang loader laporan stok (ROUND5-SCOPE)", () => {
     await loadSerialBatchStock({ warehouseId: null, asOf: new Date(), scopeWarehouseIds: [2] })
     expect(mocks.prismaMock.itemSerial.findMany.mock.calls[0][0].where).toEqual({
       warehouseId: { in: [2] },
+      status: { in: ["available", "reserved"] },
+      item: { isActive: true, deletedAt: null },
     })
     expect(mocks.prismaMock.itemBatch.findMany.mock.calls[0][0].where).toEqual({
       warehouseId: { in: [2] },
+      qty: { gt: 0 },
+      item: { isActive: true, deletedAt: null },
     })
   })
 
@@ -69,12 +73,69 @@ describe("cakupan gudang loader laporan stok (ROUND5-SCOPE)", () => {
     await loadSerialBatchStock({ warehouseId: 9, asOf: new Date(), scopeWarehouseIds: [2] })
     expect(mocks.prismaMock.itemSerial.findMany.mock.calls[0][0].where).toEqual({
       warehouseId: { in: [] },
+      status: { in: ["available", "reserved"] },
+      item: { isActive: true, deletedAt: null },
     })
   })
 
   it("loadSerialBatchStock: gudang terpilih 2 di dalam scope [2] -> tapis tunggal", async () => {
     await loadSerialBatchStock({ warehouseId: 2, asOf: new Date(), scopeWarehouseIds: [2] })
-    expect(mocks.prismaMock.itemSerial.findMany.mock.calls[0][0].where).toEqual({ warehouseId: 2 })
+    expect(mocks.prismaMock.itemSerial.findMany.mock.calls[0][0].where).toEqual({
+      warehouseId: 2,
+      status: { in: ["available", "reserved"] },
+      item: { isActive: true, deletedAt: null },
+    })
+  })
+
+  it("loadSerialBatchStock: seri used/sold dan batch habis bukan posisi stok — saring di where", async () => {
+    const serialRows = [
+      { serialNumber: "SN-OK", status: "available", item: { sku: "A", name: "Item A", isActive: true, deletedAt: null }, warehouse: { name: "Gudang A" } },
+      { serialNumber: "SN-USED", status: "used", item: { sku: "A", name: "Item A", isActive: true, deletedAt: null }, warehouse: { name: "Gudang A" } },
+      { serialNumber: "SN-SOLD", status: "sold", item: { sku: "A", name: "Item A", isActive: true, deletedAt: null }, warehouse: { name: "Gudang A" } },
+      { serialNumber: "SN-XITEM", status: "available", item: { sku: "B", name: "Item B", isActive: false, deletedAt: new Date() }, warehouse: { name: "Gudang A" } },
+    ]
+    const batchRows = [
+      { batchNumber: "B-OK", qty: 5, manufacturingDate: null, expiryDate: null, item: { sku: "A", name: "Item A", cost: 100, isActive: true, deletedAt: null }, warehouse: { name: "Gudang A" } },
+      { batchNumber: "B-ZERO", qty: 0, manufacturingDate: null, expiryDate: null, item: { sku: "A", name: "Item A", cost: 100, isActive: true, deletedAt: null }, warehouse: { name: "Gudang A" } },
+      { batchNumber: "B-XITEM", qty: 5, manufacturingDate: null, expiryDate: null, item: { sku: "B", name: "Item B", cost: 100, isActive: false, deletedAt: new Date() }, warehouse: { name: "Gudang A" } },
+    ]
+    // Mock meniru semantik saringan where Prisma (status/qty/item relasi).
+    const applySerial = (rows: typeof serialRows, where: any) =>
+      rows.filter(
+        (r) =>
+          (where?.status?.in ? where.status.in.includes(r.status) : true) &&
+          (where?.item?.isActive !== undefined ? r.item.isActive === where.item.isActive : true) &&
+          (where?.item?.deletedAt === null ? r.item.deletedAt === null : true),
+      )
+    const applyBatch = (rows: typeof batchRows, where: any) =>
+      rows.filter(
+        (r) =>
+          (where?.qty?.gt !== undefined ? Number(r.qty) > Number(where.qty.gt) : true) &&
+          (where?.item?.isActive !== undefined ? r.item.isActive === where.item.isActive : true) &&
+          (where?.item?.deletedAt === null ? r.item.deletedAt === null : true),
+      )
+    mocks.prismaMock.itemSerial.findMany.mockImplementation(async (args: any) => applySerial(serialRows, args?.where))
+    mocks.prismaMock.itemBatch.findMany.mockImplementation(async (args: any) => applyBatch(batchRows, args?.where))
+
+    const { report } = await loadSerialBatchStock({ warehouseId: null, asOf: new Date() })
+
+    expect(mocks.prismaMock.itemSerial.findMany.mock.calls[0][0].where).toEqual({
+      status: { in: ["available", "reserved"] },
+      item: { isActive: true, deletedAt: null },
+    })
+    expect(mocks.prismaMock.itemBatch.findMany.mock.calls[0][0].where).toEqual({
+      qty: { gt: 0 },
+      item: { isActive: true, deletedAt: null },
+    })
+    const joined = JSON.stringify(report.table.rows)
+    expect(joined).toContain("SN-OK")
+    expect(joined).toContain("B-OK")
+    expect(joined).not.toContain("SN-USED")
+    expect(joined).not.toContain("SN-SOLD")
+    expect(joined).not.toContain("B-ZERO")
+    expect(joined).not.toContain("Item B")
+    expect(report.totals.serials).toBe(1)
+    expect(report.totals.batches).toBe(1)
   })
 
   it("loadStockAging: scope [2] menapis lapisan; tanpa scope tak berubah", async () => {
@@ -87,6 +148,28 @@ describe("cakupan gudang loader laporan stok (ROUND5-SCOPE)", () => {
     expect(mocks.prismaMock.inventoryLayer.findMany.mock.calls[1][0].where).toEqual({
       remaining: { gt: 0 },
     })
+  })
+
+  it("loadStockAging: umur dari sourceCreatedAt bila ada (STOK-08/09), bukan createdAt layer tujuan", async () => {
+    const day = 86_400_000
+    const now = Date.now()
+    // Layer lahir di gudang tujuan 5 hari lalu, tetapi stok asalnya
+    // berumur 40 hari (pindahan antar gudang) — kelompok wajib 31–60.
+    mocks.prismaMock.inventoryLayer.findMany.mockResolvedValue([
+      {
+        itemId: 1,
+        warehouseId: 2,
+        remaining: 3,
+        unitCost: 100,
+        createdAt: new Date(now - 5 * day),
+        sourceCreatedAt: new Date(now - 40 * day),
+        item: { sku: "A", name: "Item A", unitOfMeasure: "pcs", category: null },
+      },
+    ])
+    const report = await loadStockAging([2])
+    const row = report.table.rows.find((r) => r.kind === "data" && r.cells[1] === "Item A")
+    expect(row?.kind === "data" ? row.cells[5] : null).toBe("40")
+    expect(row?.kind === "data" ? row.cells[6] : null).toBe("31–60 Hari")
   })
 
   it("R6PA-04: loadStockSummary menapis gudang+layer dan scoped tak menampilkan yatim", async () => {
