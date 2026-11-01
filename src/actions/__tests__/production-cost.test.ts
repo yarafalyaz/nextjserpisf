@@ -164,7 +164,33 @@ describe("kunci periode hari-ini (F-2026-10-20-24a)", () => {
     const res = await createProductionCost(fd({ productionOrderId: 1, category: "labor", amount: 1000 }))
 
     expect(res.success).toBe(true)
-    expect(periodOpenMock).toHaveBeenCalledTimes(1)
+    expect(periodOpenMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("regression round 17: tutup periode sesudah assert luar tetap menolak create WO-only di dalam tx", async () => {
+    woFindUniqueMock.mockResolvedValue({ id: 7 })
+    // Panggilan luar (tanpa tx) lolos; panggilan dalam tx (argumen kedua
+    // = client transaksi) menolak — mensimulasikan tutup periode yang
+    // commit di antara keduanya.
+    periodOpenMock.mockImplementation(async (_d: unknown, tx?: unknown) => {
+      if (tx) throw LOCKED
+    })
+    const res = await createProductionCost(fd({ workOrderId: 7, category: "service", amount: 50000 }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("ditutup")
+    expect(costCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("regression round 17: pull WO-only menilai ulang periode di dalam tx (tanpa backstop jurnal)", async () => {
+    woFindUniqueMock.mockResolvedValue({ id: 7, status: "in_progress" })
+    timesheetFindManyMock.mockResolvedValue([{ id: 1, hours: 2, date: new Date(), description: null }])
+    periodOpenMock.mockImplementation(async (_d: unknown, tx?: unknown) => {
+      if (tx) throw LOCKED
+    })
+    const res = await pullLaborCostFromWorkOrderTimesheets(7, 25000)
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("ditutup")
+    expect(costCreateMock).not.toHaveBeenCalled()
   })
 })
 

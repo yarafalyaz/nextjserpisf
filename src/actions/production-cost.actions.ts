@@ -118,6 +118,10 @@ export async function createProductionCost(formData: FormData) {
     }
 
     const cost = await prisma.$transaction(async (tx) => {
+      // Gerbang periode dinilai ulang di dalam tx (kunci baris setting):
+      // tutup periode yang commit sesudah assert luar tidak boleh dilompati
+      // baris biaya bertanggal hari ini (jalur WO-only tanpa backstop jurnal).
+      await assertPeriodOpen(new Date(), tx)
       // F-009-V: guard closed di dalam tx (PO/WO tertutup ditolak server).
       await assertJobCostMutable(
         { productionOrderId: v.productionOrderId ?? null, workOrderId: v.workOrderId ?? null },
@@ -211,6 +215,7 @@ export async function updateProductionCost(id: number, formData: FormData) {
         select: { amount: true },
       })
       if (!fresh) throw new Error("Biaya tidak ditemukan")
+      await assertPeriodOpen(new Date(), tx)
       await assertJobCostMutable(
         { productionOrderId: existing.productionOrderId, workOrderId: existing.workOrderId },
         "diubah",
@@ -279,6 +284,7 @@ export async function deleteProductionCost(id: number) {
         select: { amount: true },
       })
       if (!fresh) throw new Error("Biaya tidak ditemukan")
+      await assertPeriodOpen(new Date(), tx)
       await assertJobCostMutable(
         { productionOrderId: existing.productionOrderId, workOrderId: existing.workOrderId },
         "dihapus",
@@ -375,6 +381,7 @@ export async function pullLaborCostFromTimesheets(
     let totalAdded = 0
     let createdCount = 0
     await prisma.$transaction(async (tx) => {
+      await assertPeriodOpen(new Date(), tx)
       await assertJobCostMutable({ productionOrderId, workOrderId }, "ditambahkan", tx)
       await assertNoPartialRelease(tx, productionOrderId, "ditambahkan")
       // Kunci baris timesheet kandidat (urutan id global = bebas deadlock
@@ -469,6 +476,9 @@ export async function pullLaborCostFromWorkOrderTimesheets(
     let totalAdded = 0
     let createdCount = 0
     await prisma.$transaction(async (tx) => {
+      // Jalur WO-only tanpa jurnal: gerbang periode dalam tx adalah
+      // satu-satunya penjaga lawan tutup periode konkuren.
+      await assertPeriodOpen(new Date(), tx)
       // Kunci baris timesheet kandidat (urutan id global) lalu dedupe
       // dibaca ulang di dalam tx — cermin jalur proyek di atas. Tanpa
       // kunci, dua penarik konkuren sama-sama membaca snapshot kosong
@@ -562,6 +572,7 @@ export async function applyOverheadToProductionOrder(formData: FormData) {
     const driverLabel = OVERHEAD_DRIVER_LABELS[v.driverType]
 
     const cost = await prisma.$transaction(async (tx) => {
+      await assertPeriodOpen(new Date(), tx)
       await assertJobCostMutable({ productionOrderId: v.productionOrderId }, "ditambahkan", tx)
       await assertNoPartialRelease(tx, v.productionOrderId, "ditambahkan")
       const created = await tx.productionCost.create({
