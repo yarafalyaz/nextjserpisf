@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
   assetUsageRecordFindFirst: vi.fn(),
   assetFindUniqueTx: vi.fn(),
   journalFindManyTx: vi.fn(),
+  accountFindMany: vi.fn(),
+  accountFindManyTx: vi.fn(),
 }))
 
 vi.mock("@/lib/security/cron", () => ({
@@ -61,6 +63,7 @@ vi.mock("@/lib/db/prisma", () => ({
       create: (...a: unknown[]) => mocks.journalCreate(...a),
     },
     systemSetting: { findFirst: (...a: unknown[]) => mocks.systemSettingFindFirst(...a) },
+    account: { findMany: (...a: unknown[]) => mocks.accountFindMany(...a) },
     // Route memanggil $transaction SATU kali dengan callback yang diisi
     // Promise.allSettled di dalam rute (bukan array operasi).
     $transaction: (...a: unknown[]) => mocks.transaction(...a),
@@ -160,6 +163,14 @@ describe("POST /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () =>
     })
     mocks.journalFindManyTx.mockResolvedValue(acquisitionJournals())
     mocks.assetUsageRecordFindFirst.mockResolvedValue(null)
+    mocks.accountFindMany.mockResolvedValue([
+      { id: 700, isActive: true, deletedAt: null },
+      { id: 701, isActive: true, deletedAt: null },
+    ])
+    mocks.accountFindManyTx.mockResolvedValue([
+      { id: 700, isActive: true, deletedAt: null },
+      { id: 701, isActive: true, deletedAt: null },
+    ])
     mocks.txQueryRaw.mockResolvedValue([{ id: 1 }])
     // Callback tx: jalankan dengan klien palsu yang merekam pemanggilnya.
     mocks.transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
@@ -176,6 +187,7 @@ describe("POST /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () =>
           findMany: mocks.journalFindManyTx,
         },
         assetUsageRecord: { findFirst: mocks.assetUsageRecordFindFirst },
+        account: { findMany: mocks.accountFindManyTx },
       }),
     )
   })
@@ -348,7 +360,7 @@ describe("POST /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () =>
     const res = await POST(makeReq())
     const json = await res.json()
     expect(json.processed).toBe(1)
-    expect(mocks.txQueryRaw).toHaveBeenCalledTimes(1)
+    expect(mocks.txQueryRaw).toHaveBeenCalledTimes(3)
     const strings = mocks.txQueryRaw.mock.calls[0][0] as unknown as string[]
     expect(strings.join(" ")).toContain("FROM assets")
     expect(strings.join(" ")).toContain("FOR UPDATE")
@@ -587,6 +599,38 @@ describe("POST /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () =>
     const call = mocks.journalCreate.mock.calls[0]?.[0]
     expect(String(call.data.totalDebit)).toBe("500")
     expect(String(mocks.assetUpdate.mock.calls[0][0].data.currentValue)).toBe("500")
+  })
+
+  it("akun penyusutan nonaktif/terhapus diperlakukan belum lengkap, nol jurnal (putaran 25)", async () => {
+    mocks.assetFindMany.mockResolvedValue([assetRow()])
+    mocks.accountFindMany.mockResolvedValue([])
+    mocks.journalFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(acquisitionJournals())
+
+    const res = await POST(makeReq())
+    const json = await res.json()
+    expect(json.processed).toBe(0)
+    expect(json.missingAccounts).toBe(1)
+    expect(json.errorDetails[0]).toContain("belum dipetakan")
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("akun penyusutan mati di jendela scan->tx membatalkan jurnal dalam tx (putaran 25)", async () => {
+    mocks.assetFindMany.mockResolvedValue([assetRow()])
+    mocks.accountFindManyTx.mockResolvedValue([{ id: 701, isActive: true, deletedAt: null }])
+    mocks.journalFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(acquisitionJournals())
+
+    const res = await POST(makeReq())
+    const json = await res.json()
+    expect(json.processed).toBe(0)
+    expect(json.errors).toBe(1)
+    expect(json.errorDetails).toEqual(["Asset 1 (Machine): gagal diproses"])
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.assetUpdate).not.toHaveBeenCalled()
+    expect(mocks.assetHistoryCreate).not.toHaveBeenCalled()
   })
 
   it("F118-V: analyticalWithoutAccounts fail-closed missingAccounts", async () => {

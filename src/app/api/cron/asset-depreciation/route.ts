@@ -97,6 +97,33 @@ export async function POST(request: Request) {
         accumulatedDepreciationAccountId: true,
       },
     })
+    // Akun hasil resolver wajib hidup saat jurnal POSTED dibuat. ID positif
+    // saja tidak cukup: akun bisa dinonaktifkan/dihapus sesudah mapping
+    // disimpan. Status dibaca sekali untuk semua kandidat unik; penilaian
+    // otoritatif diulang dalam tx per aset di bawah kunci baris akun.
+    const candidateAccountIds = new Set<number>()
+    const addCandidate = (value: string | number | null | undefined) => {
+      const id = Number(value ?? 0)
+      if (Number.isInteger(id) && id > 0) candidateAccountIds.add(id)
+    }
+    addCandidate(settings?.depreciationExpenseAccountId)
+    addCandidate(settings?.accumulatedDepreciationAccountId)
+    addCandidate(process.env.DEPRECIATION_EXPENSE_ACCOUNT_ID)
+    addCandidate(process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID)
+    for (const asset of assets) {
+      addCandidate(asset.category?.depreciationExpenseAccountId)
+      addCandidate(asset.category?.accumulatedDepreciationAccountId)
+    }
+    const liveAccountIds = new Set(
+      candidateAccountIds.size
+        ? (
+            await prisma.account.findMany({
+              where: { id: { in: [...candidateAccountIds] }, isActive: true, deletedAt: null },
+              select: { id: true },
+            })
+          ).map((account) => account.id)
+        : [],
+    )
     const envAccount = (key: string) => Number.parseInt(process.env[key] || "0") || 0
 
     // Fast-fail awal periode tertutup; penjaga otoritatif tetap
@@ -266,7 +293,11 @@ export async function POST(request: Request) {
         continue
       }
 
-      if (!hasCompleteDepreciationAccounts(accounts)) {
+      if (
+        !hasCompleteDepreciationAccounts(accounts) ||
+        !liveAccountIds.has(accounts.expenseAccountId) ||
+        !liveAccountIds.has(accounts.accumulatedAccountId)
+      ) {
         missingAccounts++
         errors++
         errorDetails.push(
@@ -304,6 +335,23 @@ export async function POST(request: Request) {
             select: { id: true },
           })
           if (alreadyPosted) return "skipped-posted" as const
+
+          // Akun tujuan jurnal dinilai ulang di bawah kunci (id terurut):
+          // nonaktif/hapus yang commit sesudah scan luar membatalkan tx ini,
+          // bukan memposting jurnal POSTED ke akun mati.
+          const accountIds = [...new Set([expenseAccountId, accumulatedAccountId])].sort((a, b) => a - b)
+          if (typeof tx.$queryRaw === "function") {
+            for (const accountId of accountIds) {
+              await tx.$queryRaw`SELECT id FROM accounts WHERE id = ${accountId} FOR UPDATE`
+            }
+          }
+          const freshAccounts = await tx.account.findMany({
+            where: { id: { in: accountIds }, isActive: true, deletedAt: null },
+            select: { id: true },
+          })
+          if (freshAccounts.length !== accountIds.length) {
+            throw new Error("Akun beban/akumulasi penyusutan tidak aktif atau sudah dihapus.")
+          }
 
           // Nilai segar dibaca ulang DI BAWAH kunci baris aset untuk SEMUA
           // metode: scan + hitung luar adalah snapshot — disposeAsset
