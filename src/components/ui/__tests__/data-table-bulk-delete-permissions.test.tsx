@@ -153,9 +153,8 @@ describe("kontrak bulk delete bersama server/client", () => {
     expect(src).not.toContain("const modelPermissionMap: Record<ModelName, PermissionName>")
   })
 
-  it("6 tabel model boleh: BULK_MODEL tak masuk daftar individual + izin diteruskan", () => {
+  it("5 tabel model boleh: BULK_MODEL tak masuk daftar individual + izin diteruskan", () => {
     const expected: Array<{ file: string; model: BulkDeleteModel; permission: string }> = [
-      { file: "src/app/(dashboard)/crm/leads/_components/lead-table.tsx", model: "lead", permission: "delete_leads" },
       { file: "src/app/(dashboard)/master/pelanggan/_components/customer-table.tsx", model: "customer", permission: "delete_customers" },
       { file: "src/app/(dashboard)/master/barang/_components/item-table.tsx", model: "item", permission: "delete_items" },
       { file: "src/app/(dashboard)/kendaraan/fitment/_components/vehicle-fitment-table.tsx", model: "vehicleFitmentRule", permission: "delete_vehicle_fitments" },
@@ -192,6 +191,9 @@ describe("kontrak bulk delete bersama server/client", () => {
       // dokumen lewat string polos (putaran 21) — bulk mentah memutusnya.
       ["src/app/(dashboard)/master/metode-pembayaran/_components/payment-method-table.tsx", "paymentMethod"],
       ["src/app/(dashboard)/master/metode-pengiriman/_components/shipping-method-table.tsx", "shippingMethod"],
+      // Lead beraktivitas wajib soft-delete per baris (deleteLead): hapus
+      // massal mentah = hard delete + cascade musnahkan histori aktivitas.
+      ["src/app/(dashboard)/crm/leads/_components/lead-table.tsx", "lead"],
     ]
     for (const [file, model] of dead) {
       expect(BULK_DELETE_REQUIRES_INDIVIDUAL.has(model), model).toBe(true)

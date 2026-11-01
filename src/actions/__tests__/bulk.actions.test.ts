@@ -101,6 +101,12 @@ describe("Bulk Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.message).toMatch(/harus dihapus satu per satu/)
   })
+  it("putaran 40: bulkDelete menolak lead (soft-delete beraktivitas wajib per baris)", async () => {
+    const res = await bulkDelete("lead", [1])
+    expect(res?.success).toBe(false)
+    expect(res?.message).toMatch(/harus dihapus satu per satu/)
+    expect(mocks.requirePermissionMock).toHaveBeenLastCalledWith("delete_leads")
+  })
   it("prevents bulk deletion from bypassing HR scope and approval guards", async () => {
     for (const [model, permission] of [
       ["leave", "delete_leave_requests"],

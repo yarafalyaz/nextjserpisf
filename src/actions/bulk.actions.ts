@@ -155,10 +155,7 @@ export async function bulkDelete(model: ModelName, ids: number[]) {
     // selectable for new documents and visible in lists.
     const hasIsActive = schemaModel.fields.some((field) => field.name === "isActive")
 
-    // Lead — hard delete (cascade ke aktivitas otomatis via Prisma)
-    if (model === "lead") {
-      await prismaModel.deleteMany({ where: { id: { in: safeIds } } })
-    } else if (hasSoftDelete) {
+    if (hasSoftDelete) {
       await prismaModel.updateMany({
         where: { id: { in: safeIds } },
         data: { deletedAt: new Date(), ...(hasIsActive ? { isActive: false } : {}) },

@@ -226,4 +226,8 @@ export const BULK_DELETE_REQUIRES_INDIVIDUAL = new Set<BulkDeleteModel>([
   // Apresiasi karyawan terikat cakupan HR per karyawan: hapus massal mentah
   // melewati assertHrEmployeeAccess yang dijaga delete tunggal.
   "appreciation",
+  // Lead beraktivitas wajib soft-delete agar histori LeadActivity tidak
+  // musnah lewat cascade; delete tunggal (deleteLead) menerapkan aturan
+  // itu per baris. Hapus massal mentah = hard delete + cascade senyap.
+  "lead",
 ])
