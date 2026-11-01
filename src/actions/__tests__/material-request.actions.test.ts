@@ -299,6 +299,18 @@ describe("createTransferFromMaterialRequest (AC-MR-2/3)", () => {
     expect(data.items.create).toEqual([{ itemId: 1, qty: 10 }])
   })
 
+  // Regresi putaran 33: tanggal form mentah masuk wibDateToUtcMidnight tanpa
+  // dateOnly — 2026-02-30 bergulir senyap ke 2 Maret (kelas putaran 31 #4).
+  it("regresi putaran 33: tanggal transfer mustahil ditolak, bukan bergeser", async () => {
+    approvedTx()
+    const fd = new FormData()
+    fd.append("date", "2026-02-30")
+    const res = await createTransferFromMaterialRequest(1, fd)
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("tidak valid")
+    expect(mocks.txMock.inventoryTransfer.create).not.toHaveBeenCalled()
+  })
+
   it("transfer kedua hanya sisa sesudah received pertama (AC-MR-3)", async () => {
     approvedTx({ status: "terpenuhi_sebagian" })
     mocks.txMock.inventoryTransfer.findMany.mockResolvedValue([

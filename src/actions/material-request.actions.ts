@@ -31,6 +31,7 @@ import { safeJsonParse } from "@/lib/utils/safe-parse"
 import { nextSlug } from "@/lib/utils/slug-db"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
+import { dateOnly } from "@/lib/validations/finance.schemas"
 import { materialRequestSchema } from "@/lib/validations/inventory.schemas"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import {
@@ -363,6 +364,14 @@ export async function createTransferFromMaterialRequest(id: number, formData?: F
     if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Permintaan tidak valid")
     const dateRaw = formData?.get("date")
     const notesRaw = formData?.get("notes")
+    // Tanggal form wajib kalender nyata: wibDateToUtcMidnight menggulirkan
+    // 2026-02-30 -> 2 Maret senyap (pola dateOnly jalur transfer existing).
+    let transferDate: Date | null = null
+    if (typeof dateRaw === "string" && dateRaw) {
+      const parsedDate = dateOnly.safeParse(dateRaw)
+      if (!parsedDate.success) throw new Error("Tanggal transfer tidak valid.")
+      transferDate = wibDateToUtcMidnight(parsedDate.data)
+    }
 
     const created = await prisma.$transaction(async (tx) => {
       await lockMaterialRequestRow(tx, id)
@@ -410,7 +419,6 @@ export async function createTransferFromMaterialRequest(id: number, formData?: F
       if (remaining.length === 0) throw new Error("Semua baris permintaan sudah terpenuhi")
 
       const documentNo = await generateDocumentNumber("TRF")
-      const dateStr = typeof dateRaw === "string" && dateRaw ? dateRaw : null
       const transfer = await tx.inventoryTransfer.create({
         data: {
           documentNo,
@@ -418,7 +426,7 @@ export async function createTransferFromMaterialRequest(id: number, formData?: F
           sourceWarehouseId: request.sourceWarehouseId,
           destinationWarehouseId: request.requesterWarehouseId,
           materialRequestId: id,
-          date: dateStr ? wibDateToUtcMidnight(dateStr) : new Date(),
+          date: transferDate ?? new Date(),
           notes: typeof notesRaw === "string" && notesRaw ? notesRaw : `Dari ${request.documentNo}`,
           status: "draft",
           createdBy: Number(user.id),
