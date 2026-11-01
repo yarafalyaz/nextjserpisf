@@ -295,6 +295,10 @@ export async function updateSystemSettings(formData: FormData) {
       warrantyProvisionAccountId: intNull("warrantyProvisionAccountId"),
       supplierClaimReceivableAccountId: intNull("supplierClaimReceivableAccountId"),
 
+      // Tahap 3 komisi: mapping dibaca fail-closed oleh commission-payable.service.
+      commissionExpenseAccountId: intNull("commissionExpenseAccountId"),
+      commissionPayableAccountId: intNull("commissionPayableAccountId"),
+
       // Accounting - General
       pettyCashAccountId: intNull("pettyCashAccountId"),
       cashBankAccountId: intNull("cashBankAccountId"),

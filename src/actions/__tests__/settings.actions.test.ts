@@ -317,6 +317,26 @@ describe("updateSystemSettings lima mapping akun — baca-balik penyimpanan (t_3
   })
 })
 
+describe("updateSystemSettings mapping akun komisi", () => {
+  it("menyimpan commissionExpenseAccountId dan commissionPayableAccountId ke payload update", async () => {
+    await expect(
+      updateSystemSettings(fd({ commissionExpenseAccountId: "710", commissionPayableAccountId: "720" })),
+    ).rejects.toThrow("NEXT_REDIRECT")
+    const data = mocks.updateMock.mock.calls.at(-1)![0].data
+    expect(data.commissionExpenseAccountId).toBe(710)
+    expect(data.commissionPayableAccountId).toBe(720)
+  })
+
+  it("mengosongkan mapping akun komisi sebagai null", async () => {
+    await expect(
+      updateSystemSettings(fd({ commissionExpenseAccountId: "", commissionPayableAccountId: "" })),
+    ).rejects.toThrow("NEXT_REDIRECT")
+    const data = mocks.updateMock.mock.calls.at(-1)![0].data
+    expect(data.commissionExpenseAccountId).toBeNull()
+    expect(data.commissionPayableAccountId).toBeNull()
+  })
+})
+
 describe("updateSystemSettings kunci baris singleton (putaran 19)", () => {
   it("kunci system_settings FOR UPDATE sebelum bacaan + validasi PKP atas baris terkunci", async () => {
     // Baca luar (peek) tanpa tanggal; baris terkunci sudah punya tanggal dari
