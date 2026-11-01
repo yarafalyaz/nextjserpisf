@@ -16,7 +16,7 @@ import {
   createNonconformanceSchema,
   resolveNonconformanceSchema,
 } from "@/lib/validations/qc.schemas"
-import { raiseNonconformanceFromInspection } from "@/lib/services/qc.service"
+import { raiseNonconformanceFromInspection, lockQcReferenceRow } from "@/lib/services/qc.service"
 import { syncReworkCostToOrder } from "@/lib/services/production-cost.service"
 import { nextSlug } from "@/lib/utils/slug-db"
 
@@ -306,6 +306,11 @@ export async function createQcInspection(formData: FormData) {
     const documentNo = await generateDocumentNumber("QCI", "simple")
 
     const { inspection, raisedNcrIds } = await prisma.$transaction(async (tx) => {
+      // Kunci baris dokumen referensi sebelum menulis: gate penyelesaian
+      // (assertQcCleared) mengunci baris yang sama, jadi inspeksi final
+      // `failed` + NCR otomatis tidak bisa menyelinap sesudah gate dibaca
+      // tetapi sebelum status dokumen terklaim selesai.
+      await lockQcReferenceRow(v.referenceType, v.referenceId, tx)
       const inspection = await tx.qcInspection.create({
         data: {
           documentNo,
@@ -384,20 +389,27 @@ export async function createNonconformance(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("NCR", "simple")
 
-    const ncr = await prisma.nonconformance.create({
-      data: {
-        documentNo,
-        slug: await nextSlug("nonconformance", documentNo),
-        inspectionId: v.inspectionId ?? null,
-        referenceType: v.referenceType,
-        referenceId: v.referenceId,
-        defectDescription: v.defectDescription,
-        cause: v.cause ?? null,
-        responsibility: v.responsibility,
-        severity: v.severity,
-        status: "open",
-        createdBy: Number(user.id),
-      },
+    // Satu tx + kunci baris dokumen referensi: NCR `open` terserialisasi
+    // lawan gate penyelesaian (assertQcCleared mengunci baris yang sama) —
+    // tanpa ini NCR yang commit di jendela gate lolos dari snapshot
+    // penyelesaian dan dokumen selesai dengan NCR terbuka.
+    const ncr = await prisma.$transaction(async (tx) => {
+      await lockQcReferenceRow(v.referenceType, v.referenceId, tx)
+      return tx.nonconformance.create({
+        data: {
+          documentNo,
+          slug: await nextSlug("nonconformance", documentNo),
+          inspectionId: v.inspectionId ?? null,
+          referenceType: v.referenceType,
+          referenceId: v.referenceId,
+          defectDescription: v.defectDescription,
+          cause: v.cause ?? null,
+          responsibility: v.responsibility,
+          severity: v.severity,
+          status: "open",
+          createdBy: Number(user.id),
+        },
+      })
     })
 
     await logActivity("create", "Nonconformance", ncr.id, `Membuat NCR ${documentNo}`)

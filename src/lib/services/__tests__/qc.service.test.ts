@@ -12,6 +12,7 @@ const nonconformanceFindManyMock = vi.fn()
 const nonconformanceCreateMock = vi.fn()
 const generateDocumentNumberMock = vi.fn()
 const qcInspectionCountMock = vi.fn()
+const queryRawMock = vi.fn()
 
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: (...a: unknown[]) => generateDocumentNumberMock(...a),
@@ -20,6 +21,8 @@ vi.mock("@/lib/utils/document-number", () => ({
 const workOrderFindUniqueMock = vi.fn()
 
 const client = {
+  $queryRaw: (...a: unknown[]) => queryRawMock(...a),
+  $transaction: vi.fn(),
   workOrder: {
     findUnique: (...a: unknown[]) => workOrderFindUniqueMock(...a),
   },
@@ -51,6 +54,8 @@ beforeEach(() => {
   generateDocumentNumberMock.mockReset()
   nonconformanceFindManyMock.mockResolvedValue([])
   generateDocumentNumberMock.mockResolvedValue("NCR-0001")
+  queryRawMock.mockReset()
+  queryRawMock.mockResolvedValue([])
 })
 
 describe("assertWorkOrderQcCleared", () => {
@@ -108,6 +113,39 @@ describe("assertWorkOrderQcCleared", () => {
     expect(arg.where.inspectionType).toBe("final")
     expect(arg.where.referenceType).toBe("WorkOrder")
     expect(arg.where.referenceId).toBe(7)
+  })
+})
+
+describe("assertQcCleared mengunci baris dokumen referensi", () => {
+  function lockedSql(): string {
+    const arg = queryRawMock.mock.calls[0]?.[0]
+    if (Array.isArray(arg)) return arg.join("?")
+    return String((arg as { sql?: string })?.sql ?? "")
+  }
+
+  it("mengunci work_orders FOR UPDATE sebelum membaca NCR (serial lawan createQcInspection/createNonconformance)", async () => {
+    nonconformanceCountMock.mockResolvedValue(0)
+    qcInspectionFindManyMock.mockResolvedValue([])
+
+    await assertWorkOrderQcCleared(7, client as never)
+
+    expect(queryRawMock).toHaveBeenCalledTimes(1)
+    expect(lockedSql()).toContain("work_orders")
+    expect(lockedSql()).toContain("FOR UPDATE")
+    expect(queryRawMock.mock.invocationCallOrder[0]).toBeLessThan(
+      nonconformanceCountMock.mock.invocationCallOrder[0],
+    )
+  })
+
+  it("mengunci production_orders FOR UPDATE untuk gate PO", async () => {
+    nonconformanceCountMock.mockResolvedValue(0)
+    qcInspectionFindManyMock.mockResolvedValue([])
+
+    await assertProductionOrderQcCleared(9, client as never)
+
+    expect(queryRawMock).toHaveBeenCalledTimes(1)
+    expect(lockedSql()).toContain("production_orders")
+    expect(lockedSql()).toContain("FOR UPDATE")
   })
 })
 

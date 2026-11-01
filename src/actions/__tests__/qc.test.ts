@@ -13,6 +13,7 @@ const revalidateMock = vi.fn()
 const logActivityMock = vi.fn()
 const generateDocumentNumberMock = vi.fn()
 const assertWorkOrderQcClearedMock = vi.fn()
+const lockQcReferenceRowMock = vi.fn()
 const raiseNcrFromInspectionMock = vi.fn()
 const syncReworkCostMock = vi.fn()
 
@@ -43,6 +44,7 @@ vi.mock("@/lib/utils/document-number", () => ({
 }))
 vi.mock("@/lib/services/qc.service", () => ({
   assertWorkOrderQcCleared: (...a: unknown[]) => assertWorkOrderQcClearedMock(...a),
+  lockQcReferenceRow: (...a: unknown[]) => lockQcReferenceRowMock(...a),
   raiseNonconformanceFromInspection: (...a: unknown[]) => raiseNcrFromInspectionMock(...a),
 }))
 vi.mock("@/lib/services/production-cost.service", () => ({
@@ -130,7 +132,7 @@ beforeEach(() => {
     assertWorkOrderQcClearedMock, qcChecklistFindUniqueMock, qcChecklistCreateMock,
     qcChecklistUpdateMock, qcChecklistUpdateManyMock, qcChecklistDeleteMock, qcChecklistDeleteManyMock, qcInspectionCreateMock,
     nonconformanceFindUniqueMock, nonconformanceCreateMock, nonconformanceUpdateMock,
-    raiseNcrFromInspectionMock, syncReworkCostMock,
+    raiseNcrFromInspectionMock, syncReworkCostMock, lockQcReferenceRowMock,
     workOrderFindUniqueQcMock, productionOrderFindUniqueQcMock, goodsReceiptFindUniqueQcMock,
   ]) m.mockReset()
 
@@ -140,6 +142,7 @@ beforeEach(() => {
   goodsReceiptFindUniqueQcMock.mockResolvedValue({ id: 9 })
   generateDocumentNumberMock.mockResolvedValue("QCI-0001")
   assertWorkOrderQcClearedMock.mockResolvedValue(undefined)
+  lockQcReferenceRowMock.mockResolvedValue(undefined)
   raiseNcrFromInspectionMock.mockResolvedValue([])
   syncReworkCostMock.mockResolvedValue({ posted: 0, productionOrderId: null })
   vi.spyOn(console, "error").mockImplementation(() => {})
@@ -157,6 +160,22 @@ describe("createQcInspection", () => {
     expect(res.success).toBe(false)
     expect(res.error).toContain("tidak sesuai dengan jenis inspeksi")
     expect(qcInspectionCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("mengunci baris dokumen referensi di dalam tx sebelum membuat inspeksi (serial lawan gate penyelesaian)", async () => {
+    qcChecklistFindUniqueMock.mockResolvedValue({
+      id: 5, status: "released", checklistType: "final",
+      items: [{ id: 1, isRequired: true }],
+    })
+    qcInspectionCreateMock.mockResolvedValue({ id: 77, slug: "qci-0001", status: "passed" })
+
+    const res = await createQcInspection(inspectionForm({ rows: [{ id: 1, result: "pass" }] }))
+
+    expect(res.success).toBe(true)
+    expect(lockQcReferenceRowMock).toHaveBeenCalledWith("WorkOrder", 9, expect.anything())
+    expect(lockQcReferenceRowMock.mock.invocationCallOrder[0]).toBeLessThan(
+      qcInspectionCreateMock.mock.invocationCallOrder[0],
+    )
   })
 
   it("derives 'passed' when no result fails", async () => {
@@ -300,6 +319,20 @@ describe("createNonconformance", () => {
 
     expect(res.success).toBe(true)
     expect(nonconformanceCreateMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("mengunci baris dokumen referensi sebelum membuat NCR (serial lawan gate penyelesaian)", async () => {
+    nonconformanceCreateMock.mockResolvedValue({ id: 7, slug: "ncr-7" })
+
+    await createNonconformance(fd({
+      referenceType: "ProductionOrder", referenceId: 9,
+      defectDescription: "cacat", responsibility: "internal", severity: "minor",
+    }))
+
+    expect(lockQcReferenceRowMock).toHaveBeenCalledWith("ProductionOrder", 9, expect.anything())
+    expect(lockQcReferenceRowMock.mock.invocationCallOrder[0]).toBeLessThan(
+      nonconformanceCreateMock.mock.invocationCallOrder[0],
+    )
   })
 })
 

@@ -73,12 +73,38 @@ export async function assertProductionOrderQcCleared(
   return assertQcCleared("ProductionOrder", productionOrderId, "PO", client)
 }
 
+/**
+ * Kunci baris dokumen referensi QC di dalam tx pemanggil (FOR UPDATE),
+ * supaya penilai gate dan pencipta inspeksi/NCR terserialisasi pada baris
+ * dokumen yang sama: completion/close mengunci baris ini lebih dulu, dan
+ * createQcInspection/createNonconformance menguncinya sebelum menulis —
+ * tanpa kunci bersama, inspeksi final `failed` atau NCR `open` yang commit
+ * di antara bacaan gate dan klaim status pemanggil luput dari snapshot
+ * REPEATABLE READ (gate lolos, dokumen selesai dengan NCR terbuka).
+ * No-op di luar tx / pada client mock tanpa $queryRaw.
+ */
+export async function lockQcReferenceRow(
+  referenceType: string,
+  referenceId: number,
+  client: TxClient | typeof prisma,
+): Promise<void> {
+  if (typeof client.$queryRaw !== "function") return
+  if (referenceType === "WorkOrder") {
+    await client.$queryRaw`SELECT id FROM work_orders WHERE id = ${referenceId} FOR UPDATE`
+  } else if (referenceType === "ProductionOrder") {
+    await client.$queryRaw`SELECT id FROM production_orders WHERE id = ${referenceId} FOR UPDATE`
+  } else if (referenceType === "GoodsReceipt") {
+    await client.$queryRaw`SELECT id FROM goods_receipts WHERE id = ${referenceId} FOR UPDATE`
+  }
+}
+
 async function assertQcCleared(
   referenceType: string,
   referenceId: number,
   label: string,
   client: TxClient | typeof prisma,
 ): Promise<void> {
+  await lockQcReferenceRow(referenceType, referenceId, client)
   const referenceFilter = { referenceType, referenceId }
 
   const openNcr = await client.nonconformance.count({
