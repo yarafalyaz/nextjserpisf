@@ -459,6 +459,20 @@ describe("revokeWithholdingCertificate tanpa kaki sumber (putaran 22)", () => {
     expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 48: bupot fasilitas potongan nol (SKB) bisa direvoke register-saja", async () => {
+    mocks.certFindUniqueOrThrow.mockResolvedValue({
+      id: 16, status: "issued", direction: "we_withhold", certificateNumber: "BP-SKB",
+      withholdingDate: new Date(2026, 0, 10), withholdingTypeId: 3, withheldAmount: 0,
+      vendorBillId: null, salesPaymentId: null, facility: "SKB",
+    })
+    const r = await revokeWithholdingCertificate({ id: 16, idempotencyKey: key(), userId: 5 })
+    expect(r.success).toBe(true)
+    expect(mocks.certUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "revoked" }) }),
+    )
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
   it("bupot tertaut beban tunai (sumber tanpa potongan tercatat) direvoke tanpa jurnal lawan", async () => {
     mocks.certFindUniqueOrThrow.mockResolvedValue({
       id: 16, status: "issued", direction: "we_withhold", certificateNumber: "BP-CASH",

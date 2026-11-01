@@ -423,7 +423,14 @@ export async function revokeWithholdingCertificate(input: RevokeWithholdingInput
       }
       await assertPeriodOpen(cert.withholdingDate, tx as never)
       const amount = Number(cert.withheldAmount)
-      if (!(amount > 0)) throw definitive("Nominal potongan bupot tidak valid untuk revoke")
+      // Bupot fasilitas (SKB/PP23/DTP) dan jenis bertarif 0 sah berpotongan
+      // nol (R8-PAJAK-03): tanpa kaki sumber, revoke-nya register-saja di
+      // cabang bawah dan nominal nol bukan halangan. Yang ditolak hanya
+      // nominal nol PADAHAL sumber tercatat berpotongan — itu mismatch
+      // nominal bupot vs sumber, jurnal lawan nol tak boleh lahir.
+      if (sourceHasWithholdingLeg && !(amount > 0)) {
+        throw definitive("Nominal potongan bupot tidak cocok dengan dokumen sumber untuk revoke")
+      }
       // Akun efek potongan dari master jenis (fail-closed, pola terbit):
       // we_withhold memakai liabilityAccountId; withheld_from_us memakai
       // receivableAccountId. Akun lawan: Hutang Usaha (tagihan vendor) atau
