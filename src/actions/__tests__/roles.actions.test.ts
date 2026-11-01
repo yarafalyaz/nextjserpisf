@@ -121,6 +121,33 @@ describe("createRole validation", () => {
   })
 })
 
+describe("createRole/updateRole P2002 (regresi kontrak form)", () => {
+  function p2002(): Error {
+    return Object.assign(new Error("Unique constraint failed"), { code: "P2002" })
+  }
+
+  it("createRole memetakan nama peran dobel (P2002) menjadi error form, bukan throw", async () => {
+    permissionFindManyMock.mockResolvedValue([])
+    roleCreateMock.mockRejectedValue(p2002())
+
+    const res = await createRole(fd({ name: "Admin Gudang", permissions: [] }))
+
+    expect(res).toMatchObject({ success: false })
+    expect(res.error).toMatch(/sudah dipakai/)
+  })
+
+  it("updateRole memetakan nama peran dobel (P2002) menjadi error form, bukan throw", async () => {
+    roleFindUniqueMock.mockResolvedValue({ name: "Lama" })
+    permissionFindManyMock.mockResolvedValue([])
+    roleUpdateMock.mockRejectedValue(p2002())
+
+    const res = await updateRole(3, fd({ name: "Admin Gudang", permissions: [] }))
+
+    expect(res).toMatchObject({ success: false })
+    expect(res.error).toMatch(/sudah dipakai/)
+  })
+})
+
 describe("createRole least-privilege guard", () => {
   it("blocks attaching a permission the actor does not hold", async () => {
     // Requested perm id 5 resolves to manage_users, which the actor lacks.

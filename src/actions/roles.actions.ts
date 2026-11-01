@@ -76,6 +76,12 @@ export async function createRole(formData: FormData): Promise<RoleFormError> {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[createRole]", getErrorMessage(e) || e)
+    // Nama/slug peran unik di DB: duplikat adalah galat yang bisa diperbaiki
+    // pengguna, jadi kembalikan sebagai error form (kontrak ActionForm),
+    // bukan throw ke error boundary yang membuang isian.
+    if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
+      return { success: false, error: "Nama peran sudah dipakai. Pakai nama lain." }
+    }
     throw e
   }
 }
@@ -141,6 +147,9 @@ export async function updateRole(id: number, formData: FormData): Promise<RoleFo
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[updateRole]", getErrorMessage(e) || e)
+    if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
+      return { success: false, error: "Nama peran sudah dipakai. Pakai nama lain." }
+    }
     throw e
   }
 }
