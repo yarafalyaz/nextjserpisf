@@ -2363,7 +2363,6 @@ export async function onSalesReturnCompleted(
       // (receivableCredit), dan penilaian kumulatif: total terbayar valid =
       // kas + kredit retur sebelumnya + retur ini (selaras loader kanonis).
       const returnCreditSen = Math.round(receivableCredit * 100);
-      const priorSen = Math.round(priorReturnCredit * 100);
       // FIN-BR-006: lunas dari outstanding valid (grandTotalAsal − paid −
       // returnCredit kumulatif) dalam toleransi Rp1. isSettled menerima
       // total kewajiban + total terbayar valid (kas + kredit retur), bukan
@@ -2387,10 +2386,6 @@ export async function onSalesReturnCompleted(
       const paidSen = Math.round(Number(inv.paidAmount) * 100);
       const grandSen = Math.round(Number(inv.grandTotal) * 100);
       if (Number.isFinite(grandSen) && Number.isFinite(paidSen)) {
-        const reliefSen = Math.min(
-          returnCreditSen,
-          Math.max(grandSen - paidSen - priorSen, 0),
-        );
         const excessSen = Math.round(excessCredit * 100);
         await tx.salesInvoice.update({
           where: { id: salesReturn.salesInvoiceId },
