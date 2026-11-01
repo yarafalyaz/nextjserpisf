@@ -39,7 +39,12 @@ vi.mock("@/lib/db/prisma", () => {
     systemSetting: { findFirst: vi.fn().mockResolvedValue(null) },
     journal: { findMany: vi.fn().mockResolvedValue([]) },
     // R6IE-07: update invoice memuat snapshot master (uom/isService) per baris.
-    item: { findMany: vi.fn().mockResolvedValue([]) },
+    // Baris ber-itemId wajib master hidup (putaran 31): kembalikan master aktif.
+    item: {
+      findMany: vi.fn().mockResolvedValue([
+        { id: 1, unitOfMeasure: "PCS", isService: false, name: "Item", isActive: true, deletedAt: null },
+      ]),
+    },
     // R8-JB-09: update menoleh termin pelanggan saat menghitung dueDate.
     customer: { findUnique: vi.fn().mockResolvedValue(null) },
   }
