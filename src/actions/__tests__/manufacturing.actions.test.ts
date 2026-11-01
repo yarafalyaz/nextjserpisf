@@ -1045,6 +1045,30 @@ describe("Production Order Actions", () => {
     expect(materials[1].batchNumber).toBeUndefined()
   })
 
+  it("createProductionOrder rejects when work order does not exist", async () => {
+    mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({ id: 1, materials: [] })
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue(null)
+
+    const res = await actions.createProductionOrder(fdMap({ productId: 1, qty: 2, workOrderId: 7 }))
+
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak ditemukan")
+    expect(mocks.prismaMock.productionOrder.create).not.toHaveBeenCalled()
+  })
+
+  it.each(["closed", "completed", "cancelled"])(
+    "createProductionOrder menolak WO %s: PO draft tidak menempel job final",
+    async (status) => {
+      mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({ id: 1, materials: [] })
+      mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 7, documentNo: "WO-007", bomRevisionId: null, status })
+
+      const res = await actions.createProductionOrder(fdMap({ productId: 1, qty: 2, workOrderId: 7 }))
+
+      expect(res?.success).toBe(false)
+      expect(res?.error).toContain(status)
+      expect(mocks.prismaMock.productionOrder.create).not.toHaveBeenCalled()
+    },
+  )
   it("createProductionOrder succeeds", async () => {
     mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({ id: 1, materials: [] })
     const res = await actions.createProductionOrder(fdMap({

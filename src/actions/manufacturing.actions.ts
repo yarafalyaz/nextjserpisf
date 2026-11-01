@@ -715,11 +715,25 @@ export async function createProductionOrder(formData: FormData) {
     const workOrder = v.workOrderId
       ? await prisma.workOrder.findUnique({
           where: { id: v.workOrderId },
-          select: { id: true, documentNo: true, bomRevisionId: true },
+          select: { id: true, documentNo: true, bomRevisionId: true, status: true },
         })
       : null;
     if (v.workOrderId && !workOrder) {
       return { success: false, error: `Perintah Kerja #${v.workOrderId} tidak ditemukan.` };
+    }
+    // PO draft tidak boleh menempel job final: WO completed/closed/cancelled
+    // sudah tidak menerima turunan baru (pola F-009-V untuk MI/biaya). Tanpa
+    // gerbang ini PO draft lahir di WO closed (job beku) — dan kehadiran PO
+    // anak hidup di WO closed menghidupkan kembali jendela sync biaya jasa
+    // yang seharusnya tertutup. WO pending/draft/in_progress tetap sah.
+    if (
+      workOrder &&
+      (workOrder.status === "closed" || workOrder.status === "completed" || workOrder.status === "cancelled")
+    ) {
+      return {
+        success: false,
+        error: `Perintah produksi tidak dapat dibuat untuk Perintah Kerja berstatus '${workOrder.status}'.`,
+      };
     }
 
     // Snapshot the BOM in force right now. Prefer the latest *released* revision
