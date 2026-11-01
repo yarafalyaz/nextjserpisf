@@ -43,4 +43,22 @@ describe("FIN-BR-008 settlement (loader)", () => {
       }),
     )
   })
+
+  // Regresi putaran 44: faktur yang dibuat DARI pesanan (salesOrderId) tidak
+  // mewarisi quotationId pesanan — pembayaran nyata atas faktur itu adalah
+  // pelunasan ekonomi penawaran yang mendasarinya, tetapi filter lama hanya
+  // melihat faktur direct `quotationId` sehingga penawaran tetap bisa
+  // diedit sesudah turunannya dibayar. Filter wajib mencakup kedua jembatan.
+  it("regresi putaran 44: quotationHasRealSettlement mencakup faktur lewat pesanan", async () => {
+    await quotationHasRealSettlement(7)
+    expect(salesPaymentCount).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          salesInvoice: {
+            OR: [{ quotationId: 7 }, { salesOrder: { quotationId: 7 } }],
+          },
+        }),
+      }),
+    )
+  })
 })

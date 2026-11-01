@@ -52,7 +52,11 @@ export async function salesOrderHasRealSettlement(
 
 /**
  * True when ANY invoice linked to the given quotation has been really settled.
- * A quotation has no payment state of its own either.
+ * A quotation has no payment state of its own either. The link is followed
+ * through BOTH bridges (putaran 44): an invoice born from a sales order does
+ * not inherit the order's quotationId, so filtering on the direct
+ * `salesInvoice.quotationId` alone let a quotation be edited after its
+ * order-derived invoice was paid.
  */
 export async function quotationHasRealSettlement(
   quotationId: number,
@@ -61,7 +65,9 @@ export async function quotationHasRealSettlement(
   const count = await client.salesPayment.count({
     where: activeSalesPaymentWhere({
       NOT: { paymentMethod: DOWN_PAYMENT_METHOD },
-      salesInvoice: { quotationId },
+      salesInvoice: {
+        OR: [{ quotationId }, { salesOrder: { quotationId } }],
+      },
     }),
   })
   return count > 0
