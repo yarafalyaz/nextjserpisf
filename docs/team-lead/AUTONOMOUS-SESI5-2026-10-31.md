@@ -727,3 +727,27 @@ Vonis GUGUR putaran ini (jangan diangkat lagi tanpa bukti baru):
 - Laporan multi-periode/pusat-laba groupBy jurnal tanpa `deletedAt: null`: tidak ada writer `Journal.deletedAt` di produksi (hanya baca defensif dan hard-delete fisik) — tak ada baris lunak terhapus yang bisa bocor. Dormant.
 - `updateRole` cek super_admin + grant di luar tx: guard izin berbasis `actor.permissions` dari sesi adalah model `requirePermission` repo-wide; tak ada jalur eskalasi konkret (semua penulisnya pemegang `manage_roles` sah), sisa risiko hanya lost-update antar admin sah — menambal satu action tak menutup kelasnya dan tak proporsional.
 - `cheque.actions` gerbang periode di luar tx: ketiga action non-GL, transisi/hapus sudah klaim kondisional `updateMany`, tak ada tx untuk menampung gerbang; sisa jendela snapshot mikro tak proporsional (pola vonis `completeReconciliation` putaran 14).
+
+### Putaran 17 (2026-11-01) — lane laporan/keuangan + SDM/aset/CRM + inventaris/produksi (agent read-only, verifikasi sesi utama)
+
+Dua belas fix:
+
+1. `6864df442` fix(laporan): proyeksi kas mengurangi kredit retur dari piutang — baris piutang `grandTotal − paidAmount` tanpa `returnCredit` menagih retur sebagai kas masuk. Loader kanonis `loadReturnCreditByInvoiceId` dipakai bersama; helper murni `buildReceivableProjectionItems`. 8/8.
+2. `6341ac79b` fix(laporan): rekonsiliasi PPN mengurangi PPN retur penjualan — sisi dokumen hanya Σ `taxAmount`; kini `loadReturnVatAmounts` pada masa efektif nota retur (`taxReturnNoteDate ?? date`, pola SPT) dipakai layar + PDF. 54/54 gabungan.
+3. `d3875ffcb` fix(penjualan): gerbang periode tukar faktur dinilai ulang dalam transaksi — create assert di awal tx; delete kunci baris `invoice_exchanges FOR UPDATE`, baca ulang, assert dari tanggal baris terkunci, klaim kondisional `deletedAt`. 28/28 gabungan.
+4. `0d7f30744` fix(pembelian): gerbang periode transfer vendor dinilai dalam transaksi — mark/unmark kunci baris `vendor_payments` terurut lalu assert di dalam tx sebelum klaim kondisional. 148/148 gabungan.
+5. `a470c0761` fix(sdm): `approvePayroll` menolak pembuat slip sendiri — tanpa workflow, `assertApproved` lolos tanpa baris Approval; gerbang `createdBy === user.id` sesudah scope HR. Izin terpisah `approve_payroll` (backlog AM-05) tidak diambil — keputusan desain lebih besar. 242/242 gabungan.
+6. `9d8163405` fix(sdm): persetujuan kompensasi PKWT menolak pembuat sendiri — FAIL-CLOSED pada `createdBy` null, mengikuti `assertNotSelfDecision` salary adjustment di domain uang yang sama. 200/200 gabungan.
+7. `280d9d98c` fix(proyek): revisi RAB tidak boleh diputuskan pengusul sendiri — `loadOpenRevisionProposal` menerima `deciderUserId`; apply/reject meneruskannya. Proposal legacy `userId` null tak berubah. 260/260 gabungan.
+8. `f5e0b485d` fix(sdm): tambah pelamar mengunci lowongan sebelum insert — kunci baris `job_vacancies` yang sama dengan update/transisi, status dibaca ulang segar di dalam tx; tutup lowongan konkuren tak lagi menerima pelamar. 12/12.
+9. `11eaf4d46` fix(sdm): aturan statutori payroll menolak jendela tumpang tindih — create/close masuk tx berkunci tabel `payroll_statutory_rules FOR UPDATE`; irisan dinilai inklusif-inklusif (`effectiveTo` inklusif per konvensi seed/picker, bukan setengah-terbuka seperti usul agent). 8/8; suite terkait 200/200.
+10. `b9ed128fa` fix(inventaris): sisa transfer lanjutan permintaan memakai `receivedQty` — sebelumnya hanya transfer `received` + `qty` terkirim: terima parsial 4/10 melahirkan transfer lanjutan 10 penuh (dobel kirim) dan shortage-close menolkan sisa sah 6. Query kini 3 status terkirim, pola `refreshMaterialRequestFulfillmentTx` (BR-TP-13). 22/22 + 5/5.
+11. `0848cbe64` fix(produksi): reservasi manual menghormati ketersediaan dan klaim WO lain — `reserveStockForWorkOrder` menulis `qtyReserved` penuh + `shortageQty 0` tanpa membaca on-hand/klaim lawan (klaim aktif sempat 130 atas on-hand 100). Kini kunci baris item, locking re-read klaim gudang, `qtyReserved = min(qty, onHand − klaim bersih lawan)`, shortage nyata. 15/15; terkait 345/345.
+12. `31e5d2cec` fix(produksi): gerbang periode biaya produksi dinilai ulang dalam transaksi — enam entry point hanya assert luar tx; jalur WO-only tanpa jurnal tak punya backstop gerbang jurnal. `assertPeriodOpen(new Date(), tx)` di semua tx, assert luar tetap fast-fail. 50/50; terkait 222/222.
+
+CI: kedua belas head **completed success**.
+
+Keputusan kebijakan putaran ini (dicatat agar tak diadili ulang):
+
+- SoD dokumen uang: `createdBy` null legacy BOLEH untuk payroll/RAB/pengeluaran (pola dokumen sales/purchase), FAIL-CLOSED hanya PKWT mengikuti preseden salary adjustment. Menyamakan keduanya keputusan desain tersendiri.
+- Kandidat kredit masa/status kreditabel (`creditPeriod`/`creditStatus`/`creditablePercent`) pada daftar Faktur PPN sisi masukan tidak diubah: daftar itu laporan dokumen bernilai kepala rantai; posisi masa kredit adalah domain read-model SPT yang sudah benar. Yang diperbaiki putaran 18 hanya bill tanpa nomor valid (nol di jurnal + SPT, tapi penuh di dua laporan dokumen).
