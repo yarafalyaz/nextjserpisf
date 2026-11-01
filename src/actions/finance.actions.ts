@@ -2140,20 +2140,58 @@ export async function updateCostCenter(id: number, formData: FormData) {
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
-    await prisma.costCenter.update({
-      where: { id },
-      data: {
-        code: v.code,
-        name: v.name,
-        slug: await nextSlug("costCenter", v.name, { excludeId: id }),
-        description: v.description ?? null,
-        isActive: v.isActive,
-        // Must be written on update as well: cost-center-form renders the "Induk"
-        // combobox and createCostCenter already persists parentId. Without this the
-        // hierarchy edit was silently discarded (UI still reported success).
-        parentId: v.parentId ?? null,
-      },
+    const slug = await nextSlug("costCenter", v.name, { excludeId: id });
+    const newParentId = v.parentId ?? null;
+
+    // Anti-siklus di bawah kunci (pola updateAccount): baris ini + induk baru
+    // dikunci urut id dalam tx, rantai induk dinilai dari bacaan terkunci.
+    // Tanpa ini parentId menunjuk diri sendiri/keturunan — bahkan dua update
+    // silang dari snapshot form lama — membentuk siklus dan node hilang dari
+    // daftar pusat biaya yang hanya berjalan dari root.
+    const outcome = await prisma.$transaction(async (tx) => {
+      const lockIds = [...new Set(newParentId ? [id, newParentId] : [id])].sort((a, b) => a - b);
+      for (const lockId of lockIds) {
+        await tx.$queryRaw`SELECT id FROM cost_centers WHERE id = ${lockId} FOR UPDATE`;
+      }
+
+      if (newParentId) {
+        if (newParentId === id) {
+          return { error: "Pusat biaya tidak dapat menjadi induk bagi dirinya sendiri" };
+        }
+        let cursor = await tx.costCenter.findUnique({
+          where: { id: newParentId },
+          select: { id: true, parentId: true },
+        });
+        if (!cursor) return { error: "Pusat biaya induk tidak ditemukan" };
+        for (let depth = 0; cursor && depth < 100; depth++) {
+          if (cursor.parentId === id) {
+            return { error: "Pusat biaya induk tidak boleh berupa sub pusat biaya dari pusat biaya ini" };
+          }
+          if (cursor.parentId === null) break;
+          cursor = await tx.costCenter.findUnique({
+            where: { id: cursor.parentId },
+            select: { id: true, parentId: true },
+          });
+        }
+      }
+
+      await tx.costCenter.update({
+        where: { id },
+        data: {
+          code: v.code,
+          name: v.name,
+          slug,
+          description: v.description ?? null,
+          isActive: v.isActive,
+          // Must be written on update as well: cost-center-form renders the "Induk"
+          // combobox and createCostCenter already persists parentId. Without this the
+          // hierarchy edit was silently discarded (UI still reported success).
+          parentId: newParentId,
+        },
+      });
+      return { updated: true as const };
     });
+    if ("error" in outcome) return { success: false, error: outcome.error };
 
     await logActivity("update", "CostCenter", id, "Memperbarui pusat biaya");
     revalidatePath("/keuangan/pusat-biaya");

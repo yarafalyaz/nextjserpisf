@@ -632,6 +632,38 @@ describe("Account Actions", () => {
     const res = await actions.updateAccount(1, fdMap({ name: "test", code: "test", type: "ASSET", rate: "10" }))
     expect(res?.success).toBe(true)
   })
+
+  it("updateAccount menolak induk = dirinya sendiri (regresi siklus)", async () => {
+    const res = await actions.updateAccount(1, fdMap({ name: "test", code: "test", type: "ASSET", normalBalance: "DEBIT", parentId: 1 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/induk/)
+    expect(mocks.prismaMock.account.update).not.toHaveBeenCalled()
+  })
+
+  it("updateAccount menolak induk berupa keturunannya, sesudah kunci baris akun", async () => {
+    // Rantai terkunci: akun 2 (induk baru) -> parentId 1 (akun ini).
+    // Beri code+normalBalance lewat form supaya bacaan fallback tak ikut antre.
+    mocks.prismaMock.account.findUnique
+      .mockResolvedValueOnce({ id: 2, parentId: 1 })
+    const res = await actions.updateAccount(
+      1,
+      fdMap({ name: "test", code: "test", type: "ASSET", normalBalance: "DEBIT", parentId: 2 }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/induk/)
+    expect(mocks.prismaMock.$queryRaw).toHaveBeenCalled()
+    const arg = mocks.prismaMock.$queryRaw.mock.calls[0][0] as unknown
+    const sql = Array.isArray(arg)
+      ? arg.join("?")
+      : ((arg as { sql?: string; strings?: string[] }).sql ??
+        (arg as { strings?: string[] }).strings?.join("?") ??
+        "")
+    expect(sql).toMatch(/FROM accounts[\s\S]*FOR UPDATE/)
+    expect(mocks.prismaMock.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.prismaMock.account.findUnique.mock.invocationCallOrder[0],
+    )
+    expect(mocks.prismaMock.account.update).not.toHaveBeenCalled()
+  })
 })
 
 describe("ItemCategory Actions", () => {

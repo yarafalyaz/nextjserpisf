@@ -1283,6 +1283,37 @@ describe("Cost Center Actions", () => {
     }))
     expect(res?.success).toBe(true)
   })
+  it("updateCostCenter menolak induk = dirinya sendiri (regresi siklus)", async () => {
+    const res = await (actions as any).updateCostCenter(1, fdMap({
+      code: "CC-001",
+      name: "Cost Center 1 Updated",
+      parentId: 1,
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/induk/)
+    expect(mocks.prismaMock.costCenter.update).not.toHaveBeenCalled()
+  })
+  it("updateCostCenter menolak induk berupa keturunannya, sesudah kunci baris cost_centers", async () => {
+    // Rantai terkunci: pusat biaya 2 (induk baru) -> parentId 1 (baris ini).
+    mocks.prismaMock.costCenter.findUnique.mockReset()
+    mocks.prismaMock.costCenter.findUnique.mockResolvedValueOnce({ id: 2, parentId: 1 })
+    const res = await (actions as any).updateCostCenter(1, fdMap({
+      code: "CC-001",
+      name: "Cost Center 1 Updated",
+      parentId: 2,
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/induk/)
+    expect(mocks.prismaMock.$queryRaw).toHaveBeenCalled()
+    const arg = mocks.prismaMock.$queryRaw.mock.calls.at(-1)![0] as unknown
+    const sql = Array.isArray(arg)
+      ? arg.join("?")
+      : ((arg as { sql?: string; strings?: string[] }).sql ??
+        (arg as { strings?: string[] }).strings?.join("?") ??
+        "")
+    expect(sql).toMatch(/FROM cost_centers[\s\S]*FOR UPDATE/)
+    expect(mocks.prismaMock.costCenter.update).not.toHaveBeenCalled()
+  })
   it("deleteCostCenter succeeds", async () => {
     const res = await (actions as any).deleteCostCenter(1)
     expect(res?.success).toBe(true)

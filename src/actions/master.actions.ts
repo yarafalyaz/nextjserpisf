@@ -3288,34 +3288,73 @@ export async function updateAccount(id: number, formData: FormData) {
     // submitted form omits it — nulling it silently misclassifies the account in
     // the trial balance / P&L / balance sheet. Both fallbacks share one lookup.
     const submittedCode = v.code?.trim() || null;
-    let code = submittedCode;
-    let normalBalance: "DEBIT" | "CREDIT" | null = v.normalBalance ?? null;
-    if (!submittedCode || normalBalance == null) {
-      const current = await prisma.account.findUnique({
-        where: { id },
-        select: { code: true, normalBalance: true },
-      });
-      if (!current) throw new Error("Akun tidak ditemukan");
-      if (!submittedCode) code = current.code;
-      if (normalBalance == null) {
-        normalBalance = (current.normalBalance as "DEBIT" | "CREDIT" | null) ?? null;
-      }
-    }
-    // `code` is always set by this point (submitted, or read from the record).
-    const finalCode = code as string;
+    const newParentId = v.parentId ?? null;
+    const slug = await nextSlug("account", v.name, { excludeId: id });
 
-    const account = await prisma.account.update({
-      where: { id },
-      data: {
-        code: finalCode,
-        name: v.name,
-        slug: await nextSlug("account", v.name, { excludeId: id }),
-        type: v.type,
-        parentId: v.parentId ?? null,
-        description: v.description ?? null,
-        normalBalance,
-      },
+    // Baca fallback + anti-siklus + tulis dalam SATU tx berkunci: baris akun
+    // dan baris induk baru dikunci urut id, lalu rantai induk dinilai dari
+    // bacaan terkunci (pola walk updateItemCategory, kini di bawah kunci).
+    // Tanpa ini parentId menunjuk diri sendiri/keturunan — bahkan dua update
+    // silang A<->B dari snapshot form lama — membentuk siklus dan akun hilang
+    // dari pohon COA/laporan yang berjalan dari root.
+    const outcome = await prisma.$transaction(async (tx) => {
+      const lockIds = [...new Set(newParentId ? [id, newParentId] : [id])].sort((a, b) => a - b);
+      for (const lockId of lockIds) {
+        await tx.$queryRaw`SELECT id FROM accounts WHERE id = ${lockId} FOR UPDATE`;
+      }
+
+      let code = submittedCode;
+      let normalBalance: "DEBIT" | "CREDIT" | null = v.normalBalance ?? null;
+      if (!submittedCode || normalBalance == null) {
+        const current = await tx.account.findUnique({
+          where: { id },
+          select: { code: true, normalBalance: true },
+        });
+        if (!current) throw new Error("Akun tidak ditemukan");
+        if (!submittedCode) code = current.code;
+        if (normalBalance == null) {
+          normalBalance = (current.normalBalance as "DEBIT" | "CREDIT" | null) ?? null;
+        }
+      }
+
+      if (newParentId) {
+        if (newParentId === id) {
+          return { error: "Akun tidak dapat menjadi induk bagi dirinya sendiri" };
+        }
+        let cursor = await tx.account.findUnique({
+          where: { id: newParentId },
+          select: { id: true, parentId: true },
+        });
+        if (!cursor) return { error: "Akun induk tidak ditemukan" };
+        for (let depth = 0; cursor && depth < 100; depth++) {
+          if (cursor.parentId === id) {
+            return { error: "Akun induk tidak boleh berupa sub-akun dari akun ini" };
+          }
+          if (cursor.parentId === null) break;
+          cursor = await tx.account.findUnique({
+            where: { id: cursor.parentId },
+            select: { id: true, parentId: true },
+          });
+        }
+      }
+
+      const account = await tx.account.update({
+        where: { id },
+        data: {
+          // `code` is always set by this point (submitted, or read above).
+          code: code as string,
+          name: v.name,
+          slug,
+          type: v.type,
+          parentId: newParentId,
+          description: v.description ?? null,
+          normalBalance,
+        },
+      });
+      return { account };
     });
+    if ("error" in outcome) return { success: false, error: outcome.error };
+    const account = outcome.account;
 
     revalidatePath("/master/akun");
     await logActivity("update", "Account", account.id, "Memperbarui akun");
