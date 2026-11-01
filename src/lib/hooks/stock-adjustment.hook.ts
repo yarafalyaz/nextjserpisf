@@ -8,6 +8,7 @@ import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { safeMultiply } from "@/lib/utils/math";
 import { InventoryStatus, Status } from "@/lib/constants";
+import { assertWarehousesExistAndActive } from "@/lib/services/material-request.service";
 
 
 const executeInTx = async (
@@ -54,6 +55,11 @@ export async function onStockAdjustmentProcessed(
     // accounting.hook, so enforce the closed-period guard here too — otherwise
     // adjustments can back-date GL into a closed period.
     await assertPeriodOpen(adjustment.date, tx);
+
+    // Putaran 51: gudang dokumen dinilai ulang HIDUP di dalam tx sebelum
+    // gerakan stok ditulis. Penyesuaian yang diproses sesudah gudangnya
+    // dinonaktifkan/dihapus tidak boleh memposting layer ke gudang mati.
+    await assertWarehousesExistAndActive(tx as never, [adjustment.warehouseId]);
 
     // Create Stock Move per item based on difference
     const journalItems: { qty: number; cost: number; difference: number }[] = [];

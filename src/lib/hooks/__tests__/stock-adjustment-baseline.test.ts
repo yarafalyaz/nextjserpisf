@@ -41,7 +41,9 @@ function wireTx(opts: {
   liveQty: Record<number, number>
   trackSerialItemIds?: number[]
   trackBatchItemIds?: number[]
+  warehouseRows?: Array<{ id: number; name: string; isActive: boolean }>
 }) {
+  const warehouseRows = opts.warehouseRows ?? [{ id: 1, name: "Gudang Utama", isActive: true }]
   const spies = {
     queryRaw: vi.fn().mockResolvedValue([]),
     adjFindUniqueOrThrow: vi.fn().mockResolvedValue({
@@ -76,6 +78,11 @@ function wireTx(opts: {
   const tx = {
     $queryRaw: spies.queryRaw,
     $executeRaw: spies.executeRaw,
+    warehouse: {
+      findMany: vi.fn().mockImplementation(async (args: any) =>
+        warehouseRows.filter((w) => (args?.where?.id?.in ?? []).includes(w.id)),
+      ),
+    },
     stockAdjustment: { findUniqueOrThrow: spies.adjFindUniqueOrThrow, update: spies.adjUpdate },
     stockAdjustmentItem: { update: spies.adjItemUpdate },
     stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
@@ -105,6 +112,30 @@ beforeEach(() => {
     return Array.from({ length: count }, () => `SM-${++n}`)
   })
   mocks.consumeFifoLayers.mockResolvedValue({ consumedCost: 0, shortfall: 0 })
+})
+
+describe("onStockAdjustmentProcessed — gudang dokumen mati (putaran 51)", () => {
+  it("gudang nonaktif → process ditolak, tidak ada gerakan stok", async () => {
+    const spies = wireTx({
+      items: [{ itemId: 7, systemQty: 0, actualQty: 2, difference: 2, unitCost: 100 }],
+      liveQty: { 7: 0 },
+      warehouseRows: [{ id: 1, name: "Gudang Utama", isActive: false }],
+    })
+
+    await expect(onStockAdjustmentProcessed(50, 1)).rejects.toThrow(/tidak aktif/)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+  })
+
+  it("gudang terhapus (deletedAt) → process ditolak, tidak ada gerakan stok", async () => {
+    const spies = wireTx({
+      items: [{ itemId: 7, systemQty: 0, actualQty: 2, difference: 2, unitCost: 100 }],
+      liveQty: { 7: 0 },
+      warehouseRows: [],
+    })
+
+    await expect(onStockAdjustmentProcessed(50, 1)).rejects.toThrow(/tidak ditemukan/)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+  })
 })
 
 describe("onStockAdjustmentProcessed live-qty baseline", () => {
