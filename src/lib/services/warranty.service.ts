@@ -399,9 +399,15 @@ export async function decideWarrantyClaim(
   }
   const claim = await client.warrantyClaim.findUnique({
     where: { id: input.claimId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, createdBy: true },
   })
   if (!claim) throw new Error("Klaim garansi tidak ditemukan.")
+  // Pemisahan tugas: pembuat klaim tidak boleh memutuskannya sendiri
+  // (keputusan membuka biaya perbaikan/penggantian). createdBy null
+  // (legacy) tetap boleh diputuskan pejabat berizin.
+  if (claim.createdBy != null && Number(claim.createdBy) === Number(input.decisionBy)) {
+    throw new Error("Klaim garansi tidak boleh diputuskan oleh pembuatnya sendiri (pemisahan tugas) — minta pejabat lain yang berizin approve_warranty_claims.")
+  }
   assertWarrantyClaimTransition(claim.status, input.decision)
   await claimWarrantyClaimUpdate(client, claim.id, { status: claim.status }, {
     status: input.decision,

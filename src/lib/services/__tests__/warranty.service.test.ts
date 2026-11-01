@@ -234,6 +234,21 @@ describe("klaim di luar masa (F-021 AC2): manual, BUKAN auto-reject", () => {
     expect(decided.resolutionType).toBe("reject")
   })
 
+  it("regression round 19: pembuat klaim tidak boleh memutuskan klaimnya sendiri", async () => {
+    const state: Record<string, unknown> = { id: 1, status: "eligibility", createdBy: 9 }
+    p.warrantyClaim.findUnique.mockImplementation(async () => ({ ...state }))
+    mockClaimWrite(state)
+
+    await expect(
+      decideWarrantyClaim(
+        { claimId: 1, decision: "approved", resolutionType: "repair", decisionBy: 9 },
+        prisma as never,
+      ),
+    ).rejects.toThrow("pemisahan tugas")
+    expect(state.status).toBe("eligibility")
+    expect(p.warrantyClaim.updateMany).not.toHaveBeenCalled()
+  })
+
   it("transitionWarrantyClaim menolak jalur pintas ke approved/rejected", async () => {
     p.warrantyClaim.findUnique.mockResolvedValue({ id: 1, status: "eligibility" })
     await expect(
