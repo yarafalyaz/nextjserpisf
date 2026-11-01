@@ -879,6 +879,20 @@ describe("Lead Actions", () => {
     expect(res?.error).toMatch(/sudah dihapus/i)
     expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
   })
+
+  it("updateLead menolak edit pemilik lama bila lead di-assign ulang di jendela guard->tx (putaran 25)", async () => {
+    // Sales id 2 pemilik sah di snapshot luar; admin meng-assign ulang ke
+    // 7 dan commit sebelum tx mulai. Bacaan segar harus menolak edit ini,
+    // bukan menulis ulang menggunakan snapshot kepemilikan lama.
+    mocks.requirePermissionMock.mockResolvedValueOnce({ id: 2, permissions: [], roles: [] })
+    mocks.prismaMock.lead.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, assignedTo: 2, deletedAt: null, status: "new" })
+      .mockResolvedValue({ id: 1, assignedTo: 7, deletedAt: null, status: "new" })
+    const res = await actions.updateLead(1, fdMap({ name: "test", assignedTo: "2" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Anda hanya dapat mengubah lead")
+    expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
+  })
 })
 
 describe("F-2026-10-24-141-S duplikat lead (Model C)", () => {

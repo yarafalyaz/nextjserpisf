@@ -2323,6 +2323,20 @@ export async function updateLead(id: number, formData: FormData) {
       if (fresh.deletedAt) {
         throw new Error("Lead sudah dihapus dan tidak dapat diubah");
       }
+      // Guard kepemilikan menilai ulang dari baris segar: assign ulang yang
+      // commit di jendela guard luar -> tx tidak boleh diedit pemilik lama
+      // (baca snapshot luar saja membiarkan sales mencuri lead itu kembali
+      // lewat penulisan assignedTo barunya sendiri).
+      if (!isAdmin && fresh.assignedTo !== Number(actor.id)) {
+        throw new Error(
+          "Anda hanya dapat mengubah lead yang ditugaskan kepada Anda.",
+        );
+      }
+      if (!isAdmin && newAssignedTo !== fresh.assignedTo) {
+        throw new Error(
+          "Anda tidak memiliki izin untuk mengubah penugasan (assignee) lead.",
+        );
+      }
       const freshLostCheck = validateLeadLostTransition({
         fromStatus: fresh.status,
         toStatus: v.status ?? null,
