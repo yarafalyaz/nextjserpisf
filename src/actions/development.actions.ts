@@ -63,12 +63,31 @@ export async function deleteCompetency(id: number) {
   }
 }
 
+/**
+ * Kompetensi wajib hidup saat dirujuk baris syarat/penilaian (putaran 51):
+ * UI hanya menawarkan deletedAt null, server menegakkan hal yang sama —
+ * baris yatim ke kompetensi terhapus tertulis tetapi hilang dari antrean gap.
+ */
+async function assertCompetencyLive(competencyId: number): Promise<string | null> {
+  const competency = await prisma.competency.findUnique({
+    where: { id: competencyId },
+    select: { id: true, deletedAt: true },
+  });
+  if (!competency || competency.deletedAt !== null) {
+    return "Kompetensi tidak ditemukan atau sudah terhapus. Pilih kompetensi aktif.";
+  }
+  return null;
+}
+
 export async function setPositionCompetency(formData: FormData) {
   try {
     await requirePermission("edit_competencies");
     const parsed = parseFormData(positionCompetencySchema, formData);
     if (!parsed.success) return { success: false as const, error: parsed.error };
     const v = parsed.data;
+
+    const competencyError = await assertCompetencyLive(v.competencyId);
+    if (competencyError) return { success: false as const, error: competencyError };
 
     const row = await prisma.positionCompetency.upsert({
       where: {
@@ -96,6 +115,16 @@ export async function assessEmployeeCompetency(formData: FormData) {
 
     const scope = await getHrScope(actor);
     await assertHrEmployeeAccess(scope, v.employeeId);
+
+    // Putaran 51: scope menilai akses, bukan kehidupan master (pola
+    // assertLiveEmployee hrm.actions) — kompetensi + karyawan wajib hidup.
+    const competencyError = await assertCompetencyLive(v.competencyId);
+    if (competencyError) return { success: false as const, error: competencyError };
+    const liveEmployee = await prisma.employee.findFirst({
+      where: { id: v.employeeId, isActive: true, deletedAt: null },
+      select: { id: true },
+    });
+    if (!liveEmployee) return { success: false as const, error: "Karyawan tidak ditemukan atau tidak aktif" };
 
     const row = await prisma.employeeCompetency.upsert({
       where: {
@@ -204,7 +233,16 @@ export async function setTrainingStatus(id: number, status: "done" | "cancelled"
     if (existing.status !== "scheduled") {
       return { success: false as const, error: "Hanya pelatihan terjadwal yang dapat diubah statusnya" };
     }
-    await prisma.training.update({ where: { id }, data: { status } });
+    // Putaran 51: transisi ditulis sebagai klaim kondisional — dua aktor
+    // yang sama-sama membaca scheduled tidak boleh saling menimpa status
+    // terminal (done menimpa cancelled atau sebaliknya).
+    const claimed = await prisma.training.updateMany({
+      where: { id, deletedAt: null, status: "scheduled" },
+      data: { status },
+    });
+    if (claimed.count === 0) {
+      return { success: false as const, error: "Hanya pelatihan terjadwal yang dapat diubah statusnya" };
+    }
     revalidatePath("/sdm/pelatihan");
     return { success: true as const, id };
   } catch (e: unknown) {
@@ -235,6 +273,18 @@ export async function addTrainingParticipant(formData: FormData) {
 
     const scope = await getHrScope(actor);
     await assertHrEmployeeAccess(scope, v.employeeId);
+
+    // Putaran 51: peserta hanya untuk pelatihan hidup yang masih terjadwal
+    // (UI menyembunyikan form di luar scheduled; server menegakkan sama) —
+    // roster training done/cancelled/terhapus tidak boleh berubah lagi.
+    const training = await prisma.training.findFirst({
+      where: { id: v.trainingId, deletedAt: null },
+      select: { id: true, status: true },
+    });
+    if (!training) return { success: false as const, error: "Pelatihan tidak ditemukan" };
+    if (training.status !== "scheduled") {
+      return { success: false as const, error: "Peserta hanya dapat ditambahkan pada pelatihan terjadwal" };
+    }
 
     const row = await prisma.trainingParticipant.upsert({
       where: {

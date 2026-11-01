@@ -14,6 +14,8 @@ const employeeFindMany = vi.fn()
 const positionCompetencyFindMany = vi.fn()
 const employeeCompetencyFindMany = vi.fn()
 const participantUpsert = vi.fn()
+const trainingFindFirst = vi.fn()
+const trainingUpdateMany = vi.fn()
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
@@ -47,6 +49,10 @@ vi.mock("@/lib/db/prisma", () => ({
     employeeCompetency: {
       findMany: (...a: unknown[]) => employeeCompetencyFindMany(...a),
     },
+    training: {
+      findFirst: (...a: unknown[]) => trainingFindFirst(...a),
+      updateMany: (...a: unknown[]) => trainingUpdateMany(...a),
+    },
     trainingParticipant: {
       upsert: (...a: unknown[]) => participantUpsert(...a),
     },
@@ -71,6 +77,7 @@ import {
 import {
   addTrainingParticipant,
   getCompetencyGaps,
+  setTrainingStatus,
 } from "../development.actions"
 
 beforeEach(() => {
@@ -79,6 +86,8 @@ beforeEach(() => {
   actor.permissions = []
   // Gerbang siklus putaran 16: tulis ulasan hanya pada siklus aktif.
   cycleFindFirst.mockResolvedValue({ status: "active" })
+  trainingFindFirst.mockResolvedValue({ id: 3, status: "scheduled", deletedAt: null })
+  trainingUpdateMany.mockResolvedValue({ count: 1 })
 })
 
 describe("performance scoring", () => {
@@ -148,6 +157,18 @@ describe("competency gaps and training", () => {
       { competencyId: 1, competencyName: "Pengelasan", requiredLevel: 4, currentLevel: 3, gap: 1 },
       { competencyId: 2, competencyName: "K3", requiredLevel: 2, currentLevel: 0, gap: 2 },
     ])
+  })
+
+  it("regresi putaran 51: transisi pelatihan kalah klaim kondisional ditolak", async () => {
+    trainingUpdateMany.mockResolvedValue({ count: 0 })
+    const res = await setTrainingStatus(3, "done")
+    expect(res.success).toBe(false)
+    expect(trainingUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 3, deletedAt: null, status: "scheduled" },
+        data: { status: "done" },
+      }),
+    )
   })
 
   it("registers a training participant idempotently", async () => {

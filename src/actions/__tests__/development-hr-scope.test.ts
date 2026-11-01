@@ -9,6 +9,10 @@ const mocks = vi.hoisted(() => ({
   participantUpdate: vi.fn(),
   participantDelete: vi.fn(),
   employeeFindUnique: vi.fn(),
+  employeeFindFirst: vi.fn(),
+  competencyFindUnique: vi.fn(),
+  positionCompetencyUpsert: vi.fn(),
+  trainingFindFirst: vi.fn(),
   positionCompetencyFindMany: vi.fn(),
   employeeCompetencyFindMany: vi.fn(),
   logActivity: vi.fn(),
@@ -23,9 +27,11 @@ vi.mock("@/lib/auth/hr-scope", async (importOriginal) => {
 })
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    employee: { findUnique: mocks.employeeFindUnique },
-    positionCompetency: { findMany: mocks.positionCompetencyFindMany },
+    employee: { findUnique: mocks.employeeFindUnique, findFirst: mocks.employeeFindFirst },
+    competency: { findUnique: mocks.competencyFindUnique },
+    positionCompetency: { findMany: mocks.positionCompetencyFindMany, upsert: mocks.positionCompetencyUpsert },
     employeeCompetency: { upsert: mocks.employeeCompetencyUpsert, findMany: mocks.employeeCompetencyFindMany },
+    training: { findFirst: mocks.trainingFindFirst },
     trainingParticipant: {
       upsert: mocks.participantUpsert,
       findUnique: mocks.participantFindUnique,
@@ -45,6 +51,7 @@ import {
   getCompetencyGaps,
   removeTrainingParticipant,
   setParticipantResult,
+  setPositionCompetency,
 } from "../development.actions"
 
 const actor = { id: "9", roles: ["ga"] }
@@ -73,6 +80,10 @@ beforeEach(() => {
   mocks.participantFindUnique.mockResolvedValue({ employeeId: 7 })
   mocks.participantUpdate.mockResolvedValue({})
   mocks.participantDelete.mockResolvedValue({})
+  mocks.employeeFindFirst.mockResolvedValue({ id: 7 })
+  mocks.competencyFindUnique.mockResolvedValue({ id: 2, deletedAt: null })
+  mocks.positionCompetencyUpsert.mockResolvedValue({ id: 5 })
+  mocks.trainingFindFirst.mockResolvedValue({ id: 3, status: "scheduled", deletedAt: null })
   mocks.logActivity.mockResolvedValue(undefined)
 })
 
@@ -117,6 +128,47 @@ describe("getCompetencyGaps HR scope (ROUND5-SCOPE)", () => {
     expect(gaps).toEqual([
       { competencyId: 2, competencyName: "Las", requiredLevel: 4, currentLevel: 1, gap: 3 },
     ])
+  })
+})
+
+describe("gerbang hidup pengembangan (putaran 51)", () => {
+  it("peserta ke pelatihan cancelled ditolak sebelum upsert", async () => {
+    mocks.trainingFindFirst.mockResolvedValue({ id: 3, status: "cancelled", deletedAt: null })
+    const res = await addTrainingParticipant(participantForm())
+    expect(res.success).toBe(false)
+    expect(mocks.participantUpsert).not.toHaveBeenCalled()
+  })
+
+  it("peserta ke pelatihan terhapus ditolak sebelum upsert", async () => {
+    mocks.trainingFindFirst.mockResolvedValue(null)
+    const res = await addTrainingParticipant(participantForm())
+    expect(res.success).toBe(false)
+    expect(mocks.participantUpsert).not.toHaveBeenCalled()
+  })
+
+  it("penilaian atas kompetensi terhapus ditolak sebelum upsert", async () => {
+    mocks.competencyFindUnique.mockResolvedValue({ id: 2, deletedAt: new Date() })
+    const res = await assessEmployeeCompetency(competencyForm())
+    expect(res.success).toBe(false)
+    expect(mocks.employeeCompetencyUpsert).not.toHaveBeenCalled()
+  })
+
+  it("penilaian atas karyawan nonaktif ditolak sebelum upsert", async () => {
+    mocks.employeeFindFirst.mockResolvedValue(null)
+    const res = await assessEmployeeCompetency(competencyForm())
+    expect(res.success).toBe(false)
+    expect(mocks.employeeCompetencyUpsert).not.toHaveBeenCalled()
+  })
+
+  it("syarat jabatan atas kompetensi terhapus ditolak sebelum upsert", async () => {
+    mocks.competencyFindUnique.mockResolvedValue({ id: 2, deletedAt: new Date() })
+    const fd = new FormData()
+    fd.set("positionId", "4")
+    fd.set("competencyId", "2")
+    fd.set("requiredLevel", "3")
+    const res = await setPositionCompetency(fd)
+    expect(res.success).toBe(false)
+    expect(mocks.positionCompetencyUpsert).not.toHaveBeenCalled()
   })
 })
 
