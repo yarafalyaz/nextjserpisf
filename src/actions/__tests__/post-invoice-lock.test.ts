@@ -19,9 +19,14 @@ const invoiceItemCountMock = vi.fn()
 const invoiceUpdateManyMock = vi.fn()
 const invoiceUpdateMock = vi.fn()
 const invoiceFindFirstMock = vi.fn()
+const invoiceFindManyMock = vi.fn()
+const salesOrderFindUniqueMock = vi.fn()
+const salesOrderItemFindManyMock = vi.fn()
+const invoiceItemFindManyMock = vi.fn()
 const customerFindUniqueMock = vi.fn()
 const invoiceAggregateMock = vi.fn()
 const generateDocumentNumberMock = vi.fn()
+const executeRawMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -29,14 +34,22 @@ vi.mock("@/lib/auth/permissions", () => ({
 vi.mock("@/lib/db/prisma", () => {
   const mockPrisma = {
     $transaction: vi.fn((cb) => cb(mockPrisma)),
+    $executeRaw: (...a: unknown[]) => executeRawMock(...a),
+    $queryRaw: (...a: unknown[]) => executeRawMock(...a),
     salesInvoice: {
       findUniqueOrThrow: (...a: unknown[]) => invoiceFindUniqueOrThrowMock(...a),
       findFirst: (...a: unknown[]) => invoiceFindFirstMock(...a),
+      findMany: (...a: unknown[]) => invoiceFindManyMock(...a),
       update: (...a: unknown[]) => invoiceUpdateMock(...a),
       updateMany: (...a: unknown[]) => invoiceUpdateManyMock(...a),
       aggregate: (...a: unknown[]) => invoiceAggregateMock(...a),
     },
-    salesInvoiceItem: { count: (...a: unknown[]) => invoiceItemCountMock(...a) },
+    salesOrder: { findUnique: (...a: unknown[]) => salesOrderFindUniqueMock(...a) },
+    salesOrderItem: { findMany: (...a: unknown[]) => salesOrderItemFindManyMock(...a) },
+    salesInvoiceItem: {
+      count: (...a: unknown[]) => invoiceItemCountMock(...a),
+      findMany: (...a: unknown[]) => invoiceItemFindManyMock(...a),
+    },
     customer: { findUnique: (...a: unknown[]) => customerFindUniqueMock(...a) },
   }
   return { prisma: mockPrisma }
@@ -73,8 +86,15 @@ beforeEach(() => {
     requirePermissionMock, revalidateMock, logActivityMock, onSalesInvoicePostedMock,
     onSalesPaymentUpdatedMock,
     invoiceFindUniqueOrThrowMock, invoiceItemCountMock, invoiceUpdateManyMock,
-    invoiceUpdateMock, invoiceFindFirstMock, generateDocumentNumberMock,
+    invoiceUpdateMock, invoiceFindFirstMock, invoiceFindManyMock,
+    salesOrderFindUniqueMock, salesOrderItemFindManyMock, invoiceItemFindManyMock,
+    generateDocumentNumberMock, executeRawMock,
   ]) m.mockReset()
+  executeRawMock.mockResolvedValue(1)
+  invoiceFindManyMock.mockResolvedValue([])
+  salesOrderFindUniqueMock.mockResolvedValue({ documentNo: "SO-1", grandTotal: 5000, quotationId: null })
+  salesOrderItemFindManyMock.mockResolvedValue([])
+  invoiceItemFindManyMock.mockResolvedValue([])
   onSalesPaymentUpdatedMock.mockResolvedValue(undefined)
   requirePermissionMock.mockResolvedValue({ id: 3 })
   invoiceFindUniqueOrThrowMock.mockResolvedValue({
@@ -189,6 +209,30 @@ describe("postInvoice concurrency guard", () => {
     expect(result.success).toBe(true)
     expect(generateDocumentNumberMock).not.toHaveBeenCalled()
     expect(invoiceUpdateMock).not.toHaveBeenCalled()
+    expect(onSalesInvoicePostedMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("cap dinilai dari baris faktur terkunci, bukan snapshot luar tx (SO diganti edit konkuren)", async () => {
+    // Bacaan luar tx: SO lama 7. Bacaan sesudah kunci baris: SO baru 9.
+    invoiceFindUniqueOrThrowMock
+      .mockResolvedValueOnce({
+        id: 11, status: "draft", customerId: 8, grandTotal: 1000, paidAmount: 0,
+        documentNo: null, salesOrderId: 7, quotationId: null, projectId: null,
+      })
+      .mockResolvedValue({
+        id: 11, status: "draft", customerId: 8, grandTotal: 1000, paidAmount: 0,
+        documentNo: null, salesOrderId: 9, quotationId: null, projectId: null,
+      })
+
+    const result = await postInvoice(11)
+
+    expect(result.success).toBe(true)
+    // Baris faktur wajib dikunci sebelum cap dinilai.
+    const lockSql = executeRawMock.mock.calls.map((c) => String((c[0] as { strings?: string[] })?.strings?.join("?") ?? c[0])).join(" ")
+    expect(lockSql).toContain("sales_invoices")
+    // Cap membaca faktur-faktur SO 9 (bukan SO 7 dari snapshot).
+    expect(invoiceFindManyMock).toHaveBeenCalled()
+    expect(invoiceFindManyMock.mock.calls[0][0].where.salesOrderId).toBe(9)
     expect(onSalesInvoicePostedMock).toHaveBeenCalledTimes(1)
   })
 

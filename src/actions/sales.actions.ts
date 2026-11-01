@@ -1276,31 +1276,37 @@ export async function postInvoice(invoiceId: number) {
 
   // Atomically claim the post and post GL journal in a single transaction.
   await prisma.$transaction(async (tx) => {
+    // Kunci baris faktur dulu lalu baca ulang segar: snapshot luar tx bisa
+    // basi — updateSalesInvoice mengunci baris sama dan dapat mengganti
+    // salesOrderId/status selama status masih draft/approved. Cap SO dan
+    // bridge garansi wajib dinilai dari baris terkunci, bukan snapshot.
+    await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${invoiceId} FOR UPDATE`
+    const lockedInvoice = await tx.salesInvoice.findUniqueOrThrow({ where: { id: invoiceId } })
+    if (lockedInvoice.status !== "draft" && lockedInvoice.status !== "approved") {
+      throw new Error("Invoice hanya bisa di-post dari status draft atau approved")
+    }
+
     // Gerbang invoiceForbidden garansi (F-021 tahap 3 G5): WO repair klaim
     // covered tidak boleh diposting menjadi tagihan pelanggan.
     await assertInvoiceAllowedForWorkOrderBridges(tx, {
-      quotationId: invoice.quotationId,
-      projectId: invoice.projectId,
-      salesOrderId: invoice.salesOrderId,
+      quotationId: lockedInvoice.quotationId,
+      projectId: lockedInvoice.projectId,
+      salesOrderId: lockedInvoice.salesOrderId,
     })
 
     // TASK-016 BUG-06: posting adalah gerbang terakhir cap kumulatif SO —
     // faktur draft yang lahir sebelum cap ada (atau diedit melewati sisa)
     // tidak boleh memposting jurnal/stok melebihi pesanan. Nilai segar
     // dibaca ulang di dalam tx; faktur ini dikeluarkan dari total berjalan.
-    if (invoice.salesOrderId) {
-      const fresh = await tx.salesInvoice.findUniqueOrThrow({
-        where: { id: invoiceId },
-        select: { grandTotal: true },
-      })
+    if (lockedInvoice.salesOrderId) {
       const ownItems = await tx.salesInvoiceItem.findMany({
         where: { salesInvoiceId: invoiceId },
         select: { itemId: true, qty: true, uom: true },
       })
       await assertInvoiceWithinSalesOrderCap(tx, {
-        salesOrderId: invoice.salesOrderId,
+        salesOrderId: lockedInvoice.salesOrderId,
         excludeInvoiceId: invoiceId,
-        candidateGrandTotal: Number(fresh.grandTotal),
+        candidateGrandTotal: Number(lockedInvoice.grandTotal),
         candidateLines: ownItems.map((line) => ({
           itemId: line.itemId,
           qty: Number(line.qty),
@@ -1328,7 +1334,7 @@ export async function postInvoice(invoiceId: number) {
     // supaya dua posting bersamaan tidak berbagi nomor dan draft yang gagal
     // posting tidak membakar nomor. Faktur pra-migrasi yang sudah bernomor
     // TIDAK diterbitkan ulang. Slug mengikuti nomor baru (sebelumnya null).
-    if (!invoice.documentNo) {
+    if (!lockedInvoice.documentNo) {
       const documentNo = await generateDocumentNumber("INV")
       const slug = await nextSlug("salesInvoice", documentNo, { excludeId: invoiceId })
       await tx.salesInvoice.update({
