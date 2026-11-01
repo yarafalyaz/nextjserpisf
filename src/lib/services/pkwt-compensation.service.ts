@@ -94,10 +94,17 @@ export async function createPkwtCompensationEvent(
       employmentStatus: true,
       baseSalary: true,
       deletedAt: true,
+      isActive: true,
     },
   })
   if (!employee || employee.deletedAt) {
     throw new Error("Karyawan tidak ditemukan untuk peristiwa kompensasi PKWT.")
+  }
+  // Soft-delete memasang isActive false: master mati tidak boleh melahirkan
+  // peristiwa berharga baru. employmentEndedAt TIDAK digerbang — kompensasi
+  // memang hak atas segmen yang sudah berakhir.
+  if (!employee.isActive) {
+    throw new Error("Karyawan tidak aktif — peristiwa kompensasi PKWT tidak dapat dibuat.")
   }
   // Di dalam transaksi pemanggil: kunci baris karyawan SEBELUM cek irisan.
   // Tanpa kunci, dua submit konkuren membaca snapshot yang sama-sama kosong
@@ -195,6 +202,15 @@ export async function approvePkwtCompensationEvent(
   // createdBy kosong berarti maker-checker tidak dapat dibuktikan.
   if (event.createdBy == null || Number(event.createdBy) === Number(userId)) {
     throw new Error("Peristiwa kompensasi PKWT tidak boleh disetujui oleh pembuatnya sendiri (pemisahan tugas).")
+  }
+  // Karyawan yang terhapus sesudah peristiwa lahir tidak boleh lagi
+  // disetujui untuk dibayar — penyelesaian haknya lewat jalur berhenti.
+  const owner = await client.employee.findUnique({
+    where: { id: event.employeeId },
+    select: { deletedAt: true, isActive: true },
+  })
+  if (!owner || owner.deletedAt != null || !owner.isActive) {
+    throw new Error("Peristiwa kompensasi PKWT tidak dapat disetujui: karyawan pengaju sudah nonaktif/terhapus.")
   }
   // Peristiwa berharga wajib mapping siap sebelum dibekukan untuk dibayar.
   await resolvePkwtMapping(client)

@@ -40,7 +40,7 @@ function baseClient(over: Record<string, unknown> = {}) {
   const client: Record<string, any> = {
     employee: {
       findUnique: vi.fn().mockResolvedValue({
-        id: 1, employmentStatus: "PKWT", baseSalary: 4_000_000, deletedAt: null,
+        id: 1, employmentStatus: "PKWT", baseSalary: 4_000_000, deletedAt: null, isActive: true,
       }),
       findMany: vi.fn().mockResolvedValue([]),
     },
@@ -98,10 +98,23 @@ describe("E132-1 peristiwa terbekukan", () => {
     ).rejects.toThrow("kurang dari 1 bulan")
   })
 
+  it("regresi putaran 47: karyawan soft-deleted (isActive false) ditolak lahir peristiwa", async () => {
+    const client = baseClient()
+    client.employee.findUnique.mockResolvedValue({
+      id: 1, employmentStatus: "PKWT", baseSalary: 4_000_000, deletedAt: null, isActive: false,
+    })
+    await expect(
+      createPkwtCompensationEvent(client, {
+        employeeId: 1, segmentStart: d("2026-01-01"), segmentEnd: d("2026-12-31"),
+      }),
+    ).rejects.toThrow("tidak aktif")
+    expect(client.pkwtCompensationEvent.create).not.toHaveBeenCalled()
+  })
+
   it("non-PKWT ditolak", async () => {
     const client = baseClient()
     client.employee.findUnique.mockResolvedValue({
-      id: 1, employmentStatus: "PKWTT", baseSalary: 4_000_000, deletedAt: null,
+      id: 1, employmentStatus: "PKWTT", baseSalary: 4_000_000, deletedAt: null, isActive: true,
     })
     await expect(
       createPkwtCompensationEvent(client, {
@@ -172,6 +185,16 @@ describe("E132-2/4 mapping fail-closed + persetujuan", () => {
     const client = baseClient()
     client.pkwtCompensationEvent.findUnique.mockResolvedValue({ id: 7, status: "draft", createdBy: null })
     await expect(approvePkwtCompensationEvent(client, 7, 1)).rejects.toThrow("pemisahan tugas")
+    expect(client.pkwtCompensationEvent.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 47: karyawan soft-deleted — approve peristiwa ditolak, nol klaim", async () => {
+    const client = baseClient()
+    client.pkwtCompensationEvent.findUnique.mockResolvedValue({ id: 7, employeeId: 1, status: "draft", createdBy: 99 })
+    client.employee.findUnique.mockResolvedValue({
+      id: 1, employmentStatus: "PKWT", baseSalary: 4_000_000, deletedAt: new Date(), isActive: false,
+    })
+    await expect(approvePkwtCompensationEvent(client, 7, 1)).rejects.toThrow("tidak dapat disetujui")
     expect(client.pkwtCompensationEvent.updateMany).not.toHaveBeenCalled()
   })
 
