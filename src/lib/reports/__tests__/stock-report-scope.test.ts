@@ -152,7 +152,12 @@ describe("cakupan gudang loader laporan stok (ROUND5-SCOPE)", () => {
 
   it("loadStockAging: umur dari sourceCreatedAt bila ada (STOK-08/09), bukan createdAt layer tujuan", async () => {
     const day = 86_400_000
-    const now = Date.now()
+    // Bekukan jam: loader menghitung umur ceil((now - age)/hari), jadi fixture
+    // dan loader yang membaca Date.now terpisah beberapa ms menghasilkan 41
+    // (flake CI tengah malam). Waktu tetap membuat selisih persis 40 hari.
+    const now = new Date("2026-10-15T00:00:00Z").getTime()
+    vi.useFakeTimers()
+    vi.setSystemTime(now)
     // Layer lahir di gudang tujuan 5 hari lalu, tetapi stok asalnya
     // berumur 40 hari (pindahan antar gudang) — kelompok wajib 31–60.
     mocks.prismaMock.inventoryLayer.findMany.mockResolvedValue([
@@ -166,10 +171,14 @@ describe("cakupan gudang loader laporan stok (ROUND5-SCOPE)", () => {
         item: { sku: "A", name: "Item A", unitOfMeasure: "pcs", category: null },
       },
     ])
-    const report = await loadStockAging([2])
-    const row = report.table.rows.find((r) => r.kind === "data" && r.cells[1] === "Item A")
-    expect(row?.kind === "data" ? row.cells[5] : null).toBe("40")
-    expect(row?.kind === "data" ? row.cells[6] : null).toBe("31–60 Hari")
+    try {
+      const report = await loadStockAging([2])
+      const row = report.table.rows.find((r) => r.kind === "data" && r.cells[1] === "Item A")
+      expect(row?.kind === "data" ? row.cells[5] : null).toBe("40")
+      expect(row?.kind === "data" ? row.cells[6] : null).toBe("31–60 Hari")
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("R6PA-04: loadStockSummary menapis gudang+layer dan scoped tak menampilkan yatim", async () => {
