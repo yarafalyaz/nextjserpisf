@@ -786,6 +786,23 @@ describe("Lead Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("expectedCloseDate")
   })
+  it("updateLead menolak lead soft-deleted (bacaan luar)", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({ id: 1, assignedTo: 1, deletedAt: new Date(), status: "new" })
+    const res = await actions.updateLead(1, fdMap({ name: "test", estimatedValue: "100" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/sudah dihapus/i)
+    expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+  it("updateLead menolak bila hapus konkuren commit sesudah bacaan luar (recheck segar dalam tx)", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, assignedTo: 1, deletedAt: null, status: "new" })
+      .mockResolvedValue({ id: 1, assignedTo: 1, deletedAt: new Date(), status: "new" })
+    const res = await actions.updateLead(1, fdMap({ name: "test", estimatedValue: "100" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/sudah dihapus/i)
+    expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
+  })
 })
 
 describe("F-2026-10-24-141-S duplikat lead (Model C)", () => {

@@ -2236,6 +2236,13 @@ export async function updateLead(id: number, formData: FormData) {
 
     const existing = await prisma.lead.findUniqueOrThrow({ where: { id } });
 
+    // Lead terhapus (soft-delete) tak boleh dimutasi: daftar/detail/edit
+    // menyaring deletedAt, jadi tulis ke tombstone tak terlihat UI tetapi
+    // mencemari data + aktivitas. Pola updateTicket di crm.actions.
+    if (existing.deletedAt) {
+      throw new Error("Lead sudah dihapus dan tidak dapat diubah");
+    }
+
     // Security Guard: Sales can only edit their own leads unless they have manage_leads permission.
     if (!isAdmin && existing.assignedTo !== Number(actor.id)) {
       throw new Error(
@@ -2310,6 +2317,12 @@ export async function updateLead(id: number, formData: FormData) {
       // eksekusi konkuren di antara keduanya tidak boleh tertimpa.
       await tx.$queryRaw`SELECT id FROM leads WHERE id = ${id} FOR UPDATE`;
       const fresh = await tx.lead.findUniqueOrThrow({ where: { id } });
+      // Hapus konkuren bisa commit di antara bacaan luar dan kunci ini:
+      // nilai tombstone dari baris segar, bukan snapshot luar (pola
+      // convertLead re-check fresh.deletedAt sesudah lock).
+      if (fresh.deletedAt) {
+        throw new Error("Lead sudah dihapus dan tidak dapat diubah");
+      }
       const freshLostCheck = validateLeadLostTransition({
         fromStatus: fresh.status,
         toStatus: v.status ?? null,
