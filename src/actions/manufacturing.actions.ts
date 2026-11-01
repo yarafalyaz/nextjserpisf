@@ -2321,6 +2321,33 @@ export async function updateProductionOrder(id: number, formData: FormData) {
         );
       }
 
+      // Relink WO dinilai seperti createProductionOrder: tautan BARU ke WO
+      // final (closed/completed/cancelled) tidak boleh lahir — PO draft akan
+      // jadi anak terbuka yang menghalangi tutup WO dan menghidupkan kembali
+      // jendela biaya job beku. Tautan lama yang tidak berubah tidak diganggu
+      // (hanya kelahiran tautan yang dinilai; edit lain pada PO lama tetap
+      // sah). Baca ulang di bawah kunci baris WO agar finalisasi bersamaan
+      // tidak bisa menyelip.
+      if (v.workOrderId != null && v.workOrderId !== current.workOrderId) {
+        await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${v.workOrderId} FOR UPDATE`;
+        const targetWo = await tx.workOrder.findUnique({
+          where: { id: v.workOrderId },
+          select: { id: true, status: true },
+        });
+        if (!targetWo) {
+          throw new Error(`Perintah Kerja #${v.workOrderId} tidak ditemukan.`);
+        }
+        if (
+          targetWo.status === "closed" ||
+          targetWo.status === "completed" ||
+          targetWo.status === "cancelled"
+        ) {
+          throw new Error(
+            `Perintah produksi tidak dapat dibuat untuk Perintah Kerja berstatus '${targetWo.status}'.`,
+          );
+        }
+      }
+
       const existingLines = current.materials ?? [];
       const pinnedRevisionId = current.bomRevisionId ?? null;
       const productChanged = current.productId != null && v.productId !== current.productId;

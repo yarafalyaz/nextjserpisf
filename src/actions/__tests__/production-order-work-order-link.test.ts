@@ -162,10 +162,62 @@ describe("updateProductionOrder — tautan Work Order tidak hilang", () => {
       documentNo: "MO-0001",
     })
     mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({ id: 1, standardCost: 0, materials: [] })
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 9, status: "in_progress" })
 
     const res = await updateProductionOrder(1, fd({ productId: 1, qty: 2, workOrderId: 9 }))
 
     expect(res.success).toBe(true)
+    const arg = mocks.prismaMock.productionOrder.update.mock.calls[0][0]
+    expect(arg.data.workOrderId).toBe(9)
+  })
+
+  it("menolak relink ke WO final (closed/completed/cancelled)", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      status: "draft",
+      documentNo: "MO-0001",
+      workOrderId: null,
+    })
+    mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({ id: 1, standardCost: 0, materials: [] })
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 9, status: "closed" })
+
+    const res = await updateProductionOrder(1, fd({ productId: 1, qty: 2, workOrderId: 9 }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/closed/)
+    expect(mocks.prismaMock.productionOrder.update).not.toHaveBeenCalled()
+  })
+
+  it("menolak relink ke WO yang tidak ditemukan", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      status: "draft",
+      documentNo: "MO-0001",
+      workOrderId: null,
+    })
+    mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({ id: 1, standardCost: 0, materials: [] })
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue(null)
+
+    const res = await updateProductionOrder(1, fd({ productId: 1, qty: 2, workOrderId: 9 }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak ditemukan")
+    expect(mocks.prismaMock.productionOrder.update).not.toHaveBeenCalled()
+  })
+
+  it("tautan WO lama yang tidak berubah tetap tersimpan walau WO kini final", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      status: "draft",
+      documentNo: "MO-0001",
+      workOrderId: 9,
+    })
+    mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({ id: 1, standardCost: 0, materials: [] })
+
+    const res = await updateProductionOrder(1, fd({ productId: 1, qty: 2, workOrderId: 9 }))
+
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.workOrder.findUnique).not.toHaveBeenCalled()
     const arg = mocks.prismaMock.productionOrder.update.mock.calls[0][0]
     expect(arg.data.workOrderId).toBe(9)
   })
