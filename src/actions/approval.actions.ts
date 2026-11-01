@@ -47,6 +47,34 @@ type WorkflowStepInput = {
 // — menulis status ke "dokumen" tahun akan menulis ke model yang salah.
 const GATE_ONLY_REFERENCE_TYPES = new Set(["Journal", "VendorPayment", "StockAdjustment", "Asset", "Project", "YearEndClosing"]);
 
+// Putaran 49: hanya SATU workflow aktif per modelType yang boleh hidup —
+// requestApprovalIfConfigured memilih pemenang ORDER BY priority DESC
+// LIMIT 1, tetapi priority tidak pernah ditulis action/UI (selalu 0),
+// jadi dua workflow aktif satu tipe berarti pemenang tak terdefinisi
+// (urutan InnoDB antar-baris setara) dan dokumen bisa ter-route ke
+// rantai approver yang tidak dimaksud. create/update/update-delete wajib
+// menolak aktivasi kedua; cek di dalam tx sesudah mengunci seluruh baris
+// aktif tipe itu FOR UPDATE supaya dua aktivasi konkuren terserialkan.
+async function assertSingleActiveWorkflowForType(
+  tx: Pick<typeof prisma, "approvalWorkflow" | "$executeRaw">,
+  modelType: string,
+  excludeId: number | null,
+): Promise<void> {
+  if (typeof tx.$executeRaw === "function") {
+    await tx.$executeRaw`SELECT id FROM approval_workflows WHERE model_type = ${modelType} AND is_active = 1 AND deleted_at IS NULL FOR UPDATE`;
+  }
+  const dupeRows = await tx.approvalWorkflow.findMany({
+    where: { modelType, isActive: true, deletedAt: null },
+    select: { id: true },
+  });
+  const dupe = dupeRows.find((r) => r.id !== excludeId) ?? null;
+  if (dupe) {
+    throw new Error(
+      "Tipe dokumen ini sudah punya alur persetujuan aktif lain — nonaktifkan alur tersebut terlebih dahulu sebelum mengaktifkan yang baru.",
+    );
+  }
+}
+
 // Vonis F-2026-10-25-014-V K4-S2(a): mematikan/menghapus workflow untuk
 // tipe gerbang uang WAJIB tercatat eksplisit di activity log — no-op
 // requestApprovalIfConfigured tanpa workflow sesudah itu tidak senyap.
@@ -741,6 +769,9 @@ export async function createApprovalWorkflow(formData: FormData) {
 
     const slug = await nextSlug("approvalWorkflow", name);
     const wf = await prisma.$transaction(async (tx) => {
+      if (isActive !== false) {
+        await assertSingleActiveWorkflowForType(tx, modelType, null);
+      }
       await lockReferencedRoles(
         tx,
         steps.map((s) => Number(s.roleId)),
@@ -804,6 +835,9 @@ export async function updateApprovalWorkflow(id: number, formData: FormData) {
     // between the guard and step replacement.
     const pendingApprovals = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM approval_workflows WHERE id = ${id} FOR UPDATE`;
+      if (isActive !== false) {
+        await assertSingleActiveWorkflowForType(tx, modelType, id);
+      }
       await lockReferencedRoles(
         tx,
         steps.map((s) => Number(s.roleId)),

@@ -290,6 +290,23 @@ describe("Approval Workflow CRUD", () => {
     expect(mocks.prismaMock.approvalWorkflow.update).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 49: createApprovalWorkflow menolak tipe yang sudah punya workflow aktif lain", async () => {
+    mocks.prismaMock.approvalWorkflow.findMany.mockResolvedValueOnce([{ id: 9 }]);
+    const res = await actions.createApprovalWorkflow(wfFd([{ name: "Step1", roleId: 1 }]));
+    expect(res?.success).toBe(false);
+    expect(res?.error).toMatch(/sudah punya alur persetujuan aktif lain/i);
+    expect(mocks.prismaMock.approvalWorkflow.create).not.toHaveBeenCalled();
+  });
+
+  it("regresi putaran 49: updateApprovalWorkflow menolak mengaktifkan tipe yang sudah punya workflow aktif lain", async () => {
+    mocks.prismaMock.approvalWorkflow.findMany.mockResolvedValueOnce([{ id: 9 }]);
+    const res = await actions.updateApprovalWorkflow(1, wfFd([{ name: "Step1", roleId: 1 }]));
+    expect(res?.success).toBe(false);
+    expect(res?.error).toMatch(/sudah punya alur persetujuan aktif lain/i);
+    expect(mocks.prismaMock.approvalWorkflowStep.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.approvalWorkflow.update).not.toHaveBeenCalled();
+  });
+
   it("createApprovalWorkflow succeeds", async () => {
     const res = await actions.createApprovalWorkflow(wfFd([{ name: "Step1", roleId: 1 }]));
     expect(res?.success).toBe(true);
