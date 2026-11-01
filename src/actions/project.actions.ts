@@ -988,6 +988,26 @@ function toBudgetItemData(data: BudgetItemData) {
   }
 }
 
+/**
+ * ProjectItem.itemId bare Int? tanpa relasi Item: payload langsung bisa
+ * menyimpan id gaib atau item ter-soft-delete/nonaktif sebagai
+ * `Item #<id>` hantu. Bila itemId dikirim, master item wajib hidup
+ * (pola material request); null tetap bebas untuk baris biaya deskriptif.
+ */
+async function assertBudgetItemLive(
+  tx: TxClient,
+  itemId: number | null | undefined,
+) {
+  if (itemId == null) return
+  const item = await tx.item.findFirst({
+    where: { id: itemId, deletedAt: null, isActive: true },
+    select: { id: true },
+  })
+  if (!item) {
+    throw new Error("Item tidak ditemukan, tidak aktif, atau sudah dihapus")
+  }
+}
+
 async function assertBudgetStageBelongsToProject(
   tx: TxClient,
   projectId: number,
@@ -1216,6 +1236,7 @@ export async function createProjectBudgetItem(projectId: number, formData: FormD
     const item = await prisma.$transaction(async (tx) => {
       const project = await loadBudgetProject(tx, projectId)
       assertBudgetUnlocked(project)
+      await assertBudgetItemLive(tx, parsed.data.itemId)
       await assertBudgetStageBelongsToProject(tx, projectId, parsed.data.projectStageId)
       return tx.projectItem.create({
         data: { projectId, ...toBudgetItemData(parsed.data) },
@@ -1243,6 +1264,7 @@ export async function updateProjectBudgetItem(formData: FormData) {
       if (!item) throw new Error("Baris RAB tidak ditemukan")
       const project = await loadBudgetProject(tx, item.projectId)
       assertBudgetUnlocked(project)
+      await assertBudgetItemLive(tx, parsed.data.itemId)
       await assertBudgetStageBelongsToProject(tx, item.projectId, parsed.data.projectStageId)
       await tx.projectItem.update({
         where: { id: parsed.data.id },
@@ -1468,6 +1490,7 @@ export async function applyProjectBudgetRevision(projectId: number, proposalLogI
       const appliedChanges: Record<string, unknown>[] = []
       for (const change of payload.changes) {
         if (change.type === "create") {
+          await assertBudgetItemLive(tx, change.data.itemId)
           await assertBudgetStageBelongsToProject(tx, projectId, change.data.projectStageId)
           const created = await tx.projectItem.create({
             data: { projectId, ...toBudgetItemData(change.data) },
@@ -1485,6 +1508,7 @@ export async function applyProjectBudgetRevision(projectId: number, proposalLogI
           if (!existing) {
             throw new Error(`Baris RAB #${change.projectItemId} tidak ditemukan pada proyek ini.`)
           }
+          await assertBudgetItemLive(tx, change.data.itemId)
           await assertBudgetStageBelongsToProject(tx, projectId, change.data.projectStageId)
           const next = toBudgetItemData(change.data)
           for (const field of ["itemId", "projectStageId", "category", "description", "qty", "cost", "sortOrder"] as const) {

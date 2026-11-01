@@ -92,6 +92,8 @@ beforeEach(() => {
   mocks.prismaMock.costCenter.findFirst.mockResolvedValue({ id: 1 })
   // Baca ulang proyek di dalam tx updateProject: default proyek ada.
   mocks.prismaMock.project.findUnique.mockResolvedValue({ id: 1, customerVehicleId: null })
+  // Item hidup untuk baris RAB; test item gaib/mati menimpa eksplisit.
+  mocks.prismaMock.item.findFirst.mockResolvedValue({ id: 1 })
 })
 
 describe("Project Actions Error Paths", () => {
@@ -1465,6 +1467,52 @@ describe("RAB proyek F-2026-10-21-030", () => {
     expect(logArg.data.details.changes).toContainEqual(
       expect.objectContaining({ projectItemId: 5, field: "cost", old: 500, new: 900 }),
     )
+  })
+
+  it("createProjectBudgetItem menolak itemId gaib/mati tanpa menulis (putaran 25)", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(unlockedProject())
+    mocks.prismaMock.item.findFirst.mockResolvedValue(null)
+    const res = await actions.createProjectBudgetItem(
+      10,
+      fdMap({ itemId: 999999, description: "Item hantu", qty: 1, cost: 5000 }),
+    )
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Item tidak ditemukan")
+    expect(mocks.prismaMock.projectItem.create).not.toHaveBeenCalled()
+  })
+
+  it("updateProjectBudgetItem menolak itemId gaib/mati dari transaksi tanpa menulis (putaran 25)", async () => {
+    mocks.prismaMock.projectItem.findUnique.mockResolvedValue({ id: 5, projectId: 10 })
+    mocks.prismaMock.project.findUnique.mockResolvedValue(unlockedProject())
+    mocks.prismaMock.item.findFirst.mockResolvedValue(null)
+    const res = await actions.updateProjectBudgetItem(
+      fdMap({ id: 5, itemId: 999999, description: "x", qty: 1, cost: 1000 }),
+    )
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Item tidak ditemukan")
+    expect(mocks.prismaMock.projectItem.update).not.toHaveBeenCalled()
+  })
+
+  it("terapkan revisi menolak itemId gaib/mati tanpa menulis (putaran 25)", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({ budgetLockedAt: new Date(2026, 9, 20), budgetRevisionNo: 1 }),
+    )
+    mocks.prismaMock.projectLog.findFirst.mockResolvedValue({
+      id: 31,
+      notes: "Tambah item hantu",
+      userId: 2,
+      details: {
+        reason: "Tambah item hantu",
+        changes: [{ type: "create", data: { itemId: 999999, qty: 1, cost: 1000 } }],
+      },
+    })
+    mocks.prismaMock.projectLog.findMany.mockResolvedValue([])
+    mocks.prismaMock.item.findFirst.mockResolvedValue(null)
+    const res = await actions.applyProjectBudgetRevision(10, 31)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Item tidak ditemukan")
+    expect(mocks.prismaMock.projectItem.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
   })
 
   it("revisi yang sudah diputuskan tidak dapat diterapkan dua kali", async () => {
