@@ -152,6 +152,7 @@ export async function updateTicket(id: number, formData: FormData) {
         status: true,
         firstResponseAt: true,
         resolvedAt: true,
+        closedAt: true,
         deletedAt: true,
         customerId: true,
         assignedTo: true,
@@ -209,6 +210,12 @@ export async function updateTicket(id: number, formData: FormData) {
             : data.status && (data.status === "resolved" || data.status === "closed") && !existing.resolvedAt
               ? new Date()
               : undefined,
+        // closedAt sebelumnya yatim (tak pernah ditulis): stempel saat
+        // masuk closed, pertahankan cap pertama pada edit tetap-closed.
+        // Keluar dari closed sudah ditolak di atas, jadi tak ada jalur
+        // pengosongan.
+        closedAt:
+          data.status === "closed" ? (existing.closedAt ?? new Date()) : undefined,
       },
     })
   })

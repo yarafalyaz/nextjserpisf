@@ -150,6 +150,15 @@ describe("CRM Ticket Actions", () => {
     expect(String(res?.error)).toMatch(/sudah ditutup final/i)
     expect(mocks.prismaMock.crmTicket.update).not.toHaveBeenCalled()
   })
+  // Regresi putaran 46: CrmTicket.closedAt kolom yatim — tak pernah ditulis
+  // walau tiket masuk closed, jadi selalu NULL untuk semua baris.
+  it("regresi putaran 46: updateTicket mengisi closedAt saat masuk closed", async () => {
+    mocks.prismaMock.crmTicket.findUnique.mockResolvedValueOnce({ status: "resolved", firstResponseAt: new Date(), resolvedAt: new Date(), deletedAt: null, customerId: null, assignedTo: null })
+    const res = await actions.updateTicket(1, fdMap({ subject: "Tiket", status: "closed" }))
+    expect(res?.success).toBe(true)
+    const data = mocks.prismaMock.crmTicket.update.mock.calls[mocks.prismaMock.crmTicket.update.mock.calls.length - 1][0].data
+    expect(data.closedAt).toBeInstanceOf(Date)
+  })
   it("regresi putaran 46: edit tiket closed dengan status tetap closed tetap boleh", async () => {
     mocks.prismaMock.crmTicket.findUnique.mockResolvedValueOnce({ status: "closed", firstResponseAt: new Date(), resolvedAt: new Date(), deletedAt: null, customerId: null, assignedTo: null })
     const res = await actions.updateTicket(1, fdMap({ subject: "Tiket revisi", status: "closed" }))
