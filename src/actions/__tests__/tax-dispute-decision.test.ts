@@ -182,4 +182,36 @@ describe("createTaxDisputeStep — rantai dicek ulang di dalam tx terkunci", () 
       data: { status: "DIPROSES" },
     })
   })
+
+  it("regresi putaran 16: gerbang periode createTaxDisputeStep menerima tx, bukan prisma global", async () => {
+    mocks.txAssessmentFindFirst.mockResolvedValue({ id: 3, sentAt: null, status: "TERDAFTAR", steps: [] })
+    const result = await createTaxDisputeStep(fd({ assessmentId: "3", kind: "KEBERATAN", filedAt: "2026-10-01" }))
+    expect(result.success).toBe(true)
+    expect(mocks.assertPeriodOpen).toHaveBeenCalledTimes(1)
+    const [, txArg] = mocks.assertPeriodOpen.mock.calls[0] as unknown[]
+    expect(txArg).toBeDefined()
+    expect(txArg).not.toBeUndefined()
+    // tx mock membawa $queryRaw kunci assessment — prisma global mock tidak.
+    expect((txArg as { $queryRaw?: unknown }).$queryRaw).toBeDefined()
+  })
+
+  it("regresi putaran 16: gerbang periode recordTaxDisputeDecision menerima tx", async () => {
+    mocks.txStepFindUnique
+      .mockResolvedValueOnce({ assessmentId: 3 })
+      .mockResolvedValueOnce({
+        id: 9,
+        assessmentId: 3,
+        status: "DIAJUKAN",
+        filedBy: 99,
+        assessment: { disputedAmount: 1000, status: "DIPROSES" },
+      })
+    mocks.txStepFindMany.mockResolvedValue([{ decidedAmount: 400, result: "DIKABULKAN" }])
+    const result = await recordTaxDisputeDecision(
+      fd({ stepId: "9", result: "DIKABULKAN", decidedAtInput: "2026-10-01", decidedAmount: "400" }),
+    )
+    expect(result.success).toBe(true)
+    expect(mocks.assertPeriodOpen).toHaveBeenCalledTimes(1)
+    const [, txArg] = mocks.assertPeriodOpen.mock.calls[0] as unknown[]
+    expect((txArg as { $queryRaw?: unknown }).$queryRaw).toBeDefined()
+  })
 })

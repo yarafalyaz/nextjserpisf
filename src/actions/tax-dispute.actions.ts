@@ -118,14 +118,16 @@ export async function createTaxDisputeStep(formData: FormData): Promise<TaxDispu
     assertStepKind(v.kind, v.article36Subkind ?? null)
 
     const filedAt = v.filedAt ? wibDateToUtcMidnight(v.filedAt) : null
-    if (filedAt) await assertPeriodOpen(filedAt)
 
     const idempotencyKey = formData.get("idempotencyKey") as string | null
 
     // Atomik: baris ketetapan dikunci FOR UPDATE, lalu status + rantai upaya
     // dicek ULANG di dalam tx — tanpa ini dua pengajuan konkuren sama-sama
-    // lolos penjaga rantai dari baca luar yang basi.
+    // lolos penjaga rantai dari baca luar yang basi. Gerbang periode juga di
+    // DALAM tx (seperti createTaxAssessment): assertPeriodOpen(tx) mengunci
+    // baris system_settings, jadi tutup-periode tak lolos di jendela cek-tulis.
     const created = await prisma.$transaction(async (tx) => {
+      if (filedAt) await assertPeriodOpen(filedAt, tx as never)
       await tx.$queryRaw`SELECT id FROM tax_assessments WHERE id = ${v.assessmentId} FOR UPDATE`
       const assessment = await tx.taxAssessment.findFirst({
         where: { id: v.assessmentId, deletedAt: null },
@@ -201,7 +203,6 @@ export async function recordTaxDisputeDecision(formData: FormData): Promise<TaxD
     assertStepResult(v.result)
 
     const decidedAt = wibDateToUtcMidnight(v.decidedAtInput)
-    await assertPeriodOpen(decidedAt)
 
     const decidedAmount = v.decidedAmount ?? 0
     const idempotencyKey = formData.get("idempotencyKey") as string | null
@@ -209,8 +210,11 @@ export async function recordTaxDisputeDecision(formData: FormData): Promise<TaxD
     // Atomik: baris ketetapan dikunci FOR UPDATE, upaya + nominal dibaca
     // ULANG di dalam tx, lalu upaya diklaim lewat updateMany bersyarat —
     // tanpa ini dua perekam konkuren sama-sama lolos cek "belum ditutup"
-    // dari baca luar dan putusan ganda tertulis.
+    // dari baca luar dan putusan ganda tertulis. Gerbang periode juga di
+    // DALAM tx (seperti createTaxAssessment) agar tutup-periode tak lolos
+    // di jendela cek-tulis.
     const updated = await prisma.$transaction(async (tx) => {
+      await assertPeriodOpen(decidedAt, tx as never)
       const probe = await tx.taxDisputeStep.findUnique({
         where: { id: v.stepId },
         select: { assessmentId: true },
