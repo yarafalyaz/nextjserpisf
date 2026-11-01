@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
     createMany: vi.fn().mockResolvedValue({ count: 1 }),
     update: vi.fn().mockResolvedValue({}),
     updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    count: vi.fn().mockResolvedValue(0),
     delete: vi.fn().mockResolvedValue({}),
     deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
   })
@@ -161,6 +162,18 @@ describe("CRM Ticket Actions", () => {
     const res = await actions.deleteTicket(1)
     expect(res?.success).toBe(true)
   })
+  it("regression round 19: deleteTicket dengan komentar -> soft-delete, histori tidak cascade-hilang", async () => {
+    // CrmTicketComment.ticket onDelete Cascade: hard delete memusnahkan
+    // komentar. Baris beranak wajib soft-delete (fallback P2003 tidak
+    // pernah terpanggil karena cascade, bukan restrict).
+    mocks.prismaMock.crmTicketComment.count.mockResolvedValueOnce(3)
+    const res = await actions.deleteTicket(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.crmTicket.delete).not.toHaveBeenCalled()
+    const softArg = mocks.prismaMock.crmTicket.update.mock.calls.at(-1)![0]
+    expect(softArg.where).toEqual({ id: 1 })
+    expect(softArg.data.deletedAt).toBeInstanceOf(Date)
+  })
   it("deleteTicket handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.crmTicket.delete.mockRejectedValueOnce(new Error("db err"))
@@ -173,6 +186,16 @@ describe("CRM Ticket Actions", () => {
 describe("CRM Lead Actions", () => {
   it("deleteLead succeeds", async () => {
     await expect(actions.deleteLead(1)).rejects.toThrow("NEXT_REDIRECT")
+  })
+  it("regression round 19: deleteLead dengan aktivitas -> soft-delete, histori tidak cascade-hilang", async () => {
+    // LeadActivity.lead onDelete Cascade: hard delete memusnahkan histori
+    // aktivitas (laporan churn/follow-up). Baris beranak wajib soft-delete.
+    mocks.prismaMock.leadActivity.count.mockResolvedValueOnce(2)
+    await expect(actions.deleteLead(1)).rejects.toThrow("NEXT_REDIRECT")
+    expect(mocks.prismaMock.lead.delete).not.toHaveBeenCalled()
+    const softArg = mocks.prismaMock.lead.update.mock.calls.at(-1)![0]
+    expect(softArg.where).toEqual({ id: 1 })
+    expect(softArg.data.deletedAt).toBeInstanceOf(Date)
   })
   it("deleteLead handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})

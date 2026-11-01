@@ -165,10 +165,18 @@ export async function deleteTicket(id: number) {
   // CrmTicket has a deletedAt column; use the same hardDeleteOrSoftDelete
   // convention as Customer/Vendor/Item so a ticket referenced by a comment
   // or audit row soft-deletes instead of FK-erroring the action.
-  await hardDeleteOrSoftDelete(
-    () => prisma.crmTicket.delete({ where: { id } }),
-    () => prisma.crmTicket.update({ where: { id }, data: { deletedAt: new Date() } }),
-  )
+  // CrmTicketComment.ticket ber-onDelete Cascade: hard delete tiket beranak
+  // TIDAK memicu P2003 — komentar ikut musnah senyap. Tiket berkomentar
+  // langsung soft-delete; hard delete hanya untuk tiket tanpa komentar.
+  const commentCount = await prisma.crmTicketComment.count({ where: { ticketId: id } })
+  if (commentCount > 0) {
+    await prisma.crmTicket.update({ where: { id }, data: { deletedAt: new Date() } })
+  } else {
+    await hardDeleteOrSoftDelete(
+      () => prisma.crmTicket.delete({ where: { id } }),
+      () => prisma.crmTicket.update({ where: { id }, data: { deletedAt: new Date() } }),
+    )
+  }
   revalidatePath("/crm/tickets")
   await logActivity("delete", "Ticket", id, "Menghapus tiket")
   return { success: true }
@@ -188,10 +196,18 @@ export async function deleteLead(id: number) {
   await requirePermission("delete_leads")
   // Lead has a deletedAt column — soft-delete on FK conflicts to preserve the
   // churn-history report and avoid orphaning converted-lead references.
-  await hardDeleteOrSoftDelete(
-    () => prisma.lead.delete({ where: { id } }),
-    () => prisma.lead.update({ where: { id }, data: { deletedAt: new Date() } }),
-  )
+  // LeadActivity.lead ber-onDelete Cascade: hard delete lead beraktivitas
+  // TIDAK memicu P2003 — histori aktivitas ikut musnah senyap. Lead
+  // beraktivitas langsung soft-delete; hard delete hanya tanpa aktivitas.
+  const activityCount = await prisma.leadActivity.count({ where: { leadId: id } })
+  if (activityCount > 0) {
+    await prisma.lead.update({ where: { id }, data: { deletedAt: new Date() } })
+  } else {
+    await hardDeleteOrSoftDelete(
+      () => prisma.lead.delete({ where: { id } }),
+      () => prisma.lead.update({ where: { id }, data: { deletedAt: new Date() } }),
+    )
+  }
   revalidatePath("/crm/leads")
   await logActivity("delete", "Lead", id, "Menghapus lead")
   redirect("/crm/leads")
