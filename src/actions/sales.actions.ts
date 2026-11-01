@@ -70,6 +70,7 @@ async function creditGateBlockedResult(e: unknown) {
   }
 }
 import { findOverReturn } from "@/lib/sales/return-validation"
+import { assertItemsExistAndActive } from "@/lib/services/material-request.service"
 import { isSettled, SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status"
 import { resolveDueDate } from "@/lib/finance/vendor-bill"
 import { findCumulativeQtyExcess, cumulativeValueExcess } from "@/lib/sales/cumulative-cap"
@@ -92,6 +93,26 @@ export interface PricedLineMeta {
   priceSource?: PriceSource | null
   priceListId?: number | null
   priceListMinQty?: number | null
+}
+
+/**
+ * Master hidup untuk dokumen penjualan BARU: soft-delete mempertahankan
+ * baris Customer sehingga FK tetap lolos; tanpa guard ini dokumen lahir
+ * untuk customer yang sudah dinonaktifkan/dihapus (pola vendor hidup di
+ * purchase.actions). Update dokumen lama tidak memakai guard ini.
+ */
+async function assertCustomerLiveForNewDocument(
+  client: Prisma.TransactionClient | typeof prisma,
+  customerId: number,
+): Promise<void> {
+  const customer = await client.customer.findFirst({
+    where: { id: customerId, deletedAt: null },
+    select: { id: true, name: true, isActive: true },
+  })
+  if (!customer) throw new Error("Customer tidak ditemukan atau sudah dihapus")
+  if (!customer.isActive) {
+    throw new Error(`Customer ${customer.name} tidak aktif; dokumen baru tidak dapat dibuat`)
+  }
 }
 
 // F-PRICELIST-01 tahap 1: terapkan daftar harga pelanggan ke baris dokumen
@@ -250,6 +271,22 @@ export async function createQuotation(formData: FormData) {
   const parsedDates = quotationDatesSchema.safeParse({ date: data.date, validUntil: data.validUntil })
   if (!parsedDates.success) {
     throw new Error(parsedDates.error.issues[0]?.message ?? "Tanggal penawaran tidak valid")
+  }
+
+  if (data.customerId) {
+    await assertCustomerLiveForNewDocument(prisma, Number(data.customerId))
+    // QuotationItem.itemId tanpa FK ke Item: payload langsung bisa menanam
+    // item mati/fiktif tanpa bacaan master di jalur lain.
+    const quotationItemIds = [
+      ...new Set(
+        ((data.sections || []) as Array<{ items?: Array<{ itemId?: unknown }> }>).flatMap((section) =>
+          (section.items || [])
+            .map((item) => (item.itemId ? Number(item.itemId) : null))
+            .filter((id): id is number => id != null && Number.isFinite(id) && id > 0),
+        ),
+      ),
+    ]
+    if (quotationItemIds.length > 0) await assertItemsExistAndActive(prisma, quotationItemIds)
   }
 
   const documentNo = await generateDocumentNumber("QUO")
@@ -1130,6 +1167,7 @@ export async function createSalesOrder(formData: FormData) {
 
   const salesOrder = await prisma.$transaction(async (tx) => {
     await checkIdempotency(idempotencyKey, tx, user.id)
+    await assertCustomerLiveForNewDocument(tx, v.customerId)
 
     // Satu penawaran hanya boleh menghasilkan SATU pesanan penjualan. Tanpa
     // penjagaan ini, tombol "+ Pesanan Penjualan" di halaman penawaran bisa
@@ -2018,6 +2056,7 @@ export async function createSalesInvoice(formData: FormData) {
 
   const invoice = await prisma.$transaction(async (tx) => {
     await checkIdempotency(idempotencyKey, tx, user.id)
+    await assertCustomerLiveForNewDocument(tx, v.customerId)
 
     // Kunci baris SO SEBELUM bacaan pertama atas SO: gerbang status di
     // bawah dan cap kumulatif di assertInvoiceWithinSalesOrderCap membaca
@@ -2095,8 +2134,16 @@ export async function createSalesInvoice(formData: FormData) {
       if (itemIds.length > 0) {
         const masters = await tx.item.findMany({
           where: { id: { in: itemIds } },
-          select: { id: true, unitOfMeasure: true, isService: true },
+          select: { id: true, unitOfMeasure: true, isService: true, name: true, isActive: true, deletedAt: true },
         })
+        // Baris ber-itemId wajib menunjuk master hidup: item soft-delete
+        // tetap lolos FK, dan master hilang dulu jatuh diam-diam ke
+        // snapshot null. Baris bebas (itemId null) tak tersentuh.
+        for (const itemId of itemIds) {
+          const master = masters.find((m) => m.id === itemId)
+          if (!master || master.deletedAt) throw new Error(`Item #${itemId} tidak ditemukan`)
+          if (!master.isActive) throw new Error(`Item ${master.name} tidak aktif; tidak dapat difaktur`)
+        }
         for (const master of masters) masterById.set(master.id, master)
       }
       items = items.map((item) => {

@@ -81,6 +81,7 @@ function formData(extra: Record<string, string> = {}) {
 function wireTransaction() {
   const tx = {
     $queryRaw: queryRawMock,
+    customer: { findFirst: vi.fn(async () => ({ id: 1, name: "PT A", isActive: true })) },
     salesOrder: { findFirst: soFindFirstMock, create: soCreateMock },
     quotation: { findUnique: quotationFindUniqueMock },
   }

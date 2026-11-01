@@ -166,6 +166,13 @@ const SO = { id: 1, documentNo: "SO-001", status: "confirmed", customerId: 7, gr
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: 3 })
+  // Master hidup default untuk guard dokumen baru (putaran 23).
+  mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 7, name: "PT A", isActive: true })
+  mocks.prismaMock.item.findMany.mockImplementation(async (args: any) =>
+    ((args?.where?.id?.in ?? []) as number[]).map((id) => ({
+      id, name: `Item ${id}`, unitOfMeasure: "PCS", isService: false, isActive: true, deletedAt: null,
+    })),
+  )
   mocks.prismaMock.$transaction.mockImplementation(async (ops: any) => {
     if (typeof ops === "function") return ops(mocks.prismaMock)
     return Promise.all(ops)

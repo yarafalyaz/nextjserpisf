@@ -164,6 +164,10 @@ beforeEach(() => {
     if (typeof ops === "function") return ops(mocks.prismaMock)
     return Promise.all(ops)
   })
+  // Dokumen penjualan baru menolak customer nonaktif/terhapus — fixture
+  // master hidup agar test ini tetap mengukur period lock.
+  mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 1, name: "PT A", isActive: true })
+  mocks.prismaMock.customer.findUnique.mockResolvedValue({ paymentTerm: null })
 })
 
 describe("lapis-2 period lock: faktur penjualan", () => {

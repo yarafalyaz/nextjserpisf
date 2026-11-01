@@ -281,6 +281,11 @@ describe("Quotation Actions", () => {
     vi.clearAllMocks()
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.generateDocNumMock.mockResolvedValue("Q-001")
+    // Master hidup default untuk guard dokumen baru (putaran 23).
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 1, name: "PT A", isActive: true })
+    mocks.prismaMock.item.findMany.mockImplementation(async (args: any) =>
+      ((args?.where?.id?.in ?? [5]) as number[]).map((id) => ({ id, name: `Item ${id}`, isActive: true })),
+    )
     mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue({ id: 1 })
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({
       id: 1, status: "draft", sections: [{ items: [{ id: 1 }] }]
@@ -312,6 +317,34 @@ describe("Quotation Actions", () => {
     const res = await actions.createQuotation(fdQuotation({ ...basicPayload, customerVehicleId: 1 }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("Kendaraan tidak terdaftar")
+  })
+  // Master mati tak boleh melahirkan dokumen baru: soft-delete mempertahankan
+  // baris Customer/Item sehingga FK tetap lolos tanpa guard hidup.
+  it("createQuotation menolak customer nonaktif", async () => {
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 1, name: "PT Mati", isActive: false })
+    const res = await actions.createQuotation(fdQuotation(basicPayload))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.quotation.create).not.toHaveBeenCalled()
+  })
+  it("createQuotation menolak customer terhapus (tak ditemukan hidup)", async () => {
+    mocks.prismaMock.customer.findFirst.mockResolvedValue(null)
+    const res = await actions.createQuotation(fdQuotation(basicPayload))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak ditemukan")
+    expect(mocks.prismaMock.quotation.create).not.toHaveBeenCalled()
+  })
+  it("createQuotation menolak item nonaktif di baris", async () => {
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 1, name: "PT A", isActive: true })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 5, name: "Busi", isActive: false }])
+    const payload = {
+      customerId: 1, date: "2026-06-12", discount: 0, tax: 0,
+      sections: [{ items: [{ itemId: 5, qty: 1, unitPrice: 100, discountType: "amount", discount: 0 }] }],
+    }
+    const res = await actions.createQuotation(fdQuotation(payload))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.quotation.create).not.toHaveBeenCalled()
   })
   it("createQuotation computes subtotal/totals correctly with discount amount", async () => {
     const payload = {
@@ -681,6 +714,7 @@ describe("Sales Order Actions", () => {
     vi.clearAllMocks()
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.generateDocNumMock.mockResolvedValue("SO-001")
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 1, name: "PT A", isActive: true })
   })
 
   // === guards (G5 GL-BR-003: edit SO hanya draft/approved; posted/final dikunci) ===
@@ -748,6 +782,13 @@ describe("Sales Order Actions", () => {
     expect(mocks.prismaMock.salesOrderItem.deleteMany).toHaveBeenCalledTimes(1)
     expect(mocks.prismaMock.salesOrderItem.createMany).toHaveBeenCalledTimes(1)
   })
+  it("createSalesOrder menolak customer terhapus", async () => {
+    mocks.prismaMock.customer.findFirst.mockResolvedValue(null)
+    const res = await actions.createSalesOrder(fdMap({ customerId: "1", date: "2026-06-12" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak ditemukan")
+    expect(mocks.prismaMock.salesOrder.create).not.toHaveBeenCalled()
+  })
 })
 
 describe("Sales Invoice Actions", () => {
@@ -755,6 +796,32 @@ describe("Sales Invoice Actions", () => {
     vi.clearAllMocks()
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.generateDocNumMock.mockResolvedValue("INV-001")
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 7, name: "PT A", isActive: true })
+    mocks.prismaMock.item.findMany.mockImplementation(async (args: any) =>
+      ((args?.where?.id?.in ?? []) as number[]).map((id) => ({
+        id, name: `Item ${id}`, unitOfMeasure: "PCS", isService: false, isActive: true, deletedAt: null,
+      })),
+    )
+  })
+
+  it("createSalesInvoice menolak customer nonaktif", async () => {
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 7, name: "PT Mati", isActive: false })
+    const res = await actions.createSalesInvoice(fdMap({ customerId: "7", date: "2026-06-12", items: "[]" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.salesInvoice.create).not.toHaveBeenCalled()
+  })
+
+  it("createSalesInvoice menolak item nonaktif di baris form", async () => {
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 7, name: "PT A", isActive: true })
+    mocks.prismaMock.item.findMany.mockResolvedValue([
+      { id: 11, unitOfMeasure: "PCS", isService: false, isActive: false, deletedAt: null },
+    ])
+    const items = JSON.stringify([{ itemId: 11, qty: 1, unitPrice: 100, discount: 0 }])
+    const res = await actions.createSalesInvoice(fdMap({ customerId: "7", date: "2026-06-12", items }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.salesInvoice.create).not.toHaveBeenCalled()
   })
 
   // === postInvoice ===
@@ -1593,6 +1660,12 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     mocks.prismaMock.salesOrder.create.mockResolvedValue({ id: 1 })
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.generateDocNumMock.mockResolvedValue("SO-001")
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 1, name: "PT A", isActive: true })
+    mocks.prismaMock.item.findMany.mockImplementation(async (args: any) =>
+      ((args?.where?.id?.in ?? []) as number[]).map((id) => ({
+        id, name: `Item ${id}`, unitOfMeasure: "PCS", isService: false, isActive: true, deletedAt: null,
+      })),
+    )
   })
   it("createSalesOrder succeeds", async () => {
     const res = await actions.createSalesOrder(fdMap({ customerId: "1", date: "2026-06-12" }))
@@ -1709,8 +1782,8 @@ describe("Sales Order Actions (legacy happy paths)", () => {
 
   it("R6IE-07: createSalesInvoice membekukan uom dan isService dari master item", async () => {
     mocks.prismaMock.item.findMany.mockResolvedValue([
-      { id: 11, unitOfMeasure: "BOX", isService: false },
-      { id: 12, unitOfMeasure: "JAM", isService: true },
+      { id: 11, name: "Barang", unitOfMeasure: "BOX", isService: false, isActive: true, deletedAt: null },
+      { id: 12, name: "Jasa", unitOfMeasure: "JAM", isService: true, isActive: true, deletedAt: null },
     ])
     const items = JSON.stringify([
       { itemId: 11, qty: 2, unitPrice: 300, discount: 0, description: "Barang" },
@@ -1726,7 +1799,7 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     expect(arg.data.items.create[2]).toMatchObject({ uom: null, isService: null })
     expect(mocks.prismaMock.item.findMany).toHaveBeenCalledWith({
       where: { id: { in: [11, 12] } },
-      select: { id: true, unitOfMeasure: true, isService: true },
+      select: { id: true, unitOfMeasure: true, isService: true, name: true, isActive: true, deletedAt: true },
     })
   })
 
@@ -1895,6 +1968,7 @@ describe("Sales Invoice Actions (legacy happy paths)", () => {
     vi.clearAllMocks()
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.generateDocNumMock.mockResolvedValue("INV-001")
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 1, name: "PT A", isActive: true })
   })
   it("createSalesInvoice succeeds", async () => {
     const res = await actions.createSalesInvoice(fdMap({ customerId: "1", date: "2026-06-12", dueDate: "2026-06-20" }))

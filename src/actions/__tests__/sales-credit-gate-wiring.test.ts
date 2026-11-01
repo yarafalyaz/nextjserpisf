@@ -35,6 +35,7 @@ vi.mock("@/lib/db/prisma", () => ({
       fn({
         $queryRaw: vi.fn(async () => []),
         $executeRaw: vi.fn(async () => 0),
+        customer: { findFirst: vi.fn(async () => ({ id: 3, name: "PT A", isActive: true })) },
         salesOrder: {
           findFirst: mocks.soFindFirst,
           create: mocks.soCreate,
