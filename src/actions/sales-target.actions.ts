@@ -34,6 +34,7 @@ import { revalidatePath } from "next/cache"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma, TxClient } from "@/lib/db/prisma"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
+import { dateOnly } from "@/lib/validations/finance.schemas"
 import {
   findOverlappingSalesTarget,
   validateSalesTargetInput,
@@ -58,14 +59,15 @@ function cleanText(value: unknown): string {
 }
 
 function parsePeriodDate(value: string, label: string): Date {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    throw new Error(`${label} wajib format YYYY-MM-DD`)
+  // Tanggal mustahil (2026-02-30) wajib ditolak: wibDateToUtcMidnight memakai
+  // Date.UTC yang menggulirkannya diam-diam ke 2 Maret, dan cek NaN tidak
+  // pernah true untuk komponen numerik. dateOnly menilai round-trip kalender
+  // (pola jalur penjualan lain).
+  const parsed = dateOnly.safeParse(value)
+  if (!parsed.success) {
+    throw new Error(`${label}: ${parsed.error.issues[0]?.message ?? "Tanggal tidak valid"}`)
   }
-  const parsed = wibDateToUtcMidnight(value)
-  if (Number.isNaN(parsed.getTime())) {
-    throw new Error(`${label} wajib format YYYY-MM-DD`)
-  }
-  return parsed
+  return wibDateToUtcMidnight(parsed.data)
 }
 
 function formatPeriod(start: Date, end: Date): string {

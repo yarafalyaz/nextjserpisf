@@ -137,6 +137,14 @@ describe("createSalesTarget", () => {
     expect(mocks.txMock.salesTarget.create).not.toHaveBeenCalled()
   })
 
+  it("tanggal mulai mustahil 2026-02-30 ditolak (tidak digulirkan ke 2 Maret)", async () => {
+    const res = await createSalesTarget({ ...INPUT, periodStart: "2026-02-30", periodEnd: "2026-03-31" })
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("Tanggal tidak valid")
+    expect(mocks.txMock.salesTarget.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
   it("BR-TGT-04: target 0 ditolak sebelum tulis", async () => {
     const res = await createSalesTarget({ ...INPUT, targetAmount: 0 })
     expect(res.success).toBe(false)
