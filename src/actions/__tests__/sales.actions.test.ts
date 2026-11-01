@@ -1658,6 +1658,19 @@ describe("Quotation Actions (legacy happy paths)", () => {
     const res = await actions.deleteQuotation(1)
     expect(res?.success).toBe(true)
   })
+  it("regresi putaran 24: deleteQuotation menolak WO turunan ber-catatan QC", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.workOrder.findMany.mockResolvedValueOnce([{ id: 7, projectId: null }])
+    ;(mocks.prismaMock as any).qcInspection = { count: vi.fn().mockResolvedValue(1) }
+    ;(mocks.prismaMock as any).nonconformance = { count: vi.fn().mockResolvedValue(0) }
+    const res = await actions.deleteQuotation(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("catatan QC")
+    expect(mocks.prismaMock.workOrder.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.quotation.delete).not.toHaveBeenCalled()
+    mocks.prismaMock.workOrder.findMany.mockResolvedValue([])
+  })
   it("deleteQuotation menolak bila faktur turunan hidup (P3 121-V: void dulu)", async () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     // findMany ke-1 = liveInvoices (ada 1 posted), sisanya default []

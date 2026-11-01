@@ -18,6 +18,9 @@ const tx = {
   salesOrderItem: { deleteMany: vi.fn() },
   workOrder: { findMany: vi.fn(), deleteMany: vi.fn() },
   workOrderItem: { deleteMany: vi.fn() },
+  // Putaran 24: guard catatan QC polimorfik atas WO turunan; default kosong.
+  qcInspection: { count: vi.fn().mockResolvedValue(0) },
+  nonconformance: { count: vi.fn().mockResolvedValue(0) },
   project: { findMany: vi.fn(), deleteMany: vi.fn() },
   downPayment: { findMany: vi.fn(), deleteMany: vi.fn() },
   quotationSection: { findMany: vi.fn(), deleteMany: vi.fn() },

@@ -71,6 +71,7 @@ async function creditGateBlockedResult(e: unknown) {
 }
 import { findOverReturn } from "@/lib/sales/return-validation"
 import { assertItemsExistAndActive } from "@/lib/services/material-request.service"
+import { assertQcReferenceUnreferenced } from "@/lib/services/qc.service"
 import { isSettled, SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status"
 import { resolveDueDate } from "@/lib/finance/vendor-bill"
 import { findCumulativeQtyExcess, cumulativeValueExcess } from "@/lib/sales/cumulative-cap"
@@ -3136,6 +3137,12 @@ export async function deleteQuotation(id: number) {
 
     const workOrders = await tx.workOrder.findMany({ where: { quotationId: id }, select: { id: true, projectId: true } })
     const workOrderIds = workOrders.map((wo) => wo.id)
+    // Putaran 24: WO turunan dihapus fisik di sini — catatan QC polimorfik
+    // (inspeksi/NCR tanpa FK) wajib dinilai dulu seperti jalur langsung
+    // deleteWorkOrder, atau catatan itu yatim dan mewarisi id terpakai ulang.
+    for (const woId of workOrderIds) {
+      await assertQcReferenceUnreferenced("WorkOrder", woId, tx)
+    }
     const candidateProjectIds = [...new Set(workOrders.map((wo) => wo.projectId).filter((pid): pid is number => pid !== null))]
     if (workOrderIds.length) await tx.workOrderItem.deleteMany({ where: { workOrderId: { in: workOrderIds } } })
     if (workOrderIds.length) await tx.workOrder.deleteMany({ where: { id: { in: workOrderIds } } })
