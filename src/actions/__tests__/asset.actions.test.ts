@@ -636,6 +636,7 @@ describe("Asset Transfer Actions", () => {
     requirePermissionMock.mockResolvedValue({ id: 1 })
     prismaMock.assetTransfer.create.mockResolvedValue({ id: 30 })
     prismaMock.asset.update.mockResolvedValue({})
+    prismaMock.asset.findUnique.mockResolvedValue({ status: "active" })
   })
 
   it("fails validation with empty form on create", async () => {
@@ -887,7 +888,7 @@ describe("Asset Transfer Actions", () => {
     })
     prismaMock.assetTransfer.update.mockResolvedValue({ id: 30 })
     // Guard requires asset.location === oldTransfer.toLocation to revert.
-    prismaMock.asset.findUnique.mockResolvedValue({ location: "Branch1" })
+    prismaMock.asset.findUnique.mockResolvedValue({ location: "Branch1", status: "active" })
     prismaMock.assetTransfer.findFirst.mockResolvedValue(null)
 
     await updateAssetTransfer(30, fd({
@@ -936,7 +937,7 @@ describe("Asset Transfer Actions", () => {
     })
     prismaMock.assetTransfer.update.mockResolvedValue({ id: 30 })
     // Asset 5 has since been moved to "LatestBranch" by a later transfer
-    prismaMock.asset.findUnique.mockResolvedValue({ location: "LatestBranch" })
+    prismaMock.asset.findUnique.mockResolvedValue({ location: "LatestBranch", status: "active" })
 
     await updateAssetTransfer(30, fd({
       assetId: "7",
@@ -992,6 +993,40 @@ describe("Asset Transfer Actions", () => {
       where: { id: 77, isActive: true, deletedAt: null },
       select: { id: true },
     })
+  })
+
+  it("putaran 37: menolak transfer aset yang sudah dilepas", async () => {
+    prismaMock.asset.findUnique.mockResolvedValue({ status: "disposed" })
+    const res = await createAssetTransfer(fd({
+      assetId: "5",
+      toLocation: "HQ",
+      transferDate: "2026-06-12",
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/disposed/)
+    expect(prismaMock.assetTransfer.create).not.toHaveBeenCalled()
+    expect(prismaMock.asset.update).not.toHaveBeenCalled()
+  })
+
+  it("putaran 37: menolak relink transfer ke aset tujuan yang sudah dilepas", async () => {
+    prismaMock.assetTransfer.findUniqueOrThrow.mockResolvedValue({
+      id: 30,
+      assetId: 5,
+      fromLocation: "OldLoc",
+      toLocation: "Branch1",
+    })
+    prismaMock.assetTransfer.update.mockResolvedValue({ id: 30 })
+    prismaMock.asset.findUnique.mockImplementation(async (args: any) =>
+      args?.where?.id === 7 ? { status: "disposed" } : { status: "active", location: "Branch1" },
+    )
+    const res = await updateAssetTransfer(30, fd({
+      assetId: "7",
+      toLocation: "Branch2",
+      transferDate: "2026-06-12",
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/disposed/)
+    expect(prismaMock.assetTransfer.update).not.toHaveBeenCalled()
   })
 
   it("putaran 37: menolak relink transfer ke karyawan asal mati", async () => {

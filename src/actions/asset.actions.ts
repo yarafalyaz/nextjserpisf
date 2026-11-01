@@ -347,6 +347,18 @@ export async function createAssetTransfer(formData: FormData) {
         // (transferDate, id)) yang menentukan lokasi akhir. Kunci yang
         // sama dipakai updateAsset/disposeAsset/peristiwa aset.
         await tx.$executeRaw`SELECT id FROM assets WHERE id = ${data.assetId} FOR UPDATE`;
+        // Aset non-active (disposed/held_for_sale/status sampah) tak boleh
+        // berpindah lokasi: UI hanya menawarkan active, aksi memutuskan.
+        const lockedAsset = await tx.asset.findUnique({
+          where: { id: data.assetId },
+          select: { status: true },
+        });
+        if (!lockedAsset) throw new Error("Aset tidak ditemukan.");
+        if (lockedAsset.status !== "active") {
+          throw new Error(
+            `Aset berstatus '${lockedAsset.status}' tidak dapat ditransfer (hanya aset aktif).`,
+          );
+        }
         await assertLiveTransferEmployees(tx, [data.fromEmployeeId, data.toEmployeeId]);
         const created = await tx.assetTransfer.create({
           data: {
@@ -755,11 +767,29 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
         // deleteAssetTransfer; when reverting, prefer the latest remaining
         // transfer's destination over a blind fromLocation fallback so chained
         // transfers (A→B→C) stay consistent if any middle transfer is edited.
+        // Aset tujuan wajib active; aset lama juga dinilai bila lokasinya
+        // akan ditulis ulang oleh revert di bawah (aset disposed tak boleh
+        // digerakkan). Status dibaca sesudah kunci baris kedua aset.
+        const targetAsset = await tx.asset.findUnique({
+          where: { id: data.assetId },
+          select: { status: true },
+        });
+        if (!targetAsset) throw new Error("Aset tidak ditemukan.");
+        if (targetAsset.status !== "active") {
+          throw new Error(
+            `Aset berstatus '${targetAsset.status}' tidak dapat ditransfer (hanya aset aktif).`,
+          );
+        }
         if (oldTransfer.assetId !== data.assetId) {
           const oldAsset = await tx.asset.findUnique({
             where: { id: oldTransfer.assetId },
-            select: { location: true },
+            select: { location: true, status: true },
           });
+          if (oldAsset && oldAsset.status !== "active" && oldAsset.location === oldTransfer.toLocation) {
+            throw new Error(
+              `Aset asal berstatus '${oldAsset.status}' tidak dapat digerakkan lokasinya.`,
+            );
+          }
           if (oldAsset && oldAsset.location === oldTransfer.toLocation) {
             const latest = await tx.assetTransfer.findFirst({
               where: { assetId: oldTransfer.assetId, NOT: { id } },
