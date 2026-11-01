@@ -2407,31 +2407,39 @@ export async function createRackRow(formData: FormData) {
     const prefix = settings?.rowCodePrefix || "ROW-";
 
     let code = v.code ?? null;
+    const autoCode = enableAutoCode || !code;
 
-    if (enableAutoCode || !code) {
-      const maxId = await prisma.rackRow.aggregate({ _max: { id: true } });
-      let nextId = (maxId._max.id ?? 0) + 1;
-      // RackRow.code has no DB unique constraint — bump past collisions so
-      // concurrent creates don't produce duplicate codes.
-
-      while (
-        await prisma.rackRow.findFirst({
-          where: { code: prefix + String(nextId).padStart(4, "0") },
-          select: { id: true },
-        })
-      ) {
-        nextId++;
+    // Kode baris rak adalah urutan GLOBAL (dari id), tetapi unique DB hanya
+    // komposit (rackId, code) — dua create konkuren di rack berbeda membaca
+    // max id sama dan sama-sama lolos bump-loop, lalu dua lokasi fisik
+    // berbagi kode. Generate + create diserialkan dalam satu tx dengan
+    // gap-lock tabel (pola assertActiveWorkCenterNameAvailable); kode
+    // manual dari form tidak diserialkan karena unique komposit cukup.
+    const rackRow = await prisma.$transaction(async (tx) => {
+      if (autoCode) {
+        if (typeof tx.$executeRaw === "function") {
+          await tx.$executeRaw`SELECT id FROM rack_rows FOR UPDATE`;
+        }
+        const maxId = await tx.rackRow.aggregate({ _max: { id: true } });
+        let nextId = (maxId._max.id ?? 0) + 1;
+        while (
+          await tx.rackRow.findFirst({
+            where: { code: prefix + String(nextId).padStart(4, "0") },
+            select: { id: true },
+          })
+        ) {
+          nextId++;
+        }
+        code = prefix + String(nextId).padStart(4, "0");
       }
-      code = prefix + String(nextId).padStart(4, "0");
-    }
-
-    const rackRow = await prisma.rackRow.create({
-      data: {
-        rackId: v.rackId,
-        code,
-        name: v.name,
-        slug: await nextSlug("rackRow", code || v.name),
-      },
+      return tx.rackRow.create({
+        data: {
+          rackId: v.rackId,
+          code,
+          name: v.name,
+          slug: await nextSlug("rackRow", code || v.name),
+        },
+      });
     });
 
     await logActivity(

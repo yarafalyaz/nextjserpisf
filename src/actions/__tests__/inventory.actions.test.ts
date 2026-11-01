@@ -1354,6 +1354,27 @@ describe("Inventory Validation / Edge Cases", () => {
     expect(res?.success).toBe(true);
   });
 
+  it("regresi putaran 48: createRackRow mengunci tabel rack_rows sebelum generate kode global", async () => {
+    mocks.prismaMock.systemSetting.findFirst.mockResolvedValue({
+      enableAutoRowCode: true,
+    });
+    const res = await (actions as any).createRackRow(
+      fdMap({ rackId: 1, name: "Row 1", level: 1 }),
+    );
+    expect(res?.success).toBe(true);
+    const lockIdx = mocks.prismaMock.$executeRaw.mock.calls.findIndex((c: unknown[]) => {
+      const first = c[0] as unknown;
+      const sql = Array.isArray(first)
+        ? (first as string[]).join("?")
+        : (((first as { strings?: string[] })?.strings) ?? []).join("?");
+      return sql.includes("rack_rows") && sql.includes("FOR UPDATE");
+    });
+    expect(lockIdx).toBeGreaterThanOrEqual(0);
+    expect(mocks.prismaMock.$executeRaw.mock.invocationCallOrder[lockIdx]).toBeLessThan(
+      mocks.prismaMock.rackRow.aggregate.mock.invocationCallOrder[0],
+    );
+  });
+
   it("createRackRow auto generates code if missing", async () => {
     mocks.prismaMock.systemSetting.findFirst.mockResolvedValue({
       enableAutoRowCode: true,
