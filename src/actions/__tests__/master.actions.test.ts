@@ -880,6 +880,16 @@ describe("Lead Actions", () => {
     expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 46: createLead menolak non-admin menugaskan lead ke pengguna lain", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce({ id: 3, permissions: ["create_leads"], roles: ["sales"] })
+    mocks.prismaMock.user = mocks.prismaMock.user ?? { findFirst: vi.fn() }
+    mocks.prismaMock.user.findFirst = vi.fn().mockResolvedValue({ id: 7 })
+    const res = await actions.createLead(fdMap({ name: "test", assignedTo: "7" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Anda tidak memiliki izin untuk menugaskan lead kepada pengguna lain")
+    expect(mocks.prismaMock.lead.create).not.toHaveBeenCalled()
+  })
+
   it("createLead menolak assignedTo pengguna nonaktif (kolom bare-int tanpa FK)", async () => {
     mocks.prismaMock.user = mocks.prismaMock.user ?? { findFirst: vi.fn() }
     mocks.prismaMock.user.findFirst = vi.fn().mockResolvedValue(null)

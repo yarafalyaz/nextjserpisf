@@ -2145,6 +2145,20 @@ export async function createLead(formData: FormData) {
     }
     const v = parsed.data;
 
+    // Penugasan awal mengikuti gerbang updateLead: tanpa manage_leads /
+    // super_admin, lead baru hanya boleh ditugaskan ke pembuatnya sendiri.
+    // UI tambah lead tidak menawarkan pemilih penugasan; celah ini hanya
+    // terbuka lewat panggilan action langsung dengan assignedTo orang lain.
+    if (
+      !viewer.canManageLeads &&
+      v.assignedTo != null &&
+      v.assignedTo !== Number(actor.id)
+    ) {
+      throw new Error(
+        "Anda tidak memiliki izin untuk menugaskan lead kepada pengguna lain.",
+      );
+    }
+
     await assertAssignedUserLive(prisma, v.assignedTo);
 
     // F-2026-10-24-141-S Model C (Q-DUP-1): kandidat cocok -> TIDAK simpan
