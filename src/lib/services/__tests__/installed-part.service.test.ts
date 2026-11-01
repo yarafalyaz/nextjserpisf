@@ -14,10 +14,13 @@ vi.mock("@/lib/db/prisma", () => ({
     materialIssue: { findMany: vi.fn(), findUnique: vi.fn() },
     warrantyCoverage: { findMany: vi.fn() },
     installedPart: { findMany: vi.fn(), create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
+    $transaction: vi.fn(),
   },
 }))
 
 const p = prisma as unknown as Record<string, Record<string, ReturnType<typeof vi.fn>>>
+const prismaTxMock = (prisma as never as { $transaction: ReturnType<typeof vi.fn> }).$transaction
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -25,6 +28,9 @@ beforeEach(() => {
   p.installedPart.findMany.mockResolvedValue([])
   p.installedPart.create.mockResolvedValue({})
   p.installedPart.update.mockResolvedValue({ id: 1 })
+  // recordInstalledPartRemoval membuka tx sendiri bila pemanggil tanpa tx;
+  // tx mock = prisma mock yang sama (kunci baris $queryRaw no-op tercatat).
+  prismaTxMock.mockImplementation(async (cb: any) => cb(prisma))
 })
 
 describe("deriveInstalledPartStatus (BR-IP-05)", () => {
@@ -189,6 +195,28 @@ describe("recordInstalledPartRemoval (AC-IP-5)", () => {
       recordInstalledPartRemoval({ installedPartId: 1, qtyRemoved: 2, removalReason: "X", removedById: 3 }, prisma as never),
     ).rejects.toThrow("melebihi sisa")
     expect(p.installedPart.update).not.toHaveBeenCalled()
+  })
+
+  it("pemanggil tanpa tx: service membuka tx sendiri, mengunci baris part FOR UPDATE sebelum membaca cap", async () => {
+    const order: string[] = []
+    const tx = {
+      $queryRaw: vi.fn(async () => { order.push("lock"); return [{ id: 1 }] }),
+      installedPart: {
+        findUnique: vi.fn(async () => { order.push("read"); return { id: 1, customerVehicleId: 7, qty: 2, qtyRemoved: 1 } }),
+        update: vi.fn(async () => { order.push("update"); return { id: 1 } }),
+      },
+    }
+    prismaTxMock.mockImplementation(async (cb: any) => cb(tx))
+    p.installedPart.findUnique.mockImplementation(async () => { order.push("plain-read"); return { id: 1, customerVehicleId: 7, qty: 2, qtyRemoved: 1 } })
+    await recordInstalledPartRemoval(
+      { installedPartId: 1, qtyRemoved: 1, removalReason: "Lepas", removedById: 3 },
+      prisma as never,
+    )
+    // Tanpa kunci baris, dua catat-lepas konkuren membaca qtyRemoved snapshot
+    // yang sama: sama-sama lolos cap dan update terakhir menimpa akumulasi.
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1)
+    expect(order).toEqual(["lock", "read", "update"])
+    expect(Number((tx.installedPart.update.mock.calls[0] as any[])[0].data.qtyRemoved)).toBe(2)
   })
 
   it("pengganti kendaraan lain / sudah DILEPAS ditolak; pengganti sah tertaut", async () => {

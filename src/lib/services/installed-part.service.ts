@@ -229,6 +229,32 @@ export async function recordInstalledPartRemoval(
   if (!Number.isFinite(input.qtyRemoved) || input.qtyRemoved <= 0) {
     throw new Error("Jumlah part dilepas wajib lebih dari nol.")
   }
+  // Cap qtyRemoved kumulatif hanya sah bila dinilai atas baris TERKUNCI:
+  // bacaan polos + update tak bersyarat membuat dua catat-lepas konkuren
+  // sama-sama lolos cap dan update terakhir menimpa akumulasi (lost update).
+  // Pemanggil tanpa tx dibungkus tx di sini (pola disciplinary-deduction).
+  const asTx = client as TxClient & { $transaction?: typeof prisma.$transaction }
+  if (typeof asTx.$transaction === "function") {
+    return prisma.$transaction((tx) => runRemovalInTx(input, reason, tx as TxClient))
+  }
+  return runRemovalInTx(input, reason, client as TxClient)
+}
+
+async function runRemovalInTx(
+  input: {
+    installedPartId: number
+    qtyRemoved: number
+    removalReason: string
+    removedById: number
+    replacedByInstalledPartId?: number | null
+    removedAt?: Date
+  },
+  reason: string,
+  client: TxClient,
+) {
+  // Kunci baris part sebagai pernyataan pertama tx, sebelum snapshot
+  // REPEATABLE READ terbentuk, lalu baca ulang cap di bawah kunci.
+  await client.$queryRaw`SELECT id FROM installed_parts WHERE id = ${input.installedPartId} FOR UPDATE`
   const part = await client.installedPart.findUnique({
     where: { id: input.installedPartId },
     select: { id: true, customerVehicleId: true, qty: true, qtyRemoved: true },
