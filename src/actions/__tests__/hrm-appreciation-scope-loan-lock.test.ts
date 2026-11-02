@@ -22,6 +22,16 @@ const mocks = vi.hoisted(() => {
       order.push("lock")
       return [{ id: 1 }]
     }),
+    // Putaran 62: createAppreciation kini menulis lewat tx (klaim
+    // idempotency + create atomik), jadi tx mock wajib membawa modelnya.
+    appreciation: {
+      create: vi.fn().mockResolvedValue({ id: 1 }),
+    },
+    idempotencyKey: {
+      create: vi.fn().mockResolvedValue({ id: 1 }),
+      findUnique: vi.fn().mockResolvedValue(null),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
     employeeLoan: {
       findUniqueOrThrow: vi.fn(async () => {
         order.push("txLoanRead")
@@ -115,7 +125,8 @@ describe("BUGHUNT #9 — appreciation HR scope", () => {
   it("create untuk karyawan dalam scope lolos", async () => {
     const res = await createAppreciation(fd({ employeeId: "7", date: "2026-06-12", amount: "500000" }))
     expect(res?.success).toBe(true)
-    expect(mocks.prismaMock.appreciation.create).toHaveBeenCalled()
+    // Putaran 62: create berjalan lewat tx, bukan prisma root.
+    expect(mocks.tx.appreciation.create).toHaveBeenCalled()
   })
 
   it("update baris milik karyawan luar scope ditolak walau employeeId kiriman dalam scope", async () => {
