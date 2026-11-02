@@ -58,6 +58,7 @@ function wireTx(opts: {
         const s = await spies.systemSettingFindFirst()
         return [{ id: 1, period_lock_date: s?.periodLockDate ?? null }]
       }
+      if (sql.includes("goods_receipt_items")) return opts.priorGrItems
       return []
     }),
     executeRaw: vi.fn().mockResolvedValue(1),
@@ -137,6 +138,28 @@ describe("onGoodsReceiptVerified QC gate (putaran 20)", () => {
 })
 
 describe("onGoodsReceiptVerified over-receipt guard", () => {
+  it("putaran 54: prior GR dibaca sebagai locking read sesudah kunci PO", async () => {
+    const { spies } = wireTx({
+      poId: 50,
+      poItems: [{ itemId: 7, qty: 10 }],
+      priorGrItems: [{ itemId: 7, qty: 4 }],
+      grItems: [{ itemId: 7, qty: 6 }],
+    })
+
+    await onGoodsReceiptVerified(100, 1)
+
+    const sqlOf = (call: unknown[]) => {
+      const a = call[0] as { sql?: string; strings?: string[] } | string[]
+      return Array.isArray(a) ? a.join("?") : (a?.sql ?? a?.strings?.join("?") ?? "")
+    }
+    const sqls = spies.queryRaw.mock.calls.map((call: unknown[]) => sqlOf(call))
+    const poLockIndex = sqls.findIndex((sql: string) => sql.includes("FROM purchase_orders") && sql.includes("FOR UPDATE"))
+    const priorLockIndex = sqls.findIndex((sql: string) => sql.includes("goods_receipt_items") && sql.includes("FOR UPDATE"))
+    expect(poLockIndex).toBeGreaterThanOrEqual(0)
+    expect(priorLockIndex).toBeGreaterThan(poLockIndex)
+    expect(spies.grItemFindMany).not.toHaveBeenCalled()
+  })
+
   it("throws when cumulative received exceeds ordered qty", async () => {
     // PO ordered 10 of item 7; a prior verified GR received 8; this GR adds 5
     // -> cumulative 13 > 10 -> reject.

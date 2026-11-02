@@ -91,17 +91,37 @@ export async function onGoodsReceiptVerified(
     // does not run and we save the round-trip.
     let priorGRItems: Array<{ itemId: number; qty: unknown; uom: string | null }> = [];
     if (goodsReceipt.purchaseOrderId) {
+      // Kunci PO DULU, lalu prior GR dibaca sebagai LOCKING read. Urutan lama
+      // (baca prior → kunci PO) memakai snapshot REPEATABLE READ yang terbentuk
+      // sebelum kunci: dua verifikasi GR atas PO yang sama sama-sama membaca
+      // prior lama, sama-sama lolos guard, dan kumulatif diterima bisa
+      // melewati qty pesanan (putaran 54). Locking read melihat versi
+      // ter-commit terbaru sesudah kunci PO berpindah tangan.
+      await tx.$queryRaw`SELECT id FROM purchase_orders WHERE id = ${goodsReceipt.purchaseOrderId} FOR UPDATE`;
       // Exclude current GR from the query to prevent double-counting (Fix #44).
-      const rows = await tx.goodsReceiptItem.findMany({
-        where: {
-          goodsReceipt: {
-            purchaseOrderId: goodsReceipt.purchaseOrderId,
-            status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
-            id: { not: goodsReceiptId },
+      if (typeof tx.$queryRaw === "function") {
+        const rows = await tx.$queryRaw<Array<{ itemId: number; qty: unknown; uom: string | null }>>`
+          SELECT gri.item_id AS itemId, gri.qty AS qty, gri.uom AS uom
+          FROM goods_receipt_items gri
+          INNER JOIN goods_receipts gr ON gr.id = gri.goods_receipt_id
+          WHERE gr.purchase_order_id = ${goodsReceipt.purchaseOrderId}
+            AND gr.status IN (${PurchaseStatus.VERIFIED}, ${Status.COMPLETED})
+            AND gr.id <> ${goodsReceiptId}
+          FOR UPDATE
+        `;
+        priorGRItems = rows.map((r) => ({ itemId: r.itemId, qty: r.qty, uom: r.uom ?? null }));
+      } else {
+        const rows = await tx.goodsReceiptItem.findMany({
+          where: {
+            goodsReceipt: {
+              purchaseOrderId: goodsReceipt.purchaseOrderId,
+              status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
+              id: { not: goodsReceiptId },
+            },
           },
-        },
-      });
-      priorGRItems = rows.map((r) => ({ itemId: r.itemId, qty: r.qty, uom: r.uom ?? null }));
+        });
+        priorGRItems = rows.map((r) => ({ itemId: r.itemId, qty: r.qty, uom: r.uom ?? null }));
+      }
     }
 
     const grItemIds = [
@@ -186,12 +206,8 @@ export async function onGoodsReceiptVerified(
     // pool estimasi saat GR ini melunasi PO (V8 vonis F-2026-10-28-125-V).
     let allReceivedForLanded = false
     if (goodsReceipt.purchaseOrderId) {
-      // Lock the PO row so two GR verifications on the SAME PO serialize.
-      // Each GR locks only its own row above, so without this two concurrent
-      // verifies each compute cumulative received excluding the other and both
-      // could slip past the over-receipt guard below.
-      await tx.$queryRaw`SELECT id FROM purchase_orders WHERE id = ${goodsReceipt.purchaseOrderId} FOR UPDATE`;
-
+      // Baris PO sudah dikunci sebelum prior GR dibaca di atas, sehingga
+      // verifikasi GR lain atas PO yang sama ter-serialisasi di sini.
       // Check if all items in PO have been received
       const poItems = await tx.purchaseOrderItem.findMany({
         where: { purchaseOrderId: goodsReceipt.purchaseOrderId },
