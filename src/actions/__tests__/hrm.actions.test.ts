@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
+  const checkIdempotencyMock = vi.fn(async () => undefined)
   const requirePermissionMock = vi.fn()
   const revalidateMock = vi.fn()
   const logActivityMock = vi.fn()
@@ -104,6 +105,7 @@ const mocks = vi.hoisted(() => {
     }),
   }
   return {
+    checkIdempotencyMock,
     requirePermissionMock,
     revalidateMock,
     logActivityMock,
@@ -139,6 +141,10 @@ vi.mock("@/lib/auth/permissions", () => ({
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: mocks.prismaMock,
+}))
+
+vi.mock("@/lib/utils/idempotency", () => ({
+  checkIdempotency: (...a: unknown[]) => mocks.checkIdempotencyMock(...(a as [])),
 }))
 
 vi.mock("next/cache", () => ({
@@ -948,6 +954,26 @@ describe("Employee Loan Actions", () => {
     prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
     prismaMock.systemSetting.findFirst.mockResolvedValue({ id: 1 })
     prismaMock.journal.findMany.mockResolvedValue([])
+  })
+
+  it("putaran 62: createEmployeeLoan retry idempotency sama ditolak, pinjaman lahir sekali", async () => {
+    mocks.checkIdempotencyMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."))
+    const payload = {
+      employeeId: "1",
+      loanDate: "2026-06-12",
+      totalAmount: "1000000",
+      monthlyInstallment: "100000",
+      idempotencyKey: "loan-key-1",
+    }
+    const first = await actions.createEmployeeLoan(fd(payload))
+    const second = await actions.createEmployeeLoan(fd(payload))
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(String((second as { error?: string } | undefined)?.error ?? "")).toMatch(/duplikat/)
+    expect(mocks.checkIdempotencyMock).toHaveBeenCalledTimes(2)
+    expect(prismaMock.employeeLoan.create).toHaveBeenCalledTimes(1)
   })
 
   it("createEmployeeLoan succeeds with valid data", async () => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { AppDatePicker } from "@/components/ui/date-picker";
 import { createEmployeeLoan, updateEmployeeLoan } from "@/actions/hrm.actions";
 import { showSuccess, showError } from "@/lib/utils/toast";
@@ -37,6 +37,7 @@ interface LoanFormProps {
 export function EmployeeLoanForm({ employees, loan, redirectTo = "/sdm/pinjaman" }: LoanFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
   const [employeeId, setEmployeeId] = useState(
     loan ? String(loan.employeeId) : employees.length === 1 ? String(employees[0].id) : "",
   );
@@ -47,6 +48,7 @@ export function EmployeeLoanForm({ employees, loan, redirectTo = "/sdm/pinjaman"
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget);
+        if (!loan?.id) formData.set("idempotencyKey", idempotencyKeyRef.current);
         const result = loan?.id
           ? await updateEmployeeLoan(loan.id, formData)
           : await createEmployeeLoan(formData);
@@ -54,6 +56,7 @@ export function EmployeeLoanForm({ employees, loan, redirectTo = "/sdm/pinjaman"
           showError(result.error || "Gagal menyimpan data");
           return;
         }
+        if (!loan?.id) idempotencyKeyRef.current = crypto.randomUUID();
         showSuccess(
           loan?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan",
         );

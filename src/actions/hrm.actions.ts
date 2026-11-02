@@ -41,6 +41,7 @@ import { revalidatePath } from "next/cache";
 import { requireId } from "@/lib/utils/safe-parse";
 import { parseMoneyAmount } from "@/lib/utils/parse-money";
 import { nextSlug } from "@/lib/utils/slug-db";
+import { checkIdempotency } from "@/lib/utils/idempotency";
 import { parseFormData } from "@/lib/validations/parse-form";
 import { dateOnly } from "@/lib/validations/finance.schemas";
 import {
@@ -4020,7 +4021,13 @@ export async function createEmployeeLoan(formData: FormData) {
     // Create the loan row in pending status.
     // Wrap in tx to keep database constraints, but do not post the GL disbursement journal yet.
     // The journal is only posted after the loan is approved (via the approval workflow or bypass).
+    // Putaran 62: key form dinilai pertama dalam tx. Double-submit
+    // sebelumnya melahirkan dua pinjaman pending identik yang
+    // masing-masing sah di-approve dan dicairkan (jurnal piutang +
+    // kas keluar dua kali). Pemanggil tanpa key tetap no-op.
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
     const loan = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id);
       const created = await tx.employeeLoan.create({
         data: {
           slug: await nextSlug("employeeLoan", `pinjaman-${v.loanDate}`),
