@@ -98,6 +98,23 @@ describe("createDifferenceInvoice (F-2026-10-20-10)", () => {
     expect(data.grandTotal).toBe(1500000)
   })
 
+  it("putaran 70: pengajuan approval diteruskan tx dokumen (dokumen tak commit tanpa approval)", async () => {
+    const res = await createDifferenceInvoice(5)
+    expect(res.success).toBe(true)
+    expect(helpers.approvalRequestMock).toHaveBeenCalledTimes(1)
+    const call = helpers.approvalRequestMock.mock.calls[0]
+    expect(call[0]).toBe("SalesInvoice")
+    expect(call[1]).toBe(99)
+    // Argumen ke-4 wajib delegate tx dokumen (mock tx == prismaMock).
+    expect(call[3]).toBe(mocks.prismaMock)
+  })
+
+  it("putaran 70: kegagalan pengajuan approval menggagalkan lahirnya faktur (satu tx)", async () => {
+    helpers.approvalRequestMock.mockRejectedValueOnce(new Error("approval boom"))
+    const res = await createDifferenceInvoice(5)
+    expect(res.success).toBe(false)
+  })
+
   it("nominal dihitung dari grandTotal TERKUNCI, bukan snapshot luar tx", async () => {
     // Luar tx: kontrak 1,5jt (selisih 500rb atas tertagih 1jt). Di bawah
     // kunci: revisi lain sudah menurunkan kontrak ke 1jt -> selisih habis.

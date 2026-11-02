@@ -57,9 +57,16 @@ export function buildModelMock(createResult: unknown = { id: 99 }) {
 }
 
 export const approvalFactory = () => ({
-  requestApprovalIfConfigured: () => Promise.resolve(undefined),
+  requestApprovalIfConfigured: approvalRequestMock,
   assertApproved: () => Promise.resolve(undefined),
 })
+
+/**
+ * Mock pengajuan approval yang bisa dikontrol per test (putaran 70):
+ * default lolos; test atomisitas menimpanya throw supaya rollback tx
+ * dokumen terbukti (dokumen tidak boleh commit tanpa baris approval).
+ */
+export const approvalRequestMock = vi.fn().mockResolvedValue(undefined)
 
 /** Basis mock hoisted aksi penjualan revisi (selisih + revisi-turun + progres). */
 export function buildSalesRevisionPrismaMock(extra: Record<string, unknown> = {}) {

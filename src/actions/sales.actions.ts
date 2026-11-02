@@ -488,10 +488,12 @@ export async function sendQuotation(quotationId: number) {
         },
       })
     }
-  })
 
-  // F-37(a): approval generik opt-in — no-op tanpa workflow Quotation aktif.
-  await requestApprovalIfConfigured("Quotation", quotationId, Number(user.id))
+    // F-37(a): approval generik opt-in — no-op tanpa workflow Quotation
+    // aktif. Putaran 70: diteruskan tx (pola purchase/finance) supaya
+    // transisi sent dan baris approval lahir atomik.
+    await requestApprovalIfConfigured("Quotation", quotationId, Number(user.id), tx)
+  })
 
   await logActivity("send", "Quotation", quotationId, `Mengirim penawaran #${quotationId}`)
   revalidatePath("/penjualan/penawaran")
@@ -1927,11 +1929,14 @@ export async function createDifferenceInvoice(quotationId: number) {
           documentNo: created.documentNo,
         })
       }
+      // Putaran 70: pengajuan approval atomik dengan dokumen (pola
+      // purchase/finance) — rollback faktur melepas approval; tanpa ini
+      // faktur commit bisa tak punya baris approval dan lolos posting.
+      await requestApprovalIfConfigured("SalesInvoice", created.id, Number(user.id), tx)
       return created
     })
 
     await logActivity("create", "SalesInvoice", invoice.id, `Membuat faktur selisih revisi #${invoice.id} dari penawaran ${quotation.documentNo}`)
-    await requestApprovalIfConfigured("SalesInvoice", invoice.id, Number(user.id))
     revalidatePath("/penjualan/faktur")
     revalidatePath("/penjualan/penawaran")
     return { success: true, id: invoice.id, slug: invoice.slug ?? null }
@@ -2045,11 +2050,13 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
           documentNo: created.documentNo,
         })
       }
+      // Putaran 70: pengajuan approval atomik dengan dokumen (pola
+      // purchase/finance).
+      await requestApprovalIfConfigured("SalesInvoice", created.id, Number(user.id), tx)
       return created
     })
 
     await logActivity("create", "SalesInvoice", invoice.id, `Membuat faktur progres ${targetPercent}% #${invoice.id} dari penawaran ${quotation.documentNo}`)
-    await requestApprovalIfConfigured("SalesInvoice", invoice.id, Number(user.id))
     revalidatePath("/penjualan/faktur")
     revalidatePath("/penjualan/penawaran")
     return { success: true, id: invoice.id, slug: invoice.slug ?? null }
@@ -2411,11 +2418,13 @@ export async function createSalesInvoice(formData: FormData) {
         documentNo: createdInvoice.documentNo,
       })
     }
+    // Putaran 70: pengajuan approval atomik dengan dokumen (pola
+    // purchase/finance).
+    await requestApprovalIfConfigured("SalesInvoice", createdInvoice.id, Number(user.id), tx)
     return createdInvoice
   })
 
   await logActivity("create", "SalesInvoice", invoice.id, `Membuat faktur penjualan #${invoice.id}`)
-  await requestApprovalIfConfigured("SalesInvoice", invoice.id, Number(user.id));
   revalidatePath("/penjualan/faktur")
   return { success: true, id: invoice.id, slug }
 
@@ -4093,12 +4102,11 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
       // jalur edit (butuh vonis Business+Accountant; Belum ada di kartu ini).
     }
 
+    // Putaran 70: pengajuan ulang approval atomik dengan edit (R6WN-01;
+    // pola purchase/finance) — dokumen tak commit tanpa baris pengajuan.
+    await requestApprovalIfConfigured("SalesInvoice", id, Number(user.id), tx)
     return invoice
   })
-
-  // R6WN-01: edit sesudah approval final membuka pengajuan ulang (service
-  // menilai kebasian dari updatedAt); tanpa workflow ini no-op.
-  await requestApprovalIfConfigured("SalesInvoice", result.id, Number(user.id))
   await logActivity("update", "SalesInvoice", result.id, `Memperbarui faktur penjualan #${result.id}`)
   revalidatePath("/penjualan/faktur")
   return { success: true, id: result.id, slug }

@@ -86,6 +86,22 @@ describe("createProgressInvoice (F-2026-10-20-58)", () => {
     expect(mocks.prismaMock.salesInvoice.create).not.toHaveBeenCalled()
   })
 
+  it("putaran 70: pengajuan approval diteruskan tx dokumen (dokumen tak commit tanpa approval)", async () => {
+    const res = await createProgressInvoice(5, 100)
+    expect(res.success).toBe(true)
+    expect(helpers.approvalRequestMock).toHaveBeenCalledTimes(1)
+    const call = helpers.approvalRequestMock.mock.calls[0]
+    expect(call[0]).toBe("SalesInvoice")
+    expect(call[1]).toBe(99)
+    expect(call[3]).toBe(mocks.prismaMock)
+  })
+
+  it("putaran 70: kegagalan pengajuan approval menggagalkan lahirnya faktur (satu tx)", async () => {
+    helpers.approvalRequestMock.mockRejectedValueOnce(new Error("approval boom"))
+    const res = await createProgressInvoice(5, 100)
+    expect(res.success).toBe(false)
+  })
+
   it("penawaran tidak ditemukan ditolak", async () => {
     mocks.prismaMock.quotation.findFirst.mockResolvedValue(null)
     const res = await createProgressInvoice(404, 50)
