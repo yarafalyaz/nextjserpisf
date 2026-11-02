@@ -184,6 +184,28 @@ describe("Bank Statement Actions", () => {
     expect(mocks.assertPeriodOpenMock).toHaveBeenCalled()
   })
 
+  it("putaran 65: createBankStatement retry idempotencyKey sama ditolak, header lahir sekali", async () => {
+    const idemCreate = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    mocks.prismaMock.idempotencyKey = {
+      create: idemCreate,
+      findUnique: vi.fn().mockResolvedValue({ createdAt: new Date() }),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    }
+
+    const payload = { accountId: 1, date: "2026-06-13", openingBalance: 1000, closingBalance: 2000, idempotencyKey: "bs-key-1" }
+    const first = await (actions as any).createBankStatement(fdMap(payload))
+    const second = await (actions as any).createBankStatement(fdMap(payload))
+
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(String(second?.error ?? "")).toContain("duplikat")
+    expect(mocks.prismaMock.bankStatement.create).toHaveBeenCalledTimes(1)
+    delete mocks.prismaMock.idempotencyKey
+  })
+
   // Regresi putaran 34: accountId/bankId bare-int tanpa FK — header lahir
   // untuk akun nonaset/mati atau bank fiktif; picker hanya menawarkan
   // isActive + type ASSET dan bank aktif tetapi action tak menilai.

@@ -79,9 +79,14 @@ export async function createBankStatement(formData: FormData) {
     // tx) — cek luar-tx tanpa kunci bisa disela tutup-periode sebelum
     // header tertulis. Baris header lahir draft; tanggal header tetap
     // tanggal dokumen keuangan.
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
     const bankStatement = await prisma.$transaction(async (tx) => {
       const stmtDate = wibDateToUtcMidnight(v.date);
       await assertPeriodOpen(stmtDate, tx);
+      // Putaran 65: retry submit identik melahirkan header draft kembar
+      // (slug hanya suffix; tanpa jaring unik bisnis). Klaim sesudah kunci
+      // periode, mengikuti urutan baris/penyesuaian/head...
+      await checkIdempotency(idempotencyKey, tx, user.id);
       // accountId/bankId bare-int tanpa FK: header lahir untuk akun
       // nonaset/mati atau bank fiktif lalu seluruh rantai koran/rekon
       // yatim. Picker menawarkan isActive + type ASSET dan bank aktif;

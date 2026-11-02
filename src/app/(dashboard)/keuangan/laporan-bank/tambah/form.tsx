@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { createBankStatement } from "@/actions/finance.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
@@ -24,6 +24,10 @@ interface Props {
 // (form di halaman detail) tidak pernah bisa diisi karena tidak ada header-nya.
 export function BankStatementForm({ accounts, banks }: Props) {
   const router = useRouter()
+  // Idempotency: key stabil per intent tambah; retry jaringan memakai key
+  // yang sama (ditolak server), sukses merotasi untuk header berikutnya.
+  const idempotencyKeyRef = useRef<string | null>(null)
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
   const [accountId, setAccountId] = useState("")
   const [bankId, setBankId] = useState("")
@@ -31,6 +35,7 @@ export function BankStatementForm({ accounts, banks }: Props) {
   function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    formData.set("idempotencyKey", idempotencyKeyRef.current!)
     startTransition(async () => {
       try {
         const res = await createBankStatement(formData)
