@@ -3355,6 +3355,22 @@ describe("Purchase Actions Additional Branch Coverage", () => {
     expect(res?.error).toContain("PO terkait masih memiliki tagihan vendor aktif")
   })
 
+  it("putaran 57: deleteGoodsReceipt rekomputasi memakai PO segar di bawah kunci, bukan snapshot luar", async () => {
+    // Snapshot luar: PO 10. Bacaan segar di bawah kunci: GR sudah pindah ke PO 99.
+    mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, purchaseOrderId: 10, status: "draft", items: [] })
+    mocks.prismaMock.vendorBill.count.mockResolvedValueOnce(0)
+    mocks.prismaMock.stockMove.findMany.mockResolvedValueOnce([])
+    mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValue({ status: "draft", purchaseOrderId: 99 })
+    mocks.prismaMock.goodsReceipt.count.mockResolvedValueOnce(0)
+
+    const res = await actions.deleteGoodsReceipt(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.purchaseOrder.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 99 } }),
+    )
+    mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValue({ status: "draft" })
+  })
+
   it("deleteGoodsReceipt deletes GR and updates PO status", async () => {
     mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, purchaseOrderId: 10, status: "draft", items: [] })
     mocks.prismaMock.vendorBill.count.mockResolvedValueOnce(0)

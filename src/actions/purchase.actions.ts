@@ -3238,11 +3238,15 @@ export async function deleteGoodsReceipt(id: number) {
       await tx.$executeRaw`SELECT id FROM goods_receipts WHERE id = ${id} FOR UPDATE`;
       const locked = await tx.goodsReceipt.findUnique({
         where: { id },
-        select: { status: true },
+        select: { status: true, purchaseOrderId: true },
       });
       if (!locked || locked.status !== "draft") {
         throw new Error("Hanya penerimaan barang draft yang dapat dihapus");
       }
+      // purchaseOrderId segar di bawah kunci: updateGoodsReceipt bisa memindah
+      // GR antar-PO (kunci baris GR sama) — rekomputasi langkah 5 wajib
+      // menyentuh PO tujuan segar, bukan snapshot bacaan luar tx.
+      const lockedPurchaseOrderId = locked.purchaseOrderId;
 
       // Catatan QC polimorfik (inspeksi incoming/NCR) tanpa FK: GR
       // ber-catatan QC tidak boleh terhapus — catatan yatim akan mewarisi
@@ -3358,7 +3362,7 @@ export async function deleteGoodsReceipt(id: number) {
       // → factor 1, missing or non-positive conversion factor → 1 with an
       // explicit console.warn (never silent; throwing would break the sales
       // quick-add UoM flow, see uom.service).
-      if (gr.purchaseOrderId) {
+      if (lockedPurchaseOrderId) {
         // Kunci baris PO sebelum rekomputasi: verify/create GR sibling dan
         // penulis PO lain mengunci baris PO yang sama (goods-receipt.hook,
         // createGoodsReceipt). Tanpa kunci ini, GR terverifikasi yang commit
@@ -3366,9 +3370,9 @@ export async function deleteGoodsReceipt(id: number) {
         // tertimpa kurang dan status PO bisa mundur ke ordered, lalu
         // cancelPurchaseOrder lolos atas PO yang stoknya sudah masuk.
         // Urutan kunci: GR dulu (di atas), lalu PO — sama dengan delete PO.
-        await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${gr.purchaseOrderId} FOR UPDATE`;
+        await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${lockedPurchaseOrderId} FOR UPDATE`;
         const poLines = await tx.purchaseOrderItem.findMany({
-          where: { purchaseOrderId: gr.purchaseOrderId },
+          where: { purchaseOrderId: lockedPurchaseOrderId },
           orderBy: { id: "asc" },
           select: { id: true, itemId: true, qty: true },
         });
@@ -3376,7 +3380,7 @@ export async function deleteGoodsReceipt(id: number) {
           const remainingItems = await tx.goodsReceiptItem.findMany({
             where: {
               goodsReceipt: {
-                purchaseOrderId: gr.purchaseOrderId,
+                purchaseOrderId: lockedPurchaseOrderId,
                 status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
               },
             },
@@ -3430,12 +3434,12 @@ export async function deleteGoodsReceipt(id: number) {
         }
 
         const remainingCount = await tx.goodsReceipt.count({
-          where: { purchaseOrderId: gr.purchaseOrderId },
+          where: { purchaseOrderId: lockedPurchaseOrderId },
         });
 
         if (remainingCount === 0) {
           await tx.purchaseOrder.update({
-            where: { id: gr.purchaseOrderId },
+            where: { id: lockedPurchaseOrderId },
             data: { status: "ordered" },
           });
         }
