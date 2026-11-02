@@ -21,7 +21,7 @@ import {
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions";
 import { payrollStatutoryGateError } from "@/lib/services/payroll-statutory.service";
-import { nextSlug } from "@/lib/utils/slug-db";
+import { nextSlugWithClient } from "@/lib/utils/slug-db";
 import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope";
 import { computeOvertimeApprovalValue } from "@/lib/services/overtime-approval.service";
 import { notifyApprovalStepApprovers } from "@/lib/services/approval-workflow.service";
@@ -796,7 +796,8 @@ export async function createApprovalWorkflow(formData: FormData) {
       };
     }
 
-    const slug = await nextSlug("approvalWorkflow", name);
+    // Putaran 77: slug dihitung di dalam tx lewat delegate tx (slug global
+    // tidak melihat baris tak-tercommit transaksi lain).
     const wf = await prisma.$transaction(async (tx) => {
       if (isActive !== false) {
         await assertSingleActiveWorkflowForType(tx, modelType, null);
@@ -806,6 +807,7 @@ export async function createApprovalWorkflow(formData: FormData) {
         steps.map((s) => Number(s.roleId)),
       );
       await assertWorkflowApproversExist(tx, steps);
+      const slug = await nextSlugWithClient(tx as never, "approvalWorkflow", name);
       return tx.approvalWorkflow.create({
         data: {
           name,
@@ -887,7 +889,7 @@ export async function updateApprovalWorkflow(id: number, formData: FormData) {
         where: { id },
         data: {
           name,
-          slug: await nextSlug("approvalWorkflow", name, { excludeId: id }),
+          slug: await nextSlugWithClient(tx as never, "approvalWorkflow", name, { excludeId: id }),
           modelType,
           code: code || null,
           isActive: isActive !== false,

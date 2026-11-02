@@ -3641,7 +3641,14 @@ export async function deleteWarehouse(id: number) {
             where: { id },
             data: { deletedAt: new Date(), isActive: false },
           }),
-        [() => tx.itemWarehouseSetting.count({ where: { warehouseId: id } })],
+        [
+          () => tx.itemWarehouseSetting.count({ where: { warehouseId: id } }),
+          // Putaran 77: penugasan user juga satelit — hard delete gudang
+          // berpenugasan akan gagal FK / soft delete menyisakan scope hidup
+          // ke gudang mati (getWarehouseScope menyaring, tapi hapus keras
+          // harus ditahan di sini seperti satelit lain).
+          () => tx.userWarehouse.count({ where: { warehouseId: id } }),
+        ],
       );
     });
 

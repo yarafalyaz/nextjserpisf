@@ -99,6 +99,11 @@ const STALE_ON_EDIT_TYPES = new Set([
   // assertApproved — tanpa ikut daftar basi, SalesOrder lahir dari isi
   // yang tidak pernah disetujui dalam bentuk finalnya.
   "Quotation",
+  // Project: approval lahir saat createProject, tetapi updateProject tetap
+  // mengizinkan edit material (pelanggan/kendaraan/kontrak) dan gerbang
+  // lanjutan mengandalkan assertApproved — tanpa ikut daftar basi, proyek bisa
+  // diganti sesudah approval final dan memakai persetujuan atas isi lama.
+  "Project",
 ]);
 
 /** Model dokumen untuk cek kebasian; null = tipe tidak mendukung cek ini. */

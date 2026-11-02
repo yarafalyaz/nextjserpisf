@@ -26,7 +26,12 @@ export async function attachPendingTransactionAttachments(
   }))]
   if (ids.length === 0) return
 
-  await tx.transactionAttachment.updateMany({
+  // Putaran 77: klaim atomik saja tidak cukup bila pemanggil tidak memeriksa
+  // hitungannya. Lampiran bisa sudah diklaim dokumen lain yang di-submit
+  // bersamaan, atau dihapus sweep di antara unggah dan submit — dokumen ini
+  // lalu commit tanpa buktinya. Semua pemanggil memanggil dalam tx, jadi
+  // throw di sini menggulung dokumen, bukan meninggalkan dokumen senyap.
+  const claimed = await tx.transactionAttachment.updateMany({
     where: {
       id: { in: ids },
       referenceType: input.referenceType,
@@ -35,6 +40,9 @@ export async function attachPendingTransactionAttachments(
     },
     data: { referenceId: input.referenceId },
   })
+  if (claimed.count !== ids.length) {
+    throw new Error("Salah satu lampiran sudah tidak tersedia atau sudah dipakai dokumen lain; muat ulang sebelum menyimpan.")
+  }
 }
 
 /**

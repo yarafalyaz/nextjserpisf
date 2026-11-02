@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
-import { logActivity } from "@/lib/services/activity-log.service"
 
 /**
  * Purge the activity log WITHOUT destroying the evidence that a purge happened.
@@ -25,25 +24,32 @@ import { logActivity } from "@/lib/services/activity-log.service"
 export async function clearActivityLog() {
   // Izin `manage_settings`, sama dengan proxy + halaman /pengaturan/log-aktivitas
   // (super_admin bypass).
-  await requirePermission("manage_settings")
+  const actor = await requirePermission("manage_settings")
 
-  const count = await prisma.activityLog.count()
-
-  // 1. Append the purge record BEFORE deleting. logActivity stamps the acting
-  //    user from the session, so this row is the durable proof of the purge.
-  await logActivity(
-    "purge",
-    "ActivityLog",
-    0,
-    `Mengosongkan ${count} log aktivitas`,
-  )
-
-  // 2. Delete everything except the append-only "purge" audit records.
-  const result = await prisma.activityLog.deleteMany({
-    where: { action: { not: "purge" } },
+  // Putaran 77: hitung + baris purge + hapus dalam SATU tx. Jalur lama memakai
+  // logActivity() yang MENELAN kegagalan tulis (catch-all di service), jadi
+  // kegagalan insert purge tetap berlanjut ke deleteMany — jejak hilang tanpa
+  // bukti purge. Di sini insert tulis langsung lewat tx dan mengecualikan
+  // seluruh purge historis; aktifitas yang lahir di antara count dan delete
+  // lama tak lagi terhapus tak terhitung.
+  const deleted = await prisma.$transaction(async (tx) => {
+    const count = await tx.activityLog.count()
+    await tx.activityLog.create({
+      data: {
+        userId: Number(actor.id),
+        action: "purge",
+        modelType: "ActivityLog",
+        modelId: 0,
+        description: `Mengosongkan ${count} log aktivitas`,
+      },
+    })
+    const result = await tx.activityLog.deleteMany({
+      where: { action: { not: "purge" } },
+    })
+    return result.count
   })
 
   revalidatePath("/pengaturan/log-aktivitas")
-  return { deleted: result.count }
+  return { deleted }
 }
 

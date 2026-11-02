@@ -8,7 +8,7 @@ import { parseFormData } from "@/lib/validations/parse-form"
 import { recurringTransactionSchema, type RecurringTransactionInput } from "@/lib/validations/recurring.schemas"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
-import { nextSlug } from "@/lib/utils/slug-db"
+import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import {
   parseRecurringTemplate,
@@ -61,12 +61,16 @@ export async function createRecurringTransaction(formData: FormData) {
     const invalid = validateRecurringTemplate(v.type, template)
     if (invalid) return { success: false, error: invalid }
 
-    const slug = await nextSlug("recurringTransaction", v.name)
+    // Putaran 77: slug dihitung di dalam tx lewat delegate tx — slug global
+    // tidak melihat baris tak-tercommit transaksi lain, jadi dua create
+    // bersamaan bisa memilih slug sama lalu satu kalah P2002.
+    let createdSlug: string | null = null
     const created = await prisma.$transaction(async (tx) => {
       await checkIdempotency(idempotencyKey, tx, user.id)
+      createdSlug = await nextSlugWithClient(tx as never, "recurringTransaction", v.name)
       return tx.recurringTransaction.create({
         data: {
-          slug,
+          slug: createdSlug,
           name: v.name.trim(),
           type: v.type,
           frequency: v.frequency,
@@ -83,7 +87,7 @@ export async function createRecurringTransaction(formData: FormData) {
 
     await logActivity("create", "RecurringTransaction", created.id, `Menambah transaksi berulang ${created.name}`)
     revalidatePath("/pengaturan/transaksi-berulang")
-    return { success: true, id: created.id, slug }
+    return { success: true, id: created.id, slug: createdSlug }
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[createRecurringTransaction]", getErrorMessage(e) || e)
@@ -105,32 +109,37 @@ export async function updateRecurringTransaction(id: number, formData: FormData)
 
     const existing = await prisma.recurringTransaction.findUniqueOrThrow({ where: { id } })
     if (existing.deletedAt) return { success: false, error: "Jadwal transaksi berulang sudah dihapus." }
-    const slug = await nextSlug("recurringTransaction", v.name, { excludeId: id })
 
     // Only re-anchor the schedule when the start date actually moved — otherwise
     // editing the amount would silently reset a schedule that is already running.
     const startChanged = existing.startDate.getTime() !== wibDateToUtcMidnight(v.startDate).getTime()
 
+    // Putaran 77: slug + klaim dalam satu tx (delegate tx untuk slug).
     // Klaim kondisional pada nextRunDate yang dibaca: runner memakai kunci
     // optimistis yang sama untuk memajukan jadwal. Tanpa syarat ini, edit
     // yang mulai sebelum runner commit menulis ulang nextRunDate lama dan
     // occurrence yang sama terbit dua kali.
-    const claimed = await prisma.recurringTransaction.updateMany({
-      where: { id, nextRunDate: existing.nextRunDate, deletedAt: null },
-      data: {
-        slug,
-        name: v.name.trim(),
-        type: v.type,
-        frequency: v.frequency,
-        interval: v.interval,
-        startDate: wibDateToUtcMidnight(v.startDate),
-        endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
-        nextRunDate: startChanged ? wibDateToUtcMidnight(v.startDate) : existing.nextRunDate,
-        template: JSON.stringify(template),
-        isActive: v.isActive,
-      },
+    let slug: string | null = null
+    const claimCount = await prisma.$transaction(async (tx) => {
+      slug = await nextSlugWithClient(tx as never, "recurringTransaction", v.name, { excludeId: id })
+      const claimed = await tx.recurringTransaction.updateMany({
+        where: { id, nextRunDate: existing.nextRunDate, deletedAt: null },
+        data: {
+          slug,
+          name: v.name.trim(),
+          type: v.type,
+          frequency: v.frequency,
+          interval: v.interval,
+          startDate: wibDateToUtcMidnight(v.startDate),
+          endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
+          nextRunDate: startChanged ? wibDateToUtcMidnight(v.startDate) : existing.nextRunDate,
+          template: JSON.stringify(template),
+          isActive: v.isActive,
+        },
+      })
+      return claimed.count
     })
-    if (claimed.count === 0) {
+    if (claimCount === 0) {
       return { success: false, error: "Jadwal sudah berubah atau dijalankan eksekusi lain; muat ulang halaman sebelum menyimpan." }
     }
 

@@ -269,6 +269,7 @@ describe("updateRole least-privilege guard", () => {
       permissions: ["manage_settings", "view_items"],
     })
     permissionFindManyMock.mockResolvedValue([{ name: "view_items" }])
+    roleFindUniqueMock.mockResolvedValue({ name: "Viewer" })
     await expect(
       updateRole(3, fd({ name: "Viewer", permissions: ["9"] })),
     ).rejects.toThrow("NEXT_REDIRECT")
@@ -305,6 +306,36 @@ describe("updateRole slug", () => {
       updateRole(3, fd({ name: "Baru", permissions: ["9"] })),
     ).rejects.toThrow("NEXT_REDIRECT")
     expect(roleUpdateMock.mock.calls.at(-1)?.[0]?.data.slug).toBe("baru")
+  })
+})
+
+describe("updateRole kunci baris (putaran 77)", () => {
+  it("mengunci baris role sebelum bacaan penentu dan tulis", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    roleFindUniqueMock.mockResolvedValue({ name: "Viewer" })
+    await expect(updateRole(3, fd({ name: "Viewer", permissions: [] }))).rejects.toThrow("NEXT_REDIRECT")
+    expect(transactionMock).toHaveBeenCalledTimes(1)
+    expect(executeRawMock.mock.invocationCallOrder[0]).toBeLessThan(
+      roleFindUniqueMock.mock.invocationCallOrder.at(-1)!,
+    )
+    expect(roleFindUniqueMock.mock.invocationCallOrder.at(-1)!).toBeLessThan(
+      roleUpdateMock.mock.invocationCallOrder[0],
+    )
+  })
+
+  it("menilai guard dari bacaan terkunci: role berubah jadi super_admin di bawah kunci ditolak untuk non-super", async () => {
+    // Actor non-super. Bacaan terkunci menyatakan role kini super_admin —
+    // guard harus menolak dari nilai itu, bukan dari nama snapshot lama.
+    roleFindUniqueMock.mockResolvedValue({ name: "super_admin" })
+    const res = await updateRole(3, fd({ name: "Biasa", permissions: [] }))
+    expect(res).toMatchObject({ success: false, error: expect.stringMatching(/super_admin/) })
+    expect(roleUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("role terhapus di bawah kunci: error terkendali dimunculkan, bukan P2025 mentah", async () => {
+    roleFindUniqueMock.mockResolvedValue(null)
+    await expect(updateRole(3, fd({ name: "Biasa", permissions: [] }))).rejects.toThrow("Role tidak ditemukan")
+    expect(roleUpdateMock).not.toHaveBeenCalled()
   })
 })
 

@@ -17,6 +17,7 @@ const userCountMock = vi.fn()
 const bcryptCompareMock = vi.fn()
 const bcryptHashMock = vi.fn()
 const queryRawMock = vi.fn()
+const executeRawMock = vi.fn()
 
 // Tx mock: $transaction menjalankan callback dengan prisma mock yang sama
 // (pola recurring-run-now test), $queryRaw meniru kunci baris FOR UPDATE.
@@ -55,6 +56,7 @@ vi.mock("@/lib/db/prisma", () => {
     role,
     warehouse,
     $queryRaw: (...a: unknown[]) => queryRawMock(...a),
+    $executeRaw: (...a: unknown[]) => executeRawMock(...a),
   })
   return {
     prisma: {
@@ -67,7 +69,10 @@ vi.mock("@/lib/db/prisma", () => {
   }
 })
 
-vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug") }))
+vi.mock("@/lib/utils/slug-db", () => ({
+  nextSlug: vi.fn(async () => "test-slug"),
+  nextSlugWithClient: vi.fn(async () => "test-slug"),
+}))
 
 vi.mock("bcryptjs", () => ({
   default: {
@@ -111,9 +116,10 @@ beforeEach(() => {
     signInMock, signOutMock, requireAuthMock, requirePermissionMock,
     revalidateMock, userFindMock, userFindUniqueMock, userCreateMock, userUpdateMock,
     roleFindManyMock, warehouseCountMock, userCountMock, bcryptCompareMock, bcryptHashMock,
-    queryRawMock, transactionMock,
+    queryRawMock, transactionMock, executeRawMock,
   ]) m.mockReset()
   queryRawMock.mockResolvedValue([])
+  executeRawMock.mockResolvedValue(1)
   transactionMock.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn(txMock))
   bcryptHashMock.mockResolvedValue("hashed-value")
   // requirePermission resolves to the acting user (default: a plain admin
@@ -258,6 +264,22 @@ describe("createUser", () => {
     userCreateMock.mockRejectedValue(new Error("Unique constraint failed on email"))
     const res = await createUser(fd({ name: "X", email: "x@y.z", password: "kata-sandi-baru-kuat" }))
     expect(res).toEqual({ error: "Email sudah terdaftar" })
+  })
+
+  it("putaran 77: tabrakan slug tidak dilaporkan sebagai email terdaftar", async () => {
+    const err = Object.assign(new Error("Unique constraint failed"), {
+      meta: { target: ["slug"] },
+    })
+    userCreateMock.mockRejectedValue(err)
+    const res = await createUser(fd({ name: "X", email: "x@y.z", password: "kata-sandi-baru-kuat" }))
+    expect(res.error).toMatch(/tautan yang sudah dipakai/)
+  })
+
+  it("putaran 77: create user berjalan dalam transaksi", async () => {
+    userCreateMock.mockResolvedValue({ id: 12 })
+    const res = await createUser(fd({ name: "X", email: "x@y.z", password: "kata-sandi-baru-kuat" }))
+    expect(res).toEqual({ success: true, id: 12 })
+    expect(transactionMock).toHaveBeenCalled()
   })
 
   it("enforces minimum password length", async () => {
@@ -854,5 +876,19 @@ describe("updateUserWarehouses", () => {
     expect(res.error).toBeTruthy()
     expect(userUpdateMock).not.toHaveBeenCalled()
     consoleSpy.mockRestore()
+  })
+
+  it("putaran 77: validasi dan tulis dalam satu tx, kunci baris gudang mendahului count", async () => {
+    warehouseCountMock.mockResolvedValue(2)
+    userUpdateMock.mockResolvedValue({ id: 3 })
+    const res = await updateUserWarehouses(3, [5, 2])
+    expect(res).toEqual({ success: true })
+    expect(transactionMock).toHaveBeenCalledTimes(1)
+    expect(executeRawMock.mock.invocationCallOrder[0]).toBeLessThan(
+      warehouseCountMock.mock.invocationCallOrder[0],
+    )
+    expect(warehouseCountMock.mock.invocationCallOrder[0]).toBeLessThan(
+      userUpdateMock.mock.invocationCallOrder[0],
+    )
   })
 })

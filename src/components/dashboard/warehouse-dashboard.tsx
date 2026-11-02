@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma"
+import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import {
@@ -26,12 +27,50 @@ import { Button } from "@/components/ui/shadcn/button"
 import { Badge } from "@/components/ui/shadcn/badge"
 import { StatCard } from "@/components/ui/empty-state"
 
-async function getWarehouseData() {
-  const [lowStockItems, recentMoves, warehouseCount, pendingReceipts] =
-    await Promise.all([
-      prisma.$queryRaw<
-        { id: number; name: string; sku: string; qtyOnHand: number; minStock: number }[]
-      >`
+type LowStockItem = { id: number; name: string; sku: string; qtyOnHand: number; minStock: number }
+
+async function getWarehouseData(user: { id: string; roles: string[] }) {
+  // Putaran 77: dashboard gudang wajib menghormati WarehouseScope. Jalur lama
+  // menampilkan mutasi/penerimaan/jumlah SEMUA gudang ke pemegang peran
+  // `warehouse` — termasuk yang scope dokumennya `none` (tanpa penugasan) —
+  // membocorkan nama gudang lain dan aktivitas lintas gudang.
+  const scope = await getWarehouseScope(user)
+
+  if (scope.kind === "none") {
+    return {
+      lowStockItems: [] as LowStockItem[],
+      recentMoves: [],
+      warehouseCount: 0,
+      pendingReceipts: 0,
+      totalItems: 0,
+    }
+  }
+
+  const scoped = scope.kind === "assigned"
+  const warehouseIds = scoped ? scope.warehouseIds : []
+
+  const [recentMoves, pendingReceipts] = await Promise.all([
+    prisma.stockMove.findMany({
+      where: { status: "posted", ...(scoped ? { warehouseId: { in: warehouseIds } } : {}) },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+      include: {
+        item: { select: { name: true, sku: true } },
+        warehouse: { select: { name: true } },
+      },
+    }),
+    prisma.goodsReceipt.count({
+      where: { status: "draft", ...(scoped ? { warehouseId: { in: warehouseIds } } : {}) },
+    }),
+  ])
+
+  const warehouseCount = scoped
+    ? warehouseIds.length
+    : await prisma.warehouse.count({ where: { isActive: true, deletedAt: null } })
+
+  if (!scoped) {
+    const [lowStockItems, totalItems] = await Promise.all([
+      prisma.$queryRaw<LowStockItem[]>`
         SELECT id, name, sku, qty_on_hand as qtyOnHand, min_stock as minStock
         FROM items
         WHERE is_active = true
@@ -41,28 +80,74 @@ async function getWarehouseData() {
         ORDER BY qty_on_hand ASC
         LIMIT 8
       `,
-      prisma.stockMove.findMany({
-        where: { status: "posted" },
-        orderBy: { createdAt: "desc" },
-        take: 8,
-        include: {
-          item: { select: { name: true, sku: true } },
-          warehouse: { select: { name: true } },
-        },
-      }),
-      prisma.warehouse.count({ where: { isActive: true, deletedAt: null } }),
-      prisma.goodsReceipt.count({ where: { status: "draft" } }),
+      prisma.item.count({ where: { isActive: true, deletedAt: null } }),
     ])
+    return { lowStockItems, recentMoves, warehouseCount, pendingReceipts, totalItems }
+  }
 
-  const totalItems = await prisma.item.count({
-    where: { isActive: true, deletedAt: null },
-  })
+  // Stok per gudang kanonis = sisa InventoryLayer per (item, gudang);
+  // minimum efektif = override ItemWarehouseSetting.minStock, warisi
+  // Item.minStock bila NULL (BR-ROP-01). Item.qty_on_hand global TIDAK
+  // boleh dipakai menyaring per gudang.
+  const [layers, settings, totalRows] = await Promise.all([
+    prisma.inventoryLayer.groupBy({
+      by: ["itemId"],
+      where: { warehouseId: { in: warehouseIds }, remaining: { gt: 0 } },
+      _sum: { remaining: true },
+    }),
+    prisma.itemWarehouseSetting.findMany({
+      where: { warehouseId: { in: warehouseIds } },
+      select: { itemId: true, minStock: true },
+    }),
+    prisma.inventoryLayer.findMany({
+      where: { warehouseId: { in: warehouseIds } },
+      select: { itemId: true },
+      distinct: ["itemId"],
+    }),
+  ])
 
-  return { lowStockItems, recentMoves, warehouseCount, pendingReceipts, totalItems }
+  const minByItem = new Map<number, number>()
+  for (const s of settings) {
+    if (s.minStock != null) minByItem.set(s.itemId, Number(s.minStock))
+  }
+  const qtyByItem = new Map<number, number>()
+  for (const l of layers) {
+    qtyByItem.set(l.itemId, Number(l._sum.remaining ?? 0))
+  }
+  const candidateIds = [...new Set([...qtyByItem.keys(), ...minByItem.keys()])]
+  const items = candidateIds.length
+    ? await prisma.item.findMany({
+        where: { id: { in: candidateIds }, isActive: true, deletedAt: null },
+        select: { id: true, name: true, sku: true, minStock: true },
+      })
+    : []
+  const lowStockItems: LowStockItem[] = items
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      sku: item.sku,
+      qtyOnHand: qtyByItem.get(item.id) ?? 0,
+      minStock: minByItem.get(item.id) ?? Number(item.minStock),
+    }))
+    .filter((row) => row.minStock > 0 && row.qtyOnHand <= row.minStock)
+    .sort((a, b) => a.qtyOnHand - b.qtyOnHand)
+    .slice(0, 8)
+
+  return {
+    lowStockItems,
+    recentMoves,
+    warehouseCount,
+    pendingReceipts,
+    totalItems: totalRows.length,
+  }
 }
 
-export default async function WarehouseDashboard() {
-  const data = await getWarehouseData()
+export default async function WarehouseDashboard({
+  user,
+}: {
+  user: { id: string; roles: string[] }
+}) {
+  const data = await getWarehouseData(user)
   const today = new Date().toLocaleDateString("id-ID", {
     timeZone: "Asia/Jakarta",
     weekday: "long",

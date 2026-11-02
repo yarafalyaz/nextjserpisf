@@ -30,6 +30,7 @@ vi.mock("@/lib/db/prisma", () => {
       salesInvoice: docModelMock,
       asset: docModelMock,
       quotation: docModelMock,
+      project: docModelMock,
       approvalWorkflowStep: { findMany: mocks.findWorkflowSteps },
       user: { findFirst: mocks.findFirstUser, findMany: mocks.findManyUsers },
       notification: { createMany: mocks.createManyNotifications },
@@ -46,6 +47,7 @@ vi.mock("@/lib/db/prisma", () => {
         salesInvoice: docModelMock,
         asset: docModelMock,
         quotation: docModelMock,
+        project: docModelMock,
         approvalWorkflowStep: { findMany: mocks.findWorkflowSteps },
         user: { findFirst: mocks.findFirstUser, findMany: mocks.findManyUsers },
         notification: { createMany: mocks.createManyNotifications },
@@ -225,6 +227,30 @@ describe("approval-workflow.service", () => {
       expect(mocks.createApproval).toHaveBeenCalledWith({
         data: expect.objectContaining({ referenceType: "Asset", referenceId: 5, status: "pending" }),
       });
+    });
+
+    it("putaran 77: proyek diedit sesudah approval final membuka pengajuan baru", async () => {
+      mocks.findFirstWorkflow.mockResolvedValue({ id: 10 });
+      mocks.findFirstApproval.mockResolvedValue({
+        id: 1, status: "approved", completedAt: new Date("2026-10-01T00:00:00Z"),
+      });
+      mocks.docFindUnique.mockResolvedValue({ updatedAt: new Date("2026-10-02T00:00:00Z") });
+      mocks.createApproval.mockResolvedValue({ id: 2, status: "pending" });
+      const result = await requestApprovalIfConfigured("Project", 5);
+      expect(result).toBe(true);
+      expect(mocks.createApproval).toHaveBeenCalledWith({
+        data: expect.objectContaining({ referenceType: "Project", referenceId: 5, status: "pending" }),
+      });
+    });
+
+    it("putaran 77: proyek diedit sesudah approval final — assertApproved menolak (approval basi)", async () => {
+      mocks.findFirstApproval.mockResolvedValue({
+        id: 1, status: "approved", completedAt: new Date("2026-10-01T00:00:00Z"),
+      });
+      mocks.docFindUnique.mockResolvedValue({ updatedAt: new Date("2026-10-02T00:00:00Z") });
+      await expect(assertApproved("Project", 7)).rejects.toThrow(
+        "Dokumen berubah sesudah persetujuan final",
+      );
     });
 
     it("R6WN-03: approval baru langkah userId mengirim satu notifikasi ke approver itu", async () => {

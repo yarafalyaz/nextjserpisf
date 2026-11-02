@@ -109,6 +109,14 @@ const DOCUMENT_SOURCE_MAP: Record<string, { model: keyof typeof prisma; field: s
   PAYROLL: { model: 'payroll', field: 'documentNo' },
   PRJ: { model: 'project', field: 'documentNo' },
   CC: { model: 'customerCredit', field: 'documentNo' },
+  // Putaran 77: kunci ini sebelumnya absen dari map, jadi floor selalu 0 dan
+  // counter bisa menabrak nomor legacy/manual yang sudah ada (kolom nomor
+  // @unique). Tanpa softDelete: nomor baris terhapus tetap terlarang dipakai
+  // ulang karena constraint unik mencakupnya (pola CUST di bawah).
+  QCL: { model: 'qcChecklist', field: 'code' },
+  QCI: { model: 'qcInspection', field: 'documentNo' },
+  NCR: { model: 'nonconformance', field: 'documentNo' },
+  PAJAK: { model: 'taxPayment', field: 'documentNo' },
   // Master data simple codes. NOTE: we deliberately do NOT filter soft-deleted
   // rows here. The code/sku/employeeNo columns carry a UNIQUE constraint that
   // also covers soft-deleted rows, so a soft-deleted record keeps its code

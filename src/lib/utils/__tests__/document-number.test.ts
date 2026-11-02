@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => ({
   // per-model findMany delegates
   quotationFindMany: vi.fn(),
   customerFindMany: vi.fn(),
+  qcChecklistFindMany: vi.fn(),
+  qcInspectionFindMany: vi.fn(),
+  nonconformanceFindMany: vi.fn(),
+  taxPaymentFindMany: vi.fn(),
 }));
 
 vi.mock("@/lib/services/document-sequence.service", () => ({
@@ -21,6 +25,10 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     quotation: { findMany: mocks.quotationFindMany },
     customer: { findMany: mocks.customerFindMany },
+    qcChecklist: { findMany: mocks.qcChecklistFindMany },
+    qcInspection: { findMany: mocks.qcInspectionFindMany },
+    nonconformance: { findMany: mocks.nonconformanceFindMany },
+    taxPayment: { findMany: mocks.taxPaymentFindMany },
   },
 }));
 
@@ -32,6 +40,10 @@ describe("utils/document-number", () => {
     mocks.getSystemSettings.mockResolvedValue({ companyName: "Yara ERP" });
     mocks.quotationFindMany.mockResolvedValue([]);
     mocks.customerFindMany.mockResolvedValue([]);
+    mocks.qcChecklistFindMany.mockResolvedValue([]);
+    mocks.qcInspectionFindMany.mockResolvedValue([]);
+    mocks.nonconformanceFindMany.mockResolvedValue([]);
+    mocks.taxPaymentFindMany.mockResolvedValue([]);
     mocks.next.mockResolvedValue(1);
     mocks.peek.mockResolvedValue(0);
   });
@@ -99,6 +111,51 @@ describe("utils/document-number", () => {
 
       expect(mocks.next).toHaveBeenCalledWith("CUST", 0);
       expect(result).toBe("CUST-0001");
+    });
+  });
+
+  describe("floor kunci QC/pajak (putaran 77)", () => {
+    // Keempat kunci ini sebelumnya absen dari DOCUMENT_SOURCE_MAP, jadi
+    // findMaxSequence selalu 0 dan counter atomik bisa menabrak nomor
+    // legacy/manual pada kolom @unique.
+    it("QCL memakai qcChecklist.code sebagai floor", async () => {
+      mocks.qcChecklistFindMany.mockResolvedValue([{ code: "QCL-0011" }]);
+      mocks.next.mockResolvedValue(12);
+
+      const result = await generateDocumentNumber("QCL", "simple");
+
+      expect(mocks.next).toHaveBeenCalledWith("QCL", 11);
+      expect(result).toBe("QCL-0012");
+    });
+
+    it("QCI memakai qcInspection.documentNo sebagai floor", async () => {
+      mocks.qcInspectionFindMany.mockResolvedValue([{ documentNo: "QCI-0004" }]);
+      mocks.next.mockResolvedValue(5);
+
+      const result = await generateDocumentNumber("QCI", "simple");
+
+      expect(mocks.next).toHaveBeenCalledWith("QCI", 4);
+      expect(result).toBe("QCI-0005");
+    });
+
+    it("NCR memakai nonconformance.documentNo sebagai floor", async () => {
+      mocks.nonconformanceFindMany.mockResolvedValue([{ documentNo: "NCR-0021" }]);
+      mocks.next.mockResolvedValue(22);
+
+      const result = await generateDocumentNumber("NCR", "simple");
+
+      expect(mocks.next).toHaveBeenCalledWith("NCR", 21);
+      expect(result).toBe("NCR-0022");
+    });
+
+    it("PAJAK memakai taxPayment.documentNo sebagai floor (bukan nomor seri TaxInvoice)", async () => {
+      mocks.taxPaymentFindMany.mockResolvedValue([{ documentNo: "PAJAK-0009" }]);
+      mocks.next.mockResolvedValue(10);
+
+      const result = await generateDocumentNumber("PAJAK", "simple");
+
+      expect(mocks.next).toHaveBeenCalledWith("PAJAK", 9);
+      expect(result).toBe("PAJAK-0010");
     });
   });
 

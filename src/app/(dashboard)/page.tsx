@@ -274,7 +274,7 @@ export default async function DashboardPage() {
   if (!isAdmin) {
     if (roles.includes("kepala_bengkel")) return <WorkshopDashboard />
     if (roles.includes("purchasing")) return <PurchaseDashboard />
-    if (roles.includes("warehouse")) return <WarehouseDashboard />
+    if (roles.includes("warehouse")) return <WarehouseDashboard user={{ id: String(session?.user?.id ?? ""), roles }} />
     if (roles.includes("finance")) return <FinanceDashboard />
     return <EmployeeDashboard />
   }

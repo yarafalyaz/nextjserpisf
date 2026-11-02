@@ -28,9 +28,14 @@ export async function getWarehouseScope(user: ScopeUser): Promise<WarehouseScope
     return { kind: "all" }
   }
 
-  // Cari gudang yang ditugaskan ke pengguna
+  // Cari gudang yang ditugaskan ke pengguna. Putaran 77: penugasan ke gudang
+  // yang sudah nonaktif/terhapus tidak boleh terus memberi scope — baris
+  // penugasan bisa tertinggal dari soft-delete gudang, jadi saring di sisi baca.
   const assignments = await prisma.userWarehouse.findMany({
-    where: { userId: Number(user.id) },
+    where: {
+      userId: Number(user.id),
+      warehouse: { isActive: true, deletedAt: null },
+    },
     select: { warehouseId: true },
   })
 

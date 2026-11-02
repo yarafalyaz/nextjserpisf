@@ -61,6 +61,21 @@ describe("attachPendingTransactionAttachments", () => {
     })).rejects.toThrow(/ID lampiran tidak valid/i)
     expect(updateMany).not.toHaveBeenCalled()
   })
+
+  it("putaran 77: klaim sebagian menolak — lampiran terpilih sudah diklaim/dihapus", async () => {
+    // Submit dokumen lain user yang sama (atau sweep) mengambil salah satu ID
+    // di antara unggah dan submit. Tanpa cek count, dokumen ini commit tanpa
+    // bukti yang dipilih pengguna.
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 })
+    const tx = { transactionAttachment: { updateMany } } as unknown as TxClient
+
+    await expect(attachPendingTransactionAttachments(tx, {
+      attachmentIds: "[10,11]",
+      referenceType: "vendor_bill",
+      referenceId: 27,
+      uploadedBy: 4,
+    })).rejects.toThrow(/sudah tidak tersedia|sudah dipakai/)
+  })
 })
 
 describe("deleteTransactionAttachmentsTx", () => {

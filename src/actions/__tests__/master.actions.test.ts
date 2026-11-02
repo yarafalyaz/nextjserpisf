@@ -70,6 +70,7 @@ const mocks = vi.hoisted(() => {
     vendorItemPrice: buildModelMock(),
     customerPriceList: buildModelMock(),
     itemWarehouseSetting: buildModelMock(),
+    userWarehouse: buildModelMock(),
     vehicleFitmentRule: buildModelMock(),
     itemSubstitute: buildModelMock(),
 
@@ -2929,6 +2930,16 @@ describe('Coverage Hardening Edge Cases', () => {
     expect(mocks.prismaMock.warehouse.delete).not.toHaveBeenCalled()
     expect(mocks.prismaMock.warehouse.update).toHaveBeenCalled()
     mocks.prismaMock.itemWarehouseSetting.count.mockResolvedValue(0)
+  })
+
+  it('putaran 77: deleteWarehouse - penugasan user memaksa soft-delete', async () => {
+    mocks.prismaMock.userWarehouse.count.mockResolvedValue(2)
+    const res = await actions.deleteWarehouse(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.userWarehouse.count).toHaveBeenCalledWith({ where: { warehouseId: 1 } })
+    expect(mocks.prismaMock.warehouse.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.warehouse.update).toHaveBeenCalled()
+    mocks.prismaMock.userWarehouse.count.mockResolvedValue(0)
   })
 
   it('deleteItem - soft delete', async () => {

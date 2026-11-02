@@ -1,9 +1,10 @@
 "use server"
 
 import { signIn, signOut } from "@/lib/auth/auth"
+import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db/prisma"
 import { requireAuth, requirePermission } from "@/lib/auth/permissions"
-import { nextSlug } from "@/lib/utils/slug-db"
+import { nextSlugWithClient } from "@/lib/utils/slug-db"
 import { isNextRedirectError } from "@/lib/utils/error"
 import bcrypt from "bcryptjs"
 import { revalidatePath } from "next/cache"
@@ -167,18 +168,25 @@ export async function createUser(formData: FormData) {
 
     const hashedPassword = await bcrypt.hash(password, 12)
 
-    // Use try/catch on create to handle race condition (duplicate email)
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        slug: await nextSlug("user", name),
-        password: hashedPassword,
-        isActive: true,
-        roles: {
-          connect: (roleIds ?? []).map((id) => ({ id })),
+    // Use try/catch on create to handle race condition (duplicate email).
+    // Putaran 77: slug dihitung di dalam tx lewat delegate tx — slug global
+    // tidak melihat baris tak-tercommit transaksi lain, sehingga dua create
+    // nama sama bisa memilih slug sama lalu satu kalah P2002 yang dulu
+    // tersamar sebagai "Email sudah terdaftar".
+    const user = await prisma.$transaction(async (tx) => {
+      const slug = await nextSlugWithClient(tx as never, "user", name)
+      return tx.user.create({
+        data: {
+          name,
+          email,
+          slug,
+          password: hashedPassword,
+          isActive: true,
+          roles: {
+            connect: (roleIds ?? []).map((id) => ({ id })),
+          },
         },
-      },
+      })
     })
 
     // Security-relevant: who created which user with which roles. Role names
@@ -198,8 +206,14 @@ export async function createUser(formData: FormData) {
     return { success: true, id: user.id }
   } catch (e) {
     if (isNextRedirectError(e)) throw e
-    // Handle unique constraint violation (race condition on email)
+    // Handle unique constraint violation (race condition on email). Bedakan
+    // target: tabrakan slug bukan email — jangan menyesatkan pengguna.
     if (e instanceof Error && e.message.includes("Unique constraint")) {
+      const meta = (e as { meta?: { target?: unknown } }).meta
+      const target = Array.isArray(meta?.target) ? meta.target.join(",") : String(meta?.target ?? "")
+      if (target.includes("slug") && !target.includes("email")) {
+        return { error: "Nama pengguna menghasilkan tautan yang sudah dipakai. Pakai nama lain." }
+      }
       return { error: "Email sudah terdaftar" }
     }
     console.error("[createUser]", e)
@@ -344,24 +358,38 @@ export async function updateUserWarehouses(userId: number, warehouseIds: number[
     // diatur padahal tidak. Gudang nonaktif/terhapus sama tidak gunanya:
     // picker halaman hanya menawarkan gudang aktif, dan penugasan ke gudang
     // mati menulis ruang lingkup yang tidak pernah bisa dipakai.
-    if (cleanIds.length > 0) {
-      const found = await prisma.warehouse.count({
-        where: { id: { in: cleanIds }, isActive: true, deletedAt: null },
-      })
-      if (found !== cleanIds.length) {
-        return { error: "Ada gudang yang tidak ditemukan" }
+    // Putaran 77: validasi + tulis dalam SATU tx berkunci baris gudang
+    // (id terurut, hindari deadlock antar penulis). Jalur lama menghitung
+    // gudang hidup secara global lalu menulis terpisah — gudang yang
+    // dinonaktifkan/dihapus di antaranya tetap tertugaskan.
+    const assignError = await prisma.$transaction(async (tx) => {
+      if (cleanIds.length > 0) {
+        const sorted = [...cleanIds].sort((a, b) => a - b)
+        if (typeof tx.$executeRaw === "function") {
+          await tx.$executeRaw`SELECT id FROM warehouses WHERE id IN (${Prisma.join(sorted)}) ORDER BY id FOR UPDATE`
+        }
+        const found = await tx.warehouse.count({
+          where: { id: { in: cleanIds }, isActive: true, deletedAt: null },
+        })
+        if (found !== cleanIds.length) {
+          return "Ada gudang yang tidak ditemukan"
+        }
       }
-    }
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        userWarehouses: {
-          deleteMany: {},
-          create: cleanIds.map((warehouseId) => ({ warehouseId })),
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          userWarehouses: {
+            deleteMany: {},
+            create: cleanIds.map((warehouseId) => ({ warehouseId })),
+          },
         },
-      },
+      })
+      return null
     })
+    if (assignError) {
+      return { error: assignError }
+    }
 
     // Security-relevant: penugasan gudang menentukan dokumen gudang mana yang
     // boleh dibaca/ditulis. Catat sebelum/sesudah agar pemberian akses tertelusuri.

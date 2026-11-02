@@ -9,7 +9,7 @@ import { redirect } from "next/navigation"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { createRoleSchema, updateRoleSchema, rolePermissionIdsSchema } from "@/lib/validations/roles.schemas"
-import { nextSlug } from "@/lib/utils/slug-db"
+import { nextSlugWithClient } from "@/lib/utils/slug-db"
 import { assertCanGrantPermissions } from "@/lib/auth/role-grant"
 
 // Kontrak galat modul ini sengaja dibagi dua:
@@ -58,15 +58,24 @@ export async function createRole(formData: FormData): Promise<RoleFormError> {
     return { success: false, error: grantErr }
   }
 
-  const role = await prisma.role.create({
-    data: {
-      name: name.trim(),
-      slug: await nextSlug("role", name.trim()),
-      guardName: "web",
-      permissions: {
-        connect: permissionIds.map((id) => ({ id })),
+  // Putaran 77: gap-lock tabel + slug delegate tx dalam satu transaksi.
+  // Role.name dan Role.slug sama-sama @unique; slug global tidak melihat
+  // baris tak-tercommit transaksi lain sehingga create nama sama bersamaan
+  // memilih slug sama lalu satu kalah P2002 mentah.
+  const role = await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM roles FOR UPDATE`
+    }
+    return tx.role.create({
+      data: {
+        name: name.trim(),
+        slug: await nextSlugWithClient(tx as never, "role", name.trim()),
+        guardName: "web",
+        permissions: {
+          connect: permissionIds.map((id) => ({ id })),
+        },
       },
-    },
+    })
   })
 
   revalidatePath("/pengaturan/peran")
@@ -102,60 +111,77 @@ export async function updateRole(id: number, formData: FormData): Promise<RoleFo
   }
   const permissionIds = [...new Set(idsParsed.data)]
 
-  // Protect the built-in super_admin role: only a super_admin may modify it.
-  // Otherwise a manage_settings holder could strip its permissions or rename it,
-  // locking the real admins out — a privilege escalation via denial-of-service
-  // that bypasses assertCanGrantPermissions (which only guards the granted set,
-  // not edits to the all-powerful role itself).
-  const existing = await prisma.role.findUnique({ where: { id }, select: { name: true } })
-  if (existing?.name === "super_admin" && !actor.roles.includes("super_admin")) {
-    return { success: false, error: "Hanya super_admin yang dapat mengubah peran super_admin" }
-  }
-
-  // Nama istimewa hanya boleh datang dari seeder/installer — tapi MENJAGA nama yang
-  // sudah dipakai (mis. mengubah daftar izin role `super_admin`) tetap harus bisa,
-  // kalau tidak seluruh hak akses role bawaan jadi tidak bisa diatur.
-  if (name.trim().toLowerCase() !== (existing?.name ?? "").trim().toLowerCase() && isReservedRoleName(name)) {
-    return { success: false, error: `Nama peran "${name}" dicadangkan sistem dan tidak dapat dipakai.` }
-  }
-
-  // Role dicadangkan (RESERVED_ROLE_NAMES) memberi akses lintas-cakupan berbasis
-  // NAMA di warehouse-scope/hr-scope. Mengganti namanya ke nama biasa atau
-  // mengosongkan izinnya mematikan akses itu untuk semua pemegangnya — DoS
-  // administratif yang lolos dari assertCanGrantPermissions (set kosong selalu
-  // lolos). Hanya super_admin yang boleh menyentuh rename/pengosongan; edit izin
-  // non-kosong oleh non-super tetap dibatasi grantErr di bawah.
-  const existingIsReserved = isReservedRoleName(existing?.name ?? "")
-  if (existingIsReserved && !actor.roles.includes("super_admin")) {
-    const newName = name.trim()
-    if (newName !== (existing?.name ?? newName)) {
-      return { success: false, error: `Peran sistem "${existing?.name}" tidak dapat diganti nama oleh non-super_admin.` }
-    }
-    if (permissionIds.length === 0) {
-      return { success: false, error: `Peran sistem "${existing?.name}" tidak dapat dikosongkan izinnya oleh non-super_admin.` }
-    }
-  }
-
   const grantErr = await assertCanGrantPermissions(actor, permissionIds)
   if (grantErr) {
     return { success: false, error: grantErr }
   }
 
-  // Slug hanya dihitung ulang saat NAMA berubah: menyimpan daftar izin saja (mis. dari
-  // matriks) tidak boleh mengubah URL peran — kalau tidak, tautan/bookmark lama mati
-  // dan slug yang sudah tertulis di dokumen ikut berubah tanpa alasan.
-  const nameChanged = name.trim() !== (existing?.name ?? name.trim())
+  // Putaran 77: guard + tulis dalam SATU tx berkunci baris role (pola
+  // deleteRole, yang mengunci baris yang sama). Jalur lama menilai guard dari
+  // snapshot `prisma.role.findUnique` pra-tx lalu menulis polos — rename/guard
+  // reserved bisa lolos dari nama basi, dan role yang terhapus konkuren muncul
+  // sebagai P2025 mentah. Di sini semua guard dinilai ulang dari bacaan
+  // terkunci, dan slug dihitung lewat delegate tx.
+  const guardError = await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM roles WHERE id = ${id} FOR UPDATE`
+    }
+    const existing = await tx.role.findUnique({ where: { id }, select: { name: true } })
+    if (!existing) throw new Error("Role tidak ditemukan")
 
-  await prisma.role.update({
-    where: { id },
-    data: {
-      name: name.trim(),
-      ...(nameChanged ? { slug: await nextSlug("role", name.trim(), { excludeId: id }) } : {}),
-      permissions: {
-        set: permissionIds.map((pid) => ({ id: pid })),
+    // Protect the built-in super_admin role: only a super_admin may modify it.
+    // Otherwise a manage_settings holder could strip its permissions or rename it,
+    // locking the real admins out — a privilege escalation via denial-of-service
+    // that bypasses assertCanGrantPermissions (which only guards the granted set,
+    // not edits to the all-powerful role itself).
+    if (existing.name === "super_admin" && !actor.roles.includes("super_admin")) {
+      return "Hanya super_admin yang dapat mengubah peran super_admin"
+    }
+
+    // Nama istimewa hanya boleh datang dari seeder/installer — tapi MENJAGA nama yang
+    // sudah dipakai (mis. mengubah daftar izin role `super_admin`) tetap harus bisa,
+    // kalau tidak seluruh hak akses role bawaan jadi tidak bisa diatur.
+    if (name.trim().toLowerCase() !== existing.name.trim().toLowerCase() && isReservedRoleName(name)) {
+      return `Nama peran "${name}" dicadangkan sistem dan tidak dapat dipakai.`
+    }
+
+    // Role dicadangkan (RESERVED_ROLE_NAMES) memberi akses lintas-cakupan berbasis
+    // NAMA di warehouse-scope/hr-scope. Mengganti namanya ke nama biasa atau
+    // mengosongkan izinnya mematikan akses itu untuk semua pemegangnya — DoS
+    // administratif yang lolos dari assertCanGrantPermissions (set kosong selalu
+    // lolos). Hanya super_admin yang boleh menyentuh rename/pengosongan; edit izin
+    // non-kosong oleh non-super tetap dibatasi grantErr di atas.
+    const existingIsReserved = isReservedRoleName(existing.name ?? "")
+    if (existingIsReserved && !actor.roles.includes("super_admin")) {
+      const newName = name.trim()
+      if (newName !== (existing.name ?? newName)) {
+        return `Peran sistem "${existing.name}" tidak dapat diganti nama oleh non-super_admin.`
+      }
+      if (permissionIds.length === 0) {
+        return `Peran sistem "${existing.name}" tidak dapat dikosongkan izinnya oleh non-super_admin.`
+      }
+    }
+
+    // Slug hanya dihitung ulang saat NAMA berubah: menyimpan daftar izin saja (mis. dari
+    // matriks) tidak boleh mengubah URL peran — kalau tidak, tautan/bookmark lama mati
+    // dan slug yang sudah tertulis di dokumen ikut berubah tanpa alasan.
+    const nameChanged = name.trim() !== existing.name
+
+    await tx.role.update({
+      where: { id },
+      data: {
+        name: name.trim(),
+        ...(nameChanged ? { slug: await nextSlugWithClient(tx as never, "role", name.trim(), { excludeId: id }) } : {}),
+        permissions: {
+          set: permissionIds.map((pid) => ({ id: pid })),
+        },
       },
-    },
+    })
+    return null
   })
+  if (guardError) {
+    return { success: false, error: guardError }
+  }
 
   revalidatePath("/pengaturan/peran")
   await logActivity("update", "Role", id, "Memperbarui peran")

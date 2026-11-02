@@ -102,6 +102,35 @@ beforeEach(() => {
   mocks.queryRaw.mockResolvedValue([{ id: 7 }])
 })
 
+describe("slug dalam transaksi (putaran 77)", () => {
+  it("create menghitung slug lewat delegate tx, bukan prisma global", async () => {
+    const res = await createRecurringTransaction(form({ idempotencyKey: "k-slug" }))
+    expect(res.success).toBe(true)
+    // Argumen pertama nextSlugWithClient wajib tx mock yang sama dengan
+    // pemanggil create — slug global tidak melihat baris tak-tercommit.
+    expect(mocks.nextSlug).toHaveBeenCalledWith(
+      mocks.prisma,
+      "recurringTransaction",
+      "Sewa gudang",
+    )
+    expect(mocks.scheduleCreate.mock.calls[0][0].data.slug).toBe("sewa-gudang")
+  })
+
+  it("update menghitung slug lewat delegate tx sebelum klaim kondisional", async () => {
+    const res = await updateRecurringTransaction(7, form({}))
+    expect(res.success).toBe(true)
+    expect(mocks.nextSlug).toHaveBeenCalledWith(
+      mocks.prisma,
+      "recurringTransaction",
+      "Sewa gudang",
+      { excludeId: 7 },
+    )
+    expect(mocks.nextSlug.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.scheduleUpdateMany.mock.invocationCallOrder[0],
+    )
+  })
+})
+
 describe("createRecurringTransaction — tanggal kalender", () => {
   it("menolak startDate fiktif 2026-02-30 sebelum menulis DB", async () => {
     const res = await createRecurringTransaction(form({ startDate: "2026-02-30" }))

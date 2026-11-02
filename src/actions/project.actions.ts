@@ -150,7 +150,7 @@ export async function updateProject(projectId: number, formData: FormData) {
   if (!parsed.success) return { success: false, error: parsed.error }
   const { data } = parsed
 
-  await requirePermission("edit_projects")
+  const user = await requirePermission("edit_projects")
 
   // Approval workflow gate: if a Project approval workflow is configured,
   // it must be fully approved before allowing edits.
@@ -215,6 +215,11 @@ export async function updateProject(projectId: number, formData: FormData) {
         notes: data.notes ?? null,
       },
     })
+    // Putaran 77: edit sesudah approval final membuka pengajuan ulang secara
+    // atomik dengan edit ini (pola updateJournal/updateVendorPayment). Tanpa
+    // baris ini approval final yang baru basi akan menggerbang edit berikutnya
+    // fail-closed tanpa pengajuan pending yang bisa diselesaikan.
+    await requestApprovalIfConfigured("Project", projectId, Number(user.id), tx)
   })
 
   await logActivity("update", "Project", projectId, "Memperbarui proyek")
