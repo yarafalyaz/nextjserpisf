@@ -1028,6 +1028,40 @@ describe("Account Actions", () => {
     const res = await actions.createAccount(fdMap({ name: "test", code: "test", type: "ASSET", rate: "10" }))
     expect(res?.success).toBe(true)
   })
+
+  it("putaran 68: createAccount menolak induk nonaktif/terhapus dari himpunan terkunci", async () => {
+    const defaultFindMany = mocks.prismaMock.account.findMany.getMockImplementation()
+    mocks.prismaMock.account.findMany.mockImplementation(async () => [
+      { id: 3, name: "Kas Kecil", code: "1010", slug: "kas-kecil" },
+    ])
+    try {
+      const bad = await actions.createAccount(
+        fdMap({ name: "Anak Yatim", code: "1011", type: "ASSET", parentId: "999" }),
+      )
+      expect(bad?.success).toBe(false)
+      expect(String((bad as any)?.error)).toContain("Akun induk tidak ditemukan")
+      expect(mocks.prismaMock.account.create).not.toHaveBeenCalled()
+    } finally {
+      mocks.prismaMock.account.findMany.mockImplementation(defaultFindMany as never)
+    }
+  })
+
+  it("putaran 68: createAccount dengan induk hidup tersimpan dengan parentId", async () => {
+    const defaultFindMany = mocks.prismaMock.account.findMany.getMockImplementation()
+    mocks.prismaMock.account.findMany.mockImplementation(async () => [
+      { id: 7, name: "Kas", code: "1000", slug: "kas" },
+    ])
+    try {
+      const res = await actions.createAccount(
+        fdMap({ name: "Kas Cabang", code: "1001", type: "ASSET", parentId: "7" }),
+      )
+      expect(res?.success).toBe(true)
+      const createArg = mocks.prismaMock.account.create.mock.calls.at(-1)?.[0]
+      expect(createArg.data.parentId).toBe(7)
+    } finally {
+      mocks.prismaMock.account.findMany.mockImplementation(defaultFindMany as never)
+    }
+  })
   it("updateAccount succeeds", async () => {
     mocks.prismaMock.account.findUnique.mockResolvedValueOnce({ code: "TEST", normalBalance: "DEBIT" })
     const res = await actions.updateAccount(1, fdMap({ name: "test", code: "test", type: "ASSET", rate: "10" }))

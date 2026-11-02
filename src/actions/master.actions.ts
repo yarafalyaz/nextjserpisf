@@ -1987,6 +1987,14 @@ export async function createAccount(formData: FormData) {
           );
         }
       }
+      // Putaran 68: jalur create menilai induk dari himpunan terkunci yang
+      // sama (deletedAt: null): induk terhapus-lembut tak pernah duduk di
+      // himpunan ini, jadi keanggotaan himpunan == gerbang hidup yang
+      // dipakai jalur update (updateAccount "Akun induk tidak ditemukan").
+      // FK hanya menolak induk fiktif (P2003 mentah), bukan induk mati.
+      if (v.parentId != null && !candidates.some((row) => row.id === v.parentId)) {
+        throw new Error("Akun induk tidak ditemukan");
+      }
       const created = await tx.account.create({
         data: {
           code: code as string,
