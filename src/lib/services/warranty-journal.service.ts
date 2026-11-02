@@ -52,8 +52,14 @@ export interface WarrantyRepairCost {
 
 /**
  * Biaya klaim terverifikasi sistem (gerbang G4 vonis): HANYA dari WO repair
- * tertaut — MaterialIssue completed (Σ qty × cost baris, snapshot FIFO) +
+ * tertaut — MaterialIssue completed (Σ qty × snapshot FIFO complete) +
  * ProductionCost WO repair. Angka ketik bebas tidak pernah jadi biaya E2/E3.
+ *
+ * Sumber biaya material = `scrapUnitCostSnapshot`, kolom yang dibekukan hook
+ * complete dari FIFO AKTUAL yang diposting ke StockMove + jurnal pengeluaran.
+ * Kolom `cost` baris adalah snapshot master saat baris lahir dan bisa berbeda
+ * dari FIFO terpakai: memakainya mereklasifikasi biaya garansi E2/E3 dengan
+ * angka yang tidak pernah meninggalkan persediaan.
  */
 export async function computeWarrantyRepairCost(
   repairWorkOrderId: number,
@@ -62,7 +68,7 @@ export async function computeWarrantyRepairCost(
   const [issues, costs] = await Promise.all([
     client.materialIssue.findMany({
       where: { workOrderId: repairWorkOrderId, status: "completed" },
-      select: { items: { select: { qty: true, cost: true } } },
+      select: { items: { select: { qty: true, cost: true, scrapUnitCostSnapshot: true } } },
     }),
     client.productionCost.findMany({
       where: { workOrderId: repairWorkOrderId },
@@ -71,7 +77,7 @@ export async function computeWarrantyRepairCost(
   ])
   const materialCost = issues.reduce(
     (sum, mi) =>
-      mi.items.reduce((s, item) => safeAdd(s, safeMultiply(Number(item.qty), Number(item.cost), 2), 2), sum),
+      mi.items.reduce((s, item) => safeAdd(s, safeMultiply(Number(item.qty), Number(item.scrapUnitCostSnapshot ?? item.cost), 2), 2), sum),
     0,
   )
   const productionCost = costs.reduce((s, c) => safeAdd(s, Number(c.amount), 2), 0)

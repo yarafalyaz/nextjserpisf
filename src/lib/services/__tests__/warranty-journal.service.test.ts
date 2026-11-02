@@ -39,7 +39,7 @@ function makeTx(overrides: {
   claim?: Record<string, unknown> | null
   siblingClaims?: { id: number }[]
   siblingJournal?: { id: number; journalNumber: string; referenceId: number } | null
-  materialIssues?: { items: { qty: number; cost: number }[] }[]
+  materialIssues?: { items: { qty: number; cost: number; scrapUnitCostSnapshot?: number | null }[] }[]
   productionCosts?: { amount: number }[]
   settings?: Record<string, unknown> | null
   existingJournal?: { id: number; journalNumber: string } | null
@@ -148,6 +148,22 @@ beforeEach(() => {
 })
 
 describe("E2 WarrantyClaimCost (rute provisi MATI)", () => {
+  it("putaran 58: biaya material memakai snapshot FIFO complete (scrapUnitCostSnapshot), bukan cost baris mentah", async () => {
+    const { tx, entries } = makeTx({
+      claim: coveredClaim,
+      materialIssues: [{ items: [{ qty: 2, cost: 100_000, scrapUnitCostSnapshot: 130_000 }] }],
+      productionCosts: [],
+    })
+    state.tx = tx
+    const result = await postWarrantyClaimCostJournal({ claimId: 5, eventDate: new Date("2026-10-21T00:00:00Z") })
+    // 2 × 130.000 FIFO aktual = 260.000 (bukan 2 × 100.000 snapshot baris).
+    expect(result.amount).toBe(260_000)
+    expect(entries[0]).toEqual([
+      expect.objectContaining({ accountId: EXPENSE_ID, debit: 260_000, credit: 0 }),
+      expect.objectContaining({ accountId: SOURCE_ID, debit: 0, credit: 260_000 }),
+    ])
+  })
+
   it("AC-G4/G3 saldo 0: seluruh biaya 2,75jt Dr 510104 / Cr beban sumber, nol baris provisi", async () => {
     const { tx, entries } = makeTx({ claim: coveredClaim, ...costRows })
     state.tx = tx
