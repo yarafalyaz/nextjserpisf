@@ -27,8 +27,10 @@ const assertApprovedMock = vi.fn()
 const syncPettyCashMock = vi.fn()
 
 const txExpenseFindUniqueOrThrowMock = vi.fn()
+const txQueryRawMock = vi.fn(async (..._a: unknown[]) => [{ id: 5 }])
 const txMock = {
   $executeRaw: vi.fn(async () => 1),
+  $queryRaw: (a: unknown) => txQueryRawMock(a),
   expense: {
     findUniqueOrThrow: (...a: unknown[]) => txExpenseFindUniqueOrThrowMock(...a),
     create: (...a: unknown[]) => expenseCreateMock(...a),
@@ -252,7 +254,7 @@ describe("setReimbursementClaimAccounts validasi akun final (FINHR-8)", () => {
 describe("createReimbursementClaim self-scope (AC-RB-B1/B6)", () => {
   it("employeeId payload karyawan lain ditimpa scope self", async () => {
     getHrScopeMock.mockResolvedValue({ kind: "self", employeeId: 5 })
-    employeeFindUniqueMock.mockResolvedValue({ id: 5, employmentEndedAt: null })
+    employeeFindUniqueMock.mockResolvedValue({ id: 5, isActive: true, deletedAt: null, employmentEndedAt: null })
     accountFindFirstMock.mockResolvedValue({ id: 610 })
     expenseFindManyMock.mockResolvedValue([])
     expenseCreateMock.mockResolvedValue({ id: 99, documentNo: "EXP-0001" })
@@ -282,6 +284,30 @@ describe("createReimbursementClaim self-scope (AC-RB-B1/B6)", () => {
     expect(r.success).toBe(false)
     expect((r as { duplicateCandidates?: unknown[] }).duplicateCandidates).toHaveLength(1)
     expect(expenseCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("putaran 68: pengaju yang berhenti di antara cek luar dan tx ditolak dari bacaan terkunci, tanpa klaim", async () => {
+    getHrScopeMock.mockResolvedValue({ kind: "self", employeeId: 5 })
+    // Cek luar (bacaan pertama) masih melihat karyawan aktif; penilaian
+    // ulang dalam tx (bacaan kedua, sesudah kunci baris employee) melihat
+    // employmentEndedAt yang baru commit.
+    employeeFindUniqueMock
+      .mockResolvedValueOnce({ id: 5, employmentEndedAt: null })
+      .mockResolvedValueOnce({
+        id: 5, isActive: true, deletedAt: null, employmentEndedAt: new Date("2026-11-01"),
+      })
+    accountFindFirstMock.mockResolvedValue({ id: 610 })
+    expenseFindManyMock.mockResolvedValue([])
+    const r = await createReimbursementClaim(form({
+      amount: "150000", date: "2026-10-25",
+    }))
+    expect(r.success).toBe(false)
+    expect(r.error).toMatch(/sudah nonaktif/)
+    expect(expenseCreateMock).not.toHaveBeenCalled()
+    expect(txQueryRawMock).toHaveBeenCalled()
+    expect(txQueryRawMock.mock.invocationCallOrder[0]).toBeLessThan(
+      employeeFindUniqueMock.mock.invocationCallOrder[1],
+    )
   })
 
   it("user tanpa karyawan tertaut ditolak fail-closed", async () => {

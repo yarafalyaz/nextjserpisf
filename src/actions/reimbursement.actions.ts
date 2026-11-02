@@ -191,7 +191,22 @@ export async function createReimbursementClaim(formData: FormData) {
     const attachmentIds = formData.get("attachmentIds") as string | null
 
     const claim = await prisma.$transaction(async (tx) => {
+      // Putaran 68: gerbang hidup pengaju dinilai ulang dari bacaan
+      // terkunci. Kunci baris employee sebagai pernyataan pertama tx
+      // (sebelum bacaan konsisten apa pun), klaim key, lalu baca ulang
+      // lewat tx — karyawan yang berhenti/nonaktif/terhapus sesudah cek
+      // luar tak boleh melahirkan klaim baru (EC-1). Rollback melepas key.
+      if (typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT id FROM employees WHERE id = ${claimantEmployeeId} FOR UPDATE`
+      }
       await checkIdempotency(idempotencyKey, tx, user.id)
+      const claimantInTx = await tx.employee.findUnique({
+        where: { id: claimantEmployeeId },
+        select: { id: true, isActive: true, deletedAt: true, employmentEndedAt: true },
+      })
+      if (!claimantInTx || claimantInTx.deletedAt != null || !claimantInTx.isActive || claimantInTx.employmentEndedAt != null) {
+        throw new Error("Karyawan pengaju sudah nonaktif — klaim baru ditolak (EC-1).")
+      }
       const created = await tx.expense.create({
         data: {
           documentNo,
