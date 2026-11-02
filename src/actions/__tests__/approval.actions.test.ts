@@ -1000,6 +1000,20 @@ describe("HR scope jalur approval generik (round2 temuan 2)", () => {
     expect(mocks.prismaMock.leaveRequest.updateMany).not.toHaveBeenCalled();
   });
 
+  it("putaran 52: reopenApproval LeaveRequest mereset dokumen ke pending, bukan draft", async () => {
+    seedApproval({ status: "rejected", referenceType: "LeaveRequest", referenceId: 5, requestedBy: 2 });
+    // HR dalam scope self: employee dokumen = employee aktor (7).
+    mocks.prismaMock.leaveRequest.findUnique.mockResolvedValue({ employeeId: 7 });
+    mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 10 }]);
+    const res: any = await actions.reopenApproval(1);
+    expect(res.success).toBe(true);
+    // Klaim final approve/reject LeaveRequest hanya menerima pending;
+    // reset ke draft mengunci dokumen selamanya.
+    expect(mocks.prismaMock.leaveRequest.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 5, status: "rejected" }, data: { status: "pending" } }),
+    );
+  });
+
   it("reopenApproval non-HR tetap jalan (falsifikasi gerbang HR)", async () => {
     seedApproval({ status: "rejected", referenceType: "PurchaseRequest", referenceId: 5, requestedBy: 2 });
     // R6WN-04: workflow aktif terkunci ditemukan -> approval pending baru lahir.

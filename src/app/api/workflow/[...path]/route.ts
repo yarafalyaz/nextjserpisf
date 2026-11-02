@@ -203,10 +203,14 @@ export async function POST(
         // lanjut — yang menentukan adalah fresh berstatus pending di bawah.
         if (approval.status === "rejected") {
           const delegateReopen = prisma[config.model as keyof typeof prisma] as any
+          // Kosakata reset per model: dokumen dagang kembali draft; model HR
+          // lahir pending dan klaim finalnya hanya menerima pending — reset
+          // HR ke draft mengunci dokumen selamanya (putaran 52).
+          const resetStatus = HR_MODELS.has(config.model) ? "pending" : "draft"
           try {
             await delegateReopen.updateMany({
               where: { id, status: "rejected" },
-              data: { status: "draft" },
+              data: { status: resetStatus },
             })
           } catch (err) {
             console.error(`[workflow] reset status ${config.model} #${id} gagal:`, err)

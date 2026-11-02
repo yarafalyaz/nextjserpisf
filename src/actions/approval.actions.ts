@@ -719,17 +719,23 @@ export async function reopenApproval(approvalId: number) {
 
       await assertHrScopeForApproval(tx, approval.referenceType, approval.referenceId, user);
 
-      // Reset source document status to draft/prior — klaim kondisional:
+      // Reset source document status — klaim kondisional:
       // count 0 berarti dokumen tidak lagi 'rejected' (pindah jalur oleh
       // aksi lain sesudah approval ini lahir). Membiarkannya lolos akan
       // menciptakan approval pending kedua tanpa reset dokumen (state
       // yatim: dua alur, dokumen tak tersentuh). Gagal berisik + rollback.
+      // Target reset per keluarga model (putaran 52): dokumen dagang dan
+      // Payroll kembali draft; Leave/Overtime/EmployeeLoan lahir pending
+      // dan klaim finalnya hanya menerima pending — reset ke draft
+      // mengunci dokumen HR selamanya.
+      const HR_PENDING_RESET_TYPES = new Set(["LeaveRequest", "OvertimeRequest", "EmployeeLoan"]);
+      const resetStatus = HR_PENDING_RESET_TYPES.has(refType) ? "pending" : "draft";
       const modelKey = refType.charAt(0).toLowerCase() + refType.slice(1);
       const docModel = (tx as any)[modelKey];
       if (docModel?.updateMany) {
         const reset = await docModel.updateMany({
           where: { id: refId, status: "rejected" },
-          data: { status: "draft" },
+          data: { status: resetStatus },
         });
         if (reset.count === 0) {
           throw new Error(

@@ -541,6 +541,24 @@ describe("POST /api/workflow/[...path]", () => {
       expect(mocks.updateMany).not.toHaveBeenCalled()
     })
 
+    it("putaran 52: reopen dokumen HR mereset rejected ke pending, bukan draft", async () => {
+      mocks.authFn.mockResolvedValue(adminSession)
+      mocks.findUnique.mockResolvedValue({ employeeId: 7 })
+      mocks.findFirstApproval.mockResolvedValueOnce({ id: 10, status: "rejected", requestedBy: 7 })
+      mocks.findFirstApproval.mockResolvedValueOnce({ id: 11, status: "pending", requestedBy: 7 })
+
+      const res = await POST(makeReq(), makeParams(["sdm", "cuti", "5", "approve"]))
+      expect(res.status).toBe(200)
+      const json = await res.json()
+      expect(json).toEqual({ success: true, status: "pending", reopened: true })
+      // Reset harus menargetkan pre-state klaim HR (pending). Reset ke
+      // draft mengunci dokumen HR selamanya di langkah final berikutnya.
+      expect(mocks.updateMany).toHaveBeenCalledWith({
+        where: { id: 5, status: "rejected" },
+        data: { status: "pending" },
+      })
+    })
+
     it("R7API-03: reopen dokumen ditolak balas pending jujur, requestedBy = pengaju asal, nol approveStep", async () => {
       // Aktor BUKAN super_admin (user 2) — dulu reopen menulis requestedBy=2
       // lalu approveStep langsung kena maker-checker (aktor memproses
