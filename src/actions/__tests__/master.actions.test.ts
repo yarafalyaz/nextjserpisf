@@ -1235,6 +1235,65 @@ describe("Tax Actions", () => {
     expect(arg.data).not.toHaveProperty("isCompound")
   })
 
+  it("putaran 53: createTax men-serialisasi cek-nama dalam tx bergap-lock dan reuse di bawah kunci", async () => {
+    mocks.prismaMock.tax.findFirst.mockResolvedValue(null)
+    const taxFindManyDefault = mocks.prismaMock.tax.findMany.getMockImplementation()
+    mocks.prismaMock.tax.findMany.mockImplementation(async (args: any) =>
+      args?.select?.code ? [] : (taxFindManyDefault?.(args) ?? []),
+    )
+    try {
+      await actions.createTax(fdMap({ name: "PPN 11%", rate: "11", code: "PPN11" }))
+    } catch { /* redirect throws */ }
+    // Cek di luar tx (snapshot) kalah balapan; cek+create wajib di bawah
+    // gap-lock tabel taxes di dalam satu transaksi.
+    const rawArg = mocks.prismaMock.$executeRaw.mock.calls.at(-1)?.[0] as
+      | { strings?: string[] }
+      | string[]
+      | undefined
+    const rawSql = Array.isArray(rawArg)
+      ? rawArg.join("?")
+      : (rawArg?.strings?.join("?") ?? "")
+    expect(rawSql).toContain("FROM taxes FOR UPDATE")
+    expect(mocks.prismaMock.tax.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ deletedAt: null }),
+        select: expect.objectContaining({ id: true, name: true, code: true, slug: true }),
+      }),
+    )
+    expect(mocks.prismaMock.tax.create).toHaveBeenCalled()
+    mocks.prismaMock.tax.findMany.mockImplementation(taxFindManyDefault)
+  })
+
+  it("putaran 53: createTax menemukan nama aktif yang sama di bawah kunci -> reuse, bukan create kedua", async () => {
+    mocks.prismaMock.tax.findFirst.mockResolvedValue(null)
+    const taxFindManyDefault = mocks.prismaMock.tax.findMany.getMockImplementation()
+    mocks.prismaMock.tax.findMany.mockImplementation(async (args: any) =>
+      args?.select?.code
+        ? [{ id: 9, name: "PPN 11%", code: "PPN11", slug: "ppn-11" }]
+        : (taxFindManyDefault?.(args) ?? []),
+    )
+    const res: any = await actions.createTax(fdMap({ name: "ppn 11%", rate: "11", code: "PPN11" }))
+    expect(res?.success).toBe(true)
+    expect(res?.id).toBe(9)
+    expect(mocks.prismaMock.tax.create).not.toHaveBeenCalled()
+    mocks.prismaMock.tax.findMany.mockImplementation(taxFindManyDefault)
+  })
+
+  it("putaran 53: createTax kode aktif bentrok dengan nama lain -> ditolak", async () => {
+    mocks.prismaMock.tax.findFirst.mockResolvedValue(null)
+    const taxFindManyDefault = mocks.prismaMock.tax.findMany.getMockImplementation()
+    mocks.prismaMock.tax.findMany.mockImplementation(async (args: any) =>
+      args?.select?.code
+        ? [{ id: 9, name: "PPN Lama", code: "PPN11", slug: "ppn-lama" }]
+        : (taxFindManyDefault?.(args) ?? []),
+    )
+    const res: any = await actions.createTax(fdMap({ name: "PPN Baru", rate: "11", code: "ppn11" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("PPN11")
+    expect(mocks.prismaMock.tax.create).not.toHaveBeenCalled()
+    mocks.prismaMock.tax.findMany.mockImplementation(taxFindManyDefault)
+  })
+
   it("createTax clamps an out-of-range rate into 0..100", async () => {
     try {
       await actions.createTax(fdMap({ name: "Neg", rate: "-5" }))

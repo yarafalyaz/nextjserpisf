@@ -68,7 +68,7 @@ import {
   canViewSensitiveIdentity,
 } from "@/lib/auth/field-visibility";
 import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope";
-import { nextSlug } from "@/lib/utils/slug-db";
+import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db";
 import { checkIdempotency } from "@/lib/utils/idempotency";
 import {
   normalizeNitku,
@@ -2666,6 +2666,73 @@ function clampTaxRate(rate: number): number {
   return Math.min(100, Math.max(0, rate));
 }
 
+// Serialisasi cek-nama/kode pajak aktif: Tax.name/code tanpa @unique DB,
+// jadi cek findFirst pra-parse adalah snapshot yang kalah balapan — dua
+// create konkuren melahirkan dua pajak aktif bernama sama (slug diberi
+// suffix, bukan blokir). Gap-lock tabel di dalam tx (pola
+// assertActiveWorkCenterNameAvailable). Normalisasi trim+lowercase lokal:
+// Tax tak punya kolom normalizedName dan perubahan schema di luar mandat.
+function normalizeTaxNameKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+type TaxReuseHit = { kind: "reuse"; id: number; slug: string | null }
+
+async function createTaxInTx(
+  tx: Prisma.TransactionClient,
+  v: {
+    name: string;
+    rate: number;
+    code?: string | null;
+    description?: string | null;
+    type?: string | null;
+    scope?: string | null;
+    effectiveFrom?: string | null;
+    effectiveTo?: string | null;
+  },
+  opts: { isInclusive: boolean; isCompound: boolean; createdBy: number },
+): Promise<TaxReuseHit | { kind: "created"; id: number; slug: string | null }> {
+  if (typeof tx.$executeRaw === "function") {
+    await tx.$executeRaw`SELECT id FROM taxes FOR UPDATE`;
+  }
+  const candidates = await tx.tax.findMany({
+    where: { deletedAt: null },
+    select: { id: true, name: true, code: true, slug: true },
+  });
+  const nameKey = normalizeTaxNameKey(v.name);
+  const byName = candidates.find((row) => normalizeTaxNameKey(row.name) === nameKey);
+  if (byName) return { kind: "reuse", id: byName.id, slug: byName.slug };
+  const codeKey = v.code?.trim() ? normalizeTaxNameKey(v.code) : "";
+  if (codeKey) {
+    const byCode = candidates.find(
+      (row) => row.code?.trim() && normalizeTaxNameKey(row.code) === codeKey,
+    );
+    if (byCode) {
+      throw new Error(
+        `Kode pajak ${byCode.code} sudah dipakai pajak "${byCode.name}" yang aktif; pakai kode lain.`,
+      );
+    }
+  }
+  const created = await tx.tax.create({
+    data: {
+      name: v.name,
+      slug: await nextSlugWithClient(tx as never, "tax", v.name),
+      rate: clampTaxRate(v.rate),
+      code: v.code,
+      description: v.description ?? undefined,
+      type: v.type ?? undefined,
+      scope: v.scope ?? undefined,
+      isInclusive: opts.isInclusive,
+      isCompound: opts.isCompound,
+      effectiveFrom: v.effectiveFrom ? wibDateToUtcMidnight(v.effectiveFrom) : undefined,
+      effectiveTo: v.effectiveTo ? wibDateToUtcMidnight(v.effectiveTo) : undefined,
+      isActive: true,
+      createdBy: opts.createdBy,
+    },
+  });
+  return { kind: "created", id: created.id, slug: created.slug };
+}
+
 export async function createTax(formData: FormData) {
   try {
     const user = await requirePermission("create_taxes");
@@ -2680,29 +2747,35 @@ export async function createTax(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error }
     const v = parsed.data
 
-    const tax = await prisma.tax.create({
-      data: {
-        name: v.name,
-        slug: await nextSlug("tax", v.name),
-        rate: clampTaxRate(v.rate),
-        code: v.code,
-        description: v.description,
-        type: v.type,
-        scope: v.scope,
-        isInclusive: formData.get("isInclusive") === "on",
-        isCompound: formData.get("isCompound") === "on",
-        effectiveFrom: v.effectiveFrom ? wibDateToUtcMidnight(v.effectiveFrom) : undefined,
-        effectiveTo: v.effectiveTo ? wibDateToUtcMidnight(v.effectiveTo) : undefined,
-        isActive: true,
-        createdBy: Number(user.id),
-      },
-    });
+    const result = await prisma.$transaction((tx) =>
+      createTaxInTx(
+        tx,
+        {
+          name: v.name,
+          rate: v.rate,
+          code: v.code,
+          description: v.description,
+          type: v.type,
+          scope: v.scope,
+          effectiveFrom: v.effectiveFrom,
+          effectiveTo: v.effectiveTo,
+        },
+        {
+          isInclusive: formData.get("isInclusive") === "on",
+          isCompound: formData.get("isCompound") === "on",
+          createdBy: Number(user.id),
+        },
+      ),
+    );
+    if (result.kind === "reuse") {
+      return { success: true, id: result.id, slug: result.slug ?? undefined };
+    }
 
     revalidatePath("/master/pajak");
-    await logActivity("create", "Tax", tax.id, "Membuat pajak");
+    await logActivity("create", "Tax", result.id, "Membuat pajak");
     // Quick-add from another form must stay on its own page; only the
     // full-page create form navigates back to the list afterwards.
-    if (formData.get("__quickAdd") === "1") return { success: true, id: tax.id, slug: tax.slug };
+    if (formData.get("__quickAdd") === "1") return { success: true, id: result.id, slug: result.slug ?? undefined };
     redirect("/master/pajak");
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
