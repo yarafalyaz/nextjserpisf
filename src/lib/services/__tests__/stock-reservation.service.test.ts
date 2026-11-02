@@ -378,6 +378,29 @@ describe("reduceReservationsForWorkOrderItemTx (round3 change-order ubah turun)"
     expect(n).toBe(0)
     expect(updateMock).not.toHaveBeenCalled()
   })
+
+  it("putaran 53: baris reservasi dikunci FOR UPDATE sebelum dibaca", async () => {
+    findManyMock.mockResolvedValue([
+      { id: 3, qtyReserved: new Prisma.Decimal(10), qtyConsumed: new Prisma.Decimal(2) },
+    ])
+    await reduceReservationsForWorkOrderItemTx(txMock(), {
+      workOrderId: 9,
+      workOrderItemId: 41,
+      newQty: 5,
+    })
+    // Snapshot REPEATABLE READ terbentuk pada findUnique CO di tx pemanggil
+    // SEBELUM lock WO; tanpa locking read, MI konkuren yang commit sesudah
+    // lock WO tetap tak terlihat → qtyReserved ditulis di bawah qtyConsumed.
+    const sqlOf = (c: unknown[]) => {
+      const a = c[0] as { sql?: string; strings?: string[] } | string[]
+      return Array.isArray(a) ? a.join("?") : (a?.sql ?? a?.strings?.join("?") ?? "")
+    }
+    const lockIdx = queryRawMock.mock.calls.findIndex((c) => sqlOf(c).includes("FOR UPDATE"))
+    expect(lockIdx, "query kunci FOR UPDATE atas stock_reservations").toBeGreaterThanOrEqual(0)
+    const sql = sqlOf(queryRawMock.mock.calls[lockIdx])
+    expect(sql).toContain("work_order_item_id")
+    expect(sql).toContain("status = 'active'")
+  })
 })
 
 describe("releaseActiveReservationsForWorkOrderTx (F-057-S rilis per transisi)", () => {

@@ -333,6 +333,12 @@ export async function reduceReservationsForWorkOrderItemTx(
     releasedBy?: number | null
   },
 ): Promise<number> {
+  // Kunci baris reservasi aktif SEBELUM dibaca (pola consumeReservations di
+  // file ini): snapshot REPEATABLE READ tx pemanggil terbentuk sebelum lock
+  // WO (applyJobChangeOrder membaca CO lebih dulu), jadi findMany polos
+  // menilai qtyConsumed basi dan qtyReserved bisa ditulis di bawah
+  // qtyConsumed oleh MI konkuren yang baru commit (putaran 53).
+  await tx.$queryRaw`SELECT id FROM stock_reservations WHERE work_order_id = ${input.workOrderId} AND work_order_item_id = ${input.workOrderItemId} AND status = 'active' ORDER BY id FOR UPDATE`
   const rows = await tx.stockReservation.findMany({
     where: {
       workOrderId: input.workOrderId,
