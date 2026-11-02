@@ -106,6 +106,81 @@ export async function updateSystemSettings(formData: FormData) {
     })
   }
 
+  // Putaran 67: mapping akun yang DIKIRIM harus menunjuk akun hidup.
+  // Picker UI memfilter isActive, tetapi API mentah/timing-nonaktifkan
+  // membiarkan ID mati/fiktif masuk ke mapping fail-closed jalur uang.
+  // Field absen = jangan sentuh (kolom instalasi utuh); string kosong =
+  // clear sah. Satu query batch dalam tx sebelum update; satu ID mati
+  // menolak seluruh simpan, bukan diam-diam mengganti mapping.
+  {
+    const ACCOUNT_MAPPING_FIELDS = [
+      "salesReceivableAccountId",
+      "salesRevenueAccountId",
+      "salesTaxAccountId",
+      "salesReturnAccountId",
+      "salesAccountId",
+      "customerDownPaymentAccountId",
+      "purchasePayableAccountId",
+      "purchaseInventoryAccountId",
+      "purchaseTaxAccountId",
+      "assetFiscalRevaluationTaxPayableAccountId",
+      "purchaseExpenseAccountId",
+      "purchaseDiscountAccountId",
+      "purchaseShippingAccountId",
+      "purchaseAdminFeeAccountId",
+      "purchaseReturnAccountId",
+      "inventoryAccountId",
+      "inventoryAdjustmentAccountId",
+      "stockAdjustmentAccountId",
+      "cogsAccountId",
+      "wipAccountId",
+      "materialExpenseAccountId",
+      "materialIssueExpenseAccountId",
+      "abnormalScrapExpenseAccountId",
+      "warrantyExpenseAccountId",
+      "warrantyProvisionAccountId",
+      "supplierClaimReceivableAccountId",
+      "commissionExpenseAccountId",
+      "commissionPayableAccountId",
+      "pettyCashAccountId",
+      "cashBankAccountId",
+      "generalExpenseAccountId",
+      "defaultCashAccountId",
+      "reimbursementLiabilityAccountId",
+      "salaryExpenseAccountId",
+      "salariesPayableAccountId",
+      "payrollBankAccountId",
+      "employeeReceivableAccountId",
+      "employeeLoanWriteOffExpenseAccountId",
+      "depreciationExpenseAccountId",
+      "accumulatedDepreciationAccountId",
+      "retainedEarningsAccountId",
+      "lateFeeIncomeAccountId",
+      "pkwtCompensationExpenseAccountId",
+      "pkwtCompensationPayableAccountId",
+      "scrapSaleIncomeAccountId",
+    ] as const
+    const requested = new Set<number>()
+    for (const field of ACCOUNT_MAPPING_FIELDS) {
+      const value = intNull(field)
+      if (typeof value === "number") requested.add(value)
+    }
+    if (requested.size > 0) {
+      const ids = [...requested]
+      const live = await tx.account.findMany({
+        where: { id: { in: ids }, isActive: true, deletedAt: null },
+        select: { id: true },
+      })
+      const liveIds = new Set(live.map((account) => account.id))
+      const missing = ids.filter((id) => !liveIds.has(id))
+      if (missing.length > 0) {
+        throw new Error(
+          `Akun tidak aktif/terhapus atau tidak ditemukan (id: ${missing.join(", ")}). Pilih ulang akun sebelum menyimpan.`,
+        )
+      }
+    }
+  }
+
   // F-2026-10-25-015-V: status pkp WAJIB punya tanggal mulai kewajiban
   // (dari form ini atau nilai tersimpan) — konfigurasi cacat ditolak
   // di simpan, bukan baru ketahuan saat DP confirm.

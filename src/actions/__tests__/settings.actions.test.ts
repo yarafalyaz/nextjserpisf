@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   requirePermissionMock: vi.fn(),
   findFirstMock: vi.fn(),
   updateMock: vi.fn(),
+  accountFindManyMock: vi.fn(),
   logActivityMock: vi.fn(),
   lockCalls: [] as unknown[][],
   pkpFromOnLockedRead: undefined as string | Date | null | undefined,
@@ -30,6 +31,7 @@ vi.mock("@/lib/db/prisma", () => ({
           }),
           update: mocks.updateMock,
         },
+        account: { findMany: mocks.accountFindManyMock },
       }),
     ),
   },
@@ -59,12 +61,67 @@ beforeEach(() => {
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
   mocks.findFirstMock.mockResolvedValue({ id: 9 })
   mocks.updateMock.mockResolvedValue({})
+  mocks.accountFindManyMock.mockResolvedValue([])
   mocks.lockCalls = []
   mocks.pkpFromOnLockedRead = undefined
   mocks.findFirstOrder = []
 })
 
+describe("updateSystemSettings happy-path akun lainnya", () => {
+  beforeEach(() => {
+    mocks.accountFindManyMock.mockImplementation(async ({ where }: { where: { id: { in: number[] } } }) =>
+      where.id.in.map((id) => ({ id })),
+    )
+  })
+
+  it("putaran 67: mapping ke akun nonaktif/fiktif ditolak sebelum update", async () => {
+    mocks.accountFindManyMock.mockResolvedValue([{ id: 710 }])
+    await expect(
+      updateSystemSettings(fd({ commissionExpenseAccountId: "710", commissionPayableAccountId: "720" })),
+    ).rejects.toThrow(/tidak aktif\/terhapus atau tidak ditemukan \(id: 720\)/)
+    expect(mocks.updateMock).not.toHaveBeenCalled()
+    expect(mocks.accountFindManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: { in: [710, 720] }, isActive: true, deletedAt: null },
+        select: { id: true },
+      }),
+    )
+  })
+
+  it("putaran 67: mapping akun hidup lolos dan query memakai gerbang hidup", async () => {
+    mocks.accountFindManyMock.mockResolvedValue([{ id: 710 }, { id: 720 }])
+    await expect(
+      updateSystemSettings(fd({ commissionExpenseAccountId: "710", commissionPayableAccountId: "720" })),
+    ).rejects.toThrow("NEXT_REDIRECT")
+    expect(mocks.updateMock).toHaveBeenCalledTimes(1)
+    expect(mocks.accountFindManyMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("putaran 67: pengosongan mapping tetap lolos tanpa query akun", async () => {
+    await expect(
+      updateSystemSettings(fd({ commissionExpenseAccountId: "", commissionPayableAccountId: "" })),
+    ).rejects.toThrow("NEXT_REDIRECT")
+    expect(mocks.updateMock).toHaveBeenCalledTimes(1)
+    expect(mocks.accountFindManyMock).not.toHaveBeenCalled()
+  })
+
+  it("putaran 67: field absen tidak divalidasi; akun hidup tersimpan untuk yang dikirim", async () => {
+    mocks.accountFindManyMock.mockResolvedValue([{ id: 510104 }])
+    await expect(
+      updateSystemSettings(fd({ warrantyExpenseAccountId: "510104" })),
+    ).rejects.toThrow("NEXT_REDIRECT")
+    expect(mocks.updateMock).toHaveBeenCalledTimes(1)
+    expect(mocks.accountFindManyMock).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe("updateSystemSettings validasi Zod field tertulis", () => {
+  beforeEach(() => {
+    mocks.accountFindManyMock.mockImplementation(async ({ where }: { where: { id: { in: number[] } } }) =>
+      where.id.in.map((id) => ({ id })),
+    )
+  })
+
   it("menolak companyLogoDark > 500 char, tanpa update DB", async () => {
     await expect(
       updateSystemSettings(fd({ companyLogoDark: "x".repeat(501) })),
@@ -175,6 +232,13 @@ describe("updateSystemSettings lima mapping akun fail-closed (t_de3aba0b)", () =
     reimbursementLiabilityAccountId: "210209",
   } as const
 
+  // Fixture akun hidup supaya gerbang putaran 67 menerima ID mapping.
+  beforeEach(() => {
+    mocks.accountFindManyMock.mockImplementation(async ({ where }: { where: { id: { in: number[] } } }) =>
+      where.id.in.map((id) => ({ id })),
+    )
+  })
+
   it("menerima kelima mapping sebagai integer dan menyimpannya ke payload update", async () => {
     await expect(updateSystemSettings(fd({ ...LIMA_MAPPING }))).rejects.toThrow("NEXT_REDIRECT")
     const data = mocks.updateMock.mock.calls.at(-1)![0].data
@@ -248,6 +312,10 @@ describe("updateSystemSettings lima mapping akun — baca-balik penyimpanan (t_3
   let baris: BarisSetting
 
   beforeEach(() => {
+    // Fixture akun hidup supaya gerbang putaran 67 menerima ID mapping.
+    mocks.accountFindManyMock.mockImplementation(async ({ where }: { where: { id: { in: number[] } } }) =>
+      where.id.in.map((id) => ({ id })),
+    )
     baris = {
       id: 9,
       customerDownPaymentAccountId: 21,
@@ -319,6 +387,7 @@ describe("updateSystemSettings lima mapping akun — baca-balik penyimpanan (t_3
 
 describe("updateSystemSettings mapping akun komisi", () => {
   it("menyimpan commissionExpenseAccountId dan commissionPayableAccountId ke payload update", async () => {
+    mocks.accountFindManyMock.mockResolvedValue([{ id: 710 }, { id: 720 }])
     await expect(
       updateSystemSettings(fd({ commissionExpenseAccountId: "710", commissionPayableAccountId: "720" })),
     ).rejects.toThrow("NEXT_REDIRECT")
