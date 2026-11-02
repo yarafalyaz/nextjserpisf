@@ -347,6 +347,24 @@ describe("Quotation Actions", () => {
     expect(res?.error).toContain("tidak aktif")
     expect(mocks.prismaMock.quotation.create).not.toHaveBeenCalled()
   })
+  it("putaran 63: createQuotation retry idempotencyKey sama ditolak, penawaran lahir sekali", async () => {
+    const idem = mocks.prismaMock.idempotencyKey
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const mk = () => {
+      const f = fdQuotation(basicPayload)
+      f.set("idempotencyKey", "quo-key-1")
+      return f
+    }
+    const first = await actions.createQuotation(mk())
+    const second = await actions.createQuotation(mk())
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(String(second?.error ?? "")).toContain("duplikat")
+    expect(mocks.prismaMock.quotation.create).toHaveBeenCalledTimes(1)
+  })
   it("createQuotation computes subtotal/totals correctly with discount amount", async () => {
     const payload = {
       customerId: 1, date: "2026-06-12", discount: 10, tax: 5,

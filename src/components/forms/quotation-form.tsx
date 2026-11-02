@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
-import { useTransition, useMemo, useState } from "react"
+import { useTransition, useMemo, useRef, useState } from "react"
 import { useForm, useFieldArray, useWatch, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { quotationSchema, type QuotationInput } from "@/lib/validations/form.schemas"
@@ -563,6 +563,7 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
 export function QuotationForm({ customers, customerVehicles, items, products, generatedCode, paymentMethods = [], shippingMethods = [], unitOptions = [], quotation, invoiceThreshold = null, canEditQuotations = true }: QuotationFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [customerOptions, setCustomerOptions] = useState(customers)
   // Satuan baru dari quick-add (tanpa pindah halaman); digabung dgn master
   // + nilai warisan baris saat render per baris di SectionItemRow.
@@ -656,9 +657,11 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
           result = await updateQuotation(Number(quotation.id), formData)
         } else {
           formData.set("data", JSON.stringify(payload))
+          formData.set("idempotencyKey", idempotencyKeyRef.current)
           result = await createQuotation(formData)
         }
         if (result.success) {
+          if (!quotation?.id) idempotencyKeyRef.current = crypto.randomUUID()
           showSuccess(quotation?.id ? "Penawaran berhasil diperbarui" : "Penawaran berhasil dibuat")
           router.push(`/penjualan/penawaran/${result.slug ?? result.id ?? quotation?.id}`)
           router.refresh()

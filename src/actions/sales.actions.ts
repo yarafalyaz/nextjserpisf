@@ -335,7 +335,12 @@ export async function createQuotation(formData: FormData) {
 
   const { computedSubtotal, headerDiscount, headerTax, computedGrandTotal } = computeQuotationTotals(data)
 
+  // Putaran 63: retry identik melahirkan penawaran kembar yang
+  // masing-masing bisa dikirim/diterima/dikonversi menjadi SO terpisah.
+  const idempotencyKey = formData.get("idempotencyKey") as string | null
+
   const quotation = await prisma.$transaction(async (tx) => {
+    await checkIdempotency(idempotencyKey, tx, user.id)
     // Create sections and items in a single nested write (eliminates loop + N+1 inserts)
     const q = await tx.quotation.create({
       data: {
