@@ -928,6 +928,8 @@ describe("Employee Actions", () => {
     expect(res?.success).toBe(true)
   })
   it("updateEmployee succeeds", async () => {
+    // Putaran 76: baris terkunci dalam tx wajib ada dan hidup.
+    mocks.prismaMock.employee.findUnique.mockResolvedValue({ userId: null, deletedAt: null })
     const res = await actions.updateEmployee(1, fdMap({ name: "test", joinDate: "2026-06-13" }))
     expect(res?.success).toBe(true)
   })
@@ -2899,7 +2901,10 @@ describe('Coverage Hardening Edge Cases', () => {
   })
 
   it('deleteEmployee - soft delete with userId', async () => {
-    mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: 2 })
+    // Panggilan pertama snapshot pra-kunci, kedua baris terkunci (putaran 76).
+    mocks.prismaMock.employee.findUnique
+      .mockResolvedValueOnce({ userId: 2 })
+      .mockResolvedValueOnce({ userId: 2, deletedAt: null })
     mocks.prismaMock.employee.delete.mockRejectedValueOnce(makeP2003())
     const res = await actions.deleteEmployee(1)
     expect(res?.success).toBe(true)
@@ -2909,7 +2914,10 @@ describe('Coverage Hardening Edge Cases', () => {
 
   it('putaran 42: deleteEmployee menolak employee milik super_admin untuk aktor non-super_admin', async () => {
     mocks.requirePermissionMock.mockResolvedValueOnce({ id: 9, permissions: [], roles: ["admin"] })
-    mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: 77 })
+    // Snapshot pra-kunci + baris terkunci (putaran 76 menilai dari terkunci).
+    mocks.prismaMock.employee.findUnique
+      .mockResolvedValueOnce({ userId: 77 })
+      .mockResolvedValueOnce({ userId: 77, deletedAt: null })
     mocks.prismaMock.user.findUnique.mockResolvedValueOnce({ id: 77, roles: [{ name: "super_admin" }] })
     const res = await actions.deleteEmployee(1)
     expect(res?.success).toBe(false)

@@ -18,6 +18,7 @@ const txUserCreateMock = vi.fn()
 const txUserUpdateMock = vi.fn()
 const txEmployeeCreateMock = vi.fn()
 const txEmployeeUpdateMock = vi.fn()
+const txEmployeeDeleteMock = vi.fn()
 const transactionMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
@@ -48,6 +49,8 @@ vi.mock("next/navigation", () => ({
 vi.mock("bcryptjs", () => ({
   default: { hash: (...a: unknown[]) => bcryptHashMock(...a) },
 }))
+const employeeLockMock = vi.fn().mockResolvedValue(1)
+
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     user: {
@@ -60,6 +63,9 @@ vi.mock("@/lib/db/prisma", () => ({
       delete: (...a: unknown[]) => employeeDeleteMock(...a),
       update: (...a: unknown[]) => employeeUpdateMock(...a),
     },
+    // Putaran 76: deleteEmployee mengunci baris employee sebelum menilai
+    // ulang userId — mock global wajib menyediakan locking read ini.
+    $executeRaw: (...a: unknown[]) => employeeLockMock(...a),
     $transaction: (...a: unknown[]) => transactionMock(...a),
   },
 }))
@@ -97,15 +103,18 @@ beforeEach(() => {
       user: {
         create: (...a: unknown[]) => txUserCreateMock(...a),
         update: (...a: unknown[]) => txUserUpdateMock(...a),
+        findUnique: (...a: unknown[]) => userFindUniqueMock(...a),
       },
       employee: {
         create: (...a: unknown[]) => txEmployeeCreateMock(...a),
         update: (...a: unknown[]) => txEmployeeUpdateMock(...a),
+        delete: (...a: unknown[]) => txEmployeeDeleteMock(...a),
         // Kunci baris + cek ulang login di updateEmployee membaca employee
         // lewat tx — delegasikan ke mock findUnique yang sama.
         findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a),
       },
-      $executeRaw: vi.fn().mockResolvedValue(1),
+      // deleteEmployee memakai $executeRaw tx, bukan client global.
+      $executeRaw: (...a: unknown[]) => employeeLockMock(...a),
     })
   )
 })
@@ -280,6 +289,20 @@ describe("updateEmployee — create login account for existing employee", () => 
     expect(res.error).toMatch(/pengguna lain/i)
     expect(transactionMock).not.toHaveBeenCalled()
   })
+
+  it("putaran 76: menolak update ke baris tombstone dari baris terkunci", async () => {
+    // Snapshot pra-tx hidup; baris terkunci sudah soft-delete oleh
+    // deleteEmployee konkuren. Update tidak boleh menulis/menautkan login
+    // ke tombstone.
+    employeeFindUniqueMock
+      .mockResolvedValueOnce({ userId: null, deletedAt: null })
+      .mockResolvedValueOnce({ userId: null, deletedAt: new Date("2026-11-01") })
+    const res = await updateEmployee(50, fd(baseFields))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah dihapus")
+    expect(txEmployeeUpdateMock).not.toHaveBeenCalled()
+    expect(txUserCreateMock).not.toHaveBeenCalled()
+  })
 })
 
 describe("createEmployee — quick-add scope gate", () => {
@@ -308,56 +331,51 @@ describe("createEmployee — quick-add scope gate", () => {
 
 describe("deleteEmployee — revoke linked login account", () => {
   it("deactivates the linked login BEFORE deleting the employee", async () => {
-    employeeFindUniqueMock.mockResolvedValue({ userId: 7 })
-    employeeDeleteMock.mockResolvedValue({ id: 50 }) // hard delete succeeds
-    userUpdateMock.mockResolvedValue({ id: 7 })
+    employeeFindUniqueMock.mockResolvedValue({ userId: 7, deletedAt: null })
+    txEmployeeDeleteMock.mockResolvedValue({ id: 50 }) // hard delete succeeds
+    txUserUpdateMock.mockResolvedValue({ id: 7 })
 
     const res = await deleteEmployee(50)
 
     expect(res).toEqual({ success: true })
-    // Security-first ordering. The previous version deactivated the user last,
-    // inside a transaction that the employee delete had already escaped (the
-    // helper used the global client), so a failure there produced a deleted
-    // employee whose login still authenticated.
-    expect(userUpdateMock).toHaveBeenCalledWith({ where: { id: 7 }, data: { isActive: false } })
-    expect(userUpdateMock.mock.invocationCallOrder[0]).toBeLessThan(
-      employeeDeleteMock.mock.invocationCallOrder[0],
+    // Security-first ordering di dalam satu transaksi.
+    expect(txUserUpdateMock).toHaveBeenCalledWith({ where: { id: 7 }, data: { isActive: false } })
+    expect(txUserUpdateMock.mock.invocationCallOrder[0]).toBeLessThan(
+      txEmployeeDeleteMock.mock.invocationCallOrder[0],
     )
   })
 
   it("revokes the login before falling back to a soft delete on FK conflict", async () => {
     const { Prisma } = await import("@prisma/client")
-    employeeFindUniqueMock.mockResolvedValue({ userId: 7 })
+    employeeFindUniqueMock.mockResolvedValue({ userId: 7, deletedAt: null })
     // P2003 instance so hardDeleteOrSoftDelete recognizes the FK restriction.
     const p2003 = Object.assign(
       Object.create(Prisma.PrismaClientKnownRequestError.prototype),
       { code: "P2003", message: "FK constraint failed" },
     )
-    employeeDeleteMock.mockRejectedValue(p2003)
-    employeeUpdateMock.mockResolvedValue({ id: 50 })
-    userUpdateMock.mockResolvedValue({ id: 7 })
+    txEmployeeDeleteMock.mockRejectedValue(p2003)
+    txEmployeeUpdateMock.mockResolvedValue({ id: 50 })
+    txUserUpdateMock.mockResolvedValue({ id: 7 })
 
     const res = await deleteEmployee(50)
 
     expect(res).toEqual({ success: true })
-    expect(employeeUpdateMock).toHaveBeenCalled()
-    expect(userUpdateMock).toHaveBeenCalledWith({ where: { id: 7 }, data: { isActive: false } })
-    expect(userUpdateMock.mock.invocationCallOrder[0]).toBeLessThan(
-      employeeUpdateMock.mock.invocationCallOrder[0],
+    expect(txEmployeeUpdateMock).toHaveBeenCalled()
+    expect(txUserUpdateMock).toHaveBeenCalledWith({ where: { id: 7 }, data: { isActive: false } })
+    expect(txUserUpdateMock.mock.invocationCallOrder[0]).toBeLessThan(
+      txEmployeeUpdateMock.mock.invocationCallOrder[0],
     )
   })
 
   it("leaves the employee intact when revoking the login fails", async () => {
-    employeeFindUniqueMock.mockResolvedValue({ userId: 7 })
-    userUpdateMock.mockRejectedValue(new Error("db down"))
+    employeeFindUniqueMock.mockResolvedValue({ userId: 7, deletedAt: null })
+    txUserUpdateMock.mockRejectedValue(new Error("db down"))
 
     const res = await deleteEmployee(50)
 
     expect(res.success).toBe(false)
-    // Revoking the login comes first, so a failure there must not remove the
-    // employee row (otherwise we would recreate the orphaned-login state).
-    expect(employeeDeleteMock).not.toHaveBeenCalled()
-    expect(employeeUpdateMock).not.toHaveBeenCalled()
+    expect(txEmployeeDeleteMock).not.toHaveBeenCalled()
+    expect(txEmployeeUpdateMock).not.toHaveBeenCalled()
   })
 
   it("scope department menolak karyawan luar departemen sebelum mutasi apa pun", async () => {
@@ -390,24 +408,57 @@ describe("deleteEmployee — revoke linked login account", () => {
 
   it("scope all tetap lolos menghapus karyawan", async () => {
     getHrScopeMock.mockResolvedValue({ kind: "all" })
-    employeeFindUniqueMock.mockResolvedValue({ userId: 7 })
-    employeeDeleteMock.mockResolvedValue({ id: 50 })
-    userUpdateMock.mockResolvedValue({ id: 7 })
+    employeeFindUniqueMock.mockResolvedValue({ userId: 7, deletedAt: null })
+    txEmployeeDeleteMock.mockResolvedValue({ id: 50 })
+    txUserUpdateMock.mockResolvedValue({ id: 7 })
 
     const res = await deleteEmployee(50)
 
     expect(res).toEqual({ success: true })
-    expect(employeeDeleteMock).toHaveBeenCalled()
+    expect(txEmployeeDeleteMock).toHaveBeenCalled()
   })
 
   it("does not touch any user when the employee has no login account", async () => {
-    employeeFindUniqueMock.mockResolvedValue({ userId: null })
-    employeeDeleteMock.mockResolvedValue({ id: 51 })
+    employeeFindUniqueMock.mockResolvedValue({ userId: null, deletedAt: null })
+    txEmployeeDeleteMock.mockResolvedValue({ id: 51 })
 
     const res = await deleteEmployee(51)
 
     expect(res).toEqual({ success: true })
     expect(userUpdateMock).not.toHaveBeenCalled()
     expect(txUserUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("putaran 76: menonaktifkan login yang baru tertaut sesudah snapshot pra-kunci", async () => {
+    // Snapshot pertama: belum ada login. Baris terkunci: updateEmployee
+    // konkuren sudah menautkan user 9. Yang dinonaktifkan wajib user 9,
+    // bukan snapshot lama (null -> tidak ada yang dinonaktifkan).
+    employeeFindUniqueMock
+      .mockResolvedValueOnce({ userId: null })
+      .mockResolvedValueOnce({ userId: 9, deletedAt: null })
+    txUserUpdateMock.mockResolvedValue({ id: 9 })
+    txEmployeeDeleteMock.mockResolvedValue({ id: 50 })
+
+    const res = await deleteEmployee(50)
+
+    expect(res).toEqual({ success: true })
+    expect(employeeLockMock).toHaveBeenCalled()
+    expect(employeeLockMock.mock.invocationCallOrder[0]).toBeLessThan(
+      txUserUpdateMock.mock.invocationCallOrder[0],
+    )
+    expect(txUserUpdateMock).toHaveBeenCalledWith({ where: { id: 9 }, data: { isActive: false } })
+  })
+
+  it("putaran 76: menolak delete pada baris yang sudah tombstone di bawah kunci", async () => {
+    employeeFindUniqueMock
+      .mockResolvedValueOnce({ userId: 7 })
+      .mockResolvedValueOnce({ userId: 7, deletedAt: new Date("2026-11-01") })
+
+    const res = await deleteEmployee(50)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah dihapus")
+    expect(txUserUpdateMock).not.toHaveBeenCalled()
+    expect(txEmployeeDeleteMock).not.toHaveBeenCalled()
   })
 })

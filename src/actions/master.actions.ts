@@ -139,10 +139,11 @@ function parseUomConversions(
 async function assertCanModifyEmployeeTarget(
   actorRoles: string[],
   targetUserId: number | null,
+  client: Pick<typeof prisma, "user"> = prisma,
 ): Promise<string | null> {
   if (targetUserId === null) return null;
   if (actorRoles.includes("super_admin")) return null;
-  const target = await prisma.user.findUnique({
+  const target = await client.user.findUnique({
     where: { id: targetUserId },
     include: { roles: { select: { name: true } } },
   });
@@ -1876,9 +1877,15 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       }
       const lockedCurrent = await tx.employee.findUnique({
         where: { id: employeeId },
-        select: { userId: true },
+        select: { userId: true, deletedAt: true },
       });
-      if (wantsLogin && lockedCurrent?.userId) {
+      // Putaran 76: baris terkunci bisa berupa tombstone (deleteEmployee
+      // konkuren commit soft-delete sesudah snapshot pra-tx dibaca) —
+      // menulis atau menautkan login ke baris terhapus dilarang.
+      if (!lockedCurrent || lockedCurrent.deletedAt) {
+        throw new Error("Karyawan sudah dihapus");
+      }
+      if (wantsLogin && lockedCurrent.userId) {
         throw new Error("Karyawan ini sudah memiliki akun login");
       }
       const lockedManagerErr = await assertManagerChainAcyclic(employeeId, employeeFields.managerId, tx);
@@ -3611,56 +3618,67 @@ export async function deleteEmployee(id: number) {
     if (existing) {
       const scope = await getHrScope(actor);
       await assertHrEmployeeAccess(scope, id);
+    }
+
+    // Putaran 76: serialisasi delete terhadap updateEmployee konkuren di
+    // dalam SATU transaksi. Snapshot userId di atas bisa mendahului tautan
+    // login baru dari update; baris terkunci menentukan login mana yang
+    // dinonaktifkan dan apakah employee masih hidup. Kunci diambil sebagai
+    // pernyataan pertama transaksi supaya tidak ada bacaan konsisten dari
+    // snapshot lama. Urutan di dalam transaksi tetap security-first:
+    // nonaktifkan login dulu, baru hapus employee. Jika salah satu gagal,
+    // transaksi rollback sehingga tidak lahir employee terhapus dengan
+    // login aktif.
+    const linkedUserId = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${id} FOR UPDATE`;
+      }
+      const locked = await tx.employee.findUnique({
+        where: { id },
+        select: { userId: true, deletedAt: true },
+      });
+      if (!existing && !locked) return null;
+      if (!locked || locked.deletedAt) {
+        throw new Error("Karyawan sudah dihapus");
+      }
 
       // Target-escalation guard (sama seperti updateEmployee): nonaktifkan
       // employee di bawah ini ikut menonaktifkan akun login tertaut, jadi
       // aktor non-super_admin tidak boleh menyentuh employee milik
       // super_admin — admin biasa (delete_employees + HR scope all) bisa
       // mematikan login super_admin terakhir dan mengunci administrasi.
+      // Dinilai dari baris TERKUNCI: userId snapshot bisa basi.
       const targetErr = await assertCanModifyEmployeeTarget(
         actor.roles ?? [],
-        existing.userId ?? null,
+        locked.userId,
+        tx as never,
       );
-      if (targetErr) {
-        return { success: false, error: targetErr };
+      if (targetErr) throw new Error(targetErr);
+
+      if (locked.userId) {
+        await tx.user.update({
+          where: { id: locked.userId },
+          data: { isActive: false },
+        });
       }
-    }
 
-    // SECURITY-FIRST ORDERING: revoke the linked login BEFORE the employee row
-    // is deleted, and commit that on its own.
-    //
-    // The previous version wrapped both writes in one `$transaction` but handed
-    // hardDeleteOrSoftDelete the global prisma client, so the employee delete
-    // committed on a separate connection while the transaction was still open. If
-    // `tx.user.update` then failed, the transaction rolled back into exactly the
-    // state the code claimed to prevent: employee gone, login still authenticating.
-    //
-    // Deactivating first makes that state unreachable: if deactivation fails the
-    // employee row simply remains (an admin retries), and if the delete then fails
-    // the login is already revoked - safe and recoverable. The reverse order can
-    // never be repaired automatically.
-    if (existing?.userId) {
-      await prisma.user.update({
-        where: { id: existing.userId },
-        data: { isActive: false },
-      });
-    }
-
-    await hardDeleteOrSoftDelete(
-      () => prisma.employee.delete({ where: { id } }),
-      () =>
-        prisma.employee.update({
-          where: { id },
-          data: { deletedAt: new Date(), isActive: false },
-        }),
-    );
+      await hardDeleteOrSoftDelete(
+        () => tx.employee.delete({ where: { id } }),
+        () =>
+          tx.employee.update({
+            where: { id },
+            data: { deletedAt: new Date(), isActive: false },
+          }),
+      );
+      return locked.userId;
+    });
 
     revalidatePath("/master/karyawan");
     await logActivity(
       "delete",
       "Employee",
       id,
-      existing?.userId
+      linkedUserId
         ? "Menghapus karyawan + nonaktifkan akun login"
         : "Menghapus karyawan",
     );

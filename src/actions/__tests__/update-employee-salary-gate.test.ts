@@ -58,7 +58,9 @@ beforeEach(() => {
   mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: [] })
   mocks.canViewSalaryAmounts.mockResolvedValue(true)
   mocks.prismaMock.employee.findFirst.mockResolvedValue(null)
-  mocks.prismaMock.employee.findUnique.mockResolvedValue(null)
+  // Baris hidup: dipakai snapshot pra-tx dan baris terkunci dalam tx
+  // (putaran 76 menolak null/tombstone dari baris terkunci).
+  mocks.prismaMock.employee.findUnique.mockResolvedValue({ userId: null, deletedAt: null })
   mocks.prismaMock.employee.create.mockResolvedValue({ id: 1, slug: "budi" })
   mocks.prismaMock.employee.update.mockResolvedValue({ id: 1 })
   mocks.prismaMock.department.findFirst.mockResolvedValue({ id: 7 })
