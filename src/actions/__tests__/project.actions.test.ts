@@ -1387,6 +1387,14 @@ describe("addProjectLog", () => {
     expect(mocks.prismaMock.projectLog.create).not.toHaveBeenCalled()
   })
 
+  it("putaran 61: aksi namespace sistem RAB (rab_*) ditolak dari jalur log manual", async () => {
+    for (const action of ["rab_revision_proposed", "rab_locked", "rab_revision", "rab_contract_snapshot"]) {
+      const res = await actions.addProjectLog(4, fdMap({ action, notes: "palsu" }))
+      expect(res.success).toBe(false)
+    }
+    expect(mocks.prismaMock.projectLog.create).not.toHaveBeenCalled()
+  })
+
   it("menolak proyek yang tidak ada dengan pesan yang terbaca", async () => {
     mocks.prismaMock.project.findUnique.mockResolvedValue(null)
     const res = await actions.addProjectLog(404, fdMap({ action: "Catatan" }))

@@ -29,6 +29,7 @@ import {
 import type { Prisma } from "@prisma/client"
 import {
   evaluateBudgetLock,
+  PROJECT_BUDGET_LOG_ACTIONS,
   type ProjectBudgetItemInput,
 } from "@/lib/reports/project-budget"
 
@@ -1036,6 +1037,15 @@ export async function addProjectLog(projectId: number, formData: FormData) {
     const parsed = parseFormData(projectLogSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
     const v = parsed.data
+
+    // Putaran 61: namespace aksi rab_* milik mesin RAB (usulan/kunci/revisi).
+    // Pembaca mesin (findOpenRevisionProposal, riwayat RAB) mempercayai kolom
+    // action persis — log manual beraksi sistem akan terbaca sebagai usulan
+    // revisi terbuka (memblokir propose asli) dan mencemari riwayat resmi.
+    // Jalur manual hanya menulis kategori bebas dari form log.
+    if ((PROJECT_BUDGET_LOG_ACTIONS as readonly string[]).includes(v.action)) {
+      return { success: false, error: "Jenis aksi itu dicadangkan untuk proses anggaran proyek." }
+    }
 
     // Proyek harus ada. Tanpa pemeriksaan ini, id yang salah berakhir sebagai
     // galat kunci asing Prisma yang tidak terbaca pemakai.
