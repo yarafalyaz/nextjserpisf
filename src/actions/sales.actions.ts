@@ -2184,12 +2184,23 @@ export async function createSalesInvoice(formData: FormData) {
     } else if (v.quotationId) {
       const q = await tx.quotation.findUnique({
         where: { id: v.quotationId },
-        select: { salesEmployeeId: true, customerId: true },
+        select: { salesEmployeeId: true, customerId: true, status: true, validUntil: true, deletedAt: true },
       })
-      if (q && q.customerId !== v.customerId) {
+      // Gerbang status penawaran langsung (paritas gerbang SO di atas):
+      // "tetap boleh" berarti boleh tanpa SO, bukan boleh dari status apa
+      // pun. Tanpa gerbang ini penawaran draft/rejected/cancelled/kedaluwarsa/
+      // terhapus bisa difaktur lalu diposting menjadi piutang + stok keluar.
+      if (!q || q.deletedAt) throw new Error("Penawaran tidak ditemukan")
+      if (q.customerId !== v.customerId) {
         throw new Error("Penawaran yang dipilih milik customer lain, tidak bisa difaktur untuk customer ini")
       }
-      inheritedSalesEmployeeId = q?.salesEmployeeId ?? null
+      if (!["accepted", "approved", "converted"].includes(q.status)) {
+        throw new Error(
+          `Penawaran berstatus '${q.status}' belum bisa difaktur (harus penawaran yang sudah disetujui)`,
+        )
+      }
+      assertQuotationNotExpired(q.validUntil)
+      inheritedSalesEmployeeId = q.salesEmployeeId ?? null
     }
 
     // F-PRICELIST-01: baris langsung dari form mendapat harga price-list

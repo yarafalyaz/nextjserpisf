@@ -2001,6 +2001,37 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     expect(mocks.prismaMock.salesInvoice.create).not.toHaveBeenCalled()
   })
 
+  it("putaran 59: createSalesInvoice menolak penawaran langsung berstatus draft (belum disetujui)", async () => {
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ salesEmployeeId: null, customerId: 7, status: "draft", validUntil: null, deletedAt: null })
+    const res = await actions.createSalesInvoice(
+      fdMap({ customerId: "7", date: "2026-06-12", quotationId: "50" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("disetujui")
+    expect(mocks.prismaMock.salesInvoice.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 59: createSalesInvoice menolak penawaran langsung kedaluwarsa", async () => {
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ salesEmployeeId: null, customerId: 7, status: "accepted", validUntil: new Date("2026-06-01T00:00:00Z"), deletedAt: null })
+    const res = await actions.createSalesInvoice(
+      fdMap({ customerId: "7", date: "2026-06-12", quotationId: "50" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Masa berlaku penawaran sudah lewat")
+    expect(mocks.prismaMock.salesInvoice.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 59: createSalesInvoice mengizinkan penawaran langsung accepted yang masih berlaku", async () => {
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ salesEmployeeId: 5, customerId: 7, status: "accepted", validUntil: null, deletedAt: null })
+    const res = await actions.createSalesInvoice(
+      fdMap({ customerId: "7", date: "2026-06-12", quotationId: "50", items: "[]" }),
+    )
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    expect(arg.data.quotationId).toBe(50)
+    expect(arg.data.salesEmployeeId).toBe(5)
+  })
+
   // Tanpa penawaran, pesanan tetap boleh dibuat kosong (item diisi belakangan).
   it("createSalesOrder tanpa penawaran tidak membuat item", async () => {
     const res = await actions.createSalesOrder(fdMap({ customerId: "1", date: "2026-06-12" }))
