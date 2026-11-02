@@ -125,16 +125,24 @@ export async function linkSupplierClaimAction(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    // Tautan retur berjalan dalam satu transaksi: service menahan retur
+    // lewat CAS kolom penanda, dan rollback melepas tahan bila klaim gagal
+    // diklaim — tanpa tx, tahan yatim bisa mengunci retur selamanya.
     const claim =
       v.purchaseReturnId != null
-        ? await linkSupplierClaim({
-            claimId: v.claimId,
-            supplierClaimVendorId: v.supplierClaimVendorId,
-            purchaseReturnId: v.purchaseReturnId,
-            actorUserId: Number(user.id),
-            supplierClaimRefNo: v.supplierClaimRefNo ?? null,
-            supplierClaimNotes: v.supplierClaimNotes ?? null,
-          })
+        ? await prisma.$transaction((tx) =>
+            linkSupplierClaim(
+              {
+                claimId: v.claimId,
+                supplierClaimVendorId: v.supplierClaimVendorId,
+                purchaseReturnId: v.purchaseReturnId as number,
+                actorUserId: Number(user.id),
+                supplierClaimRefNo: v.supplierClaimRefNo ?? null,
+                supplierClaimNotes: v.supplierClaimNotes ?? null,
+              },
+              tx,
+            ),
+          )
         : await linkSupplierClaimVendorOnly({
             claimId: v.claimId,
             supplierClaimVendorId: v.supplierClaimVendorId,
@@ -167,14 +175,21 @@ export async function transitionSupplierClaimAction(formData: FormData) {
     const roles = (user as { roles?: string[] }).roles ?? [];
     const actorIsAdmin = roles.includes("admin") || roles.includes("super_admin");
 
-    const claim = await transitionSupplierClaim({
-      claimId: v.claimId,
-      to: v.to,
-      actorUserId: Number(user.id),
-      actorIsAdmin,
-      supplierClaimRefNo: v.supplierClaimRefNo ?? null,
-      supplierClaimNotes: v.supplierClaimNotes ?? null,
-    });
+    // Satu transaksi: lepas tahan retur di transisi terminal harus atomik
+    // dengan klaim statusnya (rollback mengembalikan keduanya).
+    const claim = await prisma.$transaction((tx) =>
+      transitionSupplierClaim(
+        {
+          claimId: v.claimId,
+          to: v.to,
+          actorUserId: Number(user.id),
+          actorIsAdmin,
+          supplierClaimRefNo: v.supplierClaimRefNo ?? null,
+          supplierClaimNotes: v.supplierClaimNotes ?? null,
+        },
+        tx,
+      ),
+    );
 
     revalidatePath("/produksi/garansi");
     await logActivity(

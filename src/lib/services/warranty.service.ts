@@ -552,6 +552,42 @@ function assertClaimEligibleForSupplierLink(claim: ClaimLinkRow): void {
   }
 }
 
+/**
+ * Tahan retur untuk klaim ini secara atomik. MariaDB tidak punya partial-
+ * unique atas subset klaim aktif, jadi "satu retur satu klaim aktif" ditegakkan
+ * lewat CAS kolom penanda retur: hanya klaim yang belum ada yang menang;
+ * hitungan 0 berarti retur sudah dipegang klaim lain. Lepas tahan hanya oleh
+ * pemegangnya (guard claimId), dan hanya menuju status terminal — melepas di
+ * luar transisi terminal membuat dua klaim bebas berebut retur yang sama.
+ */
+const SUPPLIER_CLAIM_TERMINAL_STATUSES = ["closed_recovered", "closed_no_recovery", "none"] as const
+
+async function holdPurchaseReturnForClaim(
+  client: TxClient | typeof prisma,
+  purchaseReturnId: number,
+  claimId: number,
+): Promise<void> {
+  const held = await client.purchaseReturn.updateMany({
+    where: { id: purchaseReturnId, supplierClaimHoldClaimId: null },
+    data: { supplierClaimHoldClaimId: claimId },
+  })
+  if (held.count === 0) {
+    throw new Error("Retur pembelian ini sudah tertaut ke klaim garansi lain yang masih aktif.")
+  }
+}
+
+async function releasePurchaseReturnHold(
+  client: TxClient | typeof prisma,
+  purchaseReturnId: number | null,
+  claimId: number,
+): Promise<void> {
+  if (purchaseReturnId == null) return
+  await client.purchaseReturn.updateMany({
+    where: { id: purchaseReturnId, supplierClaimHoldClaimId: claimId },
+    data: { supplierClaimHoldClaimId: null },
+  })
+}
+
 async function assertActiveVendor(
   vendorId: number,
   client: TxClient | typeof prisma,
@@ -626,6 +662,12 @@ export async function linkSupplierClaim(
   if (other) {
     throw new Error("Retur pembelian ini sudah tertaut ke klaim garansi lain yang masih aktif.")
   }
+
+  // Tahan retur atomik sesudah semua bacaan lulus, sebelum klaim ditulis:
+  // dua tautan konkuren atas retur yang sama membaca `other` null
+  // bersamaan, tetapi hanya satu CAS yang menang — yang kalah tidak
+  // pernah menimpa kolom klaimnya.
+  await holdPurchaseReturnForClaim(client, input.purchaseReturnId, claim.id)
 
   await claimWarrantyClaimUpdate(client, claim.id, { supplierClaimStatus: claim.supplierClaimStatus }, {
     supplierClaimVendorId: input.supplierClaimVendorId,
@@ -784,6 +826,12 @@ export async function transitionSupplierClaim(
     supplierClaimBy: input.actorUserId,
     supplierClaimAt: input.at ?? new Date(),
   })
+  // Tahan retur dilepas hanya saat tautan benar-benar berakhir (terminal /
+  // lepas tautan); status antara (sent/accepted/returned) tetap menahan
+  // retur untuk klaim ini.
+  if ((SUPPLIER_CLAIM_TERMINAL_STATUSES as readonly string[]).includes(input.to)) {
+    await releasePurchaseReturnHold(client, claim.purchaseReturnId, claim.id)
+  }
   return reloadClaimOrThrow(() =>
     client.warrantyClaim.findUnique({ where: { id: claim.id }, select: CLAIM_LINK_SELECT }),
   )

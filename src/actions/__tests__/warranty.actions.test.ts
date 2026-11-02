@@ -23,6 +23,9 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     warrantyClaim: { findUnique: mocks.warrantyClaimFindUnique },
     warrantyCoverage: { findMany: mocks.warrantyCoverageFindMany },
+    // Action membungkus link/transition supplier dalam $transaction;
+    // tx palsu = objek penanda yang diteruskan ke service mock.
+    $transaction: async (cb: (tx: unknown) => unknown) => cb({ __tx: true }),
   },
 }))
 vi.mock("@/lib/services/warranty.service", async (importOriginal) => {
@@ -143,6 +146,7 @@ describe("linkSupplierClaimAction (F-2026-10-21-022)", () => {
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_warranty_claims")
     expect(mocks.linkSupplierClaimMock).toHaveBeenCalledWith(
       expect.objectContaining({ claimId: 5, supplierClaimVendorId: 3, purchaseReturnId: 9, actorUserId: 7 }),
+      { __tx: true },
     )
     expect(mocks.linkSupplierClaimVendorOnlyMock).not.toHaveBeenCalled()
   })
@@ -184,6 +188,7 @@ describe("transitionSupplierClaimAction (F-2026-10-21-022)", () => {
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_warranty_claims")
     expect(mocks.transitionSupplierClaimMock).toHaveBeenCalledWith(
       expect.objectContaining({ claimId: 5, to: "accepted", actorUserId: 7, actorIsAdmin: false }),
+      { __tx: true },
     )
   })
 

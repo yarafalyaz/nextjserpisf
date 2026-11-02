@@ -29,7 +29,7 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     customerVehicle: { update: vi.fn(), updateMany: vi.fn() },
     vendor: { findUnique: vi.fn() },
-    purchaseReturn: { findUnique: vi.fn() },
+    purchaseReturn: { findUnique: vi.fn(), updateMany: vi.fn() },
     transactionAttachment: { count: vi.fn() },
   },
 }))
@@ -446,6 +446,8 @@ describe("tautan klaim supplier (F-2026-10-21-022): tautan saja, tanpa jurnal", 
     p.warrantyClaim.findUnique.mockImplementation(async () => ({ ...state }))
     p.vendor.findUnique.mockResolvedValue({ id: 5, isActive: true, deletedAt: null })
     p.purchaseReturn.findUnique.mockResolvedValue(ret)
+    // CAS penahan retur: default menang (retur belum dipegang klaim lain).
+    p.purchaseReturn.updateMany.mockResolvedValue({ count: 1 })
     p.warrantyClaim.findFirst.mockResolvedValue(null)
     p.transactionAttachment.count.mockResolvedValue(1)
     mockClaimWrite(state)
@@ -541,6 +543,32 @@ describe("tautan klaim supplier (F-2026-10-21-022): tautan saja, tanpa jurnal", 
         prisma as never,
       ),
     ).rejects.toThrow("sudah tertaut")
+  })
+
+  it("putaran 58: CAS penahan retur kalah (retur sudah dipegang klaim lain) → ditolak, klaim tidak ditulis", async () => {
+    seedLink()
+    // Klaim lain lolos baca `findFirst` bersamaan tetapi memenangkan CAS
+    // penahan lebih dulu: tautan ini wajib kalah tanpa menulis kolom klaim.
+    p.purchaseReturn.updateMany.mockResolvedValue({ count: 0 })
+    await expect(
+      linkSupplierClaim(
+        { claimId: 1, supplierClaimVendorId: 5, purchaseReturnId: 9, actorUserId: 7 },
+        prisma as never,
+      ),
+    ).rejects.toThrow("sudah tertaut")
+    expect(p.warrantyClaim.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("putaran 58: tautan sukses menetapkan penahan retur atas nama klaim ini", async () => {
+    seedLink()
+    await linkSupplierClaim(
+      { claimId: 1, supplierClaimVendorId: 5, purchaseReturnId: 9, actorUserId: 7 },
+      prisma as never,
+    )
+    expect(p.purchaseReturn.updateMany).toHaveBeenCalledWith({
+      where: { id: 9, supplierClaimHoldClaimId: null },
+      data: { supplierClaimHoldClaimId: 1 },
+    })
   })
 
   it("FALSIFIKASI vendor nonaktif → ditolak eksplisit", async () => {

@@ -2481,6 +2481,12 @@ model PurchaseReturn {
    */
   taxReturnNoteNumber String?          @map("tax_return_note_number")
   taxReturnNoteDate   DateTime?        @map("tax_return_note_date")
+  /**
+   * Klaim garansi yang sedang menahan retur ini (tautan supplier claim).
+   * Ditetapkan/lepas atomik lewat updateMany CAS oleh warranty.service,
+   * supaya satu retur tak bisa ditaut dua klaim aktif secara bersamaan.
+   */
+  supplierClaimHoldClaimId Int?       @map("supplier_claim_hold_claim_id")
   sourceTaxInvoiceId  Int?             @map("source_tax_invoice_id")
   createdBy       Int?                 @map("created_by")
   createdAt       DateTime             @default(now()) @map("created_at")
