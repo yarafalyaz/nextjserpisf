@@ -307,12 +307,12 @@ export async function POST(
           return NextResponse.json({ success: true, status: docStatus })
         }
 
-        const delegate = prisma[config.model as keyof typeof prisma] as any
-        await delegate.updateMany({
-          where: { id, status: { in: ["draft", "pending"] } },
-          data: { status: "pending" },
-        })
-
+        // Langkah antara: dokumen TIDAK ditulis. Status dokumen hanya
+        // berubah di langkah final (oleh klaim approveStep/rejectStep) —
+        // menulis 'pending' di sini mengunci langkah final selamanya,
+        // karena klaim dokumen dagang hanya menerima pre-state draft
+        // (putaran 52; kontrak backlog: dokumen tidak berpindah ke
+        // pending saat diajukan/diproses sebagian).
         revalidatePath(config.revalidate)
         return NextResponse.json({ success: true, status: "pending" })
       }

@@ -525,6 +525,22 @@ describe("POST /api/workflow/[...path]", () => {
       expect(mocks.update).not.toHaveBeenCalled()
     })
 
+    it("putaran 52: langkah antara tidak menulis status pending ke dokumen", async () => {
+      mocks.authFn.mockResolvedValue(adminSession)
+      mocks.findUnique.mockResolvedValue({ createdBy: 7 })
+      mocks.findFirstApproval.mockResolvedValueOnce({ id: 10, status: "pending" })
+      mocks.approveStepMock.mockResolvedValue(undefined)
+      mocks.findUniqueApproval.mockResolvedValueOnce({ id: 10, status: "pending", currentStep: 2 })
+
+      const res = await POST(makeReq(), makeParams(["penjualan", "pesanan", "5", "approve"]))
+      expect(res.status).toBe(200)
+      const json = await res.json()
+      expect(json.status).toBe("pending")
+      // Dokumen harus tetap draft: klaim final approveStep hanya menerima
+      // draft; menulis pending di sini mengunci langkah final selamanya.
+      expect(mocks.updateMany).not.toHaveBeenCalled()
+    })
+
     it("R7API-03: reopen dokumen ditolak balas pending jujur, requestedBy = pengaju asal, nol approveStep", async () => {
       // Aktor BUKAN super_admin (user 2) — dulu reopen menulis requestedBy=2
       // lalu approveStep langsung kena maker-checker (aktor memproses
