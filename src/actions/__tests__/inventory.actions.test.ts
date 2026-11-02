@@ -781,6 +781,42 @@ describe("Rack & WorkOrder & Others", () => {
     );
     expect(res?.success).toBe(true);
   });
+  it("putaran 69: createRack retry idempotency sama ditolak, rak lahir sekali", async () => {
+    mocks.checkIdempotency
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."));
+    mocks.prismaMock.systemSetting.findFirst.mockResolvedValue({
+      enableAutoRackCode: true,
+    });
+    const first = await actions.createRack(
+      fdMap({ warehouseId: 1, code: "R1", name: "Rack 1", idempotencyKey: "rack-key-1" }),
+    );
+    const second = await actions.createRack(
+      fdMap({ warehouseId: 1, code: "R1", name: "Rack 1", idempotencyKey: "rack-key-1" }),
+    );
+    expect(first?.success).toBe(true);
+    expect(second?.success).toBe(false);
+    expect(String((second as { error?: string } | undefined)?.error ?? "")).toMatch(/duplikat/);
+    expect(mocks.prismaMock.rack.create).toHaveBeenCalledTimes(1);
+  });
+  it("putaran 69: createRackRow retry idempotency sama ditolak, baris rak lahir sekali", async () => {
+    mocks.checkIdempotency
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."));
+    mocks.prismaMock.systemSetting.findFirst.mockResolvedValue({
+      enableAutoRowCode: true,
+    });
+    const first = await actions.createRackRow(
+      fdMap({ rackId: 1, code: "RR1", name: "Row 1", level: 1, idempotencyKey: "row-key-1" }),
+    );
+    const second = await actions.createRackRow(
+      fdMap({ rackId: 1, code: "RR1", name: "Row 1", level: 1, idempotencyKey: "row-key-1" }),
+    );
+    expect(first?.success).toBe(true);
+    expect(second?.success).toBe(false);
+    expect(String((second as { error?: string } | undefined)?.error ?? "")).toMatch(/duplikat/);
+    expect(mocks.prismaMock.rackRow.create).toHaveBeenCalledTimes(1);
+  });
   it("updateRack succeeds", async () => {
     const res = await actions.updateRack(
       1,

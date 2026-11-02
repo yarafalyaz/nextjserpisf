@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition, useEffect } from "react"
+import { useRef, useTransition, useEffect } from "react"
 import { createRack, getNextRackCode } from "@/actions/inventory.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
@@ -25,6 +25,9 @@ interface RackCreateFormProps {
 
 export function RackCreateForm({ enableAutoCode, warehouses, defaultWarehouseId }: RackCreateFormProps) {
   const router = useRouter()
+  // Putaran 69: key stabil per intent buat rak; retry memakai key sama
+  // dan ditahan server (sukses navigasi pergi, tanpa rotasi).
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [isPending, startTransition] = useTransition()
   const [warehouseId, setWarehouseId] = useState(defaultWarehouseId ? String(defaultWarehouseId) : "")
   const [warehouseOptions, setWarehouseOptions] = useState(warehouses)
@@ -54,6 +57,7 @@ export function RackCreateForm({ enableAutoCode, warehouses, defaultWarehouseId 
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("warehouseId", warehouseId)
+    formData.set("idempotencyKey", idempotencyKeyRef.current)
     startTransition(async () => {
       try {
         const result = await createRack(formData)

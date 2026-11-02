@@ -63,7 +63,7 @@ import {
   rackSchema,
   rackRowSchema,
 } from "@/lib/validations/inventory.schemas";
-import { nextSlug } from "@/lib/utils/slug-db";
+import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db";
 import { dateOnly } from "@/lib/validations/finance.schemas";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 
@@ -1911,39 +1911,53 @@ export async function createRack(formData: FormData) {
     const enableAutoCode = settings?.enableAutoRackCode !== false;
     const prefix = settings?.rackCodePrefix || "RCK-";
 
-    let code = v.code ?? null;
-    if (enableAutoCode || !code) {
-      // Derive next code scoped **per warehouse** so every warehouse
-      // starts its own counter (RCK-001, RCK-002, …).
-      const existingCodes = await prisma.rack.findMany({
-        where: { warehouseId: v.warehouseId, code: { startsWith: prefix } },
-        select: { code: true },
+    // Putaran 69: generate kode + create diserialkan dalam satu tx
+    // dengan kunci baris gudang — kode lama dibangkitkan di luar tx
+    // (balapan P2002 konkuren pada @@unique([warehouseId, code])),
+    // tanpa gerbang hidup gudang, dan tanpa klaim idempotency (retry
+    // melahirkan rak kembar berkode berikut). Klaim key sesudah
+    // kunci; rollback melepas key.
+    const rack = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM warehouses WHERE id = ${v.warehouseId} FOR UPDATE`;
+      }
+      await assertWarehousesExistAndActive(tx, [v.warehouseId]);
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
+
+      let code = v.code ?? null;
+      if (enableAutoCode || !code) {
+        // Derive next code scoped **per warehouse** so every warehouse
+        // starts its own counter (RCK-001, RCK-002, …).
+        const existingCodes = await tx.rack.findMany({
+          where: { warehouseId: v.warehouseId, code: { startsWith: prefix } },
+          select: { code: true },
+        });
+        let maxNum = 0;
+        for (const r of existingCodes) {
+          const num = Number.parseInt(r.code.slice(prefix.length), 10);
+          if (!Number.isNaN(num) && num > maxNum) maxNum = num;
+        }
+        let nextId = maxNum + 1;
+
+        while (
+          await tx.rack.findFirst({
+            where: { warehouseId: v.warehouseId, code: prefix + String(nextId).padStart(4, "0") },
+            select: { id: true },
+          })
+        ) {
+          nextId++;
+        }
+        code = prefix + String(nextId).padStart(4, "0");
+      }
+
+      return tx.rack.create({
+        data: {
+          code,
+          name: v.name,
+          slug: await nextSlugWithClient(tx as never, "rack", v.name),
+          warehouseId: v.warehouseId,
+        },
       });
-      let maxNum = 0;
-      for (const r of existingCodes) {
-        const num = Number.parseInt(r.code.slice(prefix.length), 10);
-        if (!Number.isNaN(num) && num > maxNum) maxNum = num;
-      }
-      let nextId = maxNum + 1;
-
-      while (
-        await prisma.rack.findFirst({
-          where: { warehouseId: v.warehouseId, code: prefix + String(nextId).padStart(4, "0") },
-          select: { id: true },
-        })
-      ) {
-        nextId++;
-      }
-      code = prefix + String(nextId).padStart(4, "0");
-    }
-
-    const rack = await prisma.rack.create({
-      data: {
-        code,
-        name: v.name,
-        slug: await nextSlug("rack", v.name),
-        warehouseId: v.warehouseId,
-      },
     });
 
     await logActivity("create", "Rack", rack.id, `Membuat rak #${rack.id}`);
@@ -2510,12 +2524,18 @@ export async function createRackRow(formData: FormData) {
         }
         code = prefix + String(nextId).padStart(4, "0");
       }
+      // Putaran 69: klaim key + slug delegate tx. Retry identik dulu
+      // melahirkan baris kembar berkode berikut; slug varian global
+      // tak melihat baris tak-tercommit tx lain (P2002 slug konkuren
+      // pada kode manual antar-rak). Klaim sesudah gap-lock kode;
+      // rollback melepas key.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
       return tx.rackRow.create({
         data: {
           rackId: v.rackId,
           code,
           name: v.name,
-          slug: await nextSlug("rackRow", code || v.name),
+          slug: await nextSlugWithClient(tx as never, "rackRow", code || v.name),
         },
       });
     });

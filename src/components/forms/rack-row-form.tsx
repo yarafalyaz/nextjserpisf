@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useEffect, useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { createRackRow, updateRackRow, getNextRowCode } from "@/actions/inventory.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
@@ -36,6 +36,9 @@ interface RackRowFormProps {
 
 export function RackRowForm({ warehouses, enableAutoCode, rackRow, defaultWarehouseId }: RackRowFormProps) {
   const router = useRouter()
+  // Putaran 69: key stabil per intent buat baris rak (hanya mode buat);
+  // retry memakai key sama dan ditahan server.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [isPending, startTransition] = useTransition()
 
   const initialWarehouseId = rackRow
@@ -89,6 +92,7 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow, defaultWareho
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("rackId", rackId)
+    if (!rackRow) formData.set("idempotencyKey", idempotencyKeyRef.current)
 
     startTransition(async () => {
       try {
