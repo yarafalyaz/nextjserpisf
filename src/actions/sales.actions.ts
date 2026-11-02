@@ -326,10 +326,17 @@ export async function createQuotation(formData: FormData) {
   if (data.customerVehicleId && data.customerId) {
     const vehicle = await prisma.customerVehicle.findFirst({
       where: { id: Number(data.customerVehicleId), customerId: Number(data.customerId) },
-      select: { id: true },
+      select: { id: true, isActive: true, deletedAt: true },
     })
     if (!vehicle) {
       throw new Error("Kendaraan tidak terdaftar untuk customer ini")
+    }
+    // Putaran 64: kendaraan mati tak boleh melahirkan dokumen servis
+    // baru — WO turunan mewarisi unit ini beserta konteks fitment dan
+    // cakupan garansinya. Customer/item di jalur ini sudah digerbang
+    // hidup; kendaraan sebelumnya hanya dinilai kepemilikannya.
+    if (!vehicle.isActive || vehicle.deletedAt != null) {
+      throw new Error("Kendaraan pelanggan tidak aktif atau sudah dihapus — pilih kendaraan aktif.")
     }
   }
 
@@ -805,10 +812,14 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
   if (updVehicleId && updCustomerId) {
     const vehicle = await prisma.customerVehicle.findFirst({
       where: { id: updVehicleId, customerId: Number(updCustomerId) },
-      select: { id: true },
+      select: { id: true, isActive: true, deletedAt: true },
     })
     if (!vehicle) {
       throw new Error("Kendaraan tidak terdaftar untuk customer ini")
+    }
+    // Putaran 64: gerbang hidup sama dengan createQuotation.
+    if (!vehicle.isActive || vehicle.deletedAt != null) {
+      throw new Error("Kendaraan pelanggan tidak aktif atau sudah dihapus — pilih kendaraan aktif.")
     }
   }
 

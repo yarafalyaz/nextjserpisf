@@ -17,6 +17,9 @@ export async function loadQuotationFormOptions() {
         select: { id: true, name: true },
       }),
       prisma.customerVehicle.findMany({
+        // Putaran 64: kendaraan nonaktif/terhapus tidak ditawarkan
+        // (konsisten customers/items di query yang sama).
+        where: { isActive: true, deletedAt: null },
         include: {
           vehicle: {
             include: {

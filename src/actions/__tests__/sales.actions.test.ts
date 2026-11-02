@@ -347,6 +347,20 @@ describe("Quotation Actions", () => {
     expect(res?.error).toContain("tidak aktif")
     expect(mocks.prismaMock.quotation.create).not.toHaveBeenCalled()
   })
+  it("putaran 64: createQuotation menolak kendaraan pelanggan nonaktif", async () => {
+    mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue({ id: 1, isActive: false, deletedAt: null })
+    const res = await actions.createQuotation(fdQuotation({ ...basicPayload, customerVehicleId: 1 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.quotation.create).not.toHaveBeenCalled()
+  })
+  it("putaran 64: createQuotation menolak kendaraan pelanggan terhapus", async () => {
+    mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue({ id: 1, isActive: true, deletedAt: new Date() })
+    const res = await actions.createQuotation(fdQuotation({ ...basicPayload, customerVehicleId: 1 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak aktif")
+    expect(mocks.prismaMock.quotation.create).not.toHaveBeenCalled()
+  })
   it("putaran 63: createQuotation retry idempotencyKey sama ditolak, penawaran lahir sekali", async () => {
     const idem = mocks.prismaMock.idempotencyKey
     idem.create
@@ -1816,7 +1830,8 @@ describe("Quotation Actions (legacy happy paths)", () => {
     vi.clearAllMocks()
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.generateDocNumMock.mockResolvedValue("Q-001")
-    mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue({ id: 1 })
+    // Putaran 64: gerbang hidup kendaraan — fixture wajib membawa kolomnya.
+    mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue({ id: 1, isActive: true, deletedAt: null })
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({
       id: 1, status: "draft", sections: [{ items: [{ id: 1 }] }],
     })
