@@ -41,6 +41,7 @@ vi.mock("@/lib/utils/document-number", () => financeDocumentNumberFactory("JRN-0
 vi.mock("next/cache", () => financeNextCacheFactory(holder))
 
 import { updateJournal } from "../finance.actions"
+import { requestApprovalIfConfigured } from "@/lib/services/approval-workflow.service"
 
 function fd(entries: Record<string, string>): FormData {
   const f = new FormData()
@@ -84,6 +85,18 @@ describe("updateJournal", () => {
     { accountId: 100, debit: 500, credit: 0, memo: "kas" },
     { accountId: 200, debit: 0, credit: 500, memo: "modal" },
   ])
+
+  it("putaran 70: pengajuan approval diteruskan tx dokumen (bukan transaksi terpisah pasca-commit)", async () => {
+    const result = await updateJournal(7, fd({ transactionDate: "2026-06-02", entries: validEntries }))
+    expect(result.success).toBe(true)
+    const calls = vi.mocked(requestApprovalIfConfigured).mock.calls
+    expect(calls).toHaveLength(1)
+    expect(calls[0][0]).toBe("Journal")
+    expect(calls[0][1]).toBe(7)
+    // Argumen ke-4 = tx client yang sama dengan tx tulis jurnal.
+    expect(calls[0][3]).toBeDefined()
+    expect((calls[0][3] as { journal?: unknown }).journal).toBeDefined()
+  })
 
   it("rejects editing a non-DRAFT journal", async () => {
     journalFindUniqueOrThrowMock.mockResolvedValue({ id: 7, status: "POSTED", transactionDate: new Date("2026-06-01") })

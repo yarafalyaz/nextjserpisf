@@ -745,11 +745,13 @@ export async function createJournal(formData: FormData) {
       // header+entri, bukan jurnal yatim yang dilaporkan gagal ke pemanggil.
       await attachJournalAttachments(tx, formData, j.id, Number(user.id));
 
+      // Pengajuan approval atomik dengan dokumen (pola purchase): dokumen
+      // tanpa baris approval lolos assertApproved senyap, jadi approval
+      // tidak boleh lahir di transaksi terpisah sesudah commit.
+      await requestApprovalIfConfigured("Journal", j.id, Number(user.id), tx);
+
       return j;
     });
-
-    // Route through approval workflow if one is configured for Journal.
-    await requestApprovalIfConfigured("Journal", journal.id, Number(user.id));
 
     return finishJournalMutation(journal, "create", "Membuat jurnal");
   } catch (e: unknown) {
@@ -1021,12 +1023,13 @@ export async function createExpense(formData: FormData) {
           userId: Number(user.id),
         });
       }
+      // Pengajuan approval atomik dengan dokumen (pola purchase): dokumen
+      // tanpa baris approval lolos assertApproved senyap.
+      await requestApprovalIfConfigured("Expense", created.id, Number(user.id), tx);
       return created;
     });
 
     await logActivity("create", "Expense", expense.id, "Membuat pengeluaran");
-    // Route through approval workflow if one is configured for Expense.
-    await requestApprovalIfConfigured("Expense", expense.id, Number(user.id));
     revalidatePath("/keuangan/pengeluaran");
     return { success: true, id: expense.id };
   } catch (e: unknown) {
@@ -2737,12 +2740,14 @@ export async function updateJournal(id: number, formData: FormData) {
       // header+entri, bukan perubahan commit yang dilaporkan gagal.
       await attachJournalAttachments(tx, formData, id, Number(user.id));
 
+      // Edit membuka kembali pengajuan bila approval sebelumnya ditolak
+      // (resubmit); tanpa workflow terkonfigurasi ini no-op. Atomik dengan
+      // edit: dokumen berubah tanpa pengajuan baru lolos assertApproved
+      // senyap terhadap isi yang tidak pernah disetujui.
+      await requestApprovalIfConfigured("Journal", id, Number(user.id), tx);
+
       return j;
     });
-
-    // Edit membuka kembali pengajuan bila approval sebelumnya ditolak
-    // (resubmit); tanpa workflow terkonfigurasi ini no-op.
-    await requestApprovalIfConfigured("Journal", id, Number(user.id));
 
     return finishJournalMutation(journal, "update", "Memperbarui jurnal");
   } catch (e: unknown) {
