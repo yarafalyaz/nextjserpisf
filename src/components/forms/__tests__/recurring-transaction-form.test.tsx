@@ -45,6 +45,17 @@ describe("RecurringTransactionForm — default tanggal WIB", () => {
   })
 })
 
+describe("RecurringTransactionForm — putaran 65 idempotencyKey", () => {
+  it("guard statis: create-only kirim key stabil + rotasi sesudah sukses", async () => {
+    const { readFileSync } = await import("node:fs")
+    const src = readFileSync("src/components/forms/recurring-transaction-form.tsx", "utf8")
+    expect(src).toContain("useRef")
+    expect(src).toContain("newIdempotencyKey")
+    expect(src).toContain('formData.set("idempotencyKey", idempotencyKeyRef.current)')
+    expect(src).toContain("if (!schedule?.id) idempotencyKeyRef.current = newIdempotencyKey()")
+  })
+})
+
 describe("RecurringTransactionForm — a11y wiring", () => {
   it("form punya aria-label tambah + aria-busy false; select wajib aria-required; combobox wajib aria-required; bintang dekoratif aria-hidden", () => {
     const container = document.createElement("div")

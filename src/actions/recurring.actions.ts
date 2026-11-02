@@ -9,6 +9,7 @@ import { recurringTransactionSchema, type RecurringTransactionInput } from "@/li
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { nextSlug } from "@/lib/utils/slug-db"
+import { checkIdempotency } from "@/lib/utils/idempotency"
 import {
   parseRecurringTemplate,
   recurringJournalLines,
@@ -46,6 +47,12 @@ export async function createRecurringTransaction(formData: FormData) {
   try {
     const user = await requirePermission("manage_recurring_transactions")
 
+    // Putaran 65: key wajib — retry melahirkan jadwal aktif kembar; runner
+    // mengklaim per baris jadwal (bukan per pasangan), sehingga cabang
+    // expense/jurnal keduanya memposting dokumen dobel per occurrence.
+    const idempotencyKey = String(formData.get("idempotencyKey") ?? "").trim()
+    if (!idempotencyKey) return { success: false, error: "Idempotency key wajib diisi." }
+
     const parsed = parseFormData(recurringTransactionSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
     const v = parsed.data
@@ -55,20 +62,23 @@ export async function createRecurringTransaction(formData: FormData) {
     if (invalid) return { success: false, error: invalid }
 
     const slug = await nextSlug("recurringTransaction", v.name)
-    const created = await prisma.recurringTransaction.create({
-      data: {
-        slug,
-        name: v.name.trim(),
-        type: v.type,
-        frequency: v.frequency,
-        interval: v.interval,
-        startDate: wibDateToUtcMidnight(v.startDate),
-        endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
-        nextRunDate: wibDateToUtcMidnight(v.startDate),
-        template: JSON.stringify(template),
-        isActive: v.isActive,
-        createdBy: Number(user.id),
-      },
+    const created = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id)
+      return tx.recurringTransaction.create({
+        data: {
+          slug,
+          name: v.name.trim(),
+          type: v.type,
+          frequency: v.frequency,
+          interval: v.interval,
+          startDate: wibDateToUtcMidnight(v.startDate),
+          endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
+          nextRunDate: wibDateToUtcMidnight(v.startDate),
+          template: JSON.stringify(template),
+          isActive: v.isActive,
+          createdBy: Number(user.id),
+        },
+      })
     })
 
     await logActivity("create", "RecurringTransaction", created.id, `Menambah transaksi berulang ${created.name}`)

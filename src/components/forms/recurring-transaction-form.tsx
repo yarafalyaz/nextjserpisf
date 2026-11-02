@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -18,6 +18,12 @@ import {
   SelectValue,
 } from "@/components/ui/shadcn/select"
 import { createRecurringTransaction, updateRecurringTransaction } from "@/actions/recurring.actions"
+
+// Idempotency key per intent (pola sales-invoice-form): key baru hanya
+// sesudah sukses; submit ulang intent sama memakai key yang sama.
+function newIdempotencyKey(): string {
+  return crypto.randomUUID()
+}
 import { FREQUENCIES, FREQUENCY_LABELS, type RecurrenceFrequency } from "@/lib/reports/recurring-schedule"
 import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 
@@ -50,6 +56,7 @@ interface RecurringTransactionFormProps {
 
 export function RecurringTransactionForm({ accounts, expenseCategories, schedule }: RecurringTransactionFormProps) {
   const router = useRouter()
+  const idempotencyKeyRef = useRef<string>(newIdempotencyKey())
   const [isPending, startTransition] = useTransition()
   const [type, setType] = useState<string>(schedule?.type ?? "journal")
   const [frequency, setFrequency] = useState<string>(schedule?.frequency ?? "monthly")
@@ -83,6 +90,7 @@ export function RecurringTransactionForm({ accounts, expenseCategories, schedule
       if (categoryId) formData.set("categoryId", categoryId)
     }
 
+    if (!schedule?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
     startTransition(async () => {
       try {
         const result = schedule?.id
@@ -92,6 +100,7 @@ export function RecurringTransactionForm({ accounts, expenseCategories, schedule
           showError(result?.error ?? "Gagal menyimpan data")
           return
         }
+        if (!schedule?.id) idempotencyKeyRef.current = newIdempotencyKey()
         showSuccess(schedule?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/pengaturan/transaksi-berulang")
         router.refresh()

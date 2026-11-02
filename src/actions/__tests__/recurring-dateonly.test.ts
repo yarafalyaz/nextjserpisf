@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => {
   const scheduleUpdate = vi.fn()
   const scheduleUpdateMany = vi.fn()
   const queryRaw = vi.fn()
+  const idemCreate = vi.fn()
+  const idemFindUnique = vi.fn()
+  const idemUpdateMany = vi.fn()
 
   const prisma: Record<string, unknown> = {
     recurringTransaction: {
@@ -25,6 +28,11 @@ const mocks = vi.hoisted(() => {
       findUniqueOrThrow: scheduleFindUniqueOrThrow,
       update: scheduleUpdate,
       updateMany: scheduleUpdateMany,
+    },
+    idempotencyKey: {
+      create: idemCreate,
+      findUnique: idemFindUnique,
+      updateMany: idemUpdateMany,
     },
     $queryRaw: queryRaw,
   }
@@ -41,6 +49,9 @@ const mocks = vi.hoisted(() => {
     scheduleUpdate,
     scheduleUpdateMany,
     queryRaw,
+    idemCreate,
+    idemFindUnique,
+    idemUpdateMany,
     prisma,
   }
 })
@@ -52,6 +63,7 @@ vi.mock("next/cache", async () => (await import("./validation-mock-helpers")).re
 vi.mock("@/lib/utils/document-number", async () => (await import("./validation-mock-helpers")).docNumberFactory(mocks))
 vi.mock("@/lib/utils/slug-db", async () => (await import("./validation-mock-helpers")).slugMockFactory(mocks))
 
+import * as prismaImport from "@/lib/db/prisma"
 import { createRecurringTransaction, updateRecurringTransaction } from "../recurring.actions"
 
 function form(values: Record<string, string>): FormData {
@@ -70,8 +82,14 @@ function form(values: Record<string, string>): FormData {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(prismaImport.prisma.$transaction).mockImplementation(
+    async (fn) => fn(mocks.prisma as never),
+  )
   mocks.requirePermission.mockResolvedValue({ id: 1 })
   mocks.nextSlug.mockResolvedValue("sewa-gudang")
+  mocks.idemCreate.mockResolvedValue({})
+  mocks.idemFindUnique.mockResolvedValue(null)
+  mocks.idemUpdateMany.mockResolvedValue({ count: 0 })
   mocks.scheduleCreate.mockResolvedValue({ id: 7, name: "Sewa gudang" })
   mocks.scheduleFindUniqueOrThrow.mockResolvedValue({
     id: 7,
@@ -100,7 +118,9 @@ describe("createRecurringTransaction — tanggal kalender", () => {
   })
 
   it("menyimpan tanggal sah sebagai tengah malam UTC", async () => {
-    const res = await createRecurringTransaction(form({ startDate: "2026-03-15", endDate: "2027-03-15" }))
+    const res = await createRecurringTransaction(
+      form({ startDate: "2026-03-15", endDate: "2027-03-15", idempotencyKey: "rec-key-1" }),
+    )
 
     expect(res.success).toBe(true)
     expect(mocks.scheduleCreate).toHaveBeenCalledWith(
@@ -112,6 +132,29 @@ describe("createRecurringTransaction — tanggal kalender", () => {
         }),
       }),
     )
+  })
+
+  it("putaran 65: key wajib — create tanpa idempotencyKey ditolak sebelum create", async () => {
+    const res = await createRecurringTransaction(form({}))
+
+    expect(res.success).toBe(false)
+    expect(String(res.error ?? "")).toContain("Idempotency key")
+    expect(mocks.scheduleCreate).not.toHaveBeenCalled()
+  })
+
+  it("putaran 65: retry key sama ditolak sesudah klaim pertama, create sekali", async () => {
+    mocks.idemCreate
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    mocks.idemFindUnique.mockResolvedValue({ createdAt: new Date() })
+
+    const first = await createRecurringTransaction(form({ idempotencyKey: "rec-key-1" }))
+    const second = await createRecurringTransaction(form({ idempotencyKey: "rec-key-1" }))
+
+    expect(first.success).toBe(true)
+    expect(second.success).toBe(false)
+    expect(String(second.error ?? "")).toContain("duplikat")
+    expect(mocks.scheduleCreate).toHaveBeenCalledTimes(1)
   })
 
   it("update menolak startDate fiktif sebelum menulis DB", async () => {
