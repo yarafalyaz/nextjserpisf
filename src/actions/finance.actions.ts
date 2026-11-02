@@ -326,7 +326,7 @@ export async function createBankStatementLine(formData: FormData) {
  */
 export async function importBankStatementLines(formData: FormData) {
   try {
-    await requirePermission("create_journals");
+    const user = await requirePermission("create_journals");
 
     const bankStatementId = Number(formData.get("bankStatementId"));
     const fileEntry = formData.get("file");
@@ -369,6 +369,13 @@ export async function importBankStatementLines(formData: FormData) {
         throw new Error("Rekening koran tidak ditemukan");
       if (header.status !== "draft")
         throw new Error("Import hanya untuk rekening koran berstatus draft");
+
+      // Putaran 65: retry submit identik mengimpor ulang seluruh berkas —
+      // baris koran duplikat mengembungkan total header. Konten identik
+      // antar berkas berbeda tetap sah, jadi penjaga = key per intent
+      // impor, bukan dedupe konten. Klaim sesudah kunci header + cek
+      // draft, sebelum createMany; rollback melepaskan key.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
 
       const data = parsed.lines.map((line) => {
         const date = wibDateToUtcMidnight(line.date);

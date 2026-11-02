@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { importBankStatementLines } from "@/actions/finance.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
@@ -18,6 +18,10 @@ export function BankStatementImportForm({
   baseHref: string
 }) {
   const router = useRouter()
+  // Idempotency: key stabil per intent impor; retry jaringan memakai key
+  // yang sama (ditolak server), sukses merotasi untuk berkas berikutnya.
+  const idempotencyKeyRef = useRef<string | null>(null)
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
   const [rowErrors, setRowErrors] = useState<{ row: number; message: string }[]>([])
 
@@ -26,12 +30,15 @@ export function BankStatementImportForm({
     const form = e.currentTarget
     setRowErrors([])
     startTransition(async () => {
-      const res = await importBankStatementLines(new FormData(form))
+      const fd = new FormData(form)
+      fd.set("idempotencyKey", idempotencyKeyRef.current!)
+      const res = await importBankStatementLines(fd)
       if (!res.success) {
         showError(res.error || "Gagal mengimpor rekening koran")
         if ("rowErrors" in res && res.rowErrors) setRowErrors(res.rowErrors)
         return
       }
+      idempotencyKeyRef.current = crypto.randomUUID()
       showSuccess(`${res.imported} baris rekening koran diimpor`)
       router.push(baseHref)
       router.refresh()

@@ -451,6 +451,35 @@ describe("Bank Statement Line Actions", () => {
     expect(mocks.prismaMock.bankStatement.update).toHaveBeenCalled()
   })
 
+  it("putaran 65: importBankStatementLines retry idempotencyKey sama ditolak, baris lahir sekali", async () => {
+    mocks.prismaMock.bankStatement.findUnique.mockResolvedValue({ status: "draft", deletedAt: null })
+    const idemCreate = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    mocks.prismaMock.idempotencyKey = {
+      create: idemCreate,
+      findUnique: vi.fn().mockResolvedValue({ createdAt: new Date() }),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    }
+
+    const buildFd = () => {
+      const fd = new FormData()
+      fd.append("bankStatementId", "42")
+      fd.append("idempotencyKey", "imp-key-1")
+      fd.append("csvText", "Tanggal;Keterangan;Debit;Kredit\n2026-10-01;Masuk;1500;0")
+      return fd
+    }
+    const first = await (actions as any).importBankStatementLines(buildFd())
+    const second = await (actions as any).importBankStatementLines(buildFd())
+
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(String(second?.error ?? "")).toContain("duplikat")
+    expect(mocks.prismaMock.bankStatementLine.createMany).toHaveBeenCalledTimes(1)
+    delete mocks.prismaMock.idempotencyKey
+  })
+
   it("importBankStatementLines atomik: satu baris rusak -> tidak ada createMany, error per baris kembali", async () => {
     const fd = new FormData()
     fd.append("bankStatementId", "42")
