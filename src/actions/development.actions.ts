@@ -90,15 +90,39 @@ export async function setPositionCompetency(formData: FormData) {
     const competencyError = await assertCompetencyLive(v.competencyId);
     if (competencyError) return { success: false as const, error: competencyError };
 
-    const row = await prisma.positionCompetency.upsert({
-      where: {
-        positionId_competencyId: {
-          positionId: v.positionId,
-          competencyId: v.competencyId,
+    // Putaran 70: posisi tidak pernah dinilai sebelumnya, dan snapshot
+    // kompetensi bisa basi. Kunci dua baris master (kompetensi < posisi,
+    // urut id tabel) lalu nilai ulang sebelum upsert; FK Cascade tidak
+    // menahan race soft-delete kompetensi.
+    const row = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM competencies WHERE id = ${v.competencyId} FOR UPDATE`;
+        await tx.$executeRaw`SELECT id FROM positions WHERE id = ${v.positionId} FOR UPDATE`;
+      }
+      const liveCompetency = await tx.competency.findUnique({
+        where: { id: v.competencyId },
+        select: { id: true, deletedAt: true },
+      });
+      if (!liveCompetency || liveCompetency.deletedAt !== null) {
+        throw new Error("Kompetensi tidak ditemukan atau sudah terhapus. Pilih kompetensi aktif.");
+      }
+      const position = await tx.position.findUnique({
+        where: { id: v.positionId },
+        select: { id: true },
+      });
+      if (!position) {
+        throw new Error("Jabatan tidak ditemukan. Pilih jabatan aktif.");
+      }
+      return tx.positionCompetency.upsert({
+        where: {
+          positionId_competencyId: {
+            positionId: v.positionId,
+            competencyId: v.competencyId,
+          },
         },
-      },
-      create: v,
-      update: { requiredLevel: v.requiredLevel },
+        create: v,
+        update: { requiredLevel: v.requiredLevel },
+      });
     });
     revalidatePath("/sdm/kompetensi");
     return { success: true as const, id: row.id };
@@ -127,24 +151,46 @@ export async function assessEmployeeCompetency(formData: FormData) {
     });
     if (!liveEmployee) return { success: false as const, error: "Karyawan tidak ditemukan atau tidak aktif" };
 
-    const row = await prisma.employeeCompetency.upsert({
-      where: {
-        employeeId_competencyId: {
-          employeeId: v.employeeId,
-          competencyId: v.competencyId,
+    // Putaran 70: dua gerbang di atas tetap fail-fast murah, tetapi snapshot
+    // pra-tulis tidak mengikat. Kunci baris kompetensi + karyawan (urut id
+    // kompetensi lalu karyawan mengikuti kunci pengembangan lain), nilai
+    // ulang, baru upsert dalam tx yang sama.
+    const row = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM competencies WHERE id = ${v.competencyId} FOR UPDATE`;
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${v.employeeId} FOR UPDATE`;
+      }
+      const liveCompetency = await tx.competency.findUnique({
+        where: { id: v.competencyId },
+        select: { id: true, deletedAt: true },
+      });
+      if (!liveCompetency || liveCompetency.deletedAt !== null) {
+        throw new Error("Kompetensi tidak ditemukan atau sudah terhapus. Pilih kompetensi aktif.");
+      }
+      const employee = await tx.employee.findFirst({
+        where: { id: v.employeeId, isActive: true, deletedAt: null },
+        select: { id: true },
+      });
+      if (!employee) throw new Error("Karyawan tidak ditemukan atau tidak aktif");
+      return tx.employeeCompetency.upsert({
+        where: {
+          employeeId_competencyId: {
+            employeeId: v.employeeId,
+            competencyId: v.competencyId,
+          },
         },
-      },
-      create: {
-        ...v,
-        assessedBy: Number(actor.id),
-        assessedAt: new Date(),
-      },
-      update: {
-        level: v.level,
-        notes: v.notes ?? null,
-        assessedBy: Number(actor.id),
-        assessedAt: new Date(),
-      },
+        create: {
+          ...v,
+          assessedBy: Number(actor.id),
+          assessedAt: new Date(),
+        },
+        update: {
+          level: v.level,
+          notes: v.notes ?? null,
+          assessedBy: Number(actor.id),
+          assessedAt: new Date(),
+        },
+      });
     });
     await logActivity("update", "EmployeeCompetency", row.id, "Penilaian kompetensi karyawan");
     revalidatePath("/sdm/kompetensi");

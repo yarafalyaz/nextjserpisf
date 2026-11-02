@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
   employeeFindFirst: vi.fn(),
   competencyFindUnique: vi.fn(),
   positionCompetencyUpsert: vi.fn(),
+  positionFindUnique: vi.fn(),
+  executeRaw: vi.fn(),
+  transaction: vi.fn(),
   trainingFindFirst: vi.fn(),
   positionCompetencyFindMany: vi.fn(),
   employeeCompetencyFindMany: vi.fn(),
@@ -29,6 +32,9 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     employee: { findUnique: mocks.employeeFindUnique, findFirst: mocks.employeeFindFirst },
     competency: { findUnique: mocks.competencyFindUnique },
+    position: { findUnique: mocks.positionFindUnique },
+    $executeRaw: mocks.executeRaw,
+    $transaction: mocks.transaction,
     positionCompetency: { findMany: mocks.positionCompetencyFindMany, upsert: mocks.positionCompetencyUpsert },
     employeeCompetency: { upsert: mocks.employeeCompetencyUpsert, findMany: mocks.employeeCompetencyFindMany },
     training: { findFirst: mocks.trainingFindFirst },
@@ -84,6 +90,18 @@ beforeEach(() => {
   mocks.competencyFindUnique.mockResolvedValue({ id: 2, deletedAt: null })
   mocks.positionCompetencyUpsert.mockResolvedValue({ id: 5 })
   mocks.trainingFindFirst.mockResolvedValue({ id: 3, status: "scheduled", deletedAt: null })
+  mocks.positionFindUnique.mockResolvedValue({ id: 4 })
+  mocks.executeRaw.mockResolvedValue(1)
+  mocks.transaction.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) =>
+    cb({
+      employee: { findFirst: mocks.employeeFindFirst },
+      competency: { findUnique: mocks.competencyFindUnique },
+      position: { findUnique: mocks.positionFindUnique },
+      positionCompetency: { upsert: mocks.positionCompetencyUpsert },
+      employeeCompetency: { upsert: mocks.employeeCompetencyUpsert },
+      $executeRaw: mocks.executeRaw,
+    }),
+  )
   mocks.logActivity.mockResolvedValue(undefined)
 })
 
@@ -169,6 +187,39 @@ describe("gerbang hidup pengembangan (putaran 51)", () => {
     const res = await setPositionCompetency(fd)
     expect(res.success).toBe(false)
     expect(mocks.positionCompetencyUpsert).not.toHaveBeenCalled()
+  })
+
+  it("putaran 70: syarat jabatan atas posisi tak ada ditolak sebelum upsert", async () => {
+    mocks.positionFindUnique.mockResolvedValue(null)
+    const fd = new FormData()
+    fd.set("positionId", "4")
+    fd.set("competencyId", "2")
+    fd.set("requiredLevel", "3")
+    const res = await setPositionCompetency(fd)
+    expect(res.success).toBe(false)
+    expect(String(!res.success && res.error)).toContain("Jabatan")
+    expect(mocks.positionCompetencyUpsert).not.toHaveBeenCalled()
+  })
+
+  it("putaran 70: gerbang kompetensi dinilai ulang dalam tx sesudah kunci baris", async () => {
+    // Bacaan pra-tx: hidup; bacaan dalam tx: sudah terhapus. Upsert wajib
+    // berhenti — snapshot pra-tx tidak boleh menjadi dasar tulis.
+    mocks.competencyFindUnique
+      .mockResolvedValueOnce({ id: 2, deletedAt: null })
+      .mockResolvedValue({ id: 2, deletedAt: new Date() })
+    const res = await assessEmployeeCompetency(competencyForm())
+    expect(res.success).toBe(false)
+    expect(mocks.employeeCompetencyUpsert).not.toHaveBeenCalled()
+    expect(mocks.executeRaw.mock.invocationCallOrder.length).toBeGreaterThan(0)
+  })
+
+  it("putaran 70: gerbang karyawan dinilai ulang dalam tx sesudah kunci baris", async () => {
+    mocks.employeeFindFirst
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValue(null)
+    const res = await assessEmployeeCompetency(competencyForm())
+    expect(res.success).toBe(false)
+    expect(mocks.employeeCompetencyUpsert).not.toHaveBeenCalled()
   })
 })
 
