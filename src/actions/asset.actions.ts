@@ -1308,20 +1308,10 @@ export async function disposeAsset(formData: FormData) {
     // If an "Asset" workflow is configured, this document must be approved before disposal.
     await assertApproved("Asset", data.assetId);
 
-    // Resolve GL accounts from the asset's category mapping (falls back to the
-    // global Mapping Akun, then env vars).
-    const category = asset.categoryId
-      ? await prisma.assetCategory.findUnique({
-          where: { id: asset.categoryId },
-          select: {
-            assetAccountId: true,
-            accumulatedDepreciationAccountId: true,
-            gainLossAccountId: true,
-            accumulatedImpairmentAccountId: true,
-          },
-        })
-      : null;
-    const gl = await getAssetGlAccounts(category);
+    // Mapping GL kategori dibaca ulang di dalam tx dari kategori aset yang
+    // terkunci (lihat di bawah): reklasifikasi yang commit sebelum kunci aset
+    // berpindah bisa mengganti kategori + akun, dan snapshot luar akan menilai
+    // jurnal reklasifikasi itu dengan akun kategori lama.
 
     // Nilai buku dasar disposal = jurnal POSTED (vonis F-2026-10-22-062-V
     // Putusan 1), BUKAN cache `currentValue`. Angka final dihitung ulang
@@ -1338,6 +1328,18 @@ export async function disposeAsset(formData: FormData) {
       if (lockedAsset.status === "disposed") {
         throw new Error("Aset sudah dilepas (disposed) atau sedang diproses.");
       }
+      const lockedCategory = lockedAsset.categoryId
+        ? await tx.assetCategory.findUnique({
+            where: { id: lockedAsset.categoryId },
+            select: {
+              assetAccountId: true,
+              accumulatedDepreciationAccountId: true,
+              gainLossAccountId: true,
+              accumulatedImpairmentAccountId: true,
+            },
+          })
+        : null;
+      const gl = await getAssetGlAccounts(lockedCategory);
       const lockedJournals = await tx.journal.findMany({
         where: {
           referenceId: data.assetId,
@@ -1378,7 +1380,7 @@ export async function disposeAsset(formData: FormData) {
           fixedAssetAccountId: gl.fixedAsset || null,
           accumulatedDepreciationAccountId: gl.accumDep || null,
           accumulatedImpairmentAccountId:
-            category?.accumulatedImpairmentAccountId ?? null,
+            lockedCategory?.accumulatedImpairmentAccountId ?? null,
         },
       );
       const grossCostTx = lockedPosted.hasAcquisitionJournal

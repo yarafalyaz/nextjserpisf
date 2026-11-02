@@ -14,6 +14,7 @@ const logActivityMock = vi.fn()
 const parseFormDataMock = vi.fn()
 
 const assetFindUniqueOrThrowMock = vi.fn()
+const assetCategoryFindUniqueMock = vi.fn()
 const assetUpdateManyMock = vi.fn()
 const assetHistoryCreateMock = vi.fn()
 const journalFindFirstMock = vi.fn()
@@ -28,9 +29,7 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     asset: { findUniqueOrThrow: (...a: unknown[]) => assetFindUniqueOrThrowMock(...a) },
     assetCategory: {
-      findUnique: vi.fn().mockResolvedValue({
-        assetAccountId: 11, accumulatedDepreciationAccountId: 12, gainLossAccountId: 14,
-      }),
+      findUnique: (...a: unknown[]) => assetCategoryFindUniqueMock(...a),
     },
     systemSetting: { findFirst: vi.fn().mockResolvedValue(null) },
     journal: { findMany: (...a: unknown[]) => journalFindManyMock(...a) },
@@ -58,6 +57,9 @@ function wireTransaction() {
       updateMany: assetUpdateManyMock,
       findUniqueOrThrow: (...a: unknown[]) => assetFindUniqueOrThrowMock(...a),
     },
+    assetCategory: {
+      findUnique: (...a: unknown[]) => assetCategoryFindUniqueMock(...a),
+    },
     assetHistory: { create: assetHistoryCreateMock },
     journal: { findFirst: journalFindFirstMock, findMany: journalFindManyMock, create: journalCreateMock },
   }
@@ -67,7 +69,7 @@ function wireTransaction() {
 beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock, parseFormDataMock,
-    assetFindUniqueOrThrowMock, assetUpdateManyMock, assetHistoryCreateMock,
+    assetFindUniqueOrThrowMock, assetCategoryFindUniqueMock, assetUpdateManyMock, assetHistoryCreateMock,
     journalFindFirstMock, journalFindManyMock, journalCreateMock, transactionMock,
   ]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 4 })
@@ -78,6 +80,9 @@ beforeEach(() => {
   assetFindUniqueOrThrowMock.mockResolvedValue({
     id: 7, code: "AST-001", name: "Mesin", status: "active", categoryId: 1,
     purchaseCost: 1000, currentValue: 400,
+  })
+  assetCategoryFindUniqueMock.mockResolvedValue({
+    assetAccountId: 11, accumulatedDepreciationAccountId: 12, gainLossAccountId: 14,
   })
   assetUpdateManyMock.mockResolvedValue({ count: 1 })
   assetHistoryCreateMock.mockResolvedValue({})
@@ -107,6 +112,34 @@ describe("disposeAsset concurrency guard", () => {
     expect(result.success).toBe(false)
     expect(assetHistoryCreateMock).not.toHaveBeenCalled() // no double history/journal
     expect(journalCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("putaran 54: mapping GL kategori dibaca ulang dari kategori aset terkunci", async () => {
+    const { Prisma } = await import("@prisma/client")
+    const D = (n: number) => new Prisma.Decimal(n)
+    assetFindUniqueOrThrowMock
+      .mockResolvedValueOnce({
+        id: 7, code: "AST-001", name: "Mesin", status: "active", categoryId: 1,
+        purchaseCost: 1000, currentValue: 400,
+      })
+      .mockResolvedValueOnce({
+        id: 7, code: "AST-001", name: "Mesin", status: "active", categoryId: 2,
+        purchaseCost: 1000, currentValue: 400,
+      })
+    assetCategoryFindUniqueMock.mockResolvedValue({
+      assetAccountId: 21, accumulatedDepreciationAccountId: 22, gainLossAccountId: 24,
+    })
+    journalFindManyMock.mockResolvedValue([
+      { referenceType: "ASSET_ACQUISITION", transactionDate: new Date("2026-01-05T00:00:00.000Z"), entries: [{ accountId: 21, debit: D(1000), credit: D(0) }] },
+      { referenceType: "ASSET_DEPRECIATION_202601", transactionDate: new Date("2026-01-10T00:00:00.000Z"), entries: [{ accountId: 22, debit: D(0), credit: D(100) }] },
+    ])
+    journalFindFirstMock.mockResolvedValue(null)
+
+    const res = await disposeAsset(new FormData())
+
+    expect(res.success).toBe(true)
+    expect(res.gainLoss).toBe(-900)
+    expect(assetCategoryFindUniqueMock).toHaveBeenLastCalledWith(expect.objectContaining({ where: { id: 2 } }))
   })
 
   it("riwayat disposal memakai nilai buku TERKUNCI dalam tx, bukan snapshot luar", async () => {
@@ -177,8 +210,7 @@ describe("disposeAsset concurrency guard", () => {
     // already zeroed — GL kept the asset forever. Must now throw and roll back.
     journalFindFirstMock.mockResolvedValue({ id: 1 }) // acquisition journal exists
     // Override kategori tes ini: tanpa akun terpetakan.
-    const prismaMod = await import("@/lib/db/prisma")
-    ;(prismaMod.prisma.assetCategory.findUnique as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null)
+    assetCategoryFindUniqueMock.mockResolvedValueOnce(null)
 
     const result = await disposeAsset(new FormData())
 
