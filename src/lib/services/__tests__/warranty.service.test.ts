@@ -569,6 +569,19 @@ describe("tautan klaim supplier (F-2026-10-21-022): tautan saja, tanpa jurnal", 
     ).rejects.toThrow("sudah tertaut")
   })
 
+  it("putaran 74: baris retur dikunci FOR UPDATE sebelum status/vendor/isi retur dinilai", async () => {
+    seedLink()
+    await linkSupplierClaim(
+      { claimId: 1, supplierClaimVendorId: 5, purchaseReturnId: 9, actorUserId: 7 },
+      prisma as never,
+    )
+    const lockFn = (prisma as unknown as { $executeRaw: ReturnType<typeof vi.fn> }).$executeRaw
+    expect(lockFn).toHaveBeenCalled()
+    const lockOrder = lockFn.mock.invocationCallOrder[0]
+    const readOrder = p.purchaseReturn.findUnique.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(readOrder)
+  })
+
   it("putaran 58: CAS penahan retur kalah (retur sudah dipegang klaim lain) → ditolak, klaim tidak ditulis", async () => {
     seedLink()
     // Klaim lain lolos baca `findFirst` bersamaan tetapi memenangkan CAS

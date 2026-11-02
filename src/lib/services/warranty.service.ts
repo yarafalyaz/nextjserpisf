@@ -634,6 +634,15 @@ export async function linkSupplierClaim(
   assertSupplierClaimTransition(claim.supplierClaimStatus, "drafted")
   await assertActiveVendor(input.supplierClaimVendorId, client)
 
+  // Putaran 74: kunci baris retur SEBELUM menilai status/vendor/isi —
+  // updatePurchaseReturn mengambil kunci baris yang sama sesi putaran 58,
+  // CAS hold hanya menahan dua klaim atas retur sama, ia tidak menahan
+  // edit retur yang commit di jendela (status pindah, item penutup klaim
+  // terhapus) lalu klaim tertulis atas isi basi. Mock tanpa $executeRaw
+  // melewatinya (pola kunci WO repair putaran 61).
+  if (typeof (client as TxClient).$executeRaw === "function") {
+    await (client as TxClient).$executeRaw`SELECT id FROM purchase_returns WHERE id = ${input.purchaseReturnId} FOR UPDATE`
+  }
   const ret = await client.purchaseReturn.findUnique({
     where: { id: input.purchaseReturnId },
     select: {
