@@ -672,6 +672,26 @@ describe("Task Actions", () => {
     expect(res?.error).toContain("ditugaskan kepada Anda")
     expect(mocks.prismaMock.task.update).not.toHaveBeenCalled()
   })
+  it("putaran 71: updateTask staf menilai kepemilikan lewat Employee.userId, bukan ID User", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    // User 99 tertaut Employee 7; tugas ditugaskan ke Employee 7.
+    mocks.requirePermissionMock.mockResolvedValue({ id: 99, permissions: [], roles: ["staff"] })
+    mocks.prismaMock.employee.findFirst.mockResolvedValue({ id: 7 })
+    mocks.prismaMock.task.findUniqueOrThrow.mockResolvedValue({ id: 1, assignedTo: 7, projectId: 1 })
+    const res = await actions.updateTask(fdMap({ id: 1, projectId: 1, name: "Task 1", status: "pending" }))
+    expect(res?.success).toBe(true)
+  })
+  it("putaran 71: updateTask staf ditolak walau ID User kebetulan sama dengan Employee pemilik tugas", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    // User 7 tertaut Employee 42; tugas milik Employee 7 (orang lain).
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7, permissions: [], roles: ["staff"] })
+    mocks.prismaMock.employee.findFirst.mockResolvedValue({ id: 42 })
+    mocks.prismaMock.task.findUniqueOrThrow.mockResolvedValue({ id: 1, assignedTo: 7, projectId: 1 })
+    const res = await actions.updateTask(fdMap({ id: 1, projectId: 1, name: "Task 1", status: "pending" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("ditugaskan kepada Anda")
+    expect(mocks.prismaMock.task.update).not.toHaveBeenCalled()
+  })
   it("updateTask rejects when not assigned and not manager", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.requirePermissionMock.mockResolvedValue({ id: 99, permissions: [], roles: ["staff"] })
@@ -844,6 +864,8 @@ describe("Task Actions Optional-Field Branches", () => {
   })
   it("updateTask succeeds for non-manager on own task (manage_projects absent, super_admin absent)", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 7, permissions: ["edit_projects"], roles: ["staff"] })
+    // Putaran 71: kepemilikan dinilai lewat Employee tertaut user (id 7 -> employee 7 di fixture ini).
+    mocks.prismaMock.employee.findFirst.mockResolvedValue({ id: 7 })
     mocks.prismaMock.task.findUniqueOrThrow.mockResolvedValue({ id: 1, assignedTo: 7 })
     const res = await actions.updateTask(fdMap({ id: 1, projectId: 1, name: "Mine", status: "pending" }))
     expect(res?.success).toBe(true)

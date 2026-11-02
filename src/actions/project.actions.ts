@@ -914,10 +914,24 @@ export async function updateTask(formData: FormData) {
   const actor = await requirePermission("edit_projects")
   const isManager = actor.permissions.includes("manage_projects") || actor.roles.includes("super_admin")
 
+  // Putaran 71: assignedTo adalah FK Employee, actor.id adalah ID User —
+  // membandingkan keduanya langsung menolak staf dari tugasnya sendiri
+  // sekaligus meloloskan staf yang ID user-nya kebetulan sama dengan ID
+  // employee orang lain. Resolusi lewat jembatan Employee.userId (pola
+  // hr-scope); tanpa employee tertaut staf tak memiliki tugas apa pun.
+  const actorEmployeeId = isManager
+    ? null
+    : (
+        await prisma.employee.findFirst({
+          where: { userId: Number(actor.id) },
+          select: { id: true },
+        })
+      )?.id ?? -1
+
   const existing = await prisma.task.findUniqueOrThrow({ where: { id: data.id } })
 
   // Security Guard: Staff can only update tasks assigned to them.
-  if (!isManager && existing.assignedTo !== Number(actor.id)) {
+  if (!isManager && existing.assignedTo !== actorEmployeeId) {
     throw new Error("Anda hanya dapat memperbarui tugas yang ditugaskan kepada Anda.")
   }
 
@@ -953,7 +967,7 @@ export async function updateTask(formData: FormData) {
     const slug = await nextSlugWithClient(tx as never, "task", data.name, {
       excludeId: data.id,
     })
-    if (!isManager && locked.assignedTo !== Number(actor.id)) {
+    if (!isManager && locked.assignedTo !== actorEmployeeId) {
       throw new Error("Anda hanya dapat memperbarui tugas yang ditugaskan kepada Anda.")
     }
     if (
