@@ -1570,3 +1570,36 @@ Wilayah: API routes non-cron, loader laporan sisa, lapisan form klien. Tiga agen
 ### Catatan
 - VM tanggal sesi ini berjalan di 2026-11-02; commit/CI memakai tanggal itu. Tidak ada migrasi schema putaran ini.
 - Pola "kunci identitas opsional + fallback nama" diterapkan konsisten di L1/L4/L5 supaya factory test lama tanpa id tetap sah — pola baku untuk builder laporan murni berikutnya.
+
+## Putaran 53 — Master create-path gap-lock, reverse posting lot, print (13 fix)
+
+Wilayah: create-path master data (kelas race "cek di luar tx, create di dalam"), reverse posting faktur, cetak dokumen. Kandidat agent diverifikasi sesi utama terhadap kode + schema sebelum edit. Semua CI head success.
+
+### Kelas race create master (8 fix, satu pola)
+Pola lama: `findFirst` reuse/bentrok di LUAR transaksi, lalu create — dua request konkuren sama-sama lolos, lahir dua baris aktif bernama sama (slug bersuffix, bukan blokir) karena `name` tanpa `@unique` DB. Pola fix kanonis: parse dulu, lalu `prisma.$transaction` + gap-lock `SELECT id FROM <tabel> FOR UPDATE` (guard `typeof tx.$executeRaw === "function"` untuk mock), kandidat dibaca dalam tx, nama dibandingkan `trim().toLowerCase()`, nama sama → reuse baris lama (kontrak quick-add), kode/simbol manual bentrok nama lain → throw menyebut KODE TERSIMPAN. Slug via `nextSlugWithClient(tx)`. Kode auto DocumentSequence atomik tidak di-cek manual; kode auto LOKAL non-atomik (Warehouse max+1) digenerate di dalam lock. Create-path saja — update/rename belum digerbang (vonis terpisah).
+
+1. `07eb9ca96` fix(master): createTax — helper tak-diekspor `createTaxInTx` + `normalizeTaxNameKey`.
+2. `eac994797` fix(master): createUom — gap-lock nama/simbol; model tanpa `deletedAt`.
+3. `b602988d0` fix(master): createPaymentTerm — `payment_terms`; tanpa `deletedAt`.
+4. `79eac9e01` fix(master): metode pembayaran/pengiriman generik `createMethod` — reuse hanya metode AKTIF (putusan putaran 50); nama nonaktif ditolak eksplisit; cek bentrok hanya kode manual (auto MTP/MTK tak di-cek); dua literal raw SQL per tabel.
+5. `caa577081` fix(master): createVendor — kandidat `deletedAt: null`; NPWP vendor SENGAJA tidak digerbang (blokir keras NPWP hanya lintas Customer, Q-CD-1).
+6. `8b1bf5b9e` fix(master): createWarehouse — seluruh generate lokal max+1 + bebaskan kode gudang terhapus + cek + create pindah ke dalam tx; pesan bentrok auto vs manual dipertahankan; catch P2002 luar tetap.
+7. `2fd6ac16d` fix(master): createAccount — kode kosong dari DocumentSequence atomik tak di-cek; enum `AccountType` kapital.
+8. `18be09b40` fix(finance): createCostCenter — `cost_centers` tanpa `deletedAt`; kode selalu manual (schema wajib) jadi selalu di-cek. ProfitCenter sengaja tidak disentuh (mapper duplikat sendiri, tak ada jalur reuse nama).
+
+### Posting & cetak (5 fix)
+9. `f373aa6e3` fix(print): retur mencetak basis jurnal/snapshot, bukan hitung ulang mentah — retur penjualan `returnDpp`/`returnVat` tersimpan, retur pembelian `price ?? cost`.
+10. `bec97cef5` fix(inventory): reduce reservasi change-order mengunci baris `stock_reservations` terurut FOR UPDATE sebelum baca.
+11. `34fe55d3f` fix(inventory): reverse posting faktur mengunci baris `items` (id terurut, `Prisma.join`) sebelum find-or-create `ItemBatch` — ItemBatch tanpa unique(itemId, warehouseId, batchNumber); dua void konkuren atas item sama dari faktur berbeda bisa create dua baris lot utuh (split-brain lot: pulihan berikutnya hanya menaikkan baris pertama). Pemanggil hanya mengunci dokumen induknya. Jalur tanpa lot tak menambah kunci.
+12. `689dc241b` fix(print): penerimaan mencetak `GoodsReceiptItem.uom` tersimpan per baris, bukan satuan master — qty + unitCost baris dinyatakan dalam uom itu; master hanya fallback.
+13. `705c6a101` fix(print): quotation PDF mencetak rincian Subtotal/Potongan/PPN sebelum Total — route mengirim summary utuh tetapi generator hanya menggambar Total; pola disamakan `generateTransactionPDF`.
+
+### Vonis gugur / ditunda
+- Print GR landed cost: GUGUR by-design — pool ongkir dikapitalisasi hook ke cost layer/jurnal (`baseUnitCostWithLanded`); dokumen GR tidak menyimpan landed per baris dan `PurchaseOrderItem.total` adalah total PO mentah; mencetaknya mengarang angka dokumen.
+- Update/rename master belum digerbang tabrakan nama/kode/simbol: VONIS TERPISAH tertunda — jangan campur ke create-path tanpa membaca kontrak UI pemakai master terkait.
+- K5 garansi idempotency service-level: tetap DITUNDA (lihat putaran 52).
+- Terbilang sen vs format mata uang PDF membuang sen: prioritas rendah, belum divonis.
+
+### Catatan
+- Perangkap test yang terkonfirmasi putaran ini: (a) mock settings default `{}` membuat `enableAutoXCode !== false` = true → kode manual DITIMPA kode auto, cek bentrok tak pernah jalan — test bentrok kode manual wajib set `enableAutoXCode: false` lalu pulihkan; (b) enum schema kapital (`type: "ASSET"`) — nilai kecil ditolak diam-diam sehingga reuse tak tercapai; (c) kode gudang dibandingkan persis (case-sensitive), hanya nama yang dinormalisasi.
+- Tidak ada migrasi schema putaran ini. Semua 13 head CI success (`705c6a101` head terakhir).
