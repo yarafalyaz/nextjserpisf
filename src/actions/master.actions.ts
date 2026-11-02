@@ -1245,14 +1245,32 @@ export async function updateWarehouse(warehouseId: number, formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
-    await prisma.warehouse.update({
-      where: { id: warehouseId },
-      data: {
-        name: v.name,
-        slug: await nextSlug("warehouse", v.name, { excludeId: warehouseId }),
-        code: v.code ?? "",
-        address: v.address ?? null,
-      },
+    // Putaran 61: rename dinilai dalam tx bergap-lock seperti create
+    // (putaran 53 menolak/reuse nama hidup sama). Rename menabrak nama
+    // gudang HIDUP lain sebelumnya lolos telanjang — dua gudang aktif
+    // bernama sama mengambigukan picker dan laporan stok.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM warehouses FOR UPDATE`;
+      }
+      const nameConflict = (
+        await tx.warehouse.findMany({
+          where: { deletedAt: null, id: { not: warehouseId } },
+          select: { id: true, name: true },
+        })
+      ).find((row) => normalizeTaxNameKey(row.name) === normalizeTaxNameKey(v.name));
+      if (nameConflict) {
+        throw new Error(`Nama gudang sudah dipakai gudang "${nameConflict.name}"; pakai nama lain.`);
+      }
+      await tx.warehouse.update({
+        where: { id: warehouseId },
+        data: {
+          name: v.name,
+          slug: await nextSlugWithClient(tx as never, "warehouse", v.name, { excludeId: warehouseId }),
+          code: v.code ?? "",
+          address: v.address ?? null,
+        },
+      });
     });
 
     revalidatePath("/master/gudang");
@@ -2270,15 +2288,32 @@ export async function updatePosition(id: number, formData: FormData) {
       if (!dept) throw new Error("Departemen tidak ditemukan");
     }
 
-    await prisma.position.update({
-      where: { id },
-      data: {
-        updatedBy: Number(user.id),
-        name: requireString(formData.get("name"), "name"),
-        slug: await nextSlug("position", requireString(formData.get("name"), "name"), { excludeId: id }),
-        departmentId,
-        description: (formData.get("description") as string) || null,
-      },
+    const positionName = requireString(formData.get("name"), "name");
+    // Putaran 61: rename dinilai dalam tx bergap-lock — nama jabatan
+    // milik jabatan lain ditolak, bukan slug bersuffix diam-diam.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM positions FOR UPDATE`;
+      }
+      const nameConflict = (
+        await tx.position.findMany({
+          where: { id: { not: id } },
+          select: { id: true, name: true },
+        })
+      ).find((row) => normalizeTaxNameKey(row.name) === normalizeTaxNameKey(positionName));
+      if (nameConflict) {
+        throw new Error(`Nama jabatan sudah dipakai jabatan "${nameConflict.name}"; pakai nama lain.`);
+      }
+      await tx.position.update({
+        where: { id },
+        data: {
+          updatedBy: Number(user.id),
+          name: positionName,
+          slug: await nextSlugWithClient(tx as never, "position", positionName, { excludeId: id }),
+          departmentId,
+          description: (formData.get("description") as string) || null,
+        },
+      });
     });
 
     revalidatePath("/master/jabatan");
@@ -3121,17 +3156,32 @@ export async function updateTaxGroup(id: number, formData: FormData) {
     const taxIds = [...new Set(parsedTaxIds as number[])];
     const foundTaxes = await prisma.tax.findMany({ where: { id: { in: taxIds }, isActive: true, deletedAt: null }, select: { id: true } });
     if (foundTaxes.length !== taxIds.length) throw new Error("Pajak dalam kelompok tidak ditemukan atau nonaktif");
-    await prisma.$transaction([
-      prisma.taxGroupTax.deleteMany({ where: { taxGroupId: id } }),
-      prisma.taxGroup.update({
+    // Putaran 61: rename dinilai dalam tx bergap-lock — nama kelompok
+    // pajak milik kelompok lain ditolak (sebelumnya slug bersuffix
+    // diam-diam melahirkan dua kelompok bernama sama).
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM tax_groups FOR UPDATE`;
+      }
+      const nameConflict = (
+        await tx.taxGroup.findMany({
+          where: { id: { not: id } },
+          select: { id: true, name: true },
+        })
+      ).find((row) => normalizeTaxNameKey(row.name) === normalizeTaxNameKey(name));
+      if (nameConflict) {
+        throw new Error(`Nama kelompok pajak sudah dipakai kelompok pajak "${nameConflict.name}"; pakai nama lain.`);
+      }
+      await tx.taxGroupTax.deleteMany({ where: { taxGroupId: id } });
+      await tx.taxGroup.update({
         where: { id },
         data: {
           name,
-          slug: await nextSlug("taxGroup", name, { excludeId: id }),
+          slug: await nextSlugWithClient(tx as never, "taxGroup", name, { excludeId: id }),
           taxes: { create: taxIds.map((taxId) => ({ taxId })) },
         },
-      }),
-    ]);
+      });
+    });
     revalidatePath("/master/kelompok-pajak");
     await logActivity("update", "TaxGroup", id, "Memperbarui kelompok pajak");
     return { success: true };
@@ -3233,15 +3283,40 @@ export async function updatePaymentTerm(id: number, formData: FormData) {
     const user = await requirePermission("edit_payment_terms");
 
     const fields = parsePaymentTermFields(formData);
-    await prisma.paymentTerm.update({
-      where: { id },
-      data: {
-        updatedBy: Number(user.id),
-        name: requireString(formData.get("name"), "name"),
-        slug: await nextSlug("paymentTerm", requireString(formData.get("name"), "name"), { excludeId: id }),
-        code: fields.code,
-        days: fields.days,
-      },
+    const name = requireString(formData.get("name"), "name");
+    // Putaran 61: rename dinilai dalam tx bergap-lock seperti create —
+    // nama/kode (key ternormalisasi) milik termin lain ditolak; kode
+    // @unique DB saja tak menahan varian huruf besar/kecil.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM payment_terms FOR UPDATE`;
+      }
+      const candidates = await tx.paymentTerm.findMany({
+        where: { id: { not: id } },
+        select: { id: true, name: true, code: true },
+      });
+      const nameConflict = candidates.find(
+        (row) => normalizeTaxNameKey(row.name) === normalizeTaxNameKey(name),
+      );
+      if (nameConflict) {
+        throw new Error(`Nama syarat pembayaran sudah dipakai syarat pembayaran "${nameConflict.name}"; pakai nama lain.`);
+      }
+      const codeConflict = candidates.find(
+        (row) => normalizeTaxNameKey(row.code) === normalizeTaxNameKey(fields.code),
+      );
+      if (codeConflict) {
+        throw new Error(`Kode syarat pembayaran ${codeConflict.code} sudah dipakai syarat pembayaran "${codeConflict.name}"; pakai kode lain.`);
+      }
+      await tx.paymentTerm.update({
+        where: { id },
+        data: {
+          updatedBy: Number(user.id),
+          name,
+          slug: await nextSlugWithClient(tx as never, "paymentTerm", name, { excludeId: id }),
+          code: fields.code,
+          days: fields.days,
+        },
+      });
     });
 
     revalidatePath("/master/syarat-pembayaran");

@@ -208,6 +208,50 @@ describe("putaran 61: rename master menolak nama/kode/simbol milik master hidup 
     expect(res?.error).toContain("PCS")
     expect(mocks.prismaMock.unitOfMeasure.update).not.toHaveBeenCalled()
   })
+
+  it("updateWarehouse: rename ke nama gudang hidup lain ditolak", async () => {
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([
+      { id: 2, name: "Gudang Utama", code: "WH-0002", slug: "gudang-utama" },
+    ])
+    const res: any = await actions.updateWarehouse(1, fdMap({ name: "gudang utama", code: "WH-0001" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Gudang Utama")
+    expect(mocks.prismaMock.warehouse.update).not.toHaveBeenCalled()
+  })
+
+  it("updatePaymentTerm: rename ke nama/kode termin lain ditolak", async () => {
+    mocks.prismaMock.paymentTerm.findMany.mockResolvedValue([
+      { id: 2, name: "Net 30", code: "N30", slug: "net-30" },
+    ])
+    const byName: any = await actions.updatePaymentTerm(1, fdMap({ name: "net 30", code: "N14", days: "14" }))
+    expect(byName?.success).toBe(false)
+    expect(byName?.error).toContain("Net 30")
+    const byCode: any = await actions.updatePaymentTerm(1, fdMap({ name: "Net 14", code: "n30", days: "14" }))
+    expect(byCode?.success).toBe(false)
+    expect(byCode?.error).toContain("N30")
+    expect(mocks.prismaMock.paymentTerm.update).not.toHaveBeenCalled()
+  })
+
+  it("updateTaxGroup: rename ke nama kelompok lain ditolak", async () => {
+    mocks.prismaMock.taxGroup.findMany.mockResolvedValue([
+      { id: 2, name: "PPN Umum", slug: "ppn-umum" },
+    ])
+    mocks.prismaMock.tax.findMany.mockResolvedValue([{ id: 1 }])
+    const res: any = await actions.updateTaxGroup(1, fdMap({ name: "ppn umum", taxIds: "1" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("PPN Umum")
+    expect(mocks.prismaMock.taxGroup.update).not.toHaveBeenCalled()
+  })
+
+  it("updatePosition: rename ke nama jabatan lain ditolak", async () => {
+    mocks.prismaMock.position.findMany.mockResolvedValue([
+      { id: 2, name: "Mekanik Senior", slug: "mekanik-senior" },
+    ])
+    const res: any = await actions.updatePosition(1, fdMap({ name: "mekanik senior" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Mekanik Senior")
+    expect(mocks.prismaMock.position.update).not.toHaveBeenCalled()
+  })
 })
 
 describe("FK fiktif customerCategoryId/paymentTermId (repro)", () => {
