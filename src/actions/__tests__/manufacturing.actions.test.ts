@@ -1474,6 +1474,8 @@ describe("Work Order Operation Actions (F-2026-10-21-020 Tahap A)", () => {
 
   it("startWorkOrder initializes stages in same transaction", async () => {
     P.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [{ id: 1 }] })
+    // Putaran 74: bacaan ulang terkunci dalam tx wajib melihat >=1 item.
+    P.workOrder.findUnique.mockResolvedValue({ id: 1, _count: { items: 1 } })
     P.workOrder.updateMany.mockResolvedValue({ count: 1 })
     P.$queryRaw.mockResolvedValue([{ id: 1 }])
     P.workOrderOperation.findMany.mockResolvedValue([])
@@ -1704,6 +1706,8 @@ describe("Work Order Operation auto-close (F-2026-10-21-020 lanjutan)", () => {
 describe("Work Order Actions", () => {
   it("startWorkOrder succeeds", async () => {
     mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [{ id: 1 }] })
+    // Putaran 74: bacaan ulang terkunci dalam tx wajib melihat >=1 item.
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 1, _count: { items: 1 } })
     mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 1 }])
     const res = await actions.startWorkOrder(1)
     expect(res?.success).toBe(true)

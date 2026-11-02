@@ -1767,6 +1767,21 @@ export async function startWorkOrder(workOrderId: number) {
         );
       }
 
+      // Putaran 74: item dinilai ulang sesudah klaim dari baris terklaim —
+      // updateWorkOrder bisa commit pengosongan item di jendela sama (ia
+      // mengunci baris WO lalu menulis ulang baris item sesudah klaim ini),
+      // jadi guard items.length pra-tx saja membiarkan WO kosong ter-start
+      // dan tak bisa di-restart maupun diselesaikan.
+      const freshCount = await tx.workOrder.findUnique({
+        where: { id: workOrderId },
+        select: { _count: { select: { items: true } } },
+      });
+      if (!freshCount || freshCount._count.items === 0) {
+        throw new Error(
+          "Perintah Kerja tidak bisa dimulai tanpa item. Item mungkin dihapus oleh edit konkuren; muat ulang halaman.",
+        );
+      }
+
       // Update all WO items to in_progress
       await tx.workOrderItem.updateMany({
         where: { workOrderId, status: "pending" },

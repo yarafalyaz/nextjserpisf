@@ -14,8 +14,10 @@ const revalidateMock = vi.fn()
 const logActivityMock = vi.fn()
 
 const woFindUniqueOrThrowMock = vi.fn()
+const woFindUniqueMock = vi.fn()
 const woUpdateManyMock = vi.fn()
 const woItemUpdateManyMock = vi.fn()
+const woItemCountMock = vi.fn()
 // F-2026-10-21-020 Tahap A: startWorkOrder now also initializes stage rows
 // inside the claim transaction; mock the three touchpoints so this guard
 // stays focused on the atomic claim.
@@ -37,9 +39,13 @@ vi.mock("@/lib/db/prisma", () => {
   const prisma = {
     workOrder: {
       findUniqueOrThrow: (...a: unknown[]) => woFindUniqueOrThrowMock(...a),
+      findUnique: (...a: unknown[]) => woFindUniqueMock(...a),
       updateMany: (...a: unknown[]) => woUpdateManyMock(...a),
     },
-    workOrderItem: { updateMany: (...a: unknown[]) => woItemUpdateManyMock(...a) },
+    workOrderItem: {
+      updateMany: (...a: unknown[]) => woItemUpdateManyMock(...a),
+      count: (...a: unknown[]) => woItemCountMock(...a),
+    },
     workOrderOperation: {
       findMany: (...a: unknown[]) => opFindManyMock(...a),
       createMany: (...a: unknown[]) => opCreateManyMock(...a),
@@ -87,7 +93,7 @@ import { startWorkOrder } from "../manufacturing.actions"
 beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock,
-    woFindUniqueOrThrowMock, woUpdateManyMock, woItemUpdateManyMock,
+    woFindUniqueOrThrowMock, woFindUniqueMock, woUpdateManyMock, woItemUpdateManyMock, woItemCountMock,
     opFindManyMock, opCreateManyMock, settingFindFirstMock,
   ]) m.mockReset()
   opFindManyMock.mockResolvedValue([])
@@ -105,6 +111,9 @@ beforeEach(() => {
   })
   woUpdateManyMock.mockResolvedValue({ count: 1 })
   woItemUpdateManyMock.mockResolvedValue({ count: 1 })
+  // Putaran 74: bacaan ulang item terkunci default tetap melihat 1 item.
+  woFindUniqueMock.mockResolvedValue({ id: 10, customerId: 3, status: "in_progress", _count: { items: 1 } })
+  woItemCountMock.mockResolvedValue(1)
   intakeGateMock.mockReset()
   intakeGateMock.mockResolvedValue(undefined)
 })
@@ -140,6 +149,14 @@ describe("startWorkOrder concurrency guard", () => {
 
     expect(result.success).toBe(false)
     expect(woUpdateManyMock).not.toHaveBeenCalled()
+  })
+
+  it("putaran 74: item dikosongkan konkuren sesudah klaim -> start ditolak di dalam tx", async () => {
+    woFindUniqueMock.mockResolvedValue({ id: 10, customerId: 3, status: "in_progress", _count: { items: 0 } })
+    const result = await startWorkOrder(10)
+    expect(result.success).toBe(false)
+    expect(woItemUpdateManyMock).not.toHaveBeenCalled()
+    expect(srCreateMock).not.toHaveBeenCalled()
   })
 
   it("blocks start WITHOUT flipping items/status when the F-50(a) intake gate throws", async () => {
