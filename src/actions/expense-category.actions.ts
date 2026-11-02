@@ -4,19 +4,36 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
 import { logActivity } from "@/lib/services/activity-log.service"
-import { nextSlug } from "@/lib/utils/slug-db"
+import { nextSlugWithClient } from "@/lib/utils/slug-db"
+import { checkIdempotency } from "@/lib/utils/idempotency"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { expenseCategorySchema } from "@/lib/validations/finance.schemas"
 
 export async function createExpenseCategory(formData: FormData) {
-  await requirePermission("manage_expense_categories")
+  const user = await requirePermission("manage_expense_categories")
 
   const parsed = parseFormData(expenseCategorySchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }
   const { name, label, sortOrder } = parsed.data
 
   try {
-    const created = await prisma.expenseCategory.create({ data: { name, label, sortOrder, slug: await nextSlug("expenseCategory", name) } })
+    // Putaran 70: key + klaim nama ternormalisasi di bawah gap-lock tabel
+    // (MariaDB tidak punya partial-unique): retry identik tidak lagi
+    // melahirkan kategori kembar atau meledak P2002 mentah.
+    const created = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM expense_categories FOR UPDATE`
+      }
+      const key = name.trim().toLowerCase()
+      const siblings = await tx.expenseCategory.findMany({ select: { id: true, name: true } })
+      if (siblings.some((row) => row.name.trim().toLowerCase() === key)) {
+        throw new Error("Nama kategori sudah ada")
+      }
+      return tx.expenseCategory.create({
+        data: { name, label, sortOrder, slug: await nextSlugWithClient(tx as never, "expenseCategory", name) },
+      })
+    })
     await logActivity("create", "ExpenseCategory", created.id, `Membuat kategori pengeluaran ${label}`)
     revalidatePath("/master/kategori-pengeluaran")
     return { success: true }
@@ -35,9 +52,22 @@ export async function updateExpenseCategory(id: number, formData: FormData) {
   const { name, label, sortOrder, isActive } = parsed.data
 
   try {
-    await prisma.expenseCategory.update({
-      where: { id },
-      data: { name, label, sortOrder, isActive, slug: await nextSlug("expenseCategory", name, { excludeId: id }) },
+    await prisma.$transaction(async (tx) => {
+      // Putaran 70: klaim nama ternormalisasi + slug lewat delegate tx
+      // (pola updateMethod); versi lama menghitung slug global lalu update
+      // polos, sehingga rename konkuren bertabrakan di name/slug @unique.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM expense_categories FOR UPDATE`
+      }
+      const key = name.trim().toLowerCase()
+      const siblings = await tx.expenseCategory.findMany({ select: { id: true, name: true } })
+      if (siblings.some((row) => row.id !== id && row.name.trim().toLowerCase() === key)) {
+        throw new Error("Nama kategori sudah ada")
+      }
+      await tx.expenseCategory.update({
+        where: { id },
+        data: { name, label, sortOrder, isActive, slug: await nextSlugWithClient(tx as never, "expenseCategory", name, { excludeId: id }) },
+      })
     })
     await logActivity("update", "ExpenseCategory", id, `Memperbarui kategori pengeluaran ${label}`)
     revalidatePath("/master/kategori-pengeluaran")

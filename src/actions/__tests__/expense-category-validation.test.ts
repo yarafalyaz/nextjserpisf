@@ -8,6 +8,7 @@ const nextSlugMock = vi.fn()
 const expenseCategoryCreateMock = vi.fn()
 const expenseCategoryUpdateMock = vi.fn()
 const expenseCategoryDeleteMock = vi.fn()
+const expenseCategoryFindManyMock = vi.fn()
 const expenseCountMock = vi.fn()
 const pettyCashCountMock = vi.fn()
 const txExecuteRawMock = vi.fn(async (..._a: unknown[]) => 1)
@@ -35,6 +36,11 @@ vi.mock("@/lib/services/activity-log.service", () => ({
 }))
 vi.mock("@/lib/utils/slug-db", () => ({
   nextSlug: (...a: unknown[]) => nextSlugMock(...a),
+  nextSlugWithClient: (...a: unknown[]) => nextSlugMock(...a),
+}))
+const checkIdempotencyMock = vi.fn()
+vi.mock("@/lib/utils/idempotency", () => ({
+  checkIdempotency: (...a: unknown[]) => checkIdempotencyMock(...a),
 }))
 
 import { createExpenseCategory, updateExpenseCategory, deleteExpenseCategory } from "../expense-category.actions"
@@ -62,9 +68,16 @@ beforeEach(() => {
       $executeRaw: (a: unknown) => txExecuteRawMock(a),
       expense: { count: (...a: unknown[]) => expenseCountMock(...a) },
       pettyCash: { count: (...a: unknown[]) => pettyCashCountMock(...a) },
-      expenseCategory: { delete: (...a: unknown[]) => expenseCategoryDeleteMock(...a) },
+      expenseCategory: {
+        delete: (...a: unknown[]) => expenseCategoryDeleteMock(...a),
+        create: (...a: unknown[]) => expenseCategoryCreateMock(...a),
+        update: (...a: unknown[]) => expenseCategoryUpdateMock(...a),
+        findMany: (...a: unknown[]) => expenseCategoryFindManyMock(...a),
+      },
     }),
   )
+  expenseCategoryFindManyMock.mockResolvedValue([])
+  checkIdempotencyMock.mockResolvedValue(undefined)
 })
 
 describe("expense-category Zod validation", () => {
@@ -104,6 +117,29 @@ describe("expense-category Zod validation", () => {
         data: expect.objectContaining({ name: "csr", label: "CSR", sortOrder: 3, isActive: true }),
       }),
     )
+  })
+})
+
+describe("create/updateExpenseCategory putaran 70", () => {
+  it("create double-submit ditolak: create hanya sekali", async () => {
+    checkIdempotencyMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi."))
+    const p = { name: "csr", label: "CSR", sortOrder: "0", idempotencyKey: "cat-key-1" }
+    const first = await createExpenseCategory(fd(p))
+    expect(first.success).toBe(true)
+    const second = await createExpenseCategory(fd(p))
+    expect(second.success).toBe(false)
+    expect(String(second.error)).toContain("duplikat")
+    expect(expenseCategoryCreateMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("update mengklaim nama ternormalisasi dari daftar sibling", async () => {
+    expenseCategoryFindManyMock.mockResolvedValue([{ id: 2, name: "CSR" }])
+    const res = await updateExpenseCategory(1, fd({ name: " csr ", label: "CSR Baru", sortOrder: "0" }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("sudah ada")
+    expect(expenseCategoryUpdateMock).not.toHaveBeenCalled()
   })
 })
 

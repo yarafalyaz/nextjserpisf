@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useRef, useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { createExpenseCategory } from "@/actions/expense-category.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -12,10 +12,13 @@ import { Button } from "@/components/ui/button"
 export default function CreateExpenseCategoryPage() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Putaran 70: key stabil per intent create; retry memakai ulang, sukses merotasi.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    formData.set("idempotencyKey", idempotencyKeyRef.current)
     startTransition(async () => {
       try {
         const result = await createExpenseCategory(formData)
@@ -24,6 +27,7 @@ export default function CreateExpenseCategoryPage() {
           return
         }
         showSuccess("Kategori berhasil ditambahkan")
+        idempotencyKeyRef.current = crypto.randomUUID()
         router.push("/master/kategori-pengeluaran")
         router.refresh()
       } catch (error) {
