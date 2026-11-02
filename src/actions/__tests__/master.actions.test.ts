@@ -1227,6 +1227,60 @@ describe("delete master satelit (putaran 71)", () => {
   })
 })
 
+describe("master klaim update (putaran 71)", () => {
+  const accountRows = async () => [{ id: 2, name: "Kas Kecil", code: "1001", slug: "kas-kecil" }]
+
+  it("updateAccount menolak rename ke nama ternormalisasi homolog hidup lain", async () => {
+    mocks.prismaMock.account.findMany.mockImplementation(accountRows)
+    const res = await actions.updateAccount(
+      1,
+      fdMap({ name: " kas kecil ", code: "9999", type: "ASSET", normalBalance: "DEBIT" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(String((res as { error?: string })?.error)).toContain("sudah dipakai")
+    expect(mocks.prismaMock.account.update).not.toHaveBeenCalled()
+  })
+
+  it("updateAccount menolak kode manual bentrok homolog hidup lain", async () => {
+    mocks.prismaMock.account.findMany.mockImplementation(accountRows)
+    const res = await actions.updateAccount(
+      1,
+      fdMap({ name: "Nama Baru", code: " 1001 ", type: "ASSET", normalBalance: "DEBIT" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(String((res as { error?: string })?.error)).toContain("1001")
+    expect(mocks.prismaMock.account.update).not.toHaveBeenCalled()
+  })
+
+  it("deleteItemGroup menolak hapus saat item masih menempel, dalam tx", async () => {
+    mocks.prismaMock.item.count.mockResolvedValue(2)
+    const res = await actions.deleteItemGroup(9)
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+    expect(mocks.prismaMock.itemGroup.delete).not.toHaveBeenCalled()
+  })
+
+  it("updateAccount slug dihitung dari delegate tx, bukan prisma global", async () => {
+    const txFindFirst = vi.fn()
+      .mockResolvedValueOnce({ id: 77 })
+      .mockResolvedValue(null)
+    const txFacade = { ...mocks.prismaMock, account: { ...mocks.prismaMock.account, findFirst: txFindFirst } }
+    const txImpl = mocks.prismaMock.$transaction.getMockImplementation()
+    mocks.prismaMock.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(txFacade))
+    try {
+      const res = await actions.updateAccount(
+        1,
+        fdMap({ name: "Akun Uji", code: "9000", type: "ASSET", normalBalance: "DEBIT" }),
+      )
+      expect(res?.success).toBe(true)
+      const dataArg = mocks.prismaMock.account.update.mock.calls.at(-1)?.[0]
+      expect(dataArg.data.slug).toBe("akun-uji-2")
+    } finally {
+      mocks.prismaMock.$transaction.mockImplementation(txImpl)
+    }
+  })
+})
+
 describe("Lead Actions", () => {
   it("createLead succeeds", async () => {
     try {

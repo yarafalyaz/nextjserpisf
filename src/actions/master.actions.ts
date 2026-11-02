@@ -846,7 +846,7 @@ export async function createItem(formData: FormData) {
         data: {
           sku,
           name: v.name,
-          slug: await nextSlug("item", v.name),
+          slug: await nextSlugWithClient(tx as never, "item", v.name),
           description: v.description ?? null,
           image: v.image ?? null,
           categoryId: v.categoryId ?? null,
@@ -1041,7 +1041,7 @@ export async function updateItem(itemId: number, formData: FormData) {
         data: {
           sku: v.sku || undefined,
           name: v.name,
-          slug: await nextSlug("item", v.name, { excludeId: itemId }),
+          slug: await nextSlugWithClient(tx as never, "item", v.name, { excludeId: itemId }),
           description: v.description ?? null,
           image: v.image ?? null,
           categoryId: v.categoryId ?? null,
@@ -3983,14 +3983,21 @@ export async function deleteItemGroup(id: number) {
 
     // `items.group_id` ON DELETE SET NULL, jadi menghapus grup tanpa penjaga akan
     // diam-diam melepas barang dari grupnya (kehilangan data tanpa error FK).
-    const itemCount = await prisma.item.count({ where: { groupId: id } });
-    if (itemCount > 0) {
-      throw new Error(
-        `Grup masih dipakai oleh ${itemCount} barang. Pindahkan barang ke grup lain terlebih dahulu.`,
-      );
-    }
-
-    await prisma.itemGroup.delete({ where: { id } });
+    // Putaran 71: guard dinilai dalam tx berkunci baris grup (pola
+    // deleteCustomerCategory) supaya item yang pindah ke grup di sela
+    // hitungan pra-tx tidak lepas diam-diam.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM item_groups WHERE id = ${id} FOR UPDATE`;
+      }
+      const itemCount = await tx.item.count({ where: { groupId: id } });
+      if (itemCount > 0) {
+        throw new Error(
+          `Grup masih dipakai oleh ${itemCount} barang. Pindahkan barang ke grup lain terlebih dahulu.`,
+        );
+      }
+      await tx.itemGroup.delete({ where: { id } });
+    });
 
     revalidatePath("/master/grup-barang");
     await logActivity("delete", "ItemGroup", id, "Menghapus grup barang");
@@ -4022,7 +4029,6 @@ export async function updateAccount(id: number, formData: FormData) {
     // the trial balance / P&L / balance sheet. Both fallbacks share one lookup.
     const submittedCode = v.code?.trim() || null;
     const newParentId = v.parentId ?? null;
-    const slug = await nextSlug("account", v.name, { excludeId: id });
 
     // Baca fallback + anti-siklus + tulis dalam SATU tx berkunci: baris akun
     // dan baris induk baru dikunci urut id, lalu rantai induk dinilai dari
@@ -4034,6 +4040,32 @@ export async function updateAccount(id: number, formData: FormData) {
       const lockIds = [...new Set(newParentId ? [id, newParentId] : [id])].sort((a, b) => a - b);
       for (const lockId of lockIds) {
         await tx.$queryRaw`SELECT id FROM accounts WHERE id = ${lockId} FOR UPDATE`;
+      }
+
+      // Putaran 71: klaim identitas ternormalisasi homolog hidup lain dalam
+      // tx yang sama (pola createAccount gap-lock): nama akun tak punya
+      // @unique dan code @unique hanya peka huruf persis, jadi rename
+      // membawa homolog hidup "Kas Kecil" menjadi dua baris. Kandidat
+      // dibaca lewat delegate tx di bawah kunci baris sendiri.
+      const candidates = await tx.account.findMany({
+        where: { deletedAt: null, id: { not: id } },
+        select: { id: true, name: true, code: true },
+      });
+      const nameKey = normalizeTaxNameKey(v.name);
+      const byName = candidates.find((row) => normalizeTaxNameKey(row.name) === nameKey);
+      if (byName) {
+        return { error: `Nama akun sudah dipakai akun "${byName.name}"; pakai nama lain.` };
+      }
+      if (submittedCode) {
+        const codeKey = normalizeTaxNameKey(submittedCode);
+        const byCode = candidates.find(
+          (row) => row.code?.trim() && normalizeTaxNameKey(row.code) === codeKey,
+        );
+        if (byCode) {
+          return {
+            error: `Kode akun ${byCode.code} sudah dipakai akun "${byCode.name}"; pakai kode lain.`,
+          };
+        }
       }
 
       let code = submittedCode;
@@ -4077,7 +4109,7 @@ export async function updateAccount(id: number, formData: FormData) {
           // `code` is always set by this point (submitted, or read above).
           code: code as string,
           name: v.name,
-          slug,
+          slug: await nextSlugWithClient(tx as never, "account", v.name, { excludeId: id }),
           type: v.type,
           parentId: newParentId,
           description: v.description ?? null,
