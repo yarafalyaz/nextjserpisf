@@ -251,8 +251,11 @@ export function PurchaseOrderForm({
     setPoItems(updated);
   }
 
+  // Clamp per baris >= 0 seperti server (purchaseOrderLineTotal): diskon
+  // melebihi bruto baris tidak boleh menampilkan total di bawah nol dan
+  // grand total tampilan harus sama dengan yang disimpan server.
   const itemsTotal = poItems.reduce(
-    (sum, item) => sum + (item.qty * item.unitPrice - item.discount),
+    (sum, item) => sum + Math.max(0, item.qty * item.unitPrice - item.discount),
     0,
   );
   const shippingCost = Number(watch("shippingCost")) || 0;
@@ -602,9 +605,9 @@ export function PurchaseOrderForm({
                     </td>
                     <td className="text-right">
                       Rp{" "}
-                      {(
-                        poItem.qty * poItem.unitPrice -
-                        poItem.discount
+                      {Math.max(
+                        0,
+                        poItem.qty * poItem.unitPrice - poItem.discount,
                       ).toLocaleString("id-ID")}
                     </td>
                     <td>
