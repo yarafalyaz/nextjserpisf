@@ -1920,3 +1920,39 @@ CI final putaran 63: head `9372036b5` **success**; kedelapan head fix masing-mas
 ### Catatan
 - Tidak ada migrasi schema putaran ini.
 - Harness `finance.actions.test.ts` kini memuat 4 test duplikat putaran 63 dengan pola sama: injeksi `prismaMock.idempotencyKey` per-test lalu `delete` sesudahnya supaya tidak bocor ke test lain.
+
+## Putaran 67 — CRM, master/pengaturan, inventaris lanjutan (11 fix)
+
+Wilayah: tiga agent paralel (CRM, master/pengaturan, inventaris lanjutan). Semua kandidat diverifikasi sesi utama terhadap kode + form pemanggil + schema sebelum fix; kelas dominan tetap create tanpa idempotency key, ditambah gerbang hidup yang dinilai hanya pra-tx dan mapping master tanpa klaim.
+
+### Fix inventaris (3)
+1. `2204d961e` fix(inventory): OpnameForm kirim idempotencyKey ke createStockAdjustment — action sudah membaca+mengklaim key dalam tx, tetapi form opname membangun FormData manual tanpa key sehingga retry lolos. Form kini kirim key stabil per intent (fix form-only).
+2. `da734333f` fix(inventory): `createTransferFromMaterialRequest` anti double-submit via idempotency key — sisa MR hanya dihitung dari transfer terkirim, sehingga draft baru tak mengurangi sisa; retry melahirkan draft kedua sebesar sisa penuh dan keduanya dapat diproses (StockMove dobel). Klaim sesudah kunci baris MR; UI rotasi key sesudah sukses karena transfer kedua sah dari sisa berikutnya tetap diizinkan.
+3. `bd21cd089` fix(inventory): `createStocktakeSession` anti double-submit via idempotency key — create polos luar tx; `documentNo`/`slug` selalu baru sehingga tak ada jaring unik. Create dibungkus tx dengan klaim key sebelum create; form rotasi key sesudah sukses (form di-reset in-place).
+
+### Fix CRM (1 gabungan, 2 CATAT)
+4. `221d5cf7e` fix(crm): komentar tiket + aktivitas lead anti double-submit, gerbang hidup createTicket dinilai dalam tx — `addTicketComment` dan `addLeadActivity` tanpa key melahirkan histori/timeline kembar (+task terjadwal kembar). Klaim sesudah kunci baris tiket/lead dan semua guard; form rotasi key sesudah sukses. `createTicket`: gerbang hidup customer/assignee semula hanya pra-tx; dinilai ulang lewat delegate tx (pola `updateTicket`) karena kolom bare-int tanpa FK.
+- CATAT K4: `createLead assignedTo` gerbang hidup hanya pra-tx — severity rendah; page resmi tidak merender picker user sehingga jalur UI tak menjangkaunya.
+- CATAT K5: slug CRM dari `nextSlug` global/pra-tx — dampak hanya P2002 sesaat pada create konkuren berbeda-key, bukan master kembar; severity rendah.
+
+### Fix master/pengaturan (7)
+5. `bd74fc596` fix(master): bank menolak akun COA nonaktif pada create dan update — kandidat agent hanya `updateBank`, verifikasi sesi utama menemukan query sama di `createBank`; kedua jalur kini `{ id, deletedAt: null, isActive: true }` dengan pesan "tidak ditemukan atau tidak aktif".
+6. `df4d8bc1e` fix(master): `createItem` anti double-submit via idempotency key — SKU auto selalu baru dan slug hanya suffix sehingga retry melahirkan barang kembar. Klaim pola createEmployee/createLead dalam tx; form key create-only.
+7. `876a5f17a` fix(master): `createCustomer` anti double-submit via idempotency key — reuse nama+telepon pra-tx bersifat advisory terhadap dua request tumpang tindih. Blokir keras repository tetap hanya NPWP persis (Q-CD-1, tidak diperluas); klaim ditempatkan sesudah cek konflik NPWP dalam tx (jalur blokir `return null` = commit tidak memakan key) dan tepat sebelum create. Form memakai `useState` (bukan `useRef`) karena pola ref memicu `react-hooks/refs` pada file itu — dibuktikan bisect empiris.
+8. `305a72216` fix(master): `createPosition` anti double-submit via idempotency key — `Position.name` tanpa unique; reuse nama pra-tx tak menahan retry. Klaim key di dalam tx PER PERCOBAAN retry-loop kode: retry P2002 kode adalah cabang internal request yang sama (tx percobaan gagal ter-rollback, key ikut terlepas, klaim ulang lulus); submit identik keduanyalah yang tertahan karena tx pertama commit. Klaim satu kali di luar loop ditolak karena mengubah semantik retry kode.
+9. `10052af22` fix(master): `createItemGroup` anti double-submit via idempotency key — `code @unique` (kosong di-default ke `name`) menahan retry kode persis; retry dengan pasangan code/nama per-niat yang berubah lolos. Klaim key dalam tx sebelum create; penjaga tak boleh bergantung pada apakah pemanggil mengisi code eksplisit.
+10. `f326883a9` fix(settings): tolak mapping akun nonaktif di `updateSystemSettings` — 45 field `*AccountId` ditulis tanpa validasi akun. Picker UI memfilter `isActive` (load-settings) sehingga hydrated UI tertahan, tetapi API mentah atau akun yang dinonaktifkan sesudah form dirender tetap tersimpan ke mapping fail-closed jalur uang. Fix: satu query batch `tx.account` hidup (`isActive + deletedAt null`) di dalam tx sebelum update terhadap ID yang DIKIRIM (absen = untouched; kosong = clear sah); satu ID mati menolak seluruh simpan. `payrollJournalTypeId` sengaja tidak ikut (bukan akun).
+11. `ea6409aaf` fix(master): `updateMethod` klaim nama/kode ternormalisasi sebelum update — update tanpa klaim melahirkan dua metode bernama sama (`name` tanpa unique); kode exact `@unique` tidak menahan kapital/spasi berbeda pada update. Seluruh alur (klaim terhadap baris lain, `assertMethodCodeUnused` bila kode berubah, update) satu transaksi bergap-lock, homolog kontrak createMethod putaran 53; nama/kode diri sendiri tak memblokir; slug `nextSlugWithClient`.
+
+### Vonis dicatat / gugur (tanpa patch)
+- `updateItemGroup` (master.actions.ts): update bersifat idempoten terhadap baris yang sama (`id` tetap) — BUKAN celah double-submit. Tidak diubah.
+- `createTaxGroup` klaim nama: vonis konservatif putaran 61 tetap — tidak ada bukti baru yang mengubah.
+- Rename Method tercatat ditolak agent: rename-nama-saja terbukti aman oleh sebab putaran 21 (resolusi membaca nama berjalan dari master); celah nyata hanya nama/kode lintas baris — difix #11.
+- Catatan kelas rename master hitung-referensi-luar-tx tetap CATAT (putaran 61, tak dibuka ulang).
+- Kelas QC pasca-dokumen-final tetap CATAT (putaran 61).
+
+### Catatan
+- Tidak ada migrasi schema putaran ini.
+- Pelajaran harness: `vi.clearAllMocks()` tidak membersihkan `mockImplementation` persisten — test `createPosition` baru wajib snapshot `getMockImplementation()` dan memulihkannya di `finally` (test P2002 pendahulu bocor ke test sesudahnya; run terisolasi hijau, file penuh merah). Mock `idempotencyKey` per-test menyertakan `deleteMany` supaya prune global tak ber-noise.
+- Pelajaran lint: pada `customer-form.tsx`, pola `useRef` key memicu `react-hooks/refs` padahal file lain lolos dengan pola sama; bisect empiris membuktikan `useState(() => crypto.randomUUID())` bersih (errorCount 0 vs 1). Jangan mengubah kembali ke `useRef` di file itu tanpa memeriksa ulang.
+- Semua 11 head fix CI **success** (masing-masing diverifikasi via `gh run list` sebelum log ditulis).
