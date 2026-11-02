@@ -1571,6 +1571,26 @@ describe("stocktake session (P1-5)", () => {
     expect(arg.data.notes).toHaveLength(1000);
   });
 
+  // Putaran 67: sesi lahir draft polos tanpa unique bisnis — retry submit
+  // identik melahirkan sesi opname kedua; keduanya sah sampai posting
+  // menerapkan hitungan basi. Klaim key dalam tx sebelum create.
+  it("putaran 67: createStocktakeSession retry key sama ditolak, sesi lahir sekali", async () => {
+    mocks.checkIdempotency
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."));
+    const fd = new FormData();
+    fd.set("warehouseId", "1");
+    fd.set("date", "2026-06-13");
+    fd.set("idempotencyKey", "stk-key-1");
+    const first = await actions.createStocktakeSession(fd);
+    const second = await actions.createStocktakeSession(fd);
+    expect(first.success).toBe(true);
+    expect(second.success).toBe(false);
+    expect(String((second as { error?: string }).error ?? "")).toContain("duplikat");
+    expect(mocks.checkIdempotency).toHaveBeenCalledTimes(2);
+    expect(mocks.prismaMock.stocktakeSession.create).toHaveBeenCalledTimes(1);
+  });
+
   it("saveStocktakeCounts menolak bila sesi sudah posted saat baca ulang dalam tx (balapan posting)", async () => {
     let calls = 0;
     mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockImplementation(async () => {

@@ -8,6 +8,10 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 import { createRoot, type Root } from "react-dom/client"
 import { act } from "react"
 
+const mocks = vi.hoisted(() => ({
+  CreateStocktakeSession: vi.fn(async (_fd: FormData) => ({ success: true })),
+}))
+
 vi.mock("next/navigation", () => ({
   useRouter() {
     return { refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }
@@ -15,7 +19,7 @@ vi.mock("next/navigation", () => ({
 }))
 
 vi.mock("@/actions/inventory.actions", () => ({
-  createStocktakeSession: vi.fn(async () => ({ success: true })),
+  createStocktakeSession: mocks.CreateStocktakeSession,
   snapshotStocktakeSession: vi.fn(async () => ({ success: true })),
   saveStocktakeCounts: vi.fn(async () => ({ success: true })),
   approveStocktakeSession: vi.fn(async () => ({ success: true })),
@@ -78,6 +82,25 @@ describe("gerbang izin UI opname", () => {
     const { container, root } = mount(<StocktakeSessionForm canCreate />)
     expect(container.querySelector('form[aria-label="Buat sesi opname"]')).not.toBeNull()
     expect(buttonByText(container, "Buat Sesi")).not.toBeNull()
+    act(() => root.unmount())
+  })
+
+  it("putaran 67: submit sesi kirim idempotencyKey stabil ke createStocktakeSession", async () => {
+    const { container, root } = mount(<StocktakeSessionForm canCreate />)
+    const form = container.querySelector('form[aria-label="Buat sesi opname"]') as HTMLFormElement
+    const input = container.querySelector('input[name="warehouseId"]') as HTMLInputElement
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!
+      setter.call(input, "1")
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    })
+    expect(mocks.CreateStocktakeSession).toHaveBeenCalledTimes(1)
+    const fd = mocks.CreateStocktakeSession.mock.calls[0][0] as FormData
+    expect(typeof fd.get("idempotencyKey")).toBe("string")
+    expect(String(fd.get("idempotencyKey"))).not.toBe("")
     act(() => root.unmount())
   })
 

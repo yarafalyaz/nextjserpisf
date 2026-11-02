@@ -2645,17 +2645,25 @@ export async function createStocktakeSession(formData: FormData) {
     await assertPeriodOpen(sessionDate);
 
     const documentNo = await generateDocumentNumber("STK");
-    const slug = await nextSlug("stocktakeSession", documentNo);
-    const session = await prisma.stocktakeSession.create({
-      data: {
-        documentNo,
-        slug,
-        warehouseId,
-        date: sessionDate,
-        status: "draft",
-        notes,
-        createdBy: Number(user.id),
-      },
+    // Putaran 67: retry submit identik melahirkan sesi opname kedua —
+    // documentNo/slug @unique selalu baru dari sequence sehingga tak
+    // menahan; dua sesi sah sampai posting menerapkan hitungan basi.
+    // Klaim key dalam tx membungkus create; rollback melepaskan key.
+    // Pemanggil tanpa key tetap no-op.
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
+    const session = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id);
+      return tx.stocktakeSession.create({
+        data: {
+          documentNo,
+          slug: await nextSlug("stocktakeSession", documentNo),
+          warehouseId,
+          date: sessionDate,
+          status: "draft",
+          notes,
+          createdBy: Number(user.id),
+        },
+      });
     });
     await logActivity("create", "StocktakeSession", session.id, `Sesi opname ${documentNo}`);
     revalidatePath(STOCKTAKE_PATH);

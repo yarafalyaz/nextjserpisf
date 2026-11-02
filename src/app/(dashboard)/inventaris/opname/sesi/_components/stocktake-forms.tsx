@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -20,17 +20,25 @@ import {
 /** Form sesi baru (gudang + tanggal + catatan). */
 export function StocktakeSessionForm({ canCreate }: { canCreate: boolean }) {
   const router = useRouter()
+  // Idempotency: key stabil per intent; retry jaringan memakai key sama
+  // (ditolak server). Dirotasi sesudah sukses karena form di-reset in-place
+  // dan sesi berikutnya adalah intent baru yang sah.
+  const idempotencyKeyRef = useRef<string | null>(null)
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const res = await createStocktakeSession(new FormData(form))
+      const data = new FormData(form)
+      data.set("idempotencyKey", idempotencyKeyRef.current!)
+      const res = await createStocktakeSession(data)
       if (!res.success) {
         showError(res.error || "Gagal membuat sesi")
         return
       }
+      idempotencyKeyRef.current = crypto.randomUUID()
       showSuccess("Sesi dibuat")
       form.reset()
       router.refresh()
