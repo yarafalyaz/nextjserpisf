@@ -131,6 +131,19 @@ describe("POST /api/cron/daily-notifications", () => {
     expect(res.status).toBe(500)
   })
 
+  it("putaran 54: error internal dicatat log sebelum respons 500", async () => {
+    const err = new Error("db down")
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      mocks.userFindMany.mockRejectedValue(err)
+      const res = await POST(makeReq())
+      expect(res.status).toBe(500)
+      expect(errorSpy).toHaveBeenCalledWith("[daily-notifications]", err)
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
   it("notifies low stock items (with >5 truncation)", async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-06-12T08:00:00")) // before 10am, skip absent

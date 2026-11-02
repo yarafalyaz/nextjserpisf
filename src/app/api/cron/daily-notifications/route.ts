@@ -240,7 +240,8 @@ export async function POST(request: Request) {
     adminsNotified: admins.length,
     results,
   })
-  } catch {
+  } catch (error) {
+    console.error("[daily-notifications]", error)
     return apiError("INTERNAL_ERROR", "Terjadi kesalahan server")
   }
 }
