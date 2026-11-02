@@ -114,7 +114,10 @@ export async function createBankStatement(formData: FormData) {
           reference: v.reference ?? null,
           // Referensi boleh kosong; tanpa batang cadangan slug jatuh ke
           // "item" generik. Batang cadangan: akun + tanggal dokumen.
-          slug: await nextSlug("bankStatement", v.reference ?? `rekening-${v.accountId}-${v.date}`),
+          // Putaran 70: slug lewat delegate tx — batang akun+tanggal bukan
+          // unik per create, jadi helper global tak melihat tabrakan
+          // antar-tx dan satu header rollback P2002 walau datanya sah.
+          slug: await nextSlugWithClient(tx as never, "bankStatement", v.reference ?? `rekening-${v.accountId}-${v.date}`),
           periodStart: v.periodStart ? wibDateToUtcMidnight(v.periodStart) : null,
           periodEnd: v.periodEnd ? wibDateToUtcMidnight(v.periodEnd) : null,
           openingBalance: v.openingBalance,

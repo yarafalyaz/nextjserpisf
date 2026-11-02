@@ -206,6 +206,31 @@ describe("Bank Statement Actions", () => {
     delete mocks.prismaMock.idempotencyKey
   })
 
+  it("putaran 70: createBankStatement slug reference-kosong dihitung lewat delegate tx", async () => {
+    // Facade tx berbeda: delegate tx "melihat" tabrakan slug yang tak
+    // terlihat prisma global — slug hasil wajib suffix -2 dari delegate tx.
+    const txFindFirst = vi.fn().mockResolvedValueOnce({ id: 77 }).mockResolvedValue(null)
+    const txFacade: any = {
+      ...mocks.prismaMock,
+      bankStatement: { ...mocks.prismaMock.bankStatement, findFirst: txFindFirst },
+    }
+    const defaultTx = mocks.prismaMock.$transaction.getMockImplementation()
+    mocks.prismaMock.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(txFacade))
+    try {
+      const res = await (actions as any).createBankStatement(fdMap({
+        accountId: 1,
+        date: "2026-06-13",
+        openingBalance: 1000,
+        closingBalance: 2000,
+      }))
+      expect(res?.success).toBe(true)
+      const data = mocks.prismaMock.bankStatement.create.mock.calls.at(-1)?.[0]?.data
+      expect(data.slug).toBe("rekening-1-2026-06-13-2")
+    } finally {
+      mocks.prismaMock.$transaction.mockImplementation(defaultTx)
+    }
+  })
+
   // Regresi putaran 34: accountId/bankId bare-int tanpa FK — header lahir
   // untuk akun nonaset/mati atau bank fiktif; picker hanya menawarkan
   // isActive + type ASSET dan bank aktif tetapi action tak menilai.
