@@ -14,11 +14,13 @@ const employeeFindMany = vi.fn()
 const positionCompetencyFindMany = vi.fn()
 const employeeCompetencyFindMany = vi.fn()
 const participantUpsert = vi.fn()
+const trainingCreate = vi.fn()
 const trainingFindFirst = vi.fn()
 const trainingUpdateMany = vi.fn()
+const checkIdempotencyMock = vi.fn()
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const prisma: Record<string, unknown> = {
     performanceCycle: {
       create: (...a: unknown[]) => cycleCreate(...a),
       findFirst: (...a: unknown[]) => cycleFindFirst(...a),
@@ -50,13 +52,21 @@ vi.mock("@/lib/db/prisma", () => ({
       findMany: (...a: unknown[]) => employeeCompetencyFindMany(...a),
     },
     training: {
+      create: (...a: unknown[]) => trainingCreate(...a),
       findFirst: (...a: unknown[]) => trainingFindFirst(...a),
       updateMany: (...a: unknown[]) => trainingUpdateMany(...a),
     },
     trainingParticipant: {
       upsert: (...a: unknown[]) => participantUpsert(...a),
     },
-  },
+  }
+  prisma.$transaction = vi.fn((cb: unknown) =>
+    typeof cb === "function" ? (cb as (tx: unknown) => unknown)(prisma) : Promise.all(cb as unknown[]),
+  )
+  return { prisma }
+})
+vi.mock("@/lib/utils/idempotency", () => ({
+  checkIdempotency: (...a: unknown[]) => checkIdempotencyMock(...a),
 }))
 
 const actor = { id: "7", roles: ["karyawan"], permissions: [] as string[] }
@@ -76,6 +86,7 @@ import {
 } from "../performance.actions"
 import {
   addTrainingParticipant,
+  createTraining,
   getCompetencyGaps,
   setTrainingStatus,
 } from "../development.actions"
@@ -86,6 +97,8 @@ beforeEach(() => {
   actor.permissions = []
   // Gerbang siklus putaran 16: tulis ulasan hanya pada siklus aktif.
   cycleFindFirst.mockResolvedValue({ status: "active" })
+  checkIdempotencyMock.mockResolvedValue(undefined)
+  trainingCreate.mockResolvedValue({ id: 11, title: "Pelatihan K3", slug: "pelatihan-k3" })
   trainingFindFirst.mockResolvedValue({ id: 3, status: "scheduled", deletedAt: null })
   trainingUpdateMany.mockResolvedValue({ count: 1 })
 })
@@ -169,6 +182,21 @@ describe("competency gaps and training", () => {
         data: { status: "done" },
       }),
     )
+  })
+
+  it("putaran 68: createTraining retry identik ditahan klaim idempotency di dalam tx, tanpa pelatihan kedua", async () => {
+    checkIdempotencyMock.mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."))
+    const form = new FormData()
+    form.set("title", "Pelatihan K3")
+    form.set("startDate", "2026-11-10")
+    form.set("idempotencyKey", "trn-1")
+
+    const res = await createTraining(form)
+
+    expect(res.success).toBe(false)
+    expect((res as { error?: string }).error).toMatch(/duplikat/)
+    expect(checkIdempotencyMock).toHaveBeenCalledWith("trn-1", expect.anything(), "7")
+    expect(trainingCreate).not.toHaveBeenCalled()
   })
 
   it("registers a training participant idempotently", async () => {

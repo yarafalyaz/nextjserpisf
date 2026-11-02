@@ -12,6 +12,7 @@ import {
   trainingSchema,
 } from "@/lib/validations/development.schemas";
 import { nextSlug } from "@/lib/utils/slug-db";
+import { checkIdempotency } from "@/lib/utils/idempotency";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { parseMoneyAmount } from "@/lib/utils/parse-money";
 import { logActivity } from "@/lib/services/activity-log.service";
@@ -200,19 +201,25 @@ export async function createTraining(formData: FormData) {
     if (!parsed.success) return { success: false as const, error: parsed.error };
     const v = parsed.data;
 
-    const training = await prisma.training.create({
-      data: {
-        title: v.title,
-        slug: await nextSlug("training", v.title),
-        provider: v.provider ?? null,
-        startDate: wibDateToUtcMidnight(v.startDate),
-        endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
-        location: v.location ?? null,
-        cost: parseMoneyAmount(formData.get("cost")) ?? 0,
-        description: v.description ?? null,
-        status: "scheduled",
-        createdBy: Number(user.id),
-      },
+    // Putaran 68: create polos tanpa tx/key — retry identik melahirkan
+    // pelatihan kembar (Training hanya slug @unique, slug bersuffix).
+    // Klaim key dalam tx sebelum create; rollback melepas key.
+    const training = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
+      return tx.training.create({
+        data: {
+          title: v.title,
+          slug: await nextSlug("training", v.title),
+          provider: v.provider ?? null,
+          startDate: wibDateToUtcMidnight(v.startDate),
+          endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
+          location: v.location ?? null,
+          cost: parseMoneyAmount(formData.get("cost")) ?? 0,
+          description: v.description ?? null,
+          status: "scheduled",
+          createdBy: Number(user.id),
+        },
+      });
     });
     await logActivity("create", "Training", training.id, `Membuat pelatihan ${training.title}`);
     revalidatePath("/sdm/pelatihan");

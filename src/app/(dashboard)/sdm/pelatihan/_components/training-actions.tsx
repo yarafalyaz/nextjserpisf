@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useRef, useTransition } from "react"
 import {
   addTrainingParticipant,
   createTraining,
@@ -13,15 +13,20 @@ import { showError, showSuccess } from "@/lib/utils/toast"
 export function TrainingForm() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Putaran 68: key stabil per intent; form tetap mounted sesudah sukses
+  // (form.reset), jadi key dirotasi sesudah sukses.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
 
   function onSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = event.currentTarget
     const formData = new FormData(form)
+    formData.set("idempotencyKey", idempotencyKeyRef.current)
     startTransition(async () => {
       try {
         const result = await createTraining(formData)
         if (!result?.success) throw new Error(result?.error || "Gagal membuat pelatihan")
+        idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess("Pelatihan dibuat")
         form.reset()
         router.refresh()
