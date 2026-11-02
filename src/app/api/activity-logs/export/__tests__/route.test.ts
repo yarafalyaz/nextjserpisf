@@ -127,6 +127,16 @@ it("rejects a non-integer userId with 400 and never queries", async () => {
     }))
   })
 
+  it("putaran 56: export log privat tidak boleh mengendap di disk cache browser", async () => {
+    mocks.authFn.mockResolvedValue({
+      user: { id: 1, roles: ["admin"], permissions: ["manage_settings"] },
+    })
+    mocks.findManyLogs.mockResolvedValue([])
+    const res = await GET(makeReq("http://localhost/api/activity-logs/export") as any)
+    expect(res.status).toBe(200)
+    expect(res.headers.get("Cache-Control")).toBe("no-store")
+  })
+
   it("neutralises CSV formula-injection triggers in user-controlled fields", async () => {
     // User-controlled fields: a malicious user name, action, modelType and
     // description starting with a formula trigger (=/+/-/@/tab/CR). When an

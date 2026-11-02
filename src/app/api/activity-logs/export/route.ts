@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename=log-aktivitas-${Date.now()}.csv`,
+        "Cache-Control": "no-store",
       },
     });
   } catch (e) {

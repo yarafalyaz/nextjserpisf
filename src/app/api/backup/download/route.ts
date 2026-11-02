@@ -45,6 +45,9 @@ export async function GET(req: NextRequest) {
         "Content-Type": "application/sql",
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Content-Length": String(size),
+        // Dump SQL seluruh DB: jangan mengendap di disk cache browser
+        // (PC bersama, logout tak membersihkan cache). selaras pdf route.
+        "Cache-Control": "no-store",
       },
     })
   } catch (e) {
