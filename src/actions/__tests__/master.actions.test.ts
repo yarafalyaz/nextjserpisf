@@ -2605,6 +2605,34 @@ describe('Coverage Hardening Edge Cases', () => {
     }
   })
 
+  // Putaran 67: retry submit identik createItemGroup — code kosong diset
+  // ke nama sehingga retry code sama tertahan pair code@unique, tetapi
+  // retry nama sama dengan code eksplisit per-niat tidak; klaim key dalam
+  // tx menahan retry identik sebelum create.
+  it("putaran 67: createItemGroup retry key sama ditolak, grup lahir sekali", async () => {
+    const priorCreateImpl = mocks.prismaMock.itemGroup.create.getMockImplementation()
+    mocks.prismaMock.itemGroup.create.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.idempotencyKey = {
+      create: vi.fn()
+        .mockResolvedValueOnce({ id: 1 })
+        .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" })),
+      findUnique: vi.fn(async () => ({ createdAt: new Date() })),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+      deleteMany: vi.fn(async () => ({ count: 0 })),
+    }
+    try {
+      const first = await actions.createItemGroup(fdMap({ name: "Grup Retry", idempotencyKey: "itemgroup-key-1" }))
+      if (first?.success !== true) throw new Error("DBG-FIRST:" + JSON.stringify(first))
+      const second = await actions.createItemGroup(fdMap({ name: "Grup Retry", idempotencyKey: "itemgroup-key-1" }))
+      if (second?.success !== false) throw new Error("DBG-SECOND:" + JSON.stringify(second))
+      expect(String(second?.error)).toContain("duplikat")
+      expect(mocks.prismaMock.itemGroup.create).toHaveBeenCalledTimes(1)
+    } finally {
+      delete mocks.prismaMock.idempotencyKey
+      if (priorCreateImpl) mocks.prismaMock.itemGroup.create.mockImplementation(priorCreateImpl)
+    }
+  })
+
   it('updateLead - not assigned to user and not admin', async () => {
     mocks.requirePermissionMock.mockResolvedValueOnce({ id: 2, permissions: [], roles: [] })
     mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, assignedTo: 3 })

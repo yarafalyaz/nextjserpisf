@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { createItemGroup } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -12,10 +12,13 @@ import { Button } from "@/components/ui/button"
 export default function CreateItemGroupPage() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Idempotency: key stabil per intent; retry memakai key sama (ditolak server).
+  const [idempotencyKey] = useState(() => crypto.randomUUID())
 
   function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    formData.set("idempotencyKey", idempotencyKey)
     startTransition(async () => {
       try {
         const result = await createItemGroup(formData)

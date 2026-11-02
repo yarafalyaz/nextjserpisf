@@ -3874,14 +3874,20 @@ export async function createItemGroup(formData: FormData) {
     // Kode wajib unik; kalau dikosongkan, pakai nama supaya baris tetap bisa dibuat.
     const code = ((formData.get("code") as string) || "").trim() || name;
 
-    const group = await prisma.itemGroup.create({
-      data: {
-        code,
-        name,
-        description: (formData.get("description") as string) || null,
-        slug: await nextSlug("itemGroup", name),
-        createdBy: Number(user.id),
-      },
+    // Putaran 67: klaim key dalam tx menahan retry submit identik yang
+    // pair code-nya lolos code@unique; rollback melepaskan key.
+    // Pemanggil tanpa key tetap no-op.
+    const group = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
+      return tx.itemGroup.create({
+        data: {
+          code,
+          name,
+          description: (formData.get("description") as string) || null,
+          slug: await nextSlug("itemGroup", name),
+          createdBy: Number(user.id),
+        },
+      });
     });
 
     revalidatePath("/master/grup-barang");
