@@ -62,7 +62,7 @@ import {
   materialIssueSchema,
   workOrderSchema,
   reviseWorkOrderItemsSchema,
-  workOrderSubstituteProofSymbol,
+  substituteProofSymbol,
   WORK_ORDER_END_DATE_REASONS,
   type WorkOrderEndDateReasonCode,
   rackSchema,
@@ -1657,11 +1657,8 @@ export async function updateWorkOrder(id: number, formData: FormData) {
  * Issue existing agar jurnal baliknya benar. Item belum ter-issue aman
  * diganti karena belum ada pergerakan stok apa pun.
  */
-/** WO substitusi: bukti penerapan di dalam tx klaim revisi (putaran 69). */
-export const WO_SUBSTITUTE_TX_VALIDATION = workOrderSubstituteProofSymbol;
-
 type WorkOrderSubstituteProof = {
-  substituteValidation: typeof workOrderSubstituteProofSymbol;
+  substituteValidation: typeof substituteProofSymbol;
   workOrderId: number;
   workOrderItemId: number;
   originItemId: number;
@@ -1804,7 +1801,7 @@ export async function reviseWorkOrderItems(input: {
    * `applyWorkOrderItemSubstitute`; payload klien ter-serialisasi tidak
    * bisa membawa kunci symbol ini.
    */
-  [workOrderSubstituteProofSymbol]?: WorkOrderSubstituteProof;
+  [substituteProofSymbol]?: WorkOrderSubstituteProof;
 }) {
   try {
     const user = await requirePermission("edit_work_orders");
@@ -1825,7 +1822,7 @@ export async function reviseWorkOrderItems(input: {
     // hadir tanpa marker server ditolak; UI biasa tanpa bukti sama sekali
     // berjalan persis seperti sebelumnya.
     const proofCandidate = (input as Record<PropertyKey, unknown> | null)?.[
-      WO_SUBSTITUTE_TX_VALIDATION
+      substituteProofSymbol
     ];
     let substituteProof: WorkOrderSubstituteProof | null = null;
     if (proofCandidate !== undefined) {
@@ -1834,7 +1831,7 @@ export async function reviseWorkOrderItems(input: {
         candidate !== null &&
         typeof candidate === "object" &&
         (candidate as { substituteValidation?: unknown }).substituteValidation ===
-          WO_SUBSTITUTE_TX_VALIDATION;
+          substituteProofSymbol;
       if (
         !markerOk ||
         !candidate ||

@@ -35,7 +35,7 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/db/prisma"
-import { workOrderSubstituteProofSymbol } from "@/lib/validations/inventory.schemas"
+import { substituteProofSymbol } from "@/lib/validations/inventory.schemas"
 import { requirePermission } from "@/lib/auth/permissions"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { reviseWorkOrderItems } from "@/actions/inventory.actions"
@@ -46,12 +46,12 @@ import {
 } from "@/lib/services/vehicle-fitment.service"
 
 /**
- * Marker bukti penerapan substitusi (putaran 69): `reviseWorkOrderItems`
- * hanya menerima bukti yang membawa simbol bersama ini, dan simbol hanya
- * lahir di kode server di sini — payload klien ter-serialisasi tidak
- * pernah bisa membawanya.
+ * Bukti penerapan substitusi (putaran 69): lahir di sini sebagai properti
+ * `substituteProofSymbol` pada input revisi — `reviseWorkOrderItems`
+ * hanya menerimanya dari kode server (payload klien ter-serialisasi
+ * tidak bisa membawa symbol). Marker TIDAK diekspor dari file ini:
+ * "use server" hanya boleh mengekspor fungsi async.
  */
-export const TXSubstituteValidationMarker = workOrderSubstituteProofSymbol
 
 type Result<T extends object = object> =
   | ({ success: true } & T)
@@ -443,8 +443,8 @@ export async function applyWorkOrderItemSubstitute(input: {
       // Putaran 69: bukti server-side untuk divalidasi ulang di dalam tx
       // klaim WO — relasi/item/fitment yang berubah sesudah saran tampil
       // menghentikan penerapan sebelum baris apa pun ditulis.
-      [workOrderSubstituteProofSymbol]: {
-        substituteValidation: workOrderSubstituteProofSymbol,
+      [substituteProofSymbol]: {
+        substituteValidation: substituteProofSymbol,
         workOrderId,
         workOrderItemId,
         originItemId: line.itemId,

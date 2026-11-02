@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { reviseWorkOrderItems, WO_SUBSTITUTE_TX_VALIDATION } from "../inventory.actions"
-import { TXSubstituteValidationMarker } from "../item-substitute.actions"
+import { reviseWorkOrderItems } from "../inventory.actions"
+import { substituteProofSymbol } from "@/lib/validations/inventory.schemas"
 
 const m = await vi.hoisted(async () => (await import("./work-order-test-utils")).createWorkOrderMocks())
 const { requirePermissionMock, woFindUniqueOrThrow, transactionMock } = m
@@ -75,7 +75,7 @@ beforeEach(() => {
 
 function substituteProof(over: Record<string, unknown> = {}) {
   return {
-    substituteValidation: TXSubstituteValidationMarker,
+    substituteValidation: substituteProofSymbol,
     workOrderId: 10,
     workOrderItemId: 1,
     originItemId: 1,
@@ -112,7 +112,7 @@ describe("reviseWorkOrderItems validasi substitusi dalam tx (putaran 69)", () =>
       workOrderId: 10,
       replacedItemIds: [1],
       newItems: [{ itemId: 2, qty: 2, cost: 5000 }],
-      [WO_SUBSTITUTE_TX_VALIDATION]: substituteProof(),
+      [substituteProofSymbol]: substituteProof(),
     } as never)
     expect(res.success).toBe(true)
     expect(subFindFirst).toHaveBeenCalled()
@@ -124,7 +124,7 @@ describe("reviseWorkOrderItems validasi substitusi dalam tx (putaran 69)", () =>
 
   it("bukti tanpa marker server DITOLAK: klien tidak bisa mengarang bukti", async () => {
     const forged = {
-      [WO_SUBSTITUTE_TX_VALIDATION]: substituteProof({
+      [substituteProofSymbol]: substituteProof({
         substituteValidation: "klien",
       }),
     }
@@ -144,7 +144,7 @@ describe("reviseWorkOrderItems validasi substitusi dalam tx (putaran 69)", () =>
       workOrderId: 10,
       replacedItemIds: [1],
       newItems: [{ itemId: 2, qty: 2, cost: 5000 }],
-      [WO_SUBSTITUTE_TX_VALIDATION]: substituteProof(),
+      [substituteProofSymbol]: substituteProof(),
     } as never)
     expect(res.success).toBe(false)
     expect(res.error).toContain("muat ulang saran")
@@ -177,7 +177,7 @@ describe("reviseWorkOrderItems validasi substitusi dalam tx (putaran 69)", () =>
       workOrderId: 10,
       replacedItemIds: [1],
       newItems: [{ itemId: 2, qty: 2, cost: 5000 }],
-      [WO_SUBSTITUTE_TX_VALIDATION]: substituteProof(),
+      [substituteProofSymbol]: substituteProof(),
     } as never)
     expect(res.success).toBe(false)
     expect(woiCreateMany).not.toHaveBeenCalled()
@@ -209,7 +209,7 @@ describe("reviseWorkOrderItems validasi substitusi dalam tx (putaran 69)", () =>
       workOrderId: 10,
       replacedItemIds: [1],
       newItems: [{ itemId: 2, qty: 2, cost: 5000 }],
-      [WO_SUBSTITUTE_TX_VALIDATION]: substituteProof(),
+      [substituteProofSymbol]: substituteProof(),
     } as never)
     expect(res.success).toBe(false)
     expect(res.error).toContain("Satuan dasar")

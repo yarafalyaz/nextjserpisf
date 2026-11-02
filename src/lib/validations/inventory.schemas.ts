@@ -122,15 +122,14 @@ export const workOrderSchema = z.object({
 // MaterialIssue completed); retur stok item ter-issue tetap lewat jalur
 // Material Issue/retur existing, bukan aksi ini.
 /**
- * Kunci bukti penerapan substitusi (F-2026-10-22-069-S): properti symbol
- * hanya bisa dibuat oleh kode server pemanggil internal
- * (`applyWorkOrderItemSubstitute`) — payload klien yang ter-serialisasi
- * JSON tidak pernah bisa membawanya, jadi gerbang ini tidak bisa
- * dipalsukan dari muka UI. Zod men-strip symbol secara alami; ekspor
- * "use server" membawanya hanya bila pemanggil server sungguhan
- * menyertakannya.
+ * Kunci bukti penerapan substitusi (F-2026-10-22-069-S): hanya kode server
+ * pemanggil internal (`applyWorkOrderItemSubstitute`) yang bisa
+ * membuatnya — payload klien yang ter-serialisasi JSON tidak pernah bisa
+ * membawanya, jadi gerbang ini tidak bisa dipalsukan dari muka UI. Zod
+ * men-strip symbol secara alami. Sengaja dilahirkan di sini (bukan file
+ * "use server"): file aksi hanya boleh mengekspor fungsi async.
  */
-export const workOrderSubstituteProofSymbol = Symbol.for(
+export const substituteProofSymbol = Symbol.for(
   "silengkap.workOrderSubstituteProof",
 )
 

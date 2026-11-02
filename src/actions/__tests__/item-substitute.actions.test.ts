@@ -77,8 +77,8 @@ import {
   applyWorkOrderItemSubstitute,
   createItemSubstitute,
   setItemSubstituteActive,
-  TXSubstituteValidationMarker,
 } from "../item-substitute.actions"
+import { substituteProofSymbol } from "@/lib/validations/inventory.schemas"
 import { evaluateFitment } from "@/lib/services/vehicle-fitment.service"
 
 function itemRow(id: number, over: Record<string, unknown> = {}) {
@@ -298,11 +298,11 @@ describe("applyWorkOrderItemSubstitute", () => {
   it("putaran 69: penerapan membawa bukti server-side untuk divalidasi ulang dalam tx klaim WO", async () => {
     const res = await applyWorkOrderItemSubstitute(applyInput())
     expect(res.success).toBe(true)
-    expect(TXSubstituteValidationMarker).toBeDefined()
+    expect(substituteProofSymbol).toBeDefined()
     const revised = mocks.reviseMock.mock.calls[0][0]
-    const proof = revised[TXSubstituteValidationMarker]
+    const proof = revised[substituteProofSymbol]
     expect(proof).toBeDefined()
-    expect(proof.substituteValidation).toBe(TXSubstituteValidationMarker)
+    expect(proof.substituteValidation).toBe(substituteProofSymbol)
     expect(proof).toMatchObject({
       workOrderId: 42,
       workOrderItemId: 11,
