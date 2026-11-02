@@ -97,6 +97,13 @@ export async function createTicket(formData: FormData) {
 
   const ticket = await prisma.$transaction(async (tx) => {
     await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
+    // Putaran 75: baris pelanggan dikunci sebelum gerbang hidup dinilai —
+    // deleteCustomer mengambil kunci baris yang sama sebelum hard-delete,
+    // jadi tiket tak bisa lahir menunjuk pelanggan yang sedang dihapus
+    // (customerId bare Int tanpa FK; hard delete tak terhalang P2003).
+    if (data.customerId != null && typeof tx.$queryRaw === "function") {
+      await tx.$queryRaw`SELECT id FROM customers WHERE id = ${data.customerId} FOR UPDATE`
+    }
     // Putaran 67: gerbang hidup dinilai ulang lewat delegate tx — penilaian
     // prá-tx di atas hanya fail-fast; pelanggan/pengguna yang dinonaktifkan
     // antara cek dan commit tak boleh tertulis di kolom bare-int tanpa FK

@@ -353,12 +353,17 @@ export async function createCustomer(formData: FormData) {
     let npwpConflictInTx: CustomerNpwpConflict | null = null;
     const customer = await prisma.$transaction(async (tx) => {
       if (v.taxId) {
+        // Putaran 75: baris gerbang absen = gerbang gagal-terbuka (DB hasil
+        // db push / restore parsial tanpa migrasi) — kunci baris gerbang
+        // yang hilang adalah penggaris pagu operasi master pelanggan, dan
+        // pesaing bisa commit di jendela scan kosong. Baris gerbang
+        // wajib hadir; ketidakhadirannya adalah kesalahan konfigurasi,
+        // bukan jalur bebas duplikat NPWP (keputusan repo Q-CD-1).
         const gate = await tx.customerNpwpGate.findUnique({ where: { id: 1 }, select: { id: true } });
-        if (gate) {
-          await lockCustomerNpwpGate(tx as never);
-          npwpConflictInTx = await findCustomerNpwpConflict({ taxId: v.taxId }, tx as never);
-          if (npwpConflictInTx) return null;
-        }
+        if (!gate) throw new Error("Gerbang NPWP pelanggan belum terpasang (baris customer_npwp_gate id=1 tidak ada) — jalankan migrasi database sebelum menyimpan pelanggan ber-NPWP.");
+        await lockCustomerNpwpGate(tx as never);
+        npwpConflictInTx = await findCustomerNpwpConflict({ taxId: v.taxId }, tx as never);
+        if (npwpConflictInTx) return null;
       }
       await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
       return tx.customer.create({ data: customerData });
@@ -443,16 +448,31 @@ export async function updateCustomer(customerId: number, formData: FormData) {
     // NPWP diulang dalam tx yang sama dengan update.
     let npwpConflictInTx: CustomerNpwpConflict | null = null;
     await prisma.$transaction(async (tx) => {
+      // Putaran 75: kunci baris pelanggan lalu nilai tombstone dari baris
+      // segar — deleteCustomer mengambil kunci yang sama; edit yang lolos
+      // tanpa kunci menulis data segar ke baris yang baru di-soft-delete
+      // (perubahan tak terlihat UI, kebangkitan senyap bila nanti dipulihkan).
+      if (typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT id FROM customers WHERE id = ${customerId} FOR UPDATE`;
+      }
+      const fresh = await tx.customer.findUnique({
+        where: { id: customerId },
+        select: { deletedAt: true },
+      });
+      if (fresh?.deletedAt) {
+        throw new Error("Pelanggan sudah dihapus dan tidak dapat diubah");
+      }
       if (v.taxId) {
+        // Putaran 75: baris gerbang absen = gerbang gagal-terbuka — kunci
+        // yang hilang meloloskan dua penulis NPWP sama (lihat createCustomer).
         const gate = await tx.customerNpwpGate.findUnique({ where: { id: 1 }, select: { id: true } });
-        if (gate) {
-          await lockCustomerNpwpGate(tx as never);
-          npwpConflictInTx = await findCustomerNpwpConflict(
-            { taxId: v.taxId, excludeCustomerId: customerId },
-            tx as never,
-          );
-          if (npwpConflictInTx) return;
-        }
+        if (!gate) throw new Error("Gerbang NPWP pelanggan belum terpasang (baris customer_npwp_gate id=1 tidak ada) — jalankan migrasi database sebelum menyimpan pelanggan ber-NPWP.");
+        await lockCustomerNpwpGate(tx as never);
+        npwpConflictInTx = await findCustomerNpwpConflict(
+          { taxId: v.taxId, excludeCustomerId: customerId },
+          tx as never,
+        );
+        if (npwpConflictInTx) return;
       }
       await tx.customer.update({ where: { id: customerId }, data: updateData });
     });
@@ -490,26 +510,36 @@ export async function deleteCustomer(customerId: number) {
     // hard delete pelanggan yang hanya dirujuk CRM lolos P2003 dan
     // meninggalkan customerId mati (lead terkonversi terbaca terkonversi
     // tetapi targetnya hilang). Dirujuk CRM -> langsung soft-delete.
-    const [leadRefs, ticketRefs] = await Promise.all([
-      prisma.lead.count({ where: { customerId: customerId } }),
-      prisma.crmTicket.count({ where: { customerId: customerId } }),
-    ]);
-    if (leadRefs > 0 || ticketRefs > 0) {
-      await prisma.customer.update({
-        where: { id: customerId },
-        data: { updatedBy: Number(user.id), deletedAt: new Date(), isActive: false },
-      });
-    } else {
-      await hardDeleteOrSoftDelete(
-        () => prisma.customer.delete({ where: { id: customerId } }),
-        () =>
-          prisma.customer.update({
-            where: { id: customerId },
-            data: {
-          updatedBy: Number(user.id), deletedAt: new Date(), isActive: false },
-          }),
-      );
-    }
+    // Putaran 75: hitungan + penghapusan berjalan dalam satu tx berkunci
+    // baris pelanggan — createTicket mengambil kunci baris yang sama
+    // sebelum menulis customerId bare-int-nya, jadi tiket yang commit di
+    // jendela tak lolos hitungan nol lalu hard-delete meninggalkan
+    // customerId hantu (hard delete tak terhalang P2003 tanpa FK).
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT id FROM customers WHERE id = ${customerId} FOR UPDATE`;
+      }
+      const [leadRefs, ticketRefs] = await Promise.all([
+        tx.lead.count({ where: { customerId: customerId } }),
+        tx.crmTicket.count({ where: { customerId: customerId } }),
+      ]);
+      if (leadRefs > 0 || ticketRefs > 0) {
+        await tx.customer.update({
+          where: { id: customerId },
+          data: { updatedBy: Number(user.id), deletedAt: new Date(), isActive: false },
+        });
+      } else {
+        await hardDeleteOrSoftDelete(
+          () => tx.customer.delete({ where: { id: customerId } }),
+          () =>
+            tx.customer.update({
+              where: { id: customerId },
+              data: {
+            updatedBy: Number(user.id), deletedAt: new Date(), isActive: false },
+            }),
+        );
+      }
+    });
 
     revalidatePath("/master/pelanggan");
     await logActivity("delete", "Customer", customerId, "Menghapus pelanggan");
@@ -2457,6 +2487,14 @@ export async function createLead(formData: FormData) {
     // pada lead baru (BR-DUP-06/10). Risiko konkuren sisa terdokumentasi
     // di lead-duplicate.service — tanpa klaim atomik penuh.
     const lead = await prisma.$transaction(async (tx) => {
+      // Putaran 75: penugasan dinilai ulang dari baris user terkunci —
+      // assert pra-tx tak melihat toggleUserActive (mengunci baris users
+      // yang sama) yang commit di jendela; lead lahir ter-assign ke user
+      // yang baru dinonaktifkan.
+      if (v.assignedTo != null && typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT id FROM users WHERE id = ${v.assignedTo} FOR UPDATE`;
+      }
+      await assertAssignedUserLive(tx, v.assignedTo);
       const txFound = await findLeadDuplicateCandidates(
         { phone: v.phone ?? null, email: v.email ?? null },
         viewer,
@@ -2653,10 +2691,17 @@ export async function updateLead(id: number, formData: FormData) {
       }
       const freshStatusChanged = v.status != null && v.status !== fresh.status;
 
+      // Putaran 75: keputusan berubah-kontak dinilai dari baris segar —
+      // boolean dari snapshot luar basi bila edit konkuren commit di
+      // jendela (kontak tampak tak berubah padahal baris sudah pindah).
+      const freshKeys = leadContactKeys(fresh);
+      const freshContactChanged =
+        freshKeys.phoneKey !== newKeys.phoneKey ||
+        freshKeys.emailKey !== newKeys.emailKey;
       // Re-check di dalam transaksi (§1.6); bila kandidat muncul tanpa
       // alasan sah -> batalkan seluruh edit (return null, tanpa mutasi).
       let txWarning: LeadDuplicateWarning | null = null;
-      if (contactChanged) {
+      if (freshContactChanged) {
         txWarning = buildDuplicateWarning(
           await findLeadDuplicateCandidates(
             {

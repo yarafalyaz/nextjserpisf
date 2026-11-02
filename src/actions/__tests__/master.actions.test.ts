@@ -452,6 +452,17 @@ describe("Customer Actions", () => {
     const res = await actions.deleteCustomer(1)
     expect(res?.success).toBe(true)
   })
+  it("putaran 75: deleteCustomer mengunci baris pelanggan sebelum hitungan referensi CRM", async () => {
+    mocks.prismaMock.$queryRaw = vi.fn().mockResolvedValue([{ id: 1 }])
+    const res = await actions.deleteCustomer(1)
+    expect(res?.success).toBe(true)
+    const lockOrder = mocks.prismaMock.$queryRaw.mock.invocationCallOrder[0]
+    const countOrder = Math.min(
+      mocks.prismaMock.lead.count.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
+      mocks.prismaMock.crmTicket.count.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
+    )
+    expect(lockOrder).toBeLessThan(countOrder)
+  })
   it("regression round 19: deleteCustomer dirujuk lead/tiket CRM -> soft-delete, bukan hard delete yatim", async () => {
     // Lead.customerId / CrmTicket.customerId Int polos tanpa FK: hard
     // delete lolos P2003 dan meninggalkan customerId mati (lead terkonversi

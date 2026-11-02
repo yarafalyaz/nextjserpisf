@@ -152,6 +152,16 @@ describe("CRM Ticket Actions", () => {
     const res = await actions.createTicket(fdMap({ subject: "Ticket Subject" }))
     expect(res?.success).toBe(true)
   })
+  it("putaran 75: createTicket mengunci baris pelanggan sebelum gerbang hidup dalam tx", async () => {
+    mocks.prismaMock.$queryRaw.mockClear()
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 5 })
+    const res = await actions.createTicket(fdMap({ subject: "Ticket Subject", customerId: 5 }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.$queryRaw).toHaveBeenCalled()
+    const lockOrder = mocks.prismaMock.$queryRaw.mock.invocationCallOrder[0]
+    const createOrder = mocks.prismaMock.crmTicket.create.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(createOrder)
+  })
   it("createTicket fails validation", async () => {
     const res = await actions.createTicket(fdMap({}))
     expect(res?.success).toBe(false)
