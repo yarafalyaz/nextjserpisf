@@ -108,6 +108,44 @@ describe("CRM Ticket Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
   })
+  it("putaran 71: createTicket menghitung slug lewat delegate tx", async () => {
+    const txFindFirst = vi.fn()
+      .mockResolvedValueOnce({ id: 77 })
+      .mockResolvedValue(null)
+    const txFacade = {
+      ...mocks.prismaMock,
+      crmTicket: { ...mocks.prismaMock.crmTicket, findFirst: txFindFirst },
+    }
+    const txImpl = mocks.prismaMock.$transaction.getMockImplementation()
+    mocks.prismaMock.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(txFacade))
+    try {
+      const res = await actions.createTicket(fdMap({ subject: "Tiket Uji" }))
+      expect(res?.success).toBe(true)
+      const arg = mocks.prismaMock.crmTicket.create.mock.calls[0][0]
+      expect(arg.data.slug).toBe("tiket-uji-2")
+    } finally {
+      mocks.prismaMock.$transaction.mockImplementation(txImpl)
+    }
+  })
+  it("putaran 71: updateTicket menghitung slug lewat delegate tx", async () => {
+    const txFindFirst = vi.fn()
+      .mockResolvedValueOnce({ id: 77 })
+      .mockResolvedValue(null)
+    const txFacade = {
+      ...mocks.prismaMock,
+      crmTicket: { ...mocks.prismaMock.crmTicket, findFirst: txFindFirst },
+    }
+    const txImpl = mocks.prismaMock.$transaction.getMockImplementation()
+    mocks.prismaMock.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(txFacade))
+    try {
+      const res = await actions.updateTicket(1, fdMap({ subject: "Tiket Uji" }))
+      expect(res?.success).toBe(true)
+      const arg = mocks.prismaMock.crmTicket.update.mock.calls[0][0]
+      expect(arg.data.slug).toBe("tiket-uji-2")
+    } finally {
+      mocks.prismaMock.$transaction.mockImplementation(txImpl)
+    }
+  })
   it("updateTicket succeeds", async () => {
     const res = await actions.updateTicket(1, fdMap({ subject: "Ticket Subject" }))
     expect(res?.success).toBe(true)

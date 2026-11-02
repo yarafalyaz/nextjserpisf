@@ -9,7 +9,7 @@ import { redirect } from "next/navigation"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { createTicketSchema, updateTicketSchema, leadActivitySchema, ticketCommentSchema, CONVERTIBLE_STATUSES } from "@/lib/validations/crm.schemas"
-import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db"
+import { nextSlugWithClient } from "@/lib/utils/slug-db"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 
@@ -105,7 +105,9 @@ export async function createTicket(formData: FormData) {
     await assertAssignedUserLive(tx, data.assignedTo)
     return tx.crmTicket.create({
     data: {
-      slug: await nextSlug("crmTicket", data.subject || ticketNumber),
+      // Putaran 71: slug lewat delegate tx — varian global tak melihat
+      // baris tak-tercommit transaksi lain (CrmTicket.slug @unique).
+      slug: await nextSlugWithClient(tx as never, "crmTicket", data.subject || ticketNumber),
       ticketNumber,
       subject: data.subject,
       description: data.description ?? null,
@@ -148,13 +150,15 @@ export async function updateTicket(id: number, formData: FormData) {
   }
   const data = parsed.data
 
-  // Baca awal hanya untuk slug/feedback cepat; keputusan SLA dihitung ulang
-  // dari baris TERKUNCI di dalam tx (balapan dgn deleteTicket / update lain:
-  // snapshot REPEATABLE READ bukan penjaga, dan tiket ter-soft-delete tidak
-  // boleh ditulis lagi).
-  const slug = await nextSlug("crmTicket", data.subject, { excludeId: id })
-
+  // Keputusan SLA dihitung ulang dari baris TERKUNCI di dalam tx (balapan
+  // dgn deleteTicket / update lain: snapshot REPEATABLE READ bukan penjaga,
+  // dan tiket ter-soft-delete tidak boleh ditulis lagi). Putaran 71: slug
+  // dihitung dalam tx lewat delegate tx — varian global pra-tx P2002 mentah
+  // pada rename konkuren ke subjek sama (CrmTicket.slug @unique).
   const ticket = await prisma.$transaction(async (tx) => {
+    const slug = await nextSlugWithClient(tx as never, "crmTicket", data.subject, {
+      excludeId: id,
+    })
     await tx.$executeRaw`SELECT id FROM crm_tickets WHERE id = ${id} FOR UPDATE`
     const existing = await tx.crmTicket.findUnique({
       where: { id },
