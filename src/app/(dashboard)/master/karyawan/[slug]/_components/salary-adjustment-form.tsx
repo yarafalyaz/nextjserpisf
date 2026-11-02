@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useRef, useTransition } from "react"
 import {
   cancelSalaryAdjustment,
   createSalaryAdjustment,
@@ -10,6 +10,10 @@ import { showError, showSuccess } from "@/lib/utils/toast"
 
 export function SalaryAdjustmentForm({ employeeId }: { employeeId: number }) {
   const router = useRouter()
+  // Idempotency: key stabil per intent catat; retry jaringan memakai key
+  // yang sama (ditolak server), sukses merotasi untuk pengajuan berikutnya.
+  const idempotencyKeyRef = useRef<string | null>(null)
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
 
   function onSubmit(event: React.SubmitEvent<HTMLFormElement>) {
@@ -17,10 +21,12 @@ export function SalaryAdjustmentForm({ employeeId }: { employeeId: number }) {
     const form = event.currentTarget
     const formData = new FormData(form)
     formData.set("employeeId", String(employeeId))
+    formData.set("idempotencyKey", idempotencyKeyRef.current!)
     startTransition(async () => {
       try {
         const result = await createSalaryAdjustment(formData)
         if (!result?.success) throw new Error(result?.error || "Gagal mencatat kenaikan")
+        idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess(
           result.applied
             ? `Kenaikan diterapkan (${result.changePercent != null ? `+${result.changePercent}%` : "baru"})`

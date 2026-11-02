@@ -12,6 +12,7 @@ import { revalidatePath } from "next/cache";
 import { computeChangePercent } from "@/lib/services/salary-adjustment.service";
 import { SALARY_ADJUSTMENT_REASONS } from "@/lib/hr/hcms-scoring";
 import { dateOnly } from "@/lib/validations/finance.schemas";
+import { checkIdempotency } from "@/lib/utils/idempotency";
 
 /**
  * Karyawan target penyesuaian wajib hidup (ada + isActive + belum
@@ -138,6 +139,10 @@ export async function createSalaryAdjustment(formData: FormData) {
 
     const created = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT id FROM employees WHERE id = ${employeeIdRaw} FOR UPDATE`;
+      // Putaran 65: retry submit identik melahirkan dua pengajuan menunggu
+      // yang bisa sama-sama disetujui dan applied. Klaim key sesudah kunci
+      // baris karyawan, sebelum insert; rollback melepaskan key.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, actor.id);
       const employee = await tx.employee.findUniqueOrThrow({
         where: { id: employeeIdRaw },
         select: { baseSalary: true, name: true },

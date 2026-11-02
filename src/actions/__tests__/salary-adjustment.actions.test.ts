@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => ({
   adjustmentCreate: vi.fn(),
   employeeFindUnique: vi.fn(),
   employeeFindUniqueOrThrow: vi.fn(),
+  idemCreate: vi.fn(),
+  idemFindUnique: vi.fn(),
+  idemUpdateMany: vi.fn(),
   transaction: vi.fn(),
   logActivity: vi.fn(),
   employeeFindUniqueScope: vi.fn(),
@@ -51,6 +54,11 @@ vi.mock("@/lib/db/prisma", () => ({
       findUniqueOrThrow: mocks.employeeFindUniqueOrThrow,
       findFirst: mocks.employeeFindFirst,
     },
+    idempotencyKey: {
+      create: mocks.idemCreate,
+      findUnique: mocks.idemFindUnique,
+      updateMany: mocks.idemUpdateMany,
+    },
     $transaction: mocks.transaction,
   },
 }))
@@ -79,8 +87,20 @@ function pendingRow(overrides: Record<string, unknown> = {}) {
 const NOMINAL_GAJI_TERLARANG = /5000000|4000000|5\.000\.000|4\.000\.000/
 
 function mockCreateTransaction() {
+  const idemCreate = vi
+    .fn()
+    .mockResolvedValueOnce({})
+    .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+  mocks.idemCreate.mockImplementation((...a: unknown[]) => idemCreate(...a))
+  mocks.idemFindUnique.mockResolvedValue({ createdAt: new Date() })
+  mocks.idemUpdateMany.mockResolvedValue({ count: 0 })
   const txMock = {
     $executeRaw: vi.fn(async () => 1),
+    idempotencyKey: {
+      create: mocks.idemCreate,
+      findUnique: mocks.idemFindUnique,
+      updateMany: mocks.idemUpdateMany,
+    },
     employee: {
       findUniqueOrThrow: vi.fn(async () => ({ baseSalary: 4_000_000, name: "Budi" })),
       findFirst: vi.fn(async () => ({ id: 7 })),
@@ -303,6 +323,35 @@ describe("TEMUAN-1 scope HR create/get/cancel", () => {
       const desc = String(call[3] ?? "")
       expect(desc).not.toMatch(NOMINAL_GAJI_TERLARANG)
     }
+  })
+})
+
+describe("putaran 65: createSalaryAdjustment idempotensi", () => {
+  function form() {
+    const fd = new FormData()
+    fd.set("employeeId", "7")
+    fd.set("newBaseSalary", "5000000")
+    fd.set("reason", "berkala")
+    fd.set("effectiveDate", "2027-01-01")
+    fd.set("idempotencyKey", "sa-key-1")
+    return fd
+  }
+
+  it("retry key sama ditolak, pengajuan lahir sekali", async () => {
+    mocks.requirePermission.mockResolvedValue(maker)
+    const txMock = mockCreateTransaction()
+    txMock.salaryAdjustment.create = vi.fn(async (args: { data: Record<string, unknown> }) => ({
+      id: 9,
+      ...args.data,
+    }))
+
+    const first = await createSalaryAdjustment(form())
+    const second = await createSalaryAdjustment(form())
+
+    expect(first.success).toBe(true)
+    expect(second.success).toBe(false)
+    expect(String(second.success ? "" : second.error)).toContain("duplikat")
+    expect(txMock.salaryAdjustment.create).toHaveBeenCalledTimes(1)
   })
 })
 
