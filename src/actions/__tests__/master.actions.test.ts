@@ -1386,6 +1386,22 @@ describe("Bank Actions", () => {
     expect(res?.success).toBe(false)
     expect(mocks.prismaMock.bank.update).not.toHaveBeenCalled()
   })
+  // Putaran 67: accountId ditautkan ke akun nonaktif lolos karena query
+  // hanya menyaring deletedAt (pola gerbang hidup finance:95/cheque:66).
+  // Akun mati tertaut membuat posting kas/bank memakai akun yang sudah
+  // dimatikan — kedua jalur create+update wajib menolak.
+  it("putaran 67: createBank menilai akun hidup (isActive) dalam query", async () => {
+    mocks.prismaMock.account.findFirst.mockResolvedValueOnce({ id: 999 })
+    await actions.createBank(fdMap({ name: "bank-baru", code: "BNK1", type: "bank", accountId: "999" }))
+    const where = mocks.prismaMock.account.findFirst.mock.calls.at(-1)![0].where
+    expect(where).toEqual({ id: 999, deletedAt: null, isActive: true })
+  })
+  it("putaran 67: updateBank menilai akun hidup (isActive) dalam query", async () => {
+    mocks.prismaMock.account.findFirst.mockResolvedValueOnce({ id: 999 })
+    await actions.updateBank(1, fdMap({ name: "test", code: "test", type: "bank", accountId: "999" }))
+    const where = mocks.prismaMock.account.findFirst.mock.calls.at(-1)![0].where
+    expect(where).toEqual({ id: 999, deletedAt: null, isActive: true })
+  })
   it("deleteBank succeeds", async () => {
     const res = await actions.deleteBank(1)
     expect(res?.success).toBe(true)

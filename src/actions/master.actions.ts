@@ -2726,10 +2726,12 @@ export async function createBank(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error }
     const v = parsed.data
 
-    // Bank.accountId plain Int tanpa FK; cek akun ada agar jurnal kas/bank tak yatim.
+    // Bank.accountId plain Int tanpa FK; cek akun hidup agar jurnal
+    // kas/bank tak yatim dan tak memakai akun yang sudah dimatikan
+    // (putaran 67; pola finance.actions.ts:95).
     if (v.accountId != null) {
-      const account = await prisma.account.findFirst({ where: { id: v.accountId, deletedAt: null }, select: { id: true } })
-      if (!account) return { success: false, error: "Akun (COA) tidak ditemukan" }
+      const account = await prisma.account.findFirst({ where: { id: v.accountId, deletedAt: null, isActive: true }, select: { id: true } })
+      if (!account) return { success: false, error: "Akun (COA) tidak ditemukan atau tidak aktif" }
     }
 
     const bank = await prisma.bank.create({
@@ -2762,9 +2764,11 @@ export async function updateBank(id: number, formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error }
     const v = parsed.data
 
+    // Putaran 67: tautan akun pada jalur ubah wajib hidup juga — akun
+    // nonaktif yang tertaut membuat posting kas/bank memakai akun mati.
     if (v.accountId != null) {
-      const account = await prisma.account.findFirst({ where: { id: v.accountId, deletedAt: null }, select: { id: true } })
-      if (!account) return { success: false, error: "Akun (COA) tidak ditemukan" }
+      const account = await prisma.account.findFirst({ where: { id: v.accountId, deletedAt: null, isActive: true }, select: { id: true } })
+      if (!account) return { success: false, error: "Akun (COA) tidak ditemukan atau tidak aktif" }
     }
 
     await prisma.bank.update({
