@@ -61,6 +61,9 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!customer
+  // Idempotency: key stabil per intent create; retry sesudah respons hilang
+  // memakai key sama (ditolak server). Sukses bernavigasi pergi, tak perlu rotasi.
+  const [idempotencyKey] = useState(() => crypto.randomUUID())
 
   // Quick-add state for "Kategori Pelanggan": the option list is local so a
   // newly created category appears (and gets selected) without a page reload.
@@ -122,6 +125,7 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
             }
           })
         }
+        if (!isEdit) formData.set("idempotencyKey", idempotencyKey)
         const result = isEdit ? await updateCustomer(customer!.id, formData) : await createCustomer(formData)
         if (result && !result.success) {
           if ("npwpConflict" in result && result.npwpConflict) {

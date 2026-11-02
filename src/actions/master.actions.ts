@@ -343,6 +343,13 @@ export async function createCustomer(formData: FormData) {
     // Kunci baris gerbang (model CustomerNpwpGate, baris id=1) lalu
     // ulangi scan di dalam tx sesaat sebelum create; konflik dari dalam
     // tx dipetakan ke respons blokir yang sama di luar tx.
+    // Putaran 67: key form dinilai tepat sebelum create — retry submit
+    // identik (atau konkuren tumpang tindih) prá-commit lolos reuse
+    // prá-tx lalu melahirkan baris kedua; blokir keras repo memang
+    // hanya NPWP persis (Q-CD-1), jadi penjaga retry = key per intent.
+    // Sesudah cek NPWP dalam tx supaya jalur blokir (return null =
+    // commit) tidak memakan key; rollback create melepaskan key.
+    // Pemanggil tanpa key tetap no-op.
     let npwpConflictInTx: CustomerNpwpConflict | null = null;
     const customer = await prisma.$transaction(async (tx) => {
       if (v.taxId) {
@@ -353,6 +360,7 @@ export async function createCustomer(formData: FormData) {
           if (npwpConflictInTx) return null;
         }
       }
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
       return tx.customer.create({ data: customerData });
     });
     if (npwpConflictInTx) return buildCustomerNpwpBlockedResult(npwpConflictInTx);

@@ -423,6 +423,27 @@ describe("Customer Actions", () => {
     const res = await actions.createCustomer(fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
     expect(res?.success).toBe(true)
   })
+  // Putaran 67: retry submit identik sesudah baris pertama commit membuat
+  // baris pelanggan kedua — reuse nama+telepon hanya dibaca prá-tx dari
+  // snapshot sehingga tak menahan konkuren/retry yang tumpang tindih;
+  // blokir keras repo memang hanya NPWP persis (Q-CD-1). Klaim key dalam
+  // tx menahan retry identik; dua niat sah berbeda tetap lolos.
+  it("putaran 67: createCustomer retry key sama ditolak, pelanggan lahir sekali", async () => {
+    mocks.prismaMock.idempotencyKey = {
+      create: vi.fn()
+        .mockResolvedValueOnce({ id: 1 })
+        .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" })),
+      findUnique: vi.fn(async () => ({ createdAt: new Date() })),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+    }
+    const first = await actions.createCustomer(fdMap({ name: "Pelanggan Retry", phone: "0812000", idempotencyKey: "cust-key-1" }))
+    expect(first?.success).toBe(true)
+    const second = await actions.createCustomer(fdMap({ name: "Pelanggan Retry", phone: "0812000", idempotencyKey: "cust-key-1" }))
+    expect(second?.success).toBe(false)
+    expect(String(second?.error)).toContain("duplikat")
+    expect(mocks.prismaMock.customer.create).toHaveBeenCalledTimes(1)
+    delete mocks.prismaMock.idempotencyKey
+  })
   it("updateCustomer succeeds", async () => {
     const res = await actions.updateCustomer(1, fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
     expect(res?.success).toBe(true)
