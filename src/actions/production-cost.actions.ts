@@ -667,6 +667,10 @@ export async function applyOverheadToProductionOrder(formData: FormData) {
 
     const cost = await prisma.$transaction(async (tx) => {
       await assertPeriodOpen(new Date(), tx)
+      // Putaran 68: homolog createProductionCost (putaran 64) — retry
+      // identik melahirkan baris overhead kembar dan totalActualCost/HPP
+      // naik dua kali. Klaim sebelum guard tulis; rollback melepas key.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
       await assertJobCostMutable({ productionOrderId: v.productionOrderId }, "ditambahkan", tx)
       await assertNoPartialRelease(tx, v.productionOrderId, "ditambahkan")
       const created = await tx.productionCost.create({

@@ -89,6 +89,9 @@ export function ProductionCostSection({
   const [editing, setEditing] = useState<ProductionCostRow | null>(null)
 
   // Driver-based overhead application (PRD FAB-07).
+  // Putaran 68: key terpisah dari form biaya — intent apply overhead tidak
+  // boleh berbenturan dengan intent tambah biaya di komponen yang sama.
+  const overheadIdempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [overheadOpen, setOverheadOpen] = useState(false)
   const [driverType, setDriverType] = useState("machine_hours")
   const [driverQty, setDriverQty] = useState("")
@@ -167,12 +170,14 @@ export function ProductionCostSection({
     formData.set("driverType", driverType)
     formData.set("driverQty", driverQty)
     formData.set("rate", driverRate === null ? "" : String(driverRate))
+    formData.set("idempotencyKey", overheadIdempotencyKeyRef.current)
     startTransition(async () => {
       const result = await applyOverheadToProductionOrder(formData)
       if (result && !result.success) {
         showError(result.error || "Gagal menerapkan overhead")
         return
       }
+      overheadIdempotencyKeyRef.current = crypto.randomUUID()
       showSuccess(`Overhead ${formatCurrency((result as { amount?: number }).amount ?? 0)} diterapkan`)
       setOverheadOpen(false)
       setDriverQty("")

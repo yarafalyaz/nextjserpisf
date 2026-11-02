@@ -972,4 +972,20 @@ describe("applyOverheadToProductionOrder (PRD FAB-07)", () => {
     expect(res.success).toBe(false)
     expect(orderFindUniqueMock).not.toHaveBeenCalled()
   })
+
+  it("putaran 68: retry identik ditahan klaim idempotency di dalam tx, tanpa baris/delta kedua", async () => {
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress", documentNo: "MO-001", completedQty: 0 })
+    costCreateMock.mockResolvedValue({ id: 78 })
+    checkIdempotencyMock.mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."))
+
+    const res = await applyOverheadToProductionOrder(
+      fd({ productionOrderId: 1, driverType: "machine_hours", driverQty: 12, rate: 50000, idempotencyKey: "ovh-1" }),
+    )
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/duplikat/)
+    expect(checkIdempotencyMock).toHaveBeenCalledWith("ovh-1", expect.anything(), 5)
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
 })
