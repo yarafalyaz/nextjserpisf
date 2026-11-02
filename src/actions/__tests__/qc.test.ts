@@ -98,6 +98,7 @@ vi.mock("@/lib/db/prisma", () => {
 })
 
 import {
+  createQcChecklist,
   createQcInspection,
   createNonconformance,
   releaseQcChecklist,
@@ -151,6 +152,24 @@ beforeEach(() => {
   raiseNcrFromInspectionMock.mockResolvedValue([])
   syncReworkCostMock.mockResolvedValue({ posted: 0, productionOrderId: null })
   vi.spyOn(console, "error").mockImplementation(() => {})
+})
+
+describe("createQcChecklist (putaran 68)", () => {
+  it("retry identik ditahan klaim idempotency di dalam tx, tanpa checklist kedua", async () => {
+    checkIdempotencyMock.mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."))
+    const form = fd({ name: "Checklist Mesin", checklistType: "final", idempotencyKey: "qcl-1" })
+    form.append("itemName", "Periksa oli")
+    form.append("itemMethod", "visual")
+    form.append("itemSpec", "")
+    form.append("itemRequired", "true")
+
+    const res = await createQcChecklist(form)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/duplikat/)
+    expect(checkIdempotencyMock).toHaveBeenCalledWith("qcl-1", expect.anything(), 5)
+    expect(qcChecklistCreateMock).not.toHaveBeenCalled()
+  })
 })
 
 describe("createQcInspection", () => {

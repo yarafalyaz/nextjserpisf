@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { createQcChecklist, updateQcChecklist } from "@/actions/qc.actions"
 import { Plus, Trash2 } from "lucide-react"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -63,6 +63,9 @@ export function QcChecklistForm({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Putaran 68: key stabil per intent create; retry memakai key sama
+  // (ditolak server). Dikirim hanya saat create; sukses bernavigasi pergi.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
 
   const [checklistType, setChecklistType] = useState(checklist?.checklistType ?? "incoming")
   const [productId, setProductId] = useState<number | null>(checklist?.productId ?? null)
@@ -92,6 +95,7 @@ export function QcChecklistForm({
   function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    if (!checklist) formData.set("idempotencyKey", idempotencyKeyRef.current)
     formData.set("checklistType", checklistType)
     if (productId) formData.set("productId", String(productId))
     else formData.delete("productId")

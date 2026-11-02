@@ -97,26 +97,32 @@ export async function createQcChecklist(formData: FormData) {
 
     const code = v.code || (await generateDocumentNumber("QCL", "simple"))
 
-    const checklist = await prisma.qcChecklist.create({
-      data: {
-        code,
-        name: v.name,
-        slug: await nextSlug("qcChecklist", v.name),
-        checklistType: v.checklistType,
-        productId: v.productId ?? null,
-        version: 1,
-        status: "draft",
-        createdBy: Number(user.id),
-        items: {
-          create: itemsParsed.data.map((it, idx) => ({
-            sortOrder: idx,
-            itemName: it.itemName,
-            method: it.method,
-            spec: it.spec ?? null,
-            isRequired: it.isRequired,
-          })),
+    // Putaran 68: create polos tanpa tx/key — retry identik melahirkan
+    // checklist kembar (kode auto selalu baru; nama/versi tanpa unique).
+    // Klaim key dalam tx sebelum create; rollback melepas key.
+    const checklist = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
+      return tx.qcChecklist.create({
+        data: {
+          code,
+          name: v.name,
+          slug: await nextSlug("qcChecklist", v.name),
+          checklistType: v.checklistType,
+          productId: v.productId ?? null,
+          version: 1,
+          status: "draft",
+          createdBy: Number(user.id),
+          items: {
+            create: itemsParsed.data.map((it, idx) => ({
+              sortOrder: idx,
+              itemName: it.itemName,
+              method: it.method,
+              spec: it.spec ?? null,
+              isRequired: it.isRequired,
+            })),
+          },
         },
-      },
+      })
     })
 
     await logActivity("create", "QcChecklist", checklist.id, `Membuat checklist QC #${checklist.id}`)
