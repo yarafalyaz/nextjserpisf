@@ -68,7 +68,7 @@ describe("WithholdingTaxType akun FK wajib ada", () => {
     expect(res.success).toBe(true)
     expect(mocks.prismaMock.withholdingTaxType.create).toHaveBeenCalledTimes(1)
     expect(mocks.prismaMock.account.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 10, deletedAt: null } }),
+      expect.objectContaining({ where: { id: 10, deletedAt: null, isActive: true } }),
     )
   })
 
