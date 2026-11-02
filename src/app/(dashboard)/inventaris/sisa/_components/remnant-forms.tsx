@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useRef, useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -18,17 +18,23 @@ export const REMNANT_SOURCE_OPTIONS = [
 /** Form catat sisa baru. Usable wajib dimensi + ukuran terukur + tautan baris issue asal (server menegakkan ambang kategori). */
 export function RemnantForm({ canCreate }: { canCreate: boolean }) {
   const router = useRouter()
+  // Anti double-submit: key stabil per intent create; retry/timeout membawa
+  // key sama (ditolak server sebagai duplikat), key dirotasi sesudah sukses.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [isPending, startTransition] = useTransition()
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const res = await createRemnant(new FormData(form))
+      const formData = new FormData(form)
+      formData.set("idempotencyKey", idempotencyKeyRef.current)
+      const res = await createRemnant(formData)
       if (!res.success) {
         showError(res.error || "Gagal mencatat sisa")
         return
       }
+      idempotencyKeyRef.current = crypto.randomUUID()
       showSuccess("Sisa dicatat")
       form.reset()
       router.refresh()

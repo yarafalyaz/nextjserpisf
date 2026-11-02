@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useRef, useTransition } from "react";
 import {
   createMaterialIssue,
   updateMaterialIssue,
@@ -69,6 +69,7 @@ interface MIItem {
 export interface MaterialIssuePayload {
   warehouseId: string;
   date: string;
+  idempotencyKey?: string;
   costCenterId?: string | null;
   workOrderId?: string | null;
   projectId?: string | null;
@@ -96,6 +97,7 @@ export function buildMaterialIssueFormData(input: MaterialIssuePayload): FormDat
   const formData = new FormData();
   formData.append("warehouseId", input.warehouseId);
   formData.append("date", input.date);
+  if (input.idempotencyKey) formData.append("idempotencyKey", input.idempotencyKey);
   formData.append(
     "items",
     JSON.stringify(
@@ -130,6 +132,9 @@ export function MaterialIssueForm({
   issue,
 }: MaterialIssueFormProps) {
   const router = useRouter();
+  // Anti double-submit: key stabil per intent create; retry/timeout membawa
+  // key sama (ditolak server sebagai duplikat), key dirotasi sesudah sukses.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
   // Jalur "buat dari": segmen path `perintah-kerja/<slug>` diteruskan server
   // sebagai `defaultWorkOrderId` (pola yang sama dengan form rak/baris rak).
   // Tanpa itu, pengeluaran material dari form Inventaris selalu orphan:
@@ -204,6 +209,7 @@ export function MaterialIssueForm({
         const formData = buildMaterialIssueFormData({
           warehouseId,
           date: issue?.date ?? toLocalDateOnly(new Date()),
+          ...(issue?.id ? {} : { idempotencyKey: idempotencyKeyRef.current }),
           costCenterId,
           workOrderId,
           projectId,
@@ -219,6 +225,7 @@ export function MaterialIssueForm({
           return;
         }
         setServerError(null);
+        if (!issue?.id) idempotencyKeyRef.current = crypto.randomUUID();
         showSuccess(
           issue?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan",
         );

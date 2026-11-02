@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   createStockAdjustment,
   updateStockAdjustment,
@@ -66,6 +66,9 @@ export function StockAdjustmentForm({
   adjustment,
 }: AdjustmentFormProps) {
   const router = useRouter();
+  // Anti double-submit: key stabil per intent create; retry/timeout membawa
+  // key sama (ditolak server sebagai duplikat), key dirotasi sesudah sukses.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
   const [isPending, startTransition] = useTransition();
   const [warehouseOptions, setWarehouseOptions] = useState(warehouses);
   const [warehouseId, setWarehouseId] = useState(
@@ -134,6 +137,7 @@ export function StockAdjustmentForm({
             ) as HTMLTextAreaElement
           )?.value || "";
         formData.append("notes", notesValue);
+        if (!adjustment?.id) formData.set("idempotencyKey", idempotencyKeyRef.current);
         const result = adjustment?.id
           ? await updateStockAdjustment(adjustment.id, formData)
           : await createStockAdjustment(formData);
@@ -141,6 +145,7 @@ export function StockAdjustmentForm({
           showError(result.error || "Gagal menyimpan data");
           return;
         }
+        if (!adjustment?.id) idempotencyKeyRef.current = crypto.randomUUID();
         showSuccess(
           adjustment?.id
             ? "Data berhasil diperbarui"

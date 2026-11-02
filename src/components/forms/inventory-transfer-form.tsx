@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition, useMemo } from "react"
+import { useRef, useState, useTransition, useMemo } from "react"
 import { createInventoryTransfer, updateInventoryTransfer } from "@/actions/inventory.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Plus, Trash2 } from "lucide-react"
@@ -30,6 +30,9 @@ interface TransferItem {
 
 export function InventoryTransferForm({ warehouses, items, transfer }: TransferFormProps) {
   const router = useRouter()
+  // Anti double-submit: key stabil per intent create; retry/timeout membawa
+  // key sama (ditolak server sebagai duplikat), key dirotasi sesudah sukses.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [isPending, startTransition] = useTransition()
   const [warehouseOptions, setWarehouseOptions] = useState(warehouses)
   const [sourceId, setSourceId] = useState(transfer?.sourceWarehouseId ? String(transfer.sourceWarehouseId) : "")
@@ -67,8 +70,10 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
         formData.append("date", transfer?.date ?? toLocalDateOnly(new Date()))
         if (notes) formData.append("notes", notes)
         formData.append("items", JSON.stringify(transferItems.filter((it) => it.itemId > 0 && it.qty > 0).map(({ uid: _uid, ...rest }) => rest)))
+        if (!transfer?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
         const result = transfer?.id ? await updateInventoryTransfer(transfer.id, formData) : await createInventoryTransfer(formData)
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        if (!transfer?.id) idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess(transfer?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/inventaris/transfer")
         router.refresh()

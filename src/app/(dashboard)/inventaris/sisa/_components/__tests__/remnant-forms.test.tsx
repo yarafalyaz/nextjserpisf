@@ -91,6 +91,7 @@ describe("RemnantForm F-2026-10-24-098-S", () => {
     expect(fd.get("measuredSize")).toBe("1200")
     expect(fd.get("sourceType")).toBe("material_issue_item")
     expect(fd.get("sourceId")).toBe("42")
+    expect(String(fd.get("idempotencyKey") ?? "")).not.toBe("")
     act(() => root.unmount())
   })
 })

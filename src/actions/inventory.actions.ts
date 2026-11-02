@@ -46,6 +46,7 @@ import {
   validateUsableRemnant,
 } from "@/lib/services/scrap-physical";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { checkIdempotency } from "@/lib/utils/idempotency";
 import { statusLabel } from "@/lib/utils/status-labels";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { logActivity } from "@/lib/services/activity-log.service";
@@ -266,6 +267,7 @@ function normalizeAdjustmentItem(it: AdjustmentItemInput): {
 export async function createStockAdjustment(formData: FormData) {
   try {
     const user = await requirePermission("create_stock_adjustments");
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
 
     const parsed = parseFormData(stockAdjustmentSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -311,7 +313,11 @@ export async function createStockAdjustment(formData: FormData) {
       );
     }
 
-    const adjustment = await prisma.stockAdjustment.create({
+    const adjustment = await prisma.$transaction(async (tx) => {
+      // Anti double-submit: retry dengan key sama ditolak sebelum dokumen
+      // draft kedua lahir; key kosong (pemanggil lama non-UI) no-op.
+      await checkIdempotency(idempotencyKey, tx, user.id);
+      return tx.stockAdjustment.create({
       data: {
         documentNo,
         slug: await nextSlug("stockAdjustment", documentNo),
@@ -339,7 +345,8 @@ export async function createStockAdjustment(formData: FormData) {
             };
           }),
         },
-      },
+        },
+      });
     });
 
     await logActivity(
@@ -549,6 +556,7 @@ export async function processStockAdjustment(adjustmentId: number) {
 export async function createInventoryTransfer(formData: FormData) {
   try {
     const user = await requirePermission("create_inventory_transfers");
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
 
     const parsed = parseFormData(inventoryTransferSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -567,7 +575,11 @@ export async function createInventoryTransfer(formData: FormData) {
     await assertWarehousesExistAndActive(prisma, [v.sourceWarehouseId, v.destinationWarehouseId]);
     await assertItemsExistAndActive(prisma, transferItems.map((it) => Number(it.itemId)));
 
-    const transfer = await prisma.inventoryTransfer.create({
+    const transfer = await prisma.$transaction(async (tx) => {
+      // Anti double-submit: retry dengan key sama ditolak sebelum dokumen
+      // draft kedua lahir; key kosong (pemanggil lama non-UI) no-op.
+      await checkIdempotency(idempotencyKey, tx, user.id);
+      return tx.inventoryTransfer.create({
       data: {
         documentNo,
         slug: await nextSlug("inventoryTransfer", documentNo),
@@ -583,7 +595,8 @@ export async function createInventoryTransfer(formData: FormData) {
             qty: it.qty,
           })),
         },
-      },
+        },
+      });
     });
 
     await logActivity(
@@ -1075,6 +1088,7 @@ function materialIssueItemCreateData(it: MaterialIssuePayloadItem, scrapPercentS
 export async function createMaterialIssue(formData: FormData) {
   try {
     const user = await requirePermission("create_material_issues");
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
 
     const parsed = parseFormData(materialIssueSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -1102,6 +1116,9 @@ export async function createMaterialIssue(formData: FormData) {
     }
 
     const issue = await prisma.$transaction(async (tx) => {
+      // Anti double-submit: retry dengan key sama ditolak sebelum MI draft
+      // kedua lahir; key kosong (pemanggil lama non-UI) no-op.
+      await checkIdempotency(idempotencyKey, tx, user.id);
       // Dokumen baru hanya untuk master hidup (pola material-request).
       await assertWarehousesExistAndActive(tx, [v.warehouseId]);
       await assertItemsExistAndActive(tx, miItems.map((it) => Number(it.itemId)));
@@ -2965,6 +2982,7 @@ export async function postStocktakeSession(id: number) {
 export async function createRemnant(formData: FormData) {
   try {
     const user = await requirePermission("create_material_issues");
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
     const itemId = parseStrictId(formData.get("itemId"));
     const warehouseId = parseStrictId(formData.get("warehouseId"));
     const qty = parseStrictQty(formData.get("qty"));
@@ -3018,6 +3036,9 @@ export async function createRemnant(formData: FormData) {
     // Status selain "scrapped" dihitung: consumed tetap sisa fisik dari
     // sumber yang sama, bukan kuota baru.
     const remnant = await prisma.$transaction(async (tx) => {
+      // Anti double-submit: retry dengan key sama ditolak sebelum remnant
+      // kedua lahir; key kosong (pemanggil lama non-UI) no-op.
+      await checkIdempotency(idempotencyKey, tx, user.id);
       let sourceQty: number
       if (sourceType === "material_issue_item") {
         await tx.$executeRaw`SELECT id FROM material_issue_items WHERE id = ${sourceId} FOR UPDATE`;

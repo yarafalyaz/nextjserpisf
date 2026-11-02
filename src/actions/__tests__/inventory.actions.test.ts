@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => {
+  const checkIdempotency = vi.fn(async () => undefined);
   const buildModelMock = () => ({
     findFirst: vi.fn().mockResolvedValue(null),
     findUnique: vi.fn().mockResolvedValue(null),
@@ -65,10 +66,12 @@ const mocks = vi.hoisted(() => {
     prismaMock,
     revalidateMock: vi.fn(),
     logActivityMock: vi.fn(),
+    checkIdempotency,
   };
 });
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }));
+vi.mock("@/lib/utils/idempotency", () => ({ checkIdempotency: mocks.checkIdempotency }));
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: any) => mocks.requirePermissionMock(...a),
 }));
@@ -144,6 +147,21 @@ beforeEach(() => {
 });
 
 describe("Stock Adjustment Actions", () => {
+  it("putaran 60: createStockAdjustment retry idempotency sama ditolak, dokumen lahir sekali", async () => {
+    mocks.checkIdempotency
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."));
+
+    const first = await actions.createStockAdjustment(saFd({ idempotencyKey: "adj-key-1" }));
+    const second = await actions.createStockAdjustment(saFd({ idempotencyKey: "adj-key-1" }));
+
+    expect(first?.success).toBe(true);
+    expect(second?.success).toBe(false);
+    expect(second?.error).toContain("duplikat");
+    expect(mocks.checkIdempotency).toHaveBeenCalledTimes(2);
+    expect(mocks.prismaMock.stockAdjustment.create).toHaveBeenCalledTimes(1);
+  });
+
   it("createStockAdjustment succeeds", async () => {
     const res = await actions.createStockAdjustment(saFd());
     expect(res?.success).toBe(true);
@@ -323,6 +341,21 @@ describe("Stock Adjustment Actions", () => {
 });
 
 describe("Inventory Transfer Actions", () => {
+  it("putaran 60: createInventoryTransfer retry idempotency sama ditolak, dokumen lahir sekali", async () => {
+    mocks.checkIdempotency
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."));
+
+    const first = await actions.createInventoryTransfer(transferFd({ idempotencyKey: "trf-key-1" }));
+    const second = await actions.createInventoryTransfer(transferFd({ idempotencyKey: "trf-key-1" }));
+
+    expect(first?.success).toBe(true);
+    expect(second?.success).toBe(false);
+    expect(second?.error).toContain("duplikat");
+    expect(mocks.checkIdempotency).toHaveBeenCalledTimes(2);
+    expect(mocks.prismaMock.inventoryTransfer.create).toHaveBeenCalledTimes(1);
+  });
+
   it("createInventoryTransfer succeeds", async () => {
     const res = await actions.createInventoryTransfer(transferFd());
     expect(res?.success).toBe(true);
@@ -468,6 +501,21 @@ describe("Inventory Transfer Actions", () => {
 });
 
 describe("Material Issue Actions", () => {
+  it("putaran 60: createMaterialIssue retry idempotency sama ditolak, dokumen lahir sekali", async () => {
+    mocks.checkIdempotency
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."));
+
+    const first = await actions.createMaterialIssue(miFd({ idempotencyKey: "mi-key-1" }));
+    const second = await actions.createMaterialIssue(miFd({ idempotencyKey: "mi-key-1" }));
+
+    expect(first?.success).toBe(true);
+    expect(second?.success).toBe(false);
+    expect(second?.error).toContain("duplikat");
+    expect(mocks.checkIdempotency).toHaveBeenCalledTimes(2);
+    expect(mocks.prismaMock.materialIssue.create).toHaveBeenCalledTimes(1);
+  });
+
   it("createMaterialIssue succeeds", async () => {
     const res = await actions.createMaterialIssue(miFd());
     expect(res?.success).toBe(true);
@@ -1802,6 +1850,21 @@ describe("remnant (P1-5)", () => {
     for (const [k, v] of Object.entries(over)) fd.set(k, v);
     return fd;
   };
+
+  it("putaran 60: createRemnant retry idempotency sama ditolak, dokumen lahir sekali", async () => {
+    mocks.checkIdempotency
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."));
+
+    const first = await actions.createRemnant(usableFd({ idempotencyKey: "rmn-key-1" }));
+    const second = await actions.createRemnant(usableFd({ idempotencyKey: "rmn-key-1" }));
+
+    expect(first.success).toBe(true);
+    expect(second.success).toBe(false);
+    expect(String((second as { error?: string }).error ?? "")).toContain("duplikat");
+    expect(mocks.checkIdempotency).toHaveBeenCalledTimes(2);
+    expect(mocks.prismaMock.remnant.create).toHaveBeenCalledTimes(1);
+  });
 
   it("createRemnant menolak sumber issue fiktif (sourceId tanpa baris nyata)", async () => {
     mocks.prismaMock.materialIssueItem.findUnique.mockResolvedValue(null);
