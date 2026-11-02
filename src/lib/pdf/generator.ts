@@ -712,14 +712,29 @@ export async function generateQuotationPDF(
   doc.text(splitNotes, ml, y + 4.5)
   const noteHeight = splitNotes.length * 4
 
-  // Draw Total on the right (aligned with the first line of NOTE)
-  doc.setFont("Helvetica", "bold")
-  doc.setFontSize(9.5)
-  doc.text("Total", 130, y)
-  doc.text(":", 145, y)
-  doc.text(formatPdfCurrency(summary.total), pageW - ml, y, { align: "right" })
+  // Ringkasan di kanan (sejajar CATATAN): subtotal/diskon/PPN lalu Total.
+  // Route mengirim summary utuh; sebelumnya hanya Total yang tercetak
+  // sehingga pelanggan tak bisa memeriksa asal angka total (putaran 53).
+  // Diskon baris sudah masuk total baris; diskon dokumen + PPN di sini.
+  let summaryY = y
+  const drawSummaryRow = (label: string, value: string, bold: boolean) => {
+    doc.setFont("Helvetica", bold ? "bold" : "normal")
+    doc.setFontSize(bold ? 9.5 : 8.5)
+    doc.text(label, 130, summaryY)
+    doc.text(":", 145, summaryY)
+    doc.text(value, pageW - ml, summaryY, { align: "right" })
+    summaryY += 5
+  }
+  drawSummaryRow("Subtotal", formatPdfCurrency(summary.subtotal), false)
+  if (summary.discount && summary.discount > 0) {
+    drawSummaryRow("Potongan / Diskon", `-${formatPdfCurrency(summary.discount)}`, false)
+  }
+  if (summary.tax && summary.tax > 0) {
+    drawSummaryRow("Pajak (PPN)", formatPdfCurrency(summary.tax), false)
+  }
+  drawSummaryRow("Total", formatPdfCurrency(summary.total), true)
 
-  y += Math.max(noteHeight + 8, 12)
+  y += Math.max(noteHeight + 8, summaryY - y + 4)
 
   // Ensure signature blocks won't overlap the bottom of page
   if (y > 240) {

@@ -236,6 +236,16 @@ describe("PDF Generator Flows", () => {
     expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
   })
 
+  it("putaran 53: quotation PDF mencetak rincian subtotal/diskon/PPN sebelum Total", async () => {
+    const qDocInfo = { ...mockDocInfo, notes: "Catatan" }
+    await generateQuotationPDF(mockCompany, qDocInfo, mockItems, mockSummary)
+    const texts = mockDoc.text.mock.calls.map((c: any[]) => String(c[0]))
+    expect(texts.some((t: string) => t.includes("Subtotal"))).toBe(true)
+    expect(texts.some((t: string) => /diskon/i.test(t))).toBe(true)
+    expect(texts.some((t: string) => /PPN/.test(t))).toBe(true)
+    expect(texts.some((t: string) => t === "Total")).toBe(true)
+  })
+
   it("handles image download failures gracefully", async () => {
     // Make fetch fail completely (triggers loadImageData catch block)
     global.fetch = vi.fn().mockRejectedValue(new Error("network error"))
