@@ -7,6 +7,7 @@ import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { REPORT_JOURNAL_STATUSES } from "@/lib/services/report-aggregation.service"
 import { buildVatPosition, VAT_STATUS_LABELS } from "@/lib/reports/vat-reconciliation"
+import { isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { loadReturnVatAmounts } from "@/lib/reports/tax-summary-data"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -72,7 +73,7 @@ export default async function VatReconciliationPage({
     }),
     prisma.vendorBill.findMany({
       where: { date: { gte: startDate, lte: endDate }, status: { in: ["posted", "partial", "paid"] }, deletedAt: null },
-      select: { tax: true },
+      select: { tax: true, taxInvoiceNumber: true },
     }),
     loadReturnVatAmounts({ start: startDate, end: endDate }),
   ])
@@ -82,7 +83,18 @@ export default async function VatReconciliationPage({
   const bookInput = inputAccountEntries.reduce((sum, e) => sum + Number(e.debit) - Number(e.credit), 0)
   const docOutput = salesInvoices.reduce((sum, inv) => sum + Number(inv.taxAmount), 0)
     - returnVatAmounts.reduce((sum, amount) => sum + amount, 0)
-  const docInput = vendorBills.reduce((sum, bill) => sum + Number(bill.tax), 0)
+  // Paritas PDF/SPT (tax-summary-data): bill tax>0 tanpa nomor faktur pajak
+  // vendor valid tidak punya kaki Dr PPN Masukan di jurnal (PPN gabung HPP
+  // di accounting.hook) — sisi dokumen wajib 0 juga, kalau tidak layar
+  // menampilkan selisih palsu permanen sebesar pajak bill tak bernomor.
+  const docInput = vendorBills.reduce(
+    (sum, bill) =>
+      sum +
+      (Number(bill.tax) > 0 && !isValidVendorTaxInvoiceNumber(bill.taxInvoiceNumber ?? null)
+        ? 0
+        : Number(bill.tax)),
+    0,
+  )
 
   const position = buildVatPosition(bookOutput, bookInput)
   const outputDiff = bookOutput - docOutput
