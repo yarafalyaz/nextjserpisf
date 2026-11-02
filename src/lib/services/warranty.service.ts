@@ -439,6 +439,15 @@ export async function transitionWarrantyClaim(
   // guard lintas klaim TASK-019 lalu menolak klaim pemilik sah secara
   // permanen. WO tanpa kendaraan tercatat tidak ditolak (data lama).
   if (input.to === "in_repair" && input.repairWorkOrderId != null) {
+    // Putaran 61: kunci baris WO repair SEBELUM cek tautan. CAS di bawah
+    // hanya menjaga baris klaim ini sendiri — dua klaim BERBEDA yang
+    // menaut WO yang sama bersamaan sama-sama lolos cek linkedElsewhere
+    // dari snapshot REPEATABLE READ lalu sama-sama menulis. Kunci baris
+    // WO menserialkan penaut lintas klaim (pola warranty-journal yang
+    // mengunci WO yang sama); mock tanpa $executeRaw melewatinya.
+    if (typeof (client as TxClient).$executeRaw === "function") {
+      await (client as TxClient).$executeRaw`SELECT id FROM work_orders WHERE id = ${input.repairWorkOrderId} FOR UPDATE`
+    }
     const wo = await client.workOrder.findUnique({
       where: { id: input.repairWorkOrderId },
       select: { id: true, status: true, customerVehicleId: true },
@@ -469,11 +478,11 @@ export async function transitionWarrantyClaim(
     }
   }
   // Tulis tautan WO repair ikut CAS yang sama dengan syarat tambahan
-  // repairWorkOrderId masih kosong: dua klaim konkuren ke WO yang sama
-  // terserialkan oleh CAS status masing-masing saja tidak cukup — tanpa
-  // syarat null ini keduanya menulis WO yang sama sebelum guard
-  // linkedElsewhere lawan terbaca (MariaDB tak punya partial-unique
-  // untuk "satu WO aktif per klaim", jadi CAS kolom inilah jaringnya).
+  // repairWorkOrderId masih kosong: tanpa syarat null ini klaim yang
+  // sama bisa menimpa tautannya sendiri di tengah jalan. Serialisasi
+  // LINTAS klaim (dua klaim berbeda ke WO sama) dipegang kunci baris WO
+  // di atas — CAS per-klaim tidak melihat baris lawan (MariaDB tak punya
+  // partial-unique untuk "satu WO aktif per klaim").
   const linkingRepairWo = input.to === "in_repair" && input.repairWorkOrderId != null
   await claimWarrantyClaimUpdate(
     client,

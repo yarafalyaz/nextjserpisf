@@ -15,6 +15,8 @@ import { prisma } from "@/lib/db/prisma"
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
+    $executeRaw: vi.fn(async () => 1),
+    $queryRaw: vi.fn(async () => []),
     workOrder: { findUnique: vi.fn() },
     materialIssue: { findMany: vi.fn() },
     item: { findMany: vi.fn() },
@@ -345,6 +347,28 @@ describe("klaim di luar masa (F-021 AC2): manual, BUKAN auto-reject", () => {
     }
     expect(writeCall.where).toMatchObject({ id: 1, status: "approved", repairWorkOrderId: null })
     expect(writeCall.data).toMatchObject({ status: "in_repair", repairWorkOrderId: 55 })
+  })
+
+  it("putaran 61: tautan WO repair mengunci baris WO sebelum cek tautan klaim lain", async () => {
+    const claim: { id: number; status: string; customerVehicleId: number } = {
+      id: 1, status: "approved", customerVehicleId: 7,
+    }
+    p.warrantyClaim.findUnique.mockImplementation(async () => ({ ...claim }))
+    p.workOrder.findUnique.mockResolvedValue({ id: 55, status: "processing", customerVehicleId: 7 })
+    p.warrantyClaim.findMany.mockResolvedValue([])
+    mockClaimWrite(claim)
+
+    await transitionWarrantyClaim({ claimId: 1, to: "in_repair", repairWorkOrderId: 55 }, prisma as never)
+
+    // CAS klaim bersifat per-baris-sendiri: dua klaim berbeda bisa lolos
+    // cek linkedElsewhere bersamaan dari snapshot. Kunci baris WO-lah
+    // yang menserialkan penaut lintas klaim, jadi wajib mendahului cek.
+    const lockOrder = (prisma as never as { $executeRaw: ReturnType<typeof vi.fn> }).$executeRaw
+      .mock.invocationCallOrder[0]
+    const linkedCheckOrder = p.warrantyClaim.findMany.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeDefined()
+    expect(linkedCheckOrder).toBeDefined()
+    expect(lockOrder).toBeLessThan(linkedCheckOrder)
   })
 
   it("regresi putaran 50: tautan WO repair kendaraan lain ditolak", async () => {

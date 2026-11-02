@@ -111,11 +111,19 @@ export async function transitionWarrantyClaimAction(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
-    const claim = await transitionWarrantyClaim({
-      claimId: v.claimId,
-      to: v.to,
-      repairWorkOrderId: v.repairWorkOrderId ?? null,
-    });
+    // Satu transaksi: service mengunci baris WO repair untuk
+    // menserialkan tautan lintas klaim — kunci tanpa tx terlepas
+    // seketika dan tidak menahan siapa pun.
+    const claim = await prisma.$transaction((tx) =>
+      transitionWarrantyClaim(
+        {
+          claimId: v.claimId,
+          to: v.to,
+          repairWorkOrderId: v.repairWorkOrderId ?? null,
+        },
+        tx,
+      ),
+    );
 
     revalidatePath("/produksi/garansi");
     await logActivity("update", "WarrantyClaim", claim.id, `Klaim garansi berpindah ke status ${v.to}`);
