@@ -2105,3 +2105,29 @@ Semua kandidat agent diverifikasi sesi utama terhadap kode aktual + schema sebel
 - Run `41451885894` head `d142a3eea`: Lint completed failure sesudah ~50 menit pada step `eslint .`, log job tidak tersedia dari GitHub (404 blob). Kontra-bukti: `eslint .` penuh lokal exit 0 pada tree berisi head itu, dan head sesudahnya `96b0eabdf` (run `41452204696`, memuat `d142a3eea`) full CI success termasuk Lint. Vonis: kegagalan runner/infra, bukan kode. Unit Tests run yang sama success.
 - Tidak ada migrasi schema putaran ini.
 - Head final putaran 71 `96b0eabdf` CI **success**.
+
+## Putaran 72 — SDM/pajak, keuangan/laporan, produksi/servis (3 agent audit paralel)
+
+Semua kandidat agent diverifikasi sesi utama terhadap kode aktual + schema sebelum edit; 3 fix commit/push, semua head CI success.
+
+### Fix SDM (1)
+1. `40acd1a0c` fix(hr): nilai ulang hidup karyawan dan snapshot komponen dalam tx — `assignEmployeePayrollComponent`/`updateEmployeePayrollComponent` menilai ulang `assertLiveEmployee` di bawah kunci baris karyawan dalam tx (menonaktifkan penugasan karyawan mati tetap sah); `addPayrollComponentLine` snapshot komponen kini dari baris segar delegate tx (`findUnique` sesudah cek dup terkunci), bukan objek pra-tx; `createLeaveRequest`/`createOvertimeRequest` menilai ulang hidup sesudah kunci karyawan; `createAttendance` kini mengunci baris karyawan FOR UPDATE + menilai ulang hidup sebelum tulis; `createEmployeeRoster` gerbang hidup pra-tulis ditambah (tanpa tx — `@@unique([employeeId, date, type])` + P2002 ramah sudah menahan retry).
+
+### Fix pajak (1)
+2. `156f1184f` fix(tax): akun PPh dinilai ulang lewat delegate tx — `withholdingAccountError` menerima client opsional; `createWithholdingTaxType`/`updateWithholdingTaxType` menilai ulang akun lewat delegate tx sesudah klaim kode ternormalisasi dalam tx. Cek pra-tx dipertahankan untuk pesan cepat. Severity asal Rendah (tak ada jalur UI penonaktifan akun); difix sebagai pertahanan kedalaman murah mengikuti pola tax-payment putaran sebelumnya.
+
+### Fix produksi (1)
+3. `ee55bae97` fix(manufacturing): snapshot produksi dinilai ulang dalam tx berkunci produk — tiga titik: (a) `releaseBomRevision` mengunci baris `products` FOR UPDATE sebagai pernyataan pertama tx sebelum klaim rilis (klaim per-revisi + supersede `updateMany` tidak menserialkan dua rilis konkuren produk yang sama → dua revisi bisa sama-sama `released`, padahal invarian fungsi "at most one released"); (b) `createProductionOrder` snapshot BOM efektif + biaya standar dipindah dari luar tx ke dalam tx di bawah kunci baris produk yang sama (rilis revisi/hitung ulang biaya yang commit di jendela membuat PO mem-pin revisi superseded dengan biaya basi); (c) `updateProductionOrder` `totalStandardCost` kini dari `Product.standardCost` segar lewat delegate tx, bukan bacaan pra-tx — konsisten dengan baris material yang ditulis tx yang sama. Bukti merah: 2 test orde-kunci terpisah (`bom-revision.test.ts`, `manufacturing.actions.test.ts`); harness `$queryRaw` diangkat ke mock bersama di-hoist karena reset async `beforeEach` tidak di-await memberi merah palsu sesudah fix.
+
+### Vonis dicatat / gugur (tanpa patch)
+- Slug global 16 situs SDM/pajak (`hrm.actions.ts` 10 situs + `tax-dispute.actions.ts:100` + `recruitment.actions.ts:48` dst.): semua basis unik/fail-closed P2002; migrasi mekanis ke `nextSlugWithClient` dimungkinkan tetapi nilai pertahanan rendah. CATAT — jangan churn massal.
+- `upsertSuccessorCandidate` (`succession.actions.ts:34-92`): pra-cek tanpa kunci; titik non-finansial dilindungi `@@unique([positionId, candidateEmployeeId])`. CATAT Low.
+
+### Daftar bersih agent (jangan diangkat ulang tanpa bukti baru)
+- Keuangan/laporan: `postJournal` (kunci + `assertApproved(..., tx)` + klaim draft), `createJournal`/`createExpense`/`createPettyCash`/`createProfitCenter`, `approveExpense`, `markExpensePaid`, `updateExpense`/`updatePettyCash`/`deletePettyCash`, `createCostCenter`, `createTaxAssessment`, tax payment/faktur pajak/bupot, `createMethod`/`updateMethod`; loader laporan keuangan (`trial-balance-data.ts`, `statement-data.ts`, `ledger-cash-data.ts`, `vat-invoices-data.ts`, `tax-summary-data.ts`) satu loader layar+PDF dengan saldo awal konsisten.
+- Produksi/servis: seluruh `manufacturing.actions.ts` selain 3 titik fix, `qc.actions.ts`, warranty actions/service/journal, WO/MI di `inventory.actions.ts`, `production-cost.actions.ts`, `bom-revision-change.actions.ts`, `job-change-order.actions.ts`, `work-center.actions.ts`, `vehicle.actions.ts`, `job-payment-schedule.actions.ts`; form produksi/garansi mengirim idempotencyKey.
+
+### Catatan
+- Tidak ada migrasi schema putaran ini.
+- Pelajaran harness: reset mock async di `beforeEach` yang tidak di-await berjalan SESUDAH test — kontrak orde-kunci wajib mock bersama di-hoist dengan reset sinkron.
+- Head final putaran 72 `ee55bae97` CI **success** (run `41461411436`); `40acd1a0c` run `41460036071` success, `156f1184f` run `41460410908` success.
