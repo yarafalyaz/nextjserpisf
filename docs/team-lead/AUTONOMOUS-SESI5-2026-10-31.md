@@ -1730,3 +1730,17 @@ Wilayah: penjualan + keuangan (kandidat agent penjualan `a740849f` & keuangan `a
 ### Catatan
 - Tidak ada migrasi schema putaran ini. Perangkap test: ekspektasi pesan error wajib menyalin pesan kanonis persis (`Masa berlaku penawaran sudah lewat…`, bukan parafrase "kedaluwarsa").
 - stderr `[idempotency] prune gagal` pada mock tanpa `prisma.idempotencyKey.deleteMany` global adalah noise opportunistic-sweep yang memang ditelan (return 0) — bukan kegagalan test.
+
+## Putaran 60 — Pajak/laporan (1 fix, berjalan)
+
+Wilayah: pajak + laporan (agent `a6d06136`); inventaris (agent `a615a60e`) masih berjalan saat seksi ini ditulis.
+
+### Fix
+1. `85a8b17d6` fix(tax): layar rekonsiliasi PPN menolkan PPN bill tanpa nomor faktur valid — halaman `/laporan/rekonsiliasi-ppn` kini memilih `taxInvoiceNumber` dan menolkan `tax` bill tanpa nomor valid, persis aturan PDF (`loadVatReconciliation`) dan SPT. Sebelumnya layar menjumlah semua `VendorBill.tax`: bill yang di jurnal tak melahirkan Dr PPN Masukan (`creditInputVat` false, PPN gabung HPP) tampil sebagai dokumen masukan, menciptakan selisih palsu layar permanen sebesar pajak bill tak bernomor. CI dipantau.
+
+### Vonis agent terverifikasi aman (tak diangkat)
+- NSFP/faktur pajak: kunci baris + nilai ulang dalam tx, nomor aktif dilindungi generated unique `active_number_key`; bupot: kunci sumber + cocok nominal dalam tx; TaxPayment: nilai ulang dalam tx, void ber-`deletedAt`.
+- Agregasi GL laporan memakai `REPORT_JOURNAL_STATUSES` + `deletedAt: null`; periode laporan semua lewat helper path (tak ada baca query-string tanpa helper); pembulatan inti safe-math. Project PL status `confirmed` pada VendorBill = dead allowance (tak ada writer) — bukan bug aktif.
+
+### Catatan
+- Perangkap tooling: perintah mutasi file lewat node di dalam container menulis ke file yang sama dengan host (bind mount satu arah terkonfirmasi) — mutasi "sandbox container" untuk bukti merah menghapus edit host. Bukti perilaku lama diganti verifikasi case-by-case terhadap kode (hook/PDF/validator) dan file dipulihkan dari backup container `/tmp/page-fixed.tsx`. Jangan ulangi trik mutasi-container untuk halaman RSC yang tak punya harness test.
