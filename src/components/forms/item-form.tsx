@@ -71,6 +71,10 @@ interface ItemFormProps {
 
 export function ItemForm({ item, categories, groups, brands, vendors, warehouses, racks, rackRows, unitOptions = [], generatedCode, enableAutoCode = true, baseUrl = "" }: ItemFormProps) {
   const router = useRouter()
+  // Idempotency: key stabil per intent tambah; retry jaringan memakai key
+  // yang sama (ditolak server). Sukses bernavigasi pergi, tak perlu rotasi.
+  const idempotencyKeyRef = useRef<string | null>(null)
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
   const [uploading, setUploading] = useState(false)
   const [imagePreview, setImagePreview] = useState<string | null>(item?.image || null)
@@ -218,6 +222,7 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
           .filter((u) => u.code.trim() !== "" && u.factorToBase !== "")
           .map((u) => ({ code: u.code.trim(), factorToBase: Number(u.factorToBase) }))
         formData.set("uomConversions", JSON.stringify(cleanedUom))
+        if (!isEdit) formData.set("idempotencyKey", idempotencyKeyRef.current!)
         const result = isEdit ? await updateItem(item!.id, formData) : await createItem(formData)
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")

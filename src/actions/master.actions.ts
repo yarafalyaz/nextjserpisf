@@ -760,7 +760,7 @@ async function checkItemMasterReferences(refs: {
 
 export async function createItem(formData: FormData) {
   try {
-    await requirePermission("create_items");
+    const actor = await requirePermission("create_items");
 
     const parsed = parseFormData(itemSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -813,7 +813,11 @@ export async function createItem(formData: FormData) {
     // alternate units but the UI claiming the create succeeded, producing
     // "phantom" items missing the multi-UoM data the operator just typed in.
     // Wrapping both in one tx ties item existence to conversion existence.
+    // Putaran 67: key form dinilai pertama dalam tx — retry double-submit
+    // sebelumnya melahirkan barang kembar (SKU auto sekuens baru + slug
+    // bersuffix; stok/HPP/harga terbelah). Pemanggil tanpa key no-op.
     const item = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, actor.id);
       let finalCostingMethod: "fifo" | "average" | undefined = v.costingMethod;
       if (!finalCostingMethod && v.categoryId) {
         const cat = await tx.itemCategory.findUnique({

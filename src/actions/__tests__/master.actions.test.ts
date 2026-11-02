@@ -593,6 +593,25 @@ describe("Item Actions", () => {
     const res = await actions.createItem(fdMap({ name: "Item Test", cost: "100", price: "200" }))
     expect(res?.success).toBe(true)
   })
+  // Putaran 67: retry submit identik melahirkan barang kembar — SKU auto
+  // selalu baru dari sequence dan slug hanya diberi suffix sehingga tak
+  // ada yang menahan; stok/HPP/harga terbelah ke dua master.
+  it("putaran 67: createItem retry key sama ditolak, barang lahir sekali", async () => {
+    mocks.prismaMock.idempotencyKey = {
+      create: vi.fn()
+        .mockResolvedValueOnce({ id: 1 })
+        .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" })),
+      findUnique: vi.fn(async () => ({ createdAt: new Date() })),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+    }
+    const first = await actions.createItem(fdMap({ name: "Barang Retry", cost: "100", price: "200", idempotencyKey: "item-key-1" }))
+    expect(first?.success).toBe(true)
+    const second = await actions.createItem(fdMap({ name: "Barang Retry", cost: "100", price: "200", idempotencyKey: "item-key-1" }))
+    expect(second?.success).toBe(false)
+    expect(String(second?.error)).toContain("duplikat")
+    expect(mocks.prismaMock.item.create).toHaveBeenCalledTimes(1)
+    delete mocks.prismaMock.idempotencyKey
+  })
   it("updateItem succeeds", async () => {
     const res = await actions.updateItem(1, fdMap({ name: "Item Test Updated", cost: "100", price: "200" }))
     expect(res?.success).toBe(true)
