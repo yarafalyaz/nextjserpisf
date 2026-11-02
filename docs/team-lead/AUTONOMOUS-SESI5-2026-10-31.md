@@ -1774,7 +1774,7 @@ Wilayah: master/pengaturan, proyek/aset, manufaktur (agent paralel); semua kandi
 - Cache `currentValue` reversal aset (K4 proyek/aset): CATAT — reversal menulis snapshot asal ke cache, tetapi pembaca otoritatif (disposal, cron depresiasi, laporan) membaca jurnal POSTED; yang korup hanya label tampilan "Nilai Saat Ini (cache)" sampai cron berikutnya.
 - `createTaxGroup` tanpa gerbang nama sama sekali (di luar kandidat rename): tercatat — create polos melahirkan kelompok bernama sama via slug bersuffix; belum ada bukti konsumen string yang rusak, antrekan bila ada bukti picker/dokumen tertukar.
 
-## Putaran 62 — SDM, pembelian, API privat (11 fix + 2 fixture)
+## Putaran 62 — SDM, pembelian, API privat (10 fix + 2 fixture)
 
 Wilayah: SDM + pembelian (agent paralel) dan API/cron/auth (agent). Semua kandidat diverifikasi sesi utama terhadap kode + schema sebelum fix. Pola tiap fix: test merah terpisah → fix → batch terkait + 6 guard → tsc/eslint.
 
@@ -1809,3 +1809,31 @@ CI final putaran 62: head `f7cbfdae8` **success** (semua job), mencakup seluruh 
 ### Catatan
 - Tidak ada migrasi schema putaran ini.
 - Pelajaran batch terulang ketiga kalinya: sesudah memindah create ke tx, grep SEMUA harness yang memanggil action itu — dua harness terpisah (`position/taxgroup`, `hrm-appreciation-scope`) tertinggal di putaran 61/62 dan membuat CI merah berturut-turut walau produksi benar.
+
+## Putaran 63 — Penjualan, keuangan, produksi (8 fix)
+
+Wilayah: penjualan + keuangan (agent paralel), inventaris (agent — hasil justru menunjuk modul produksi). Semua kandidat diverifikasi sesi utama terhadap kode + form pemanggil sebelum fix; kelas dominan tetap sama: create tanpa idempotency key. Pola tiap fix: test merah terpisah → key pernyataan pertama tx → form key stabil create-only + rotasi → batch terkait + 6 guard → tsc/eslint.
+
+### Fix penjualan
+1. `71fd6843b` fix(sales): `createSalesReturn` anti double-submit via idempotency key — cap over-return hanya menolak total melewati qty faktur; dua draft retur parsial identik sebelumnya masing-masing bisa diselesaikan: StockMove IN + kredit AR/PPN dobel.
+2. `f23511d07` fix(sales): `createDeliveryOrder` anti double-submit via idempotency key — asimetri cap: cap create menghitung draft, cap ship hanya shipped; dua draft identik qty ≤50% sebelumnya bisa dikirim berurutan, total terkirim 2× qty baris SO.
+3. `9372036b5` fix(sales): `createQuotation` anti double-submit via idempotency key — dampak terendah, hulu rantai; dua penawaran kembar masing-masing bisa menempuh send → accept → konversi menjadi SO terpisah (gerbang satu-SO hanya per id penawaran). Key dikirim sebagai field FormData terpisah di luar payload JSON `data`.
+
+### Fix keuangan
+4. `b84687e30` fix(finance): `createCheque` anti double-submit via idempotency key — nomor dokumen selalu baru dan nomor lembar fisik non-unik; dua giro pending identik masing-masing bisa dicairkan (klaim status per baris id, bukan per nomor lembar).
+5. `c53cf6137` fix(finance): `createBankStatementLine` anti double-submit via idempotency key — baris mutasi hantu hasil retry menggeser total header dan memblokir penyelesaian rekonsiliasi (penyelesaian menuntut semua baris tercakup). Klaim key sesudah kunci header + periode, urutan kunci repo tetap.
+6. `8cbb70be5` fix(finance): `createReconciliationAdjustment` anti double-submit via idempotency key — item outstanding kembar menggeser `adjustedBookBalance` dua kali saat `completeReconciliation` mensertifikasi saldo.
+7. `836c77367` fix(finance): `createBankReconciliation` anti double-submit via idempotency key — satu-satunya kandidat yang create-nya benar-benar di luar `$transaction`; kini dibungkus tx dengan klaim key pertama dan slug lewat `nextSlugWithClient`. Dua draft akun/periode sama sebelumnya bisa disertifikasi terpisah.
+
+### Fix produksi
+8. `5428a9a77` fix(manufacturing): `createProductionOrder` anti double-submit via idempotency key — kandidat tunggal agent "inventaris" yang lolos ambang bukti, justru di produksi: dua perintah produksi identik masing-masing bisa mengeluarkan bahan (FIFO terkonsumsi dua kali bila stok cukup) dan menerima barang jadi dua kali. Kunci WO `FOR UPDATE` hanya menilai status/BOM, tidak men-dedupe intent.
+
+### Vonis / cakupan agent
+- Agent penjualan kategori 2–4 dinyatakan bersih dengan bukti per-fungsi (transisi posting kunci+klaim+baca-ulang; faktur turunan terkunci quotation; `updateSalesPayment` diblokir jurnal POSTED + kunci dua faktur id-terurut). Agent keuangan menyatakan bersih: `postJournal`/`reverseJournal`/`deleteBankTransfer`/`deletePettyCash`/`completeReconciliation` (FOR UPDATE + klaim kondisional + `assertPeriodOpen(..., tx)`). Jangan diangkat ulang tanpa bukti baru.
+- Agent inventaris: 1 kandidat kualifikasi (produksi di atas), kelas 1–4 lain tidak memenuhi ambang bukti sesudah pengecualian putaran 60–62.
+
+CI final putaran 63: head `9372036b5` **success**; kedelapan head fix masing-masing **success** (termasuk intermediate, tanpa failure).
+
+### Catatan
+- Tidak ada migrasi schema putaran ini.
+- Harness `finance.actions.test.ts` kini memuat 4 test duplikat putaran 63 dengan pola sama: injeksi `prismaMock.idempotencyKey` per-test lalu `delete` sesudahnya supaya tidak bocor ke test lain.
