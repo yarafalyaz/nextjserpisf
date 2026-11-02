@@ -1,23 +1,26 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useRef, useTransition } from "react"
 import { createApplicant } from "@/actions/recruitment.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
 
 export function ApplicantForm({ vacancyId }: { vacancyId: number }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
 
   function onSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = event.currentTarget
     const formData = new FormData(form)
     formData.set("vacancyId", String(vacancyId))
+    formData.set("idempotencyKey", idempotencyKeyRef.current)
     startTransition(async () => {
       try {
         const result = await createApplicant(formData)
         if (!result?.success) throw new Error(result?.error || "Gagal menambah pelamar")
+        idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess("Pelamar ditambahkan")
         form.reset()
         router.refresh()

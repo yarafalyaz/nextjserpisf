@@ -66,6 +66,12 @@ vi.mock("@/lib/utils/slug-db", () => ({
 }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: async () => {} }))
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }))
+const { checkIdempotencyMock } = vi.hoisted(() => ({
+  checkIdempotencyMock: vi.fn(async () => undefined),
+}))
+vi.mock("@/lib/utils/idempotency", () => ({
+  checkIdempotency: (...a: unknown[]) => checkIdempotencyMock(...(a as [])),
+}))
 
 import {
   createApplicant,
@@ -125,6 +131,22 @@ describe("recruitment actions", () => {
     expect(res.success).toBe(false)
     expect(applicantCreate).not.toHaveBeenCalled()
     expect(historyCreate).not.toHaveBeenCalled()
+  })
+
+  it("putaran 62: createApplicant retry idempotency sama ditolak, pelamar lahir sekali", async () => {
+    vacancyFindFirst.mockResolvedValue({ id: 3, status: "open" })
+    applicantCreate.mockResolvedValue({ id: 9, name: "Budi" })
+    checkIdempotencyMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."))
+    const payload = { vacancyId: "3", name: "Budi", idempotencyKey: "applicant-key-1" }
+    const first = await createApplicant(form(payload))
+    const second = await createApplicant(form(payload))
+    expect(first.success).toBe(true)
+    expect(second.success).toBe(false)
+    expect(String((second as { error?: string }).error ?? "")).toMatch(/duplikat/)
+    expect(checkIdempotencyMock).toHaveBeenCalledTimes(2)
+    expect(applicantCreate).toHaveBeenCalledTimes(1)
   })
 
   it("refuses to move a stage directly to hired", async () => {

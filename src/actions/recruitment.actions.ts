@@ -8,6 +8,7 @@ import {
   vacancySchema,
 } from "@/lib/validations/recruitment.schemas";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { checkIdempotency } from "@/lib/utils/idempotency";
 import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { logActivity } from "@/lib/services/activity-log.service";
@@ -183,7 +184,13 @@ export async function createApplicant(formData: FormData) {
       return { success: false as const, error: "Pelamar hanya dapat ditambah ke lowongan yang terbuka" };
     }
 
+    // Putaran 62: key form dinilai pertama dalam tx. Double-submit
+    // sebelumnya melahirkan dua baris pelamar identik; keduanya kandidat
+    // sah terpisah sehingga kuota > 1 bisa mempekerjakan orang yang sama
+    // dua kali. Pemanggil tanpa key tetap no-op.
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
     const applicant = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id);
       // Kunci baris lowongan yang sama dengan updateVacancy/setVacancyStatus,
       // lalu baca ulang status: tutup lowongan yang commit sesudah cek luar
       // tidak boleh tetap menerima pelamar baru.
