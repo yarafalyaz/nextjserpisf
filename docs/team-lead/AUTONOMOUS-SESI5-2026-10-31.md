@@ -2239,3 +2239,52 @@ Semua kandidat agent diverifikasi sesi utama terhadap kode aktual + schema sebel
 ### Catatan
 - Tidak ada migrasi schema putaran ini.
 - Pelajaran harness (pengulangan putaran 74): facade tx per-file harus dilengkapi saat produksi mulai memakai delegate tx baru; kegagalan CI putaran ini 100% fixture, bukan produksi — dibuktikan hijau lokal penuh sebelum push perbaikan.
+
+## Putaran 76 — SDM payroll, master, produksi, pembelian (audit lintas wilayah)
+
+Semua kandidat agent diverifikasi sesi utama terhadap kode aktual + `prisma/schema.prisma` sebelum edit. Putaran ini: 5 commit fix; head kode final `247867cae` CI **success** (run `41501237989`). Tidak ada migrasi schema.
+
+### Prioritas 1 — agregat statutori payroll (`9bcb6f023`, run `41491474785` success)
+- Terbukti: dua slip WEEKLY terpisah untuk karyawan+periode sama sama-sama kurang potong BPJS/PPh21 karena alokasi "target minus slip lain" dihitung dari snapshot di luar transaksi tulis.
+- Fix: `buildPayrollWrite` menerima client transaksi; agregat `computeBpjsForPeriod`/`computePph21ForPeriod` dihitung ulang per baris di dalam tx publish massal dan di dalam tx tulis berkunci employee untuk `processPayroll`/`updatePayroll`; `recalcDraftPayrollFromLines` meneruskan `txClient`.
+- Keputusan desain mengikat: (a) baris **Desember terbit persis estimasi** — snapshot dan nominal sama-sama pending-final (F-026; approve menolak sampai hitung ulang Pasal 17 jalur single); recalc tidak menyelesaikan Pasal 17 diam-diam. (b) Gerbang susun (Pasal 65/BR-LOAN-03) **tidak ditegakkan ulang pada publish massal** — sudah di gerbang estimasi; menegakkannya saat penyegaran agregat mengubah populasi terbit (slip absen-penuh sah terbit net-0) = mengubah angka berjalan tanpa mandat. Kegagalan recalc per baris menjadi skip terhitung `statutoriBerubah`, bukan gagal run dan bukan terbit angka basi.
+
+### Prioritas 2 — urutan kunci edit SDM (`700bdb01c`, run `41492614034` success)
+- `updateLeaveRequest`/`updateOvertimeRequest`: kunci baris dokumen → kunci employees (asal ∪ tujuan, id naik) → locking re-read; tolak "sudah berubah" bila karyawan berpindah sebelum kunci terambil. 4 test regresi; merah 4/4 terpisah, hijau sesudah fix.
+- `updateEmployeeLoan` diverifikasi **sudah aman**: target tunggal dinilai sesudah kunci dokumen. Jangan diangkat ulang.
+
+### Master — vonis kandidat 1–6
+1. `deleteEmployee`/`updateEmployee` — FIX (`d0409b64f`, run `41495665986` success). Snapshot `userId` pra-kunci bisa melewatkan tautan login yang baru dibuat `updateEmployee` konkuren (employee terhapus, login aktif yatim); `updateEmployee` menulis ke tombstone. Fix final: satu `$transaction` (kunci employee → nilai ulang `deletedAt`/`userId` → nonaktifkan login dulu → hapus employee). Catatan desain: kunci global client di luar tx ditolak — autocommit melepas row lock sesudah statement.
+2. `deletePaymentTerm` — CATAT beralasan, jangan patch sepihak. Guard pemakaian di luar tx; penulis lawan tersebar (create/update customer/vendor menulis `paymentTermId` di banyak titik tanpa mengunci baris payment term). FK customer/vendor `ON DELETE SET NULL`: kerusakan berupa assignment senyap ter-null administratif, bukan dobel bayar. Fix benar mensyaratkan semua penulis customer/vendor ikut mengunci baris payment term yang sama — blast radius lebar.
+3. `deleteDepartment` — CATAT beralasan, alasan sama: hitungan referensi employee/position/vacancy/cost-center/holiday di luar tx; penulis lawan tersebar luas; mode FK campuran (SET NULL, bare-int yatim, Cascade).
+4. `createPosition` — FIX (`247867cae`): gap-lock tabel `positions` + scan nama ternormalisasi dalam tx + slug delegate tx; semantik reuse baris existing dipertahankan.
+5. `createTaxGroup` — FIX (`247867cae`): gap-lock `tax_groups` + scan nama ternormalisasi dalam tx, menolak konflik (selaras `updateTaxGroup`).
+6. `createBank`/`updateBank` — FIX (`247867cae`): satu tx bergap-lock `banks`, akun dinilai dari delegate tx, konflik nama ternormalisasi (create me-reuse, update menolak), slug delegate tx.
+
+### Produksi — vonis kandidat 1–6
+1. Gerbang STOK-14 `completedQty` basi sesudah kunci PO — FIX (`6623fb88e`, run `41498072013` success): nilai otoritatif diambil langsung dari hasil locking read.
+2. Biaya WO-only masuk sesudah WO `completed/cancelled/closed` — FIX (`247867cae`): helper `assertWorkOrderCostMutable` mengunci baris `work_orders` dan menilai status dari locking read di create/update/delete/pull WO-only. Jalur ganda PO+WO sengaja dilewati (PO dinilai penuh; tak ada bukti WO terminal di bawah PO aktif).
+3. `cancelWorkOrder` vs Material Issue `processing` — FIX (`6623fb88e`): blocker diperluas `draft|processing|completed`, menyamai `closeWorkOrder`; completion MI menunggu kunci WO yang sama sehingga serialisasi dua arah nyata.
+4. Putusan ganti revisi BOM tak menilai ulang target `released` — FIX (`247867cae`): target dinilai ulang (eksistensi + produk sama + status) di bawah kunci produk yang sama dengan `releaseBomRevision`; pin tak mendarat di revisi ter-supersede.
+5. Work center — GUGUR, laporan agent basi: kode aktual sudah gap-lock + scan nama aktif dan locking read stasiun sebelum cek `isActive`, lengkap dengan komentar race-nya. Jangan diangkat ulang.
+6. Tautan Material Request ke WO terminal — FIX (`247867cae`): `closed` masuk himpunan penolak terminal kanonis; `assertWorkOrderLinkable` mengunci baris WO lebih dulu; `createMaterialRequest` mengklaim `idempotencyKey` dalam tx dan form mengirim key per intent (rotasi sesudah sukses).
+
+### Pembelian — vonis kandidat 1–6
+1. PR berkomitmen bisa dihapus, tautan PO terlepas senyap — FIX (`6623fb88e`): tx berkunci PR menolak status `approved|partial_ordered|ordered` dan PO tertaut; klaim `deleteMany` berpredikat status; approval dihapus dalam tx sama.
+2. Scope gudang basi pada `verifyGoodsReceipt` — FIX (`247867cae`): hook menilai ulang scope atas baris GR+items terkunci lewat parameter opsional `scopeUser`; pemanggil lama tanpa argumen mempertahankan perilaku lama persis. Test baru `goods-receipt-scope.test.ts`.
+3. Scope/isi retur basi pada `processPurchaseReturn` — GUGUR penuh: hook mengunci baris retur → PO → membaca ulang items + konteks gudang dari tx dan menilai gudang hidup dalam tx; `updatePurchaseReturn` mengunci baris retur yang sama. Jangan diangkat ulang.
+4. Urutan kunci PO↔GR tagihan berpotensi deadlock — FIX (`247867cae`): `confirmVendorBill` disamakan ke urutan kanonis bill → GR → PO (sebelumnya bill → PO → GR melawan create/update). Kunci PO memakai `fresh.purchaseOrderId` hasil penilaian pasangan terkunci. Bukti merah terpisah (urutan GR sesudah PO), hijau sesudah fix.
+5. `createMaterialRequest` tanpa idempotency — FIX (lihat Produksi 6).
+6. Kunci item retur tak terurut/tak dedupe — FIX (`247867cae`): `[...new Set(ids)].sort((a, b) => a - b)` sebelum `Prisma.join`, menyamai pola hook stok lain. Bukti merah: nilai join `[9,3,9]`; hijau: `[3,9]`.
+
+### CATAT tambahan putaran ini
+- Kunci employee pada `recalcDraftPayrollFromLines` (usulan agent, urutan payroll → employee) DITOLAK: `updatePayroll` memegang employee lalu menunggu payroll yang sama yang dipegang recalc — menambah kunci employee sesudah payroll bisa membentuk siklus deadlock. Jangan patch tanpa test deadlock DB.
+
+### Daftar bersih agent (jangan diangkat ulang tanpa bukti baru)
+- Master: inti approval workflow (`approveStep`/`rejectStep` kunci baris + klaim atomik, single-active workflow terkunci per tipe), settings singleton, penomoran dokumen atomik, create/update Customer/Vendor/Item/Warehouse/Account/Tax/UoM/PaymentTerm, delete Customer/Vendor/Item/Warehouse/Tax/ItemGroup/CustomerCategory, `deleteRole`/`updateUserRoles`/`toggleUserActive`, work center (Produksi 5).
+- Produksi: `releaseBomRevision`, `createWorkOrder`, `updateWorkOrder`, `completeMaterialIssue` (klaim atomik + guard PO-consumed), `createMaterialIssueFromWorkOrder`, `closeWorkOrder`, `calculateStandardCost`, `createBomRevision`.
+- Pembelian: verifikasi GR ganda/over-receipt, buat GR, tagihan vendor create/confirm/update selain urutan kunci, retur create/update/process selain kandidat 3/6, hapus GR/PO, hapus/void tagihan, nomor faktur pajak, uang muka pembelian, transfer vendor, alokasi VendorCredit, nomor dokumen, serial/batch GR, duplikat harga pemasok (`@@unique([vendorId, itemId, minQty])`), hold klaim supplier by-design, form create utama pembelian mengirim `idempotencyKey`.
+
+### Bukti
+- Batch final `247867cae`: 18 file test 894/894; guard statis 184/184 (schema-usage, silent-failure, wired-transition-actions, action-wiring, permission-seed-parity, action-guard-coverage); `tsc --noEmit` bersih; ESLint 16 file berubah bersih; `git diff --check` bersih. Bukti merah per kelompok dicatat per commit (produksi 5 failed, master 4 failed, MR 2 failed, kandidat pembelian 4/6 2 failed).
+- CI: `9bcb6f023` run `41491474785`, `700bdb01c` run `41492614034`, `d0409b64f` run `41495665986`, `6623fb88e` run `41498072013`, `247867cae` run `41501237989` — semua success.
