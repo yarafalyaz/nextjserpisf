@@ -1442,6 +1442,12 @@ export async function postInvoice(invoiceId: number) {
       throw new Error("Invoice hanya bisa di-post dari status draft atau approved")
     }
 
+    // Putaran 70: nilai ulang approval di bawah kunci baris (pola
+    // confirmVendorPayment/postJournal). Cek pra-tx saja membiarkan edit
+    // yang membuka pengajuan pending baru — atau approval final yang basi
+    // terhadap updatedAt — lolos memposting isi yang belum disetujui.
+    await assertApproved("SalesInvoice", invoiceId, tx)
+
     // Gerbang invoiceForbidden garansi (F-021 tahap 3 G5): WO repair klaim
     // covered tidak boleh diposting menjadi tagihan pelanggan.
     await assertInvoiceAllowedForWorkOrderBridges(tx, {

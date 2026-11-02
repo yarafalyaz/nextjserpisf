@@ -27,6 +27,7 @@ const customerFindUniqueMock = vi.fn()
 const invoiceAggregateMock = vi.fn()
 const generateDocumentNumberMock = vi.fn()
 const executeRawMock = vi.fn()
+const assertApprovedMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -78,6 +79,10 @@ vi.mock("@/lib/sales/return-validation", () => ({ findOverReturn: vi.fn(() => nu
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
 }))
+vi.mock("@/lib/services/approval-workflow.service", () => ({
+  assertApproved: (...a: unknown[]) => assertApprovedMock(...a),
+  requestApprovalIfConfigured: vi.fn().mockResolvedValue(false),
+}))
 
 import { postInvoice } from "../sales.actions"
 
@@ -88,8 +93,9 @@ beforeEach(() => {
     invoiceFindUniqueOrThrowMock, invoiceItemCountMock, invoiceUpdateManyMock,
     invoiceUpdateMock, invoiceFindFirstMock, invoiceFindManyMock,
     salesOrderFindUniqueMock, salesOrderItemFindManyMock, invoiceItemFindManyMock,
-    generateDocumentNumberMock, executeRawMock,
+    generateDocumentNumberMock, executeRawMock, assertApprovedMock,
   ]) m.mockReset()
+  assertApprovedMock.mockResolvedValue(undefined)
   executeRawMock.mockResolvedValue(1)
   invoiceFindManyMock.mockResolvedValue([])
   salesOrderFindUniqueMock.mockResolvedValue({ documentNo: "SO-1", grandTotal: 5000, quotationId: null })
@@ -109,6 +115,29 @@ beforeEach(() => {
 })
 
 describe("postInvoice concurrency guard", () => {
+  it("putaran 70: approval dinilai ulang di dalam tx berkunci dengan tx diteruskan (bukan hanya pra-tx)", async () => {
+    const result = await postInvoice(11)
+    expect(result.success).toBe(true)
+    const inTx = assertApprovedMock.mock.calls.filter(
+      (c) => c[0] === "SalesInvoice" && c[1] === 11 && c[2] != null,
+    )
+    expect(inTx).toHaveLength(1)
+    // Penilaian dalam tx sesudah kunci baris faktur, sebelum klaim posted.
+    expect(executeRawMock.mock.invocationCallOrder[0]).toBeLessThan(
+      assertApprovedMock.mock.invocationCallOrder[assertApprovedMock.mock.calls.indexOf(inTx[0])],
+    )
+  })
+
+  it("putaran 70: approval pending yang lahir sesudah cek luar menghentikan posting dalam tx", async () => {
+    assertApprovedMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Dokumen masih menunggu persetujuan (approval workflow) sebelum dapat dilanjutkan."))
+    const result = await postInvoice(11)
+    expect(result.success).toBe(false)
+    expect(invoiceUpdateManyMock).not.toHaveBeenCalled()
+    expect(onSalesInvoicePostedMock).not.toHaveBeenCalled()
+  })
+
   it("posts via an atomic conditional claim scoped to status in (draft, approved)", async () => {
     const result = await postInvoice(11)
 
