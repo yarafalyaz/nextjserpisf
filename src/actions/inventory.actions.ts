@@ -1546,12 +1546,24 @@ export async function updateWorkOrder(id: number, formData: FormData) {
     }
 
     const items = normalizeWorkOrderItems(v.items ?? null);
-    // Baris ditulis ulang total di bawah (deleteMany+createMany = penanaman
-    // baris baru) dan header menulis customerId — keduanya dinilai hidup
-    // sebelum tx, pola gerbang create dokumen bebas.
-    await assertLiveWorkOrderRefs(prisma, v.customerId, items.map((i) => i.itemId));
 
     await prisma.$transaction(async (tx) => {
+      // Putaran 64: baris WO dikunci sebagai pernyataan pertama tx, lalu
+      // status dan gerbang hidup dinilai ulang — sebelumnya customer/item
+      // dinilai dari snapshot pra-tx sehingga deaktifasi yang commit
+      // di antara penilaian dan tulis lolos. Kunci sama menserialkan
+      // updateWorkOrder konkuren dan penonaktif master.
+      if (typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${id} FOR UPDATE`;
+      }
+      const locked = await tx.workOrder.findUniqueOrThrow({ where: { id } });
+      if (locked.status !== "draft" && locked.status !== "pending") {
+        throw new Error(
+          `Perintah Kerja tidak bisa diperbarui dengan status '${locked.status}'. Hanya status 'draft' atau 'pending' yang dapat diperbarui.`,
+        );
+      }
+      await assertLiveWorkOrderRefs(tx as never, v.customerId, items.map((i) => i.itemId));
+
       // Re-verify status inside the transaction (TOCTOU guard): two concurrent
       // edits could each read status=draft, both pass the pre-tx check, and
       // both reach this point. The conditional updateMany serializes them —

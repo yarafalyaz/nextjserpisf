@@ -35,12 +35,23 @@ const {
 
 // State transaksi yang ditiru: claim status selalu menang (count 1) +
 // delete/recreate item no-op — cukup untuk updateWorkOrder lolos penuh.
+// Putaran 64: tx juga menyediakan locking read + gerbang hidup (delegate tx).
 const tx = {
-  workOrder: { updateMany: (...a: unknown[]) => woUpdateMany(...a) },
+  workOrder: {
+    updateMany: (...a: unknown[]) => woUpdateMany(...a),
+    findUniqueOrThrow: (...a: unknown[]) => woFindUniqueOrThrow(...a),
+  },
   workOrderItem: {
     deleteMany: (...a: unknown[]) => woiDeleteMany(...a),
     createMany: (...a: unknown[]) => woiCreateMany(...a),
   },
+  customer: { findFirst: vi.fn().mockResolvedValue({ id: 1 }) },
+  item: {
+    findMany: vi.fn().mockImplementation(async (args: any) =>
+      (args?.where?.id?.in ?? []).map((id: number) => ({ id, name: `Item ${id}`, isActive: true })),
+    ),
+  },
+  $queryRaw: vi.fn().mockResolvedValue([{ id: 10 }]),
 }
 
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: m.requirePermissionMock }))

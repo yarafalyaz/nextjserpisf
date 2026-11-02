@@ -169,6 +169,30 @@ describe("updateWorkOrder gerbang hidup", () => {
   })
 })
 
+describe("putaran 64: updateWorkOrder gerbang hidup dalam tx berkunci", () => {
+  beforeEach(() => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 10, status: "draft", documentNo: "WO-0001", endDate: null })
+  })
+
+  it("kunci baris WO mendahului penilaian hidup di dalam tx", async () => {
+    const res = await updateWorkOrder(10, fd({ customerId: "7", date: "2026-11-01", items: JSON.stringify(LIVE_ITEMS) }))
+    expect(res.success).toBe(true)
+    const lockOrder = (mocks.prismaMock.$queryRaw.mock.invocationCallOrder as number[])[0]
+    const customerOrder = (mocks.prismaMock.customer.findFirst.mock.invocationCallOrder as number[]).at(-1)!
+    expect(lockOrder).toBeLessThan(customerOrder)
+    const lockArg = mocks.prismaMock.$queryRaw.mock.calls.at(-1)![0] as { sql?: string } | string[]
+    const sql = Array.isArray(lockArg) ? lockArg.join("?") : (lockArg.sql ?? "")
+    expect(sql).toMatch(/FROM work_orders[\s\S]*FOR UPDATE/)
+  })
+
+  it("status yang ternyata bukan draft sesudah kunci ditolak tanpa menulis", async () => {
+    mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 0 })
+    const res = await updateWorkOrder(10, fd({ customerId: "7", date: "2026-11-01", items: JSON.stringify(LIVE_ITEMS) }))
+    expect(res.success).toBe(false)
+    expect(mocks.prismaMock.workOrderItem.deleteMany).not.toHaveBeenCalled()
+  })
+})
+
 describe("reviseWorkOrderItems gerbang hidup", () => {
   it("menolak item baru nonaktif", async () => {
     mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 200, name: "Winch", isActive: false }])
