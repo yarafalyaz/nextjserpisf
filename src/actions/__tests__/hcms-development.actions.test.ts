@@ -74,7 +74,10 @@ vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: async () => actor,
   hasPermission: async () => true,
 }))
-vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: async () => "test-slug" }))
+vi.mock("@/lib/utils/slug-db", () => ({
+  nextSlug: async () => "test-slug",
+  nextSlugWithClient: async () => "test-slug",
+}))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: async () => {} }))
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }))
 

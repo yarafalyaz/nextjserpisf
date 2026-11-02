@@ -11,7 +11,7 @@ import {
   trainingParticipantSchema,
   trainingSchema,
 } from "@/lib/validations/development.schemas";
-import { nextSlug } from "@/lib/utils/slug-db";
+import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db";
 import { checkIdempotency } from "@/lib/utils/idempotency";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { parseMoneyAmount } from "@/lib/utils/parse-money";
@@ -209,7 +209,9 @@ export async function createTraining(formData: FormData) {
       return tx.training.create({
         data: {
           title: v.title,
-          slug: await nextSlug("training", v.title),
+          // Putaran 68: slug dari delegate tx — varian global tak melihat
+          // baris tak-tercommit transaksi lain (P2002 slug konkuren).
+          slug: await nextSlugWithClient(tx as never, "training", v.title),
           provider: v.provider ?? null,
           startDate: wibDateToUtcMidnight(v.startDate),
           endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,

@@ -61,7 +61,7 @@ import {
   parseWorkOrderStageNames,
   shouldAutoCompleteWorkOrder,
 } from "@/lib/reports/work-order-progress";
-import { nextSlug } from "@/lib/utils/slug-db";
+import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db";
 import { checkIdempotency } from "@/lib/utils/idempotency";
 import { reservationExpiresAt } from "@/lib/reports/stock-reservation";
 import { reservationReleaseNotice } from "@/lib/reports/stock-reservation-release";
@@ -156,7 +156,9 @@ export async function createProduct(formData: FormData) {
         data: {
           name: v.name,
           code,
-          slug: await nextSlug("product", v.name),
+          // Putaran 68: slug dari delegate tx — varian global tak melihat
+          // baris tak-tercommit transaksi lain (P2002 slug konkuren).
+          slug: await nextSlugWithClient(tx as never, "product", v.name),
           description: v.description ?? null,
           vehicleBrandId: v.vehicleBrandId,
           vehicleModelId: v.vehicleModelId,

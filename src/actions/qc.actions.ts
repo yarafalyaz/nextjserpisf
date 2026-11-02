@@ -19,7 +19,7 @@ import {
 import { raiseNonconformanceFromInspection, lockQcReferenceRow } from "@/lib/services/qc.service"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import { syncReworkCostToOrder } from "@/lib/services/production-cost.service"
-import { nextSlug } from "@/lib/utils/slug-db"
+import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db"
 
 const QC_REFERENCE_LABEL: Record<string, string> = {
   WorkOrder: "Perintah Kerja",
@@ -106,7 +106,10 @@ export async function createQcChecklist(formData: FormData) {
         data: {
           code,
           name: v.name,
-          slug: await nextSlug("qcChecklist", v.name),
+          // Putaran 68: slug dari delegate tx (pola nextSlugWithClient) —
+          // varian global tak melihat baris tak-tercommit transaksi lain,
+          // dua create nama sama konkuren bisa P2002 slug.
+          slug: await nextSlugWithClient(tx as never, "qcChecklist", v.name),
           checklistType: v.checklistType,
           productId: v.productId ?? null,
           version: 1,
