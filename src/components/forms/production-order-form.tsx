@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { createProductionOrder, updateProductionOrder } from "@/actions/manufacturing.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
@@ -25,6 +25,7 @@ interface ProductionOrderFormProps {
 export function ProductionOrderForm({ products, workOrders = [], defaultWorkOrderId = null, defaultProductId = null, order }: ProductionOrderFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [productId, setProductId] = useState(
     order?.productId ? String(order.productId) : defaultProductId ? String(defaultProductId) : "",
   )
@@ -37,8 +38,10 @@ export function ProductionOrderForm({ products, workOrders = [], defaultWorkOrde
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
+        if (!order?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
         const result = order?.id ? await updateProductionOrder(order.id, formData) : await createProductionOrder(formData)
         if (result.success) {
+          if (!order?.id) idempotencyKeyRef.current = crypto.randomUUID()
           showSuccess(order?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
           router.push("/produksi/production-orders")
           router.refresh()

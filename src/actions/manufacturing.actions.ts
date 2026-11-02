@@ -62,6 +62,7 @@ import {
   shouldAutoCompleteWorkOrder,
 } from "@/lib/reports/work-order-progress";
 import { nextSlug } from "@/lib/utils/slug-db";
+import { checkIdempotency } from "@/lib/utils/idempotency";
 import { reservationExpiresAt } from "@/lib/reports/stock-reservation";
 import { reservationReleaseNotice } from "@/lib/reports/stock-reservation-release";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
@@ -717,6 +718,11 @@ export async function createProductionOrder(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    // Putaran 63: nomor dokumen selalu baru, jadi retry identik
+    // melahirkan perintah produksi kembar yang masing-masing bisa
+    // mengeluarkan bahan dan menerima barang jadi (FIFO + stok dobel).
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
+
     const documentNo = await generateDocumentNumber("MO");
 
     // Dokumen sumber: FK `ProductionOrder.workOrderId` ada di skema tetapi tak
@@ -794,6 +800,7 @@ export async function createProductionOrder(formData: FormData) {
     // insert production_orders — konsisten dengan situs lain yang
     // mengunci WO (issueMaterial, MI dari WO).
     const productionOrder = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id);
       let workOrder = outerWorkOrder;
       if (outerWorkOrder) {
         if (typeof tx.$queryRaw === "function") {

@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => {
     item: buildModelMock(),
     bomRevision: buildModelMock(),
     productMaterial: buildModelMock(),
+    idempotencyKey: buildModelMock(),
     $queryRaw: vi.fn().mockResolvedValue([]),
   }
   prismaMock.$transaction = vi.fn(async (ops: unknown) =>
@@ -87,6 +88,24 @@ beforeEach(() => {
   mocks.prismaMock.bomRevision.findFirst.mockResolvedValue({ id: 77, revisionNo: 1, materials: [] })
   mocks.prismaMock.productionOrder.create.mockResolvedValue({ id: 3, slug: "mo-0003" })
   mocks.prismaMock.productionOrder.updateMany.mockResolvedValue({ count: 1 })
+})
+
+describe("createProductionOrder — idempotency (putaran 63)", () => {
+  it("retry idempotencyKey sama ditolak, perintah produksi lahir sekali", async () => {
+    const idem = mocks.prismaMock.idempotencyKey
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+
+    const first = await createProductionOrder(fd({ productId: 1, qty: 2, idempotencyKey: "mo-key-1" }))
+    const second = await createProductionOrder(fd({ productId: 1, qty: 2, idempotencyKey: "mo-key-1" }))
+
+    expect(first.success).toBe(true)
+    expect(second.success).toBe(false)
+    expect(String((second as { error?: string }).error)).toContain("duplikat")
+    expect(mocks.prismaMock.productionOrder.create).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe("createProductionOrder — tautan Work Order", () => {
