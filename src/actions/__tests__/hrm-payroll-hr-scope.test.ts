@@ -111,9 +111,19 @@ vi.mock("@/lib/db/prisma", () => {
           findUniqueOrThrow: (...a: unknown[]) => payrollFindUniqueOrThrowMock(...a),
           findMany: (...a: unknown[]) => payrollFindManyMock(...a),
           createMany: (...a: unknown[]) => payrollCreateManyMock(...a),
+          // Putaran 75: klaim approvePayroll berjalan dalam tx.
+          updateMany: (...a: unknown[]) => payrollUpdateManyMock(...a),
         },
+        employee: {
+          // Putaran 75: hidup dinilai dari baris terkunci lewat delegate tx.
+          findFirst: (...a: unknown[]) => employeeFindFirstMock(...a),
+          findMany: (...a: unknown[]) => employeeFindManyMock(...a),
+        },
+        approval: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({}) },
+        approvalWorkflow: { findFirst: vi.fn().mockResolvedValue(null) },
         payrollComponentLine: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
         $queryRaw: async () => [{ id: 1 }],
+        $executeRaw: vi.fn().mockResolvedValue(1),
       }),
     $queryRaw: async () => [{ id: 1 }],
     $executeRaw: vi.fn().mockResolvedValue(1),
@@ -186,6 +196,9 @@ beforeEach(() => {
   })
   employeeFindUniqueMock.mockResolvedValue({ departmentId: 3 })
   employeeFindManyMock.mockResolvedValue([])
+  // JANGAN seed default hidup di sini: findFirst juga dipakai resolusi
+  // user->employee hr-scope (default null sebelum putaran 75). Test yang
+  // butuh gerbang hidup lolos menanam nilainya sendiri.
   generateDocNumMock.mockResolvedValue("PAYROLL-0001")
   generateDocNumBatchMock.mockResolvedValue([])
   applyDueSalaryAdjustmentsMock.mockResolvedValue(undefined)
@@ -248,31 +261,31 @@ describe("putaran 38: updatePayroll menolak pindah slip ke karyawan mati", () =>
 })
 
 describe("AC-HRS-2: populasi generateBulkPayroll disaring cakupan HR", () => {
-  it("self: query populasi (panggilan pertama) membawa saringan id milik sendiri", async () => {
+  // Populasi = query findMany yang memuat employmentEndedAt dalam select
+  // (live-check dalam tx putaran 75 memakai select { id } saja).
+  function populationWhere() {
+    const call = employeeFindManyMock.mock.calls.find(
+      (c) => (c[0]?.select as { employmentEndedAt?: unknown } | undefined)?.employmentEndedAt !== undefined,
+    )
+    return call?.[0]?.where as { AND?: unknown } | undefined
+  }
+
+  it("self: query populasi membawa saringan id milik sendiri", async () => {
     requirePermissionMock.mockResolvedValue(userSessions().staff)
     await generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
-    const populationWhere = employeeFindManyMock.mock.calls.at(0)?.[0]?.where as {
-      AND?: unknown[]
-    }
-    expect(populationWhere.AND).toEqual([{ id: ME.self.id }])
+    expect(populationWhere()?.AND).toEqual([{ id: ME.self.id }])
   })
 
-  it("kepala_bengkel: query populasi (panggilan pertama) membawa saringan departemen", async () => {
+  it("kepala_bengkel: query populasi membawa saringan departemen", async () => {
     requirePermissionMock.mockResolvedValue(userSessions().head)
     await generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
-    const populationWhere = employeeFindManyMock.mock.calls.at(0)?.[0]?.where as {
-      AND?: unknown[]
-    }
-    expect(populationWhere.AND).toEqual([{ departmentId: ME.head.departmentId }])
+    expect(populationWhere()?.AND).toEqual([{ departmentId: ME.head.departmentId }])
   })
 
   it("peran all tidak mendapat saringan tambahan (nol perubahan perilaku)", async () => {
     requirePermissionMock.mockResolvedValue(userSessions().finance)
     await generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
-    const populationWhere = employeeFindManyMock.mock.calls.at(0)?.[0]?.where as {
-      AND?: unknown
-    }
-    expect(populationWhere.AND).toBeUndefined()
+    expect(populationWhere()?.AND).toBeUndefined()
   })
 })
 

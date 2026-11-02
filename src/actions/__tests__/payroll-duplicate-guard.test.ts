@@ -31,7 +31,11 @@ vi.mock("@/lib/db/prisma", () => {
       findFirst: vi.fn().mockResolvedValue(null),
       create: (...a: unknown[]) => payrollCreateMock(...a),
     },
-    employee: { findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a) },
+    employee: {
+      findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a),
+      // Putaran 75: assertLiveEmployee dalam tx menilai hidup dari delegate tx.
+      findFirst: vi.fn().mockResolvedValue({ id: 5 }),
+    },
     employeeLoan: { findMany: vi.fn().mockResolvedValue([]) },
     approvalWorkflow: { findFirst: vi.fn().mockResolvedValue(null) },
     approval: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({}) },
