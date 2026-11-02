@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition, useMemo, useState } from "react";
+import { useRef, useTransition, useMemo, useState } from "react";
 import {
   createCustomerVehicle,
   updateCustomerVehicle,
@@ -63,6 +63,10 @@ export function CustomerVehicleForm({
   redirectTo,
 }: CustomerVehicleFormProps) {
   const router = useRouter();
+  // Idempotency: key stabil per intent tambah; retry jaringan memakai key
+  // yang sama (ditolak server), sukses merotasi untuk kendaraan berikutnya.
+  const idempotencyKeyRef = useRef<string | null>(null);
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID();
   const [isPending, startTransition] = useTransition();
 
   const [selectedBrandId, setSelectedBrandId] = useState<number | null>(
@@ -116,6 +120,7 @@ export function CustomerVehicleForm({
 
         formData.set("variantId", String(selectedVariantId));
 
+        if (!vehicle?.id) formData.set("idempotencyKey", idempotencyKeyRef.current!);
         const result = vehicle?.id
           ? await updateCustomerVehicle(vehicle.id, formData)
           : await createCustomerVehicle(formData);
@@ -123,6 +128,7 @@ export function CustomerVehicleForm({
           showError(result.error || "Gagal menyimpan data");
           return;
         }
+        idempotencyKeyRef.current = crypto.randomUUID();
         showSuccess(
           vehicle?.id
             ? "Kendaraan berhasil diperbarui"

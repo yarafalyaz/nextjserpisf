@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
     salesOrder: buildModelMock(),
     salesInvoice: buildModelMock(),
     customer: buildModelMock(),
+    idempotencyKey: buildModelMock(),
 
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
@@ -262,6 +263,19 @@ describe("Customer Vehicle Actions", () => {
     const res = await actions.createCustomerVehicle(fdMap({ customerId: 1, variantId: 1 }))
     expect(res?.success).toBe(false)
     expect(res?.error).toMatch(/fk fail/)
+  })
+  it("putaran 64: createCustomerVehicle retry idempotencyKey sama ditolak, kendaraan lahir sekali", async () => {
+    const idem = mocks.prismaMock.idempotencyKey
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const first = await actions.createCustomerVehicle(fdMap({ customerId: 1, variantId: 1, idempotencyKey: "cv-key-1" }))
+    expect(first?.success).toBe(true)
+    const second = await actions.createCustomerVehicle(fdMap({ customerId: 1, variantId: 1, idempotencyKey: "cv-key-1" }))
+    expect(second?.success).toBe(false)
+    expect(second?.error).toContain("duplikat")
+    expect(mocks.prismaMock.customerVehicle.create).toHaveBeenCalledTimes(1)
   })
   it("updateCustomerVehicle succeeds", async () => {
     const res = await actions.updateCustomerVehicle(1, fdMap({ customerId: 1, variantId: 1, vehicleId: 1 }))

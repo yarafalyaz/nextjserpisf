@@ -15,6 +15,7 @@ import {
   serviceScheduleSchema,
 } from "@/lib/validations/vehicle.schemas";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
+import { checkIdempotency } from "@/lib/utils/idempotency";
 import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db";
 
 /** Kunci pembanding nama master kendaraan: trim + lowercase (kontrak nama unik per induk). */
@@ -678,7 +679,7 @@ async function assertCustomerVehicleRefsExist(input: {
 
 export async function createCustomerVehicle(formData: FormData) {
   try {
-    await requirePermission("create_customers");
+    const user = await requirePermission("create_customers");
 
     const parsed = parseFormData(customerVehicleSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -705,7 +706,12 @@ export async function createCustomerVehicle(formData: FormData) {
     // transaction. Without the wrapper, a vehicle.create success followed by a
     // customerVehicle.create failure orphans the freshly-created Vehicle row.
     // Mirrors the atomic createVehicle fix.
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
     const customerVehicle = await prisma.$transaction(async (tx) => {
+      // Putaran 64: retry submit identik melahirkan kepemilikan (dan, pada
+      // jalur varian, Vehicle) kembar — schema tidak punya jaring unik.
+      // Klaim key sebagai pernyataan pertama tx: rollback melepaskan key.
+      await checkIdempotency(idempotencyKey, tx, user.id);
       let vehicleId: number;
 
       if (variantId) {
