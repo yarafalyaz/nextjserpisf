@@ -15,7 +15,7 @@ import {
   createShippingMethodSchema,
   updateShippingMethodSchema,
 } from "@/lib/validations/method.schemas"
-import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db"
+import { nextSlugWithClient } from "@/lib/utils/slug-db"
 
 // Payment dan shipping method berbagi alur CRUD yang sama; bit yang berbeda
 // (permission, schema, model, awalan kode, pesan log, path) jadi konfigurasi.
@@ -144,24 +144,61 @@ async function updateMethod(cfg: MethodConfig, id: number, formData: FormData, u
     const parsed = parseFormData(cfg.schemas.update, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
 
-    // Ganti `code` = memutus rujukan string dokumen lama (lihat
-    // assertMethodCodeUnused). Rename `name` aman: resolusi membaca nama
-    // berjalan dari master. Kode tak berubah -> guard dilewati.
-    const existing = await cfg.model.findUnique({ where: { id }, select: { code: true } })
-    if (existing && parsed.data.code !== existing.code) {
-      const blocked = await assertMethodCodeUnused(cfg, existing.code)
-      if (blocked) return { success: false, error: blocked }
-    }
+    // Putaran 67: klaim nama/kode ternormalisasi homolog createMethod —
+    // kontrak putaran 53 menolak duplicate normalized nama di file Metode.
+    // Jalur update kini juga harus menolak rename ke namespace file lain;
+    // nama dirinya sendiri tidak memblokir. Nilai ulang + guard kode dipakai
+    // + update satu transaksi bergap-lock supaya create/update konkuren tak
+    // sama-sama lewat (pola tx create putaran 53 baris 80-94).
+    const name = parsed.data.name
+    const label = cfg.entity === "PaymentMethod" ? "Metode pembayaran" : "Metode pengiriman"
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        if (cfg.table === "payment_methods") {
+          await tx.$executeRaw`SELECT id FROM payment_methods FOR UPDATE`
+        } else {
+          await tx.$executeRaw`SELECT id FROM shipping_methods FOR UPDATE`
+        }
+      }
+      const txModel: any = cfg.table === "payment_methods" ? tx.paymentMethod : tx.shippingMethod
+      const candidates: { id: number; name: string; code: string; slug: string | null; isActive: boolean }[] =
+        await txModel.findMany({
+          select: { id: true, name: true, code: true, slug: true, isActive: true },
+        })
+      const nameKey = normalizeMethodKey(name)
+      const ownName = candidates.find((row) => row.id !== id && normalizeMethodKey(row.name) === nameKey)
+      if (ownName) {
+        throw new Error(
+          `${label} "${ownName.name}" sudah memakai nama ${JSON.stringify(name.trim())}; pakai nama lain.`,
+        )
+      }
+      const codeKey = normalizeMethodKey(parsed.data.code)
+      const ownCode = candidates.find((row) => row.id !== id && normalizeMethodKey(row.code) === codeKey)
+      if (ownCode) {
+        throw new Error(
+          `Kode ${label.toLowerCase()} ${ownCode.code} sudah dipakai ${label.toLowerCase()} "${ownCode.name}"; pakai kode lain.`,
+        )
+      }
 
-    await cfg.model.update({
-      where: { id },
-      data: {
-        updatedBy: Number(user.id),
-        code: parsed.data.code,
-        name: parsed.data.name,
-        slug: await nextSlug(cfg.slugModel, parsed.data.name, { excludeId: id }),
-        isActive: parsed.data.isActive ?? false,
-      },
+      // Ganti `code` = memutus rujukan string dokumen lama (lihat
+      // assertMethodCodeUnused). Rename `name` aman: resolusi membaca nama
+      // berjalan dari master. Kode tak berubah -> guard dilewati.
+      const existing = await txModel.findUnique({ where: { id }, select: { code: true } })
+      if (existing && parsed.data.code !== existing.code) {
+        const blocked = await assertMethodCodeUnused(cfg, existing.code)
+        if (blocked) throw new Error(blocked)
+      }
+
+      return txModel.update({
+        where: { id },
+        data: {
+          updatedBy: Number(user.id),
+          code: parsed.data.code,
+          name,
+          slug: await nextSlugWithClient(tx as never, cfg.slugModel, name, { excludeId: id }),
+          isActive: parsed.data.isActive ?? false,
+        },
+      })
     })
     await logActivity("update", cfg.entity, id, cfg.messages.update)
     revalidatePath(cfg.listPath)

@@ -164,6 +164,70 @@ describe("putaran 53: create metode di bawah gap-lock", () => {
   })
 })
 
+describe("putaran 67: update metode klaim nama/kode ternormalisasi", () => {
+  it("rename pembayaran ke nama file lain (beda kapital) ditolak dan update tidak dipanggil", async () => {
+    mocks.prismaMock.paymentMethod.findUnique.mockResolvedValue({ code: "CASH" })
+    mocks.prismaMock.paymentMethod.findMany.mockResolvedValue([
+      { id: 1, name: "Tunai Baru", code: "CASH", slug: "tunai-baru", isActive: true },
+      { id: 2, name: "Transfer", code: "TRA", slug: "transfer", isActive: true },
+    ])
+    const res = await actions.updatePaymentMethod(1, fdMap({ name: " transfer ", code: "CASH" }))
+    expect(res?.success).toBe(false)
+    expect(String((res as any)?.error)).toContain("Transfer")
+    expect(mocks.prismaMock.paymentMethod.update).not.toHaveBeenCalled()
+    mocks.prismaMock.paymentMethod.findMany.mockResolvedValue([])
+  })
+
+  it("rename pembayaran ke kode file lain (beda kapital) ditolak dan update tidak dipanggil", async () => {
+    mocks.prismaMock.paymentMethod.findUnique.mockResolvedValue({ code: "CASH2" })
+    mocks.prismaMock.paymentMethod.findMany.mockResolvedValue([
+      { id: 1, name: "Tunai Baru", code: "CASH2", slug: "tunai-baru", isActive: true },
+      { id: 2, name: "Transfer", code: "TRA", slug: "transfer", isActive: true },
+    ])
+    const res = await actions.updatePaymentMethod(1, fdMap({ name: "Tunai Baru", code: " tra " }))
+    expect(res?.success).toBe(false)
+    expect(String((res as any)?.error)).toContain("TRA")
+    expect(mocks.prismaMock.paymentMethod.update).not.toHaveBeenCalled()
+    mocks.prismaMock.paymentMethod.findMany.mockResolvedValue([])
+  })
+
+  it("kode lama dipakai dokumen tetap memblokir ganti kode lebih dulu", async () => {
+    mocks.prismaMock.paymentMethod.findUnique.mockResolvedValue({ code: "CASH" })
+    mocks.countMock.mockResolvedValue(2)
+    const res = await actions.updatePaymentMethod(1, fdMap({ name: "Tunai", code: "CASH2" }))
+    expect(res?.success).toBe(false)
+    expect(String((res as any)?.error)).toContain("masih dipakai")
+    expect(mocks.prismaMock.paymentMethod.update).not.toHaveBeenCalled()
+  })
+
+  it("update pembayaran valid memanggil findMany di bawah transaksi dan gap-lock", async () => {
+    mocks.prismaMock.paymentMethod.findUnique.mockResolvedValue({ code: "CASH" })
+    mocks.prismaMock.paymentMethod.findMany.mockResolvedValue([
+      { id: 1, name: "Tunai", code: "CASH", slug: "tunai", isActive: true },
+    ])
+    const res = await actions.updatePaymentMethod(1, fdMap({ name: "Tunai Baru", code: "CASH" }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+    expect(mocks.prismaMock.$executeRaw).toHaveBeenCalled()
+    expect(mocks.prismaMock.paymentMethod.findMany).toHaveBeenCalled()
+    expect(mocks.prismaMock.paymentMethod.update).toHaveBeenCalledTimes(1)
+    mocks.prismaMock.paymentMethod.findMany.mockResolvedValue([])
+  })
+
+  it("rename pengiriman ke nama file lain ditolak dan update tidak dipanggil", async () => {
+    mocks.prismaMock.shippingMethod.findUnique.mockResolvedValue({ code: "KIRIM" })
+    mocks.prismaMock.shippingMethod.findMany.mockResolvedValue([
+      { id: 1, name: "Kirim Baru", code: "KIRIM", slug: "kirim-baru", isActive: true },
+      { id: 2, name: "JNE", code: "JNE", slug: "jne", isActive: true },
+    ])
+    const res = await actions.updateShippingMethod(1, fdMap({ name: " jne ", code: "KIRIM" }))
+    expect(res?.success).toBe(false)
+    expect(String((res as any)?.error)).toContain("JNE")
+    expect(mocks.prismaMock.shippingMethod.update).not.toHaveBeenCalled()
+    mocks.prismaMock.shippingMethod.findMany.mockResolvedValue([])
+  })
+})
+
 describe("Payment Method Actions", () => {
   it("createPaymentMethod succeeds", async () => {
     const res = await actions.createPaymentMethod(fdMap({ name: "Cash", code: "CASH" }))
