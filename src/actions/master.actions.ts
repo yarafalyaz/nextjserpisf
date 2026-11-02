@@ -3121,14 +3121,28 @@ export async function createTaxGroup(formData: FormData) {
     const foundTaxes = await prisma.tax.findMany({ where: { id: { in: taxIds }, isActive: true, deletedAt: null }, select: { id: true } });
     if (foundTaxes.length !== taxIds.length) throw new Error("Pajak dalam kelompok tidak ditemukan atau nonaktif");
 
-    const taxGroup = await prisma.taxGroup.create({
-      data: {
-        name,
-        slug: await nextSlug("taxGroup", name),
-        taxes: {
-          create: taxIds.map((taxId) => ({ taxId })),
+    // Putaran 61: create berjalan dalam tx yang mengunci baris pajak
+    // anggota (id terurut, anti-deadlock) lalu menilai ulang kehidupannya.
+    // deleteTax mengunci baris pajak yang sama — tanpa kunci bersama,
+    // soft-delete lawan yang commit di jendela cek->create menidurkan
+    // pajak tepat sesudah ia masuk kelompok aktif.
+    const taxGroup = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        for (const taxId of [...taxIds].sort((a, b) => a - b)) {
+          await tx.$executeRaw`SELECT id FROM taxes WHERE id = ${taxId} FOR UPDATE`;
+        }
+      }
+      const lockedTaxes = await tx.tax.findMany({ where: { id: { in: taxIds }, isActive: true, deletedAt: null }, select: { id: true } });
+      if (lockedTaxes.length !== taxIds.length) throw new Error("Pajak dalam kelompok tidak ditemukan atau nonaktif");
+      return tx.taxGroup.create({
+        data: {
+          name,
+          slug: await nextSlugWithClient(tx as never, "taxGroup", name),
+          taxes: {
+            create: taxIds.map((taxId) => ({ taxId })),
+          },
         },
-      },
+      });
     });
 
     revalidatePath("/master/kelompok-pajak");
@@ -3163,6 +3177,16 @@ export async function updateTaxGroup(id: number, formData: FormData) {
       if (typeof tx.$executeRaw === "function") {
         await tx.$executeRaw`SELECT id FROM tax_groups FOR UPDATE`;
       }
+      // Kunci baris pajak anggota (id terurut) + nilai ulang hidup dalam
+      // tx: deleteTax mengunci baris yang sama, jadi pajak yang ditidurkan
+      // lawan di jendela cek luar tidak lolos masuk kelompok.
+      if (typeof tx.$executeRaw === "function") {
+        for (const taxId of [...taxIds].sort((a, b) => a - b)) {
+          await tx.$executeRaw`SELECT id FROM taxes WHERE id = ${taxId} FOR UPDATE`;
+        }
+      }
+      const lockedTaxes = await tx.tax.findMany({ where: { id: { in: taxIds }, isActive: true, deletedAt: null }, select: { id: true } });
+      if (lockedTaxes.length !== taxIds.length) throw new Error("Pajak dalam kelompok tidak ditemukan atau nonaktif");
       const nameConflict = (
         await tx.taxGroup.findMany({
           where: { id: { not: id } },
@@ -3679,34 +3703,39 @@ export async function deleteTax(id: number) {
   try {
     const user = await requirePermission("delete_taxes");
 
-    // tax_group_taxes.tax_id has NO foreign key (only tax_group_id does), so a
-    // hard delete would NOT raise P2003 and would leave the group row pointing at
-    // a non-existent tax — the group then renders a blank/broken line. Guard on
-    // memberships explicitly before attempting the delete.
-    const usedInGroups = await prisma.taxGroupTax.count({ where: { taxId: id } });
-    if (usedInGroups > 0) {
-      return {
-        success: false,
-        error: `Pajak masih dipakai di ${usedInGroups} kelompok pajak. Hapus dari kelompok terlebih dahulu.`,
-      };
-    }
+    // tax_group_taxes.tax_id ber-FK Restrict ke taxes (schema.prisma):
+    // hard delete pajak beranggotakan kelompok ditolak DB. Yang berbahaya
+    // justru BALAPANNYA — hitung keanggotaan di luar tx membaca 0 tepat
+    // sebelum createTaxGroup lawan commit, lalu fallback soft-delete
+    // menidurkan pajak yang baru saja masuk kelompok aktif. Putaran 61:
+    // hitung + hapus dalam satu tx berkunci baris pajak; penulis kelompok
+    // mengunci baris pajak yang sama, jadi kedua sisi terserialkan.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM taxes WHERE id = ${id} FOR UPDATE`;
+      }
+      const usedInGroups = await tx.taxGroupTax.count({ where: { taxId: id } });
+      if (usedInGroups > 0) {
+        throw new Error(`Pajak masih dipakai di ${usedInGroups} kelompok pajak. Hapus dari kelompok terlebih dahulu.`);
+      }
 
-    // Tax has a deletedAt column; fall back to soft-delete on FK conflict
-    // (e.g. when referenced by a TaxGroup line) to mirror the convention
-    // used by deleteCustomer / deleteVendor / deleteItem.
-    //
-    // isActive is cleared alongside deletedAt (same as deleteCustomerCategory):
-    // the "Kelompok Pajak" pickers load taxes with `where: { isActive: true }`,
-    // so without this a soft-deleted tax stayed selectable in new tax groups.
-    await hardDeleteOrSoftDelete(
-      () => prisma.tax.delete({ where: { id } }),
-      () =>
-        prisma.tax.update({
-          where: { id },
-          data: {
-        updatedBy: Number(user.id), deletedAt: new Date(), isActive: false },
-        }),
-    );
+      // Tax has a deletedAt column; fall back to soft-delete on FK conflict
+      // to mirror the convention used by deleteCustomer / deleteVendor /
+      // deleteItem.
+      //
+      // isActive is cleared alongside deletedAt (same as deleteCustomerCategory):
+      // the "Kelompok Pajak" pickers load taxes with `where: { isActive: true }`,
+      // so without this a soft-deleted tax stayed selectable in new tax groups.
+      await hardDeleteOrSoftDelete(
+        () => tx.tax.delete({ where: { id } }),
+        () =>
+          tx.tax.update({
+            where: { id },
+            data: {
+          updatedBy: Number(user.id), deletedAt: new Date(), isActive: false },
+          }),
+      );
+    });
 
     revalidatePath("/master/pajak");
     await logActivity("delete", "Tax", id, "Menghapus pajak");

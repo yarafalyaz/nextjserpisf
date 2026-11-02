@@ -254,6 +254,61 @@ describe("putaran 61: rename master menolak nama/kode/simbol milik master hidup 
   })
 })
 
+describe("putaran 61: hapus pajak dan penulis kelompok terserialkan kunci baris pajak", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+  })
+
+  afterEach(() => {
+    // Mock persisten describe ini (baris pajak tunggal, hitung anggota 2)
+    // meracuni Tax Actions sesudahnya — clearAllMocks tidak membuang
+    // implementasi mockResolvedValue, jadi pulihkan bentuk harness asal.
+    mocks.prismaMock.tax.findMany.mockImplementation(async (args: any) =>
+      (args?.where?.id?.in ?? []).map((id: number) => ({ id })),
+    )
+    mocks.prismaMock.taxGroupTax.count.mockResolvedValue(0)
+  })
+
+  const rawSqlOf = (call: unknown[]) =>
+    (call[0] as unknown[]).map((part) => String(part)).join(" ")
+
+  it("deleteTax: kunci baris pajak mendahului hitung keanggotaan kelompok", async () => {
+    mocks.prismaMock.taxGroupTax.count.mockResolvedValue(2)
+    const res: any = await actions.deleteTax(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("kelompok pajak")
+    const rawCalls = mocks.prismaMock.$executeRaw.mock.calls as unknown[][]
+    const lockIdx = rawCalls.findIndex((c) => rawSqlOf(c).includes("FROM taxes"))
+    expect(lockIdx).toBeGreaterThanOrEqual(0)
+    expect(mocks.prismaMock.$executeRaw.mock.invocationCallOrder[lockIdx]).toBeLessThan(
+      mocks.prismaMock.taxGroupTax.count.mock.invocationCallOrder[0],
+    )
+    expect(mocks.prismaMock.tax.delete).not.toHaveBeenCalled()
+  })
+
+  it("createTaxGroup: kunci baris pajak anggota mendahului create kelompok", async () => {
+    mocks.prismaMock.tax.findMany.mockResolvedValue([{ id: 1 }])
+    const res: any = await actions.createTaxGroup(fdMap({ name: "PPN Umum", taxIds: "1" }))
+    expect(res?.success).toBe(true)
+    const rawCalls = mocks.prismaMock.$executeRaw.mock.calls as unknown[][]
+    const lockIdx = rawCalls.findIndex((c) => rawSqlOf(c).includes("FROM taxes"))
+    expect(lockIdx).toBeGreaterThanOrEqual(0)
+    expect(mocks.prismaMock.$executeRaw.mock.invocationCallOrder[lockIdx]).toBeLessThan(
+      mocks.prismaMock.taxGroup.create.mock.invocationCallOrder[0],
+    )
+  })
+
+  it("updateTaxGroup: kunci baris pajak anggota di dalam transaksi", async () => {
+    mocks.prismaMock.taxGroup.findMany.mockResolvedValue([])
+    mocks.prismaMock.tax.findMany.mockResolvedValue([{ id: 1 }])
+    const res: any = await actions.updateTaxGroup(1, fdMap({ name: "PPN Umum", taxIds: "1" }))
+    expect(res?.success).toBe(true)
+    const rawCalls = mocks.prismaMock.$executeRaw.mock.calls as unknown[][]
+    expect(rawCalls.some((c) => rawSqlOf(c).includes("FROM taxes"))).toBe(true)
+  })
+})
+
 describe("FK fiktif customerCategoryId/paymentTermId (repro)", () => {
   it("createCustomer tolak customerCategoryId fiktif", async () => {
     const res = await actions.createCustomer(fdMap({ name: "X", customerCategoryId: "999999" }))
