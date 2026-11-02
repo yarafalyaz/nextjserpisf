@@ -101,7 +101,8 @@ export async function onTransferProcessed(
       // 1. Batch-generate one document number per item (was N serial round-trips).
       const smDocNos = await generateDocumentNumberBatch("SM", aggregatedItems.length);
       // 2. Lock all item rows in a single query (was N serial FOR UPDATE).
-      await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(aggregatedItems.map(([id]) => id))}) FOR UPDATE`;
+      // Id terurut menaik seperti jalur receive (urutan kunci global).
+      await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(aggregatedItems.map(([id]) => id).sort((a, b) => a - b))}) FOR UPDATE`;
 
       let docIdx = 0;
       for (const [itemId, qty] of aggregatedItems) {

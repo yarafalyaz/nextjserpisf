@@ -197,6 +197,29 @@ describe("onStockAdjustmentProcessed live-qty baseline", () => {
     )
   })
 
+  it("putaran 54: kunci baris items terurut menaik walau baris dokumen menurun", async () => {
+    const spies = wireTx({
+      items: [
+        { itemId: 9, systemQty: 0, actualQty: 6, difference: 6, unitCost: 50 },
+        { itemId: 7, systemQty: 0, actualQty: 4, difference: 4, unitCost: 50 },
+      ],
+      liveQty: { 9: 0, 7: 0 },
+    })
+
+    await onStockAdjustmentProcessed(50, 1)
+
+    const itemLock = spies.queryRaw.mock.calls.find((c: unknown[]) => {
+      const first = c[0] as unknown
+      const sql = Array.isArray(first) ? (first as string[]).join("?") : ((first as { strings?: string[] })?.strings ?? []).join("?")
+      return sql.includes("FROM items") && sql.includes("FOR UPDATE")
+    })
+    expect(itemLock).toBeDefined()
+    const values = (itemLock!.slice(1) as unknown[]).find(
+      (v) => v && typeof v === "object" && "values" in (v as Record<string, unknown>),
+    ) as { values?: unknown[] } | undefined
+    expect(values?.values).toEqual([7, 9])
+  })
+
   it("creates ONE layer per lot for a multi-batch positive adjustment (bukan layer gabungan)", async () => {
     const spies = wireTx({
       items: [{ itemId: 9, systemQty: 0, actualQty: 10, difference: 10, unitCost: 50, batchNumbers: ["LOT-A", "LOT-B"] }],

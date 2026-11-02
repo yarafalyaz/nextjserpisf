@@ -76,7 +76,9 @@ export async function onStockAdjustmentProcessed(
         throw new Error("Penyesuaian stok berisi item duplikat.");
       }
       if (itemIds.length > 0) {
-        await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(itemIds)}) FOR UPDATE`;
+        // Urutan kunci global menaik (preseden transfer receive): dokumen
+        // dengan daftar item terbalik tidak saling menunggu (deadlock 1213).
+        await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join([...itemIds].sort((a, b) => a - b))}) FOR UPDATE`;
       }
       
       // 2. Fetch the LIVE per-warehouse stock for this adjustment's warehouse.

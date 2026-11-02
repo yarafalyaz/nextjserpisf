@@ -671,6 +671,28 @@ describe("createInboundMoves item row lock (race batch tujuan)", () => {
   })
 })
 
+describe("onTransferProcessed item row lock order (putaran 54)", () => {
+  it("kunci baris items terurut unik menaik pada jalur OUT", async () => {
+    const { spies } = wireTx([
+      { itemId: 9, qty: 2 },
+      { itemId: 7, qty: 2 },
+    ])
+
+    await onTransferProcessed(100, 1)
+
+    const itemLock = spies.queryRaw.mock.calls.find((call: unknown[]) => {
+      const first = call[0] as unknown
+      const sql = Array.isArray(first) ? (first as string[]).join("?") : ((first as { strings?: string[] })?.strings ?? []).join("?")
+      return sql.includes("FROM items") && sql.includes("FOR UPDATE")
+    })
+    expect(itemLock).toBeDefined()
+    const values = (itemLock!.slice(1) as unknown[]).find(
+      (v) => v && typeof v === "object" && "values" in (v as Record<string, unknown>),
+    ) as { values?: unknown[] } | undefined
+    expect(values?.values).toEqual([7, 9])
+  })
+})
+
 describe("onTransferProcessed expired-lot guard forwarding (F-011)", () => {
   it("passes transfer.date as documentDate to consumeFifoLayers", async () => {
     const { spies } = wireTx([{ itemId: 7, qty: 3 }])

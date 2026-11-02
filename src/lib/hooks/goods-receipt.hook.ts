@@ -309,7 +309,8 @@ export async function onGoodsReceiptVerified(
     // over-receipt guard) so this step reuses them.
 
     const smDocNos = await generateDocumentNumberBatch("SM", goodsReceipt.items.length);
-    await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(grItemIds)}) FOR UPDATE`;
+    // Id terurut menaik = urutan kunci global (anti-deadlock antar dokumen).
+    await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join([...grItemIds].sort((a, b) => a - b))}) FOR UPDATE`;
 
     // Baseline average cost WAJIB segar dari bawah kunci item: meta di
     // atas dibaca SEBELUM kunci, jadi GR lain untuk item average yang sama

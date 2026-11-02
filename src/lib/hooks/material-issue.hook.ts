@@ -149,9 +149,10 @@ export async function onMaterialIssueCompleted(
       // 1. Batch document numbers
       const smDocNos = await generateDocumentNumberBatch("SM", activeItems.length);
       
-      // 2. Batch lock item rows to serialize global qtyOnHand updates
+      // 2. Batch lock item rows to serialize global qtyOnHand updates.
+      // Id terurut menaik = urutan kunci global (anti-deadlock antar dokumen).
       const itemIds = activeItems.map((item) => item.itemId);
-      await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(itemIds)}) FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join([...new Set(itemIds)].sort((a, b) => a - b))}) FOR UPDATE`;
       
       let docIdx = 0;
       for (const item of activeItems) {
