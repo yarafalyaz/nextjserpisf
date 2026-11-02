@@ -48,7 +48,7 @@ function makeClient(over: Record<string, any> = {}) {
           : over.decision,
       ),
     },
-    employee: { findUnique: vi.fn().mockResolvedValue({ id: 42, deletedAt: null }) },
+    employee: { findUnique: over.employee?.findUnique ?? vi.fn().mockResolvedValue({ id: 42, deletedAt: null, isActive: true, employmentEndedAt: null }) },
     disciplinaryDeductionApplication: {
       findUnique: vi.fn().mockImplementation(async ({ where }: any) => apps.find((a) => a.idempotencyKey === where.idempotencyKey) ?? null),
       aggregate: vi.fn().mockResolvedValue({ _sum: { amount: 0 } }),
@@ -185,6 +185,14 @@ describe("createDisciplinaryDeductionDecision", () => {
     await expect(
       createDisciplinaryDeductionDecision(client, { ...base, suspensionKind: "proses_phk", suspensionPayTreatment: "tidak_dibayar" }),
     ).rejects.toThrow(/penuh/)
+  })
+
+  it("putaran 65: subjek nonaktif ditolak sebelum create", async () => {
+    const { client } = makeClient({
+      employee: { findUnique: vi.fn().mockResolvedValue({ id: 42, deletedAt: null, isActive: false, employmentEndedAt: null }) },
+    })
+    await expect(createDisciplinaryDeductionDecision(client, base)).rejects.toThrow(/tidak aktif|berhenti/)
+    expect((client as any).disciplinaryDeductionDecision.create).not.toHaveBeenCalled()
   })
 
   it("keputusan sah tersimpan verbatim dengan slug", async () => {

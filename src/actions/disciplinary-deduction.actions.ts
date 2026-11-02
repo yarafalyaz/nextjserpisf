@@ -102,10 +102,29 @@ export async function createDisciplinaryDeductionDecisionAction(
 
     const signer = await prisma.employee.findUnique({
       where: { id: input.signedBy },
-      select: { id: true, deletedAt: true },
+      select: { id: true, deletedAt: true, isActive: true, employmentEndedAt: true },
     })
     if (!signer || signer.deletedAt != null) {
       throw new Error("Pejabat penandatangan keputusan tidak ditemukan")
+    }
+    // Putaran 65: penandatangan nonaktif/berhenti tak boleh menandatangani
+    // dokumen keputusan baru (preseden reviewer probation putaran sebelumnya).
+    if (!signer.isActive || signer.employmentEndedAt != null) {
+      throw new Error("Pejabat penandatangan keputusan tidak aktif atau sudah berhenti bekerja")
+    }
+
+    // Putaran 65: subjek nonaktif/berhenti tak boleh menerima keputusan
+    // baru. Gerbang sama dinilai ulang di service create; di sini fail-fast
+    // sebelum service dipanggil.
+    const subject = await prisma.employee.findUnique({
+      where: { id: input.employeeId },
+      select: { id: true, deletedAt: true, isActive: true, employmentEndedAt: true },
+    })
+    if (!subject || subject.deletedAt != null) {
+      throw new Error("Karyawan pada dokumen keputusan tidak ditemukan")
+    }
+    if (!subject.isActive || subject.employmentEndedAt != null) {
+      throw new Error("Karyawan pada dokumen keputusan tidak aktif atau sudah berhenti bekerja")
     }
 
     const created = await createDisciplinaryDeductionDecision(prisma, {

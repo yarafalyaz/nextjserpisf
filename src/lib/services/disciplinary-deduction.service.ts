@@ -293,9 +293,14 @@ export async function createDisciplinaryDeductionDecision(
 
   const employee = await client.employee.findUnique({
     where: { id: input.employeeId },
-    select: { id: true, deletedAt: true },
+    select: { id: true, deletedAt: true, isActive: true, employmentEndedAt: true },
   })
   if (!employee || employee.deletedAt) throw new Error("Karyawan pada dokumen keputusan tidak ditemukan.")
+  // Putaran 65: gerbang hidup subjek juga di service (semua pemanggil, bukan
+  // hanya action) — keputusan baru tak lahir untuk karyawan mati.
+  if (!employee.isActive || employee.employmentEndedAt) {
+    throw new Error("Karyawan pada dokumen keputusan tidak aktif atau sudah berhenti bekerja.")
+  }
 
   const slug = await nextSlug("disciplinaryDeductionDecision", input.documentNo)
   return client.disciplinaryDeductionDecision.create({

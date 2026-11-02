@@ -56,6 +56,8 @@ function seedMocks(scope: unknown = { kind: "all" }) {
     id: where.id,
     departmentId: 7,
     deletedAt: null,
+    isActive: true,
+    employmentEndedAt: null,
   }))
   mocks.recordFindFirst.mockResolvedValue({ id: 5 })
   mocks.decisionCreate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
@@ -175,6 +177,30 @@ describe("createDisciplinaryDeductionDecisionAction", () => {
       success: false,
       error: "Pejabat penandatangan keputusan tidak ditemukan",
     })
+    expect(mocks.decisionCreate).not.toHaveBeenCalled()
+  })
+
+  it("putaran 65: penandatangan nonaktif ditolak sebelum service create", async () => {
+    mocks.employeeFindUnique.mockImplementation(async ({ where }: { where: { id: number } }) => {
+      if (where.id === 3) return { id: 3, deletedAt: null, isActive: false, employmentEndedAt: null }
+      return { id: where.id, departmentId: 7, deletedAt: null, isActive: true, employmentEndedAt: null }
+    })
+
+    const result = await createDisciplinaryDeductionDecisionAction(input)
+
+    expect(result.success).toBe(false)
+    expect(mocks.decisionCreate).not.toHaveBeenCalled()
+  })
+
+  it("putaran 65: subjek sudah berhenti ditolak sebelum service create", async () => {
+    mocks.employeeFindUnique.mockImplementation(async ({ where }: { where: { id: number } }) => {
+      if (where.id === 42) return { id: 42, departmentId: 7, deletedAt: null, isActive: true, employmentEndedAt: new Date("2026-09-01T00:00:00Z") }
+      return { id: where.id, deletedAt: null, isActive: true, employmentEndedAt: null }
+    })
+
+    const result = await createDisciplinaryDeductionDecisionAction(input)
+
+    expect(result.success).toBe(false)
     expect(mocks.decisionCreate).not.toHaveBeenCalled()
   })
 })
