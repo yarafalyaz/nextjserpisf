@@ -1404,6 +1404,29 @@ describe("Work Order Operation Actions (F-2026-10-21-020 Tahap A)", () => {
     expect(res?.success).toBe(false)
   })
 
+  it("putaran 64: kunci WO diambil SEBELUM status dinilai (kontrak urutan)", async () => {
+    // Mock tak bisa memodelkan snapshot MariaDB; yang bisa dikunci di
+    // sini adalah kontrak urutannya: locking read mendahului penilaian
+    // status. Kode lama menilai status dulu, kunci belakangan di helper.
+    setupInProgress()
+    P.workOrderOperation.findMany.mockResolvedValue([])
+    const res = await actions.initializeWorkOrderOperations(1)
+    expect(res?.success).toBe(true)
+    const lockAt = P.$queryRaw.mock.invocationCallOrder[0]
+    const readAt = P.workOrder.findUniqueOrThrow.mock.invocationCallOrder[0]
+    expect(lockAt).toBeLessThan(readAt)
+  })
+
+  it("putaran 64: WO yang status terkuncinya bukan in_progress tidak menerima tahap", async () => {
+    P.$queryRaw.mockResolvedValue([{ id: 1 }])
+    P.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "cancelled" })
+    P.workOrderOperation.findMany.mockResolvedValue([])
+    const res = await actions.initializeWorkOrderOperations(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error ?? "")).toContain("cancelled")
+    expect(P.workOrderOperation.createMany).not.toHaveBeenCalled()
+  })
+
   it("startWorkOrder initializes stages in same transaction", async () => {
     P.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [{ id: 1 }] })
     P.workOrder.updateMany.mockResolvedValue({ count: 1 })

@@ -2697,6 +2697,14 @@ export async function initializeWorkOrderOperations(workOrderId: number) {
   try {
     const user = await requirePermission("edit_work_orders");
     const res = await prisma.$transaction(async (tx) => {
+      // Putaran 64: kunci WO SEBELUM menilai status. Dulu status dibaca
+      // dari snapshot pra-kunci; WO yang dibatalkan/ditutup bersamaan
+      // tetap menerima baris tahap pending yatim. Helper di bawah juga
+      // mengunci, tetapi penilaian status harus dari bacaan sesudah
+      // kunci pertama ini (pola updateProductionOrder).
+      if (typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
+      }
       const wo = await tx.workOrder.findUniqueOrThrow({
         where: { id: workOrderId },
         select: { id: true, status: true },
