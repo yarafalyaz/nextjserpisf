@@ -1107,95 +1107,103 @@ function isWarehouseCodeConflict(e: unknown): boolean {
   );
 }
 
+/** Hasil bentrok kode createWarehouse: pesan auto vs manual dipisah seperti
+ * perilaku sebelum tx — generate yang bentrok menyuruh coba lagi, kode manual
+ * menyebut kode final yang dipakai gudang hidup lain. */
+function autoCodeOrManualError(auto: boolean, code: string) {
+  return {
+    kind: "error" as const,
+    error: auto
+      ? "Kode gudang hasil generate bertabrakan dengan data yang sudah ada — silakan coba simpan lagi."
+      : `Kode gudang "${code}" sudah dipakai gudang lain.`,
+  };
+}
+
 export async function createWarehouse(formData: FormData) {
   try {
     await requirePermission("create_warehouses");
-
-    const rawNameWh = (formData.get("name") as string | null)?.trim()
-    if (rawNameWh) {
-      const existing = await prisma.warehouse.findFirst({ where: { name: rawNameWh, deletedAt: null }, select: { id: true, slug: true } })
-      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
-    }
-
 
     const parsed = parseFormData(warehouseServerSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
     const settings = await getSystemSettings();
+    const autoCode = settings.enableAutoWarehouseCode !== false;
     let code = v.code || null;
-    if (settings.enableAutoWarehouseCode !== false || !code) {
-      const prefix = settings.warehouseCodePrefix || "WH-";
-      // Only count non-deleted warehouses so soft-deleted codes can be reused
-      const existingCodes = await prisma.warehouse.findMany({
-        where: { deletedAt: null, code: { startsWith: prefix } },
-        select: { code: true },
-      });
-      let maxNum = 0;
-      for (const w of existingCodes) {
-        const num = Number.parseInt(w.code.slice(prefix.length), 10);
-        if (!Number.isNaN(num) && num > maxNum) maxNum = num;
+
+    // Nama tanpa @unique DB (code memang @unique): cek findFirst pra-parse
+    // di luar tx kalah balapan — dua create konkuren melahirkan dua gudang
+    // aktif bernama sama (slug bersuffix, bukan blokir). Seluruh
+    // cek/generate/bebaskan-kode-terhapus/create dalam satu tx bergap-lock
+    // (pola createTax putaran 53): nama hidup sama -> reuse; generate kode
+    // auto juga di dalam lock karena generator lokal max+1 bukan lane
+    // DocumentSequence atomik; kode final bentrok gudang hidup -> tolak
+    // (pesan auto/manual dipisah seperti sebelum refactor).
+    const result = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM warehouses FOR UPDATE`;
       }
-      let nextId = maxNum + 1;
-      while (
-        await prisma.warehouse.findFirst({
-          where: { deletedAt: null, code: prefix + String(nextId).padStart(4, "0") },
+      const candidates = await tx.warehouse.findMany({
+        where: { deletedAt: null },
+        select: { id: true, name: true, code: true, slug: true },
+      });
+      const nameKey = normalizeTaxNameKey(v.name);
+      const byName = candidates.find((row) => normalizeTaxNameKey(row.name) === nameKey);
+      if (byName) return { kind: "reuse" as const, id: byName.id, slug: byName.slug };
+      const manualCode = Boolean(v.code);
+      if (autoCode || !code) {
+        const prefix = settings.warehouseCodePrefix || "WH-";
+        let maxNum = 0;
+        for (const w of candidates) {
+          if (!w.code.startsWith(prefix)) continue;
+          const num = Number.parseInt(w.code.slice(prefix.length), 10);
+          if (!Number.isNaN(num) && num > maxNum) maxNum = num;
+        }
+        const usedCodes = new Set(candidates.map((w) => w.code));
+        let nextId = maxNum + 1;
+        while (usedCodes.has(prefix + String(nextId).padStart(4, "0"))) {
+          nextId++;
+        }
+        code = prefix + String(nextId).padStart(4, "0");
+      }
+      // Bebaskan kode yang dipegang gudang soft-deleted (bentrok @unique DB).
+      if (code) {
+        const existingDeleted = await tx.warehouse.findFirst({
+          where: { deletedAt: { not: null }, code },
           select: { id: true },
-        })
-      ) {
-        nextId++;
-      }
-      code = prefix + String(nextId).padStart(4, "0");
-    }
-
-    // Free up code if it's held by a soft-deleted warehouse (UNIQUE collision)
-    if (code) {
-      const existingDeleted = await prisma.warehouse.findFirst({
-        where: { deletedAt: { not: null }, code },
-        select: { id: true },
-      });
-      if (existingDeleted) {
-        await prisma.warehouse.update({
-          where: { id: existingDeleted.id },
-          data: { code: `DELETED-${existingDeleted.id}-${Date.now()}` },
         });
+        if (existingDeleted) {
+          await tx.warehouse.update({
+            where: { id: existingDeleted.id },
+            data: { code: `DELETED-${existingDeleted.id}-${Date.now()}` },
+          });
+        }
+        const usedBy = candidates.find((row) => row.code === code);
+        if (usedBy) {
+          return autoCodeOrManualError(autoCode || !manualCode, code);
+        }
       }
-    }
-
-    // Cek kode terpakai di muka: tabrakan kode manual dilaporkan sebagai
-    // pesan yang bisa ditindak, bukan pesan unik-mentah DB dari catch luar.
-    // Baris ter-soft-delete dikecualikan — kodenya dibebaskan blok di atas.
-    const autoCode = settings.enableAutoWarehouseCode !== false || !v.code;
-    if (code) {
-      const usedBy = await prisma.warehouse.findFirst({
-        where: { code, deletedAt: null },
-        select: { id: true },
+      const created = await tx.warehouse.create({
+        data: {
+          name: v.name,
+          slug: await nextSlugWithClient(tx as never, "warehouse", v.name),
+          code: code ?? "",
+          address: v.address ?? null,
+          isActive: true,
+        },
       });
-      if (usedBy) {
-        return {
-          success: false,
-          error: autoCode
-            ? "Kode gudang hasil generate bertabrakan dengan data yang sudah ada — silakan coba simpan lagi."
-            : `Kode gudang "${code}" sudah dipakai gudang lain.`,
-        };
-      }
-    }
-
-    // `code` adalah kolom NOT NULL: mode auto selalu menghasilkan kode,
-    // mode manual tanpa kode memakai string kosong (konvensi existing).
-    const warehouse = await prisma.warehouse.create({
-      data: {
-        name: v.name,
-        slug: await nextSlug("warehouse", v.name),
-        code: code ?? "",
-        address: v.address ?? null,
-        isActive: true,
-      },
+      return { kind: "created" as const, id: created.id, slug: created.slug };
     });
+    if (result.kind === "reuse") {
+      return { success: true, id: result.id, slug: result.slug ?? undefined };
+    }
+    if (result.kind === "error") {
+      return { success: false, error: result.error };
+    }
 
     revalidatePath("/master/gudang");
-    await logActivity("create", "Warehouse", warehouse.id, "Membuat gudang");
-    return { success: true, id: warehouse.id, slug: warehouse.slug };
+    await logActivity("create", "Warehouse", result.id, "Membuat gudang");
+    return { success: true, id: result.id, slug: result.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createWarehouse]", getErrorMessage(e) || e);

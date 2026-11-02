@@ -625,17 +625,46 @@ describe("Warehouse Actions", () => {
 })
 
 describe("Warehouse kode unik: tabrakan dilaporkan bisa ditindak, bukan P2002 mentah", () => {
+  it("putaran 53: createWarehouse di bawah gap-lock — nama hidup sama reuse; kode manual bentrok ditolak menyebut kode tersimpan", async () => {
+    const sqlOf = (c: unknown[]) => {
+      const a = c[0] as { sql?: string; strings?: string[] } | string[]
+      return Array.isArray(a) ? a.join("?") : (a?.sql ?? a?.strings?.join("?") ?? "")
+    }
+    mocks.getSystemSettingsMock.mockResolvedValue({ enableAutoWarehouseCode: false })
+    const defaultFindMany = mocks.prismaMock.warehouse.findMany.getMockImplementation()
+    mocks.prismaMock.warehouse.findMany.mockImplementation(async () => [
+      { id: 3, name: "Gudang Utama", code: "WH-UTAMA", slug: "gudang-utama" },
+    ])
+    try {
+      const reuse = await actions.createWarehouse(fdMap({ name: " gudang utama ", code: "LAIN" }))
+      expect(reuse?.success).toBe(true)
+      expect((reuse as { id?: number }).id).toBe(3)
+      expect(mocks.prismaMock.warehouse.create).not.toHaveBeenCalled()
+      expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+      const lockIdx = (mocks.prismaMock.$executeRaw.mock.calls as unknown[][]).findIndex((c) => sqlOf(c).includes("warehouses"))
+      expect(lockIdx, "gap-lock warehouses FOR UPDATE").toBeGreaterThanOrEqual(0)
+
+      const clash = await actions.createWarehouse(fdMap({ name: "Gudang Baru", code: "WH-UTAMA" }))
+      expect(clash?.success).toBe(false)
+      expect(clash && !clash.success ? clash.error : "").toContain("WH-UTAMA")
+      expect(mocks.prismaMock.warehouse.create).not.toHaveBeenCalled()
+    } finally {
+      mocks.prismaMock.warehouse.findMany.mockImplementation(defaultFindMany as never)
+      mocks.getSystemSettingsMock.mockResolvedValue({ enableAutoCustomerCode: true })
+    }
+  })
+
   it("createWarehouse: kode manual sudah dipakai gudang aktif -> ditolak sebelum create", async () => {
     // Manual code only survives when auto-code is off; without this the
     // action overwrites the submitted code with an auto-generated one.
+    // Putaran 53: sumber cek kini kandidat findMany dalam tx gap-lock.
     mocks.getSystemSettingsMock.mockResolvedValue({ enableAutoWarehouseCode: false })
-    mocks.prismaMock.warehouse.findFirst.mockImplementation(async (args: any) =>
-      args?.where?.code === "WH-0001" && args?.where?.deletedAt === null ? { id: 9 } : null,
-    )
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 9, name: "Gudang Lama", code: "WH-0001", slug: "gudang-lama" }])
     const res = await actions.createWarehouse(fdMap({ name: "Gudang Baru", code: "WH-0001" }))
     expect(res?.success).toBe(false)
     if (res && !res.success) expect(res.error).toContain("WH-0001")
     expect(mocks.prismaMock.warehouse.create).not.toHaveBeenCalled()
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([])
   })
 
   it("createWarehouse: balapan lolos cek, create menolak P2002 code -> pesan persahabatan", async () => {
