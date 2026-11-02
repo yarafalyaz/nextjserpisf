@@ -192,6 +192,25 @@ describe("createBomRevision", () => {
       { itemId: 3, qty: 1 },
     ])
   })
+
+  it("putaran 70: slug revisi memuat productId (anti tabrakan lintas produk bernomor sama)", async () => {
+    productFindUniqueOrThrowMock.mockResolvedValue({
+      id: 9, materials: [{ itemId: 1, qty: 2 }],
+    })
+    // findFirst dipanggil dua konsumen: (a) latest revisionNo desc,
+    // (b) cek tabrakan slug dari helper — (b) wajib bebas, selain itu
+    // helper fallback timestamp (artefak mock, bukan perilaku produksi).
+    bomRevisionFindFirstMock.mockImplementation(async (args: any) =>
+      args?.where?.slug ? null : { revisionNo: 4 },
+    )
+    bomRevisionCreateMock.mockResolvedValue({ id: 77, revisionNo: 5 })
+
+    const res = await createBomRevision(fd({ productId: 9, effectiveDate: "2026-10-08" }))
+
+    expect(res.success).toBe(true)
+    const arg = bomRevisionCreateMock.mock.calls[0][0]
+    expect(arg.data.slug).toBe("bom-9-revisi-5")
+  })
 })
 
 describe("releaseBomRevision", () => {

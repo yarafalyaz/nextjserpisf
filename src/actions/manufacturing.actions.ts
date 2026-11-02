@@ -376,7 +376,13 @@ export async function createBomRevision(formData: FormData) {
         data: {
           productId: v.productId,
           revisionNo: nextNo,
-          slug: await nextSlug("bomRevision", String(nextNo)),
+          // Putaran 70: basis slug memuat productId — basis nomor revisi
+          // saja bertabrakan antar-produk bernomor sama (umum di revisi 1)
+          // karena kunci baris produk tidak menserialkan lintas produk dan
+          // slug global tidak melihat baris tak-tercommit lawan; satu tx
+          // rollback P2002 walau revisi sah. Varian client menilai tabrakan
+          // lewat delegate tx.
+          slug: await nextSlugWithClient(tx as never, "bomRevision", `bom-${v.productId}-revisi-${nextNo}`),
           status: "draft",
           effectiveDate: v.effectiveDate ? wibDateToUtcMidnight(v.effectiveDate) : new Date(),
           notes: v.notes ?? null,
