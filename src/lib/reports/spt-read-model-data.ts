@@ -90,14 +90,15 @@ export async function loadSptPeriodRowsForRange(range?: {
   const periodInRange =
     startPeriod && endPeriod ? { gte: startPeriod, lte: endPeriod } : undefined
 
-  const [taxInvoices, salesInvoices, vendorBills, salesReturns, journalEntries, taxPayments] =
+  const [taxInvoices, coverageInvoices, salesInvoices, vendorBills, salesReturns, journalEntries, taxPayments] =
     await Promise.all([
       prisma.taxInvoice.findMany({
-        // Rantai pengganti utuh (masa dari asal) + cakupan legacy per
-        // dokumen dari SEMUA faktur: faktur luar rentang tetap menaungi
-        // dokumen legacy-nya. Hanya faktur masukan credited yang masa
-        // kreditnya di luar rentang boleh dibuang di DB (builder membuang
+        // Rantai pengganti utuh (masa dari asal) dimuat semua untuk arah
+        // out. Hanya faktur masukan credited yang masa kreditnya di luar
+        // rentang boleh dibuang di DB (builder membuang
         // non-credited/tanpa creditPeriod juga); sisanya tetap dimuat.
+        // Cakupan legacy TIDAK boleh diturunkan dari barisan tersaring
+        // ini — diambil lewat query coverage terpisah di bawah.
         where: inRange
           ? {
               OR: [
@@ -129,6 +130,17 @@ export async function loadSptPeriodRowsForRange(range?: {
         },
         orderBy: { id: "asc" },
       }),
+      // Cakupan legacy: dokumen tertaut TaxInvoice APA PUN (status apa
+      // pun, masa kredit/datum apa pun) tidak dihitung ulang sebagai
+      // legacy. Query tersaring di atas membuang masukan credited luar
+      // rentang, jadi set cakupan wajib dari scan tak tersaring sendiri —
+      // kalau tidak, bill yang TI-nya dikreditkan di masa lain dihitung
+      // legacy dua kali (dobel PPN Masukan). Hanya 2 kolom id.
+      inRange
+        ? prisma.taxInvoice.findMany({
+            select: { salesInvoiceId: true, vendorBillId: true },
+          })
+        : Promise.resolve([]),
       prisma.salesInvoice.findMany({
         where: {
           status: { in: ["posted", "partial", "paid"] },
@@ -243,11 +255,14 @@ export async function loadSptPeriodRowsForRange(range?: {
   // Fallback legacy PER DOKUMEN: dokumen komersial yang sudah punya
   // TaxInvoice (status apa pun) tidak dihitung ulang sebagai legacy —
   // yang belum punya tetap tampil walau masanya sudah punya TaxInvoice.
+  // Sumber set cakupan: barisan baris utama bila tanpa rentang (semua TI
+  // dimuat); bila rentang, query coverage tak tersaring di atas.
+  const coverageSource = inRange ? coverageInvoices : taxInvoices
   const coveredSalesIds = new Set(
-    taxInvoices.filter((t) => t.direction === "out" && t.salesInvoiceId != null).map((t) => t.salesInvoiceId),
+    coverageSource.filter((t) => t.salesInvoiceId != null).map((t) => t.salesInvoiceId),
   )
   const coveredBillIds = new Set(
-    taxInvoices.filter((t) => t.direction === "in" && t.vendorBillId != null).map((t) => t.vendorBillId),
+    coverageSource.filter((t) => t.vendorBillId != null).map((t) => t.vendorBillId),
   )
   const legacyOut = new Map<string, { dpp: number; vat: number; count: number }>()
   for (const inv of salesInvoices) {

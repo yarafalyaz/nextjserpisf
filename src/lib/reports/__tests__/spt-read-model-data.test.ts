@@ -192,6 +192,10 @@ describe("loadSptPeriodRowsForRange — filter periode di DB", () => {
         },
       }),
     )
+    // Query coverage cakupan legacy: tak tersaring, hanya 2 kolom id.
+    expect(mocks.prismaMock.taxInvoice.findMany).toHaveBeenCalledWith({
+      select: { salesInvoiceId: true, vendorBillId: true },
+    })
     expect(mocks.prismaMock.salesInvoice.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ date: { gte: RANGE_START, lte: RANGE_END } }),
@@ -258,12 +262,38 @@ describe("loadSptPeriodRowsForRange — filter periode di DB", () => {
     ])
   })
 
+  it("putaran 55: bill covered oleh TaxInvoice dibuang dari legacy walau TI luar rentang tanggal", async () => {
+    // Bill 606 (Jan, tax>0, nomor valid) tertaut TI 8 (creditPeriod Mar,
+    // status credited) -> DB boleh membuang TI 8 untuk rentang Jan, tetapi
+    // cakupan legacy WAJIB tetap melihatnya; bila tidak, bill 606 dihitung
+    // legacy di Jan walau sudah dikreditkan resmi di Mar (dobel masukan).
+    TAX_INVOICES.push(
+      { id: 8, direction: "in", taxPeriod: "2026-03", creditPeriod: "2026-03", creditStatus: "credited", dpp: 1500, taxAmount: 165, djpStatus: "approved", creditablePercent: 100, salesInvoiceId: null, vendorBillId: 606, replacesId: null },
+    )
+    VENDOR_BILLS.push(
+      { id: 606, date: D(2026, 1, 25), subtotal: 1500, discountAmount: 0, tax: 165, taxInvoiceNumber: "010.000-26.00000006", status: "posted", deletedAt: null },
+    )
+    try {
+      const rows = await loadSptPeriodRowsForRange(RANGE)
+      // Jan tak berubah dari ekspektasi ekuivalensi: tak ada +165 dari bill 606.
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toMatchObject({ period: "2026-01", inputVat: 286, net: 198, paid: 100, balance: 98 })
+    } finally {
+      TAX_INVOICES.pop()
+      VENDOR_BILLS.pop()
+    }
+  })
+
   it("tanpa range: query tanpa filter periode (perilaku lama persis)", async () => {
     const rows = await loadSptPeriodRows()
 
     expect(mocks.prismaMock.taxInvoice.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: undefined }),
     )
+    // Tanpa rentang tidak ada query coverage terpisah (barisan utama utuh).
+    expect(mocks.prismaMock.taxInvoice.findMany).not.toHaveBeenCalledWith({
+      select: { salesInvoiceId: true, vendorBillId: true },
+    })
     expect(mocks.prismaMock.salesInvoice.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { status: { in: ["posted", "partial", "paid"] }, deletedAt: null, taxAmount: { gt: 0 } },
