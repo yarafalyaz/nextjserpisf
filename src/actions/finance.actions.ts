@@ -1612,6 +1612,20 @@ export async function createBankReconciliation(formData: FormData) {
 
     const reconciliation = await prisma.$transaction(async (tx) => {
       await checkIdempotency(idempotencyKey, tx, user.id);
+      // Putaran 75: akun dikunci lalu hidup/type dinilai ulang dalam tx —
+      // cek pra-tx tak melihat updateAccount (mengunci baris akun yang
+      // sama) yang mengubah type keluar ASSET di jendela sama, dan draft
+      // rekonsiliasi lahir atas akun non-aset.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM accounts WHERE id = ${v.accountId} FOR UPDATE`;
+      }
+      const lockedAccount = await tx.account.findFirst({
+        where: { id: v.accountId, isActive: true, deletedAt: null, type: "ASSET" },
+        select: { id: true },
+      });
+      if (!lockedAccount) {
+        throw new Error("Akun rekonsiliasi tidak ditemukan, tidak aktif atau bukan akun aset");
+      }
       return tx.bankReconciliation.create({
         data: {
           reconciliationNumber,

@@ -1388,6 +1388,23 @@ describe("Bank Reconciliation Actions", () => {
     expect(mocks.prismaMock.bankReconciliation.create).toHaveBeenCalledTimes(1)
     delete mocks.prismaMock.idempotencyKey
   })
+  it("putaran 75: createBankReconciliation menilai ulang akun dari baris terkunci dalam tx", async () => {
+    // Bacaan pra-tx hidup; bacaan terkunci dalam tx melihat type sudah
+    // berubah keluar ASSET oleh updateAccount konkuren -> draft tak lahir.
+    // Harness menyatukan tx == prismaMock; kode lama membaca sekali saja.
+    mocks.prismaMock.account.findFirst
+      .mockResolvedValueOnce({ id: 1 })
+      .mockResolvedValueOnce(null)
+    mocks.prismaMock.$executeRaw = vi.fn().mockResolvedValue(1)
+    const res = await (actions as any).createBankReconciliation(fdMap({
+      accountId: 1,
+      statementDate: "2026-06-13",
+      statementBalance: 5000
+    }))
+    expect(res?.success).toBe(false)
+    expect(res.error).toMatch(/tidak aktif atau bukan akun aset/i)
+    expect(mocks.prismaMock.bankReconciliation.create).not.toHaveBeenCalled()
+  })
   it("matchReconciliationLine succeeds", async () => {
     mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", accountId: 10, periodStart: null, periodEnd: null })
     mocks.prismaMock.bankStatementLine.findUniqueOrThrow.mockResolvedValue({ date: new Date("2026-06-13"), amount: 1000, type: "debit", debit: 1000, credit: 0, bankStatement: { accountId: 10 } })
