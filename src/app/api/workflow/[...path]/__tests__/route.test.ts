@@ -467,6 +467,18 @@ describe("POST /api/workflow/[...path]", () => {
   describe("With Active Approval Workflow", () => {
     beforeEach(() => {
       mocks.findFirstWorkflow.mockResolvedValue({ id: 1 })
+      // Dokumen dagang ada secara default; test 404 menimpanya dengan null.
+      mocks.findUnique.mockResolvedValue({ id: 5, createdBy: 7 })
+    })
+
+    it("putaran 52: id dagang tak ada di cabang workflow balas 404, nol approval yatim", async () => {
+      mocks.authFn.mockResolvedValue(adminSession)
+      mocks.findUnique.mockResolvedValue(null)
+
+      const res = await POST(makeReq(), makeParams(["penjualan", "pesanan", "999", "approve"]))
+      expect(res.status).toBe(404)
+      expect(mocks.requestApprovalMock).not.toHaveBeenCalled()
+      expect(mocks.approveStepMock).not.toHaveBeenCalled()
     })
 
     it("initiates and approves workflow step and status becomes approved on last step", async () => {

@@ -158,6 +158,22 @@ export async function POST(
           }
         }
 
+        // Dokumen dagang: keberadaan wajib dicek sebelum inisiasi — pola
+        // 404 HR di atas. requestApprovalIfConfigured tidak memvalidasi
+        // dokumen, jadi id tak ada melahirkan approval pending yatim yang
+        // mengotori antrean persetujuan (putaran 52). Cek ini TIDAK
+        // memakai fallback createdBy di bawah, yang memang menelan null.
+        if (!HR_MODELS.has(config.model)) {
+          const delegateDoc = prisma[config.model as keyof typeof prisma] as any
+          const docExists = await delegateDoc.findUnique({
+            where: { id },
+            select: { id: true },
+          })
+          if (!docExists) {
+            return apiError("NOT_FOUND", "Data tidak ditemukan")
+          }
+        }
+
         let approval = await prisma.approval.findFirst({
           where: { referenceType: modelType, referenceId: id },
           orderBy: { id: "desc" },
