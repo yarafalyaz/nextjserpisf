@@ -108,9 +108,10 @@ export async function createCustomerLateFeeTerm(
 
     const customer = await prisma.customer.findFirst({
       where: { id: customerId, deletedAt: null },
-      select: { id: true, name: true },
+      select: { id: true, name: true, isActive: true },
     })
     if (!customer) return { success: false, error: "Pelanggan tidak ditemukan." }
+    if (!customer.isActive) return { success: false, error: "Pelanggan tidak aktif; syarat denda baru tidak dapat dibuat." }
 
     const created = await prisma.$transaction(async (tx) => {
       const claim = await claimIdempotencyKey(
@@ -134,6 +135,13 @@ export async function createCustomerLateFeeTerm(
         })
         return { id: prev?.id ?? 0 }
       }
+      // Putaran 70: nilai ulang hidup lewat delegate tx (pola dokumen bebas
+      // assertCustomerLiveForNewDocument); pra-tx hanya fail-fast.
+      const liveCustomer = await tx.customer.findFirst({
+        where: { id: customerId, isActive: true, deletedAt: null },
+        select: { id: true },
+      })
+      if (!liveCustomer) throw new Error("Pelanggan tidak ditemukan atau tidak aktif.")
       const row = await tx.customerLateFeeTerm.create({
         data: {
           customerId,

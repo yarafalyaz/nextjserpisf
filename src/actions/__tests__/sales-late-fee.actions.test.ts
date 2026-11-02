@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
     createMany: vi.fn(async () => ({ count: 2 })),
   })
   const tx: Record<string, unknown> = {
+    customer: model(),
     salesInvoice: model(),
     customerLateFeeTerm: model(),
     salesLateFee: model(),
@@ -144,6 +145,9 @@ beforeEach(() => {
   )
   tx.journal.findFirst.mockResolvedValue(null)
   tx.journal.create.mockResolvedValue({ id: 900 })
+  // Putaran 70: default customer hidup untuk gerbang pra-tx + dalam-tx.
+  ;(mocks.prismaMock.customer as M).findFirst.mockResolvedValue({ id: 3, name: "PT Uji", isActive: true })
+  tx.customer.findFirst.mockResolvedValue({ id: 3, isActive: true })
   // Loader kredit retur: default tanpa retur. mockReset eksplisit karena
   // vi.clearAllMocks tidak membuang mockResolvedValue antar-test.
   tx.salesReturn.findMany.mockReset().mockResolvedValue([])
@@ -509,7 +513,7 @@ describe("createCustomerLateFeeTerm (P2a)", () => {
       fd({ customerId: "3", ratePercentPerDay: "0.1", flatAmountPerDay: "1000", effectiveFrom: "2026-01-01" }),
     )
     expect(bad.success).toBe(false)
-    ;(mocks.prismaMock.customer as M).findFirst.mockResolvedValue({ id: 3, name: "PT Uji" })
+    ;(mocks.prismaMock.customer as M).findFirst.mockResolvedValue({ id: 3, name: "PT Uji", isActive: true })
     tx.customerLateFeeTerm.create.mockResolvedValue({ id: 7 })
     const ok = await actions.createCustomerLateFeeTerm(
       fd({
@@ -520,6 +524,25 @@ describe("createCustomerLateFeeTerm (P2a)", () => {
       }),
     )
     expect(ok).toEqual({ success: true, id: 7 })
+  })
+
+  it("putaran 70: customer nonaktif ditolak sebelum create", async () => {
+    // Muncul hidup untuk bacaan pra-tx, lalu NONAKTIF pada bacaan tx:
+    // gerbang dalam-tx memakai where isActive:true sehingga baris mati
+    // dibaca sebagai null oleh kontrak mock.
+    tx.customer.findFirst.mockResolvedValue(null)
+    tx.customerLateFeeTerm.create.mockResolvedValue({ id: 7 })
+    const res = await actions.createCustomerLateFeeTerm(
+      fd({
+        customerId: "3",
+        ratePercentPerDay: "0.1",
+        effectiveFrom: "2026-01-01",
+        idempotencyKey: "latefee-term-0070",
+      }),
+    )
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("tidak aktif")
+    expect(tx.customerLateFeeTerm.create).not.toHaveBeenCalled()
   })
 
   it("putaran 65: key wajib — create tanpa idempotencyKey ditolak sebelum tulis apa pun", async () => {
@@ -533,7 +556,7 @@ describe("createCustomerLateFeeTerm (P2a)", () => {
   })
 
   it("putaran 65: retry identik (key sama) replay hasil pertama, tanpa baris tarif kedua", async () => {
-    ;(mocks.prismaMock.customer as M).findFirst.mockResolvedValue({ id: 3, name: "PT Uji" })
+    ;(mocks.prismaMock.customer as M).findFirst.mockResolvedValue({ id: 3, name: "PT Uji", isActive: true })
     tx.customerLateFeeTerm.findUnique.mockResolvedValue({ id: 7 })
     mocks.claimMock.mockResolvedValue({ replayed: true, resultRefId: 7 })
     const res = await actions.createCustomerLateFeeTerm(
@@ -549,7 +572,7 @@ describe("createCustomerLateFeeTerm (P2a)", () => {
   })
 
   it("putaran 65: create ber-key mengklaim key di dalam tx lalu bind ke baris baru", async () => {
-    ;(mocks.prismaMock.customer as M).findFirst.mockResolvedValue({ id: 3, name: "PT Uji" })
+    ;(mocks.prismaMock.customer as M).findFirst.mockResolvedValue({ id: 3, name: "PT Uji", isActive: true })
     tx.customerLateFeeTerm.create.mockResolvedValue({ id: 7 })
     const res = await actions.createCustomerLateFeeTerm(
       fd({
