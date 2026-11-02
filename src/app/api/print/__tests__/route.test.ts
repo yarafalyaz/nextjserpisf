@@ -551,13 +551,15 @@ describe("GET /api/print", () => {
         // Skalar ini yang dibaca penjaga batas gudang (document-scope);
         // record nyata selalu punya, mock-nya saja yang tadinya belum lengkap.
         warehouseId: 1,
-        items: [{ itemId: 5, qty: 4, unitCost: 25_000 }],
+        items: [{ itemId: 5, qty: 4, unitCost: 25_000, uom: "Dus" }],
       })
       mocks.itemFindMany.mockResolvedValue([{ id: 5, name: "Pelat", unitOfMeasure: "Lembar" }])
 
       const res = await GET(makeReq("http://localhost/api/print?tipe=goods-receipt&id=1"))
       const json = await res.json()
-      expect(json.items[0]).toMatchObject({ description: "Pelat", total: 100_000 })
+      // Satuan baris = uom TERSIMPAN dokumen (qty + unitCost dinyatakan dalam
+      // uom itu), bukan satuan dasar master — halaman detail memakai item.uom.
+      expect(json.items[0]).toMatchObject({ description: "Pelat", unit: "Dus", total: 100_000 })
       expect(json.summary.total).toBe(100_000)
       expect(json.docInfo.notes).toContain("Gudang Utama")
     })

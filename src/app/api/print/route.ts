@@ -722,11 +722,17 @@ export async function GET(request: Request) {
       if (blocked) return blocked
 
       const info = await loadItemInfo(doc.items.map((it) => it.itemId))
+      // Satuan baris = uom TERSIMPAN dokumen: qty + unitCost dinyatakan dalam
+      // uom itu (hook mengkonversi ke satuan dasar hanya untuk stok).
+      // Menampilkan satuan dasar master di sini salah-label qty (halaman
+      // detail penerimaan memakai item.uom); baris lama tanpa uom jatuh ke
+      // satuan master. Total tetap qty × unitCost yang tersimpan — landed
+      // cost dikapitalisasi ke cost layer/jurnal, bukan ke dokumen.
       const items = doc.items.map((it, idx) => ({
         no: idx + 1,
         description: info.get(it.itemId)?.name || `Item #${it.itemId}`,
         qty: Number(it.qty),
-        unit: info.get(it.itemId)?.unit ?? null,
+        unit: it.uom ?? info.get(it.itemId)?.unit ?? null,
         price: Number(it.unitCost),
         discount: 0,
         total: Number(it.qty) * Number(it.unitCost),
