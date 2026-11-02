@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useMemo, useState, useTransition } from "react"
+import { useMemo, useRef, useState, useTransition } from "react"
 import {
   createProjectBudgetItem,
   updateProjectBudgetItem,
@@ -59,6 +59,10 @@ interface Props {
 
 export function ProjectBudgetEditor({ projectId, items, stages, quotations, isLocked, canEdit, canManage, pendingProposal }: Readonly<Props>) {
   const router = useRouter()
+  // Idempotency: key stabil per intent tambah baris; retry jaringan memakai
+  // key yang sama (ditolak server), sukses merotasi untuk baris berikutnya.
+  const idempotencyKeyRef = useRef<string | null>(null)
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
   const [editing, setEditing] = useState<BudgetItemRow | null>(null)
   const [confirm, setConfirm] = useState<null | { title: string; body: string; label: string; run: () => Promise<{ success: boolean; error?: string }> }>(null)
@@ -100,7 +104,7 @@ export function ProjectBudgetEditor({ projectId, items, stages, quotations, isLo
       return
     }
     if (editing) { fd.set("id", String(editing.id)); run(updateProjectBudgetItem(fd), "Baris RAB diubah", () => setEditing(null)) }
-    else run(createProjectBudgetItem(projectId, fd), "Baris RAB ditambahkan", () => { setStageId(""); setCategory("") })
+    else { fd.set("idempotencyKey", idempotencyKeyRef.current!); run(createProjectBudgetItem(projectId, fd), "Baris RAB ditambahkan", () => { idempotencyKeyRef.current = crypto.randomUUID(); setStageId(""); setCategory("") }) }
   }
 
   if (!canEdit && !canManage) return null

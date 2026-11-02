@@ -1376,10 +1376,14 @@ export async function createProjectBudgetItem(projectId: number, formData: FormD
   try {
     const parsed = parseFormData(projectBudgetItemSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
-    await requirePermission("edit_projects")
+    const user = await requirePermission("edit_projects")
     const item = await prisma.$transaction(async (tx) => {
       const project = await loadBudgetProject(tx, projectId)
       assertBudgetUnlocked(project)
+      // Putaran 64: retry submit identik melahirkan baris RAB kembar yang
+      // menggembungkan total sebelum dikunci. Key diklaim sesudah proyek
+      // dinilai dalam tx berkunci proyek; rollback melepaskan key.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
       await assertBudgetItemLive(tx, parsed.data.itemId)
       await assertBudgetStageBelongsToProject(tx, projectId, parsed.data.projectStageId)
       return tx.projectItem.create({

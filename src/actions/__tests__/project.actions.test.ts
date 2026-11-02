@@ -1484,6 +1484,24 @@ describe("RAB proyek F-2026-10-21-030", () => {
     expect(readOrder).toBeLessThan(writeOrder)
   })
 
+  it("putaran 64: createProjectBudgetItem retry idempotencyKey sama ditolak, baris RAB lahir sekali", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(unlockedProject())
+    mocks.prismaMock.projectStage.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.projectItem.create.mockResolvedValue({ id: 77 })
+    const idem = mocks.prismaMock.idempotencyKey
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const formData = () => fdMap({ description: "Plat", qty: 2, cost: 50000000, sortOrder: 0, idempotencyKey: "rab-key-1" })
+    const first = await actions.createProjectBudgetItem(10, formData())
+    expect(first?.success).toBe(true)
+    const second = await actions.createProjectBudgetItem(10, formData())
+    expect(second?.success).toBe(false)
+    expect(second?.error).toContain("duplikat")
+    expect(mocks.prismaMock.projectItem.create).toHaveBeenCalledTimes(1)
+  })
+
   it("putaran 61: proyek completed tidak bisa diubah RAB/kontrak langsung (paritas BR-13)", async () => {
     mocks.prismaMock.project.findUnique.mockResolvedValue(unlockedProject({ status: "completed" }))
     const itemRes = await actions.createProjectBudgetItem(
