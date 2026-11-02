@@ -264,7 +264,28 @@ export async function deleteProject(id: number) {
       pettyCash,
       vendorBills,
     } = project._count
-    const counts = { workOrders, timesheets, tasks, overtimeRequests, pettyCash, vendorBills }
+    // Quotation/SalesInvoice/MaterialIssue/Expense hanya menyimpan kolom
+    // projectId polos TANPA relasi Project (schema), jadi _count relasi
+    // buta terhadapnya — padahal loader L/R proyek membaca persis kolom
+    // itu. Tanpa hitungan ini proyek terhapus dan riwayat uangnya yatim.
+    const [quotations, salesInvoices, materialIssues, expenses] = await Promise.all([
+      tx.quotation.count({ where: { projectId: id } }),
+      tx.salesInvoice.count({ where: { projectId: id } }),
+      tx.materialIssue.count({ where: { projectId: id } }),
+      tx.expense.count({ where: { projectId: id } }),
+    ])
+    const counts = {
+      workOrders,
+      timesheets,
+      tasks,
+      overtimeRequests,
+      pettyCash,
+      vendorBills,
+      quotations,
+      salesInvoices,
+      materialIssues,
+      expenses,
+    }
     if (Object.values(counts).some((count) => count > 0)) {
       return { counts }
     }
@@ -284,12 +305,23 @@ export async function deleteProject(id: number) {
     return { success: false, error: "Proyek tidak ditemukan" }
   }
   if (guard?.counts) {
-    const { workOrders, timesheets, tasks, overtimeRequests, pettyCash, vendorBills } = guard.counts
+    const {
+      workOrders,
+      timesheets,
+      tasks,
+      overtimeRequests,
+      pettyCash,
+      vendorBills,
+      quotations,
+      salesInvoices,
+      materialIssues,
+      expenses,
+    } = guard.counts
     return {
       success: false,
       error:
         "Proyek tidak dapat dihapus karena masih memiliki data terkait " +
-        `(work order: ${workOrders}, lembar waktu: ${timesheets}, tugas: ${tasks}, lembur: ${overtimeRequests}, kas kecil: ${pettyCash}, tagihan vendor: ${vendorBills}). ` +
+        `(work order: ${workOrders}, lembar waktu: ${timesheets}, tugas: ${tasks}, lembur: ${overtimeRequests}, kas kecil: ${pettyCash}, tagihan vendor: ${vendorBills}, penawaran: ${quotations}, faktur penjualan: ${salesInvoices}, pengeluaran material: ${materialIssues}, biaya: ${expenses}). ` +
         "Hapus atau pindahkan data tersebut terlebih dahulu.",
     }
   }

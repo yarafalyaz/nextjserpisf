@@ -41,6 +41,8 @@ const mocks = vi.hoisted(() => {
     notification: buildModelMock(),
     projectItem: buildModelMock(),
     quotation: buildModelMock(),
+    salesInvoice: buildModelMock(),
+    expense: buildModelMock(),
     idempotencyKey: buildModelMock(),
 
     $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
@@ -566,6 +568,30 @@ describe("Project Actions", () => {
     mocks.prismaMock.project.findUnique.mockResolvedValue(null)
     const res = await actions.deleteProject(1)
     expect(res?.success).toBe(false)
+  })
+  it("putaran 55: deleteProject menolak proyek yang hanya dirujuk kolom projectId polos", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue({
+      id: 1,
+      _count: {
+        workOrders: 0,
+        timesheets: 0,
+        tasks: 0,
+        overtimeRequests: 0,
+        pettyCash: 0,
+        vendorBills: 0,
+      },
+    })
+    mocks.prismaMock.salesInvoice.count.mockResolvedValue(2)
+    try {
+      const res = await actions.deleteProject(1)
+      expect(res?.success).toBe(false)
+      expect(res.error).toContain("faktur penjualan: 2")
+      expect(mocks.prismaMock.project.deleteMany).not.toHaveBeenCalled()
+    } finally {
+      // clearAllMocks tidak membuang mockResolvedValue — pulihkan default
+      // supaya test deleteProject sesudahnya tidak mewarisi hitungan ini.
+      mocks.prismaMock.salesInvoice.count.mockResolvedValue(0)
+    }
   })
   it("initializeProjectStages skips if already exists", async () => {
     mocks.prismaMock.projectStage.findMany.mockResolvedValue([{ id: 1 }])
