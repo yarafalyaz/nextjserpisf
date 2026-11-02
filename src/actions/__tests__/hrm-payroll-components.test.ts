@@ -205,6 +205,39 @@ describe("F-027 master komponen", () => {
   })
 })
 
+describe("putaran 72: hidup dinilai ulang di bawah kunci", () => {
+  it("penugasan: karyawan mati di bacaan dalam tx ditolak", async () => {
+    prismaMock.employee.findUnique.mockResolvedValue({ id: 7 })
+    prismaMock.payrollComponent.findUnique.mockResolvedValue({ id: 3, isActive: true, recurrence: "fixed" })
+    // Hidup pra-tx lolos; bacaan dalam tx (klien sama di harness) melihat mati.
+    prismaMock.employee.findFirst
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValueOnce(null)
+    prismaMock.employeePayrollComponent.findFirst.mockResolvedValue(null)
+    const res = await actions.assignEmployeePayrollComponent(fd({
+      employeeId: "7", componentId: "3", defaultAmount: "500000", effectiveFrom: "2026-05-01",
+    }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("Karyawan tidak ditemukan atau tidak aktif")
+    expect(prismaMock.employeePayrollComponent.create).not.toHaveBeenCalled()
+  })
+
+  it("baris komponen: snapshot diambil dari komponen segar dalam tx, bukan pra-tx", async () => {
+    prismaMock.payrollComponent.findUnique
+      .mockResolvedValueOnce({ id: 3, name: "Lama", kind: "earning", recurrence: "variable", isTaxable: true, isActive: true, accountId: 11 })
+      .mockResolvedValueOnce({ id: 3, name: "Baru", kind: "earning", recurrence: "variable", isTaxable: false, isActive: true, accountId: 22 })
+    prismaMock.payrollComponentLine.findMany.mockResolvedValue([
+      { id: 31, payrollId: 55, componentId: 3, componentNameSnapshot: "Baru", kindSnapshot: "earning", recurrenceSnapshot: "variable", isTaxableSnapshot: false, source: "manual", assignmentId: null, accountIdSnapshot: 22, amount: 100000 },
+    ])
+    const res = await actions.addPayrollComponentLine(55, fd({ componentId: "3", amount: "100000" }))
+    expect(res.success).toBe(true)
+    const data = prismaMock.payrollComponentLine.create.mock.calls.at(-1)?.[0]?.data
+    expect(data.componentNameSnapshot).toBe("Baru")
+    expect(data.isTaxableSnapshot).toBe(false)
+    expect(data.accountIdSnapshot).toBe(22)
+  })
+})
+
 describe("F-027 penugasan", () => {
   it("overlap (employee,component) ditolak", async () => {
     prismaMock.employee.findUnique.mockResolvedValue({ id: 7 })

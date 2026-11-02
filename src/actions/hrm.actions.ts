@@ -488,6 +488,8 @@ export async function assignEmployeePayrollComponent(formData: FormData) {
     // sama-sama lolos dan tunjangan yang sama tertarik dua kali di slip.
     const created = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
+      // Putaran 72: hidup dinilai ulang di bawah kunci (pola createTimesheet).
+      await assertLiveEmployee(employeeId, tx as never);
       const dup = await tx.employeePayrollComponent.findFirst({
         where: {
           employeeId,
@@ -551,6 +553,8 @@ export async function updateEmployeePayrollComponent(id: number, formData: FormD
     // sama dengan update — alasan sama dengan jalur buat penugasan.
     const updated = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT id FROM employees WHERE id = ${existing.employeeId} FOR UPDATE`;
+      // Putaran 72: hidup dinilai ulang di bawah kunci bila penugasan aktif.
+      if (isActive) await assertLiveEmployee(existing.employeeId, tx as never);
       if (isActive) {
         const newEnd = effectiveTo ?? new Date("9999-12-31T00:00:00.000Z");
         const dup = await tx.employeePayrollComponent.findFirst({
@@ -786,17 +790,23 @@ export async function addPayrollComponentLine(payrollId: number, formData: FormD
         select: { id: true },
       });
       if (dupLocked) throw new Error("Komponen gaji yang sama sudah ada pada slip ini");
+      // Putaran 72: snapshot komponen dibaca ulang dalam tx — snapshot
+      // pra-tx bisa berasal dari komponen yang baru dinonaktifkan/diubah
+      // admin di jendela antara cek luar dan kunci slip.
+      const freshComponent = await tx.payrollComponent.findUnique({ where: { id: componentId } });
+      if (!freshComponent) throw new Error("Komponen gaji tidak ditemukan");
+      if (!freshComponent.isActive) throw new Error("Komponen gaji nonaktif tidak boleh ditambahkan");
       const row = await tx.payrollComponentLine.create({
         data: {
           payrollId,
           componentId,
-          componentNameSnapshot: component.name,
-          kindSnapshot: component.kind,
-          recurrenceSnapshot: component.recurrence,
-          isTaxableSnapshot: component.isTaxable,
+          componentNameSnapshot: freshComponent.name,
+          kindSnapshot: freshComponent.kind,
+          recurrenceSnapshot: freshComponent.recurrence,
+          isTaxableSnapshot: freshComponent.isTaxable,
           source: "manual",
           assignmentId: null,
-          accountIdSnapshot: component.accountId ?? null,
+          accountIdSnapshot: freshComponent.accountId ?? null,
           amount,
         },
       });
@@ -1152,6 +1162,8 @@ export async function createLeaveRequest(formData: FormData) {
     // same employee now proceed one at a time.
     const leave = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
+      // Putaran 72: hidup dinilai ulang di bawah kunci baris karyawan.
+      await assertLiveEmployee(employeeId, tx as never);
 
       const overlap = await tx.leaveRequest.findFirst({
         where: {
@@ -1268,6 +1280,8 @@ export async function createOvertimeRequest(formData: FormData) {
       // baris overtime_requests sendiri sehingga cap-nya menilai baris itu,
       // bukan penulis create lain.
       await tx.$executeRaw`SELECT id FROM employees WHERE id = ${v.employeeId} FOR UPDATE`;
+      // Putaran 72: hidup dinilai ulang di bawah kunci baris karyawan.
+      await assertLiveEmployee(v.employeeId, tx as never);
       // Putaran 70: klaim key per intent dalam tx sesudah kunci karyawan —
       // retry submit melahirkan pengajuan kedua yang lolos cap kumulatif
       // dan sama-sama bisa disetujui. Pemanggil tanpa key tetap no-op.
@@ -4801,6 +4815,11 @@ export async function createAttendance(formData: FormData) {
 
     let lateMinutes = 0;
     const attendance = await prisma.$transaction(async (tx) => {
+      // Putaran 72: kunci baris karyawan lalu nilai ulang hidup dalam tx.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${v.employeeId} FOR UPDATE`;
+      }
+      await assertLiveEmployee(v.employeeId, tx as never);
       const data = await buildAttendanceData(v, tx);
       lateMinutes = data.lateMinutes;
       // Gerbang slip-final yang sama dengan persetujuan koreksi (013-V butir 8):
@@ -6430,6 +6449,8 @@ export async function createEmployeeRoster(formData: FormData) {
 
     const scope = await getHrScope(user);
     await assertHrEmployeeAccess(scope, v.employeeId);
+    // Putaran 72: roster hanya untuk karyawan hidup (pola titik tulis SDM lain).
+    await assertLiveEmployee(v.employeeId);
 
     const roster = await prisma.employeeRoster.create({
       data: {
