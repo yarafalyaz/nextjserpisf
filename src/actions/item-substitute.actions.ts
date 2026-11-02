@@ -35,6 +35,7 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/db/prisma"
+import { workOrderSubstituteProofSymbol } from "@/lib/validations/inventory.schemas"
 import { requirePermission } from "@/lib/auth/permissions"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { reviseWorkOrderItems } from "@/actions/inventory.actions"
@@ -43,6 +44,14 @@ import {
   configurationFromCustomerVehicle,
   evaluateFitment,
 } from "@/lib/services/vehicle-fitment.service"
+
+/**
+ * Marker bukti penerapan substitusi (putaran 69): `reviseWorkOrderItems`
+ * hanya menerima bukti yang membawa simbol bersama ini, dan simbol hanya
+ * lahir di kode server di sini — payload klien ter-serialisasi tidak
+ * pernah bisa membawanya.
+ */
+export const TXSubstituteValidationMarker = workOrderSubstituteProofSymbol
 
 type Result<T extends object = object> =
   | ({ success: true } & T)
@@ -431,6 +440,20 @@ export async function applyWorkOrderItemSubstitute(input: {
           ...(line.description ? { description: line.description } : {}),
         },
       ],
+      // Putaran 69: bukti server-side untuk divalidasi ulang di dalam tx
+      // klaim WO — relasi/item/fitment yang berubah sesudah saran tampil
+      // menghentikan penerapan sebelum baris apa pun ditulis.
+      [workOrderSubstituteProofSymbol]: {
+        substituteValidation: workOrderSubstituteProofSymbol,
+        workOrderId,
+        workOrderItemId,
+        originItemId: line.itemId,
+        substituteItemId,
+        qty,
+        cost: Number(substituteItem.cost),
+        fitment,
+        fitmentReason,
+      },
     })
     if (!revised.success) return { success: false, error: revised.error ?? "Revisi item ditolak" }
 

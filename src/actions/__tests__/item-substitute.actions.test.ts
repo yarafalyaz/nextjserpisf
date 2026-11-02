@@ -77,6 +77,7 @@ import {
   applyWorkOrderItemSubstitute,
   createItemSubstitute,
   setItemSubstituteActive,
+  TXSubstituteValidationMarker,
 } from "../item-substitute.actions"
 import { evaluateFitment } from "@/lib/services/vehicle-fitment.service"
 
@@ -292,5 +293,25 @@ describe("applyWorkOrderItemSubstitute", () => {
       error: "Sebagian item sudah dikeluarkan lewat Pengeluaran Material selesai",
     })
     expect(mocks.prismaMock.activityLog.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 69: penerapan membawa bukti server-side untuk divalidasi ulang dalam tx klaim WO", async () => {
+    const res = await applyWorkOrderItemSubstitute(applyInput())
+    expect(res.success).toBe(true)
+    expect(TXSubstituteValidationMarker).toBeDefined()
+    const revised = mocks.reviseMock.mock.calls[0][0]
+    const proof = revised[TXSubstituteValidationMarker]
+    expect(proof).toBeDefined()
+    expect(proof.substituteValidation).toBe(TXSubstituteValidationMarker)
+    expect(proof).toMatchObject({
+      workOrderId: 42,
+      workOrderItemId: 11,
+      originItemId: 1,
+      substituteItemId: 2,
+      qty: 4,
+      cost: 5000,
+      fitment: "unknown",
+      fitmentReason: "Tidak ada aturan fitment yang cocok; kompatibilitas belum diketahui.",
+    })
   })
 })

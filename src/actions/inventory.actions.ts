@@ -4,11 +4,15 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/permissions";
 import { safeSubtract, safeMultiply } from "@/lib/utils/math";
-import { prisma } from "@/lib/db/prisma";
+import { prisma, type TxClient } from "@/lib/db/prisma";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { assertJobCostMutable } from "@/lib/services/job-closeout.service";
 import { releaseReservationsForReplacedItemsTx } from "@/lib/services/stock-reservation.service";
 import { stampWorkOrderFitmentSnapshot } from "@/lib/services/vehicle-fitment.service";
+import {
+  configurationFromCustomerVehicle,
+  evaluateFitment,
+} from "@/lib/services/vehicle-fitment.service";
 import { reservationReleaseNotice } from "@/lib/reports/stock-reservation-release";
 import {
   assertApproved,
@@ -58,6 +62,7 @@ import {
   materialIssueSchema,
   workOrderSchema,
   reviseWorkOrderItemsSchema,
+  workOrderSubstituteProofSymbol,
   WORK_ORDER_END_DATE_REASONS,
   type WorkOrderEndDateReasonCode,
   rackSchema,
@@ -1652,6 +1657,139 @@ export async function updateWorkOrder(id: number, formData: FormData) {
  * Issue existing agar jurnal baliknya benar. Item belum ter-issue aman
  * diganti karena belum ada pergerakan stok apa pun.
  */
+/** WO substitusi: bukti penerapan di dalam tx klaim revisi (putaran 69). */
+export const WO_SUBSTITUTE_TX_VALIDATION = workOrderSubstituteProofSymbol;
+
+type WorkOrderSubstituteProof = {
+  substituteValidation: typeof workOrderSubstituteProofSymbol;
+  workOrderId: number;
+  workOrderItemId: number;
+  originItemId: number;
+  substituteItemId: number;
+  qty: number;
+  cost: number;
+  fitment: "compatible" | "incompatible" | "unknown";
+  fitmentReason: string;
+};
+
+const substituteItemGuardSelect = {
+  id: true,
+  name: true,
+  sku: true,
+  unitOfMeasure: true,
+  isActive: true,
+  isService: true,
+  deletedAt: true,
+  cost: true,
+} as const;
+
+type SubstituteItemGuardRow = {
+  id: number;
+  name: string;
+  sku: string;
+  unitOfMeasure: string;
+  isActive: boolean;
+  isService: boolean;
+  deletedAt: Date | null;
+  cost: unknown;
+};
+
+/**
+ * Penjaga substitusi di dalam tx klaim WO (putaran 69): nilai ulang relasi
+ * aktif, kedua item stok aktif + satuan sama, dan fitment keras pengganti
+ * memakai delegate tx yang sama dengan tulis revisi.
+ */
+async function assertWorkOrderSubstituteInTx(
+  tx: TxClient,
+  proof: WorkOrderSubstituteProof,
+): Promise<void> {
+  const lineRows = await tx.$queryRaw<Array<{ item_id: number }>>`
+    SELECT item_id FROM work_order_items WHERE id = ${proof.workOrderItemId} FOR UPDATE
+  `;
+  if (lineRows.length === 0 || lineRows[0].item_id !== proof.originItemId) {
+    throw new Error("Baris Perintah Kerja sudah berubah; muat ulang halaman.");
+  }
+  await tx.$queryRaw<Array<{ id: number }>>`
+    SELECT id FROM work_orders WHERE id = ${proof.workOrderId} FOR UPDATE
+  `;
+  await tx.$queryRaw<Array<{ id: number }>>`
+    SELECT id FROM items WHERE id IN (${proof.originItemId}, ${proof.substituteItemId}) ORDER BY id FOR UPDATE
+  `;
+  await tx.$queryRaw<Array<{ id: number }>>`
+    SELECT id FROM item_substitutes WHERE item_id = ${proof.originItemId} AND substitute_item_id = ${proof.substituteItemId} FOR UPDATE
+  `;
+
+  const relation = await tx.itemSubstitute.findFirst({
+    where: {
+      itemId: proof.originItemId,
+      substituteItemId: proof.substituteItemId,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  if (!relation) {
+    throw new Error(
+      "Relasi substitusi aktif untuk pasangan ini tidak ditemukan — muat ulang saran (relasi mungkin baru dinonaktifkan)",
+    );
+  }
+
+  const origin = await tx.item.findUnique({
+    where: { id: proof.originItemId },
+    select: substituteItemGuardSelect,
+  });
+  const substitute = await tx.item.findUnique({
+    where: { id: proof.substituteItemId },
+    select: substituteItemGuardSelect,
+  });
+  for (const [item, label] of [
+    [origin, "Barang asal"],
+    [substitute, "Barang pengganti"],
+  ] as const) {
+    if (!item || item.deletedAt != null || !item.isActive) {
+      throw new Error(`${label} tidak ditemukan atau sudah nonaktif`);
+    }
+    if (item.isService) {
+      throw new Error(`${label} adalah jasa — substitusi hanya antar item stok`);
+    }
+  }
+  const originRow = origin as SubstituteItemGuardRow;
+  const substituteRow = substitute as SubstituteItemGuardRow;
+  if (originRow.unitOfMeasure !== substituteRow.unitOfMeasure) {
+    throw new Error(
+      `Satuan dasar pengganti (${substituteRow.unitOfMeasure}) berbeda dari barang asal (${originRow.unitOfMeasure}) — substitusi lintas satuan dasar belum didukung`,
+    );
+  }
+
+  const wo = await tx.workOrder.findUnique({
+    where: { id: proof.workOrderId },
+    select: { id: true, status: true, customerVehicleId: true, bomRevisionId: true },
+  });
+  if (!wo) throw new Error("Perintah Kerja tidak ditemukan");
+  if (wo.status !== "in_progress") {
+    throw new Error("Status Perintah Kerja sudah berubah; muat ulang halaman.");
+  }
+
+  // Q-SUB69-2 dalam tx: aturan fitment yang diperbarui sesudah saran tampil
+  // juga mengikat; `incompatible` ditolak keras, `unknown` lolos tercatat.
+  if (wo.customerVehicleId) {
+    const configuration = await configurationFromCustomerVehicle(tx, wo.customerVehicleId);
+    if (configuration) {
+      const evaluation = await evaluateFitment(tx, {
+        itemId: proof.substituteItemId,
+        bomRevisionId: wo.bomRevisionId,
+        configuration,
+      });
+      if (evaluation.result === "incompatible") {
+        throw new Error(
+          `Substitusi ditolak: pengganti tidak cocok untuk kendaraan perintah kerja ini. ${evaluation.reason}`,
+        );
+      }
+      if (evaluation.result !== proof.fitment) {
+        throw new Error("Kondisi fitment sudah berubah; muat ulang saran substitusi.");
+      }
+    }
+  }
+}
 export async function reviseWorkOrderItems(input: {
   workOrderId: number;
   replacedItemIds?: number[];
@@ -1661,6 +1799,12 @@ export async function reviseWorkOrderItems(input: {
   newEndDate?: string;
   endDateReasonCode?: string;
   endDateReasonNote?: string;
+  /**
+   * Bukti penerapan substitusi server-side (putaran 69): hanya lahir dari
+   * `applyWorkOrderItemSubstitute`; payload klien ter-serialisasi tidak
+   * bisa membawa kunci symbol ini.
+   */
+  [workOrderSubstituteProofSymbol]?: WorkOrderSubstituteProof;
 }) {
   try {
     const user = await requirePermission("edit_work_orders");
@@ -1674,6 +1818,43 @@ export async function reviseWorkOrderItems(input: {
     }
     const v = parsed.data;
     const replacedIds = [...new Set(v.replacedItemIds)];
+
+    // Putaran 69: bukti penerapan substitusi hanya bisa lahir dari kode
+    // server (`applyWorkOrderItemSubstitute`) lewat kunci symbol bersama —
+    // payload klien ter-serialisasi tidak pernah membawanya. Bukti yang
+    // hadir tanpa marker server ditolak; UI biasa tanpa bukti sama sekali
+    // berjalan persis seperti sebelumnya.
+    const proofCandidate = (input as Record<PropertyKey, unknown> | null)?.[
+      WO_SUBSTITUTE_TX_VALIDATION
+    ];
+    let substituteProof: WorkOrderSubstituteProof | null = null;
+    if (proofCandidate !== undefined) {
+      const candidate = proofCandidate as Partial<WorkOrderSubstituteProof> | null;
+      const markerOk =
+        candidate !== null &&
+        typeof candidate === "object" &&
+        (candidate as { substituteValidation?: unknown }).substituteValidation ===
+          WO_SUBSTITUTE_TX_VALIDATION;
+      if (
+        !markerOk ||
+        !candidate ||
+        typeof candidate !== "object" ||
+        candidate.workOrderId !== v.workOrderId ||
+        !Number.isInteger(candidate.workOrderItemId) ||
+        !Number.isInteger(candidate.originItemId) ||
+        !Number.isInteger(candidate.substituteItemId) ||
+        typeof candidate.qty !== "number" ||
+        v.replacedItemIds.length !== 1 ||
+        v.replacedItemIds[0] !== candidate.workOrderItemId ||
+        v.newItems.length !== 1 ||
+        v.newItems[0].itemId !== candidate.substituteItemId ||
+        v.newItems[0].qty !== candidate.qty ||
+        (v.newItems[0].cost || 0) !== candidate.cost
+      ) {
+        return { success: false, error: "Bukti penerapan substitusi tidak valid" };
+      }
+      substituteProof = candidate as WorkOrderSubstituteProof;
+    }
 
     const wo = await prisma.workOrder.findUniqueOrThrow({
       where: { id: v.workOrderId },
@@ -1723,6 +1904,11 @@ export async function reviseWorkOrderItems(input: {
       if (claim.count === 0) {
         throw new Error("Status Perintah Kerja sudah berubah; muat ulang halaman.");
       }
+
+      // Putaran 69: penerapan substitusi dinilai ulang di dalam tx klaim
+      // yang sama (relasi/item/fitment per bukti server) sebelum tulis apa
+      // pun; revisi biasa tanpa bukti tidak menyentuh jalur ini.
+      if (substituteProof) await assertWorkOrderSubstituteInTx(tx, substituteProof);
 
       let released = 0;
       if (replacedIds.length > 0) {
