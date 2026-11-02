@@ -619,6 +619,13 @@ export async function releaseBomRevision(id: number) {
     // supersede of the previously released revision run in ONE transaction so
     // a crash between them can never leave zero or two released revisions.
     const releaseResult = await prisma.$transaction(async (tx) => {
+      // Putaran 72: kunci baris produk dulu (pola createBomRevision) —
+      // klaim per-revisi + supersede updateMany tidak menserialkan dua
+      // rilis konkuren untuk produk sama, sehingga dua revisi bisa sama-
+      // sama berakhir released. Kunci produk menserialkan pasangan itu.
+      if (typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT id FROM products WHERE id = ${revision.productId} FOR UPDATE`;
+      }
       const claimed = await tx.bomRevision.updateMany({
         where: { id, status: "approved" },
         data: { status: "released", releasedAt: new Date(), releasedBy: Number(user.id) },
@@ -785,36 +792,11 @@ export async function createProductionOrder(formData: FormData) {
     // (frozen lines) and fall back to the working BOM for products that have no
     // released revision yet. Pinning bomRevisionId means later edits to the
     // master BOM cannot change the basis of this order (PRD FAB-02).
-    const product = await prisma.product.findUniqueOrThrow({
-      where: { id: v.productId },
-      select: { id: true, standardCost: true },
-    });
-    const effectiveBom = await resolveEffectiveBom(v.productId);
-    const bomLines = effectiveBom.lines;
-
-    // Per-item standard cost for each BOM line (stamped on the order material).
-    const bomItemIds = bomLines.map((m) => m.itemId);
-    const bomItems = bomItemIds.length
-      ? await prisma.item.findMany({
-          where: { id: { in: bomItemIds } },
-          select: { id: true, standardCost: true },
-        })
-      : [];
-    const bomCostMap = new Map(bomItems.map((i) => [i.id, Number(i.standardCost)]));
-
-    // Product standard cost: use the stored rollup, but if it was never computed
-    // (<= 0) derive it INLINE from the BOM here. Computing inline (rather than
-    // calling calculateStandardCost) avoids its nested requirePermission("edit_products")
-    // check — a user holding only create_production_orders would otherwise have
-    // that throw silently swallowed, leaving totalStandardCost = 0 and a bogus
-    // full-actual variance at completion.
-    let productStdCost = Number(product.standardCost);
-    if (productStdCost <= 0 && bomLines.length > 0) {
-      productStdCost = bomLines.reduce(
-        (sum, m) => safeAdd(sum, safeMultiply(bomCostMap.get(m.itemId) ?? 0, m.qtyPerUnit, 2), 2),
-        0,
-      );
-    }
+    // Putaran 72: snapshot tidak lagi dibaca di luar tx — rilis revisi baru
+    // atau hitung ulang biaya standar yang commit di jendelanya membuat PO
+    // mem-pin revisi yang sudah superseded dengan biaya basi. Bacaan
+    // dipindah ke dalam tx di bawah kunci baris produk (pola
+    // createBomRevision / calculateStandardCost).
 
     // Serialisasi per WO (bila tertaut): kunci baris WO lalu nilai ulang
     // status + bomRevisionId dari baris segar di dalam tx sebelum create.
@@ -824,6 +806,44 @@ export async function createProductionOrder(formData: FormData) {
     // mengunci WO (issueMaterial, MI dari WO).
     const productionOrder = await prisma.$transaction(async (tx) => {
       await checkIdempotency(idempotencyKey, tx, user.id);
+
+      // Putaran 72: snapshot BOM + biaya standar dibaca di sini, di bawah
+      // kunci baris produk, supaya rilis revisi/hitung ulang biaya yang
+      // commit bersamaan tidak bisa menyela di tengah snapshot.
+      if (typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT id FROM products WHERE id = ${v.productId} FOR UPDATE`;
+      }
+      const product = await tx.product.findUniqueOrThrow({
+        where: { id: v.productId },
+        select: { id: true, standardCost: true },
+      });
+      const effectiveBom = await resolveEffectiveBom(v.productId, tx as never);
+      const bomLines = effectiveBom.lines;
+
+      // Per-item standard cost for each BOM line (stamped on the order material).
+      const bomItemIds = bomLines.map((m) => m.itemId);
+      const bomItems = bomItemIds.length
+        ? await tx.item.findMany({
+            where: { id: { in: bomItemIds } },
+            select: { id: true, standardCost: true },
+          })
+        : [];
+      const bomCostMap = new Map(bomItems.map((i) => [i.id, Number(i.standardCost)]));
+
+      // Product standard cost: use the stored rollup, but if it was never computed
+      // (<= 0) derive it INLINE from the BOM here. Computing inline (rather than
+      // calling calculateStandardCost) avoids its nested requirePermission("edit_products")
+      // check — a user holding only create_production_orders would otherwise have
+      // that throw silently swallowed, leaving totalStandardCost = 0 and a bogus
+      // full-actual variance at completion.
+      let productStdCost = Number(product.standardCost);
+      if (productStdCost <= 0 && bomLines.length > 0) {
+        productStdCost = bomLines.reduce(
+          (sum, m) => safeAdd(sum, safeMultiply(bomCostMap.get(m.itemId) ?? 0, m.qtyPerUnit, 2), 2),
+          0,
+        );
+      }
+
       let workOrder = outerWorkOrder;
       if (outerWorkOrder) {
         if (typeof tx.$queryRaw === "function") {
@@ -899,7 +919,7 @@ export async function createProductionOrder(formData: FormData) {
       `Membuat perintah produksi #${productionOrder.id}`,
     );
 
-    if (outerWorkOrder && effectiveBom.revisionId != null) {
+    if (outerWorkOrder && productionOrder.bomRevisionId != null) {
       revalidatePath("/produksi/perintah-kerja");
     }
 
@@ -2399,7 +2419,6 @@ export async function updateProductionOrder(id: number, formData: FormData) {
       where: { id: v.productId },
       include: { materials: true },
     });
-    const updProductStdCost = Number(product.standardCost);
     const poDocumentNo = po.documentNo;
 
     const productionOrder = await prisma.$transaction(async (tx) => {
@@ -2444,6 +2463,16 @@ export async function updateProductionOrder(id: number, formData: FormData) {
           );
         }
       }
+
+      // Putaran 72: rollup biaya produk dibaca ulang dari delegate tx —
+      // bacaan luar bisa basi bila hitung ulang biaya commit di jendela
+      // antara cek luar dan tx, membuat totalStandardCost tak konsisten
+      // dengan baris material yang ditulis tx yang sama.
+      const freshProduct = await tx.product.findUniqueOrThrow({
+        where: { id: v.productId },
+        select: { id: true, standardCost: true },
+      });
+      const updProductStdCost = Number(freshProduct.standardCost);
 
       const existingLines = current.materials ?? [];
       const pinnedRevisionId = current.bomRevisionId ?? null;

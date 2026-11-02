@@ -27,6 +27,7 @@ const bomRevisionDeleteMock = vi.fn()
 const bomRevisionDeleteManyMock = vi.fn()
 
 const generateDocumentNumberMock = vi.fn()
+const queryRawMock = vi.fn()
 const idemCreateMock = vi.fn()
 const idemFindUniqueMock = vi.fn()
 const idemUpdateManyMock = vi.fn()
@@ -45,7 +46,7 @@ vi.mock("@/lib/utils/document-number", () => ({
 
 vi.mock("@/lib/db/prisma", () => {
   const prisma: Record<string, unknown> = {
-    $queryRaw: vi.fn().mockResolvedValue([]),
+    $queryRaw: (...a: unknown[]) => queryRawMock(...a),
     $executeRaw: vi.fn().mockResolvedValue(1),
     product: { findUniqueOrThrow: (...a: unknown[]) => productFindUniqueOrThrowMock(...a) },
     item: { findMany: (...a: unknown[]) => itemFindManyMock(...a) },
@@ -99,9 +100,10 @@ beforeEach(() => {
     productMaterialFindManyMock, bomRevisionFindFirstMock, bomRevisionCreateMock,
     bomRevisionFindUniqueMock, bomRevisionUpdateMock, bomRevisionUpdateManyMock,
     bomRevisionDeleteMock, bomRevisionDeleteManyMock, generateDocumentNumberMock,
-    idemCreateMock, idemFindUniqueMock, idemUpdateManyMock,
+    idemCreateMock, idemFindUniqueMock, idemUpdateManyMock, queryRawMock,
   ]) m.mockReset()
   idemCreateMock.mockResolvedValue({ id: 1 })
+  queryRawMock.mockResolvedValue([])
 
   requirePermissionMock.mockResolvedValue({ id: 5 })
   generateDocumentNumberMock.mockResolvedValue("MO-0001")
@@ -109,6 +111,34 @@ beforeEach(() => {
 })
 
 describe("createProductionOrder — BOM revision pinning", () => {
+  it("putaran 72: snapshot BOM + biaya dibaca di bawah kunci baris produk dalam tx", async () => {
+    productFindUniqueOrThrowMock.mockResolvedValue({ id: 9, standardCost: 0 })
+    bomRevisionFindFirstMock.mockResolvedValue({
+      id: 42, revisionNo: 2,
+      materials: [{ itemId: 1, qty: 2 }, { itemId: 2, qty: 3 }],
+    })
+    itemFindManyMock.mockResolvedValue([
+      { id: 1, standardCost: 10 },
+      { id: 2, standardCost: 5 },
+    ])
+    productionOrderCreateMock.mockResolvedValue({ id: 100 })
+
+    const res = await createProductionOrder(fd({ productId: 9, qty: 4 }))
+
+    expect(res.success).toBe(true)
+    const lockCall = queryRawMock.mock.calls.find((c) => {
+      const a = c[0] as { strings?: string[] } | unknown[]
+      const s = Array.isArray(a) ? a.join("?") : (a.strings ?? []).join("?")
+      return /FROM products/.test(s)
+    })
+    expect(lockCall).toBeDefined()
+    const firstReadOrder = Math.min(
+      bomRevisionFindFirstMock.mock.invocationCallOrder[0],
+      productFindUniqueOrThrowMock.mock.invocationCallOrder[0],
+    )
+    expect(queryRawMock.mock.invocationCallOrder[queryRawMock.mock.calls.indexOf(lockCall as never)]).toBeLessThan(firstReadOrder)
+  })
+
   it("pins the released revision and snapshots its frozen lines", async () => {
     productFindUniqueOrThrowMock.mockResolvedValue({ id: 9, standardCost: 0 })
     // Released revision exists → resolveEffectiveBom returns it.
@@ -214,6 +244,25 @@ describe("createBomRevision", () => {
 })
 
 describe("releaseBomRevision", () => {
+  it("putaran 72: kunci baris produk diambil sebelum klaim rilis (serialisasi per produk)", async () => {
+    bomRevisionFindUniqueMock.mockResolvedValue({
+      id: 1, revisionNo: 2, productId: 9, materials: [{ itemId: 1, qty: 1 }],
+    })
+    itemFindManyMock.mockResolvedValue([{ id: 1, name: "Busi", isActive: true }])
+    bomRevisionUpdateManyMock.mockResolvedValue({ count: 1 })
+
+    const res = await releaseBomRevision(1)
+
+    expect(res.success).toBe(true)
+    expect(queryRawMock.mock.calls.length).toBeGreaterThan(0)
+    const sqlArg = queryRawMock.mock.calls[0][0] as { strings?: string[] } | unknown[]
+    const sql = Array.isArray(sqlArg) ? sqlArg.join("?") : (sqlArg.strings ?? []).join("?")
+    expect(sql).toMatch(/FROM products/)
+    expect(queryRawMock.mock.invocationCallOrder[0]).toBeLessThan(
+      bomRevisionUpdateManyMock.mock.invocationCallOrder[0],
+    )
+  })
+
   it("refuses to release an empty revision", async () => {
     bomRevisionFindUniqueMock.mockResolvedValue({ id: 1, revisionNo: 1, productId: 9, materials: [] })
 

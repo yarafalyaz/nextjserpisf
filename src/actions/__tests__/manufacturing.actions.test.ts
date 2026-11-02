@@ -1321,6 +1321,25 @@ describe("Production Order Actions", () => {
     })
   })
 
+  it("putaran 72: updateProductionOrder menilai ulang rollup produk dalam tx", async () => {
+    // Bacaan luar biaya 100 (basi); baris segar dalam tx biaya 250. Tx dan
+    // klien global berbagi mock di harness ini, jadi bacaan berurutan
+    // membedakan luar vs dalam tx.
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", documentNo: "MO-001", productId: 1, qty: 4, bomRevisionId: 77,
+      materials: [{ itemId: 9, qty: 8, standardCost: 25, scrapPercentSnapshot: 5 }],
+    })
+    mocks.prismaMock.product.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, standardCost: 100, materials: [] })
+      .mockResolvedValueOnce({ id: 1, standardCost: 250 })
+
+    const res = await actions.updateProductionOrder(1, fdMap({ productId: 1, qty: 6 }))
+
+    expect(res?.success).toBe(true)
+    const updateArg = mocks.prismaMock.productionOrder.update.mock.calls[0][0]
+    expect(updateArg.data.totalStandardCost).toBe(1500)
+  })
+
   it("updateProductionOrder handles validation error", async () => {
     const res = await actions.updateProductionOrder(1, new FormData())
     expect(res?.success).toBe(false)
