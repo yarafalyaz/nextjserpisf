@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
   const accountCount = vi.fn()
   const accountFindFirst = vi.fn()
   const chequeCreate = vi.fn()
+  const checkIdempotency = vi.fn()
 
   const prisma: Record<string, unknown> = {
     account: { count: accountCount, findFirst: accountFindFirst },
@@ -31,6 +32,7 @@ const mocks = vi.hoisted(() => {
     accountCount,
     accountFindFirst,
     chequeCreate,
+    checkIdempotency,
     prisma,
   }
 })
@@ -42,6 +44,7 @@ vi.mock("@/lib/services/activity-log.service", async () => (await import("./vali
 vi.mock("next/cache", async () => (await import("./validation-mock-helpers")).revalidateFactory(mocks))
 vi.mock("@/lib/utils/document-number", async () => (await import("./validation-mock-helpers")).docNumberFactory(mocks))
 vi.mock("@/lib/services/period-lock.service", async () => (await import("./validation-mock-helpers")).periodLockFactory(mocks))
+vi.mock("@/lib/utils/idempotency", () => ({ checkIdempotency: (...a: unknown[]) => mocks.checkIdempotency(...a) }))
 
 import { createCheque } from "../cheque.actions"
 
@@ -63,6 +66,7 @@ beforeEach(() => {
   mocks.accountCount.mockResolvedValue(0)
   mocks.accountFindFirst.mockResolvedValue({ id: 5 })
   mocks.chequeCreate.mockResolvedValue({ id: 1 })
+  mocks.checkIdempotency.mockResolvedValue(undefined)
 })
 
 describe("createCheque zod validation", () => {
@@ -109,6 +113,19 @@ describe("createCheque zod validation", () => {
     const res = await createCheque(form({ ...base, dueDate: "" }))
     expect(res.success).toBe(false)
     expect(mocks.chequeCreate).not.toHaveBeenCalled()
+  })
+
+  it("putaran 63: retry idempotencyKey sama ditolak, giro lahir sekali", async () => {
+    mocks.checkIdempotency
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."))
+    const first = await createCheque(form({ ...base, idempotencyKey: "chq-key-1" }))
+    const second = await createCheque(form({ ...base, idempotencyKey: "chq-key-1" }))
+    expect(first.success).toBe(true)
+    expect(second.success).toBe(false)
+    expect(String((second as { error?: string }).error)).toContain("duplikat")
+    expect(mocks.checkIdempotency).toHaveBeenCalledWith("chq-key-1", mocks.prisma, 7)
+    expect(mocks.chequeCreate).toHaveBeenCalledTimes(1)
   })
 
   it("happy path tetap create", async () => {

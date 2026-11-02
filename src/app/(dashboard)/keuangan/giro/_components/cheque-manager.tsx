@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { BadgeCheck, Ban, Trash2 } from "lucide-react"
 
 import { createCheque, deleteCheque, updateChequeStatus } from "@/actions/cheque.actions"
@@ -64,6 +64,7 @@ export function ChequeManager({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
 
   const [type, setType] = useState("giro")
   const [direction, setDirection] = useState("in")
@@ -92,12 +93,14 @@ export function ChequeManager({
         formData.set("amount", amount === null ? "" : String(amount))
         formData.set("dueDate", dueDate)
         formData.set("notes", notes)
+        formData.set("idempotencyKey", idempotencyKeyRef.current)
 
         const result = await createCheque(formData)
         if (result && !result.success) {
           showError(result.error || "Gagal menyimpan giro/cek")
           return
         }
+        idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess("Giro/cek dicatat")
         setNumber("")
         setParty("")

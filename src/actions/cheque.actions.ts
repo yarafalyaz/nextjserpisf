@@ -11,6 +11,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { chequeSchema } from "@/lib/validations/finance.schemas"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
+import { checkIdempotency } from "@/lib/utils/idempotency"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 
 const REVALIDATE = "/keuangan/giro"
@@ -35,6 +36,10 @@ export async function createCheque(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error }
     const v = parsed.data
 
+    // Putaran 63: nomor dokumen selalu baru, jadi retry identik
+    // melahirkan dua giro pending untuk lembar/nominal sama.
+    const idempotencyKey = formData.get("idempotencyKey") as string | null
+
     const type = v.type
     const direction = v.direction
     const number = v.number ?? null
@@ -54,6 +59,7 @@ export async function createCheque(formData: FormData) {
     const documentNo = await generateDocumentNumber("CHQ", "simple")
 
     const cheque = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id)
       await assertPeriodOpen(dueDate, tx)
       if (accountId) {
         const live = await tx.account.findFirst({
