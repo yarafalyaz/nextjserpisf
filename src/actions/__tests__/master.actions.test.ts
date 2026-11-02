@@ -388,6 +388,34 @@ describe("F-2026-10-25-003-S duplikat pelanggan (AC-CD-B4/B5/B7)", () => {
 })
 
 describe("Vendor Actions", () => {
+  it("putaran 53: createVendor di bawah gap-lock — nama hidup sama reuse, kode manual bentrok ditolak", async () => {
+    const sqlOf = (c: unknown[]) => {
+      const a = c[0] as { sql?: string; strings?: string[] } | string[]
+      return Array.isArray(a) ? a.join("?") : (a?.sql ?? a?.strings?.join("?") ?? "")
+    }
+    const defaultFindMany = mocks.prismaMock.vendor.findMany.getMockImplementation()
+    mocks.prismaMock.vendor.findMany.mockImplementation(async () => [
+      { id: 3, name: "Vendor A", code: "VND-A", slug: "vendor-a" },
+    ])
+    mocks.getSystemSettingsMock.mockResolvedValue({ enableAutoCustomerCode: true, enableAutoVendorCode: false })
+    try {
+      const reuse = await actions.createVendor(fdMap({ name: " vendor a ", code: "LAIN" }))
+      expect(reuse?.success).toBe(true)
+      expect((reuse as { id?: number }).id).toBe(3)
+      expect(mocks.prismaMock.vendor.create).not.toHaveBeenCalled()
+      expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+      const lockIdx = (mocks.prismaMock.$executeRaw.mock.calls as unknown[][]).findIndex((c) => sqlOf(c).includes("vendors"))
+      expect(lockIdx, "gap-lock vendors FOR UPDATE").toBeGreaterThanOrEqual(0)
+
+      const clash = await actions.createVendor(fdMap({ name: "Vendor B", code: " vnd-a " }))
+      expect(clash?.success).toBe(false)
+      expect(String(clash?.error)).toContain("VND-A")
+      expect(mocks.prismaMock.vendor.create).not.toHaveBeenCalled()
+    } finally {
+      mocks.prismaMock.vendor.findMany.mockImplementation(defaultFindMany as never)
+      mocks.getSystemSettingsMock.mockResolvedValue({ enableAutoCustomerCode: true })
+    }
+  })
   it("createVendor succeeds", async () => {
     const res = await actions.createVendor(fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
     expect(res?.success).toBe(true)

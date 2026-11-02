@@ -539,38 +539,75 @@ export async function createVendor(formData: FormData) {
 
     const settings = await getSystemSettings();
     let code = v.code || null;
+    const manualCode = Boolean(v.code);
     if (settings.enableAutoVendorCode !== false || !code) {
       code = await generateDocumentNumber("VND", "simple");
     }
 
-    const vendor = await prisma.vendor.create({
-      data: {
-        name: v.name,
-        slug: await nextSlug("vendor", v.name),
-        code,
-        email: v.email ?? null,
-        phone: v.phone ?? null,
-        address: v.address ?? null,
-        city: v.city ?? null,
-        npwp: v.npwp ?? null,
-        contactPerson: v.contactPerson ?? null,
-        createdBy: Number(user.id),
-        paymentTermId: v.paymentTermId ?? null,
-        street: v.street ?? null,
-        province: v.province ?? null,
-        postalCode: v.postalCode ?? null,
-        districtVendor: v.districtVendor ?? null,
-        villageVendor: v.villageVendor ?? null,
-        bankName: v.bankName ?? null,
-        bankAccountNumber: v.bankAccountNumber ?? null,
-        bankAccountHolder: v.bankAccountHolder ?? null,
-        isActive: true,
-      },
+    // Nama tanpa @unique DB (code memang @unique): cek findFirst pra-parse
+    // di luar tx kalah balapan — dua create konkuren melahirkan dua vendor
+    // aktif bernama sama (slug bersuffix, bukan blokir) dan kode manual
+    // bentrok hanya muncul sebagai P2002 mentah. Cek+create dalam tx
+    // bergap-lock (pola createTax putaran 53): nama hidup sama -> reuse;
+    // kode manual bentrok vendor hidup lain -> tolak menyebut kode
+    // tersimpan. Kode auto tidak di-cek (lane DocumentSequence atomik).
+    // NPWP vendor BELUM digerbang (keputusan repo: blokir keras NPWP hanya
+    // lintas Customer, Q-CD-1) — jangan ditambah di sini.
+    const result = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vendors FOR UPDATE`;
+      }
+      const candidates = await tx.vendor.findMany({
+        where: { deletedAt: null },
+        select: { id: true, name: true, code: true, slug: true },
+      });
+      const nameKey = normalizeTaxNameKey(v.name);
+      const byName = candidates.find((row) => normalizeTaxNameKey(row.name) === nameKey);
+      if (byName) return { kind: "reuse" as const, id: byName.id, slug: byName.slug };
+      if (manualCode && code) {
+        const codeKey = normalizeTaxNameKey(code);
+        const byCode = candidates.find(
+          (row) => row.code?.trim() && normalizeTaxNameKey(row.code) === codeKey,
+        );
+        if (byCode) {
+          throw new Error(
+            `Kode vendor ${byCode.code} sudah dipakai vendor "${byCode.name}"; pakai kode lain.`,
+          );
+        }
+      }
+      const created = await tx.vendor.create({
+        data: {
+          name: v.name,
+          slug: await nextSlugWithClient(tx as never, "vendor", v.name),
+          code,
+          email: v.email ?? null,
+          phone: v.phone ?? null,
+          address: v.address ?? null,
+          city: v.city ?? null,
+          npwp: v.npwp ?? null,
+          contactPerson: v.contactPerson ?? null,
+          createdBy: Number(user.id),
+          paymentTermId: v.paymentTermId ?? null,
+          street: v.street ?? null,
+          province: v.province ?? null,
+          postalCode: v.postalCode ?? null,
+          districtVendor: v.districtVendor ?? null,
+          villageVendor: v.villageVendor ?? null,
+          bankName: v.bankName ?? null,
+          bankAccountNumber: v.bankAccountNumber ?? null,
+          bankAccountHolder: v.bankAccountHolder ?? null,
+          isActive: true,
+        },
+      });
+      return { kind: "created" as const, id: created.id, slug: created.slug };
     });
+    if (result.kind === "reuse") {
+      return { success: true, id: result.id, slug: result.slug ?? undefined };
+    }
 
     revalidatePath("/master/vendor");
-    await logActivity("create", "Vendor", vendor.id, "Membuat vendor");
-    return { success: true, id: vendor.id, slug: vendor.slug };
+    await logActivity("create", "Vendor", result.id, "Membuat vendor");
+    return { success: true, id: result.id, slug: result.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createVendor]", getErrorMessage(e) || e);
