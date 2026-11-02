@@ -38,6 +38,7 @@ import { journalBookValue } from "@/lib/finance/asset-book-value";
 import { isRegisteredAssetUseStatus } from "@/lib/finance/asset-use-status";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { nextSlug } from "@/lib/utils/slug-db";
+import { checkIdempotency } from "@/lib/utils/idempotency";
 
 // ==================== ASSET GL HELPERS ====================
 // Asset GL accounts resolve with the SAME precedence as depreciation:
@@ -961,6 +962,10 @@ export async function createAsset(formData: FormData) {
     }
 
     const asset = await prisma.$transaction(async (tx) => {
+      // Anti double-submit (pola expense/bank-transfer): tanpa key, kode dari
+      // sequence atomik + jurnal perolehan membuat retry lahir aset+jurnal
+      // ganda senyap. Key dicatat lewat tx pemanggil — rollback melepasnya.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
       const created = await tx.asset.create({
         data: {
           slug: await nextSlug("asset", data.name),

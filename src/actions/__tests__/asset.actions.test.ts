@@ -89,6 +89,11 @@ const mocks = vi.hoisted(() => {
       findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn(),
     },
+    idempotencyKey: {
+      create: vi.fn().mockResolvedValue({}),
+      findUnique: vi.fn().mockResolvedValue(null),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
     documentSequence: {
       upsert: vi.fn(),
     },
@@ -1143,6 +1148,21 @@ describe("createAsset / updateAsset", () => {
   it("fails validation with empty form on update", async () => {
     const res = await updateAsset(100, fd({}))
     expect(res?.success).toBe(false)
+  })
+
+  it("putaran 57: createAsset duplikat (idempotency key sama) ditolak, nol aset kedua", async () => {
+    // Key sudah tercatat segar = submit yang sama sedang/telah diproses.
+    prismaMock.idempotencyKey.create.mockRejectedValueOnce(
+      Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),
+    )
+    prismaMock.idempotencyKey.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const res = await createAsset(fd({
+      name: "Laptop",
+      purchasePrice: "1000",
+      idempotencyKey: "asset-create-key-1",
+    }))
+    expect(res?.success).toBe(false)
+    expect(prismaMock.asset.create).not.toHaveBeenCalled()
   })
 
   it("generates code when none provided", async () => {

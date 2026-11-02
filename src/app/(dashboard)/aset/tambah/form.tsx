@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { createAsset, updateAsset } from "@/actions/asset.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
@@ -42,6 +42,9 @@ interface AssetFormProps {
 export function AssetForm({ categories, brands, groups = [], asset, generatedCode }: AssetFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Anti double-submit: key stabil per intent create, dirotasi sesudah sukses,
+  // dipakai ulang saat retry/error (pola expense-form).
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   // Merek terpilih mengendalikan opsi Tipe/Model: hanya model milik merek itu
   // yang ditawarkan, dan ganti merek mengosongkan pilihan model yang basi
   // (kalau tidak, ID model merek lama terkirim bersama merek baru).
@@ -70,8 +73,10 @@ export function AssetForm({ categories, brands, groups = [], asset, generatedCod
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
+        if (!asset?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
         const result = asset?.id ? await updateAsset(asset.id, formData) : await createAsset(formData)
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        if (!asset?.id) idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess(asset?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/aset")
         router.refresh()
