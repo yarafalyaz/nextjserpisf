@@ -5,11 +5,13 @@ const mocks = vi.hoisted(() => ({
   prismaMock: {
     taxGroup: {
       findFirst: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({ id: 1 }),
       update: vi.fn().mockResolvedValue({ id: 1 }),
     },
     taxGroupTax: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
     tax: { findMany: vi.fn().mockResolvedValue([{ id: 1 }]) },
+    $executeRaw: vi.fn().mockResolvedValue(1),
     $transaction: vi.fn(),
   },
 }))
@@ -21,7 +23,10 @@ vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: vi.fn() }))
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn().mockResolvedValue("DOC-001") }))
 vi.mock("@/lib/utils/settings", () => ({ getSystemSettings: vi.fn().mockResolvedValue({}) }))
-vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn().mockResolvedValue("grup") }))
+vi.mock("@/lib/utils/slug-db", () => ({
+  nextSlug: vi.fn().mockResolvedValue("grup"),
+  nextSlugWithClient: vi.fn().mockResolvedValue("grup"),
+}))
 vi.mock("@/lib/auth/hr-scope", () => ({ getHrScope: vi.fn().mockResolvedValue(null) }))
 vi.mock("bcryptjs", () => { const m = { hash: vi.fn().mockResolvedValue("h"), compare: vi.fn().mockResolvedValue(true) }; return { ...m, default: m } })
 
@@ -37,6 +42,8 @@ function fd(name: string, ids: string[]): FormData {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+  mocks.prismaMock.$executeRaw.mockResolvedValue(1)
+  mocks.prismaMock.taxGroup.findMany.mockResolvedValue([])
   mocks.prismaMock.taxGroup.create.mockResolvedValue({ id: 1 })
   mocks.prismaMock.taxGroup.update.mockResolvedValue({ id: 1 })
   mocks.prismaMock.taxGroupTax.deleteMany.mockResolvedValue({ count: 1 })

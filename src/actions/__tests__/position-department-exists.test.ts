@@ -7,12 +7,15 @@ const mocks = vi.hoisted(() => ({
   prismaMock: {
     position: {
       findFirst: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({ id: 1 }),
       update: vi.fn().mockResolvedValue({ id: 1 }),
     },
     department: {
       findFirst: vi.fn().mockResolvedValue({ id: 7 }),
     },
+    $executeRaw: vi.fn().mockResolvedValue(1),
+    $transaction: vi.fn(),
   },
 }))
 
@@ -23,7 +26,10 @@ vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: mocks.logActivityMock }))
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn().mockResolvedValue("POS-001") }))
 vi.mock("@/lib/utils/settings", () => ({ getSystemSettings: vi.fn().mockResolvedValue({}) }))
-vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn().mockResolvedValue("manager") }))
+vi.mock("@/lib/utils/slug-db", () => ({
+  nextSlug: vi.fn().mockResolvedValue("manager"),
+  nextSlugWithClient: vi.fn().mockResolvedValue("manager"),
+}))
 vi.mock("@/lib/auth/hr-scope", () => ({ getHrScope: vi.fn().mockResolvedValue(null) }))
 vi.mock("bcryptjs", () => {
   const m = { hash: vi.fn().mockResolvedValue("hash"), compare: vi.fn().mockResolvedValue(true) }
@@ -41,7 +47,10 @@ function fd(entries: Record<string, string>): FormData {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+  mocks.prismaMock.$transaction.mockImplementation(async (ops: any) => Array.isArray(ops) ? Promise.all(ops) : ops(mocks.prismaMock))
+  mocks.prismaMock.$executeRaw.mockResolvedValue(1)
   mocks.prismaMock.position.findFirst.mockResolvedValue(null)
+  mocks.prismaMock.position.findMany.mockResolvedValue([])
   mocks.prismaMock.position.create.mockResolvedValue({ id: 1 })
   mocks.prismaMock.position.update.mockResolvedValue({ id: 1 })
   mocks.prismaMock.department.findFirst.mockResolvedValue({ id: 7 })
