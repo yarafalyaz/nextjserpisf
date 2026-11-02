@@ -142,6 +142,28 @@ describe("Vehicle Model Actions", () => {
     expect(res?.error).toBe('Model "Avanza" sudah ada untuk merek ini.')
   })
 
+  it("putaran 69: updateVehicleBrand menolak nama ternormalisasi milik merek lain", async () => {
+    const brandMock = mocks.prismaMock.vehicleBrand
+    const prevFindMany = brandMock.findMany.getMockImplementation()
+    const prevUpdate = brandMock.update.getMockImplementation()
+    const prevVariantFindMany = mocks.prismaMock.vehicleVariant.findMany.getMockImplementation()
+    brandMock.findMany.mockImplementation(async () => [
+      { id: 1, slug: "toyota", name: "Toyota" },
+      { id: 2, slug: "daihatsu", name: "Daihatsu" },
+    ])
+    try {
+      const res = await actions.updateVehicleBrand(1, fdMap({ name: "  daihatsu " }))
+      expect(res?.success).toBe(false)
+      expect(res?.error).toContain("sudah ada")
+      expect(brandMock.update).not.toHaveBeenCalled()
+    } finally {
+      if (prevFindMany) brandMock.findMany.mockImplementation(prevFindMany)
+      if (prevUpdate) brandMock.update.mockImplementation(prevUpdate)
+      if (prevVariantFindMany) mocks.prismaMock.vehicleVariant.findMany.mockImplementation(prevVariantFindMany)
+      else mocks.prismaMock.vehicleVariant.findMany.mockReset()
+    }
+  })
+
   it("putaran 55 K1: updateVehicleModel menolak nama sama (trim+case) yang lahir belakangan", async () => {
     mocks.prismaMock.vehicleModel.findMany.mockImplementation(async () => [{ id: 9, name: "Avanza" }])
     try {
@@ -171,10 +193,8 @@ describe("Vehicle Variant Actions", () => {
     expect(res?.success).toBe(true)
   })
   it("createVehicleVariant mengunci baris model sebelum cek duplikat (race regresi)", async () => {
-    // Tanpa unique (vehicleModelId, name) di DB, cek findFirst lepas
-    // membiarkan dua create konkuren membuat varian nama sama. Kunci baris
-    // model induk di dalam tx menyerialkan cek-tulis per model.
-    mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce(null)
+    // Putaran 69: klaim berpindah dari findFirst mentah ke findMany
+    // ternormalisasi di bawah kunci yang sama.
     const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", vehicleModelId: 1 }))
     expect(res?.success).toBe(true)
     expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
@@ -187,14 +207,44 @@ describe("Vehicle Variant Actions", () => {
         "")
     expect(sql).toMatch(/FROM vehicle_models[\s\S]*FOR UPDATE/)
     expect(mocks.prismaMock.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.prismaMock.vehicleVariant.findFirst.mock.invocationCallOrder[0],
+      mocks.prismaMock.vehicleVariant.findMany.mock.invocationCallOrder[0],
     )
   })
   it("createVehicleVariant menolak duplikat yang terlihat di bawah kunci tanpa create", async () => {
-    mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce({ id: 9 })
-    const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", vehicleModelId: 1 }))
-    expect(res?.success).toBe(false)
-    expect(mocks.prismaMock.vehicleVariant.create).not.toHaveBeenCalled()
+    const variantMock = mocks.prismaMock.vehicleVariant
+    const prevFindMany = variantMock.findMany.getMockImplementation()
+    variantMock.findMany.mockResolvedValueOnce([{ id: 9, name: "1.5 G" }])
+    try {
+      const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", vehicleModelId: 1 }))
+      expect(res?.success).toBe(false)
+      expect(mocks.prismaMock.vehicleVariant.create).not.toHaveBeenCalled()
+    } finally {
+      if (prevFindMany) variantMock.findMany.mockImplementation(prevFindMany)
+    }
+  })
+  it("putaran 69: createVehicleVariant menolak duplikat ternormalisasi di bawah kunci", async () => {
+    const variantMock = mocks.prismaMock.vehicleVariant
+    const prevCreate = variantMock.create.getMockImplementation()
+    const prevVariantFindMany = variantMock.findMany.getMockImplementation()
+    const prevBrandFindMany = mocks.prismaMock.vehicleBrand.findMany.getMockImplementation()
+    variantMock.findMany.mockImplementation(async () => [
+      { id: 9, name: "1.5 G", vehicleModelId: 1 },
+    ])
+    variantMock.create.mockImplementation(async () => {
+      throw new Error("AAA PUTARAN69 VARIAN LOLOS")
+    })
+    try {
+      const res = await actions.createVehicleVariant(fdMap({ name: "1.5 g", vehicleModelId: 1 }))
+      expect(res?.success).toBe(false)
+      expect(res?.error).toContain("sudah ada")
+      expect(variantMock.create).not.toHaveBeenCalled()
+    } finally {
+      if (prevVariantFindMany) variantMock.findMany.mockImplementation(prevVariantFindMany)
+      else variantMock.findMany.mockReset()
+      if (prevCreate) variantMock.create.mockImplementation(prevCreate)
+      if (prevBrandFindMany) mocks.prismaMock.vehicleBrand.findMany.mockImplementation(prevBrandFindMany)
+      else mocks.prismaMock.vehicleBrand.findMany.mockReset()
+    }
   })
   it("deleteVehicleVariant succeeds", async () => {
     const res = await actions.deleteVehicleVariant(1)
@@ -206,6 +256,21 @@ describe("Vehicle Actions", () => {
   it("createVehicle succeeds", async () => {
     const res = await actions.createVehicle(fdMap({ variantId: 1, name: "Fortuner 2.4", year: 2023 }))
     expect(res?.success).toBe(true)
+  })
+
+  it("putaran 69: createVehicle retry key sama ditahan — tipe katalog lahir sekali", async () => {
+    const idem = mocks.prismaMock.idempotencyKey
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const fd = () => fdMap({ variantId: 1, name: "Fortuner 2.4", year: 2023, idempotencyKey: "vehicle-key-1" })
+    const first = await actions.createVehicle(fd())
+    const second = await actions.createVehicle(fd())
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    if (!second?.success) expect(second.error).toMatch(/duplikat/i)
+    expect(mocks.prismaMock.vehicle.create).toHaveBeenCalledTimes(1)
   })
   it("updateVehicle succeeds", async () => {
     const res = await actions.updateVehicle(1, fdMap({ variantId: 1, name: "Fortuner 2.4", year: 2023 }))
@@ -219,6 +284,8 @@ describe("Vehicle Actions", () => {
 
 describe("Customer Vehicle Actions", () => {
   it("createCustomerVehicle succeeds", async () => {
+    mocks.prismaMock.vehicleVariant.findFirst.mockReset()
+    mocks.prismaMock.vehicleVariant.findFirst.mockImplementation(async () => ({ id: 1 }))
     const res = await actions.createCustomerVehicle(fdMap({ customerId: 1, variantId: 1, vehicleId: 1 }))
     expect(res?.success).toBe(true)
   })
@@ -557,10 +624,16 @@ describe("Vehicle Actions Error Paths", () => {
     }
   })
   it("deleteVehicle refuses if has relation dependents (line 345 branch)", async () => {
-    mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce({ id: 2 })
-    const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", vehicleModelId: 1 }))
-    expect(res?.success).toBe(false)
-    expect(res?.error).toContain("sudah ada")
+    const variantMock = mocks.prismaMock.vehicleVariant
+    const prevFindMany = variantMock.findMany.getMockImplementation()
+    variantMock.findMany.mockResolvedValueOnce([{ id: 2, name: "1.5 G" }])
+    try {
+      const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", vehicleModelId: 1 }))
+      expect(res?.success).toBe(false)
+      expect(res?.error).toContain("sudah ada")
+    } finally {
+      if (prevFindMany) variantMock.findMany.mockImplementation(prevFindMany)
+    }
   })
   it("updateVehicleModel fails validation (empty name)", async () => {
     const res = await actions.updateVehicleModel(1, fdMap({ name: "" }))

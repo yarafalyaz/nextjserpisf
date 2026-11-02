@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition, useMemo } from "react"
+import { useRef, useState, useTransition, useMemo } from "react"
 import { createVehicle, updateVehicle } from "@/actions/vehicle.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
@@ -36,6 +36,9 @@ interface VehicleFormProps {
 // customer-owned unit via /kendaraan/pelanggan, not here.
 export function VehicleForm({ brands, models, variants, vehicle }: VehicleFormProps) {
   const router = useRouter()
+  // Putaran 69: key stabil per intent buat tipe kendaraan (hanya mode buat);
+  // retry memakai key sama dan ditahan server.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [isPending, startTransition] = useTransition()
 
   // Resolve initial values: derive brandId from variant→model→brand if needed
@@ -82,6 +85,7 @@ export function VehicleForm({ brands, models, variants, vehicle }: VehicleFormPr
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
+        if (!vehicle?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
         // Ensure variantId is in formData (Combobox renders hidden input via name prop)
         const result = vehicle?.id ? await updateVehicle(vehicle.id, formData) : await createVehicle(formData)
         if (result && !result.success) {

@@ -165,24 +165,30 @@ export async function createVehicleModel(formData: FormData) {
 
 export async function createVehicle(formData: FormData) {
   try {
-    await requirePermission("create_vehicles");
+    const user = await requirePermission("create_vehicles");
 
     const parsed = parseFormData(vehicleSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
 
     const { variantId, name, year } = parsed.data;
 
-    // `Vehicle` is the catalog type master: it only carries the variant link,
-    // an optional label and a model year. Physical-unit attributes (plate,
-    // color) live on CustomerVehicle. No customer linkage here — a customer's
-    // ownership of this type is created via /kendaraan/pelanggan.
-    const vehicle = await prisma.vehicle.create({
-      data: {
-        vehicleVariantId: variantId,
-        name: name ?? null,
-        year: year ?? null,
-        slug: await nextSlug("vehicle", name ?? "vehicle"),
-      },
+    // Putaran 69: schema Vehicle hanya slug @unique — retry submit
+    // melahirkan tipe katalog kembar dan slug global bisa P2002 konkuren.
+    // Klaim key dalam tx sebelum create; slug dari delegate tx.
+    const vehicle = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(
+        formData.get("idempotencyKey") as string | null,
+        tx,
+        user.id,
+      );
+      return tx.vehicle.create({
+        data: {
+          vehicleVariantId: variantId,
+          name: name ?? null,
+          year: year ?? null,
+          slug: await nextSlugWithClient(tx as never, "vehicle", name ?? "vehicle"),
+        },
+      });
     });
 
     revalidatePath("/kendaraan");
@@ -318,9 +324,16 @@ export async function createVehicleVariant(formData: FormData) {
     // dua create konkuren terserialkan dan cek kedua melihat baris pertama.
     const outcome = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM vehicle_models WHERE id = ${vehicleModelId} FOR UPDATE`;
-      const duplicate = await tx.vehicleVariant.findFirst({
-        where: { vehicleModelId, name },
+      // Putaran 69: klaim duplikat samakan kontrak saudara (trim+lowercase),
+      // bukan nama mentah — `1.5 G` vs `1.5 g` tak lagi hidup berdampingan.
+      const nameKey = normalizeVehicleMasterName(name);
+      const siblings = await tx.vehicleVariant.findMany({
+        where: { vehicleModelId },
+        select: { id: true, name: true },
       });
+      const duplicate = siblings.find(
+        (row) => normalizeVehicleMasterName(row.name) === nameKey,
+      );
       if (duplicate) return { duplicate: true as const };
       const variant = await tx.vehicleVariant.create({
         data: {
@@ -414,15 +427,38 @@ export async function updateVehicleBrand(id: number, formData: FormData) {
     const parsed = parseFormData(vehicleBrandSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
 
-    await prisma.vehicleBrand.update({
-      where: { id },
-      data: {
-        name: parsed.data.name,
-        slug: await nextSlug("vehicleBrand", parsed.data.name, {
-          excludeId: id,
-        }),
-      },
-    });
+    // Putaran 69: rename samakan klaim ternormalisasi createVehicleBrand —
+    // kontrak nama unik trim+lowercase digerbang di bawah gap-lock tabel,
+    // slug dari delegate tx.
+    const outcome = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vehicle_brands FOR UPDATE`
+      }
+      const nameKey = normalizeVehicleMasterName(parsed.data.name)
+      const existing = await tx.vehicleBrand.findMany({
+        select: { id: true, slug: true, name: true },
+      })
+      const duplicate = existing.find(
+        (row) => row.id !== id && normalizeVehicleMasterName(row.name) === nameKey,
+      )
+      if (duplicate) return { duplicate: true as const }
+      await tx.vehicleBrand.update({
+        where: { id },
+        data: {
+          name: parsed.data.name,
+          slug: await nextSlugWithClient(tx as never, "vehicleBrand", parsed.data.name, {
+            excludeId: id,
+          }),
+        },
+      })
+      return { ok: true as const }
+    })
+    if ("duplicate" in outcome) {
+      return {
+        success: false,
+        error: `Merek "${parsed.data.name.trim()}" sudah ada.`,
+      }
+    }
 
     revalidatePath("/kendaraan/merek");
     await logActivity(
@@ -738,7 +774,9 @@ export async function createCustomerVehicle(formData: FormData) {
           customerId,
           vehicleId,
           // Pelat nomor paling terbaca di URL; unit tanpa pelat memakai fallback.
-          slug: await nextSlug("customerVehicle", plateNumber, {
+          // Putaran 69: slug dari delegate tx (varian global tak melihat
+          // baris tak-tercommit transaksi lain).
+          slug: await nextSlugWithClient(tx as never, "customerVehicle", plateNumber, {
             fallback: `kendaraan-${customerId}-${vehicleId}`,
           }),
           plateNumber: plateNumber ?? null,
