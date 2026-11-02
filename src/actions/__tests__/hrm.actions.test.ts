@@ -458,6 +458,38 @@ describe("Leave Request Actions", () => {
     expect(prismaMock.leaveRequest.update).not.toHaveBeenCalled()
   })
 
+  it("putaran 76: updateLeaveRequest mengunci employees sebelum bacaan konsisten pertama", async () => {
+    // MariaDB REPEATABLE READ: findUniqueOrThrow pertama dalam tx membentuk
+    // snapshot; bila bacaan itu mendahului kunci employees, baris yang dinilai
+    // bisa mendahului commit penulis lain. Kunci employees (current ∪ target)
+    // wajib mendahului bacaan kedua (locking re-read dalam tx).
+    const res = await actions.updateLeaveRequest(1, fd({
+      employeeId: "1",
+      type: "annual",
+      startDate: "2026-06-15",
+      endDate: "2026-06-20",
+    }))
+    expect(res?.success).toBe(true)
+    const lockOrder = (prismaMock as any).$executeRaw.mock.invocationCallOrder[0]
+    const currentReadOrder = prismaMock.leaveRequest.findUniqueOrThrow.mock.invocationCallOrder[1]
+    expect(lockOrder).toBeLessThan(currentReadOrder)
+  })
+
+  it("putaran 76: updateLeaveRequest menolak bila karyawan baris berubah di bawah kunci", async () => {
+    prismaMock.leaveRequest.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, employeeId: 1, status: "pending" })
+      .mockResolvedValueOnce({ id: 1, employeeId: 7, status: "pending" })
+    const res = await actions.updateLeaveRequest(1, fd({
+      employeeId: "1",
+      type: "annual",
+      startDate: "2026-06-15",
+      endDate: "2026-06-20",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("sudah berubah")
+    expect(prismaMock.leaveRequest.update).not.toHaveBeenCalled()
+  })
+
   it("deleteLeaveRequest removes record", async () => {
     const res = await actions.deleteLeaveRequest(1)
     expect(res?.success).toBe(true)
@@ -621,6 +653,32 @@ describe("Overtime Request Actions", () => {
     const lockOrder = (prismaMock as any).$executeRaw.mock.invocationCallOrder[0]
     const capOrder = prismaMock.overtimeRequest.findMany.mock.invocationCallOrder[0]
     expect(lockOrder).toBeLessThan(capOrder)
+  })
+
+  it("putaran 76: updateOvertimeRequest mengunci employees sebelum bacaan konsisten pertama", async () => {
+    const ok = await actions.updateOvertimeRequest(1, fd({
+      employeeId: "1",
+      date: "2026-06-12",
+      hours: "3",
+    }))
+    expect(ok?.success).toBe(true)
+    const lockOrder = (prismaMock as any).$executeRaw.mock.invocationCallOrder[0]
+    const currentReadOrder = prismaMock.overtimeRequest.findUniqueOrThrow.mock.invocationCallOrder[1]
+    expect(lockOrder).toBeLessThan(currentReadOrder)
+  })
+
+  it("putaran 76: updateOvertimeRequest menolak bila karyawan baris berubah di bawah kunci", async () => {
+    prismaMock.overtimeRequest.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, employeeId: 1, status: "pending", projectId: null })
+      .mockResolvedValueOnce({ id: 1, employeeId: 7, status: "pending" })
+    const changed = await actions.updateOvertimeRequest(1, fd({
+      employeeId: "1",
+      date: "2026-06-12",
+      hours: "3",
+    }))
+    expect(changed?.success).toBe(false)
+    expect(changed?.error).toContain("sudah berubah")
+    expect(prismaMock.overtimeRequest.updateMany).not.toHaveBeenCalled()
   })
 
   it("approveOvertime updates status", async () => {

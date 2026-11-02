@@ -5678,6 +5678,16 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
     // not double-counted against the balance when editing.
     const leave = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM leave_requests WHERE id = ${id} FOR UPDATE`;
+      // Putaran 76 (kandidat 7): kunci baris employees (current ∪ target, id
+      // menaik) SEBELUM bacaan konsisten pertama. Bacaan current sesudah ini
+      // adalah locking re-read di bawah kunci dokumen, sehingga snapshot
+      // dibentuk pasca-kunci (pola createLeaveRequest:1182) — bukan dari
+      // jendela sebelum employees terkunci, yang bisa mendahului commit
+      // penonaktifan/pindah oleh penulis lain yang mengambil kunci sama.
+      const employeeIds = [...new Set([existing.employeeId, employeeId])].sort((a, b) => a - b);
+      for (const lockId of employeeIds) {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${lockId} FOR UPDATE`;
+      }
       const current = await tx.leaveRequest.findUniqueOrThrow({
         where: { id },
         select: { status: true, employeeId: true },
@@ -5685,10 +5695,8 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
       if (current.status !== "pending") {
         throw new Error("Hanya pengajuan cuti berstatus menunggu yang dapat diedit");
       }
-
-      const employeeIds = [...new Set([current.employeeId, employeeId])].sort((a, b) => a - b);
-      for (const lockId of employeeIds) {
-        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${lockId} FOR UPDATE`;
+      if (current.employeeId !== existing.employeeId) {
+        throw new Error("Pengajuan cuti sudah berubah — muat ulang sebelum mengedit");
       }
       // Putaran 75: nilai ulang hidup source/target dari baris terkunci —
       // gerbang hidup hanya terhadap karyawan yang benar-benar dinilai.
@@ -5812,6 +5820,21 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
 
     const overtime = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM overtime_requests WHERE id = ${id} FOR UPDATE`;
+      // Putaran 76 (kandidat 7): kunci baris employees (current ∪ target, id
+      // menaik) SEBELUM bacaan konsisten pertama — bacaan current sesudah ini
+      // adalah locking re-read di bawah kunci dokumen sehingga snapshot
+      // dibentuk pasca-kunci (pola createOvertimeRequest), bukan dari jendela
+      // sebelum employees terkunci.
+      // Serialisasi cap per karyawan seperti create (lihat catatan di
+      // createOvertimeRequest): kunci baris overtime sendiri tidak
+      // menserialkan dua edit baris berbeda yang sama-sama pindah ke
+      // karyawan target — snapshot cap masing-masing lolos, commit
+      // keduanya menembus cap PP 35/2021. Urutan kunci global:
+      // overtime_requests dulu (di atas), lalu employees.
+      const employeeIds = [...new Set([existing.employeeId, v.employeeId])].sort((a, b) => a - b);
+      for (const employeeId of employeeIds) {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
+      }
       const current = await tx.overtimeRequest.findUniqueOrThrow({
         where: { id },
         select: { status: true, employeeId: true },
@@ -5819,15 +5842,8 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
       if (current.status !== "pending") {
         throw new Error("Hanya pengajuan lembur berstatus menunggu yang dapat diedit");
       }
-      // Serialisasi cap per karyawan seperti create (lihat catatan di
-      // createOvertimeRequest): kunci baris overtime sendiri tidak
-      // menserialkan dua edit baris berbeda yang sama-sama pindah ke
-      // karyawan target — snapshot cap masing-masing lolos, commit
-      // keduanya menembus cap PP 35/2021. Urutan kunci global:
-      // overtime_requests dulu (di atas), lalu employees.
-      const employeeIds = [...new Set([current.employeeId, v.employeeId])].sort((a, b) => a - b);
-      for (const employeeId of employeeIds) {
-        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
+      if (current.employeeId !== existing.employeeId) {
+        throw new Error("Pengajuan lembur sudah berubah — muat ulang sebelum mengedit");
       }
       // Putaran 75: nilai ulang hidup target pindahan dari baris terkunci —
       // assert pra-tx tak melihat penonaktifan yang commit di jendela.
