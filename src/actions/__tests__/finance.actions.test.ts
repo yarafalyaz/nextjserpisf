@@ -1659,6 +1659,46 @@ describe("Cost Center Actions", () => {
     expect(sql).toMatch(/FROM cost_centers[\s\S]*FOR UPDATE/)
     expect(mocks.prismaMock.costCenter.update).not.toHaveBeenCalled()
   })
+  it("putaran 70: updateCostCenter menolak kode ternormalisasi milik pusat biaya lain dalam tx", async () => {
+    mocks.prismaMock.costCenter.findMany.mockResolvedValue([
+      { id: 1, name: "Lama", code: "CC-001" },
+      { id: 2, name: "Operasional", code: "CC-002" },
+    ])
+    const res = await (actions as any).updateCostCenter(1, fdMap({
+      code: " cc-002 ",
+      name: "Baru",
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error ?? "")).toMatch(/CC-002/)
+    expect(mocks.prismaMock.costCenter.update).not.toHaveBeenCalled()
+  })
+
+  it("putaran 70: updateCostCenter menghitung slug rename lewat delegate tx", async () => {
+    mocks.prismaMock.costCenter.findMany.mockResolvedValue([
+      { id: 1, name: "Lama", code: "CC-001" },
+    ])
+    // Facade tx berbeda: tabrakan slug hanya terlihat delegate tx.
+    const txFindFirst = vi.fn()
+      .mockResolvedValueOnce({ id: 77 })
+      .mockResolvedValue(null)
+    const baseTx = mocks.prismaMock.$transaction.getMockImplementation()
+    mocks.prismaMock.$transaction.mockImplementationOnce(async (cb: any) =>
+      cb({ ...mocks.prismaMock, costCenter: { ...mocks.prismaMock.costCenter, findFirst: txFindFirst } }),
+    )
+    try {
+      const res = await (actions as any).updateCostCenter(1, fdMap({
+        code: "CC-001",
+        name: "Cost Center 1 Updated",
+      }))
+      expect(res?.success).toBe(true)
+      const updateArg = mocks.prismaMock.costCenter.update.mock.calls[0][0]
+      expect(updateArg.data.slug).toBe("cost-center-1-updated-2")
+      expect(txFindFirst).toHaveBeenCalled()
+    } finally {
+      if (baseTx) mocks.prismaMock.$transaction.mockImplementation(baseTx)
+    }
+  })
+
   it("deleteCostCenter succeeds", async () => {
     const res = await (actions as any).deleteCostCenter(1)
     expect(res?.success).toBe(true)

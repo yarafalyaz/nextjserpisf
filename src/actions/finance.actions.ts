@@ -2366,7 +2366,6 @@ export async function updateCostCenter(id: number, formData: FormData) {
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
-    const slug = await nextSlug("costCenter", v.name, { excludeId: id });
     const newParentId = v.parentId ?? null;
 
     // Anti-siklus di bawah kunci (pola updateAccount): baris ini + induk baru
@@ -2401,12 +2400,31 @@ export async function updateCostCenter(id: number, formData: FormData) {
         }
       }
 
+      // Putaran 70: klaim kode ternormalisasi homolog createCostCenter —
+      // create menolak kode milik lain menyebut kode tersimpan, sedangkan
+      // update sebelumnya hanya tertahan P2002 mentah @unique. Nama tetap
+      // bebas (tampilkan duplikat sah, rename create memakai reuse).
+      // Daftar sibling dibaca dari himpunan terkunci yang sama.
+      const candidates = await tx.costCenter.findMany({
+        select: { id: true, name: true, code: true },
+      });
+      const codeKey = v.code.trim().toLowerCase();
+      const byCode = candidates.find(
+        (row) => row.id !== id && row.code.trim().toLowerCase() === codeKey,
+      );
+      if (byCode) {
+        return {
+          error: `Kode pusat biaya ${byCode.code} sudah dipakai pusat biaya "${byCode.name}"; pakai kode lain.`,
+        };
+      }
+
       await tx.costCenter.update({
         where: { id },
         data: {
           code: v.code,
           name: v.name,
-          slug,
+          // Putaran 70: slug rename lewat delegate tx (pola updateVehicle).
+          slug: await nextSlugWithClient(tx as never, "costCenter", v.name, { excludeId: id }),
           description: v.description ?? null,
           isActive: v.isActive,
           // Must be written on update as well: cost-center-form renders the "Induk"
