@@ -2434,6 +2434,30 @@ describe("Delivery Order Actions (legacy happy paths)", () => {
     )
     expect(res?.success).toBe(true)
   })
+  it("putaran 63: createDeliveryOrder — retry idempotencyKey sama ditolak, surat jalan lahir sekali", async () => {
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({
+      id: 1, documentNo: "SO-001", status: "confirmed", customerId: 1,
+    })
+    mocks.prismaMock.salesOrderItem.findMany.mockResolvedValue([{ id: 11, itemId: 5 }])
+    const idem = mocks.prismaMock.idempotencyKey
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const payload = {
+      salesOrderId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ salesOrderItemId: 11, itemId: 5, qty: 2 }]),
+      idempotencyKey: "do-key-1",
+    }
+    const first = await actions.createDeliveryOrder(fdMap(payload))
+    const second = await actions.createDeliveryOrder(fdMap(payload))
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(second?.error).toContain("duplikat")
+    expect(mocks.prismaMock.deliveryOrder.create).toHaveBeenCalledTimes(1)
+  })
+
   it("createDeliveryOrder menolak bila status pesanan berubah jadi dibatalkan di dalam tx (balapan)", async () => {
     let calls = 0
     mocks.prismaMock.salesOrder.findUnique.mockImplementation(async () => {

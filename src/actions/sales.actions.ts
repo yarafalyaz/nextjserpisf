@@ -2890,6 +2890,11 @@ export async function createDeliveryOrder(formData: FormData) {
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
   const v = parsed.data
 
+  // Putaran 63: cap create menghitung draft, tetapi cap ship hanya
+  // shipped — retry identik melahirkan dua draft yang bisa dikirim
+  // berurutan dan menembus qty pesanan di laporan pemenuhan.
+  const idempotencyKey = formData.get("idempotencyKey") as string | null
+
   const salesOrderId = v.salesOrderId
 
   // Gerbang status di SERVER, bukan hanya di pemilih pesanan pada halaman: form
@@ -2961,6 +2966,7 @@ export async function createDeliveryOrder(formData: FormData) {
   // ini tidak boleh menembus qty dipesan. DO tetap tidak menyentuh stok —
   // keluar stok hanya lewat posting faktur.
   const deliveryOrder = await prisma.$transaction(async (tx) => {
+    await checkIdempotency(idempotencyKey, tx, user.id)
     await tx.$queryRaw`SELECT id FROM sales_orders WHERE id = ${salesOrderId} FOR UPDATE`
     // Baca ulang status SESUDAH kunci: pesanan bisa dibatalkan/ditutup di antara
     // cek awal (di luar tx) dan kunci ini. Gerbang luar saja tak cukup — DO dari

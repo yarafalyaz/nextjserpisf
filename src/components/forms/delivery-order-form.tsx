@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
@@ -47,6 +47,7 @@ function rowsForOrder(salesOrders: DeliveryOrderSalesOrder[], salesOrderId: stri
 export function DeliveryOrderForm({ salesOrders, defaultSalesOrderId, deliveryOrder }: DeliveryOrderFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [date, setDate] = useState(deliveryOrder?.date ?? toLocalDateOnly(new Date()))
   const [deliveryDate, setDeliveryDate] = useState(deliveryOrder?.deliveryDate ?? "")
   const [salesOrderId, setSalesOrderId] = useState(
@@ -91,9 +92,11 @@ export function DeliveryOrderForm({ salesOrders, defaultSalesOrderId, deliveryOr
             ),
           )
         }
+        if (!deliveryOrder?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
         const { createDeliveryOrder, updateDeliveryOrder } = await import("@/actions/sales.actions")
         const result = deliveryOrder?.id ? await updateDeliveryOrder(deliveryOrder.id, formData) : await createDeliveryOrder(formData)
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        if (!deliveryOrder?.id) idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess(deliveryOrder?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/penjualan/surat-jalan")
         router.refresh()
