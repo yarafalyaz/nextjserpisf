@@ -2018,7 +2018,18 @@ export async function createMaterialIssueFromWorkOrder(
         );
       }
 
-      if (wo.items.length === 0) {
+      // Baca baris WO SEGAR di bawah kunci (bukan snapshot luar): revisi
+      // yang commit sesudah findUniqueOrThrow luar harus dihormati —
+      // snapshot lama bisa memuat baris yang baru saja ditandai
+      // `replaced` (memang tidak pernah keluar via `return`), dan MI akan
+      // mengeluarkan stok item yang tak lagi menjadi bagian WO. Pola baca
+      // ulang sesudah FOR UPDATE = updateProductionOrder di bawah.
+      const lockedWo = await tx.workOrder.findUniqueOrThrow({
+        where: { id: workOrderId },
+        include: { items: true },
+      });
+      const issueableItems = lockedWo.items.filter((i) => i.status !== "replaced");
+      if (issueableItems.length === 0) {
         throw new Error(
           "Work Order tidak memiliki item. Tambahkan item terlebih dahulu.",
         );
@@ -2027,14 +2038,14 @@ export async function createMaterialIssueFromWorkOrder(
       const miDocNo = await generateDocumentNumber("MI");
       const customerName = wo.customer?.name ?? "Unknown";
       const licensePlate = wo.quotation?.customerVehicle?.plateNumber ?? "-";
-      const notes = `Pengeluaran material untuk WO ${wo.documentNo}\nPelanggan: ${customerName}\nPlat Nomor: ${licensePlate}`;
+      const notes = `Pengeluaran material untuk WO ${lockedWo.documentNo}\nPelanggan: ${customerName}\nPlat Nomor: ${licensePlate}`;
 
       const created = await tx.materialIssue.create({
         data: {
           documentNo: miDocNo,
           warehouseId,
           workOrderId,
-          projectId: wo.projectId,
+          projectId: lockedWo.projectId,
           date: new Date(),
           notes,
           status: "draft",
@@ -2051,12 +2062,12 @@ export async function createMaterialIssueFromWorkOrder(
       // LENGKAP: baris di luar revisi ikut null.
       const snapshotByItem = await resolveMaterialIssueScrapSnapshots(
         tx,
-        wo.items.map((i) => ({ itemId: i.itemId, workOrderItemId: i.id })),
+        issueableItems.map((i) => ({ itemId: i.itemId, workOrderItemId: i.id })),
         workOrderId,
       );
 
       await tx.materialIssueItem.createMany({
-        data: wo.items
+        data: issueableItems
           .filter((i) => Number(i.qty) > 0)
           .map((i) => ({
             materialIssueId: created.id,

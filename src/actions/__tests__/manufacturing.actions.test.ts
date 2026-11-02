@@ -2006,6 +2006,28 @@ describe("Work Order Actions", () => {
     ])
   })
 
+  it("putaran 55: createMaterialIssueFromWorkOrder tidak meng-issue baris WO replaced", async () => {
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "in_progress", documentNo: "WO-1",
+      productionOrder: { id: 1, productId: 1 },
+      quantity: 10,
+      items: [
+        { id: 1, qty: 5, itemId: 1, status: "replaced" },
+        { id: 2, qty: 3, itemId: 2, status: "pending" },
+      ],
+      product: { billOfMaterials: "[]" },
+      customer: { name: "Customer A" },
+      quotation: null,
+    } as any)
+    const res = await actions.createMaterialIssueFromWorkOrder(1, 1)
+    expect(res?.success).toBe(true)
+    const createArg = mocks.prismaMock.materialIssueItem.createMany.mock.calls.at(-1)?.[0]
+    expect(createArg.data).toEqual([
+      expect.objectContaining({ itemId: 2, workOrderItemId: 2 }),
+    ])
+  })
+
   it("createMaterialIssueFromWorkOrder fails when MI exists", async () => {
     mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({ id: 1, documentNo: "MI-1" })
     mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({
