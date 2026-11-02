@@ -2131,3 +2131,29 @@ Semua kandidat agent diverifikasi sesi utama terhadap kode aktual + schema sebel
 - Tidak ada migrasi schema putaran ini.
 - Pelajaran harness: reset mock async di `beforeEach` yang tidak di-await berjalan SESUDAH test — kontrak orde-kunci wajib mock bersama di-hoist dengan reset sinkron.
 - Head final putaran 72 `ee55bae97` CI **success** (run `41461411436`); `40acd1a0c` run `41460036071` success, `156f1184f` run `41460410908` success.
+
+## Putaran 73 — penjualan, pembelian, API/cron (3 agent audit paralel)
+
+Semua kandidat agent diverifikasi sesi utama terhadap kode aktual + schema sebelum edit; 2 fix commit/push.
+
+### Fix penjualan (1 commit, 5 titik)
+1. `85aa5324e` fix(sales): kunci dan nilai ulang dokumen turunan penawaran dalam tx — (a) `resyncOnEdit` (`quotation-sync.service.ts`) kini mengunci baris SO + faktur calon (id naik) lalu membaca ulang status dari baris terkunci sebelum tulis: tanpa berbagi kunci ini resync bisa menimpa faktur yang baru saja posted oleh `postInvoice` (posted immutable GL-BR-003 jebol); SO yang keluar dari draft dilewati utuh. (b) `updateQuotation` ikut mengunci faktur jembatan-SO (`sales_invoices` JOIN `sales_orders` pembawa quotationId) — `quotationHasRealSettlement` mengikuti kedua jembatan tetapi kunci lama hanya yang langsung, jadi pembayaran faktur jembatan-SO bisa commit tak terlihat oleh count penjaga. (c) `updateSalesInvoice` mengunci baris SO tujuan sebelum menilai pasangan customer/status (bacaan polos dalam tx = snapshot). (d) `completeSalesReturn` menilai ulang `reason` dari baris retur terkunci (P4 F-2026-10-26-121-V) — `updateSalesReturn` bisa mengosongkan reason di jendela pra-tx. (e) `acceptQuotation` menilai ulang approval lewat `assertApproved(..., tx)` di bawah kunci baris penawaran (opt-in `assertApprovalInTx` pada `decideQuotation`; reject tidak ikut digerbang) — cek basi pra-tx tidak melihat edit yang commit di jendela kunci. Bukti merah perintah terpisah untuk (a)(c)(d)(e); CATATAN kejujuran: (b) fix diterapkan sebelum test ditulis — test hijau run pertama, tanpa bukti merah formal. Dua fixture lama diselaraskan: bacaan terkunci retur kini membawa `reason`, dan lost-race accept kini memodelkan bacaan stale-check pra-tx sebagai bacaan pertama.
+
+### Fix pembelian (1)
+2. `229245b56` fix(purchase): nomor faktur vendor bill dinilai ulang dalam tx — `setVendorBillTaxInvoiceNumber`: guard "sudah bernomor" hanya dari bacaan pra-tx; dalam tx `fresh` hanya dinilai ulang status/tax, nomor tidak pernah, dan dupe-check memakai `excludeBillId` bill sendiri. Dua request nomor berbeda bersamaan → penulis kedua me-reverse jurnal pengganti pertama, menulis nomornya, posting ulang tanpa penolakan. Nomor kini dinilai ulang dari baris terkunci (`isValidVendorTaxInvoiceNumber(fresh.taxInvoiceNumber)`) sebelum reverse/tulis. Schema hanya `@@index([vendorId, taxInvoiceNumber])` non-unik — kunci baris bill adalah serialisasi yang benar.
+
+### Vonis dicatat / gugur (tanpa patch)
+- Dedupe notifikasi cron tidak atomik (`src/app/api/cron/route.ts:155-159,274-280`, `daily-notifications/route.ts`, `notification.service.ts:115-184`; `Notification` tanpa `@@unique` dedupe-key). Kode sendiri sudah menandai `ponytail:` dengan upgrade path eksplisit ("naikkan ke unique dedupe-key bila cron diparalelkan"); scheduler serial by design, dampak noise/alert fatigue saja. CATAT — jangan patch tanpa keputusan paralelisasi.
+- Expiry `acceptQuotation` sengaja TIDAK dinilai ulang dalam tx: pola repo menilai expiry dari bacaan terkunci di `convertQuotationToOrder`; meneruskan expiry ke accept mengubah vonis produk tanpa mandat. CATAT terpisah.
+- Kandidat agent `issueSalesLateFee` terbit denda penuh berulang GUGUR sebagai bug: banyak dokumen denda per faktur memang by design (panel menampilkan N dokumen, reversal per dokumen, `buildLateFeeOutstandingByInvoice` menjumlahkan saldo posted/partial; backlog F-2026-10-22-093-V: dokumen denda terpisah terbit eksplisit per faktur oleh operator). Nominal penuh sejak due date = akrual kumulatif by design; menolak/mengurangkan sepihak mengubah angka berjalan tanpa mandat.
+
+### Daftar bersih agent (jangan diangkat ulang tanpa bukti baru)
+- Pembelian: create PR/PO/GR/VendorBill/VendorPayment/PurchaseReturn/PurchaseAdvance/PO jasa, titik posting, VendorCredit, harga pemasok, faktur pajak register, approval PR/PO, delete dokumen, master delete, jalur print/workflow.
+- API/cron: semua route cron (POST + `isValidCronRequest`; depresiasi FOR UPDATE; auto-reject CAS; recurring CAS `nextRunDate`; sync-holidays Serializable), proxy/rate-limit, route berkas/unduhan, route data/cetak, publik by design (`health`, `address`, auth); tidak ada webhook/callback eksternal di `src/app/api`.
+- Penjualan: selain 5 titik fix dan 1 gugur di atas, kandidat lain agent tidak lolos verifikasi sesi utama.
+
+### Catatan
+- Tidak ada migrasi schema putaran ini.
+- Pelajaran harness: mock delegate yang sama melayani bacaan pra-tx DAN terkunci — fixture lost-race/stale wajib mengantrekan bacaan pra-tx sebagai Once pertama, bukan mengasumsikan bacaan pertama adalah yang terkunci.
+- Tests putaran 73: sales.actions 253/253, batch terkait 16 file 505/505, 6 guard statis 184/184, tsc clean, lint clean.
+- Head final putaran 73 `85aa5324e` CI **success** (run `41467228913`); `229245b56` tercakup dalam run head yang sama.
