@@ -328,6 +328,25 @@ describe("klaim di luar masa (F-021 AC2): manual, BUKAN auto-reject", () => {
     )
   })
 
+  it("putaran 55 K3: klaim atomik WO repair ditulis bersyarat repairWorkOrderId IS NULL", async () => {
+    const claim: { id: number; status: string; customerVehicleId: number } = {
+      id: 1, status: "approved", customerVehicleId: 7,
+    }
+    p.warrantyClaim.findUnique.mockImplementation(async () => ({ ...claim }))
+    p.workOrder.findUnique.mockResolvedValue({ id: 55, status: "processing", customerVehicleId: 7 })
+    p.warrantyClaim.findMany.mockResolvedValue([])
+    mockClaimWrite(claim)
+
+    await transitionWarrantyClaim({ claimId: 1, to: "in_repair", repairWorkOrderId: 55 }, prisma as never)
+
+    const writeCall = p.warrantyClaim.updateMany.mock.calls.at(-1)?.[0] as {
+      where?: Record<string, unknown>
+      data?: Record<string, unknown>
+    }
+    expect(writeCall.where).toMatchObject({ id: 1, status: "approved", repairWorkOrderId: null })
+    expect(writeCall.data).toMatchObject({ status: "in_repair", repairWorkOrderId: 55 })
+  })
+
   it("regresi putaran 50: tautan WO repair kendaraan lain ditolak", async () => {
     const claim: { id: number; status: string; customerVehicleId: number } = {
       id: 1, status: "approved", customerVehicleId: 7,

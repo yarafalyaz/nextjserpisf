@@ -310,7 +310,7 @@ async function reloadClaimOrThrow<T>(
 async function claimWarrantyClaimUpdate(
   client: TxClient | typeof prisma,
   claimId: number,
-  guard: { status: string } | { supplierClaimStatus: string },
+  guard: { status: string } | { supplierClaimStatus: string } | { status: string; repairWorkOrderId: null },
   data: Record<string, unknown>,
 ): Promise<void> {
   const claimed = await client.warrantyClaim.updateMany({
@@ -468,12 +468,24 @@ export async function transitionWarrantyClaim(
       )
     }
   }
-  await claimWarrantyClaimUpdate(client, claim.id, { status: claim.status }, {
-    status: input.to,
-    ...(input.to === "in_repair" && input.repairWorkOrderId != null
-      ? { repairWorkOrderId: input.repairWorkOrderId }
-      : {}),
-  })
+  // Tulis tautan WO repair ikut CAS yang sama dengan syarat tambahan
+  // repairWorkOrderId masih kosong: dua klaim konkuren ke WO yang sama
+  // terserialkan oleh CAS status masing-masing saja tidak cukup — tanpa
+  // syarat null ini keduanya menulis WO yang sama sebelum guard
+  // linkedElsewhere lawan terbaca (MariaDB tak punya partial-unique
+  // untuk "satu WO aktif per klaim", jadi CAS kolom inilah jaringnya).
+  const linkingRepairWo = input.to === "in_repair" && input.repairWorkOrderId != null
+  await claimWarrantyClaimUpdate(
+    client,
+    claim.id,
+    linkingRepairWo
+      ? { status: claim.status, repairWorkOrderId: null }
+      : { status: claim.status },
+    {
+      status: input.to,
+      ...(linkingRepairWo ? { repairWorkOrderId: input.repairWorkOrderId } : {}),
+    },
+  )
   return reloadClaimOrThrow(() => client.warrantyClaim.findUnique({ where: { id: claim.id } }))
 }
 
