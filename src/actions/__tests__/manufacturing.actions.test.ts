@@ -52,6 +52,7 @@ const mocks = vi.hoisted(() => {
     qcChecklist: buildModelMock(),
     qcInspection: buildModelMock(),
     nonconformance: buildModelMock(),
+    idempotencyKey: buildModelMock(),
 
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
@@ -158,6 +159,23 @@ beforeEach(() => {
 })
 
 describe("Product Actions", () => {
+  it("putaran 64: createProduct retry idempotencyKey sama ditolak, produk lahir sekali", async () => {
+    const idem = mocks.prismaMock.idempotencyKey
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const payload = { name: "Product Test", code: "PROD-1", idempotencyKey: "prd-key-1" }
+
+    const first = await actions.createProduct(fdMap(payload))
+    const second = await actions.createProduct(fdMap(payload))
+
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(String(second?.error ?? "")).toContain("duplikat")
+    expect(mocks.prismaMock.product.create).toHaveBeenCalledTimes(1)
+  })
+
   it("createProduct succeeds", async () => {
     const res = await actions.createProduct(fdMap({
       name: "Product Test",

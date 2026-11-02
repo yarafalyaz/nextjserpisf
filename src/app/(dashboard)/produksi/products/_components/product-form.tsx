@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition, useEffect, useMemo } from "react"
+import { useRef, useState, useTransition, useEffect, useMemo } from "react"
 import { createProduct, updateProduct } from "@/actions/manufacturing.actions"
 import { Plus, Trash2 } from "lucide-react"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -58,6 +58,7 @@ export function ProductForm({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [materials, setMaterials] = useState<MaterialRow[]>(
     product && product.materials.length > 0
       ? product.materials.map((m) => ({ itemId: String(m.itemId), qty: String(m.qty) }))
@@ -141,6 +142,7 @@ export function ProductForm({
     if (selectedBrandId) formData.set("vehicleBrandId", String(selectedBrandId))
     if (selectedModelId) formData.set("vehicleModelId", String(selectedModelId))
     formData.set("inventoryItemId", inventoryItemId ? String(inventoryItemId) : "")
+    if (!product?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
 
     // Append material rows
     materials.forEach((m) => {
@@ -153,6 +155,7 @@ export function ProductForm({
     startTransition(async () => {
       const result = product?.id ? await updateProduct(product.id, formData) : await createProduct(formData)
       if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+      if (!product?.id) idempotencyKeyRef.current = crypto.randomUUID()
       showSuccess(product?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
       router.push("/produksi/products")
       router.refresh()

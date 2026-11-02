@@ -108,7 +108,7 @@ function mergeUnique(a: string[], b: string[]): string[] {
 
 export async function createProduct(formData: FormData) {
   try {
-    await requirePermission("create_products");
+    const user = await requirePermission("create_products");
 
     const parsed = parseFormData(createProductSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -146,22 +146,29 @@ export async function createProduct(formData: FormData) {
     const refsError = await bomRefsError(materialsParsed.data.map((m) => m.itemId), v.vehicleBrandId, v.vehicleModelId);
     if (refsError) return { success: false, error: refsError };
 
-    const product = await prisma.product.create({
-      data: {
-        name: v.name,
-        code,
-        slug: await nextSlug("product", v.name),
-        description: v.description ?? null,
-        vehicleBrandId: v.vehicleBrandId,
-        vehicleModelId: v.vehicleModelId,
-        inventoryItemId: v.inventoryItemId ?? null,
-        materials: {
-          create: materialsParsed.data.map((m) => ({
-            itemId: m.itemId,
-            qty: m.qty,
-          })),
+    // Putaran 64: kode/slug selalu baru, jadi retry identik melahirkan
+    // produk kembar aktif (varian tanpa inventoryItemId tak tertahan
+    // unique apa pun) yang sama-sama bisa dipilih perintah produksi.
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
+    const product = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id);
+      return tx.product.create({
+        data: {
+          name: v.name,
+          code,
+          slug: await nextSlug("product", v.name),
+          description: v.description ?? null,
+          vehicleBrandId: v.vehicleBrandId,
+          vehicleModelId: v.vehicleModelId,
+          inventoryItemId: v.inventoryItemId ?? null,
+          materials: {
+            create: materialsParsed.data.map((m) => ({
+              itemId: m.itemId,
+              qty: m.qty,
+            })),
+          },
         },
-      },
+      });
     });
 
     await logActivity(
