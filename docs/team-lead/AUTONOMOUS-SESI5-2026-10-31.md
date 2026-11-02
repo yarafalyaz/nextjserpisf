@@ -1880,12 +1880,12 @@ Wilayah: tiga agent paralel (pembelian+penjualan sisa; keuangan-lanjutan+pajak+c
 4. `9cacd692b` fix(finance): `createRecurringTransaction` anti double-submit via idempotency key — jadwal aktif kembar; runner mengklaim per baris jadwal (bukan per pasangan), jadi cabang expense/jurnal memposting dokumen dobel per occurrence. Create dibungkus tx, klaim key pertama; form key create-only + rotasi.
 5. `806c1ee38` fix(tax): akun nonaktif ditolak di master jenis PPh — `withholdingAccountError` hanya menilai eksistensi + `deletedAt`; akun yang dinonaktifkan sesudah form dibuka tersimpan sah lalu transaksi sah gagal berisik di titik pakai. Syarat `isActive: true` ditambah ke kedua query akun.
 
-### CATAT SDM (antrean putaran 66, belum difix)
-- `addPayrollComponentLine` race kembar (`hrm.actions.ts:764-794`): cek duplikat luar tx, kunci payroll hanya baca ulang status draft; tanpa cek duplikat dalam tx dan tanpa `@@unique([payrollId, componentId])` → komponen dobel terhitung `recalcDraftPayrollFromLines`.
-- `createSalaryAdjustment` retry dobel (`salary-adjustment.actions.ts:104-195`): dua pengajuan `menunggu` sama-sama bisa disetujui lalu `applied`.
-- `createTimesheet` retry dobel (`hrm.actions.ts:4141-4190`): dua baris 8 jam lolos cap 24 jam; production pull membuat labor cost per `sourceTimesheetId` dobel.
-- `saveProbationReviewDraft` draft kembar (`probation.actions.ts:160-206`): cek-ada luar tx tanpa kunci/unique `(employeeId, milestone)`.
-- Kandidat disiplin-deduction (karyawan/signer nonaktif lolos, caller `applyDisciplinaryDeduction` belum ditemukan) dan `createVacancy` (kode unik per panggilan gagal menahan retry) dicatat residu rendah; belum ada bukti dampak uang.
+### CATAT SDM — SELESAI di putaran 66 (5 fix)
+- `addPayrollComponentLine` race kembar (`hrm.actions.ts:764-794`) → DIFIX `8c401b041` (putaran 66 #1).
+- `createSalaryAdjustment` retry dobel (`salary-adjustment.actions.ts:104-195`) → DIFIX `93808827a` (putaran 66 #2).
+- `createTimesheet` retry dobel (`hrm.actions.ts:4141-4190`) → DIFIX `c3c6b61f4` (putaran 66 #3).
+- `saveProbationReviewDraft` draft kembar (`probation.actions.ts:160-206`) → DIFIX `5efeae72e` (putaran 66 #4).
+- Kandidat disiplin-deduction (karyawan/signer nonaktif lolos) → DIFIX `9df9b6087` dan `createVacancy` (kode unik per panggilan gagal menahan retry) → DIFIX `526ccfa16` (putaran 66 #5/#6). Disiplin-deduction terbukti punya pemanggil UI (panel keputusan) — vonis "belum ditemukan caller" putaran ini keliru dan dikoreksi putaran 66.
 
 ### Vonis / cakupan agent (jangan diangkat ulang tanpa bukti baru)
 - Pembelian+penjualan sisa bersih kecuali fix #1: `createServicePurchaseOrderFromWorkOrder` (kunci WO + cek duplikat dalam tx), `createSalesOrder`/`createSalesInvoice`/`createSalesPayment` (ber-key + kunci baris + cap dalam tx), `createDifferenceInvoice`/`createProgressInvoice`/`createRevisionDownCredit` (kunci quotation, kandidat dari baris terkunci), `confirmDownPayment` (kunci DP hulu + jurnal unique + hook idempoten), `verifyGoodsReceipt`/`processPurchaseReturn` (hook kunci baris + jaring StockMove/jurnal existing), `confirmVendorBill`/`confirmVendorPayment`/`reverseVendorPayment`/`voidVendorBill`/`cancelPurchaseOrder`/`decideQuotation`/`postInvoice`/`completeSalesReturn` (kunci + baca ulang/klaim kondisional).
@@ -1896,6 +1896,22 @@ Wilayah: tiga agent paralel (pembelian+penjualan sisa; keuangan-lanjutan+pajak+c
 ### Catatan
 - Tidak ada migrasi schema putaran ini.
 - Satu flake tak-lokal teramati satu kali pada batch guard saat commit fix #5 (6 run pengulangan hijau berurutan, file terkait hijau 10/10); bukan dari diff putaran 65.
+
+## Putaran 66 — SDM (lanjutan antrean putaran 65; 6 fix)
+
+Wilayah: lima kandidat CATAT putaran 65 + satu kandidat yang semula ditulis residu rendah. Semua diverifikasi ulang sesi utama terhadap kode + form + schema; setiap fix mengikuti pola yang sama (test merah terpisah → fix → batch harness pemanggil + 6 guard → tsc/lint → commit/push).
+
+### Fix
+1. `8c401b041` fix(hrm): `addPayrollComponentLine` menilai ulang duplikat di bawah kunci slip — cek duplikat luar tx tanpa kunci; dua request konkuren sama-sama lolos lalu insert di bawah kunci payroll yang sama (tanpa `@@unique([payrollId, componentId])`), total draft terhitung dobel. Cek duplikat dinilai ulang dalam tx sesudah kunci baris payroll + cek status draft.
+2. `93808827a` fix(hrm): `createSalaryAdjustment` anti double-submit via idempotency key — retry melahirkan dua pengajuan `menunggu` yang sama-sama bisa disetujui dan applied. Form kirim key stabil per intent (rotasi sesudah sukses); klaim dalam tx sesudah kunci baris karyawan.
+3. `c3c6b61f4` fix(hrm): `createTimesheet` anti double-submit via idempotency key — dua baris 8 jam lolos cap 24 jam; production pull membuat labor cost dobel per `sourceTimesheetId`. Klaim key dalam tx sesudah konteks WO dinilai ulang; form key create-only + rotasi.
+4. `5efeae72e` fix(hrm): `saveProbationReviewDraft` kunci karyawan cegah draft milestone kembar — find-then-create tanpa tx/kunci dan tanpa `@@unique([employeeId, milestone])`. Pindah ke tx: kunci baris karyawan pernyataan pertama, status dinilai ulang dari bacaan tx.
+5. `9df9b6087` fix(hrm): keputusan potongan disiplin menolak subjek/penandatangan nonaktif — action (signer) + service create (subjek) hanya menilai `deletedAt`. Action kini menolak signer nonaktif/berhenti + fail-fast subjek; service menilai ulang `isActive + employmentEndedAt` untuk semua pemanggil. Koreksi atas catatan putaran 65: caller UI keputusan memang ada.
+6. `526ccfa16` fix(hrm): `createVacancy` anti double-submit via idempotency key — `generateDocumentNumber` menaikkan sequence tiap panggilan sehingga `code @unique` tidak menahan retry; create dibungkus tx dengan klaim key sebelum `jobVacancy.create`.
+
+### Catatan
+- Tidak ada migrasi schema putaran ini.
+- Pola kunci putaran ini sama dengan putaran sebelumnya: serialized-by-row-lock bila ada kunci baris yang sudah dipakai jalur tulis terkait (slip, karyawan), key per intent bila jurang hanya retry sekuensial (pengajuan, lembar waktu, lowongan).
 
 CI final putaran 64: head `9ace1f558` **success**; keduabelas head fix masing-masing **success** (termasuk intermediate, tanpa failure).
 
