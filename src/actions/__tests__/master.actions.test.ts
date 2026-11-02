@@ -781,6 +781,32 @@ describe("Employee Actions", () => {
 })
 
 describe("Account Actions", () => {
+  it("putaran 53: createAccount di bawah gap-lock — nama hidup sama reuse, kode manual bentrok ditolak", async () => {
+    const sqlOf = (c: unknown[]) => {
+      const a = c[0] as { sql?: string; strings?: string[] } | string[]
+      return Array.isArray(a) ? a.join("?") : (a?.sql ?? a?.strings?.join("?") ?? "")
+    }
+    const defaultFindMany = mocks.prismaMock.account.findMany.getMockImplementation()
+    mocks.prismaMock.account.findMany.mockImplementation(async () => [
+      { id: 3, name: "Kas Kecil", code: "1010", slug: "kas-kecil" },
+    ])
+    try {
+      const reuse = await actions.createAccount(fdMap({ name: " kas kecil ", code: "LAIN", type: "ASSET" }))
+      expect(reuse?.success).toBe(true)
+      expect((reuse as { id?: number }).id).toBe(3)
+      expect(mocks.prismaMock.account.create).not.toHaveBeenCalled()
+      expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+      const lockIdx = (mocks.prismaMock.$executeRaw.mock.calls as unknown[][]).findIndex((c) => sqlOf(c).includes("accounts"))
+      expect(lockIdx, "gap-lock accounts FOR UPDATE").toBeGreaterThanOrEqual(0)
+
+      const clash = await actions.createAccount(fdMap({ name: "Kas Besar", code: " 1010 ", type: "ASSET" }))
+      expect(clash?.success).toBe(false)
+      expect(String(clash?.error)).toContain("1010")
+      expect(mocks.prismaMock.account.create).not.toHaveBeenCalled()
+    } finally {
+      mocks.prismaMock.account.findMany.mockImplementation(defaultFindMany as never)
+    }
+  })
   it("createAccount succeeds", async () => {
     const res = await actions.createAccount(fdMap({ name: "test", code: "test", type: "ASSET", rate: "10" }))
     expect(res?.success).toBe(true)

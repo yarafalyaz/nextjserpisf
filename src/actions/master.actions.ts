@@ -1895,38 +1895,66 @@ export async function createAccount(formData: FormData) {
   try {
     await requirePermission("create_accounts");
 
-    const rawNameAcc = (formData.get("name") as string | null)?.trim()
-    if (rawNameAcc) {
-      const existing = await prisma.account.findFirst({ where: { name: rawNameAcc, deletedAt: null }, select: { id: true, slug: true } })
-      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
-    }
-
-
     const parsed = parseFormData(accountServerSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
     let code = v.code || null;
+    const manualCode = Boolean(v.code);
     if (!code) {
       code = await generateDocumentNumber("ACC", "simple");
     }
 
-    const account = await prisma.account.create({
-      data: {
-        code,
-        name: v.name,
-        slug: await nextSlug("account", v.name),
-        type: v.type,
-        parentId: v.parentId ?? null,
-        description: v.description ?? null,
-        normalBalance: v.normalBalance ?? null,
-        isActive: true,
-      },
+    // Nama tanpa @unique DB (code memang @unique): cek findFirst pra-parse
+    // di luar tx kalah balapan — dua create konkuren melahirkan dua akun
+    // aktif bernama sama (slug bersuffix, bukan blokir) dan kode manual
+    // bentrok hanya muncul sebagai P2002 mentah. Cek+create dalam tx
+    // bergap-lock (pola createTax putaran 53): nama hidup sama -> reuse;
+    // kode manual bentrok akun hidup lain -> tolak menyebut kode
+    // tersimpan. Kode auto tidak di-cek (lane DocumentSequence atomik).
+    const result = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM accounts FOR UPDATE`;
+      }
+      const candidates = await tx.account.findMany({
+        where: { deletedAt: null },
+        select: { id: true, name: true, code: true, slug: true },
+      });
+      const nameKey = normalizeTaxNameKey(v.name);
+      const byName = candidates.find((row) => normalizeTaxNameKey(row.name) === nameKey);
+      if (byName) return { kind: "reuse" as const, id: byName.id, slug: byName.slug };
+      if (manualCode && code) {
+        const codeKey = normalizeTaxNameKey(code);
+        const byCode = candidates.find(
+          (row) => normalizeTaxNameKey(row.code) === codeKey,
+        );
+        if (byCode) {
+          throw new Error(
+            `Kode akun ${byCode.code} sudah dipakai akun "${byCode.name}"; pakai kode lain.`,
+          );
+        }
+      }
+      const created = await tx.account.create({
+        data: {
+          code: code as string,
+          name: v.name,
+          slug: await nextSlugWithClient(tx as never, "account", v.name),
+          type: v.type,
+          parentId: v.parentId ?? null,
+          description: v.description ?? null,
+          normalBalance: v.normalBalance ?? null,
+          isActive: true,
+        },
+      });
+      return { kind: "created" as const, id: created.id, slug: created.slug };
     });
+    if (result.kind === "reuse") {
+      return { success: true, id: result.id, slug: result.slug ?? undefined };
+    }
 
     revalidatePath("/master/akun");
-    await logActivity("create", "Account", account.id, "Membuat akun");
-    return { success: true, id: account.id, slug: account.slug };
+    await logActivity("create", "Account", result.id, "Membuat akun");
+    return { success: true, id: result.id, slug: result.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createAccount]", getErrorMessage(e) || e);
