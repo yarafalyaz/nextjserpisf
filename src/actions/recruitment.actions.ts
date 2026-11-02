@@ -35,21 +35,29 @@ export async function createVacancy(formData: FormData) {
     const v = parsed.data;
 
     const code = await generateDocumentNumber("VAC", "simple");
-    const vacancy = await prisma.jobVacancy.create({
-      data: {
-        code,
-        slug: await nextSlug("jobVacancy", code),
-        title: v.title,
-        departmentId: v.departmentId ?? null,
-        positionId: v.positionId ?? null,
-        description: v.description ?? null,
-        requirements: v.requirements ?? null,
-        location: v.location ?? null,
-        employmentType: v.employmentType ?? null,
-        quota: v.quota,
-        status: "draft",
-        createdBy: Number(user.id),
-      },
+    // Putaran 65: retry submit identik melahirkan lowongan draft kembar —
+    // generateDocumentNumber menaikkan sequence tiap panggilan sehingga
+    // code @unique tidak menahan. Create dibungkus tx agar klaim key
+    // lahir atomik dengan baris; rollback melepaskan key.
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
+    const vacancy = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id);
+      return tx.jobVacancy.create({
+        data: {
+          code,
+          slug: await nextSlug("jobVacancy", code),
+          title: v.title,
+          departmentId: v.departmentId ?? null,
+          positionId: v.positionId ?? null,
+          description: v.description ?? null,
+          requirements: v.requirements ?? null,
+          location: v.location ?? null,
+          employmentType: v.employmentType ?? null,
+          quota: v.quota,
+          status: "draft",
+          createdBy: Number(user.id),
+        },
+      });
     });
 
     await logActivity("create", "JobVacancy", vacancy.id, `Membuat lowongan ${vacancy.title}`);

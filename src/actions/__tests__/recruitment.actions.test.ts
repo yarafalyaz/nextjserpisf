@@ -18,6 +18,7 @@ const txMock = {
     findFirst: (...a: unknown[]) => vacancyFindFirst(...a),
     count: vi.fn(async () => 0),
     update: (...a: unknown[]) => vacancyUpdate(...a),
+    create: (...a: unknown[]) => vacancyCreate(...a),
   },
   jobApplicant: {
     create: (...a: unknown[]) => applicantCreate(...a),
@@ -102,6 +103,20 @@ describe("recruitment actions", () => {
         data: expect.objectContaining({ code: "VAC-0001", status: "draft", quota: 2 }),
       }),
     )
+  })
+
+  it("putaran 65: createVacancy retry idempotency sama ditolak, lowongan lahir sekali", async () => {
+    vacancyCreate.mockResolvedValue({ id: 5, slug: "test-slug", title: "Welder" })
+    checkIdempotencyMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."))
+    const payload = { title: "Welder", quota: "2", idempotencyKey: "vac-key-1" }
+    const first = await createVacancy(form(payload))
+    const second = await createVacancy(form(payload))
+    expect(first.success).toBe(true)
+    expect(second.success).toBe(false)
+    expect(String((second as { error?: string }).error ?? "")).toMatch(/duplikat/)
+    expect(vacancyCreate).toHaveBeenCalledTimes(1)
   })
 
   it("rejects applicants for a vacancy that is not open", async () => {

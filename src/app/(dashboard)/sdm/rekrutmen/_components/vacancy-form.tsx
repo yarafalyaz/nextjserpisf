@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useRef, useTransition } from "react"
 import { createVacancy, updateVacancy } from "@/actions/recruitment.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
 
@@ -23,12 +23,17 @@ interface VacancyFormProps {
 
 export function VacancyForm({ vacancy, departments, positions }: VacancyFormProps) {
   const router = useRouter()
+  // Idempotency: key stabil per intent tambah; retry jaringan memakai key
+  // yang sama (ditolak server). Sukses bernavigasi pergi, tak perlu rotasi.
+  const idempotencyKeyRef = useRef<string | null>(null)
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!vacancy
 
   function onSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
+    if (!isEdit) formData.set("idempotencyKey", idempotencyKeyRef.current!)
     startTransition(async () => {
       try {
         const result = isEdit
