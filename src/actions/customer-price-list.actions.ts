@@ -67,6 +67,23 @@ export async function createCustomerPriceList(formData: FormData): Promise<Custo
     // dan cek kedua melihat baris pertama (bukan snapshot lepas).
     const outcome = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM items WHERE id = ${data.itemId} FOR UPDATE`
+      // Putaran 68: kunci saja tak membuktikan hidup — nilai ulang dari
+      // bacaan terkunci (FOR UPDATE adalah locking read, melihat commit
+      // terbaru walau snapshot tx sudah terbentuk). Barang yang
+      // dinonaktifkan/dihapus sesudah halaman dirender tak boleh ditanami
+      // harga yang kelak otomatis dipakai faktur saat diaktifkan lagi.
+      const item = await tx.item.findFirst({
+        where: { id: data.itemId, deletedAt: null, isActive: true },
+        select: { id: true },
+      })
+      if (!item) return { deadItem: true as const }
+      if (data.customerCategoryId != null) {
+        const category = await tx.customerCategory.findFirst({
+          where: { id: data.customerCategoryId, deletedAt: null, isActive: true },
+          select: { id: true },
+        })
+        if (!category) return { deadCategory: true as const }
+      }
       const duplicate = await tx.customerPriceList.findFirst({
         where: { customerCategoryId: data.customerCategoryId, itemId: data.itemId, minQty: data.minQty, effectiveDate: data.effectiveDate },
         select: { id: true },
@@ -77,6 +94,12 @@ export async function createCustomerPriceList(formData: FormData): Promise<Custo
       })
       return { created }
     })
+    if ("deadItem" in outcome) {
+      return { success: false, error: "Barang tidak ditemukan atau tidak aktif." }
+    }
+    if ("deadCategory" in outcome) {
+      return { success: false, error: "Kategori pelanggan tidak ditemukan atau tidak aktif." }
+    }
     if ("duplicate" in outcome) {
       return {
         success: false,
@@ -110,6 +133,20 @@ export async function updateCustomerPriceList(id: number, formData: FormData): P
     // satu tx sesudah kunci baris items, dinilai dari bacaan terkunci.
     const outcome = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM items WHERE id = ${data.itemId} FOR UPDATE`
+      // Putaran 68: gerbang hidup sama seperti create — dinilai dari bacaan
+      // terkunci sesudah kunci baris items.
+      const item = await tx.item.findFirst({
+        where: { id: data.itemId, deletedAt: null, isActive: true },
+        select: { id: true },
+      })
+      if (!item) return { deadItem: true as const }
+      if (data.customerCategoryId != null) {
+        const category = await tx.customerCategory.findFirst({
+          where: { id: data.customerCategoryId, deletedAt: null, isActive: true },
+          select: { id: true },
+        })
+        if (!category) return { deadCategory: true as const }
+      }
       const duplicate = await tx.customerPriceList.findFirst({
         where: { customerCategoryId: data.customerCategoryId, itemId: data.itemId, minQty: data.minQty, effectiveDate: data.effectiveDate, id: { not: id } },
         select: { id: true },
@@ -118,6 +155,12 @@ export async function updateCustomerPriceList(id: number, formData: FormData): P
       await tx.customerPriceList.update({ where: { id }, data })
       return { updated: true as const }
     })
+    if ("deadItem" in outcome) {
+      return { success: false, error: "Barang tidak ditemukan atau tidak aktif." }
+    }
+    if ("deadCategory" in outcome) {
+      return { success: false, error: "Kategori pelanggan tidak ditemukan atau tidak aktif." }
+    }
     if ("duplicate" in outcome) {
       return { success: false, error: "Sudah ada baris lain dengan kategori, barang, minimal qty, dan tanggal efektif yang sama." }
     }
