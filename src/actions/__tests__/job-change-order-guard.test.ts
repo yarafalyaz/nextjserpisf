@@ -132,6 +132,8 @@ import {
   createJobChangeOrder,
   recordJobChangeOrderApproval,
   applyJobChangeOrder,
+  updateJobChangeOrderLines,
+  sendJobChangeOrder,
 } from "../job-change-order.actions"
 
 const WO = {
@@ -326,6 +328,41 @@ describe("createJobChangeOrder — penjaga inti", () => {
     })
     expect(hapus.success).toBe(true)
     expect(coCreateMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe("putaran 69: garis CO dinilai ulang di bawah kunci WO", () => {
+  it("updateJobChangeOrderLines: kunci CO/WO diambil sebelum bacaan CO; status berjalan menolak, deleteMany 0x", async () => {
+    // Mock tak memodelkan snapshot MariaDB: jaminan dibuktikan lewat
+    // urutan kunci (pola qc/project) + penolakan atas bacaan tunggal
+    // pasca-kunci yang mencerminkan status berjalan menunggu_pelanggan.
+    coFindUniqueMock.mockResolvedValue({ id: 77, workOrderId: 10, quotationId: 50, status: "menunggu_pelanggan" })
+    const res = await updateJobChangeOrderLines({
+      changeOrderId: 77,
+      lines: [{ workOrderItemId: 11, itemId: 101, action: "ubah", qtyAfter: 3, unitPriceAfter: 50000 }],
+    })
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toMatch(/draft/)
+    expect(coItemDeleteManyMock).not.toHaveBeenCalled()
+    const lockOrder = queryRawMock.mock.invocationCallOrder[0]
+    const readOrder = coFindUniqueMock.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(readOrder)
+  })
+
+  it("sendJobChangeOrder: kunci sebelum bacaan; selisih dari baris berjalan (2 baris = 60000)", async () => {
+    const liveItems = [
+      { workOrderItemId: 11, itemId: 101, action: "ubah", qtyBefore: 1, qtyAfter: 2, unitPriceBefore: 50000, unitPriceAfter: 50000, discountBefore: 0, discountAfter: 0 },
+      { workOrderItemId: 12, itemId: 102, action: "ubah", qtyBefore: 1, qtyAfter: 2, unitPriceBefore: 10000, unitPriceAfter: 10000, discountBefore: 0, discountAfter: 0 },
+    ]
+    coFindUniqueMock.mockResolvedValue({ id: 77, documentNo: "001/WO/ISF/10/2026-CO-001", workOrderId: 10, quotationId: 50, status: "draft", reason: "Upgrade", items: liveItems })
+    const res = await sendJobChangeOrder(77)
+    expect(res.success).toBe(true)
+    const claimArg = coUpdateManyMock.mock.calls.at(-1)?.[0]
+    expect(Number(claimArg.data.selisihNilai)).toBe(60000)
+    expect(Number(claimArg.data.grandTotalSesudah)).toBe(120000)
+    const lockOrder = queryRawMock.mock.invocationCallOrder[0]
+    const readOrder = coFindUniqueMock.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(readOrder)
   })
 })
 

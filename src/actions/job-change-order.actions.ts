@@ -331,6 +331,16 @@ export async function updateJobChangeOrderLines(input: {
     validateLines(requested)
 
     await prisma.$transaction(async (tx) => {
+      // Putaran 69: bacaan pertama WAJIB locking read agar snapshot
+      // REPEATABLE READ tidak terbentuk dari bacaan CO pra-kunci
+      // (status/items basi sesudah send konkuren). Kunci baris CO
+      // dulu untuk menemukan WO, lalu kunci baris WO (passangan
+      // create/send/apply), lalu baca ulang CO di bawah kunci.
+      const coRows = await tx.$queryRaw<Array<{ work_order_id: number }>>`
+        SELECT work_order_id FROM job_change_orders WHERE id = ${changeOrderId} FOR UPDATE
+      `
+      if (coRows.length === 0) throw new Error("Change order tidak ditemukan")
+      await lockWorkOrderRow(tx, coRows[0].work_order_id)
       const co = await tx.jobChangeOrder.findUnique({
         where: { id: changeOrderId },
         select: { id: true, workOrderId: true, quotationId: true, status: true },
@@ -339,8 +349,11 @@ export async function updateJobChangeOrderLines(input: {
       if (co.status !== "draft") {
         throw new Error(`Baris change order hanya bisa diubah saat status draft. Status saat ini '${co.status}'.`)
       }
-      await lockWorkOrderRow(tx, co.workOrderId)
       const wo = await loadWorkOrderForChangeOrder(tx, co.workOrderId)
+      // Putaran 69 (#5): kelayakan WO dinilai ulang di bawah kunci —
+      // WO batal/tutup sesudah draf lahir menolak edit baris (paritas
+      // create/send/apply yang memanggil gerbang yang sama).
+      assertWorkOrderEligibleForChangeOrder({ workOrderStatus: wo.status, quotationId: wo.quotationId })
       const locked = await loadLockedLineIds(tx, co.workOrderId, wo.items)
       assertLinesNotLocked(requested, locked)
       const quoteLines = await loadQuoteLinesFlat(tx, co.quotationId)
@@ -389,6 +402,15 @@ export async function sendJobChangeOrder(changeOrderId: number) {
     const id = num(changeOrderId)
 
     const sent = await prisma.$transaction(async (tx) => {
+      // Putaran 69: bacaan pertama WAJIB locking read (lihat
+      // updateJobChangeOrderLines) — selisih/grandTotal yang diklaim
+      // kirim wajib dihitung dari baris berjalan di bawah kunci WO,
+      // bukan snapshot CO yang dibaca sebelum kunci diperoleh.
+      const coRows = await tx.$queryRaw<Array<{ work_order_id: number }>>`
+        SELECT work_order_id FROM job_change_orders WHERE id = ${id} FOR UPDATE
+      `
+      if (coRows.length === 0) throw new Error("Change order tidak ditemukan")
+      await lockWorkOrderRow(tx, coRows[0].work_order_id)
       const co = await tx.jobChangeOrder.findUnique({
         where: { id },
         include: { items: { orderBy: { sortOrder: "asc" } } },
@@ -398,7 +420,6 @@ export async function sendJobChangeOrder(changeOrderId: number) {
       if (!cleanText(co.reason)) throw new Error("Alasan perubahan wajib diisi sebelum dikirim")
       if (co.items.length === 0) throw new Error("Change order belum punya baris perubahan")
 
-      await lockWorkOrderRow(tx, co.workOrderId)
       const wo = await loadWorkOrderForChangeOrder(tx, co.workOrderId)
       assertWorkOrderEligibleForChangeOrder({ workOrderStatus: wo.status, quotationId: wo.quotationId })
       const locked = await loadLockedLineIds(tx, co.workOrderId, wo.items)
