@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => {
       update: vi.fn().mockResolvedValue({ id: 1 }),
       findMany: vi.fn().mockResolvedValue([]),
     },
+    account: {
+      findFirst: vi.fn().mockResolvedValue({ id: 10 }),
+    },
     $executeRaw: vi.fn().mockResolvedValue(1),
   }
   return {
@@ -176,6 +179,14 @@ describe("WithholdingTaxType akun FK wajib ada", () => {
     expect(res.success).toBe(false)
     expect(res.error).toContain("Kode PPh")
     expect(mocks.prismaMock.withholdingTaxType.update).not.toHaveBeenCalled()
+  })
+
+  it("putaran 72: create menilai ulang akun lewat delegate tx", async () => {
+    mocks.txFacade.account.findFirst.mockResolvedValue(null)
+    const res = await actions.createWithholdingTaxType(fd({ ...BASE, liabilityAccountId: "10" }))
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Hutang PPh/)
+    expect(mocks.prismaMock.withholdingTaxType.create).not.toHaveBeenCalled()
   })
 
   it("update menulis pasal + kode objek", async () => {

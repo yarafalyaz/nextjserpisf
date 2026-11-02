@@ -26,16 +26,16 @@ import { checkIdempotency } from "@/lib/utils/idempotency"
 async function withholdingAccountError(v: {
   liabilityAccountId?: number
   receivableAccountId?: number
-}): Promise<string | null> {
+}, db: Pick<typeof prisma, "account"> = prisma): Promise<string | null> {
   if (v.liabilityAccountId != null) {
-    const account = await prisma.account.findFirst({
+    const account = await db.account.findFirst({
       where: { id: v.liabilityAccountId, deletedAt: null, isActive: true },
       select: { id: true },
     })
     if (!account) return "Akun Hutang PPh tidak ditemukan atau tidak aktif"
   }
   if (v.receivableAccountId != null) {
-    const account = await prisma.account.findFirst({
+    const account = await db.account.findFirst({
       where: { id: v.receivableAccountId, deletedAt: null, isActive: true },
       select: { id: true },
     })
@@ -68,6 +68,9 @@ export async function createWithholdingTaxType(formData: FormData) {
       if (siblings.some((row) => row.code.trim().toLowerCase() === codeKey)) {
         throw new Error("Kode PPh sudah dipakai jenis potongan lain; pakai kode lain.")
       }
+      // Putaran 72: akun PPh dinilai ulang lewat delegate tx.
+      const inTxAccountError = await withholdingAccountError(v, tx as never)
+      if (inTxAccountError) throw new Error(inTxAccountError)
       return tx.withholdingTaxType.create({
         data: {
           code: v.code.trim(),
@@ -116,6 +119,9 @@ export async function updateWithholdingTaxType(id: number, formData: FormData) {
       if (siblings.some((row) => row.id !== id && row.code.trim().toLowerCase() === codeKey)) {
         throw new Error("Kode PPh sudah dipakai jenis potongan lain; pakai kode lain.")
       }
+      // Putaran 72: akun PPh dinilai ulang lewat delegate tx.
+      const inTxAccountError = await withholdingAccountError(v, tx as never)
+      if (inTxAccountError) throw new Error(inTxAccountError)
       await tx.withholdingTaxType.update({
         where: { id },
         data: {
