@@ -11,8 +11,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
  */
 
 const mocks = vi.hoisted(() => {
+  const idemCreate = vi.fn()
+  const idemFindUnique = vi.fn()
+  const idemUpdateMany = vi.fn().mockResolvedValue({ count: 1 })
   const txMock: Record<string, any> = {
     $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
+    idempotencyKey: {
+      create: (...a: unknown[]) => idemCreate(...a),
+      findUnique: (...a: unknown[]) => idemFindUnique(...a),
+      updateMany: (...a: unknown[]) => idemUpdateMany(...a),
+    },
     materialRequest: {
       findUnique: vi.fn(),
       create: vi.fn(),
@@ -46,6 +54,9 @@ const mocks = vi.hoisted(() => {
   return {
     prismaMock,
     txMock,
+    idemCreate,
+    idemFindUnique,
+    idemUpdateMany,
     requirePermissionMock: vi.fn(),
   }
 })
@@ -115,6 +126,10 @@ beforeEach(() => {
     { id: 2, name: "Cabang", isActive: true },
   ])
   mocks.txMock.item.findMany.mockResolvedValue([{ id: 1, name: "Oli", isActive: true }])
+  mocks.idemCreate.mockReset()
+  mocks.idemCreate.mockResolvedValue({ id: 1 })
+  mocks.idemFindUnique.mockReset()
+  mocks.idemFindUnique.mockResolvedValue({ createdAt: new Date() })
   mocks.prismaMock.materialRequest.updateMany.mockResolvedValue({ count: 1 })
   mocks.prismaMock.materialRequest.deleteMany.mockResolvedValue({ count: 1 })
   mocks.prismaMock.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
@@ -366,6 +381,39 @@ describe("createTransferFromMaterialRequest (AC-MR-2/3)", () => {
       { items: [{ itemId: 1, qty: 10, receivedQty: 4 }] },
     ])
     const res = await createTransferFromMaterialRequest(1)
+    expect(res.success).toBe(true)
+    const data = mocks.txMock.inventoryTransfer.create.mock.calls[0][0].data
+    expect(data.items.create).toEqual([{ itemId: 1, qty: 6 }])
+  })
+
+  // Putaran 67: sisa hanya menghitung transfer terkirim; draft baru tidak
+  // mengubah status MR — retry submit identik melahirkan draft transfer
+  // kedua sebesar sisa penuh, dan keduanya dapat diproses kemudian
+  // (StockMove dobel). Klaim key sesudah kunci baris MR, sebelum create;
+  // draft kedua yang SAH memakai key intent baru (rotasi sesudah sukses).
+  it("putaran 67: retry key sama ditolak sebelum transfer kedua lahir", async () => {
+    approvedTx()
+    mocks.idemCreate
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    const fd = new FormData()
+    fd.set("idempotencyKey", "intent-transfer-1")
+    const first = await createTransferFromMaterialRequest(1, fd)
+    expect(first.success).toBe(true)
+    const second = await createTransferFromMaterialRequest(1, fd)
+    expect(second.success).toBe(false)
+    expect(String((second as { error?: string }).error)).toContain("duplikat")
+    expect(mocks.txMock.inventoryTransfer.create).toHaveBeenCalledTimes(1)
+  })
+
+  it("putaran 67: transfer kedua sah dengan key intent baru", async () => {
+    approvedTx({ status: "terpenuhi_sebagian" })
+    mocks.txMock.inventoryTransfer.findMany.mockResolvedValue([
+      { items: [{ itemId: 1, receivedQty: 4 }] },
+    ])
+    const fd = new FormData()
+    fd.set("idempotencyKey", "intent-transfer-2")
+    const res = await createTransferFromMaterialRequest(1, fd)
     expect(res.success).toBe(true)
     const data = mocks.txMock.inventoryTransfer.create.mock.calls[0][0].data
     expect(data.items.create).toEqual([{ itemId: 1, qty: 6 }])

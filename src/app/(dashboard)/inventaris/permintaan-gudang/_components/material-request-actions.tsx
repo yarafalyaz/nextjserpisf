@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import {
   submitMaterialRequest,
@@ -37,6 +37,11 @@ interface MaterialRequestActionsProps {
 
 export function MaterialRequestActions({ id, status, canApprove, canEdit, canCreateTransfer }: MaterialRequestActionsProps) {
   const router = useRouter()
+  // Idempotency: key stabil per intent buat transfer; retry jaringan memakai
+  // key sama (ditolak server). Dirotasi sesudah sukses agar transfer kedua
+  // yang sah dari sisa berikutnya tidak tertahan.
+  const idempotencyKeyRef = useRef<string | null>(null)
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
   const [confirmKind, setConfirmKind] = useState<"submit" | "approve" | "transfer" | null>(null)
   const [reasonKind, setReasonKind] = useState<ReasonKind | null>(null)
@@ -120,8 +125,13 @@ export function MaterialRequestActions({ id, status, canApprove, canEdit, canCre
         isPending={isPending}
         onConfirm={() =>
           run(async () => {
-            const result = await createTransferFromMaterialRequest(id)
-            if (result.success && "slug" in result && result.slug) router.push(`/inventaris/transfer/${result.slug}`)
+            const fd = new FormData()
+            fd.set("idempotencyKey", idempotencyKeyRef.current!)
+            const result = await createTransferFromMaterialRequest(id, fd)
+            if (result.success && "slug" in result && result.slug) {
+              idempotencyKeyRef.current = crypto.randomUUID()
+              router.push(`/inventaris/transfer/${result.slug}`)
+            }
             return result
           }, "Transfer berhasil dibuat", () => setConfirmKind(null))
         }

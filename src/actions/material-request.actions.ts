@@ -26,6 +26,7 @@ import {
   getWarehouseScope,
 } from "@/lib/auth/warehouse-scope"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
+import { checkIdempotency } from "@/lib/utils/idempotency"
 import { parseLocaleNumber } from "@/lib/utils/parse-money"
 import { safeJsonParse } from "@/lib/utils/safe-parse"
 import { nextSlug } from "@/lib/utils/slug-db"
@@ -392,6 +393,13 @@ export async function createTransferFromMaterialRequest(id: number, formData?: F
           `Transfer hanya dapat dibuat dari permintaan disetujui (status saat ini: '${request.status}')`,
         )
       }
+      // Putaran 67: sisa di bawah hanya menghitung transfer terkirim;
+      // draft baru tak mengubah status MR, sehingga retry submit identik
+      // melahirkan draft kedua sebesar sisa penuh — keduanya dapat
+      // diproses kemudian (dobel StockMove). Klaim key sesudah kunci
+      // baris MR; rollback melepaskan key. Transfer kedua yang sah dari
+      // sisa berikutnya memakai key intent baru (rotasi sisi UI).
+      await checkIdempotency(formData?.get("idempotencyKey") as string | null, tx, user.id)
       const scope = await getWarehouseScope(user)
       // Scope KEDUA gudang dokumen (patokan inventory_transfer existing).
       assertWarehouseAccessMulti(scope, [request.sourceWarehouseId, request.requesterWarehouseId])
