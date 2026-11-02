@@ -9,16 +9,21 @@ const applicantFindFirst = vi.fn()
 const applicantUpdate = vi.fn()
 const historyCreate = vi.fn()
 const employeeCreate = vi.fn()
+const applicantCount = vi.fn(async (..._a: unknown[]) => 0)
+const applicantFindMany = vi.fn(async (..._a: unknown[]) => [] as unknown[])
 
 const txMock = {
   $executeRaw: vi.fn(async () => 1),
   jobVacancy: {
     findFirst: (...a: unknown[]) => vacancyFindFirst(...a),
+    count: vi.fn(async () => 0),
     update: (...a: unknown[]) => vacancyUpdate(...a),
   },
   jobApplicant: {
     create: (...a: unknown[]) => applicantCreate(...a),
     findFirst: (...a: unknown[]) => applicantFindFirst(...a),
+    findMany: (...a: unknown[]) => applicantFindMany(...a),
+    count: (...a: unknown[]) => applicantCount(...a),
     update: (...a: unknown[]) => applicantUpdate(...a),
   },
   employee: { create: (...a: unknown[]) => employeeCreate(...a) },
@@ -36,6 +41,8 @@ vi.mock("@/lib/db/prisma", () => ({
     jobApplicant: {
       create: (...a: unknown[]) => applicantCreate(...a),
       findFirst: (...a: unknown[]) => applicantFindFirst(...a),
+      findMany: (...a: unknown[]) => applicantFindMany(...a),
+      count: (...a: unknown[]) => applicantCount(...a),
       update: (...a: unknown[]) => applicantUpdate(...a),
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
@@ -52,7 +59,11 @@ vi.mock("@/lib/auth/permissions", () => ({
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: async (prefix: string) => `${prefix}-0001`,
 }))
-vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: async () => "test-slug" }))
+const { slugWithClientSpy } = vi.hoisted(() => ({ slugWithClientSpy: vi.fn(async () => "test-slug") }))
+vi.mock("@/lib/utils/slug-db", () => ({
+  nextSlug: async () => "test-slug",
+  nextSlugWithClient: slugWithClientSpy,
+}))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: async () => {} }))
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }))
 
@@ -191,6 +202,66 @@ describe("recruitment actions", () => {
     const res = await hireApplicant(9)
     expect(res.success).toBe(false)
     expect(employeeCreate).not.toHaveBeenCalled()
+  })
+
+  it("putaran 56: hire menolak lowongan yang sudah dihapus (soft-delete)", async () => {
+    applicantFindFirst.mockResolvedValue({
+      id: 9,
+      stage: "offering",
+      name: "Budi",
+      hiredEmployeeId: null,
+      vacancy: { deletedAt: new Date(), status: "open", departmentId: 1, positionId: 3, quota: 5 },
+    })
+    vacancyFindFirst.mockResolvedValue(null)
+    try {
+      const res = await hireApplicant(9)
+      expect(res.success).toBe(false)
+      expect(employeeCreate).not.toHaveBeenCalled()
+    } finally {
+      vacancyFindFirst.mockReset()
+    }
+  })
+
+  it("putaran 56: hire menolak kuota lowongan yang sudah penuh (sequence)", async () => {
+    applicantFindFirst.mockResolvedValue({
+      id: 9,
+      stage: "offering",
+      name: "Budi",
+      hiredEmployeeId: null,
+      vacancy: { deletedAt: null, status: "open", departmentId: 1, positionId: 3, quota: 1 },
+    })
+    vacancyFindFirst.mockResolvedValue({ id: 3, status: "open", quota: 1 })
+    applicantCount.mockResolvedValue(1)
+    try {
+      const res = await hireApplicant(9)
+      expect(res.success).toBe(false)
+      expect(employeeCreate).not.toHaveBeenCalled()
+    } finally {
+      applicantCount.mockResolvedValue(0)
+      vacancyFindFirst.mockReset()
+    }
+  })
+
+  it("putaran 56: hire menolak slug tx-global (write memakai nextSlugWithClient)", async () => {
+    applicantFindFirst.mockResolvedValue({
+      id: 9,
+      stage: "offering",
+      name: "Budi",
+      email: "budi@example.com",
+      phone: "0812",
+      hiredEmployeeId: null,
+      vacancy: { deletedAt: null, status: "open", departmentId: 1, positionId: 3, quota: 5 },
+    })
+    applicantCount.mockResolvedValue(0)
+    vacancyFindFirst.mockResolvedValue({ id: 3, status: "open", quota: 5 })
+    employeeCreate.mockResolvedValue({ id: 42, employeeNo: "EMP-0001" })
+    try {
+      const res = await hireApplicant(9)
+      expect(res.success).toBe(true)
+      expect(slugWithClientSpy).toHaveBeenCalled()
+    } finally {
+      vacancyFindFirst.mockReset()
+    }
   })
 
   it("vacancy status only moves draft->open->closed", async () => {

@@ -8,7 +8,7 @@ import {
   vacancySchema,
 } from "@/lib/validations/recruitment.schemas";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
-import { nextSlug } from "@/lib/utils/slug-db";
+import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
@@ -78,6 +78,14 @@ export async function updateVacancy(id: number, formData: FormData) {
       if (!existing) throw new Error("Lowongan tidak ditemukan");
       if (existing.status === "closed") {
         throw new Error("Lowongan yang sudah ditutup tidak dapat diubah");
+      }
+      // Gerbang bawah: kuota tak boleh di bawah anak yang sudah diterima —
+      // jadwal edit quota menembak hire berikutnya di bawah kunci yang sama.
+      const hiredCount = await tx.jobApplicant.count({
+        where: { vacancyId: id, stage: "hired", deletedAt: null },
+      });
+      if (v.quota < hiredCount) {
+        throw new Error(`Kuota tidak dapat di bawah jumlah yang sudah diterima (${hiredCount})`);
       }
       await tx.jobVacancy.update({
         where: { id },
@@ -192,7 +200,7 @@ export async function createApplicant(formData: FormData) {
       const created = await tx.jobApplicant.create({
         data: {
           vacancyId: v.vacancyId,
-          slug: await nextSlug("jobApplicant", v.name),
+          slug: await nextSlugWithClient(tx as never, "jobApplicant", v.name),
           name: v.name,
           email: v.email || null,
           phone: v.phone ?? null,
@@ -316,10 +324,31 @@ export async function hireApplicant(applicantId: number) {
         throw new Error("Pelamar yang ditolak tidak dapat diterima");
       }
 
+      // Gerbang kuota + lowongan hidup dinilai di bawah kunci baris
+      // lowongan (kunci penilik bersama updateVacancy/setVacancyStatus/
+      // createApplicant): dua hire konkuren ke lowongan sama terserialkan,
+      // dan hire dari halaman basi tak melahirkan karyawan dari lowongan
+      // yang sudah dihapus/ditutup. Urutan kunci: applicant lalu vacancy,
+      // konsisten di seluruh file.
+      await tx.$executeRaw`SELECT id FROM job_vacancies WHERE id = ${applicant.vacancyId} FOR UPDATE`;
+      const vacancy = await tx.jobVacancy.findFirst({
+        where: { id: applicant.vacancyId, deletedAt: null },
+      });
+      if (!vacancy) throw new Error("Lowongan sudah dihapus; pelamar tidak dapat diterima");
+      if (vacancy.status !== "open") {
+        throw new Error("Lowongan sudah ditutup; pelamar tidak dapat diterima");
+      }
+      const hiredCount = await tx.jobApplicant.count({
+        where: { vacancyId: applicant.vacancyId, stage: "hired", deletedAt: null },
+      });
+      if (hiredCount >= vacancy.quota) {
+        throw new Error(`Kuota lowongan (${vacancy.quota}) sudah penuh`);
+      }
+
       const employee = await tx.employee.create({
         data: {
           employeeNo,
-          slug: await nextSlug("employee", applicant.name),
+          slug: await nextSlugWithClient(tx as never, "employee", applicant.name),
           name: applicant.name,
           email: applicant.email,
           phone: applicant.phone,
