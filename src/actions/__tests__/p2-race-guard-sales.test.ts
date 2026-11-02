@@ -24,6 +24,9 @@ const paymentUpdateMock = vi.fn()
 const accountCountMock = vi.fn()
 const txExecuteRawMock = vi.fn()
 const transactionMock = vi.fn()
+const idemCreateMock = vi.fn()
+const idemFindUniqueMock = vi.fn()
+const idemUpdateManyMock = vi.fn()
 const onSalesPaymentCreatedMock = vi.fn()
 const onSalesPaymentUpdatedMock = vi.fn()
 const deleteJournalByReferenceTxMock = vi.fn()
@@ -128,6 +131,7 @@ const allMocks = [
   invoiceFindUniqueOrThrowMock, paymentAggregateMock, paymentUpdateMock,
   accountCountMock, txExecuteRawMock, transactionMock, onSalesPaymentCreatedMock,
   onSalesPaymentUpdatedMock, deleteJournalByReferenceTxMock, attachMock,
+  idemCreateMock, idemFindUniqueMock, idemUpdateManyMock,
 ]
 
 function fdMap(payload: Record<string, string | number>): FormData {
@@ -171,6 +175,11 @@ describe("P2-3 DP quotation re-read guard", () => {
         create: (...a: unknown[]) => dpCreateMock(...a),
         update: (...a: unknown[]) => dpUpdateMock(...a),
       },
+      idempotencyKey: {
+        create: (...a: unknown[]) => idemCreateMock(...a),
+        findUnique: (...a: unknown[]) => idemFindUniqueMock(...a),
+        updateMany: (...a: unknown[]) => idemUpdateManyMock(...a),
+      },
     }
     transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
   }
@@ -201,6 +210,26 @@ describe("P2-3 DP quotation re-read guard", () => {
     expect(result.success).toBe(false)
     expect(result.error).toContain("approved/accepted/converted")
     expect(dpCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("putaran 59: createDownPayment — retry dengan idempotencyKey sama ditolak, DP lahir sekali", async () => {
+    const order: string[] = []
+    wireDpTx(order, { status: "accepted", grandTotal: 1000 })
+    // Kunci pertama tercatat; klaim kedua tabrakan P2002 + kunci segar = duplikat.
+    idemCreateMock
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idemFindUniqueMock.mockResolvedValue({ createdAt: new Date() })
+    idemUpdateManyMock.mockResolvedValue({ count: 0 })
+
+    const fd = () => fdMap({ quotationId: 50, amount: 100, paymentDate: "2024-01-01", idempotencyKey: "dp-key-1" })
+    const first = await createDownPayment(fd())
+    const second = await createDownPayment(fd())
+
+    expect(first.success).toBe(true)
+    expect(second.success).toBe(false)
+    expect(second.error).toContain("duplikat")
+    expect(dpCreateMock).toHaveBeenCalledTimes(1)
   })
 
   it("updateDownPayment: locks + re-reads the DP row itself, then re-reads quotation inside the tx and enforces the cap", async () => {

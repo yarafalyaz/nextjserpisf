@@ -935,6 +935,13 @@ export async function createDownPayment(formData: FormData) {
   const quotationId = v.quotationId
   const amount = v.amount
 
+  // Anti double-submit (pola createSalesOrder): tanpa idempotency key, retry/
+  // resubmit lahir sebagai DP draft kedua yang sah — cap kumulatif hanya
+  // menolak total > grandTotal, jadi duplikat kecil lolos dan keduanya bisa
+  // dikonfirmasi menjadi jurnal kas + kewajiban DP ganda. Key dicatat lewat
+  // tx pemanggil, jadi rollback melepasnya; DP bertahap sah memakai key baru.
+  const idempotencyKey = formData.get("idempotencyKey") as string | null
+
   // Quotation TOCTOU guard: baca luar-tx dihapus. Status + grandTotal dibaca
   // ulang DALAM tx setelah FOR UPDATE — pesaing bisa membatalkan/menolak
   // quotation di antara baca luar dan tulis. Cap kumulatif tetap dalam tx yang
@@ -950,6 +957,7 @@ export async function createDownPayment(formData: FormData) {
   // no GL trace. Move it INSIDE the tx and pass tx so a failed post rolls
   // back the DP insert.
     const dp = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id)
       await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
 
       const quotation = await tx.quotation.findUniqueOrThrow({ where: { id: quotationId } })

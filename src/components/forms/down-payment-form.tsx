@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition, useEffect } from "react"
+import { useState, useTransition, useEffect, useRef } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -55,6 +55,10 @@ interface DownPaymentFormProps {
 
 export function DownPaymentForm({ customers, quotations, downPayment, defaultQuotationId: _defaultQuotationId, defaultCustomerId: _defaultCustomerId, paymentMethods = [] }: DownPaymentFormProps) {
   const router = useRouter()
+  // Anti double-submit: key stabil per intent create; retry/timeout membawa
+  // key yang sama (ditolak server sebagai duplikat), key dirotasi sesudah
+  // sukses supaya DP bertahap berikutnya tetap sah.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [isPending, startTransition] = useTransition()
   const [proofFile, setProofFile] = useState<File | null>(null)
   const [customerOptions, setCustomerOptions] = useState(customers)
@@ -100,8 +104,10 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
         if (proofFile) {
           formData.append("proofImage", proofFile)
         }
+        if (!downPayment?.id) formData.append("idempotencyKey", idempotencyKeyRef.current)
         const result = downPayment?.id ? await updateDownPayment(downPayment.id, formData) : await createDownPayment(formData)
         if (result.success) {
+          if (!downPayment?.id) idempotencyKeyRef.current = crypto.randomUUID()
           showSuccess(downPayment?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
           router.push("/penjualan/uang-muka")
           router.refresh()
