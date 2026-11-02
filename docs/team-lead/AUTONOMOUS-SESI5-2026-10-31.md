@@ -2076,3 +2076,32 @@ Wilayah: tiga agent paralel (keuangan/pajak, SDM/produksi/proyek, penjualan/pemb
 - Tidak ada migrasi schema putaran ini.
 - Pelajaran harness: (a) harness dengan tx == prisma global memberi hijau palsu untuk kontrak slug delegate — kontrak yang benar memakai facade tx berbeda yang "melihat" tabrakan tak terlihat global, slug hasil wajib suffix `-2`; (b) dua bacaan `findFirst` delegate yang sama dalam satu tx berbagi antrean `mockResolvedValueOnce` — pisahkan delegate per konsumen; (c) kontrak mock gerbang `findFirst({ isActive: true })` atas baris mati wajib `null`, bukan objek `isActive: false` (mock mengabaikan `where`); (d) perubahan titik tulis bersama wajib menjalankan SEMUA file test yang menyentuh fungsi itu — dua failure CI putaran ini berasal dari harness yang tertinggal kontrak tx baru, bukan bug produksi.
 - Head final `9595d2c24` CI **success** (run `41448260434`); semua failure head antara terurai ke dua akar fixture di atas.
+
+## Putaran 71 — CRM/proyek, master/pengaturan, inventaris/aset/servis (3 agent audit paralel)
+
+Semua kandidat agent diverifikasi sesi utama terhadap kode aktual + schema sebelum edit; 8 fix commit/push, semua head CI success kecuali satu catatan runner di bawah.
+
+### Fix CRM/proyek (4)
+1. `53b714c3b` fix(project): guard tugas staf menilai Employee tertaut user — `updateTask` membandingkan ID User dengan `Task.assignedTo` (FK Employee); jembatan `Employee.userId @unique` kini dipakai untuk staf non-manajer di cek luar dan baris terkunci. HIGH.
+2. `ff2aa3fc5` fix(crm): slug tiket dihitung lewat delegate tx — `createTicket`/`updateTicket` slug prisma global → `nextSlugWithClient` dalam tx.
+3. `e1ae9866a` fix(crm): slug lead dihitung lewat delegate tx — `createLead`/`updateLead` pola sama.
+4. `2350c58a7` fix(crm): deleteLead menegakkan kepemilikan dari baris terkunci — rep non-admin hanya boleh menghapus lead miliknya, dinilai dari baris FOR UPDATE.
+5. `a7af918d3` fix(project): log proyek anti double-submit via idempotency key — `addProjectLog` klaim key dalam tx; form mengirim key stabil per intent.
+
+### Fix master/aset (4)
+6. `229d6d77a` fix(master): hitung satelit delete master dalam tx berkunci — `deleteVendor`/`deleteItem`/`deleteWarehouse` menghitung satelit lewat delegate tx di bawah kunci baris master; penulis satelit diserialkan pada kunci sama (`createVendorPrice`, setter min-stock/lead-time, `createVehicleFitment`, `createItemSubstitute`). `createCustomerPriceList` dan `deleteCustomerCategory` sudah berkunci dari putaran sebelumnya.
+7. `d142a3eea` fix(master): klaim akun dan guard grup dinilai dalam tx — `updateAccount` klaim nama+kode manual ternormalisasi homolog hidup lain dalam tx + slug delegate tx; `deleteItemGroup` hitung+delete dalam tx berkunci baris grup; slug item create/update lewat delegate tx.
+8. `96b0eabdf` fix(asset): slug brand dan kategori dari delegate tx — `updateAssetBrand` slug dalam tx berkunci; `updateAssetCategory` ditulis dalam satu tx dengan slug delegate.
+
+### Vonis dicatat / gugur (tanpa patch)
+- Guard delete induk tanpa serialisasi penulis FK: `deletePaymentTerm`/`deleteDepartment`/`deletePosition`/`deleteBank` (master) dan `deleteMethod` (method.actions, `assertMethodCodeUnused` atas `code` string bare-int tanpa FK). Kunci baris induk tidak menyerialkan penulis FK/penulis bare-int lintas modul dan metode bare-int; CATAT Low menunggu pola serialisasi penulis.
+- `deleteItemGroup` sisi penulis: delete-side sudah berkunci (fix #7) tetapi penulis FK item→grup (`updateItem`) adalah kunci baris item, bukan grup; analogi `deleteWorkSchedule` putaran 70. Sisi penulis CATAT.
+- `setItemSubstituteActive` tanpa CAS/kunci: flip non-aktif→aktif tidak mengambil kunci item yang baru ditanam `createItemSubstitute`; pasangan aktif ganda bisa lahir. CATAT (patch butuh CAS `updateMany` + evaluasi ulang pasangan di bawah kunci kedua item).
+- `updateRack`/`updateRackRow`/`deleteRack`/`deleteRackRow`: penulis FK `Item.defaultRackId/RowId` adalah kunci baris item; `StockMove.rackId` lahir dari titik posting bersama. Kunci baris rack tidak menyerialkan keduanya. CATAT.
+- `createStockAdjustment`/`createInventoryTransfer` gerbang hidup hanya pra-tx: titik posting menilai ulang hidup, dampak hanya draft basi. CATAT Low.
+- `createItem`/`updateItem` slug: divonis fix (masuk #7) karena basis slug = nama yang bisa bertabrakan antar-create, beda dengan batang nomor dokumen atomik.
+
+### Catatan CI
+- Run `41451885894` head `d142a3eea`: Lint completed failure sesudah ~50 menit pada step `eslint .`, log job tidak tersedia dari GitHub (404 blob). Kontra-bukti: `eslint .` penuh lokal exit 0 pada tree berisi head itu, dan head sesudahnya `96b0eabdf` (run `41452204696`, memuat `d142a3eea`) full CI success termasuk Lint. Vonis: kegagalan runner/infra, bukan kode. Unit Tests run yang sama success.
+- Tidak ada migrasi schema putaran ini.
+- Head final putaran 71 `96b0eabdf` CI **success**.
