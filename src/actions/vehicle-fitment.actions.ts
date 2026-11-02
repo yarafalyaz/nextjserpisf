@@ -17,7 +17,8 @@ import {
   evaluateProductFitment,
   loadFitmentConflicts,
 } from "@/lib/services/vehicle-fitment.service";
-import { nextSlug } from "@/lib/utils/slug-db";
+import { nextSlugWithClient } from "@/lib/utils/slug-db";
+import { checkIdempotency } from "@/lib/utils/idempotency";
 
 /**
  * Ref aturan wajib hidup & rantainya utuh sebelum tulis. FK DB menahan
@@ -107,23 +108,29 @@ export async function createVehicleFitment(formData: FormData) {
     const refError = await assertFitmentRefsLive(v)
     if (refError) return { success: false, error: refError }
 
-    const rule = await prisma.vehicleFitmentRule.create({
-      data: {
-        itemId: v.itemId,
-        bomRevisionId: v.bomRevisionId ?? null,
-        vehicleBrandId: v.vehicleBrandId ?? null,
-        vehicleModelId: v.vehicleModelId ?? null,
-        vehicleVariantId: v.vehicleVariantId ?? null,
-        yearFrom: v.yearFrom ?? null,
-        yearTo: v.yearTo ?? null,
-        drivetrain: v.drivetrain ?? null,
-        transmission: v.transmission ?? null,
-        result: v.result,
-        source: v.source ?? null,
-        notes: v.notes ?? null,
-        createdBy: Number(user.id),
-        slug: await nextSlug("vehicleFitmentRule", "fitment"),
-      },
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
+    const rule = await prisma.$transaction(async (tx) => {
+      // Putaran 64: retry submit identik melahirkan aturan fitment kembar
+      // (aturan id terbaru memenangkan tie-breaking di resolver).
+      await checkIdempotency(idempotencyKey, tx, user.id);
+      return tx.vehicleFitmentRule.create({
+        data: {
+          itemId: v.itemId,
+          bomRevisionId: v.bomRevisionId ?? null,
+          vehicleBrandId: v.vehicleBrandId ?? null,
+          vehicleModelId: v.vehicleModelId ?? null,
+          vehicleVariantId: v.vehicleVariantId ?? null,
+          yearFrom: v.yearFrom ?? null,
+          yearTo: v.yearTo ?? null,
+          drivetrain: v.drivetrain ?? null,
+          transmission: v.transmission ?? null,
+          result: v.result,
+          source: v.source ?? null,
+          notes: v.notes ?? null,
+          createdBy: Number(user.id),
+          slug: await nextSlugWithClient(tx as never, "vehicleFitmentRule", "fitment"),
+        },
+      });
     });
 
     revalidatePath("/kendaraan/fitment");

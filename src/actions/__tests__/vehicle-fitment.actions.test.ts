@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   requirePermissionMock: vi.fn(),
+  idemCreate: vi.fn(),
+  idemFindUnique: vi.fn(),
+  idemUpdateMany: vi.fn(),
   prisma: {
     vehicleFitmentRule: {
       create: vi.fn(),
@@ -16,6 +19,12 @@ const mocks = vi.hoisted(() => ({
     vehicleVariant: { findFirst: vi.fn() },
     bomRevision: { findFirst: vi.fn() },
     productMaterial: { findMany: vi.fn() },
+    idempotencyKey: {
+      create: (...a: unknown[]) => mocks.idemCreate(...a),
+      findUnique: (...a: unknown[]) => mocks.idemFindUnique(...a),
+      updateMany: (...a: unknown[]) => mocks.idemUpdateMany(...a),
+    },
+    $transaction: vi.fn(),
   },
 }))
 
@@ -43,6 +52,10 @@ function fdMap(payload: Record<string, string>): FormData {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+  mocks.prisma.$transaction.mockImplementation(async (cb: (tx: any) => unknown) => cb(mocks.prisma))
+  mocks.idemCreate.mockResolvedValue({ id: 1 })
+  mocks.idemFindUnique.mockResolvedValue(null)
+  mocks.idemUpdateMany.mockResolvedValue({ count: 1 })
   // nextSlug() probes for a free slug via findFirst → null means it's free.
   mocks.prisma.vehicleFitmentRule.findFirst.mockResolvedValue(null)
   // Default ref hidup & rantai utuh; test gerbang menimpa seperlunya.
@@ -110,6 +123,26 @@ describe("putaran 55 K2: gerbang ref fitment", () => {
 })
 
 describe("createVehicleFitment", () => {
+  it("putaran 64: retry idempotencyKey sama ditolak, aturan lahir sekali", async () => {
+    mocks.prisma.vehicleFitmentRule.create.mockResolvedValue({ id: 9 })
+    mocks.idemCreate
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    mocks.idemFindUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const first = await createVehicleFitment(fdMap({
+      itemId: "5", vehicleBrandId: "1", vehicleModelId: "2", vehicleVariantId: "3",
+      result: "compatible", idempotencyKey: "vf-key-1",
+    }))
+    expect(first.success).toBe(true)
+    const second = await createVehicleFitment(fdMap({
+      itemId: "5", vehicleBrandId: "1", vehicleModelId: "2", vehicleVariantId: "3",
+      result: "compatible", idempotencyKey: "vf-key-1",
+    }))
+    expect(second.success).toBe(false)
+    expect(String(second.error)).toContain("duplikat")
+    expect(mocks.prisma.vehicleFitmentRule.create).toHaveBeenCalledTimes(1)
+  })
+
   it("creates a rule scoped to the given item and configuration", async () => {
     mocks.prisma.vehicleFitmentRule.create.mockResolvedValue({ id: 9 })
     const res = await createVehicleFitment(fdMap({

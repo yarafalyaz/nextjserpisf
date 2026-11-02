@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { AlertTriangle } from "lucide-react"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -60,6 +60,10 @@ interface FitmentFormProps {
 
 export function VehicleFitmentForm({ items, brands, models, variants, rule }: FitmentFormProps) {
   const router = useRouter()
+  // Idempotency: key stabil per intent tambah; retry jaringan memakai key
+  // yang sama (ditolak server), sukses merotasi untuk aturan berikutnya.
+  const idempotencyKeyRef = useRef<string | null>(null)
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
 
   const [itemId, setItemId] = useState<string | null>(rule ? String(rule.itemId) : null)
@@ -132,11 +136,13 @@ export function VehicleFitmentForm({ items, brands, models, variants, rule }: Fi
       if (notes) formData.set("notes", notes)
       formData.set("isActive", isActive ? "true" : "false")
 
+      if (!rule?.id) formData.set("idempotencyKey", idempotencyKeyRef.current!)
       const res = rule?.id
         ? await updateVehicleFitment(rule.id, formData)
         : await createVehicleFitment(formData)
 
       if (!res.success) return showError(res.error || "Gagal menyimpan aturan fitment")
+      idempotencyKeyRef.current = crypto.randomUUID()
       showSuccess(rule?.id ? "Aturan fitment diperbarui" : "Aturan fitment ditambahkan")
       router.push("/kendaraan/fitment")
       router.refresh()
