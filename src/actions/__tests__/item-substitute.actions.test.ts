@@ -18,6 +18,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => {
   const txMock = {
     itemSubstitute: { findUnique: vi.fn(), create: vi.fn() },
+    // Putaran 71: create menilai ulang hidup kedua item lewat delegate tx.
+    item: { findUnique: vi.fn() },
   }
   const prismaMock = {
     ...txMock,
@@ -101,6 +103,9 @@ beforeEach(() => {
   mocks.reviseMock.mockResolvedValue({ success: true, releaseNotice: null })
   mocks.prismaMock.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
     cb(mocks.txMock),
+  )
+  mocks.txMock.item.findUnique.mockImplementation(
+    async (args: { where: { id: number } }) => itemRow(args.where.id),
   )
   mocks.txMock.itemSubstitute.findUnique.mockResolvedValue(null)
   mocks.txMock.itemSubstitute.create.mockImplementation(

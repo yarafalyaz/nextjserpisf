@@ -1206,6 +1206,27 @@ describe("Position Actions", () => {
   })
 })
 
+describe("delete master satelit (putaran 71)", () => {
+  it("deleteItem menilai satelit dalam tx berkunci baris item", async () => {
+    const res = await actions.deleteItem(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+    const exec = mocks.prismaMock.$executeRaw.mock.calls.map((c: unknown[]) => String(c[0])).join(" ")
+    expect(exec).toContain("items")
+    expect(mocks.prismaMock.item.delete).toHaveBeenCalled()
+  })
+  it("deleteVendor menilai satelit dalam tx berkunci baris vendor", async () => {
+    const res = await actions.deleteVendor(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+  })
+  it("deleteWarehouse menilai satelit dalam tx berkunci baris gudang", async () => {
+    const res = await actions.deleteWarehouse(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+  })
+})
+
 describe("Lead Actions", () => {
   it("createLead succeeds", async () => {
     try {

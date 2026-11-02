@@ -209,6 +209,21 @@ export async function createItemSubstitute(input: {
     }
 
     const created = await prisma.$transaction(async (tx) => {
+      // Putaran 71: kunci kedua baris item (id terurut) — deleteItem
+      // menilai satelit substitusi di bawah kunci item yang sama, dan
+      // hidup kedua item dinilai ulang dari bacaan terkunci.
+      if (typeof tx.$executeRaw === "function") {
+        const lockIds = [itemId, substituteItemId].sort((a, b) => a - b)
+        for (const lockId of lockIds) {
+          await tx.$executeRaw`SELECT id FROM items WHERE id = ${lockId} FOR UPDATE`
+        }
+      }
+      const [freshOrigin, freshSubstitute] = await Promise.all([
+        tx.item.findUnique({ where: { id: itemId }, select: itemGuardSelect }),
+        tx.item.findUnique({ where: { id: substituteItemId }, select: itemGuardSelect }),
+      ])
+      assertStockActiveItem(freshOrigin, "Barang asal")
+      assertStockActiveItem(freshSubstitute, "Barang pengganti")
       // Pasangan hidup (aktif ATAU nonaktif) sudah tercatat: arah yang
       // sama tidak dibuat dua kali; baris nonaktif diaktifkan lewat
       // jalur nonaktifkan/aktifkan, bukan baris baru (AC-SUB69-1).

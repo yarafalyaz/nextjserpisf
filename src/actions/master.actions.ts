@@ -3449,16 +3449,26 @@ export async function deleteVendor(id: number) {
   try {
     const user = await requirePermission("delete_vendors");
 
-    await hardDeleteOrSoftDelete(
-      () => prisma.vendor.delete({ where: { id } }),
-      () =>
-        prisma.vendor.update({
-          where: { id },
-          data: {
-        updatedBy: Number(user.id), deletedAt: new Date(), isActive: false },
-        }),
-      [() => prisma.vendorItemPrice.count({ where: { vendorId: id } })],
-    );
+    // Putaran 71: hitung satelit + hapus dalam SATU tx berkunci baris
+    // vendor (pola deleteTax). Hitungan lepas membaca 0 tepat sebelum
+    // createVendorPrice commit, lalu hard delete Cascade memusnahkan
+    // baris harga baru senyap; penulis harga mengunci baris vendor yang
+    // sama, jadi kedua sisi terserialkan.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vendors WHERE id = ${id} FOR UPDATE`;
+      }
+      await hardDeleteOrSoftDelete(
+        () => tx.vendor.delete({ where: { id } }),
+        () =>
+          tx.vendor.update({
+            where: { id },
+            data: {
+          updatedBy: Number(user.id), deletedAt: new Date(), isActive: false },
+          }),
+        [() => tx.vendorItemPrice.count({ where: { vendorId: id } })],
+      );
+    });
 
     revalidatePath("/master/vendor");
     await logActivity("delete", "Vendor", id, "Menghapus vendor");
@@ -3474,22 +3484,32 @@ export async function deleteItem(id: number) {
   try {
     await requirePermission("delete_items");
 
-    await hardDeleteOrSoftDelete(
-      () => prisma.item.delete({ where: { id } }),
-      () =>
-        prisma.item.update({ where: { id }, data: { deletedAt: new Date(), isActive: false } }),
-      [
-        () => prisma.vendorItemPrice.count({ where: { itemId: id } }),
-        () => prisma.customerPriceList.count({ where: { itemId: id } }),
-        () => prisma.itemWarehouseSetting.count({ where: { itemId: id } }),
-        () => prisma.uomConversion.count({ where: { itemId: id } }),
-        () => prisma.vehicleFitmentRule.count({ where: { itemId: id } }),
+    // Putaran 71: hitung satelit + hapus dalam SATU tx berkunci baris
+    // item (pola deleteTax). Penulis satelit (harga pemasok/pelanggan,
+    // stok minimum per gudang) mengunci baris item yang sama; hitungan
+    // lepas membaca 0 di jendela sama lalu hard delete Cascade
+    // memusnahkan baris satelit baru senyap.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM items WHERE id = ${id} FOR UPDATE`;
+      }
+      await hardDeleteOrSoftDelete(
+        () => tx.item.delete({ where: { id } }),
         () =>
-          prisma.itemSubstitute.count({
-            where: { OR: [{ itemId: id }, { substituteItemId: id }] },
-          }),
-      ],
-    );
+          tx.item.update({ where: { id }, data: { deletedAt: new Date(), isActive: false } }),
+        [
+          () => tx.vendorItemPrice.count({ where: { itemId: id } }),
+          () => tx.customerPriceList.count({ where: { itemId: id } }),
+          () => tx.itemWarehouseSetting.count({ where: { itemId: id } }),
+          () => tx.uomConversion.count({ where: { itemId: id } }),
+          () => tx.vehicleFitmentRule.count({ where: { itemId: id } }),
+          () =>
+            tx.itemSubstitute.count({
+              where: { OR: [{ itemId: id }, { substituteItemId: id }] },
+            }),
+        ],
+      );
+    });
 
     revalidatePath("/master/barang");
     await logActivity("delete", "Item", id, "Menghapus barang");
@@ -3505,15 +3525,23 @@ export async function deleteWarehouse(id: number) {
   try {
     await requirePermission("delete_warehouses");
 
-    await hardDeleteOrSoftDelete(
-      () => prisma.warehouse.delete({ where: { id } }),
-      () =>
-        prisma.warehouse.update({
-          where: { id },
-          data: { deletedAt: new Date(), isActive: false },
-        }),
-      [() => prisma.itemWarehouseSetting.count({ where: { warehouseId: id } })],
-    );
+    // Putaran 71: hitung satelit + hapus dalam SATU tx berkunci baris
+    // gudang (pola deleteTax); penulis stok minimum mengunci baris
+    // gudang yang sama, jadi satelit baru tak ter-Cascade senyap.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM warehouses WHERE id = ${id} FOR UPDATE`;
+      }
+      await hardDeleteOrSoftDelete(
+        () => tx.warehouse.delete({ where: { id } }),
+        () =>
+          tx.warehouse.update({
+            where: { id },
+            data: { deletedAt: new Date(), isActive: false },
+          }),
+        [() => tx.itemWarehouseSetting.count({ where: { warehouseId: id } })],
+      );
+    });
 
     revalidatePath("/master/gudang");
     await logActivity("delete", "Warehouse", id, "Menghapus gudang");

@@ -113,6 +113,11 @@ export async function createVehicleFitment(formData: FormData) {
       // Putaran 64: retry submit identik melahirkan aturan fitment kembar
       // (aturan id terbaru memenangkan tie-breaking di resolver).
       await checkIdempotency(idempotencyKey, tx, user.id);
+      // Putaran 71: kunci baris item — deleteItem menilai satelit
+      // fitment di bawah kunci yang sama.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM items WHERE id = ${v.itemId} FOR UPDATE`;
+      }
       return tx.vehicleFitmentRule.create({
         data: {
           itemId: v.itemId,

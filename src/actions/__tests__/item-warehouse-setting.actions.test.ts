@@ -23,7 +23,13 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock("@/lib/db/prisma", () => ({
-  prisma: { ...mocks.prismaMock, userWarehouse: { findMany: mocks.userWarehouseFindMany } },
+  prisma: {
+    ...mocks.prismaMock,
+    userWarehouse: { findMany: mocks.userWarehouseFindMany },
+    // Putaran 71: setter menilai hidup + upsert dalam tx berkunci master;
+    // tx facade memakai delegate mock yang sama.
+    $transaction: vi.fn(async (cb: (tx: unknown) => unknown) => cb(mocks.prismaMock)),
+  },
 }))
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: mocks.requirePermissionMock }))
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))

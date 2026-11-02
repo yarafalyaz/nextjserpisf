@@ -54,30 +54,51 @@ export async function createVendorPrice(formData: FormData): Promise<VendorPrice
     if (!parsed.success) return { success: false, error: parsed.error }
     const v = parsed.data
 
-    await assertLiveVendorItem(v.vendorId, v.itemId)
-
-    const duplicate = await prisma.vendorItemPrice.findFirst({
-      where: { vendorId: v.vendorId, itemId: v.itemId, minQty: toMoney(v.minQty) },
-      select: { id: true },
-    })
-    if (duplicate) {
-      return {
-        success: false,
-        error: "Harga untuk pemasok, barang, dan minimal qty itu sudah ada. Ubah baris yang ada.",
+    // Putaran 71: tulis dalam tx yang mengunci baris vendor lalu item
+    // (urutan id konsisten): deleteVendor/deleteItem menilai satelit di
+    // bawah kunci baris master yang sama, jadi harga baru tak lahir pada
+    // master yang sedang di-hard-delete (Cascade) dan hidup master
+    // dinilai dari bacaan terkunci, bukan snapshot pra-tx.
+    const outcome = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vendors WHERE id = ${v.vendorId} FOR UPDATE`
+        await tx.$executeRaw`SELECT id FROM items WHERE id = ${v.itemId} FOR UPDATE`
       }
-    }
-
-    const created = await prisma.vendorItemPrice.create({
-      data: {
-        vendorId: v.vendorId,
-        itemId: v.itemId,
-        price: toMoney(v.price),
-        minQty: toMoney(v.minQty),
-        effectiveDate: v.effectiveDate ? wibDateToUtcMidnight(v.effectiveDate) : null,
-        notes: v.notes ?? null,
-        createdBy: Number(user.id),
-      },
+      const liveVendor = await tx.vendor.findFirst({
+        where: { id: v.vendorId, isActive: true, deletedAt: null },
+        select: { id: true },
+      })
+      if (!liveVendor) return { error: "Vendor tidak ditemukan atau tidak aktif" as const }
+      const liveItem = await tx.item.findFirst({
+        where: { id: v.itemId, isActive: true, deletedAt: null },
+        select: { id: true },
+      })
+      if (!liveItem) return { error: "Barang tidak ditemukan atau tidak aktif" as const }
+      const duplicate = await tx.vendorItemPrice.findFirst({
+        where: { vendorId: v.vendorId, itemId: v.itemId, minQty: toMoney(v.minQty) },
+        select: { id: true },
+      })
+      if (duplicate) {
+        return {
+          error:
+            "Harga untuk pemasok, barang, dan minimal qty itu sudah ada. Ubah baris yang ada." as const,
+        }
+      }
+      const created = await tx.vendorItemPrice.create({
+        data: {
+          vendorId: v.vendorId,
+          itemId: v.itemId,
+          price: toMoney(v.price),
+          minQty: toMoney(v.minQty),
+          effectiveDate: v.effectiveDate ? wibDateToUtcMidnight(v.effectiveDate) : null,
+          notes: v.notes ?? null,
+          createdBy: Number(user.id),
+        },
+      })
+      return { created }
     })
+    if ("error" in outcome) return { success: false, error: outcome.error }
+    const created = outcome.created
 
     await logActivity("create", "VendorItemPrice", created.id, "Menambah harga pemasok")
     revalidatePath(REVALIDATE)

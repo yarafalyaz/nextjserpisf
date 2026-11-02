@@ -107,13 +107,18 @@ async function assertWarehouseScopeFor(user: { id: string; roles: string[]; perm
   assertWarehouseAccess(scope, warehouseId)
 }
 
-async function assertItemAndWarehouse(itemId: number, warehouseId: number) {
+type ItemWarehouseDb = {
+  item: { findUnique: typeof prisma.item.findUnique }
+  warehouse: { findUnique: typeof prisma.warehouse.findUnique }
+}
+
+async function assertItemAndWarehouse(itemId: number, warehouseId: number, db: ItemWarehouseDb = prisma) {
   const [item, warehouse] = await Promise.all([
-    prisma.item.findUnique({
+    db.item.findUnique({
       where: { id: itemId },
       select: { id: true, sku: true, name: true, isActive: true, isService: true, deletedAt: true },
     }),
-    prisma.warehouse.findUnique({
+    db.warehouse.findUnique({
       where: { id: warehouseId },
       select: { id: true, name: true, isActive: true, deletedAt: true },
     }),
@@ -136,19 +141,29 @@ export async function setItemWarehouseMinStock(
     const itemId = positiveId(itemIdInput, "Barang")
     const warehouseId = positiveId(warehouseIdInput, "Gudang")
     const minStock = parseMinStock(minStockInput)
-    const { item, warehouse } = await assertItemAndWarehouse(itemId, warehouseId)
     await assertWarehouseScopeFor(user, warehouseId)
 
-    const existing = await prisma.itemWarehouseSetting.findUnique({
-      where: { itemId_warehouseId: { itemId, warehouseId } },
-      select: { id: true, minStock: true },
-    })
-
-    const saved = await prisma.itemWarehouseSetting.upsert({
-      where: { itemId_warehouseId: { itemId, warehouseId } },
-      create: { itemId, warehouseId, minStock, createdBy: Number(user.id), updatedBy: Number(user.id) },
-      update: { minStock, updatedBy: Number(user.id) },
-      select: { id: true },
+    // Putaran 71: kunci baris item lalu gudang dalam tx sebelum menilai
+    // hidup + upsert — deleteItem/deleteWarehouse menilai satelit di
+    // bawah kunci baris master yang sama, jadi baris baru tak lahir pada
+    // master yang sedang di-hard-delete (Cascade).
+    const { item, warehouse, existing, saved } = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM items WHERE id = ${itemId} FOR UPDATE`
+        await tx.$executeRaw`SELECT id FROM warehouses WHERE id = ${warehouseId} FOR UPDATE`
+      }
+      const checked = await assertItemAndWarehouse(itemId, warehouseId, tx as never)
+      const existingRow = await tx.itemWarehouseSetting.findUnique({
+        where: { itemId_warehouseId: { itemId, warehouseId } },
+        select: { id: true, minStock: true },
+      })
+      const savedRow = await tx.itemWarehouseSetting.upsert({
+        where: { itemId_warehouseId: { itemId, warehouseId } },
+        create: { itemId, warehouseId, minStock, createdBy: Number(user.id), updatedBy: Number(user.id) },
+        update: { minStock, updatedBy: Number(user.id) },
+        select: { id: true },
+      })
+      return { ...checked, existing: existingRow, saved: savedRow }
     })
 
     const log = await writeSettingLog({
@@ -194,25 +209,33 @@ export async function setItemWarehouseLeadTime(
     const itemId = positiveId(itemIdInput, "Barang")
     const warehouseId = positiveId(warehouseIdInput, "Gudang")
     const leadTimeDays = parseLeadTimeDays(leadTimeInput)
-    const { item, warehouse } = await assertItemAndWarehouse(itemId, warehouseId)
     await assertWarehouseScopeFor(user, warehouseId)
 
-    const existing = await prisma.itemWarehouseSetting.findUnique({
-      where: { itemId_warehouseId: { itemId, warehouseId } },
-      select: { id: true, leadTimeDays: true },
-    })
-    const saved = await prisma.itemWarehouseSetting.upsert({
-      where: { itemId_warehouseId: { itemId, warehouseId } },
-      create: {
-        itemId,
-        warehouseId,
-        minStock: null, // warisi global, bukan snapshot (BR-ROP-01)
-        leadTimeDays,
-        createdBy: Number(user.id),
-        updatedBy: Number(user.id),
-      },
-      update: { leadTimeDays, updatedBy: Number(user.id) },
-      select: { id: true },
+    // Putaran 71: serialisasi kunci master sama dengan setItemWarehouseMinStock.
+    const { item, warehouse, existing, saved } = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM items WHERE id = ${itemId} FOR UPDATE`
+        await tx.$executeRaw`SELECT id FROM warehouses WHERE id = ${warehouseId} FOR UPDATE`
+      }
+      const checked = await assertItemAndWarehouse(itemId, warehouseId, tx as never)
+      const existingRow = await tx.itemWarehouseSetting.findUnique({
+        where: { itemId_warehouseId: { itemId, warehouseId } },
+        select: { id: true, leadTimeDays: true },
+      })
+      const savedRow = await tx.itemWarehouseSetting.upsert({
+        where: { itemId_warehouseId: { itemId, warehouseId } },
+        create: {
+          itemId,
+          warehouseId,
+          minStock: null, // warisi global, bukan snapshot (BR-ROP-01)
+          leadTimeDays,
+          createdBy: Number(user.id),
+          updatedBy: Number(user.id),
+        },
+        update: { leadTimeDays, updatedBy: Number(user.id) },
+        select: { id: true },
+      })
+      return { ...checked, existing: existingRow, saved: savedRow }
     })
 
     const log = await writeSettingLog({
