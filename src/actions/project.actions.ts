@@ -1086,13 +1086,19 @@ export async function addProjectLog(projectId: number, formData: FormData) {
     })
     if (!project) return { success: false, error: "Proyek tidak ditemukan" }
 
-    const log = await prisma.projectLog.create({
-      data: {
-        projectId,
-        action: v.action,
-        notes: v.notes ?? null,
-        userId: Number(user.id),
-      },
+    // Putaran 71: klaim idempotency + tulis dalam satu tx (pola
+    // addTicketComment) — retry jaringan/resubmit melahirkan log kembar
+    // karena ProjectLog tak punya kolom unik penahan.
+    const log = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
+      return tx.projectLog.create({
+        data: {
+          projectId,
+          action: v.action,
+          notes: v.notes ?? null,
+          userId: Number(user.id),
+        },
+      })
     })
 
     revalidatePath("/proyek")

@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { addProjectLog } from "@/actions/project.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
@@ -25,6 +25,7 @@ export function ProjectLogForm({ projectId, canCreate = true }: { projectId: num
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [action, setAction] = useState("Progres")
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -32,11 +33,13 @@ export function ProjectLogForm({ projectId, canCreate = true }: { projectId: num
     startTransition(async () => {
       const fd = new FormData(form)
       fd.set("action", action)
+      fd.set("idempotencyKey", idempotencyKeyRef.current)
       const res = await addProjectLog(projectId, fd)
       if (!res.success) {
         showError(res.error || "Gagal menambahkan log")
         return
       }
+      idempotencyKeyRef.current = crypto.randomUUID()
       showSuccess("Log ditambahkan")
       form.reset()
       setAction("Progres")

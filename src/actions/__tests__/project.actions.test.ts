@@ -872,6 +872,21 @@ describe("Task Actions Optional-Field Branches", () => {
   })
 })
 
+describe("addProjectLog (putaran 71)", () => {
+  it("retry dengan key sama ditolak duplikat, satu log lahir", async () => {
+    mocks.prismaMock.idempotencyKey.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    mocks.prismaMock.idempotencyKey.findUnique.mockResolvedValue({ createdAt: new Date() })
+    const first = await actions.addProjectLog(1, fdMap({ action: "Progres", notes: "cek", idempotencyKey: "log-key-1" }))
+    expect(first?.success).toBe(true)
+    const second = await actions.addProjectLog(1, fdMap({ action: "Progres", notes: "cek", idempotencyKey: "log-key-1" }))
+    expect(second?.success).toBe(false)
+    expect(second?.error).toContain("duplikat")
+    expect(mocks.prismaMock.projectLog.create).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe("updateProjectStageProgress status-transition branches", () => {
   beforeEach(() => {
     mocks.prismaMock.projectStage.findUniqueOrThrow.mockResolvedValue({ id: 1, projectId: 1, sortOrder: 1 })
