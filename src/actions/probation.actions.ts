@@ -177,27 +177,36 @@ export async function saveProbationReviewDraft(input: ProbationReviewFormInput):
     )
     if (!slot) throw new Error("Titik evaluasi tidak valid untuk masa percobaan ini")
 
-    const existing = await prisma.probationReview.findFirst({
-      where: { employeeId, milestone: slot.milestone },
-      select: { id: true, status: true },
+    // Putaran 65: find-then-create tanpa tx/kunci melahirkan draft
+    // milestone kembar saat dua submit konkuren (tanpa unique DB).
+    // Kunci baris karyawan menserialkan pasangan per karyawan; status
+    // dinilai ulang sesudah kunci dari bacaan tx.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`
+      }
+      const existing = await tx.probationReview.findFirst({
+        where: { employeeId, milestone: slot.milestone },
+        select: { id: true, status: true },
+      })
+      if (existing && existing.status !== "draft") {
+        throw new Error("Evaluasi titik ini sudah dikirim dan tidak dapat diubah")
+      }
+      const data = {
+        employeeId,
+        milestone: slot.milestone,
+        dueDate: slot.dueDate,
+        reviewerEmployeeId,
+        technicalScore: input.technicalScore,
+        disciplineScore: input.disciplineScore,
+        attendanceScore: input.attendanceScore,
+        notes: input.notes,
+        recommendation: input.recommendation,
+        status: "draft",
+      }
+      if (existing) await tx.probationReview.update({ where: { id: existing.id }, data })
+      else await tx.probationReview.create({ data })
     })
-    if (existing && existing.status !== "draft") {
-      throw new Error("Evaluasi titik ini sudah dikirim dan tidak dapat diubah")
-    }
-    const data = {
-      employeeId,
-      milestone: slot.milestone,
-      dueDate: slot.dueDate,
-      reviewerEmployeeId,
-      technicalScore: input.technicalScore,
-      disciplineScore: input.disciplineScore,
-      attendanceScore: input.attendanceScore,
-      notes: input.notes,
-      recommendation: input.recommendation,
-      status: "draft",
-    }
-    if (existing) await prisma.probationReview.update({ where: { id: existing.id }, data })
-    else await prisma.probationReview.create({ data })
     revalidatePath(REVALIDATE)
     return { success: true }
   } catch (e) {

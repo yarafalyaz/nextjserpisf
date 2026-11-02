@@ -109,6 +109,7 @@ beforeEach(() => {
         update: mocks.reviewUpdate,
         updateMany: mocks.reviewUpdateMany,
         findFirst: mocks.reviewFindFirstTx,
+        create: mocks.reviewCreate,
       },
       employee: { update: mocks.employeeUpdate, findUnique: mocks.employeeFindUnique },
       contractDecisionRequest: {
@@ -287,6 +288,16 @@ describe("saveProbationReviewDraft (F-5)", () => {
     expect(mocks.reviewCreate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ reviewerEmployeeId: 7, status: "draft" }) }),
     )
+  })
+
+  it("putaran 65: kunci karyawan mendahului findFirst di dalam tx (urutan serialisasi)", async () => {
+    setupDraft()
+    expect(await saveProbationReviewDraft(draftInput)).toEqual({ success: true })
+    expect(mocks.transaction).toHaveBeenCalled()
+    const lockOrder = (mocks.executeRaw as any).mock.invocationCallOrder[0]
+    const findOrder = mocks.reviewFindFirstTx.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(findOrder)
+    expect(mocks.reviewFindFirst).not.toHaveBeenCalled()
   })
 })
 
