@@ -697,6 +697,7 @@ async function recalcDraftPayrollFromLines(payrollId: number, txClient?: typeof 
   // final slip — slip final-resign tidak boleh turun ke TER bulanan.
   const recalcSnapshot = payroll.statutorySnapshot as { pph21Ter?: { periodKind?: string } } | null;
   const w = await buildPayrollWrite({
+    db,
     employeeId: payroll.employeeId,
     period: payroll.period,
     excludePayrollId: payroll.id,
@@ -983,6 +984,7 @@ function assertDeductionCeilingOrThrow(o: {
 }
 
 async function buildPayrollWrite(o: {
+  db?: TxClient | typeof prisma;
   employeeId: number | null;
   period?: string;
   excludePayrollId?: number;
@@ -990,6 +992,14 @@ async function buildPayrollWrite(o: {
   endDate: Date;
   fallbackLabel: "pembuatan slip" | "update slip";
   componentLines?: readonly { kindSnapshot: string; amount: unknown }[];
+  /**
+   * Gerbang susun (plafon Pasal 65 + BR-LOAN-03). Default ditegakkan (jalur
+   * single process/update/recalc). Publish massal mematikannya: baris massal
+   * sudah lolos plafon estimasi dan memang boleh terbit net-0 (absen penuh);
+   * menegakkan gerbang susun saat penyegaran statutori akan mengubah
+   * populasi terbit run massal, bukan menyegarkan agregatnya.
+   */
+  composeGuards?: boolean;
   /** R8-SDM-05: hasil prorate gaji pokok periode ini (audit + basis BPJS). */
   prorate?: ProratedBaseSalary;
   v: {
@@ -1009,38 +1019,43 @@ async function buildPayrollWrite(o: {
   };
 }) {
   const { v } = o;
+  const db = o.db ?? prisma;
   const period = o.period ?? `${o.endDate.getFullYear()}-${String(o.endDate.getMonth() + 1).padStart(2, "0")}`;
   // Frekuensi dari master karyawan server (bukan client): WEEKLY memakai
-  // agregator BPJS se-masa + nominal cicilan mingguan tersimpan.
+  // agregator BPJS se-masa + nominal cicilan mingguan tersimpan. Client
+  // disediakan pemanggil supaya agregat dibaca sesudah kunci karyawan.
   const employeeMaster = o.employeeId
-    ? await prisma.employee.findUnique({
+    ? await db.employee.findUnique({
         where: { id: o.employeeId },
         select: { maritalStatus: true, dependents: true, paymentFrequency: true },
       })
     : null;
   const frequency: PayrollFrequency = employeeMaster?.paymentFrequency === "WEEKLY" ? "WEEKLY" : "MONTHLY";
-  const cappedLoan = await capLoanDeduction(prisma, o.employeeId, v.loanDeduction ?? 0, frequency);
+  const cappedLoan = await capLoanDeduction(db as never, o.employeeId, v.loanDeduction ?? 0, frequency);
   const taxProfile = employeeMaster;
   const base = v.baseSalary ?? 0;
   const gross = safeSum([base, v.allowances ?? 0, v.overtimeTotal ?? 0, v.appreciationTotal ?? 0], 0);
-  const ruleset = await getStatutoryParams(prisma, o.endDate);
+  const ruleset = await getStatutoryParams(db as never, o.endDate);
   if (ruleset.fromFallback) {
     throw new Error(
       `Ruleset statutori periode ini belum lengkap/valid — ${o.fallbackLabel} ditolak. Minta accountant melengkapi ruleset, lalu hitung ulang.`,
     );
   }
-  assertDeductionCeilingOrThrow({
-    gross,
-    cappedLoan,
-    lateDeduction: v.lateDeduction,
-    componentDeductions: v.deductions ?? 0,
-    fallbackLabel: o.fallbackLabel,
-  });
+  if (o.composeGuards !== false) {
+    assertDeductionCeilingOrThrow({
+      gross,
+      cappedLoan,
+      lateDeduction: v.lateDeduction,
+      componentDeductions: v.deductions ?? 0,
+      fallbackLabel: o.fallbackLabel,
+    });
+  }
   // F-103-V agregator BPJS final masa (B1-B6): dipakai SERAGAM semua
   // frekuensi (B4 — tanpa cabang WEEKLY). Slip se-masa lain aktif dibaca
   // per period; campuran slip berpenanda + legacy dalam satu masa =
   // klaim final masa ditolak (B8), bukan dicampur diam-diam.
   const bpjsComputed = await computeBpjsForPeriod({
+    db,
     employeeId: o.employeeId,
     period,
     currentBase: base,
@@ -1053,6 +1068,7 @@ async function buildPayrollWrite(o: {
   // (Des / final-resign) = hitung ulang Pasal 17. Legacy TIDAK lagi dipanggil
   // jalur tulis — dipertahankan hanya reproduksi slip pra-titik-berlaku.
   const pphResult = await computePph21ForPeriod({
+    db,
     employeeId: o.employeeId,
     period: o.period ?? `${o.endDate.getFullYear()}-${String(o.endDate.getMonth() + 1).padStart(2, "0")}`,
     endDate: o.endDate,
@@ -1087,18 +1103,20 @@ async function buildPayrollWrite(o: {
   const statutoryTotal = safeAdd(bpjsParts.total, pph, 0);
   // F-2026-10-29-162-V PUT-LOAN-1 (E162-1): penjaga anggaran BR-LOAN-03 saat
   // SUSUN — Σ potongan termasuk statutori > bruto = tolak berisik, nol pangkas.
-  const budgetBreach = evaluateLoanBudgetGuard({
-    gross,
-    loanDeduction: cappedLoan,
-    statutory: statutoryTotal,
-    otherDeductions: safeAdd(
-      v.deductions ?? 0,
-      safeAdd(v.lateDeduction, v.absentDeduction, 0),
-      0,
-    ),
-  });
-  if (budgetBreach) {
-    throw new Error(loanBudgetGuardMessage(budgetBreach, "susun"));
+  if (o.composeGuards !== false) {
+    const budgetBreach = evaluateLoanBudgetGuard({
+      gross,
+      loanDeduction: cappedLoan,
+      statutory: statutoryTotal,
+      otherDeductions: safeAdd(
+        v.deductions ?? 0,
+        safeAdd(v.lateDeduction, v.absentDeduction, 0),
+        0,
+      ),
+    });
+    if (budgetBreach) {
+      throw new Error(loanBudgetGuardMessage(budgetBreach, "susun"));
+    }
   }
   const withheld = safeSum([v.deductions ?? 0, cappedLoan, v.lateDeduction, v.absentDeduction, statutoryTotal], 0);
   const net = Math.max(0, safeSubtract(gross, withheld, 0));
@@ -1796,6 +1814,7 @@ interface Pph21PeriodComputation {
  * berisik (B8); tanpa karyawan -> basis slip berjalan saja (preview).
  */
 async function computeBpjsForPeriod(o: {
+  db?: TxClient | typeof prisma;
   employeeId: number | null;
   period: string;
   currentBase: number;
@@ -1804,7 +1823,8 @@ async function computeBpjsForPeriod(o: {
 }): Promise<{ bpjs: ReturnType<typeof computeBpjsEmployee>; aggregate: BpjsAggregateSnapshot }> {
   let others: BpjsPeriodSlip[] = [];
   if (o.employeeId) {
-    const rows = await prisma.payroll.findMany({
+    const db = o.db ?? prisma;
+    const rows = await db.payroll.findMany({
       where: { employeeId: o.employeeId, period: o.period },
       select: {
         id: true, baseSalary: true, bpjsHealthEmployee: true,
@@ -1837,6 +1857,7 @@ async function computeBpjsForPeriod(o: {
 }
 
 async function computePph21ForPeriod(o: {
+  db?: TxClient | typeof prisma
   employeeId: number | null
   period: string
   endDate: Date
@@ -1849,10 +1870,11 @@ async function computePph21ForPeriod(o: {
   resignationFinal?: boolean
   finalReason?: string | null
 }): Promise<Pph21PeriodComputation> {
+  const db = o.db ?? prisma
   const { year, month } = periodYearMonth(o.period, o.endDate)
   let joinDate: Date | null = null
   if (o.employeeId) {
-    const emp = await prisma.employee.findUnique({
+    const emp = await db.employee.findUnique({
       where: { id: o.employeeId },
       select: { joinDate: true },
     })
@@ -1870,7 +1892,7 @@ async function computePph21ForPeriod(o: {
   // Slip se-tahun karyawan (untuk agregasi masa terakhir + selisih se-masa).
   let yearSlips: { id: number; period: string; type: string; status: string; grossSalary: unknown; pph21: unknown; bpjsEmploymentEmployee: unknown; statutorySnapshot: unknown }[] = []
   if (o.employeeId) {
-    const all = await prisma.payroll.findMany({
+    const all = await db.payroll.findMany({
       where: { employeeId: o.employeeId },
       select: {
         id: true, period: true, type: true, status: true, grossSalary: true,
@@ -1923,7 +1945,7 @@ async function computePph21ForPeriod(o: {
     }
   }
 
-  const brackets = await getTerBrackets(prisma as never, category, o.endDate)
+  const brackets = await getTerBrackets(db as never, category, o.endDate)
   if (!brackets) {
     throw new Error(
       "Tabel TER PP 58/2023 belum terisi lengkap untuk periode ini — hitung final ditolak. Minta accountant melengkapi tabel TER, lalu hitung ulang.",
@@ -2912,6 +2934,20 @@ export async function generateBulkPayroll(
               freshByEmployee.set(slip.employeeId, arr);
             }
           }
+          // Putaran 76: hitung ulang angka tulis tiap baris lolos lewat
+          // buildPayrollWrite dengan client transaksi (master, pinjaman,
+          // ruleset, slip agregat se-periode, dan bracket semua lewat tx),
+          // supaya slip konkuren yang commit sesudah estimasi luar tidak
+          // sama-sama memakai agregat basi. Gerbang susun single TIDAK
+          // ditegakkan ulang (composeGuards mati): baris massal sudah lolos
+          // plafon estimasi dan sah terbit net-0 — menegakkan BR-LOAN-03 di
+          // sini akan mengubah populasi terbit, bukan menyegarkan agregat.
+          // Baris Desember diterbitkan PERSIS dari estimasi: snapshot DAN
+          // nominalnya pending-final (F-026: approve menolak sampai hitung
+          // ulang Pasal 17 di jalur single) — menyegarkan nominalnya ke
+          // Pasal 17 di sini akan menyelesaikan finalnya diam-diam. Baris
+          // yang gagal dihitung ulang di sini dilewati alasan
+          // statutoriBerubah, bukan diterbitkan dengan angka pra-kunci.
           const keptRows: typeof rows = [];
           for (const row of rows) {
             if (!liveIds.has(row.employeeId)) {
@@ -2933,9 +2969,66 @@ export async function generateBulkPayroll(
                 reason: "irisan",
                 conflictDocumentNo: conflict.documentNo,
               });
-            } else {
-              keptRows.push(row);
+              continue;
             }
+            const est = estimations.get(row.employeeId);
+            if (!est) {
+              runSkips.push({ employeeId: row.employeeId, reason: "statutoriBerubah", conflictDocumentNo: null });
+              continue;
+            }
+            if (period.endsWith("-12")) {
+              keptRows.push(row);
+              continue;
+            }
+            let fresh;
+            try {
+              fresh = await buildPayrollWrite({
+                db: tx as never,
+                employeeId: row.employeeId,
+                period,
+                endDate: rangeEnd,
+                fallbackLabel: "update slip",
+                composeGuards: false,
+                componentLines: est.componentLines,
+                v: {
+                  baseSalary: row.baseSalary,
+                  allowances: row.allowances,
+                  deductions: row.deductions,
+                  overtimeTotal: row.overtimeTotal,
+                  appreciationTotal: row.appreciationTotal,
+                  loanDeduction: row.loanDeduction,
+                  lateDeduction: row.lateDeduction,
+                  lateMinutes: row.lateMinutes,
+                  workingDays: row.workingDays,
+                  presentDays: row.presentDays,
+                  absentDays: row.absentDays,
+                  absentDeduction: row.absentDeduction,
+                },
+              });
+            } catch {
+              // Error validasi statutori dalam tx tidak boleh mengubah
+              // kegagalan satu karyawan menjadi diam-diam lolos dengan angka
+              // basi; baris dilewati dan dihitung sebagai statutoriBerubah.
+              runSkips.push({ employeeId: row.employeeId, reason: "statutoriBerubah", conflictDocumentNo: null });
+              continue;
+            }
+            keptRows.push({
+              ...row,
+              bpjsHealthEmployee: fresh.bpjsHealthEmployee,
+              bpjsEmploymentEmployee: fresh.bpjsEmploymentEmployee,
+              pph21: fresh.pph21,
+              // Snapshot segar membawa agregat pasca-kunci; potongan audit
+              // estimasi yang tak dihitung ulang di sini (prorate dsb.)
+              // dipertahankan dari snapshot estimasi.
+              statutorySnapshot: {
+                ...((est.statutorySnapshot as Record<string, unknown>) ?? {}),
+                ...((fresh.statutorySnapshot as Record<string, unknown>) ?? {}),
+              } as typeof row.statutorySnapshot,
+              loanDeduction: fresh.loanDeduction,
+              grossSalary: fresh.grossSalary,
+              netSalary: fresh.netSalary,
+              totalAmount: fresh.totalAmount,
+            });
           }
           if (keptRows.length === 0) return { count: 0, created: [] as { id: number; employeeId: number | null }[] };
           await tx.payroll.createMany({ data: keptRows, skipDuplicates: true });
@@ -3163,23 +3256,6 @@ export async function processPayroll(formData: FormData) {
       salaryBefore: prorateHistory.salaryBefore,
       adjustments: prorateHistory.adjustments,
     });
-    const w = await buildPayrollWrite({
-      employeeId,
-      period,
-      endDate,
-      resignationFinal: wantsFinal,
-      fallbackLabel: "pembuatan slip",
-      componentLines,
-      prorate,
-      v: {
-        ...v,
-        baseSalary: v.baseSalary ?? prorate.amount,
-        allowances: componentLines.length > 0 ? componentSummary.allowances : (v.allowances ?? 0),
-        deductions: componentLines.length > 0 ? componentSummary.deductions : (v.deductions ?? 0),
-        lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction,
-      },
-    });
-
     const payroll = await prisma.$transaction(async (tx) => {
       // Kunci baris karyawan lalu periksa ulang irisan di dalam transaksi
       // yang sama dengan insert (anti TOCTOU terhadap cek di atas).
@@ -3199,6 +3275,26 @@ export async function processPayroll(formData: FormData) {
       // yang dinonaktifkan/dihapus sesudah assert pra-tx tak boleh menerima
       // slip baru (updateEmployee mengambil kunci baris yang sama).
       await assertLiveEmployee(employeeId, tx as never);
+      // Putaran 76: agregat statutori wajib dibaca sesudah kunci karyawan,
+      // supaya slip WEEKLY konkuren karyawan+periode sama tidak sama-sama
+      // memakai alokasi "target minus slip lain" dari snapshot pra-tx.
+      const w = await buildPayrollWrite({
+        db: tx as never,
+        employeeId,
+        period,
+        endDate,
+        resignationFinal: wantsFinal,
+        fallbackLabel: "pembuatan slip",
+        componentLines,
+        prorate,
+        v: {
+          ...v,
+          baseSalary: v.baseSalary ?? prorate.amount,
+          allowances: componentLines.length > 0 ? componentSummary.allowances : (v.allowances ?? 0),
+          deductions: componentLines.length > 0 ? componentSummary.deductions : (v.deductions ?? 0),
+          lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction,
+        },
+      });
       const created = await tx.payroll.create({
         data: {
         slug: await nextSlug("payroll", documentNo),
@@ -3418,24 +3514,6 @@ export async function updatePayroll(id: number, formData: FormData) {
       salaryBefore: updateHistory.salaryBefore,
       adjustments: updateHistory.adjustments,
     });
-    const w = await buildPayrollWrite({
-      employeeId,
-      period: v.period,
-      excludePayrollId: id,
-      resignationFinal: effectiveResignationFinal,
-      endDate,
-      fallbackLabel: "update slip",
-      componentLines: existingLines.length > 0 ? existingLines : undefined,
-      prorate: updateProrate,
-      v: {
-        ...v,
-        baseSalary: v.baseSalary ?? updateProrate.amount,
-        allowances: existingLines.length > 0 ? lineSummary.allowances : (v.allowances ?? 0),
-        deductions: existingLines.length > 0 ? lineSummary.deductions : (v.deductions ?? 0),
-        lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction,
-      },
-    });
-
     const payroll = await prisma.$transaction(async (tx) => {
       // F-076-S BR-PF-03: kunci baris karyawan + periksa irisan (di luar
       // slip ini sendiri) di transaksi sama dengan update — rentang hasil
@@ -3462,6 +3540,26 @@ export async function updatePayroll(id: number, formData: FormData) {
       if (updateEmployeeId != null && updateEmployeeId !== existing.employeeId) {
         await assertLiveEmployee(updateEmployeeId, tx as never);
       }
+      // Putaran 76: agregat statutori memakai data sesudah kunci karyawan;
+      // baca pra-tx dapat melewatkan slip WEEKLY konkuren periode sama.
+      const w = await buildPayrollWrite({
+        db: tx as never,
+        employeeId,
+        period: v.period,
+        excludePayrollId: id,
+        resignationFinal: effectiveResignationFinal,
+        endDate,
+        fallbackLabel: "update slip",
+        componentLines: existingLines.length > 0 ? existingLines : undefined,
+        prorate: updateProrate,
+        v: {
+          ...v,
+          baseSalary: v.baseSalary ?? updateProrate.amount,
+          allowances: existingLines.length > 0 ? lineSummary.allowances : (v.allowances ?? 0),
+          deductions: existingLines.length > 0 ? lineSummary.deductions : (v.deductions ?? 0),
+          lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction,
+        },
+      });
       // R8-SDM-04: klaim atomik berpredikat draft. Cek draft di awal
       // fungsi ini terjadi jauh sebelum transaksi -- approver paralel
       // bisa menang di antaranya, dan update tanpa predikat akan

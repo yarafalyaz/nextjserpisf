@@ -514,8 +514,12 @@ describe("F-027 tarikan generate", () => {
       .mockResolvedValue([{ id: 7, baseSalary: 5000000, maritalStatus: "single", dependents: 0, departmentId: null, employeeLoans: [] }])
     // Urutan findMany bulk: (1) baca luar irisan, (2) baca ulang komponen
     // estimasi, (3) cek ulang irisan DI DALAM transaksi kunci (t_a92d0da1 —
-    // wajib kosong agar tidak bentrok diri), (4) baca ulang slip terbit.
+    // wajib kosong agar tidak bentrok diri), (4) bacaan agregat BPJS+PPh21
+    // hitung ulang dalam tx putaran 76 (dua bacaan pra-tulis), (5) baca ulang
+    // slip terbit.
     prismaMock.payroll.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
@@ -542,6 +546,16 @@ describe("F-027 tarikan generate", () => {
     prismaMock.employee.findMany
       .mockResolvedValueOnce([{ id: 7 }])
       .mockResolvedValue([{ id: 7, baseSalary: 5000000, maritalStatus: "single", dependents: 0, departmentId: null, employeeLoans: [] }])
+    // Hitung ulang dalam tx putaran 76 membaca agregat dua kali sebelum
+    // baca ulang slip terbit (default findMany kosong lolos; antrean ini
+    // hanya menjaga urutan supaya baca ulang menemukan slip terbit).
+    prismaMock.payroll.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([{ id: 55, employeeId: 7, componentLines: [] }])
     const res = await actions.generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
     expect(res.success).toBe(true)
     const row = prismaMock.payroll.createMany.mock.calls.at(-1)[0].data[0]

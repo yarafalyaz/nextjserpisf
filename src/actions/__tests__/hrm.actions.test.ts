@@ -1922,7 +1922,7 @@ describe("generateBulkPayroll edge cases", () => {
     restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.employee.findMany.mockResolvedValue([{
-      id: 1, baseSalary: 100, maritalStatus: "single", employeeLoans: []
+      id: 1, baseSalary: 5000000, maritalStatus: "single", employeeLoans: []
     }])
     prismaMock.payroll.findMany.mockResolvedValue([])
     prismaMock.employee.findUnique.mockResolvedValue({ id: 1 })
@@ -3370,8 +3370,20 @@ describe("F-2026-10-22-076-S generateBulkPayroll penjaga irisan bertransaksi (au
         $executeRaw: prismaMock.$executeRaw,
         salaryAdjustment: prismaMock.salaryAdjustment,
         employee: prismaMock.employee,
+        employeeLoan: prismaMock.employeeLoan,
+        // Putaran 76: hitung ulang statutori dalam tx membaca ruleset dan
+        // bracket lewat delegate tx juga.
+        payrollStatutoryRule: prismaMock.payrollStatutoryRule,
+        payrollTerBracket: prismaMock.payrollTerBracket,
         payroll: {
-          findMany: vi.fn(async () => { emitOrder.push("txFindMany"); return inTxPayrolls }),
+          // Putaran 76: hitung ulang statutori dalam tx membaca agregat lewat
+          // delegate payroll tx (employeeId tunggal) — slip race hanya untuk
+          // cek irisan (employeeId.in), bukan agregat se-masa.
+          findMany: vi.fn(async (args: any) => {
+            emitOrder.push("txFindMany");
+            if (args?.where?.employeeId?.in) return inTxPayrolls;
+            return [];
+          }),
           createMany: vi.fn(async (args: any) => {
             emitOrder.push("txCreateMany")
             return prismaMock.payroll.createMany(args)
@@ -3477,8 +3489,13 @@ describe("TASK-018 regresi payroll (bulk TER, gerbang, final, plafon, pinjaman)"
     ])
     const agg = { bpjsAggregate: { basis: 2600000, targetHealth: 26000, targetEmployment: 78000, withheldHealth: 0, withheldEmployment: 0 } }
     const prior = (doc: string, start: string, end: string) => ({
+      // id/period/type/correctsPayrollId wajib ada: hitung ulang dalam tx
+      // putaran 76 membaca agregat lewat computePph21ForPeriod (saring
+      // period/type), bukan hanya estimator luar.
+      id: { "PAY-202605-0001": 21, "PAY-202605-0002": 22, "PAY-202605-0003": 23 }[doc],
       employeeId: 2, startDate: new Date(start), endDate: new Date(end), status: "paid",
       documentNo: doc, baseSalary: 2600000, grossSalary: 2600000, pph21: 0,
+      type: "regular", period: "2026-05", correctsPayrollId: null,
       bpjsHealthEmployee: 26000, bpjsEmploymentEmployee: 78000, statutorySnapshot: agg,
     })
     prismaMock.payroll.findMany.mockResolvedValue([
@@ -3536,6 +3553,91 @@ describe("TASK-018 regresi payroll (bulk TER, gerbang, final, plafon, pinjaman)"
     const updateArg = prismaMock.payroll.updateMany.mock.calls.at(-1)?.[0] as { where: unknown; data: { statutorySnapshot: { pph21Ter: { periodKind: string } } } }
     expect(updateArg.where).toEqual({ id: 1, status: "draft" })
     expect(updateArg.data.statutorySnapshot.pph21Ter.periodKind).toBe("final-resignation")
+  })
+
+  it("putaran 76: agregat statutori memakai data pasca-kunci, bukan snapshot pra-tx", async () => {
+    const weekly = {
+      id: 2, baseSalary: 3000000, maritalStatus: "single", dependents: 0,
+      departmentId: null, paymentFrequency: "WEEKLY", employeeLoans: [],
+      employmentEndedAt: null,
+    }
+    prismaMock.employee.findMany.mockResolvedValue([weekly])
+    prismaMock.workSchedule.findMany.mockResolvedValue([
+      { workDays: "1,2,3,4,5", employees: [], departments: [] },
+    ])
+    prismaMock.attendance.findMany.mockResolvedValue(
+      [25, 26, 27, 28, 29].map((day) => ({
+        employeeId: 2,
+        date: new Date(Date.UTC(2026, 4, day, 12)),
+        checkIn: "08:00",
+        lateMinutes: 0,
+      })),
+    )
+    ;(prismaMock.payrollTerBracket.findMany as any).mockResolvedValue([
+      { category: "A", lowerBound: 0, upperBound: null, rateMilliPercent: 0, effectiveFrom: new Date("2024-01-01"), effectiveTo: null, source: "PP 58/2023" },
+    ])
+    const agg = { bpjsAggregate: { basis: 3000000, targetHealth: 30000, targetEmployment: 90000, withheldHealth: 0, withheldEmployment: 0 } }
+    const prior = (doc: string, start: string, end: string) => ({
+      id: { "PAY-202605-0001": 21, "PAY-202605-0002": 22, "PAY-202605-0003": 23 }[doc],
+      employeeId: 2, startDate: new Date(start), endDate: new Date(end), status: "paid",
+      documentNo: doc, baseSalary: 3000000, grossSalary: 3000000, pph21: 0,
+      type: "regular", period: "2026-05", correctsPayrollId: null,
+      bpjsHealthEmployee: 0, bpjsEmploymentEmployee: 0, statutorySnapshot: agg,
+    })
+    const outside = [prior("PAY-202605-0001", "2026-05-04", "2026-05-10")]
+    const inside = [
+      prior("PAY-202605-0001", "2026-05-04", "2026-05-10"),
+      prior("PAY-202605-0002", "2026-05-11", "2026-05-17"),
+      prior("PAY-202605-0003", "2026-05-18", "2026-05-24"),
+    ]
+    let txReads = 0
+    prismaMock.payroll.findMany.mockImplementation(async (args: any) => {
+      if (args?.where?.employeeId?.in) return outside
+      if (args?.where?.employeeId === 2) return outside
+      return []
+    })
+    const previousTransaction = prismaMock.$transaction.getMockImplementation()
+    prismaMock.$transaction.mockImplementation(async (ops: any) => {
+      if (typeof ops !== "function") return Promise.all(ops)
+      const tx = {
+        ...prismaMock,
+        payroll: {
+          ...prismaMock.payroll,
+          findMany: vi.fn(async (args: any) => {
+            txReads += 1
+            if (args?.where?.employeeId?.in) return []
+            if (args?.where?.employeeId === 2) return inside
+            return []
+          }),
+          createMany: prismaMock.payroll.createMany,
+        },
+        employee: {
+          ...prismaMock.employee,
+          findMany: prismaMock.employee.findMany,
+          findUnique: vi.fn(async (_args: any) => ({
+            id: 2, baseSalary: 3000000, maritalStatus: "single", dependents: 0,
+            departmentId: null, paymentFrequency: "WEEKLY", employeeLoans: [],
+            joinDate: null, employmentEndedAt: null,
+          })),
+        },
+        employeeLoan: prismaMock.employeeLoan,
+        salaryAdjustment: prismaMock.salaryAdjustment,
+        payrollTerBracket: prismaMock.payrollTerBracket,
+        payrollStatutoryRule: prismaMock.payrollStatutoryRule,
+      }
+      return ops(tx)
+    })
+    try {
+      const r = await actions.generateBulkPayroll("2026-05", "2026-05-25", "2026-05-31", "WEEKLY")
+      expect(r?.success).toBe(true)
+      expect(r?.success && r.count).toBe(1)
+      const rows = prismaMock.payroll.createMany.mock.calls.at(-1)?.[0].data as Array<{ bpjsHealthEmployee: number; bpjsEmploymentEmployee: number }>
+      expect(rows[0].bpjsHealthEmployee).toBe(120000)
+      expect(rows[0].bpjsEmploymentEmployee).toBe(345000)
+      expect(txReads).toBeGreaterThan(0)
+    } finally {
+      if (previousTransaction) prismaMock.$transaction.mockImplementation(previousTransaction)
+    }
   })
 
   it("(2) markPayrollPaid menolak slip fallback 2024 yang ter-approve di luar gerbang", async () => {

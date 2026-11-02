@@ -146,6 +146,7 @@ describe("helper run mingguan (murni, tanpa hitung payroll)", () => {
       irisan: 0,
       berhenti: 3,
       cakupan: 0,
+      statutoriBerubah: 0,
     })
     expect(lines).toEqual([
       { reason: "frekuensiLain", label: "Frekuensi bayar berbeda", count: 2 },
@@ -163,7 +164,7 @@ describe("helper run mingguan (murni, tanpa hitung payroll)", () => {
       { reason: "berhenti", label: "Karyawan berhenti — di luar populasi massal", count: 3 },
     ])
     expect(
-      payrollRunSkipLines({ frekuensiLain: 0, pinjaman: 0, bpjsBelumDidukung: 0, plafonPotongan: 0, irisan: 0, berhenti: 0, cakupan: 0 }),
+      payrollRunSkipLines({ frekuensiLain: 0, pinjaman: 0, bpjsBelumDidukung: 0, plafonPotongan: 0, irisan: 0, berhenti: 0, cakupan: 0, statutoriBerubah: 0 }),
     ).toEqual([])
   })
 })

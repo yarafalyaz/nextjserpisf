@@ -117,8 +117,13 @@ vi.mock("@/lib/db/prisma", () => {
         employee: {
           // Putaran 75: hidup dinilai dari baris terkunci lewat delegate tx.
           findFirst: (...a: unknown[]) => employeeFindFirstMock(...a),
+          findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a),
           findMany: (...a: unknown[]) => employeeFindManyMock(...a),
         },
+        employeeLoan: { findMany: vi.fn().mockResolvedValue([]) },
+        salaryAdjustment: { findMany: vi.fn().mockResolvedValue([]) },
+        payrollStatutoryRule: { findMany: (...a: unknown[]) => statRuleFindManyMock(...a) },
+        payrollTerBracket: { findMany: (...a: unknown[]) => terFindManyMock(...a) },
         approval: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({}) },
         approvalWorkflow: { findFirst: vi.fn().mockResolvedValue(null) },
         payrollComponentLine: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },

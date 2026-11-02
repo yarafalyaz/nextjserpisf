@@ -146,6 +146,7 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
               irisan: 0,
               berhenti: 0,
               cakupan: 0,
+              statutoriBerubah: 0,
             },
           })
           showSuccess(`Berhasil membuat ${res.count ?? 0} draf slip gaji untuk periode ${runPeriod}!`)
