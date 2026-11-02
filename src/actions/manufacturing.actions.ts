@@ -725,13 +725,13 @@ export async function createProductionOrder(formData: FormData) {
     // menghitung perintah produksi. Nilainya di sini divalidasi ke baris nyata
     // (bukan hanya `Number()`), supaya WO salah/typo ditolak dengan pesan yang
     // berguna alih-alih galat FK.
-    const workOrder = v.workOrderId
+    const outerWorkOrder = v.workOrderId
       ? await prisma.workOrder.findUnique({
           where: { id: v.workOrderId },
           select: { id: true, documentNo: true, bomRevisionId: true, status: true },
         })
       : null;
-    if (v.workOrderId && !workOrder) {
+    if (v.workOrderId && !outerWorkOrder) {
       return { success: false, error: `Perintah Kerja #${v.workOrderId} tidak ditemukan.` };
     }
     // PO draft tidak boleh menempel job final: WO completed/closed/cancelled
@@ -739,13 +739,16 @@ export async function createProductionOrder(formData: FormData) {
     // gerbang ini PO draft lahir di WO closed (job beku) — dan kehadiran PO
     // anak hidup di WO closed menghidupkan kembali jendela sync biaya jasa
     // yang seharusnya tertutup. WO pending/draft/in_progress tetap sah.
+    // Cek di sini fast-path dari bacaan luar; status dinilai ULANG dari
+    // baris terkunci di dalam tx sesudah FOR UPDATE (lihat di bawah) —
+    // bacaan luar bisa basi bila WO difinalisasi di tengah persiapan BOM.
     if (
-      workOrder &&
-      (workOrder.status === "closed" || workOrder.status === "completed" || workOrder.status === "cancelled")
+      outerWorkOrder &&
+      (outerWorkOrder.status === "closed" || outerWorkOrder.status === "completed" || outerWorkOrder.status === "cancelled")
     ) {
       return {
         success: false,
-        error: `Perintah produksi tidak dapat dibuat untuk Perintah Kerja berstatus '${workOrder.status}'.`,
+        error: `Perintah produksi tidak dapat dibuat untuk Perintah Kerja berstatus '${outerWorkOrder.status}'.`,
       };
     }
 
@@ -784,33 +787,79 @@ export async function createProductionOrder(formData: FormData) {
       );
     }
 
-    const productionOrder = await prisma.productionOrder.create({
-      data: {
-        documentNo,
-        slug: await nextSlug("productionOrder", documentNo),
-        productId: v.productId,
-        bomRevisionId: effectiveBom.revisionId,
-        workOrderId: workOrder?.id ?? null,
-        qty: v.qty,
-        startDate: v.startDate ? wibDateToUtcMidnight(v.startDate) : null,
-        endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
-        notes: v.notes ?? null,
-        status: "draft",
-        // total_standard_cost = product standard cost × order qty
-        totalStandardCost: safeMultiply(productStdCost, v.qty, 2),
-        createdBy: Number(user.id),
-        materials: {
-          create: bomLines.map((m) => ({
-            itemId: m.itemId,
-            qty: safeMultiply(m.qtyPerUnit, v.qty, 4),
-            standardCost: bomCostMap.get(m.itemId) ?? 0,
-            // F-008: beku allowance revisi ter-pin saat PO dibuat (null =
-            // belum kalibrasi). Tanpa kolom ini jalur PO tak pernah bisa
-            // klasifikasi normal — complete dilarang baca BOM hidup.
-            scrapPercentSnapshot: m.scrapPercent ?? null,
-          })),
+    // Serialisasi per WO (bila tertaut): kunci baris WO lalu nilai ulang
+    // status + bomRevisionId dari baris segar di dalam tx sebelum create.
+    // Tanpa ini WO yang ditutup antara cek luar dan create menerima PO
+    // draft anak pada job beku. Urutan kunci: work_orders dulu, baru
+    // insert production_orders — konsisten dengan situs lain yang
+    // mengunci WO (issueMaterial, MI dari WO).
+    const productionOrder = await prisma.$transaction(async (tx) => {
+      let workOrder = outerWorkOrder;
+      if (outerWorkOrder) {
+        if (typeof tx.$queryRaw === "function") {
+          await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${outerWorkOrder.id} FOR UPDATE`;
+        }
+        const freshWo = await tx.workOrder.findUnique({
+          where: { id: outerWorkOrder.id },
+          select: { id: true, documentNo: true, bomRevisionId: true, status: true },
+        });
+        if (!freshWo) {
+          throw new Error(`Perintah Kerja #${outerWorkOrder.id} tidak ditemukan.`);
+        }
+        if (
+          freshWo.status === "closed" ||
+          freshWo.status === "completed" ||
+          freshWo.status === "cancelled"
+        ) {
+          throw new Error(
+            `Perintah produksi tidak dapat dibuat untuk Perintah Kerja berstatus '${freshWo.status}'.`,
+          );
+        }
+        workOrder = freshWo;
+      }
+
+      const created = await tx.productionOrder.create({
+        data: {
+          documentNo,
+          slug: await nextSlug("productionOrder", documentNo),
+          productId: v.productId,
+          bomRevisionId: effectiveBom.revisionId,
+          workOrderId: workOrder?.id ?? null,
+          qty: v.qty,
+          startDate: v.startDate ? wibDateToUtcMidnight(v.startDate) : null,
+          endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
+          notes: v.notes ?? null,
+          status: "draft",
+          // total_standard_cost = product standard cost × order qty
+          totalStandardCost: safeMultiply(productStdCost, v.qty, 2),
+          createdBy: Number(user.id),
+          materials: {
+            create: bomLines.map((m) => ({
+              itemId: m.itemId,
+              qty: safeMultiply(m.qtyPerUnit, v.qty, 4),
+              standardCost: bomCostMap.get(m.itemId) ?? 0,
+              // F-008: beku allowance revisi ter-pin saat PO dibuat (null =
+              // belum kalibrasi). Tanpa kolom ini jalur PO tak pernah bisa
+              // klasifikasi normal — complete dilarang baca BOM hidup.
+              scrapPercentSnapshot: m.scrapPercent ?? null,
+            })),
+          },
         },
-      },
+      });
+
+      // WO ← BOM: `WorkOrder.bomRevisionId` tak pernah diisi jalur mana pun (form WO
+      // tidak punya pilihan BOM) padahal detail WO sudah menampilkan kolomnya.
+      // Revisi BOM yang baru di-snapshot order ini dipinjamkan ke WO-nya — hanya
+      // bila WO belum punya revisi, supaya pilihan yang sudah ada tidak ditimpa.
+      // Dipindah ke dalam tx: status segar di atas yang menentukan.
+      if (workOrder && workOrder.bomRevisionId == null && effectiveBom.revisionId != null) {
+        await tx.workOrder.updateMany({
+          where: { id: workOrder.id, bomRevisionId: null },
+          data: { bomRevisionId: effectiveBom.revisionId },
+        });
+      }
+
+      return created;
     });
 
     await logActivity(
@@ -820,15 +869,7 @@ export async function createProductionOrder(formData: FormData) {
       `Membuat perintah produksi #${productionOrder.id}`,
     );
 
-    // WO ← BOM: `WorkOrder.bomRevisionId` tak pernah diisi jalur mana pun (form WO
-    // tidak punya pilihan BOM) padahal detail WO sudah menampilkan kolomnya.
-    // Revisi BOM yang baru di-snapshot order ini dipinjamkan ke WO-nya — hanya
-    // bila WO belum punya revisi, supaya pilihan yang sudah ada tidak ditimpa.
-    if (workOrder && workOrder.bomRevisionId == null && effectiveBom.revisionId != null) {
-      await prisma.workOrder.updateMany({
-        where: { id: workOrder.id, bomRevisionId: null },
-        data: { bomRevisionId: effectiveBom.revisionId },
-      });
+    if (outerWorkOrder && effectiveBom.revisionId != null) {
       revalidatePath("/produksi/perintah-kerja");
     }
 

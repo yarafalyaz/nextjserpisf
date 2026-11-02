@@ -1132,6 +1132,30 @@ describe("Production Order Actions", () => {
       expect(mocks.prismaMock.productionOrder.create).not.toHaveBeenCalled()
     },
   )
+  it("putaran 55: createProductionOrder membaca ulang status WO di bawah kunci (bacaan luar bisa basi)", async () => {
+    mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({ id: 1, materials: [] })
+    // Luar: WO terlihat in_progress; segar di tx: sudah closed.
+    mocks.prismaMock.workOrder.findUnique
+      .mockResolvedValueOnce({ id: 7, documentNo: "WO-007", bomRevisionId: null, status: "in_progress" })
+      .mockResolvedValue({ id: 7, status: "closed" })
+
+    const res = await actions.createProductionOrder(fdMap({ productId: 1, qty: 2, workOrderId: 7 }))
+
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("closed")
+    expect(mocks.prismaMock.productionOrder.create).not.toHaveBeenCalled()
+    const qRaw = mocks.prismaMock.$queryRaw as ReturnType<typeof vi.fn>
+    const locked = qRaw.mock.calls.some((c) => {
+      const a = c[0] as { sql?: string; strings?: string[] } | string[]
+      const sql = Array.isArray(a) ? a.join("?") : (a.sql ?? a.strings?.join("?") ?? "")
+      return sql.includes("work_orders") && sql.includes("FOR UPDATE")
+    })
+    expect(locked).toBe(true)
+    // findUnique bersama dipakai jalur lain (mis. MI dari WO): kembalikan
+    // default vi.fn() supaya implementasi Once di atas tak bocor.
+    mocks.prismaMock.workOrder.findUnique.mockReset()
+  })
+
   it("createProductionOrder succeeds", async () => {
     mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({ id: 1, materials: [] })
     const res = await actions.createProductionOrder(fdMap({
