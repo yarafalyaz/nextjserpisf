@@ -540,7 +540,11 @@ export async function respondDisciplinaryRecord(
     })
     if (!window.allowed) throw new Error(window.message)
     return await claimTransition(
-      { workflowStatus: "issued", employeeId: me },
+      // Putaran 62: employeeResponseAt null = satu-satunya penulis yang sah.
+      // Berkas disiplin tidak punya riwayat revisi; klaim tanpa syarat
+      // kosong membiarkan pengiriman ulang menimpa bantahan pertama
+      // (jendela 7 hari menilai issuedAt saja). Klaim kalah = count 0.
+      { workflowStatus: "issued", employeeId: me, employeeResponseAt: null },
       {
         employeeResponse: requireText(response, "Tanggapan karyawan wajib diisi"),
         employeeResponseAt: new Date(),
@@ -575,7 +579,10 @@ export async function recordLateDisciplinaryResponse(
       throw new Error("Tanggapan hanya dapat diberikan pada surat peringatan yang sudah terbit")
     }
     return await claimTransition(
-      { workflowStatus: "issued" },
+      // Putaran 62: HR menempelkan tanggapan TERLAMBAT pun hanya bila
+      // belum ada tanggapan; menempelkan sesudah tanggapan tepat waktu
+      // akan menimpa isi karyawan dan membalik flag terlambat.
+      { workflowStatus: "issued", employeeResponseAt: null },
       { employeeResponse: clean, employeeResponseAt: new Date(), employeeResponseLate: true },
       "Tanggapan hanya dapat diberikan pada surat peringatan yang sudah terbit",
       "update",

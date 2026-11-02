@@ -348,6 +348,28 @@ describe("tanggapan karyawan (Q-DISC-3)", () => {
       }),
     )
   })
+
+  it("putaran 62: klaim tanggapan mensyaratkan employeeResponseAt null (tanggapan pertama tak tertimpa)", async () => {
+    mocks.recFindUnique.mockResolvedValue(
+      recordRow({ employeeId: 99, workflowStatus: "issued", issuedAt: new Date() }),
+    )
+    expect(await respondDisciplinaryRecord(5, "Bantahan saya")).toEqual({ success: true })
+    expect(mocks.recUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ employeeResponseAt: null }),
+      }),
+    )
+
+    mocks.recUpdateMany.mockClear()
+    mocks.recUpdateMany.mockResolvedValue({ count: 0 })
+    const hr = await recordLateDisciplinaryResponse(5, "Versi HR")
+    expect(hr.success).toBe(false)
+    expect(mocks.recUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ employeeResponseAt: null }),
+      }),
+    )
+  })
 })
 
 describe("voidDisciplinaryRecord (BR-DISC-10)", () => {
