@@ -50,6 +50,8 @@ export interface SerialBatchInput {
   kind: "serial" | "batch"
   itemSku: string
   itemName: string
+  /** Identitas gudang; nama BUKAN identitas unik (Warehouse.name tak unik). */
+  warehouseId?: number | null
   warehouseName: string
   /** Nomor seri atau nomor batch. */
   code: string
@@ -132,18 +134,22 @@ export function buildSerialBatchStock(input: {
     else if (days <= EXPIRING_SOON_DAYS) totals.expiringSoon += 1
   }
 
-  // Kelompokkan per gudang; di dalamnya urut nama barang lalu nomor.
-  const byWarehouse = new Map<string, SerialBatchInput[]>()
+  // Kelompokkan per gudang (identitas id; fallback nama untuk input tanpa
+  // id); di dalamnya urut nama barang lalu nomor. Dua gudang berbeda
+  // bernama sama tidak boleh tergabung (putaran 52).
+  const byWarehouse = new Map<string, { name: string; records: SerialBatchInput[] }>()
   for (const record of records) {
-    const bucket = byWarehouse.get(record.warehouseName) ?? []
-    bucket.push(record)
-    byWarehouse.set(record.warehouseName, bucket)
+    const key = record.warehouseId != null ? `id:${record.warehouseId}` : `name:${record.warehouseName}`
+    const bucket = byWarehouse.get(key) ?? { name: record.warehouseName, records: [] }
+    bucket.records.push(record)
+    byWarehouse.set(key, bucket)
   }
 
   const rows: TableRow[] = []
 
-  for (const warehouseName of [...byWarehouse.keys()].sort((a, b) => a.localeCompare(b, "id-ID"))) {
-    const items = byWarehouse.get(warehouseName)!.sort((a, b) => {
+  for (const group of [...byWarehouse.values()].sort((a, b) => a.name.localeCompare(b.name, "id-ID"))) {
+    const warehouseName = group.name
+    const items = group.records.sort((a, b) => {
       const byItem = `${a.itemSku} ${a.itemName}`.localeCompare(`${b.itemSku} ${b.itemName}`, "id-ID")
       return byItem !== 0 ? byItem : a.code.localeCompare(b.code, "id-ID")
     })

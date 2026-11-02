@@ -33,6 +33,24 @@ function texts(result: ReturnType<typeof buildSerialBatchStock>) {
     .join("\n")
 }
 
+describe("putaran 52: grouping per identitas gudang, bukan nama", () => {
+  it("dua gudang bernama sama menjadi dua kelompok terpisah", () => {
+    const result = buildSerialBatchStock({
+      records: [
+        record({ warehouseId: 11, warehouseName: "Gudang Sama", code: "SN-A" }),
+        record({ warehouseId: 22, warehouseName: "Gudang Sama", code: "SN-B" }),
+      ],
+      asOf: AS_OF,
+      trackedItems: 2,
+    })
+
+    const groupLabels = result.table.rows.filter((r) => r.kind === "group").map((r) => (r.kind === "group" ? r.label : ""))
+    expect(groupLabels).toHaveLength(2)
+    // Label tampil tetap nama (kode tidak ikut — kontrak tampilan lama).
+    expect(groupLabels.every((label) => label.startsWith("Gudang: Gudang Sama (1)"))).toBe(true)
+  })
+})
+
 describe("daysUntilExpiry", () => {
   it("menghitung sisa hari dan negatif saat sudah lewat", () => {
     expect(daysUntilExpiry(new Date(2026, 9, 25), AS_OF)).toBe(10)
