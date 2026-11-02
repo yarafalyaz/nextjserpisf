@@ -52,6 +52,8 @@ const COMPOSITION_COLUMNS: TableColumn[] = [
 ]
 
 export interface PayrollRowInput {
+  /** Identitas karyawan (Payroll.employeeId); nama BUKAN identitas unik. */
+  employeeId?: number | null
   employeeName: string
   npwp: string | null
   baseSalary: number
@@ -124,22 +126,36 @@ interface Grouped {
 function groupByEmployee(rows: PayrollRowInput[]): Grouped[] {
   const map = new Map<string, Grouped>()
   for (const row of rows) {
-    const key = row.employeeName
+    // Kunci identitas: employeeId bila ada; fallback nama HANYA untuk input
+    // tanpa id (unit test lama). Dua karyawan berbeda bernama sama tidak
+    // boleh tergabung — nama bukan unik di schema (putaran 52).
+    const key = row.employeeId != null ? `id:${row.employeeId}` : `name:${row.employeeName}`
     const existing = map.get(key)
-    if (existing) existing.rows.push(row)
-    else map.set(key, { employeeName: row.employeeName, npwp: row.npwp, rows: [row] })
+    if (existing) {
+      existing.rows.push(row)
+      // NPWP grup: ambil non-kosong pertama supaya slip awal tanpa NPWP
+      // tidak menyembunyikan NPWP yang terisi di slip berikutnya.
+      if (existing.npwp == null && row.npwp != null) existing.npwp = row.npwp
+    } else {
+      map.set(key, { employeeName: row.employeeName, npwp: row.npwp, rows: [row] })
+    }
   }
   return [...map.values()].sort((a, b) => a.employeeName.localeCompare(b.employeeName, "id-ID"))
 }
 
 /** Dua slip berurutan untuk periode yang sama pada satu karyawan = data ganda. */
-export function duplicateEmployeePeriods(rows: { employeeName: string; period: string }[]): string[] {
-  const seen = new Map<string, number>()
+export function duplicateEmployeePeriods(
+  rows: { employeeId?: number | null; employeeName: string; period: string }[],
+): string[] {
+  const seen = new Map<string, { count: number; employeeName: string }>()
   for (const row of rows) {
-    const key = `${row.employeeName}|${row.period}`
-    seen.set(key, (seen.get(key) ?? 0) + 1)
+    const identity = row.employeeId != null ? `id:${row.employeeId}` : `name:${row.employeeName}`
+    const key = `${identity}|${row.period}`
+    const entry = seen.get(key)
+    if (entry) entry.count += 1
+    else seen.set(key, { count: 1, employeeName: row.employeeName })
   }
-  return [...seen.entries()].filter(([, count]) => count > 1).map(([key]) => key.split("|")[0])
+  return [...seen.values()].filter((e) => e.count > 1).map((e) => e.employeeName)
 }
 
 export interface PayrollReportResult {

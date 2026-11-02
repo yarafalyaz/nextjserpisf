@@ -32,6 +32,7 @@ export async function loadPayrollRows(period: { start: Date; end: Date }): Promi
       },
       select: {
         id: true,
+        employeeId: true,
         correctsPayrollId: true,
         period: true,
         status: true,
@@ -82,6 +83,7 @@ export async function loadPayrollRows(period: { start: Date; end: Date }): Promi
   const livePayrolls = payrolls.filter((p) => !correctedIds.has(p.id))
 
   const rows: PayrollRowInput[] = livePayrolls.map((payroll) => ({
+    employeeId: payroll.employeeId ?? null,
     employeeName: payroll.employee?.name ?? "Tanpa karyawan",
     npwp: payroll.employee?.npwp ?? null,
     baseSalary: Number(payroll.baseSalary),
@@ -102,6 +104,7 @@ export async function loadPayrollRows(period: { start: Date; end: Date }): Promi
 
   const duplicateEmployees = duplicateEmployeePeriods(
     livePayrolls.map((payroll) => ({
+      employeeId: payroll.employeeId ?? null,
       employeeName: payroll.employee?.name ?? "Tanpa karyawan",
       period: payroll.period,
     })),

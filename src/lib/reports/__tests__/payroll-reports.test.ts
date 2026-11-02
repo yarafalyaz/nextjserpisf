@@ -150,4 +150,70 @@ describe("duplicateEmployeePeriods", () => {
     expect(duplicates).toContain("Budi")
     expect(duplicates).not.toContain("Ani")
   })
+
+  it("putaran 52: dua karyawan berbeda bernama sama tidak dianggap duplikat", () => {
+    const duplicates = duplicateEmployeePeriods([
+      { employeeId: 11, employeeName: "Budi", period: "2026-10" },
+      { employeeId: 22, employeeName: "Budi", period: "2026-10" },
+    ])
+
+    expect(duplicates).toEqual([])
+  })
+
+  it("putaran 52: satu karyawan dua slip seperiode tetap terdeteksi walau nama tampil beda eja", () => {
+    const duplicates = duplicateEmployeePeriods([
+      { employeeId: 11, employeeName: "Budi", period: "2026-10" },
+      { employeeId: 11, employeeName: "Budi", period: "2026-10" },
+    ])
+
+    expect(duplicates).toEqual(["Budi"])
+  })
+})
+
+describe("putaran 52: grouping per identitas karyawan, bukan nama", () => {
+  it("dua karyawan bernama sama menjadi dua baris terpisah dengan NPWP masing-masing", () => {
+    const result = buildPayrollByEmployee({
+      rows: [
+        row({ employeeId: 11, employeeName: "Budi", npwp: "11.111.111.1-111.111", baseSalary: 5_000_000, gross: 5_000_000, net: 5_000_000 }),
+        row({ employeeId: 22, employeeName: "Budi", npwp: "22.222.222.2-222.222", baseSalary: 7_000_000, gross: 7_000_000, net: 7_000_000 }),
+      ],
+      draftSlips: 0,
+      duplicateEmployees: [],
+    })
+
+    const dataRows = result.table.rows.filter((r) => r.kind === "data")
+    expect(dataRows).toHaveLength(2)
+    expect(result.totals.slips).toBe(2)
+    expect(result.totals.gross).toBe(12_000_000)
+  })
+
+  it("PPh 21 dua karyawan bernama sama memakai NPWP masing-masing", () => {
+    const result = buildPph21({
+      rows: [
+        row({ employeeId: 11, employeeName: "Budi", npwp: "11.111.111.1-111.111", pph21: 100_000 }),
+        row({ employeeId: 22, employeeName: "Budi", npwp: "22.222.222.2-222.222", pph21: 200_000 }),
+      ],
+      draftSlips: 0,
+    })
+
+    const dataRows = result.table.rows.filter((r) => r.kind === "data")
+    expect(dataRows).toHaveLength(2)
+    const npwps = dataRows.map((r) => (r.kind === "data" ? r.cells[1] : null))
+    expect(npwps).toContain("11.111.111.1-111.111")
+    expect(npwps).toContain("22.222.222.2-222.222")
+  })
+
+  it("satu karyawan multi-slip tetap satu grup walau NPWP baris berbeda (ambil non-kosong pertama)", () => {
+    const result = buildPayrollByEmployee({
+      rows: [
+        row({ employeeId: 11, employeeName: "Budi", npwp: null, baseSalary: 5_000_000 }),
+        row({ employeeId: 11, employeeName: "Budi", npwp: "33.333.333.3-333.333", baseSalary: 5_000_000 }),
+      ],
+      draftSlips: 0,
+      duplicateEmployees: [],
+    })
+
+    const dataRows = result.table.rows.filter((r) => r.kind === "data")
+    expect(dataRows).toHaveLength(1)
+  })
 })
