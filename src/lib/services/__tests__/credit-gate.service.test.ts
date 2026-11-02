@@ -325,6 +325,31 @@ describe("credit-gate.service (F-2026-10-25-035-B)", () => {
     }
   })
 
+  it("putaran 55: query penekan K5 hanya berupa whitelist SO terbuka (bukan not-cancelled)", async () => {
+    // SO draft tidak melewati gate apa pun — bila ikut menekan K5, gate
+    // bypass paper-only: lahirkan SO draft lalu WO aktif bebas exposure.
+    // Penekan K5 kanonis = OPEN_ORDER_STATUSES (sama K2 loader).
+    const tx = makeTx({
+      gateEnabled: true,
+      creditLimit: 1_000_000,
+      workOrders: [{ customerId: 3, quotationId: 10 }],
+      quotations: [{ id: 10, customerId: 3, grandTotal: 400_000 }],
+      k5Orders: [],
+      k5Invoices: [],
+    })
+    await assessCreditGateInTx(tx, { ...attempt, quotationId: 10 })
+    const findMany = (tx as never as { salesOrder: { findMany: ReturnType<typeof vi.fn> } })
+      .salesOrder.findMany
+    const k5Call = findMany.mock.calls.find((c) => {
+      const where = (c[0] as { where?: Row })?.where
+      return where != null && "quotationId" in where
+    })
+    expect(k5Call).toBeDefined()
+    expect(((k5Call as unknown[])[0] as { where: Row }).where.status).toEqual(
+      expect.objectContaining({ in: expect.arrayContaining(["confirmed", "processing", "completed"]) }),
+    )
+  })
+
   it("F1 anti-dobel K5 invoice-dari-quotation tanpa SO: K5 sumber digantikan invoice baru, WO lain tetap dihitung", async () => {
     // Jalur projectedRow baris 491-500: invoice 500rb lahir langsung dari
     // quotation 10 tanpa SO. K5 existing 600rb (quotation 10: 400rb +

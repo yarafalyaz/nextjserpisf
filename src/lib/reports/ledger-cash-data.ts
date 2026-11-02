@@ -698,8 +698,11 @@ export async function loadCustomerCreditExposure(period: Period): Promise<Custom
             where: { id: { in: woQuotationIds }, deletedAt: null },
             select: { id: true, customerId: true, grandTotal: true, customer: { select: { name: true, creditLimit: true } } },
           }),
+          // Penekan K5 = SO TERBUKA saja (whitelist K2 di atas):
+          // SO draft/rejected bukan komitmen dan tak melewati gate apa
+          // pun — menekan K5 = bypass paper-only pada paparan kredit.
           prisma.salesOrder.findMany({
-            where: { quotationId: { in: woQuotationIds }, status: { not: "cancelled" }, deletedAt: null },
+            where: { quotationId: { in: woQuotationIds }, status: { in: ["confirmed", "processing", "completed"] }, deletedAt: null },
             select: { quotationId: true, grandTotal: true },
           }),
           prisma.salesInvoice.findMany({

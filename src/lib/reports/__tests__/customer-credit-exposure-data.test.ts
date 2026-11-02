@@ -161,4 +161,33 @@ describe("FIN-BR-008 paparan kredit (loader)", () => {
       }),
     )
   })
+
+  it("putaran 55: SO draft tidak menekan K5 (whitelist OPEN_ORDER_STATUSES)", async () => {
+    // WO aktif -> quotation 50 (Rp100jt) + SO draft se-quotation -> K5
+    // harus tetap 100jt: penekan K5 hanya SO terbuka
+    // (confirmed/processing/completed, OPEN_ORDER_STATUSES kanonis).
+    // SO draft bukan komitmen — menekan K5 = bypass gerbang kredit
+    // paper-only (draft tidak melewati gate apa pun).
+    mocks.prismaMock.workOrder.findMany.mockResolvedValue([
+      { customerId: 1, quotationId: 50 },
+    ])
+    mocks.prismaMock.quotation.findMany.mockImplementation(async (args: any) =>
+      args?.where?.id?.in?.includes(50)
+        ? [{ id: 50, customerId: 1, grandTotal: 100, customer: { name: "PT Fleet", creditLimit: 500 } }]
+        : [],
+    )
+
+    const { rows } = await loadCustomerCreditExposure(period)
+
+    const fleet = rows.find((r) => r.customerId === 1)
+    expect(fleet?.woUnrepresented).toBe(100)
+    // SO penekan K5 hanya berupa whitelist terbuka, bukan not-cancelled.
+    for (const call of mocks.prismaMock.salesOrder.findMany.mock.calls as any[]) {
+      if (call[0]?.where?.quotationId) {
+        expect(call[0].where.status).toEqual(
+          expect.objectContaining({ in: expect.arrayContaining(["confirmed"]) }),
+        )
+      }
+    }
+  })
 })

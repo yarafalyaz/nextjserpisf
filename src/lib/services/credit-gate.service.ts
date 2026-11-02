@@ -330,10 +330,13 @@ async function loadComponents(
           where: { id: { in: woQuotationIds }, deletedAt: null },
           select: { id: true, customerId: true, grandTotal: true },
         }),
+        // Penekan K5 = SO TERBUKA saja (OPEN_ORDER_STATUSES): SO draft/
+        // rejected bukan komitmen dan tak melewati gate apa pun —
+        // menekan K5 = bypass paper-only pada paparan kredit.
         tx.salesOrder.findMany({
           where: {
             quotationId: { in: woQuotationIds },
-            status: { not: "cancelled" },
+            status: { in: [...OPEN_ORDER_STATUSES] },
             deletedAt: null,
           },
           select: { quotationId: true, grandTotal: true },
