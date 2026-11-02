@@ -3032,12 +3032,18 @@ export async function createRemnant(formData: FormData) {
         await tx.$executeRaw`SELECT id FROM production_order_materials WHERE id = ${sourceId} FOR UPDATE`;
         const src = await tx.productionOrderMaterial.findUnique({
           where: { id: sourceId ?? 0 },
-          select: { itemId: true, qty: true },
+          select: { itemId: true, qty: true, actualQty: true },
         });
         if (!src) throw new Error("Baris material sumber tidak ditemukan");
         if (src.itemId !== itemId) throw new Error("Baris material sumber milik item lain");
-        sourceQty = Number(src.qty)
+        // Remnant lahir dari material yang BENAR-BENAR terbit, bukan rencana
+        // BOM: baris PO punya qty rencana terpisah dari actualQty kumulatif.
+        sourceQty = Number(src.actualQty ?? 0)
       }
+      // Master dinilai ulang HIDUP di dalam tx sesudah kunci sumber: admin
+      // bisa menonaktifkan/menghapus item/gudang sesudah form dibuka.
+      await assertItemsExistAndActive(tx, [itemId]);
+      await assertWarehousesExistAndActive(tx, [warehouseId]);
       const claimed = await tx.remnant.aggregate({
         where: { sourceType, sourceId, status: { not: "scrapped" } },
         _sum: { qty: true },
