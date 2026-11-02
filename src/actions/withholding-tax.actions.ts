@@ -28,17 +28,17 @@ async function withholdingAccountError(v: {
 }): Promise<string | null> {
   if (v.liabilityAccountId != null) {
     const account = await prisma.account.findFirst({
-      where: { id: v.liabilityAccountId, deletedAt: null },
+      where: { id: v.liabilityAccountId, deletedAt: null, isActive: true },
       select: { id: true },
     })
-    if (!account) return "Akun Hutang PPh tidak ditemukan"
+    if (!account) return "Akun Hutang PPh tidak ditemukan atau tidak aktif"
   }
   if (v.receivableAccountId != null) {
     const account = await prisma.account.findFirst({
-      where: { id: v.receivableAccountId, deletedAt: null },
+      where: { id: v.receivableAccountId, deletedAt: null, isActive: true },
       select: { id: true },
     })
-    if (!account) return "Akun PPh dibayar dimuka tidak ditemukan"
+    if (!account) return "Akun PPh dibayar dimuka tidak ditemukan atau tidak aktif"
   }
   return null
 }

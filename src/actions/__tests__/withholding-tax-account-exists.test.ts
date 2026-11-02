@@ -72,6 +72,30 @@ describe("WithholdingTaxType akun FK wajib ada", () => {
     )
   })
 
+  // putaran 65: akun nonaktif ditolak di master; titik pakai juga menilai
+  // akun hidup dalam tx, tetapi master beracun membuat transaksi sah
+  // gagal berisik di titik pakai.
+  it("putaran 65: create menolak akun kewajiban nonaktif", async () => {
+    const res = await actions.createWithholdingTaxType(
+      fd({ ...BASE, liabilityAccountId: "10" }),
+    )
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.account.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 10, deletedAt: null, isActive: true } }),
+    )
+  })
+
+  it("putaran 65: update menolak akun PPh dibayar dimuka nonaktif", async () => {
+    const res = await actions.updateWithholdingTaxType(
+      5,
+      fd({ ...BASE, receivableAccountId: "11" }),
+    )
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.account.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 11, deletedAt: null, isActive: true } }),
+    )
+  })
+
   it("create tanpa akun tetap lolos (opsional)", async () => {
     const res = await actions.createWithholdingTaxType(fd(BASE))
     expect(res.success).toBe(true)
