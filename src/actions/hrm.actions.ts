@@ -3269,7 +3269,11 @@ export async function updatePayroll(id: number, formData: FormData) {
       if (!gate.allowed) throw new Error(gate.message);
     }
 
-    const employeeId = v.employeeId ?? null;
+    // Karyawan slip tak pernah dilepas oleh absennya field form: semua
+    // gerbang di atas (scope, berhenti, kunci rentang) dinilai atas
+    // updateEmployeeId (fallback existing), jadi nilai tulis memakai
+    // variabel yang sama — bukan v.employeeId mentah yang bisa null.
+    const employeeId = updateEmployeeId;
     const startDate = wibDateToUtcMidnight(v.startDate);
     const endDate = wibDateToUtcMidnight(v.endDate);
 

@@ -1475,6 +1475,21 @@ describe("Payroll Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("putaran 58: updatePayroll tanpa employeeId mempertahankan karyawan slip, bukan null", async () => {
+    const res = await actions.updatePayroll(1, fd({
+      period: "2026-05",
+      startDate: "2026-05-01",
+      endDate: "2026-05-31",
+      basicSalary: "6000000",
+      totalAllowances: "0",
+      totalDeductions: "0",
+      netPay: "6000000",
+    }))
+    expect(res?.success).toBe(true)
+    const claim = prismaMock.payroll.updateMany.mock.calls.at(-1)?.[0]
+    expect(claim.data.employeeId).toBe(1)
+  })
+
   it("R8-SDM-04: updatePayroll menulis lewat klaim atomik berpredikat draft", async () => {
     const res = await actions.updatePayroll(1, fd({
       period: "2026-05",
