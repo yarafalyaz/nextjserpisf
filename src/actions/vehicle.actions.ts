@@ -15,7 +15,12 @@ import {
   serviceScheduleSchema,
 } from "@/lib/validations/vehicle.schemas";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
-import { nextSlug } from "@/lib/utils/slug-db";
+import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db";
+
+/** Kunci pembanding nama master kendaraan: trim + lowercase (kontrak nama unik per induk). */
+function normalizeVehicleMasterName(value: string): string {
+  return value.trim().toLowerCase()
+}
 
 // ==================== VEHICLE BRAND ACTIONS ====================
 
@@ -26,12 +31,38 @@ export async function createVehicleBrand(formData: FormData) {
     const parsed = parseFormData(vehicleBrandSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
 
-    const vehicleBrand = await prisma.vehicleBrand.create({
-      data: {
-        name: parsed.data.name,
-        slug: await nextSlug("vehicleBrand", parsed.data.name),
-      },
-    });
+    // Nama merek tanpa @unique DB (hanya slug @unique): cek + create dalam
+    // tx bergap-lock tabel — dua create konkuren terserialkan dan yang
+    // kedua melihat baris pertama (pola createVendor master.actions).
+    // nextSlugWithClient membaca delegate tx supaya slug tidak bertabrakan
+    // dengan baris tak-tercommit transaksi lain.
+    const outcome = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vehicle_brands FOR UPDATE`
+      }
+      const nameKey = normalizeVehicleMasterName(parsed.data.name)
+      const existing = await tx.vehicleBrand.findMany({
+        select: { id: true, slug: true, name: true },
+      })
+      const duplicate = existing.find(
+        (row) => normalizeVehicleMasterName(row.name) === nameKey,
+      )
+      if (duplicate) return { duplicate: true as const }
+      const vehicleBrand = await tx.vehicleBrand.create({
+        data: {
+          name: parsed.data.name,
+          slug: await nextSlugWithClient(tx as never, "vehicleBrand", parsed.data.name),
+        },
+      })
+      return { vehicleBrand }
+    })
+    if ("duplicate" in outcome) {
+      return {
+        success: false,
+        error: `Merek "${parsed.data.name.trim()}" sudah ada.`,
+      }
+    }
+    const vehicleBrand = outcome.vehicleBrand
 
     revalidatePath("/kendaraan/merek");
     await logActivity(
@@ -54,6 +85,7 @@ export async function createVehicleBrand(formData: FormData) {
 // ==================== VEHICLE MODEL ACTIONS ====================
 
 export async function createVehicleModel(formData: FormData) {
+  let parsedName = ""
   try {
     await requirePermission("create_vehicle_models");
 
@@ -61,24 +93,45 @@ export async function createVehicleModel(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
 
     const { name, vehicleBrandId } = parsed.data;
+    parsedName = name
 
-    const duplicate = await prisma.vehicleModel.findFirst({
-      where: { vehicleBrandId, name },
-    });
-    if (duplicate) {
+    // Serialisasi per merek induk (pola createVehicleVariant): cek + create
+    // dalam tx sesudah kunci baris merek — dua create konkuren terserialkan.
+    // @@unique(vehicleBrandId, name) DB hanya untuk nama mentah sama persis;
+    // nama beda trim/case lolos SQL, jadi cek ternormalisasi tetap wajib di
+    // dalam tx. Merek yatim dinilai dari hasil locking read itu sendiri.
+    // Baris yatim (hasil kosong) dinilai yatim SEBELUM cek duplikat.
+    const outcome = await prisma.$transaction(async (tx) => {
+      const brandRows = (await tx.$queryRaw`SELECT id FROM vehicle_brands WHERE id = ${vehicleBrandId} FOR UPDATE`) as Array<{ id: number }>
+      if (brandRows.length === 0) return { missingBrand: true as const }
+      const nameKey = normalizeVehicleMasterName(name)
+      const siblings = await tx.vehicleModel.findMany({
+        where: { vehicleBrandId },
+        select: { id: true, name: true },
+      })
+      const duplicate = siblings.find(
+        (row) => normalizeVehicleMasterName(row.name) === nameKey,
+      )
+      if (duplicate) return { duplicate: true as const }
+      const model = await tx.vehicleModel.create({
+        data: {
+          name,
+          vehicleBrandId,
+          slug: await nextSlugWithClient(tx as never, "vehicleModel", name),
+        },
+      })
+      return { model }
+    })
+    if ("missingBrand" in outcome) {
+      return { success: false, error: "Merek kendaraan tidak ditemukan." }
+    }
+    if ("duplicate" in outcome) {
       return {
         success: false,
         error: `Model "${name}" sudah ada untuk merek ini.`,
-      };
+      }
     }
-
-    const model = await prisma.vehicleModel.create({
-      data: {
-        name,
-        vehicleBrandId,
-        slug: await nextSlug("vehicleModel", name),
-      },
-    });
+    const model = outcome.model
 
     revalidatePath("/kendaraan/model");
     revalidatePath("/kendaraan/merek");
@@ -92,6 +145,14 @@ export async function createVehicleModel(formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createVehicleModel]", getErrorMessage(e) || e);
+    // Unique (vehicleBrandId, name) DB adalah jaring terakhir untuk nama
+    // mentah sama persis yang lolos di antara cek dan create.
+    if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
+      return {
+        success: false,
+        error: `Model "${parsedName}" sudah ada untuk merek ini.`,
+      }
+    }
     return {
       success: false,
       error: getErrorMessage(e, "Gagal membuat model kendaraan"),
@@ -381,6 +442,7 @@ export async function updateVehicleBrand(id: number, formData: FormData) {
 }
 
 export async function updateVehicleModel(id: number, formData: FormData) {
+  let parsedName = ""
   try {
     await requirePermission("edit_vehicle_models");
 
@@ -388,25 +450,43 @@ export async function updateVehicleModel(id: number, formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
 
     const { name, vehicleBrandId } = parsed.data;
+    parsedName = name
 
-    const duplicate = await prisma.vehicleModel.findFirst({
-      where: { vehicleBrandId, name, NOT: { id } },
-    });
-    if (duplicate) {
+    // Serialisasi per merek induk (pola createVehicleModel): cek + tulis
+    // dalam tx sesudah kunci baris merek target. Baris yatim (merek target
+    // tak ada) dinilai dari hasil locking read itu sendiri.
+    const outcome = await prisma.$transaction(async (tx) => {
+      const brandRows = (await tx.$queryRaw`SELECT id FROM vehicle_brands WHERE id = ${vehicleBrandId} FOR UPDATE`) as Array<{ id: number }>
+      if (brandRows.length === 0) return { missingBrand: true as const }
+      const nameKey = normalizeVehicleMasterName(name)
+      const siblings = await tx.vehicleModel.findMany({
+        where: { vehicleBrandId },
+        select: { id: true, name: true },
+      })
+      const duplicate = siblings.find(
+        (row) => row.id !== id && normalizeVehicleMasterName(row.name) === nameKey,
+      )
+      if (duplicate) return { duplicate: true as const }
+      const model = await tx.vehicleModel.update({
+        where: { id },
+        data: {
+          name,
+          vehicleBrandId,
+          slug: await nextSlugWithClient(tx as never, "vehicleModel", name, { excludeId: id }),
+        },
+      })
+      return { model }
+    })
+    if ("missingBrand" in outcome) {
+      return { success: false, error: "Merek kendaraan tidak ditemukan." }
+    }
+    if ("duplicate" in outcome) {
       return {
         success: false,
         error: `Model "${name}" sudah ada untuk merek ini.`,
-      };
+      }
     }
-
-    const model = await prisma.vehicleModel.update({
-      where: { id },
-      data: {
-        name,
-        vehicleBrandId,
-        slug: await nextSlug("vehicleModel", name, { excludeId: id }),
-      },
-    });
+    const model = outcome.model
 
     revalidatePath("/kendaraan/model");
     revalidatePath("/kendaraan/merek");
@@ -420,6 +500,12 @@ export async function updateVehicleModel(id: number, formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateVehicleModel]", getErrorMessage(e) || e);
+    if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
+      return {
+        success: false,
+        error: `Model "${parsedName}" sudah ada untuk merek ini.`,
+      }
+    }
     return {
       success: false,
       error: getErrorMessage(e, "Gagal memperbarui model kendaraan"),

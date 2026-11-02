@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => {
       return Promise.all(ops)
     }),
     $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
+    $executeRaw: vi.fn().mockResolvedValue(1),
   }
 
   return {
@@ -72,6 +73,24 @@ describe("Vehicle Brand Actions", () => {
     const res = await actions.createVehicleBrand(fdMap({ name: "Toyota" }))
     expect(res?.success).toBe(true)
   })
+
+  it("putaran 55 K1: createVehicleBrand menolak nama sama (trim+case) yang lahir belakangan", async () => {
+    mocks.prismaMock.vehicleBrand.findMany.mockImplementation(async (args: any) => {
+      const cond = args?.where?.name as { in?: string[] } | undefined
+      if (!cond?.in || cond.in.includes("Toyota")) {
+        return [{ id: 9, slug: "toyota", name: "Toyota" }]
+      }
+      return []
+    })
+    try {
+      const res = await actions.createVehicleBrand(fdMap({ name: "  toyota  " }))
+      expect(res?.success).toBe(false)
+      expect(res?.error).toContain("sudah ada")
+      expect(mocks.prismaMock.vehicleBrand.create).not.toHaveBeenCalled()
+    } finally {
+      mocks.prismaMock.vehicleBrand.findMany.mockResolvedValue([])
+    }
+  })
   it("updateVehicleBrand succeeds", async () => {
     const res = await actions.updateVehicleBrand(1, fdMap({ name: "Toyota" }))
     expect(res?.success).toBe(true)
@@ -86,6 +105,53 @@ describe("Vehicle Model Actions", () => {
   it("createVehicleModel succeeds", async () => {
     const res = await actions.createVehicleModel(fdMap({ name: "Avanza", vehicleBrandId: 1 }))
     expect(res?.success).toBe(true)
+  })
+
+  it("putaran 55 K1: createVehicleModel menjalankan cek-tulis di dalam tx terkunci dan menerima FK yatim", async () => {
+    // G01: cek-tulis harus lewat delegate tx + kunci baris merek induk.
+    const res = await actions.createVehicleModel(fdMap({ name: "Avanza", vehicleBrandId: 1 }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+    const lockCall = (mocks.prismaMock.$queryRaw.mock.calls as unknown[][]).find((c) => {
+      const a = c[0] as { sql?: string; strings?: string[] } | string[]
+      const sql = Array.isArray(a) ? a.join("?") : (a.sql ?? a.strings?.join("?") ?? "")
+      return /FROM vehicle_brands[\s\S]*FOR UPDATE/.test(sql)
+    })
+    expect(lockCall).toBeDefined()
+    const createArg = mocks.prismaMock.vehicleModel.create.mock.calls.at(-1)?.[0] as any
+    expect(createArg.data.slug).toBeTruthy()
+
+    // G02: merek yatim dari delegasi tx -> ditolak menyebut merek, bukan
+    // slug yatim atau error mentah (test terpisah karena clearAllMocks
+    // tidak membuang Once antar-test ini; dipakai Once pada query kunci).
+    ;(mocks.prismaMock.$queryRaw as any).mockResolvedValueOnce([])
+    const missing = await actions.createVehicleModel(fdMap({ name: "Xenia", vehicleBrandId: 999 }))
+    expect(missing?.success).toBe(false)
+    expect(missing?.error).toContain("tidak ditemukan")
+    expect(mocks.prismaMock.vehicleModel.create).toHaveBeenCalledTimes(1)
+  })
+
+  it("putaran 55 K1: createVehicleModel P2002 dari unique DB menjadi pesan duplikat", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.vehicleModel.create.mockRejectedValueOnce(
+      Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),
+    )
+    const res = await actions.createVehicleModel(fdMap({ name: "Avanza", vehicleBrandId: 1 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe('Model "Avanza" sudah ada untuk merek ini.')
+  })
+
+  it("putaran 55 K1: updateVehicleModel menolak nama sama (trim+case) yang lahir belakangan", async () => {
+    mocks.prismaMock.vehicleModel.findMany.mockImplementation(async () => [{ id: 9, name: "Avanza" }])
+    try {
+      const res = await actions.updateVehicleModel(1, fdMap({ name: "  avanza ", vehicleBrandId: 1 }))
+      expect(res?.success).toBe(false)
+      expect(res?.error).toContain("sudah ada")
+      expect(mocks.prismaMock.vehicleModel.update).not.toHaveBeenCalled()
+    } finally {
+      mocks.prismaMock.vehicleModel.findMany.mockResolvedValue([])
+      expect(mocks.prismaMock.vehicleModel.create).not.toHaveBeenCalled()
+    }
   })
   it("updateVehicleModel succeeds", async () => {
     const res = await actions.updateVehicleModel(1, fdMap({ name: "Avanza", vehicleBrandId: 1 }))
@@ -467,10 +533,14 @@ describe("Vehicle Actions Error Paths", () => {
     expect(res?.error).toBe("db err")
   })
   it("updateVehicleModel fails if duplicate name", async () => {
-    mocks.prismaMock.vehicleModel.findFirst.mockResolvedValueOnce({ id: 2 })
-    const res = await actions.updateVehicleModel(1, fdMap({ name: "Avanza", vehicleBrandId: 1 }))
-    expect(res?.success).toBe(false)
-    expect(res?.error).toContain("sudah ada")
+    mocks.prismaMock.vehicleModel.findMany.mockImplementation(async () => [{ id: 2, name: "Avanza" }])
+    try {
+      const res = await actions.updateVehicleModel(1, fdMap({ name: "Avanza", vehicleBrandId: 1 }))
+      expect(res?.success).toBe(false)
+      expect(res?.error).toContain("sudah ada")
+    } finally {
+      mocks.prismaMock.vehicleModel.findMany.mockResolvedValue([])
+    }
   })
   it("deleteVehicle refuses if has relation dependents (line 345 branch)", async () => {
     mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce({ id: 2 })
@@ -571,10 +641,14 @@ describe("Vehicle Actions Remaining Branches", () => {
     expect(res?.success).toBe(false)
   })
   it("createVehicleModel fails if duplicate name (line 57)", async () => {
-    mocks.prismaMock.vehicleModel.findFirst.mockResolvedValueOnce({ id: 2 })
-    const res = await actions.createVehicleModel(fdMap({ name: "Avanza", vehicleBrandId: 1 }))
-    expect(res?.success).toBe(false)
-    expect(res?.error).toContain("sudah ada")
+    mocks.prismaMock.vehicleModel.findMany.mockImplementation(async () => [{ id: 2, name: "Avanza" }])
+    try {
+      const res = await actions.createVehicleModel(fdMap({ name: "Avanza", vehicleBrandId: 1 }))
+      expect(res?.success).toBe(false)
+      expect(res?.error).toContain("sudah ada")
+    } finally {
+      mocks.prismaMock.vehicleModel.findMany.mockResolvedValue([])
+    }
   })
   it("createVehicle stores name and year on the catalog type", async () => {
     const res = await actions.createVehicle(fdMap({ variantId: 42, name: "Avanza 1.3 G", year: 2022 }))
