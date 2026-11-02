@@ -2026,3 +2026,53 @@ Wilayah: tiga agent paralel (inventaris/aset/servis, proyek/konstruksi, API/cron
 - Tidak ada migrasi schema putaran ini.
 - Pelajaran harness: (a) mock `findFirst` kendaraan memberi hijau palsu karena harness mengabaikan `where` — test ternormalisasi yang bermakna digerbangi lewat daftar sibling `findMany` yang dibandingkan di JS (MariaDB collation case-insensitive tidak dimodelkan mock); (b) `vi.clearAllMocks()` tidak membersihkan `mockImplementation` persisten — test yang menimpanya wajib snapshot `getMockImplementation()` + restore `finally`; (c) test kontrak kunci memakai `mock.invocationCallOrder`, bukan model dua-bacaan basi, karena produksi yang benar membaca sekali sesudah kunci.
 - Semua head fix putaran 69 CI **success** kecuali `46afb44e6` yang gagal Build (diperbaiki `20d637405`, run `41440125951` **success** penuh termasuk Docker Image Build).
+
+## Putaran 70 — Kendaraan, keuangan, SDM, produksi, penjualan/pembelian (21 fix + 2 fixture test)
+
+Wilayah: tiga agent paralel (keuangan/pajak, SDM/produksi/proyek, penjualan/pembelian). Semua kandidat diverifikasi sesi utama terhadap kode + form pemanggil + schema sebelum fix. Kelas dominan: pengajuan approval lahir pasca-commit tanpa tx, snapshot pra-tx yang menilai syarat tulis, slug global dalam/di luar tx, create master tanpa idempotency key dan tanpa klaim identitas ternormalisasi.
+
+### Fix kendaraan/finance/master (8)
+1. `5fc93be3f` fix(vehicle): slug rename tipe kendaraan dihitung dalam tx lewat delegate — `updateVehicle` satu-satunya sisa `nextSlug(` global di file; kini tx + kunci baris `vehicles` + `nextSlugWithClient(..., { excludeId })`. Menutup sisa Low putaran 69.
+2. `647998c3c` fix(finance): pengajuan approval jurnal/pengeluaran atomik dalam tx dokumen — `createJournal`/`createExpense`/`updateJournal` memanggil `requestApprovalIfConfigured` pasca-commit; kegagalan di antara melahirkan dokumen tanpa baris approval yang lolos senyap di `assertApproved`. Ketiganya kini menerima tx dokumen (pola purchase).
+3. `922476e60` fix(finance): delete kategori pengeluaran berkunci dalam satu tx — guard `_count` pra-tx lalu delete polos; kini kunci baris `expense_categories` lalu penilaian ulang kedua hubungan dalam tx yang sama (homolog `deleteCostCenter`).
+4. `5313f5260` fix(finance): updateCostCenter klaim kode ternormalisasi dan slug dalam tx — create sudah mengklaim kode dari daftar sibling di bawah gap-lock, update tidak (pola `updateMethod` putaran 67). Nama tidak digerbang: create memakai reuse nama by design.
+5. `959a8b093` fix(master): create/update kategori pengeluaran idempoten dan klaim nama dalam tx — create polos slug global menjadi tx + `checkIdempotency` + gap-lock + klaim nama ternormalisasi + slug delegate; form tambah mengirim key.
+6. `4aeb78678` fix(finance): master jenis PPh idempoten dan klaim kode ternormalisasi dalam tx — create/update polos tanpa tx, catch membocorkan pesan P2002 mentah; kini tx + key (create) + gap-lock + klaim kode + slug delegate.
+7. `84de6e62a` fix(finance): create/update pusat laba idempoten dan klaim kode ternormalisasi dalam tx — pola yang sama; helper error kini meneruskan pesan bisnis klaim/duplikat apa adanya.
+8. `a9ab9cdee` fix(finance): slug header rekening koran dihitung lewat delegate tx — `createBankStatement` sudah tx+key+gerbang akun dalam tx, tetapi slug `nextSlug` global batang akun+tanggal bertabrakan antar-create sah; kini `nextSlugWithClient`.
+
+### Fix SDM/produksi (8)
+9. `f34b0e046` fix(hr): pengajuan lembur anti double-submit via idempotency key — `createOvertimeRequest` sudah tx berkunci + approval ber-tx, tanpa klaim key; form kini mengirim key per intent buat.
+10. `97248b3c4` fix(hr): create jadwal kerja anti double-submit via idempotency key — create polos tanpa tx menjadi tx + klaim key; form rotasi key sesudah sukses mode buat.
+11. `c0255a14b` fix(hr): createEmployeeLoan nilai ulang karyawan hidup di bawah kunci baris — gerbang hidup hanya pra-tx dan slug global batang tanggal; kini kunci karyawan → klaim key → nilai ulang `assertLiveEmployee(tx)` → slug delegate.
+12. `eef953b77` fix(hr): basis kompensasi PKWT dibaca ulang sesudah kunci karyawan — snapshot pra-kunci (status/gaji pokok) menjadi basis peristiwa; kini bacaan ulang pasca locking-read menilai ulang kedua gerbang sebelum create.
+13. `2c8fdb8ec` fix(production): slug revisi BOM memuat productId dan dihitung lewat delegate tx — kunci per produk tidak menserialkan lintas produk; dua produk membuat revisi bernomor sama memilih slug "1" sama dari bacaan global → P2002. Basis kini `bom-<productId>-revisi-<n>`; vonis putaran 68 menyempit.
+14. `86e7bf004` fix(production): slug rename produk dan checklist QC dihitung lewat delegate tx — keduanya sudah tx berkunci tetapi slug global; kini `nextSlugWithClient(..., { excludeId })`.
+15. `0a30a9955` fix(hr): gerbang syarat dan penilaian kompetensi dinilai ulang dalam tx berkunci — `setPositionCompetency` tidak pernah menilai `position` sama sekali; kini tx mengunci `competencies` lalu `positions`, menilai ulang kompetensi lewat delegate, menolak jabatan tak ditemukan; `assessEmployeeCompetency` menilai ulang kompetensi + karyawan dalam tx berkunci sebelum upsert.
+16. `d635e1628` fix(hr): apresiasi nilai ulang scope/hidup dan slug lewat delegate tx — `updateAppreciation` membaca existing/scope pra-tx + update polos slug global batang konstan; kini tx berkunci menilai ulang baris/scope/hidup. Bonus: `createAppreciation` batang slug konstan `"apresiasi"` ikut pindah ke delegate tx.
+
+### Fix penjualan/pembelian (6)
+17. `c4ddd97b4` fix(sales): postInvoice menilai ulang approval di bawah kunci faktur — `assertApproved` hanya pra-tx; pengajuan pending yang terbuka di jendela lolos posting. Kini dinilai ulang dalam tx sesudah cek status (pola `confirmVendorPayment`/`postJournal`). Severity Tinggi.
+18. `d9b9c93d8` fix(sales): gerbang hidup penawaran dinilai ulang dalam transaksi — `createQuotation` menilai customer/item/kendaraan semua pra-tx; kini dinilai ulang lewat delegate tx sesudah klaim key. `updateQuotation` kendaraan yang hanya pra-tx ikut dinilai ulang dalam tx.
+19. `2ed7e6962` fix(sales): pengajuan approval faktur dan pembayaran atomik dalam tx dokumen — 7 titik (`sendQuotation`, faktur selisih, faktur progres, `createSalesInvoice`, `updateSalesInvoice`, `createVendorPayment`, `updateVendorPayment`) mengajukan approval pasca-commit; semuanya kini di dalam tx dokumen masing-masing.
+20. `a10ee5daa` fix(sales): syarat denda baru menolak pelanggan nonaktif — `createCustomerLateFeeTerm` hanya menolak `deletedAt`; kini pra-tx menolak nonaktif + penilaian ulang hidup dalam tx sesudah klaim financial-idempotency.
+21. `c97f2a85b` fix(purchase): snapshot PO jasa dinilai ulang di bawah kunci WO — vendor/status WO/baris/flag jasa snapshot pra-tx; kini loader bersama menilai ulang semua di bawah kunci baris WO lewat delegate tx; subtotal/baris PO memakai snapshot segar.
+
+### Fixture test (produksi tidak berubah)
+- `10b2b708c` test(sales): fixture atribusi membaca kategori lewat delegate tx — gerbang hidup customer #18 membaca delegate tx; fixture menjawab null sehingga jalur sukses ditolak. CI merah run `41445112412` dst.
+- `9595d2c24` test(hr): facade tx apresiasi membawa delegate update dalam tx — facade BUGHUNT #9 tak punya delegate appreciation dalam-tx; jalur dalam-scope gagal `d.findFirst is not a function`. CI merah run `41446453988`/`41446687852`.
+
+### Vonis dicatat / gugur (tanpa patch)
+- `deleteWorkSchedule` guard `_count` pra-tx lalu delete polos: pola kunci baris induk tidak terbukti menahan penulis M2M implisit — tidak ada penulis `connect` penugasan jadwal di repo (penugasan lahir hanya seed/SQL). Jangan patch membabi buta; CATAT.
+- `createExpense` akun hidup hanya pra-tx: titik bayar fail-closed via `assertAccountsExist` menahan snapshot; CATAT Low.
+- Slug global pendamping batang nomor dokumen atomik (`createJournal:730`, `createExpense:987`, `createPettyCash:1522`): batang unik atomik dari `DocumentSequenceService`; aman pola putaran 68. CATAT.
+
+### Daftar bersih agent (jangan diangkat ulang tanpa bukti baru)
+- Keuangan/pajak: createJournal/updateJournal ber-key+kunci; postJournal/reverseJournal/deleteJournal klaim berkunci; bank statement + rekonsiliasi; recurring klaim bersyarat; bank transfer; tax payment; tax-dispute; cheque klaim status; period-close; petty cash gap-lock; deleteCostCenter/deleteProfitCenter berkunci; tax-documents key min-8; `DocumentSequenceService` atomik; `JournalService.createJournal` akun hidup dalam tx.
+- SDM/produksi/proyek: proyek sisa; payroll inti (`generateBulkPayroll`, `processPayroll`, `approvePayroll`, `markPayrollPaid`, `correctPaidPayroll`); reimbursement create + penetapan akun; transisi recruitment; `resolveNonconformance`; update/delete/pull-labor production-cost.
+- Penjualan/pembelian: `createSalesPayment`; `createSalesReturn` (cap dalam tx); `createVendorBill` (three-way match dalam tx); `confirmVendorPayment` (approval+vendor+akun dalam kunci); `onPurchaseReturnProcessed`; alokasi/refund kredit pelanggan; harga pelanggan dalam tx.
+
+### Catatan
+- Tidak ada migrasi schema putaran ini.
+- Pelajaran harness: (a) harness dengan tx == prisma global memberi hijau palsu untuk kontrak slug delegate — kontrak yang benar memakai facade tx berbeda yang "melihat" tabrakan tak terlihat global, slug hasil wajib suffix `-2`; (b) dua bacaan `findFirst` delegate yang sama dalam satu tx berbagi antrean `mockResolvedValueOnce` — pisahkan delegate per konsumen; (c) kontrak mock gerbang `findFirst({ isActive: true })` atas baris mati wajib `null`, bukan objek `isActive: false` (mock mengabaikan `where`); (d) perubahan titik tulis bersama wajib menjalankan SEMUA file test yang menyentuh fungsi itu — dua failure CI putaran ini berasal dari harness yang tertinggal kontrak tx baru, bukan bug produksi.
+- Head final `9595d2c24` CI **success** (run `41448260434`); semua failure head antara terurai ke dua akar fixture di atas.
