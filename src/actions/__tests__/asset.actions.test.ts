@@ -703,6 +703,21 @@ describe("Asset Transfer Actions", () => {
     }))).rejects.toThrow(redirectErr)
   })
 
+  it("putaran 61: slug transfer dipilih di dalam tx lewat tx client (bukan prisma global)", async () => {
+    const res = await createAssetTransfer(fd({
+      assetId: "5",
+      toLocation: "HQ",
+      transferDate: "2026-06-12",
+    }))
+    expect(res.success).toBe(true)
+    // Cek tabrakan slug harus membaca delegate tx: findFirst assetTransfer
+    // dipanggil dari dalam callback $transaction, sesudah kunci baris aset.
+    expect(prismaMock.$transaction).toHaveBeenCalled()
+    const lockOrder = prismaMock.$executeRaw.mock.invocationCallOrder.at(-1)!
+    const slugCheckOrder = prismaMock.assetTransfer.findFirst.mock.invocationCallOrder.at(-1)!
+    expect(lockOrder).toBeLessThan(slugCheckOrder)
+  })
+
   it("creates transfer and updates asset location", async () => {
     const res = await createAssetTransfer(fd({
       assetId: "5",
@@ -1163,6 +1178,20 @@ describe("createAsset / updateAsset", () => {
     }))
     expect(res?.success).toBe(false)
     expect(prismaMock.asset.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 61: slug aset dipilih lewat tx client di dalam transaksi", async () => {
+    const res = await createAsset(fd({ name: "Laptop", purchasePrice: "1000" }))
+    expect(res?.success).toBe(true)
+    // Mock $transaction menjalankan callback dengan prismaMock itu sendiri,
+    // jadi pemakaian tx client terlihat sebagai findFirst aset SESUDAH
+    // $transaction dipanggil; nextSlug global membacanya sebelum/sesudah
+    // tanpa lewat callback (tak bisa dibedakan urutan di mock ini) — bukti
+    // pembeda: argumen create memuat slug hasil buildUniqueSlug atas bacaan
+    // findFirst tx (null -> slug dasar nama).
+    expect(prismaMock.asset.findFirst).toHaveBeenCalled()
+    const createArg = prismaMock.asset.create.mock.calls.at(-1)![0]
+    expect(createArg.data.slug).toBe("laptop")
   })
 
   it("generates code when none provided", async () => {

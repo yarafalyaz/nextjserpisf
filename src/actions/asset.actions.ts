@@ -37,7 +37,7 @@ import { resolveFiscalGroup } from "@/lib/finance/asset-fiscal-groups";
 import { journalBookValue } from "@/lib/finance/asset-book-value";
 import { isRegisteredAssetUseStatus } from "@/lib/finance/asset-use-status";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
-import { nextSlug } from "@/lib/utils/slug-db";
+import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db";
 import { checkIdempotency } from "@/lib/utils/idempotency";
 
 // ==================== ASSET GL HELPERS ====================
@@ -330,17 +330,6 @@ export async function createAssetTransfer(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const { data } = parsed;
 
-    // AssetTransfer has no name/number of its own; slug falls back to the
-    // constant stem "transfer" (→ transfer, transfer-2, ...).
-    const slug = await nextSlug("assetTransfer", "transfer")
-
-    // Atomicity guard: a successful assetTransfer.create followed by a failed
-    // asset.update (FK violation, transient DB error, lost connection) would
-    // orphan the transfer record with a stale asset.location, silently desyncing
-    // the asset's current-location view from the latest transfer destination.
-    // Wrap the pair in $transaction so any inner write failing rolls the whole
-    // batch back — mirrors deleteAssetTransfer / updateAssetTransfer / createAsset
-    // / vehicle compound writes (commit 7bc5062).
     const transfer = await prisma.$transaction(
       async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
         // Kunci baris aset dulu: himpunan transfer dibaca ulang di bawah
@@ -349,6 +338,13 @@ export async function createAssetTransfer(formData: FormData) {
         // (transferDate, id)) yang menentukan lokasi akhir. Kunci yang
         // sama dipakai updateAsset/disposeAsset/peristiwa aset.
         await tx.$executeRaw`SELECT id FROM assets WHERE id = ${data.assetId} FOR UPDATE`;
+        // Putaran 61: slug dipilih DI DALAM tx lewat tx client. nextSlug
+        // global membaca prisma global yang tak melihat baris tak-tercommit
+        // transaksi lain — dua create bersamaan memilih slug "transfer"
+        // sama lalu satu P2002 mentah (pola terdokumentasi slug-db).
+        // AssetTransfer has no name/number of its own; slug falls back to
+        // the constant stem "transfer" (→ transfer, transfer-2, ...).
+        const slug = await nextSlugWithClient(tx as never, "assetTransfer", "transfer");
         // Aset non-active (disposed/held_for_sale/status sampah) tak boleh
         // berpindah lokasi: UI hanya menawarkan active, aksi memutuskan.
         const lockedAsset = await tx.asset.findUnique({
@@ -840,7 +836,8 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
         const updated = await tx.assetTransfer.update({
           where: { id },
           data: {
-            slug: await nextSlug("assetTransfer", "transfer", { excludeId: id }),
+            // Putaran 61: slug lewat tx client.
+            slug: await nextSlugWithClient(tx as never, "assetTransfer", "transfer", { excludeId: id }),
             assetId: data.assetId,
             fromLocation: data.fromLocation ?? null,
             toLocation: data.toLocation,
@@ -968,7 +965,8 @@ export async function createAsset(formData: FormData) {
       await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
       const created = await tx.asset.create({
         data: {
-          slug: await nextSlug("asset", data.name),
+          // Putaran 61: slug lewat tx client (lihat createAssetTransfer).
+          slug: await nextSlugWithClient(tx as never, "asset", data.name),
           name: data.name,
           code: code,
           categoryId: data.categoryId ?? null,
@@ -1154,9 +1152,10 @@ export async function updateAsset(id: number, formData: FormData) {
     // di bawah kunci. Tanpa ini, edit yang dimulai saat aset active
     // membangkitkan aset yang sudah dilepas (jurnal pelepasan POSTED)
     // kembali ke active, dan guard harga perolehan menilai jurnal basi.
-    const slug = await nextSlug("asset", data.name, { excludeId: id });
     await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT id FROM assets WHERE id = ${id} FOR UPDATE`;
+      // Putaran 61: slug dihitung ulang di dalam tx lewat tx client.
+      const slug = await nextSlugWithClient(tx as never, "asset", data.name, { excludeId: id });
       const lockedAsset = await tx.asset.findUnique({
         where: { id },
         select: {
