@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useState } from "react"
 
 import { issueDownPaymentTaxInvoiceAction } from "@/actions/tax-documents.actions"
 import { Button } from "@/components/ui/button"
@@ -33,17 +33,16 @@ export interface DownPaymentTaxRowView extends DownPaymentVatSnapshotView {
  * (sistem tidak mengarang nomor), galat service tampil apa adanya.
  */
 export function DownPaymentTaxPanel({ rows, canIssue = false }: { rows: DownPaymentTaxRowView[]; canIssue?: boolean }) {
-  const { isPending, run } = useTaxDocAction()
+  const { isPending, keyRef, run } = useTaxDocAction()
   const [activeId, setActiveId] = useState<number | null>(null)
-  const keyRef = useRef<string>(crypto.randomUUID())
 
   function submit(e: React.SubmitEvent<HTMLFormElement>, downPaymentId: number) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("downPaymentId", String(downPaymentId))
+    // Key diputar hook sesudah sukses; retry memakai key sama (putaran 52).
     formData.set("idempotencyKey", keyRef.current)
     run(issueDownPaymentTaxInvoiceAction, formData, "Faktur pajak uang muka diterbitkan")
-    keyRef.current = crypto.randomUUID()
   }
 
   return (

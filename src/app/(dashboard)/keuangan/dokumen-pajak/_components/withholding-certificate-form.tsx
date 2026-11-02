@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useRef, useState } from "react"
+import { useState } from "react"
 
 import {
   issueWithholdingCertificateAction,
@@ -168,11 +168,10 @@ export function WithholdingLifecycleActions({
   canRevoke: boolean
   canSettle: boolean
 }) {
-  const { isPending, run } = useTaxDocAction("Gagal memproses bukti potong")
+  const { isPending, keyRef, run } = useTaxDocAction("Gagal memproses bukti potong")
   const [certId, setCertId] = useState("")
   const [period, setPeriod] = useState("")
   const [amount, setAmount] = useState<number | null>(null)
-  const keyRef = useRef<string>(crypto.randomUUID())
 
   if (!canRevoke && !canSettle) return null
 
@@ -180,8 +179,8 @@ export function WithholdingLifecycleActions({
     e.preventDefault()
     const formData = new FormData()
     formData.set("id", certId)
+    // Key diputar hook sesudah sukses; retry memakai key sama (putaran 52).
     formData.set("idempotencyKey", keyRef.current)
-    keyRef.current = crypto.randomUUID()
     run(revokeWithholdingCertificateAction, formData, "Bukti potong dicabut")
   }
 
@@ -191,7 +190,6 @@ export function WithholdingLifecycleActions({
     formData.set("idempotencyKey", keyRef.current)
     formData.set("period", period)
     formData.set("amount", amount === null ? "" : String(amount))
-    keyRef.current = crypto.randomUUID()
     run(settleWithholdingTaxAction, formData, "Setoran PPh dicatat")
   }
 

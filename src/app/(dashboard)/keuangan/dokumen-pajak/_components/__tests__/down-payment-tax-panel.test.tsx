@@ -156,6 +156,31 @@ describe("DownPaymentTaxPanel F-2026-10-25-004-V", () => {
     expect(fd.get("legacy15Confirmed")).toBe("true")
   })
 
+  it("putaran 52: key tetap sama sesudah gagal, berputar sesudah sukses", async () => {
+    const { container } = mount(<DownPaymentTaxPanel rows={[BASE]} canIssue />)
+    issueAction.mockResolvedValueOnce({ success: false, error: "DP belum confirmed — FP UM ditolak" })
+    openAndSubmit(container)
+    act(() => {
+      container.querySelector("form")!.requestSubmit()
+    })
+    await flush()
+    act(() => {
+      container.querySelector("form")!.requestSubmit()
+    })
+    await flush()
+    act(() => {
+      container.querySelector("form")!.requestSubmit()
+    })
+    await flush()
+
+    const keys = issueAction.mock.calls.map((c) => String((c[0] as FormData).get("idempotencyKey")))
+    expect(keys).toHaveLength(3)
+    // Gagal tidak memutar key: retry submit kedua memakai key sama supaya
+    // claim server menolak FP UM ganda; sukses memutar untuk intent segar.
+    expect(keys[1]).toBe(keys[0])
+    expect(keys[2]).not.toBe(keys[0])
+  })
+
   it("empty state saat belum ada DP", () => {
     const { container } = mount(<DownPaymentTaxPanel rows={[]} canIssue />)
     expect(container.textContent).toContain("Belum ada uang muka tercatat.")

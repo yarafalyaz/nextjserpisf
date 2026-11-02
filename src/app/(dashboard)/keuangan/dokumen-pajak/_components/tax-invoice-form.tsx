@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useRef, useState } from "react"
+import { useState } from "react"
 
 import {
   issueTaxInvoiceAction,
@@ -163,19 +163,19 @@ export function TaxInvoiceForm({
 
 /** Aksi atas satu faktur terbit: pengganti / batal / kredit masukan. */
 export function TaxInvoiceLifecycleActions({ invoices }: { invoices: TaxOption[] }) {
-  const { isPending, run } = useTaxDocAction()
+  const { isPending, keyRef, run } = useTaxDocAction()
   const [mode, setMode] = useState<"replace" | "cancel" | "credit" | "">("")
   const [invoiceId, setInvoiceId] = useState("")
   const [date, setDate] = useState(toLocalDateOnly(new Date()))
   const [sellingPrice, setSellingPrice] = useState<number | null>(null)
   const [creditPeriod, setCreditPeriod] = useState("")
-  const keyRef = useRef<string>(crypto.randomUUID())
 
   if (invoices.length === 0) return null
 
   function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    // Key diputar hook sesudah sukses; retry memakai key sama (putaran 52).
     formData.set("idempotencyKey", keyRef.current)
     if (mode === "replace") {
       formData.set("replacesId", invoiceId)
@@ -190,7 +190,6 @@ export function TaxInvoiceLifecycleActions({ invoices }: { invoices: TaxOption[]
       formData.set("creditPeriod", creditPeriod)
       run(creditInputInvoiceAction, formData, "Kredit pajak masukan dicatat")
     }
-    keyRef.current = crypto.randomUUID()
   }
 
   return (

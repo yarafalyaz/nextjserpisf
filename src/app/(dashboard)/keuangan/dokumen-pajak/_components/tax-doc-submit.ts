@@ -48,9 +48,17 @@ export function useTaxDocSubmit(successText: string, fallbackText: string, navig
   return { isPending, idempotencyKeyRef, run }
 }
 
-/** Varian tanpa navigasi: untuk aksi atas dokumen yang sudah terbit. */
+/**
+ * Varian tanpa navigasi: untuk aksi atas dokumen yang sudah terbit.
+ *
+ * Menyediakan keyRef bersama: key satu intent aksi; hook memutar key BARU
+ * hanya sesudah sukses tercatat — retry sesudah respons hilang/gagal memakai
+ * key sama supaya claim idempotensi server menolak ganda. Memutar key saat
+ * submit (sebelum hasil diketahui) membuka aksi ganda (putaran 52).
+ */
 export function useTaxDocAction(fallbackText = "Gagal memproses dokumen pajak") {
   const router = useRouter()
+  const keyRef = useRef<string>(crypto.randomUUID())
   const [isPending, startTransition] = useTransition()
 
   function run(action: TaxDocAction, formData: FormData, successText: string) {
@@ -61,6 +69,7 @@ export function useTaxDocAction(fallbackText = "Gagal memproses dokumen pajak") 
           showError(result.error || fallbackText)
           return
         }
+        keyRef.current = crypto.randomUUID()
         showSuccess(successText)
         router.refresh()
       } catch (error) {
@@ -69,5 +78,5 @@ export function useTaxDocAction(fallbackText = "Gagal memproses dokumen pajak") 
     })
   }
 
-  return { isPending, run }
+  return { isPending, keyRef, run }
 }
