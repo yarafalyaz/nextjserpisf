@@ -516,20 +516,32 @@ export async function deleteAssetTransfer(id: number) {
     });
 
     await prisma.$transaction(async (tx) => {
-      // Kunci baris aset sebelum delete + hitung ulang lokasi (pasangan
-      // serialisasi create/update transfer dan penulis aset lain).
+      // Kunci baris aset snapshot sebelum delete + hitung ulang lokasi
+      // (pasangan serialisasi create/update transfer dan penulis aset lain).
       await tx.$executeRaw`SELECT id FROM assets WHERE id = ${transfer.assetId} FOR UPDATE`;
+      // Baris transfer dibaca ULANG di bawah kuncinya: snapshot luar bisa
+      // basi bila edit konkuren me-relink transfer ke aset lain — hapus dan
+      // hitung ulang lokasi wajib mengikuti baris segar (pola update).
+      await tx.$executeRaw`SELECT id FROM asset_transfers WHERE id = ${id} FOR UPDATE`;
+      const freshTransfer = await tx.assetTransfer.findUnique({
+        where: { id },
+        select: { assetId: true, fromLocation: true, toLocation: true },
+      });
+      if (!freshTransfer) throw new Error("Transfer aset tidak ditemukan.");
+      if (freshTransfer.assetId !== transfer.assetId) {
+        await tx.$executeRaw`SELECT id FROM assets WHERE id = ${freshTransfer.assetId} FOR UPDATE`;
+      }
       await tx.assetTransfer.delete({ where: { id } });
 
       // If this transfer is what set the asset's current location, revert it to the
       // latest remaining transfer's destination (or this transfer's origin if none).
       const asset = await tx.asset.findUnique({
-        where: { id: transfer.assetId },
+        where: { id: freshTransfer.assetId },
         select: { location: true },
       });
-      if (asset && asset.location === transfer.toLocation) {
+      if (asset && asset.location === freshTransfer.toLocation) {
         const latest = await tx.assetTransfer.findFirst({
-          where: { assetId: transfer.assetId },
+          where: { assetId: freshTransfer.assetId },
           // Tiebreaker on id: two transfers on the same day (common when staff
           // batch-move multiple assets at end-of-day) would otherwise come back
           // in non-deterministic order, letting an earlier-inserted row "win"
@@ -540,8 +552,8 @@ export async function deleteAssetTransfer(id: number) {
           select: { toLocation: true },
         });
         await tx.asset.update({
-          where: { id: transfer.assetId },
-          data: { location: latest?.toLocation ?? transfer.fromLocation },
+          where: { id: freshTransfer.assetId },
+          data: { location: latest?.toLocation ?? freshTransfer.fromLocation },
         });
       }
     });

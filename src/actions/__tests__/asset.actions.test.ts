@@ -811,6 +811,35 @@ describe("Asset Transfer Actions", () => {
     })
   })
 
+  it("putaran 54: hapus transfer mengikuti baris segar di bawah kunci, bukan snapshot luar", async () => {
+    prismaMock.assetTransfer.findUniqueOrThrow.mockResolvedValue({
+      assetId: 5,
+      fromLocation: "OldLoc",
+      toLocation: "HQ",
+    })
+    // Edit konkuren sudah me-relink transfer ke aset 6 (A->Branch).
+    prismaMock.assetTransfer.findUnique.mockResolvedValue({
+      assetId: 6,
+      fromLocation: "OtherOld",
+      toLocation: "Branch",
+    })
+    prismaMock.asset.findUnique.mockImplementation(async ({ where }: any) =>
+      where.id === 6 ? { location: "Branch" } : { location: "HQ" },
+    )
+    prismaMock.assetTransfer.findFirst.mockResolvedValue(null)
+
+    const res = await deleteAssetTransfer(30)
+
+    expect(res.success).toBe(true)
+    expect(prismaMock.asset.update).toHaveBeenCalledWith({
+      where: { id: 6 },
+      data: { location: "OtherOld" },
+    })
+    expect(prismaMock.asset.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 5 } }),
+    )
+  })
+
   it("deletes transfer and reverts to latest transfer destination if one exists", async () => {
     prismaMock.assetTransfer.findUniqueOrThrow.mockResolvedValue({
       assetId: 5,
