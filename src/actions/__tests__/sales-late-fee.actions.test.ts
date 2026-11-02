@@ -512,8 +512,61 @@ describe("createCustomerLateFeeTerm (P2a)", () => {
     ;(mocks.prismaMock.customer as M).findFirst.mockResolvedValue({ id: 3, name: "PT Uji" })
     tx.customerLateFeeTerm.create.mockResolvedValue({ id: 7 })
     const ok = await actions.createCustomerLateFeeTerm(
-      fd({ customerId: "3", ratePercentPerDay: "0.1", effectiveFrom: "2026-01-01" }),
+      fd({
+        customerId: "3",
+        ratePercentPerDay: "0.1",
+        effectiveFrom: "2026-01-01",
+        idempotencyKey: "latefee-term-0001",
+      }),
     )
     expect(ok).toEqual({ success: true, id: 7 })
+  })
+
+  it("putaran 65: key wajib — create tanpa idempotencyKey ditolak sebelum tulis apa pun", async () => {
+    const res = await actions.createCustomerLateFeeTerm(
+      fd({ customerId: "3", ratePercentPerDay: "0.1", effectiveFrom: "2026-01-01" }),
+    )
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("Idempotency key")
+    expect(mocks.claimMock).not.toHaveBeenCalled()
+    expect(tx.customerLateFeeTerm.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 65: retry identik (key sama) replay hasil pertama, tanpa baris tarif kedua", async () => {
+    ;(mocks.prismaMock.customer as M).findFirst.mockResolvedValue({ id: 3, name: "PT Uji" })
+    tx.customerLateFeeTerm.findUnique.mockResolvedValue({ id: 7 })
+    mocks.claimMock.mockResolvedValue({ replayed: true, resultRefId: 7 })
+    const res = await actions.createCustomerLateFeeTerm(
+      fd({
+        customerId: "3",
+        ratePercentPerDay: "0.1",
+        effectiveFrom: "2026-01-01",
+        idempotencyKey: "latefee-term-0001",
+      }),
+    )
+    expect(res).toEqual({ success: true, id: 7 })
+    expect(tx.customerLateFeeTerm.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 65: create ber-key mengklaim key di dalam tx lalu bind ke baris baru", async () => {
+    ;(mocks.prismaMock.customer as M).findFirst.mockResolvedValue({ id: 3, name: "PT Uji" })
+    tx.customerLateFeeTerm.create.mockResolvedValue({ id: 7 })
+    const res = await actions.createCustomerLateFeeTerm(
+      fd({
+        customerId: "3",
+        ratePercentPerDay: "0.1",
+        effectiveFrom: "2026-01-01",
+        idempotencyKey: "latefee-term-0001",
+      }),
+    )
+    expect(res).toEqual({ success: true, id: 7 })
+    expect(mocks.claimMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "sales_late_fee_term",
+      "latefee-term-0001",
+      7,
+      expect.any(String),
+    )
+    expect(mocks.bindMock).toHaveBeenCalledWith(expect.anything(), "latefee-term-0001", "CustomerLateFeeTerm", 7)
   })
 })

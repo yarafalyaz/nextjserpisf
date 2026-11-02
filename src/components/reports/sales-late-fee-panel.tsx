@@ -64,18 +64,21 @@ function TermForm({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [basis, setBasis] = useState("rate")
+  const idempotencyKeyRef = useRef<string>(newIdempotencyKey())
 
   function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     if (basis === "rate") formData.delete("flatAmountPerDay")
     else formData.delete("ratePercentPerDay")
+    formData.set("idempotencyKey", idempotencyKeyRef.current)
     startTransition(async () => {
       const result = await createCustomerLateFeeTerm(formData)
       if (!result.success) {
         showError(result.error ?? "Gagal menyimpan syarat denda.")
         return
       }
+      idempotencyKeyRef.current = newIdempotencyKey()
       showSuccess("Syarat denda pelanggan tersimpan.")
       onDone()
       router.refresh()

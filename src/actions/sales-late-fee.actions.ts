@@ -79,6 +79,10 @@ export async function createCustomerLateFeeTerm(
 ): Promise<LateFeeActionResult> {
   try {
     const user = await requirePermission("create_sales_late_fees")
+    // Putaran 65: create master tarif tanpa key melahirkan syarat kembar
+    // pada retry — kontrak key sama seperti issueSalesLateFee di file ini.
+    const idempotencyKey = String(formData.get("idempotencyKey") ?? "").trim()
+    if (!idempotencyKey) return { success: false, error: "Idempotency key wajib diisi." }
     const customerId = parseId(formData.get("customerId"))
     if (customerId == null) return { success: false, error: "Pelanggan tidak valid." }
 
@@ -108,18 +112,43 @@ export async function createCustomerLateFeeTerm(
     })
     if (!customer) return { success: false, error: "Pelanggan tidak ditemukan." }
 
-    const created = await prisma.customerLateFeeTerm.create({
-      data: {
-        customerId,
-        ratePercentPerDay: rate,
-        flatAmountPerDay: flat,
-        capAmount: cap,
-        effectiveFrom,
-        effectiveTo,
-        notes: formData.get("notes") ? String(formData.get("notes")) : null,
-        createdBy: Number(user.id),
-      },
-      select: { id: true },
+    const created = await prisma.$transaction(async (tx) => {
+      const claim = await claimIdempotencyKey(
+        tx as never,
+        "sales_late_fee_term",
+        idempotencyKey,
+        Number(user.id),
+        payloadFingerprint({
+          customerId,
+          ratePercentPerDay: rate ?? 0,
+          flatAmountPerDay: flat ?? 0,
+          capAmount: cap ?? 0,
+          effectiveFrom: effectiveFrom.toISOString().slice(0, 10),
+          effectiveTo: effectiveTo ? effectiveTo.toISOString().slice(0, 10) : "",
+        }),
+      )
+      if (claim.replayed) {
+        const prev = await tx.customerLateFeeTerm.findUnique({
+          where: { id: claim.resultRefId ?? 0 },
+          select: { id: true },
+        })
+        return { id: prev?.id ?? 0 }
+      }
+      const row = await tx.customerLateFeeTerm.create({
+        data: {
+          customerId,
+          ratePercentPerDay: rate,
+          flatAmountPerDay: flat,
+          capAmount: cap,
+          effectiveFrom,
+          effectiveTo,
+          notes: formData.get("notes") ? String(formData.get("notes")) : null,
+          createdBy: Number(user.id),
+        },
+        select: { id: true },
+      })
+      await bindIdempotencyKey(tx as never, idempotencyKey, "CustomerLateFeeTerm", row.id)
+      return row
     })
     await logActivity(
       "customer_late_fee_term_created",
