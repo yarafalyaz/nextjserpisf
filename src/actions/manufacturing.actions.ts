@@ -343,6 +343,10 @@ export async function createBomRevision(formData: FormData) {
       // calls cannot read the same latest revisionNo and collide on the
       // (productId, revisionNo) unique constraint.
       await tx.$queryRaw`SELECT id FROM products WHERE id = ${v.productId} FOR UPDATE`;
+      // Putaran 64: retry identik melahirkan revisi draft kembar (nomor
+      // naik, jadi unique (productId, revisionNo) tak menahan) yang bisa
+      // sama-sama dirilis dan saling men-supersede.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
       // Snapshot BOM dibaca ULANG di bawah kunci: updateProduct menukar BOM
       // lewat update baris produk yang sama, jadi BOM yang commit di antara
       // bacaan luar dan kunci terlihat di sini. Pola sama calculateStandardCost

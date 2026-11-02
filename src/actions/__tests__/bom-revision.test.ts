@@ -27,6 +27,9 @@ const bomRevisionDeleteMock = vi.fn()
 const bomRevisionDeleteManyMock = vi.fn()
 
 const generateDocumentNumberMock = vi.fn()
+const idemCreateMock = vi.fn()
+const idemFindUniqueMock = vi.fn()
+const idemUpdateManyMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -51,6 +54,11 @@ vi.mock("@/lib/db/prisma", () => {
       findFirst: vi.fn().mockResolvedValue(null),
     },
     productMaterial: { findMany: (...a: unknown[]) => productMaterialFindManyMock(...a) },
+    idempotencyKey: {
+      create: (...a: unknown[]) => idemCreateMock(...a),
+      findUnique: (...a: unknown[]) => idemFindUniqueMock(...a),
+      updateMany: (...a: unknown[]) => idemUpdateManyMock(...a),
+    },
     bomRevision: {
       findFirst: (...a: unknown[]) => bomRevisionFindFirstMock(...a),
       findUnique: (...a: unknown[]) => bomRevisionFindUniqueMock(...a),
@@ -91,7 +99,9 @@ beforeEach(() => {
     productMaterialFindManyMock, bomRevisionFindFirstMock, bomRevisionCreateMock,
     bomRevisionFindUniqueMock, bomRevisionUpdateMock, bomRevisionUpdateManyMock,
     bomRevisionDeleteMock, bomRevisionDeleteManyMock, generateDocumentNumberMock,
+    idemCreateMock, idemFindUniqueMock, idemUpdateManyMock,
   ]) m.mockReset()
+  idemCreateMock.mockResolvedValue({ id: 1 })
 
   requirePermissionMock.mockResolvedValue({ id: 5 })
   generateDocumentNumberMock.mockResolvedValue("MO-0001")
@@ -143,6 +153,27 @@ describe("createProductionOrder — BOM revision pinning", () => {
 })
 
 describe("createBomRevision", () => {
+  it("putaran 64: retry idempotencyKey sama ditolak, revisi lahir sekali", async () => {
+    productFindUniqueOrThrowMock.mockResolvedValue({
+      id: 9, materials: [{ itemId: 1, qty: 2 }],
+    })
+    bomRevisionFindFirstMock.mockResolvedValue({ revisionNo: 4 })
+    bomRevisionCreateMock.mockResolvedValue({ id: 77, revisionNo: 5 })
+    idemCreateMock
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idemFindUniqueMock.mockResolvedValue({ createdAt: new Date() })
+
+    const payload = { productId: 9, effectiveDate: "2026-10-08", idempotencyKey: "bom-key-1" }
+    const first = await createBomRevision(fd(payload))
+    const second = await createBomRevision(fd(payload))
+
+    expect(first.success).toBe(true)
+    expect(second.success).toBe(false)
+    expect(String(second.error ?? "")).toContain("duplikat")
+    expect(bomRevisionCreateMock).toHaveBeenCalledTimes(1)
+  })
+
   it("snapshots the working BOM and assigns the next revision number", async () => {
     productFindUniqueOrThrowMock.mockResolvedValue({
       id: 9, materials: [{ itemId: 1, qty: 2 }, { itemId: 3, qty: 1 }],

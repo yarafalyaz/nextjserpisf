@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition, useMemo } from "react"
+import { useRef, useState, useTransition, useMemo } from "react"
 import { createBomRevision, updateBomRevision } from "@/actions/manufacturing.actions"
 import { Plus, Trash2 } from "lucide-react"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -56,6 +56,7 @@ export function BomRevisionForm({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
 
   const [productId, setProductId] = useState<number | null>(revision?.productId ?? null)
   const [lines, setLines] = useState<RevisionRow[]>(
@@ -91,6 +92,7 @@ export function BomRevisionForm({
     const formData = new FormData(e.currentTarget)
 
     if (!revision && productId) formData.set("productId", String(productId))
+    if (!revision) formData.set("idempotencyKey", idempotencyKeyRef.current)
     lines.forEach((l) => {
       if (l.itemId && l.qty) {
         formData.append("revisionItemId", l.itemId)
@@ -107,6 +109,7 @@ export function BomRevisionForm({
         showError(result.error || "Gagal menyimpan data")
         return
       }
+      if (!revision) idempotencyKeyRef.current = crypto.randomUUID()
       showSuccess(revision ? "Revisi BOM diperbarui" : "Revisi BOM dibuat")
       router.push("/produksi/bom-revisi")
       router.refresh()
