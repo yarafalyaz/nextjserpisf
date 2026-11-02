@@ -1386,6 +1386,12 @@ export async function createGoodsReceipt(formData: FormData) {
   try {
     const user = await requirePermission("create_goods_receipts");
 
+    // Anti double-submit: guard over-receipt kumulatif hanya menolak
+    // total melewati qty PO, jadi dua GR parsial kembar sama-sama lolos
+    // verifikasi dan stok/FIFO/HPP naik dua kali untuk satu pengiriman.
+    // Key dinilai pertama dalam tx; rollback melepasnya.
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
+
     const parsed = parseFormData(goodsReceiptSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
@@ -1408,6 +1414,7 @@ export async function createGoodsReceipt(formData: FormData) {
     await assertGrRackConsistency(prisma, v.warehouseId, items);
 
     const gr = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id);
       // Lock + validate the PO status before creating the receipt. Without this a
       // GR could be created against a PO that is still draft (bypassing approval),
       // already received, or cancelled — and the unconditional flip to "received"

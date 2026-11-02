@@ -909,6 +909,26 @@ describe("Goods Receipt Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("putaran 62: createGoodsReceipt — retry dengan idempotencyKey sama ditolak, GR lahir sekali", async () => {
+    const idem = mocks.prismaMock.idempotencyKey
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "ordered", items: [{ itemId: 1, qty: 10 }] })
+    const payload = {
+      purchaseOrderId: "1", warehouseId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 4, unitCost: 1000 }]),
+      idempotencyKey: "gr-key-1",
+    }
+    const first = await actions.createGoodsReceipt(fdMap(payload))
+    const second = await actions.createGoodsReceipt(fdMap(payload))
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(second?.error).toContain("duplikat")
+    expect(mocks.prismaMock.goodsReceipt.create).toHaveBeenCalledTimes(1)
+  })
+
   it("STOK-18: duplicate PO lines aggregate into GR qtyOrdered snapshot", async () => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({
       id: 1,

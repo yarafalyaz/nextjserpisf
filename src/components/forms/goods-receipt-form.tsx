@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   createGoodsReceipt,
   updateGoodsReceipt,
@@ -207,6 +207,7 @@ export function GoodsReceiptForm({
 }: GRFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
   const [warehouseOptions, setWarehouseOptions] = useState(warehouses);
   const initialPoId = receipt?.purchaseOrderId
     ? String(receipt.purchaseOrderId)
@@ -337,6 +338,7 @@ export function GoodsReceiptForm({
           };
         });
         formData.append("items", JSON.stringify(items));
+        if (!receipt?.id) formData.append("idempotencyKey", idempotencyKeyRef.current);
         const result = receipt?.id
           ? await updateGoodsReceipt(receipt.id, formData)
           : await createGoodsReceipt(formData);
@@ -344,6 +346,7 @@ export function GoodsReceiptForm({
           showError(result.error || "Gagal menyimpan data");
           return;
         }
+        if (!receipt?.id) idempotencyKeyRef.current = crypto.randomUUID();
         showSuccess(
           receipt?.id
             ? "Data berhasil diperbarui"
