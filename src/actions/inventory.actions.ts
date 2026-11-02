@@ -2257,6 +2257,31 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
       await assertWarehousesExistAndActive(tx, [v.warehouseId]);
       await assertItemsExistAndActive(tx, miItems.map((it) => Number(it.itemId)));
 
+      // Pindah WO dinilai ulang penuh (pola createMaterialIssue): tanpa
+      // kunci baris WO tujuan + cek satu-MI-aktif + gerbang job closed,
+      // edit draft bisa menanam MI kedua ke WO yang sudah punya MI aktif
+      // (keduanya boleh diselesaikan -> stok keluar dua kali) atau ke WO
+      // closed yang biayanya beku. Urutan kunci WO->MI mengikuti create
+      // (kunci WO dulu); jalur balik (lintasan lain yang mengunci MI dulu)
+      // berisiko deadlock tetapi rollback bersih, bukan lost update.
+      if (v.workOrderId !== undefined && v.workOrderId !== (mi.workOrderId ?? null)) {
+        await tx.$executeRaw`SELECT id FROM work_orders WHERE id = ${v.workOrderId} FOR UPDATE`;
+        await assertJobCostMutable({ workOrderId: v.workOrderId }, "dibuatkan pengeluaran materialnya", tx as never);
+        const clash = await tx.materialIssue.findFirst({
+          where: {
+            workOrderId: v.workOrderId,
+            status: { in: ["draft", "processing", "completed"] },
+            id: { not: id },
+          },
+          select: { id: true, documentNo: true },
+        });
+        if (clash) {
+          throw new Error(
+            `Material Issue sudah pernah dibuat untuk Work Order ini (No: ${clash.documentNo}).`,
+          );
+        }
+      }
+
       await tx.materialIssueItem.deleteMany({ where: { materialIssueId: id } });
       // F-008: baris lahir ulang saat update draft -> snapshot beku ulang.
       const snapshotByItem = await resolveMaterialIssueScrapSnapshots(

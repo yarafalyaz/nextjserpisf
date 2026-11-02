@@ -113,6 +113,9 @@ beforeEach(() => {
   })
   mocks.prismaMock.materialIssue.findUnique.mockResolvedValue({ status: "draft" })
   mocks.prismaMock.materialIssue.findFirst.mockResolvedValue(null)
+  // mockResolvedValue persisten bertahan lintas test (clearAllMocks tak
+  // membuang implementasi): status WO default hidup dipulihkan eksplisit.
+  mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ status: "in_progress" })
 })
 
 describe("createMaterialIssue — menyimpan kolom penaut", () => {
@@ -182,6 +185,31 @@ describe("createMaterialIssue — WO-BR-004 guard anti-ganda form", () => {
     const where = mocks.prismaMock.materialIssue.findFirst.mock.calls[0][0].where
     expect(where.workOrderId).toBe(7)
     expect(where.status).toEqual({ in: ["draft", "processing", "completed"] })
+  })
+})
+
+describe("updateMaterialIssue — putaran 58: pindah WO dinilai ulang", () => {
+  it("menolak pindah ke WO yang sudah punya MI aktif lain", async () => {
+    // WO 9 sudah punya MI aktif #5; pindah MI draft #10 (masih di WO 7) ke
+    // WO 9 melahirkan MI ganda yang boleh diselesaikan bersama (stok keluar
+    // dua kali). Create menolak ini; update harus menolak pula.
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({ id: 5, documentNo: "MI-0005" })
+
+    const res = await updateMaterialIssue(10, fd({ ...base, workOrderId: "9" }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("MI-0005")
+    expect(mocks.prismaMock.materialIssue.update).not.toHaveBeenCalled()
+  })
+
+  it("menolak pindah ke WO closed", async () => {
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ status: "closed" })
+
+    const res = await updateMaterialIssue(10, fd({ ...base, workOrderId: "9" }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/ditutup \(closed\)/)
+    expect(mocks.prismaMock.materialIssue.update).not.toHaveBeenCalled()
   })
 })
 
