@@ -1659,3 +1659,29 @@ Wilayah: hasil verifikasi kandidat agent CRM/proyek + keuangan/pajak putaran 54/
 - Perangkap test terkonfirmasi lagi: `vi.clearAllMocks()` tidak membuang `mockResolvedValue` persisten — test yang menimpanya wajib pulihkan di `finally`; catch handler tidak boleh membaca variabel ter-scope `try` (`parsed is not defined`).
 - Guard repo-scan timeout 5000ms pada batch ~297 file (flake beban) — rerun terpisah hijau; jangan ubah daftar beku.
 - Tidak ada migrasi schema putaran ini.
+
+## Putaran 56 — CRM aktivitas, rekrutmen hire, API unduhan (3 fix)
+
+1. `9ba9f0edf` fix(crm): gerbang selesai/buka-kembali aktivitas lead dinilai di bawah kunci baris lead — sebelumnya `assertLeadActivityCompletionGuard` berjalan pada bacaan global tanpa tx, klaim aktivitas saja yang atomik; lead yang baru `lost`/terhapus/diambil alih di jendela lolos gerbang basi.
+2. `4a4fcf241` fix(hrm): kuota + lowongan hidup dinilai di bawah kunci saat `hireApplicant` — sebelumnya hanya baris applicant dikunci: hire sekuensial melampaui `quota`, hire dari halaman basi melahirkan karyawan dari lowongan soft-deleted, `updateVacancy` bisa menurunkan quota di bawah jumlah hired. Slug employee/createApplicant beralih `nextSlugWithClient`.
+3. `32ff85ca9` fix(api): unduhan backup DB + export log aktivitas `Cache-Control: no-store` — dump SQL seluruh DB dan CSV log (IP/deskripsi) bisa mengendap di disk cache browser PC bersama sesudah logout.
+
+### Vonis gugur / ditunda
+- CRM kandidat gerbang hidup customer/agen tanpa kunci baris ref (`createTicket`, `createLead`, `updateLead`): jendela sub-detik penonaktifan konkuren, kelas sama sisa approval disposal yang sudah diterima — CATAT, tanpa patch sepihak.
+- CRM duplikat lead konkuren: residual terdokumentasi AC-DUP-8 — DILARANG dipatch.
+- API kandidat `formData()` luar try di route upload + JSON privat tanpa cache header (print/payroll/notifications): GUGUR — multipart rusak = 500 framework bukan kebocoran; `NextResponse.json` tanpa `Content-Disposition` tak di-cache sebagai berkas.
+- Rekrutmen kandidat duplikat orang (email sama → dua Employee) + pasangan department/position vacancy tak divalidasi: kebijakan bisnis (Employee.email tak unik by-design, pesan FK tersanitasi) — CATAT, tanpa patch.
+
+## Putaran 57 — Aset, pembelian, peran (4 fix, berjalan)
+
+1. `91d00ac9a` fix(asset): `createAsset` anti double-submit — `checkIdempotency` dicatat lewat tx + key stabil form; sebelumnya kode sequence atomik membuat retry lahir aset + jurnal perolehan ganda senyap.
+2. `182608913` fix(auth): nama peran `finance`/`ga`/`kepala_bengkel` masuk `RESERVED_ROLE_NAMES` — scope HR berbasis NAMA peran; rename peran biasa oleh pemegang `manage_roles` non-super sebelumnya mewarisi akses semua/departemen karyawan tanpa izin HR.
+3. `0f8da19a1` fix(purchase): jurnal ulang bill vendor lahir sesudah reversal nomor faktur — cek idempotency `onVendorBillPosted` tanpa filter status menemukan jurnal asal REVERSED lalu return senyap; GL neto bill nol permanen. Kedua cek kini hanya POSTED.
+4. `2edf1ca01` fix(purchase): rekomputasi PO pada `deleteGoodsReceipt` memakai `purchaseOrderId` segar di bawah kunci baris GR — snapshot luar membuat PO tujuan pemindahan GR tertinggal `partial_received` + `receivedQty` basi.
+
+### Antre / dicatat putaran 57
+- `createServicePurchaseOrderFromWorkOrder` menilai status/baris WO dari snapshot luar tx (PO lahir draft — dampak terbatas).
+- Kunci item hook retur pembelian tidak terurut (deadlock saja, rollback bersih, retry-able).
+- `updateRole` check-then-write tanpa tx/kunci; guard super_admin aktif terakhir di `toggleUserActive`; `updateUserWarehouses` tanpa guard target; ID grant tak-existent lolos diam-diam — semua dampak lemah/membutuhkan aktor super sendiri.
+- Aset: snapshot akun kategori luar tx, merek bare-int yatim sesudah hapus model konkuren, approval basi disposeAsset, akun mapping kategori luar tx — jendela sub-detik setara sisa yang sudah diterima.
+- Tidak ada migrasi schema putaran 56–57.
