@@ -126,6 +126,24 @@ describe("onVendorBillPosted - service/expense branch", () => {
     expect(mocks.vendorBillFindUniqueOrThrow).not.toHaveBeenCalled()
   })
 
+  it("putaran 57: repost sesudah reversal (hanya jurnal REVERSED) WAJIB posting ulang", async () => {
+    mocks.systemSettingFindFirst.mockResolvedValue({
+      purchasePayableAccountId: PAYABLE,
+      purchaseExpenseAccountId: EXPENSE,
+      purchaseInventoryAccountId: null,
+      purchaseTaxAccountId: null,
+    })
+    // Jurnal asal sudah dibalik (REVERSED) oleh setVendorBillTaxInvoiceNumber;
+    // jurnal pengganti harus lahir, bukan dilewati sebagai "sudah ada".
+    // Mock honor filter status: hanya baris POSTED yang dihitung ada.
+    mocks.journalFindFirst.mockImplementation(async (args: any) =>
+      args?.where?.status === "POSTED" ? null : { id: 99, status: "REVERSED" },
+    )
+
+    await onVendorBillPosted(1, 42)
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(1)
+  })
+
   it("is idempotent: skips when a journal already exists for the bill", async () => {
     mocks.systemSettingFindFirst.mockResolvedValue({
       purchasePayableAccountId: PAYABLE,

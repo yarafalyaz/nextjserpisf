@@ -2968,7 +2968,7 @@ export async function onVendorBillPosted(
   });
 
   const existing = await db.journal.findFirst({
-    where: { referenceType: "VendorBill", referenceId: billId },
+    where: { referenceType: "VendorBill", referenceId: billId, status: "POSTED" },
   });
   if (existing) {
     console.info(
@@ -3080,9 +3080,12 @@ export async function onVendorBillPosted(
   }
 
   await executeInTx(txClient, async (tx) => {
-    // double check
+    // double check — hanya jurnal POSTED yang menahan repost: baris REVERSED
+    // adalah jurnal asal yang sudah dibalik (alur isi nomor faktur pasca-
+    // posting); menganggapnya "sudah ada" membunuh jurnal pengganti senyap
+    // dan GL neto bill menjadi nol permanen.
     const existingInTx = await tx.journal.findFirst({
-      where: { referenceType: "VendorBill", referenceId: billId },
+      where: { referenceType: "VendorBill", referenceId: billId, status: "POSTED" },
     });
     if (existingInTx) {
       console.info(
