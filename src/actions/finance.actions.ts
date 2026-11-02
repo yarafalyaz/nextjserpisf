@@ -1587,20 +1587,28 @@ export async function createBankReconciliation(formData: FormData) {
 
     const reconciliationNumber = await generateDocumentNumber("REC");
 
-    const reconciliation = await prisma.bankReconciliation.create({
-      data: {
-        reconciliationNumber,
-        slug: await nextSlug("bankReconciliation", reconciliationNumber),
-        accountId: v.accountId,
-        statementDate: wibDateToUtcMidnight(v.statementDate),
-        statementBalance: v.statementBalance,
-        periodStart: v.periodStart ? wibDateToUtcMidnight(v.periodStart) : null,
-        periodEnd: v.periodEnd ? wibDateToUtcMidnight(v.periodEnd) : null,
-        bookBalance: v.bookBalance,
-        notes: v.notes ?? null,
-        status: "draft",
-        createdBy: Number(user.id),
-      },
+    // Putaran 63: tanpa key, retry identik melahirkan dua draft
+    // rekonsiliasi untuk akun/periode sama yang masing-masing bisa
+    // disertifikasi terpisah.
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
+
+    const reconciliation = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id);
+      return tx.bankReconciliation.create({
+        data: {
+          reconciliationNumber,
+          slug: await nextSlugWithClient(tx as never, "bankReconciliation", reconciliationNumber),
+          accountId: v.accountId,
+          statementDate: wibDateToUtcMidnight(v.statementDate),
+          statementBalance: v.statementBalance,
+          periodStart: v.periodStart ? wibDateToUtcMidnight(v.periodStart) : null,
+          periodEnd: v.periodEnd ? wibDateToUtcMidnight(v.periodEnd) : null,
+          bookBalance: v.bookBalance,
+          notes: v.notes ?? null,
+          status: "draft",
+          createdBy: Number(user.id),
+        },
+      });
     });
 
     await logActivity(

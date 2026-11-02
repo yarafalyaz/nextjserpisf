@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { createBankReconciliation } from "@/actions/finance.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
@@ -19,15 +19,18 @@ interface Props {
 export function BankReconciliationForm({ accounts }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [accountId, setAccountId] = useState("")
 
   function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    formData.set("idempotencyKey", idempotencyKeyRef.current)
     startTransition(async () => {
       try {
         const res = await createBankReconciliation(formData)
         if (!res?.success) throw new Error(res?.error || "Gagal menyimpan data")
+        idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess("Rekonsiliasi berhasil dibuat")
         router.push("/keuangan/rekonsiliasi-bank")
         router.refresh()

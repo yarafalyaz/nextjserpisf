@@ -1290,6 +1290,28 @@ describe("Bank Reconciliation Actions", () => {
     expect(res.error).toMatch(/tidak aktif atau bukan akun aset/i)
     expect(mocks.prismaMock.bankReconciliation.create).not.toHaveBeenCalled()
   })
+  it("putaran 63: createBankReconciliation retry idempotencyKey sama ditolak, draft lahir sekali", async () => {
+    mocks.prismaMock.account.findFirst.mockResolvedValue({ id: 1 })
+    const idemCreate = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    mocks.prismaMock.idempotencyKey = {
+      create: idemCreate,
+      findUnique: vi.fn().mockResolvedValue({ createdAt: new Date() }),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    }
+
+    const payload = { accountId: 1, statementDate: "2026-06-13", statementBalance: 5000, idempotencyKey: "rec-key-1" }
+    const first = await (actions as any).createBankReconciliation(fdMap(payload))
+    const second = await (actions as any).createBankReconciliation(fdMap(payload))
+
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(String(second?.error ?? "")).toContain("duplikat")
+    expect(mocks.prismaMock.bankReconciliation.create).toHaveBeenCalledTimes(1)
+    delete mocks.prismaMock.idempotencyKey
+  })
   it("matchReconciliationLine succeeds", async () => {
     mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", accountId: 10, periodStart: null, periodEnd: null })
     mocks.prismaMock.bankStatementLine.findUniqueOrThrow.mockResolvedValue({ date: new Date("2026-06-13"), amount: 1000, type: "debit", debit: 1000, credit: 0, bankStatement: { accountId: 10 } })
