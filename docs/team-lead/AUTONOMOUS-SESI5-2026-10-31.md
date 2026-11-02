@@ -1603,3 +1603,31 @@ Pola lama: `findFirst` reuse/bentrok di LUAR transaksi, lalu create — dua requ
 ### Catatan
 - Perangkap test yang terkonfirmasi putaran ini: (a) mock settings default `{}` membuat `enableAutoXCode !== false` = true → kode manual DITIMPA kode auto, cek bentrok tak pernah jalan — test bentrok kode manual wajib set `enableAutoXCode: false` lalu pulihkan; (b) enum schema kapital (`type: "ASSET"`) — nilai kecil ditolak diam-diam sehingga reuse tak tercapai; (c) kode gudang dibandingkan persis (case-sensitive), hanya nama yang dinormalisasi.
 - Tidak ada migrasi schema putaran ini. Semua 13 head CI success (`705c6a101` head terakhir).
+
+## Putaran 54 — Hooks inventaris, aset, route workflow/cron, cetak (8 fix)
+
+Wilayah: hooks inventaris/produksi, `asset.actions.ts` + proyek, API routes + cron. Tiga agent read-only paralel; kandidat diverifikasi sesi utama terhadap kode + schema sebelum edit. Semua CI head success.
+
+### Fix
+1. `1f2393c8a` fix(print): sen tampil di `formatPdfCurrency` bila ada pecahan — `terbilang()` sudah menyebut sen, angka tercetak membuangnya → dokumen bersen tak cocok antara angka dan kata. Pecahan 2 digit hanya bila non-bulat. Merah 1.
+2. `1536fc4fd` fix(inventory): guard over-receipt GR membaca prior GR sebagai LOCKING read sesudah kunci PO — urutan lama membaca prior sebelum kunci memakai snapshot REPEATABLE READ yang sudah terbentuk; dua verifikasi konkuren sama-sama lolos dan kumulatif diterima melewati qty PO. `received_qty` tulis absolut menguatkan hilang-update.
+3. `1ed996bc4` fix(inventory): kunci baris `items` terurut menaik di 4 hook (stock-adjustment, material-issue, goods-receipt, inventory-transfer OUT) — urutan daftar kunci disamakan preseden receive; hardening konsistensi urutan kunci global, bukan klaim deadlock terbukti.
+4. `83d77c0cb` fix(asset): `disposeAsset` membaca mapping GL dari kategori aset TERKUNCI di dalam tx — snapshot luar menilai jurnal reklasifikasi yang commit di jendela kunci dengan akun kategori lama → nilai buku salah, saldo kategori baru yatim.
+5. `00711b016` fix(asset): `deleteAssetTransfer` membaca baris transfer segar di bawah kunci — snapshot luar bisa sudah di-relink edit konkuren; hapus + hitung ulang lokasi wajib mengikuti baris segar (pola `updateAssetTransfer` tetangga).
+6. `90828a64f` fix(workflow): error DB membaca pembuat dokumen tidak lagi ditelan `.catch((): null => null)` di route workflow — fallback aktor mencatat `requestedBy` salah lalu approval buntu di maker-checker. Regex guard `silent-failure` diperluas menerima handler bertipe `(): null => null`; tidak ada pelanggaran lain di repo.
+7. `7cc21f332` fix(asset): `generateAssetFiscalYearRows` dalam tx + kunci `assets`; segmen tahun baru dibangun dari `closingBalance` baris terbekukan, bukan `openingBalance` input yang konflik — unique `(assetId, taxYear)` hanya menahan tahun sama, rantai campuran antar tahun membeku permanen sebelumnya. Hasil hitung tahun terbit tidak ditulis ulang; `existing` dihitung dari baris yang tumpang tindih rantai efektif.
+8. `4b45bd197` fix(cron): catch terluar `daily-notifications` mencatat `console.error("[daily-notifications]", error)` sebelum respons 500 generik (pola 3 route cron lain).
+
+### Vonis ditunda / gugur (verifikasi sesi utama)
+- `updateAssetCategory` mengubah mapping GL walau jurnal POSTED ada: DITUNDA kebijakan — pemindahan saldo antar akun yang benar = jurnal reklasifikasi; memblokir edit kategori = keputusan desain bisnis, jangan patch sepihak.
+- Approval basi `disposeAsset` dibaca luar tx: SEBAGIAN BESAR TERTUTUP — `assertApproved` sendiri punya stale-check `updatedAt > completedAt` fail-closed; sisa jendela sub-detik tidak dipatch.
+- Nama/kode master aset duplikat (`AssetCategory`/`AssetGroup`/`AssetBrand` tanpa `@unique` nama): DITUNDA kebijakan (kategori sudah catatan terbuka baris 1035 log); slug bersuffix bukan penjaga tetapi blokir/reuse = keputusan bisnis.
+- Berkas warisan `public/uploads/avatars|signatures` masih publik: TIDAK dipatch kode — route privat baru benar; penutupan butuh migrasi berkas + URL tersimpan di DB saat deploy, fakta server produksi tak terlihat dari repo.
+- `vercel.json` menjadwalkan GET ke 3 route cron POST-only → 405 BILA deploy Vercel aktif: perlu fakta target deploy; produksi Docker memicu POST Bearer.
+- Dedupe notifikasi cron race (`notifyUsersIfNew` baca-lalu-tulis, `Notification` tanpa kolom dedupe): fix benar butuh kolom + migrasi; komentar `ponytail:` di kode sendiri sudah mengakui; dampak spam saja.
+- ItemBatch tanpa `@@unique(itemId, warehouseId, batchNumber)`: LATEN — semua penulis saat ini mengunci baris item lebih dulu; tidak ada migrasi schema sepihak.
+
+### Catatan
+- Guard repo-scan bisa timeout 5000ms pada batch paralel besar (flake beban) — selalu hijau direrun terpisah; jangan ubah daftar beku karena flake.
+- Kelas bersih agent (jangan diangkat ulang tanpa bukti baru): konsumsi FIFO locking read + dekremen atomik; serial `updateMany` bersyarat + `@unique`; reservasi MI `ORDER BY id`; auth/otorisasi API route; download/traversal; double-posting finansial cron (klaim `updateMany`, flip bersyarat, Serializable); `project.actions.ts` (transaksi+kunci lengkap).
+- Tidak ada migrasi schema putaran ini. Semua 8 head CI success (`4b45bd197` head terakhir).
