@@ -219,12 +219,27 @@ export async function deleteVehicleBrand(id: number) {
     // menyebut jumlahnya. Hanya relasi opsional SetNull yang bermasalah: tautan
     // kendaraan (yang malah MELEBAR jadi wildcard saat induknya hilang) dan
     // tautan kompatibilitas produk. Varian→Kendaraan Restrict, jadi tidak perlu.
-    const [productCount, ruleCount] = await Promise.all([
-      prisma.product.count({ where: { vehicleBrandId: id } }),
-      prisma.vehicleFitmentRule.count({ where: { vehicleBrandId: id } }),
-    ]);
-    const totalCount = productCount + ruleCount;
-    if (totalCount > 0) {
+    // Putaran 74: baris master dikunci DULU (pernyataan pertama tx) lalu
+    // hitungan dinilai ulang — deleteVehicleBrand lama menilai dari
+    // snapshot pra-tx pola approval lama (tak melihat Product/fitment yang
+    // commit di jendela sama), delete lolos dan kompatibilitas hilang senyap.
+    const outcome = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vehicle_brands WHERE id = ${id} FOR UPDATE`
+      }
+      const [productCount, ruleCount] = await Promise.all([
+        tx.product.count({ where: { vehicleBrandId: id } }),
+        tx.vehicleFitmentRule.count({ where: { vehicleBrandId: id } }),
+      ]);
+      if (productCount + ruleCount > 0) {
+        return { kind: "inUse" as const, productCount, ruleCount };
+      }
+      const row = await tx.vehicleBrand.delete({ where: { id } });
+      return { kind: "deleted" as const, row };
+    });
+    if (outcome.kind === "inUse") {
+      const { productCount, ruleCount } = outcome;
+      const totalCount = productCount + ruleCount;
       return {
         success: false,
         error:
@@ -233,8 +248,6 @@ export async function deleteVehicleBrand(id: number) {
           `Lepas asosiasi merek dari produk dan aturan terlebih dahulu.`,
       };
     }
-
-    await prisma.vehicleBrand.delete({ where: { id } });
 
     revalidatePath("/kendaraan/merek");
     await logActivity(
@@ -272,12 +285,25 @@ export async function deleteVehicleModel(id: number) {
     // Hanya relasi opsional SetNull yang bermasalah: aturan kendaraan (yang
     // malah MELEBAR jadi wildcard saat induknya hilang) dan tautan
     // kompatibilitas produk. Varian→Model Restrict, jadi tidak perlu.
-    const [productCount, ruleCount] = await Promise.all([
-      prisma.product.count({ where: { vehicleModelId: id } }),
-      prisma.vehicleFitmentRule.count({ where: { vehicleModelId: id } }),
-    ]);
-    const totalCount = productCount + ruleCount;
-    if (totalCount > 0) {
+    // Putaran 74: hitungan + delete dalam tx berkunci baris model —
+    // lihat deleteVehicleBrand.
+    const outcome = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vehicle_models WHERE id = ${id} FOR UPDATE`
+      }
+      const [productCount, ruleCount] = await Promise.all([
+        tx.product.count({ where: { vehicleModelId: id } }),
+        tx.vehicleFitmentRule.count({ where: { vehicleModelId: id } }),
+      ]);
+      if (productCount + ruleCount > 0) {
+        return { kind: "inUse" as const, productCount, ruleCount };
+      }
+      const row = await tx.vehicleModel.delete({ where: { id } });
+      return { kind: "deleted" as const, row };
+    });
+    if (outcome.kind === "inUse") {
+      const { productCount, ruleCount } = outcome;
+      const totalCount = productCount + ruleCount;
       return {
         success: false,
         error:
@@ -286,8 +312,6 @@ export async function deleteVehicleModel(id: number) {
           `Lepas asosiasi model dari produk dan aturan terlebih dahulu.`,
       };
     }
-
-    await prisma.vehicleModel.delete({ where: { id } });
 
     revalidatePath("/kendaraan/model");
     revalidatePath("/kendaraan/merek");
@@ -381,20 +405,32 @@ export async function deleteVehicleVariant(id: number) {
     // is Restrict (aman), tapi VehicleFitmentRule.vehicleVariantId opsional
     // SetNull — hapus varian tanpa penjagaan diam-diam MELEBARkan aturan itu
     // jadi wildcard varian. Kolomnya memang ditulis fitment actions, jadi hidup.
-    const [vehicleCount, ruleCount] = await Promise.all([
-      prisma.vehicle.count({ where: { vehicleVariantId: id } }),
-      prisma.vehicleFitmentRule.count({ where: { vehicleVariantId: id } }),
-    ]);
-    const inUseCount = vehicleCount + ruleCount;
-    if (inUseCount > 0) {
+    // Putaran 74: hitungan + delete dalam tx berkunci baris varian — lihat
+    // deleteVehicleBrand. Bacaan baris varian (untuk revalidate) ikut dalam
+    // tx yang sama sesudah kunci.
+    const outcome = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vehicle_variants WHERE id = ${id} FOR UPDATE`
+      }
+      const [vehicleCount, ruleCount] = await Promise.all([
+        tx.vehicle.count({ where: { vehicleVariantId: id } }),
+        tx.vehicleFitmentRule.count({ where: { vehicleVariantId: id } }),
+      ]);
+      if (vehicleCount + ruleCount > 0) {
+        return { kind: "inUse" as const, vehicleCount, ruleCount };
+      }
+      const variant = await tx.vehicleVariant.findUnique({ where: { id } });
+      await tx.vehicleVariant.delete({ where: { id } });
+      return { kind: "deleted" as const, variant };
+    });
+    if (outcome.kind === "inUse") {
+      const inUseCount = outcome.vehicleCount + outcome.ruleCount;
       return {
         success: false,
-        error: `Tidak bisa menghapus varian — masih dipakai oleh ${inUseCount} data (kendaraan: ${vehicleCount}, aturan kompatibilitas: ${ruleCount}).`,
+        error: `Tidak bisa menghapus varian — masih dipakai oleh ${inUseCount} data (kendaraan: ${outcome.vehicleCount}, aturan kompatibilitas: ${outcome.ruleCount}).`,
       };
     }
-
-    const variant = await prisma.vehicleVariant.findUnique({ where: { id } });
-    await prisma.vehicleVariant.delete({ where: { id } });
+    const variant = outcome.variant;
 
     if (variant)
       revalidatePath(`/kendaraan/model/${variant.vehicleModelId}/ubah`);
@@ -976,68 +1012,76 @@ export async function deleteCustomerVehicle(id: number) {
   try {
     await requirePermission("delete_customers");
 
-    const vehicle = await prisma.customerVehicle.findUniqueOrThrow({
-      where: { id },
-      select: {
-        customerId: true,
-        vehicleId: true,
-        _count: {
-          select: { workOrders: true, quotations: true, projects: true },
+    // Putaran 74: baris dikunci DULU (pernyataan pertama tx) lalu hitungan
+    // dependen dinilai ulang dari baris terkunci — version sebelumnya
+    // membaca hitungan dari snapshot pra-tx (pola approval lama): dokumen
+    // SO/quo/WO yang commit di jendela sama tak terlihat, delete lolos,
+    // relasi SetNull senyap dan kolom Int polos SO/Invoice jadi dangling.
+    const vehicle = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT id FROM customer_vehicles WHERE id = ${id} FOR UPDATE`;
+      }
+      const locked = await tx.customerVehicle.findUniqueOrThrow({
+        where: { id },
+        select: {
+          customerId: true,
+          vehicleId: true,
+          _count: {
+            select: { workOrders: true, quotations: true, projects: true },
+          },
         },
-      },
+      });
+
+      // Integrity guard: customerVehicleId on Quotation/WorkOrder/Project is nullable
+      // (SetNull), so deleting a customer-vehicle with history silently NULLs the
+      // vehicle reference on those documents, erasing service-history linkage.
+      // Refuse when dependents exist (mirrors deleteVehicle / deleteRole).
+      const relationDependents =
+        locked._count.workOrders +
+        locked._count.quotations +
+        locked._count.projects;
+
+      // SalesOrder.customerVehicleId and SalesInvoice.customerVehicleId are plain
+      // (non-relation) Int columns — CustomerVehicle has no back-relation for them,
+      // so they cannot be counted via _count above. Without this, a customer-vehicle
+      // referenced ONLY by an SO/Invoice (no WO/quotation/project) would pass the
+      // guard and be deleted, orphaning their customer_vehicle_id (no FK = silent
+      // dangling reference on financial documents). Count them directly. Mirrors the
+      // same guard already present in deleteVehicle.
+      const [soCount, invCount] = await Promise.all([
+        tx.salesOrder.count({ where: { customerVehicleId: id } }),
+        tx.salesInvoice.count({ where: { customerVehicleId: id } }),
+      ]);
+      const dependents = relationDependents + soCount + invCount;
+      if (dependents > 0) {
+        return { dependents, customerId: locked.customerId, vehicleId: locked.vehicleId };
+      }
+
+      // Delete the linkage row AND its backing catalog-type Vehicle row
+      // atomically. Every CustomerVehicle created from a variant gets its
+      // own dedicated catalog Vehicle row (see createCustomerVehicle),
+      // and Vehicle → CustomerVehicle is onDelete: Restrict — deleting
+      // only the linkage would leave that Vehicle row orphaned forever;
+      // a Vehicle MAY be shared by several CustomerVehicles, so only
+      // delete it when this is its last remaining owner.
+      const otherOwners = await tx.customerVehicle.count({
+        where: { vehicleId: locked.vehicleId, id: { not: id } },
+      });
+      await tx.customerVehicle.delete({ where: { id } });
+      if (otherOwners === 0) {
+        await tx.vehicle.deleteMany({ where: { id: locked.vehicleId } });
+      }
+      return { dependents: 0, customerId: locked.customerId, vehicleId: locked.vehicleId };
     });
 
-    // Integrity guard: customerVehicleId on Quotation/WorkOrder/Project is nullable
-    // (SetNull), so deleting a customer-vehicle with history silently NULLs the
-    // vehicle reference on those documents, erasing service-history linkage.
-    // Refuse when dependents exist (mirrors deleteVehicle / deleteRole).
-    const relationDependents =
-      vehicle._count.workOrders +
-      vehicle._count.quotations +
-      vehicle._count.projects;
-
-    // SalesOrder.customerVehicleId and SalesInvoice.customerVehicleId are plain
-    // (non-relation) Int columns — CustomerVehicle has no back-relation for them,
-    // so they cannot be counted via _count above. Without this, a customer-vehicle
-    // referenced ONLY by an SO/Invoice (no WO/quotation/project) would pass the
-    // guard and be deleted, orphaning their customer_vehicle_id (no FK = silent
-    // dangling reference on financial documents). Count them directly. Mirrors the
-    // same guard already present in deleteVehicle.
-    const [soCount, invCount] = await Promise.all([
-      prisma.salesOrder.count({ where: { customerVehicleId: id } }),
-      prisma.salesInvoice.count({ where: { customerVehicleId: id } }),
-    ]);
-    const salesDependents = soCount + invCount;
-
-    const dependents = relationDependents + salesDependents;
-    if (dependents > 0) {
+    if (vehicle.dependents > 0) {
       return {
         success: false,
         error:
-          `Kendaraan pelanggan ini punya ${dependents} dokumen terkait (perintah kerja/penawaran/proyek/penjualan) ` +
+          `Kendaraan pelanggan ini punya ${vehicle.dependents} dokumen terkait (perintah kerja/penawaran/proyek/penjualan) ` +
           `dan tidak bisa dihapus karena akan menghilangkan riwayat servis. Nonaktifkan kendaraan sebagai gantinya.`,
       };
     }
-
-    // Delete the linkage row AND its backing catalog-type Vehicle row atomically.
-    // Every CustomerVehicle created from a variant gets its own dedicated
-    // catalog Vehicle row (see createCustomerVehicle), and Vehicle → CustomerVehicle
-    // is onDelete: Restrict — deleting only the linkage would leave that Vehicle
-    // row orphaned forever (no customer, invisible in every screen), and the FK
-    // would block a later raw delete. A Vehicle MAY be shared by several
-    // CustomerVehicles, so only delete it when this is its last remaining owner;
-    // otherwise just drop the linkage and keep the shared row.
-    await prisma.$transaction(async (tx) => {
-      const otherOwners = await tx.customerVehicle.count({
-        where: { vehicleId: vehicle.vehicleId, id: { not: id } },
-      });
-
-      await tx.customerVehicle.delete({ where: { id } });
-
-      if (otherOwners === 0) {
-        await tx.vehicle.deleteMany({ where: { id: vehicle.vehicleId } });
-      }
-    });
 
     revalidatePath(`/master/pelanggan/${vehicle.customerId}/kendaraan`);
     await logActivity(

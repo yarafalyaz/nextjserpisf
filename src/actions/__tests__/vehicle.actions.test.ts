@@ -391,6 +391,23 @@ describe("Customer Vehicle Actions", () => {
     const res = await actions.deleteCustomerVehicle(1)
     expect(res?.success).toBe(true)
   })
+  it("putaran 74: deleteCustomerVehicle menolak dari hitungan terkunci (dependen dokumen baru di jendela)", async () => {
+    // Pra-tx (bacaan awal kode lama) tanpa bergantung — baris terkunci dalam
+    // tx melihat dokumen SO yang commit di jendela sama. Mock menyatukan
+    // tx == prismaMock maka hitungan delegate tunggal ini mewakili bacaan
+    // terkunci; gadai perilaku: delete wajib tidak terpanggil.
+    mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({
+      id: 1, customerId: 1, vehicleId: 9,
+      _count: { workOrders: 0, quotations: 0, projects: 0 }
+    })
+    mocks.prismaMock.salesOrder.count.mockResolvedValueOnce(2)
+    mocks.prismaMock.salesInvoice.count.mockResolvedValueOnce(0)
+    const res = await actions.deleteCustomerVehicle(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("2 dokumen")
+    expect(mocks.prismaMock.customerVehicle.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vehicle.deleteMany).not.toHaveBeenCalled()
+  })
   it("updateCustomerVehicle fails without vehicleId (line 502-506 branch)", async () => {
     mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({ id: 1, customerId: 1, vehicleId: 1 })
     const res = await actions.updateCustomerVehicle(1, fdMap({ customerId: 1 }))
