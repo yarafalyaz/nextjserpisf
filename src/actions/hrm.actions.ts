@@ -6004,11 +6004,18 @@ export async function createAppreciation(formData: FormData) {
     await assertHrEmployeeAccess(await getHrScope(user), v.employeeId);
     await assertLiveEmployee(v.employeeId);
 
-    const appreciation = await prisma.appreciation.create({
-      data: {
-        slug: await nextSlug("appreciation", "apresiasi"),
-        ...appreciationWriteData(v),
-      },
+    // Putaran 62: key form dinilai pertama dalam tx. Double-submit
+    // sebelumnya melahirkan dua apresiasi identik yang sama-sama masuk
+    // bruto payroll karyawan. Pemanggil tanpa key tetap no-op.
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
+    const appreciation = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id);
+      return tx.appreciation.create({
+        data: {
+          slug: await nextSlug("appreciation", "apresiasi"),
+          ...appreciationWriteData(v),
+        },
+      });
     });
 
     await logActivity(

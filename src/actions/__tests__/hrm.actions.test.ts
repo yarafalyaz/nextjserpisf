@@ -1210,6 +1210,26 @@ describe("Appreciation Actions", () => {
     prismaMock.appreciation.findUniqueOrThrow.mockResolvedValue({ employeeId: 1 })
   })
 
+  it("putaran 62: createAppreciation retry idempotency sama ditolak, bonus lahir sekali", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
+    mocks.checkIdempotencyMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."))
+    const payload = {
+      employeeId: "1",
+      date: "2026-06-12",
+      title: "Star Performer",
+      amount: "500000",
+      idempotencyKey: "appr-key-1",
+    }
+    const first = await actions.createAppreciation(fd(payload))
+    const second = await actions.createAppreciation(fd(payload))
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(String((second as { error?: string } | undefined)?.error ?? "")).toMatch(/duplikat/)
+    expect(prismaMock.appreciation.create).toHaveBeenCalledTimes(1)
+  })
+
   it("createAppreciation succeeds", async () => {
     const res = await actions.createAppreciation(fd({
       employeeId: "1",

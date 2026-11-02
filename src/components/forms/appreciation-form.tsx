@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { createAppreciation, updateAppreciation } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -28,6 +28,7 @@ interface AppreciationFormProps {
 export function AppreciationForm({ employees, appreciation }: AppreciationFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [employeeId, setEmployeeId] = useState(appreciation?.employeeId ? String(appreciation.employeeId) : "")
   const [employeeOptions, setEmployeeOptions] = useState(employees)
 
@@ -41,9 +42,11 @@ export function AppreciationForm({ employees, appreciation }: AppreciationFormPr
           formData.set("id", String(appreciation.id))
           result = await updateAppreciation(formData)
         } else {
+          formData.set("idempotencyKey", idempotencyKeyRef.current)
           result = await createAppreciation(formData)
         }
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        if (!appreciation?.id) idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess(appreciation?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/sdm/apresiasi")
         router.refresh()
