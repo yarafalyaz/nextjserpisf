@@ -73,4 +73,22 @@ describe("arus kas PDF paritas layar (loadCashFlow)", () => {
     expect(subtotal?.kind === "subtotal" && subtotal.values[0]).toContain("10")
     expect(takTerklasifikasi?.kind === "line" && takTerklasifikasi.values[0]).toContain("7")
   })
+
+  it("putaran 55: himpunan kas = configured ∪ reportGroup BANK, bukan heuristik nama", async () => {
+    // Akun ASSET bernama "Kasbon Direksi"/"Piutang Bank Garansi" lolos
+    // contains Kas/Bank lama dan mencemari saldo akhir laporan.
+    // Himpunan kanonis repo = configured settings ∪ reportGroup "BANK"
+    // (form pembayaran/transfer), live saja.
+    await loadCashFlow({ start: new Date(2026, 9, 1), end: new Date(2026, 9, 31) })
+    expect(mocks.prismaMock.account.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          type: "ASSET",
+          isActive: true,
+          deletedAt: null,
+          OR: [{ id: { in: [1] } }, { reportGroup: "BANK" }],
+        },
+      }),
+    )
+  })
 })

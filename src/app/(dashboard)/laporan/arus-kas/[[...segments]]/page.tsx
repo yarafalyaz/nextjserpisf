@@ -67,14 +67,16 @@ export default async function CashFlowPage({
     (id): id is number => typeof id === "number",
   );
 
+  // Selaras loader PDF: himpunan kas = configured ∪ reportGroup "BANK",
+  // live saja — bukan heuristik nama (Kasbon Direksi dkk. bukan kas).
   const cashAccounts = await prisma.account.findMany({
     where: {
       type: "ASSET",
+      isActive: true,
+      deletedAt: null,
       OR: [
         { id: { in: configuredCashIds.length ? configuredCashIds : [-1] } },
-        { name: { contains: "Kas" } },
-        { name: { contains: "Bank" } },
-        { name: { contains: "Cash" } },
+        { reportGroup: "BANK" },
       ],
     },
     select: { id: true },

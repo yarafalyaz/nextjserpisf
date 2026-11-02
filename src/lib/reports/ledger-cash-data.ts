@@ -879,14 +879,18 @@ export async function loadCashFlow(period: Period): Promise<CashFlowReportView> 
   const configured = [settings?.cashBankAccountId, settings?.pettyCashAccountId].filter(
     (id): id is number => typeof id === "number",
   )
+  // Himpunan kas kanonis: akun terkonfigurasi settings ∪ reportGroup
+  // "BANK" (definisi yang sama dipakai form pembayaran/transfer), live
+  // saja. Heuristik contains "Kas"/"Bank"/"Cash" lama menangkap akun
+  // seperti Kasbon Direksi dan mencemari saldo laporan.
   const cashAccounts = await prisma.account.findMany({
     where: {
       type: "ASSET",
+      isActive: true,
+      deletedAt: null,
       OR: [
         { id: { in: configured.length ? configured : [-1] } },
-        { name: { contains: "Kas" } },
-        { name: { contains: "Bank" } },
-        { name: { contains: "Cash" } },
+        { reportGroup: "BANK" },
       ],
     },
     select: { id: true },
