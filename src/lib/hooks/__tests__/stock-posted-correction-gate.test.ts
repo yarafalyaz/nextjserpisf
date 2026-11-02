@@ -78,7 +78,16 @@ function baseTx(spies: ReturnType<typeof makeSpies>) {
       ),
     },
     stockMove: { findFirst: vi.fn().mockResolvedValue(null), create: spies.moveCreate },
-    item: { findMany: vi.fn().mockResolvedValue([itemRow]) },
+    // Putaran 60: hook stok juga menilai item hidup; dispatcher per bentuk
+    // select — gerbang hidup menerima baris hidup id 7, query metadata lama
+    // (trackSerial/trackBatch) menerima itemRow fixture.
+    item: {
+      findMany: vi.fn().mockImplementation(async (args: any) =>
+        args?.select?.isActive || args?.select?.name
+          ? (args?.where?.id?.in ?? []).map((id: number) => ({ id, name: `Item ${id}`, isActive: true }))
+          : [itemRow],
+      ),
+    },
     itemSerial: { findMany: vi.fn().mockResolvedValue([]), updateMany: vi.fn().mockResolvedValue({ count: 0 }), createMany: vi.fn().mockResolvedValue({ count: 0 }) },
     itemBatch: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({}), update: vi.fn().mockResolvedValue({}) },
   }
