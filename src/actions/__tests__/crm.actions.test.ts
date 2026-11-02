@@ -75,6 +75,61 @@ beforeEach(() => {
   mocks.prismaMock.crmTicket.findUnique.mockResolvedValue({ id: 1, status: "open", firstResponseAt: null, resolvedAt: null, deletedAt: null })
 })
 
+describe("deleteLead ownership (putaran 71)", () => {
+  it("rep tanpa manage_leads ditolak menghapus lead rep lain, nol tulis", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.requirePermissionMock.mockResolvedValue({ id: 3, permissions: ["delete_leads"], roles: ["sales"] })
+    const txLeadFind = vi.fn(async () => ({ id: 1, assignedTo: 9 }))
+    const txUpdate = vi.fn(async () => ({}))
+    const txDelete = vi.fn(async () => ({}))
+    const txFacade = {
+      ...mocks.prismaMock,
+      lead: {
+        ...mocks.prismaMock.lead,
+        findUniqueOrThrow: txLeadFind,
+        update: txUpdate,
+        delete: txDelete,
+      },
+      leadActivity: { count: vi.fn(async () => 0) },
+    }
+    const txImpl = mocks.prismaMock.$transaction.getMockImplementation()
+    mocks.prismaMock.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(txFacade))
+    try {
+      const res = await actions.deleteLead(1)
+      expect(res?.success).toBe(false)
+      expect(res?.error).toContain("ditugaskan kepada Anda")
+      expect(txUpdate).not.toHaveBeenCalled()
+      expect(txDelete).not.toHaveBeenCalled()
+    } finally {
+      mocks.prismaMock.$transaction.mockImplementation(txImpl)
+    }
+  })
+  it("pemilik lead boleh menghapus leadnya sendiri", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 3, permissions: ["delete_leads"], roles: ["sales"] })
+    const txUpdate = vi.fn(async () => ({}))
+    const txFacade = {
+      ...mocks.prismaMock,
+      lead: {
+        ...mocks.prismaMock.lead,
+        findUniqueOrThrow: vi.fn(async () => ({ id: 1, assignedTo: 3 })),
+        update: txUpdate,
+        delete: vi.fn(async () => ({})),
+      },
+      leadActivity: { count: vi.fn(async () => 2) },
+    }
+    const txImpl = mocks.prismaMock.$transaction.getMockImplementation()
+    mocks.prismaMock.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(txFacade))
+    try {
+      try {
+        await actions.deleteLead(1)
+      } catch { /* redirect */ }
+      expect(txUpdate).toHaveBeenCalled()
+    } finally {
+      mocks.prismaMock.$transaction.mockImplementation(txImpl)
+    }
+  })
+})
+
 describe("CRM Ticket Actions", () => {
   it("regresi putaran 46: createTicket menolak kunci idempotensi duplikat segar", async () => {
     mocks.prismaMock.idempotencyKey = {

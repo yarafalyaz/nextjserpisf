@@ -288,7 +288,14 @@ export async function deleteLead(id: number) {
 
   try {
   // Fix #22: Add permission check
-  await requirePermission("delete_leads")
+  const user = await requirePermission("delete_leads")
+  // Putaran 71: kepemilikan dinilai dari baris terkunci (pola convertLead
+  // baris 387-389) — delete adalah mutasi lead paling destruktif dan
+  // satu-satunya tanpa gerbang pemilik; rep berizin delete_leads bisa
+  // menghapus lead rep lain termasuk yang sudah terkonversi.
+  const isAdmin =
+    user.permissions.includes("manage_leads") ||
+    user.roles.includes("super_admin")
   // Lead has a deletedAt column — soft-delete on FK conflicts to preserve the
   // churn-history report and avoid orphaning converted-lead references.
   // LeadActivity.lead ber-onDelete Cascade: hard delete lead beraktivitas
@@ -298,6 +305,12 @@ export async function deleteLead(id: number) {
   // sebelum hitungan; addLeadActivity mengunci baris yang sama.
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT id FROM leads WHERE id = ${id} FOR UPDATE`
+    if (!isAdmin) {
+      const fresh = await tx.lead.findUniqueOrThrow({ where: { id } })
+      if (fresh.assignedTo !== Number(user.id)) {
+        throw new Error("Anda hanya dapat menghapus lead yang ditugaskan kepada Anda.")
+      }
+    }
     const activityCount = await tx.leadActivity.count({ where: { leadId: id } })
     if (activityCount > 0) {
       await tx.lead.update({ where: { id }, data: { deletedAt: new Date() } })
