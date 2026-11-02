@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -33,6 +33,8 @@ const ARTICLE_OPTIONS = ["PPh21", "PPh22", "PPh23", "PPh4(2)", "PPh26", "PPh15"]
 export function WithholdingTaxTypeForm({ accounts, taxType }: WithholdingTaxTypeFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Putaran 70: key stabil per intent create; retry memakai ulang, sukses merotasi.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [isActive, setIsActive] = useState(taxType?.isActive ?? true)
   const [liabilityAccountId, setLiabilityAccountId] = useState<string | null>(
     taxType?.liabilityAccountId ? String(taxType.liabilityAccountId) : null,
@@ -50,6 +52,7 @@ export function WithholdingTaxTypeForm({ accounts, taxType }: WithholdingTaxType
     else formData.delete("article")
     if (liabilityAccountId) formData.set("liabilityAccountId", liabilityAccountId)
     if (receivableAccountId) formData.set("receivableAccountId", receivableAccountId)
+    if (!taxType?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
 
     startTransition(async () => {
       try {
@@ -61,6 +64,7 @@ export function WithholdingTaxTypeForm({ accounts, taxType }: WithholdingTaxType
           return
         }
         showSuccess(taxType?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
+        if (!taxType?.id) idempotencyKeyRef.current = crypto.randomUUID()
         router.push("/pengaturan/pajak-potong")
         router.refresh()
       } catch (error) {

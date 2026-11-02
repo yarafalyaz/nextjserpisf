@@ -1,25 +1,41 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-const mocks = vi.hoisted(() => ({
-  requirePermissionMock: vi.fn(),
-  revalidateMock: vi.fn(),
-  logActivityMock: vi.fn(),
-  prismaMock: {
+const mocks = vi.hoisted(() => {
+  const txFacade = {
     withholdingTaxType: {
       create: vi.fn().mockResolvedValue({ id: 1 }),
       update: vi.fn().mockResolvedValue({ id: 1 }),
+      findMany: vi.fn().mockResolvedValue([]),
     },
-    account: {
-      findFirst: vi.fn().mockResolvedValue({ id: 10 }),
+    $executeRaw: vi.fn().mockResolvedValue(1),
+  }
+  return {
+    requirePermissionMock: vi.fn(),
+    revalidateMock: vi.fn(),
+    logActivityMock: vi.fn(),
+    txFacade,
+    prismaMock: {
+      withholdingTaxType: txFacade.withholdingTaxType,
+      account: {
+        findFirst: vi.fn().mockResolvedValue({ id: 10 }),
+      },
+      $transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => cb(txFacade)),
     },
-  },
-}))
+  }
+})
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: any) => mocks.requirePermissionMock(...a) }))
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: mocks.logActivityMock }))
-vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn().mockResolvedValue("pph-23") }))
+vi.mock("@/lib/utils/slug-db", () => ({
+  nextSlug: vi.fn().mockResolvedValue("pph-23"),
+  nextSlugWithClient: vi.fn().mockResolvedValue("pph-23"),
+}))
+const checkIdempotencyMock = vi.fn()
+vi.mock("@/lib/utils/idempotency", () => ({
+  checkIdempotency: (...a: unknown[]) => checkIdempotencyMock(...a),
+}))
 
 import * as actions from "../withholding-tax.actions"
 
@@ -33,10 +49,13 @@ const BASE = { code: "PPH23", name: "PPh 23", rate: "2" }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+  mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: [] })
   mocks.prismaMock.account.findFirst.mockResolvedValue({ id: 10 })
   mocks.prismaMock.withholdingTaxType.create.mockResolvedValue({ id: 1 })
   mocks.prismaMock.withholdingTaxType.update.mockResolvedValue({ id: 1 })
+  mocks.prismaMock.withholdingTaxType.findMany.mockResolvedValue([])
+  mocks.txFacade.$executeRaw.mockResolvedValue(1)
+  checkIdempotencyMock.mockResolvedValue(undefined)
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
 
@@ -127,6 +146,36 @@ describe("WithholdingTaxType akun FK wajib ada", () => {
     const res = await actions.createWithholdingTaxType(fd({ ...BASE, article: "PPh99" }))
     expect(res.success).toBe(false)
     expect(mocks.prismaMock.withholdingTaxType.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 70: create double-submit ditolak: create hanya sekali", async () => {
+    checkIdempotencyMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi."))
+    const p = { ...BASE, idempotencyKey: "wht-key-1" }
+    const first = await actions.createWithholdingTaxType(fd(p))
+    expect(first.success).toBe(true)
+    const second = await actions.createWithholdingTaxType(fd(p))
+    expect(second.success).toBe(false)
+    expect(String(second.error)).toContain("duplikat")
+    expect(mocks.prismaMock.withholdingTaxType.create).toHaveBeenCalledTimes(1)
+  })
+
+  it("putaran 70: create mengklaim kode ternormalisasi dari daftar sibling", async () => {
+    mocks.prismaMock.withholdingTaxType.findMany.mockResolvedValue([{ id: 2, code: "pph23 " }])
+    const res = await actions.createWithholdingTaxType(fd({ ...BASE, code: " PPH23" }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("Kode PPh")
+    expect(res.error).not.toContain("Unique constraint")
+    expect(mocks.prismaMock.withholdingTaxType.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 70: update mengklaim kode ternormalisasi dari daftar sibling", async () => {
+    mocks.prismaMock.withholdingTaxType.findMany.mockResolvedValue([{ id: 2, code: "PPH23" }])
+    const res = await actions.updateWithholdingTaxType(5, fd({ ...BASE, code: " pph23 " }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("Kode PPh")
+    expect(mocks.prismaMock.withholdingTaxType.update).not.toHaveBeenCalled()
   })
 
   it("update menulis pasal + kode objek", async () => {
