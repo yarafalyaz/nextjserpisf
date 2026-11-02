@@ -576,6 +576,22 @@ describe("F-027 baris draft", () => {
     expect(res.error).toContain("sudah ada")
   })
 
+  it("putaran 65: duplikat muncul sesudah cek luar (race) ditolak dalam tx berkunci", async () => {
+    prismaMock.payrollComponent.findUnique.mockResolvedValue({
+      id: 9, name: "Bonus", kind: "earning", recurrence: "variable", isTaxable: true, isActive: true, accountId: null,
+    })
+    // Bacaan pertama (luar tx) kosong; bacaan ulang di bawah kunci payroll
+    // melihat insert request saingan yang sudah commit.
+    prismaMock.payrollComponentLine.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 31 })
+    const res = await actions.addPayrollComponentLine(55, fd({ componentId: "9", amount: "250000" }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah ada")
+    expect(prismaMock.payrollComponentLine.create).not.toHaveBeenCalled()
+    expect(prismaMock.payrollComponentLine.findFirst).toHaveBeenCalledTimes(2)
+  })
+
   it("updatePayroll slip berbaris: agregat klien diabaikan, turunan baris menang", async () => {
     prismaMock.payroll.findUniqueOrThrow.mockResolvedValue({ ...draftPayroll })
     prismaMock.payroll.findUnique.mockResolvedValue({ id: 7, maritalStatus: "single", dependents: 0 })

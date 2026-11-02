@@ -777,6 +777,15 @@ export async function addPayrollComponentLine(payrollId: number, formData: FormD
       if (locked.status !== "draft") {
         throw new Error("Baris komponen gaji hanya dapat diubah pada slip draft");
       }
+      // Putaran 65: cek duplikat luar tx (baris 764) dibaca tanpa kunci —
+      // dua request konkuren sama-sama lolos lalu terserial di kunci
+      // payroll dan sama-sama insert (tanpa unique DB). Dinilai ulang di
+      // bawah kunci payroll agar request kedua melihat insert pertama.
+      const dupLocked = await tx.payrollComponentLine.findFirst({
+        where: { payrollId, componentId },
+        select: { id: true },
+      });
+      if (dupLocked) throw new Error("Komponen gaji yang sama sudah ada pada slip ini");
       const row = await tx.payrollComponentLine.create({
         data: {
           payrollId,
