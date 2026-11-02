@@ -44,7 +44,8 @@ vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: (...a: unkn
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }))
 vi.mock("@/lib/finance/asset-disposal", () => ({ buildAssetDisposalEntries: vi.fn(() => []) }))
-vi.mock("@/lib/services/approval-workflow.service", () => ({ assertApproved: vi.fn(async () => undefined) }))
+const assertApprovedMock = vi.fn(async (..._a: unknown[]) => undefined)
+vi.mock("@/lib/services/approval-workflow.service", () => ({ assertApproved: (...a: unknown[]) => assertApprovedMock(...a) }))
 
 import { disposeAsset } from "../asset.actions"
 
@@ -72,6 +73,8 @@ beforeEach(() => {
     assetFindUniqueOrThrowMock, assetCategoryFindUniqueMock, assetUpdateManyMock, assetHistoryCreateMock,
     journalFindFirstMock, journalFindManyMock, journalCreateMock, transactionMock,
   ]) m.mockReset()
+  assertApprovedMock.mockReset()
+  assertApprovedMock.mockResolvedValue(undefined)
   requirePermissionMock.mockResolvedValue({ id: 4 })
   parseFormDataMock.mockReturnValue({
     success: true,
@@ -92,6 +95,21 @@ beforeEach(() => {
 })
 
 describe("disposeAsset concurrency guard", () => {
+  it("putaran 74: approval basi dinilai ulang di dalam tx — disposal ditolak sebelum klaim", async () => {
+    // Pra-tx lolos (approval lama); dalam tx (argumen ketiga terisi)
+    // dokumen terbaca berubah sesudah approval final → fail-closed basi.
+    assertApprovedMock.mockImplementation(async (...a: unknown[]) => {
+      if (a[2]) throw new Error("Dokumen berubah sesudah persetujuan final — ajukan ulang persetujuan sebelum dilanjutkan.")
+      return undefined
+    })
+    const result = await disposeAsset(new FormData())
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("berubah sesudah persetujuan")
+    expect(assetUpdateManyMock).not.toHaveBeenCalled()
+    expect(assetHistoryCreateMock).not.toHaveBeenCalled()
+    expect(journalCreateMock).not.toHaveBeenCalled()
+  })
+
   it("disposes via an atomic conditional claim scoped to status != disposed", async () => {
     const result = await disposeAsset(new FormData())
 

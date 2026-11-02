@@ -1086,7 +1086,7 @@ export async function createAsset(formData: FormData) {
 export async function updateAsset(id: number, formData: FormData) {
   "use server";
   try {
-    await requirePermission("edit_assets");
+    const user = await requirePermission("edit_assets");
 
     const parsed = parseFormData(assetSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -1300,6 +1300,12 @@ export async function updateAsset(id: number, formData: FormData) {
         notes: data.description || null,
       },
       });
+      // Putaran 74: edit sesudah approval final membuka pengajuan baru
+      // atomik dengan edit (pola updateJournal/updateVendorPayment) —
+      // tanpa baris ini assertApproved fail-closed basi di disposeAsset
+      // menolak selamanya dan aset sah tak bisa dilepas. Tanpa workflow
+      // terkonfigurasi ini no-op.
+      await requestApprovalIfConfigured("Asset", id, Number(user.id), tx);
     });
 
     await logActivity("update", "Asset", id, "Memperbarui aset");
@@ -1365,6 +1371,12 @@ export async function disposeAsset(formData: FormData) {
       // terposting sesudah bacaan luar tetapi sebelum klaim disposal —
       // klaim hanya mencegah disposal ganda, bukan menggeser dasar hitung.
       await tx.$executeRaw`SELECT id FROM assets WHERE id = ${data.assetId} FOR UPDATE`;
+      // Putaran 74: approval dinilai ulang dari baris terkunci (pola
+      // postJournal/postInvoice) — cek pra-tx tidak melihat edit yang
+      // commit di jendela kunci; fakta terdisposal wajib fakta ter-approve
+      // (Asset masuk STALE_ON_EDIT_TYPES). updateAsset membuka pengajuan
+      // baru untuk isi hasil edit, jadi penolakan di sini bisa dipulihkan.
+      await assertApproved("Asset", data.assetId, tx);
       const lockedAsset = await tx.asset.findUniqueOrThrow({ where: { id: data.assetId } });
       if (lockedAsset.status === "disposed") {
         throw new Error("Aset sudah dilepas (disposed) atau sedang diproses.");

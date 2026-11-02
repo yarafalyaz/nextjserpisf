@@ -1581,6 +1581,33 @@ describe("createAsset / updateAsset", () => {
     expect(requestApprovalMock).toHaveBeenCalledWith("Asset", expect.any(Number), expect.any(Number))
   })
 
+  it("putaran 74: updateAsset membuka pengajuan approval baru atomik dengan edit", async () => {
+    // Edit sesudah approval final menaikkan updatedAt; tanpa pengajuan
+    // baru, assertApproved fail-closed basi di disposeAsset menolak
+    // selamanya (aset sah terkunci dari disposal). Pola updateJournal.
+    // Harness tak membersihkan mock antar-test: bedakan panggilan sesi ini
+    // lewat requestedBy khas (sesi default id 1; sebelum putaran ini
+    // updateAsset tak pernah memanggil requestApprovalIfConfigured).
+    requirePermissionMock.mockResolvedValue({ id: 74 })
+    prismaMock.asset.findUniqueOrThrow.mockResolvedValue({
+      id: 100,
+      purchaseCost: 1000,
+      status: "active",
+    })
+    prismaMock.asset.findUnique.mockResolvedValue({
+      purchaseCost: 1000, status: "active", categoryId: null,
+      depreciationMethod: "straight_line", usefulLifeMonths: null, residualValue: 0,
+    })
+    const res = await updateAsset(100, fd({
+      name: "Laptop Ubah",
+      code: "LAP-14",
+      purchasePrice: "1000",
+    }))
+    expect(res?.success).toBe(true)
+    expect(prismaMock.asset.update).toHaveBeenCalled()
+    expect(requestApprovalMock).toHaveBeenCalledWith("Asset", 100, 74, expect.anything())
+  })
+
   it("skips GL posting when purchaseCost is 0", async () => {
     process.env.FIXED_ASSET_ACCOUNT_ID = "200"
     process.env.ASSET_CASH_ACCOUNT_ID = "201"
