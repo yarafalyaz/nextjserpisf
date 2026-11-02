@@ -1589,7 +1589,12 @@ export async function createEmployee(formData: FormData) {
     await assertEmployeeRefsExist(employeeData);
 
     // Create employee + (optionally) a linked login account atomically.
+    // Putaran 61: key form dinilai pertama dalam tx. Retry double-submit
+    // sebelumnya melahirkan karyawan kembar (employeeNo sekuens beda,
+    // tanpa login tak ada unique apa pun yang menahan) — risiko slip
+    // gaji ganda. Quick-add tanpa key tetap no-op (upsert nama menahan).
     const employee = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, actor.id);
       if (wantsLogin && email && loginPass) {
         const hashedPassword = await bcrypt.hash(loginPass, 12);
         const user = await tx.user.create({

@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
-import { useTransition, useState, type InputEvent } from "react"
+import { useRef, useTransition, useState, type InputEvent } from "react"
 import { useForm, Controller, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { employeeSchema, type EmployeeInput } from "@/lib/validations/form.schemas"
@@ -146,6 +146,7 @@ function RolePicker({
 export function EmployeeForm({ employee, departments, positions, managers = [], generatedCode, enableAutoCode = true, roles = [] }: EmployeeFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const isEdit = !!employee
   // Login account can be offered when creating, or when editing an employee
   // that doesn't have a login account yet.
@@ -240,6 +241,7 @@ export function EmployeeForm({ employee, departments, positions, managers = [], 
           loginRoleIds.forEach((id) => formData.append("loginRoleIds", id))
         }
 
+        if (!isEdit) formData.set("idempotencyKey", idempotencyKeyRef.current)
         const result = isEdit
           ? await updateEmployee(employee!.id, formData)
           : await createEmployee(formData)
@@ -247,6 +249,7 @@ export function EmployeeForm({ employee, departments, positions, managers = [], 
         if (!result?.success) {
           throw new Error(result?.error || "Gagal menyimpan data")
         }
+        if (!isEdit) idempotencyKeyRef.current = crypto.randomUUID()
 
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/master/karyawan")

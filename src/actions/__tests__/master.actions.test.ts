@@ -754,6 +754,25 @@ describe("Warehouse kode unik: tabrakan dilaporkan bisa ditindak, bukan P2002 me
 })
 
 describe("Employee Actions", () => {
+  it("putaran 61: createEmployee menolak kunci idempotensi duplikat segar", async () => {
+    mocks.prismaMock.idempotencyKey = {
+      create: vi.fn(async () => {
+        const err: any = new Error("unique")
+        err.code = "P2002"
+        throw err
+      }),
+      findUnique: vi.fn(async () => ({ createdAt: new Date() })),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+    }
+    try {
+      const res = await actions.createEmployee(fdMap({ name: "test", joinDate: "2026-06-13", idempotencyKey: "emp-key-1" }))
+      expect(res?.success).toBe(false)
+      expect(res?.error).toContain("Permintaan duplikat terdeteksi")
+      expect(mocks.prismaMock.employee.create).not.toHaveBeenCalled()
+    } finally {
+      delete mocks.prismaMock.idempotencyKey
+    }
+  })
   it("createEmployee succeeds", async () => {
     const res = await actions.createEmployee(fdMap({ name: "test", joinDate: "2026-06-13" }))
     expect(res?.success).toBe(true)
