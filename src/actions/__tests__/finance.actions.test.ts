@@ -1527,6 +1527,46 @@ describe("Cost Center Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("putaran 68: createCostCenter menolak induk tak ditemukan dari himpunan terkunci", async () => {
+    const defaultFindMany = mocks.prismaMock.costCenter.findMany.getMockImplementation()
+    mocks.prismaMock.costCenter.findMany.mockImplementation(async () => [
+      { id: 3, name: "Biaya Operasional", code: "CC-OPS", slug: "biaya-operasional" },
+    ])
+    try {
+      const bad = await (actions as any).createCostCenter(fdMap({
+        code: "CC-ANAK",
+        name: "Anak Yatim",
+        isActive: "true",
+        parentId: "999",
+      }))
+      expect(bad?.success).toBe(false)
+      expect(String(bad?.error)).toContain("Pusat biaya induk tidak ditemukan")
+      expect(mocks.prismaMock.costCenter.create).not.toHaveBeenCalled()
+    } finally {
+      mocks.prismaMock.costCenter.findMany.mockImplementation(defaultFindMany as never)
+    }
+  })
+
+  it("putaran 68: createCostCenter dengan induk hidup tersimpan dengan parentId", async () => {
+    const defaultFindMany = mocks.prismaMock.costCenter.findMany.getMockImplementation()
+    mocks.prismaMock.costCenter.findMany.mockImplementation(async () => [
+      { id: 7, name: "Biaya Induk", code: "CC-IND", slug: "biaya-induk" },
+    ])
+    try {
+      const res = await (actions as any).createCostCenter(fdMap({
+        code: "CC-ANAK",
+        name: "Anak Sah",
+        isActive: "true",
+        parentId: "7",
+      }))
+      expect(res?.success).toBe(true)
+      const createArg = mocks.prismaMock.costCenter.create.mock.calls.at(-1)?.[0]
+      expect(createArg.data.parentId).toBe(7)
+    } finally {
+      mocks.prismaMock.costCenter.findMany.mockImplementation(defaultFindMany as never)
+    }
+  })
+
   /**
    * Pusat laba: model `ProfitCenter` sebelumnya tidak punya jalur tulis sama sekali
    * (hanya skrip seed), padahal laporan pusat laba membacanya.

@@ -2316,6 +2316,13 @@ export async function createCostCenter(formData: FormData) {
           `Kode pusat biaya ${byCode.code} sudah dipakai pusat biaya "${byCode.name}"; pakai kode lain.`,
         );
       }
+      // Putaran 68: jalur create menilai induk dari himpunan terkunci yang
+      // sama: FK hanya menolak induk fiktif (P2003 mentah), dan tanpa cek
+      // ini parentId menggantung lolos. Pesan homolog jalur update
+      // (updateCostCenter "Pusat biaya induk tidak ditemukan").
+      if (v.parentId != null && !candidates.some((row) => row.id === v.parentId)) {
+        throw new Error("Pusat biaya induk tidak ditemukan");
+      }
       const created = await tx.costCenter.create({
         data: {
           code: v.code,
