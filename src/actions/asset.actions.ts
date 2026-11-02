@@ -200,12 +200,17 @@ export async function createAssetCategory(formData: FormData) {
  */
 export async function createAssetGroup(formData: FormData) {
   try {
-    await requirePermission("create_asset_groups");
+    const user = await requirePermission("create_asset_groups");
 
     const parsed = parseFormData(assetGroupSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
 
-    const group = await prisma.assetGroup.create({ data: { name: parsed.data.name } });
+    // Putaran 64: retry submit identik melahirkan grup kembar (grup tidak
+    // punya slug/unique apa pun). Key diklaim dalam tx; rollback melepaskan.
+    const group = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
+      return tx.assetGroup.create({ data: { name: parsed.data.name } });
+    });
 
     await logActivity("create", "AssetGroup", group.id, `Menambah grup aset ${parsed.data.name}`);
     revalidatePath("/aset/grup");

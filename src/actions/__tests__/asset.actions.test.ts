@@ -211,6 +211,10 @@ describe("Asset Group Actions", () => {
    * `AssetGroup` tidak punya jalur tulis sama sekali sebelum modul `/aset/grup`
    * ditambahkan — hanya skrip seed — padahal `Asset.groupId` dibaca halaman aset.
    */
+  beforeEach(() => {
+    requirePermissionMock.mockResolvedValue({ id: 1 })
+  })
+
   it("createAssetGroup menulis nama dan memakai izin tambah", async () => {
     prismaMock.assetGroup.create.mockResolvedValue({ id: 11 })
 
@@ -228,6 +232,22 @@ describe("Asset Group Actions", () => {
 
     expect(res.success).toBe(false)
     expect(prismaMock.assetGroup.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 64: createAssetGroup retry idempotencyKey sama ditolak, grup lahir sekali", async () => {
+    prismaMock.assetGroup.create.mockResolvedValue({ id: 11 })
+    const idem = prismaMock.idempotencyKey as any
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const formData = () => fd({ name: "Kendaraan Operasional", idempotencyKey: "ag-key-1" })
+    const first = await createAssetGroup(formData())
+    expect(first?.success).toBe(true)
+    const second = await createAssetGroup(formData())
+    expect(second?.success).toBe(false)
+    expect(second?.error).toContain("duplikat")
+    expect(prismaMock.assetGroup.create).toHaveBeenCalledTimes(1)
   })
 
   it("updateAssetGroup memakai izin ubah", async () => {
@@ -704,33 +724,18 @@ describe("Asset Transfer Actions", () => {
   })
 
   it("putaran 64: createAssetTransfer retry idempotencyKey sama ditolak, riwayat transfer lahir sekali", async () => {
-    // Fixture persisten per-aksi (bukan antrean Once): antrean Once di
-    // model idempotencyKey bersama menelan injeksi test createAsset lain
-    // (vi.clearAllMocks tidak membersihkan implementasi persisten).
     const idem = prismaMock.idempotencyKey as any
-    const seenKeys = new Set<string>()
-    idem.create.mockImplementation(async (args: any) => {
-      if (seenKeys.has(args.data.key)) {
-        throw Object.assign(new Error("dup"), { code: "P2002" })
-      }
-      seenKeys.add(args.data.key)
-      return { id: 1 }
-    })
-    idem.findUnique.mockImplementation(async (args: any) =>
-      seenKeys.has(args.where.key) ? { createdAt: new Date() } : null,
-    )
-    try {
-      const payload = { assetId: "5", toLocation: "HQ", transferDate: "2026-06-12", idempotencyKey: "at-key-1" }
-      const first = await createAssetTransfer(fd(payload))
-      expect(first?.success).toBe(true)
-      const second = await createAssetTransfer(fd(payload))
-      expect(second?.success).toBe(false)
-      expect(second?.error).toContain("duplikat")
-      expect(prismaMock.assetTransfer.create).toHaveBeenCalledTimes(1)
-    } finally {
-      idem.create.mockResolvedValue({})
-      idem.findUnique.mockResolvedValue(null)
-    }
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const payload = { assetId: "5", toLocation: "HQ", transferDate: "2026-06-12", idempotencyKey: "at-key-1" }
+    const first = await createAssetTransfer(fd(payload))
+    expect(first?.success).toBe(true)
+    const second = await createAssetTransfer(fd(payload))
+    expect(second?.success).toBe(false)
+    expect(second?.error).toContain("duplikat")
+    expect(prismaMock.assetTransfer.create).toHaveBeenCalledTimes(1)
   })
 
   it("putaran 61: slug transfer dipilih di dalam tx lewat tx client (bukan prisma global)", async () => {
