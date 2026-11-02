@@ -42,7 +42,7 @@ const mocks = vi.hoisted(() => {
     goodsReceipt: {
       delete: vi.fn(),
       count: vi.fn().mockResolvedValue(0),
-      findUnique: vi.fn().mockResolvedValue({ status: "draft" }),
+      findUnique: vi.fn().mockResolvedValue({ status: "draft", purchaseOrderId: 10 }),
     },
     qcInspection: { count: vi.fn().mockResolvedValue(0) },
     nonconformance: { count: vi.fn().mockResolvedValue(0) },
@@ -126,7 +126,7 @@ describe("deleteGoodsReceipt menghitung ulang receivedQty PO", () => {
     });
     mocks.prismaMock.vendorBill.count.mockResolvedValue(0);
     mocks.txMock.goodsReceipt.count.mockResolvedValue(0);
-    mocks.txMock.goodsReceipt.findUnique.mockResolvedValue({ status: "draft" });
+    mocks.txMock.goodsReceipt.findUnique.mockResolvedValue({ status: "draft", purchaseOrderId: 10 });
     mocks.txMock.goodsReceiptItem.findMany.mockResolvedValue([]);
     // Default eksplisit: vi.clearAllMocks tidak membuang implementasi dari
     // test sebelumnya (regresi QC memasang count 1).
@@ -238,6 +238,7 @@ describe("deleteGoodsReceipt menghitung ulang receivedQty PO", () => {
       status: "draft",
       items: [],
     });
+    mocks.txMock.goodsReceipt.findUnique.mockResolvedValue({ status: "draft", purchaseOrderId: null });
 
     const res = await deleteGoodsReceipt(2);
 
