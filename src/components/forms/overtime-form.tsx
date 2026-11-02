@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { createOvertimeRequest, updateOvertimeRequest } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -19,6 +19,7 @@ import { toLocalDateOnly } from "@/lib/utils/date-only"
 export function OvertimeForm({ employees, projects, overtime }: { employees: { id: number; name: string }[]; projects?: { id: number; name: string }[]; overtime?: { id: number; employeeId: number; projectId?: number | null; date: string; hours: number; totalHours?: number | null; mealHours?: number | null; billableHours?: number | null; reason?: string | null } }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [date, setDate] = useState(overtime?.date ? new Date(overtime.date).toISOString().split("T")[0] : toLocalDateOnly(new Date()))
   const [employeeId, setEmployeeId] = useState<string | null>(
     overtime?.employeeId ? String(overtime.employeeId) : employees.length === 1 ? String(employees[0].id) : null
@@ -31,8 +32,10 @@ export function OvertimeForm({ employees, projects, overtime }: { employees: { i
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
+        if (!overtime?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
         const result = overtime?.id ? await updateOvertimeRequest(overtime.id, formData) : await createOvertimeRequest(formData)
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        if (!overtime?.id) idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess(overtime?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/sdm/lembur")
         router.refresh()

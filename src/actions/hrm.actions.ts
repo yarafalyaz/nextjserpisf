@@ -1268,6 +1268,10 @@ export async function createOvertimeRequest(formData: FormData) {
       // baris overtime_requests sendiri sehingga cap-nya menilai baris itu,
       // bukan penulis create lain.
       await tx.$executeRaw`SELECT id FROM employees WHERE id = ${v.employeeId} FOR UPDATE`;
+      // Putaran 70: klaim key per intent dalam tx sesudah kunci karyawan —
+      // retry submit melahirkan pengajuan kedua yang lolos cap kumulatif
+      // dan sama-sama bisa disetujui. Pemanggil tanpa key tetap no-op.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
       // Batas lembur PP 35/2021 Pasal 26 ayat (1) — gerbang bersama create/
       // update di overtime-pay.service (syarat vonis K2-S1).
       const otDate = wibDateToUtcMidnight(v.date);

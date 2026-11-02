@@ -540,6 +540,20 @@ describe("Overtime Request Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("putaran 70: createOvertimeRequest retry idempotency sama ditolak, pengajuan lahir sekali", async () => {
+    mocks.checkIdempotencyMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."))
+    const payload = { employeeId: "1", date: "2026-06-12", hours: "2", idempotencyKey: "overtime-key-1" }
+    const first = await actions.createOvertimeRequest(fd(payload))
+    const second = await actions.createOvertimeRequest(fd(payload))
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(String((second as { error?: string } | undefined)?.error ?? "")).toMatch(/duplikat/)
+    expect(mocks.checkIdempotencyMock).toHaveBeenCalledTimes(2)
+    expect(prismaMock.overtimeRequest.create).toHaveBeenCalledTimes(1)
+  })
+
   it("putaran 38: lembur baru untuk karyawan mati/terhapus ditolak sebelum tulis", async () => {
     prismaMock.employee.findFirst.mockResolvedValue(null)
     const res = await actions.createOvertimeRequest(fd({
