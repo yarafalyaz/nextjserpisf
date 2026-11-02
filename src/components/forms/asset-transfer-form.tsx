@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { AppDatePicker } from "@/components/ui/date-picker";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
@@ -39,6 +39,10 @@ export function AssetTransferForm({
   transfer,
 }: AssetTransferFormProps) {
   const router = useRouter();
+  // Idempotency: key stabil per intent tambah; retry jaringan memakai key
+  // yang sama (ditolak server), sukses merotasi untuk transfer berikutnya.
+  const idempotencyKeyRef = useRef<string | null>(null);
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID();
   const [isPending, startTransition] = useTransition();
   const [transferDate, setTransferDate] = useState(
     transfer?.transferDate || toLocalDateOnly(new Date()),
@@ -63,6 +67,7 @@ export function AssetTransferForm({
         const formData = new FormData(e.currentTarget);
         const { createAssetTransfer, updateAssetTransfer } =
           await import("@/actions/asset.actions");
+        if (!transfer?.id) formData.set("idempotencyKey", idempotencyKeyRef.current!);
         const result = transfer?.id
           ? await updateAssetTransfer(transfer.id, formData)
           : await createAssetTransfer(formData);
@@ -70,6 +75,7 @@ export function AssetTransferForm({
           showError(result.error || "Gagal menyimpan data");
           return;
         }
+        idempotencyKeyRef.current = crypto.randomUUID();
         showSuccess(
           transfer?.id
             ? "Data berhasil diperbarui"

@@ -703,6 +703,36 @@ describe("Asset Transfer Actions", () => {
     }))).rejects.toThrow(redirectErr)
   })
 
+  it("putaran 64: createAssetTransfer retry idempotencyKey sama ditolak, riwayat transfer lahir sekali", async () => {
+    // Fixture persisten per-aksi (bukan antrean Once): antrean Once di
+    // model idempotencyKey bersama menelan injeksi test createAsset lain
+    // (vi.clearAllMocks tidak membersihkan implementasi persisten).
+    const idem = prismaMock.idempotencyKey as any
+    const seenKeys = new Set<string>()
+    idem.create.mockImplementation(async (args: any) => {
+      if (seenKeys.has(args.data.key)) {
+        throw Object.assign(new Error("dup"), { code: "P2002" })
+      }
+      seenKeys.add(args.data.key)
+      return { id: 1 }
+    })
+    idem.findUnique.mockImplementation(async (args: any) =>
+      seenKeys.has(args.where.key) ? { createdAt: new Date() } : null,
+    )
+    try {
+      const payload = { assetId: "5", toLocation: "HQ", transferDate: "2026-06-12", idempotencyKey: "at-key-1" }
+      const first = await createAssetTransfer(fd(payload))
+      expect(first?.success).toBe(true)
+      const second = await createAssetTransfer(fd(payload))
+      expect(second?.success).toBe(false)
+      expect(second?.error).toContain("duplikat")
+      expect(prismaMock.assetTransfer.create).toHaveBeenCalledTimes(1)
+    } finally {
+      idem.create.mockResolvedValue({})
+      idem.findUnique.mockResolvedValue(null)
+    }
+  })
+
   it("putaran 61: slug transfer dipilih di dalam tx lewat tx client (bukan prisma global)", async () => {
     const res = await createAssetTransfer(fd({
       assetId: "5",

@@ -338,6 +338,9 @@ export async function createAssetTransfer(formData: FormData) {
         // (transferDate, id)) yang menentukan lokasi akhir. Kunci yang
         // sama dipakai updateAsset/disposeAsset/peristiwa aset.
         await tx.$executeRaw`SELECT id FROM assets WHERE id = ${data.assetId} FOR UPDATE`;
+        // Putaran 64: retry submit identik melahirkan riwayat transfer
+        // kembar. Key diklaim sesudah kunci aset; rollback melepaskan key.
+        await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
         // Putaran 61: slug dipilih DI DALAM tx lewat tx client. nextSlug
         // global membaca prisma global yang tak melihat baris tak-tercommit
         // transaksi lain — dua create bersamaan memilih slug "transfer"
