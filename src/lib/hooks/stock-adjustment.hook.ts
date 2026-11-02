@@ -8,7 +8,10 @@ import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { safeMultiply } from "@/lib/utils/math";
 import { InventoryStatus, Status } from "@/lib/constants";
-import { assertWarehousesExistAndActive } from "@/lib/services/material-request.service";
+import {
+  assertItemsExistAndActive,
+  assertWarehousesExistAndActive,
+} from "@/lib/services/material-request.service";
 
 
 const executeInTx = async (
@@ -60,6 +63,10 @@ export async function onStockAdjustmentProcessed(
     // gerakan stok ditulis. Penyesuaian yang diproses sesudah gudangnya
     // dinonaktifkan/dihapus tidak boleh memposting layer ke gudang mati.
     await assertWarehousesExistAndActive(tx as never, [adjustment.warehouseId]);
+    // Putaran 60: item baris dokumen juga dinilai ulang HIDUP di titik
+    // posting. Item yang dinonaktifkan/dihapus sesudah draft dibuat tidak
+    // boleh tetap digerakkan FIFO/StockMove/qtyOnHand/jurnalnya.
+    await assertItemsExistAndActive(tx as never, adjustment.items.map((item) => item.itemId));
 
     // Create Stock Move per item based on difference
     const journalItems: { qty: number; cost: number; difference: number }[] = [];

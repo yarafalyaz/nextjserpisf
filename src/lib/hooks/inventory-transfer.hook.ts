@@ -16,7 +16,10 @@ import {
   type ReceiptLineInput,
   type TransferLineState,
 } from "@/lib/services/inventory-transfer-receipt.service";
-import { assertWarehousesExistAndActive } from "@/lib/services/material-request.service";
+import {
+  assertItemsExistAndActive,
+  assertWarehousesExistAndActive,
+} from "@/lib/services/material-request.service";
 
 const EPSILON = 0.0001;
 
@@ -58,6 +61,15 @@ export async function onTransferProcessed(
 
     // Enforce period lock — transfer date must fall in an open period.
     await assertPeriodOpen(transfer.date, tx);
+
+    // Putaran 60: titik posting OUT menilai master HIDUP dari baris dokumen
+    // terkunci. Item/gudang asal yang mati sesudah draft dibuat tidak boleh
+    // tetap dikonsumsi FIFO/ditulis StockMove/qtyOnHand.
+    await assertWarehousesExistAndActive(tx as never, [transfer.sourceWarehouseId]);
+    await assertItemsExistAndActive(
+      tx as never,
+      [...new Set(transfer.items.map((item) => item.itemId))],
+    );
 
     // Idempotency: skip when stock moves already exist (logged — caller-visible in prod logs)
     const existingOutMoves = await tx.stockMove.findFirst({
@@ -410,6 +422,13 @@ export async function onTransferReceived(
     // sesudah kirim tidak boleh menerima stok posted diam-diam. Gudang
     // asal tidak digerbang: stok sudah keluar saat process.
     await assertWarehousesExistAndActive(tx as never, [transfer.destinationWarehouseId]);
+    // Putaran 60: item baris transfer juga dinilai ulang HIDUP di titik
+    // terima (kedua jalur). Item mati sesudah kirim tidak boleh lahir lagi
+    // sebagai layer/StockMove IN di gudang tujuan.
+    await assertItemsExistAndActive(
+      tx as never,
+      [...new Set(transfer.items.map((item) => item.itemId))],
+    );
 
     if (receipt) {
       // Q-TP-1: periode dinilai per TANGGAL KEJADIAN, bukan tanggal kirim.

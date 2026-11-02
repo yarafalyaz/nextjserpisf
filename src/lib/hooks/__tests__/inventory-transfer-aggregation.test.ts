@@ -30,10 +30,14 @@ vi.mock("@/lib/db/prisma", () => ({
 
 import { onTransferProcessed, onTransferReceived } from "@/lib/hooks/inventory-transfer.hook"
 
-function wireTx(transferItems: Array<{ id?: number; itemId: number; qty: number; receivedQty?: number; serialNumbers?: unknown; batchAllocations?: unknown }>, status = "draft") {
+function wireTx(
+  transferItems: Array<{ id?: number; itemId: number; qty: number; receivedQty?: number; serialNumbers?: unknown; batchAllocations?: unknown }>,
+  status = "draft",
+  opts: { inactiveItemIds?: number[]; deletedItemIds?: number[]; inactiveWarehouseIds?: number[] } = {},
+) {
   const warehouseRows = [
-    { id: 1, name: "Gudang Asal", isActive: true },
-    { id: 2, name: "Gudang Tujuan", isActive: true },
+    { id: 1, name: "Gudang Asal", isActive: !opts.inactiveWarehouseIds?.includes(1) },
+    { id: 2, name: "Gudang Tujuan", isActive: !opts.inactiveWarehouseIds?.includes(2) },
   ]
   const normalizedItems = transferItems.map((item, index) => ({ receivedQty: 0, ...item, id: item.id ?? index + 1 }))
   const spies = {
@@ -51,7 +55,28 @@ function wireTx(transferItems: Array<{ id?: number; itemId: number; qty: number;
     moveCreate: vi.fn().mockResolvedValue({ id: 999 }),
     transferItemUpdate: vi.fn().mockResolvedValue({}),
     serialUpdateMany: vi.fn().mockResolvedValue({ count: 0 }),
-    itemFindMany: vi.fn().mockResolvedValue([]),
+    itemFindMany: vi.fn().mockImplementation(async ({ where, select }: { where?: { id?: { in?: number[] } }; select?: Record<string, boolean> }) => {
+      const ids = where?.id?.in ?? []
+      if (select?.isActive || select?.name) {
+        return ids.filter((id) => !opts.deletedItemIds?.includes(id)).map((id) => ({
+          id,
+          // Mock gerbang hidup wajib konsisten dengan fixture lokal yang
+          // menimpa findMany khusus di test individual; di sini wireTx tak
+          // punya state aktif selain opts.
+          name: `Item ${id}`,
+          isActive: !opts.inactiveItemIds?.includes(id),
+        }))
+      }
+      return []
+    }),
+    itemAliveFindMany: vi.fn().mockImplementation(async ({ where }: { where?: { id?: { in?: number[] } } }) => {
+      const ids = where?.id?.in ?? []
+      return ids.filter((id) => !opts.deletedItemIds?.includes(id)).map((id) => ({
+        id,
+        name: `Item ${id}`,
+        isActive: !opts.inactiveItemIds?.includes(id),
+      }))
+    }),
     batchFindMany: vi.fn().mockResolvedValue([]),
     batchFindFirst: vi.fn().mockResolvedValue(null),
     batchUpdate: vi.fn().mockResolvedValue({}),
@@ -67,7 +92,14 @@ function wireTx(transferItems: Array<{ id?: number; itemId: number; qty: number;
     inventoryTransferItem: { update: spies.transferItemUpdate },
     inventoryTransferReceipt: { create: spies.receiptCreate },
     inventoryTransferReceiptItem: { findMany: spies.receiptItemFindMany },
-    item: { findMany: spies.itemFindMany },
+    item: {
+      findMany: (...args: any[]) => {
+        const first = args[0] as { select?: Record<string, boolean> } | undefined
+        return first?.select?.isActive || first?.select?.name
+          ? spies.itemAliveFindMany(...args)
+          : spies.itemFindMany(...args)
+      },
+    },
     itemSerial: { updateMany: spies.serialUpdateMany },
     itemBatch: {
       findMany: spies.batchFindMany,
@@ -95,6 +127,32 @@ beforeEach(() => {
   )
   // Cost differs per FIFO consume call to make drift detectable if dedup regressed.
   mocks.consumeFifoLayers.mockResolvedValue({ consumedCost: 500, shortfall: 0, consumedSerials: [], consumedBatches: [] })
+})
+
+describe("onTransferProcessed — master mati (putaran 60)", () => {
+  it("item nonaktif sesudah create → process ditolak, FIFO tidak dikonsumsi", async () => {
+    const { spies } = wireTx([{ itemId: 7, qty: 3 }], "draft", { inactiveItemIds: [7] })
+
+    await expect(onTransferProcessed(100, 1)).rejects.toThrow(/tidak aktif/)
+    expect(mocks.consumeFifoLayers).not.toHaveBeenCalled()
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+  })
+
+  it("item terhapus sesudah create → process ditolak, FIFO tidak dikonsumsi", async () => {
+    const { spies } = wireTx([{ itemId: 7, qty: 3 }], "draft", { deletedItemIds: [7] })
+
+    await expect(onTransferProcessed(100, 1)).rejects.toThrow(/tidak ditemukan/)
+    expect(mocks.consumeFifoLayers).not.toHaveBeenCalled()
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+  })
+
+  it("gudang asal nonaktif sesudah create → process ditolak, FIFO tidak dikonsumsi", async () => {
+    const { spies } = wireTx([{ itemId: 7, qty: 3 }], "draft", { inactiveWarehouseIds: [1] })
+
+    await expect(onTransferProcessed(100, 1)).rejects.toThrow(/tidak aktif/)
+    expect(mocks.consumeFifoLayers).not.toHaveBeenCalled()
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+  })
 })
 
 describe("onTransferProcessed item aggregation", () => {
@@ -202,6 +260,30 @@ describe("onTransferProcessed item aggregation", () => {
     await onTransferProcessed(100, 1, tx as any)
     expect(mocks.transaction).not.toHaveBeenCalled()
     expect(spies.moveCreate).toHaveBeenCalled()
+  })
+})
+
+describe("onTransferReceived — item mati (putaran 60)", () => {
+  it("item nonaktif sesudah kirim → terima legacy ditolak, tidak ada gerakan IN", async () => {
+    const { spies } = wireTx([{ itemId: 7, qty: 3 }], "processed", { inactiveItemIds: [7] })
+    spies.moveFindFirst.mockResolvedValueOnce(null)
+
+    await expect(onTransferReceived(100, 1)).rejects.toThrow(/tidak aktif/)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+    expect(mocks.createInLayer).not.toHaveBeenCalled()
+  })
+
+  it("item terhapus sesudah kirim → terima parsial ditolak, tidak ada gerakan IN/receipt", async () => {
+    const { spies } = wireTx([{ id: 51, itemId: 7, qty: 3 }], "processed", { deletedItemIds: [7] })
+
+    await expect(onTransferReceived(100, 1, undefined, {
+      receivedDate: new Date("2026-03-01T00:00:00Z"),
+      idempotencyKey: "receipt-key-item-mati",
+      lines: [{ transferItemId: 51, qty: 2 }],
+    })).rejects.toThrow(/tidak ditemukan/)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+    expect(spies.receiptCreate).not.toHaveBeenCalled()
+    expect(mocks.createInLayer).not.toHaveBeenCalled()
   })
 })
 

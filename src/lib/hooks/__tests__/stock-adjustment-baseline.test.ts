@@ -42,6 +42,8 @@ function wireTx(opts: {
   trackSerialItemIds?: number[]
   trackBatchItemIds?: number[]
   warehouseRows?: Array<{ id: number; name: string; isActive: boolean }>
+  inactiveItemIds?: number[]
+  deletedItemIds?: number[]
 }) {
   const warehouseRows = opts.warehouseRows ?? [{ id: 1, name: "Gudang Utama", isActive: true }]
   const spies = {
@@ -58,13 +60,19 @@ function wireTx(opts: {
     itemFindUnique: vi.fn().mockImplementation(({ where }: { where: { id: number } }) =>
       Promise.resolve({ qtyOnHand: opts.liveQty[where.id] ?? 0 }),
     ),
-    itemFindMany: vi.fn().mockImplementation(async ({ where }: { where: { id: { in: number[] } } }) =>
-      where.id.in.map((id: number) => ({
+    itemFindMany: vi.fn().mockImplementation(async ({ where, select }: { where: { id: { in: number[] } }; select?: Record<string, boolean> }) => {
+      const rows = where.id.in.filter((id) => !opts.deletedItemIds?.includes(id)).map((id: number) => ({
         id,
+        // Gerbang hidup punya kolom sendiri; query metadata lama wajib tetap
+        // boleh membaca baris yang sudah dimatikan (duplikat Track flags).
+        ...(select?.isActive || select?.name
+          ? { name: `Item ${id}`, isActive: !opts.inactiveItemIds?.includes(id) }
+          : {}),
         trackSerial: opts.trackSerialItemIds?.includes(id) ?? false,
         trackBatch: opts.trackBatchItemIds?.includes(id) ?? false,
-      })),
-    ),
+      }))
+      return rows
+    }),
     serialCreateMany: vi.fn().mockResolvedValue({ count: 0 }),
     batchFindFirst: vi.fn().mockResolvedValue(null),
     batchCreate: vi.fn().mockResolvedValue({}),
@@ -112,6 +120,34 @@ beforeEach(() => {
     return Array.from({ length: count }, () => `SM-${++n}`)
   })
   mocks.consumeFifoLayers.mockResolvedValue({ consumedCost: 0, shortfall: 0 })
+})
+
+describe("onStockAdjustmentProcessed — item dokumen mati (putaran 60)", () => {
+  it("item nonaktif sesudah create → process ditolak, tidak ada gerakan stok/jurnal", async () => {
+    const spies = wireTx({
+      items: [{ itemId: 7, systemQty: 0, actualQty: 2, difference: 2, unitCost: 100 }],
+      liveQty: { 7: 0 },
+      inactiveItemIds: [7],
+    })
+
+    await expect(onStockAdjustmentProcessed(50, 1)).rejects.toThrow(/tidak aktif/)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+    expect(mocks.consumeFifoLayers).not.toHaveBeenCalled()
+    expect(mocks.onStockAdjustment).not.toHaveBeenCalled()
+  })
+
+  it("item terhapus sesudah create → process ditolak, tidak ada gerakan stok/jurnal", async () => {
+    const spies = wireTx({
+      items: [{ itemId: 7, systemQty: 0, actualQty: 2, difference: 2, unitCost: 100 }],
+      liveQty: { 7: 0 },
+      deletedItemIds: [7],
+    })
+
+    await expect(onStockAdjustmentProcessed(50, 1)).rejects.toThrow(/tidak ditemukan/)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+    expect(mocks.consumeFifoLayers).not.toHaveBeenCalled()
+    expect(mocks.onStockAdjustment).not.toHaveBeenCalled()
+  })
 })
 
 describe("onStockAdjustmentProcessed — gudang dokumen mati (putaran 51)", () => {
