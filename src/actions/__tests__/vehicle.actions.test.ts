@@ -276,6 +276,21 @@ describe("Vehicle Actions", () => {
     const res = await actions.updateVehicle(1, fdMap({ variantId: 1, name: "Fortuner 2.4", year: 2023 }))
     expect(res?.success).toBe(true)
   })
+  it("putaran 70: updateVehicle menghitung slug dalam tx berkunci baris (bukan slug global pra-tx)", async () => {
+    const res = await actions.updateVehicle(1, fdMap({ variantId: 1, name: "Fortuner 2.4", year: 2023 }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+    const lockCall = (mocks.prismaMock.$executeRaw.mock.calls as unknown[][]).find((c) => {
+      const a = c[0] as { sql?: string; strings?: string[] } | string[]
+      const sql = Array.isArray(a) ? a.join("?") : (a.sql ?? a.strings?.join("?") ?? "")
+      return /FROM vehicles[\s\S]*FOR UPDATE/.test(sql)
+    })
+    expect(lockCall).toBeDefined()
+    const lockOrder = mocks.prismaMock.$executeRaw.mock.invocationCallOrder[
+      (mocks.prismaMock.$executeRaw.mock.calls as unknown[][]).indexOf(lockCall as unknown[])
+    ]
+    expect(lockOrder).toBeLessThan(mocks.prismaMock.vehicle.update.mock.invocationCallOrder[0])
+  })
   it("deleteVehicle succeeds", async () => {
     const res = await actions.deleteVehicle(1)
     expect(res?.success).toBe(true)

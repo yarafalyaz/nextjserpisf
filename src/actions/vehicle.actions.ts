@@ -16,7 +16,7 @@ import {
 } from "@/lib/validations/vehicle.schemas";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { checkIdempotency } from "@/lib/utils/idempotency";
-import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db";
+import { nextSlugWithClient } from "@/lib/utils/slug-db";
 
 /** Kunci pembanding nama master kendaraan: trim + lowercase (kontrak nama unik per induk). */
 function normalizeVehicleMasterName(value: string): string {
@@ -559,14 +559,25 @@ export async function updateVehicle(id: number, formData: FormData) {
 
     const { variantId, name, year } = parsed.data;
 
-    await prisma.vehicle.update({
-      where: { id },
-      data: {
-        vehicleVariantId: variantId,
-        name: name ?? null,
-        year: year ?? null,
-        slug: await nextSlug("vehicle", name ?? "vehicle", { excludeId: id }),
-      },
+    // Putaran 70: slug rename dihitung dalam tx lewat delegate tx (pola
+    // updateVehicleBrand/updateVehicleModel) — slug global pra-tx tidak
+    // melihat baris tak-tercommit transaksi lain sehingga rename konkuren
+    // ber-basis sama bisa P2002 slug mentah.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vehicles WHERE id = ${id} FOR UPDATE`;
+      }
+      return tx.vehicle.update({
+        where: { id },
+        data: {
+          vehicleVariantId: variantId,
+          name: name ?? null,
+          year: year ?? null,
+          slug: await nextSlugWithClient(tx as never, "vehicle", name ?? "vehicle", {
+            excludeId: id,
+          }),
+        },
+      });
     });
 
     revalidatePath("/kendaraan");
