@@ -1538,3 +1538,35 @@ Tiga agent audit read-only (aset, SDM, proyek) melaporkan kandidat + daftar bers
 - Hooks: material-issue, sales-late-fee, sales-payment bersih soal penilaian akun/gudang hidup sesudah putaran 50-51; hook posting dagang semua kini menilai akun hidup (`assertAccountsExist`) atau gudang resolved hidup (`assertWarehousesExistAndActive`) di titik uang/stok bergerak.
 - API: lampiran 30 model (16 tanpa deletedAt kini select kondisional); dashboard manage_settings; cron route POST-only fail-closed (validator kanonis `src/lib/security/cron.ts`).
 - Actions misc: bulkDelete count nyata; cron manual precedence kanonis; backup prune mengecualikan snapshot sendiri.
+
+## Putaran 52 — Route workflow, loader laporan, form klien (12 fix)
+
+Wilayah: API routes non-cron, loader laporan sisa, lapisan form klien. Tiga agent read-only paralel; semua kandidat diverifikasi sesi utama terhadap kode + schema + backlog sebelum edit.
+
+### Route workflow `/api/workflow/[...path]` (4 fix)
+1. `f673538e3` fix(purchase): approve manual PO memicu hitung ulang PR — jalur manual route hanya flip PO draft→approved; semua transisi PO lain (approveStep/rejectStep, cancel, delete) memanggil `recalcPurchaseRequestStatus`, jalur ini tidak → PR macet approved, PO kedua bisa lahir dari PR sama. Merah 2 → hijau 42/42, terkait 567/567.
+2. `d0c562f95` fix(workflow): langkah antara tidak menulis status pending ke dokumen — route menulis `status: "pending"` sesudah langkah non-final; klaim final `APPROVE_CLAIMS`/`REJECT_CLAIMS` dokumen dagang hanya `from: ["draft"]` → klik Setujui #2 rollback permanen (approval sudah approved dalam tx, klaim count 0). Kontradiksi kontrak backlog baris 34649 (dokumen tidak berpindah ke pending saat diajukan). Model HR lahir pending tidak kena. Merah → hijau 43/43.
+3. `dcd66a2e3` fix(workflow): reopen dokumen HR mereset ke pending, bukan draft — DUA situs (route cabang rejected + `reopenApproval` action) mereset semua model ke draft; LeaveRequest/OvertimeRequest/EmployeeLoan lahir pending dan klaim finalnya hanya `from: ["pending"]` → dokumen HR macet 409 selamanya sesudah reopen. Merah 1+1 → hijau 132/132.
+4. `50f4341e2` fix(workflow): cabang workflow dokumen dagang mengecek keberadaan dokumen — model HR sudah 404, dagang tidak; `requestApprovalIfConfigured` tidak memvalidasi dokumen → approval pending yatim lahir dan mengotori antrean. Penilaian jangkauan: `StatusActions` hanya halaman detail, jadi jalur hanya terjangkau URL tua/race hapus/klik manual. Merah → hijau 45/45.
+
+### Loader laporan (4 fix, identitas bukan nama)
+5. `dd819f773` fix(reports): grouping gaji memakai identitas karyawan — `PayrollRowInput` tanpa employeeId; `groupByEmployee` + `duplicateEmployeePeriods` kunci nama (Employee.name tak unik); loader bahkan tidak men-select employeeId. Fix: `employeeId` opsional (fallback nama untuk input tanpa id), NPWP grup non-kosong pertama; preseden `pph21-export.ts:192`. `buildPph21` ikut benar. Merah 3 → hijau 18/18, konsumen 293/293.
+6. `71a52d08b` fix(reports): umur + ringkasan stok menyaring item nonaktif/terhapus — `loadStockAging`/`loadStockSummary` tanpa tapis item hidup; hapus item tidak menolkan layer FIFO. Pola loader tetangga (slow-moving, serial/batch). Rekonsiliasi SENGAJA tidak disaring (layer item terhapus justru direkonsiliasi, komentar baris 242-244); baris yatim gudang R6IE-08 tidak diubah. Merah → hijau 69/69.
+7. `9b135220d` fix(reports): grouping stok seri/batch identitas gudang — builder kunci Map nama gudang; Warehouse.name tak unik, code unik. Fix: `warehouseId` opsional kunci `id:`, label tetap nama persis (kontrak tampilan lama). Antrean FEFO tidak diubah (nama hanya label baris). Merah → hijau 75/75.
+8. `92b8f394d` fix(reports): hitungan pemasok harga vendor identitas — `vendors = new Set(vendorName).size`; loader membuang vendorId yang sudah di-orderBy. Fix: `vendorId` opsional kunci sama; pola itemKey sudah benar sebelumnya. Merah → hijau 9/9.
+
+### Form klien — idempotency & paritas display (4 fix)
+9. `c5037d3ce` fix(sales): form SO + pembayaran mengirim idempotency key stabil — kedua form NOL key padahal server membaca (`createSalesOrder:1211`, `createSalesPayment:2351`) dan guard lain tak berdedupe (SO tanpa quotation; payment parsial lolos di bawah sisa). Cermin preseden `sales-invoice-form.tsx:110-135`. Merah 2 → hijau 21/21.
+10. `59a4dd4bd` fix(tax): idempotency key dokumen pajak berputar hanya sesudah sukses — TIGA call site memutar key sinkron sesudah `run()` fire-and-forget (down-payment-tax-panel, TaxInvoiceLifecycleActions replace/cancel/credit, WithholdingLifecycleActions revoke/settle): retry key baru lolos claim per-key server. Fix terpusat: `useTaxDocAction` pemilik satu keyRef, putar hanya sesudah sukses; preseden file sama (`useTaxDocSubmit` baris 38 sudah benar). Hijau 9/9 + 202/202 (test pra-fix lolos perilaku lama, jadi bukti = 1 regresi baru + reviewer independen).
+11. `ecd29f691` fix(crm): lead form memutar idempotency key sesudah sukses — key dibuat sekali, tidak pernah dirotasi; komponen tetap mounted sesudah sukses → create kedua yang sah ditolak "duplikat" 24 jam. Kebalikan fix 10 (kunci tidak berputar sama sekali). Hijau 4/4.
+12. `0bcf3275b` fix(purchase): total baris form PO di-clamp nol seperti server — form hitung mentah tanpa clamp; server `purchaseOrderLineTotal` `Math.max(0, ...)`; diskon > bruto → display 150.000 vs tersimpan 200.000 tanpa reject. Display-only. Hijau 8/8.
+
+### Vonis gugur (verifikasi sesi utama)
+- L2 eksposur kredit K5 vs SO draft: GUGUR — vonis backlog V3 baris 4612-4618 MENGIKAT berbunyi persis "Sigma SO non-cancelled"; draft termasuk menurut teks vonis; baris tabel V2 4578 mengatur komponen K2, bukan penekan K5. Dua konsumen (ledger-cash-data + credit-gate.service) konsisten. Mengubah = mengubah rumus tervonis sepihak.
+- K5 garansi (form mengirim key, server membuang): DITUNDA keputusan — risiko nyata (dua klaim intake per coverage dari double-submit), tetapi fix benar perlu perubahan kontrak `warranty.service` + action + schema Zod sekaligus; jalur ada jurnal konsekutif juga (odometer updateMany di service). Jangan patch sebagian tanpa keputusan arsitektur idempotensi service-level.
+- Kelas bersih agent: combobox quick-add (sudah `<button type="button">`, grep `role="option"` produksi nol), link laporan (semua `buildReportHref`; `?tanggalMulai=` hanya kompat baca server).
+- Catatan gugur agent loaders (jangan diangkat ulang): VendorBill `confirmed` tanpa penulis produksi; TaxInvoice `notIn [cancelled,replaced]` persis gerbang J-RF1; reimbursement `not REVERSED` (jurnal resmi selalu POSTED); job-payment-schedule draft-inclusive by-definition reservasi porsi; jurnal POSTED-only ber-referenceType spesifik; kelas WIB loader pakai helper periode bersama.
+
+### Catatan
+- VM tanggal sesi ini berjalan di 2026-11-02; commit/CI memakai tanggal itu. Tidak ada migrasi schema putaran ini.
+- Pola "kunci identitas opsional + fallback nama" diterapkan konsisten di L1/L4/L5 supaya factory test lama tanpa id tetap sah — pola baku untuk builder laporan murni berikutnya.
