@@ -84,6 +84,7 @@ interface VendorBillFormProps {
 export function VendorBillForm({ vendors, projects = [], items, purchaseOrders = [], withholdingTypes = [], bill }: VendorBillFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
   const [vendorOptions, setVendorOptions] = useState(vendors);
   const initialDate = bill?.date || toLocalDateOnly(new Date());
   const [date, setDateState] = useState(initialDate);
@@ -241,6 +242,7 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
         formData.set("grandTotal", String(grandTotal));
         formData.set("withholdingAmount", String(withholdingAmount || 0));
         formData.set("items", JSON.stringify(billItems.map(({ uid: _uid, ...rest }) => rest)));
+        if (!bill?.id) formData.set("idempotencyKey", idempotencyKeyRef.current);
         const { createVendorBill, updateVendorBill } =
           await import("@/actions/purchase.actions");
         const result = bill?.id
@@ -250,6 +252,7 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
           showError(result.error || "Gagal menyimpan data");
           return;
         }
+        if (!bill?.id) idempotencyKeyRef.current = crypto.randomUUID();
         showSuccess(
           bill?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan",
         );

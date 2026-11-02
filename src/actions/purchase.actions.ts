@@ -1837,6 +1837,11 @@ export async function createVendorBill(formData: FormData) {
   try {
     const user = await requirePermission("create_vendor_bills");
 
+    // Anti double-submit (pola createVendorPayment): retry bisa
+    // melahirkan tagihan draft kembar yang sama-sama lolos konfirmasi
+    // terpisah. Key dinilai pertama dalam tx; rollback melepasnya.
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
+
     const parsed = parseFormData(vendorBillSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
@@ -1875,6 +1880,7 @@ export async function createVendorBill(formData: FormData) {
     await assertLiveWithholdingTypeTx(prisma, v.withholdingTypeId ?? null);
 
     const bill = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id);
       // Vendor mati tak boleh melahirkan tagihan (paritas create PO
       // putaran 22): picker menyembunyikannya, server wajib menolak.
       await assertLiveVendorTx(tx, v.vendorId);

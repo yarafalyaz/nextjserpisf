@@ -1044,6 +1044,24 @@ describe("Vendor Bill Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("putaran 62: createVendorBill — retry dengan idempotencyKey sama ditolak, tagihan lahir sekali", async () => {
+    const idem = mocks.prismaMock.idempotencyKey
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const payload = {
+      vendorId: "1", date: "2026-06-12", subtotal: "500", tax: "0", grandTotal: "500",
+      idempotencyKey: "bill-key-1",
+    }
+    const first = await actions.createVendorBill(fdMap(payload))
+    const second = await actions.createVendorBill(fdMap(payload))
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(second?.error).toContain("duplikat")
+    expect(mocks.prismaMock.vendorBill.create).toHaveBeenCalledTimes(1)
+  })
+
   it("createVendorBill persists the item lines (goods stay recorded)", async () => {
     mocks.prismaMock.item.findMany.mockResolvedValue([
       { id: 7, sku: "BRG-01", name: "Baut", unitOfMeasure: "PCS", isActive: true, deletedAt: null },
