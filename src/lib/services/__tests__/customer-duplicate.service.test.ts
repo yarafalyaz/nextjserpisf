@@ -260,6 +260,16 @@ describe("Q-CD-1 findCustomerNpwpConflict (gerbang BLOKIR NPWP persis)", () => {
     );
   });
 
+  it("putaran 55: gerbang NPWP tidak memakai take yang bisa memotong pemegang konflik", async () => {
+    customerFindMany.mockResolvedValue([row()] as never);
+    const conflict = await findCustomerNpwpConflict({
+      taxId: "012345678901000",
+    });
+    expect(conflict?.id).toBe(11);
+    const arg = customerFindMany.mock.calls.at(-1)?.[0] as { take?: number };
+    expect(arg.take).toBeUndefined();
+  });
+
   it("pesan blokir menyebut nama + kode pemegang (verbatim)", () => {
     expect(
       buildCustomerNpwpBlockedMessage({

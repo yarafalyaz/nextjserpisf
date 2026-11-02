@@ -311,6 +311,9 @@ export async function findCustomerNpwpConflict(
   const taxIdKey = normalizeCustomerTaxIdKey(input.taxId);
   if (taxIdKey == null) return null;
 
+  // Gerbang KERAS tidak boleh terpotong MAX_CANDIDATE_SCAN (batas itu
+  // hanya untuk kandidat advisory): pemegang NPWP di luar 2000 baris
+  // pertama akan lolos blokir Q-CD-1 walau scan berjalan di bawah kunci.
   const rows = (await db.customer.findMany({
     where: {
       isActive: true,
@@ -322,7 +325,6 @@ export async function findCustomerNpwpConflict(
     },
     select: { id: true, slug: true, name: true, code: true, taxId: true },
     orderBy: { id: "asc" },
-    take: MAX_CANDIDATE_SCAN,
   })) as Array<CustomerRow & { taxId: string | null }>;
 
   for (const row of rows) {
