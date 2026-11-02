@@ -236,7 +236,11 @@ export async function updateProduct(id: number, formData: FormData) {
         where: { id },
         data: {
           name: v.name,
-          slug: await nextSlug("product", v.name, { excludeId: id }),
+          // Putaran 70: slug rename lewat delegate tx (pola updateVehicle) —
+          // nextSlug global di dalam tx tak melihat baris tak-tercommit
+          // transaksi lain, dua rename konkuren ke nama sama memilih slug
+          // sama lalu satu P2002.
+          slug: await nextSlugWithClient(tx as never, "product", v.name, { excludeId: id }),
           code: v.code ?? null,
           description: v.description ?? null,
           vehicleBrandId: v.vehicleBrandId,

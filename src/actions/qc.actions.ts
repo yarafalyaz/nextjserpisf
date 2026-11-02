@@ -185,7 +185,9 @@ export async function updateQcChecklist(id: number, formData: FormData) {
         data: {
           code: v.code ?? null,
           name: v.name,
-          slug: await nextSlug("qcChecklist", v.name, { excludeId: id }),
+          // Putaran 70: slug rename lewat delegate tx (pola updateVehicle) —
+          // nextSlug global tak melihat baris tak-tercommit transaksi lain.
+          slug: await nextSlugWithClient(tx as never, "qcChecklist", v.name, { excludeId: id }),
           checklistType: v.checklistType,
           productId: v.productId ?? null,
           items: {

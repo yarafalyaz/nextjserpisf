@@ -464,6 +464,34 @@ describe("updateQcChecklist", () => {
   })
 })
 
+describe("updateQcChecklist slug (putaran 70)", () => {
+  it("slug rename dihitung lewat delegate tx sesudah kunci baris checklist", async () => {
+    qcChecklistFindUniqueMock.mockResolvedValue({ status: "draft" })
+    const prismaMockQc = (await import("@/lib/db/prisma")).prisma as any
+    // Facade tx berbeda dari prisma global: tabrakan slug HANYA terlihat
+    // delegate tx. Versi lama membaca prisma global → batang polos; versi
+    // delegate tx → suffix -2.
+    const txFindFirst = vi.fn()
+      .mockResolvedValueOnce({ id: 77 })
+      .mockResolvedValue(null)
+    const txFacade = {
+      ...prismaMockQc,
+      qcChecklist: { ...(prismaMockQc.qcChecklist as Record<string, unknown>), findFirst: txFindFirst },
+    }
+    prismaMockQc.$transaction.mockImplementationOnce(async (cb: any) => cb(txFacade))
+    const f = fd({ name: "Checklist A", checklistType: "final" })
+    f.append("itemName", "Periksa dimensi")
+    f.append("itemMethod", "measure")
+    const res = await updateQcChecklist(1, f)
+    expect(res.success).toBe(true)
+    const updateArg = qcChecklistUpdateMock.mock.calls[0][0]
+    expect(updateArg.data.slug).toBe("checklist-a-2")
+    expect(txFindFirst).toHaveBeenCalled()
+    const lockOrder = prismaMockQc.$executeRaw.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(txFindFirst.mock.invocationCallOrder[0])
+  })
+})
+
 describe("releaseQcChecklist", () => {
   it("refuses to release an empty checklist", async () => {
     qcChecklistFindUniqueMock.mockResolvedValue({ id: 1, _count: { items: 0 } })

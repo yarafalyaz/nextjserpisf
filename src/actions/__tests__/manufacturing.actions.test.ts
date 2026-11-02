@@ -259,6 +259,32 @@ describe("Product Actions", () => {
     expect(events).toEqual(["lock", "update"])
   })
 
+  it("putaran 70: updateProduct menghitung slug rename lewat delegate tx sesudah kunci baris produk", async () => {
+    mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({ id: 1, materials: [] })
+    mocks.prismaMock.product.findFirst.mockResolvedValue(null)
+    // Facade tx berbeda dari prisma global: tabrakan slug HANYA terlihat
+    // delegate tx (baris tak-tercommit transaksi lain). Versi lama membaca
+    // prisma global → memilih batang polos; versi delegate tx → suffix -2.
+    const txFindFirst = vi.fn()
+      .mockResolvedValueOnce({ id: 77 })
+      .mockResolvedValue(null)
+    const txFacade = {
+      ...mocks.prismaMock,
+      product: { ...mocks.prismaMock.product, findFirst: txFindFirst },
+    }
+    mocks.prismaMock.$transaction.mockImplementationOnce(async (cb: any) => cb(txFacade))
+    const fd = fdMap({ name: "Product Test Update", code: "PROD-2" })
+    fd.append("materialItemId", "1")
+    fd.append("materialQty", "2")
+    const res = await actions.updateProduct(1, fd)
+    expect(res?.success).toBe(true)
+    const updateArg = mocks.prismaMock.product.update.mock.calls[0][0]
+    expect(updateArg.data.slug).toBe("product-test-update-2")
+    expect(txFindFirst).toHaveBeenCalled()
+    const lockOrder = mocks.prismaMock.$queryRaw.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(txFindFirst.mock.invocationCallOrder[0])
+  })
+
   it("updateProduct handles validation error", async () => {
     const res = await actions.updateProduct(1, new FormData())
     expect(res?.success).toBe(false)
