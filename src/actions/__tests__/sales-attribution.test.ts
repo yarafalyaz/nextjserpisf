@@ -110,8 +110,12 @@ describe("F-016 tahap 1 pewarisan penjual", () => {
     transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) =>
       cb({
         employee: { findFirst: employeeFindFirstMock },
-        // F-2026-10-22-065-S: snapshot persen ambang membaca kategori pelanggan.
-        customer: { findFirst: vi.fn(async () => null) },
+        // Putaran 70: gerbang hidup customer + snapshot persen ambang kini
+        // berbagi delegate customer dalam tx — gerbang wajib melihat baris
+        // hidup, ambang kategori null sah (fail-closed helper).
+        customer: {
+          findFirst: vi.fn(async () => ({ id: 3, name: "PT A", isActive: true, customerCategory: null })),
+        },
         quotation: { create: quotationCreateMock },
         quotationHistory: { create: vi.fn() },
       }),

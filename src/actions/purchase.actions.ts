@@ -1257,7 +1257,7 @@ export async function createServicePurchaseOrderFromWorkOrder(
       return { wo: freshWo, serviceLines: lines };
     };
 
-    const { wo, serviceLines } = await loadServiceLines(prisma as unknown as DbLike);
+    const { wo } = await loadServiceLines(prisma as unknown as DbLike);
 
     // Guard against accidental duplicate subcontracting.
     const existing = options?.force
