@@ -10,6 +10,11 @@ const mocks = vi.hoisted(() => ({
       findMany: vi.fn(),
       findFirst: vi.fn(),
     },
+    item: { findFirst: vi.fn() },
+    vehicleBrand: { findFirst: vi.fn() },
+    vehicleModel: { findFirst: vi.fn() },
+    vehicleVariant: { findFirst: vi.fn() },
+    bomRevision: { findFirst: vi.fn() },
     productMaterial: { findMany: vi.fn() },
   },
 }))
@@ -40,6 +45,68 @@ beforeEach(() => {
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
   // nextSlug() probes for a free slug via findFirst → null means it's free.
   mocks.prisma.vehicleFitmentRule.findFirst.mockResolvedValue(null)
+  // Default ref hidup & rantai utuh; test gerbang menimpa seperlunya.
+  mocks.prisma.item.findFirst.mockResolvedValue({ id: 5, isActive: true })
+  mocks.prisma.vehicleBrand.findFirst.mockResolvedValue({ id: 1 })
+  mocks.prisma.vehicleModel.findFirst.mockResolvedValue({ id: 2, vehicleBrandId: 1 })
+  mocks.prisma.vehicleVariant.findFirst.mockResolvedValue({ id: 3, vehicleModelId: 2 })
+  mocks.prisma.bomRevision.findFirst.mockResolvedValue({ id: 7 })
+})
+
+describe("putaran 55 K2: gerbang ref fitment", () => {
+  it("menolak item nonaktif", async () => {
+    mocks.prisma.item.findFirst.mockResolvedValueOnce({ id: 5, isActive: false })
+    const res = await createVehicleFitment(fdMap({ itemId: "5", result: "compatible" }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak aktif")
+    expect(mocks.prisma.vehicleFitmentRule.create).not.toHaveBeenCalled()
+  })
+
+  it("menolak item yatim (bukan error FK mentah)", async () => {
+    mocks.prisma.item.findFirst.mockResolvedValueOnce(null)
+    const res = await createVehicleFitment(fdMap({ itemId: "999", result: "compatible" }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak ditemukan")
+    expect(mocks.prisma.vehicleFitmentRule.create).not.toHaveBeenCalled()
+  })
+
+  it("menolak model yatim dan rantai patah (model bukan milik merek)", async () => {
+    mocks.prisma.vehicleModel.findFirst.mockResolvedValueOnce(null)
+    const yatim = await createVehicleFitment(fdMap({
+      itemId: "5", vehicleBrandId: "1", vehicleModelId: "999", result: "compatible",
+    }))
+    expect(yatim.success).toBe(false)
+    expect(yatim.error).toContain("tidak ditemukan")
+
+    mocks.prisma.vehicleModel.findFirst.mockResolvedValueOnce({ id: 2, vehicleBrandId: 9 })
+    const patah = await createVehicleFitment(fdMap({
+      itemId: "5", vehicleBrandId: "1", vehicleModelId: "2", result: "compatible",
+    }))
+    expect(patah.success).toBe(false)
+    expect(patah.error).toContain("bukan milik")
+    expect(mocks.prisma.vehicleFitmentRule.create).not.toHaveBeenCalled()
+  })
+
+  it("menolak varian bukan milik model pada update", async () => {
+    mocks.prisma.vehicleVariant.findFirst.mockResolvedValueOnce({ id: 3, vehicleModelId: 9 })
+    const res = await updateVehicleFitment(4, fdMap({
+      itemId: "5", vehicleBrandId: "1", vehicleModelId: "2", vehicleVariantId: "3",
+      result: "incompatible",
+    }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("bukan milik")
+    expect(mocks.prisma.vehicleFitmentRule.update).not.toHaveBeenCalled()
+  })
+
+  it("menolak revisi BOM yatim", async () => {
+    mocks.prisma.bomRevision.findFirst.mockResolvedValueOnce(null)
+    const res = await createVehicleFitment(fdMap({
+      itemId: "5", bomRevisionId: "999", result: "compatible",
+    }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak ditemukan")
+    expect(mocks.prisma.vehicleFitmentRule.create).not.toHaveBeenCalled()
+  })
 })
 
 describe("createVehicleFitment", () => {

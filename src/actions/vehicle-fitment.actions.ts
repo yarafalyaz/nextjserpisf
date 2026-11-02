@@ -19,6 +19,77 @@ import {
 } from "@/lib/services/vehicle-fitment.service";
 import { nextSlug } from "@/lib/utils/slug-db";
 
+/**
+ * Ref aturan wajib hidup & rantainya utuh sebelum tulis. FK DB menahan
+ * id yatim, tetapi melempar P2003 mentah; FK sama sekali tidak memeriksa
+ * model milik merek yang dipilih (form menyaring anak per induk, action
+ * tidak) — aturan dengan rantai patah diam-diam tidak pernah cocok di
+ * evaluator. Item adalah satu-satunya ref dengan hidup (isActive +
+ * deletedAt); master kendaraan/BOM keras-hapus sehingga cukup ada.
+ */
+async function assertFitmentRefsLive(v: {
+  itemId: number
+  bomRevisionId?: number | null
+  vehicleBrandId?: number | null
+  vehicleModelId?: number | null
+  vehicleVariantId?: number | null
+}): Promise<string | null> {
+  const item = await prisma.item.findFirst({
+    where: { id: v.itemId, deletedAt: null },
+    select: { id: true, isActive: true },
+  })
+  if (!item) return "Item tidak ditemukan."
+  if (!item.isActive) return "Item tidak aktif; aturan kompatibilitas baru tidak dapat dibuat untuknya."
+  if (v.bomRevisionId != null) {
+    const revision = await prisma.bomRevision.findFirst({
+      where: { id: v.bomRevisionId },
+      select: { id: true },
+    })
+    if (!revision) return "Revisi BOM tidak ditemukan."
+  }
+  if (v.vehicleBrandId != null) {
+    const brand = await prisma.vehicleBrand.findFirst({
+      where: { id: v.vehicleBrandId },
+      select: { id: true },
+    })
+    if (!brand) return "Merek kendaraan tidak ditemukan."
+  }
+  let modelBrandId: number | null = null
+  if (v.vehicleModelId != null) {
+    const model = await prisma.vehicleModel.findFirst({
+      where: { id: v.vehicleModelId },
+      select: { id: true, vehicleBrandId: true },
+    })
+    if (!model) return "Model kendaraan tidak ditemukan."
+    modelBrandId = model.vehicleBrandId
+    if (v.vehicleBrandId != null && model.vehicleBrandId !== v.vehicleBrandId) {
+      return "Model kendaraan bukan milik merek yang dipilih."
+    }
+  }
+  if (v.vehicleVariantId != null) {
+    const variant = await prisma.vehicleVariant.findFirst({
+      where: { id: v.vehicleVariantId },
+      select: { id: true, vehicleModelId: true },
+    })
+    if (!variant) return "Varian kendaraan tidak ditemukan."
+    if (v.vehicleModelId != null && variant.vehicleModelId !== v.vehicleModelId) {
+      return "Varian kendaraan bukan milik model yang dipilih."
+    }
+    if (v.vehicleBrandId != null && modelBrandId == null) {
+      // Brand disematkan tanpa model: rantai varian tetap wajib menuju
+      // brand itu lewat model induknya.
+      const parent = await prisma.vehicleModel.findFirst({
+        where: { id: variant.vehicleModelId },
+        select: { vehicleBrandId: true },
+      })
+      if (!parent || parent.vehicleBrandId !== v.vehicleBrandId) {
+        return "Varian kendaraan bukan milik merek yang dipilih."
+      }
+    }
+  }
+  return null
+}
+
 // ==================== VEHICLE FITMENT RULE ACTIONS (VEH-07) ====================
 
 export async function createVehicleFitment(formData: FormData) {
@@ -32,6 +103,9 @@ export async function createVehicleFitment(formData: FormData) {
     if (v.yearFrom != null && v.yearTo != null && v.yearFrom > v.yearTo) {
       return { success: false, error: "Tahun awal tidak boleh melebihi tahun akhir." };
     }
+
+    const refError = await assertFitmentRefsLive(v)
+    if (refError) return { success: false, error: refError }
 
     const rule = await prisma.vehicleFitmentRule.create({
       data: {
@@ -73,6 +147,9 @@ export async function updateVehicleFitment(id: number, formData: FormData) {
     if (v.yearFrom != null && v.yearTo != null && v.yearFrom > v.yearTo) {
       return { success: false, error: "Tahun awal tidak boleh melebihi tahun akhir." };
     }
+
+    const refError = await assertFitmentRefsLive(v)
+    if (refError) return { success: false, error: refError }
 
     const rule = await prisma.vehicleFitmentRule.update({
       where: { id },
