@@ -980,6 +980,10 @@ export async function createPurchaseRequest(formData: FormData) {
   try {
     const user = await requirePermission("create_purchase_requests");
 
+    // Putaran 62: tanpa key, double-submit melahirkan dua PR draft
+    // identik yang bisa disetujui terpisah dan menjadi dua PO.
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
+
     const parsed = parseFormData(purchaseRequestSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
@@ -987,44 +991,52 @@ export async function createPurchaseRequest(formData: FormData) {
     const documentNo = await generateDocumentNumber("PR");
     const slug = await nextSlug("purchaseRequest", documentNo);
     await assertLiveRequester(v.requestedBy);
-    // Vendor saran PR dinilai hidup (putaran 43): kolom bare-int tanpa FK,
-    // id nonaktif/fiktif tersimpan senyap tanpa gerbang ini.
-    if (v.vendorId != null) {
-      await assertLiveVendorTx(prisma, v.vendorId);
-    }
     const requestedBy = v.requestedBy || Number(user.id);
     const items = parsePurchaseRequestItems(v.items);
-    // Baris PR bebas (bukan turunan dokumen lain): item mati/fiktif ditolak
-    // bernama — PurchaseRequestItem.itemId bare-int tanpa FK, jadi tanpa
-    // gerbang ini id gaib tersimpan senyap (paritas sisi jual putaran 31).
-    if (items.length > 0) {
-      await assertItemsExistAndActive(prisma, items.map((i) => i.itemId));
-    }
 
     const requestDateRaw = v.requestDate;
     const description = v.description ?? null;
 
-    const pr = await prisma.purchaseRequest.create({
-      data: {
-        documentNo,
-        slug,
-        title: v.title ?? null,
-        requestedBy,
-        vendorId: v.vendorId ?? null,
-        date: wibDateToUtcMidnight(v.date),
-        requestDate: requestDateRaw ? wibDateToUtcMidnight(requestDateRaw) : null,
-        description,
-        notes: v.notes ?? null,
-        status: "draft",
-        createdBy: Number(user.id),
-        items: {
-          create: items.map((i) => ({
-            itemId: i.itemId,
-            qty: i.qty,
-            notes: i.notes,
-          })),
+    const pr = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id);
+      // Vendor saran PR dinilai hidup (putaran 43): kolom bare-int tanpa FK,
+      // id nonaktif/fiktif tersimpan senyap tanpa gerbang ini.
+      if (v.vendorId != null) {
+        await assertLiveVendorTx(tx, v.vendorId);
+      }
+      // Baris PR bebas (bukan turunan dokumen lain): item mati/fiktif ditolak
+      // bernama — PurchaseRequestItem.itemId bare-int tanpa FK, jadi tanpa
+      // gerbang ini id gaib tersimpan senyap (paritas sisi jual putaran 31).
+      if (items.length > 0) {
+        await assertItemsExistAndActive(tx, items.map((i) => i.itemId));
+      }
+
+      const created = await tx.purchaseRequest.create({
+        data: {
+          documentNo,
+          slug,
+          title: v.title ?? null,
+          requestedBy,
+          vendorId: v.vendorId ?? null,
+          date: wibDateToUtcMidnight(v.date),
+          requestDate: requestDateRaw ? wibDateToUtcMidnight(requestDateRaw) : null,
+          description,
+          notes: v.notes ?? null,
+          status: "draft",
+          createdBy: Number(user.id),
+          items: {
+            create: items.map((i) => ({
+              itemId: i.itemId,
+              qty: i.qty,
+              notes: i.notes,
+            })),
+          },
         },
-      },
+      });
+
+      // Approval atomik dengan dokumen: rollback PR melepas approval/key.
+      await requestApprovalIfConfigured("PurchaseRequest", created.id, Number(user.id), tx);
+      return created;
     });
 
     await logActivity(
@@ -1033,7 +1045,6 @@ export async function createPurchaseRequest(formData: FormData) {
       pr.id,
       `Membuat permintaan pembelian #${pr.id}`,
     );
-    await requestApprovalIfConfigured("PurchaseRequest", pr.id, Number(user.id));
     revalidatePath("/pembelian/permintaan");
     return { success: true, id: pr.id, slug };
   } catch (e: unknown) {

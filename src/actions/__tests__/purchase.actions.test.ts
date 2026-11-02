@@ -266,6 +266,26 @@ describe("Purchase Request Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("putaran 62: createPurchaseRequest — retry dengan idempotencyKey sama ditolak, PR lahir sekali", async () => {
+    const idem = mocks.prismaMock.idempotencyKey
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const payload = {
+      date: "2026-06-12",
+      title: "PR Test",
+      items: JSON.stringify([{ itemId: 1, qty: 10, notes: "" }]),
+      idempotencyKey: "pr-key-1",
+    }
+    const first = await actions.createPurchaseRequest(fdMap(payload))
+    const second = await actions.createPurchaseRequest(fdMap(payload))
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(second?.error).toContain("duplikat")
+    expect(mocks.prismaMock.purchaseRequest.create).toHaveBeenCalledTimes(1)
+  })
+
   it("createPurchaseRequest persists the suggested vendor", async () => {
     await actions.createPurchaseRequest(fdMap({
       date: "2026-06-12",

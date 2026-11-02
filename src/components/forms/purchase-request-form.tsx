@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   createPurchaseRequest,
   updatePurchaseRequest,
@@ -61,6 +61,7 @@ export function PurchaseRequestForm({
 }: PRFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
   const [employeeOptions, setEmployeeOptions] = useState(employees);
   const [vendorOptions, setVendorOptions] = useState(vendors ?? []);
   const [title, setTitle] = useState(request?.title || "");
@@ -130,6 +131,9 @@ export function PurchaseRequestForm({
         formData.append("requestDate", requestDate);
         formData.append("description", description);
         formData.append("items", JSON.stringify(prItems.map(({ uid: _uid, ...rest }) => rest)));
+        if (!request?.id) {
+          formData.append("idempotencyKey", idempotencyKeyRef.current);
+        }
         const result = request?.id
           ? await updatePurchaseRequest(request.id, formData)
           : await createPurchaseRequest(formData);
@@ -137,6 +141,7 @@ export function PurchaseRequestForm({
           showError(result.error || "Gagal menyimpan data");
           return;
         }
+        if (!request?.id) idempotencyKeyRef.current = crypto.randomUUID();
         showSuccess(
           request?.id
             ? "Data berhasil diperbarui"
