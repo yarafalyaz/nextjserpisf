@@ -1387,7 +1387,24 @@ export async function approveOvertime(overtimeId: number) {
       return { success: true };
     }
 
-    const claim = await computeOvertimeApprovalValue(prisma, ot, Number(user.id));
+    // Putaran 75: hitung nilai di dalam tx yang mengunci baris overtime —
+    // updateOvertimeRequest mengunci baris yang sama, jadi employeeId/date/
+    // hours yang dihitung selalu milik baris saat ini, bukan snapshot luar
+    // (edit pending konkuren yang commit di jendela tak boleh membuat
+    // calculatedValue dari jam lama tertulis ke jam baru).
+    const claim = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT id FROM overtime_requests WHERE id = ${overtimeId} FOR UPDATE`;
+      }
+      const fresh = await tx.overtimeRequest.findUniqueOrThrow({
+        where: { id: overtimeId },
+        include: { employee: { select: { baseSalary: true, paymentFrequency: true } } },
+      });
+      if (fresh.calculatedValue != null && Number(fresh.calculatedValue) > 0) {
+        return { count: 0 };
+      }
+      return computeOvertimeApprovalValue(tx as never, fresh, Number(user.id));
+    });
     if (claim.count === 0) {
       // Kalah klaim nilai dari penghitung konkuren = nilai sudah terisi;
       // perlakukan sebagai idempotent no-op, bukan kegagalan persetujuan.
@@ -2858,6 +2875,16 @@ export async function generateBulkPayroll(
       : await prisma.$transaction(async (tx) => {
           const lockIds = [...new Set(rows.map((r) => r.employeeId))].sort((a, b) => a - b);
           await tx.$queryRaw`SELECT id FROM employees WHERE id IN (${Prisma.join(lockIds)}) ORDER BY id FOR UPDATE`;
+          // Putaran 75: hidup dinilai ulang dari baris terkunci — karyawan
+          // yang dinonaktifkan/dihapus sesudah populasi dibaca tak boleh
+          // menerima slip massal. Baris yang lolos dibuat persis dari
+          // estimasi snapshot (angka tak dihitung ulang); yang kalah race
+          // tercatat alasan "berhenti" seperti gerbang berhenti populasi.
+          const liveRows = await tx.employee.findMany({
+            where: { id: { in: lockIds }, isActive: true, deletedAt: null },
+            select: { id: true },
+          });
+          const liveIds = new Set(liveRows.map((e) => e.id));
           const freshByEmployee = new Map<number, typeof existingPayrolls>();
           if (lockIds.length > 0) {
             const fresh = await tx.payroll.findMany({
@@ -2878,6 +2905,14 @@ export async function generateBulkPayroll(
           }
           const keptRows: typeof rows = [];
           for (const row of rows) {
+            if (!liveIds.has(row.employeeId)) {
+              runSkips.push({
+                employeeId: row.employeeId,
+                reason: "berhenti",
+                conflictDocumentNo: null,
+              });
+              continue;
+            }
             const conflict = findPayrollRangeConflict(
               freshByEmployee.get(row.employeeId) ?? [],
               rangeStart,
@@ -3151,6 +3186,10 @@ export async function processPayroll(formData: FormData) {
           `Rentang slip ini beririsan dengan slip ${conflictInTx.documentNo} karyawan yang sama. Hapus atau ubah rentang slip penabrak terlebih dahulu.`,
         );
       }
+      // Putaran 75: hidup dinilai ulang sesudah kunci employee — karyawan
+      // yang dinonaktifkan/dihapus sesudah assert pra-tx tak boleh menerima
+      // slip baru (updateEmployee mengambil kunci baris yang sama).
+      await assertLiveEmployee(employeeId, tx as never);
       const created = await tx.payroll.create({
         data: {
         slug: await nextSlug("payroll", documentNo),
@@ -3407,6 +3446,13 @@ export async function updatePayroll(id: number, formData: FormData) {
           );
         }
       }
+      // Putaran 75: pemindahan slip ke karyawan lain menilai ulang hidup
+      // target dari baris terkunci (assert pra-tx tak melihat penonaktifan
+      // yang commit di jendela). Slip tetap pada karyawan sama tak dinilai
+      // ulang, pola preseden payroll.
+      if (updateEmployeeId != null && updateEmployeeId !== existing.employeeId) {
+        await assertLiveEmployee(updateEmployeeId, tx as never);
+      }
       // R8-SDM-04: klaim atomik berpredikat draft. Cek draft di awal
       // fungsi ini terjadi jauh sebelum transaksi -- approver paralel
       // bisa menang di antaranya, dan update tanpa predikat akan
@@ -3480,9 +3526,19 @@ export async function approvePayroll(payrollId: number) {
     const gateError = payrollStatutoryGateError(payroll.statutorySnapshot);
     if (gateError) throw new Error(gateError);
 
-    const claim = await prisma.payroll.updateMany({
-      where: { id: payrollId, status: "draft" },
-      data: { status: "approved", approvedBy: Number(user.id) },
+    // Putaran 75: klaim berjalan dalam tx berkunci baris employee —
+    // updateAttendance/deleteAttendance mengambil kunci yang sama sebelum
+    // menilai gerbang slip-final, jadi finalisasi slip dan edit absensi
+    // dalam rentangnya berserial (tanpa kunci bersama, approver commit di
+    // jendela cek absensi dan dasar slip final berubah sesudah approved).
+    const claim = await prisma.$transaction(async (tx) => {
+      if (payroll.employeeId != null && typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${payroll.employeeId} FOR UPDATE`;
+      }
+      return tx.payroll.updateMany({
+        where: { id: payrollId, status: "draft" },
+        data: { status: "approved", approvedBy: Number(user.id) },
+      });
     });
     if (claim.count === 0) {
       throw new Error("Penggajian sudah diproses atau status tidak valid");
@@ -4888,6 +4944,14 @@ export async function updateAttendance(id: number, formData: FormData) {
 
     let lateMinutes = 0;
     await prisma.$transaction(async (tx) => {
+      // Putaran 75: kunci baris employee (asal + tujuan bila pindah, id
+      // naik) sebelum gerbang slip-final dinilai — approvePayroll
+      // mengambil kunci yang sama, jadi cek di bawah membaca keadaan
+      // final yang sudah serial, bukan snapshot.
+      const lockIds = [...new Set([existing.employeeId, v.employeeId])].sort((a, b) => a - b);
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id IN (${Prisma.join(lockIds)}) ORDER BY id FOR UPDATE`;
+      }
       const data = await buildAttendanceData(v, tx);
       lateMinutes = data.lateMinutes;
       // Gerbang slip-final dua sisi: tanggal asal maupun tanggal tujuan
@@ -4946,6 +5010,11 @@ export async function deleteAttendance(id: number) {
     });
     await assertHrEmployeeAccess(await getHrScope(user), existing.employeeId);
     await prisma.$transaction(async (tx) => {
+      // Putaran 75: kunci baris employee sebelum gerbang dinilai
+      // (pasangan approvePayroll di atas).
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${existing.employeeId} FOR UPDATE`;
+      }
       // Gerbang slip-final: hapus langsung tanggal dalam slip approved/paid
       // mengubah dasar slip final sama seperti tulis langsung.
       const finalSlip = await tx.payroll.findFirst({
@@ -5504,13 +5573,21 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
       await tx.$queryRaw`SELECT id FROM leave_requests WHERE id = ${id} FOR UPDATE`;
       const current = await tx.leaveRequest.findUniqueOrThrow({
         where: { id },
-        select: { status: true },
+        select: { status: true, employeeId: true },
       });
       if (current.status !== "pending") {
         throw new Error("Hanya pengajuan cuti berstatus menunggu yang dapat diedit");
       }
 
-      await tx.$queryRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
+      const employeeIds = [...new Set([current.employeeId, employeeId])].sort((a, b) => a - b);
+      for (const lockId of employeeIds) {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${lockId} FOR UPDATE`;
+      }
+      // Putaran 75: nilai ulang hidup source/target dari baris terkunci —
+      // gerbang hidup hanya terhadap karyawan yang benar-benar dinilai.
+      if (employeeId !== current.employeeId) {
+        await assertLiveEmployee(employeeId, tx as never);
+      }
 
       const overlap = await tx.leaveRequest.findFirst({
         where: {
@@ -5645,6 +5722,11 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
       for (const employeeId of employeeIds) {
         await tx.$executeRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
       }
+      // Putaran 75: nilai ulang hidup target pindahan dari baris terkunci —
+      // assert pra-tx tak melihat penonaktifan yang commit di jendela.
+      if (v.employeeId !== current.employeeId) {
+        await assertLiveEmployee(v.employeeId, tx as never);
+      }
 
       // Gerbang batas yang sama dengan create (syarat vonis K2-S1):
       // tanpa ini edit pending 2 jam -> 5 jam hari kerja lolos batas
@@ -5725,10 +5807,18 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
       await tx.$queryRaw`SELECT id FROM employee_loans WHERE id = ${id} FOR UPDATE`;
       const current = await tx.employeeLoan.findUniqueOrThrow({
         where: { id },
-        select: { totalAmount: true, remainingAmount: true, status: true },
+        select: { totalAmount: true, remainingAmount: true, status: true, employeeId: true },
       });
       if (current.status !== "pending") {
         throw new Error("Hanya pinjaman berstatus menunggu yang dapat diedit");
+      }
+
+      // Putaran 75: nilai ulang hidup target dari baris terkunci —
+      // assert pra-tx tak melihat penonaktifan yang commit di jendela.
+      // Karyawan tetap (tanpa pindah) tak dinilai ulang, pola preseden.
+      if (v.employeeId !== current.employeeId) {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${v.employeeId} FOR UPDATE`;
+        await assertLiveEmployee(v.employeeId, tx as never);
       }
 
       const oldTotal = Number(current.totalAmount);
@@ -6394,7 +6484,18 @@ export async function approvePkwtEvent(eventId: number) {
     });
     if (!event) throw new Error("Peristiwa kompensasi PKWT tidak ditemukan.");
     await assertHrEmployeeAccess(await getHrScope(user), event.employeeId);
-    await approvePkwtCompensationEvent(prisma, eventId, Number((user as { id: unknown }).id));
+    // Putaran 75: gerbang owner/mapping dinilai dalam tx berkunci baris
+    // event + employee — deleteEmployee (polos) bisa commit di jendela
+    // antara cek owner dan klaim status, peristiwa karyawan mati jadi
+    // approved. Kunci employee adalah kunci yang sama dengan edit
+    // karyawan berkunci (updateEmployee), jadi penilaian serial.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM pkwt_compensation_events WHERE id = ${eventId} FOR UPDATE`;
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${event.employeeId} FOR UPDATE`;
+      }
+      await approvePkwtCompensationEvent(tx as never, eventId, Number((user as { id: unknown }).id));
+    });
     await logActivity("approve", "PkwtCompensationEvent", eventId, "Menyetujui peristiwa kompensasi PKWT");
     revalidatePath("/sdm/penggajian");
     return { success: true };

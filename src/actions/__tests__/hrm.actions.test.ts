@@ -710,7 +710,7 @@ describe("Overtime Request Actions", () => {
     // dasar = baseSalary apa adanya — regresi nol populasi tanpa tunjangan.
     // 2026-06-12 = Jumat (hari kerja fallback Senin-Jumat): 2 jam = 1 jam
     // x1,5 + 1 jam x2 = 3,5 x (5.000.000/173) = 101.156.
-    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValueOnce({
+    const otRow = {
       id: 1,
       employeeId: 1,
       status: "pending",
@@ -718,7 +718,10 @@ describe("Overtime Request Actions", () => {
       date: new Date("2026-06-12T00:00:00Z"),
       calculatedValue: null,
       employee: { baseSalary: 5_000_000 },
-    })
+    }
+    prismaMock.overtimeRequest.findUniqueOrThrow
+      .mockResolvedValueOnce(otRow)
+      .mockResolvedValueOnce(otRow)
     const res = await actions.approveOvertime(1)
     expect(res?.success).toBe(true)
     const arg = prismaMock.overtimeRequest.updateMany.mock.calls[0][0]
@@ -779,7 +782,8 @@ describe("Overtime Request Actions", () => {
         })
       },
     )
-    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValueOnce({
+    // Dua bacaan: pra-tx + locking re-read dalam tx (putaran 75).
+    const otRow = {
       id: 1,
       employeeId: 1,
       status: "pending",
@@ -787,7 +791,10 @@ describe("Overtime Request Actions", () => {
       date: otDate,
       calculatedValue: null,
       employee: { baseSalary: 3_460_000 },
-    })
+    }
+    prismaMock.overtimeRequest.findUniqueOrThrow
+      .mockResolvedValueOnce(otRow)
+      .mockResolvedValueOnce(otRow)
     const res = await actions.approveOvertime(1)
     expect(res?.success).toBe(true)
     // Where produksi wajib menilai jendela pada ot.date, bukan tanggal lain.
@@ -3106,6 +3113,37 @@ describe("Absensi Actions", () => {
     const res = await actions.approvePkwtEvent(5)
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("tidak memiliki akses")
+    mocks.hrScopeOverride.current = null
+  })
+
+  it("putaran 75: approvePkwtEvent mengunci event dan employee sebelum gerbang service", async () => {
+    mocks.hrScopeOverride.current = { kind: "all" }
+    ;(prismaMock as any).$executeRaw.mockClear()
+    ;(prismaMock as any).pkwtCompensationEvent = {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 5, employeeId: 9, status: "draft", createdBy: 2,
+      }),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      findFirst: vi.fn().mockResolvedValue(null),
+    }
+    prismaMock.employee.findUnique.mockResolvedValue({ deletedAt: null, isActive: true })
+    prismaMock.systemSetting.findFirst.mockResolvedValue({
+      pkwtCompensationExpenseAccountId: 631,
+      pkwtCompensationPayableAccountId: 231,
+    })
+    ;(prismaMock as any).account = {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 631, code: "630101", isActive: true, deletedAt: null, name: "PKWT",
+      }),
+    }
+    const res = await actions.approvePkwtEvent(5)
+    if (!res?.success) throw new Error(`approve gagal: ${res?.error}`)
+    const lockOrders = (prismaMock as any).$executeRaw.mock.invocationCallOrder
+    const ownerOrder = prismaMock.employee.findUnique.mock.invocationCallOrder[0]
+    const claimOrder = (prismaMock as any).pkwtCompensationEvent.updateMany.mock.invocationCallOrder[0]
+    expect(lockOrders).toHaveLength(2)
+    expect(Math.max(...lockOrders)).toBeLessThan(ownerOrder)
+    expect(Math.max(...lockOrders)).toBeLessThan(claimOrder)
     mocks.hrScopeOverride.current = null
   })
 
