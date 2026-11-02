@@ -7,6 +7,7 @@ import { Status } from "@/lib/constants"
 import { apiError } from "@/lib/api-response"
 import { approveStep, rejectStep } from "@/actions/approval.actions"
 import { requestApprovalIfConfigured } from "@/lib/services/approval-workflow.service"
+import { recalcPurchaseRequestStatus } from "@/lib/hooks/purchase-order.hook"
 import { onEmployeeLoanDisbursed } from "@/lib/hooks/accounting.hook"
 import { approveOvertime } from "@/actions/hrm.actions"
 import { assertCSRF } from "@/lib/security/csrf"
@@ -404,6 +405,21 @@ export async function POST(
         return apiError("NOT_FOUND", "Data tidak ditemukan")
       }
       return apiError("CONFLICT", `Tidak dapat mengubah status dari '${exists.status}' menjadi '${newStatus}'`)
+    }
+
+    // PO lolos/tolak di jalur manual mengubah coverage PR tertaut — jalur
+    // transisi lain (approveStep/rejectStep, cancel, delete) semuanya
+    // memanggil hitung ulang ini; tanpanya PR macet 'approved'
+    // (putaran 52). Recalc membuka transaksinya sendiri dan no-op bila
+    // status PR bukan turunan-coverage.
+    if (modelType === "PurchaseOrder" && result.count > 0) {
+      const po = await delegate.findUnique({
+        where: { id },
+        select: { purchaseRequestId: true },
+      })
+      if (po?.purchaseRequestId) {
+        await recalcPurchaseRequestStatus(po.purchaseRequestId)
+      }
     }
 
     revalidatePath(config.revalidate)

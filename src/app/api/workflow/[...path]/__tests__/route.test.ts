@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   rejectStepMock: vi.fn(),
   approveOvertimeMock: vi.fn(),
   requestApprovalMock: vi.fn(),
+  recalcPrMock: vi.fn(),
   assertCSRFMock: vi.fn().mockResolvedValue(undefined),
   employeeFindFirst: vi.fn(),
   employeeFindUnique: vi.fn(),
@@ -32,6 +33,10 @@ vi.mock("@/actions/hrm.actions", () => ({
 
 vi.mock("@/lib/services/approval-workflow.service", () => ({
   requestApprovalIfConfigured: (...a: unknown[]) => mocks.requestApprovalMock(...a),
+}))
+
+vi.mock("@/lib/hooks/purchase-order.hook", () => ({
+  recalcPurchaseRequestStatus: (...a: unknown[]) => mocks.recalcPrMock(...a),
 }))
 
 vi.mock("@/lib/security/csrf", () => ({
@@ -292,6 +297,28 @@ describe("POST /api/workflow/[...path]", () => {
       where: { id: 5, status: { in: ["pending"] } },
       data: { status: "rejected" },
     })
+  })
+
+  it("putaran 52: approve manual PO memicu hitung ulang status PR tertaut", async () => {
+    mocks.authFn.mockResolvedValue(adminSession)
+    mocks.findFirstWorkflow.mockResolvedValue(null)
+    mocks.updateMany.mockResolvedValue({ count: 1 })
+    mocks.findUnique.mockResolvedValue({ purchaseRequestId: 77 })
+
+    const res = await POST(makeReq(), makeParams(["pembelian", "pesanan", "5", "approve"]))
+    expect(res.status).toBe(200)
+    expect(mocks.recalcPrMock).toHaveBeenCalledWith(77)
+  })
+
+  it("putaran 52: reject manual PO memicu hitung ulang status PR tertaut", async () => {
+    mocks.authFn.mockResolvedValue(adminSession)
+    mocks.findFirstWorkflow.mockResolvedValue(null)
+    mocks.updateMany.mockResolvedValue({ count: 1 })
+    mocks.findUnique.mockResolvedValue({ purchaseRequestId: 77 })
+
+    const res = await POST(makeReq(), makeParams(["pembelian", "pesanan", "5", "reject"]))
+    expect(res.status).toBe(200)
+    expect(mocks.recalcPrMock).toHaveBeenCalledWith(77)
   })
 
   it("rejects successfully", async () => {
