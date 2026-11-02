@@ -4599,20 +4599,25 @@ export async function deleteDepartmentHoliday(id: number) {
 
 export async function createWorkSchedule(formData: FormData) {
   try {
-    await requirePermission("create_work_schedules");
+    const user = await requirePermission("create_work_schedules");
     const parsed = parseFormData(workScheduleSchema, formData);
     if (!parsed.success) return { success: false as const, error: parsed.error };
     const v = parsed.data;
 
-    const schedule = await prisma.workSchedule.create({
-      data: {
-        name: v.name,
-        // Bentuk "0-6 dipisah koma" — sama dengan yang diurai layanan absensi.
-        workDays: v.workDays,
-        startTime: v.startTime,
-        endTime: v.endTime,
-        isActive: v.isActive ?? true,
-      },
+    // Putaran 70: name tanpa unique — retry submit melahirkan jadwal
+    // kembar. Klaim key dalam tx sebelum create; tanpa key tetap no-op.
+    const schedule = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
+      return tx.workSchedule.create({
+        data: {
+          name: v.name,
+          // Bentuk "0-6 dipisah koma" — sama dengan yang diurai layanan absensi.
+          workDays: v.workDays,
+          startTime: v.startTime,
+          endTime: v.endTime,
+          isActive: v.isActive ?? true,
+        },
+      });
     });
 
     await logActivity("create", "WorkSchedule", schedule.id, `Menambah jadwal kerja ${v.name}`);

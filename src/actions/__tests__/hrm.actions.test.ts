@@ -2543,6 +2543,26 @@ describe("Kalender Kerja", () => {
     expect(arg.data.isActive).toBe(true)
   })
 
+  it("putaran 70: createWorkSchedule retry idempotency sama ditolak, jadwal lahir sekali", async () => {
+    prismaMock.workSchedule.create.mockResolvedValue({ id: 3 })
+    mocks.checkIdempotencyMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."))
+    const payload = {
+      name: "Shift Pagi",
+      workDays: "1,2,3,4,5",
+      startTime: "08:00",
+      endTime: "17:00",
+      idempotencyKey: "schedule-key-1",
+    }
+    const first = await actions.createWorkSchedule(fd(payload))
+    const second = await actions.createWorkSchedule(fd(payload))
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(mocks.checkIdempotencyMock).toHaveBeenCalledTimes(2)
+    expect(prismaMock.workSchedule.create).toHaveBeenCalledTimes(1)
+  })
+
   it("createWorkSchedule menolak jadwal tanpa hari kerja (fallback Senin-Jumat tidak boleh diam-diam)", async () => {
     const res = await actions.createWorkSchedule(
       fd({ name: "Tanpa Hari", startTime: "08:00", endTime: "17:00" }),

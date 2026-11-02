@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useRef, useTransition } from "react"
 import {
   createHoliday,
   updateHoliday,
@@ -205,6 +205,7 @@ export function DepartmentHolidayForm({
 export function WorkScheduleForm({ schedule }: { schedule?: WorkScheduleItem }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const selectedDays = new Set(
     (schedule?.workDays ?? "1,2,3,4,5").split(",").map((v) => v.trim()),
   )
@@ -224,6 +225,7 @@ export function WorkScheduleForm({ schedule }: { schedule?: WorkScheduleItem }) 
       // jadwal nonaktif tidak pernah bisa dinonaktifkan lewat UI.
       const activeBox = form.querySelector<HTMLInputElement>('input[name="isActive"]')
       fd.set("isActive", activeBox?.checked ? "true" : "false")
+      if (!schedule) fd.set("idempotencyKey", idempotencyKeyRef.current)
       const res = schedule
         ? await updateWorkSchedule(schedule.id, fd)
         : await createWorkSchedule(fd)
@@ -231,6 +233,7 @@ export function WorkScheduleForm({ schedule }: { schedule?: WorkScheduleItem }) 
         showError(res.error || "Gagal menyimpan jadwal kerja")
         return
       }
+      if (!schedule) idempotencyKeyRef.current = crypto.randomUUID()
       showSuccess(schedule ? "Jadwal kerja diperbarui" : "Jadwal kerja ditambahkan")
       form.reset()
       router.push("/sdm/kalender-kerja")
