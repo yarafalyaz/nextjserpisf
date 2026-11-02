@@ -97,7 +97,9 @@ describe("GET /api/down-payment-proof/[id] (R7PR-01)", () => {
     expect(res.headers.get("Content-Disposition")).toContain("inline")
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff")
     expect(res.headers.get("Content-Security-Policy")).toContain("sandbox")
-    expect(res.headers.get("Cache-Control")).toContain("private")
+    // Putaran 62: bukti bayar privat tidak disimpan browser sesudah
+    // logout/pencabutan izin (standar repo: pdf/backup/export no-store).
+    expect(res.headers.get("Cache-Control")).toBe("no-store")
     expect(Buffer.from(await res.arrayBuffer()).toString()).toBe("proof-bytes")
   })
 

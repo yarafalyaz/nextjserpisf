@@ -66,7 +66,9 @@ export async function GET(
     headers: {
       "Content-Type": MIME_MAP[ext] ?? "application/octet-stream",
       "Content-Disposition": `inline; filename="${filename}"`,
-      "Cache-Control": "private, max-age=3600",
+      // Putaran 62: avatar/tanda tangan privat tidak disimpan di disk
+      // cache PC bersama; samakan standar no-store route privat lain.
+      "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
       "Content-Security-Policy": "default-src 'none'; sandbox",
     },

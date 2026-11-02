@@ -85,7 +85,10 @@ export async function GET(
     headers: {
       "Content-Type": contentType,
       "Content-Disposition": `${dispositionMode}; filename="${segments[segments.length - 1]}"`,
-      "Cache-Control": "private, max-age=3600",
+      // Putaran 62: lampiran dokumen keuangan/pribadi tidak boleh tersisa
+      // di disk cache PC bersama sesudah logout/pencabutan izin. Standar
+      // repo untuk data setara adalah no-store (pdf/backup/activity export).
+      "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
       // Restrict script execution inside PDF/images
       "Content-Security-Policy": "default-src 'none'; sandbox",

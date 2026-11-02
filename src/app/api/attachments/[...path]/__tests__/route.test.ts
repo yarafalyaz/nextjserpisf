@@ -92,6 +92,12 @@ describe("GET /api/attachments/[...path]", () => {
     expect(res.status).toBe(404)
   })
 
+  it("putaran 62: berkas privat tidak disimpan browser (no-store)", async () => {
+    const res = await GET(makeReq(), makeParams(["quotation", "file.pdf"]))
+    expect(res.status).toBe(200)
+    expect(res.headers.get("Cache-Control")).toBe("no-store")
+  })
+
   it("returns file content with correct Content-Type (pdf)", async () => {
     const res = await GET(makeReq(), makeParams(["quotation", "file.pdf"]))
     expect(res.status).toBe(200)
