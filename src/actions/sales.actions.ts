@@ -651,7 +651,6 @@ export async function convertQuotationToOrder(quotationId: number) {
 
   const documentNo = await generateDocumentNumber("SO")
   const slug = await nextSlug("salesOrder", documentNo)
-  const allItems = quotation.sections.flatMap((section) => section.items)
 
   const salesOrder = await prisma.$transaction(async (tx) => {
     // Serialize concurrent converts for the SAME quotation by locking the
@@ -667,14 +666,30 @@ export async function convertQuotationToOrder(quotationId: number) {
       throw new Error("Penawaran ini sudah memiliki Pesanan Penjualan")
     }
 
+    // Baca ulang quotation SEGAR di bawah kunci (pola updateQuotation):
+    // updateQuotation hanya menolak status cancelled, jadi quotation
+    // accepted/approved bisa direvisi item/totalnya — bahkan dibatalkan —
+    // di jendela antara snapshot luar dan kunci ini. SO, baris, dan
+    // penilaian gerbang kredit wajib berasal dari revisi terkunci,
+    // bukan snapshot luar yang basi.
+    const lockedQuotation = await tx.quotation.findUniqueOrThrow({
+      where: { id: quotationId },
+      include: { sections: { include: { items: true } } },
+    })
+    if (!["accepted", "approved"].includes(lockedQuotation.status)) {
+      throw new Error("Hanya penawaran approved/accepted yang dapat dikonversi")
+    }
+    assertQuotationNotExpired(lockedQuotation.validUntil)
+    const lockedItems = lockedQuotation.sections.flatMap((section) => section.items)
+
     // F-2026-10-25-035-B titik tahan Q-CL2-4: nilai SEBELUM baris lahir;
     // tertahan = throw = rollback penuh (nol SO lahir).
     const convertAttempt = {
-      customerId: quotation.customerId,
+      customerId: lockedQuotation.customerId,
       documentType: "sales_order" as const,
-      attemptedAmount: Number(quotation.grandTotal),
+      attemptedAmount: Number(lockedQuotation.grandTotal),
       requestedBy: Number(user.id),
-      quotationId: quotation.id,
+      quotationId: lockedQuotation.id,
       // Jalur tanpa FormData: tanpa alasan -> tanpa rekod pending
       // (fase 3 mengembalikan null); approved bersidik sama tetap
       // bisa dipakai lewat fase 2 di bawah.
@@ -688,25 +703,25 @@ export async function convertQuotationToOrder(quotationId: number) {
       data: {
         documentNo,
         slug,
-        customerId: quotation.customerId,
-        quotationId: quotation.id,
-        customerVehicleId: quotation.customerVehicleId,
-        salesEmployeeId: quotation.salesEmployeeId,
+        customerId: lockedQuotation.customerId,
+        quotationId: lockedQuotation.id,
+        customerVehicleId: lockedQuotation.customerVehicleId,
+        salesEmployeeId: lockedQuotation.salesEmployeeId,
         date: new Date(),
-        subtotal: quotation.subtotal,
-        discount: quotation.discount ?? 0,
-        tax: quotation.tax ?? 0,
-        grandTotal: quotation.grandTotal,
-        totalAmount: quotation.grandTotal,
+        subtotal: lockedQuotation.subtotal,
+        discount: lockedQuotation.discount ?? 0,
+        tax: lockedQuotation.tax ?? 0,
+        grandTotal: lockedQuotation.grandTotal,
+        totalAmount: lockedQuotation.grandTotal,
         status: "draft",
-        notes: `Otomatis dibuat dari Quotation ${quotation.documentNo}`,
+        notes: `Otomatis dibuat dari Quotation ${lockedQuotation.documentNo}`,
         createdBy: Number(user.id),
       },
     })
 
-    if (allItems.length > 0) {
+    if (lockedItems.length > 0) {
       await tx.salesOrderItem.createMany({
-        data: allItems.map((item) => ({
+        data: lockedItems.map((item) => ({
           salesOrderId: so.id,
           itemId: item.itemId,
           description: item.description,

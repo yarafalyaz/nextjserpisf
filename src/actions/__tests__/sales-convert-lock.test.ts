@@ -19,6 +19,7 @@ const soFindFirstMock = vi.fn()
 const soCreateMock = vi.fn()
 const soItemCreateManyMock = vi.fn()
 const quotationUpdateMock = vi.fn()
+const quotationFindUniqueMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -67,7 +68,7 @@ function wireTransaction() {
     $queryRaw: queryRawMock,
     salesOrder: { findFirst: soFindFirstMock, create: soCreateMock },
     salesOrderItem: { createMany: soItemCreateManyMock },
-    quotation: { update: quotationUpdateMock },
+    quotation: { update: quotationUpdateMock, findUniqueOrThrow: quotationFindUniqueMock },
   }
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
 }
@@ -76,7 +77,7 @@ beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock, generateDocNumberMock,
     transactionMock, quotationFindUniqueOrThrowMock, queryRawMock, soFindFirstMock,
-    soCreateMock, soItemCreateManyMock, quotationUpdateMock,
+    soCreateMock, soItemCreateManyMock, quotationUpdateMock, quotationFindUniqueMock,
   ]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 1 })
   generateDocNumberMock.mockResolvedValue("SO-0001")
@@ -90,6 +91,13 @@ beforeEach(() => {
   soCreateMock.mockResolvedValue({ id: 200 })
   soItemCreateManyMock.mockResolvedValue({ count: 1 })
   quotationUpdateMock.mockResolvedValue({})
+  // Bacaan ulang terkunci default = revisi sama dengan snapshot luar.
+  quotationFindUniqueMock.mockResolvedValue({
+    id: 50, documentNo: "QUO-0001", status: "accepted", customerId: 3, customerVehicleId: 9,
+    customer: undefined, salesEmployeeId: null,
+    subtotal: 1000, discount: 0, tax: 110, grandTotal: 1110,
+    sections: [{ items: [{ itemId: 7, description: "x", qty: 1, unitPrice: 1000, discount: 0, total: 1000 }] }],
+  })
   wireTransaction()
 })
 
@@ -111,6 +119,38 @@ describe("convertQuotationToOrder concurrency guard", () => {
     const result = await convertQuotationToOrder(50)
     expect(result.success).toBe(false)
     expect(result.error).toContain("sudah memiliki Pesanan Penjualan")
+    expect(soCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("putaran 59: SO dibangun dari revisi quotation TERKUNCI, bukan snapshot luar", async () => {
+    // Snapshot luar revisi A (grandTotal 1110); edit quotation commit revisi B
+    // (grandTotal 2220) sebelum konversi memperoleh kunci. SO wajib lahir dari B.
+    quotationFindUniqueMock.mockResolvedValue({
+      id: 50, documentNo: "QUO-0001", status: "accepted", customerId: 3, customerVehicleId: 9,
+      salesEmployeeId: null, subtotal: 2000, discount: 0, tax: 220, grandTotal: 2220,
+      sections: [{ items: [{ itemId: 8, description: "y", qty: 2, unitPrice: 1000, discount: 0, total: 2000 }] }],
+    })
+
+    const result = await convertQuotationToOrder(50)
+
+    expect(result.success).toBe(true)
+    const soData = soCreateMock.mock.calls[0][0].data
+    expect(soData.grandTotal).toBe(2220)
+    expect(soCreateMock).toHaveBeenCalledTimes(1)
+    expect(soItemCreateManyMock.mock.calls[0][0].data[0].itemId).toBe(8)
+  })
+
+  it("putaran 59: quotation dibatalkan sesudah snapshot luar → konversi ditolak di bawah kunci", async () => {
+    quotationFindUniqueMock.mockResolvedValue({
+      id: 50, documentNo: "QUO-0001", status: "cancelled", customerId: 3, customerVehicleId: 9,
+      salesEmployeeId: null, subtotal: 1000, discount: 0, tax: 110, grandTotal: 1110,
+      sections: [],
+    })
+
+    const result = await convertQuotationToOrder(50)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("approved/accepted")
     expect(soCreateMock).not.toHaveBeenCalled()
   })
 })

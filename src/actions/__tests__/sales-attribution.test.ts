@@ -65,13 +65,14 @@ beforeEach(() => {
   requirePermissionMock.mockResolvedValue({ id: 1 })
 })
 
-function wireConvertTx() {
+function wireConvertTx(locked: Record<string, unknown>) {
   transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) =>
     cb({
       $queryRaw: vi.fn(async () => []),
       salesOrder: { findFirst: vi.fn(async () => null), create: soCreateMock },
       salesOrderItem: { createMany: vi.fn() },
-      quotation: { update: vi.fn() },
+      // Bacaan ulang terkunci quotation = revisi yang sama dengan snapshot luar.
+      quotation: { update: vi.fn(), findUniqueOrThrow: vi.fn(async () => locked) },
     }),
   )
 }
@@ -90,7 +91,7 @@ describe("F-016 tahap 1 pewarisan penjual", () => {
   it("convert: SO mewarisi salesEmployeeId penawaran", async () => {
     quotationFindUniqueOrThrowMock.mockResolvedValue(quotation())
     soCreateMock.mockResolvedValue({ id: 99 })
-    wireConvertTx()
+    wireConvertTx(quotation())
     const r = await convertQuotationToOrder(50)
     expect(r.success).toBe(true)
     expect(soCreateMock.mock.calls[0][0].data.salesEmployeeId).toBe(7)
@@ -99,7 +100,7 @@ describe("F-016 tahap 1 pewarisan penjual", () => {
   it("convert: penawaran tanpa penjual -> SO tanpa penjual", async () => {
     quotationFindUniqueOrThrowMock.mockResolvedValue(quotation({ salesEmployeeId: null }))
     soCreateMock.mockResolvedValue({ id: 99 })
-    wireConvertTx()
+    wireConvertTx(quotation({ salesEmployeeId: null }))
     await convertQuotationToOrder(50)
     expect(soCreateMock.mock.calls[0][0].data.salesEmployeeId).toBeNull()
   })
