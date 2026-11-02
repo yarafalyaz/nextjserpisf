@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useRef, useTransition } from "react";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
 import { Input } from "@/components/ui/shadcn/input";
@@ -17,12 +17,15 @@ export function ProfitCenterForm({
 }: { center?: { id: number; code: string; name: string } } = {}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  // Putaran 70: key stabil per intent create; retry memakai ulang, sukses merotasi.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget);
+        if (!center?.id) formData.set("idempotencyKey", idempotencyKeyRef.current);
         const { createProfitCenter, updateProfitCenter } = await import(
           "@/actions/finance.actions"
         );
@@ -36,6 +39,7 @@ export function ProfitCenterForm({
         showSuccess(
           center?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan",
         );
+        if (!center?.id) idempotencyKeyRef.current = crypto.randomUUID();
         router.push("/keuangan/pusat-laba");
         router.refresh();
       } catch (error) {

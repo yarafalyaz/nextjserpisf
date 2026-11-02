@@ -2204,20 +2204,38 @@ function profitCenterDuplicateError(e: unknown, tag: string) {
     return { success: false as const, error: "Kode pusat laba sudah digunakan" };
   }
   const message = getErrorMessage(e) || "";
+  if (message.includes("duplikat") || message.includes("sudah digunakan")) {
+    return { success: false as const, error: message };
+  }
   console.error(tag, message || e);
   return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
 }
 
 export async function createProfitCenter(formData: FormData) {
   try {
-    await requirePermission("create_profit_centers");
+    const user = await requirePermission("create_profit_centers");
 
     const parsed = parseFormData(profitCenterSchema, formData);
     if (!parsed.success) return { success: false as const, error: parsed.error };
     const v = parsed.data;
 
-    const center = await prisma.profitCenter.create({
-      data: { code: v.code, name: v.name },
+    // Putaran 70: key + klaim kode ternormalisasi di bawah gap-lock tabel.
+    // Versi lama create polos: retry melahirkan pusat laba kembar berkode
+    // mirip tetapi tidak identik; klaim JS di bawah kunci membuat tabrakan
+    // kapital terpetakan dukplikat sejak awal.
+    const center = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM profit_centers FOR UPDATE`;
+      }
+      const codeKey = v.code.trim().toLowerCase();
+      const siblings = await tx.profitCenter.findMany({ select: { id: true, code: true } });
+      if (siblings.some((row) => row.code.trim().toLowerCase() === codeKey)) {
+        throw new Error("Kode pusat laba sudah digunakan");
+      }
+      return tx.profitCenter.create({
+        data: { code: v.code, name: v.name },
+      });
     });
 
     await logActivity("create", "ProfitCenter", center.id, `Menambah pusat laba ${v.code}`);
@@ -2236,9 +2254,21 @@ export async function updateProfitCenter(id: number, formData: FormData) {
     if (!parsed.success) return { success: false as const, error: parsed.error };
     const v = parsed.data;
 
-    await prisma.profitCenter.update({
-      where: { id },
-      data: { code: v.code, name: v.name },
+    // Putaran 70: klaim kode ternormalisasi dalam tx gap-lock (pola
+    // updateMethod/updateCostCenter); update polos hanya ditahan P2002.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM profit_centers FOR UPDATE`;
+      }
+      const codeKey = v.code.trim().toLowerCase();
+      const siblings = await tx.profitCenter.findMany({ select: { id: true, code: true } });
+      if (siblings.some((row) => row.id !== id && row.code.trim().toLowerCase() === codeKey)) {
+        throw new Error("Kode pusat laba sudah digunakan");
+      }
+      await tx.profitCenter.update({
+        where: { id },
+        data: { code: v.code, name: v.name },
+      });
     });
 
     await logActivity("update", "ProfitCenter", id, `Mengubah pusat laba ${v.code}`);

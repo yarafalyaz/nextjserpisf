@@ -1602,6 +1602,42 @@ describe("Cost Center Actions", () => {
       expect(res).toEqual({ success: false, error: "Kode pusat laba sudah digunakan" })
     })
 
+    it("putaran 70: createProfitCenter double-submit key sama ditolak, baris lahir sekali", async () => {
+      mocks.prismaMock.idempotencyKey = {
+        create: vi.fn().mockResolvedValue({ id: 1 }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUnique: vi.fn().mockResolvedValue({ createdAt: new Date() }),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      }
+      mocks.prismaMock.idempotencyKey.create
+        .mockResolvedValueOnce({ id: 1 })
+        .mockRejectedValue(Object.assign(new Error("dup"), { code: "P2002" }))
+      const p = { code: "PC-09", name: "Pusat Laba Baru", idempotencyKey: "pc-key-1" }
+      const first = await (actions as any).createProfitCenter(fdMap(p))
+      expect(first.success).toBe(true)
+      const second = await (actions as any).createProfitCenter(fdMap(p))
+      expect(second.success).toBe(false)
+      expect(String(second.error)).toContain("duplikat")
+      expect(mocks.prismaMock.profitCenter.create).toHaveBeenCalledTimes(1)
+      delete mocks.prismaMock.idempotencyKey
+    })
+
+    it("putaran 70: createProfitCenter mengklaim kode ternormalisasi dari daftar sibling", async () => {
+      mocks.prismaMock.profitCenter.findMany.mockResolvedValue([{ id: 2, code: "PC-01" }])
+      const res = await (actions as any).createProfitCenter(fdMap({ code: " pc-01 ", name: "Duplikat" }))
+      expect(res.success).toBe(false)
+      expect(String(res.error)).toContain("Kode pusat laba sudah digunakan")
+      expect(mocks.prismaMock.profitCenter.create).not.toHaveBeenCalled()
+    })
+
+    it("putaran 70: updateProfitCenter mengklaim kode ternormalisasi dari daftar sibling", async () => {
+      mocks.prismaMock.profitCenter.findMany.mockResolvedValue([{ id: 2, code: "pc-01" }])
+      const res = await (actions as any).updateProfitCenter(7, fdMap({ code: " PC-01", name: "Duplikat" }))
+      expect(res.success).toBe(false)
+      expect(String(res.error)).toContain("Kode pusat laba sudah digunakan")
+      expect(mocks.prismaMock.profitCenter.update).not.toHaveBeenCalled()
+    })
+
     it("updateProfitCenter memakai izin edit_profit_centers", async () => {
       mocks.prismaMock.profitCenter.update.mockResolvedValue({})
       const res = await (actions as any).updateProfitCenter(
