@@ -2436,7 +2436,6 @@ export async function createLead(formData: FormData) {
     const leadNumber = await generateDocumentNumber("LEAD", "simple");
 
     const data = {
-      slug: await nextSlug("lead", v.name || leadNumber),
       leadNumber,
       name: v.name,
       email: v.email ?? null,
@@ -2471,7 +2470,15 @@ export async function createLead(formData: FormData) {
       // boleh mengonsumsi key, tetapi retry submit yang benar-benar menulis
       // lead harus tertahan sebagai duplikat.
       await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, actor.id);
-      const created = await tx.lead.create({ data });
+      // Putaran 71: slug lewat delegate tx — varian global pra-tx tak
+      // melihat baris tak-tercommit transaksi lain; lead bernama sama
+      // sah lahir lewat jalur override duplikat (Lead.slug @unique).
+      const created = await tx.lead.create({
+        data: {
+          ...data,
+          slug: await nextSlugWithClient(tx as never, "lead", v.name || leadNumber),
+        },
+      });
       const effective = txWarning ?? preWarning;
       if (effective && reasonCheck.ok) {
         await tx.leadActivity.create({
@@ -2666,7 +2673,7 @@ export async function updateLead(id: number, formData: FormData) {
       await tx.lead.update({
         where: { id },
         data: {
-          slug: await nextSlug("lead", v.name || existing.leadNumber, { excludeId: id }),
+          slug: await nextSlugWithClient(tx as never, "lead", v.name || existing.leadNumber, { excludeId: id }),
           name: v.name,
           email: v.email ?? null,
           phone: v.phone ?? null,

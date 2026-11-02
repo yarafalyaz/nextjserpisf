@@ -1249,6 +1249,49 @@ describe("Lead Actions", () => {
     expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
   })
 
+  it("putaran 71: createLead menghitung slug lewat delegate tx", async () => {
+    const txFindFirst = vi.fn()
+      .mockResolvedValueOnce({ id: 77 })
+      .mockResolvedValue(null)
+    const txFacade = {
+      ...mocks.prismaMock,
+      lead: { ...mocks.prismaMock.lead, findFirst: txFindFirst },
+    }
+    const txImpl = mocks.prismaMock.$transaction.getMockImplementation()
+    mocks.prismaMock.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(txFacade))
+    try {
+      try {
+        await actions.createLead(fdMap({ name: "Lead Uji", estimatedValue: "100" }))
+      } catch { /* redirect */ }
+      expect(mocks.prismaMock.lead.create).toHaveBeenCalled()
+      const arg = mocks.prismaMock.lead.create.mock.calls[0][0]
+      expect(arg.data.slug).toBe("lead-uji-2")
+    } finally {
+      mocks.prismaMock.$transaction.mockImplementation(txImpl)
+    }
+  })
+  it("putaran 71: updateLead menghitung slug lewat delegate tx", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({ id: 1, activities: "[]", assignedTo: 1 })
+    const txFindFirst = vi.fn()
+      .mockResolvedValueOnce({ id: 77 })
+      .mockResolvedValue(null)
+    const txFacade = {
+      ...mocks.prismaMock,
+      lead: { ...mocks.prismaMock.lead, findFirst: txFindFirst },
+    }
+    const txImpl = mocks.prismaMock.$transaction.getMockImplementation()
+    mocks.prismaMock.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(txFacade))
+    try {
+      try {
+        await actions.updateLead(1, fdMap({ name: "Lead Uji", estimatedValue: "100" }))
+      } catch { /* redirect */ }
+      expect(mocks.prismaMock.lead.update).toHaveBeenCalled()
+      const arg = mocks.prismaMock.lead.update.mock.calls[0][0]
+      expect(arg.data.slug).toBe("lead-uji-2")
+    } finally {
+      mocks.prismaMock.$transaction.mockImplementation(txImpl)
+    }
+  })
   it("regresi putaran 46: createLead menolak non-admin menugaskan lead ke pengguna lain", async () => {
     mocks.requirePermissionMock.mockResolvedValueOnce({ id: 3, permissions: ["create_leads"], roles: ["sales"] })
     mocks.prismaMock.user = mocks.prismaMock.user ?? { findFirst: vi.fn() }
