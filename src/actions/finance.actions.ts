@@ -59,7 +59,7 @@ import {
   findFirstNegativeBalance,
 } from "@/lib/finance/petty-cash-chain";
 import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service";
-import { nextSlug } from "@/lib/utils/slug-db";
+import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db";
 import { parseMoneyAmount } from "@/lib/utils/parse-money";
 import { parseBankStatementCsv } from "@/lib/finance/bank-statement-csv";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
@@ -2261,37 +2261,58 @@ export async function createCostCenter(formData: FormData) {
   try {
     await requirePermission("create_cost_centers");
 
-    const rawNameCC2 = (formData.get("name") as string | null)?.trim()
-    if (rawNameCC2) {
-      const existing = await prisma.costCenter.findFirst({ where: { name: rawNameCC2 }, select: { id: true, slug: true } })
-      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
-    }
-
-
     const parsed = parseFormData(costCenterSchema, formData);
     if (!parsed.success)
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
-    const costCenter = await prisma.costCenter.create({
-      data: {
-        code: v.code,
-        name: v.name,
-        slug: await nextSlug("costCenter", v.name),
-        description: v.description ?? null,
-        isActive: v.isActive,
-        parentId: v.parentId ?? null,
-      },
+    // Nama tanpa @unique DB (code memang @unique dan wajib): cek findFirst
+    // pra-parse di luar tx kalah balapan — dua create konkuren melahirkan
+    // dua pusat biaya bernama sama (slug bersuffix, bukan blokir) dan kode
+    // bentrok hanya muncul sebagai P2002 mentah. Cek+create dalam tx
+    // bergap-lock (pola createTax putaran 53): nama sama (trim+lowercase)
+    // -> reuse; kode bentrok -> tolak menyebut kode tersimpan. Model tanpa
+    // deletedAt: semua baris = himpunan yang dinilai.
+    const result = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM cost_centers FOR UPDATE`;
+      }
+      const candidates = await tx.costCenter.findMany({
+        select: { id: true, name: true, code: true, slug: true },
+      });
+      const key = (value: string) => value.trim().toLowerCase();
+      const byName = candidates.find((row) => key(row.name) === key(v.name));
+      if (byName) return { kind: "reuse" as const, id: byName.id, slug: byName.slug };
+      const byCode = candidates.find((row) => key(row.code) === key(v.code));
+      if (byCode) {
+        throw new Error(
+          `Kode pusat biaya ${byCode.code} sudah dipakai pusat biaya "${byCode.name}"; pakai kode lain.`,
+        );
+      }
+      const created = await tx.costCenter.create({
+        data: {
+          code: v.code,
+          name: v.name,
+          slug: await nextSlugWithClient(tx as never, "costCenter", v.name),
+          description: v.description ?? null,
+          isActive: v.isActive,
+          parentId: v.parentId ?? null,
+        },
+      });
+      return { kind: "created" as const, id: created.id, slug: created.slug };
     });
+    if (result.kind === "reuse") {
+      return { success: true, id: result.id, slug: result.slug ?? undefined };
+    }
 
     await logActivity(
       "create",
       "CostCenter",
-      costCenter.id,
+      result.id,
       "Membuat pusat biaya",
     );
     revalidatePath("/keuangan/pusat-biaya");
-    return { success: true, id: costCenter.id };
+    return { success: true, id: result.id };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createCostCenter]", getErrorMessage(e) || e);

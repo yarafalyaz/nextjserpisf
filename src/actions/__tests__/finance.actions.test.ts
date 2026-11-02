@@ -1395,6 +1395,33 @@ describe("Bank Reconciliation Actions", () => {
 
 
 describe("Cost Center Actions", () => {
+  it("putaran 53: createCostCenter di bawah gap-lock — nama sama reuse, kode bentrok ditolak", async () => {
+    const sqlOf = (c: unknown[]) => {
+      const a = c[0] as { sql?: string; strings?: string[] } | string[]
+      return Array.isArray(a) ? a.join("?") : (a?.sql ?? a?.strings?.join("?") ?? "")
+    }
+    const defaultFindMany = mocks.prismaMock.costCenter.findMany.getMockImplementation()
+    mocks.prismaMock.costCenter.findMany.mockImplementation(async () => [
+      { id: 3, name: "Biaya Operasional", code: "CC-OPS", slug: "biaya-operasional" },
+    ])
+    try {
+      const reuse = await (actions as any).createCostCenter(fdMap({ code: "CC-LAIN", name: " biaya operasional " }))
+      expect(reuse?.success).toBe(true)
+      expect(reuse?.id).toBe(3)
+      expect(mocks.prismaMock.costCenter.create).not.toHaveBeenCalled()
+      expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+      const lockIdx = (mocks.prismaMock.$executeRaw.mock.calls as unknown[][]).findIndex((c) => sqlOf(c).includes("cost_centers"))
+      expect(lockIdx, "gap-lock cost_centers FOR UPDATE").toBeGreaterThanOrEqual(0)
+
+      const clash = await (actions as any).createCostCenter(fdMap({ code: " cc-ops ", name: "Biaya Baru" }))
+      expect(clash?.success).toBe(false)
+      expect(String(clash?.error)).toContain("CC-OPS")
+      expect(mocks.prismaMock.costCenter.create).not.toHaveBeenCalled()
+    } finally {
+      mocks.prismaMock.costCenter.findMany.mockImplementation(defaultFindMany as never)
+    }
+  })
+
   it("createCostCenter succeeds", async () => {
     const res = await (actions as any).createCostCenter(fdMap({
       code: "CC-001",
