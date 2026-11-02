@@ -2663,6 +2663,11 @@ export async function createSalesReturn(formData: FormData) {
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
   const v = parsed.data
 
+  // Putaran 63: cap over-return hanya menolak total melewati qty faktur;
+  // retry identik melahirkan dua draft parsial yang masing-masing bisa
+  // diselesaikan (stok masuk + kredit AR/PPN dobel).
+  const idempotencyKey = formData.get("idempotencyKey") as string | null
+
   const documentNo = await generateDocumentNumber("SR")
   const slug = await nextSlug("salesReturn", documentNo)
 
@@ -2749,6 +2754,7 @@ export async function createSalesReturn(formData: FormData) {
   // createDownPayment lock pattern. A violation throws (rolls back the no-op tx)
   // and is surfaced by the outer catch with the same message.
   const salesReturn = await prisma.$transaction(async (tx) => {
+    await checkIdempotency(idempotencyKey, tx, user.id)
     if (invoiceId) {
       await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${invoiceId} FOR UPDATE`
 

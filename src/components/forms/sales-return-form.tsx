@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { createSalesReturn, updateSalesReturn } from "@/actions/sales.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
@@ -33,6 +33,7 @@ interface ReturnItem {
 export function SalesReturnForm({ invoices, customers, items, returnData }: SalesReturnFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [date, setDate] = useState(returnData?.date ?? toLocalDateOnly(new Date()))
   const [taxReturnNoteDate, setTaxReturnNoteDate] = useState(returnData?.taxReturnNoteDate ?? "")
   const [salesInvoiceId, setSalesInvoiceId] = useState(returnData?.salesInvoiceId ? String(returnData.salesInvoiceId) : "")
@@ -73,8 +74,10 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
         const formData = new FormData(e.currentTarget)
         formData.set("date", date)
         formData.append("items", JSON.stringify(returnItems.map(({ uid: _uid, ...rest }) => rest)))
+        if (!returnData?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
         const result = returnData?.id ? await updateSalesReturn(returnData.id, formData) : await createSalesReturn(formData)
         if (result.success) {
+          if (!returnData?.id) idempotencyKeyRef.current = crypto.randomUUID()
           showSuccess(returnData?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
           router.push("/penjualan/retur")
           router.refresh()

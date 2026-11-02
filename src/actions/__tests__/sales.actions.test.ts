@@ -61,6 +61,7 @@ const mocks = vi.hoisted(() => {
     financialIdempotencyKey: buildModelMock(),
     salesReturn: buildModelMock(),
     salesReturnItem: buildModelMock(),
+    idempotencyKey: buildModelMock(),
     deliveryOrder: buildModelMock(),
     deliveryOrderItem: buildModelMock(),
     downPayment: buildModelMock(),
@@ -1522,6 +1523,30 @@ describe("Sales Return Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("hanya bisa diselesaikan dari status draft")
     expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
+  it("putaran 63: createSalesReturn — retry idempotencyKey sama ditolak, retur lahir sekali", async () => {
+    mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "posted", customerId: 1 })
+    mocks.prismaMock.salesInvoiceItem.findMany.mockResolvedValue([{ itemId: 1, unitPrice: 1000, qty: 10, uom: null, batchAllocations: [] }])
+    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 1, cost: 100, price: 1000 }])
+    const idem = mocks.prismaMock.idempotencyKey
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const payload = {
+      customerId: 1,
+      salesInvoiceId: 1,
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 2 }]),
+      idempotencyKey: "sret-key-1",
+    }
+    const first = await actions.createSalesReturn(fdMap(payload))
+    const second = await actions.createSalesReturn(fdMap(payload))
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(second?.error).toContain("duplikat")
+    expect(mocks.prismaMock.salesReturn.create).toHaveBeenCalledTimes(1)
   })
 
   // === createSalesReturn over-return branch coverage ===
