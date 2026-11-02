@@ -13,7 +13,6 @@ import { checkIdempotency } from "@/lib/utils/idempotency"
 import { nextSlugWithClient } from "@/lib/utils/slug-db"
 import type { TxClient } from "@/lib/db/prisma"
 import { parseFormData } from "@/lib/validations/parse-form"
-import { nextSlug } from "@/lib/utils/slug-db"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import {
   createProjectSchema,
@@ -163,8 +162,6 @@ export async function updateProject(projectId: number, formData: FormData) {
   // Kendaraan yang TIDAK dikirim form dipertahankan apa adanya (form selalu
   // mengirim pilihannya; kunci kendaraan<->pelanggan membuat kendaraan tidak
   // bisa dipindahkan diam-diam saat pelanggan diganti).
-  const nextSlugValue = await nextSlug("project", data.name, { excludeId: projectId })
-
   await prisma.$transaction(async (tx) => {
     if (typeof tx.$executeRaw === "function") {
       await tx.$executeRaw`SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE`
@@ -174,6 +171,14 @@ export async function updateProject(projectId: number, formData: FormData) {
       select: { customerVehicleId: true },
     })
     if (!fresh) throw new Error("Proyek tidak ditemukan")
+
+    // Putaran 69: slug dihitung dalam tx lewat delegate tx (pola
+    // createProject baris atas) — varian global pra-tx tak melihat
+    // baris tak-tercommit rename konkuren; slug @unique menahan
+    // duplikat, bukan mencegah P2002 mentah.
+    const nextSlugValue = await nextSlugWithClient(tx as never, "project", data.name, {
+      excludeId: projectId,
+    })
 
     const nextVehicleId =
       data.customerVehicleId !== undefined
@@ -927,7 +932,6 @@ export async function updateTask(formData: FormData) {
   // baris terkunci: cek di atas membaca snapshot — manager yang menugaskan
   // ulang tugas di antara cek dan update membuat update staff yang basi
   // menimpa assignedTo (merebut kembali / mengosongkan penugasan).
-  const slug = await nextSlug("task", data.name, { excludeId: data.id })
   await prisma.$transaction(async (tx) => {
     if (typeof tx.$queryRaw === "function") {
       const rows = await tx.$queryRaw<Array<{ id: number }>>`
@@ -936,6 +940,12 @@ export async function updateTask(formData: FormData) {
       if (rows.length === 0) throw new Error("Tugas tidak ditemukan.")
     }
     const locked = await tx.task.findUniqueOrThrow({ where: { id: data.id } })
+    // Putaran 69: slug dihitung dalam tx lewat delegate tx (pola
+    // createTask baris 873) — varian global pra-tx P2002 mentah pada
+    // rename konkuren ke nama sama (Task.slug @unique).
+    const slug = await nextSlugWithClient(tx as never, "task", data.name, {
+      excludeId: data.id,
+    })
     if (!isManager && locked.assignedTo !== Number(actor.id)) {
       throw new Error("Anda hanya dapat memperbarui tugas yang ditugaskan kepada Anda.")
     }
