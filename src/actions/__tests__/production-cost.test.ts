@@ -95,6 +95,7 @@ beforeEach(() => {
   // queryRaw juga dipakai kunci baris lain; nilai ini hanya dibaca sebagai
   // baris PO oleh jalur biaya ber-PO, test spesifik menimpanya.
   queryRawMock.mockResolvedValue([{ status: "in_progress", completed_qty: 0 }])
+  woFindUniqueMock.mockResolvedValue({ id: 10, status: "in_progress" })
 
   requirePermissionMock.mockResolvedValue({ id: 5 })
   periodOpenMock.mockResolvedValue(undefined)
@@ -326,6 +327,20 @@ describe("createProductionCost", () => {
     expect(res.error).toContain(status)
     expect(costDeleteMock).not.toHaveBeenCalled()
   })
+
+  it.each(["completed", "cancelled"])(
+    "putaran 76: locking read WO %s menolak create WO-only walau snapshot luar in_progress",
+    async (status) => {
+      woFindUniqueMock.mockResolvedValue({ id: 7, status: "in_progress" })
+      queryRawMock.mockResolvedValue([{ status }])
+
+      const res = await createProductionCost(fd({ workOrderId: 7, category: "service", amount: 50000 }))
+
+      expect(res.success).toBe(false)
+      if (!res.success) expect(res.error).toContain(status)
+      expect(costCreateMock).not.toHaveBeenCalled()
+    },
+  )
 
   it("refuses when neither order nor work order is given", async () => {
     const res = await createProductionCost(fd({ category: "labor", amount: 1000 }))
@@ -924,6 +939,24 @@ describe("pullLaborCostFromWorkOrderTimesheets — jalur WO langsung (F-2026-10-
     // sama, jadi sesudah kunci ini jam beku; test ini membuktikan NILAI
     // yang dipakai adalah bacaan terkunci, bukan snapshot pra-kunci.
   })
+
+  it.each(["completed", "cancelled"])(
+    "putaran 76: locking read WO %s menolak pull WO walau snapshot luar in_progress",
+    async (status) => {
+      woFindUniqueMock.mockResolvedValue({ id: 7, status: "in_progress" })
+      timesheetFindManyMock.mockResolvedValue([
+        { id: 21, hours: 8, date: new Date(), description: null },
+      ])
+      costFindManyMock.mockResolvedValue([])
+      queryRawMock.mockResolvedValue([{ status }])
+
+      const res = await pullLaborCostFromWorkOrderTimesheets(7, 25000)
+
+      expect(res.success).toBe(false)
+      if (!res.success) expect(res.error).toContain(status)
+      expect(costCreateMock).not.toHaveBeenCalled()
+    },
+  )
 
   it("tanpa izin manage_production_costs ditolak sebelum query apa pun", async () => {
     requirePermissionMock.mockRejectedValue(new Error("Tidak memiliki izin"))

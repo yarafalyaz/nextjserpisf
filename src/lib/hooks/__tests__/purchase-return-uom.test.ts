@@ -144,6 +144,41 @@ describe("purchase return — gudang sumber mati (putaran 51)", () => {
   })
 })
 
+describe("purchase return item lock order (putaran 76)", () => {
+  it("mengunci item unik dalam urutan ID naik", async () => {
+    const { spies } = makeTx()
+    spies.returnFindUniqueOrThrow.mockResolvedValue({
+      id: 7,
+      documentNo: "PR-7",
+      purchaseOrderId: 4,
+      date: new Date("2026-10-01"),
+      status: "processing",
+      items: [
+        { itemId: 9, qty: 1, cost: 100 },
+        { itemId: 3, qty: 1, cost: 100 },
+        { itemId: 9, qty: 1, cost: 100 },
+      ],
+    })
+    spies.receiptItemFindMany.mockResolvedValue([
+      { itemId: 3, uom: "PCS", warehouseId: 2, goodsReceipt: { warehouseId: 1 } },
+      { itemId: 9, uom: "PCS", warehouseId: 2, goodsReceipt: { warehouseId: 1 } },
+    ])
+    spies.itemFindMany.mockResolvedValue([
+      { id: 3, defaultWarehouseId: 2 },
+      { id: 9, defaultWarehouseId: 2 },
+    ])
+
+    await onPurchaseReturnProcessed(7, 9)
+
+    const itemLock = spies.queryRaw.mock.calls.find((call) => {
+      const sql = Array.from(call[0] as TemplateStringsArray).join("?")
+      return sql.includes("FROM items") && sql.includes("FOR UPDATE")
+    })
+    expect(itemLock).toBeDefined()
+    expect((itemLock![1] as { values: unknown }).values).toEqual([3, 9])
+  })
+})
+
 describe("purchase return UoM and receipt warehouse", () => {
   it("returns 2 BOX as 24 base units to the item's receipt warehouse", async () => {
     const { spies, tx } = makeTx()

@@ -181,6 +181,37 @@ describe("createMaterialRequest (AC-MR-1)", () => {
     expect(mocks.txMock.materialRequest.create).not.toHaveBeenCalled()
   })
 
+  it("putaran 76: WO closed menolak tautan baru (himpunan terminal termasuk closed)", async () => {
+    mocks.txMock.workOrder.findUnique.mockResolvedValue({ status: "closed", documentNo: "WO-0007" })
+    const res = await createMaterialRequest(
+      fd({
+        requesterWarehouseId: "2",
+        sourceWarehouseId: "1",
+        workOrderId: "7",
+        items: JSON.stringify([{ itemId: 1, qty: 2 }]),
+      }),
+    )
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("closed")
+    expect(mocks.txMock.materialRequest.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 76: klaim idempotency mendahului create MR", async () => {
+    const res = await createMaterialRequest(
+      fd({
+        requesterWarehouseId: "2",
+        sourceWarehouseId: "1",
+        items: JSON.stringify([{ itemId: 1, qty: 2 }]),
+        idempotencyKey: "key-mr-1",
+      }),
+    )
+    expect(res.success).toBe(true)
+    expect(mocks.idemCreate).toHaveBeenCalledTimes(1)
+    expect(mocks.idemCreate.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.txMock.materialRequest.create.mock.invocationCallOrder[0],
+    )
+  })
+
   it("izin create_material_requests; draft lahir tanpa StockMove/jurnal (AC-MR-8)", async () => {
     const res = await createMaterialRequest(
       fd({

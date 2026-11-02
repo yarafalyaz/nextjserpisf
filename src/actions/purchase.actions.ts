@@ -1584,8 +1584,12 @@ export async function verifyGoodsReceipt(grId: number) {
       throw new Error("Penerimaan Barang hanya bisa diverifikasi dari status draf");
     }
 
-    // Hook: auto-number, PO status update, Stock Move IN
-    await onGoodsReceiptVerified(grId, Number(user.id));
+    // Hook: auto-number, PO status update, Stock Move IN. Scope dinilai
+    // ulang di dalam tx hook atas baris terkunci (putaran 76).
+    await onGoodsReceiptVerified(grId, Number(user.id), {
+      id: String(user.id),
+      roles: user.roles ?? [],
+    });
 
     // Notify admins
     await notificationService.notifyAdmins(
@@ -2283,10 +2287,6 @@ export async function confirmVendorBill(billId: number) {
       // updateVendorBill (yang mengunci baris ini) bisa commit di antaranya
       // dan posting menulis status/balanceDue + jurnal dari nominal basi.
       await tx.$executeRaw`SELECT id FROM vendor_bills WHERE id = ${billId} FOR UPDATE`;
-      if (bill.purchaseOrderId) {
-        await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${bill.purchaseOrderId} FOR UPDATE`;
-      }
-
       const fresh = await tx.vendorBill.findUniqueOrThrow({
         where: { id: billId },
       });
@@ -2315,6 +2315,12 @@ export async function confirmVendorBill(billId: number) {
           data: { purchaseOrderId: pair.purchaseOrderId },
         });
         fresh.purchaseOrderId = pair.purchaseOrderId;
+      }
+      // Urutan kunci kanonis bill → GR → PO sama seperti create/update.
+      // Kunci PO snapshot sebelum helper pasangan bisa membentuk siklus
+      // dengan jalur yang memegang GR lalu menunggu PO ini.
+      if (fresh.purchaseOrderId) {
+        await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${fresh.purchaseOrderId} FOR UPDATE`;
       }
 
       // F-2026-10-24-133-V Putusan 1(a)/4: tagihan L3 wajib (masih) tanpa

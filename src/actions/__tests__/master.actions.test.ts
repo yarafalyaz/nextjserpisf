@@ -288,6 +288,7 @@ describe("putaran 61: hapus pajak dan penulis kelompok terserialkan kunci baris 
   })
 
   it("createTaxGroup: kunci baris pajak anggota mendahului create kelompok", async () => {
+    mocks.prismaMock.taxGroup.findMany.mockResolvedValue([])
     mocks.prismaMock.tax.findMany.mockResolvedValue([{ id: 1 }])
     const res: any = await actions.createTaxGroup(fdMap({ name: "PPN Umum", taxIds: "1" }))
     expect(res?.success).toBe(true)
@@ -306,6 +307,15 @@ describe("putaran 61: hapus pajak dan penulis kelompok terserialkan kunci baris 
     expect(res?.success).toBe(true)
     const rawCalls = mocks.prismaMock.$executeRaw.mock.calls as unknown[][]
     expect(rawCalls.some((c) => rawSqlOf(c).includes("FROM taxes"))).toBe(true)
+  })
+
+  it("putaran 76: createTaxGroup menolak nama kelompok ternormalisasi homolog", async () => {
+    mocks.prismaMock.tax.findMany.mockResolvedValue([{ id: 1 }])
+    mocks.prismaMock.taxGroup.findMany.mockResolvedValue([{ id: 3, name: "PPN Umum" }])
+    const res: any = await actions.createTaxGroup(fdMap({ name: " ppn umum ", taxIds: "1" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("sudah dipakai")
+    expect(mocks.prismaMock.taxGroup.create).not.toHaveBeenCalled()
   })
 })
 
@@ -1203,6 +1213,20 @@ describe("Position Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("putaran 76: createPosition reuse nama ternormalisasi homolog dalam tx bergap-lock", async () => {
+    mocks.prismaMock.position.findMany.mockResolvedValue([{ id: 4, name: "Manager", slug: "manager" }])
+    const res = await actions.createPosition(fdMap({ name: " manager ", code: "MGR1" }))
+    expect(res?.success).toBe(true)
+    expect((res as { id?: number })?.id).toBe(4)
+    expect(mocks.prismaMock.position.create).not.toHaveBeenCalled()
+    const rawCalls = mocks.prismaMock.$executeRaw.mock.calls as unknown[][]
+    const lockIdx = rawCalls.findIndex((c) => String((c[0] as unknown[]).join(" ")).includes("FROM positions"))
+    expect(lockIdx).toBeGreaterThanOrEqual(0)
+    expect(mocks.prismaMock.$executeRaw.mock.invocationCallOrder[lockIdx]).toBeLessThan(
+      mocks.prismaMock.position.findMany.mock.invocationCallOrder[0],
+    )
+  })
+
   it("deletePosition menolak bila dirujuk lowongan atau satelit kompetensi/suksesi tanpa menghapus (putaran 25)", async () => {
     // job_vacancies.position_id ON DELETE SET NULL; position_competencies/
     // succession_candidates ON DELETE CASCADE — hapus mentah me-null-kan
@@ -1534,6 +1558,27 @@ describe("F-2026-10-24-141-S duplikat lead (Model C)", () => {
 })
 
 describe("Bank Actions", () => {
+  it("putaran 76: createBank reuse nama ternormalisasi homolog dalam tx bergap-lock", async () => {
+    mocks.prismaMock.bank.findMany.mockResolvedValue([{ id: 4, name: "BCA", slug: "bca" }])
+    const res = await actions.createBank(fdMap({ name: " bca ", code: "BCA1", type: "bank" }))
+    expect(res?.success).toBe(true)
+    expect((res as { id?: number })?.id).toBe(4)
+    expect(mocks.prismaMock.bank.create).not.toHaveBeenCalled()
+  })
+  it("putaran 76: updateBank menolak rename ke nama ternormalisasi homolog", async () => {
+    mocks.prismaMock.bank.findMany.mockResolvedValue([{ id: 4, name: "BCA" }])
+    const res = await actions.updateBank(1, fdMap({ name: " bca ", code: "test", type: "bank" }))
+    expect(res?.success).toBe(false)
+    expect(String((res as { error?: string })?.error)).toContain("sudah dipakai")
+    expect(mocks.prismaMock.bank.update).not.toHaveBeenCalled()
+  })
+  it("putaran 76: createBank menilai akun hidup dari delegate tx, bukan snapshot luar", async () => {
+    mocks.prismaMock.account.findFirst.mockResolvedValue(null)
+    const res = await actions.createBank(fdMap({ name: "bank-baru", code: "BNK1", type: "bank", accountId: "999" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Akun (COA) tidak ditemukan")
+    expect(mocks.prismaMock.bank.create).not.toHaveBeenCalled()
+  })
   it("createBank succeeds", async () => {
     const res = await actions.createBank(fdMap({ name: "test", code: "test", type: "bank", rate: "10" }))
     expect(res?.success).toBe(true)

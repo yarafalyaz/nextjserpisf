@@ -8,6 +8,7 @@ import { createInLayer } from "@/lib/services/inventory-fifo";
 import { allocateLandedCost } from "@/lib/services/landed-cost.service";
 import { getGlobalCostingMethod, resolveCostingMethod } from "@/lib/services/costing-method.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { assertWarehouseAccessMulti, getWarehouseScope } from "@/lib/auth/warehouse-scope";
 import { assertGoodsReceiptQcCleared } from "@/lib/services/qc.service";
 import { PurchaseStatus, Status } from "@/lib/constants";
 
@@ -22,7 +23,8 @@ import { PurchaseStatus, Status } from "@/lib/constants";
 
 export async function onGoodsReceiptVerified(
   goodsReceiptId: number,
-  userId?: number
+  userId?: number,
+  scopeUser?: { id: string; roles: string[] }
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
     // Serialize concurrent calls for the same goods receipt.
@@ -38,6 +40,17 @@ export async function onGoodsReceiptVerified(
         },
       },
     });
+
+    // Putaran 76: scope gudang dinilai ulang atas baris TERKUNCI di dalam
+    // tx — cek action memakai snapshot pra-tx, jadi baris GR yang pindah
+    // gudang atau penugasan yang dicabut di jendelanya tetap terposting.
+    // Pemanggil lama tanpa scopeUser melewati (perilaku lama utuh).
+    if (scopeUser) {
+      assertWarehouseAccessMulti(await getWarehouseScope(scopeUser), [
+        goodsReceipt.warehouseId,
+        ...goodsReceipt.items.map((i) => i.warehouseId).filter((w): w is number => w != null),
+      ]);
+    }
 
     // Idempotency: check if stock moves already exist
     const existingMoves = await tx.stockMove.findFirst({

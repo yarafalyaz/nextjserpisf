@@ -31,8 +31,14 @@ type Tx = TxClient
 
 export const MATERIAL_REQUEST_DOCUMENT_PREFIX = "MRQ"
 
-/** Status WO yang menolak tautan permintaan baru (Q-MR-5). */
-export const MATERIAL_REQUEST_WO_BLOCKED_STATUSES = ["completed", "cancelled"] as const
+/**
+ * Status WO yang menolak tautan permintaan baru (Q-MR-5). Putaran 76:
+ * `closed` (tutup job F-009) ikut menolak — semantik sama dengan
+ * completed/cancelled: job selesai tidak melahirkan permintaan baru.
+ * Himpunan terminal kanonis repo: bom-revision-change WO_CLOSED,
+ * closedWorkOrderError (timesheet-context).
+ */
+export const MATERIAL_REQUEST_WO_BLOCKED_STATUSES = ["completed", "cancelled", "closed"] as const
 
 export interface MaterialRequestItemWrite {
   itemId: number
@@ -216,6 +222,12 @@ export async function assertItemsExistAndActive(
 
 /** Q-MR-5: WO tertaut hanya penanda; WO selesai/batal menolak tautan baru. */
 export async function assertWorkOrderLinkable(tx: Tx, workOrderId: number): Promise<void> {
+  // Putaran 76: kunci baris WO (penulis transisi WO memakai kunci yang
+  // sama) lalu nilai status dari locking read — transaksi create/update
+  // bisa sudah membentuk snapshot konsisten sebelum titik ini.
+  if (typeof tx.$queryRaw === "function") {
+    await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`
+  }
   const workOrder = await tx.workOrder.findUnique({
     where: { id: workOrderId },
     select: { status: true, documentNo: true },

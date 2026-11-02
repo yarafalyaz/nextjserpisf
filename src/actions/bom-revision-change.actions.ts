@@ -335,6 +335,37 @@ export async function decideBomRevisionChange(input: {
       if (doc.bomRevisionId !== change.fromRevisionId) {
         throw new Error("Pin revisi dokumen sudah berubah sejak pengajuan dibuat; ajukan ulang dari pin saat ini.")
       }
+      // Putaran 76: target dinilai ulang saat PUTUSAN, bukan hanya saat
+      // pengajuan — rilis revisi lain untuk produk sama men-supersede
+      // target yang menunggu (releaseBomRevision mengunci baris produk,
+      // jadi kunci produk yang sama di sini menserialkan dua arah), dan
+      // pin tidak boleh mendarat di revisi yang tidak lagi released.
+      const fromRevision = await tx.bomRevision.findFirst({
+        where: { id: change.fromRevisionId },
+        select: { id: true, productId: true },
+      })
+      const toRevision = await tx.bomRevision.findFirst({
+        where: { id: change.toRevisionId },
+        select: { id: true, productId: true, status: true },
+      })
+      if (!toRevision) throw new Error("Revisi BOM tujuan tidak ditemukan.")
+      if (fromRevision && toRevision.productId !== fromRevision.productId) {
+        throw new Error("Revisi BOM tujuan untuk produk berbeda; ganti revisi hanya dalam produk yang sama.")
+      }
+      if (typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT id FROM products WHERE id = ${toRevision.productId} FOR UPDATE`
+      }
+      const toRevisionLocked = await tx.bomRevision.findFirst({
+        where: { id: change.toRevisionId },
+        select: { id: true, productId: true, status: true },
+      })
+      if (!toRevisionLocked) throw new Error("Revisi BOM tujuan tidak ditemukan.")
+      if (fromRevision && toRevisionLocked.productId !== fromRevision.productId) {
+        throw new Error("Revisi BOM tujuan untuk produk berbeda; ganti revisi hanya dalam produk yang sama.")
+      }
+      if (toRevisionLocked.status !== "released") {
+        throw new Error("Revisi BOM tujuan tidak lagi berstatus released; pin tidak dapat diganti — ajukan ulang dengan revisi tujuan yang dirilis.")
+      }
       // Pin diganti dalam transaksi persetujuan yang sama (BR-BOM68-06).
       if (owner === "wo") {
         await tx.workOrder.update({

@@ -2304,10 +2304,22 @@ export async function createPosition(formData: FormData) {
       try {
         const position = await prisma.$transaction(async (tx) => {
           await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
+          const positionName = requireString(formData.get("name"), "name");
+          // Putaran 76 (cermin updatePosition putaran 61): nama jabatan
+          // ternormalisasi tanpa unique DB — reuse pra-tx pola persis kalah
+          // race melahirkan jabatan kembar. Gap-lock tabel lalu scan dalam
+          // tx; slug dari delegate tx, bukan client global.
+          if (typeof tx.$executeRaw === "function") {
+            await tx.$executeRaw`SELECT id FROM positions FOR UPDATE`;
+          }
+          const nameConflict = (
+            await tx.position.findMany({ select: { id: true, name: true, slug: true } })
+          ).find((row) => normalizeTaxNameKey(row.name) === normalizeTaxNameKey(positionName));
+          if (nameConflict) return { id: nameConflict.id, slug: nameConflict.slug };
           return tx.position.create({
             data: {
-              name: requireString(formData.get("name"), "name"),
-              slug: await nextSlug("position", requireString(formData.get("name"), "name")),
+              name: positionName,
+              slug: await nextSlugWithClient(tx as never, "position", positionName),
               code,
               departmentId,
               description: (formData.get("description") as string) || null,
@@ -2816,25 +2828,36 @@ export async function createBank(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error }
     const v = parsed.data
 
-    // Bank.accountId plain Int tanpa FK; cek akun hidup agar jurnal
-    // kas/bank tak yatim dan tak memakai akun yang sudah dimatikan
-    // (putaran 67; pola finance.actions.ts:95).
-    if (v.accountId != null) {
-      const account = await prisma.account.findFirst({ where: { id: v.accountId, deletedAt: null, isActive: true }, select: { id: true } })
-      if (!account) return { success: false, error: "Akun (COA) tidak ditemukan atau tidak aktif" }
-    }
-
-    const bank = await prisma.bank.create({
-      data: {
-        name: v.name,
-        slug: await nextSlug("bank", v.name),
-        code: v.code,
-        accountId: v.accountId ?? null,
-        type: v.type,
-        isActive: true,
-        createdBy: Number(user.id),
-      },
+    // Putaran 76 (cermin createTaxInTx): Bank.accountId plain Int tanpa FK
+    // dan name tanpa unique DB — cek akun hidup + reuse nama pra-tx kalah
+    // race menidurkan akun di jendela dan melahirkan bank bernama sama.
+    // Satu tx gap-lock tabel bank: nilai ulang akun + nama dari delegate tx.
+    const bank = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM banks FOR UPDATE`;
+      }
+      if (v.accountId != null) {
+        const account = await tx.account.findFirst({ where: { id: v.accountId, deletedAt: null, isActive: true }, select: { id: true } })
+        if (!account) throw new Error("Akun (COA) tidak ditemukan atau tidak aktif")
+      }
+      const existing = (
+        await tx.bank.findMany({ select: { id: true, name: true, slug: true } })
+      ).find((row) => normalizeTaxNameKey(row.name) === normalizeTaxNameKey(v.name));
+      if (existing) return { id: existing.id, slug: existing.slug, reused: true as const };
+      const created = await tx.bank.create({
+        data: {
+          name: v.name,
+          slug: await nextSlugWithClient(tx as never, "bank", v.name),
+          code: v.code,
+          accountId: v.accountId ?? null,
+          type: v.type,
+          isActive: true,
+          createdBy: Number(user.id),
+        },
+      });
+      return { id: created.id, slug: created.slug, reused: false as const };
     });
+    if (bank.reused) return { success: true, id: bank.id, slug: bank.slug ?? undefined };
 
     revalidatePath("/master/bank");
     await logActivity("create", "Bank", bank.id, "Membuat bank");
@@ -2854,23 +2877,38 @@ export async function updateBank(id: number, formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error }
     const v = parsed.data
 
-    // Putaran 67: tautan akun pada jalur ubah wajib hidup juga — akun
-    // nonaktif yang tertaut membuat posting kas/bank memakai akun mati.
-    if (v.accountId != null) {
-      const account = await prisma.account.findFirst({ where: { id: v.accountId, deletedAt: null, isActive: true }, select: { id: true } })
-      if (!account) return { success: false, error: "Akun (COA) tidak ditemukan atau tidak aktif" }
-    }
-
-    await prisma.bank.update({
-      where: { id },
-      data: {
-        updatedBy: Number(user.id),
-        name: v.name,
-        slug: await nextSlug("bank", v.name, { excludeId: id }),
-        code: v.code,
-        accountId: v.accountId ?? null,
-        type: v.type,
-      },
+    // Putaran 76 (cermin updateTaxGroup putaran 61): rename + tautan akun
+    // dinilai dalam tx bergap-lock — nama bank ternormalisasi milik bank
+    // lain ditolak (dulu slug bersuffix diam-diam), dan akun yang mati di
+    // jendela cek->update tidak lolos (putaran 67 pra-tx saja).
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM banks FOR UPDATE`;
+      }
+      if (v.accountId != null) {
+        const account = await tx.account.findFirst({ where: { id: v.accountId, deletedAt: null, isActive: true }, select: { id: true } })
+        if (!account) throw new Error("Akun (COA) tidak ditemukan atau tidak aktif")
+      }
+      const nameConflict = (
+        await tx.bank.findMany({
+          where: { id: { not: id } },
+          select: { id: true, name: true },
+        })
+      ).find((row) => normalizeTaxNameKey(row.name) === normalizeTaxNameKey(v.name));
+      if (nameConflict) {
+        throw new Error(`Nama bank sudah dipakai bank "${nameConflict.name}"; pakai nama lain.`);
+      }
+      await tx.bank.update({
+        where: { id },
+        data: {
+          updatedBy: Number(user.id),
+          name: v.name,
+          slug: await nextSlugWithClient(tx as never, "bank", v.name, { excludeId: id }),
+          code: v.code,
+          accountId: v.accountId ?? null,
+          type: v.type,
+        },
+      });
     });
 
     revalidatePath("/master/bank");
@@ -3228,6 +3266,18 @@ export async function createTaxGroup(formData: FormData) {
       }
       const lockedTaxes = await tx.tax.findMany({ where: { id: { in: taxIds }, isActive: true, deletedAt: null }, select: { id: true } });
       if (lockedTaxes.length !== taxIds.length) throw new Error("Pajak dalam kelompok tidak ditemukan atau nonaktif");
+      // Putaran 76 (cermin updateTaxGroup putaran 61): nama kelompok tanpa
+      // unique DB — create konkuren lolos dua kelompok bernama sama.
+      // Gap-lock tabel lalu scan nama ternormalisasi di dalam tx.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM tax_groups FOR UPDATE`;
+      }
+      const nameConflict = (
+        await tx.taxGroup.findMany({ select: { id: true, name: true } })
+      ).find((row) => normalizeTaxNameKey(row.name) === normalizeTaxNameKey(name));
+      if (nameConflict) {
+        throw new Error(`Nama kelompok pajak sudah dipakai kelompok pajak "${nameConflict.name}"; pakai nama lain.`);
+      }
       return tx.taxGroup.create({
         data: {
           name,

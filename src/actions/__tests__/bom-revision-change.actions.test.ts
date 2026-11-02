@@ -82,9 +82,7 @@ beforeEach(() => {
   mocks.txMock.$queryRaw.mockResolvedValue([{ id: 9 }])
   mocks.txMock.workOrder.findFirst.mockResolvedValue(woDoc())
   mocks.txMock.workOrder.update.mockResolvedValue({ id: 9 })
-  mocks.txMock.bomRevision.findFirst
-    .mockResolvedValueOnce({ id: 100, productId: 5, revisionNo: 1 })
-    .mockResolvedValueOnce({ id: 101, productId: 5, revisionNo: 2, status: "released" })
+  mocks.txMock.bomRevision.findFirst.mockResolvedValue({ id: 101, productId: 5, revisionNo: 2, status: "released" })
   mocks.txMock.bomRevisionChangeRequest.findFirst.mockResolvedValue(null)
   mocks.txMock.bomRevisionChangeRequest.create.mockResolvedValue({ id: 55 })
   mocks.txMock.bomRevisionChangeRequest.updateMany.mockResolvedValue({ count: 1 })
@@ -150,6 +148,7 @@ describe("requestBomRevisionChange", () => {
       .mockReset()
       .mockResolvedValueOnce({ id: 100, productId: 5, revisionNo: 1 })
       .mockResolvedValueOnce({ id: 101, productId: 5, revisionNo: 2, status: "draft" })
+      .mockResolvedValue({ id: 101, productId: 5, revisionNo: 2, status: "released" })
     const res = await requestBomRevisionChange({
       workOrderId: 9,
       toRevisionId: 101,
@@ -252,6 +251,20 @@ describe("decideBomRevisionChange", () => {
     expect(res.success).toBe(false)
     expect((res as { error?: string }).error).toContain("wajib mengisi alasan")
     expect(mocks.txMock.bomRevisionChangeRequest.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("putaran 76: target ter-supersede sesudah ajuan — persetujuan ditolak, pin tidak diganti", async () => {
+    mocks.txMock.bomRevision.findFirst
+      .mockReset()
+      .mockResolvedValueOnce({ id: 100, productId: 5, revisionNo: 1 })
+      .mockResolvedValueOnce({ id: 101, productId: 5, revisionNo: 2, status: "superseded" })
+      .mockResolvedValue({ id: 101, productId: 5, revisionNo: 2, status: "superseded" })
+
+    const res = await decideBomRevisionChange({ changeRequestId: 55, decision: "setujui" })
+
+    expect(res.success).toBe(false)
+    expect((res as { error?: string }).error).toContain("tidak lagi berstatus released")
+    expect(mocks.txMock.workOrder.update).not.toHaveBeenCalled()
   })
 
   it("pin sudah berubah sejak ajuan: persetujuan ditolak berisik", async () => {

@@ -164,8 +164,10 @@ export async function onPurchaseReturnProcessed(
     if (activeItems.length > 0) {
       // Batch-generate one document number per line (was N serial round-trips).
       const smDocNos = await generateDocumentNumberBatch("SM", activeItems.length);
-      // Lock all item rows in a single query (was N serial FOR UPDATE).
-      await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(activeItems.map((it) => it.itemId))}) FOR UPDATE`;
+      // Lock all item rows in a single query (was N serial FOR UPDATE), in
+      // canonical ascending unique-ID order to avoid cross-transaction cycles.
+      const itemIds = [...new Set(activeItems.map((it) => it.itemId))].sort((a, b) => a - b);
+      await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(itemIds)}) FOR UPDATE`;
 
       let docIdx = 0;
       for (const item of activeItems) {

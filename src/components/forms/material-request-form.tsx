@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition, useMemo } from "react"
+import { useRef, useState, useTransition, useMemo } from "react"
 import { createMaterialRequest, updateMaterialRequest } from "@/actions/material-request.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Plus, Trash2 } from "lucide-react"
@@ -37,6 +37,10 @@ interface RequestItem {
 
 export function MaterialRequestForm({ warehouses, items, workOrders, request }: MaterialRequestFormProps) {
   const router = useRouter()
+  // Idempotency: key stabil per intent tambah; retry jaringan memakai key
+  // yang sama (ditolak server), sukses merotasi untuk permintaan berikutnya.
+  const idempotencyKeyRef = useRef<string | null>(null)
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
   const [warehouseOptions, setWarehouseOptions] = useState(warehouses)
   const [requesterId, setRequesterId] = useState(request?.requesterWarehouseId ? String(request.requesterWarehouseId) : "")
@@ -81,10 +85,12 @@ export function MaterialRequestForm({ warehouses, items, workOrders, request }: 
               .map(({ uid: _uid, notes, ...rest }) => ({ ...rest, notes: notes || undefined })),
           ),
         )
+        if (!request?.id) formData.set("idempotencyKey", idempotencyKeyRef.current!)
         const result = request?.id
           ? await updateMaterialRequest(request.id, formData)
           : await createMaterialRequest(formData)
         if (result && !result.success) { showError("error" in result ? result.error || "Gagal menyimpan data" : "Gagal menyimpan data"); return }
+        idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess(request?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/inventaris/permintaan-gudang")
         router.refresh()

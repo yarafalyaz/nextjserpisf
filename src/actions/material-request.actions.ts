@@ -117,6 +117,10 @@ export async function createMaterialRequest(formData: FormData) {
     await assertRequesterScope(user, v.requesterWarehouseId)
 
     const created = await prisma.$transaction(async (tx) => {
+      // Putaran 76 (cermin createTransferFromMaterialRequest putaran 67):
+      // retry submit identik melahirkan MR draft kedua; klaim key dalam tx,
+      // rollback melepas. Tanpa key no-op (pola repo).
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
       await assertWarehousesExistAndActive(tx, [v.requesterWarehouseId, v.sourceWarehouseId])
       await assertItemsExistAndActive(tx, items.map((i) => i.itemId))
       if (v.workOrderId) await assertWorkOrderLinkable(tx, v.workOrderId)

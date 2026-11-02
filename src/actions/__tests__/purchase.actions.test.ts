@@ -1478,6 +1478,37 @@ describe("Vendor Bill Actions", () => {
     expect(mocks.prismaMock.$executeRaw.mock.invocationCallOrder[billLockIdx]).toBeLessThan(secondRead)
   })
 
+  it("putaran 76: confirmVendorBill mengunci GR sebelum PO", async () => {
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", purchaseOrderId: 42, goodsReceiptId: 7, vendorId: 9,
+      createdBy: 99, notes: null, subtotal: 100, tax: 0, grandTotal: 100,
+      withholdingAmount: 0, withholdingTypeId: null,
+    })
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 9 })
+    mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValue({
+      documentNo: "GR-007", status: "verified", purchaseOrderId: 42,
+      purchaseOrder: { vendorId: 9 },
+    })
+    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 100 }] }])
+    mocks.prismaMock.vendorBillItem.findMany.mockResolvedValue([])
+    mocks.prismaMock.vendorBillItem.count.mockResolvedValue(0)
+    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })
+    const sqlSeen: string[] = []
+    mocks.prismaMock.$executeRaw.mockImplementation((...a: any[]) => {
+      const first = a[0]
+      sqlSeen.push(Array.isArray(first) ? first.join("?") : ((first as any)?.strings?.join("?") ?? String(first ?? "")))
+      return Promise.resolve(1)
+    })
+
+    const res = await actions.confirmVendorBill(1)
+
+    expect(res?.success).toBe(true)
+    const grLockIdx = sqlSeen.findIndex((s) => /goods_receipts/i.test(s) && /for update/i.test(s))
+    const poLockIdx = sqlSeen.findIndex((s) => /purchase_orders/i.test(s) && /for update/i.test(s))
+    expect(grLockIdx).toBeGreaterThanOrEqual(0)
+    expect(poLockIdx).toBeGreaterThan(grLockIdx)
+  })
+
   it("createVendorBill tidak mem-posting jurnal (draft murni, P0-2)", async () => {
     const hook = (await import("@/lib/hooks/accounting.hook")).onVendorBillPosted as any
     hook.mockClear()

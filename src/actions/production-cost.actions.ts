@@ -104,6 +104,32 @@ async function assertNoPartialRelease(
 }
 
 /**
+ * Putaran 76 (cermin assertNoPartialRelease): jalur WO-only pernah hanya
+ * menilai status completed/cancelled dari snapshot luar tx; di dalam tx
+ * penjaga satu-satunya assertJobCostMutable (closed). WO yang ditransisikan
+ * penulis lain (completeWorkOrder/cancelWorkOrder mengunci baris yang sama)
+ * sesudah snapshot lolos. Kunci baris WO lalu nilai status langsung dari
+ * locking read — bacaan konsisten sesudah kunci bisa tetap snapshot lama.
+ * Jalur ganda (PO+WO) dilewati: status PO dinilai penuh oleh
+ * assertNoPartialRelease dan WO terminal di bawah PO aktif tidak lazim.
+ */
+async function assertWorkOrderCostMutable(
+  tx: TxClient,
+  workOrderId: number,
+  verb: "ditambahkan" | "diubah" | "dihapus",
+): Promise<void> {
+  const locked = await tx.$queryRaw<Array<{ status: string }>>`SELECT status FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`
+  const fresh = locked[0] ?? null
+  const invalid = mutableWorkOrderError(fresh, verb)
+  if (invalid) throw new Error(invalid.error)
+  if (fresh?.status === "closed") {
+    throw new Error(
+      `Biaya tidak dapat ${verb}: perintah kerja sudah ditutup (closed). Buka kembali (reopen) dengan alasan untuk mengubah biaya.`,
+    )
+  }
+}
+
+/**
  * Add a non-material cost line (labor/machine/overhead/subcontract/service) to a
  * production order and roll its amount into the order's actual cost (PRD
  * FAB-06/07/08/09). At least one of productionOrderId/workOrderId must be set;
@@ -171,6 +197,9 @@ export async function createProductionCost(formData: FormData) {
         "ditambahkan",
         tx,
       )
+      if (!v.productionOrderId && v.workOrderId) {
+        await assertWorkOrderCostMutable(tx, v.workOrderId, "ditambahkan")
+      }
       if (v.productionOrderId) await assertNoPartialRelease(tx, v.productionOrderId, "ditambahkan")
       const created = await tx.productionCost.create({
         data: {
@@ -280,6 +309,9 @@ export async function updateProductionCost(id: number, formData: FormData) {
         "diubah",
         tx,
       )
+      if (!existing.productionOrderId && existing.workOrderId) {
+        await assertWorkOrderCostMutable(tx, existing.workOrderId, "diubah")
+      }
       if (existing.productionOrderId) await assertNoPartialRelease(tx, existing.productionOrderId, "diubah")
       await tx.productionCost.update({
         where: { id },
@@ -357,6 +389,9 @@ export async function deleteProductionCost(id: number) {
         "dihapus",
         tx,
       )
+      if (!existing.productionOrderId && existing.workOrderId) {
+        await assertWorkOrderCostMutable(tx, existing.workOrderId, "dihapus")
+      }
       if (existing.productionOrderId) await assertNoPartialRelease(tx, existing.productionOrderId, "dihapus")
       await tx.productionCost.delete({ where: { id } })
       if (existing.productionOrderId) {
@@ -567,6 +602,10 @@ export async function pullLaborCostFromWorkOrderTimesheets(
       // proyek) — close konkuren sesudah cek luar tak boleh melahirkan
       // ProductionCost menempel WO closed (klaim job-closeout.service).
       await assertJobCostMutable({ workOrderId }, "ditambahkan", tx)
+      // Putaran 76: WO-only — completed/cancelled konkuren sesudah cek
+      // luar juga wajib tertahan; kunci baris WO (penulis transisi WO
+      // memakai kunci yang sama) dan nilai status dari locking read.
+      await assertWorkOrderCostMutable(tx, workOrderId, "ditambahkan")
       // Kunci baris timesheet kandidat (urutan id global) lalu dedupe
       // dibaca ulang di dalam tx — cermin jalur proyek di atas. Tanpa
       // kunci, dua penarik konkuren sama-sama membaca snapshot kosong
