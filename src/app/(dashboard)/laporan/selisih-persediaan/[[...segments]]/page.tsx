@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
@@ -23,12 +24,17 @@ export default async function InventoryReconciliationPage({
   searchParams: Promise<Record<string, string | undefined>>
 }) {
   const user = await requirePermission("view_reports")
+  // Putaran 69: cakupan gudang ditegakkan (paritas valuasi-stok) —
+  // tanpa ini user scoped membaca nilai per gudang di luar cakupannya.
+  const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
+  const scopeIds: number[] | undefined =
+    scope.kind === "all" ? undefined : scope.kind === "assigned" ? scope.warehouseIds : []
   const period = await reportPeriodFromRoute(routeParams, searchParams, (now) => ({
     start: new Date(now.getFullYear(), 0, 1),
     end: now,
   }))
 
-  const { reconciliation, periodLabel, periodCaption } = await loadInventoryReconciliation(period)
+  const { reconciliation, periodLabel, periodCaption } = await loadInventoryReconciliation(period, scopeIds)
 
   return (
     <ReportPageShell

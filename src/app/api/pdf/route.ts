@@ -84,6 +84,8 @@ export async function GET(request: Request) {
       "stok-tidak-bergerak",
       "ringkasan-stok",
       "rekonsiliasi-stok",
+      // Putaran 69: rincian nilai per gudang — scope wajib dihitung.
+      "selisih-persediaan",
     ])
     let warehouseScope: number[] | undefined
     if (STOCK_PDF_KEYS.has(report)) {

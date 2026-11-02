@@ -1,9 +1,33 @@
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   buildInventoryReconciliation,
   inventoryReconciliationSummary,
 } from "@/lib/reports/inventory-reconciliation"
+
+const dataMocks = vi.hoisted(() => ({
+  prismaMock: {
+    inventoryLayer: { findMany: vi.fn() },
+    warehouse: { findMany: vi.fn() },
+    account: { findUnique: vi.fn() },
+  },
+}))
+vi.mock("@/lib/db/prisma", () => ({ prisma: dataMocks.prismaMock }))
+vi.mock("@/lib/utils/settings", () => ({
+  getSystemSettings: async () => ({ inventoryAccountId: null, costingMethod: "fifo" }),
+}))
+vi.mock("@/lib/services/report-aggregation.service", () => ({
+  sumNetForAccount: async () => 0,
+}))
+
+import { loadInventoryReconciliation } from "../inventory-reconciliation-data"
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  dataMocks.prismaMock.inventoryLayer.findMany.mockResolvedValue([])
+  dataMocks.prismaMock.warehouse.findMany.mockResolvedValue([])
+  dataMocks.prismaMock.account.findUnique.mockResolvedValue(null)
+})
 
 const valuation = {
   qty: 100,
@@ -14,6 +38,30 @@ const valuation = {
 function noticesOf(result: ReturnType<typeof buildInventoryReconciliation>) {
   return result.table.rows.filter((row) => row.kind === "notice").map((row) => row.text)
 }
+
+describe("loadInventoryReconciliation cakupan gudang (putaran 69)", () => {
+  const PERIOD = { start: new Date(2026, 0, 1), end: new Date(2026, 10, 2) }
+
+  it("scope [2]: where layer menapis gudang cakupan; tanpa scope where lama utuh", async () => {
+    await loadInventoryReconciliation(PERIOD, [2])
+    const scopedArg = dataMocks.prismaMock.inventoryLayer.findMany.mock.calls[0][0]
+    expect(scopedArg.where).toEqual(
+      expect.objectContaining({ remaining: { gt: 0 }, warehouseId: { in: [2] } }),
+    )
+
+    await loadInventoryReconciliation(PERIOD)
+    const globalArg = dataMocks.prismaMock.inventoryLayer.findMany.mock.calls[1][0]
+    expect(globalArg.where).toEqual({ remaining: { gt: 0 } })
+  })
+
+  it("scope []: where paksa kosong (tak ada gudang bocor)", async () => {
+    await loadInventoryReconciliation(PERIOD, [])
+    const arg = dataMocks.prismaMock.inventoryLayer.findMany.mock.calls[0][0]
+    expect(arg.where).toEqual(
+      expect.objectContaining({ warehouseId: { in: [] } }),
+    )
+  })
+})
 
 describe("buildInventoryReconciliation", () => {
   it("menyatakan cocok bila saldo akun sama dengan nilai barang", () => {

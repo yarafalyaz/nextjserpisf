@@ -599,8 +599,8 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     title: "Selisih Saldo Akun Persediaan",
     subtitle: "Pemeriksaan: Buku Besar dibanding Nilai Barang",
     defaultPeriod: startOfYear,
-    async load({ period }) {
-      const report = await loadInventoryReconciliation(period)
+    async load({ period, warehouseScope }) {
+      const report = await loadInventoryReconciliation(period, warehouseScope ?? undefined)
       return {
         kind: "table",
         table: report.reconciliation.table,

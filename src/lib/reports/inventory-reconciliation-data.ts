@@ -25,16 +25,31 @@ export interface InventoryReconciliationReport {
   periodCaption: string
 }
 
-export async function loadInventoryReconciliation(period: {
-  start: Date
-  end: Date
-}): Promise<InventoryReconciliationReport> {
+export async function loadInventoryReconciliation(
+  period: {
+    start: Date
+    end: Date
+  },
+  // Cakupan gudang pemanggil (putaran 69): undefined = semua gudang
+  // (perilaku lama); array (termasuk kosong) menapis layer + rincian
+  // per gudang. Saldo buku besar tetap global — akun persediaan satu
+  // akun GL, dan laporan ini membandingkan GL terhadap nilai barang;
+  // penapisan hanya membatasi sisi barang yang boleh dilihat user
+  // scoped (paritas valuasi-stok/rekonsiliasi-stok). Selisih baris
+  // total untuk user scoped karenanya membandingkan GL global dengan
+  // nilai cakupan — sama seperti saudara laporan stok scoped yang
+  // menampilkan total cakupan di samping saldo global.
+  scopeWarehouseIds?: number[],
+): Promise<InventoryReconciliationReport> {
   const settings = await getSystemSettings()
   const inventoryAccountId = settings.inventoryAccountId ?? null
 
   const [layers, warehouses] = await Promise.all([
     prisma.inventoryLayer.findMany({
-      where: { remaining: { gt: 0 } },
+      where: {
+        remaining: { gt: 0 },
+        ...(scopeWarehouseIds ? { warehouseId: { in: scopeWarehouseIds } } : {}),
+      },
       include: {
         item: {
           select: {
