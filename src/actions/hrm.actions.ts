@@ -40,7 +40,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { requireId } from "@/lib/utils/safe-parse";
 import { parseMoneyAmount } from "@/lib/utils/parse-money";
-import { nextSlug } from "@/lib/utils/slug-db";
+import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db";
 import { checkIdempotency } from "@/lib/utils/idempotency";
 import { parseFormData } from "@/lib/validations/parse-form";
 import { dateOnly } from "@/lib/validations/finance.schemas";
@@ -4040,10 +4040,21 @@ export async function createEmployeeLoan(formData: FormData) {
     // kas keluar dua kali). Pemanggil tanpa key tetap no-op.
     const idempotencyKey = formData.get("idempotencyKey") as string | null;
     const loan = await prisma.$transaction(async (tx) => {
+      // Putaran 70: kunci baris karyawan SEBAGAI pernyataan pertama tx
+      // (kunci tidak menyegarkan snapshot tx, pola createReimbursementClaim),
+      // lalu klaim key dan gerbang hidup dinilai ULANG dari delegate tx.
+      // assertLiveEmployee pra-tx saja membiarkan nonaktif/masuknya
+      // pengajuan persis sebelum tx lahir pinjaman pending yang bisa
+      // disetujui. Slug juga dihitung lewat delegate tx: basis tanggal
+      // sama untuk semua pinjaman hari itu.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${v.employeeId} FOR UPDATE`;
+      }
       await checkIdempotency(idempotencyKey, tx, user.id);
+      await assertLiveEmployee(v.employeeId, tx);
       const created = await tx.employeeLoan.create({
         data: {
-          slug: await nextSlug("employeeLoan", `pinjaman-${v.loanDate}`),
+          slug: await nextSlugWithClient(tx as never, "employeeLoan", `pinjaman-${v.loanDate}`),
           employeeId: v.employeeId,
           loanDate: wibDateToUtcMidnight(v.loanDate),
           totalAmount,

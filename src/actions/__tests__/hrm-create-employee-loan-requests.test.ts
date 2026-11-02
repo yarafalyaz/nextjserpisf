@@ -9,6 +9,10 @@ import { createEmployeeLoan } from "../hrm.actions"
 const mocks = vi.hoisted(() => {
   const txDelegates = {
     employeeLoan: { create: vi.fn() },
+    // Putaran 70: tx mengunci baris karyawan lalu menilai ulang hidup
+    // lewat delegate tx sebelum create.
+    employee: { findFirst: vi.fn() },
+    $executeRaw: vi.fn().mockResolvedValue(1),
   }
   return {
     prismaMock: {
@@ -54,6 +58,7 @@ vi.mock("@/lib/services/approval-workflow.service", () => ({
 
 vi.mock("@/lib/utils/slug-db", () => ({
   nextSlug: vi.fn().mockResolvedValue("pinjaman-2026-10-25"),
+  nextSlugWithClient: vi.fn().mockResolvedValue("pinjaman-2026-10-25"),
 }))
 
 function loanForm(employeeId: string) {
@@ -70,6 +75,8 @@ describe("createEmployeeLoan dua pintu izin (Q-LS-1)", () => {
     vi.clearAllMocks()
     mocks.requestApprovalMock.mockResolvedValue(false)
     mocks.txDelegates.employeeLoan.create.mockResolvedValue({ id: 11 })
+    mocks.txDelegates.employee.findFirst.mockResolvedValue({ id: 7 })
+    mocks.txDelegates.$executeRaw.mockResolvedValue(1)
     // User 42 tertaut employee 7.
     mocks.prismaMock.employee.findFirst.mockResolvedValue({
       id: 7,

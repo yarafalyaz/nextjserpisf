@@ -1047,6 +1047,27 @@ describe("Employee Loan Actions", () => {
     expect(prismaMock.employeeLoan.create).not.toHaveBeenCalled()
   })
 
+  it("putaran 70: createEmployeeLoan menilai ulang hidup karyawan di bawah kunci baris dalam tx", async () => {
+    // Bacaan hidup pra-tx lolos; karyawan dinonaktifkan sebelum tx dinilai
+    // ulang sesudah kunci FOR UPDATE — pinjaman tidak lahir.
+    prismaMock.employee.findFirst
+      .mockResolvedValueOnce({ id: 1 })
+      .mockResolvedValue(null)
+    const res = await actions.createEmployeeLoan(fd({
+      employeeId: "1",
+      loanDate: "2026-06-12",
+      totalAmount: "1000000",
+      monthlyInstallment: "100000",
+      idempotencyKey: "loan-key-r70",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/tidak ditemukan atau tidak aktif/i)
+    expect(prismaMock.employeeLoan.create).not.toHaveBeenCalled()
+    const lockOrder = prismaMock.$executeRaw.mock.invocationCallOrder[0]
+    const reads = prismaMock.employee.findFirst.mock.invocationCallOrder
+    expect(lockOrder).toBeLessThan(reads[reads.length - 1])
+  })
+
   it("regresi putaran 34: updateEmployeeLoan menolak karyawan target nonaktif", async () => {
     prismaMock.employee.findFirst.mockResolvedValue(null)
     const res = await actions.updateEmployeeLoan(1, fd({
