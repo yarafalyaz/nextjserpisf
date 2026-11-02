@@ -495,6 +495,49 @@ describe("GET /api/print", () => {
       expect(json.docInfo.notes).toContain("INV-9")
     })
 
+    it("putaran 53: retur penjualan memakai snapshot DPP/PPN, bukan hitung ulang mentah", async () => {
+      mocks.salesReturnFindUnique.mockResolvedValue({
+        documentNo: "SR-PPN",
+        date: new Date("2026-10-07"),
+        reason: "Barang rusak",
+        customer: { name: "CV X", address: "Jl. X", street: null, phone: "" },
+        salesInvoice: { documentNo: "INV-9" },
+        items: [
+          { itemId: 3, qty: 2, price: 500_000, cost: 300_000, returnDpp: 1_000_000, returnVat: 110_000 },
+        ],
+      })
+      mocks.itemFindMany.mockResolvedValue([{ id: 3, name: "Bracket", unitOfMeasure: "Pcs" }])
+
+      const res = await GET(makeReq("http://localhost/api/print?tipe=sales-return&id=1"))
+      const json = await res.json()
+      // Jurnal kredit piutang = DPP + PPN snapshot (accounting.hook:2210);
+      // PDF harus mencetak angka yang sama, bukan DPP saja.
+      expect(json.summary.subtotal).toBe(1_000_000)
+      expect(json.summary.tax).toBe(110_000)
+      expect(json.summary.total).toBe(1_110_000)
+    })
+
+    it("putaran 53: retur pembelian memakai harga beku price, bukan cost master", async () => {
+      mocks.purchaseReturnFindUnique.mockResolvedValue({
+        documentNo: "PR-RET-1",
+        date: new Date("2026-10-07"),
+        reason: "Salah kirim",
+        purchaseOrder: {
+          documentNo: "PO-7",
+          vendor: { name: "PT Vendor", address: "Jl. V", street: null, phone: "084" },
+        },
+        items: [{ itemId: 5, qty: 10, price: 100_000, cost: 80_000 }],
+      })
+      mocks.itemFindMany.mockResolvedValue([{ id: 5, name: "Pelat", unitOfMeasure: "Lembar" }])
+
+      const res = await GET(makeReq("http://localhost/api/print?tipe=purchase-return&id=1"))
+      const json = await res.json()
+      // AP relief memakai price beku (accounting.hook:2493-2501); cost master
+      // yang bergerak DILARANG jadi DPP (return-snapshot.ts:14).
+      expect(json.items[0]).toMatchObject({ price: 100_000, total: 1_000_000 })
+      expect(json.summary.total).toBe(1_000_000)
+    })
+
     it("penerimaan barang: nilai = qty × unit cost, vendor dari pesanan", async () => {
       mocks.goodsReceiptFindUnique.mockResolvedValue({
         documentNo: "GR-1",

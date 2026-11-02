@@ -627,7 +627,16 @@ export async function GET(request: Request) {
         discount: 0,
         total: Number(it.qty) * Number(it.price),
       }))
-      const total = items.reduce((sum, item) => sum + item.total, 0)
+      // Kredit piutang terjurnal = DPP + PPN snapshot F-004
+      // (accounting.hook: safeAdd(priceTotal, returnVatTotal)); cetakan
+      // memakai snapshot baris yang sama. Baris legacy tanpa snapshot:
+      // PPN 0 (fallback hitung-ulang berlabel hidup di read-model pajak,
+      // bukan di dokumen cetak).
+      const subtotal = doc.items.reduce(
+        (sum, it) => sum + (it.returnDpp != null ? Number(it.returnDpp) : Number(it.qty) * Number(it.price)),
+        0,
+      )
+      const tax = doc.items.reduce((sum, it) => sum + (it.returnVat != null ? Number(it.returnVat) : 0), 0)
 
       return NextResponse.json({
         company: companyInfo,
@@ -648,7 +657,7 @@ export async function GET(request: Request) {
             .join(" — "),
         },
         items,
-        summary: { subtotal: total, discount: 0, tax: 0, total },
+        summary: { subtotal, discount: 0, tax, total: subtotal + tax },
       })
     }
 
@@ -665,14 +674,18 @@ export async function GET(request: Request) {
       if (blocked) return blocked
 
       const info = await loadItemInfo(doc.items.map((it) => it.itemId))
+      // Harga baris = harga BEKU `price` (harga beli tagihan asal) — basis
+      // AP relief terjurnal (accounting.hook) dan DPP snapshot F-004.
+      // `cost` master yang bergerak DILARANG jadi basis (return-snapshot).
+      // Baris legacy tanpa price jatuh ke cost (satu-satunya harga tersisa).
       const items = doc.items.map((it, idx) => ({
         no: idx + 1,
         description: info.get(it.itemId)?.name || `Item #${it.itemId}`,
         qty: Number(it.qty),
         unit: info.get(it.itemId)?.unit ?? null,
-        price: Number(it.cost),
+        price: Number(it.price ?? it.cost),
         discount: 0,
-        total: Number(it.qty) * Number(it.cost),
+        total: Number(it.qty) * Number(it.price ?? it.cost),
       }))
       const total = items.reduce((sum, item) => sum + item.total, 0)
       const vendor = doc.purchaseOrder.vendor
