@@ -1332,11 +1332,23 @@ export async function createWorkOrder(formData: FormData) {
     const items = normalizeWorkOrderItems(v.items ?? null);
     await assertLiveWorkOrderRefs(prisma, v.customerId, items.map((i) => i.itemId));
 
+    // Kendaraan mengikuti quotation (pola jalur DP down-payment.hook):
+    // stampWorkOrderFitmentSnapshot membaca customerVehicleId WO langsung,
+    // jadi tanpa salinan ini WO manual atas kendaraan tak pernah dinilai
+    // fitment-nya dan coverage garansi kehilangan konteks kendaraan.
+    const quotationVehicleId = v.quotationId
+      ? (await prisma.quotation.findUnique({
+          where: { id: v.quotationId },
+          select: { customerVehicleId: true },
+        }))?.customerVehicleId ?? null
+      : null;
+
     const wo = await prisma.workOrder.create({
       data: {
         documentNo,
         slug: await nextSlug("workOrder", documentNo),
         quotationId: v.quotationId ?? null,
+        customerVehicleId: quotationVehicleId,
         projectId: v.projectId ?? null,
         customerId: v.customerId,
         date: wibDateToUtcMidnight(v.date),
