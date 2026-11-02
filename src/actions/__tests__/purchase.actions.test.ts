@@ -679,6 +679,38 @@ describe("Purchase Order Actions", () => {
       expect(lockOrder).toBeLessThan(findOrders[2])
     })
 
+    it("putaran 70: status WO segar di bawah kunci menolak completed", async () => {
+      wireServiceWo()
+      // Bacaan luar: in_progress. Bacaan dalam tx: completed — WO selesai
+      // kedua tombol diklik tidak boleh tetap melahirkan PO jasa.
+      mocks.prismaMock.workOrder.findUnique
+        .mockResolvedValueOnce({
+          id: 9, documentNo: "WO-009", status: "in_progress",
+          items: [{ itemId: 100, qty: 2, cost: 150000 }],
+        })
+        .mockResolvedValueOnce({
+          id: 9, documentNo: "WO-009", status: "completed",
+          items: [{ itemId: 100, qty: 2, cost: 150000 }],
+        })
+      const res = await actions.createServicePurchaseOrderFromWorkOrder(9, 3)
+      expect(res.success).toBe(false)
+      const lockOrder = (mocks.prismaMock.$executeRaw as unknown as { mock: { invocationCallOrder: number[] } }).mock.invocationCallOrder[0]
+      const freshReadOrder = (mocks.prismaMock.workOrder.findUnique as unknown as { mock: { invocationCallOrder: number[] } }).mock.invocationCallOrder[1]
+      expect(lockOrder).toBeLessThan(freshReadOrder)
+      expect(mocks.prismaMock.purchaseOrder.create).not.toHaveBeenCalled()
+    })
+
+    it("putaran 70: vendor mati di dalam tx ditolak", async () => {
+      wireServiceWo()
+      // Vendor mati sesudah snapshot pra-tx: PO tak boleh tetap lahir.
+      mocks.prismaMock.vendor.findFirst
+        .mockResolvedValueOnce({ id: 3 })
+        .mockResolvedValueOnce(null)
+      const res = await actions.createServicePurchaseOrderFromWorkOrder(9, 3)
+      expect(res.success).toBe(false)
+      expect(mocks.prismaMock.purchaseOrder.create).not.toHaveBeenCalled()
+    })
+
     it("rejects a completed or cancelled work order", async () => {
       mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 3 })
       mocks.prismaMock.workOrder.findUnique.mockResolvedValue({

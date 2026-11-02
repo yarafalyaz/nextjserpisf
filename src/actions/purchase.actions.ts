@@ -1206,42 +1206,58 @@ export async function createServicePurchaseOrderFromWorkOrder(
     });
     if (!vendor) throw new Error("Vendor tidak ditemukan atau tidak aktif");
 
-    const wo = await prisma.workOrder.findUnique({
-      where: { id: workOrderId },
-      select: {
-        id: true,
-        documentNo: true,
-        status: true,
-        items: {
-          select: { itemId: true, qty: true, cost: true },
+    type WorkOrderLike = {
+      id: number;
+      documentNo: string;
+      status: string;
+      items: { itemId: number; qty: unknown; cost: unknown }[];
+    };
+    type DbLike = {
+      workOrder: { findUnique: (args: unknown) => Promise<WorkOrderLike | null> };
+      item: { findMany: (args: unknown) => Promise<{ id: number }[]> };
+      vendor: { findFirst: (args: unknown) => Promise<{ id: number } | null> };
+    };
+    // Snapshot dipakai untuk fail-fast murah; penilaian ulang yang mengikat
+    // berjalan dalam tx berkunci di bawah (pola confirmVendorPayment).
+    const loadServiceLines = async (db: DbLike) => {
+      const freshWo = await db.workOrder.findUnique({
+        where: { id: workOrderId },
+        select: {
+          id: true,
+          documentNo: true,
+          status: true,
+          items: {
+            select: { itemId: true, qty: true, cost: true },
+          },
         },
-      },
-    });
-    if (!wo) throw new Error("Perintah kerja tidak ditemukan");
-    if (wo.status === "cancelled" || wo.status === "completed") {
-      throw new Error(`Tidak bisa membuat PO jasa untuk perintah kerja berstatus '${wo.status}'`);
-    }
+      });
+      if (!freshWo) throw new Error("Perintah kerja tidak ditemukan");
+      if (freshWo.status === "cancelled" || freshWo.status === "completed") {
+        throw new Error(`Tidak bisa membuat PO jasa untuk perintah kerja berstatus '${freshWo.status}'`);
+      }
+      // WorkOrderItem has no item relation — resolve the service flags in one query.
+      const itemIds = [...new Set(freshWo.items.map((i) => i.itemId))];
+      const rows = itemIds.length
+        ? await db.item.findMany({
+            where: { id: { in: itemIds }, isService: true, isActive: true, deletedAt: null },
+            select: { id: true },
+          })
+        : [];
+      const serviceIds = new Set(rows.map((i) => i.id));
+      const lines = freshWo.items
+        .filter((i) => serviceIds.has(i.itemId) && Number(i.qty) > 0)
+        .map((i) => ({
+          itemId: i.itemId,
+          qty: Number(i.qty),
+          unitPrice: Number(i.cost ?? 0),
+        }));
+      if (lines.length === 0) {
+        throw new Error("Perintah kerja ini tidak memiliki item jasa (isService) untuk dipesan");
+      }
+      return { wo: freshWo, serviceLines: lines };
+    };
 
-    // WorkOrderItem has no item relation — resolve the service flags in one query.
-    const woItemIds = [...new Set(wo.items.map((i) => i.itemId))];
-    const itemRows = woItemIds.length
-      ? await prisma.item.findMany({
-          where: { id: { in: woItemIds }, isService: true, isActive: true, deletedAt: null },
-          select: { id: true },
-        })
-      : [];
-    const serviceItemIds = new Set(itemRows.map((i) => i.id));
-
-    const serviceLines = wo.items
-      .filter((i) => serviceItemIds.has(i.itemId) && Number(i.qty) > 0)
-      .map((i) => ({
-        itemId: i.itemId,
-        qty: Number(i.qty),
-        unitPrice: Number(i.cost ?? 0),
-      }));
-    if (serviceLines.length === 0) {
-      throw new Error("Perintah kerja ini tidak memiliki item jasa (isService) untuk dipesan");
-    }
+    const { wo, serviceLines } = await loadServiceLines(prisma as unknown as DbLike);
 
     // Guard against accidental duplicate subcontracting.
     const existing = options?.force
@@ -1261,10 +1277,6 @@ export async function createServicePurchaseOrderFromWorkOrder(
       );
     }
 
-    const subtotal = serviceLines.reduce(
-      (s, it) => safeAdd(s, safeMultiply(it.qty, it.unitPrice, 0), 0),
-      0,
-    );
     const documentNo = await generateDocumentNumber("PO");
     const slug = await nextSlug("purchaseOrder", documentNo);
 
@@ -1273,6 +1285,20 @@ export async function createServicePurchaseOrderFromWorkOrder(
       // snapshot, jadi dua submit konkuren sama-sama lolos dan lahir dua PO
       // jasa untuk satu WO (biaya subkontrak dobel).
       await tx.$executeRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
+      // Putaran 70: status/baris WO + flag jasa + hidup vendor dinilai ulang
+      // di bawah kunci — snapshot pra-tx tidak mengikat (WO bisa selesai
+      // atau vendor dinonaktifkan di antara baca luar dan tulis).
+      const fresh = await loadServiceLines(tx as unknown as DbLike);
+      const liveVendor = await tx.vendor.findFirst({
+        where: { id: vendorId, isActive: true, deletedAt: null },
+        select: { id: true },
+      });
+      if (!liveVendor) throw new Error("Vendor tidak ditemukan atau tidak aktif");
+      const finalLines = fresh.serviceLines;
+      const finalSubtotal = finalLines.reduce(
+        (s, it) => safeAdd(s, safeMultiply(it.qty, it.unitPrice, 0), 0),
+        0,
+      );
       if (!options?.force) {
         const dup = await tx.purchaseOrder.findFirst({
           where: {
@@ -1297,15 +1323,15 @@ export async function createServicePurchaseOrderFromWorkOrder(
           workOrderId,
           isService: true,
           date: new Date(),
-          notes: `PO jasa/subkontrak untuk perintah kerja ${wo.documentNo}`,
-          subtotal,
+          notes: `PO jasa/subkontrak untuk perintah kerja ${fresh.wo.documentNo}`,
+          subtotal: finalSubtotal,
           discount: 0,
           tax: 0,
-          grandTotal: subtotal,
+          grandTotal: finalSubtotal,
           status: "draft",
           createdBy: Number(user.id),
           items: {
-            create: serviceLines.map((it) => ({
+            create: finalLines.map((it) => ({
               itemId: it.itemId,
               qty: it.qty,
               unitPrice: it.unitPrice,
