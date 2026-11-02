@@ -47,6 +47,15 @@ describe("nama role istimewa", () => {
     expect(isReservedRoleName("auditor")).toBe(false)
   })
 
+  it("putaran 57: setiap nama berperilaku istimewa di kode juga dicadangkan dari UI peran", () => {
+    // finance/ga/kepala_bengkel memberi scope HR berbasis NAMA saja; tanpa
+    // reservasi, pemegang manage_roles bisa rename peran biasa menjadi ini
+    // dan mewarisi scope tanpa pernah memegang izin HR.
+    for (const name of [...HR_ALL_ACCESS_ROLES, ...WAREHOUSE_ALL_ACCESS_ROLES, "kepala_bengkel"]) {
+      expect(RESERVED_ROLE_NAMES).toContain(name)
+    }
+  })
+
   it("super_admin selalu dicadangkan dan selalu punya akses penuh", () => {
     expect(isReservedRoleName("super_admin")).toBe(true)
     expect(WAREHOUSE_ALL_ACCESS_ROLES).toContain("super_admin")

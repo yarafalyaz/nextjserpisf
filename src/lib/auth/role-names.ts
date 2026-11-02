@@ -30,6 +30,13 @@ export const RESERVED_ROLE_NAMES = [
   "logistics",
   "hr",
   "hr_manager",
+  // Nama berperilaku istimewa yang NYATA di-seed: finance/ga = scope HR
+  // semua karyawan (HR_ALL_ACCESS_ROLES), kepala_bengkel = scope HR
+  // departemen (hr-scope). Tanpa ini, pemegang manage_roles bisa rename
+  // peran biasa menjadi ini dan mewarisi scope berbasis nama tanpa izin HR.
+  "finance",
+  "ga",
+  "kepala_bengkel",
 ] as const
 
 export function isReservedRoleName(name: string): boolean {
