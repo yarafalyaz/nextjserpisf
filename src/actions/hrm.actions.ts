@@ -6041,12 +6041,14 @@ export async function createAppreciation(formData: FormData) {
     // Putaran 62: key form dinilai pertama dalam tx. Double-submit
     // sebelumnya melahirkan dua apresiasi identik yang sama-sama masuk
     // bruto payroll karyawan. Pemanggil tanpa key tetap no-op.
+    // Putaran 70: slug batang konstan "apresiasi" — semua create memilih
+    // slug yang sama; helper global tak melihat tabrakan antar-tx.
     const idempotencyKey = formData.get("idempotencyKey") as string | null;
     const appreciation = await prisma.$transaction(async (tx) => {
       await checkIdempotency(idempotencyKey, tx, user.id);
       return tx.appreciation.create({
         data: {
-          slug: await nextSlug("appreciation", "apresiasi"),
+          slug: await nextSlugWithClient(tx as never, "appreciation", "apresiasi"),
           ...appreciationWriteData(v),
         },
       });
@@ -6096,12 +6098,31 @@ export async function updateAppreciation(formData: FormData) {
       await assertLiveEmployee(v.employeeId);
     }
 
-    const appreciation = await prisma.appreciation.update({
-      where: { id },
-      data: {
-        slug: await nextSlug("appreciation", "apresiasi", { excludeId: id }),
-        ...appreciationWriteData(v),
-      },
+    // Putaran 70: scope pemilik + hidup target + slug dinilai ulang dalam
+    // tx berkunci baris appreciations (pola updateTimesheet): versi lama
+    // membaca pra-tx, slug global, update polos — pemindahan ke karyawan
+    // yang nonaktif di jendela baca->tulis lolos, dan slug "apresiasi"
+    // bertabrakan antar-update konkuren.
+    const appreciation = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM appreciations WHERE id = ${id} FOR UPDATE`;
+      }
+      const fresh = await tx.appreciation.findUniqueOrThrow({
+        where: { id },
+        select: { employeeId: true },
+      });
+      await assertHrEmployeeAccess(scope, fresh.employeeId);
+      if (v.employeeId !== fresh.employeeId) {
+        await assertHrEmployeeAccess(scope, v.employeeId);
+        await assertLiveEmployee(v.employeeId, tx);
+      }
+      return tx.appreciation.update({
+        where: { id },
+        data: {
+          slug: await nextSlugWithClient(tx as never, "appreciation", "apresiasi", { excludeId: id }),
+          ...appreciationWriteData(v),
+        },
+      });
     });
 
     await logActivity(

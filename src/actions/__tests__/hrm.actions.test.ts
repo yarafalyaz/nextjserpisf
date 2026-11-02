@@ -1292,6 +1292,67 @@ describe("Appreciation Actions", () => {
     const res = await actions.deleteAppreciation(1)
     expect(res?.success).toBe(true)
   })
+
+  it("putaran 70: updateAppreciation menilai scope + hidup dalam tx lewat delegate berbeda", async () => {
+    // Bacaan global pra-tx: hidup. Delegate tx: karyawan sudah nonaktif.
+    // Harness tx == global tidak bisa membedakan (hijau palsu); facade tx
+    // berbeda dipakai, dan lockOrder wajib < bacaan tx < update.
+    const txFindFirst = vi.fn().mockResolvedValue(null)
+    const txFacade = {
+      appreciation: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ employeeId: 9 }),
+        update: vi.fn().mockResolvedValue({ id: 1 }),
+      },
+      employee: { findFirst: txFindFirst },
+      $executeRaw: vi.fn().mockResolvedValue(1),
+      $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
+    }
+    const defaultImpl = (prismaMock.$transaction as any).getMockImplementation?.()
+    prismaMock.$transaction.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => cb(txFacade))
+    try {
+      const res = await actions.updateAppreciation(fd({
+        id: "1",
+        employeeId: "9",
+        date: "2026-06-12",
+        title: "Star Performer",
+        amount: "600000",
+      }))
+      expect(res?.success).toBe(false)
+      expect(txFacade.appreciation.update).not.toHaveBeenCalled()
+    } finally {
+      if (defaultImpl) prismaMock.$transaction.mockImplementation(defaultImpl)
+    }
+  })
+
+  it("putaran 70: updateAppreciation slug dihitung lewat delegate tx (tabrakan -2)", async () => {
+    const txFindFirst = vi.fn().mockResolvedValueOnce({ id: 77 }).mockResolvedValue(null)
+    const txFacade = {
+      appreciation: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ employeeId: 1 }),
+        update: vi.fn().mockResolvedValue({ id: 1 }),
+        findFirst: txFindFirst,
+      },
+      employee: { findFirst: vi.fn().mockResolvedValue({ id: 1 }) },
+      $executeRaw: vi.fn().mockResolvedValue(1),
+      $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
+    }
+    const defaultImpl = (prismaMock.$transaction as any).getMockImplementation?.()
+    prismaMock.$transaction.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => cb(txFacade))
+    try {
+      const res = await actions.updateAppreciation(fd({
+        id: "1",
+        employeeId: "1",
+        date: "2026-06-12",
+        title: "Star Performer",
+        amount: "600000",
+      }))
+      expect(res?.success).toBe(true)
+      const data = txFacade.appreciation.update.mock.calls[0][0].data
+      expect(data.slug).toBe("apresiasi-2")
+    } finally {
+      if (defaultImpl) prismaMock.$transaction.mockImplementation(defaultImpl)
+    }
+  })
 })
 
 describe("Payroll Actions", () => {
