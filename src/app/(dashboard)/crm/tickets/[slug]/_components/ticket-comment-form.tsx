@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useRef, useTransition } from "react"
 import { addTicketComment } from "@/actions/crm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
@@ -14,17 +14,25 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 
 export function TicketCommentForm({ ticketId, canCreate = true }: { ticketId: number; canCreate?: boolean }) {
   const router = useRouter()
+  // Idempotency: key stabil per intent; retry jaringan memakai key sama
+  // (ditolak server). Dirotasi sesudah sukses karena form di-reset in-place
+  // dan komentar berikutnya adalah intent baru yang sah.
+  const idempotencyKeyRef = useRef<string | null>(null)
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const res = await addTicketComment(ticketId, new FormData(form))
+      const fd = new FormData(form)
+      fd.set("idempotencyKey", idempotencyKeyRef.current!)
+      const res = await addTicketComment(ticketId, fd)
       if (!res.success) {
         showError(res.error || "Gagal menambahkan komentar")
         return
       }
+      idempotencyKeyRef.current = crypto.randomUUID()
       showSuccess("Komentar ditambahkan")
       form.reset()
       router.refresh()

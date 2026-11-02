@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
     lead: buildModelMock(),
     leadActivity: buildModelMock(),
     customer: buildModelMock(),
+    user: buildModelMock(),
     $queryRaw: vi.fn().mockResolvedValue([]),
     $executeRaw: vi.fn().mockResolvedValue(1),
 
@@ -209,6 +210,24 @@ describe("CRM Ticket Actions", () => {
     expect(res?.success).toBe(false)
     expect(String(res?.error)).toContain("Pengguna penugasan tidak ditemukan atau tidak aktif")
     expect(mocks.prismaMock.crmTicket.create).not.toHaveBeenCalled()
+    delete mocks.prismaMock.user
+  })
+
+  // Putaran 67: gerbang hidup createTicket dinilai prá-tx (baris 92-93 lama)
+  // dari snapshot — pelanggan/pengguna yang dinonaktifkan antara cek dan
+  // commit tetap tertulis (kolom bare-int tanpa FK). Penilaian wajib lewat
+  // delegate tx dalam transaksi, pola updateTicket.
+  it("putaran 67: createTicket menilai customer hidup lewat delegate tx", async () => {
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 5 })
+    const txCustomerFindFirst = vi.fn(async () => ({ id: 5 }))
+    mocks.prismaMock.$transaction.mockImplementationOnce(async (fn: any) =>
+      fn({ ...mocks.prismaMock, customer: { findFirst: txCustomerFindFirst } }),
+    )
+    const res = await actions.createTicket(fdMap({ subject: "Tiket", customerId: 5 }))
+    expect(res?.success).toBe(true)
+    expect(txCustomerFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 5, deletedAt: null, isActive: true } }),
+    )
   })
   it("updateTicket menolak assignedTo pengguna nonaktif dalam tx terkunci", async () => {
     mocks.prismaMock.user = { findFirst: vi.fn().mockResolvedValue(null) }
@@ -483,6 +502,27 @@ describe("addLeadActivity guard + scheduledAt (round4 #5)", () => {
     expect(managed?.success).toBe(true)
     expect(mocks.prismaMock.leadActivity.create).toHaveBeenCalledTimes(2)
   })
+
+  // Putaran 67: retry submit identik melahirkan aktivitas kembar (histori
+  // dobel + dua task terjadwal di antrean follow-up). Klaim key dalam tx
+  // sesudah guard lead; rollback melepaskan key.
+  it("putaran 67: retry key sama ditolak, aktivitas lahir sekali", async () => {
+    mocks.prismaMock.idempotencyKey = {
+      create: vi.fn()
+        .mockResolvedValueOnce({ id: 1 })
+        .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" })),
+      findUnique: vi.fn(async () => ({ createdAt: new Date() })),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+    }
+    const payload = fdMap({ type: "task", subject: "Follow up", scheduledAt: "2026-10-20", idempotencyKey: "act-key-1" })
+    const first = await actions.addLeadActivity(1, payload)
+    expect(first?.success).toBe(true)
+    const second = await actions.addLeadActivity(1, payload)
+    expect(second?.success).toBe(false)
+    expect(String(second?.error)).toContain("duplikat")
+    expect(mocks.prismaMock.leadActivity.create).toHaveBeenCalledTimes(1)
+    delete mocks.prismaMock.idempotencyKey
+  })
   it("menolak scheduledAt fiktif 2026-02-30 tanpa tulis DB", async () => {
     const res = await actions.addLeadActivity(1, fdMap({ type: "task", subject: "Follow up", scheduledAt: "2026-02-30" }))
     expect(res?.success).toBe(false)
@@ -576,6 +616,27 @@ describe("addTicketComment", () => {
     mocks.prismaMock.crmTicketComment.create.mockRejectedValueOnce(new Error("db err"))
     const res = await actions.addTicketComment(7, fdMap({ body: "Halo" }))
     expect(res).toEqual({ success: false, error: "db err" })
+  })
+
+  // Putaran 67: retry submit identik melahirkan komentar kembar di timeline
+  // tiket + dua entri log aktivitas. Klaim key dalam tx sesudah kunci baris
+  // tiket; rollback melepaskan key.
+  it("putaran 67: retry key sama ditolak, komentar lahir sekali", async () => {
+    mocks.prismaMock.crmTicket.findFirst.mockResolvedValue({ id: 7 })
+    mocks.prismaMock.idempotencyKey = {
+      create: vi.fn()
+        .mockResolvedValueOnce({ id: 1 })
+        .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" })),
+      findUnique: vi.fn(async () => ({ createdAt: new Date() })),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+    }
+    const first = await actions.addTicketComment(7, fdMap({ body: "Halo", idempotencyKey: "cmt-key-1" }))
+    expect(first.success).toBe(true)
+    const second = await actions.addTicketComment(7, fdMap({ body: "Halo", idempotencyKey: "cmt-key-1" }))
+    expect(second.success).toBe(false)
+    expect(String(second.error)).toContain("duplikat")
+    expect(mocks.prismaMock.crmTicketComment.create).toHaveBeenCalledTimes(1)
+    delete mocks.prismaMock.idempotencyKey
   })
 })
 

@@ -97,6 +97,12 @@ export async function createTicket(formData: FormData) {
 
   const ticket = await prisma.$transaction(async (tx) => {
     await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
+    // Putaran 67: gerbang hidup dinilai ulang lewat delegate tx — penilaian
+    // prá-tx di atas hanya fail-fast; pelanggan/pengguna yang dinonaktifkan
+    // antara cek dan commit tak boleh tertulis di kolom bare-int tanpa FK
+    // (pola updateTicket baris 178-183).
+    await assertTicketCustomerLive(tx, data.customerId)
+    await assertAssignedUserLive(tx, data.assignedTo)
     return tx.crmTicket.create({
     data: {
       slug: await nextSlug("crmTicket", data.subject || ticketNumber),
@@ -449,6 +455,10 @@ export async function addTicketComment(ticketId: number, formData: FormData) {
         select: { id: true },
       })
       if (!ticket) throw new Error("Tiket tidak ditemukan")
+      // Putaran 67: retry submit identik melahirkan komentar kembar di
+      // timeline + dua entri log aktivitas. Klaim key sesudah kunci baris
+      // tiket dan cek hidup; rollback melepaskan key. Tanpa key no-op.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
       return tx.crmTicketComment.create({
         data: {
           ticketId,
@@ -511,6 +521,11 @@ export async function addLeadActivity(leadId: number, formData: FormData) {
       if (!isAdmin && lead.assignedTo !== Number(user.id)) {
         throw new Error("Anda hanya dapat menambahkan aktivitas lead yang ditugaskan kepada Anda.")
       }
+      // Putaran 67: retry submit identik melahirkan aktivitas kembar —
+      // histori dobel plus dua task terjadwal di antrean follow-up. Klaim
+      // key sesudah kunci baris lead dan semua guard; rollback melepaskan
+      // key. Tanpa key no-op.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
       return tx.leadActivity.create({
         data: {
           leadId,

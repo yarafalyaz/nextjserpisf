@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { UserCheck, Plus, Check, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/shadcn/button"
@@ -58,6 +58,11 @@ export function ConvertLeadButton({ leadId, canConvert }: { leadId: number; canC
 /** Inline form to log a lead activity (note/call/email/meeting/task). */
 export function AddLeadActivityForm({ leadId, canCreate = true }: { leadId: number; canCreate?: boolean }) {
   const router = useRouter()
+  // Idempotency: key stabil per intent; retry jaringan memakai key sama
+  // (ditolak server). Dirotasi sesudah sukses karena form di-reset in-place
+  // dan aktivitas berikutnya adalah intent baru yang sah.
+  const idempotencyKeyRef = useRef<string | null>(null)
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
   const [type, setType] = useState("note")
 
@@ -67,11 +72,13 @@ export function AddLeadActivityForm({ leadId, canCreate = true }: { leadId: numb
     startTransition(async () => {
       const fd = new FormData(form)
       fd.set("type", type)
+      fd.set("idempotencyKey", idempotencyKeyRef.current!)
       const res = await addLeadActivity(leadId, fd)
       if (!res.success) {
         showError(res.error || "Gagal menambahkan aktivitas")
         return
       }
+      idempotencyKeyRef.current = crypto.randomUUID()
       showSuccess("Aktivitas ditambahkan")
       form.reset()
       setType("note")
