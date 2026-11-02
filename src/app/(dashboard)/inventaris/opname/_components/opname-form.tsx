@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { createStockAdjustment } from "@/actions/inventory.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
@@ -43,6 +43,10 @@ interface OpnameFormProps {
  */
 export function OpnameForm({ warehouseId, date, rows, canCreate }: OpnameFormProps) {
   const router = useRouter()
+  // Idempotency: key stabil per intent; retry sesudah respons hilang memakai
+  // key sama (ditolak server). Sukses bernavigasi pergi, tak perlu rotasi.
+  const idempotencyKeyRef = useRef<string | null>(null)
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
   const [counted, setCounted] = useState<Record<number, string>>(
     Object.fromEntries(rows.map((row) => [row.id, String(row.systemQty)])),
@@ -78,6 +82,7 @@ export function OpnameForm({ warehouseId, date, rows, canCreate }: OpnameFormPro
     formData.set("reason", "Hasil stok opname")
     formData.set("notes", notes)
     formData.set("items", JSON.stringify(items))
+    formData.set("idempotencyKey", idempotencyKeyRef.current!)
 
     startTransition(async () => {
       try {

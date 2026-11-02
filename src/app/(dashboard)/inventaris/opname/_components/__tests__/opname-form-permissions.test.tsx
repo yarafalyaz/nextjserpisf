@@ -8,6 +8,10 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 import { createRoot, type Root } from "react-dom/client"
 import { act } from "react"
 
+const mocks = vi.hoisted(() => ({
+  CreateStockAdjustment: vi.fn(async (_fd: FormData) => ({ success: true })),
+}))
+
 vi.mock("next/navigation", () => ({
   useRouter() {
     return { refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }
@@ -15,7 +19,7 @@ vi.mock("next/navigation", () => ({
 }))
 
 vi.mock("@/actions/inventory.actions", () => ({
-  createStockAdjustment: vi.fn(async () => ({ success: true })),
+  createStockAdjustment: mocks.CreateStockAdjustment,
 }))
 
 vi.mock("@/lib/utils/toast", () => ({
@@ -98,5 +102,26 @@ describe("OpnameForm gerbang izin UI (create_stock_adjustments)", () => {
     )
     expect(page).toContain('hasPermission("create_stock_adjustments")')
     expect(page).toContain("canCreate={canCreate}")
+  })
+
+  it("putaran 67: kirim idempotencyKey stabil ke createStockAdjustment", async () => {
+    const { container, root } = mount(
+      <OpnameForm warehouseId={1} date="2026-10-30" rows={ROWS} canCreate />,
+    )
+    const input = container.querySelector('input[aria-label="Hasil hitung Barang Uji"]') as HTMLInputElement
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!
+      setter.call(input, "8")
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    const button = submitButton(container)!
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))
+    })
+    expect(mocks.CreateStockAdjustment).toHaveBeenCalledTimes(1)
+    const fd = mocks.CreateStockAdjustment.mock.calls[0][0] as FormData
+    expect(typeof fd.get("idempotencyKey")).toBe("string")
+    expect(String(fd.get("idempotencyKey"))).not.toBe("")
+    act(() => root.unmount())
   })
 })
