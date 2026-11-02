@@ -15,6 +15,7 @@ const itemBatchFindFirst = vi.fn()
 const itemBatchUpdate = vi.fn()
 const itemBatchCreate = vi.fn()
 const executeRaw = vi.fn()
+const queryRaw = vi.fn()
 const salesPaymentFindMany = vi.fn()
 const salesInvoiceItemFindMany = vi.fn()
 const itemSerialUpdateMany = vi.fn()
@@ -49,6 +50,7 @@ const client = {
     updateMany: (...a: unknown[]) => itemSerialUpdateMany(...a),
   },
   $executeRaw: (...a: unknown[]) => executeRaw(...a),
+  $queryRaw: (...a: unknown[]) => queryRaw(...a),
 }
 
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
@@ -68,6 +70,7 @@ beforeEach(() => {
   itemBatchUpdate.mockResolvedValue({})
   itemBatchCreate.mockResolvedValue({})
   executeRaw.mockResolvedValue(0)
+  queryRaw.mockResolvedValue([])
   salesPaymentFindMany.mockResolvedValue([])
 })
 
@@ -164,6 +167,29 @@ describe("reverseSalesInvoicePostingTx", () => {
       data: { qty: { increment: 5 } },
     })
     expect(itemBatchCreate).not.toHaveBeenCalled()
+  })
+
+  it("putaran 53: baris item dikunci FOR UPDATE sebelum find-or-create ItemBatch", async () => {
+    stockMoveFindMany.mockResolvedValue([
+      { id: 1, itemId: 10, warehouseId: 2, qty: 5, cost: 1000 },
+    ])
+    salesInvoiceItemFindMany.mockResolvedValue([
+      { itemId: 10, serialNumbers: null, batchAllocations: [{ batchNumber: "LOT-A", warehouseId: 2, qty: 5, unitCost: 1000 }] },
+    ])
+    itemBatchFindFirst.mockResolvedValue(null)
+
+    await reverseSalesInvoicePostingTx(client as never, 7)
+
+    const sqlOf = (c: unknown[]) => {
+      const a = c[0] as { sql?: string; strings?: string[] } | string[]
+      return Array.isArray(a) ? a.join("?") : (a?.sql ?? a?.strings?.join("?") ?? "")
+    }
+    const lockIdx = queryRaw.mock.calls.findIndex((c) => sqlOf(c).includes("FROM items"))
+    expect(lockIdx, "kunci baris items FOR UPDATE").toBeGreaterThanOrEqual(0)
+    expect(sqlOf(queryRaw.mock.calls[lockIdx])).toContain("FOR UPDATE")
+    expect(queryRaw.mock.invocationCallOrder[lockIdx]).toBeLessThan(
+      itemBatchFindFirst.mock.invocationCallOrder[0],
+    )
   })
 
   it("recreates the batch lot on reversal when the lot row is gone", async () => {

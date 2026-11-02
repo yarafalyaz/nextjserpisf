@@ -1,4 +1,5 @@
 import type { TxClient } from "@/lib/db/prisma"
+import { Prisma } from "@prisma/client"
 import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import { reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
 import { slugify } from "@/lib/utils/slug"
@@ -234,6 +235,22 @@ export async function reverseSalesInvoicePostingTx(
 
     // Kembalikan qty lot fisik, simetris dengan pemulihan serial di bawah:
     // tambah ke lot bila masih ada, buat ulang bila sudah terhapus.
+    // Putaran 53: ItemBatch tanpa unique(itemId, warehouseId, batchNumber),
+    // jadi find-or-create adalah cek-lalu-buat yang kalah balapan — dua void
+    // konkuren atas item yang sama (faktur berbeda) sama-sama membaca lot
+    // absen lalu sama-sama create: dua baris lot untuk satu lot logis, dan
+    // pulihan berikutnya hanya menaikkan baris pertama (split-brain lot).
+    // Pemanggil hanya mengunci baris dokumen induknya, bukan item. Kunci
+    // baris item terurut (pola goods-receipt/transfer) men-serialkan
+    // find-or-create dengan semua jalur batch item yang sama.
+    const batchItemIds = [...new Set(
+      allocationsByMove.flatMap((allocs, idx) =>
+        allocs.filter((a) => a.batchNumber && a.warehouseId != null).map(() => revMoves[idx].itemId),
+      ),
+    )].sort((a, b) => a - b)
+    if (batchItemIds.length > 0 && typeof tx.$queryRaw === "function") {
+      await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(batchItemIds)}) FOR UPDATE`
+    }
     for (let idx = 0; idx < revMoves.length; idx++) {
       for (const alloc of allocationsByMove[idx] ?? []) {
         if (!alloc.batchNumber || alloc.warehouseId == null) continue
