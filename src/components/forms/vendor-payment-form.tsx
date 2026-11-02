@@ -43,6 +43,10 @@ function formatFileSize(bytes: number): string {
 
 export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = [], preselectedBillId = null }: VendorPaymentFormProps) {
   const router = useRouter()
+  // Anti double-submit: key stabil per intent create; retry/timeout membawa
+  // key yang sama (ditolak server sebagai duplikat), key dirotasi sesudah
+  // sukses supaya pembayaran berikutnya tetap sah.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [isPending, startTransition] = useTransition()
   // Tagihan yang sedang ditargetkan: dari tombol "Bayar" (preselected) atau dari
   // pembayaran yang sedang diubah. Dipakai untuk menampilkan kartu ringkasan &
@@ -134,6 +138,7 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
+        if (!payment?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
         if (targetBillId) formData.set("vendorBillId", targetBillId)
         if (uploadedFiles.length > 0) {
           formData.set("attachmentIds", JSON.stringify(uploadedFiles.map((f) => f.id)))
@@ -141,6 +146,7 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
         const { createVendorPayment, updateVendorPayment } = await import("@/actions/purchase.actions")
         const result = payment?.id ? await updateVendorPayment(payment.id, formData) : await createVendorPayment(formData)
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        if (!payment?.id) idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess(payment?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/pembelian/pembayaran-vendor")
         router.refresh()

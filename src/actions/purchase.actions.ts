@@ -2100,6 +2100,12 @@ export async function createVendorPayment(formData: FormData) {
   try {
     const user = await requirePermission("create_vendor_payments");
 
+    // Anti double-submit (pola createPurchaseOrder): tanpa idempotency key,
+    // retry/resubmit lahir sebagai pembayaran draft kedua yang sah dan bisa
+    // dikonfirmasi terpisah (kas keluar + utang turun ganda). Key dicatat
+    // lewat tx pemanggil — rollback melepasnya.
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
+
     const parsed = parseFormData(vendorPaymentSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
@@ -2148,6 +2154,7 @@ export async function createVendorPayment(formData: FormData) {
     }
 
     const payment = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id);
       const created = await tx.vendorPayment.create({
         data: {
           documentNo,

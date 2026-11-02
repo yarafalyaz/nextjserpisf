@@ -57,6 +57,7 @@ const mocks = vi.hoisted(() => {
     employee: buildModelMock(),
     taxInvoice: buildModelMock(),
     financialIdempotencyKey: buildModelMock(),
+    idempotencyKey: buildModelMock(),
     userWarehouse: buildModelMock(),
     approvalWorkflow: buildModelMock(),
     approval: buildModelMock(),
@@ -1941,6 +1942,24 @@ describe("Vendor Payment Actions", () => {
       paymentMethod: "cash"
     }))
     expect(res?.success).toBe(true)
+  })
+
+  it("putaran 59: createVendorPayment — retry dengan idempotencyKey sama ditolak, pembayaran lahir sekali", async () => {
+    const idem = mocks.prismaMock.idempotencyKey
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const payload = {
+      vendorId: "1", amount: "50000000", paymentDate: "2026-06-12", paymentMethod: "transfer",
+      idempotencyKey: "vpay-key-1",
+    }
+    const first = await actions.createVendorPayment(fdMap(payload))
+    const second = await actions.createVendorPayment(fdMap(payload))
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(second?.error).toContain("duplikat")
+    expect(mocks.prismaMock.vendorPayment.create).toHaveBeenCalledTimes(1)
   })
 
   it("regresi putaran 24: createVendorPayment menolak vendor nonaktif/terhapus", async () => {
