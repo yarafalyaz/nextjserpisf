@@ -341,6 +341,38 @@ describe("Asset Brand Actions", () => {
     expect(prismaMock.assetBrand.update).toHaveBeenCalled()
   })
 
+  it("putaran 71: updateAssetBrand slug dihitung dari delegate tx", async () => {
+    const txFindFirst = vi.fn()
+      .mockResolvedValueOnce({ id: 77 })
+      .mockResolvedValue(null)
+    const txFacade = { ...prismaMock, assetBrand: { ...prismaMock.assetBrand, findFirst: txFindFirst } }
+    const txImpl = prismaMock.$transaction.getMockImplementation() as never
+    prismaMock.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(txFacade))
+    try {
+      await expect(updateAssetBrand(20, fd({ name: "Merek Uji" }))).rejects.toThrow("NEXT_REDIRECT")
+      const dataArg = prismaMock.assetBrand.update.mock.calls.at(-1)?.[0]
+      expect(dataArg.data.slug).toBe("merek-uji-2")
+    } finally {
+      prismaMock.$transaction.mockImplementation(txImpl)
+    }
+  })
+
+  it("putaran 71: updateAssetCategory slug dihitung dari delegate tx", async () => {
+    const txFindFirst = vi.fn()
+      .mockResolvedValueOnce({ id: 77 })
+      .mockResolvedValue(null)
+    const txFacade = { ...prismaMock, assetCategory: { ...prismaMock.assetCategory, findFirst: txFindFirst } }
+    const txImpl = prismaMock.$transaction.getMockImplementation() as never
+    prismaMock.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(txFacade))
+    try {
+      await expect(updateAssetCategory(5, fd({ name: "Kategori Uji" }))).rejects.toThrow("NEXT_REDIRECT")
+      const dataArg = prismaMock.assetCategory.update.mock.calls.at(-1)?.[0]
+      expect(dataArg.data.slug).toBe("kategori-uji-2")
+    } finally {
+      prismaMock.$transaction.mockImplementation(txImpl)
+    }
+  })
+
   /**
    * Tipe/model merek — satu-satunya jalur tulis `asset_brand_models`.
    *

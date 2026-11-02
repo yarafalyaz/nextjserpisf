@@ -37,7 +37,7 @@ import { resolveFiscalGroup } from "@/lib/finance/asset-fiscal-groups";
 import { journalBookValue } from "@/lib/finance/asset-book-value";
 import { isRegisteredAssetUseStatus } from "@/lib/finance/asset-use-status";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
-import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db";
+import { nextSlugWithClient } from "@/lib/utils/slug-db";
 import { checkIdempotency } from "@/lib/utils/idempotency";
 
 // ==================== ASSET GL HELPERS ====================
@@ -651,13 +651,16 @@ export async function updateAssetBrand(id: number, formData: FormData) {
     // Diff by name: only changed models are written and only unreferenced
     // stale models are deleted. A blanket delete+recreate churns every model
     // id, orphaning `Asset.assetBrandModelId` (bare Int? with no FK).
-    const slug = await nextSlug("assetBrand", data.name, { excludeId: id });
+    // Putaran 71: slug dipilih dalam tx lewat delegate tx (sebelumnya
+    // prisma global pra-tx) supaya tabrakan slug brand lain yang baru
+    // ter-commit terlihat.
     const desiredNames = [...new Map(data.models.map((name) => [name.trim().toLowerCase(), name])).values()];
     await prisma.$transaction(async (tx) => {
       // Kunci baris brand DULU: schema tak punya @@unique(assetBrandId, name),
       // jadi dua update konkuren wajib terserialkan sebelum diff dibaca —
       // tanpa kunci keduanya menyimpulkan nama sama harus dibuat.
       await tx.$queryRaw`SELECT id FROM asset_brands WHERE id = ${id} FOR UPDATE`;
+      const slug = await nextSlugWithClient(tx as never, "assetBrand", data.name, { excludeId: id });
       const existing = await tx.assetBrandModel.findMany({
         where: { assetBrandId: id },
         select: { id: true, name: true },
@@ -724,10 +727,13 @@ export async function updateAssetCategory(id: number, formData: FormData) {
     const accountError = await assetCategoryAccountError(data);
     if (accountError) return { success: false, error: accountError };
 
-    await prisma.assetCategory.update({
-      where: { id },
-      data: {
-        slug: await nextSlug("assetCategory", data.name, { excludeId: id }),
+    // Kategori diubah utuh (termasuk akun petanya) dalam satu tx; slug
+    // dipilih lewat delegate tx (putaran 71 — sebelumnya prisma global).
+    await prisma.$transaction(async (tx) => {
+      return tx.assetCategory.update({
+        where: { id },
+        data: {
+          slug: await nextSlugWithClient(tx as never, "assetCategory", data.name, { excludeId: id }),
         name: data.name,
         code: data.code ?? null,
         depreciationRate: data.depreciationRate ?? null,
@@ -745,7 +751,8 @@ export async function updateAssetCategory(id: number, formData: FormData) {
         revaluationSurplusAccountId: data.revaluationSurplusAccountId ?? null,
         impairmentLossAccountId: data.impairmentLossAccountId ?? null,
         accumulatedImpairmentAccountId: data.accumulatedImpairmentAccountId ?? null,
-      },
+        },
+      });
     });
 
     await logActivity(
