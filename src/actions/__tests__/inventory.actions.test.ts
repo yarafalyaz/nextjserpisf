@@ -286,6 +286,24 @@ describe("Stock Adjustment Actions", () => {
     expect(res?.success).toBe(true);
     expect(mocks.prismaMock.stockAdjustment.update).toHaveBeenCalled();
   });
+  it("putaran 74: approval basi dinilai ulang di dalam tx sesudah klaim — hook stok tak jalan", async () => {
+    const { assertApproved } = await import("@/lib/services/approval-workflow.service");
+    // Panggilan pra-tx lolos (approval lama approved); panggilan dalam tx
+    // (argumen ketiga = tx) menolak: edit sesudah approval final membuka
+    // pengajuan pending baru di jendela antara cek pra-tx dan klaim.
+    vi.mocked(assertApproved).mockImplementation(async (_type: string, _id: number, tx?: unknown) => {
+      if (tx) throw new Error("Dokumen masih menunggu persetujuan (approval workflow) sebelum dapat dilanjutkan.");
+    });
+    seedDraft(mocks.prismaMock.stockAdjustment, { items: [] });
+    const res = await actions.processStockAdjustment(1);
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("menunggu persetujuan");
+    expect(stockAdjHook).not.toHaveBeenCalled();
+    expect(vi.mocked(assertApproved)).toHaveBeenCalledTimes(2);
+    // Pulihkan implementasi default: vi.clearAllMocks tidak membuang
+    // mockImplementation persisten, dan test berikut memakai jalur ini.
+    vi.mocked(assertApproved).mockResolvedValue(undefined);
+  });
   it("processStockAdjustment ditolak bila approval pending (P0-3)", async () => {
     const { assertApproved } = await import("@/lib/services/approval-workflow.service");
     vi.mocked(assertApproved).mockRejectedValueOnce(

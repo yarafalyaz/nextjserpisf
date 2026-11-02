@@ -134,6 +134,27 @@ describe("removeItemWarehouseMinStock", () => {
     expect(res).toMatchObject({ success: true, removed: false })
     expect(mocks.prismaMock.itemWarehouseSetting.delete).not.toHaveBeenCalled()
   })
+
+  it("putaran 74: remove menilai ulang hidup master dari baris terkunci (item mati di jendela -> ditolak, tanpa tulis)", async () => {
+    const lockSpy = vi.fn().mockResolvedValue(1)
+    ;(mocks.prismaMock as any).$executeRaw = lockSpy
+    // Setter (pasangan yang sudah berkunci) membuktikan pola fixture:
+    // gerbang hidup di dalam tx membaca item hidup dan upsert berjalan.
+    const setRes = await setItemWarehouseMinStock(1, 2, 3)
+    expect(setRes.success).toBe(true)
+    expect(lockSpy.mock.calls.length).toBeGreaterThan(0)
+    // Sesudah kunci, bacaan delegate tx melihat item sudah nonaktif
+    // (delete/deaktivasi commit di jendela) — remove wajib menolak dari
+    // keadaan TERKUNCI itu, bukan snapshot hidup pra-tx.
+    mocks.prismaMock.item.findUnique.mockResolvedValue({
+      id: 1, sku: "BRG-1", name: "Busi", isActive: false, isService: false, deletedAt: null,
+    })
+    mocks.prismaMock.itemWarehouseSetting.findUnique.mockResolvedValue({ id: 9, minStock: 2, leadTimeDays: null })
+    const res = await removeItemWarehouseMinStock(1, 2)
+    expect(res.success).toBe(false)
+    expect(mocks.prismaMock.itemWarehouseSetting.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.itemWarehouseSetting.update).not.toHaveBeenCalled()
+  })
 })
 
 describe("lead time titik pesan-ulang F-2026-10-25-048-S", () => {

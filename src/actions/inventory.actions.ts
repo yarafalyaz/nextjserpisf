@@ -420,6 +420,13 @@ export async function processStockAdjustment(adjustmentId: number) {
 
     try {
       await prisma.$transaction(async (tx) => {
+        // Putaran 74: approval dinilai ulang di dalam tx (pola postJournal).
+        // Klaim draft->processing di atas tidak menserialkan terhadap
+        // updateStockAdjustment (mengunci baris dokumen, commit, lalu
+        // membuka approval pending baru untuk isi hasil edit) — tanpa
+        // nilai-ulang ini, isi yang belum pernah disetujui dalam bentuk
+        // finalnya terposting berbekal approval lama.
+        await assertApproved("StockAdjustment", adjustmentId, tx);
         // F-2026-10-22-081-S cabang penutupan selisih transfer (Q-TP-3):
         // adjustment tertaut transfer diproses sebagai JURNAL SAJA lewat
         // service existing (akun kosong = throw = rollback, AC-TP-5).
@@ -929,7 +936,7 @@ export async function closeInventoryTransferShortage(transferId: number) {
   try {
     const user = await requirePermission("create_stock_adjustments");
 
-    const { transfer, shortage } = await loadTransferShortageState(transferId);
+    const { transfer } = await loadTransferShortageState(transferId);
 
     const warehouseScope = await getWarehouseScope(user);
     assertWarehouseAccess(warehouseScope, transfer.destinationWarehouseId);
@@ -937,28 +944,9 @@ export async function closeInventoryTransferShortage(transferId: number) {
     if (transfer.status !== "processed" && transfer.status !== "partially_received") {
       throw new Error("Tutup selisih hanya untuk transfer yang masih dalam perjalanan.");
     }
-    if (shortage.length === 0) {
-      throw new Error("Transfer ini tidak memiliki sisa belum diterima untuk ditutup.");
-    }
 
     const date = new Date();
     await assertPeriodOpen(date);
-
-    // Agregasi per item (penjaga baris adjustment: satu baris per item).
-    const byItem = new Map<number, { qty: number; received: number; unitCost: number; serials: string[] }>();
-    for (const line of shortage) {
-      const agg = byItem.get(line.itemId) ?? { qty: 0, received: 0, unitCost: line.unitCost, serials: [] };
-      agg.qty += line.remainingQty;
-      agg.serials.push(...line.serialNumbers);
-      byItem.set(line.itemId, agg);
-    }
-    const sentByItem = new Map<number, { qty: number; receivedQty: number }>();
-    for (const it of transfer.items) {
-      const agg = sentByItem.get(it.itemId) ?? { qty: 0, receivedQty: 0 };
-      agg.qty += Number(it.qty);
-      agg.receivedQty += Number(it.receivedQty);
-      sentByItem.set(it.itemId, agg);
-    }
 
     // STOK-19: cek draf aktif + create wajib atomik. Tanpa ini dua
     // permintaan bersamaan sama-sama lolos cek lalu melahirkan dua draf
@@ -966,9 +954,66 @@ export async function closeInventoryTransferShortage(transferId: number) {
     // dobel). Lock baris transfer (statement pertama tx) menserialkan
     // penutupan per transfer; semua read sesudahnya melihat hasil
     // pemenang yang sudah commit.
+    // Putaran 74: status + sisa juga dinilai ulang dari baris terkunci —
+    // receive konkuren mengambil kunci baris transfer yang sama, jadi
+    // snapshot pra-tx bisa basi (sisa sudah diterima/status received);
+    // draf hantu dari snapshot itu memblokir penutupan sah lewat cek
+    // satu-draf-aktif di bawah dan menyesatkan operator.
     const adjustment = await prisma.$transaction(async (tx) => {
       if (typeof tx.$executeRaw === "function") {
         await tx.$executeRaw`SELECT id FROM inventory_transfers WHERE id = ${transferId} FOR UPDATE`;
+      }
+      const lockedTransfer = await tx.inventoryTransfer.findUniqueOrThrow({
+        where: { id: transferId },
+        include: { items: true },
+      });
+      if (lockedTransfer.status !== "processed" && lockedTransfer.status !== "partially_received") {
+        throw new Error("Tutup selisih hanya untuk transfer yang masih dalam perjalanan.");
+      }
+      const [receiptItems, outMoves] = await Promise.all([
+        tx.inventoryTransferReceiptItem.findMany({
+          where: { receipt: { inventoryTransferId: transferId } },
+          select: { inventoryTransferItemId: true, serialNumbers: true },
+        }),
+        tx.stockMove.findMany({
+          where: {
+            referenceType: "InventoryTransfer",
+            referenceId: transferId,
+            impact: "OUT",
+            status: "posted",
+          },
+          select: { itemId: true, cost: true },
+        }),
+      ]);
+      const lockedShortage = buildShortageLines(
+        lockedTransfer.items.map((it) => ({
+          id: it.id,
+          itemId: it.itemId,
+          qty: Number(it.qty),
+          receivedQty: Number(it.receivedQty),
+          serialNumbers: parseStoredSerials(it.serialNumbers),
+        })),
+        groupReceivedSerialsByLine(receiptItems),
+        carriedCostMapFromOutMoves(outMoves),
+      );
+      if (lockedShortage.length === 0) {
+        throw new Error("Transfer ini tidak memiliki sisa belum diterima untuk ditutup.");
+      }
+      // Agregasi per item (penjaga baris adjustment: satu baris per item)
+      // dari keadaan TERKUNCI, bukan snapshot pra-tx.
+      const byItem = new Map<number, { qty: number; received: number; unitCost: number; serials: string[] }>();
+      for (const line of lockedShortage) {
+        const agg = byItem.get(line.itemId) ?? { qty: 0, received: 0, unitCost: line.unitCost, serials: [] };
+        agg.qty += line.remainingQty;
+        agg.serials.push(...line.serialNumbers);
+        byItem.set(line.itemId, agg);
+      }
+      const sentByItem = new Map<number, { qty: number; receivedQty: number }>();
+      for (const it of lockedTransfer.items) {
+        const agg = sentByItem.get(it.itemId) ?? { qty: 0, receivedQty: 0 };
+        agg.qty += Number(it.qty);
+        agg.receivedQty += Number(it.receivedQty);
+        sentByItem.set(it.itemId, agg);
       }
       const activeClosure = await tx.stockAdjustment.findFirst({
         where: {

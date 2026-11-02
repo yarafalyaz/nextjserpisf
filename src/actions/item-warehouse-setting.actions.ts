@@ -270,19 +270,32 @@ export async function removeItemWarehouseLeadTime(
     const user = await requirePermission("edit_items")
     const itemId = positiveId(itemIdInput, "Barang")
     const warehouseId = positiveId(warehouseIdInput, "Gudang")
-    const { item, warehouse } = await assertItemAndWarehouse(itemId, warehouseId)
     await assertWarehouseScopeFor(user, warehouseId)
 
-    const existing = await prisma.itemWarehouseSetting.findUnique({
-      where: { itemId_warehouseId: { itemId, warehouseId } },
-      select: { id: true, leadTimeDays: true },
+    // Putaran 74: serialisasi kunci master sama dengan pasangan setter
+    // (putaran 71) — hidup pasangan dinilai ulang dari baris terkunci dan
+    // tulis terjadi di tx yang sama, bukan dari snapshot pra-tx. Tanpa
+    // ini remove menulis atas baris yang sudah ter-Cascade oleh
+    // deleteItem/deleteWarehouse (P2025 mentah) atau master baru mati.
+    const outcome = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM items WHERE id = ${itemId} FOR UPDATE`
+        await tx.$executeRaw`SELECT id FROM warehouses WHERE id = ${warehouseId} FOR UPDATE`
+      }
+      const checked = await assertItemAndWarehouse(itemId, warehouseId, tx as never)
+      const existing = await tx.itemWarehouseSetting.findUnique({
+        where: { itemId_warehouseId: { itemId, warehouseId } },
+        select: { id: true, leadTimeDays: true },
+      })
+      if (!existing || existing.leadTimeDays == null) return { ...checked, existing: null }
+      await tx.itemWarehouseSetting.update({
+        where: { id: existing.id },
+        data: { leadTimeDays: null, updatedBy: Number(user.id) },
+      })
+      return { ...checked, existing }
     })
-    if (!existing || existing.leadTimeDays == null) return { success: true, removed: false }
-
-    await prisma.itemWarehouseSetting.update({
-      where: { id: existing.id },
-      data: { leadTimeDays: null, updatedBy: Number(user.id) },
-    })
+    const { item, warehouse, existing } = outcome
+    if (!existing) return { success: true, removed: false }
 
     const log = await writeSettingLog({
       userId: Number(user.id),
@@ -313,26 +326,33 @@ export async function removeItemWarehouseMinStock(
     const user = await requirePermission("edit_items")
     const itemId = positiveId(itemIdInput, "Barang")
     const warehouseId = positiveId(warehouseIdInput, "Gudang")
-    const { item, warehouse } = await assertItemAndWarehouse(itemId, warehouseId)
     await assertWarehouseScopeFor(user, warehouseId)
 
-    const existing = await prisma.itemWarehouseSetting.findUnique({
-      where: { itemId_warehouseId: { itemId, warehouseId } },
-      select: { id: true, minStock: true, leadTimeDays: true },
-    })
-    if (!existing) return { success: true, removed: false }
-
-    if (existing.minStock == null) {
-      return { success: true, removed: false }
-    }
-    if (existing.leadTimeDays != null) {
-      await prisma.itemWarehouseSetting.update({
-        where: { id: existing.id },
-        data: { minStock: null, updatedBy: Number(user.id) },
+    // Putaran 74: serialisasi kunci master sama dengan pasangan setter
+    // (putaran 71) — lihat removeItemWarehouseLeadTime.
+    const outcome = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM items WHERE id = ${itemId} FOR UPDATE`
+        await tx.$executeRaw`SELECT id FROM warehouses WHERE id = ${warehouseId} FOR UPDATE`
+      }
+      const checked = await assertItemAndWarehouse(itemId, warehouseId, tx as never)
+      const existing = await tx.itemWarehouseSetting.findUnique({
+        where: { itemId_warehouseId: { itemId, warehouseId } },
+        select: { id: true, minStock: true, leadTimeDays: true },
       })
-    } else {
-      await prisma.itemWarehouseSetting.delete({ where: { id: existing.id } })
-    }
+      if (!existing || existing.minStock == null) return { ...checked, existing: null as null | typeof existing, removed: false }
+      if (existing.leadTimeDays != null) {
+        await tx.itemWarehouseSetting.update({
+          where: { id: existing.id },
+          data: { minStock: null, updatedBy: Number(user.id) },
+        })
+      } else {
+        await tx.itemWarehouseSetting.delete({ where: { id: existing.id } })
+      }
+      return { ...checked, existing, removed: true }
+    })
+    const { item, warehouse, existing } = outcome
+    if (!existing || !outcome.removed) return { success: true, removed: false }
 
     const log = await writeSettingLog({
       userId: Number(user.id),

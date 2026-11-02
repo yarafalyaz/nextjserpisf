@@ -284,6 +284,70 @@ describe("closeInventoryTransferShortage — gerbang izin aksi", () => {
     expect(m.inventoryTransfer.findUniqueOrThrow).not.toHaveBeenCalled()
     expect(m.stockAdjustment.create).not.toHaveBeenCalled()
   })
+
+  it("putaran 74: status/sisa dinilai ulang dari baris terkunci — receive konkuren menutup sisa -> draf tak lahir", async () => {
+    const m = mocks.prismaMock
+    m.$executeRaw = vi.fn().mockResolvedValue(1)
+    // Bacaan pra-tx (loadTransferShortageState): partially_received, sisa 6.
+    // Bacaan terkunci dalam tx: receive konkuren sudah commit (status
+    // received, receivedQty penuh) — penutupan wajib menolak, bukan
+    // melahirkan draf hantu yang memblokir penutupan sah.
+    m.inventoryTransfer = {
+      findUniqueOrThrow: vi.fn()
+        .mockResolvedValueOnce({
+          id: 100, documentNo: "TRF-001", status: "partially_received",
+          destinationWarehouseId: 2, materialRequestId: null,
+          items: [{ id: 11, itemId: 7, qty: 10, receivedQty: 4, serialNumbers: null }],
+        })
+        .mockResolvedValueOnce({
+          id: 100, documentNo: "TRF-001", status: "received",
+          destinationWarehouseId: 2, materialRequestId: null,
+          items: [{ id: 11, itemId: 7, qty: 10, receivedQty: 10, serialNumbers: null }],
+        }),
+    }
+    m.inventoryTransferReceiptItem = { findMany: vi.fn().mockResolvedValue([]) }
+    m.stockMove = { findMany: vi.fn().mockResolvedValue([{ itemId: 7, cost: 15 }]) }
+    m.stockAdjustment = {
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({ id: 9, slug: "adj-0001" }),
+    }
+    const res = await closeInventoryTransferShortage(100)
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("dalam perjalanan")
+    expect(m.stockAdjustment.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 74: baris draf dari keadaan terkunci (sisa menyusut sebagian sesudah kunci)", async () => {
+    const m = mocks.prismaMock
+    m.$executeRaw = vi.fn().mockResolvedValue(1)
+    // Pra-tx melihat sisa 6 (receivedQty 4); terkunci melihat sisa 2
+    // (receivedQty 8) — draf wajib memakai angka terkunci, bukan snapshot.
+    m.inventoryTransfer = {
+      findUniqueOrThrow: vi.fn()
+        .mockResolvedValueOnce({
+          id: 100, documentNo: "TRF-001", status: "partially_received",
+          destinationWarehouseId: 2, materialRequestId: null,
+          items: [{ id: 11, itemId: 7, qty: 10, receivedQty: 4, serialNumbers: null }],
+        })
+        .mockResolvedValueOnce({
+          id: 100, documentNo: "TRF-001", status: "partially_received",
+          destinationWarehouseId: 2, materialRequestId: null,
+          items: [{ id: 11, itemId: 7, qty: 10, receivedQty: 8, serialNumbers: null }],
+        }),
+    }
+    m.inventoryTransferReceiptItem = { findMany: vi.fn().mockResolvedValue([]) }
+    m.stockMove = { findMany: vi.fn().mockResolvedValue([{ itemId: 7, cost: 15 }]) }
+    m.stockAdjustment = {
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({ id: 9, slug: "adj-0001" }),
+    }
+    const res = await closeInventoryTransferShortage(100)
+    expect(res.success).toBe(true)
+    const createArg = m.stockAdjustment.create.mock.calls[0]![0] as any
+    expect(createArg.data.items.create[0]).toMatchObject({
+      itemId: 7, systemQty: 10, actualQty: 8, difference: -2, unitCost: 15,
+    })
+  })
 })
 
 describe("processStockAdjustment — assertApproved menjaga cabang closure", () => {
