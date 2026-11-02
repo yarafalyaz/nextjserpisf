@@ -216,6 +216,27 @@ describe("F-2026-10-28-157-V E157B guard per-baris + referensi termin (create/ed
     expect(mocks.prismaMock.journal.findMany).not.toHaveBeenCalled()
   })
 
+  it("putaran 73: isi-nomor menilai ulang nomor dari baris terkunci dalam tx", async () => {
+    // Bacaan luar: bill posted ber-PPN belum bernomor. Di dalam tx baris
+    // segar sudah bernomor (request lain commit lebih dulu) — penulis
+    // kedua wajib ditolak sebelum jurnal dibalik/ditimpa.
+    mocks.prismaMock.vendorBill.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "posted", vendorId: 1, tax: 11000, taxInvoiceNumber: null, date: new Date(), slug: "bill-1" })
+      .mockResolvedValueOnce({ id: 1, status: "posted", vendorId: 1, tax: 11000, taxInvoiceNumber: "010.000-26.12345678", date: new Date(), slug: "bill-1" })
+    if (!mocks.prismaMock.taxInvoice) {
+      const { buildModelMock } = await import("./validation-mock-helpers")
+      mocks.prismaMock.taxInvoice = buildModelMock()
+    }
+    mocks.prismaMock.taxInvoice.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.vendorBill.findFirst.mockResolvedValue(null)
+    const fd = new FormData()
+    fd.append("taxInvoiceNumber", "010.000-26.87654321")
+    const res = await actions.setVendorBillTaxInvoiceNumber(1, fd)
+    expectBillReject(res, /sudah bernomor/i)
+    expect(mocks.prismaMock.journal.findMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled()
+  })
+
   // Falsifikasi arah Putusan 1 — acuan GR per LINE: dua baris GR item sama
   // (unitCost 10000 + 12000) dikonsumsi berurutan oleh dua baris bill.
   // Plafon agregat GR ikut dinaikkan agar guard per-baris yang diuji,

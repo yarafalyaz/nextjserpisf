@@ -4582,6 +4582,12 @@ export async function setVendorBillTaxInvoiceNumber(
       if (Number(fresh.tax ?? 0) <= 0) {
         throw new Error("Tagihan ini tidak memuat PPN.");
       }
+      // Putaran 73: nomor dinilai ulang dari baris terkunci — guard
+      // pra-tx saja membiarkan penulis kedua menimpa nomor penulis
+      // pertama dan me-reverse jurnal penggantinya.
+      if (isValidVendorTaxInvoiceNumber(fresh.taxInvoiceNumber ?? null)) {
+        throw new Error("Tagihan ini sudah bernomor faktur valid.");
+      }
 
       // Jendela 3 masa UU PPN 9(2)/(9): kredit dibuka maks 3 masa sesudah
       // masa faktur. Masa faktur = tanggal bill (DPP lahir saat bill posting).
