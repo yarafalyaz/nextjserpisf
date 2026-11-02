@@ -10,6 +10,8 @@ const expenseCategoryUpdateMock = vi.fn()
 const expenseCategoryDeleteMock = vi.fn()
 const expenseCountMock = vi.fn()
 const pettyCashCountMock = vi.fn()
+const txExecuteRawMock = vi.fn(async (..._a: unknown[]) => 1)
+const transactionMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -23,6 +25,8 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     expense: { count: (...a: unknown[]) => expenseCountMock(...a) },
     pettyCash: { count: (...a: unknown[]) => pettyCashCountMock(...a) },
+    $executeRaw: (...a: unknown[]) => txExecuteRawMock(...a),
+    $transaction: (...a: unknown[]) => transactionMock(...a),
   },
 }))
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
@@ -50,6 +54,17 @@ beforeEach(() => {
   expenseCategoryDeleteMock.mockResolvedValue({})
   expenseCountMock.mockResolvedValue(0)
   pettyCashCountMock.mockResolvedValue(3)
+  txExecuteRawMock.mockResolvedValue(1)
+  // tx == prisma mock (delegate sama); urutan kunci diverifikasi via
+  // invocationCallOrder pada mock bersama.
+  transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+    cb({
+      $executeRaw: (a: unknown) => txExecuteRawMock(a),
+      expense: { count: (...a: unknown[]) => expenseCountMock(...a) },
+      pettyCash: { count: (...a: unknown[]) => pettyCashCountMock(...a) },
+      expenseCategory: { delete: (...a: unknown[]) => expenseCategoryDeleteMock(...a) },
+    }),
+  )
 })
 
 describe("expense-category Zod validation", () => {
@@ -110,5 +125,17 @@ describe("deleteExpenseCategory referential guard", () => {
     const res = await deleteExpenseCategory(7)
     expect(res.success).toBe(true)
     expect(expenseCategoryDeleteMock).toHaveBeenCalledWith({ where: { id: 7 } })
+  })
+
+  it("putaran 70: guard + delete dalam SATU tx berkunci baris kategori (kunci sebelum hitung dan delete)", async () => {
+    expenseCountMock.mockResolvedValue(0)
+    pettyCashCountMock.mockResolvedValue(0)
+    const res = await deleteExpenseCategory(7)
+    expect(res.success).toBe(true)
+    expect(transactionMock).toHaveBeenCalled()
+    const lockOrder = txExecuteRawMock.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(expenseCountMock.mock.invocationCallOrder[0])
+    expect(lockOrder).toBeLessThan(pettyCashCountMock.mock.invocationCallOrder[0])
+    expect(lockOrder).toBeLessThan(expenseCategoryDeleteMock.mock.invocationCallOrder[0])
   })
 })
