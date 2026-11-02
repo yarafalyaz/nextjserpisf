@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { Pencil } from "lucide-react"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -78,6 +78,7 @@ export function ProductionCostSection({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [open, setOpen] = useState(false)
   const [category, setCategory] = useState("labor")
   const [hours, setHours] = useState("")
@@ -110,6 +111,7 @@ export function ProductionCostSection({
   function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    if (!editing) formData.set("idempotencyKey", idempotencyKeyRef.current)
     formData.set("productionOrderId", String(productionOrderId))
     formData.set("category", category)
     if (workOrderId) formData.set("workOrderId", String(workOrderId))
@@ -125,6 +127,7 @@ export function ProductionCostSection({
         showError(result.error || "Gagal menyimpan biaya")
         return
       }
+      if (!editing) idempotencyKeyRef.current = crypto.randomUUID()
       showSuccess(editing ? "Biaya produksi diperbarui" : "Biaya produksi ditambahkan")
       setOpen(false)
       setEditing(null)

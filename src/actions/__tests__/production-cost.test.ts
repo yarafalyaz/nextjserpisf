@@ -14,6 +14,7 @@ const revalidateMock = vi.fn()
 const logActivityMock = vi.fn()
 const applyDeltaMock = vi.fn()
 
+const checkIdempotencyMock = vi.fn()
 const costCreateMock = vi.fn()
 const costFindUniqueMock = vi.fn()
 const costUpdateMock = vi.fn()
@@ -41,6 +42,9 @@ vi.mock("@/lib/services/period-lock.service", () => ({
 }))
 vi.mock("@/lib/services/job-closeout.service", () => ({
   assertJobCostMutable: (...a: unknown[]) => jobGuardMock(...a),
+}))
+vi.mock("@/lib/utils/idempotency", () => ({
+  checkIdempotency: (...a: unknown[]) => checkIdempotencyMock(...a),
 }))
 
 vi.mock("@/lib/db/prisma", () => {
@@ -84,7 +88,9 @@ beforeEach(() => {
     requirePermissionMock, periodOpenMock, revalidateMock, logActivityMock, applyDeltaMock,
     costCreateMock, costFindUniqueMock, costUpdateMock, costDeleteMock, costFindManyMock,
     orderFindUniqueMock, woFindUniqueMock, vendorFindUniqueMock, timesheetFindManyMock, queryRawMock,
+    checkIdempotencyMock,
   ]) m.mockReset()
+  checkIdempotencyMock.mockResolvedValue(undefined)
   queryRawMock.mockResolvedValue([])
 
   requirePermissionMock.mockResolvedValue({ id: 5 })
@@ -232,6 +238,25 @@ describe("kunci periode hari-ini (F-2026-10-20-24a)", () => {
 })
 
 describe("createProductionCost", () => {
+  it("putaran 64: retry idempotencyKey sama ditolak, biaya + jurnal lahir sekali", async () => {
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress" })
+    costCreateMock.mockResolvedValue({ id: 99 })
+    checkIdempotencyMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."))
+
+    const payload = { productionOrderId: 1, category: "labor", amount: 250000, idempotencyKey: "pc-key-1" }
+    const first = await createProductionCost(fd(payload))
+    const second = await createProductionCost(fd(payload))
+
+    expect(first.success).toBe(true)
+    expect(second.success).toBe(false)
+    expect(String(second.error ?? "")).toContain("duplikat")
+    expect(costCreateMock).toHaveBeenCalledTimes(1)
+    expect(applyDeltaMock).toHaveBeenCalledTimes(1)
+    expect(checkIdempotencyMock).toHaveBeenCalledWith("pc-key-1", expect.anything(), 5)
+  })
+
   it("rolls the amount into the production order HPP", async () => {
     orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress" })
     costCreateMock.mockResolvedValue({ id: 99 })

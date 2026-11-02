@@ -18,6 +18,7 @@ import { applyProductionCostDelta } from "@/lib/services/production-cost.service
 import { closedWorkOrderError } from "@/lib/services/timesheet-context"
 import { assertJobCostMutable } from "@/lib/services/job-closeout.service"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
+import { checkIdempotency } from "@/lib/utils/idempotency"
 import { safeMultiply, safeRound } from "@/lib/utils/math"
 
 /**
@@ -155,6 +156,9 @@ export async function createProductionCost(formData: FormData) {
       // tutup periode yang commit sesudah assert luar tidak boleh dilompati
       // baris biaya bertanggal hari ini (jalur WO-only tanpa backstop jurnal).
       await assertPeriodOpen(new Date(), tx)
+      // Putaran 64: retry identik melahirkan baris biaya kembar —
+      // totalActualCost dan jurnal WIP naik dua kali, HPP membengkak.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
       // F-009-V: guard closed di dalam tx (PO/WO tertutup ditolak server).
       await assertJobCostMutable(
         { productionOrderId: v.productionOrderId ?? null, workOrderId: v.workOrderId ?? null },
