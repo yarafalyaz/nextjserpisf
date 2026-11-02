@@ -1552,6 +1552,31 @@ describe("PaymentTerm Actions", () => {
     expect(mocks.prismaMock.paymentTerm.create).not.toHaveBeenCalled()
     expect(mocks.prismaMock.paymentTerm.update).not.toHaveBeenCalled()
   })
+  it("putaran 53: createPaymentTerm di bawah gap-lock — nama sama reuse, kode bentrok ditolak", async () => {
+    const sqlOf = (c: unknown[]) => {
+      const a = c[0] as { sql?: string; strings?: string[] } | string[]
+      return Array.isArray(a) ? a.join("?") : (a?.sql ?? a?.strings?.join("?") ?? "")
+    }
+    const defaultFindMany = mocks.prismaMock.paymentTerm.findMany.getMockImplementation()
+    mocks.prismaMock.paymentTerm.findMany.mockImplementation(async () => [
+      { id: 3, name: "Net 30", code: "NET30", slug: "net-30" },
+    ])
+    try {
+      const reuse = await actions.createPaymentTerm(fdMap({ name: " net 30 ", code: "NET30", days: "30" }))
+      expect(reuse?.success).toBe(true)
+      expect((reuse as { id?: number }).id).toBe(3)
+      expect(mocks.prismaMock.paymentTerm.create).not.toHaveBeenCalled()
+      expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+      const lockIdx = (mocks.prismaMock.$executeRaw.mock.calls as unknown[][]).findIndex((c) => sqlOf(c).includes("payment_terms"))
+      expect(lockIdx, "gap-lock payment_terms FOR UPDATE").toBeGreaterThanOrEqual(0)
+
+      const clash = await actions.createPaymentTerm(fdMap({ name: "Net Sembilan", code: " net30 ", days: "9" }))
+      expect(clash?.success).toBe(false)
+      expect(String(clash?.error)).toContain("NET30")
+    } finally {
+      mocks.prismaMock.paymentTerm.findMany.mockImplementation(defaultFindMany as never)
+    }
+  })
   it("deletePaymentTerm succeeds", async () => {
     const res = await actions.deletePaymentTerm(1)
     expect(res?.success).toBe(true)

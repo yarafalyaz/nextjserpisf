@@ -3048,26 +3048,57 @@ export async function createPaymentTerm(formData: FormData) {
     }
 
 
+    // Nama tanpa @unique DB (code memang @unique): cek findFirst pra-parse
+    // di luar tx kalah balapan — dua create konkuren melahirkan dua termin
+    // bernama sama (slug bersuffix, bukan blokir). Cek+create dalam tx
+    // bergap-lock (pola createTax/createUom putaran 53): nama sama -> reuse;
+    // kode bentrok -> tolak menyebut kode tersimpan. Model tanpa deletedAt:
+    // semua baris = himpunan yang dinilai.
     const fields = parsePaymentTermFields(formData);
-    const paymentTerm = await prisma.paymentTerm.create({
-      data: {
-        name: requireString(formData.get("name"), "name"),
-        slug: await nextSlug("paymentTerm", requireString(formData.get("name"), "name")),
-        code: fields.code,
-        days: fields.days,
-        isActive: true,
-        createdBy: Number(user.id),
-      },
+    const name = requireString(formData.get("name"), "name");
+    const result = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM payment_terms FOR UPDATE`;
+      }
+      const candidates = await tx.paymentTerm.findMany({
+        select: { id: true, name: true, code: true, slug: true },
+      });
+      const nameKey = normalizeTaxNameKey(name);
+      const byName = candidates.find((row) => normalizeTaxNameKey(row.name) === nameKey);
+      if (byName) return { kind: "reuse" as const, id: byName.id, slug: byName.slug };
+      const codeKey = normalizeTaxNameKey(fields.code);
+      const byCode = candidates.find(
+        (row) => normalizeTaxNameKey(row.code) === codeKey,
+      );
+      if (byCode) {
+        throw new Error(
+          `Kode syarat pembayaran ${byCode.code} sudah dipakai syarat pembayaran "${byCode.name}"; pakai kode lain.`,
+        );
+      }
+      const created = await tx.paymentTerm.create({
+        data: {
+          name,
+          slug: await nextSlugWithClient(tx as never, "paymentTerm", name),
+          code: fields.code,
+          days: fields.days,
+          isActive: true,
+          createdBy: Number(user.id),
+        },
+      });
+      return { kind: "created" as const, id: created.id, slug: created.slug };
     });
+    if (result.kind === "reuse") {
+      return { success: true, id: result.id, slug: result.slug ?? undefined };
+    }
 
     revalidatePath("/master/syarat-pembayaran");
     await logActivity(
       "create",
       "PaymentTerm",
-      paymentTerm.id,
+      result.id,
       "Membuat syarat pembayaran",
     );
-    return { success: true, id: paymentTerm.id, slug: paymentTerm.slug };
+    return { success: true, id: result.id, slug: result.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createPaymentTerm]", getErrorMessage(e) || e);
