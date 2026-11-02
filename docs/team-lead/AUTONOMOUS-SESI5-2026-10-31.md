@@ -1751,7 +1751,7 @@ Wilayah: pajak + laporan (agent `a6d06136`), inventaris (agent `a615a60e`); semu
 - Perangkap tooling: perintah mutasi file lewat node di dalam container menulis ke file yang sama dengan host (bind mount satu arah terkonfirmasi) — mutasi "sandbox container" untuk bukti merah menghapus edit host. Bukti perilaku lama diganti verifikasi case-by-case terhadap kode (hook/PDF/validator) dan file dipulihkan dari backup container `/tmp/page-fixed.tsx`. Jangan ulangi trik mutasi-container untuk halaman RSC yang tak punya harness test.
 - Pelajaran batch: sesudah mengubah hook/service bersama, grep SEMUA file test yang mengimpor modul itu (termasuk harness gerbang lama seperti `stock-posted-correction-gate`) sebelum push — satu harness tertinggal membuat tiga run CI merah berturut-turut.
 
-## Putaran 61 — Master, proyek, aset, manufaktur (8 fix)
+## Putaran 61 — Master, proyek, aset, manufaktur (10 fix)
 
 Wilayah: master/pengaturan, proyek/aset, manufaktur (agent paralel); semua kandidat diverifikasi sesi utama.
 
@@ -1773,3 +1773,39 @@ Wilayah: master/pengaturan, proyek/aset, manufaktur (agent paralel); semua kandi
 - Kelas delete master hitung-referensi-luar-tx (`deleteBank`/`deleteDepartment`/`deletePosition`/`deleteUom`/dll): CATAT tanpa patch — serialisasi penuh menuntut kunci baris master di SEMUA penulis referensi (vendor payment, mutasi, dsb.); patch parsial memberi rasa aman palsu. Jendela sub-detik, dampak referensi yatim bare-int tampil rusak, setara sisa yang diterima putaran sebelumnya.
 - Cache `currentValue` reversal aset (K4 proyek/aset): CATAT — reversal menulis snapshot asal ke cache, tetapi pembaca otoritatif (disposal, cron depresiasi, laporan) membaca jurnal POSTED; yang korup hanya label tampilan "Nilai Saat Ini (cache)" sampai cron berikutnya.
 - `createTaxGroup` tanpa gerbang nama sama sekali (di luar kandidat rename): tercatat — create polos melahirkan kelompok bernama sama via slug bersuffix; belum ada bukti konsumen string yang rusak, antrekan bila ada bukti picker/dokumen tertukar.
+
+## Putaran 62 — SDM, pembelian, API privat (11 fix + 2 fixture)
+
+Wilayah: SDM + pembelian (agent paralel) dan API/cron/auth (agent). Semua kandidat diverifikasi sesi utama terhadap kode + schema sebelum fix. Pola tiap fix: test merah terpisah → fix → batch terkait + 6 guard → tsc/eslint.
+
+### Fix SDM
+1. `d4d8bae05` fix(hrm): `createEmployeeLoan` anti double-submit via idempotency key — key pernyataan pertama tx create, diteruskan ke `requestApprovalIfConfigured` lewat tx; form mengirim key stabil create dan merotasinya sesudah sukses. Sebelumnya retry melahirkan pinjaman draft kedua yang bisa disetujui terpisah.
+2. `db1646664` fix(hrm): `createAppreciation` anti double-submit via idempotency key — create dipindah ke tx dengan klaim key pertama; form mengirim key stabil. Sebelumnya dua apresiasi identik sama-sama masuk bruto payroll.
+3. `d124ba88a` fix(hrm): tanggapan disiplin pertama tidak tertimpa — klaim `respondDisciplinaryRecord` + `recordLateDisciplinaryResponse` kini mensyaratkan `employeeResponseAt: null`; klaim kalah (`count=0`) gagal berisik. Sebelumnya tanggapan HR terlambat menimpa tanggapan tepat waktu dan membalik flag keterlambatan.
+4. `751806fd5` fix(hrm): akrual PKWT menilai baris ulang sesudah kunci periode — pengumpulan baris dipindah ke dalam tx, pernyataan pertamanya `assertPeriodOpen(date, tx)` (kunci `system_settings`); jurnal tambahan putaran 59 dipertahankan. Sebelumnya run konkuren membaca snapshot pra-kunci: P2002 mentah menghentikan batch dan jurnal agregat bisa terpecah.
+5. `1c4a94f87` fix(hrm): `createApplicant` anti double-submit via idempotency key — klaim key pertama dalam tx berkunci lowongan; form mengirim key stabil. Tanpa unique `(vacancyId,email)` by-design (pelamar sah boleh berbagi email), jadi penjaga yang benar adalah key per intent, bukan blokir duplikat orang.
+
+### Fix pembelian
+6. `7dccfcd8d` fix(purchase): `createVendorBill` anti double-submit via idempotency key — tagihan manual tanpa PO dan duplikat parsial di bawah plafon three-way-match sebelumnya lolos sebagai draft kedua (AP ganda saat keduanya dikonfirmasi).
+7. `a6ea79c85` fix(purchase): `createGoodsReceipt` anti double-submit via idempotency key — dua GR parsial kembar (masing-masing di bawah qty PO) sebelumnya sama-sama bisa terverifikasi: stok/FIFO/jurnal clearing dobel.
+8. `17bfd8f73` fix(purchase): `createPurchaseReturn` anti double-submit via idempotency key — dua retur parsial kembar di bawah cap kumulatif sebelumnya sama-sama bisa diproses: stok keluar + relief AP/VendorCredit dobel.
+9. `6090d159b` fix(purchase): `createPurchaseRequest` anti double-submit via idempotency key — create + approval kini satu tx (klaim key pertama, gerbang hidup dinilai lewat tx, approval menerima tx). Sebelumnya dua PR draft identik bisa disetujui terpisah menjadi dua PO.
+
+### Fix API
+10. `f7cbfdae8` fix(api): berkas privat tidak di-cache browser — route lampiran terotentikasi, bukti DP, dan unggahan privat (avatar/tanda tangan) kini `Cache-Control: no-store`, menyamai standar repo (pdf/backup/export). Sebelumnya `private, max-age=3600` menyisakan berkas keuangan/pribadi di disk cache PC bersama sesudah logout/pencabutan izin.
+
+### Fixture CI
+11. `eea3c074f` test(master): harness jabatan/kelompok pajak disesuaikan dengan kontrak tx rename putaran 61 (`$transaction`, `$executeRaw`, `findMany`, `nextSlugWithClient`) — CI head putaran 61 merah 4 test murni fixture tertinggal, produksi benar.
+12. `a46f863e1` test(hrm): harness scope apresiasi disesuaikan dengan create via tx putaran 62 (model `appreciation`/`idempotencyKey` di tx mock + assertion jalur tx) — pola sama: fixture tertinggal, produksi benar.
+
+CI final putaran 62: head `f7cbfdae8` **success** (semua job), mencakup seluruh fix di atas. Failure intermediate `db1646664`..`17bfd8f73` terdiagnosis sebagai dua harness tertinggal itu dan teratasi di head berikutnya; jangan dinilai per-head lama.
+
+### Vonis gugur / dicatat (API)
+- JSON API privat tanpa `Cache-Control` (`/api/print`, late-penalty, activity-logs, notifications): CATAT tanpa patch — konsisten vonis putaran 56; `NextResponse.json` tanpa `Content-Disposition` tidak di-cache sebagai berkas oleh browser. Perubahan menyeluruh butuh keputusan platform (proxy/apiError), bukan patch per-route.
+- Bypass rate-limit route API berbuntut ekstensi statis di proxy: DITOLAK diangkat — handler tetap auth+permission; kelas DoS/rate-limit di luar cakupan fix keamanan sesi ini.
+- Upload lampiran tanpa idempotency key: CATAT dampak rendah — retry melahirkan berkas yatim ber-`referenceId` nyata; sapuan orphan tidak menyentuhnya, tetapi tidak ada efek uang/stok.
+- Jalur aman terverifikasi agent (jangan diangkat ulang): semua cron POST + `CRON_SECRET` fail-closed tanpa ekspor GET; otorisasi route fail-closed; traversal tertutup di ketiga route berkas; auth inti re-sync DB.
+
+### Catatan
+- Tidak ada migrasi schema putaran ini.
+- Pelajaran batch terulang ketiga kalinya: sesudah memindah create ke tx, grep SEMUA harness yang memanggil action itu — dua harness terpisah (`position/taxgroup`, `hrm-appreciation-scope`) tertinggal di putaran 61/62 dan membuat CI merah berturut-turut walau produksi benar.
