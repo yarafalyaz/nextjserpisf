@@ -26,6 +26,11 @@ const mocks = vi.hoisted(() => {
     // idempotency + create atomik), jadi tx mock wajib membawa modelnya.
     appreciation: {
       create: vi.fn().mockResolvedValue({ id: 1 }),
+      // Putaran 70: update menilai ulang baris lewat delegate tx; slug
+      // dihitung nextSlugWithClient atas bacaan delegate tx ini.
+      findUniqueOrThrow: vi.fn(async () => ({ employeeId: 7 })),
+      findFirst: vi.fn(async () => null),
+      update: vi.fn().mockResolvedValue({ id: 1 }),
     },
     idempotencyKey: {
       create: vi.fn().mockResolvedValue({ id: 1 }),
@@ -145,7 +150,8 @@ describe("BUGHUNT #9 — appreciation HR scope", () => {
   it("update dalam scope (tanpa pindah karyawan) lolos", async () => {
     const res = await updateAppreciation(fd({ id: "1", employeeId: "7", date: "2026-06-12", amount: "1" }))
     expect(res?.success).toBe(true)
-    expect(mocks.prismaMock.appreciation.update).toHaveBeenCalled()
+    // Putaran 70: tulis berjalan lewat delegate tx, bukan prisma root.
+    expect(mocks.tx.appreciation.update).toHaveBeenCalled()
   })
 
   it("regresi putaran 47: create untuk karyawan nonaktif/terhapus ditolak (gerbang hidup), nol create", async () => {
