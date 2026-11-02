@@ -1652,90 +1652,147 @@ export async function generateAssetFiscalYearRows(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const { data } = parsed;
 
-    const asset = await prisma.asset.findUnique({
-      where: { id: data.assetId },
-      select: {
-        id: true,
-        purchaseCost: true,
-        purchaseDate: true,
-        category: {
-          select: {
-            fiscalMethod: true,
-            taxGroupCode: true,
-            taxTypeListed: true,
-            taxDjpDetermination: true,
+    type GenerateResult =
+      | { success: true; created: number; existing: number; assetId: number }
+      | { success: false; error: string };
+    const result = await prisma.$transaction(async (tx): Promise<GenerateResult> => {
+      // Kunci aset sebelum membaca baris terbit: generate konkuren harus
+      // membaca rantai yang sudah committed, bukan mencampur dua rantai
+      // dari snapshot berbeda (putaran 54).
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM assets WHERE id = ${data.assetId} FOR UPDATE`;
+      }
+      const asset = await tx.asset.findUnique({
+        where: { id: data.assetId },
+        select: {
+          id: true,
+          purchaseCost: true,
+          purchaseDate: true,
+          category: {
+            select: {
+              fiscalMethod: true,
+              taxGroupCode: true,
+              taxTypeListed: true,
+              taxDjpDetermination: true,
+            },
           },
+          fiscalYearRows: { orderBy: { taxYear: "asc" } },
         },
-        fiscalYearRows: { orderBy: { taxYear: "asc" } },
-      },
-    });
-    if (!asset) return { success: false, error: "Aset tidak ditemukan." };
-
-    const resolution = resolveFiscalGroup({
-      taxGroupCode: asset.category?.taxGroupCode,
-      taxTypeListed: asset.category?.taxTypeListed,
-      taxDjpDetermination: asset.category?.taxDjpDetermination,
-    });
-    if (resolution.status !== "resolved") {
-      return {
-        success: false,
-        error: "Kelompok fiskal belum dapat ditentukan pada kategori aset ini.",
-      };
-    }
-
-    const built = buildFiscalYearRows({
-      purchaseCost: asset.purchaseCost,
-      fiscalMethod: asset.category?.fiscalMethod ?? null,
-      fiscalGroup: resolution.group,
-      purchaseDate: asset.purchaseDate,
-      throughYear: data.throughYear,
-      openingBalance: data.openingBalance ?? null,
-      openingYear: data.openingYear ?? null,
-    });
-    if (built.rows === null) {
-      const messages: Record<string, string> = {
-        "metode-belum-dipilih": "Metode fiskal belum dipilih pada kategori aset ini.",
-        "bangunan-saldo-menurun": "Bangunan hanya boleh garis lurus; metode saldo menurun ditolak.",
-        "metode-tidak-sah": "Metode fiskal tidak sah untuk kelompok fiskal kategori ini.",
-        "tanpa-tanggal-perolehan": "Tanggal perolehan aset belum terisi; fiskal belum dapat dihitung.",
-        "saldo-pembuka-tidak-valid": "Saldo pembuka tidak valid (negatif atau tahun pembuka sebelum tahun perolehan).",
-      };
-      return { success: false, error: messages[built.reason] ?? built.reason };
-    }
-
-    const existingYears = new Set(asset.fiscalYearRows.map((row) => row.taxYear));
-    const fresh = built.rows.filter((row) => !existingYears.has(row.taxYear));
-    let created = 0;
-    if (fresh.length > 0) {
-      const batch = await prisma.assetFiscalYearRow.createMany({
-        data: fresh.map((row) => ({
-          assetId: asset.id,
-          taxYear: row.taxYear,
-          yearIndex: row.yearIndex,
-          openingBalance: row.openingBalance,
-          depreciation: row.depreciation,
-          closingBalance: row.closingBalance,
-          method: row.method,
-          groupCode: row.groupCode,
-          ratePercent: row.ratePercent,
-          source: row.source,
-        })),
-        skipDuplicates: true,
       });
-      created = batch.count;
-    }
+      if (!asset) return { success: false, error: "Aset tidak ditemukan." };
 
-    if (created > 0) {
+      const resolution = resolveFiscalGroup({
+        taxGroupCode: asset.category?.taxGroupCode,
+        taxTypeListed: asset.category?.taxTypeListed,
+        taxDjpDetermination: asset.category?.taxDjpDetermination,
+      });
+      if (resolution.status !== "resolved") {
+        return {
+          success: false,
+          error: "Kelompok fiskal belum dapat ditentukan pada kategori aset ini.",
+        };
+      }
+
+      const buildRows = (openingBalance: unknown, openingYear: number | null) =>
+        buildFiscalYearRows({
+          purchaseCost: asset.purchaseCost,
+          fiscalMethod: asset.category?.fiscalMethod ?? null,
+          fiscalGroup: resolution.group,
+          purchaseDate: asset.purchaseDate,
+          throughYear: data.throughYear,
+          openingBalance: openingBalance as never,
+          openingYear,
+        });
+      const built = buildRows(data.openingBalance ?? null, data.openingYear ?? null);
+      if (built.rows === null) {
+        const messages: Record<string, string> = {
+          "metode-belum-dipilih": "Metode fiskal belum dipilih pada kategori aset ini.",
+          "bangunan-saldo-menurun": "Bangunan hanya boleh garis lurus; metode saldo menurun ditolak.",
+          "metode-tidak-sah": "Metode fiskal tidak sah untuk kelompok fiskal kategori ini.",
+          "tanpa-tanggal-perolehan": "Tanggal perolehan aset belum terisi; fiskal belum dapat dihitung.",
+          "saldo-pembuka-tidak-valid": "Saldo pembuka tidak valid (negatif atau tahun pembuka sebelum tahun perolehan).",
+        };
+        return { success: false, error: messages[built.reason] ?? built.reason };
+      }
+
+      // Baris terbit adalah jangkar rantai: tahun baru sesudahnya wajib
+      // membuka dari closingBalance terbekukan. Input opening yang konflik
+      // tidak boleh melahirkan tahun lanjutan dari saldo lain, karena baris
+      // lama memang tidak ditulis ulang.
+      let rows = built.rows;
+      const existingRows = [...asset.fiscalYearRows].sort((a, b) => a.taxYear - b.taxYear);
+      const continuation = (openingBalance: unknown, openingYear: number) => {
+        const segment = buildRows(openingBalance, openingYear);
+        if (segment.rows === null) return null;
+        return segment.rows.map((row, index) =>
+          index === 0 && row.source === "opening" ? { ...row, source: "computed" as const } : row,
+        );
+      };
+      if (rows.length > 0) {
+        const preceding = [...existingRows]
+          .reverse()
+          .find((row) => row.taxYear < rows[0].taxYear && row.closingBalance != null);
+        if (preceding) {
+          const segment = continuation(preceding.closingBalance, preceding.taxYear + 1);
+          if (segment) rows = segment;
+        }
+      }
+      for (const existing of existingRows) {
+        if (existing.closingBalance == null || existing.taxYear > data.throughYear) continue;
+        const builtRow = rows.find((row) => row.taxYear === existing.taxYear);
+        if (!builtRow) continue;
+        if (new Prisma.Decimal(builtRow.closingBalance).equals(new Prisma.Decimal(existing.closingBalance as never))) continue;
+        if (existing.taxYear >= data.throughYear) {
+          rows = rows.filter((row) => row.taxYear <= existing.taxYear);
+          break;
+        }
+        const segment = continuation(existing.closingBalance, existing.taxYear + 1);
+        if (segment) {
+          rows = [...rows.filter((row) => row.taxYear <= existing.taxYear), ...segment];
+        }
+      }
+
+      const existingYears = new Set(existingRows.map((row) => row.taxYear));
+      const fresh = rows.filter((row) => !existingYears.has(row.taxYear));
+      let created = 0;
+      if (fresh.length > 0) {
+        const batch = await tx.assetFiscalYearRow.createMany({
+          data: fresh.map((row) => ({
+            assetId: asset.id,
+            taxYear: row.taxYear,
+            yearIndex: row.yearIndex,
+            openingBalance: row.openingBalance,
+            depreciation: row.depreciation,
+            closingBalance: row.closingBalance,
+            method: row.method,
+            groupCode: row.groupCode,
+            ratePercent: row.ratePercent,
+            source: row.source,
+          })),
+          skipDuplicates: true,
+        });
+        created = batch.count;
+      }
+      return {
+        success: true,
+        created,
+        existing: rows.filter((row) => existingYears.has(row.taxYear)).length,
+        assetId: asset.id,
+      };
+    });
+    if (!result.success) return result;
+
+    if (result.created > 0) {
       await logActivity(
         "create",
         "AssetFiscalYearRow",
-        asset.id,
-        `Membekukan ${created} baris tahun fiskal aset ${asset.id} sampai ${data.throughYear}`,
+        result.assetId,
+        `Membekukan ${result.created} baris tahun fiskal aset ${result.assetId} sampai ${data.throughYear}`,
       );
     }
     revalidatePath("/aset");
     revalidatePath("/laporan/perbedaan-penyusutan");
-    return { success: true, created, existing: built.rows.length - fresh.length };
+    return { success: true, created: result.created, existing: result.existing };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[generateAssetFiscalYearRows]", getErrorMessage(e) || e);

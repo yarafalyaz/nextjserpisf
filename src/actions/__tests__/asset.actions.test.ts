@@ -2162,6 +2162,30 @@ describe("generateAssetFiscalYearRows (F-109-V P4)", () => {
     prismaMock.asset.findUnique.mockResolvedValue(null)
     expect((await generateAssetFiscalYearRows(genFd()))?.success).toBe(false)
   })
+
+  it("putaran 54: rantai tahun baru mengikuti saldo akhir baris terbekukan, bukan input opening konflik", async () => {
+    prismaMock.asset.findUnique.mockResolvedValue(fiscalAsset({
+      fiscalYearRows: [{
+        taxYear: 2023,
+        yearIndex: 1,
+        openingBalance: new Prisma.Decimal(12_000_000),
+        depreciation: new Prisma.Decimal(6_000_000),
+        closingBalance: new Prisma.Decimal(6_000_000),
+        method: "declining_balance",
+        groupCode: "GROUP_1",
+        ratePercent: new Prisma.Decimal(50),
+        source: "computed",
+      }],
+    }))
+    const res = await generateAssetFiscalYearRows(genFd({ openingBalance: "9000000", openingYear: "2024" }))
+    expect(res?.success).toBe(true)
+    const arg = prismaMock.assetFiscalYearRow.createMany.mock.calls[0][0]
+    expect(arg.data).toHaveLength(1)
+    expect(arg.data[0].taxYear).toBe(2024)
+    expect(arg.data[0].openingBalance.toString()).toBe("6000000")
+    expect(arg.data[0].depreciation.toString()).toBe("3000000")
+    expect(arg.data[0].closingBalance.toString()).toBe("3000000")
+  })
 })
 
 describe("assetCategorySchema fiscalMethod (F-109-V P1)", () => {
