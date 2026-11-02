@@ -186,16 +186,16 @@ export async function POST(
         let docCreator: number | null = null
         if (config.hasCreatedBy === false) {
           // Model HR tak punya createdBy: pemilik dokumen = employee.userId.
+          // Error DB TIDAK ditelan: fallback aktor di bawah akan mencatat
+          // requestedBy yang salah lalu approval buntu di maker-checker.
           const delegateCreator = prisma[config.model as keyof typeof prisma] as any
           const hrDoc = await delegateCreator
             .findUnique({ where: { id }, select: { employee: { select: { userId: true } } } })
-            .catch((): null => null)
           docCreator = hrDoc?.employee?.userId != null ? Number(hrDoc.employee.userId) : null
         } else {
           const delegateCreator = prisma[config.model as keyof typeof prisma] as any
           const doc = await delegateCreator
             .findUnique({ where: { id }, select: { createdBy: true } })
-            .catch((): null => null)
           docCreator = doc?.createdBy != null ? Number(doc.createdBy) : null
         }
 

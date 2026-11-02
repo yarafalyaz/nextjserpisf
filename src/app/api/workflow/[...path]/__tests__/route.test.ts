@@ -481,6 +481,19 @@ describe("POST /api/workflow/[...path]", () => {
       expect(mocks.approveStepMock).not.toHaveBeenCalled()
     })
 
+    it("putaran 54: error DB saat membaca pembuat dokumen tidak ditelan menjadi fallback aktor", async () => {
+      mocks.authFn.mockResolvedValue(adminSession)
+      mocks.findUnique.mockResolvedValueOnce({ id: 5 })
+      mocks.findUnique.mockRejectedValueOnce(new Error("db down"))
+      mocks.findFirstApproval.mockResolvedValueOnce(null)
+
+      const res = await POST(makeReq(), makeParams(["penjualan", "pesanan", "5", "approve"]))
+
+      expect(res.status).toBe(500)
+      expect(mocks.requestApprovalMock).not.toHaveBeenCalled()
+      expect(mocks.approveStepMock).not.toHaveBeenCalled()
+    })
+
     it("initiates and approves workflow step and status becomes approved on last step", async () => {
       mocks.authFn.mockResolvedValue(adminSession)
       mocks.findFirstApproval.mockResolvedValueOnce(null)

@@ -66,7 +66,7 @@ const ALLOWED_EMPTY_CATCH_COUNTS: Record<string, number> = {
  * TIDAK dihitung (pemeriksaan isi blok di tes perluasan).
  */
 const SILENT_PROMISE_CATCH_WIDE =
-  /\.catch\(\s*(?:async\s+)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*(?:\{\s*(?:return\s+(?:null|undefined|false|0|\[\s*\]|\{\}|void\s+0)\s*;?|return\s*;?)?\s*\}|null|undefined|false|0|\[\s*\]|\{\s*\}|""|''|``|void\s+0)\s*\)/g
+  /\.catch\(\s*(?:async\s+)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)(?:\s*:\s*[^=]*?)?\s*=>\s*(?:\{\s*(?:return\s+(?:null|undefined|false|0|\[\s*\]|\{\}|void\s+0)\s*;?|return\s*;?)?\s*\}|null|undefined|false|0|\[\s*\]|\{\s*\}|""|''|``|void\s+0)\s*\)/g
 
 const ALLOWED_PROMISE_CATCH: Record<string, string> = {
   "src/app/api/cron/route.ts": "sapu berkas lampiran yatim best-effort (R-9); unlink gagal = berkas memang sudah hilang, deleteMany tetap jalan",
@@ -591,6 +591,7 @@ describe("detektor kegagalan senyap (round2 #17)", () => {
       "p.catch((e) => { return; })",
       "p.catch(() => void 0)",
       "p.catch((e) => { return [] })",
+      "p.catch((): null => null)",
     ]
     for (const s of senyap) {
       expect(pola.test(blankComments(s)), s).toBe(true)
