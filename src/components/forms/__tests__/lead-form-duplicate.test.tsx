@@ -216,4 +216,25 @@ describe("LeadForm — panel duplikat DUP-F1", () => {
     act(() => root.unmount())
     container.remove()
   })
+
+  it("putaran 52: sukses memutar key, gagal memakai key sama", async () => {
+    createLeadMock.mockResolvedValueOnce({ success: false, error: "Nama lead wajib diisi." })
+    createLeadMock.mockResolvedValue({ success: true, id: 1 })
+    const { container, root } = mountForm()
+    // 1: gagal — 2: sukses — 3: create berikutnya dari form mounted sama.
+    for (let i = 0; i < 3; i++) {
+      submitForm(container)
+      await act(async () => {})
+      await act(async () => {})
+    }
+    const keys = createLeadMock.mock.calls.map((c) =>
+      String((c[0] as FormData).get("idempotencyKey") ?? ""),
+    )
+    expect(keys).toHaveLength(3)
+    expect(keys[0]).not.toBe("")
+    expect(keys[1]).toBe(keys[0])
+    expect(keys[2]).not.toBe(keys[0])
+    act(() => root.unmount())
+    container.remove()
+  })
 })

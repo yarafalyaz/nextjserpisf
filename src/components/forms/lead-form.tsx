@@ -146,6 +146,10 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
           showError(result.error || "Gagal menyimpan data")
           return
         }
+        // Key satu intent create: putar sesudah sukses supaya create
+        // berikutnya dari form yang sama tidak ditolak server sebagai
+        // duplikat 24 jam; retry sesudah gagal tetap memakai key sama.
+        if (!isEdit) idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.refresh()
       } catch (error) {
