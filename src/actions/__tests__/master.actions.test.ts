@@ -1199,6 +1199,49 @@ describe("Uom Actions", () => {
   })
 })
 
+describe("createUom gap-lock (putaran 53)", () => {
+  beforeEach(() => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.unitOfMeasure.findFirst.mockResolvedValue(null)
+  })
+
+  function uomCreateOnly(impl: (args: any) => Promise<unknown>) {
+    const def = mocks.prismaMock.unitOfMeasure.findMany.getMockImplementation()
+    mocks.prismaMock.unitOfMeasure.findMany.mockImplementation(async (args: any) =>
+      args?.select?.symbol ? impl(args) : (def?.(args) ?? []),
+    )
+    return def
+  }
+
+  it("cek+create dalam tx bergap-lock; reuse nama di bawah kunci tanpa create kedua", async () => {
+    const restore = uomCreateOnly(async () => [
+      { id: 4, name: "Pcs", symbol: "pcs", slug: "pcs" },
+    ])
+    const res: any = await actions.createUom(fdMap({ name: "pcs", symbol: "PCS" }))
+    expect(res?.success).toBe(true)
+    expect(res?.id).toBe(4)
+    expect(mocks.prismaMock.unitOfMeasure.create).not.toHaveBeenCalled()
+    const rawArg = mocks.prismaMock.$executeRaw.mock.calls.at(-1)?.[0] as
+      | { strings?: string[] }
+      | string[]
+      | undefined
+    const rawSql = Array.isArray(rawArg) ? rawArg.join("?") : (rawArg?.strings?.join("?") ?? "")
+    expect(rawSql).toContain("FROM unit_of_measures FOR UPDATE")
+    mocks.prismaMock.unitOfMeasure.findMany.mockImplementation(restore)
+  })
+
+  it("simbol aktif bentrok nama lain -> ditolak", async () => {
+    const restore = uomCreateOnly(async () => [
+      { id: 4, name: "Pieces", symbol: "PCS", slug: "pieces" },
+    ])
+    const res: any = await actions.createUom(fdMap({ name: "Per Buah", symbol: "pcs" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("PCS")
+    expect(mocks.prismaMock.unitOfMeasure.create).not.toHaveBeenCalled()
+    mocks.prismaMock.unitOfMeasure.findMany.mockImplementation(restore)
+  })
+})
+
 describe("Tax Actions", () => {
   it("createTax succeeds", async () => {
     try {

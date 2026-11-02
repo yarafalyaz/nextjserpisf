@@ -3890,18 +3890,47 @@ export async function createUom(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error }
     const { name, symbol, category } = parsed.data
 
-    const uom = await prisma.unitOfMeasure.create({
-      data: {
-        name,
-        slug: await nextSlug("unitOfMeasure", name),
-        symbol,
-        category,
-        isActive: true,
-      },
+    // Nama/simbol satuan tanpa @unique DB; cek pra-parse kalah balapan.
+    // Cek+create dalam tx bergap-lock (pola createTax putaran 53): nama
+    // hidup sama -> reuse; simbol hidup bentrok nama lain -> tolak, karena
+    // item mencocokkan satuan lewat string symbol/nama (lihat updateUom).
+    // Model tanpa deletedAt: semua baris = himpunan yang dinilai.
+    const result = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM unit_of_measures FOR UPDATE`;
+      }
+      const candidates = await tx.unitOfMeasure.findMany({
+        select: { id: true, name: true, symbol: true, slug: true },
+      });
+      const nameKey = normalizeTaxNameKey(name);
+      const byName = candidates.find((row) => normalizeTaxNameKey(row.name) === nameKey);
+      if (byName) return { kind: "reuse" as const, id: byName.id, slug: byName.slug };
+      const symbolKey = normalizeTaxNameKey(symbol);
+      const bySymbol = candidates.find(
+        (row) => normalizeTaxNameKey(row.symbol) === symbolKey,
+      );
+      if (bySymbol) {
+        throw new Error(
+          `Simbol satuan ${bySymbol.symbol} sudah dipakai satuan "${bySymbol.name}"; pakai simbol lain.`,
+        );
+      }
+      const created = await tx.unitOfMeasure.create({
+        data: {
+          name,
+          slug: await nextSlugWithClient(tx as never, "unitOfMeasure", name),
+          symbol,
+          category,
+          isActive: true,
+        },
+      });
+      return { kind: "created" as const, id: created.id, slug: created.slug };
     });
-    await logActivity("create", "UnitOfMeasure", uom.id, "Membuat satuan");
+    if (result.kind === "reuse") {
+      return { success: true, id: result.id, slug: result.slug ?? undefined };
+    }
+    await logActivity("create", "UnitOfMeasure", result.id, "Membuat satuan");
     revalidatePath("/master/satuan");
-    return { success: true, id: uom.id, slug: uom.slug };
+    return { success: true, id: result.id, slug: result.slug ?? undefined };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createUom]", getErrorMessage(e) || e);
