@@ -92,6 +92,40 @@ describe("E132-1 peristiwa terbekukan", () => {
     expect(ev.status).toBe("draft")
   })
 
+  it("putaran 70: basis dibaca ULANG sesudah kunci baris karyawan (snapshot pra-kunci basi ditolak pakai)", async () => {
+    const client = baseClient()
+    client.$executeRaw = vi.fn().mockResolvedValue(1)
+    // Bacaan pertama (pra-kunci) basi: gaji 4jt. Sesudah kunci (bacaan
+    // kedua) gaji sudah berubah 6jt — snapshot wajib dari bacaan kedua.
+    client.employee.findUnique
+      .mockResolvedValueOnce({ id: 1, employmentStatus: "PKWT", baseSalary: 4_000_000, deletedAt: null, isActive: true })
+      .mockResolvedValue({ id: 1, employmentStatus: "PKWT", baseSalary: 6_000_000, deletedAt: null, isActive: true })
+    const ev = await createPkwtCompensationEvent(client, {
+      employeeId: 1, segmentStart: d("2026-01-01"), segmentEnd: d("2026-06-15"),
+    })
+    expect(Number(ev.baseSalarySnapshot)).toBe(6_000_000)
+    expect(Number(ev.basisMonthly)).toBe(7_000_000)
+    const lockOrder = (client.$executeRaw as any).mock.invocationCallOrder[0]
+    const reads = client.employee.findUnique.mock.invocationCallOrder
+    expect(reads.length).toBeGreaterThanOrEqual(2)
+    expect(reads[0]).toBeLessThan(lockOrder)
+    expect(lockOrder).toBeLessThan(reads[1])
+  })
+
+  it("putaran 70: karyawan dinonaktifkan sesudah bacaan pertama ditolak dari bacaan pasca-kunci", async () => {
+    const client = baseClient()
+    client.$executeRaw = vi.fn().mockResolvedValue(1)
+    client.employee.findUnique
+      .mockResolvedValueOnce({ id: 1, employmentStatus: "PKWT", baseSalary: 4_000_000, deletedAt: null, isActive: true })
+      .mockResolvedValue({ id: 1, employmentStatus: "PKWT", baseSalary: 4_000_000, deletedAt: null, isActive: false })
+    await expect(
+      createPkwtCompensationEvent(client, {
+        employeeId: 1, segmentStart: d("2026-01-01"), segmentEnd: d("2026-12-31"),
+      }),
+    ).rejects.toThrow("tidak aktif")
+    expect(client.pkwtCompensationEvent.create).not.toHaveBeenCalled()
+  })
+
   it("<1 bulan ditolak", async () => {
     const client = baseClient()
     await expect(

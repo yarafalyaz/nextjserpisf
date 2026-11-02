@@ -87,16 +87,18 @@ export async function createPkwtCompensationEvent(
   client: Client,
   input: CreatePkwtEventInput,
 ) {
-  const employee = await client.employee.findUnique({
-    where: { id: input.employeeId },
-    select: {
-      id: true,
-      employmentStatus: true,
-      baseSalary: true,
-      deletedAt: true,
-      isActive: true,
-    },
-  })
+  const readEmployee = () =>
+    client.employee.findUnique({
+      where: { id: input.employeeId },
+      select: {
+        id: true,
+        employmentStatus: true,
+        baseSalary: true,
+        deletedAt: true,
+        isActive: true,
+      },
+    })
+  let employee = await readEmployee()
   if (!employee || employee.deletedAt) {
     throw new Error("Karyawan tidak ditemukan untuk peristiwa kompensasi PKWT.")
   }
@@ -112,6 +114,18 @@ export async function createPkwtCompensationEvent(
   // dua kali. Client root (bukan tx) tidak bisa dikunci per baris di sini.
   if ("$executeRaw" in client) {
     await (client as TxClient).$executeRaw`SELECT id FROM employees WHERE id = ${input.employeeId} FOR UPDATE`
+    // Putaran 70: snapshot pra-kunci bisa basi (gaji/status berubah dan
+    // commit saat menunggu kunci). Basis peristiwa WAJIB dari bacaan
+    // pasca-kunci: locking read menyegarkan snapshot tx (pola
+    // locking re-read repo), bacaan plain berikutnya membaca baris
+    // terkunci terbaru. Tanpa kunci (client root) bacaan pertama final.
+    employee = await readEmployee()
+    if (!employee || employee.deletedAt) {
+      throw new Error("Karyawan tidak ditemukan untuk peristiwa kompensasi PKWT.")
+    }
+    if (!employee.isActive) {
+      throw new Error("Karyawan tidak aktif — peristiwa kompensasi PKWT tidak dapat dibuat.")
+    }
   }
   if (employee.employmentStatus !== "PKWT") {
     throw new Error(PKWT_MSG.notPkwt(employee.employmentStatus))
