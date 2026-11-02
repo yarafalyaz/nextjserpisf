@@ -1832,6 +1832,45 @@ Wilayah: penjualan + keuangan (agent paralel), inventaris (agent — hasil justr
 - Agent penjualan kategori 2–4 dinyatakan bersih dengan bukti per-fungsi (transisi posting kunci+klaim+baca-ulang; faktur turunan terkunci quotation; `updateSalesPayment` diblokir jurnal POSTED + kunci dua faktur id-terurut). Agent keuangan menyatakan bersih: `postJournal`/`reverseJournal`/`deleteBankTransfer`/`deletePettyCash`/`completeReconciliation` (FOR UPDATE + klaim kondisional + `assertPeriodOpen(..., tx)`). Jangan diangkat ulang tanpa bukti baru.
 - Agent inventaris: 1 kandidat kualifikasi (produksi di atas), kelas 1–4 lain tidak memenuhi ambang bukti sesudah pengecualian putaran 60–62.
 
+## Putaran 64 — Manufaktur, servis kendaraan, proyek, aset (12 fix)
+
+Wilayah: manufaktur + servis/workshop/garansi/kendaraan (agent paralel), inv inventaris turunan kandidat servis #updateWorkOrder, proyek/aset (agent paralel). Semua kandidat diverifikasi sesi utama terhadap kode + form pemanggil + schema sebelum fix. Kelas dominan tetap create tanpa idempotency key; satu kandidat transisi (status WO dinilai pra-kunci) dan dua gerbang hidup (kendaraan pelanggan di quotation; gerbang hidup updateWorkOrder dinilai pra-tx).
+
+### Fix manufaktur (agent manufaktur 5 kandidat: 4 fix, 1 CATAT)
+1. `d50aeed18` fix(manufacturing): `createProductionCost` anti double-submit via idempotency key — dampak tertinggi putaran ini: retry melahirkan jurnal WIP dobel.
+2. `45e92e3ee` fix(manufacturing): `createBomRevision` anti double-submit via idempotency key — unik `(productId, revisionNo)` justru naik nomor tiap retry sehingga tak menahan duplikat; klaim diatur sesudah kunci baris produk (urutan kunci file yang ada).
+3. `e51badd68` fix(manufacturing): `createProduct` anti double-submit via idempotency key — create polos luar tx dibungkus tx dengan klaim key pertama.
+4. `a5a7320fe` fix(manufacturing): nilai status WO sesudah kunci di `initializeWorkOrderOperations` — WO cancelled/closed bersamaan sebelumnya tetap menerima tahap pending yatim. Kunci WO kini pernyataan pertama tx; test berupa kontrak urutan `invocationCallOrder` + penjaga status-terkunci (mock tak bisa memodelkan snapshot MariaDB; rancangan dua-bacaan gugur dan jangan dikembalikan).
+
+### Fix servis kendaraan & inventaris WO (agent servis 4 kandidat: 3 fix, 1 koreksi sendiri gugur)
+5. `39696f7db` fix(sales): kendaraan pelanggan nonaktif ditolak di penawaran — loader `loadQuotationFormOptions` memuat `customerVehicle.findMany` tanpa `where`, dan kedua aksi (`createQuotation`/`updateQuotation`) hanya cek kepemilikan; baris aktif kini dinilai `isActive`/`deletedAt` dari baris yang sama. Satu fixture legacy disesuaikan mengikuti kontrak select baru (harness tertinggal, produksi benar).
+6. `bc4a53278` fix(vehicle): `createCustomerVehicle` anti double-submit via idempotency key — retry melahirkan kepemilikan pelat-sama kembar dan (jalur variant) katalog `Vehicle` kembar; schema hanya unik pada slug.
+7. `9016fb83f` fix(vehicle): `createVehicleFitment` anti double-submit via idempotency key — aturan kembar id-terbaru memenangkan tie-breaking resolver; create dibungkus tx, slug via `nextSlugWithClient`.
+8. `5a28d111c` fix(inventory): gerbang hidup `updateWorkOrder` dinilai ulang sesudah kunci WO — sebelumnya gerbang hidup dinilai dari snapshot prisma luar tx; kini kunci baris WO menjadi pernyataan pertama tx lalu status + `assertLiveWorkOrderRefs(tx)` dinilai ulang; klaim `updateMany` status tetap jaring terakhir. Satu harness disesuaikan kontrak tx baru (delegate tx kini menyediakan `findUniqueOrThrow`/`customer`/`item`/`$queryRaw`).
+
+### Fix proyek & aset (agent proyek/aset 4 kandidat: 4 fix, 1 CATAT — kandidat 3 berisi tiga master)
+9. `509253ea5` fix(project): `createProjectBudgetItem` anti double-submit via idempotency key — baris RAB kembar menggembungkan total sebelum `lockProjectBudget`; klaim diatur sesudah `loadBudgetProject` + `assertBudgetUnlocked` (urutan kunci proyek yang ada).
+10. `13f020ad4` fix(asset): `createAssetTransfer` anti double-submit via idempotency key — riwayat transfer kembar yang sah tanpa efek lokasi akhir; hanya unik pada slug.
+11. `cc981c8e3` fix(asset): `createAssetGroup` anti double-submit via idempotency key — grup tak punya slug/unique apa pun; kembar paling langsung.
+12. `9ace1f558` fix(asset): `createAssetBrand` + `createAssetCategory` anti double-submit via idempotency key — nama tak unik, slug hanya suffix; create dibungkus tx dengan `nextSlugWithClient`.
+
+### Vonis dicatat / gugur (tanpa patch)
+- `updateProductionOrder` menulis `totalStandardCost` dari snapshot produk luar tx (`manufacturing.actions.ts:2349/2375/2533`): CATAT — angka yang stale hanyalah benchmark varians (bukan uang/stok terposting); serialisasi lawan penulis produk menuntut kunci produk di semua jalur edit PO; perbaikan parsial = rasa aman palsu.
+- `createAssetTransfer` — lihat fix #10; snapshot kontrak proyek dari quotation (`setProjectContractFromQuotation` mengunci proyek tetapi tidak mengunci baris quotation): CATAT — quotation tetap `accepted` sesudah dibaca; mengunci barisnya mengubah interleaving edit quotation, bukan keputusan sepihak (aging singkat; default konservatif menulis apa adanya).
+- `updateWorkOrder` jalur lain: slug WO dihitung dari `findUniqueOrThrow`/status pra-tx sebelum klaim `updateMany` dalam waktu yang hampir bersamaan — CATAT tanpa patch: klaim status tetap menahan tulis dari WO yang berubah statusnya; slug hanya mengubah label URL, bukan data.
+- Snapshot quotation kontrak proyek (`project.actions.ts:1155-1303`, `1736-1758` vs `updateQuotation` `sales.actions.ts:822-905`): CATAT — mengunci baris quotation sesudah lock proyek mengubah interleaving yang melibatkan transaksi kecil sales juga; bukan keputusan sepihak ronde ini.
+- Kendaraan pelanggan jalur quick-add: tidak disesuaikan — tombol quick-add adalah jalan pintas yang sama dengan form (pola sudah diperbaiki sebelum putaran ini); residual rendah, dicatat lewat log tanpa diff.
+- Agent servis menolak kandidat `startWorkOrder` intake luar tx (tak ada jalur hapus inspeksi) dan `createVehicle`/`createQcInspection` (bukti lemah): tidak diangkat ulang tanpa bukti baru.
+- Daftar bersih agent manufaktur (jangan diangkat ulang): `createMaterialIssueFromWorkOrder`, `requestBomRevisionChange`, `createWorkCenter`, transisi PO/WO/BOM klaim kondisional, `issueMaterial`, `completeProductionOrder`, `reserveStockForWorkOrder`, `calculateStandardCost`.
+- Daftar bersih agent proyek/aset: `createProject`/`createTask`/`createAsset` (sudah ber-key), `initializeProjectStages`, `proposeProjectBudgetRevision`, `disposeAsset`, `generateAssetFiscalYearRows`, `lockProjectBudget`, `updateProjectStageProgress`, `syncProjectStatus`.
+
+### Catatan
+- Tidak ada migrasi schema putaran ini.
+- Pelajaran harness terverifikasi dua kali sesi ini: describe tanpa `requirePermissionMock` sendiri bergantung urutan eksekusi — sekali tolak (Asset Group test baru menemukan `user` undefined) sampai disediakan `beforeEach` own; antrean `mockResolvedValueOnce`/`findUnique.mockResolvedValueOnce` pada model `idempotencyKey` bersama menelan injeksi test lain di file yang sama (`vi.clearAllMocks` tidak membersihkan antrean maupun implementasi persisten) — mode mock dirancang per-aksi via fixture persisten lalu dikembalikan; injeksi ditata ulang ke pola locked-key yang sama sesudah suntingan production selesai ditunda urutan sesi.
+- Koreksi ejaan `FIxture` yang terdeteksi sesudah commit RAB tidak diubah — nilai observable nol.
+
+CI final putaran 64: head `9ace1f558` **success**; keduabelas head fix masing-masing **success** (termasuk intermediate, tanpa failure).
+
 CI final putaran 63: head `9372036b5` **success**; kedelapan head fix masing-masing **success** (termasuk intermediate, tanpa failure).
 
 ### Catatan
