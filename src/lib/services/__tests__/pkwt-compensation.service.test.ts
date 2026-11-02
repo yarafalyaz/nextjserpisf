@@ -303,6 +303,28 @@ describe("E132-2 akrual bulanan agregat", () => {
     expect(res.accruedCount).toBe(0)
     expect(res.journalId).toBeNull()
   })
+
+  it("putaran 59: rerun dengan karyawan baru — jurnal tambahan baru, bukan tempel jurnal agregat lama", async () => {
+    const client = baseClient()
+    // Jurnal agregat periode sudah ada dari run pertama.
+    client.journal.findFirst.mockResolvedValue({ id: 77, status: "POSTED", deletedAt: null, journalNumber: "PKWT-ACCR-2026-03" })
+    client.employee.findMany.mockResolvedValue([
+      { id: 1, contractStartDate: d("2026-01-01"), contractEndDate: d("2026-12-31") },
+    ])
+    // Karyawan ini belum punya baris akrual periode ini (baru valid/rerun).
+    client.pkwtCompensationAccrual.findFirst.mockResolvedValue(null)
+    const res = await runPkwtMonthlyAccrual(client, "2026-03", 1)
+    expect(res.accruedCount).toBe(1)
+    expect(res.totalAmount).toBe(416_666.67) // 1/12 x 5.000.000
+    // Jurnal baru wajib lahir untuk baris rerun; jurnal lama tetap 77 dan
+    // TIDAK boleh ditumpangi baris baru.
+    expect(journalServiceMocks.createJournal).toHaveBeenCalledTimes(1)
+    const jArg = journalServiceMocks.createJournal.mock.calls[0][0]
+    expect(jArg.entries[0].debit).toBe(416_666.67)
+    expect(jArg.entries[1].credit).toBe(416_666.67)
+    const accrualArg = client.pkwtCompensationAccrual.create.mock.calls[0][0]
+    expect(accrualArg.data.journalId).toBe(55) // id jurnal baru dari mock
+  })
 })
 
 describe("putaran 38: markPkwtEventPaid klaim kondisional", () => {

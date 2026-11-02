@@ -349,12 +349,43 @@ export async function runPkwtMonthlyAccrual(
   // Pemanggil action membungkus tx; service juga bisa jalan dari prisma root.
   const asTx = client as TxClient & { $transaction?: typeof prisma.$transaction }
   const run = async (tx: TxClient) => {
+    // Gaya humanReadableNumber (mrp/planning.service) untuk jurnal tambahan.
+    const humanReadableNumber = (value: unknown): string => {
+      const digits = String(value ?? "").replace(/\D+/g, "")
+      if (!digits) return ""
+      const trimmed = digits.replace(/^0+(?=\d)/, "")
+      return trimmed.padStart(Math.max(3, trimmed.length), "0")
+    }
     const existingJournal = await tx.journal.findFirst({
       where: { referenceType: PKWT_COMPENSATION_REFERENCE_TYPE, referenceId: year * 100 + month },
-      select: { id: true },
+      select: { id: true, status: true, deletedAt: true, journalNumber: true },
     })
-    let journalId = existingJournal?.id ?? null
-    if (!journalId) {
+    const canReuseJournal =
+      existingJournal != null &&
+      existingJournal.deletedAt == null &&
+      existingJournal.status === "POSTED"
+    let journalId: number
+    if (canReuseJournal) {
+      const { JournalService } = await import("@/lib/services/journal.service")
+      const created = await new JournalService(tx).createJournal({
+        journalNumber: `PKWT-ACCR-${period}-${humanReadableNumber(existingJournal.id)}`,
+        transactionDate: monthEndUtc,
+        referenceType: PKWT_COMPENSATION_REFERENCE_TYPE,
+        referenceId: year * 100 + month,
+        description: `Akrual kompensasi PKWT tambahan ${period}`,
+        type: "GENERAL",
+        createdBy: userId ?? undefined,
+        entries: [
+          { accountId: mapping.expenseAccountId, debit: totalAmount, credit: 0, memo: "Beban Kompensasi PKWT (akrual)" },
+          { accountId: mapping.payableAccountId, debit: 0, credit: totalAmount, memo: "Utang Kompensasi PKWT (akrual)" },
+        ],
+      })
+      journalId = created.id
+    } else if (existingJournal) {
+      throw new Error(
+        `Jurnal akrual kompensasi PKWT periode ${period} sudah ada dengan status ${existingJournal.status}; akrual tambahan tidak bisa ditempel ke jurnal lama.`,
+      )
+    } else {
       const { JournalService } = await import("@/lib/services/journal.service")
       const created = await new JournalService(tx).createJournal({
         journalNumber: `PKWT-ACCR-${period}`,
