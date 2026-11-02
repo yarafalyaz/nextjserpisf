@@ -123,7 +123,7 @@ function fdMap(payload: Record<string, string | number | null | undefined>): For
 
 beforeEach(() => {
   vi.clearAllMocks()
-  
+
   // Reset model mocks and transaction
   Object.values(mocks.prismaMock).forEach((m: any) => {
     if (typeof m === "function") return
@@ -158,6 +158,15 @@ beforeEach(() => {
       if (arg?.select?._count) return ids.map((id) => ({ id, _count: { children: 0 } }))
       return ids.map((id) => ({ id }))
     },
+  )
+
+  // Putaran 77: klaim lampiran wajib count == jumlah id yang diminta;
+  // mock default count:1 menolak klaim 2+ lampiran secara sah. Tirukan
+  // klaim penuh dari argumen where.
+  mocks.prismaMock.transactionAttachment.updateMany.mockReset().mockImplementation(
+    async (args: { where?: { id?: { in?: unknown[] } } }) => ({
+      count: Array.isArray(args?.where?.id?.in) ? args.where.id.in.length : 1,
+    }),
   )
 
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })

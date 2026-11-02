@@ -146,6 +146,13 @@ beforeEach(() => {
   // default draft agar jalur hapus draft lama tetap lolos; test balapan
   // menimpanya ke verified.
   mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValue({ status: "draft" })
+  // Putaran 77: klaim lampiran wajib count == jumlah id yang diminta;
+  // mock default count:1 menolak klaim 2+ lampiran secara sah.
+  mocks.prismaMock.transactionAttachment.updateMany.mockReset().mockImplementation(
+    async (args: { where?: { id?: { in?: unknown[] } } }) => ({
+      count: Array.isArray(args?.where?.id?.in) ? args.where.id.in.length : 1,
+    }),
+  )
 })
 
 function mockDraftReturn() {

@@ -1423,6 +1423,13 @@ describe("Sales Payment Actions", () => {
     vi.clearAllMocks()
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.generateDocNumMock.mockResolvedValue("PAY-001")
+    // Putaran 77: klaim lampiran wajib count == jumlah id yang diminta;
+    // mock default count:1 menolak klaim 2+ lampiran secara sah.
+    mocks.prismaMock.transactionAttachment.updateMany.mockReset().mockImplementation(
+      async (args: { where?: { id?: { in?: unknown[] } } }) => ({
+        count: Array.isArray(args?.where?.id?.in) ? args.where.id.in.length : 1,
+      }),
+    )
   })
 
   // === createSalesPayment ===
