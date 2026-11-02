@@ -16,6 +16,7 @@ import { ReportNarration } from "@/components/reports/report-narration"
 
 import type { Metadata } from "next"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
+import { loadCashAccountIds } from "@/lib/reports/ledger-cash-data"
 
 export const metadata: Metadata = { title: "Buku Bank" }
 
@@ -49,25 +50,26 @@ export default async function BankBookPage({
     : null
   const accountId = accountRow?.id ?? null
 
-  const bankAccounts = await prisma.account.findMany({
-    where: {
-      isActive: true,
-      type: 'ASSET',
-      OR: [
-        { code: { startsWith: '1-1' } },
-        { name: { contains: 'Bank' } },
-        { name: { contains: 'Kas' } },
-      ],
-    },
-    orderBy: { code: 'asc' },
-  })
+  // Putaran 75: himpunan kas/bank kanonis sama dengan PDF/Arus Kas
+  // (settings ∪ reportGroup BANK via loadCashAccountIds). Heuristik
+  // kode/nama lama menangkap Kasbon sebagai "bank", membuang rekening
+  // hasil rename, dan akun terpilih di luar heuristik hilang senyap
+  // dari layar padahal PDF mencetaknya.
+  const cashIds = await loadCashAccountIds()
+  const bankAccounts = cashIds.length
+    ? await prisma.account.findMany({
+        where: { id: { in: cashIds } },
+        orderBy: { code: 'asc' },
+      })
+    : []
 
   const selectedAccount = accountId ? bankAccounts.find(a => a.id === accountId) : null
+  const notCashAccount = accountId != null && !selectedAccount
 
   let openingBalance = 0
   let entries: { date: Date; journalNumber: string; description: string; debit: number; credit: number }[] = []
 
-  if (accountId) {
+  if (accountId && selectedAccount) {
     const openingEntries = await prisma.journalEntry.findMany({
       where: {
         accountId,
@@ -144,6 +146,12 @@ export default async function BankBookPage({
       {!accountId && (
         <div className="flex flex-col items-center gap-3 py-16 text-center print:hidden">
           <p className="text-muted-foreground text-sm">Pilih akun kas/bank untuk melihat buku bank</p>
+        </div>
+      )}
+
+      {notCashAccount && (
+        <div className="flex flex-col items-center gap-3 py-16 text-center print:hidden">
+          <p className="text-muted-foreground text-sm">Akun terpilih bukan rekening kas/bank (atur reportGroup BANK atau tetapkan sebagai akun kas di pengaturan).</p>
         </div>
       )}
 

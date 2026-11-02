@@ -213,7 +213,37 @@ export async function loadGeneralLedger(period: Period, accountKey: string | nul
   )
 }
 
-/** Buku Bank: sama, tetapi hanya dari rekening kas/bank. */
+/**
+ * Himpunan kas/bank kanonis (putaran 75): akun terkonfigurasi settings
+ * (cashBankAccountId/pettyCashAccountId) ∪ reportGroup "BANK", live saja —
+ * definisi yang sama dipakai Arus Kas dan form pembayaran/transfer.
+ * Heuristik kode/nama lama (kode 1-1*, nama mengandung Bank/Kas) menangkap
+ * akun seperti Kasbon dan membuang rekening hasil rename, sehingga layar
+ * Buku Bank dan PDF untuk URL yang sama bisa beda isi.
+ */
+export async function loadCashAccountIds(): Promise<number[]> {
+  const settings = await prisma.systemSetting.findFirst({
+    select: { cashBankAccountId: true, pettyCashAccountId: true },
+  })
+  const configured = [settings?.cashBankAccountId, settings?.pettyCashAccountId].filter(
+    (id): id is number => typeof id === "number",
+  )
+  const cashAccounts = await prisma.account.findMany({
+    where: {
+      type: "ASSET",
+      isActive: true,
+      deletedAt: null,
+      OR: [
+        { id: { in: configured.length ? configured : [-1] } },
+        { reportGroup: "BANK" },
+      ],
+    },
+    select: { id: true },
+  })
+  return cashAccounts.map((a) => a.id)
+}
+
+/** Buku Bank: sama seperti Buku Besar, tetapi hanya dari rekening kas/bank kanonis. */
 export async function loadBankLedger(period: Period, accountKey: string | null): Promise<LedgerReportView> {
   const accountId = await resolveAccountId("slug-or-id", accountKey)
   if (!accountId) {
@@ -223,8 +253,15 @@ export async function loadBankLedger(period: Period, accountKey: string | null):
       "Pilih rekening terlebih dahulu (parameter akun=<slug/id>) untuk menampilkan buku bank.",
     )
   }
-  const account = await prisma.account.findFirst({ where: { id: accountId }, select: { id: true } })
-  return ledgerRows(account?.id ?? null, period, "Rekening tidak ditemukan.")
+  const cashIds = await loadCashAccountIds()
+  if (!cashIds.includes(accountId)) {
+    return ledgerRows(
+      null,
+      period,
+      "Akun terpilih bukan rekening kas/bank (atur reportGroup BANK atau tetapkan sebagai akun kas di pengaturan).",
+    )
+  }
+  return ledgerRows(accountId, period, "Rekening tidak ditemukan.")
 }
 
 const SUBLEDGER_COLUMNS: TableColumn[] = [
@@ -873,29 +910,7 @@ export async function loadCustomerReceivables(period: Period): Promise<LedgerRep
  * (kode/nama/kolom angka) supaya masuk pipeline statement di route PDF.
  */
 export async function loadCashFlow(period: Period): Promise<CashFlowReportView> {
-  const settings = await prisma.systemSetting.findFirst({
-    select: { cashBankAccountId: true, pettyCashAccountId: true },
-  })
-  const configured = [settings?.cashBankAccountId, settings?.pettyCashAccountId].filter(
-    (id): id is number => typeof id === "number",
-  )
-  // Himpunan kas kanonis: akun terkonfigurasi settings ∪ reportGroup
-  // "BANK" (definisi yang sama dipakai form pembayaran/transfer), live
-  // saja. Heuristik contains "Kas"/"Bank"/"Cash" lama menangkap akun
-  // seperti Kasbon Direksi dan mencemari saldo laporan.
-  const cashAccounts = await prisma.account.findMany({
-    where: {
-      type: "ASSET",
-      isActive: true,
-      deletedAt: null,
-      OR: [
-        { id: { in: configured.length ? configured : [-1] } },
-        { reportGroup: "BANK" },
-      ],
-    },
-    select: { id: true },
-  })
-  const cashIds = cashAccounts.map((a) => a.id)
+  const cashIds = await loadCashAccountIds()
   const [entries, priorSums] = await Promise.all([
     prisma.journalEntry.findMany({
       where: {

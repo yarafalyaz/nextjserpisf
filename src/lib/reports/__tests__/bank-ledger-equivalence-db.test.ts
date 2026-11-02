@@ -42,6 +42,7 @@ describe.skipIf(SKIP)("bank-ledger equivalence (refactor perf S3-A, DB)", () => 
         code: `EQ-BANK-${Date.now()}`,
         name: "Bank Ekuivalensi",
         type: "ASSET",
+        reportGroup: "BANK",
         normalBalance: "DEBIT",
         slug: "eq-bank-ledger",
       },
@@ -115,11 +116,31 @@ describe.skipIf(SKIP)("bank-ledger equivalence (refactor perf S3-A, DB)", () => 
     expect(total.cells).toEqual(["100", "100", "1.500"]) // 100.48/100.26/1500.36 desimal-0
   })
 
-  it("loadGeneralLedger berbagi hasil identik dengan loadBankLedger", async () => {
+  it("loadGeneralLedger berbagi hasil identik dengan loadBankLedger untuk akun kas/bank", async () => {
     const [bank, gl] = await Promise.all([
       loadBankLedger(period, "eq-bank-ledger"),
       loadGeneralLedger(period, "eq-bank-ledger"),
     ])
     expect(gl).toEqual(bank)
+  })
+
+  it("putaran 75: akun non-kas/bank ditolak loadBankLedger tetapi tetap terbaca loadGeneralLedger", async () => {
+    const other = await prisma.account.create({
+      data: {
+        code: `EQ-NONBANK-${Date.now()}`,
+        name: "Piutang Ekuivalensi",
+        type: "ASSET",
+        normalBalance: "DEBIT",
+        slug: "eq-non-bank-ledger",
+      },
+    })
+    try {
+      const bank = await loadBankLedger(period, "eq-non-bank-ledger")
+      expect(JSON.stringify(bank.table.rows)).toContain("bukan rekening kas/bank")
+      const gl = await loadGeneralLedger(period, "eq-non-bank-ledger")
+      expect(JSON.stringify(gl.table.rows)).not.toContain("bukan rekening kas/bank")
+    } finally {
+      await prisma.account.delete({ where: { id: other.id } })
+    }
   })
 })
