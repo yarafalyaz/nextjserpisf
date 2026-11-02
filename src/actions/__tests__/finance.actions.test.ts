@@ -321,6 +321,29 @@ describe("Bank Statement Line Actions", () => {
     delete mocks.prismaMock.idempotencyKey
   })
 
+  it("putaran 63: createBankStatementLine retry idempotencyKey sama ditolak, baris lahir sekali", async () => {
+    mocks.prismaMock.bankStatementLine.create.mockResolvedValue({ id: 11 })
+    const idemCreate = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    mocks.prismaMock.idempotencyKey = {
+      create: idemCreate,
+      findUnique: vi.fn().mockResolvedValue({ createdAt: new Date() }),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    }
+
+    const payload = { bankStatementId: 3, date: "2026-06-13", amount: "1000", type: "debit", idempotencyKey: "bsl-key-1" }
+    const first = await (actions as any).createBankStatementLine(fdMap(payload))
+    const second = await (actions as any).createBankStatementLine(fdMap(payload))
+
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(String(second?.error ?? "")).toContain("duplikat")
+    expect(mocks.prismaMock.bankStatementLine.create).toHaveBeenCalledTimes(1)
+    delete mocks.prismaMock.idempotencyKey
+  })
+
   it("createBankStatementLine memetakan type credit ke kolom credit saja", async () => {
     mocks.prismaMock.bankStatementLine.create.mockResolvedValue({ id: 11 })
 

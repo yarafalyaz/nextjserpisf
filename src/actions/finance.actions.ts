@@ -249,7 +249,7 @@ async function lockReconParentsAndAssertNotCompleted(
  */
 export async function createBankStatementLine(formData: FormData) {
   try {
-    await requirePermission("create_journals");
+    const user = await requirePermission("create_journals");
 
     const parsed = parseFormData(bankStatementLineSchema, formData);
     if (!parsed.success)
@@ -271,6 +271,9 @@ export async function createBankStatementLine(formData: FormData) {
       // tidak bisa menyelip di antara cek dan tulis.
       await lockBankStatementHeaders(tx, [v.bankStatementId]);
       await assertPeriodOpen(lineDate, tx);
+      // Putaran 63: retry identik melahirkan baris mutasi hantu yang
+      // mengubah total header dan memblokir penyelesaian rekonsiliasi.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
       const created = await tx.bankStatementLine.create({
         data: {
           bankStatementId: v.bankStatementId,

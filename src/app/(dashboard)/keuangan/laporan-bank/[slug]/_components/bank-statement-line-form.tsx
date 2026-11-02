@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { createBankStatementLine, updateBankStatementLine } from "@/actions/finance.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
@@ -50,6 +50,7 @@ export function BankStatementLineForm({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   // Nilai nominal dipegang sebagai state supaya bisa direset setelah baris
   // ditambahkan; `CurrencyInput` menyimpan tampilannya di state internal, dan
   // `form.reset()` saja tidak mengosongkan angka yang terlihat.
@@ -60,6 +61,7 @@ export function BankStatementLineForm({
     const form = e.currentTarget
     startTransition(async () => {
       const fd = new FormData(form)
+      if (!line) fd.set("idempotencyKey", idempotencyKeyRef.current)
       const res = line
         ? await updateBankStatementLine(line.id, fd)
         : await createBankStatementLine(fd)
@@ -67,6 +69,7 @@ export function BankStatementLineForm({
         showError(res.error || "Gagal menyimpan baris rekening koran")
         return
       }
+      if (!line) idempotencyKeyRef.current = crypto.randomUUID()
       showSuccess(
         line ? "Baris rekening koran diperbarui" : "Baris rekening koran ditambahkan",
       )
