@@ -606,6 +606,28 @@ describe("completeLeadActivity / reopenLeadActivity (F-2026-10-25-008-S)", () =>
     expect(mocks.prismaMock.leadActivity.updateMany).not.toHaveBeenCalled()
   })
 
+  it("putaran 56: complete mengeksekusi gerbang+klaim dalam tx berkunci baris lead", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce(pemilik)
+    leadMilik(3)
+    mocks.prismaMock.leadActivity.findFirst.mockResolvedValue({
+      id: 5, scheduledAt: new Date(), completedAt: null,
+    })
+    mocks.prismaMock.leadActivity.updateMany.mockResolvedValue({ count: 1 })
+
+    const res = await actions.completeLeadActivity(1, 5)
+
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+    const lockSql = (mocks.prismaMock.$executeRaw.mock.calls as unknown[][])
+      .map((c) => {
+        const a = c[0] as { sql?: string; strings?: string[] } | string[]
+        return Array.isArray(a) ? a.join("?") : (a?.sql ?? a?.strings?.join("?") ?? "")
+      })
+      .join(" ")
+    expect(lockSql).toContain("FROM leads")
+    expect(lockSql).toContain("FOR UPDATE")
+  })
+
   it("B1: pemilik menandai -> klaim atomik completedAt waktu server + log + revalidate", async () => {
     mocks.requirePermissionMock.mockResolvedValueOnce(pemilik)
     leadMilik(3)

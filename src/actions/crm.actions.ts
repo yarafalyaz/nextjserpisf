@@ -557,21 +557,34 @@ export async function completeLeadActivity(leadId: number, activityId: number) {
   try {
     const user = await requirePermission("edit_leads")
 
-    const denied = await assertLeadActivityCompletionGuard(user, leadId, activityId, true)
-    if (denied) return denied
+    // Gerbang + klaim dalam SATU tx berkunci baris lead (pola addLeadActivity/
+    // deleteLead): guard global baca-lalu-klaim membiarkan updateLead->lost,
+    // ganti pemilik, atau deleteLead commit di jendelanya lalu klaim tetap
+    // menulis completedAt pada lead tombstone/lost dan melapor sukses.
+    const outcome = await prisma.$transaction(
+      async (tx): Promise<{ success: false; error: string } | null> => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM leads WHERE id = ${leadId} FOR UPDATE`
+      }
+      const denied = await assertLeadActivityCompletionGuard(user, leadId, activityId, true, tx)
+      if (denied) return denied
 
-    const claim = await prisma.leadActivity.updateMany({
-      where: {
-        id: activityId,
-        leadId,
-        scheduledAt: { not: null },
-        completedAt: null,
+      const claim = await tx.leadActivity.updateMany({
+        where: {
+          id: activityId,
+          leadId,
+          scheduledAt: { not: null },
+          completedAt: null,
+        },
+        data: { completedAt: new Date() },
+      })
+      if (claim.count === 0) {
+        return { success: false, error: await leadActivityStateError(activityId, leadId, true, tx) }
+      }
+      return null
       },
-      data: { completedAt: new Date() },
-    })
-    if (claim.count === 0) {
-      return { success: false, error: await leadActivityStateError(activityId, leadId, true) }
-    }
+    )
+    if (outcome) return outcome
 
     await logActivity(
       "complete",
@@ -598,20 +611,31 @@ export async function reopenLeadActivity(leadId: number, activityId: number) {
   try {
     const user = await requirePermission("edit_leads")
 
-    const denied = await assertLeadActivityCompletionGuard(user, leadId, activityId, false)
-    if (denied) return denied
+    // Tx berkunci baris lead yang sama seperti completeLeadActivity:
+    // gerbang kepemilikan dinilai dari baris terkunci, bukan snapshot.
+    const outcome = await prisma.$transaction(
+      async (tx): Promise<{ success: false; error: string } | null> => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM leads WHERE id = ${leadId} FOR UPDATE`
+      }
+      const denied = await assertLeadActivityCompletionGuard(user, leadId, activityId, false, tx)
+      if (denied) return denied
 
-    const claim = await prisma.leadActivity.updateMany({
-      where: {
-        id: activityId,
-        leadId,
-        completedAt: { not: null },
+      const claim = await tx.leadActivity.updateMany({
+        where: {
+          id: activityId,
+          leadId,
+          completedAt: { not: null },
+        },
+        data: { completedAt: null },
+      })
+      if (claim.count === 0) {
+        return { success: false, error: await leadActivityStateError(activityId, leadId, false, tx) }
+      }
+      return null
       },
-      data: { completedAt: null },
-    })
-    if (claim.count === 0) {
-      return { success: false, error: await leadActivityStateError(activityId, leadId, false) }
-    }
+    )
+    if (outcome) return outcome
 
     await logActivity(
       "reopen",
@@ -648,8 +672,9 @@ async function assertLeadActivityCompletionGuard(
   leadId: number,
   activityId: number,
   completing: boolean,
+  client: typeof prisma | Prisma.TransactionClient = prisma,
 ): Promise<{ success: false; error: string } | null> {
-  const lead = await prisma.lead.findFirst({
+  const lead = await client.lead.findFirst({
     where: { id: leadId, deletedAt: null },
     select: { id: true, assignedTo: true, status: true },
   })
@@ -675,7 +700,7 @@ async function assertLeadActivityCompletionGuard(
     }
   }
 
-  const activity = await prisma.leadActivity.findFirst({
+  const activity = await client.leadActivity.findFirst({
     where: { id: activityId, leadId },
     select: { id: true, scheduledAt: true, completedAt: true },
   })
@@ -708,8 +733,9 @@ async function leadActivityStateError(
   activityId: number,
   leadId: number,
   completing: boolean,
+  client: typeof prisma | Prisma.TransactionClient = prisma,
 ): Promise<string> {
-  const activity = await prisma.leadActivity.findFirst({
+  const activity = await client.leadActivity.findFirst({
     where: { id: activityId, leadId },
     select: { id: true, scheduledAt: true, completedAt: true },
   })
