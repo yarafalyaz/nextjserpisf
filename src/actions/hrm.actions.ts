@@ -4171,6 +4171,11 @@ export async function createTimesheet(formData: FormData) {
       }
       const freshError = await timesheetContextGuard(v, tx);
       if (freshError) throw new Error(freshError.error);
+      // Putaran 65: retry submit identik melahirkan baris jam identik
+      // (cap 24 jam tidak menahan bila 2x8 jam) yang kemudian ditarik
+      // menjadi ProductionCost per baris -> biaya produksi dobel. Klaim
+      // key sesudah konteks dinilai ulang, sebelum create.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
       await assertTimesheetDailyHoursTx(tx, v.employeeId, wibDateToUtcMidnight(v.date), v.hours, null);
       // Hidup dinilai di bawah kunci baris karyawan (diambil cap harian):
       // jam tidak menempel ke karyawan yang mati sesudah cek luar.

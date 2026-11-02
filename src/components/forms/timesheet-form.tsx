@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { AppDatePicker } from "@/components/ui/date-picker";
 import { createTimesheet, updateTimesheet } from "@/actions/hrm.actions";
 import { showSuccess, showError } from "@/lib/utils/toast";
@@ -48,6 +48,10 @@ export function TimesheetForm({
   breakEnd,
 }: TimesheetFormProps) {
   const router = useRouter();
+  // Idempotency: key stabil per intent tambah; retry jaringan memakai key
+  // yang sama (ditolak server), sukses merotasi untuk entri berikutnya.
+  const idempotencyKeyRef = useRef<string | null>(null);
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID();
   const [isPending, startTransition] = useTransition();
   const [employeeId, setEmployeeId] = useState<string | null>(
     timesheet ? String(timesheet.employeeId) : null,
@@ -105,6 +109,7 @@ export function TimesheetForm({
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget);
+        if (!timesheet?.id) formData.set("idempotencyKey", idempotencyKeyRef.current!);
         const result = timesheet?.id
           ? await updateTimesheet(timesheet.id, formData)
           : await createTimesheet(formData);
@@ -112,6 +117,7 @@ export function TimesheetForm({
           showError(result.error || "Gagal menyimpan data");
           return;
         }
+        idempotencyKeyRef.current = crypto.randomUUID();
         showSuccess(
           timesheet?.id
             ? "Data berhasil diperbarui"

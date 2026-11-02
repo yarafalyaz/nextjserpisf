@@ -22,6 +22,11 @@ const mocks = vi.hoisted(() => {
     workOrder: buildModelMock(),
     task: buildModelMock(),
     employee: buildModelMock(),
+    idempotencyKey: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     $transaction: vi.fn(async (ops: unknown) => {
       if (typeof ops === "function") return (ops as (p: unknown) => unknown)(prismaMock)
       return Promise.all(ops as Promise<unknown>[])
@@ -66,6 +71,23 @@ beforeEach(() => {
   mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 7, status: "in_progress" })
   mocks.prismaMock.task.findUnique.mockResolvedValue({ id: 9, projectId: 3 })
   vi.spyOn(console, "error").mockImplementation(() => {})
+})
+
+describe("putaran 65: createTimesheet idempotensi", () => {
+  it("retry key sama ditolak, lembar waktu lahir sekali", async () => {
+    mocks.prismaMock.idempotencyKey.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    mocks.prismaMock.idempotencyKey.findUnique.mockResolvedValue({ createdAt: new Date() })
+
+    const first = await createTimesheet(fd({ ...BASE, workOrderId: "7", idempotencyKey: "ts-key-1" }))
+    const second = await createTimesheet(fd({ ...BASE, workOrderId: "7", idempotencyKey: "ts-key-1" }))
+
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(String(second.success ? "" : second.error)).toContain("duplikat")
+    expect(mocks.prismaMock.timesheet.create).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe("createTimesheet konteks (F-2026-10-21-019)", () => {
