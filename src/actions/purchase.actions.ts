@@ -2979,21 +2979,48 @@ export async function deletePurchaseRequest(id: number) {
     const pr = await prisma.purchaseRequest.findUniqueOrThrow({
       where: { id },
     });
-    if (pr.status === "approved") {
+    if (["approved", "partial_ordered", "ordered"].includes(pr.status)) {
       throw new Error("Tidak bisa menghapus PR yang sudah approved");
     }
 
-    // Klaim atomik: bacaan di atas bisa basi — approver yang commit
-    // "approved" di antaranya memakai status. Hapus hanya bila status
-    // SAAT klaim belum approved; count 0 kalah balapan.
-    const claim = await prisma.purchaseRequest.deleteMany({
-      where: { id, status: { not: "approved" } },
-    });
-    if (claim.count === 0) {
-      throw new Error("Tidak bisa menghapus PR yang sudah approved");
-    }
-    await prisma.approval.deleteMany({
-      where: { referenceType: "PurchaseRequest", referenceId: id },
+    // Putaran 76: status saja tidak cukup — PR partial_ordered/ordered
+    // sudah melahirkan PO, dan FK purchase_orders.purchase_request_id
+    // ON DELETE SET NULL akan melepas tautan senyap (coverage + jejak
+    // audit hilang). Kunci baris PR dalam tx (createPurchaseOrder
+    // mengunci baris yang sama), lalu nilai ulang status DAN keberadaan
+    // PO dari baris terkunci sebelum klaim hapus.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT id FROM purchase_requests WHERE id = ${id} FOR UPDATE`;
+      }
+      const locked = await tx.purchaseRequest.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+      if (!locked) throw new Error("Permintaan Pembelian tidak ditemukan");
+      if (["approved", "partial_ordered", "ordered"].includes(locked.status)) {
+        throw new Error("Tidak bisa menghapus PR yang sudah approved");
+      }
+      const linkedPo = await tx.purchaseOrder.count({
+        where: { purchaseRequestId: id },
+      });
+      if (linkedPo > 0) {
+        throw new Error(
+          "Tidak bisa menghapus PR yang sudah memiliki pesanan pembelian — hapus/batalkan pesanan terkait terlebih dahulu.",
+        );
+      }
+      const claim = await tx.purchaseRequest.deleteMany({
+        where: {
+          id,
+          status: { notIn: ["approved", "partial_ordered", "ordered"] },
+        },
+      });
+      if (claim.count === 0) {
+        throw new Error("Tidak bisa menghapus PR yang sudah approved");
+      }
+      await tx.approval.deleteMany({
+        where: { referenceType: "PurchaseRequest", referenceId: id },
+      });
     });
 
     await logActivity(

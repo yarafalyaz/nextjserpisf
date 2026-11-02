@@ -88,11 +88,17 @@ async function assertNoPartialRelease(
   productionOrderId: number,
   verb: "ditambahkan" | "diubah" | "dihapus",
 ): Promise<void> {
-  await tx.$queryRaw`SELECT id FROM production_orders WHERE id = ${productionOrderId} FOR UPDATE`
-  const fresh = await tx.productionOrder.findUnique({
-    where: { id: productionOrderId },
-    select: { status: true, completedQty: true },
-  })
+  // Nilai penentu wajib berasal dari locking read itu sendiri. MariaDB
+  // REPEATABLE READ tidak menyegarkan snapshot konsisten yang terbentuk
+  // sebelum kunci diperoleh (assertPeriodOpen/assertJobCostMutable bisa
+  // membentuknya), jadi findUnique sesudah kunci dapat membaca
+  // status/completedQty lama dan melewatkan release parsial konkuren.
+  const locked = await tx.$queryRaw<
+    Array<{ status: string; completed_qty: unknown }>
+  >`SELECT status, completed_qty FROM production_orders WHERE id = ${productionOrderId} FOR UPDATE`
+  const fresh = locked[0]
+    ? { status: locked[0].status, completedQty: locked[0].completed_qty }
+    : null
   const invalid = mutableOrderError(fresh, verb)
   if (invalid) throw new Error(invalid.error)
 }

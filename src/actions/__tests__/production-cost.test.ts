@@ -91,7 +91,10 @@ beforeEach(() => {
     checkIdempotencyMock,
   ]) m.mockReset()
   checkIdempotencyMock.mockResolvedValue(undefined)
-  queryRawMock.mockResolvedValue([])
+  // Default locking read PO (assertNoPartialRelease): hidup, belum release.
+  // queryRaw juga dipakai kunci baris lain; nilai ini hanya dibaca sebagai
+  // baris PO oleh jalur biaya ber-PO, test spesifik menimpanya.
+  queryRawMock.mockResolvedValue([{ status: "in_progress", completed_qty: 0 }])
 
   requirePermissionMock.mockResolvedValue({ id: 5 })
   periodOpenMock.mockResolvedValue(undefined)
@@ -542,6 +545,21 @@ describe("STOK-14: biaya dibekukan sesudah release parsial", () => {
 
     expect(res.success).toBe(true)
     expect(applyDeltaMock).toHaveBeenCalled()
+  })
+
+  it("putaran 76: locking read completedQty > 0 menolak create walau findUnique snapshot 0", async () => {
+    // Snapshot pra-tx dan findUnique dalam tx masih 0; locking read wajib
+    // menjadi sumber kebenaran karena REPEATABLE READ tidak menyegarkan
+    // snapshot yang terbentuk sebelum kunci PO diperoleh.
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress", completedQty: 0 })
+    queryRawMock.mockResolvedValue([{ status: "in_progress", completed_qty: 5 }])
+
+    const res = await createProductionCost(fd({ productionOrderId: 1, category: "labor", amount: 1000 }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("release parsial")
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
   })
 })
 

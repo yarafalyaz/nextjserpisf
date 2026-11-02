@@ -330,6 +330,8 @@ describe("Purchase Request Actions", () => {
 
 
   it("deletePurchaseRequest succeeds", async () => {
+    // Putaran 76: jalur hapus membaca ulang status di bawah kunci baris PR.
+    mocks.prismaMock.purchaseRequest.findUnique.mockResolvedValue({ status: "draft" })
     const res = await actions.deletePurchaseRequest(1)
     expect(res?.success).toBe(true)
   })
@@ -3451,10 +3453,36 @@ describe("Purchase Actions Additional Branch Coverage", () => {
 
   it("deletePurchaseRequest refuses when the atomic claim loses (approved mid-flight)", async () => {
     mocks.prismaMock.purchaseRequest.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft" })
+    mocks.prismaMock.purchaseRequest.findUnique.mockResolvedValueOnce({ status: "draft" })
     mocks.prismaMock.purchaseRequest.deleteMany.mockResolvedValueOnce({ count: 0 })
     const res = await actions.deletePurchaseRequest(1)
     expect(res?.success).toBe(false)
     expect(mocks.prismaMock.purchaseRequest.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.approval.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it.each(["partial_ordered", "ordered"])(
+    "putaran 76: deletePurchaseRequest menolak PR %s (PO sudah berkomitmen)",
+    async (status) => {
+      mocks.prismaMock.purchaseRequest.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status })
+      const res = await actions.deletePurchaseRequest(1)
+      expect(res?.success).toBe(false)
+      expect(res?.error).toContain("Tidak bisa menghapus PR yang sudah approved")
+      expect(mocks.prismaMock.purchaseRequest.deleteMany).not.toHaveBeenCalled()
+    },
+  )
+
+  it("putaran 76: deletePurchaseRequest menolak PR dengan PO tertaut dari baris terkunci", async () => {
+    // Snapshot luar draft; di bawah kunci ada PO tertaut (createPurchaseOrder
+    // konkuren commit lebih dulu). Tanpa kunci+hitung ulang, FK SET NULL
+    // melepas tautan PO senyap.
+    mocks.prismaMock.purchaseRequest.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft" })
+    mocks.prismaMock.purchaseRequest.findUnique.mockResolvedValueOnce({ status: "draft" })
+    mocks.prismaMock.purchaseOrder.count.mockResolvedValueOnce(1)
+    const res = await actions.deletePurchaseRequest(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("sudah memiliki pesanan pembelian")
+    expect(mocks.prismaMock.purchaseRequest.deleteMany).not.toHaveBeenCalled()
     expect(mocks.prismaMock.approval.deleteMany).not.toHaveBeenCalled()
   })
 

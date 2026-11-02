@@ -3033,18 +3033,28 @@ export async function cancelWorkOrder(workOrderId: number, reason?: string) {
           `Perintah kerja hanya dapat dibatalkan dari status 'in_progress' (saat ini '${wo.status}').`,
         );
       }
-      // STOK-13: WO dengan pengeluaran material completed atau order
-      // produksi anak aktif tidak boleh dibatalkan — material/biaya sudah
-      // keluar dan anak akan yatim. Selesaikan/reversal dulu secara eksplisit.
-      const [completedIssues, activeChildOrders] = await Promise.all([
-        tx.materialIssue.count({ where: { workOrderId, status: "completed" } }),
-        tx.productionOrder.count({
-          where: { workOrderId, status: { notIn: ["completed", "cancelled", "closed"] } },
-        }),
-      ]);
-      if (completedIssues > 0) {
+      // STOK-13 + putaran 76: WO dengan pengeluaran material completed
+      // atau order produksi anak aktif tidak boleh dibatalkan — material/
+      // biaya sudah keluar dan anak akan yatim. MI draft|processing ikut
+      // menahan (samakan closeWorkOrder): MI processing sudah diklaim
+      // completeMaterialIssue dan bisa memposting stok sesudah WO batal,
+      // karena complete hanya menolak WO closed, bukan cancelled. Bacaan
+      // di bawah kunci baris WO: complete menunggu kunci yang sama.
+      const openIssue = await tx.materialIssue.findFirst({
+        where: { workOrderId, status: { in: ["draft", "processing", "completed"] } },
+        select: { id: true, documentNo: true, status: true },
+      });
+      const activeChildOrders = await tx.productionOrder.count({
+        where: { workOrderId, status: { notIn: ["completed", "cancelled", "closed"] } },
+      });
+      if (openIssue?.status === "completed") {
         throw new Error(
           "Perintah kerja memiliki pengeluaran material yang sudah selesai — batalkan/retur pengeluaran material terlebih dahulu sebelum membatalkan perintah kerja.",
+        );
+      }
+      if (openIssue) {
+        throw new Error(
+          `Perintah kerja belum dapat dibatalkan: pengeluaran material #${openIssue.id} (${openIssue.documentNo}) masih berstatus '${openIssue.status}'.`,
         );
       }
       if (activeChildOrders > 0) {

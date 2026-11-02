@@ -15,6 +15,7 @@ const woiFindFirstMock = vi.fn()
 const miItemAggregateMock = vi.fn()
 const srUpdateManyMock = vi.fn()
 const miCountMock = vi.fn()
+const miFindFirstMock = vi.fn()
 const poCountMock = vi.fn()
 const srFindFirstMock = vi.fn()
 const srCreateMock = vi.fn()
@@ -32,7 +33,10 @@ vi.mock("@/lib/db/prisma", () => {
       updateMany: (...a: unknown[]) => woUpdateManyMock(...a),
     },
     workOrderItem: { findFirst: (...a: unknown[]) => woiFindFirstMock(...a) },
-    materialIssue: { count: (...a: unknown[]) => miCountMock(...a) },
+    materialIssue: {
+      count: (...a: unknown[]) => miCountMock(...a),
+      findFirst: (...a: unknown[]) => miFindFirstMock(...a),
+    },
     productionOrder: { count: (...a: unknown[]) => poCountMock(...a) },
     materialIssueItem: { aggregate: (...a: unknown[]) => miItemAggregateMock(...a) },
     stockReservation: {
@@ -72,6 +76,7 @@ beforeEach(() => {
   requirePermissionMock.mockResolvedValue({ id: 7 })
   woUpdateManyMock.mockResolvedValue({ count: 1 })
   miCountMock.mockResolvedValue(0)
+  miFindFirstMock.mockResolvedValue(null)
   poCountMock.mockResolvedValue(0)
   srUpdateManyMock.mockResolvedValue({ count: 1 })
   srFindManyMock.mockResolvedValue([])
@@ -130,10 +135,20 @@ describe("cancelWorkOrder (BR-RES-11)", () => {
 
   it("STOK-13: MI completed -> cancel ditolak, status tak berubah", async () => {
     woFindUniqueOrThrowMock.mockResolvedValue({ id: 9, status: "in_progress" })
-    miCountMock.mockResolvedValue(1)
+    miFindFirstMock.mockResolvedValue({ id: 3, documentNo: "MI-003", status: "completed" })
     const res = await cancelWorkOrder(9, "pelanggan batal")
     expect(res.success).toBe(false)
     if (!res.success) expect(res.error).toContain("pengeluaran material")
+    expect(woUpdateManyMock).not.toHaveBeenCalled()
+    expect(srUpdateManyMock).not.toHaveBeenCalled()
+  })
+
+  it.each(["draft", "processing"])("putaran 76: MI %s menahan cancel — complete tidak boleh posting ke WO batal", async (status) => {
+    woFindUniqueOrThrowMock.mockResolvedValue({ id: 9, status: "in_progress" })
+    miFindFirstMock.mockResolvedValue({ id: 4, documentNo: "MI-004", status })
+    const res = await cancelWorkOrder(9, "pelanggan batal")
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toContain(status)
     expect(woUpdateManyMock).not.toHaveBeenCalled()
     expect(srUpdateManyMock).not.toHaveBeenCalled()
   })
