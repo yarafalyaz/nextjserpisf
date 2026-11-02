@@ -628,28 +628,46 @@ export async function updateVendor(vendorId: number, formData: FormData) {
       if (!term) return { success: false, error: "Syarat pembayaran tidak ditemukan" };
     }
 
-    await prisma.vendor.update({
-      where: { id: vendorId },
-      data: {
-        updatedBy: Number(user.id),
-        name: v.name,
-        slug: await nextSlug("vendor", v.name, { excludeId: vendorId }),
-        email: v.email ?? null,
-        phone: v.phone ?? null,
-        address: v.address ?? null,
-        city: v.city ?? null,
-        npwp: v.npwp ?? null,
-        contactPerson: v.contactPerson ?? null,
-        paymentTermId: v.paymentTermId ?? null,
-        street: v.street ?? null,
-        province: v.province ?? null,
-        postalCode: v.postalCode ?? null,
-        districtVendor: v.districtVendor ?? null,
-        villageVendor: v.villageVendor ?? null,
-        bankName: v.bankName ?? null,
-        bankAccountNumber: v.bankAccountNumber ?? null,
-        bankAccountHolder: v.bankAccountHolder ?? null,
-      },
+    // Putaran 61: rename dinilai ulang dalam tx bergap-lock (pola create).
+    // Nama vendor tak punya @unique; rename telanjang melahirkan vendor
+    // hidup bernama sama persis seperti celah create yang ditutup putaran 53.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vendors FOR UPDATE`;
+      }
+      const candidates = await tx.vendor.findMany({
+        where: { deletedAt: null, id: { not: vendorId } },
+        select: { id: true, name: true },
+      });
+      const conflict = candidates.find(
+        (row) => normalizeTaxNameKey(row.name) === normalizeTaxNameKey(v.name),
+      );
+      if (conflict) {
+        throw new Error(`Nama vendor sudah dipakai vendor "${conflict.name}"; pakai nama lain.`);
+      }
+      await tx.vendor.update({
+        where: { id: vendorId },
+        data: {
+          updatedBy: Number(user.id),
+          name: v.name,
+          slug: await nextSlugWithClient(tx as never, "vendor", v.name, { excludeId: vendorId }),
+          email: v.email ?? null,
+          phone: v.phone ?? null,
+          address: v.address ?? null,
+          city: v.city ?? null,
+          npwp: v.npwp ?? null,
+          contactPerson: v.contactPerson ?? null,
+          paymentTermId: v.paymentTermId ?? null,
+          street: v.street ?? null,
+          province: v.province ?? null,
+          postalCode: v.postalCode ?? null,
+          districtVendor: v.districtVendor ?? null,
+          villageVendor: v.villageVendor ?? null,
+          bankName: v.bankName ?? null,
+          bankAccountNumber: v.bankAccountNumber ?? null,
+          bankAccountHolder: v.bankAccountHolder ?? null,
+        },
+      });
     });
 
     revalidatePath("/master/vendor");
@@ -2873,7 +2891,6 @@ export async function updateTax(id: number, formData: FormData) {
     // parentId preservation fixes.
     const data: Prisma.TaxUpdateInput = {
       name: v.name,
-      slug: await nextSlug("tax", v.name, { excludeId: id }),
       rate: clampTaxRate(v.rate),
       code: v.code,
       description: v.description,
@@ -2889,9 +2906,36 @@ export async function updateTax(id: number, formData: FormData) {
       data.isCompound = formData.get("isCompound") === "on";
     }
 
-    await prisma.tax.update({
-      where: { id },
-      data,
+    // Putaran 61: rename dinilai ulang dalam tx bergap-lock (pola create).
+    // Nama/kode pajak tak punya @unique; rename telanjang melahirkan pajak
+    // hidup bernama/berkode sama seperti celah create yang ditutup putaran 53.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM taxes FOR UPDATE`;
+      }
+      const candidates = await tx.tax.findMany({
+        where: { deletedAt: null, id: { not: id } },
+        select: { id: true, name: true, code: true },
+      });
+      const nameConflict = candidates.find(
+        (row) => normalizeTaxNameKey(row.name) === normalizeTaxNameKey(v.name),
+      );
+      if (nameConflict) {
+        throw new Error(`Nama pajak sudah dipakai pajak "${nameConflict.name}"; pakai nama lain.`);
+      }
+      const codeKey = v.code?.trim() ? normalizeTaxNameKey(v.code) : "";
+      if (codeKey) {
+        const codeConflict = candidates.find(
+          (row) => row.code?.trim() && normalizeTaxNameKey(row.code) === codeKey,
+        );
+        if (codeConflict) {
+          throw new Error(
+            `Kode pajak ${codeConflict.code} sudah dipakai pajak "${codeConflict.name}" yang aktif; pakai kode lain.`,
+          );
+        }
+      }
+      data.slug = await nextSlugWithClient(tx as never, "tax", v.name, { excludeId: id });
+      await tx.tax.update({ where: { id }, data });
     });
 
     revalidatePath("/master/pajak");
@@ -4068,14 +4112,40 @@ export async function updateUom(id: number, formData: FormData) {
       }
     }
 
-    await prisma.unitOfMeasure.update({
-      where: { id },
-      data: {
-        name,
-        slug: await nextSlug("unitOfMeasure", name, { excludeId: id }),
-        symbol,
-        category,
-      },
+    // Putaran 61: tabrakan nama/simbol dengan satuan lain dinilai dalam tx
+    // bergap-lock (pola create). Rename telanjang bisa menyamakan simbol dua
+    // satuan aktif; konsumen string (opsi satuan item) lalu dedup senyap.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM unit_of_measures FOR UPDATE`;
+      }
+      const candidates = await tx.unitOfMeasure.findMany({
+        where: { id: { not: id } },
+        select: { id: true, name: true, symbol: true },
+      });
+      const nameConflict = candidates.find(
+        (row) => normalizeTaxNameKey(row.name) === normalizeTaxNameKey(name),
+      );
+      if (nameConflict) {
+        throw new Error(`Nama satuan sudah dipakai satuan "${nameConflict.name}"; pakai nama lain.`);
+      }
+      const symbolConflict = candidates.find(
+        (row) => normalizeTaxNameKey(row.symbol) === normalizeTaxNameKey(symbol),
+      );
+      if (symbolConflict) {
+        throw new Error(
+          `Simbol satuan ${symbolConflict.symbol} sudah dipakai satuan "${symbolConflict.name}"; pakai simbol lain.`,
+        );
+      }
+      await tx.unitOfMeasure.update({
+        where: { id },
+        data: {
+          name,
+          slug: await nextSlugWithClient(tx as never, "unitOfMeasure", name, { excludeId: id }),
+          symbol,
+          category,
+        },
+      });
     });
     await logActivity("update", "UnitOfMeasure", id, "Memperbarui satuan");
     revalidatePath("/master/satuan");

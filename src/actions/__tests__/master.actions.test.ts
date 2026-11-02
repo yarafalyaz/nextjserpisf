@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
   const buildModelMock = () => ({
@@ -148,6 +148,65 @@ describe("deleteCustomerCategory guard rujukan harga/komisi (putaran 21)", () =>
         data: expect.objectContaining({ isActive: false, deletedAt: expect.any(Date) }),
       }),
     )
+  })
+})
+
+describe("putaran 61: rename master menolak nama/kode/simbol milik master hidup lain", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+  })
+
+  afterEach(() => {
+    // Pulihkan harness khusus tax (pemetaan id->baris) yang describe ini
+    // timpa: clearAllMocks tidak membuang implementasi persisten, dan test
+    // TaxGroup sesudahnya bergantung pada pemetaan itu.
+    mocks.prismaMock.tax.findMany.mockImplementation(async (args: any) =>
+      (args?.where?.id?.in ?? []).map((id: number) => ({ id })),
+    )
+    mocks.prismaMock.unitOfMeasure.findMany.mockResolvedValue([])
+  })
+
+  it("updateVendor: rename ke nama vendor hidup lain ditolak, update tidak jalan", async () => {
+    mocks.prismaMock.vendor.findMany.mockResolvedValue([
+      { id: 2, name: "PT Sumber", code: "VND-2", slug: "pt-sumber" },
+    ])
+    const res: any = await actions.updateVendor(1, fdMap({ name: "pt sumber" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("PT Sumber")
+    expect(mocks.prismaMock.vendor.update).not.toHaveBeenCalled()
+  })
+
+  it("updateTax: rename ke nama pajak hidup lain ditolak", async () => {
+    mocks.prismaMock.tax.findMany.mockResolvedValue([
+      { id: 2, name: "PPN 11", code: "PPN11", slug: "ppn-11" },
+    ])
+    const res: any = await actions.updateTax(1, fdMap({ name: "ppn 11", rate: "11" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("PPN 11")
+    expect(mocks.prismaMock.tax.update).not.toHaveBeenCalled()
+  })
+
+  it("updateTax: rename kode ke kode pajak hidup lain ditolak", async () => {
+    mocks.prismaMock.tax.findMany.mockResolvedValue([
+      { id: 2, name: "PPN 11", code: "PPN11", slug: "ppn-11" },
+    ])
+    const res: any = await actions.updateTax(1, fdMap({ name: "PPN Baru", rate: "11", code: "ppn11" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("PPN11")
+    expect(mocks.prismaMock.tax.update).not.toHaveBeenCalled()
+  })
+
+  it("updateUom: rename simbol ke simbol satuan lain ditolak", async () => {
+    mocks.prismaMock.unitOfMeasure.findUnique.mockResolvedValue({ id: 1, name: "Paket", symbol: "PCK" })
+    mocks.prismaMock.item.count.mockResolvedValue(0)
+    mocks.prismaMock.unitOfMeasure.findMany.mockResolvedValue([
+      { id: 2, name: "Pieces", symbol: "PCS", slug: "pieces" },
+    ])
+    const res: any = await actions.updateUom(1, fdMap({ name: "Paket", symbol: "pcs", category: "barang" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("PCS")
+    expect(mocks.prismaMock.unitOfMeasure.update).not.toHaveBeenCalled()
   })
 })
 
@@ -1232,6 +1291,11 @@ describe("Bank Actions", () => {
 })
 
 describe("Uom Actions", () => {
+  beforeEach(() => {
+    // Putaran 61: updateUom menilai tabrakan nama/simbol dalam tx; mock
+    // bersama harus menjawab findMany kandidat dengan himpunan kosong.
+    mocks.prismaMock.unitOfMeasure.findMany.mockResolvedValue([])
+  })
   it("createUom rejects arbitrary category before DB write", async () => {
     const res = await actions.createUom(fdMap({ name: "Piece", symbol: "PCS", category: "crypto" }))
     expect(res?.success).toBe(false)
