@@ -1281,6 +1281,7 @@ function parseRevisionPayload(raw: string): RevisionPayload {
 export async function setProjectContractFromQuotation(
   projectId: number,
   quotationId: number,
+  idempotencyKey?: string | null,
 ) {
   try {
     const user = await requirePermission("edit_projects")
@@ -1288,6 +1289,12 @@ export async function setProjectContractFromQuotation(
     const result = await prisma.$transaction(async (tx) => {
       const project = await loadBudgetProject(tx, projectId)
       assertBudgetUnlocked(project)
+      // Putaran 69: nilai kontrak idempoten tetapi entri riwayat
+      // rab_contract_snapshot lahir tiap panggilan — retry identik
+      // mengotori jejak audit. Klaim key sesudah kunci proyek
+      // (loadBudgetProject); rollback melepas key. Pemanggil lama
+      // tanpa key tetap no-op.
+      await checkIdempotency(idempotencyKey ?? null, tx, user.id)
       const quotation = await tx.quotation.findFirst({
         where: {
           id: quotationId,
@@ -1346,6 +1353,9 @@ export async function setProjectContractManual(projectId: number, formData: Form
     await prisma.$transaction(async (tx) => {
       const project = await loadBudgetProject(tx, projectId)
       assertBudgetUnlocked(project)
+      // Putaran 69: pasangan snapshot — retry identik menahan log
+      // rab_contract_manual kembar (nilai kontrak sendiri idempoten).
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
       await tx.project.update({
         where: { id: projectId },
         data: {

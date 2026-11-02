@@ -1719,6 +1719,48 @@ describe("RAB proyek F-2026-10-21-030", () => {
     expect(mocks.prismaMock.projectItem.create).not.toHaveBeenCalled()
   })
 
+  it("putaran 69: set kontrak retry key sama ditahan — nilai ditulis dan log lahir sekali", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(unlockedProject())
+    mocks.prismaMock.quotation.findFirst.mockResolvedValue({
+      id: 7,
+      documentNo: "Q-007",
+      grandTotal: 55000000,
+    })
+    const idem = mocks.prismaMock.idempotencyKey
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const first = await actions.setProjectContractFromQuotation(10, 7, "rab-contract-key-1")
+    expect(first?.success).toBe(true)
+    const second = await actions.setProjectContractFromQuotation(10, 7, "rab-contract-key-1")
+    expect(second?.success).toBe(false)
+    expect(String(second?.error)).toContain("duplikat")
+    expect(mocks.prismaMock.project.update).toHaveBeenCalledTimes(1)
+    const contractLogs = mocks.prismaMock.projectLog.create.mock.calls.filter(
+      (c: any[]) => c[0]?.data?.action === "rab_contract_snapshot",
+    )
+    expect(contractLogs).toHaveLength(1)
+
+    const firstManual = await actions.setProjectContractManual(
+      10,
+      fdMap({ contractAmount: "9000", reason: "nego", idempotencyKey: "rab-manual-key-1" }),
+    )
+    expect(firstManual?.success).toBe(true)
+    idem.create.mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const secondManual = await actions.setProjectContractManual(
+      10,
+      fdMap({ contractAmount: "9000", reason: "nego", idempotencyKey: "rab-manual-key-1" }),
+    )
+    expect(secondManual?.success).toBe(false)
+    expect(String(secondManual?.error)).toContain("duplikat")
+    const manualLogs = mocks.prismaMock.projectLog.create.mock.calls.filter(
+      (c: any[]) => c[0]?.data?.action === "rab_contract_manual",
+    )
+    expect(manualLogs).toHaveLength(1)
+  })
+
   it("putaran 69: update/delete baris RAB mengunci baris proyek sebelum membaca item (langgar BR-03 bila item dibaca dulu)", async () => {
     mocks.prismaMock.projectItem.findFirst.mockResolvedValue({ id: 5, projectId: 10 })
     mocks.prismaMock.project.findUnique.mockResolvedValue(unlockedProject())

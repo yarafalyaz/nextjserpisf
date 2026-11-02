@@ -63,6 +63,10 @@ export function ProjectBudgetEditor({ projectId, items, stages, quotations, isLo
   // key yang sama (ditolak server), sukses merotasi untuk baris berikutnya.
   const idempotencyKeyRef = useRef<string | null>(null)
   if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
+  // Putaran 69: key intent terpisah untuk set kontrak (snapshot/manual) —
+  // berbagi key dengan tambah baris menahan intent sah yang berbeda.
+  const contractKeyRef = useRef<string | null>(null)
+  if (contractKeyRef.current === null) contractKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
   const [editing, setEditing] = useState<BudgetItemRow | null>(null)
   const [confirm, setConfirm] = useState<null | { title: string; body: string; label: string; run: () => Promise<{ success: boolean; error?: string }> }>(null)
@@ -168,14 +172,14 @@ export function ProjectBudgetEditor({ projectId, items, stages, quotations, isLo
 
       {!isLocked && canEdit && (
         <div className="mt-4 grid grid-cols-1 gap-3 border-t border-default/50 pt-3 sm:grid-cols-2">
-          <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(); fd.set("contractAmount", manualAmount); fd.set("reason", manualReason); run(setProjectContractManual(projectId, fd), "Nilai kontrak manual tersimpan", () => { setManualAmount(""); setManualReason("") }) }} aria-label="Nilai kontrak manual" className="flex flex-col gap-2">
+          <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(); fd.set("contractAmount", manualAmount); fd.set("reason", manualReason); fd.set("idempotencyKey", contractKeyRef.current!); run(setProjectContractManual(projectId, fd), "Nilai kontrak manual tersimpan", () => { contractKeyRef.current = crypto.randomUUID(); setManualAmount(""); setManualReason("") }) }} aria-label="Nilai kontrak manual" className="flex flex-col gap-2">
             <span className="text-xs font-semibold text-foreground">Nilai Kontrak Manual</span>
             <div className="flex flex-col gap-1.5"><Label htmlFor="rabManualAmount">Nilai Kontrak (Rp)</Label><Input id="rabManualAmount" type="number" min="0" required value={manualAmount} onChange={(e) => setManualAmount(e.target.value)} /></div>
             <div className="flex flex-col gap-1.5"><Label htmlFor="rabManualReason">Alasan</Label><Input id="rabManualReason" required value={manualReason} onChange={(e) => setManualReason(e.target.value)} /></div>
             <Button type="submit" variant="secondary" isDisabled={isPending}>Simpan Kontrak Manual</Button>
           </form>
           {quotations.length > 0 && (
-            <form onSubmit={(e) => { e.preventDefault(); if (!quotationId) { showError("Pilih penawaran sumber kontrak"); return } run(setProjectContractFromQuotation(projectId, Number(quotationId)), "Kontrak dari penawaran tersimpan") }} aria-label="Kontrak dari penawaran" className="flex flex-col gap-2">
+            <form onSubmit={(e) => { e.preventDefault(); if (!quotationId) { showError("Pilih penawaran sumber kontrak"); return } run(setProjectContractFromQuotation(projectId, Number(quotationId), contractKeyRef.current), "Kontrak dari penawaran tersimpan", () => { contractKeyRef.current = crypto.randomUUID() }) }} aria-label="Kontrak dari penawaran" className="flex flex-col gap-2">
               <span className="text-xs font-semibold text-foreground">Kontrak dari Penawaran</span>
               <div className="flex flex-col gap-1.5"><Label htmlFor="rabQuotation">Penawaran (disetujui)</Label><FormSelect id="rabQuotation" value={quotationId} onValueChange={setQuotationId} options={quotations.map((q) => ({ value: String(q.id), label: `${q.documentNo} — ${formatCurrency(q.grandTotal)}` }))} /></div>
               <Button type="submit" variant="secondary" isDisabled={isPending}>Pakai Penawaran Ini</Button>
