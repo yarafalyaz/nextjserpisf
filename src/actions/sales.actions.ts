@@ -210,6 +210,7 @@ async function decideQuotation(
   userId: number,
   decision: { status: string; action: string; verb: string; description?: string },
   revisionNumber: number,
+  opts?: { assertApprovalInTx?: boolean },
 ) {
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     // Kunci baris penawaran lalu putuskan atas status+revisi TERKUNCI: cek
@@ -223,6 +224,12 @@ async function decideQuotation(
     })
     if (!locked || locked.status !== "sent") {
       throw new Error("Status penawaran sudah berubah; muat ulang halaman sebelum memutuskan.")
+    }
+    // Putaran 73: accept menilai ulang approval dari baris terkunci (pola
+    // postInvoice) — cek basi pra-tx tidak melihat edit yang commit di
+    // jendela antara cek dan kunci; isi ter-accept wajib isi ter-approve.
+    if (opts?.assertApprovalInTx) {
+      await assertApproved("Quotation", quotationId, tx)
     }
     const lockedRevision = locked.revisionNumber ?? revisionNumber
     await tx.quotation.update({
@@ -522,7 +529,7 @@ export async function acceptQuotation(quotationId: number) {
   // F-37(a): no-op tanpa workflow/approval Quotation.
   await assertApproved("Quotation", quotationId)
 
-  await decideQuotation(quotationId, Number(user.id), { status: "accepted", action: "accepted", verb: "diterima" }, quotation.revisionNumber)
+  await decideQuotation(quotationId, Number(user.id), { status: "accepted", action: "accepted", verb: "diterima" }, quotation.revisionNumber, { assertApprovalInTx: true })
 
   // Notify admins
   await notificationService.notifyAdmins('Penawaran diterima pelanggan', `/penjualan/penawaran/${quotationId}`)
@@ -867,6 +874,12 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
     // tengah edit (penawaran ter-edit di bawah faktur yang sudah lunas).
     // Faktur baru dari konfirmasi DP tertahan kunci quotation di atas.
     await tx.$executeRaw`SELECT id FROM sales_invoices WHERE quotation_id = ${quotationId} ORDER BY id FOR UPDATE`
+    // Putaran 73: faktur jembatan-SO (quotationId faktur null, SO yang
+    // membawa quotationId) ikut dikunci — quotationHasRealSettlement
+    // mengikuti kedua jembatan, tetapi kunci lama hanya menjembatani
+    // yang langsung, jadi pembayaran atas faktur jembatan-SO bisa commit
+    // tak terlihat oleh count di bawah.
+    await tx.$executeRaw`SELECT si.id FROM sales_invoices si INNER JOIN sales_orders so ON so.id = si.sales_order_id WHERE so.quotation_id = ${quotationId} ORDER BY si.id FOR UPDATE`
     if (await quotationHasRealSettlement(quotationId, tx as never)) {
       throw new Error("Penawaran sudah ada pelunasan, item tidak bisa diubah lagi")
     }
@@ -2641,10 +2654,16 @@ export async function completeSalesReturn(returnId: number) {
     }
     const freshReturn = await tx.salesReturn.findUniqueOrThrow({
       where: { id: returnId },
-      select: { status: true },
+      select: { status: true, reason: true },
     })
     if (freshReturn.status !== "draft") {
       throw new Error("Retur penjualan hanya bisa diselesaikan dari status draft")
+    }
+    // Putaran 73: reason dinilai ulang dari baris terkunci (P4 vonis
+    // F-2026-10-26-121-V) — updateSalesReturn bisa mengosongkan reason
+    // antara cek pra-tx dan kunci ini.
+    if (String(freshReturn.reason ?? "").trim().length === 0) {
+      throw new Error("Retur penjualan tidak bisa diselesaikan tanpa alasan tertulis (reason wajib diisi).")
     }
     // Stock Move IN — the stock hook sets status to "completed" at the end. Do NOT
     // set it here first, otherwise the hook's "already completed" guard aborts and
@@ -3857,6 +3876,13 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
       await assertCustomerLiveForNewDocument(tx, v.customerId)
     }
     if (v.salesOrderId) {
+      // Putaran 73: kunci baris SO tujuan sebelum pasangan dinilai —
+      // bacaan polos dalam tx adalah snapshot; updateSalesOrder bisa
+      // memindah customer/status SO di jendela yang sama. Cap di bawah
+      // mengunci SO yang sama lagi (idempoten).
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM sales_orders WHERE id = ${v.salesOrderId} FOR UPDATE`
+      }
       const targetSo = await tx.salesOrder.findUnique({
         where: { id: v.salesOrderId },
         select: { status: true, customerId: true },

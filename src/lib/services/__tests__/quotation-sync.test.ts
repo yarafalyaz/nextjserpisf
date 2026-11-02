@@ -29,6 +29,41 @@ describe("quotation-sync.service / resyncOnEdit", () => {
     mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([])
   })
 
+  it("putaran 73: SO/faktur calon dikunci lalu status dibaca ulang sebelum tulis", async () => {
+    const p = mocks.prismaMock
+    p.$executeRaw = vi.fn().mockResolvedValue(1)
+    p.quotation.findUnique.mockResolvedValue({
+      id: 5, status: "draft", subtotal: 500, discount: 0, tax: 0, grandTotal: 500,
+      sections: [{ items: [{ itemId: 1, qty: 1, unitPrice: 500, discount: 0, total: 500 }] }],
+    })
+    // Snapshot awal melihat SO/faktur draft; bacaan sesudah kunci melihat
+    // faktur sudah posted (penulis lain commit di jendela resync).
+    p.salesOrder.findMany
+      .mockResolvedValueOnce([{ id: 10 }])
+      .mockResolvedValueOnce([{ id: 10, status: "draft" }])
+    p.salesOrder.update.mockResolvedValue({})
+    p.salesOrderItem.deleteMany.mockResolvedValue({ count: 0 })
+    p.salesOrderItem.createMany.mockResolvedValue({ count: 1 })
+    p.salesInvoice.findMany
+      .mockResolvedValueOnce([{ id: 101, salesOrderId: 10, status: "draft", grandTotal: 500 }])
+      .mockResolvedValueOnce([{ id: 101, salesOrderId: 10, status: "posted", grandTotal: 500 }])
+    p.salesInvoiceItem.deleteMany.mockResolvedValue({ count: 0 })
+    p.salesInvoice.update.mockResolvedValue({})
+
+    await resyncOnEdit(5)
+
+    const lockSql = p.$executeRaw.mock.calls.map((call: any[]) => {
+      const arg = call[0] as unknown
+      if (Array.isArray(arg)) return arg.join("?")
+      return ((arg as { strings?: string[] }).strings ?? []).join("?")
+    })
+    expect(lockSql.some((sql: string) => /FROM sales_orders/.test(sql))).toBe(true)
+    expect(lockSql.some((sql: string) => /FROM sales_invoices/.test(sql))).toBe(true)
+    // Faktur posted tidak boleh dihapus itemnya atau ditimpa totalnya.
+    expect(p.salesInvoiceItem.deleteMany).not.toHaveBeenCalled()
+    expect(p.salesInvoice.update).not.toHaveBeenCalled()
+  })
+
   it("hanya menyentuh SO draft (G1 GL-BR-003: SO confirmed/processing dilewati)", async () => {
     const p = mocks.prismaMock
     p.quotation.findUnique.mockResolvedValue({

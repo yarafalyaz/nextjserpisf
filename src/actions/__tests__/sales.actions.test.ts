@@ -669,6 +669,26 @@ describe("Quotation Actions", () => {
       countMock.mock.invocationCallOrder.at(-1) ?? Number.POSITIVE_INFINITY,
     )
   })
+  it("putaran 73: updateQuotation ikut mengunci faktur jembatan-SO sebelum count pelunasan", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "converted", customerId: 1, documentNo: "Q-001" })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ id: 1, status: "converted", revisionNumber: 3 })
+
+    await actions.updateQuotation(1, fdQuotation({ customerId: 1, sections: [], discount: 0, tax: 0 }))
+
+    const rawCalls = mocks.prismaMock.$executeRaw.mock.calls as unknown[][]
+    const sqlOf = (c: unknown[]) => {
+      const first = c[0] as { strings?: string[] } | unknown
+      if (Array.isArray(first)) return first.join("?")
+      return (first as { strings?: string[] })?.strings?.join("?") ?? ""
+    }
+    const bridgeLockIdx = rawCalls.findIndex((c) => /sales_orders so/i.test(sqlOf(c)))
+    expect(bridgeLockIdx).toBeGreaterThanOrEqual(0)
+    expect(sqlOf(rawCalls[bridgeLockIdx])).toMatch(/for update/i)
+    const countMock = mocks.prismaMock.salesPayment.count as ReturnType<typeof vi.fn>
+    expect(mocks.prismaMock.$executeRaw.mock.invocationCallOrder[bridgeLockIdx]).toBeLessThan(
+      countMock.mock.invocationCallOrder.at(-1) ?? Number.POSITIVE_INFINITY,
+    )
+  })
 })
 
 describe("Down Payment Actions", () => {
@@ -1083,6 +1103,26 @@ describe("Sales Invoice Actions", () => {
   // customer faktur atau berstatus bisa-difaktur — pasangan SO milik customer
   // lain lolos bila angka muat, piutang tercatat ke pihak salah (create
   // menolak keduanya sejak lama).
+  it("putaran 73: updateSalesInvoice mengunci SO tujuan sebelum menilai pasangan customer/status", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", customerId: 1, quotationId: null, salesOrderId: 10, paidAmount: 0, grandTotal: 0,
+    })
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ customerId: 1, status: "approved" })
+    const res = await actions.updateSalesInvoice(1, fdMap({ customerId: 1, date: "2026-06-12", salesOrderId: 20 }))
+    expect(res?.success).toBe(true)
+    const rawCalls = mocks.prismaMock.$executeRaw.mock.calls as unknown[][]
+    const sqlOf = (c: unknown[]) => {
+      const first = c[0] as { strings?: string[] } | unknown
+      if (Array.isArray(first)) return first.join("?")
+      return (first as { strings?: string[] })?.strings?.join("?") ?? ""
+    }
+    const soLockIdx = rawCalls.findIndex((c) => /sales_orders/i.test(sqlOf(c)))
+    expect(soLockIdx).toBeGreaterThanOrEqual(0)
+    expect(mocks.prismaMock.$executeRaw.mock.invocationCallOrder[soLockIdx]).toBeLessThan(
+      mocks.prismaMock.salesOrder.findUnique.mock.invocationCallOrder[0],
+    )
+  })
+
   it("regresi putaran 44: updateSalesInvoice menolak pindah SO milik customer lain", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
@@ -1346,11 +1386,24 @@ describe("completeSalesReturn STOK-03", () => {
   it("faktur asal aktif -> complete lolos guard", async () => {
     mocks.prismaMock.salesReturn.findUniqueOrThrow
       .mockResolvedValueOnce({ id: 7, status: "draft", reason: "Barang cacat", createdBy: 3, salesInvoiceId: 9, items: [] })
-      .mockResolvedValue({ id: 7, status: "draft", items: [] })
+      // Bacaan terkunci dalam tx wajib membawa reason (putaran 73 menilai
+      // ulang reason dari baris ini), bukan hanya status.
+      .mockResolvedValue({ id: 7, status: "draft", reason: "Barang cacat", items: [] })
     mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "posted" })
     mocks.prismaMock.stockMove.findFirst.mockResolvedValue({ id: 1 })
     const res = await actions.completeSalesReturn(7)
     expect(res?.success).toBe(true)
+  })
+
+  it("putaran 73: reason dikosongkan di dalam tx -> complete ditolak sebelum hook stok", async () => {
+    mocks.prismaMock.salesReturn.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 7, status: "draft", reason: "Barang cacat", createdBy: 3, salesInvoiceId: 9, items: [] })
+      .mockResolvedValueOnce({ id: 7, status: "draft", reason: "   " })
+    mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "posted" })
+    const res = await actions.completeSalesReturn(7)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("alasan")
+    expect(mocks.prismaMock.stockMove.findFirst).not.toHaveBeenCalled()
   })
 
   it("STOK-10: status berubah cancelled di dalam tx -> complete ditolak, hook stok tak dipanggil", async () => {
@@ -1892,6 +1945,25 @@ describe("Quotation Actions (legacy happy paths)", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("hanya bisa dikirim dari status draft")
   })
+  it("putaran 73: acceptQuotation menilai ulang approval di bawah kunci baris", async () => {
+    // Approval final approved; di dalam tx dokumen terbaca berubah sesudah
+    // approval selesai (edit konkuren commit) — assertApproved(tx) wajib
+    // fail-closed basi, accept tidak boleh menulis status/riwayat.
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "sent", revisionNumber: 3 })
+    // Bacaan stale-check pra-tx: dokumen belum berubah (lolos). Bacaan
+    // terkunci dalam tx: dokumen sudah berubah sesudah approval final.
+    mocks.prismaMock.quotation.findUnique
+      .mockResolvedValueOnce({ id: 1, status: "sent", revisionNumber: 3, updatedAt: new Date("2026-06-11T00:00:00Z") })
+      .mockResolvedValueOnce({ id: 1, status: "sent", revisionNumber: 3, updatedAt: new Date("2026-06-13T00:00:00Z") })
+      .mockResolvedValue({ id: 1, status: "sent", revisionNumber: 3, updatedAt: new Date("2026-06-13T00:00:00Z") })
+    mocks.prismaMock.approval.findFirst.mockResolvedValue({ id: 9, status: "approved", completedAt: new Date("2026-06-12T00:00:00Z") })
+    const res = await actions.acceptQuotation(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("berubah sesudah persetujuan")
+    expect(mocks.prismaMock.quotation.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.quotationHistory.create).not.toHaveBeenCalled()
+  })
+
   it("acceptQuotation succeeds", async () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "sent", revisionNumber: 3 })
     const res = await actions.acceptQuotation(1)
@@ -1921,7 +1993,11 @@ describe("Quotation Actions (legacy happy paths)", () => {
   it("acceptQuotation refuses when the locked re-read is already accepted (lost race)", async () => {
     mocks.prismaMock.quotation.findUniqueOrThrow
       .mockResolvedValueOnce({ id: 1, status: "sent", revisionNumber: 3 })
-    mocks.prismaMock.quotation.findUnique.mockResolvedValueOnce({ id: 1, status: "accepted", revisionNumber: 3 })
+    // Bacaan pertama = stale-check pra-tx (tanpa approval terdaftar
+    // mock ini menjawab apa pun, tetapi bacaan terkunci tetap kedua).
+    mocks.prismaMock.quotation.findUnique
+      .mockResolvedValueOnce({ id: 1, status: "sent", revisionNumber: 3 })
+      .mockResolvedValueOnce({ id: 1, status: "accepted", revisionNumber: 3 })
     const res = await actions.acceptQuotation(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toMatch(/sent|berubah/)

@@ -1,5 +1,5 @@
  
-import { SalesInvoiceStatus } from '@prisma/client'
+import { Prisma, SalesInvoiceStatus } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import {
   assessCreditGateInTx,
@@ -86,8 +86,36 @@ export async function resyncOnEdit(quotationId: number, userId: number | null = 
               status: SalesInvoiceStatus.draft,
             },
           })
-    const invoicesBySO = new Map<number, typeof allInvoices>()
-    for (const inv of allInvoices) {
+
+    // Putaran 73: kunci baris SO + faktur calon (id naik, anti-deadlock),
+    // lalu baca ulang status dari baris terkunci. Bacaan snapshot di atas
+    // bisa basi: postInvoice/updateSalesOrder mengunci baris dokumennya
+    // sendiri, jadi tanpa berbagi kunci ini resync menimpa faktur yang
+    // baru saja posted (GL-BR-003 jebol). Settlement juga dinilai sesudah
+    // kunci faktur, bukan dari snapshot awal transaksi.
+    const candidateInvoiceIds = allInvoices.map((inv) => inv.id).sort((a, b) => a - b)
+    if (salesOrderIds.length > 0 && typeof tx.$executeRaw === "function") {
+      const sortedSoIds = [...salesOrderIds].sort((a, b) => a - b)
+      await tx.$executeRaw`SELECT id FROM sales_orders WHERE id IN (${Prisma.join(sortedSoIds)}) ORDER BY id FOR UPDATE`
+    }
+    if (candidateInvoiceIds.length > 0 && typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id IN (${Prisma.join(candidateInvoiceIds)}) ORDER BY id FOR UPDATE`
+    }
+    const freshSalesOrders = salesOrderIds.length === 0
+      ? []
+      : await tx.salesOrder.findMany({
+          where: { id: { in: salesOrderIds }, status: "draft" },
+          select: { id: true },
+        })
+    const freshSalesOrderIds = new Set(freshSalesOrders.map((s) => s.id))
+    const freshInvoices = candidateInvoiceIds.length === 0
+      ? []
+      : await tx.salesInvoice.findMany({
+          where: { id: { in: candidateInvoiceIds }, status: SalesInvoiceStatus.draft },
+        })
+
+    const invoicesBySO = new Map<number, typeof freshInvoices>()
+    for (const inv of freshInvoices) {
       // salesOrderId is non-null on schema (required FK), but Prisma's TS type
       // marks the join column as nullable. The where:{ in: salesOrderIds }
       // filter above guarantees we never see null; the explicit assertion
@@ -101,6 +129,8 @@ export async function resyncOnEdit(quotationId: number, userId: number | null = 
     }
 
     for (const so of salesOrders) {
+      // Putaran 73: SO yang keluar dari draft sesudah kunci dilewati utuh.
+      if (!freshSalesOrderIds.has(so.id)) continue
       await tx.salesOrderItem.deleteMany({ where: { salesOrderId: so.id } })
       if (items.length > 0) {
         await tx.salesOrderItem.createMany({
