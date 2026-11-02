@@ -2577,6 +2577,34 @@ describe('Coverage Hardening Edge Cases', () => {
     expect(res?.success).toBe(false)
   })
 
+  // Putaran 67: retry submit identik sesudah baris pertama commit membuat
+  // jabatan kembar nama persis — reuse nama hanya dibaca prá-tx sehingga
+  // tak menahan konkuren/retry tumpang tindih; name tak punya unique
+  // (code/slug saja). Klaim key dalam tx menahan retry identik.
+  it("putaran 67: createPosition retry key sama ditolak, jabatan lahir sekali", async () => {
+    const priorCreateImpl = mocks.prismaMock.position.create.getMockImplementation()
+    mocks.prismaMock.position.create.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.idempotencyKey = {
+      create: vi.fn()
+        .mockResolvedValueOnce({ id: 1 })
+        .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" })),
+      findUnique: vi.fn(async () => ({ createdAt: new Date() })),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+      deleteMany: vi.fn(async () => ({ count: 0 })),
+    }
+    try {
+      const first = await actions.createPosition(fdMap({ name: "Jabatan Retry", idempotencyKey: "pos-key-1" }))
+      if (first?.success !== true) throw new Error("DBG-FIRST:" + JSON.stringify(first))
+      const second = await actions.createPosition(fdMap({ name: "Jabatan Retry", idempotencyKey: "pos-key-1" }))
+      if (second?.success !== false) throw new Error("DBG-SECOND:" + JSON.stringify(second))
+      expect(String(second?.error)).toContain("duplikat")
+      expect(mocks.prismaMock.position.create).toHaveBeenCalledTimes(1)
+    } finally {
+      delete mocks.prismaMock.idempotencyKey
+      if (priorCreateImpl) mocks.prismaMock.position.create.mockImplementation(priorCreateImpl)
+    }
+  })
+
   it('updateLead - not assigned to user and not admin', async () => {
     mocks.requirePermissionMock.mockResolvedValueOnce({ id: 2, permissions: [], roles: [] })
     mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, assignedTo: 3 })

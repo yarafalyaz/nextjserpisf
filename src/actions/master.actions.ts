@@ -2224,7 +2224,7 @@ export async function updateDepartment(id: number, formData: FormData) {
 
 export async function createPosition(formData: FormData) {
   try {
-    await requirePermission("create_positions");
+    const user = await requirePermission("create_positions");
 
     const rawNamePos = (formData.get("name") as string | null)?.trim()
     if (rawNamePos) {
@@ -2243,20 +2243,31 @@ export async function createPosition(formData: FormData) {
     const submittedCode = (formData.get("code") as string) || null;
     let code = submittedCode;
 
+    // Putaran 67: klaim key mendahului retry-loop kode — reuse nama di
+    // atas hanya advisory prá-tx, name tak punya unique sehingga retry
+    // submit identik melahirkan jabatan kedua. Retry kode P2002 adalah
+    // cabang internal request sama (unik ditukar kode baru), BUKAN
+    // submit baru; key yang sama dipakai ulang di tx berikutnya, klaim
+    // ulang lulus karena baris key pertama ter-rollback bersama tx kode
+    // gagal. Submit identik kedualah yang tertahan: tx pertamanya
+    // commit. Tanpa key no-op.
     for (let attempt = 0; attempt < 3; attempt++) {
       if (!code) {
         code = await generateDocumentNumber("POS", "simple");
       }
 
       try {
-        const position = await prisma.position.create({
-          data: {
-            name: requireString(formData.get("name"), "name"),
-            slug: await nextSlug("position", requireString(formData.get("name"), "name")),
-            code,
-            departmentId,
-            description: (formData.get("description") as string) || null,
-          },
+        const position = await prisma.$transaction(async (tx) => {
+          await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
+          return tx.position.create({
+            data: {
+              name: requireString(formData.get("name"), "name"),
+              slug: await nextSlug("position", requireString(formData.get("name"), "name")),
+              code,
+              departmentId,
+              description: (formData.get("description") as string) || null,
+            },
+          });
         });
 
         revalidatePath("/master/karyawan");

@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { createPosition, updatePosition } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
@@ -20,11 +20,17 @@ export function PositionCreateForm({ departments, position, generatedCode }: Pos
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!position
+  // Idempotency: key stabil per intent create; retry sesudah respons hilang
+  // memakai key sama (ditolak server). Sukses bernavigasi pergi, tak perlu rotasi.
+  const [idempotencyKey] = useState(() => crypto.randomUUID())
 
   function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
-    if (!isEdit) formData.delete("code")
+    if (!isEdit) {
+      formData.delete("code")
+      formData.set("idempotencyKey", idempotencyKey)
+    }
     startTransition(async () => {
       const result = isEdit
         ? await updatePosition(position!.id, formData)
