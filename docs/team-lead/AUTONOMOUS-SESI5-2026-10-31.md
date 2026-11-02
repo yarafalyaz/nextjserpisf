@@ -1672,12 +1672,15 @@ Wilayah: hasil verifikasi kandidat agent CRM/proyek + keuangan/pajak putaran 54/
 - API kandidat `formData()` luar try di route upload + JSON privat tanpa cache header (print/payroll/notifications): GUGUR — multipart rusak = 500 framework bukan kebocoran; `NextResponse.json` tanpa `Content-Disposition` tak di-cache sebagai berkas.
 - Rekrutmen kandidat duplikat orang (email sama → dua Employee) + pasangan department/position vacancy tak divalidasi: kebijakan bisnis (Employee.email tak unik by-design, pesan FK tersanitasi) — CATAT, tanpa patch.
 
-## Putaran 57 — Aset, pembelian, peran (4 fix, berjalan)
+## Putaran 57 — Aset, pembelian, peran (4 fix, SELESAI)
 
 1. `91d00ac9a` fix(asset): `createAsset` anti double-submit — `checkIdempotency` dicatat lewat tx + key stabil form; sebelumnya kode sequence atomik membuat retry lahir aset + jurnal perolehan ganda senyap.
 2. `182608913` fix(auth): nama peran `finance`/`ga`/`kepala_bengkel` masuk `RESERVED_ROLE_NAMES` — scope HR berbasis NAMA peran; rename peran biasa oleh pemegang `manage_roles` non-super sebelumnya mewarisi akses semua/departemen karyawan tanpa izin HR.
 3. `0f8da19a1` fix(purchase): jurnal ulang bill vendor lahir sesudah reversal nomor faktur — cek idempotency `onVendorBillPosted` tanpa filter status menemukan jurnal asal REVERSED lalu return senyap; GL neto bill nol permanen. Kedua cek kini hanya POSTED.
 4. `2edf1ca01` fix(purchase): rekomputasi PO pada `deleteGoodsReceipt` memakai `purchaseOrderId` segar di bawah kunci baris GR — snapshot luar membuat PO tujuan pemindahan GR tertinggal `partial_received` + `receivedQty` basi.
+5. `b478244bc` test(purchase): fixture suite `delete-goods-receipt-received-qty` diperbarui ke kontrak select kunci baru (`purchaseOrderId` segar) — CI head `2edf1ca01` merah 4 test SEMUA di fixture ini (produksi benar); hijau lokal 484/484 sesudah fixture diperbaiki.
+
+CI final putaran 57: semua head success (`91d00ac9a`, `182608913`, `0f8da19a1`, `b478244bc`; head `2edf1ca01` failure terdiagnosis fixture, teratasi di head berikutnya).
 
 ### Antre / dicatat putaran 57
 - `createServicePurchaseOrderFromWorkOrder` menilai status/baris WO dari snapshot luar tx (PO lahir draft — dampak terbatas).
@@ -1685,3 +1688,24 @@ Wilayah: hasil verifikasi kandidat agent CRM/proyek + keuangan/pajak putaran 54/
 - `updateRole` check-then-write tanpa tx/kunci; guard super_admin aktif terakhir di `toggleUserActive`; `updateUserWarehouses` tanpa guard target; ID grant tak-existent lolos diam-diam — semua dampak lemah/membutuhkan aktor super sendiri.
 - Aset: snapshot akun kategori luar tx, merek bare-int yatim sesudah hapus model konkuren, approval basi disposeAsset, akun mapping kategori luar tx — jendela sub-detik setara sisa yang sudah diterima.
 - Tidak ada migrasi schema putaran 56–57.
+
+## Putaran 58 — Payroll, servis/garansi, WO (5 fix)
+
+Wilayah: payroll/absensi + servis/garansi (kandidat agent), diverifikasi sesi utama terhadap kode + schema. Setiap fix: test merah terpisah → fix → batch terkait + 6 guard → tsc/eslint.
+
+### Fix
+1. `bcd65b37c` fix(hrm): `updatePayroll` menulis `employeeId = updateEmployeeId` (fallback existing yang sudah lolos semua gerbang scope/berhenti/kunci rentang), bukan `v.employeeId ?? null` mentah — panggilan tanpa field form meloloskan gerbang atas karyawan lama lalu menyimpan slip `employeeId: null`. CI success.
+2. `a0ba693e8` fix(warranty): `computeWarrantyRepairCost` memakai `scrapUnitCostSnapshot` per baris MI completed (snapshot FIFO yang dibekukan hook complete dan diposting ke StockMove + jurnal), fallback `cost` hanya bila snapshot null. Sebelumnya docblock mengklaim "snapshot FIFO" tetapi menjumlah `MaterialIssueItem.cost` (snapshot master saat baris lahir), jadi reklasifikasi E2 dan cap E3 menyimpang dari biaya yang benar-benar keluar dari persediaan. CI success.
+3. `b68597fef` fix(inventory): pindah WO via `updateMaterialIssue` dinilai ulang — kunci baris WO tujuan + `assertJobCostMutable` + cek satu-MI-aktif (WO-BR-004, kecuali dokumen ini sendiri) di dalam tx. Sebelumnya edit draft bisa menanam MI kedua ke WO yang sudah punya MI aktif (keduanya boleh diselesaikan, stok keluar dua kali) atau ke WO closed yang biayanya beku; create menilai ketiganya, edit tidak. CI dipantau.
+4. `35389c300` fix(warranty): satu retur pembelian tidak bisa ditaut dua klaim aktif — kolom penanda `PurchaseReturn.supplierClaimHoldClaimId` (migrasi aditif `20261101120000`, drift 0) ditahan lewat CAS `updateMany` di `linkSupplierClaim` sesudah semua bacaan lulus, dilepas hanya oleh pemegangnya pada transisi terminal; action link + transition kini membungkus service dalam `$transaction`. Sebelumnya cek "klaim aktif lain" adalah baca polos: dua tautan konkuren sama-sama membaca nol dan sama-sama menulis retur yang sama. CI dipantau.
+5. `e5be5b401` fix(inventory): `createWorkOrder` manual menyalin `customerVehicleId` dari quotation bila `quotationId` terisi (pola jalur DP di down-payment.hook). Sebelumnya WO manual atas kendaraan selalu null, dan `stampWorkOrderFitmentSnapshot` berhenti senyap pada kolom null — fitment WO manual tak pernah dievaluasi. CI dipantau.
+
+### Vonis gugur / dicatat
+- Biaya WO-only sesudah WO terminal (production-cost): SUDAH ter-fix putaran 50 (`mutableWorkOrderError` menolak completed/cancelled di create/update/delete). Sisa: cek itu snapshot luar tx dan dalam-tx hanya menolak `closed` — biaya WO-only tak meroll HPP GL (hanya mengumpan `computeWarrantyRepairCost` yang terbatas klaim closed + WO tertaut). CATAT, tanpa patch.
+- Payroll dicatat tanpa patch: scope baris komponen slip `employeeId=null` legacy lolos di `getPayrollComponentLines`/`assertDraftPayrollLineAccess` (jalur utama fail-closed) + event PKWT ke slip null; serialisasi gerbang slip-final absensi vs approve payroll (kunci tak dibagi).
+- `createServicePurchaseOrderFromWorkOrder`: baris PO jasa dari snapshot WO luar tx — PO lahir `draft` dan duplikat sudah dikunci ulang dalam tx; dampak lemah. CATAT.
+- Kunci item hook retur pembelian satu query `IN (...)` tanpa urutan eksplisit: deadlock lintas-PO saja, rollback bersih retry-able; retur se-PO sudah terserialkan kunci baris PO. CATAT.
+
+### Catatan
+- Satu migrasi schema putaran ini (`supplier_claim_hold_claim_id`, aditif nullable); `db:check-migrations` drift 0, `prisma db push` dev sync. E2E memakai bundle prebuilt — rebuild sebelum Playwright berikutnya.
+- Perangkap berulang terkonfirmasi: `vi.clearAllMocks()` tidak membuang `mockResolvedValue` persisten (fixture WO `closed` bocor ke test lama) — pulihkan default di `beforeEach`.
