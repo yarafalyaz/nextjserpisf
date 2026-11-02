@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition, useMemo } from "react"
+import { useRef, useState, useTransition, useMemo } from "react"
 import { createQcInspection } from "@/actions/qc.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
@@ -61,6 +61,9 @@ interface QcInspectionFormProps {
 export function QcInspectionForm({ checklists, initialInspectionType, initialReferenceType, initialReferenceId }: QcInspectionFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Putaran 68: key stabil per intent; retry memakai key sama (ditolak
+  // server). Sukses bernavigasi pergi, tanpa rotasi.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
 
   const [checklistId, setChecklistId] = useState<number | null>(null)
   const [inspectionType, setInspectionType] = useState(
@@ -111,6 +114,7 @@ export function QcInspectionForm({ checklists, initialInspectionType, initialRef
     }
 
     const formData = new FormData(e.currentTarget)
+    formData.set("idempotencyKey", idempotencyKeyRef.current)
     formData.set("checklistId", String(selectedChecklist.id))
     formData.set("inspectionType", inspectionType)
     formData.set("referenceType", referenceType)

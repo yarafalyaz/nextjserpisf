@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { createNonconformance } from "@/actions/qc.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
@@ -43,6 +43,9 @@ const RESPONSIBILITY_OPTIONS = [
 export function NonconformanceForm({ inspections }: { inspections: InspectionOption[] }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Putaran 68: key stabil per intent; retry memakai key sama (ditolak
+  // server). Sukses bernavigasi pergi, tanpa rotasi.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
 
   const [referenceType, setReferenceType] = useState("WorkOrder")
   const [severity, setSeverity] = useState("minor")
@@ -52,6 +55,7 @@ export function NonconformanceForm({ inspections }: { inspections: InspectionOpt
   function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    formData.set("idempotencyKey", idempotencyKeyRef.current)
     formData.set("referenceType", referenceType)
     formData.set("severity", severity)
     formData.set("responsibility", responsibility)

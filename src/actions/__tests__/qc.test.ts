@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const requirePermissionMock = vi.fn()
 const revalidateMock = vi.fn()
 const logActivityMock = vi.fn()
+const checkIdempotencyMock = vi.fn()
 const generateDocumentNumberMock = vi.fn()
 const assertWorkOrderQcClearedMock = vi.fn()
 const lockQcReferenceRowMock = vi.fn()
@@ -36,6 +37,9 @@ vi.mock("@/lib/auth/permissions", () => ({
 }))
 vi.mock("@/lib/services/activity-log.service", () => ({
   logActivity: (...a: unknown[]) => logActivityMock(...a),
+}))
+vi.mock("@/lib/utils/idempotency", () => ({
+  checkIdempotency: (...a: unknown[]) => checkIdempotencyMock(...a),
 }))
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
 vi.mock("@/lib/utils/document-number", () => ({
@@ -128,7 +132,7 @@ function inspectionForm(over: {
 
 beforeEach(() => {
   for (const m of [
-    requirePermissionMock, revalidateMock, logActivityMock, generateDocumentNumberMock,
+    requirePermissionMock, revalidateMock, logActivityMock, checkIdempotencyMock, generateDocumentNumberMock,
     assertWorkOrderQcClearedMock, qcChecklistFindUniqueMock, qcChecklistCreateMock,
     qcChecklistUpdateMock, qcChecklistUpdateManyMock, qcChecklistDeleteMock, qcChecklistDeleteManyMock, qcInspectionCreateMock,
     nonconformanceFindUniqueMock, nonconformanceCreateMock, nonconformanceUpdateMock,
@@ -137,6 +141,7 @@ beforeEach(() => {
   ]) m.mockReset()
 
   requirePermissionMock.mockResolvedValue({ id: 5 })
+  checkIdempotencyMock.mockResolvedValue(undefined)
   workOrderFindUniqueQcMock.mockResolvedValue({ id: 9 })
   productionOrderFindUniqueQcMock.mockResolvedValue({ id: 9 })
   goodsReceiptFindUniqueQcMock.mockResolvedValue({ id: 9 })
@@ -149,6 +154,27 @@ beforeEach(() => {
 })
 
 describe("createQcInspection", () => {
+  it("putaran 68: retry identik ditahan klaim idempotency sesudah kunci baris referensi, tanpa inspeksi kedua", async () => {
+    qcChecklistFindUniqueMock.mockResolvedValue({
+      id: 5, status: "released", checklistType: "final",
+      items: [{ id: 1, isRequired: true }],
+    })
+    checkIdempotencyMock.mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."))
+    const form = inspectionForm({ rows: [{ id: 1, result: "fail" }] })
+    form.set("idempotencyKey", "qci-1")
+
+    const res = await createQcInspection(form)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/duplikat/)
+    expect(checkIdempotencyMock).toHaveBeenCalledWith("qci-1", expect.anything(), 5)
+    expect(lockQcReferenceRowMock.mock.invocationCallOrder[0]).toBeLessThan(
+      checkIdempotencyMock.mock.invocationCallOrder[0],
+    )
+    expect(qcInspectionCreateMock).not.toHaveBeenCalled()
+    expect(raiseNcrFromInspectionMock).not.toHaveBeenCalled()
+  })
+
   it("menolak checklist yang jenisnya beda dari jenis inspeksi", async () => {
     qcChecklistFindUniqueMock.mockResolvedValue({
       id: 5, status: "released", checklistType: "vehicle_intake",
@@ -323,6 +349,24 @@ describe("createQcInspection", () => {
 })
 
 describe("createNonconformance", () => {
+  it("putaran 68: retry identik ditahan klaim idempotency sesudah kunci baris referensi, tanpa NCR kedua", async () => {
+    checkIdempotencyMock.mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."))
+
+    const res = await createNonconformance(fd({
+      referenceType: "ProductionOrder", referenceId: 9,
+      defectDescription: "cacat", responsibility: "internal", severity: "minor",
+      idempotencyKey: "ncr-1",
+    }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/duplikat/)
+    expect(checkIdempotencyMock).toHaveBeenCalledWith("ncr-1", expect.anything(), 5)
+    expect(lockQcReferenceRowMock.mock.invocationCallOrder[0]).toBeLessThan(
+      checkIdempotencyMock.mock.invocationCallOrder[0],
+    )
+    expect(nonconformanceCreateMock).not.toHaveBeenCalled()
+  })
+
   it("refuses when referenced document does not exist", async () => {
     productionOrderFindUniqueQcMock.mockResolvedValue(null)
 

@@ -17,6 +17,7 @@ import {
   resolveNonconformanceSchema,
 } from "@/lib/validations/qc.schemas"
 import { raiseNonconformanceFromInspection, lockQcReferenceRow } from "@/lib/services/qc.service"
+import { checkIdempotency } from "@/lib/utils/idempotency"
 import { syncReworkCostToOrder } from "@/lib/services/production-cost.service"
 import { nextSlug } from "@/lib/utils/slug-db"
 
@@ -340,6 +341,11 @@ export async function createQcInspection(formData: FormData) {
       // `failed` + NCR otomatis tidak bisa menyelinap sesudah gate dibaca
       // tetapi sebelum status dokumen terklaim selesai.
       await lockQcReferenceRow(v.referenceType, v.referenceId, tx)
+      // Putaran 68: retry identik melahirkan inspeksi kembar (documentNo
+      // selalu baru) dan, untuk inspeksi gagal, NCR otomatis kembar —
+      // dedupe NCR hanya per inspectionId yang sama. Klaim key sesudah
+      // kunci baris referensi; rollback melepas key.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
       // Penilaian eksistensi otoritatif: sesudah kunci baris referensi
       // (penghapus mengunci baris yang sama), baris yang terhapus lawan
       // membuat inspeksi polimorfik yatim — tolak sebelum menulis.
@@ -428,6 +434,10 @@ export async function createNonconformance(formData: FormData) {
     // penyelesaian dan dokumen selesai dengan NCR terbuka.
     const ncr = await prisma.$transaction(async (tx) => {
       await lockQcReferenceRow(v.referenceType, v.referenceId, tx)
+      // Putaran 68: retry identik melahirkan NCR `open` kembar (documentNo
+      // selalu baru) yang memblokir handover dua kali. Klaim key sesudah
+      // kunci baris referensi; rollback melepas key.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id)
       // Penilaian eksistensi otoritatif sesudah kunci (pola createQcInspection):
       // penghapus yang commit di jendela cek luar -> kunci menolak NCR yatim.
       await assertQcReferenceLockedExists(v.referenceType, v.referenceId, tx)
