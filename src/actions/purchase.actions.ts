@@ -2794,6 +2794,12 @@ export async function createPurchaseReturn(formData: FormData) {
   try {
     const user = await requirePermission("create_purchase_returns");
 
+    // Anti double-submit: cap kumulatif hanya menolak total melewati
+    // qty diterima, jadi dua retur parsial kembar sama-sama lolos dan
+    // stok keluar + kredit vendor tercatat dua kali. Key dinilai
+    // pertama dalam tx; rollback melepasnya.
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
+
     const parsed = parseFormData(purchaseReturnSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
@@ -2820,6 +2826,7 @@ export async function createPurchaseReturn(formData: FormData) {
     // inventory + over-credit the vendor. Mirrors the createVendorBill
     // 3-way-match pattern: lock + in-tx re-check + write atomically.
     const purchaseReturn = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id);
       if (v.purchaseOrderId) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
       }

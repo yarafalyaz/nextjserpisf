@@ -2279,6 +2279,25 @@ describe("Purchase Return Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("putaran 62: createPurchaseReturn — retry dengan idempotencyKey sama ditolak, retur lahir sekali", async () => {
+    const idem = mocks.prismaMock.idempotencyKey
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const payload = {
+      purchaseOrderId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 2 }]),
+      idempotencyKey: "pret-key-1",
+    }
+    const first = await actions.createPurchaseReturn(fdMap(payload))
+    const second = await actions.createPurchaseReturn(fdMap(payload))
+    expect(first?.success).toBe(true)
+    expect(second?.success).toBe(false)
+    expect(second?.error).toContain("duplikat")
+    expect(mocks.prismaMock.purchaseReturn.create).toHaveBeenCalledTimes(1)
+  })
+
   // F-004 §3 simetris: nomor + tanggal nota retur pajak beli ditulis apa adanya.
   it("STOK-05: cap retur beli dalam qty dasar lintas UOM (1 BOX=12 + 1 PCS = 13)", async () => {
     // toBaseFactor nyata: BOX->PCS faktor 12 lewat uomConversion.
