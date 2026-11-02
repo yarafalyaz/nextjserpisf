@@ -608,6 +608,20 @@ describe("Quotation Actions", () => {
     const res = await actions.updateQuotation(1, fdQuotation({ customerId: 1, sections: [], discount: 0, tax: 0 }))
     expect(res?.success).toBe(true)
   })
+  it("putaran 70: updateQuotation menilai ulang hidup kendaraan dalam tx (cek pra-tx saja tak cukup)", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", customerId: 1 })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ id: 1, status: "draft", revisionNumber: 3, customerId: 1 })
+    // Bacaan pra-tx hidup; bacaan dalam tx (delegate == mock bersama)
+    // melihat kendaraan sudah nonaktif — edit ditolak sebelum sections
+    // ditimpa.
+    mocks.prismaMock.customerVehicle.findFirst
+      .mockResolvedValueOnce({ id: 2, isActive: true, deletedAt: null })
+      .mockResolvedValue({ id: 2, isActive: false, deletedAt: null })
+    const res = await actions.updateQuotation(1, fdQuotation({ ...basicPayload, customerVehicleId: 2 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Kendaraan pelanggan tidak aktif")
+    expect(mocks.prismaMock.quotation.update).not.toHaveBeenCalled()
+  })
   it("updateQuotation fails on invalid json", async () => {
     const res = await actions.updateQuotation(1, fdMap({ data: "invalid json" }))
     expect(res?.success).toBe(false)

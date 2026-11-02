@@ -8,6 +8,12 @@ const transactionMock = vi.fn()
 
 const quotationCreateMock = vi.fn()
 const vehicleFindFirstMock = vi.fn()
+const customerFindFirstMock = vi.fn()
+const itemFindManyMock = vi.fn()
+// Delegate tx terpisah dari prisma global (putaran 70): bacaan pra-tx dan
+// bacaan dalam tx bisa ditata berbeda (hidup vs mati sesudah cek cepat).
+const txVehicleFindFirstMock = vi.fn()
+const txCustomerLiveMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -16,12 +22,8 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     customerVehicle: { findFirst: (...a: unknown[]) => vehicleFindFirstMock(...a) },
     // Dokumen baru menolak customer/item nonaktif-terhapus: master hidup.
-    customer: { findFirst: vi.fn(async () => ({ id: 10, name: "PT Q", isActive: true })) },
-    item: {
-      findMany: vi.fn(async (args: any) =>
-        (args?.where?.id?.in ?? []).map((id: number) => ({ id, name: `Item ${id}`, isActive: true, deletedAt: null })),
-      ),
-    },
+    customer: { findFirst: (...a: unknown[]) => customerFindFirstMock(...a) },
+    item: { findMany: (...a: unknown[]) => itemFindManyMock(...a) },
     $transaction: (...a: unknown[]) => transactionMock(...a),
   },
 }))
@@ -60,8 +62,17 @@ function wireTransaction() {
   const tx = {
     quotation: { create: quotationCreateMock },
     // F-2026-10-22-065-S: snapshot persen ambang membaca kategori pelanggan;
-    // tanpa kategori -> null (default 50).
-    customer: { findFirst: vi.fn(async () => null) },
+    // tanpa kategori -> null (default 50). assertCustomerLive tx adalah
+    // bacaan findFirst pertama kapsul ini; snapshot ambang tetap null.
+    customer: {
+      findFirst: async (...a: unknown[]) => {
+        const live = await txCustomerLiveMock(...a)
+        if (live !== undefined) return live
+        return null
+      },
+    },
+    item: { findMany: itemFindManyMock },
+    customerVehicle: { findFirst: (...a: unknown[]) => txVehicleFindFirstMock(...a) },
   }
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
 }
@@ -70,10 +81,18 @@ beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock, generateDocNumberMock,
     transactionMock, quotationCreateMock, vehicleFindFirstMock,
+    customerFindFirstMock, itemFindManyMock, txVehicleFindFirstMock, txCustomerLiveMock,
   ]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 1 })
   generateDocNumberMock.mockResolvedValue("QUO-0001")
   quotationCreateMock.mockResolvedValue({ id: 99 })
+  customerFindFirstMock.mockResolvedValue({ id: 10, name: "PT Q", isActive: true })
+  itemFindManyMock.mockImplementation(async (args: any) =>
+    (args?.where?.id?.in ?? []).map((id: number) => ({ id, name: `Item ${id}`, isActive: true, deletedAt: null })),
+  )
+  vehicleFindFirstMock.mockResolvedValue({ id: 3, isActive: true, deletedAt: null })
+  txVehicleFindFirstMock.mockResolvedValue({ id: 3, isActive: true, deletedAt: null })
+  txCustomerLiveMock.mockResolvedValue({ id: 10, name: "PT Q", isActive: true })
   wireTransaction()
 })
 
@@ -278,5 +297,33 @@ describe("createQuotation server-side total recompute", () => {
         }),
       }),
     )
+  })
+})
+
+describe("createQuotation gerbang hidup dalam tx (putaran 70)", () => {
+  const baseData = {
+    customerId: 10,
+    date: "2026-06-09",
+    sections: [
+      { name: "Jasa", items: [{ itemId: 1, qty: 1, unitPrice: 1000, discountType: "fixed", discount: 0, total: 0 }] },
+    ],
+  }
+
+  it("customer dinonaktifkan sesudah cek pra-tx ditolak dari bacaan delegate tx", async () => {
+    // Bacaan pra-tx (prisma global) hidup; bacaan dalam tx (delegate
+    // terpisah) melihat customer sudah nonaktif — penawaran TIDAK lahir.
+    txCustomerLiveMock.mockResolvedValue({ id: 10, name: "PT Q", isActive: false })
+    const result = await createQuotation(fdData(baseData))
+    expect(result.success).toBe(false)
+    expect(String((result as { error?: string }).error ?? "")).toMatch(/tidak aktif/)
+    expect(quotationCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("kendaraan dinonaktifkan sesudah cek pra-tx ditolak dari bacaan delegate tx", async () => {
+    txVehicleFindFirstMock.mockResolvedValue({ id: 3, isActive: false, deletedAt: null })
+    const result = await createQuotation(fdData({ ...baseData, customerVehicleId: 3 }))
+    expect(result.success).toBe(false)
+    expect(String((result as { error?: string }).error ?? "")).toMatch(/Kendaraan pelanggan tidak aktif/)
+    expect(quotationCreateMock).not.toHaveBeenCalled()
   })
 })

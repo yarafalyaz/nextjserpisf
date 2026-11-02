@@ -303,21 +303,20 @@ export async function createQuotation(formData: FormData) {
     throw new Error(parsedDates.error.issues[0]?.message ?? "Tanggal penawaran tidak valid")
   }
 
-  if (data.customerId) {
-    await assertCustomerLiveForNewDocument(prisma, Number(data.customerId))
-    // QuotationItem.itemId tanpa FK ke Item: payload langsung bisa menanam
-    // item mati/fiktif tanpa bacaan master di jalur lain.
-    const quotationItemIds = [
-      ...new Set(
-        ((data.sections || []) as Array<{ items?: Array<{ itemId?: unknown }> }>).flatMap((section) =>
-          (section.items || [])
-            .map((item) => (item.itemId ? Number(item.itemId) : null))
-            .filter((id): id is number => id != null && Number.isFinite(id) && id > 0),
+  // QuotationItem.itemId tanpa FK ke Item: payload langsung bisa menanam
+  // item mati/fiktif tanpa bacaan master di jalur lain. Daftar saja di
+  // sini; gerbangnya dinilai di dalam tx (putaran 70).
+  const quotationItemIds = data.customerId
+    ? [
+        ...new Set(
+          ((data.sections || []) as Array<{ items?: Array<{ itemId?: unknown }> }>).flatMap((section) =>
+            (section.items || [])
+              .map((item) => (item.itemId ? Number(item.itemId) : null))
+              .filter((id): id is number => id != null && Number.isFinite(id) && id > 0),
+          ),
         ),
-      ),
-    ]
-    if (quotationItemIds.length > 0) await assertItemsExistAndActive(prisma, quotationItemIds)
-  }
+      ]
+    : []
 
   const documentNo = await generateDocumentNumber("QUO")
   const slug = await nextSlug("quotation", documentNo)
@@ -348,6 +347,26 @@ export async function createQuotation(formData: FormData) {
 
   const quotation = await prisma.$transaction(async (tx) => {
     await checkIdempotency(idempotencyKey, tx, user.id)
+    // Putaran 70: gerbang hidup dinilai ULANG lewat delegate tx (homolog
+    // updateQuotation 869-872). Cek pra-tx saja membiarkan nonaktif/masuk
+    // persis sebelum tx melahirkan penawaran untuk master mati. Pesan
+    // sama dengan cek cepat pra-tx.
+    if (data.customerId) {
+      await assertCustomerLiveForNewDocument(tx as never, Number(data.customerId))
+      if (quotationItemIds.length > 0) await assertItemsExistAndActive(tx as never, quotationItemIds)
+    }
+    if (data.customerVehicleId && data.customerId) {
+      const vehicle = await tx.customerVehicle.findFirst({
+        where: { id: Number(data.customerVehicleId), customerId: Number(data.customerId) },
+        select: { id: true, isActive: true, deletedAt: true },
+      })
+      if (!vehicle) {
+        throw new Error("Kendaraan tidak terdaftar untuk customer ini")
+      }
+      if (!vehicle.isActive || vehicle.deletedAt != null) {
+        throw new Error("Kendaraan pelanggan tidak aktif atau sudah dihapus — pilih kendaraan aktif.")
+      }
+    }
     // Create sections and items in a single nested write (eliminates loop + N+1 inserts)
     const q = await tx.quotation.create({
       data: {
@@ -870,6 +889,21 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
     const newCustomerId = data.customerId ? Number(data.customerId) : null
     if (newCustomerId != null && newCustomerId !== quotation.customerId) {
       await assertCustomerLiveForNewDocument(tx, newCustomerId)
+    }
+    // Putaran 70: kendaraan payload juga dinilai ulang dalam tx (gerbang
+    // pra-tx saja membiarkan nonaktif/masuk persis sebelum edit menanam
+    // kendaraan mati — paritas createQuotation putaran 70).
+    if (updVehicleId && updCustomerId) {
+      const vehicle = await tx.customerVehicle.findFirst({
+        where: { id: updVehicleId, customerId: Number(updCustomerId) },
+        select: { id: true, isActive: true, deletedAt: true },
+      })
+      if (!vehicle) {
+        throw new Error("Kendaraan tidak terdaftar untuk customer ini")
+      }
+      if (!vehicle.isActive || vehicle.deletedAt != null) {
+        throw new Error("Kendaraan pelanggan tidak aktif atau sudah dihapus — pilih kendaraan aktif.")
+      }
     }
 
     // Replace sections + items wholesale: the edit form sends the full section
