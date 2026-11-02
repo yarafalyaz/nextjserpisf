@@ -30,6 +30,7 @@ import {
   transitionWarrantyClaim,
 } from "@/lib/services/warranty.service";
 import { recordInstalledPartRemoval } from "@/lib/services/installed-part.service";
+import { checkIdempotency } from "@/lib/utils/idempotency";
 
 // ==================== WARRANTY CLAIM ACTIONS (F-2026-10-21-021 tahap 2) ====================
 // Service warranty.service.ts memegang state machine + keputusan manual;
@@ -41,13 +42,26 @@ export async function createWarrantyClaimAction(formData: FormData) {
     const parsed = parseFormData(createWarrantyClaimSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
 
-    const claim = await createWarrantyClaim({
-      coverageId: v.coverageId,
-      reportedAt: v.reportedAt ?? new Date(),
-      odometerKm: v.odometerKm ?? null,
-      complaint: v.complaint,
-      createdBy: Number(user.id),
+    // Form sudah mengirim idempotencyKey sejak awal tetapi action tidak
+    // pernah membacanya — retry/dua tab melahirkan dua klaim `intake`
+    // atas cakupan sama, masing-masing bisa disetujui dan ditaut ke WO
+    // perbaikan berbeda (biaya garansi tercatat dua kali). Key dinilai
+    // sebagai pernyataan pertama tx dan klaim lahir lewat tx yang sama,
+    // jadi rollback melepas key; pemanggil lama tanpa key tetap no-op.
+    const claim = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id);
+      return createWarrantyClaim(
+        {
+          coverageId: v.coverageId,
+          reportedAt: v.reportedAt ?? new Date(),
+          odometerKm: v.odometerKm ?? null,
+          complaint: v.complaint,
+          createdBy: Number(user.id),
+        },
+        tx,
+      );
     });
 
     revalidatePath("/produksi/garansi");

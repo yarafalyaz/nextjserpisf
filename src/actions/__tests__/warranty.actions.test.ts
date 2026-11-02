@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   requirePermissionMock: vi.fn(),
+  checkIdempotencyMock: vi.fn(async () => undefined),
   createWarrantyClaimMock: vi.fn(),
   decideWarrantyClaimMock: vi.fn(),
   transitionWarrantyClaimMock: vi.fn(),
@@ -40,6 +41,9 @@ vi.mock("@/lib/services/warranty.service", async (importOriginal) => {
     transitionSupplierClaim: (...a: unknown[]) => mocks.transitionSupplierClaimMock(...a),
   }
 })
+vi.mock("@/lib/utils/idempotency", () => ({
+  checkIdempotency: (...a: unknown[]) => mocks.checkIdempotencyMock(...(a as [])),
+}))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: vi.fn() }))
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 
@@ -71,6 +75,7 @@ describe("createWarrantyClaimAction", () => {
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("create_warranty_claims")
     expect(mocks.createWarrantyClaimMock).toHaveBeenCalledWith(
       expect.objectContaining({ coverageId: 3, complaint: "Shock bocor", createdBy: 7 }),
+      expect.objectContaining({ __tx: true }),
     )
   })
 
@@ -78,6 +83,30 @@ describe("createWarrantyClaimAction", () => {
     const res = await createWarrantyClaimAction(fd({ coverageId: "3", complaint: "  " }))
     expect(res.success).toBe(false)
     expect(mocks.createWarrantyClaimMock).not.toHaveBeenCalled()
+  })
+
+  it("putaran 61: retry dengan idempotencyKey sama ditolak, klaim lahir sekali", async () => {
+    mocks.createWarrantyClaimMock.mockResolvedValue({ id: 11 })
+    mocks.checkIdempotencyMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(
+        new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."),
+      )
+    const payload = fd({ coverageId: "3", complaint: "Shock bocor", idempotencyKey: "claim-key-1" })
+
+    const first = await createWarrantyClaimAction(payload)
+    const second = await createWarrantyClaimAction(payload)
+
+    expect(first.success).toBe(true)
+    expect(second.success).toBe(false)
+    expect(String((second as { error?: string }).error ?? "")).toMatch(/duplikat/)
+    expect(mocks.checkIdempotencyMock).toHaveBeenCalledTimes(2)
+    // tx diteruskan sebagai client service agar key + klaim satu transaksi.
+    expect(mocks.createWarrantyClaimMock).toHaveBeenCalledTimes(1)
+    expect(mocks.createWarrantyClaimMock).toHaveBeenCalledWith(
+      expect.objectContaining({ coverageId: 3 }),
+      expect.objectContaining({ __tx: true }),
+    )
   })
 })
 
