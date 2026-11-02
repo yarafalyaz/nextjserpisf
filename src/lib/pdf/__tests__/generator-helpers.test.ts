@@ -14,8 +14,13 @@ describe("formatPdfCurrency", () => {
     expect(formatPdfCurrency(1500000, false)).toBe("1.500.000")
   })
 
-  it("rounds to whole rupiah (no fraction digits)", () => {
-    expect(formatPdfCurrency(1234.99)).toBe("Rp 1.235")
+  it("keeps whole rupiah compact (no fraction digits)", () => {
+    expect(formatPdfCurrency(1235)).toBe("Rp 1.235")
+  })
+
+  it("putaran 54: pecahan sen ditampilkan agar cocok dengan Terbilang", () => {
+    expect(formatPdfCurrency(1234.56)).toBe("Rp 1.234,56")
+    expect(formatPdfCurrency(1234.5, false)).toBe("1.234,50")
   })
 
   it("coerces null/NaN-like input to zero", () => {

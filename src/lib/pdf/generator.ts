@@ -443,7 +443,14 @@ export async function generateTransactionPDF(
 
 // Exported for unit testing — pure formatting/parsing helpers with branch logic.
 export function formatPdfCurrency(value: number, showSymbol = true) {
-  const formatted = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(Number(value || 0))
+  // Sen ditampilkan (2 digit) hanya bila ada pecahan: total utuh tetap
+  // ringkas, total bersen tercetak persis seperti kata Terbilang.
+  const amount = Number(value || 0)
+  const fractionDigits = Number.isInteger(amount) ? 0 : 2
+  const formatted = new Intl.NumberFormat("id-ID", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(amount)
   return showSymbol ? `Rp ${formatted}` : formatted
 }
 
