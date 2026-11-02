@@ -245,22 +245,6 @@ export async function runPkwtMonthlyAccrual(
   const monthStartUtc = new Date(Date.UTC(year, month - 1, 1) - 7 * 3600_000)
   const monthEndUtc = new Date(Date.UTC(year, month, 0) - 7 * 3600_000)
 
-  const employees = await client.employee.findMany({
-    where: {
-      employmentStatus: "PKWT",
-      deletedAt: null,
-      contractStartDate: { not: null, lte: monthEndUtc },
-      OR: [{ contractEndDate: null }, { contractEndDate: { gte: monthStartUtc } }],
-    },
-    select: { id: true, contractStartDate: true, contractEndDate: true },
-    orderBy: { id: "asc" },
-  })
-  if (employees.length === 0) return { journalId: null, accruedCount: 0, totalAmount: 0 }
-
-  const mapping = await resolvePkwtMapping(client)
-  await assertPeriodOpen(monthEndUtc, client as TxClient)
-
-  // Kumpulkan baris subledger bulan ini (lewati yang sudah terakrual).
   type Row = {
     employeeId: number
     eventId: number | null
@@ -268,87 +252,114 @@ export async function runPkwtMonthlyAccrual(
     amount: number
     basisMonthly: number
   }
-  const rows: Row[] = []
-  for (const emp of employees) {
-    const segmentStart = emp.contractStartDate!
-    const existing = await client.pkwtCompensationAccrual.findFirst({
-      where: { employeeId: emp.id, segmentStart, period },
-      select: { id: true },
-    })
-    if (existing) continue
-    const event = await client.pkwtCompensationEvent.findFirst({
+
+  // Kumpulkan baris subledger bulan ini (lewati yang sudah terakrual).
+  // Pengumpulan WAJIB lewat client yang diberikan pemanggil fungsi ini:
+  // jalur tulis memanggilnya ulang di dalam tx sesudah kunci periode,
+  // jadi snapshot pra-kunci tidak pernah dipakai menulis.
+  const collectRows = async (readClient: Client): Promise<Row[]> => {
+    const employees = await readClient.employee.findMany({
       where: {
-        employeeId: emp.id,
-        segmentStart,
-        status: { in: ["draft", "approved", "paid"] },
+        employmentStatus: "PKWT",
+        deletedAt: null,
+        contractStartDate: { not: null, lte: monthEndUtc },
+        OR: [{ contractEndDate: null }, { contractEndDate: { gte: monthStartUtc } }],
       },
-      orderBy: { id: "desc" },
-      select: { id: true, amount: true, basisMonthly: true, segmentEnd: true },
+      select: { id: true, contractStartDate: true, contractEndDate: true },
+      orderBy: { id: "asc" },
     })
-    const segmentEnd = event?.segmentEnd ?? emp.contractEndDate ?? monthEndUtc
-    // Basis berjalan: dari peristiwa bila sudah lahir, else master bulan ini.
-    let basisMonthly = event ? Number(event.basisMonthly) : 0
-    if (!event) {
-      const empFull = await client.employee.findUnique({
-        where: { id: emp.id },
-        select: { baseSalary: true },
+    const rows: Row[] = []
+    for (const emp of employees) {
+      const segmentStart = emp.contractStartDate!
+      const existing = await readClient.pkwtCompensationAccrual.findFirst({
+        where: { employeeId: emp.id, segmentStart, period },
+        select: { id: true },
       })
-      const assigns = await client.employeePayrollComponent.findMany({
+      if (existing) continue
+      const event = await readClient.pkwtCompensationEvent.findFirst({
         where: {
           employeeId: emp.id,
-          isActive: true,
-          effectiveFrom: { lte: monthEndUtc },
-          OR: [{ effectiveTo: null }, { effectiveTo: { gte: monthEndUtc } }],
-          component: { isActive: true, recurrence: "fixed", kind: "earning" },
+          segmentStart,
+          status: { in: ["draft", "approved", "paid"] },
         },
-        select: { defaultAmount: true },
+        orderBy: { id: "desc" },
+        select: { id: true, amount: true, basisMonthly: true, segmentEnd: true },
       })
-      basisMonthly = safeRound(
-        Number(empFull?.baseSalary ?? 0) +
-          assigns.reduce((s, a) => s + Number(a.defaultAmount), 0),
-        2,
-      )
-    }
-    if (basisMonthly <= 0) continue
-    const sliceStart = segmentStart.getTime() > monthStartUtc.getTime() ? segmentStart : monthStartUtc
-    const sliceEnd = segmentEnd.getTime() < monthEndUtc.getTime() ? segmentEnd : monthEndUtc
-    if (sliceEnd.getTime() < sliceStart.getTime()) continue
-    const sliceMonths = computeServiceMonths(sliceStart, sliceEnd)
-    let amount = safeRound((sliceMonths / 12) * basisMonthly, 2)
-    // Bulan terakhir segmen + peristiwa terbekukan: tutup ke nominal persis.
-    const isClosing =
-      segmentEnd.getTime() <= monthEndUtc.getTime() &&
-      segmentEnd.getTime() >= monthStartUtc.getTime()
-    if (isClosing && event) {
-      const prior = await client.pkwtCompensationAccrual.aggregate({
-        where: { employeeId: emp.id, segmentStart },
-        _sum: { amount: true },
+      const segmentEnd = event?.segmentEnd ?? emp.contractEndDate ?? monthEndUtc
+      // Basis berjalan: dari peristiwa bila sudah lahir, else master bulan ini.
+      let basisMonthly = event ? Number(event.basisMonthly) : 0
+      if (!event) {
+        const empFull = await readClient.employee.findUnique({
+          where: { id: emp.id },
+          select: { baseSalary: true },
+        })
+        const assigns = await readClient.employeePayrollComponent.findMany({
+          where: {
+            employeeId: emp.id,
+            isActive: true,
+            effectiveFrom: { lte: monthEndUtc },
+            OR: [{ effectiveTo: null }, { effectiveTo: { gte: monthEndUtc } }],
+            component: { isActive: true, recurrence: "fixed", kind: "earning" },
+          },
+          select: { defaultAmount: true },
+        })
+        basisMonthly = safeRound(
+          Number(empFull?.baseSalary ?? 0) +
+            assigns.reduce((s, a) => s + Number(a.defaultAmount), 0),
+          2,
+        )
+      }
+      if (basisMonthly <= 0) continue
+      const sliceStart = segmentStart.getTime() > monthStartUtc.getTime() ? segmentStart : monthStartUtc
+      const sliceEnd = segmentEnd.getTime() < monthEndUtc.getTime() ? segmentEnd : monthEndUtc
+      if (sliceEnd.getTime() < sliceStart.getTime()) continue
+      const sliceMonths = computeServiceMonths(sliceStart, sliceEnd)
+      let amount = safeRound((sliceMonths / 12) * basisMonthly, 2)
+      // Bulan terakhir segmen + peristiwa terbekukan: tutup ke nominal persis.
+      const isClosing =
+        segmentEnd.getTime() <= monthEndUtc.getTime() &&
+        segmentEnd.getTime() >= monthStartUtc.getTime()
+      if (isClosing && event) {
+        const prior = await readClient.pkwtCompensationAccrual.aggregate({
+          where: { employeeId: emp.id, segmentStart },
+          _sum: { amount: true },
+        })
+        amount = safeRound(Number(event.amount) - Number(prior._sum.amount ?? 0), 2)
+      }
+      if (amount === 0) continue
+      // FINHR-7: closing negatif = akrual terdahulu sudah melebihi nominal
+      // peristiwa. Baris negatif diam-diam menggerus jurnal agregat dan
+      // subledger karyawan; koreksi harus reversal eksplisit, bukan akrual.
+      if (amount < 0) {
+        throw new Error(
+          `Akrual kompensasi PKWT karyawan ${emp.id} periode ${period} menjadi negatif (${amount}): akrual sebelumnya melebihi nominal peristiwa. Koreksi lewat reversal, bukan akrual negatif.`,
+        )
+      }
+      rows.push({
+        employeeId: emp.id,
+        eventId: event?.id ?? null,
+        segmentStart,
+        amount,
+        basisMonthly,
       })
-      amount = safeRound(Number(event.amount) - Number(prior._sum.amount ?? 0), 2)
     }
-    if (amount === 0) continue
-    // FINHR-7: closing negatif = akrual terdahulu sudah melebihi nominal
-    // peristiwa. Baris negatif diam-diam menggerus jurnal agregat dan
-    // subledger karyawan; koreksi harus reversal eksplisit, bukan akrual.
-    if (amount < 0) {
-      throw new Error(
-        `Akrual kompensasi PKWT karyawan ${emp.id} periode ${period} menjadi negatif (${amount}): akrual sebelumnya melebihi nominal peristiwa. Koreksi lewat reversal, bukan akrual negatif.`,
-      )
-    }
-    rows.push({
-      employeeId: emp.id,
-      eventId: event?.id ?? null,
-      segmentStart,
-      amount,
-      basisMonthly,
-    })
+    return rows
   }
-  if (rows.length === 0) return { journalId: null, accruedCount: 0, totalAmount: 0 }
 
-  const totalAmount = safeRound(rows.reduce((s, r) => s + r.amount, 0), 2)
   // Pemanggil action membungkus tx; service juga bisa jalan dari prisma root.
   const asTx = client as TxClient & { $transaction?: typeof prisma.$transaction }
   const run = async (tx: TxClient) => {
+    // Putaran 62: gerbang periode versi tx mengunci baris system_settings
+    // (lihat period-lock.service) — mutex yang sama dengan tutup periode —
+    // sebagai pernyataan pertama tx. Baris lalu dikumpulkan ULANG lewat
+    // tx: dua run konkuren terserialkan di kunci itu, dan run yang kalah
+    // melihat baris lawan sudah terakrual lalu berhenti bersih, bukan
+    // meledak P2002 dari snapshot pra-kunci atau memecah jurnal agregat.
+    await assertPeriodOpen(monthEndUtc, tx)
+    const rows = await collectRows(tx as Client)
+    if (rows.length === 0) return { journalId: null, accruedCount: 0, totalAmount: 0 }
+    const totalAmount = safeRound(rows.reduce((s, r) => s + r.amount, 0), 2)
+    const mapping = await resolvePkwtMapping(tx as Client)
     // Gaya humanReadableNumber (mrp/planning.service) untuk jurnal tambahan.
     const humanReadableNumber = (value: unknown): string => {
       const digits = String(value ?? "").replace(/\D+/g, "")
@@ -416,13 +427,11 @@ export async function runPkwtMonthlyAccrual(
         },
       })
     }
-    return journalId
+    return { journalId, accruedCount: rows.length, totalAmount }
   }
-  const journalId =
-    typeof asTx.$transaction === "function"
-      ? await prisma.$transaction((tx) => run(tx as TxClient))
-      : await run(client as TxClient)
-  return { journalId, accruedCount: rows.length, totalAmount }
+  return typeof asTx.$transaction === "function"
+    ? prisma.$transaction((tx) => run(tx as TxClient))
+    : run(client as TxClient)
 }
 
 /**

@@ -7,8 +7,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
  */
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: {} }))
-vi.mock("@/lib/services/period-lock.service", () => ({
+const periodLockMocks = vi.hoisted(() => ({
   assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: periodLockMocks.assertPeriodOpen,
 }))
 const journalServiceMocks = vi.hoisted(() => ({
   createJournal: vi.fn().mockResolvedValue({ id: 55 }),
@@ -302,6 +305,25 @@ describe("E132-2 akrual bulanan agregat", () => {
     const res = await runPkwtMonthlyAccrual(client, "2026-03", 1)
     expect(res.accruedCount).toBe(0)
     expect(res.journalId).toBeNull()
+  })
+
+  it("putaran 62: baris dinilai ulang sesudah kunci periode — run yang kalah balapan lewati tanpa jurnal/P2002", async () => {
+    const client = baseClient()
+    client.employee.findMany.mockResolvedValue([
+      { id: 1, contractStartDate: d("2026-01-01"), contractEndDate: d("2026-12-31") },
+    ])
+    // Di dalam tx sesudah kunci periode, baris lawan sudah terakrual;
+    // pengumpulan baris memang hanya terjadi di sana.
+    client.pkwtCompensationAccrual.findFirst.mockResolvedValue({ id: 9 })
+
+    const res = await runPkwtMonthlyAccrual(client, "2026-03", 1)
+    expect(periodLockMocks.assertPeriodOpen).toHaveBeenCalledTimes(1)
+    expect(periodLockMocks.assertPeriodOpen.mock.invocationCallOrder[0]).toBeLessThan(
+      client.employee.findMany.mock.invocationCallOrder[0],
+    )
+    expect(res).toEqual({ journalId: null, accruedCount: 0, totalAmount: 0 })
+    expect(journalServiceMocks.createJournal).not.toHaveBeenCalled()
+    expect(client.pkwtCompensationAccrual.create).not.toHaveBeenCalled()
   })
 
   it("putaran 59: rerun dengan karyawan baru — jurnal tambahan baru, bukan tempel jurnal agregat lama", async () => {
