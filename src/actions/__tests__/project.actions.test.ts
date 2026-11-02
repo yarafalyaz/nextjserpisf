@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
     projectStage: buildModelMock(),
     projectStageProgress: buildModelMock(),
     task: buildModelMock(),
+    timesheet: buildModelMock(),
     systemSetting: buildModelMock(),
     item: buildModelMock(),
     workOrder: buildModelMock(),
@@ -251,7 +252,7 @@ describe("Project Actions Error Paths", () => {
   })
   it("deleteTask handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    mocks.prismaMock.task.delete.mockRejectedValueOnce(new Error("db err"))
+    mocks.prismaMock.task.deleteMany.mockRejectedValueOnce(new Error("db err"))
     const res = await actions.deleteTask(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
@@ -682,6 +683,27 @@ describe("Task Actions", () => {
   it("deleteTask succeeds", async () => {
     const res = await actions.deleteTask(1)
     expect(res?.success).toBe(true)
+  })
+  it("putaran 55: deleteTask menolak tugas bertimesheet di bawah kunci (FK Restrict)", async () => {
+    mocks.prismaMock.timesheet.count.mockResolvedValue(2)
+    try {
+      const res = await actions.deleteTask(1)
+      expect(res?.success).toBe(false)
+      expect(res?.error).toContain("lembar waktu")
+      expect(mocks.prismaMock.task.delete).not.toHaveBeenCalled()
+      expect(mocks.prismaMock.task.deleteMany).not.toHaveBeenCalled()
+      const exec = mocks.prismaMock.$executeRaw.mock.calls.map((c: any[]) => String(c[0])).join(" ")
+      expect(exec).toContain("tasks")
+    } finally {
+      // clearAllMocks tidak membuang mockResolvedValue.
+      mocks.prismaMock.timesheet.count.mockResolvedValue(0)
+    }
+  })
+  it("putaran 55: deleteTask melaporkan yatim yang kalah race kunci", async () => {
+    mocks.prismaMock.task.deleteMany.mockResolvedValueOnce({ count: 0 })
+    const res = await actions.deleteTask(999)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak ditemukan")
   })
 })
 
@@ -1150,7 +1172,7 @@ describe("NEXT_REDIRECT Error Catch Paths", () => {
   })
 
   it("deleteTask re-throws NEXT_REDIRECT error", async () => {
-    mocks.prismaMock.task.delete.mockRejectedValueOnce({ digest: "NEXT_REDIRECT_10" })
+    mocks.prismaMock.task.deleteMany.mockRejectedValueOnce({ digest: "NEXT_REDIRECT_10" })
     await expect(
       actions.deleteTask(1)
     ).rejects.toEqual({ digest: "NEXT_REDIRECT_10" })

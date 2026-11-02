@@ -981,7 +981,31 @@ export async function deleteTask(id: number) {
   try {
   await requirePermission("delete_projects")
 
-  await prisma.task.delete({ where: { id } })
+  // Timesheet.taskId adalah FK Restrict: delete polos melempar P2003
+  // mentah. Nilai guard dari baris tugas terkunci dalam tx lalu klaim
+  // atomik (pola deleteProject) supaya penulis timesheet di jendela
+  // cek-hapus tak lolos dan dua delete tak sama-sama sukses.
+  const guard = await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM tasks WHERE id = ${id} FOR UPDATE`
+    }
+    const timesheets = await tx.timesheet.count({ where: { taskId: id } })
+    if (timesheets > 0) return { timesheets }
+    const claim = await tx.task.deleteMany({ where: { id } })
+    if (claim.count === 0) return { missing: true as const }
+    return null
+  })
+  if (guard?.missing) {
+    return { success: false, error: "Tugas tidak ditemukan" }
+  }
+  if (guard?.timesheets) {
+    return {
+      success: false,
+      error:
+        `Tugas tidak dapat dihapus karena masih memiliki ${guard.timesheets} lembar waktu terkait. ` +
+        "Hapus atau pindahkan lembar waktu tersebut terlebih dahulu.",
+    }
+  }
 
   await logActivity("delete", "Task", id, "Menghapus tugas")
   revalidatePath("/proyek/tugas")
