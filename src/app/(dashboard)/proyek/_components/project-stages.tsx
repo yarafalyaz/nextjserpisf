@@ -48,7 +48,11 @@ const STAGE_STATUS_LABELS: Record<string, string> = {
 export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  
+  // Putaran 69: key stabil per intent transisi tahap (satu per buka
+  // dialog); retry jaringan mengirim key sama dan ditahan server,
+  // sukses merotasi supaya transisi sah berikutnya tidak tertahan.
+  const [stageKey, setStageKey] = useState(() => crypto.randomUUID())
+
   // State for confirm dialog
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedStage, setSelectedStage] = useState<Stage | null>(null)
@@ -113,10 +117,12 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
           selectedStage.id,
           targetStatus,
           notes || undefined,
-          targetStatus === "in_progress" ? percentage : undefined
+          targetStatus === "in_progress" ? percentage : undefined,
+          stageKey
         )
 
         if (res.success) {
+          setStageKey(crypto.randomUUID())
           showSuccess(
             isUpdatingProgressOnly
               ? "Progres tahapan berhasil diperbarui"

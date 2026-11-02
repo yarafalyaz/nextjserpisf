@@ -433,7 +433,8 @@ export async function updateProjectStageProgress(
   stageId: number,
   status: string,
   notes?: string,
-  percentage?: number
+  percentage?: number,
+  idempotencyKey?: string | null
 ) {
   try {
   const user = await requirePermission("edit_projects")
@@ -496,6 +497,12 @@ export async function updateProjectStageProgress(
     if (stage.projectId !== projectId) {
       throw new Error("Stage tidak ditemukan pada project ini.")
     }
+
+    // Putaran 69: record ProjectStageProgress lahir tiap panggilan —
+    // retry basi berstatus pending membuka ulang tahap dan menulis
+    // record progres kembar. Klaim key sesudah kunci proyek+tahap
+    // dan sesudah kepemilikan tahap terbukti; rollback melepas key.
+    await checkIdempotency(idempotencyKey ?? null, tx, user.id)
 
     // Guard: cannot start/complete if previous stage is not completed
     const previousStage = await tx.projectStage.findFirst({

@@ -1719,6 +1719,22 @@ describe("RAB proyek F-2026-10-21-030", () => {
     expect(mocks.prismaMock.projectItem.create).not.toHaveBeenCalled()
   })
 
+  it("putaran 69: updateProjectStageProgress retry identik ditahan klaim idempotency, record progres lahir sekali", async () => {
+    mocks.prismaMock.projectStage.findUniqueOrThrow.mockResolvedValue({ id: 1, projectId: 10, sortOrder: 1, startedAt: null })
+    mocks.prismaMock.projectStage.findFirst.mockResolvedValue(null)
+    const idem = mocks.prismaMock.idempotencyKey
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const first = await actions.updateProjectStageProgress(10, 1, "in_progress", "mulai", 50, "stage-key-1")
+    expect(first?.success).toBe(true)
+    const second = await actions.updateProjectStageProgress(10, 1, "in_progress", "mulai", 50, "stage-key-1")
+    expect(second?.success).toBe(false)
+    expect(String(second?.error)).toContain("duplikat")
+    expect(mocks.prismaMock.projectStageProgress.create).toHaveBeenCalledTimes(1)
+  })
+
   it("putaran 69: set kontrak retry key sama ditahan — nilai ditulis dan log lahir sekali", async () => {
     mocks.prismaMock.project.findUnique.mockResolvedValue(unlockedProject())
     mocks.prismaMock.quotation.findFirst.mockResolvedValue({
