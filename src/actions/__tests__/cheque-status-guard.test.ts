@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
     account: { count: vi.fn() },
     cheque: { create: vi.fn(), findFirst: chequeFindFirst, update: chequeUpdate, updateMany: chequeUpdateMany },
   }
+  prisma.$transaction = vi.fn(async (cb: (tx: unknown) => unknown) => cb(prisma))
   return { requirePermission, logActivity, revalidatePath, assertPeriodOpen, chequeFindFirst, chequeUpdate, chequeUpdateMany, prisma }
 })
 
@@ -93,6 +94,32 @@ describe("updateChequeStatus terminal guard", () => {
     const allowed = await updateChequeStatus(1, "cleared")
     expect(allowed.success).toBe(true)
     expect(mocks.chequeUpdateMany).toHaveBeenCalledOnce()
+  })
+})
+
+describe("putaran 75: periode dinilai ulang dalam tx sebelum klaim", () => {
+  it("updateChequeStatus ditolak bila periode tertutup saat dinilai ulang dalam tx", async () => {
+    // Bacaan pra-tx (argumen kedua undefined) lolos; penilaian ulang dalam
+    // tx (argumen kedua = facade tx) melihat tutup periode yang commit di
+    // jendela -> klaim tidak boleh berjalan.
+    mocks.assertPeriodOpen.mockImplementation(async (_d: unknown, tx?: unknown) => {
+      if (tx) throw new Error("Periode akuntansi sudah ditutup sampai 30/09/2026.")
+    })
+    const res = await updateChequeStatus(1, "cleared")
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toContain("sudah ditutup")
+    expect(mocks.chequeUpdateMany).not.toHaveBeenCalled()
+    expect(mocks.assertPeriodOpen.mock.calls.some((c: unknown[]) => c[1] !== undefined)).toBe(true)
+  })
+
+  it("deleteCheque ditolak bila periode tertutup saat dinilai ulang dalam tx", async () => {
+    mocks.assertPeriodOpen.mockImplementation(async (_d: unknown, tx?: unknown) => {
+      if (tx) throw new Error("Periode akuntansi sudah ditutup sampai 30/09/2026.")
+    })
+    const res = await deleteCheque(1)
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toContain("sudah ditutup")
+    expect(mocks.chequeUpdateMany).not.toHaveBeenCalled()
   })
 })
 

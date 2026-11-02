@@ -130,12 +130,18 @@ export async function updateChequeStatus(id: number, status: string) {
 
     await assertPeriodOpen(cheque.dueDate)
 
-    // Klaim transisi secara kondisional: hanya baris yang statusnya masih
-    // sama saat dibaca yang boleh berpindah. Mencegah dua klik bersamaan
-    // (cair + batal) sama-sama sukses.
-    const claimed = await prisma.cheque.updateMany({
-      where: { id, deletedAt: null, status: cheque.status },
-      data: { status },
+    // Putaran 75: klaim berjalan dalam tx dengan periode dinilai ulang
+    // dari baris setting terkunci (pola createCheque) — assertPeriodOpen
+    // pra-tx tanpa kunci tak melihat tutup periode yang commit di
+    // jendela, status giro bertanggal periode tertutup tetap berubah.
+    // Klaim transisi kondisional: hanya baris yang statusnya masih sama
+    // saat dibaca yang boleh berpindah (dua klik cair + batal bersamaan).
+    const claimed = await prisma.$transaction(async (tx) => {
+      await assertPeriodOpen(cheque.dueDate, tx as never)
+      return tx.cheque.updateMany({
+        where: { id, deletedAt: null, status: cheque.status },
+        data: { status },
+      })
     })
     if (claimed.count === 0) {
       return {
@@ -166,13 +172,18 @@ export async function deleteCheque(id: number) {
 
     await assertPeriodOpen(cheque.dueDate)
 
+    // Putaran 75: periode dinilai ulang dalam tx berkunci setting
+    // (pola sama seperti updateChequeStatus di atas).
     // Soft delete: register giro ikut audit trail, jadi barisnya tidak dihapus fisik.
     // Klaim kondisional atas deletedAt: snapshot di atas bisa basi (baris baru
     // saja ter-soft-delete oleh request lain) — update tak bersyarat akan
     // menimpa deletedAt diam-diam dan melaporkan sukses palsu.
-    const claimed = await prisma.cheque.updateMany({
-      where: { id, deletedAt: null },
-      data: { deletedAt: new Date() },
+    const claimed = await prisma.$transaction(async (tx) => {
+      await assertPeriodOpen(cheque.dueDate, tx as never)
+      return tx.cheque.updateMany({
+        where: { id, deletedAt: null },
+        data: { deletedAt: new Date() },
+      })
     })
     if (claimed.count === 0) {
       return { success: false, error: "Giro/cek sudah terhapus oleh pengguna lain — muat ulang halaman." }
