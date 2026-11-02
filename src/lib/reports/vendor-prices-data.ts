@@ -26,6 +26,7 @@ export async function loadVendorPrices(): Promise<VendorPricesReport> {
   })
 
   const rows: VendorPriceInput[] = prices.map((price) => ({
+    vendorId: price.vendorId,
     vendorName: price.vendor.name,
     itemKey: String(price.itemId),
     itemLabel: `${price.item.sku} — ${price.item.name}`,

@@ -94,4 +94,14 @@ describe("buildVendorPriceListing", () => {
 
     expect(result.totals).toEqual({ count: 3, vendors: 2, items: 2 })
   })
+
+  it("putaran 52: dua vendor berbeda bernama sama dihitung dua pemasok", () => {
+    const result = buildVendorPriceListing([
+      row({ vendorId: 11, vendorName: "PT Sama", itemKey: "1" }),
+      row({ vendorId: 22, vendorName: "PT Sama", itemKey: "1" }),
+    ])
+
+    expect(result.totals.vendors).toBe(2)
+    expect(result.verdict).toContain("2 pemasok")
+  })
 })

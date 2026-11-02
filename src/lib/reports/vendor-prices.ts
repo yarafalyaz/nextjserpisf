@@ -26,6 +26,8 @@ const COLUMNS: TableColumn[] = [
 ]
 
 export interface VendorPriceInput {
+  /** Identitas vendor; nama BUKAN identitas unik (Vendor.name tak unik). */
+  vendorId?: number | null
   vendorName: string
   itemKey: string
   itemLabel: string
@@ -114,7 +116,9 @@ export function buildVendorPriceListing(rows: VendorPriceInput[]): VendorPriceRe
       "jadi angka di sini adalah catatan kesepakatan, bukan harga yang otomatis dipakai transaksi.",
   })
 
-  const vendors = new Set(sorted.map((row) => row.vendorName)).size
+  const vendors = new Set(
+    sorted.map((row) => (row.vendorId != null ? `id:${row.vendorId}` : `name:${row.vendorName}`)),
+  ).size
   const items = new Set(sorted.map((row) => row.itemKey)).size
 
   return {
