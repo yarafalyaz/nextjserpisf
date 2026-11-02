@@ -1484,6 +1484,24 @@ describe("RAB proyek F-2026-10-21-030", () => {
     expect(readOrder).toBeLessThan(writeOrder)
   })
 
+  it("putaran 61: proyek completed tidak bisa diubah RAB/kontrak langsung (paritas BR-13)", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(unlockedProject({ status: "completed" }))
+    const itemRes = await actions.createProjectBudgetItem(
+      10,
+      fdMap({ description: "Plat", qty: 1, cost: 5000, sortOrder: 0 }),
+    )
+    expect(itemRes?.success).toBe(false)
+    expect(itemRes?.error).toContain("selesai")
+    expect(mocks.prismaMock.projectItem.create).not.toHaveBeenCalled()
+
+    const contractRes = await actions.setProjectContractManual(
+      10,
+      fdMap({ contractAmount: "9000", reason: "nego ulang" }),
+    )
+    expect(contractRes?.success).toBe(false)
+    expect(contractRes?.error).toContain("selesai")
+  })
+
   it("BR-03: anggaran terkunci -> edit baris langsung ditolak server, tidak menulis", async () => {
     mocks.prismaMock.projectItem.findUnique.mockResolvedValue({ id: 5, projectId: 10 })
     mocks.prismaMock.project.findUnique.mockResolvedValue(

@@ -1176,8 +1176,16 @@ async function loadBudgetProject(tx: TxClient, projectId: number) {
   return project
 }
 
-function assertBudgetUnlocked(project: { budgetLockedAt: Date | null }) {
+function assertBudgetUnlocked(project: { budgetLockedAt: Date | null; status?: string }) {
   if (project.budgetLockedAt !== null) throw new Error(LOCKED_BUDGET_ERROR)
+  // Putaran 61 (paritas BR-13): proyek completed final — BR-13 menolak kunci
+  // retroaktif untuknya, jadi edit langsung RAB/kontrak atas proyek selesai
+  // (sinkron tahap bisa menyelesaikan proyek yang RAB-nya belum terkunci)
+  // tidak boleh mengubah angka final/margin tanpa jejak. Proyek yang tahapnya
+  // dibuka lagi tersinkron keluar dari completed dan bisa diedit kembali.
+  if (project.status === "completed") {
+    throw new Error("Proyek sudah selesai (completed) — RAB dan nilai kontrak tidak dapat diubah.")
+  }
 }
 
 type RevisionChange =
