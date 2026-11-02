@@ -1400,6 +1400,15 @@ export async function approveOvertime(overtimeId: number) {
         where: { id: overtimeId },
         include: { employee: { select: { baseSalary: true, paymentFrequency: true } } },
       });
+      // Putaran 75 residual: baris pindah karyawan sesudah scope dinilai
+      // di luar -> scope + SoD nilai ulang atas karyawan segar sebelum
+      // nilai/status tertulis ke karyawan yang salah.
+      if (fresh.employeeId !== ot.employeeId) {
+        await assertHrEmployeeAccess(scope, fresh.employeeId);
+        if (approverEmployeeId != null && approverEmployeeId === fresh.employeeId) {
+          throw new Error("Penyetuju tidak boleh menyetujui pengajuan lemburnya sendiri");
+        }
+      }
       if (fresh.calculatedValue != null && Number(fresh.calculatedValue) > 0) {
         return { count: 0 };
       }
