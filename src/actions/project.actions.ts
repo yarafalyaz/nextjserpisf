@@ -1405,11 +1405,24 @@ export async function updateProjectBudgetItem(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error }
     await requirePermission("edit_projects")
     await prisma.$transaction(async (tx) => {
-      const item = await tx.projectItem.findUnique({
+      // Putaran 69: kunci baris proyek MENJADI bacaan pertama tx.
+      // Snapshot REPEATABLE READ terbentuk pada bacaan konsisten
+      // pertama; membaca item dulu (kode lama) membuat budgetLockedAt
+      // dari loadBudgetProject sesudahnya basi null -> lock RAB yang
+      // commit di jendela lolos pemeriksaan BR-03. Kolom tabel
+      // termap: project_items.project_id (@@map prisma:5638-5656).
+      const itemRows = await tx.$queryRaw<Array<{ project_id: number }>>`
+        SELECT project_id FROM project_items WHERE id = ${parsed.data.id} FOR UPDATE
+      `
+      const item = await tx.projectItem.findFirst({
         where: { id: parsed.data.id },
         select: { id: true, projectId: true },
       })
-      if (!item) throw new Error("Baris RAB tidak ditemukan")
+      if (itemRows.length === 0 || !item) throw new Error("Baris RAB tidak ditemukan")
+      const projectRows = await tx.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM projects WHERE id = ${item.projectId} FOR UPDATE
+      `
+      if (projectRows.length === 0) throw new Error("Proyek tidak ditemukan")
       const project = await loadBudgetProject(tx, item.projectId)
       assertBudgetUnlocked(project)
       await assertBudgetItemLive(tx, parsed.data.itemId)
@@ -1432,11 +1445,23 @@ export async function deleteProjectBudgetItem(itemId: number) {
   try {
     await requirePermission("edit_projects")
     await prisma.$transaction(async (tx) => {
-      const item = await tx.projectItem.findUnique({
+      // Putaran 69: kunci baris proyek MENJADI bacaan pertama tx (lihat
+      // komentar pasangannya di updateProjectBudgetItem) — pokok yang
+      // dikunci dulu (SELECT project_id ... FOR UPDATE atas baris RAB
+      // yang akan dihapus), bacaan bukan-kunci (findFirst) dibiarkan
+      // tersekat sesudah kunci pertama agar snapshot terisolasi.
+      const itemRows = await tx.$queryRaw<Array<{ project_id: number }>>`
+        SELECT project_id FROM project_items WHERE id = ${itemId} FOR UPDATE
+      `
+      const item = await tx.projectItem.findFirst({
         where: { id: itemId },
         select: { id: true, projectId: true },
       })
-      if (!item) throw new Error("Baris RAB tidak ditemukan")
+      if (itemRows.length === 0 || !item) throw new Error("Baris RAB tidak ditemukan")
+      const projectRows = await tx.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM projects WHERE id = ${item.projectId} FOR UPDATE
+      `
+      if (projectRows.length === 0) throw new Error("Proyek tidak ditemukan")
       const project = await loadBudgetProject(tx, item.projectId)
       assertBudgetUnlocked(project)
       await tx.projectItem.delete({ where: { id: itemId } })

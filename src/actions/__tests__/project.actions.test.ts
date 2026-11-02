@@ -1521,7 +1521,9 @@ describe("RAB proyek F-2026-10-21-030", () => {
   })
 
   it("BR-03: anggaran terkunci -> edit baris langsung ditolak server, tidak menulis", async () => {
-    mocks.prismaMock.projectItem.findUnique.mockResolvedValue({ id: 5, projectId: 10 })
+    // Putaran 69: bacaan pasca-kunci kini findFirst (findUnique tak bisa
+    // menjepit bacaan di antara kunci item dan kunci proyek).
+    mocks.prismaMock.projectItem.findFirst.mockResolvedValue({ id: 5, projectId: 10 })
     mocks.prismaMock.project.findUnique.mockResolvedValue(
       unlockedProject({ budgetLockedAt: new Date(2026, 9, 20) }),
     )
@@ -1715,6 +1717,29 @@ describe("RAB proyek F-2026-10-21-030", () => {
     expect(res?.success).toBe(false)
     expect(String(res?.error)).toContain("Item tidak ditemukan")
     expect(mocks.prismaMock.projectItem.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 69: update/delete baris RAB mengunci baris proyek sebelum membaca item (langgar BR-03 bila item dibaca dulu)", async () => {
+    mocks.prismaMock.projectItem.findFirst.mockResolvedValue({ id: 5, projectId: 10 })
+    mocks.prismaMock.project.findUnique.mockResolvedValue(unlockedProject())
+    const res = await actions.updateProjectBudgetItem(
+      fdMap({ id: 5, itemId: "", description: "x", qty: 1, cost: 1000, sortOrder: 0 }),
+    )
+    expect(res?.success).toBe(true)
+    const lockOrderU = mocks.prismaMock.$queryRaw.mock.invocationCallOrder[0]
+    const itemOrderU = mocks.prismaMock.projectItem.findFirst.mock.invocationCallOrder[0]
+    expect(lockOrderU).toBeLessThan(itemOrderU)
+
+    vi.clearAllMocks()
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1, permissions: ["manage_projects"], roles: ["super_admin"] })
+    mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 10 }])
+    mocks.prismaMock.projectItem.findFirst.mockResolvedValue({ id: 5, projectId: 10 })
+    mocks.prismaMock.project.findUnique.mockResolvedValue(unlockedProject())
+    const resDel = await actions.deleteProjectBudgetItem(5)
+    expect(resDel?.success).toBe(true)
+    const lockOrderD = mocks.prismaMock.$queryRaw.mock.invocationCallOrder[0]
+    const itemOrderD = mocks.prismaMock.projectItem.findFirst.mock.invocationCallOrder[0]
+    expect(lockOrderD).toBeLessThan(itemOrderD)
   })
 
   it("updateProjectBudgetItem menolak itemId gaib/mati dari transaksi tanpa menulis (putaran 25)", async () => {
