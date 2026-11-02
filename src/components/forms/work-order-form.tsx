@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { AppDatePicker } from "@/components/ui/date-picker";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
@@ -63,6 +63,7 @@ export function WorkOrderForm({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
   // Saat mengedit, tanggal harus di-seed dari dokumen lama: sebelumnya selalu
   // "hari ini", sehingga menyimpan ulang perintah kerja back-date memindahkan
   // dokumen (dan angka laporannya) ke periode berjalan.
@@ -117,6 +118,7 @@ export function WorkOrderForm({
       try {
         const formData = new FormData(e.currentTarget);
         formData.append("items", JSON.stringify(woItems.map(({ uid: _uid, ...rest }) => rest)));
+        if (!workOrder?.id) formData.set("idempotencyKey", idempotencyKeyRef.current);
         const { createWorkOrder, updateWorkOrder } =
           await import("@/actions/inventory.actions");
         const result = workOrder?.id
@@ -126,6 +128,7 @@ export function WorkOrderForm({
           showError(result.error || "Gagal menyimpan data");
           return;
         }
+        if (!workOrder?.id) idempotencyKeyRef.current = crypto.randomUUID();
         showSuccess(
           workOrder?.id
             ? "Data berhasil diperbarui"

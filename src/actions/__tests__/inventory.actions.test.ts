@@ -744,6 +744,20 @@ describe("Material Issue Actions", () => {
 });
 
 describe("Rack & WorkOrder & Others", () => {
+  it("putaran 61: createWorkOrder retry idempotency sama ditolak, WO lahir sekali", async () => {
+    mocks.checkIdempotency
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses."));
+
+    const first = await actions.createWorkOrder(woFd({ idempotencyKey: "wo-key-1" }));
+    const second = await actions.createWorkOrder(woFd({ idempotencyKey: "wo-key-1" }));
+
+    expect(first?.success).toBe(true);
+    expect(second?.success).toBe(false);
+    expect(String((second as { error?: string } | undefined)?.error ?? "")).toMatch(/duplikat/);
+    expect(mocks.checkIdempotency).toHaveBeenCalledTimes(2);
+    expect(mocks.prismaMock.workOrder.create).toHaveBeenCalledTimes(1);
+  });
   it("createWorkOrder succeeds", async () => {
     const res = await actions.createWorkOrder(
       fdMap({ customerId: 1, projectId: 1, date: DATE, name: "WO", quantity: 1 }),

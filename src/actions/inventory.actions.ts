@@ -1344,52 +1344,64 @@ export async function createWorkOrder(formData: FormData) {
     const parsed = parseFormData(workOrderSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
 
     const documentNo = await generateDocumentNumber("WO");
     const items = normalizeWorkOrderItems(v.items ?? null);
-    await assertLiveWorkOrderRefs(prisma, v.customerId, items.map((i) => i.itemId));
 
-    // Kendaraan mengikuti quotation (pola jalur DP down-payment.hook):
-    // stampWorkOrderFitmentSnapshot membaca customerVehicleId WO langsung,
-    // jadi tanpa salinan ini WO manual atas kendaraan tak pernah dinilai
-    // fitment-nya dan coverage garansi kehilangan konteks kendaraan.
-    const quotationVehicleId = v.quotationId
-      ? (await prisma.quotation.findUnique({
-          where: { id: v.quotationId },
-          select: { customerVehicleId: true },
-        }))?.customerVehicleId ?? null
-      : null;
+    // Putaran 61: WO lahir dalam SATU transaksi dengan key dinilai
+    // pertama. Retry/timeout sebelumnya melahirkan dua WO draft identik
+    // yang masing-masing bisa di-start sampai complete (DeliveryOrder +
+    // cakupan garansi per WO). Gerbang referensi hidup dinilai di dalam
+    // tx juga; nomor dokumen dari sekuens atomik global (gap saat
+    // rollback wajar). Pemanggil tanpa key tetap no-op.
+    const wo = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id);
+      await assertLiveWorkOrderRefs(tx as never, v.customerId, items.map((i) => i.itemId));
 
-    const wo = await prisma.workOrder.create({
-      data: {
-        documentNo,
-        slug: await nextSlug("workOrder", documentNo),
-        quotationId: v.quotationId ?? null,
-        customerVehicleId: quotationVehicleId,
-        projectId: v.projectId ?? null,
-        customerId: v.customerId,
-        date: wibDateToUtcMidnight(v.date),
-        // Persist optional schedule dates the form sends. Previously dropped
-        // silently — the column was nullable but the action never read it.
-        startDate: v.startDate ? wibDateToUtcMidnight(v.startDate) : null,
-        endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
-        notes: v.notes ?? null,
-        status: "draft",
-        createdBy: Number(user.id),
-        items: {
-          create: items.map((i) => ({
-            itemId: i.itemId,
-            qty: i.qty,
-            cost: i.cost,
-            description: i.description || null,
-            status: i.status || "pending",
-          })),
+      // Kendaraan mengikuti quotation (pola jalur DP down-payment.hook):
+      // stampWorkOrderFitmentSnapshot membaca customerVehicleId WO langsung,
+      // jadi tanpa salinan ini WO manual atas kendaraan tak pernah dinilai
+      // fitment-nya dan coverage garansi kehilangan konteks kendaraan.
+      const quotationVehicleId = v.quotationId
+        ? (await tx.quotation.findUnique({
+            where: { id: v.quotationId },
+            select: { customerVehicleId: true },
+          }))?.customerVehicleId ?? null
+        : null;
+
+      const created = await tx.workOrder.create({
+        data: {
+          documentNo,
+          slug: await nextSlug("workOrder", documentNo),
+          quotationId: v.quotationId ?? null,
+          customerVehicleId: quotationVehicleId,
+          projectId: v.projectId ?? null,
+          customerId: v.customerId,
+          date: wibDateToUtcMidnight(v.date),
+          // Persist optional schedule dates the form sends. Previously dropped
+          // silently — the column was nullable but the action never read it.
+          startDate: v.startDate ? wibDateToUtcMidnight(v.startDate) : null,
+          endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
+          notes: v.notes ?? null,
+          status: "draft",
+          createdBy: Number(user.id),
+          items: {
+            create: items.map((i) => ({
+              itemId: i.itemId,
+              qty: i.qty,
+              cost: i.cost,
+              description: i.description || null,
+              status: i.status || "pending",
+            })),
+          },
         },
-      },
-    });
+      });
 
-    // F-2026-10-22-063-S: snapshot PERINGATAN fitment baris (tak memblokir).
-    await stampWorkOrderFitmentSnapshot(prisma, wo.id);
+      // F-2026-10-22-063-S: snapshot PERINGATAN fitment baris (tak memblokir).
+      await stampWorkOrderFitmentSnapshot(tx as never, created.id);
+      return created;
+    });
 
     await logActivity(
       "create",
