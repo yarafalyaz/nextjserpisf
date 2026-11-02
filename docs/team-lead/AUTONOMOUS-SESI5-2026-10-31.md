@@ -2194,3 +2194,48 @@ Semua kandidat agent diverifikasi sesi utama terhadap kode aktual + schema sebel
 - Pelajaran harness: `mockResolvedValue` persisten bocor lintas test karena `vi.clearAllMocks()` tidak membuang implementasi — nilai `salesOrder.count = 2` dari test putaran 74 menggeser urutan konsumsi `customerVehicle.count` Once test sesudahnya; empat kegagalan batch awal seluruhnya polusi fixture (satu count tak diantrekan menghasilkan jumlah NaN), bukan cacat produksi. Fixture gerbang dokumen baru wajib `mockResolvedValueOnce`.
 - Tests putaran 74 segmen servis: batch 15 file 758/758 (termasuk 6 guard statis), tsc clean, lint clean. Segmen inventaris/aset: 558/558 + 222/222, tsc/lint clean.
 - Head final putaran 74 `b25a0cc48` CI **success** (run `41475486078`); `5cf6274ca` + `5755ee4f5` success dalam run `41470541992`; `99d281a31` + `6e2a2c9df` tercakup run head.
+
+## Putaran 75 — keuangan/laporan, SDM/pajak, CRM/proyek (3 agent audit paralel)
+
+Semua kandidat agent diverifikasi sesi utama terhadap kode aktual + schema sebelum edit; 14 titik fix dalam 7 commit.
+
+### Fix laporan/keuangan (`02ba5775a`, `295898a07`, `3aa7a9e45`)
+1. Buku Bank: layar memakai heuristik kode `1-1*`/nama Bank/Kas, PDF `loadBankLedger` menerima akun apa pun — akun terpilih di luar heuristik hilang senyap dari layar tetapi tercetak, akun "Kasbon" tercetak sebagai bank. Helper kanonis `loadCashAccountIds` (settings `cashBankAccountId`/`pettyCashAccountId` ∪ `reportGroup: "BANK"`, live) diekstrak dari `loadCashFlow`; layar, dropdown, PDF memakai himpunan sama, akun non-kas ditolak eksplisit. Test baru 3 (non-kas ditolak tanpa query jurnal; reportGroup BANK lolos; akun settings lolos); fixture DB diselaraskan.
+2. `updateChequeStatus`/`deleteCheque`: klaim kondisional kini dalam tx dengan `assertPeriodOpen(dueDate, tx)` (pola `createCheque`). Fast-fail pra-tx tanpa kunci tak melihat tutup periode yang commit di jendela. Merah valid 2 test.
+3. `createBankReconciliation`: dalam tx, baris `accounts` dikunci FOR UPDATE lalu hidup/type=ASSET dinilai ulang — `updateAccount` (mengunci baris yang sama) bisa mengubah type keluar ASSET di jendela cek pra-tx. Merah valid 1 test.
+
+### Fix SDM (`f11cf8fe8` 8 titik, `b92f70ba4` 1 titik)
+4. `processPayroll`: hidup dinilai ulang sesudah kunci employee dalam tx (`assertLiveEmployee(employeeId, tx)`) sebelum create.
+5. `updatePayroll`: hidup target dinilai ulang dalam tx hanya bila slip pindah karyawan (slip tetap tak dinilai ulang, preseden payroll).
+6. `generateBulkPayroll`: baris karyawan yang mati sesudah populasi dibaca dibuang dalam tx publish (alasan `berhenti`), estimasi snapshot tidak dihitung ulang — angka berjalan tak berubah.
+7. `approvePayroll`: klaim draft→approved dalam tx berkunci baris employee.
+8. `updateAttendance`/`deleteAttendance`: kunci baris employee asal+tujuan (id naik) sebelum gerbang slip-final — berserial dua arah dengan `approvePayroll` (#7).
+9. `approveOvertime`: nilai dihitung dari locking re-read dalam tx, bukan snapshot luar (edit pending konkuren tak lagi membuat `calculatedValue` jam lama tertulis ke jam baru).
+10. Edit cuti/lembur/pinjaman: hidup target pindahan dinilai ulang dari baris terkunci (`assertLiveEmployee(..., tx)`); cuti memakai `current.employeeId` dari baris segar untuk keputusan pindah.
+11. `approvePkwtEvent`: service gerbang owner/mapping kini berjalan dalam tx berkunci baris event + employee (satu-satunya pemanggil service).
+12. Residual `approveOvertime` (`b92f70ba4`): scope + SoD dinilai ulang atas karyawan segar bila baris pindah karyawan sebelum kunci terambil.
+
+### Fix CRM (`5c5c47f72`, 5 titik)
+13. Gerbang NPWP gagal-tertutup: baris `customer_npwp_gate id=1` absen (DB hasil db push/restore parsial tanpa migrasi) kini menolak simpan ber-NPWP di `createCustomer`/`updateCustomer`, bukan meloloskan dua penulis NPWP sama tanpa kunci. Keputusan repo Q-CD-1 (blokir keras NPWP persis) tak berubah.
+14. `deleteCustomer` menghitung Lead/CrmTicket + hard/soft-delete dalam satu tx berkunci baris pelanggan; `createTicket` mengunci baris pelanggan sebelum gerbang hidup dalam tx — tiket tak lahir menunjuk pelanggan hard-deleted (`CrmTicket.customerId` bare Int tanpa FK). `createLead` menilai ulang penugasan dari baris `users` terkunci; `updateLead` menghitung `freshContactChanged` dari baris segar; `updateCustomer` mengunci baris pelanggan dan menolak tombstone.
+
+### Perbaikan fixture CI (`1140bbeaf`)
+- Run CI pertama putaran 75 (`41482520411`, head `5c5c47f72`) failure 6 test — seluruhnya harness: facade tx `hrm-payroll-hr-scope.test.ts` tanpa `employee.findFirst/findMany`/`$executeRaw`/`payroll.updateMany` untuk gerbang putaran 75, dan `payroll-duplicate-guard.test.ts` delegate employee tx tanpa `findFirst`. Facade dilengkapi; assertion populasi bulk mencari query populasi (select `employmentEndedAt`) bukan indeks panggilan 0. Run `41483614248` (`b92f70ba4`) failure fixture yang sama; head final `1140bbeaf` CI **success** (run `41484763118`). Batch lokal sesudah selaras: 14 file 1078/1078 (termasuk 6 guard statis), tsc/lint clean. Bukti merah gabungan di HEAD: 10 failed lintas file (termasuk 4 kontrak `approveOvertime` lama yang kini wajib baca ulang dalam tx).
+
+### Vonis dicatat / gugur (tanpa patch)
+- `JournalService.reverseJournal` tanpa kunci eksplisit (penahan Serializable + unique constraint; tidak ada caller produksi). CATAT Low.
+- Placeholder akun reimbursement (`reimbursement.actions.ts`) query `type: "EXPENSE"` tanpa isActive/deletedAt walau komentar bilang "aktif"; fail-closed hilir menahan GL. CATAT Low.
+- PDF Arus Kas membuang rincian per bulan yang tampil di layar; total sama (dikunci `cash-flow-parity.test.ts`). Vonis produk. CATAT.
+- Kandidat SDM 3 attach PKWT: attach sudah membaca peristiwa+akrual di dalam tx sesudah kunci payroll (test orde-kunci ada); sisa race adalah `runPkwtMonthlyAccrual` yang menserialkan pada kunci periode — serialisasi dua arah penuh mengunci semua baris employee dalam tx akrual bulanan = blast radius besar + ubah perilaku operasional. CATAT dengan mitigasi unique akrual `(employeeId, segmentStart, period)`.
+- `setPositionCritical` tanpa `getHrScope`: bukti desain permission global belum cukup. CATAT. `upsertSuccessorCandidate` CATAT lama (`@@unique`).
+- Slug customer global pra-tx: tabrakan → P2002 fail-closed, tanpa data ganda. CATAT pola berulang.
+- Race agregat statutori payroll (dua slip WEEKLY terpisah karyawan+periode sama kurang potong BPJS/PPh21 karena estimasi dibaca di luar tx; `recalcDraftPayrollFromLines` mengabaikan `txClient` saat memanggil `buildPayrollWrite`) dan urutan kunci employee sesudah bacaan konsisten pertama di tx edit cuti/lembur/pinjaman — DIVERIFIKASI TERBUKTI oleh agent `acf15d3baa36b091a`, masuk antrean putaran 76 (bukan CATAT permanen).
+
+### Daftar bersih agent (jangan diangkat ulang tanpa bukti baru)
+- Keuangan/laporan: selain 3 titik fix dan 3 CATAT di atas, kandidat lain agent tidak lolos verifikasi sesi utama.
+- SDM/pajak: `convertLead` n/a; pajak bersih; payroll sisi kunci rentang/draft, PKWT attach, klaim aktivitas bersih.
+- CRM/proyek: `convertLead` (kunci lead + baca ulang penuh), tiket create/update/delete selain titik #14, klaim aktivitas lead, proyek/RAB/JCO/jadwal pembayaran bersih.
+
+### Catatan
+- Tidak ada migrasi schema putaran ini.
+- Pelajaran harness (pengulangan putaran 74): facade tx per-file harus dilengkapi saat produksi mulai memakai delegate tx baru; kegagalan CI putaran ini 100% fixture, bukan produksi — dibuktikan hijau lokal penuh sebelum push perbaikan.
