@@ -14,16 +14,20 @@ const mocks = vi.hoisted(() => {
     deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
   })
 
+  const prismaMock: any = {
+    paymentMethod: buildModelMock(),
+    shippingMethod: buildModelMock(),
+    $executeRaw: vi.fn().mockResolvedValue(0),
+  }
+  prismaMock.$transaction = vi.fn(async (ops: any) => (typeof ops === "function" ? ops(prismaMock) : Promise.all(ops)))
+
   return {
     requirePermissionMock: vi.fn(),
     revalidateMock: vi.fn(),
     logActivityMock: vi.fn(),
     settingsMock: vi.fn().mockResolvedValue({}),
     countMock: vi.fn().mockResolvedValue(0),
-    prismaMock: {
-      paymentMethod: buildModelMock(),
-      shippingMethod: buildModelMock(),
-    }
+    prismaMock,
   }
 })
 
@@ -56,7 +60,7 @@ function fdMap(payload: Record<string, string | number | null | undefined>): For
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
-  mocks.settingsMock.mockResolvedValue({})
+  mocks.settingsMock.mockResolvedValue({ enableAutoPaymentMethodCode: false })
   mocks.countMock.mockResolvedValue(0)
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
@@ -107,21 +111,56 @@ describe("guard kode metode dirujuk dokumen (putaran 21)", () => {
 
 describe("reuse nama metode nonaktif (putaran 50)", () => {
   it("createPaymentMethod menolak nama yang sudah ada tetapi nonaktif", async () => {
-    mocks.prismaMock.paymentMethod.findFirst.mockResolvedValue({ id: 7, slug: "transfer-lama", isActive: false })
+    mocks.prismaMock.paymentMethod.findMany.mockResolvedValue([{ id: 7, slug: "transfer-lama", name: "Transfer Lama", code: "TRA-LAMA", isActive: false }])
     const res = await actions.createPaymentMethod(fdMap({ name: "Transfer Lama" }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("nonaktif")
     expect(mocks.prismaMock.paymentMethod.create).not.toHaveBeenCalled()
+    mocks.prismaMock.paymentMethod.findMany.mockResolvedValue([])
   })
 
   it("createPaymentMethod tetap reuse nama aktif persis", async () => {
-    mocks.prismaMock.paymentMethod.findFirst.mockResolvedValue({ id: 7, slug: "transfer", isActive: true })
+    mocks.prismaMock.paymentMethod.findMany.mockResolvedValue([{ id: 7, slug: "transfer", name: "Transfer", code: "TRA", isActive: true }])
     const res = await actions.createPaymentMethod(fdMap({ name: "Transfer" }))
     expect(res?.success).toBe(true)
     expect((res as any)?.id).toBe(7)
     expect(mocks.prismaMock.paymentMethod.create).not.toHaveBeenCalled()
     // clearAllMocks tidak membuang mockResolvedValue persisten — pulihkan.
-    mocks.prismaMock.paymentMethod.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.paymentMethod.findMany.mockResolvedValue([])
+  })
+})
+
+describe("putaran 53: create metode di bawah gap-lock", () => {
+  it("nama aktif sama (beda kapital/spasi) reuse di bawah kunci; nama nonaktif ditolak; kode manual bentrok ditolak", async () => {
+    const sqlOf = (c: unknown[]) => {
+      const a = c[0] as { sql?: string; strings?: string[] } | string[]
+      return Array.isArray(a) ? a.join("?") : (a?.sql ?? a?.strings?.join("?") ?? "")
+    }
+    const defaultFindMany = mocks.prismaMock.paymentMethod.findMany.getMockImplementation()
+    mocks.prismaMock.paymentMethod.findMany.mockImplementation(async () => [
+      { id: 3, name: "Transfer", code: "TRA", slug: "transfer", isActive: true },
+      { id: 4, name: "Tunai Lama", code: "TNL", slug: "tunai-lama", isActive: false },
+    ])
+    try {
+      const reuse = await actions.createPaymentMethod(fdMap({ name: " transfer ", code: "LAIN" }))
+      expect(reuse?.success).toBe(true)
+      expect((reuse as { id?: number }).id).toBe(3)
+      expect(mocks.prismaMock.paymentMethod.create).not.toHaveBeenCalled()
+      expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+      const lockIdx = (mocks.prismaMock.$executeRaw.mock.calls as unknown[][]).findIndex((c) => sqlOf(c).includes("payment_methods"))
+      expect(lockIdx, "gap-lock payment_methods FOR UPDATE").toBeGreaterThanOrEqual(0)
+
+      const inactive = await actions.createPaymentMethod(fdMap({ name: "Tunai Lama" }))
+      expect(inactive?.success).toBe(false)
+      expect(String(inactive?.error)).toContain("nonaktif")
+
+      const clash = await actions.createPaymentMethod(fdMap({ name: "Metode Baru", code: " tra " }))
+      expect(clash?.success).toBe(false)
+      expect(String(clash?.error)).toContain("TRA")
+      expect(mocks.prismaMock.paymentMethod.create).not.toHaveBeenCalled()
+    } finally {
+      mocks.prismaMock.paymentMethod.findMany.mockImplementation(defaultFindMany as never)
+    }
   })
 })
 

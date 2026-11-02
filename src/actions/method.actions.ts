@@ -15,12 +15,13 @@ import {
   createShippingMethodSchema,
   updateShippingMethodSchema,
 } from "@/lib/validations/method.schemas"
-import { nextSlug } from "@/lib/utils/slug-db"
+import { nextSlug, nextSlugWithClient } from "@/lib/utils/slug-db"
 
 // Payment dan shipping method berbagi alur CRUD yang sama; bit yang berbeda
 // (permission, schema, model, awalan kode, pesan log, path) jadi konfigurasi.
 interface MethodConfig {
   model: any
+  table: "payment_methods" | "shipping_methods"
   slugModel: "paymentMethod" | "shippingMethod"
   entity: string
   permissions: { create: PermissionName; edit: PermissionName; delete: PermissionName }
@@ -47,25 +48,13 @@ async function assertMethodCodeUnused(cfg: MethodConfig, code: string): Promise<
   return `${cfg.entity === "PaymentMethod" ? "Metode pembayaran" : "Metode pengiriman"} masih dipakai ${used} dokumen — tidak dapat dihapus atau diganti kodenya. Nonaktifkan saja bila tidak dipakai lagi.`
 }
 
+function normalizeMethodKey(value: string): string {
+  return value.trim().toLowerCase()
+}
+
 async function createMethod(cfg: MethodConfig, formData: FormData, skipPermission = false) {
   try {
     if (!skipPermission) await requirePermission(cfg.permissions.create)
-
-    const rawName = (formData.get("name") as string | null)?.trim()
-    if (rawName) {
-      const existing = await cfg.model.findFirst({ where: { name: rawName }, select: { id: true, slug: true, isActive: true } })
-      if (existing) {
-        // Putaran 50: reuse idempoten hanya untuk metode AKTIF. Metode
-        // nonaktif bernama sama tidak boleh terpilih diam-diam oleh
-        // quick-add — resolver aktif (method.service) tidak menawarkannya,
-        // jadi dokumen akan membawa kode metode yang tak bisa dipilih.
-        if (!existing.isActive) {
-          const label = cfg.entity === "PaymentMethod" ? "Metode pembayaran" : "Metode pengiriman"
-          return { success: false, error: `${label} "${rawName}" sudah ada tetapi nonaktif — aktifkan kembali dari master metode, jangan buat duplikat.` }
-        }
-        return { success: true, id: existing.id, slug: existing.slug ?? undefined }
-      }
-    }
 
     const parsed = parseFormData(cfg.schemas.create, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
@@ -75,17 +64,73 @@ async function createMethod(cfg: MethodConfig, formData: FormData, skipPermissio
     if (settings[cfg.autoCodeFlag] !== false || !code) {
       code = await generateDocumentNumber(cfg.codePrefix, "simple")
     }
-    const row = await cfg.model.create({
-      data: {
-        code,
-        name: parsed.data.name,
-        slug: await nextSlug(cfg.slugModel, parsed.data.name),
-        isActive: parsed.data.isActive ?? false,
-      },
+
+    // Nama tanpa @unique DB (code memang @unique): cek findFirst pra-parse
+    // di luar tx kalah balapan — dua create konkuren melahirkan dua metode
+    // bernama sama (slug bersuffix, bukan blokir) dan kode manual bentrok
+    // hanya muncul sebagai P2002 mentah. Cek+create dalam tx bergap-lock
+    // (pola createTax putaran 53): nama sama reuse aktif / tolak nonaktif;
+    // kode manual bentrok -> tolak menyebut kode tersimpan; kode auto tidak
+    // di-cek (lane sekuens atomik DocumentSequence, bentrok = kegagalan
+    // nyata yang tak boleh disamarkan jadi reuse). Tabel dari cfg karena
+    // raw SQL tak bisa parameter nama tabel; keduanya literal internal.
+    const name = parsed.data.name
+    const label = cfg.entity === "PaymentMethod" ? "Metode pembayaran" : "Metode pengiriman"
+    const manualCode = Boolean(parsed.data.code)
+    const result = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        if (cfg.table === "payment_methods") {
+          await tx.$executeRaw`SELECT id FROM payment_methods FOR UPDATE`
+        } else {
+          await tx.$executeRaw`SELECT id FROM shipping_methods FOR UPDATE`
+        }
+      }
+      // cfg.model adalah any; model tx dipilih dengan tipe longgar yang sama
+      // supaya union delegate Prisma tak mengunci findMany/create.
+      const txModel: any = cfg.table === "payment_methods" ? tx.paymentMethod : tx.shippingMethod
+      const candidates: { id: number; name: string; code: string; slug: string | null; isActive: boolean }[] =
+        await txModel.findMany({
+          select: { id: true, name: true, code: true, slug: true, isActive: true },
+        })
+      const nameKey = normalizeMethodKey(name)
+      const byName = candidates.find((row) => normalizeMethodKey(row.name) === nameKey)
+      if (byName) {
+        // Reuse idempoten hanya untuk metode AKTIF (putaran 50): metode
+        // nonaktif bernama sama tidak boleh terpilih diam-diam oleh
+        // quick-add — resolver aktif (method.service) tidak menawarkannya.
+        if (!byName.isActive) {
+          return { kind: "inactive" as const, name: byName.name }
+        }
+        return { kind: "reuse" as const, id: byName.id, slug: byName.slug as string | null }
+      }
+      if (manualCode && code) {
+        const codeKey = normalizeMethodKey(code)
+        const byCode = candidates.find((row) => normalizeMethodKey(row.code) === codeKey)
+        if (byCode) {
+          throw new Error(
+            `Kode ${label.toLowerCase()} ${byCode.code} sudah dipakai ${label.toLowerCase()} "${byCode.name}"; pakai kode lain.`,
+          )
+        }
+      }
+      const row = await txModel.create({
+        data: {
+          code,
+          name,
+          slug: await nextSlugWithClient(tx as never, cfg.slugModel, name),
+          isActive: parsed.data.isActive ?? false,
+        },
+      })
+      return { kind: "created" as const, id: row.id, slug: row.slug as string | null }
     })
-    await logActivity("create", cfg.entity, row.id, cfg.messages.create)
+    if (result.kind === "inactive") {
+      return { success: false, error: `${label} "${result.name}" sudah ada tetapi nonaktif — aktifkan kembali dari master metode, jangan buat duplikat.` }
+    }
+    if (result.kind === "reuse") {
+      return { success: true, id: result.id, slug: result.slug ?? undefined }
+    }
+    await logActivity("create", cfg.entity, result.id, cfg.messages.create)
     revalidatePath(cfg.listPath)
-    return { success: true, id: row.id, slug: row.slug }
+    return { success: true, id: result.id, slug: result.slug }
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error(`[${cfg.actionName.create}]`, getErrorMessage(e) || e)
@@ -149,6 +194,7 @@ async function deleteMethod(cfg: MethodConfig, id: number, skipPermission = fals
 
 const paymentMethodConfig: MethodConfig = {
   model: prisma.paymentMethod,
+  table: "payment_methods",
   slugModel: "paymentMethod",
   entity: "PaymentMethod",
   permissions: {
@@ -184,6 +230,7 @@ const paymentMethodConfig: MethodConfig = {
 
 const shippingMethodConfig: MethodConfig = {
   model: prisma.shippingMethod,
+  table: "shipping_methods",
   slugModel: "shippingMethod",
   entity: "ShippingMethod",
   permissions: {
