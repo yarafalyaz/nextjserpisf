@@ -1631,3 +1631,31 @@ Wilayah: hooks inventaris/produksi, `asset.actions.ts` + proyek, API routes + cr
 - Guard repo-scan bisa timeout 5000ms pada batch paralel besar (flake beban) — selalu hijau direrun terpisah; jangan ubah daftar beku karena flake.
 - Kelas bersih agent (jangan diangkat ulang tanpa bukti baru): konsumsi FIFO locking read + dekremen atomik; serial `updateMany` bersyarat + `@unique`; reservasi MI `ORDER BY id`; auth/otorisasi API route; download/traversal; double-posting finansial cron (klaim `updateMany`, flip bersyarat, Serializable); `project.actions.ts` (transaksi+kunci lengkap).
 - Tidak ada migrasi schema putaran ini. Semua 8 head CI success (`4b45bd197` head terakhir).
+
+## Putaran 55 — CRM/kendaraan, proyek, produksi, pajak, kredit, garansi (11 fix)
+
+Wilayah: hasil verifikasi kandidat agent CRM/proyek + keuangan/pajak putaran 54/55, dibuktikan sesi utama terhadap kode + schema + backlog. Setiap fix: test merah terpisah → fix → batch terkait + 6 guard → tsc/eslint.
+
+### Fix
+1. `c835d3d97` fix(crm): gerbang NPWP pelanggan `findCustomerNpwpConflict` tidak lagi memakai `take: MAX_CANDIDATE_SCAN` (2000) — pemegang NPWP persis di luar 2000 baris aktif pertama tak terlihat gerbang BLOKIR Q-CD-1 walau di bawah kunci. Batas scan tetap untuk jalur advisory.
+2. `38fae8915` fix(project): `deleteProject` ikut menghitung 4 kolom `projectId` polos tanpa relasi (`Quotation`/`SalesInvoice`/`MaterialIssue`/`Expense`) — `_count` relasi buta terhadapnya padahal loader L/R proyek membaca persis kolom itu; proyek terhapus = riwayat uang yatim.
+3. `6dc213f73` fix(manufacturing): `createMaterialIssueFromWorkOrder` membangun MI dari baris WO segar terkunci — snapshot luar membuat baris yang baru di-`replaced` (revise/substitusi) tetap keluar stok.
+4. `4ac6bca36` fix(tax): cakupan legacy SPT tidak lagi diturunkan dari barisan TaxInvoice tersaring rentang — bill yang TI-nya dikreditkan masa lain dihitung legacy dua kali (dobel PPN Masukan). Query coverage tak tersaring 2 kolom id hanya saat rentang aktif.
+5. `fd5a563d5` fix(manufacturing): `createProductionOrder` menilai ulang status WO di bawah kunci sebelum create — WO yang difinalisasi di jendela cek-create menerima PO draft anak pada job beku.
+6. `157d74633` fix(vehicle): cek duplikat merek/model kendaraan dalam tx terkunci — brand tanpa cek sama sekali; model cek nama persis luar tx (race P2002 mentah, merek yatim FK mentah, trim/case lolos). Gap-lock tabel brand; kunci baris merek induk untuk model; nama ternormalisasi trim+lowercase; P2002 → pesan duplikat.
+7. `d5ae3e16a` fix(finance): SO draft tidak menekan paparan kredit K5 — query penekan memakai `status: { not: "cancelled" }` di loader laporan + gerbang kredit; SO draft tak melewati gate apa pun (bypass paper-only). Disempitkan ke whitelist kanonis `OPEN_ORDER_STATUSES` di kedua situs; sentinel F5-1 tetap hijau.
+8. `09fa18e10` fix(report): himpunan kas arus kas = configured ∪ `reportGroup: "BANK"` + live, bukan heuristik `contains "Kas"/"Bank"/"Cash"` — Kasbon Direksi dkk. mencemari saldo; akun nonaktif/terhapus ikut terhitung. Kedua situs (layar + loader PDF). Residual tercatat: akun buatan UI tak punya `reportGroup` (schema form tak membuka field) — sama seperti semua jalur pembayaran hari ini.
+9. `acdf50016` fix(vehicle): gerbang hidup + rantai induk `createVehicleFitment`/`updateVehicleFitment` — item nonaktif/terhapus diterima, FK yatim P2003 mentah, model-bukan-milik-merek tak terdeteksi FK apa pun (aturan rantai patah tak pernah cocok evaluator). Helper `assertFitmentRefsLive` lokal.
+10. `69689baa4` fix(warranty): tautan WO repair ikut CAS bersyarat `repairWorkOrderId IS NULL` — CAS status saja menserialkan klaim yang sama; dua klaim berbeda ke WO sama sama-sama lolos guard baca-lalu-tulis. Tanpa migrasi/unique (klaim terminal sah berbagi WO).
+11. `a4789dd4b` fix(project): `deleteTask` menolak tugas bertimesheet di bawah kunci (FK Restrict P2003 mentah sebelumnya) + klaim atomik `deleteMany`, pola `deleteProject`.
+
+### Vonis gugur / ditunda
+- K2 fitment klaim "scope hilang = wildcard senyap": MENYEMPIT — delete master kendaraan sudah ter-guard hitung aturan (putaran terdahulu), dan `verifyFitment`/`evaluateFitment` mengkonfirmasi parent hanya mengekstrak konteks, kunci evaluasinya `vehicleId`-query, jadi bukan lubang arbitrer. Sisa nyata hanya gerbang tulis (fix #9).
+- K3 garansi klaim "tanpa @@unique": MENYEMPIT — jaring yang benar = CAS kolom (fix #10), bukan unique (akan melarang reuse WO oleh klaim terminal yang sah). Idempotency service-level garansi tetap DITUNDA (keputusan arsitektur, catatan putaran 52).
+- P3 work-center `isActive` snapshot: GUGUR — sudah fix putaran 49 lengkap dengan regression test.
+- Semua vonis ditunda putaran 54 tetap berlaku (updateAssetCategory pasca-jurnal, nama master aset, berkas warisan uploads, vercel.json GET cron, dedupe notifikasi, ItemBatch).
+
+### Catatan
+- Perangkap test terkonfirmasi lagi: `vi.clearAllMocks()` tidak membuang `mockResolvedValue` persisten — test yang menimpanya wajib pulihkan di `finally`; catch handler tidak boleh membaca variabel ter-scope `try` (`parsed is not defined`).
+- Guard repo-scan timeout 5000ms pada batch ~297 file (flake beban) — rerun terpisah hijau; jangan ubah daftar beku.
+- Tidak ada migrasi schema putaran ini.
