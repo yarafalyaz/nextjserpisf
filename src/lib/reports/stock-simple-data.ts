@@ -94,6 +94,10 @@ export async function loadStockAging(
   const layers = await prisma.inventoryLayer.findMany({
     where: {
       remaining: { gt: 0 },
+      // Item nonaktif/terhapus bukan posisi stok aktif — pola loader
+      // tetangga (slow-moving, serial/batch). Rekonsiliasi SENGAJA tidak
+      // disaring: layer item terhapus justru yang harus terlihat selisihnya.
+      item: { isActive: true, deletedAt: null },
       ...(scopeWarehouseIds != null ? { warehouseId: { in: scopeWarehouseIds } } : {}),
     },
     include: {
@@ -155,6 +159,10 @@ export async function loadStockSummary(
     prisma.inventoryLayer.findMany({
       where: {
         remaining: { gt: 0 },
+        // Item mati disaring seperti loader stok lain (putaran 52);
+        // gudang nonaktif/terhapus tetap tampil lewat baris yatim di bawah
+        // karena layer-nya masih bernilai — itu keputusan R6IE-08.
+        item: { isActive: true, deletedAt: null },
         ...(scoped ? { warehouseId: { in: scopeWarehouseIds } } : {}),
       },
       select: { itemId: true, warehouseId: true, remaining: true, unitCost: true },

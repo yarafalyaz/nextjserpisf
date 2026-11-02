@@ -55,6 +55,18 @@ describe("cakupan gudang loader laporan stok (ROUND5-SCOPE)", () => {
     expect(arg.where.warehouseId).toBeUndefined()
   })
 
+  it("putaran 52: loadStockAging dan loadStockSummary menapis item nonaktif/terhapus di where", async () => {
+    await loadStockAging([2])
+    expect(mocks.prismaMock.inventoryLayer.findMany.mock.calls[0][0].where).toEqual(
+      expect.objectContaining({ item: { isActive: true, deletedAt: null } }),
+    )
+    await loadStockSummary([2])
+    const layerCall = mocks.prismaMock.inventoryLayer.findMany.mock.calls[1][0]
+    expect(layerCall.where).toEqual(
+      expect.objectContaining({ item: { isActive: true, deletedAt: null } }),
+    )
+  })
+
   it("loadSerialBatchStock: tanpa pilihan gudang, scope [2] menapis serial+batch", async () => {
     await loadSerialBatchStock({ warehouseId: null, asOf: new Date(), scopeWarehouseIds: [2] })
     expect(mocks.prismaMock.itemSerial.findMany.mock.calls[0][0].where).toEqual({
@@ -142,11 +154,13 @@ describe("cakupan gudang loader laporan stok (ROUND5-SCOPE)", () => {
     await loadStockAging([2])
     expect(mocks.prismaMock.inventoryLayer.findMany.mock.calls[0][0].where).toEqual({
       remaining: { gt: 0 },
+      item: { isActive: true, deletedAt: null },
       warehouseId: { in: [2] },
     })
     await loadStockAging()
     expect(mocks.prismaMock.inventoryLayer.findMany.mock.calls[1][0].where).toEqual({
       remaining: { gt: 0 },
+      item: { isActive: true, deletedAt: null },
     })
   })
 
@@ -195,6 +209,7 @@ describe("cakupan gudang loader laporan stok (ROUND5-SCOPE)", () => {
     })
     expect(mocks.prismaMock.inventoryLayer.findMany.mock.calls[0][0].where).toEqual({
       remaining: { gt: 0 },
+      item: { isActive: true, deletedAt: null },
       warehouseId: { in: [2] },
     })
     expect(JSON.stringify(report.table.rows)).not.toContain("Tanpa Gudang / Lainnya")
