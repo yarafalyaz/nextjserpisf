@@ -16,6 +16,7 @@ const noDeletedAtFindUniqueMock = vi.fn(async (...callArgs: any[]) => {
 })
 const taxDocumentFindUniqueMock = vi.fn()
 const taxParentFindUniqueMock = vi.fn()
+const disciplinaryFindUniqueMock = vi.fn()
 const authMock = vi.fn()
 const warehouseAssignmentsMock = vi.fn()
 
@@ -34,6 +35,13 @@ vi.mock("@/lib/db/prisma", () => ({
     warrantyClaim: { findUnique: (...a: unknown[]) => documentFindUniqueMock(...a) },
     taxAssessment: { findUnique: (...a: unknown[]) => taxParentFindUniqueMock(...a) },
     taxDisputeStep: { findUnique: (...a: unknown[]) => taxDocumentFindUniqueMock(...a) },
+    employeeDisciplinaryRecord: { findUnique: (...a: unknown[]) => disciplinaryFindUniqueMock(...a) },
+    // getHrScope asli membaca employee pemanggil (findFirst) dan subjek
+    // (findUnique): default pemanggil = karyawan 99 tanpa departemen.
+    employee: {
+      findFirst: vi.fn(async () => ({ id: 99, departmentId: null })),
+      findUnique: vi.fn(async () => ({ departmentId: null })),
+    },
     userWarehouse: { findMany: (...a: unknown[]) => warehouseAssignmentsMock(...a) },
   },
 }))
@@ -45,6 +53,8 @@ beforeEach(() => {
   documentFindUniqueMock.mockReset()
   taxDocumentFindUniqueMock.mockReset()
   taxParentFindUniqueMock.mockReset()
+  disciplinaryFindUniqueMock.mockReset()
+  disciplinaryFindUniqueMock.mockResolvedValue({ id: 3, employeeId: 42, deletedAt: null })
   authMock.mockReset()
   warehouseAssignmentsMock.mockReset()
   documentFindUniqueMock.mockResolvedValue({ id: 1 })
@@ -165,6 +175,21 @@ describe("canAccessAttachment", () => {
   it("R7API-01: tanpa view_tax_disputes lampiran sengketa tetap ditolak", async () => {
     hasPermissionMock.mockResolvedValue(false)
     await expect(canAccessAttachment("tax_dispute_step", 1)).resolves.toBe(false)
+  })
+
+  it("putaran 69: lampiran rekod disiplin di luar HR scope ditolak (AC-DISC-5)", async () => {
+    hasPermissionMock.mockResolvedValue(true)
+    authMock.mockResolvedValue({ user: { id: "8", roles: ["karyawan"] } })
+    await expect(canAccessAttachment("EmployeeDisciplinaryRecord", 3)).resolves.toBe(false)
+    expect(disciplinaryFindUniqueMock).toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ employeeId: true }) }),
+    )
+  })
+
+  it("putaran 69: lampiran rekod disiplin dalam HR scope (all-access) lolos", async () => {
+    hasPermissionMock.mockResolvedValue(true)
+    authMock.mockResolvedValue({ user: { id: "1", roles: ["super_admin"] } })
+    await expect(canAccessAttachment("EmployeeDisciplinaryRecord", 3)).resolves.toBe(true)
   })
 
   it("R7API-02: unggah temp vendor_payment (referenceId 0) lolos dengan create_vendor_payments", async () => {

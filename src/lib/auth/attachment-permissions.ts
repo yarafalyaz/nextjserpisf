@@ -5,6 +5,7 @@ import { hasPermission } from "@/lib/auth/permissions"
 import { auth } from "@/lib/auth/auth"
 import { prisma } from "@/lib/db/prisma"
 import { canAccessWarehouseScopedDocument } from "@/lib/auth/document-scope"
+import { getHrScope } from "@/lib/auth/hr-scope"
 import {
   ATTACHMENT_CREATE_PERMISSION,
   ATTACHMENT_PERMISSION,
@@ -100,15 +101,46 @@ async function canAccessAttachmentWithPermission(
   // (unduh/daftar/tulis). Model tanpa kolom deletedAt tidak ikut dinilai —
   // select-nya tidak boleh memuat deletedAt (Prisma menolak field tak ada).
   const parent = ATTACHMENT_PARENT[referenceType]
+  // Putaran 69: rekod disiplin dinilai HR scope subjeknya (AC-DISC-5,
+  // paritas halaman sdm/disiplin/[id]) — izin view saja membuka lampiran
+  // bukti karyawan di luar cakupan pemanggil.
+  const hrScoped = referenceType === "EmployeeDisciplinaryRecord"
   const document = await model.findUnique({
     where: { id: referenceId },
     select: {
       id: true,
       ...(MODELS_WITH_DELETED_AT.has(modelKey) ? { deletedAt: true } : {}),
       ...(parent ? { [parent.foreignKey]: true } : {}),
+      ...(hrScoped ? { employeeId: true } : {}),
     },
   })
   if (!document || document.deletedAt) return false
+
+  if (hrScoped) {
+    const session = await auth()
+    if (!session?.user) return false
+    const scope = await getHrScope({
+      id: session.user.id,
+      roles: (session.user as { roles?: string[] }).roles ?? [],
+    })
+    // Penilaian scope tanpa throw (assertHrEmployeeAccess melempar):
+    // kind dinilai eksplisit; department memeriksa departemen subjek
+    // lewat delegate employee, sama seperti helper bersama.
+    const subjectId = document.employeeId as number
+    if (scope.kind === "team" && !scope.memberIds.includes(subjectId)) return false
+    if (scope.kind === "self" && scope.employeeId !== subjectId) return false
+    if (scope.kind === "department") {
+      if (scope.departmentId == null) {
+        if (scope.employeeId !== subjectId) return false
+      } else {
+        const subject = await prisma.employee.findUnique({
+          where: { id: subjectId },
+          select: { departmentId: true },
+        })
+        if (!subject || subject.departmentId !== scope.departmentId) return false
+      }
+    }
+  }
 
   // R7API-01: induk (mis. ketetapan dari langkah sengketa) yang terhapus
   // menutup lampirannya — dicek langsung karena deletedAt langkah kosong.
