@@ -143,7 +143,7 @@ async function assetCategoryAccountError(v: {
 
 export async function createAssetCategory(formData: FormData) {
   try {
-    await requirePermission("create_asset_categories");
+    const user = await requirePermission("create_asset_categories");
 
     const parsed = parseFormData(assetCategorySchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -152,9 +152,13 @@ export async function createAssetCategory(formData: FormData) {
     const accountError = await assetCategoryAccountError(data);
     if (accountError) return { success: false, error: accountError };
 
-    const category = await prisma.assetCategory.create({
-      data: {
-        slug: await nextSlug("assetCategory", data.name),
+    // Putaran 64: retry submit identik melahirkan kategori kembar (nama tak
+    // unik; slug hanya berbeda suffix). Key diklaim dalam tx; rollback lepas.
+    const category = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
+      return tx.assetCategory.create({
+        data: {
+          slug: await nextSlugWithClient(tx as never, "assetCategory", data.name),
         name: data.name,
         code: data.code ?? null,
         depreciationRate: data.depreciationRate ?? null,
@@ -172,7 +176,8 @@ export async function createAssetCategory(formData: FormData) {
         revaluationSurplusAccountId: data.revaluationSurplusAccountId ?? null,
         impairmentLossAccountId: data.impairmentLossAccountId ?? null,
         accumulatedImpairmentAccountId: data.accumulatedImpairmentAccountId ?? null,
-      },
+        },
+      });
     });
 
     await logActivity(
@@ -278,20 +283,25 @@ export async function deleteAssetGroup(id: number) {
 
 export async function createAssetBrand(formData: FormData) {
   try {
-    await requirePermission("create_asset_brands");
+    const user = await requirePermission("create_asset_brands");
 
     const parsed = parseFormData(assetBrandSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const { data } = parsed;
 
-    const brand = await prisma.assetBrand.create({
-      data: {
-        slug: await nextSlug("assetBrand", data.name),
-        name: data.name,
-        // Tipe/model merek — tanpa ini tabel `asset_brand_models` tidak punya
-        // penulis sama sekali, sehingga tipe aset per merek tidak bisa dicatat.
-        models: { create: data.models.map((name) => ({ name })) },
-      },
+    // Putaran 64: retry submit identik melahirkan merek kembar (nama tak
+    // unik; slug hanya berbeda suffix). Key diklaim dalam tx; rollback lepas.
+    const brand = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
+      return tx.assetBrand.create({
+        data: {
+          slug: await nextSlugWithClient(tx as never, "assetBrand", data.name),
+          name: data.name,
+          // Tipe/model merek — tanpa ini tabel `asset_brand_models` tidak punya
+          // penulis sama sekali, sehingga tipe aset per merek tidak bisa dicatat.
+          models: { create: data.models.map((name) => ({ name })) },
+        },
+      });
     });
 
     await logActivity("create", "AssetBrand", brand.id, "Membuat merek aset");

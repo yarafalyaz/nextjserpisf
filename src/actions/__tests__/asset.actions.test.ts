@@ -322,6 +322,20 @@ describe("Asset Brand Actions", () => {
     expect(prismaMock.assetBrand.create).toHaveBeenCalled()
   })
 
+  it("putaran 64: createAssetBrand retry idempotencyKey sama ditolak, merek lahir sekali", async () => {
+    const idem = prismaMock.idempotencyKey as any
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const formData = () => fd({ name: "Dell", idempotencyKey: "ab-key-1" })
+    await expect(createAssetBrand(formData())).rejects.toThrow("NEXT_REDIRECT")
+    const second = await createAssetBrand(formData())
+    expect(second?.success).toBe(false)
+    expect(second?.error).toContain("duplikat")
+    expect(prismaMock.assetBrand.create).toHaveBeenCalledTimes(1)
+  })
+
   it("updates brand and redirects", async () => {
     await expect(updateAssetBrand(20, fd({ name: "HP" }))).rejects.toThrow("NEXT_REDIRECT")
     expect(prismaMock.assetBrand.update).toHaveBeenCalled()
@@ -577,6 +591,20 @@ describe("Asset Category Actions", () => {
     expect(String(res?.error)).toMatch(/Akun Aset Tetap/)
     expect(prismaMock.assetCategory.create).not.toHaveBeenCalled()
     expect(prismaMock.account.findMany.mock.calls[0][0].where.isActive).toBe(true)
+  })
+
+  it("putaran 64: createAssetCategory retry idempotencyKey sama ditolak, kategori lahir sekali", async () => {
+    const idem = prismaMock.idempotencyKey as any
+    idem.create
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    idem.findUnique.mockResolvedValueOnce({ createdAt: new Date() })
+    const formData = () => fd({ name: "Komputer", idempotencyKey: "ac-key-1" })
+    await expect(createAssetCategory(formData())).rejects.toThrow("NEXT_REDIRECT")
+    const second = await createAssetCategory(formData())
+    expect(second?.success).toBe(false)
+    expect(second?.error).toContain("duplikat")
+    expect(prismaMock.assetCategory.create).toHaveBeenCalledTimes(1)
   })
 
   it("creates category and redirects", async () => {

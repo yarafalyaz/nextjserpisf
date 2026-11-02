@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useRef, useTransition } from "react";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
 import { Input } from "@/components/ui/shadcn/input";
@@ -17,6 +17,10 @@ export function AssetBrandForm({
   brand,
 }: { brand?: { id: number; name: string; models?: { name: string }[] } } = {}) {
   const router = useRouter();
+  // Idempotency: key stabil per intent tambah; retry jaringan memakai key
+  // yang sama (ditolak server), sukses merotasi untuk merek berikutnya.
+  const idempotencyKeyRef = useRef<string | null>(null);
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID();
   const [isPending, startTransition] = useTransition();
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
@@ -26,6 +30,7 @@ export function AssetBrandForm({
         const formData = new FormData(e.currentTarget);
         const { createAssetBrand, updateAssetBrand } =
           await import("@/actions/asset.actions");
+        if (!brand?.id) formData.set("idempotencyKey", idempotencyKeyRef.current!);
         const result = brand?.id
           ? await updateAssetBrand(brand.id, formData)
           : await createAssetBrand(formData);
@@ -33,6 +38,7 @@ export function AssetBrandForm({
           showError(result.error || "Gagal menyimpan data");
           return;
         }
+        idempotencyKeyRef.current = crypto.randomUUID();
         showSuccess(
           brand?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan",
         );

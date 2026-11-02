@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useRef, useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -45,6 +45,10 @@ export function AssetCategoryForm({
   accounts?: AssetCategoryAccountOption[]
 } = {}) {
   const router = useRouter()
+  // Idempotency: key stabil per intent tambah; retry jaringan memakai key
+  // yang sama (ditolak server), sukses merotasi untuk kategori berikutnya.
+  const idempotencyKeyRef = useRef<string | null>(null)
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
 
   const accountOptions = accounts.map((a) => ({ value: String(a.id), label: `${a.code} - ${a.name}` }))
@@ -54,9 +58,11 @@ export function AssetCategoryForm({
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
+        if (!category?.id) formData.set("idempotencyKey", idempotencyKeyRef.current!)
         const { createAssetCategory, updateAssetCategory } = await import("@/actions/asset.actions")
         const result = category?.id ? await updateAssetCategory(category.id, formData) : await createAssetCategory(formData)
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess(category?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.refresh()
       } catch (error) {
