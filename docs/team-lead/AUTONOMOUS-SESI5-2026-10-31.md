@@ -1869,6 +1869,34 @@ Wilayah: manufaktur + servis/workshop/garansi/kendaraan (agent paralel), inv inv
 - Pelajaran harness terverifikasi dua kali sesi ini: describe tanpa `requirePermissionMock` sendiri bergantung urutan eksekusi — sekali tolak (Asset Group test baru menemukan `user` undefined) sampai disediakan `beforeEach` own; antrean `mockResolvedValueOnce`/`findUnique.mockResolvedValueOnce` pada model `idempotencyKey` bersama menelan injeksi test lain di file yang sama (`vi.clearAllMocks` tidak membersihkan antrean maupun implementasi persisten) — mode mock dirancang per-aksi via fixture persisten lalu dikembalikan; injeksi ditata ulang ke pola locked-key yang sama sesudah suntingan production selesai ditunda urutan sesi.
 - Koreksi ejaan `FIxture` yang terdeteksi sesudah commit RAB tidak diubah — nilai observable nol.
 
+## Putaran 65 — Penjualan+Pembelian sisa, keuangan-lanjutan+pajak, SDM sisa (4 fix, 6 CATAT SDM)
+
+Wilayah: tiga agent paralel (pembelian+penjualan sisa; keuangan-lanjutan+pajak+cron; SDM sisa). Semua kandidat diverifikasi sesi utama terhadap kode + form pemanggil + schema sebelum fix; kelas dominan tetap create tanpa idempotency key. Enam kandidat SDM belum difix ronde ini (CATAT di bawah — antrean putaran 66).
+
+### Fix
+1. `7017471fc` fix(sales): `createCustomerLateFeeTerm` anti double-submit via idempotency key — master tarif tanpa key melahirkan syarat kembar; `issueSalesLateFee` memakai tarif efektif-terbaru sehingga denda bisa berubah antar terbitan. Scope baru `sales_late_fee_term` pada `financial-idempotency.service` (klaim dalam tx + fingerprint + bind ke baris pertama; replay mengembalikan baris pertama); panel kirim key stabil per intent, rotasi sesudah sukses. 3 test baru merah→hijau.
+2. `ad032c406` fix(finance): `createBankStatement` anti double-submit via idempotency key — header draft kembar tanpa jaring unik bisnis (slug hanya suffix); baris/import tersebar dan cakupan rekonsiliasi tercemar. Klaim sesudah kunci periode; form koran kirim key stabil.
+3. `d86710651` fix(finance): `importBankStatementLines` anti double-submit via idempotency key — retry mengimpor ulang seluruh berkas: baris koran duplikat mengembungkan total header dan memblokir penyelesaian rekonsiliasi. Konten identik antar berkas berbeda tetap sah, jadi penjaga = key per intent impor, bukan dedupe konten. Klaim sesudah kunci header + cek draft, sebelum `createMany`; rollback melepaskan key.
+4. `9cacd692b` fix(finance): `createRecurringTransaction` anti double-submit via idempotency key — jadwal aktif kembar; runner mengklaim per baris jadwal (bukan per pasangan), jadi cabang expense/jurnal memposting dokumen dobel per occurrence. Create dibungkus tx, klaim key pertama; form key create-only + rotasi.
+5. `806c1ee38` fix(tax): akun nonaktif ditolak di master jenis PPh — `withholdingAccountError` hanya menilai eksistensi + `deletedAt`; akun yang dinonaktifkan sesudah form dibuka tersimpan sah lalu transaksi sah gagal berisik di titik pakai. Syarat `isActive: true` ditambah ke kedua query akun.
+
+### CATAT SDM (antrean putaran 66, belum difix)
+- `addPayrollComponentLine` race kembar (`hrm.actions.ts:764-794`): cek duplikat luar tx, kunci payroll hanya baca ulang status draft; tanpa cek duplikat dalam tx dan tanpa `@@unique([payrollId, componentId])` → komponen dobel terhitung `recalcDraftPayrollFromLines`.
+- `createSalaryAdjustment` retry dobel (`salary-adjustment.actions.ts:104-195`): dua pengajuan `menunggu` sama-sama bisa disetujui lalu `applied`.
+- `createTimesheet` retry dobel (`hrm.actions.ts:4141-4190`): dua baris 8 jam lolos cap 24 jam; production pull membuat labor cost per `sourceTimesheetId` dobel.
+- `saveProbationReviewDraft` draft kembar (`probation.actions.ts:160-206`): cek-ada luar tx tanpa kunci/unique `(employeeId, milestone)`.
+- Kandidat disiplin-deduction (karyawan/signer nonaktif lolos, caller `applyDisciplinaryDeduction` belum ditemukan) dan `createVacancy` (kode unik per panggilan gagal menahan retry) dicatat residu rendah; belum ada bukti dampak uang.
+
+### Vonis / cakupan agent (jangan diangkat ulang tanpa bukti baru)
+- Pembelian+penjualan sisa bersih kecuali fix #1: `createServicePurchaseOrderFromWorkOrder` (kunci WO + cek duplikat dalam tx), `createSalesOrder`/`createSalesInvoice`/`createSalesPayment` (ber-key + kunci baris + cap dalam tx), `createDifferenceInvoice`/`createProgressInvoice`/`createRevisionDownCredit` (kunci quotation, kandidat dari baris terkunci), `confirmDownPayment` (kunci DP hulu + jurnal unique + hook idempoten), `verifyGoodsReceipt`/`processPurchaseReturn` (hook kunci baris + jaring StockMove/jurnal existing), `confirmVendorBill`/`confirmVendorPayment`/`reverseVendorPayment`/`voidVendorBill`/`cancelPurchaseOrder`/`decideQuotation`/`postInvoice`/`completeSalesReturn` (kunci + baca ulang/klaim kondisional).
+- Keuangan bersih kecuali fix #2–#5: semua create keuangan inti ber-key dalam tx; transisi jurnal/exp/kas-kecil/rekon kunci + baca ulang + klaim kondisional; `cheque`, `bank-transfer`, `tax-payment` (akun dikunci + dinilai ulang hidup dalam tx); pajak (`tax-invoice.service`, `withholding-certificate.service`, `tax-dispute`) pakai `financial-idempotency` persisten claim-dulu + fingerprint; periode + penutup tahun kunci setting + klaim kondisional; `runDueRecurring`/`runRecurringNow` klaim `updateMany{nextRunDate,isActive,deletedAt}`.
+- SDM bersih: payroll utama + `addPayrollCommissionLine`/`attachPkwtEventToPayroll`, komponen master, cuti/lembur, pinjaman selain create, rekrutmen selain `createVacancy`, transisi salary adjustment, probation transisi, disiplin jenjang + tanggapan, PKWT, succession.
+- Ditolak/dira-gu: `createProfitCenter` (`code @unique` menahan retry), `JournalService.createJournal`/`reverseJournal` (tanpa pemanggil produksi — dead code), akun mati di `createJournal` DRAFT (ditolak di `postJournal` by design), cron `taskRecoverStuckReversals` (klaim kondisional).
+
+### Catatan
+- Tidak ada migrasi schema putaran ini.
+- Satu flake tak-lokal teramati satu kali pada batch guard saat commit fix #5 (6 run pengulangan hijau berurutan, file terkait hijau 10/10); bukan dari diff putaran 65.
+
 CI final putaran 64: head `9ace1f558` **success**; keduabelas head fix masing-masing **success** (termasuk intermediate, tanpa failure).
 
 CI final putaran 63: head `9372036b5` **success**; kedelapan head fix masing-masing **success** (termasuk intermediate, tanpa failure).
