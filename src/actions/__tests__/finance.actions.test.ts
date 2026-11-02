@@ -2152,6 +2152,33 @@ describe("More Action Branches", () => {
     })
   })
 
+  it("putaran 63: createReconciliationAdjustment retry idempotencyKey sama ditolak, item lahir sekali", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft",
+    })
+    mocks.prismaMock.bankReconciliationItem.create.mockResolvedValue({ id: 7 })
+    const idemCreate = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 1 })
+      .mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }))
+    mocks.prismaMock.idempotencyKey = {
+      create: idemCreate,
+      findUnique: vi.fn().mockResolvedValue({ createdAt: new Date() }),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    }
+
+    const payload = { type: "outstanding_deposit", amount: "1000", date: "2026-06-13", idempotencyKey: "adj-key-1" }
+    const first = await actions.createReconciliationAdjustment(1, fdMap(payload))
+    const second = await actions.createReconciliationAdjustment(1, fdMap(payload))
+
+    expect(first.success).toBe(true)
+    expect(second.success).toBe(false)
+    expect(String(second.error ?? "")).toContain("duplikat")
+    expect(mocks.prismaMock.bankReconciliationItem.create).toHaveBeenCalledTimes(1)
+    delete mocks.prismaMock.idempotencyKey
+  })
+
   it("createReconciliationAdjustment menolak nominal id-ID yang salah parse", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({

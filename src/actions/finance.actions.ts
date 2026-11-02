@@ -1800,7 +1800,7 @@ export async function createReconciliationAdjustment(
   formData: FormData,
 ) {
   try {
-    await requirePermission("manage_bank_reconciliation");
+    const user = await requirePermission("manage_bank_reconciliation");
 
     const rawType = String(formData.get("type") ?? "").trim();
     if (rawType !== "outstanding_deposit" && rawType !== "outstanding_check") {
@@ -1839,6 +1839,10 @@ export async function createReconciliationAdjustment(
       if (recon.status !== "draft") {
         throw new Error("Hanya rekonsiliasi dengan status draft yang dapat ditambah penyesuaian");
       }
+
+      // Putaran 63: retry identik melahirkan item penyesuaian kembar
+      // yang menggeser adjustedBookBalance dua kali saat penyelesaian.
+      await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
 
       return tx.bankReconciliationItem.create({
         data: {

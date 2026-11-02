@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { createReconciliationAdjustment } from "@/actions/finance.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
@@ -23,6 +23,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 export function AdjustmentForm({ reconciliationId }: { reconciliationId: number }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [type, setType] = useState("")
   const [amount, setAmount] = useState<number>(0)
 
@@ -34,11 +35,14 @@ export function AdjustmentForm({ reconciliationId }: { reconciliationId: number 
       return
     }
     startTransition(async () => {
-      const res = await createReconciliationAdjustment(reconciliationId, new FormData(form))
+      const fd = new FormData(form)
+      fd.set("idempotencyKey", idempotencyKeyRef.current)
+      const res = await createReconciliationAdjustment(reconciliationId, fd)
       if (!res.success) {
         showError(res.error || "Gagal menambah penyesuaian")
         return
       }
+      idempotencyKeyRef.current = crypto.randomUUID()
       showSuccess("Item penyesuaian ditambahkan")
       form.reset()
       setType("")
