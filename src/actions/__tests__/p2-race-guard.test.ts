@@ -46,6 +46,7 @@ vi.mock("@/lib/db/prisma", () => ({
 vi.mock("@/lib/hooks/accounting.hook", () => ({
   onExpenseApproved: (...a: unknown[]) => onExpenseApprovedMock(...a),
   onPettyCashCreated: vi.fn(),
+  assertJournalNotInCompletedReconciliation: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock("@/lib/hooks/expense.hook", () => ({
   onExpenseApprovedSyncPettyCash: vi.fn(),
