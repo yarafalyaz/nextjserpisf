@@ -59,13 +59,26 @@ describe("aggregateSales", () => {
 describe("monthlySales", () => {
   it("buckets by month and labels in Indonesian", () => {
     const rows = monthlySales([
-      { date: new Date(2026, 8, 5), grandTotal: 1000 },
-      { date: new Date(2026, 8, 20), grandTotal: 500 },
-      { date: new Date(2026, 9, 2), grandTotal: 2000 },
+      { date: new Date(2026, 8, 5), items: [{ total: 1000 }] },
+      { date: new Date(2026, 8, 20), items: [{ total: 500 }] },
+      { date: new Date(2026, 9, 2), items: [{ total: 2000 }] },
     ])
     expect(rows.map((r) => r.month)).toEqual(["2026-09", "2026-10"])
     expect(rows[0]).toMatchObject({ label: "September 2026", revenue: 1500, invoiceCount: 2 })
     expect(rows[1]).toMatchObject({ label: "Oktober 2026", revenue: 2000, invoiceCount: 1 })
+  })
+
+  it("putaran 95: basis = Σ baris (sama KPI), bukan grandTotal — diskon header + PPN tak ikut tren", () => {
+    // Faktur: baris 1.000.000, diskon header 100.000, PPN 99.000 → grandTotal
+    // 999.000. Tren wajib 1.000.000 agar sebasis KPI Total Penjualan halaman.
+    const rows = monthlySales([
+      {
+        date: new Date(2026, 9, 10),
+        items: [{ total: 600_000 }, { total: 400_000 }],
+      },
+    ])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ revenue: 1_000_000, invoiceCount: 1 })
   })
 
   it("is empty without invoices", () => {

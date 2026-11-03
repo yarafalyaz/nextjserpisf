@@ -71,14 +71,24 @@ export interface MonthlySalesRow {
   invoiceCount: number
 }
 
-/** Monthly revenue trend, ascending by month. */
-export function monthlySales(invoices: { date: Date; grandTotal: number }[]): MonthlySalesRow[] {
+/**
+ * Monthly revenue trend, ascending by month. Basis = line revenue (Σ baris,
+ * setelah diskon baris, sebelum diskon header + PPN) — basis yang sama
+ * dengan KPI "Total Penjualan" dan tabel kelompok (`aggregateSales`).
+ * Putaran 95: sebelumnya Σ `grandTotal`, sehingga tren menyimpang dari KPI
+ * halaman yang sama persis sebesar diskon header dan PPN faktur.
+ */
+export function monthlySales(
+  invoices: { date: Date; items: { total: number }[] }[],
+): MonthlySalesRow[] {
   const buckets = new Map<string, MonthlySalesRow>()
 
   for (const invoice of invoices) {
     const month = `${invoice.date.getFullYear()}-${String(invoice.date.getMonth() + 1).padStart(2, "0")}`
     const existing = buckets.get(month) ?? { month, label: formatPeriod(month), revenue: 0, invoiceCount: 0 }
-    existing.revenue = safeAdd(existing.revenue, invoice.grandTotal, 2)
+    for (const item of invoice.items) {
+      existing.revenue = safeAdd(existing.revenue, item.total, 2)
+    }
     existing.invoiceCount += 1
     buckets.set(month, existing)
   }

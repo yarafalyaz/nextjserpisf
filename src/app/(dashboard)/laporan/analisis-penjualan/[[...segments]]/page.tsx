@@ -82,12 +82,19 @@ export default async function SalesAnalyticsPage({
 
   // The monthly trend deliberately ignores the period filter: a one-month view of
   // a monthly chart is useless, so it always covers the last 12 months to endDate.
+  // Basis tren = Σ baris (sama dengan KPI Total Penjualan), bukan grandTotal —
+  // lihat komentar di monthlySales (putaran 95).
   const trendStart = new Date(endDate.getFullYear(), endDate.getMonth() - 11, 1)
   const trendInvoices = await prisma.salesInvoice.findMany({
     where: { status: { in: [...RECOGNISED_AR_STATUSES] }, deletedAt: null, date: { gte: trendStart, lte: endDate } },
-    select: { date: true, grandTotal: true },
+    select: { date: true, items: { select: { total: true } } },
   })
-  const monthly = monthlySales(trendInvoices.map((inv) => ({ date: inv.date, grandTotal: Number(inv.grandTotal) })))
+  const monthly = monthlySales(
+    trendInvoices.map((inv) => ({
+      date: inv.date,
+      items: inv.items.map((it) => ({ total: Number(it.total) })),
+    })),
+  )
 
   const totalRevenue = groups.reduce((sum, row) => sum + row.revenue, 0)
   const totalQty = groups.reduce((sum, row) => sum + row.qty, 0)
