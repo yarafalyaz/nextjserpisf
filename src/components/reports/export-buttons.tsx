@@ -71,7 +71,7 @@ function openPdf(href: string, download: boolean) {
  */
 export { formatPrintedAtWib }
 
-function csvQuote(value: string): string {
+export function csvQuote(value: string): string {
   // Putaran 87: guard formula-injection sama seperti sel body (baris ~237) dan
   // builder server — kop memuat nama perusahaan dari settings.
   const safe = /^[=+\-@\t|%]/.test(value) ? `\t${value}` : value
@@ -218,20 +218,20 @@ export function ExportButtons({
       return
     }
 
-    let csv = `"${title}"\n${headerLines.join('\n')}\n\n`
+    let csv = `${csvQuote(title)}\n${headerLines.join('\n')}\n\n`
     // Narasi laporan (mis. disclaimer di [data-report-narration]) ikut ke
     // berkas: ekspor tidak boleh melepas konteks hukum dari angkanya.
     const narrationEl = document.querySelector('[data-report-narration]')
     const narrationText = narrationEl?.getAttribute('data-report-narration') || ''
-    if (narrationText) csv += `"${narrationText.replace(/"/g, '""')}"\n\n`
+    if (narrationText) csv += `${csvQuote(narrationText)}\n\n`
     document.querySelectorAll('[data-report-truncation]').forEach((note) => {
       const text = note.getAttribute('data-report-truncation') || ''
-      if (text) csv += `"TERPOTONG: ${text.replace(/"/g, '""')}"\n`
+      if (text) csv += `${csvQuote(`TERPOTONG: ${text}`)}\n`
     })
     if (document.querySelector('[data-report-truncation]')) csv += '\n'
     tables.forEach((table) => {
       const section = table.getAttribute('data-report-table')
-      if (section) csv += `"${section}"\n`
+      if (section) csv += `${csvQuote(section)}\n`
       const rows = table.querySelectorAll('tr')
       rows.forEach((row) => {
         const cells = row.querySelectorAll('th, td')

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 
-import { buildCsvHeaderLines, formatPrintedAtWib } from "../export-buttons"
+import { buildCsvHeaderLines, csvQuote, formatPrintedAtWib } from "../export-buttons"
 
 describe("AC-REP-003 kop ekspor klien", () => {
   it("waktu cetak selalu Asia/Jakarta berlabel WIB, bukan zona perangkat", () => {
@@ -38,5 +38,11 @@ describe("AC-REP-003 kop ekspor klien", () => {
     expect(
       buildCsvHeaderLines({ companyName: "@PT Contoh", printedAt: "28 Oktober 2026 07.30 WIB" }),
     ).toEqual(['"\t@PT Contoh"', '"Dicetak: 28 Oktober 2026 07.30 WIB"'])
+  })
+
+  it("putaran 93: judul/narasi/section memakai csvQuote yang sama (quote + guard formula)", () => {
+    expect(csvQuote('Pusat Laba "=X"')).toBe('"Pusat Laba ""=X"""')
+    expect(csvQuote("=SUM(A1:A9)")).toBe('"\t=SUM(A1:A9)"')
+    expect(csvQuote("@nama barang")).toBe('"\t@nama barang"')
   })
 })
