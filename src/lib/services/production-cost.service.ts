@@ -115,8 +115,10 @@ export async function syncServicePurchaseOrderCost(
   // kunci tetap membaca nilai lama. Client tanpa $queryRaw atau baris
   // tanpa status jatuh ke snapshot di atas; jalur produksi selalu punya
   // $queryRaw dan WO yang terhubung selalu berstatus. Urutan kunci
-  // WO -> ProductionOrder meniru create/complete Material Issue; arah
-  // lawan issueMaterial (PO -> WO) sudah ada di repo tanpa siklus baru.
+  // WO -> ProductionOrder adalah urutan global: issueMaterial dan
+  // createProductionOrder selaras dengannya sejak putaran 79 (sebelumnya
+  // PO -> WO / produk -> WO, deadlock melawan jalur ini dan pasangan
+  // decideBomRevisionChange).
   if (typeof client.$queryRaw === "function") {
     const lockedWo = (await client.$queryRaw`SELECT status FROM work_orders WHERE id = ${po.workOrderId} FOR UPDATE`) as
       | Array<{ status: string }>

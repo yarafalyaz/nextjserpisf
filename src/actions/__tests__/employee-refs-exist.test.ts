@@ -31,7 +31,10 @@ vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: vi.fn() }))
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn().mockResolvedValue("EMP-001") }))
 vi.mock("@/lib/utils/settings", () => ({ getSystemSettings: vi.fn().mockResolvedValue({}) }))
-vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn().mockResolvedValue("budi") }))
+vi.mock("@/lib/utils/slug-db", () => ({
+  nextSlug: vi.fn().mockResolvedValue("budi"),
+  nextSlugWithClient: vi.fn().mockResolvedValue("budi"),
+}))
 vi.mock("@/lib/auth/hr-scope", () => ({ getHrScope: vi.fn().mockResolvedValue({ kind: "all" }) }))
 vi.mock("bcryptjs", () => {
   const m = { hash: vi.fn().mockResolvedValue("hash"), compare: vi.fn().mockResolvedValue(true) }

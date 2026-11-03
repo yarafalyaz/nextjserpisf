@@ -730,19 +730,24 @@ export async function listVehicleVariantOptions(): Promise<{ value: string; labe
 // FK hanya dicek format (int positif) oleh schema: customer terhapus,
 // varian/tipe fiktif lolos lalu gagal P2003 mentah. Cek eksistensi
 // pra-tulis (pola withholding-tax/position-department).
+type CustomerVehicleRefsClient = Pick<
+  typeof prisma,
+  "customer" | "vehicleVariant" | "vehicle"
+>
+
 async function assertCustomerVehicleRefsExist(input: {
   customerId: number;
   variantId?: number | null;
   formVehicleId?: number | null;
   kendaraanId?: number | null;
-}): Promise<string | null> {
-  const customer = await prisma.customer.findFirst({
+}, client: CustomerVehicleRefsClient = prisma): Promise<string | null> {
+  const customer = await client.customer.findFirst({
     where: { id: input.customerId, deletedAt: null, isActive: true },
     select: { id: true },
   });
   if (!customer) return "Pelanggan tidak ditemukan";
   if (input.variantId) {
-    const variant = await prisma.vehicleVariant.findFirst({
+    const variant = await client.vehicleVariant.findFirst({
       where: { id: input.variantId },
       select: { id: true },
     });
@@ -750,7 +755,7 @@ async function assertCustomerVehicleRefsExist(input: {
   } else {
     const rawVehicleId = input.formVehicleId ?? input.kendaraanId;
     if (rawVehicleId) {
-      const vehicle = await prisma.vehicle.findFirst({
+      const vehicle = await client.vehicle.findFirst({
         where: { id: rawVehicleId, deletedAt: null },
         select: { id: true },
       });
@@ -791,6 +796,18 @@ export async function createCustomerVehicle(formData: FormData) {
     // Mirrors the atomic createVehicle fix.
     const idempotencyKey = formData.get("idempotencyKey") as string | null;
     const customerVehicle = await prisma.$transaction(async (tx) => {
+      // Putaran 79: kunci baris customer + nilai ulang hidup SEBELUM klaim
+      // idempotency membentuk snapshot. deleteCustomer mengunci baris yang
+      // sama lalu soft-delete; tanpa ini kepemilikan lahir menempel ke
+      // pelanggan yang baru mati di jendela cek pra-tx.
+      if (typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT id FROM customers WHERE id = ${customerId} FOR UPDATE`;
+      }
+      const lockedRefError = await assertCustomerVehicleRefsExist(
+        { customerId, variantId, formVehicleId, kendaraanId },
+        tx as CustomerVehicleRefsClient,
+      );
+      if (lockedRefError) throw new Error(lockedRefError);
       // Putaran 64: retry submit identik melahirkan kepemilikan (dan, pada
       // jalur varian, Vehicle) kembar — schema tidak punya jaring unik.
       // Klaim key sebagai pernyataan pertama tx: rollback melepaskan key.
@@ -871,6 +888,20 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
     // .update failure would otherwise leave the pair inconsistent (e.g. year
     // moved on the type but the link still points at the old row).
     await prisma.$transaction(async (tx) => {
+      // Putaran 79: kunci link ini + customer tujuan lalu nilai
+      // ulang hidup customer SEBELUM kendaraan katalog bisa lahir/diubah —
+      // cek pra-tx fast-fail saja; deleteCustomer mengunci baris customer
+      // yang sama, jadi pindah kepemilikan ke pelanggan yang baru
+      // di-soft-delete di jendela cek ditolak dari bacaan terkunci.
+      if (typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT id FROM customer_vehicles WHERE id = ${id} FOR UPDATE`;
+        await tx.$queryRaw`SELECT id FROM customers WHERE id = ${d.customerId} FOR UPDATE`;
+      }
+      const lockedRefError = await assertCustomerVehicleRefsExist(
+        { customerId: d.customerId, variantId: d.variantId, formVehicleId: d.vehicleId, kendaraanId: d.kendaraanId },
+        tx as CustomerVehicleRefsClient,
+      );
+      if (lockedRefError) throw new Error(lockedRefError);
       const existing = await tx.customerVehicle.findUniqueOrThrow({
         where: { id },
       });

@@ -1662,7 +1662,7 @@ export async function createEmployee(formData: FormData) {
           data: {
             name: employeeData.name,
             email: email.trim(),
-            slug: await nextSlug("user", employeeData.name),
+            slug: await nextSlugWithClient(tx as never, "user", employeeData.name),
             password: hashedPassword,
             isActive: true,
             ...(loginRoleIds.length > 0
@@ -1674,14 +1674,14 @@ export async function createEmployee(formData: FormData) {
           data: {
             ...employeeData,
             userId: user.id,
-            slug: await nextSlug("employee", employeeData.name),
+            slug: await nextSlugWithClient(tx as never, "employee", employeeData.name),
           },
         });
       }
       return tx.employee.create({
         data: {
           ...employeeData,
-          slug: await nextSlug("employee", employeeData.name),
+          slug: await nextSlugWithClient(tx as never, "employee", employeeData.name),
         },
       });
     });
@@ -1796,7 +1796,8 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
 
     // If the employee already has a login account and the email is changing,
     // keep the user's login email in sync (email IS the login credential).
-    let syncUserId: number | null = null;
+    // Nilai guard diulang dari baris terkunci dalam tx; snapshot ini hanya
+    // fail-fast supaya konflik email jelas sebelum transaksi dibuka.
     if (!wantsLogin && current?.userId && trimmedEmail) {
       const clash = await prisma.user.findUnique({
         where: { email: trimmedEmail },
@@ -1807,7 +1808,6 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
           error: "Email sudah terdaftar sebagai pengguna lain",
         };
       }
-      syncUserId = current.userId;
     }
 
     const parsedDates = parseFormData(employeeDatesSchema, formData);
@@ -1850,7 +1850,6 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       ...employeeFields,
       ...(lifecycleFields ?? {}),
       // updateEmployee tidak menulis joinDate (tak berubah); tanggal divalidasi di atas agar konsisten dgn create.
-      slug: await nextSlug("employee", employeeFields.name, { excludeId: employeeId }),
     };
     const updateDataSensitive = (await canViewSensitiveIdentity())
       ? updateDataRaw
@@ -1888,6 +1887,21 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       if (wantsLogin && lockedCurrent.userId) {
         throw new Error("Karyawan ini sudah memiliki akun login");
       }
+      const lockedTargetUserId = lockedCurrent.userId ?? null;
+      const lockedTargetErr = await assertCanModifyEmployeeTarget(
+        actor.roles,
+        lockedTargetUserId,
+        tx,
+      );
+      if (lockedTargetErr) throw new Error(lockedTargetErr);
+      const lockedSyncUserId = !wantsLogin ? lockedTargetUserId : null;
+      const lockedSlug = await nextSlugWithClient(
+        tx as never,
+        "employee",
+        updateData.name,
+        { excludeId: employeeId },
+      );
+      const lockedUpdateData = { ...updateData, slug: lockedSlug };
       const lockedManagerErr = await assertManagerChainAcyclic(employeeId, employeeFields.managerId, tx);
       if (lockedManagerErr) throw new Error(lockedManagerErr);
       if (wantsLogin && email && loginPass) {
@@ -1896,7 +1910,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
           data: {
             name: updateData.name,
             email: email.trim(),
-            slug: await nextSlug("user", updateData.name),
+            slug: await nextSlugWithClient(tx as never, "user", updateData.name),
             password: hashedPassword,
             isActive: true,
             ...(loginRoleIds.length > 0
@@ -1906,17 +1920,17 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
         });
         await tx.employee.update({
           where: { id: employeeId },
-          data: { ...updateData, userId: user.id },
+          data: { ...lockedUpdateData, userId: user.id },
         });
       } else {
         await tx.employee.update({
           where: { id: employeeId },
-          data: updateData,
+          data: lockedUpdateData,
         });
         // Keep the linked login account's email + name + roles in sync with the employee.
-        if (syncUserId) {
+        if (lockedSyncUserId) {
           await tx.user.update({
-            where: { id: syncUserId },
+            where: { id: lockedSyncUserId },
             data: {
               name: updateData.name,
               ...(trimmedEmail ? { email: trimmedEmail } : {}),

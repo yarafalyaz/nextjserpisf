@@ -67,6 +67,16 @@ beforeEach(() => {
 })
 
 describe("putaran 55 K2: gerbang ref fitment", () => {
+  it("putaran 79: update menolak item yang mati di jendela cek pra-tx (nilai ulang berkunci)", async () => {
+    mocks.prisma.item.findFirst
+      .mockResolvedValueOnce({ id: 5, isActive: true }) // cek pra-tx: hidup
+      .mockResolvedValue({ id: 5, isActive: false }) // baca ulang dalam tx: mati
+    const res = await updateVehicleFitment(4, fdMap({ itemId: "5", result: "compatible" }))
+    expect(res.success).toBe(false)
+    expect((res as { error?: string }).error).toContain("tidak aktif")
+    expect(mocks.prisma.vehicleFitmentRule.update).not.toHaveBeenCalled()
+  })
+
   it("menolak item nonaktif", async () => {
     mocks.prisma.item.findFirst.mockResolvedValueOnce({ id: 5, isActive: false })
     const res = await createVehicleFitment(fdMap({ itemId: "5", result: "compatible" }))

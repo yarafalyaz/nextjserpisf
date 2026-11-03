@@ -298,6 +298,24 @@ describe("Vehicle Actions", () => {
 })
 
 describe("Customer Vehicle Actions", () => {
+  it("putaran 79: createCustomerVehicle menolak pelanggan yang di-soft-delete di jendela cek pra-tx", async () => {
+    mocks.prismaMock.customer.findFirst
+      .mockResolvedValueOnce({ id: 1 }) // cek pra-tx: hidup
+      .mockResolvedValue(null) // baca ulang dalam tx: sudah mati
+    const res = await actions.createCustomerVehicle(fdMap({ customerId: 1, variantId: 1, vehicleId: 1 }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.customerVehicle.create).not.toHaveBeenCalled()
+  })
+  it("putaran 79: updateCustomerVehicle menolak pelanggan tujuan yang di-soft-delete di jendela cek pra-tx", async () => {
+    mocks.prismaMock.customer.findFirst
+      .mockResolvedValueOnce({ id: 1 })
+      .mockResolvedValue(null)
+    const res = await actions.updateCustomerVehicle(9, fdMap({ customerId: 1, variantId: 1, vehicleId: 1 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Pelanggan tidak ditemukan")
+    expect(mocks.prismaMock.customerVehicle.update).not.toHaveBeenCalled()
+  })
+
   it("createCustomerVehicle succeeds", async () => {
     mocks.prismaMock.vehicleVariant.findFirst.mockReset()
     mocks.prismaMock.vehicleVariant.findFirst.mockImplementation(async () => ({ id: 1 }))

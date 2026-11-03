@@ -28,28 +28,33 @@ import { checkIdempotency } from "@/lib/utils/idempotency";
  * evaluator. Item adalah satu-satunya ref dengan hidup (isActive +
  * deletedAt); master kendaraan/BOM keras-hapus sehingga cukup ada.
  */
+type FitmentRefsClient = Pick<
+  typeof prisma,
+  "item" | "bomRevision" | "vehicleBrand" | "vehicleModel" | "vehicleVariant"
+>
+
 async function assertFitmentRefsLive(v: {
   itemId: number
   bomRevisionId?: number | null
   vehicleBrandId?: number | null
   vehicleModelId?: number | null
   vehicleVariantId?: number | null
-}): Promise<string | null> {
-  const item = await prisma.item.findFirst({
+}, client: FitmentRefsClient = prisma): Promise<string | null> {
+  const item = await client.item.findFirst({
     where: { id: v.itemId, deletedAt: null },
     select: { id: true, isActive: true },
   })
   if (!item) return "Item tidak ditemukan."
   if (!item.isActive) return "Item tidak aktif; aturan kompatibilitas baru tidak dapat dibuat untuknya."
   if (v.bomRevisionId != null) {
-    const revision = await prisma.bomRevision.findFirst({
+    const revision = await client.bomRevision.findFirst({
       where: { id: v.bomRevisionId },
       select: { id: true },
     })
     if (!revision) return "Revisi BOM tidak ditemukan."
   }
   if (v.vehicleBrandId != null) {
-    const brand = await prisma.vehicleBrand.findFirst({
+    const brand = await client.vehicleBrand.findFirst({
       where: { id: v.vehicleBrandId },
       select: { id: true },
     })
@@ -57,7 +62,7 @@ async function assertFitmentRefsLive(v: {
   }
   let modelBrandId: number | null = null
   if (v.vehicleModelId != null) {
-    const model = await prisma.vehicleModel.findFirst({
+    const model = await client.vehicleModel.findFirst({
       where: { id: v.vehicleModelId },
       select: { id: true, vehicleBrandId: true },
     })
@@ -68,7 +73,7 @@ async function assertFitmentRefsLive(v: {
     }
   }
   if (v.vehicleVariantId != null) {
-    const variant = await prisma.vehicleVariant.findFirst({
+    const variant = await client.vehicleVariant.findFirst({
       where: { id: v.vehicleVariantId },
       select: { id: true, vehicleModelId: true },
     })
@@ -79,7 +84,7 @@ async function assertFitmentRefsLive(v: {
     if (v.vehicleBrandId != null && modelBrandId == null) {
       // Brand disematkan tanpa model: rantai varian tetap wajib menuju
       // brand itu lewat model induknya.
-      const parent = await prisma.vehicleModel.findFirst({
+      const parent = await client.vehicleModel.findFirst({
         where: { id: variant.vehicleModelId },
         select: { vehicleBrandId: true },
       })
@@ -163,23 +168,34 @@ export async function updateVehicleFitment(id: number, formData: FormData) {
     const refError = await assertFitmentRefsLive(v)
     if (refError) return { success: false, error: refError }
 
-    const rule = await prisma.vehicleFitmentRule.update({
-      where: { id },
-      data: {
-        itemId: v.itemId,
-        bomRevisionId: v.bomRevisionId ?? null,
-        vehicleBrandId: v.vehicleBrandId ?? null,
-        vehicleModelId: v.vehicleModelId ?? null,
-        vehicleVariantId: v.vehicleVariantId ?? null,
-        yearFrom: v.yearFrom ?? null,
-        yearTo: v.yearTo ?? null,
-        drivetrain: v.drivetrain ?? null,
-        transmission: v.transmission ?? null,
-        result: v.result,
-        source: v.source ?? null,
-        notes: v.notes ?? null,
-        ...(v.isActive !== undefined ? { isActive: v.isActive } : {}),
-      },
+    // Putaran 79: nilai ulang ref DALAM tx sesudah kunci baris item — cek
+    // pra-tx di atas fast-fail saja. deleteItem mengunci baris item yang
+    // sama lalu soft-delete; tanpa nilai ulang ini update mendarat sesudah
+    // delete commit dan menautkan aturan aktif ke item mati.
+    const rule = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM items WHERE id = ${v.itemId} FOR UPDATE`;
+      }
+      const lockedRefError = await assertFitmentRefsLive(v, tx as FitmentRefsClient)
+      if (lockedRefError) throw new Error(lockedRefError)
+      return tx.vehicleFitmentRule.update({
+        where: { id },
+        data: {
+          itemId: v.itemId,
+          bomRevisionId: v.bomRevisionId ?? null,
+          vehicleBrandId: v.vehicleBrandId ?? null,
+          vehicleModelId: v.vehicleModelId ?? null,
+          vehicleVariantId: v.vehicleVariantId ?? null,
+          yearFrom: v.yearFrom ?? null,
+          yearTo: v.yearTo ?? null,
+          drivetrain: v.drivetrain ?? null,
+          transmission: v.transmission ?? null,
+          result: v.result,
+          source: v.source ?? null,
+          notes: v.notes ?? null,
+          ...(v.isActive !== undefined ? { isActive: v.isActive } : {}),
+        },
+      });
     });
 
     revalidatePath("/kendaraan/fitment");

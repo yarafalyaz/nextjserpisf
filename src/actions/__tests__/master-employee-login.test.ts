@@ -16,6 +16,8 @@ const employeeDeleteMock = vi.fn()
 const employeeUpdateMock = vi.fn()
 const txUserCreateMock = vi.fn()
 const txUserUpdateMock = vi.fn()
+const nextSlugMock = vi.fn(async (..._a: unknown[]) => "test-slug")
+const nextSlugWithClientMock = vi.fn(async (..._a: unknown[]) => "tx-slug")
 const txEmployeeCreateMock = vi.fn()
 const txEmployeeUpdateMock = vi.fn()
 const txEmployeeDeleteMock = vi.fn()
@@ -29,7 +31,10 @@ vi.mock("@/lib/auth/hr-scope", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/auth/hr-scope")>()
   return { ...actual, getHrScope: (...a: unknown[]) => getHrScopeMock(...a) }
 })
-vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug") }))
+vi.mock("@/lib/utils/slug-db", () => ({
+  nextSlug: (...a: unknown[]) => nextSlugMock(...a),
+  nextSlugWithClient: (...a: unknown[]) => nextSlugWithClientMock(...a),
+}))
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: (...a: unknown[]) => generateDocMock(...a),
   peekNextDocumentNumber: vi.fn(),
@@ -50,6 +55,7 @@ vi.mock("bcryptjs", () => ({
   default: { hash: (...a: unknown[]) => bcryptHashMock(...a) },
 }))
 const employeeLockMock = vi.fn().mockResolvedValue(1)
+const roleFindManyMock = vi.fn()
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
@@ -97,6 +103,7 @@ beforeEach(() => {
   logActivityMock.mockResolvedValue(undefined)
   // nextSlug() probes for a free slug via findFirst → null means it's free.
   employeeFindFirstMock.mockResolvedValue(null)
+  roleFindManyMock.mockResolvedValue([])
   // $transaction runs the callback with a tx stub
   transactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) =>
     cb({
@@ -105,6 +112,7 @@ beforeEach(() => {
         update: (...a: unknown[]) => txUserUpdateMock(...a),
         findUnique: (...a: unknown[]) => userFindUniqueMock(...a),
       },
+      role: { findMany: (...a: unknown[]) => roleFindManyMock(...a) },
       employee: {
         create: (...a: unknown[]) => txEmployeeCreateMock(...a),
         update: (...a: unknown[]) => txEmployeeUpdateMock(...a),
@@ -132,6 +140,19 @@ describe("createEmployee — without login account", () => {
     expect(arg.data.userId).toBeUndefined()
     expect(arg.data.name).toBe("Budi Santoso")
   })
+
+  it("putaran 79: slug karyawan memakai delegate tx, bukan client global", async () => {
+    txEmployeeCreateMock.mockResolvedValue({ id: 42 })
+    const res = await createEmployee(fd(baseFields))
+    expect(res.success).toBe(true)
+    expect(nextSlugWithClientMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "employee",
+      "Budi Santoso",
+    )
+    expect(nextSlugMock).not.toHaveBeenCalled()
+    expect(txEmployeeCreateMock.mock.calls[0][0].data.slug).toBe("tx-slug")
+  })
 })
 
 describe("createEmployee — with login account", () => {
@@ -153,6 +174,8 @@ describe("createEmployee — with login account", () => {
     const userArg = txUserCreateMock.mock.calls[0][0]
     expect(userArg.data.email).toBe("budi@corp.id")
     expect(userArg.data.password).toBe("hashed-pw")
+    expect(userArg.data.slug).toBe("tx-slug")
+    expect(nextSlugMock).not.toHaveBeenCalled()
     expect(userArg.data.roles.connect).toEqual([{ id: 3 }, { id: 5 }])
     // employee linked to the new user
     const empArg = txEmployeeCreateMock.mock.calls[0][0]
@@ -302,6 +325,39 @@ describe("updateEmployee — create login account for existing employee", () => 
     expect(res.error).toContain("sudah dihapus")
     expect(txEmployeeUpdateMock).not.toHaveBeenCalled()
     expect(txUserCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("putaran 79: target yang baru menjadi super_admin di bawah kunci ditolak", async () => {
+    requirePermissionMock.mockResolvedValue({
+      id: "8",
+      roles: ["hr_admin"],
+      permissions: ["edit_employees"],
+    })
+    // Snapshot pra-tx: target belum super_admin; bacaan dalam tx membaca
+    // set role sesudah updateUserRoles konkuren menjadikannya super_admin.
+    userFindUniqueMock
+      .mockResolvedValueOnce({ id: 7, roles: [{ name: "employee" }] })
+      .mockResolvedValueOnce({ id: 7, roles: [{ name: "super_admin" }] })
+    employeeFindUniqueMock.mockResolvedValue({ userId: 7, deletedAt: null })
+    const res = await updateEmployee(50, fd(baseFields))
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toMatch(/super admin/i)
+    expect(txEmployeeUpdateMock).not.toHaveBeenCalled()
+    expect(txUserUpdateMock).not.toHaveBeenCalled()
+    expect(employeeLockMock.mock.invocationCallOrder.length).toBeGreaterThan(0)
+  })
+
+  it("putaran 79: slug update dihitung dalam tx dari bacaan scope kunci", async () => {
+    txEmployeeUpdateMock.mockResolvedValue({ id: 50 })
+    const res = await updateEmployee(50, fd(baseFields))
+    expect(res.success).toBe(true)
+    expect(nextSlugWithClientMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "employee",
+      "Budi Santoso",
+      { excludeId: 50 },
+    )
+    expect(nextSlugMock).not.toHaveBeenCalled()
   })
 })
 

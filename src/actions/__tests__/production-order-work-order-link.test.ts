@@ -109,6 +109,26 @@ describe("createProductionOrder — idempotency (putaran 63)", () => {
 })
 
 describe("createProductionOrder — tautan Work Order", () => {
+  it("putaran 79: WO tertaut dikunci SEBELUM baris produk (urutan kunci global WO->PO->produk)", async () => {
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({
+      id: 7,
+      documentNo: "WO-0007",
+      bomRevisionId: null,
+    })
+    const sqlSeen: string[] = []
+    ;(mocks.prismaMock.$queryRaw as ReturnType<typeof vi.fn>).mockImplementation((...a: unknown[]) => {
+      const first = a[0] as { strings?: string[] } | string[] | undefined
+      sqlSeen.push(Array.isArray(first) ? first.join("?") : ((first as any)?.strings?.join("?") ?? String(first ?? "")))
+      return Promise.resolve([])
+    })
+    const res = await createProductionOrder(fd({ productId: 1, qty: 2, workOrderId: 7 }))
+    expect(res.success).toBe(true)
+    const woLockIdx = sqlSeen.findIndex((s) => /work_orders/i.test(s) && /for update/i.test(s))
+    const productLockIdx = sqlSeen.findIndex((s) => /products/i.test(s) && /for update/i.test(s))
+    expect(woLockIdx).toBeGreaterThanOrEqual(0)
+    expect(productLockIdx).toBeGreaterThan(woLockIdx)
+  })
+
   it("menyimpan workOrderId dan meminjamkan revisi BOM ke WO yang belum punya", async () => {
     mocks.prismaMock.workOrder.findUnique.mockResolvedValue({
       id: 7,

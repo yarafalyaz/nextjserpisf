@@ -807,6 +807,14 @@ export async function createProductionOrder(formData: FormData) {
     const productionOrder = await prisma.$transaction(async (tx) => {
       await checkIdempotency(idempotencyKey, tx, user.id);
 
+      // Putaran 79: urutan kunci global WO -> produk. decideBomRevisionChange
+      // mengunci dokumen pemilik (WO/PO) lalu baris produk; bila tx ini
+      // mengunci produk dulu lalu WO, pasangan itu deadlock (satu korban
+      // rollback). WO tertaut karena itu dikunci SEBELUM produk — status
+      // dinilai ulang dari baris terkunci di bawah.
+      if (outerWorkOrder && typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${outerWorkOrder.id} FOR UPDATE`;
+      }
       // Putaran 72: snapshot BOM + biaya standar dibaca di sini, di bawah
       // kunci baris produk, supaya rilis revisi/hitung ulang biaya yang
       // commit bersamaan tidak bisa menyela di tengah snapshot.
@@ -846,9 +854,8 @@ export async function createProductionOrder(formData: FormData) {
 
       let workOrder = outerWorkOrder;
       if (outerWorkOrder) {
-        if (typeof tx.$queryRaw === "function") {
-          await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${outerWorkOrder.id} FOR UPDATE`;
-        }
+        // Baris WO sudah dikunci di atas (urutan global WO -> produk);
+        // bacaan ini menilai status dari baris terkunci itu.
         const freshWo = await tx.workOrder.findUnique({
           where: { id: outerWorkOrder.id },
           select: { id: true, documentNo: true, bomRevisionId: true, status: true },
@@ -1072,7 +1079,25 @@ export async function issueMaterial(
     const warehouseScope = await getWarehouseScope(user);
     if (warehouseScope.kind === "none") throw new Error("Anda tidak memiliki akses ke gudang mana pun.");
 
+    // Pre-read ringan untuk menentukan WO induk: wibawa decideBomRevisionChange
+    // diturunkan ke kunci WO, jadi urutan kunci global tx ini WO -> PO.
+    // Snapshot pra-tx hanya menentukan APA yang dikunci; semua nilai penentu
+    // dibaca ulang dari baris terkunci di dalam tx.
+    const link = await prisma.productionOrder.findUnique({
+      where: { id: productionOrderId },
+      select: { workOrderId: true },
+    });
+
     await prisma.$transaction(async (tx) => {
+      // Putaran 79: urutan kunci global WO -> PO (lalu item urut id).
+      // Pasangan keputusan ganti revisi BOM mengunci dokumen pemilik
+      // (WO/PO) lalu baris produk; sink biaya jasa mengunci WO lalu PO
+      // anak urut id. Arah PO -> WO di sini deadlock melawan keduanya.
+      // WO induk dikunci lebih dulu bila tertaut; lost-update sesama
+      // issueMaterial tetap terserialkan oleh kunci baris PO sesudahnya.
+      if (link?.workOrderId != null) {
+        await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${link.workOrderId} FOR UPDATE`;
+      }
       // Lock the order row so concurrent issueMaterial calls serialise — without
       // this, two calls read the same totalActualCost and the later write
       // overwrites the earlier (lost update), dropping a batch's cost.
@@ -1081,6 +1106,9 @@ export async function issueMaterial(
         where: { id: productionOrderId },
         select: { id: true, documentNo: true, status: true, totalActualCost: true, workOrderId: true, startDate: true, createdAt: true },
       });
+      if (link && order.workOrderId !== link.workOrderId) {
+        throw new Error("Tautan perintah kerja perintah produksi berubah selama proses; ulangi pengeluaran material.");
+      }
       if (order.status !== "confirmed" && order.status !== "in_progress") {
         throw new Error(
           `Material hanya bisa dikeluarkan untuk perintah berstatus 'confirmed' atau 'in_progress' (saat ini '${order.status}')`,
@@ -1103,9 +1131,9 @@ export async function issueMaterial(
       // mengunci WO sebelum membaca agregat actualQty): tanpa kunci ini,
       // complete yang sudah lolos guard bisa commit StockMove sesudah cek
       // di bawah, dan actualQty di sini tetap lahir — material keluar dua
-      // jalur. Urutan kunci global: PO lalu WO.
+      // jalur. Baris WO sudah dikunci di awal tx (urutan global WO -> PO);
+      // count di bawah membaca dari titik serialisasi yang sama.
       if (order.workOrderId != null) {
-        await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${order.workOrderId} FOR UPDATE`;
         const consumedViaMI = await tx.materialIssue.count({
           where: {
             workOrderId: order.workOrderId,

@@ -686,6 +686,7 @@ describe("Production Order Actions", () => {
   })
 
   it("issueMaterial mengunci baris WO sebelum guard konsumsi MI (pasangan completeMaterialIssue)", async () => {
+    mocks.prismaMock.productionOrder.findUnique.mockResolvedValue({ workOrderId: 42 })
     mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
       id: 8, documentNo: "MO-008", status: "in_progress", totalActualCost: 0, workOrderId: 42,
     })
@@ -711,7 +712,57 @@ describe("Production Order Actions", () => {
     )
   })
 
+  it("putaran 79: issueMaterial mengunci WO induk SEBELUM baris PO (urutan kunci global WO->PO)", async () => {
+    mocks.prismaMock.productionOrder.findUnique.mockResolvedValue({ workOrderId: 42 })
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", totalActualCost: 0, workOrderId: 42,
+    })
+    mocks.prismaMock.materialIssue.count.mockResolvedValue(0)
+    mocks.prismaMock.item.findMany.mockResolvedValue([{
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5, isActive: true, deletedAt: null,
+    }])
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 99 })
+    const sqlSeen: string[] = []
+    mocks.prismaMock.$queryRaw.mockImplementation((...a: any[]) => {
+      const first = a[0]
+      sqlSeen.push(Array.isArray(first) ? first.join("?") : ((first as any)?.strings?.join("?") ?? String(first ?? "")))
+      return Promise.resolve([])
+    })
+    const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 3 }])
+    expect(res.success).toBe(true)
+    const woLockIdx = sqlSeen.findIndex((s) => /work_orders/i.test(s) && /for update/i.test(s))
+    const poLockIdx = sqlSeen.findIndex((s) => /production_orders/i.test(s) && /for update/i.test(s))
+    expect(woLockIdx).toBeGreaterThanOrEqual(0)
+    expect(poLockIdx).toBeGreaterThan(woLockIdx)
+  })
+
+  it("putaran 79: issueMaterial PO tanpa WO tetap mengunci PO dulu (tanpa kunci WO)", async () => {
+    mocks.prismaMock.productionOrder.findUnique.mockResolvedValue({ workOrderId: null })
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", totalActualCost: 0, workOrderId: null,
+    })
+    mocks.prismaMock.materialIssue.count.mockResolvedValue(0)
+    mocks.prismaMock.item.findMany.mockResolvedValue([{
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5, isActive: true, deletedAt: null,
+    }])
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 99 })
+    const sqlSeen: string[] = []
+    mocks.prismaMock.$queryRaw.mockImplementation((...a: any[]) => {
+      const first = a[0]
+      sqlSeen.push(Array.isArray(first) ? first.join("?") : ((first as any)?.strings?.join("?") ?? String(first ?? "")))
+      return Promise.resolve([])
+    })
+    const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 3 }])
+    expect(res.success).toBe(true)
+    expect(sqlSeen.findIndex((s) => /work_orders/i.test(s) && /for update/i.test(s))).toBe(-1)
+  })
+
   it("refuses PO issue when the linked WO was already consumed via MI (P1-4)", async () => {
+    mocks.prismaMock.productionOrder.findUnique.mockResolvedValue({ workOrderId: 42 })
     mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
       id: 8, documentNo: "MO-008", status: "in_progress", totalActualCost: 0, workOrderId: 42,
     })
@@ -725,6 +776,7 @@ describe("Production Order Actions", () => {
   })
 
   it("allows PO issue when the linked WO has no completed MI (P1-4)", async () => {
+    mocks.prismaMock.productionOrder.findUnique.mockResolvedValue({ workOrderId: 42 })
     mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
       id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0, workOrderId: 42,
     })
@@ -750,8 +802,9 @@ describe("Production Order Actions", () => {
   })
 
   it("persists the consumed serials and lots on the material line (PRD line 369 / REP-13)", async () => {
+    mocks.prismaMock.productionOrder.findUnique.mockResolvedValue({ workOrderId: null })
     mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
-      id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0,
+      id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0, workOrderId: null,
     })
     mocks.prismaMock.item.findMany.mockResolvedValue([{
       id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5, isActive: true, deletedAt: null,
@@ -790,8 +843,9 @@ describe("Production Order Actions", () => {
   })
 
   it("merges serials/lots into an existing material line on a later issue", async () => {
+    mocks.prismaMock.productionOrder.findUnique.mockResolvedValue({ workOrderId: null })
     mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
-      id: 8, documentNo: "MO-008", status: "in_progress", totalActualCost: 42,
+      id: 8, documentNo: "MO-008", status: "in_progress", totalActualCost: 42, workOrderId: null,
     })
     mocks.prismaMock.item.findMany.mockResolvedValue([{
       id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5, isActive: true, deletedAt: null,
