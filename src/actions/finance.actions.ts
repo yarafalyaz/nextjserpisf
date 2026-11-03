@@ -853,11 +853,34 @@ export async function postJournal(journalId: number) {
       // assertAccountsExist hook posting). costCenterId/profitCenterId
       // bare-int tanpa FK: id fiktif tersimpan senyap dan laporan per-pusat
       // kehilangan atribusi; CostCenter juga punya isActive.
+      // Putaran 81: penilaian wajib sesudah kunci baris akun & pusat —
+      // updateAccount bisa menjadikan akun induk dan deleteCostCenter/
+      // deleteProfitCenter bisa menghapus pusat di jendela cek->klaim
+      // (delete pusat mengunci baris yang sama lalu menghitung entri,
+      // termasuk DRAFT, jadi siapa menang kunci yang menang). Urutan
+      // accounts -> cost_centers -> profit_centers (sama JournalService).
+      const journalAccountIds = [
+        ...new Set(journal.entries.map((e) => e.accountId).filter((v): v is number => typeof v === "number" && v > 0)),
+      ].sort((a, b) => a - b);
+      const journalCostCenterIds = [
+        ...new Set(journal.entries.map((e) => e.costCenterId).filter((v): v is number => typeof v === "number" && v > 0)),
+      ].sort((a, b) => a - b);
+      const journalProfitCenterIds = [
+        ...new Set(journal.entries.map((e) => e.profitCenterId).filter((v): v is number => typeof v === "number" && v > 0)),
+      ].sort((a, b) => a - b);
+      if (typeof tx.$executeRaw === "function" && journalAccountIds.length > 0) {
+        await tx.$executeRaw`SELECT id FROM accounts WHERE id IN (${Prisma.join(journalAccountIds)}) FOR UPDATE`;
+      }
+      if (typeof tx.$executeRaw === "function" && journalCostCenterIds.length > 0) {
+        await tx.$executeRaw`SELECT id FROM cost_centers WHERE id IN (${Prisma.join(journalCostCenterIds)}) FOR UPDATE`;
+      }
+      if (typeof tx.$executeRaw === "function" && journalProfitCenterIds.length > 0) {
+        await tx.$executeRaw`SELECT id FROM profit_centers WHERE id IN (${Prisma.join(journalProfitCenterIds)}) FOR UPDATE`;
+      }
       await assertAccountsExist(tx, journal.entries.map((e) => e.accountId), "Jurnal manual");
       // Akun induk (punya anak) bukan akun terposting: saldo terkubur di
       // header COA dan rollup laporan tak konsisten antar format — preseden
       // penolakan di warranty-journal.service.ts (assertPostableAccount).
-      const journalAccountIds = [...new Set(journal.entries.map((e) => e.accountId))];
       const withChildren = await tx.account.findMany({
         where: { id: { in: journalAccountIds } },
         select: { id: true, _count: { select: { children: true } } },

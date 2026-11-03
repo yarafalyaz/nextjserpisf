@@ -551,6 +551,23 @@ describe("total trailing: BUGHUNT round3 #1 (leading blank geser kolom)", () => 
     expect(outputRow?.kind === "data" ? outputRow.cells : []).toEqual(["PPN Keluaran", "0", "890", "(890)"])
   })
 
+  it("putaran 81: rekonsiliasi PPN docOutput net retur legacy hitung-ulang (tanpa snapshot)", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([{ taxAmount: 11000 }])
+    mocks.prismaMock.vendorBill.findMany.mockResolvedValue([])
+    mocks.prismaMock.salesReturn.findMany.mockResolvedValue([
+      {
+        date: new Date(2026, 9, 10),
+        taxReturnNoteDate: null,
+        salesInvoice: { subtotal: 100000, discount: 0, taxAmount: 11000 },
+        items: [{ returnVat: null, qty: 2, price: 50000 }],
+      },
+    ])
+    const recon = await loadVatReconciliation(period)
+    const outputRow = recon.table.rows.find((r) => r.kind === "data" && r.cells[0] === "PPN Keluaran")
+    // PPN retur legacy = 2 x 50.000 x 11% = 11.000 -> docOutput 0, bukan 11.000.
+    expect(outputRow?.kind === "data" ? outputRow.cells : []).toEqual(["PPN Keluaran", "0", "0", "0"])
+  })
+
   it("regression round 18: rekonsiliasi PPN docInput nol untuk bill tanpa nomor faktur pajak valid", async () => {
     mocks.prismaMock.journalEntry.findMany.mockResolvedValue([])
     mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([])

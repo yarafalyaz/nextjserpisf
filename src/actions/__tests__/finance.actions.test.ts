@@ -2750,6 +2750,70 @@ describe("Status guard branches", () => {
     expect(mocks.prismaMock.journal.updateMany).not.toHaveBeenCalled()
   })
 
+  // Putaran 81: penilaian akun/pusat di titik posting wajib sesudah kunci
+  // baris akun & pusat — penulis lawan (updateAccount induk/parentId,
+  // deleteCostCenter/deleteProfitCenter) mengunci baris yang sama.
+  it("putaran 81: postJournal mengunci akun & pusat sebelum menilai akun/pusat", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 9 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", createdBy: 1, transactionDate: new Date("2024-01-01"), entries: [{ accountId: 2, debit: 1000, credit: 0, costCenterId: 7 }, { accountId: 1, debit: 0, credit: 1000, profitCenterId: 8 }] })
+    mocks.prismaMock.account.findMany.mockImplementation(async (args: any) => {
+      if (args?.select?._count) return [{ id: 1, _count: { children: 0 } }, { id: 2, _count: { children: 0 } }]
+      return [{ id: 1 }, { id: 2 }]
+    })
+    mocks.prismaMock.costCenter.findMany.mockResolvedValue([{ id: 7 }])
+    mocks.prismaMock.profitCenter.findMany.mockResolvedValue([{ id: 8 }])
+    const res = await actions.postJournal(1)
+    expect(res.success).toBe(true)
+
+    const calls = (mocks.prismaMock.$executeRaw as any).mock.calls as unknown[][]
+    // Prisma tagged-template: bentuk panggilan beda per jalur (strings array
+    // polos vs obyek _Sql) — normalkan seperti pola purchase.actions.test.
+    const sqlOf = (call: unknown[]) =>
+      Array.isArray(call[0])
+        ? (call[0] as unknown[]).join("")
+        : String((call[0] as { strings?: string[] })?.strings?.join("?") ?? call[0])
+    const accountLockIndex = calls.findIndex((c) => /from\s+accounts/i.test(sqlOf(c)) && /for update/i.test(sqlOf(c)))
+    expect(accountLockIndex).toBeGreaterThanOrEqual(0)
+    // ID terurut naik (deadlock-free satu arah) dibungkus satu argumen join.
+    const accountJoin = calls[accountLockIndex][1] as { values?: unknown }
+    expect(accountJoin.values).toEqual([1, 2])
+    const journalLockIndex = calls.findIndex((c) => /from\s+journals/i.test(sqlOf(c)))
+    const costLockIndex = calls.findIndex((c) => /from\s+cost_centers/i.test(sqlOf(c)))
+    const profitLockIndex = calls.findIndex((c) => /from\s+profit_centers/i.test(sqlOf(c)))
+    expect(costLockIndex).toBeGreaterThanOrEqual(0)
+    expect(profitLockIndex).toBeGreaterThanOrEqual(0)
+
+    const rawOrder = (idx: number) => (mocks.prismaMock.$executeRaw as any).mock.invocationCallOrder[idx]
+    // Sesudah kunci baris jurnal; akun sebelum pusat; akun sebelum penilaian.
+    expect(rawOrder(accountLockIndex)).toBeGreaterThan(rawOrder(journalLockIndex))
+    expect(rawOrder(accountLockIndex)).toBeLessThan(rawOrder(costLockIndex))
+    expect(rawOrder(costLockIndex)).toBeLessThan(rawOrder(profitLockIndex))
+    expect(rawOrder(accountLockIndex)).toBeLessThan((mocks.prismaMock.account.findMany as any).mock.invocationCallOrder[0])
+    expect(rawOrder(costLockIndex)).toBeLessThan((mocks.prismaMock.costCenter.findMany as any).mock.invocationCallOrder[0])
+    expect(rawOrder(profitLockIndex)).toBeLessThan((mocks.prismaMock.profitCenter.findMany as any).mock.invocationCallOrder[0])
+    expect(mocks.prismaMock.journal.updateMany).toHaveBeenCalled()
+  })
+
+  it("putaran 81: postJournal tetap menilai pusat dari bacaan sesudah kunci", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 9 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", createdBy: 1, transactionDate: new Date("2024-01-01"), entries: [{ accountId: 1, debit: 1000, credit: 0, profitCenterId: 99999 }, { accountId: 2, debit: 0, credit: 1000 }] })
+    mocks.prismaMock.account.findMany.mockImplementation(async (args: any) => {
+      if (args?.select?._count) return [{ id: 1, _count: { children: 0 } }, { id: 2, _count: { children: 0 } }]
+      return [{ id: 1 }, { id: 2 }]
+    })
+    mocks.prismaMock.profitCenter.findMany.mockResolvedValue([])
+    const res = await actions.postJournal(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Pusat laba tidak ditemukan/i)
+    expect(mocks.prismaMock.journal.updateMany).not.toHaveBeenCalled()
+    const calls = (mocks.prismaMock.$executeRaw as any).mock.calls as unknown[][]
+    const sqlOf = (call: unknown[]) =>
+      Array.isArray(call[0])
+        ? (call[0] as unknown[]).join("")
+        : String((call[0] as { strings?: string[] })?.strings?.join("?") ?? call[0])
+    expect(calls.some((c) => /from\s+profit_centers/i.test(sqlOf(c)))).toBe(true)
+  })
+
   it("regression round 18: postJournal menolak pembuat jurnal sendiri", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", createdBy: 1, transactionDate: new Date("2024-01-01"), entries: [{ accountId: 1, debit: 1000, credit: 0 }, { accountId: 2, debit: 0, credit: 1000 }] })

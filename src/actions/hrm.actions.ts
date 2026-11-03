@@ -4374,7 +4374,9 @@ export async function createTimesheet(formData: FormData) {
       await assertLiveEmployee(v.employeeId, tx);
       return tx.timesheet.create({
         data: {
-          slug: await nextSlug("timesheet", `lembar-waktu-${v.date}`),
+          // Putaran 81: slug lewat delegate tx (stem bersama lintas karyawan
+          // — varian global tak melihat baris tak-tercommit tx lain -> P2002).
+          slug: await nextSlugWithClient(tx as never, "timesheet", `lembar-waktu-${v.date}`),
           ...timesheetWriteData(v),
         },
       });
@@ -6231,7 +6233,7 @@ export async function updateTimesheet(id: number, formData: FormData) {
       return tx.timesheet.update({
         where: { id },
         data: {
-          slug: await nextSlug("timesheet", "lembar-waktu", { excludeId: id }),
+          slug: await nextSlugWithClient(tx as never, "timesheet", "lembar-waktu", { excludeId: id }),
           ...timesheetWriteData(v),
         },
       });

@@ -58,6 +58,7 @@ export default async function EditAccountPage({
           parentId: data.parentId,
           description: data.description,
           normalBalance: data.normalBalance,
+          reportGroup: data.reportGroup,
         }}
         accounts={parentAccounts}
       />

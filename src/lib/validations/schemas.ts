@@ -1,5 +1,6 @@
 import { z } from "zod"
 import "./zod-locale";
+import { ACCOUNT_GROUP_LABELS } from "@/lib/utils/account-groups";
 
 const optionalString = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
@@ -217,6 +218,17 @@ export const accountServerSchema = z.object({
     .enum(["DEBIT", "CREDIT"], {
       message: "Saldo normal harus DEBIT atau CREDIT",
     })
+    .optional(),
+  // Kelompok laporan (Account.reportGroup) menentukan himpunan kas/bank dan
+  // klasifikasi laporan; tanpa field ini akun baru via UI selalu NULL dan tak
+  // pernah masuk pemilih pembayaran/transfer. String kosong = tak dikirim.
+  reportGroup: z
+    .preprocess(
+      (v) => (v === "" || v == null ? undefined : v),
+      z.enum(Object.keys(ACCOUNT_GROUP_LABELS) as [string, ...string[]], {
+        message: "Kelompok laporan tidak dikenal",
+      }),
+    )
     .optional(),
 })
 

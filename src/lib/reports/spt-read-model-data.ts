@@ -23,7 +23,7 @@ import {
 } from "@/lib/tax/spt-read-model"
 import { buildTaxLiability } from "@/lib/tax/tax-liability"
 import { isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice"
-import { returnDeductionPeriod, utcPeriodOf } from "@/lib/tax/return-snapshot"
+import { returnDeductionPeriod, snapshotReturnLine, utcPeriodOf } from "@/lib/tax/return-snapshot"
 import { safeSubtract } from "@/lib/utils/math"
 
 export interface SptPeriodRow {
@@ -49,6 +49,16 @@ export interface SptPeriodRow {
 // jurnal pada masa yang sama.
 function periodOf(date: Date): string {
   return utcPeriodOf(date)
+}
+
+// Batas rentang dari parseReportPeriod adalah tanggal LOKAL proses (awal/
+// akhir bulan setempat), bukan tanggal dokumen — masanya WAJIB dibaca dari
+// komponen lokalnya juga. Membacanya lewat UTC (periodOf) menggeser masa
+// awal sebulan ke belakang pada proses WIB: awal bulan 00:00 lokal = sore
+// bulan lalu UTC, sehingga prefilter creditPeriod/period dan filter akhir
+// memuat masa sebelum periode terpilih.
+function rangePeriodOf(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
 }
 
 export async function loadSptPeriodRows(): Promise<SptPeriodRow[]> {
@@ -78,8 +88,8 @@ export async function loadSptPeriodRowsForRange(range?: {
   // disaring per baris), masukan = creditPeriod, legacy = masa tanggal
   // dokumen, retur = masa coalesce(nota, retur), jurnal = masa tanggal
   // jurnal, setor = period. Bila `range` absen: query persis seperti dulu.
-  const startPeriod = range ? periodOf(range.start) : null
-  const endPeriod = range ? periodOf(range.end) : null
+  const startPeriod = range ? rangePeriodOf(range.start) : null
+  const endPeriod = range ? rangePeriodOf(range.end) : null
   const inRange = startPeriod != null && endPeriod != null
   // Periode tersaring: awal masa awal s/d akhir masa akhir (inklusif).
   const rangeStart = inRange ? new Date(range!.start.getFullYear(), range!.start.getMonth(), 1) : null
@@ -172,7 +182,10 @@ export async function loadSptPeriodRowsForRange(range?: {
         select: {
           date: true,
           taxReturnNoteDate: true,
-          items: { select: { returnDpp: true, returnVat: true } },
+          // qty/price + faktur asal dimuat hanya untuk hitung-ulang baris
+          // legacy (tanpa snapshot) di bawah — pola loader Faktur PPN.
+          salesInvoice: { select: { subtotal: true, discount: true, taxAmount: true } },
+          items: { select: { returnDpp: true, returnVat: true, qty: true, price: true } },
         },
       }),
       outputAccountId || inputAccountId
@@ -300,12 +313,37 @@ export async function loadSptPeriodRowsForRange(range?: {
 
   const deductionRows = buildReturnDeductionRows(
     salesReturns.flatMap((ret) =>
-      ret.items.map((item) => ({
-        period: returnDeductionPeriod(ret.date, ret.taxReturnNoteDate),
-        dpp: item.returnDpp == null ? 0 : Number(item.returnDpp),
-        vat: item.returnVat == null ? 0 : Number(item.returnVat),
-        snapshot: item.returnDpp != null && item.returnVat != null,
-      })),
+      ret.items.map((item) => {
+        if (item.returnDpp != null && item.returnVat != null) {
+          return {
+            period: returnDeductionPeriod(ret.date, ret.taxReturnNoteDate),
+            dpp: Number(item.returnDpp),
+            vat: Number(item.returnVat),
+            snapshot: true,
+          }
+        }
+        // Baris legacy (pra-F-004, tanpa snapshot): hitung-ulang dari qty x
+        // price + tarif efektif faktur asal, berlabel legacy — memetakan
+        // null ke 0 menghilangkan pengurang dari masa yang betul (pola
+        // kanonis vat-invoices-data).
+        const recalc = snapshotReturnLine({
+          qty: Number(item.qty ?? 0),
+          price: Number(item.price ?? 0),
+          source: ret.salesInvoice
+            ? {
+                subtotal: Number(ret.salesInvoice.subtotal),
+                discount: Number(ret.salesInvoice.discount),
+                taxAmount: Number(ret.salesInvoice.taxAmount),
+              }
+            : null,
+        })
+        return {
+          period: returnDeductionPeriod(ret.date, ret.taxReturnNoteDate),
+          dpp: recalc.returnDpp,
+          vat: recalc.returnVat,
+          snapshot: false,
+        }
+      }),
     ),
   ).byPeriod
 

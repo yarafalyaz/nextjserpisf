@@ -23,6 +23,8 @@ function buildService(txOverrides: Record<string, unknown> = {}) {
     $queryRaw: spies.queryRaw,
     $executeRaw: spies.executeRaw,
     account: { findMany: spies.accountFindMany },
+    costCenter: { findMany: vi.fn().mockResolvedValue([]) },
+    profitCenter: { findMany: vi.fn().mockResolvedValue([]) },
     journal: {
       create: spies.journalCreate,
       findUniqueOrThrow: spies.journalFindUniqueOrThrow,
@@ -239,7 +241,9 @@ describe("JournalService", () => {
       // Material-Issue / stock journals landed with cost_center_id = NULL and every
       // cost-center report (pusat-laba, anggaran-vs-realisasi) silently lost the
       // realisasi into the "no cost center" bucket.
-      const { service, spies } = buildService();
+      const { service, spies } = buildService({
+        costCenter: { findMany: vi.fn().mockResolvedValue([{ id: 42 }]) },
+      });
       spies.accountFindMany.mockResolvedValue([
         { id: 1, isActive: true, deletedAt: null, _count: { children: 0 } },
         { id: 2, isActive: true, deletedAt: null, _count: { children: 0 } },
@@ -263,6 +267,83 @@ describe("JournalService", () => {
           expect.objectContaining({ accountId: 2, costCenterId: null }),
         ],
       });
+    });
+
+    // Putaran 81: jurnal lahir POSTED — titik pengakuan wajib mengunci baris
+    // akun + pusat sebelum menilai (penulis lawan: updateAccount induk /
+    // deleteCostCenter / deleteProfitCenter berkunci baris sama).
+    it("putaran 81: mengunci baris akun urut id sebelum menilai akun", async () => {
+      const { service, spies } = buildService();
+      spies.accountFindMany.mockResolvedValue([
+        { id: 1, isActive: true, deletedAt: null, _count: { children: 0 } },
+        { id: 2, isActive: true, deletedAt: null, _count: { children: 0 } },
+      ]);
+      spies.journalCreate.mockResolvedValue({ id: 1, journalNumber: "JRN-1" });
+      spies.journalEntryCreateMany.mockResolvedValue({ count: 2 });
+
+      await service.createJournal({
+        journalNumber: "JRN-1",
+        transactionDate: new Date(),
+        type: "manual",
+        entries: [
+          { accountId: 2, debit: 100, credit: 0 },
+          { accountId: 1, debit: 0, credit: 100 },
+        ],
+      });
+
+      const sqls = spies.executeRaw.mock.calls.map((c) => ((c as unknown as [string[]])[0] ?? []).join("?"));
+      const accountLockIndex = sqls.findIndex((s) => /from\s+accounts/i.test(s) && /for update/i.test(s));
+      expect(accountLockIndex).toBeGreaterThanOrEqual(0);
+      // Prisma.join membungkus daftar id sebagai satu nilai _Sql.
+      const joinArg = spies.executeRaw.mock.calls[accountLockIndex][1] as unknown as { values: unknown[] };
+      expect(joinArg.values).toEqual([1, 2]);
+      expect(spies.executeRaw.mock.invocationCallOrder[accountLockIndex]).toBeLessThan(
+        spies.accountFindMany.mock.invocationCallOrder[0],
+      );
+    });
+
+    it("putaran 81: menolak pusat biaya fiktif (jurnal lahir POSTED)", async () => {
+      const ccFindMany = vi.fn().mockResolvedValue([]);
+      const { service, spies } = buildService({ costCenter: { findMany: ccFindMany } });
+      spies.accountFindMany.mockResolvedValue([
+        { id: 1, isActive: true, deletedAt: null, _count: { children: 0 } },
+        { id: 2, isActive: true, deletedAt: null, _count: { children: 0 } },
+      ]);
+
+      await expect(
+        service.createJournal({
+          journalNumber: "JRN-1",
+          transactionDate: new Date(),
+          type: "stock",
+          entries: [
+            { accountId: 1, debit: 100, credit: 0, costCenterId: 42 },
+            { accountId: 2, debit: 0, credit: 100 },
+          ],
+        }),
+      ).rejects.toThrow(/Pusat biaya tidak ditemukan.*42/);
+      expect(spies.journalCreate).not.toHaveBeenCalled();
+    });
+
+    it("putaran 81: menolak pusat laba fiktif (jurnal lahir POSTED)", async () => {
+      const pcFindMany = vi.fn().mockResolvedValue([]);
+      const { service, spies } = buildService({ profitCenter: { findMany: pcFindMany } });
+      spies.accountFindMany.mockResolvedValue([
+        { id: 1, isActive: true, deletedAt: null, _count: { children: 0 } },
+        { id: 2, isActive: true, deletedAt: null, _count: { children: 0 } },
+      ]);
+
+      await expect(
+        service.createJournal({
+          journalNumber: "JRN-1",
+          transactionDate: new Date(),
+          type: "stock",
+          entries: [
+            { accountId: 1, debit: 100, credit: 0, profitCenterId: 9 },
+            { accountId: 2, debit: 0, credit: 100 },
+          ],
+        }),
+      ).rejects.toThrow(/Pusat laba tidak ditemukan.*9/);
+      expect(spies.journalCreate).not.toHaveBeenCalled();
     });
 
     it("writes through an existing transaction without opening a nested transaction", async () => {

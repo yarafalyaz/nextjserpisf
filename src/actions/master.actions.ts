@@ -319,9 +319,14 @@ export async function createCustomer(formData: FormData) {
       code = await generateDocumentNumber("CUST", "simple");
     }
 
+    // Putaran 81: slug pelanggan (stem nama, @unique) dihitung dalam tx lewat
+    // delegate tx — varian global pra-tx tak melihat baris tak-tercommit
+    // create/rename konkuren (P2002 mentah). Variabel karena tx wajib tahu
+    // nilai final sebelum create.
+    let customerSlug: string | null = null;
     const customerData = {
       name: v.name,
-      slug: await nextSlug("customer", v.name),
+      slug: "" as string | null,
       email: v.email ?? null,
       phone: v.phone ?? null,
       address: v.address ?? null,
@@ -368,6 +373,8 @@ export async function createCustomer(formData: FormData) {
         if (npwpConflictInTx) return null;
       }
       await checkIdempotency(formData.get("idempotencyKey") as string | null, tx, user.id);
+      customerSlug = await nextSlugWithClient(tx as never, "customer", v.name);
+      customerData.slug = customerSlug;
       return tx.customer.create({ data: customerData });
     });
     if (npwpConflictInTx) return buildCustomerNpwpBlockedResult(npwpConflictInTx);
@@ -426,10 +433,13 @@ export async function updateCustomer(customerId: number, formData: FormData) {
       if (!term) return { success: false, error: "Syarat pembayaran tidak ditemukan" };
     }
 
+    // Putaran 81: slug dihitung dalam tx lewat delegate tx (di bawah kunci
+    // baris pelanggan di bawah) — varian global pra-tx tak melihat rename
+    // konkuren (P2002 pada Customer.slug @unique).
     const updateData = {
       updatedBy: Number(user.id),
       name: v.name,
-      slug: await nextSlug("customer", v.name, { excludeId: customerId }),
+      slug: "" as string | null,
       email: v.email ?? null,
       phone: v.phone ?? null,
       address: v.address ?? null,
@@ -476,6 +486,9 @@ export async function updateCustomer(customerId: number, formData: FormData) {
         );
         if (npwpConflictInTx) return;
       }
+      updateData.slug = await nextSlugWithClient(tx as never, "customer", v.name, {
+        excludeId: customerId,
+      });
       await tx.customer.update({ where: { id: customerId }, data: updateData });
     });
     if (npwpConflictInTx) return buildCustomerNpwpBlockedResult(npwpConflictInTx);
@@ -2212,6 +2225,7 @@ export async function createAccount(formData: FormData) {
           parentId: v.parentId ?? null,
           description: v.description ?? null,
           normalBalance: v.normalBalance ?? null,
+          reportGroup: v.reportGroup ?? null,
           isActive: true,
         },
       });
@@ -4361,15 +4375,21 @@ export async function updateAccount(id: number, formData: FormData) {
 
       let code = submittedCode;
       let normalBalance: "DEBIT" | "CREDIT" | null = v.normalBalance ?? null;
-      if (!submittedCode || normalBalance == null) {
+      // reportGroup sama: kosong/tak dikirim = pertahankan nilai tersimpan.
+      let reportGroup: string | null = v.reportGroup ?? null;
+      if (!submittedCode || normalBalance == null || reportGroup == null) {
+        // `args` = parameter runtime Prisma (bukan literal yang diketik ketat).
         const current = await tx.account.findUnique({
           where: { id },
-          select: { code: true, normalBalance: true },
-        });
+          select: { code: true, normalBalance: true, reportGroup: true },
+        } as unknown as { where: { id: number }; select: { code: true; normalBalance: true } });
         if (!current) throw new Error("Akun tidak ditemukan");
         if (!submittedCode) code = current.code;
         if (normalBalance == null) {
           normalBalance = (current.normalBalance as "DEBIT" | "CREDIT" | null) ?? null;
+        }
+        if (reportGroup == null) {
+          reportGroup = ((current as unknown as { reportGroup?: string | null }).reportGroup ?? null) as string | null;
         }
       }
 
@@ -4405,6 +4425,7 @@ export async function updateAccount(id: number, formData: FormData) {
           parentId: newParentId,
           description: v.description ?? null,
           normalBalance,
+          reportGroup,
         },
       });
       return { account };

@@ -129,11 +129,14 @@ export async function createProject(formData: FormData) {
     })
     // Auto-initialize default project stages (ikut tx yang sama)
     await doInitializeProjectStages(created.id, tx)
+    // Putaran 81: pengajuan approval ikut tx proyek (pola createAsset) —
+    // proyek lahir tanpa baris Approval sesudah commit lolos assertApproved
+    // senyap pada edit selamanya; kegagalan di sini menggulung proyek.
+    await requestApprovalIfConfigured("Project", created.id, Number(user.id), tx)
     return created
   })
 
   await logActivity("create", "Project", project.id, "Membuat proyek")
-  await requestApprovalIfConfigured("Project", project.id, Number(user.id));
   revalidatePath("/proyek")
   return { success: true, id: project.id }
 
@@ -166,6 +169,11 @@ export async function updateProject(projectId: number, formData: FormData) {
     if (typeof tx.$executeRaw === "function") {
       await tx.$executeRaw`SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE`
     }
+    // Putaran 81: approval dinilai ulang sesudah kunci baris proyek —
+    // cek pra-tx tak melihat penolakan/resubmisi yang commit di jendela
+    // kunci; Project gate-only jadi baris proyek sendiri tak berubah oleh
+    // approver (pola disposeAsset/postJournal).
+    await assertApproved("Project", projectId, tx)
     const fresh = await tx.project.findUnique({
       where: { id: projectId },
       select: { customerVehicleId: true },

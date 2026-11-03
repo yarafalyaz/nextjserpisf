@@ -162,6 +162,38 @@ describe("Project Actions Error Paths", () => {
     expect(String(res?.error)).toContain("Pusat biaya tidak ditemukan")
     expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
   })
+  it("putaran 81: updateProject menilai approval ulang di dalam tx sesudah kunci proyek", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue({ id: 1, customerVehicleId: null })
+    // Cek pra-tx tidak melihat approval; penilaian dalam-tx melihat pending
+    // yang commit di jendela kunci. Service asli atas mock membuktikan
+    // gerbang kedua berjalan.
+    mocks.prismaMock.approval.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 9, status: "pending", completedAt: null })
+    mocks.prismaMock.$executeRaw.mockClear()
+    const res = await actions.updateProject(1, fdMap({ customerId: 1, name: "P" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/menunggu persetujuan/)
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
+    const rawArgs = mocks.prismaMock.$executeRaw.mock.calls.map((call: any[]) => call[0])
+    const rawSql = rawArgs.map((arg: any) => (Array.isArray(arg) ? arg.join("?") : (arg?.strings?.join("?") ?? ""))).join(" ")
+    expect(rawSql).toMatch(/FROM projects[\s\S]*FOR UPDATE/)
+    expect(mocks.prismaMock.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.prismaMock.approval.findFirst.mock.invocationCallOrder[1],
+    )
+  })
+
+  it("putaran 81: createProject meminta approval dalam tx yang sama", async () => {
+    mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 7 }])
+    mocks.prismaMock.approval.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.approval.create.mockClear()
+    const res = await actions.createProject(fdMap({ customerId: 1, name: "P" }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.approval.create).toHaveBeenCalledTimes(1)
+    const approvalArg = mocks.prismaMock.approval.create.mock.calls[0][0]
+    expect(approvalArg.data).toMatchObject({ referenceType: "Project", referenceId: 1, status: "pending" })
+  })
+
   it("regresi putaran 47: createTask dengan idempotencyKey duplikat ditolak tanpa tugas kedua", async () => {
     mocks.prismaMock.idempotencyKey.create.mockRejectedValueOnce(
       Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),

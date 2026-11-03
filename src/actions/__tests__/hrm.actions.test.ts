@@ -1256,6 +1256,24 @@ describe("Timesheet Actions", () => {
     expect(mutasi()).not.toHaveBeenCalled()
   })
 
+  it("putaran 81: createTimesheet slug dari delegate tx (timesheets), bukan prisma global", async () => {
+    const res = await actions.createTimesheet(fd({
+      employeeId: "1",
+      projectId: "1",
+      date: "2026-06-12",
+      hours: "8",
+      activity: "Coding",
+    }))
+    expect(res?.success).toBe(true)
+    const createArg = prismaMock.timesheet.create.mock.calls.at(-1)?.[0] as any
+    expect(createArg.data.slug).toContain("lembar-waktu")
+    // Delegate tx pada harness ini = prismaMock itu sendiri; kontraindikasi
+    // regresi adalah slug terhitung dari bacaan tak terkunci di luar tx —
+    // kontrak yang bisa dicek di sini: create dipanggil dengan slug hasil
+    // delegate yang sama dengan bacaan kandidat di dalam tx.
+    expect(prismaMock.timesheet.findFirst).toHaveBeenCalled()
+  })
+
   it("regresi putaran 22: createTimesheet menolak WO yang menjadi final sesudah cek luar", async () => {
     ;(prismaMock as any).workOrder = { findUnique: vi.fn() }
     ;(prismaMock as any).workOrder.findUnique

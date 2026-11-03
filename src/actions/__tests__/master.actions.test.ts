@@ -1178,6 +1178,46 @@ describe("Account Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("putaran 81: createAccount menulis reportGroup dari form (Kelompok Laporan)", async () => {
+    const defaultFindMany = mocks.prismaMock.account.findMany.getMockImplementation()
+    mocks.prismaMock.account.findMany.mockImplementation(async () => [])
+    try {
+      const res = await actions.createAccount(
+        fdMap({ name: "Kas Operasional", code: "1002", type: "ASSET", reportGroup: "BANK" }),
+      )
+      expect(res?.success).toBe(true)
+      const createArg = mocks.prismaMock.account.create.mock.calls.at(-1)?.[0]
+      expect(createArg.data.reportGroup).toBe("BANK")
+    } finally {
+      mocks.prismaMock.account.findMany.mockImplementation(defaultFindMany as never)
+    }
+  })
+
+  it("putaran 81: createAccount menolak reportGroup di luar daftar kelompok", async () => {
+    const res = await actions.createAccount(
+      fdMap({ name: "Kas Aneh", code: "1003", type: "ASSET", reportGroup: "BEBAS" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.account.create).not.toHaveBeenCalled()
+  })
+
+  it("putaran 81: updateAccount menulis reportGroup dan mempertahankannya bila form mengosongkan", async () => {
+    mocks.prismaMock.account.findUnique.mockResolvedValue({ code: "1000", normalBalance: "DEBIT", reportGroup: "AREC" })
+    const setRes = await actions.updateAccount(
+      1,
+      fdMap({ name: "Kas", code: "1000", type: "ASSET", normalBalance: "DEBIT", reportGroup: "BANK" }),
+    )
+    expect(setRes?.success).toBe(true)
+    expect(mocks.prismaMock.account.update.mock.calls.at(-1)?.[0].data.reportGroup).toBe("BANK")
+
+    const keepRes = await actions.updateAccount(
+      1,
+      fdMap({ name: "Kas", code: "1000", type: "ASSET", normalBalance: "DEBIT", reportGroup: "" }),
+    )
+    expect(keepRes?.success).toBe(true)
+    expect(mocks.prismaMock.account.update.mock.calls.at(-1)?.[0].data.reportGroup).toBe("AREC")
+  })
+
   it("updateAccount menolak induk = dirinya sendiri (regresi siklus)", async () => {
     const res = await actions.updateAccount(1, fdMap({ name: "test", code: "test", type: "ASSET", normalBalance: "DEBIT", parentId: 1 }))
     expect(res?.success).toBe(false)
@@ -1187,12 +1227,12 @@ describe("Account Actions", () => {
 
   it("updateAccount menolak induk berupa keturunannya, sesudah kunci baris akun", async () => {
     // Rantai terkunci: akun 2 (induk baru) -> parentId 1 (akun ini).
-    // Beri code+normalBalance lewat form supaya bacaan fallback tak ikut antre.
+    // Beri code+normalBalance+reportGroup lewat form supaya bacaan fallback tak ikut antre.
     mocks.prismaMock.account.findUnique
       .mockResolvedValueOnce({ id: 2, parentId: 1 })
     const res = await actions.updateAccount(
       1,
-      fdMap({ name: "test", code: "test", type: "ASSET", normalBalance: "DEBIT", parentId: 2 }),
+      fdMap({ name: "test", code: "test", type: "ASSET", normalBalance: "DEBIT", reportGroup: "BANK", parentId: 2 }),
     )
     expect(res?.success).toBe(false)
     expect(res?.error).toMatch(/induk/)

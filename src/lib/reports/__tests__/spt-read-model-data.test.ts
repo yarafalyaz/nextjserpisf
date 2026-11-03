@@ -74,8 +74,9 @@ const SALES_RETURNS = [
   { status: "completed", date: D(2026, 1, 10), taxReturnNoteDate: D(2026, 2, 1), items: [{ returnDpp: 200, returnVat: 22 }] },
   // keduanya luar -> dibuang DB.
   { status: "completed", date: D(2026, 3, 5), taxReturnNoteDate: null, items: [{ returnDpp: 300, returnVat: 33 }] },
-  // legacy tanpa snapshot, date dalam, nota null -> masa Jan, vat 0.
-  { status: "completed", date: D(2026, 1, 18), taxReturnNoteDate: null, items: [{ returnDpp: null, returnVat: null }] },
+  // legacy tanpa snapshot, date dalam, nota null -> masa Jan, dihitung ulang
+  // dari qty x price + tarif efektif faktur asal (putaran 81).
+  { status: "completed", date: D(2026, 1, 18), taxReturnNoteDate: null, salesInvoice: { subtotal: 1000000, discount: 0, taxAmount: 110000 }, items: [{ returnDpp: null, returnVat: null, qty: 2, price: 50000 }] },
 ]
 
 const JOURNAL_ENTRIES = [
@@ -242,22 +243,25 @@ describe("loadSptPeriodRowsForRange — filter periode di DB", () => {
 
     // Hanya masa 2026-01. Keluaran: kepala rantai TI 3 (220) + legacy SI 503 (275)
     // = 495 mixed. Masukan: TI 5 credited (88) + legacy bill 604 (198) = 286 mixed;
-    // bill 603 ternaungi TI 7 walau TI 7 tanpa creditPeriod. Retur: nota Jan (11).
+    // bill 603 ternaungi TI 7 walau TI 7 tanpa creditPeriod. Retur: nota Jan
+    // snapshot (11) + legacy hitung-ulang (11.000).
     // Jurnal Jan: out 220 - in 88 = 132. Setor Jan ppn: 100.
+    // Retur: nota Jan snapshot 11 + legacy Jan hitung-ulang (2x50.000 DPP,
+    // tarif efektif 11% -> 11.000) = 11.011 (putaran 81).
     expect(rows).toEqual([
       {
         period: "2026-01",
         outputVat: 495,
-        returnVat: 11,
+        returnVat: 11011,
         inputVat: 286,
-        net: 198,
-        kurangBayar: true,
+        net: -10802,
+        kurangBayar: false,
         source: "mixed",
         journalLiability: 132,
-        journalVsSptDiff: -66,
+        journalVsSptDiff: 10934,
         paid: 100,
-        balance: 98,
-        overpaid: false,
+        balance: -10902,
+        overpaid: true,
       },
     ])
   })
@@ -277,10 +281,43 @@ describe("loadSptPeriodRowsForRange — filter periode di DB", () => {
       const rows = await loadSptPeriodRowsForRange(RANGE)
       // Jan tak berubah dari ekspektasi ekuivalensi: tak ada +165 dari bill 606.
       expect(rows).toHaveLength(1)
-      expect(rows[0]).toMatchObject({ period: "2026-01", inputVat: 286, net: 198, paid: 100, balance: 98 })
+      expect(rows[0]).toMatchObject({ period: "2026-01", inputVat: 286, net: -10802, paid: 100, balance: -10902 })
     } finally {
       TAX_INVOICES.pop()
       VENDOR_BILLS.pop()
+    }
+  })
+
+  it("putaran 81: batas rentang dari komponen lokal — masa sebelum periode terpilih tidak ikut", async () => {
+    // Rentang lokal mulai tanggal 1: di TZ WIB, awal bulan lokal dibaca
+    // komponen UTC-nya sebagai bulan sebelumnya oleh kode lama, sehingga
+    // creditPeriod/period bulan sebelumnya ikut lolos prefilter & filter
+    // akhir. Kontrak: where memakai "2026-01", dan baris masa 2025-12
+    // (creditPeriod/period) tidak tampil.
+    TAX_INVOICES.push(
+      { id: 9, direction: "in", taxPeriod: "2025-12", creditPeriod: "2025-12", creditStatus: "credited", dpp: 100, taxAmount: 11, djpStatus: "approved", creditablePercent: 100, salesInvoiceId: null, vendorBillId: 607, replacesId: null },
+    )
+    TAX_PAYMENTS.push({ period: "2025-12", amount: 55, taxKind: "ppn", deletedAt: null })
+    try {
+      const localRange = { start: new Date(2026, 0, 1), end: new Date(2026, 0, 31, 23, 59, 59, 999) }
+      const rows = await loadSptPeriodRowsForRange(localRange)
+      expect(mocks.prismaMock.taxInvoice.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: expect.arrayContaining([
+              expect.objectContaining({
+                OR: expect.arrayContaining([
+                  { creditPeriod: { gte: "2026-01", lte: "2026-01" } },
+                ]),
+              }),
+            ]),
+          }),
+        }),
+      )
+      expect(rows.map((r) => r.period)).not.toContain("2025-12")
+    } finally {
+      TAX_INVOICES.pop()
+      TAX_PAYMENTS.pop()
     }
   })
 

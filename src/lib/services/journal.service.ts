@@ -92,7 +92,15 @@ export class JournalService {
         // terhapus/induk ditolak seperti di titik posting lain (pola
         // assertAccountsExist + assertPostableAccount warranty). Tanpa ini
         // jalur stok (mapping settings mentah) memposting ke akun mati.
-        const accountIds = [...new Set(input.entries.map((e) => e.accountId))]
+        const accountIds = [...new Set(input.entries.map((e) => e.accountId))].sort((a, b) => a - b)
+        // Penilaian wajib sesudah kunci baris: updateAccount bisa menjadikan
+        // akun induk / menonaktifkannya dan deleteCostCenter/deleteProfitCenter
+        // bisa menghapus pusat di jendela cek→tulis (JournalEntry.costCenterId
+        // bare-int tanpa FK, jadi tak ada P2003 penyelamat). Urutan kunci
+        // accounts -> cost_centers -> profit_centers sama dengan postJournal.
+        if (typeof tx.$executeRaw === "function" && accountIds.length > 0) {
+          await tx.$executeRaw`SELECT id FROM accounts WHERE id IN (${Prisma.join(accountIds)}) FOR UPDATE`
+        }
         const accounts = await tx.account.findMany({
           where: { id: { in: accountIds } },
           select: { id: true, isActive: true, deletedAt: true, _count: { select: { children: true } } },
@@ -112,6 +120,42 @@ export class JournalService {
         const parentIds = accounts.filter((a) => a._count.children > 0).map((a) => a.id)
         if (parentIds.length > 0) {
           throw new Error(`Akun induk tidak bisa diposting (id: ${parentIds.join(', ')}). Pilih akun anak yang terposting.`)
+        }
+
+        // Pusat dinilai dari baris terkunci (delete pusat mengunci baris yang
+        // sama lalu menghitung entri — siapa menang kunci memutuskan: entri
+        // POSTED terlihat count, atau pusat hilang dan posting ditolak).
+        const costCenterIds = [
+          ...new Set(input.entries.map((e) => e.costCenterId).filter((v): v is number => typeof v === 'number' && v > 0)),
+        ].sort((a, b) => a - b)
+        if (costCenterIds.length > 0) {
+          if (typeof tx.$executeRaw === "function") {
+            await tx.$executeRaw`SELECT id FROM cost_centers WHERE id IN (${Prisma.join(costCenterIds)}) FOR UPDATE`
+          }
+          const found = await tx.costCenter.findMany({
+            where: { id: { in: costCenterIds }, isActive: true },
+            select: { id: true },
+          })
+          if (found.length !== costCenterIds.length) {
+            const missing = costCenterIds.filter((id) => !found.some((f) => f.id === id))
+            throw new Error(`Pusat biaya tidak ditemukan atau tidak aktif (id: ${missing.join(', ')}). Pilih ulang pusat biaya sebelum posting.`)
+          }
+        }
+        const profitCenterIds = [
+          ...new Set(input.entries.map((e) => e.profitCenterId).filter((v): v is number => typeof v === 'number' && v > 0)),
+        ].sort((a, b) => a - b)
+        if (profitCenterIds.length > 0) {
+          if (typeof tx.$executeRaw === "function") {
+            await tx.$executeRaw`SELECT id FROM profit_centers WHERE id IN (${Prisma.join(profitCenterIds)}) FOR UPDATE`
+          }
+          const found = await tx.profitCenter.findMany({
+            where: { id: { in: profitCenterIds } },
+            select: { id: true },
+          })
+          if (found.length !== profitCenterIds.length) {
+            const missing = profitCenterIds.filter((id) => !found.some((f) => f.id === id))
+            throw new Error(`Pusat laba tidak ditemukan (id: ${missing.join(', ')}). Pilih ulang pusat laba sebelum posting.`)
+          }
         }
 
         // Create journal header

@@ -18,6 +18,7 @@ import { REPORT_JOURNAL_STATUSES } from "@/lib/services/report-aggregation.servi
 import { formatAccounting } from "@/lib/utils/format"
 import { loadSptPeriodRowsForRange, type SptPeriodRow } from "@/lib/reports/spt-read-model-data"
 import { isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice"
+import { snapshotReturnLine } from "@/lib/tax/return-snapshot"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface TaxSimpleReport {
@@ -57,7 +58,9 @@ export async function loadReturnVatAmounts(period: Period): Promise<number[]> {
     select: {
       date: true,
       taxReturnNoteDate: true,
-      items: { select: { returnVat: true } },
+      // qty/price + faktur asal hanya untuk hitung-ulang baris legacy.
+      salesInvoice: { select: { subtotal: true, discount: true, taxAmount: true } },
+      items: { select: { returnVat: true, qty: true, price: true } },
     },
   })
   return returns
@@ -65,7 +68,24 @@ export async function loadReturnVatAmounts(period: Period): Promise<number[]> {
       const effective = ret.taxReturnNoteDate ?? ret.date
       return effective.getTime() >= period.start.getTime() && effective.getTime() <= period.end.getTime()
     })
-    .flatMap((ret) => ret.items.map((item) => Number(item.returnVat ?? 0)))
+    .flatMap((ret) =>
+      ret.items.map((item) => {
+        if (item.returnVat != null) return Number(item.returnVat)
+        // Baris legacy (tanpa snapshot): hitung-ulang tarif efektif faktur
+        // asal; memetakan null ke 0 menghilangkan pengurang dari rekonsiliasi.
+        return snapshotReturnLine({
+          qty: Number(item.qty ?? 0),
+          price: Number(item.price ?? 0),
+          source: ret.salesInvoice
+            ? {
+                subtotal: Number(ret.salesInvoice.subtotal),
+                discount: Number(ret.salesInvoice.discount),
+                taxAmount: Number(ret.salesInvoice.taxAmount),
+              }
+            : null,
+        }).returnVat
+      }),
+    )
 }
 
 const RECON_COLUMNS: TableColumn[] = [

@@ -11,11 +11,12 @@ import { FormSelect } from "@/components/ui/form-select"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
+import { ACCOUNT_GROUP_LABELS } from "@/lib/utils/account-groups"
 
 interface AccountFormProps {
   accounts: { id: number; code: string; name: string
 }[]
-  account?: { id: number; code: string; name: string; type: string; parentId?: number | null; description?: string | null; normalBalance?: string | null }
+  account?: { id: number; code: string; name: string; type: string; parentId?: number | null; description?: string | null; normalBalance?: string | null; reportGroup?: string | null }
   generatedCode?: string
 }
 
@@ -101,6 +102,16 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
               { value: "DEBIT", label: "Debit" },
               { value: "CREDIT", label: "Kredit" },
             ]}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="reportGroup">Kelompok Laporan</Label>
+          <FormSelect
+            id="reportGroup"
+            name="reportGroup"
+            placeholder="Pilih Kelompok Laporan"
+            defaultValue={account?.reportGroup ?? null}
+            options={Object.entries(ACCOUNT_GROUP_LABELS).map(([value, label]) => ({ value, label }))}
           />
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
