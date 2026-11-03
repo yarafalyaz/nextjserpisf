@@ -1,7 +1,7 @@
  
 import { jsPDF } from "jspdf"
 import autoTable from "jspdf-autotable"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrency, formatPrintedAtWib } from "@/lib/utils/format"
 import { terbilangLabel } from "@/lib/utils/terbilang"
 import { statusLabel } from "@/lib/utils/status-labels"
 
@@ -74,6 +74,9 @@ export interface TransactionPdfOptions {
 export interface DocumentSummary {
   subtotal: number
   discount?: number
+  /** Ongkir & biaya jasa (komponen grandTotal PO kanonis). Putaran 85. */
+  shipping?: number
+  serviceFee?: number
   tax?: number
   total: number
 }
@@ -344,6 +347,26 @@ export function buildTransactionPdf(
       currentY += rowH
     }
 
+    if (summary.shipping && summary.shipping > 0) {
+      doc.setFont("Helvetica", "normal")
+      doc.setTextColor(midGray)
+      doc.text("Ongkos Kirim", summaryStartX, currentY)
+      doc.setFont("Helvetica", "bold")
+      doc.setTextColor(darkGray)
+      doc.text(formatCurrency(summary.shipping), 210 - ml, currentY, { align: "right" })
+      currentY += rowH
+    }
+
+    if (summary.serviceFee && summary.serviceFee > 0) {
+      doc.setFont("Helvetica", "normal")
+      doc.setTextColor(midGray)
+      doc.text("Biaya Jasa", summaryStartX, currentY)
+      doc.setFont("Helvetica", "bold")
+      doc.setTextColor(darkGray)
+      doc.text(formatCurrency(summary.serviceFee), 210 - ml, currentY, { align: "right" })
+      currentY += rowH
+    }
+
     if (summary.tax && summary.tax > 0) {
       doc.setFont("Helvetica", "normal")
       doc.setTextColor(midGray)
@@ -408,7 +431,10 @@ export function buildTransactionPdf(
     doc.setDrawColor(226, 232, 240)
     doc.setLineWidth(0.2)
     doc.line(ml, 282, 210 - ml, 282)
-    doc.text(`Dicetak: ${new Date().toLocaleString("id-ID")}`, ml, 286)
+    // Putaran 85: cap waktu cetak dipaku WIB (kanonis formatPrintedAtWib) —
+    // toLocaleString tanpa timeZone mengikuti zona browser dan bisa beda
+    // hari dari tanggal dokumen.
+    doc.text(`Dicetak: ${formatPrintedAtWib(new Date())}`, ml, 286)
     doc.text(`Halaman ${page} dari ${pageCount}`, 210 - ml, 286, { align: "right" })
   }
 
@@ -735,6 +761,12 @@ export async function generateQuotationPDF(
   drawSummaryRow("Subtotal", formatPdfCurrency(summary.subtotal), false)
   if (summary.discount && summary.discount > 0) {
     drawSummaryRow("Potongan / Diskon", `-${formatPdfCurrency(summary.discount)}`, false)
+  }
+  if (summary.shipping && summary.shipping > 0) {
+    drawSummaryRow("Ongkos Kirim", formatPdfCurrency(summary.shipping), false)
+  }
+  if (summary.serviceFee && summary.serviceFee > 0) {
+    drawSummaryRow("Biaya Jasa", formatPdfCurrency(summary.serviceFee), false)
   }
   if (summary.tax && summary.tax > 0) {
     drawSummaryRow("Pajak (PPN)", formatPdfCurrency(summary.tax), false)

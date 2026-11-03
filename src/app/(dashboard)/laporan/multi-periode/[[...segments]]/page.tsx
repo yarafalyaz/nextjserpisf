@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatAccounting, formatCurrency } from '@/lib/utils/format'
-import { buildPeriodColumns, MULTI_PERIOD_MODE_LABELS, parseMultiPeriodCount, type MultiPeriodMode } from '@/lib/reports/multi-period'
+import { buildPeriodColumns, cumulativeNetProfit, MULTI_PERIOD_MODE_LABELS, parseMultiPeriodCount, type MultiPeriodMode } from '@/lib/reports/multi-period'
 import { reportPeriodFromRoute, splitReportSegments } from '@/lib/reports/report-period'
 import type { AccountType } from '@prisma/client'
 import { ReportLetterhead } from '@/components/reports/report-letterhead'
@@ -47,7 +47,7 @@ export default async function MultiPeriodReportPage({
   const count = parseMultiPeriodCount(filters.jumlah ?? search.jumlah)
 
   const typeFilter: AccountType[] =
-    statement === 'neraca' ? ['ASSET', 'LIABILITY', 'EQUITY'] : ['REVENUE', 'EXPENSE']
+    statement === 'neraca' ? ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'] : ['REVENUE', 'EXPENSE']
   const columns = buildPeriodColumns(mode, count, anchor)
 
   // One aggregate per column: movement inside the period for P&L, cumulative
@@ -122,7 +122,12 @@ export default async function MultiPeriodReportPage({
   }
 
   const totalAssets = sumByType('ASSET')
-  const totalLiabilitiesEquity = columns.map((_, index) => sumByType('LIABILITY')[index] + sumByType('EQUITY')[index])
+  // Putaran 85: laba berjalan kumulatif adalah bagian ekuitas (pola
+  // computeBalanceSheet "Laba/Rugi Berjalan"). Tanpa ini neraca tak pernah
+  // seimbang dan KPI selisih permanen merah sebesar laba berjalan.
+  const currentEarnings = cumulativeNetProfit(sumByType('REVENUE'), sumByType('EXPENSE'))
+  const totalEquityWithEarnings = columns.map((_, index) => sumByType('EQUITY')[index] + currentEarnings[index])
+  const totalLiabilitiesEquity = columns.map((_, index) => sumByType('LIABILITY')[index] + totalEquityWithEarnings[index])
 
   const columnCount = columns.length + 2 // label + total
   const periodLabel = `${MULTI_PERIOD_MODE_LABELS[mode]} — ${columns[0].label} s/d ${columns[columns.length - 1].label}`
@@ -243,6 +248,28 @@ export default async function MultiPeriodReportPage({
                   {section('Aset', 'ASSET', totalAssets)}
                   {section('Liabilitas', 'LIABILITY', sumByType('LIABILITY'))}
                   {section('Ekuitas', 'EQUITY', sumByType('EQUITY'))}
+                  <tr className="border-b border-default/60">
+                    <td className="px-3 py-1.5 text-sm whitespace-nowrap italic">Laba/Rugi Berjalan</td>
+                    {columns.map((column, index) => (
+                      <td key={column.key} className="px-3 py-1.5 text-right text-sm tabular-nums">
+                        {formatAccounting(currentEarnings[index], { zeroDash: true })}
+                      </td>
+                    ))}
+                    <td className="px-3 py-1.5 text-right text-sm font-semibold tabular-nums">
+                      {formatAccounting(currentEarnings[currentEarnings.length - 1], { zeroDash: true })}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-default bg-surface-muted/40 font-semibold">
+                    <td className="px-3 py-2 text-sm">Total Ekuitas (termasuk Laba Berjalan)</td>
+                    {columns.map((column, index) => (
+                      <td key={column.key} className="px-3 py-2 text-right text-sm tabular-nums">
+                        {formatAccounting(totalEquityWithEarnings[index], { zeroDash: false })}
+                      </td>
+                    ))}
+                    <td className="px-3 py-2 text-right text-sm tabular-nums">
+                      {formatAccounting(totalEquityWithEarnings[totalEquityWithEarnings.length - 1], { zeroDash: false })}
+                    </td>
+                  </tr>
                   <tr className="border-t-2 border-default bg-surface-muted/40 font-bold">
                     <td className="px-3 py-2 text-sm">Total Liabilitas + Ekuitas</td>
                     {columns.map((column, index) => (

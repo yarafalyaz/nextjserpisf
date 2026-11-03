@@ -54,6 +54,13 @@ describe("buildPeriodColumns", () => {
   })
 })
 
+describe("cumulativeNetProfit (putaran 85)", () => {
+  it("laba berjalan kumulatif per kolom, bukan laba kolom saja", async () => {
+    const { cumulativeNetProfit } = await import("../multi-period")
+    expect(cumulativeNetProfit([100, 50, 0], [40, 20, 10])).toEqual([60, 90, 80])
+  })
+})
+
 describe("parseMultiPeriodCount", () => {
   it("menerima integer 1..36 apa adanya", () => {
     expect(parseMultiPeriodCount("1")).toBe(1)

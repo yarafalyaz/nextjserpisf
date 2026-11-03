@@ -103,11 +103,37 @@ export default async function ProjectDetailPage({
       take: 10,
       orderBy: { createdAt: "desc" },
     }),
-    prisma.salesInvoice.findMany({
-      where: { projectId: project.id, deletedAt: null },
-      take: 10,
-      orderBy: { createdAt: "desc" },
-    }),
+    // Putaran 85: writer faktur produksi tak pernah menulis
+    // SalesInvoice.projectId (kolom polos tanpa relasi) — faktur sah proyek
+    // lahir lewat quotation proyek / SO dari quotation itu. Kumpulkan tiga
+    // jembatan seperti ringkasan penagihan, dedup per id.
+    (async () => {
+      const projectQuotations = await prisma.quotation.findMany({
+        where: { projectId: project.id, deletedAt: null },
+        select: { id: true },
+      })
+      const quotationIds = projectQuotations.map((q) => q.id)
+      const projectOrders =
+        quotationIds.length === 0
+          ? []
+          : await prisma.salesOrder.findMany({
+              where: { quotationId: { in: quotationIds }, deletedAt: null },
+              select: { id: true },
+            })
+      const found = await prisma.salesInvoice.findMany({
+        where: {
+          deletedAt: null,
+          OR: [
+            { projectId: project.id },
+            ...(quotationIds.length ? [{ quotationId: { in: quotationIds } }] : []),
+            ...(projectOrders.length ? [{ salesOrderId: { in: projectOrders.map((o) => o.id) } }] : []),
+          ],
+        },
+        take: 10,
+        orderBy: { createdAt: "desc" },
+      })
+      return found
+    })(),
     loadProjectPlForProject(project.id),
     loadProjectBudgetForProject(project.id),
     loadProjectEarnedValueForProject(project.id),

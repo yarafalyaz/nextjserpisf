@@ -59,7 +59,14 @@ export async function loadWithholdingCertificateInputs(
     prisma.withholdingCertificate.findMany({
       where: {
         withholdingDate: { gte: period.start, lte: period.end },
-        status: { not: "revoked" },
+        // Putaran 85: hanya bupot TERBIT yang jadi bukti potong laporan.
+        // `not: "revoked"` ikut menarik status "draft" (default skema):
+        // draft menggelembungkan total DAN menekan baris fallback dokumen
+        // sumbernya lewat certifiedBillIds/certifiedPaymentIds di bawah.
+        // Filter anti-dobel `not: "revoked"` di service/purchase/sales
+        // SENGAJA tak diubah — di sana draft memang harus memblokir
+        // penerbitan ulang.
+        status: "issued",
       },
       include: {
         withholdingType: { select: { code: true, name: true } },

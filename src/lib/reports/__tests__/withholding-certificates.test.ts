@@ -84,6 +84,21 @@ describe("serializeWithholdingCertificatesCsv (F-35a)", () => {
   })
 })
 
+describe("loadWithholdingCertificateInputs — hanya bupot terbit (putaran 85)", () => {
+  it("loader menyaring status issued; draft tak masuk laporan maupun menekan fallback", async () => {
+    vb.mockResolvedValue([] as never)
+    sp.mockResolvedValue([] as never)
+
+    await loadWithholdingCertificateInputs({ start: new Date(2026, 0, 1), end: new Date(2026, 0, 31) })
+
+    expect(wc).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: "issued" }),
+      }),
+    )
+  })
+})
+
 describe("loadWithholdingCertificatesCsv (F-35a)", () => {
   it("loader memetakan NPWP vendor + customer dan DPP pembelian", async () => {
     vb.mockResolvedValue([{

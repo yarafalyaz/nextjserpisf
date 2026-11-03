@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   qcInspectionFindMany: vi.fn(),
   nonconformanceFindMany: vi.fn(),
   taxPaymentFindMany: vi.fn(),
+  vendorCreditFindMany: vi.fn(),
+  bankReconciliationFindMany: vi.fn(),
 }));
 
 vi.mock("@/lib/services/document-sequence.service", () => ({
@@ -29,6 +31,8 @@ vi.mock("@/lib/db/prisma", () => ({
     qcInspection: { findMany: mocks.qcInspectionFindMany },
     nonconformance: { findMany: mocks.nonconformanceFindMany },
     taxPayment: { findMany: mocks.taxPaymentFindMany },
+    vendorCredit: { findMany: mocks.vendorCreditFindMany },
+    bankReconciliation: { findMany: mocks.bankReconciliationFindMany },
   },
 }));
 
@@ -44,9 +48,29 @@ describe("utils/document-number", () => {
     mocks.qcInspectionFindMany.mockResolvedValue([]);
     mocks.nonconformanceFindMany.mockResolvedValue([]);
     mocks.taxPaymentFindMany.mockResolvedValue([]);
+    mocks.vendorCreditFindMany.mockResolvedValue([]);
+    mocks.bankReconciliationFindMany.mockResolvedValue([]);
     mocks.next.mockResolvedValue(1);
     mocks.peek.mockResolvedValue(0);
   });
+
+  describe("floor kunci putaran 85", () => {
+    it("VC membaca floor dari vendorCredit.documentNo existing", async () => {
+      mocks.vendorCreditFindMany.mockResolvedValue([{ documentNo: "0007/VC/YAR/10/2026" }])
+      mocks.next.mockResolvedValue(8)
+      await generateDocumentNumber("VC")
+      expect(mocks.vendorCreditFindMany).toHaveBeenCalled()
+      expect(mocks.next).toHaveBeenCalledWith(expect.any(String), 7)
+    })
+
+    it("REC membaca floor dari bankReconciliation.reconciliationNumber (simple)", async () => {
+      mocks.bankReconciliationFindMany.mockResolvedValue([{ reconciliationNumber: "REC-0012" }])
+      mocks.next.mockResolvedValue(13)
+      const result = await generateDocumentNumber("REC", "simple")
+      expect(mocks.next).toHaveBeenCalledWith(expect.any(String), 12)
+      expect(result).toBe("REC-0013")
+    })
+  })
 
   describe("generateDocumentNumber (complex)", () => {
     it("formats as NNN/PREFIX/COMPANY/MM/YYYY", async () => {

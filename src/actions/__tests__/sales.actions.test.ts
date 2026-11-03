@@ -1098,6 +1098,26 @@ describe("Sales Invoice Actions", () => {
     expect(mocks.prismaMock.salesInvoiceItem.findMany).toHaveBeenCalled()
   })
 
+  it("putaran 85: cap SO ikut menghitung faktur direct-quotation sebelum konversi", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", customerId: 1, quotationId: null, salesOrderId: 10, paidAmount: 0, grandTotal: 550,
+    })
+    mocks.prismaMock.salesInvoiceItem.findMany.mockResolvedValue([{ itemId: 5, qty: 2, uom: null }])
+    // SO tujuan lahir dari quotation 77 (nilai 600); faktur
+    // direct-quotation 80 sudah terbit sebelum konversi. Cap SO polos:
+    // 0 + 550 ≤ 600 lolos; cap quotation: 80 + 550 = 630 > 600 tertahan.
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ documentNo: "SO-2", grandTotal: 600, quotationId: 77, customerId: 1, status: "approved" })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ grandTotal: 600 })
+    mocks.prismaMock.salesInvoice.findMany.mockImplementation(async (args: any) => {
+      const where = args?.where ?? {}
+      if (where.quotationId === 77) return [{ id: 9, status: "posted", grandTotal: 80 }]
+      return []
+    })
+    const res = await actions.updateSalesInvoice(1, fdMap({ customerId: 1, date: "2026-06-12", salesOrderId: 20 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("melebihi nilai Penawaran induk")
+  })
+
   // Regresi putaran 44: edit faktur draft memindah salesOrderId menilai nilai/
   // qty terhadap SO tujuan tetapi TIDAK pernah memeriksa SO tujuan milik
   // customer faktur atau berstatus bisa-difaktur — pasangan SO milik customer

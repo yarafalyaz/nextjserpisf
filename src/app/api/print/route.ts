@@ -421,6 +421,11 @@ export async function GET(request: Request) {
         summary: {
           subtotal: Number(doc.subtotal),
           discount: Number(doc.discount || 0),
+          // Putaran 85: ongkir/biaya jasa komponen grandTotal kanonis
+          // (buildPurchaseOrderTotals) — tanpa baris ini cetakan PO tak
+          // rekonsiliasi (Subtotal lompat langsung ke Total).
+          shipping: Number(doc.shippingCost || 0),
+          serviceFee: Number(doc.serviceFee || 0),
           tax: Number(doc.tax || 0),
           total: Number(doc.grandTotal),
         },

@@ -1702,6 +1702,34 @@ async function assertInvoiceWithinSalesOrderCap(
     }
   }
 
+  // Putaran 85: SO yang lahir dari quotation mewarisi grandTotal quotation,
+  // tetapi cap di atas hanya menghitung faktur ber-salesOrderId SO ini.
+  // Faktur direct-quotation (salesOrderId null) yang terbit SEBELUM
+  // konversi tak terlihat, sehingga total posted bisa menembus nilai
+  // quotation (direct 80jt + via SO 100jt atas quotation 100jt). Nilai
+  // ulang terhadap cap quotation tiga-jembatan dari bacaan terkunci yang
+  // sama (baris quotation sudah dikunci di atas).
+  if (so.quotationId) {
+    const lockedQuotation = await tx.quotation.findUnique({
+      where: { id: so.quotationId },
+      select: { grandTotal: true },
+    })
+    if (lockedQuotation) {
+      const jobInvoices = await collectQuotationInvoices(tx, so.quotationId)
+      const jobBilled = jobInvoices
+        .filter((inv) => inv.status !== "cancelled" && inv.id !== input.excludeInvoiceId)
+        .reduce((sum, inv) => safeAdd(sum, Number(inv.grandTotal), 2), 0)
+      const jobExcess = cumulativeValueExcess(jobBilled, input.candidateGrandTotal, Number(lockedQuotation.grandTotal))
+      if (jobExcess > 0.01) {
+        throw new Error(
+          `Faktur melebihi nilai Penawaran induk: sudah tertagih ${jobBilled}, ` +
+            `faktur ini ${input.candidateGrandTotal}, nilai penawaran ${Number(lockedQuotation.grandTotal)} (kelebihan ${jobExcess}). ` +
+            `Kurangi nilai faktur atau ubah penawaran.`,
+        )
+      }
+    }
+  }
+
   const soItems = await tx.salesOrderItem.findMany({
     where: { salesOrderId: input.salesOrderId },
     select: { itemId: true, qty: true },

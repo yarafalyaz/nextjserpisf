@@ -86,7 +86,7 @@ export async function loadBalanceSheetParts(
   ])
 
   const accountById = new Map(accounts.map((a) => [a.id, a]))
-  const { totalAssets, totalLiabilities, totalEquity, isBalanced } = computeBalanceSheet(
+  const { totalAssets, totalLiabilities, totalEquity, isBalanced, netIncome } = computeBalanceSheet(
     [...sums.entries()].map(([accountId, v]) => ({
       accountId,
       accountName: accountById.get(accountId)?.name ?? "",
@@ -120,10 +120,28 @@ export async function loadBalanceSheetParts(
       options,
     )
 
+  // Putaran 85: totalEquity dari computeBalanceSheet MEMUAT laba berjalan,
+  // tetapi rincian ekuitas hanya akun EQUITY — rincian tak pernah menjumlah
+  // ke subtotalnya. Tambah baris laba berjalan eksplisit (pola
+  // equity-changes), JANGAN turunkan total: identitas Aset = Kewajiban +
+  // Ekuitas bergantung laba masuk total.
+  const equityRows = rowsOf("EQUITY")
+  if (Math.abs(netIncome) >= 0.01) {
+    equityRows.push({
+      id: -1,
+      slug: null,
+      code: "NI",
+      name: "Laba/Rugi Berjalan",
+      balance: netIncome,
+      level: 0,
+      hasChildren: false,
+    })
+  }
+
   return {
     assetRows: rowsOf("ASSET"),
     liabilityRows: rowsOf("LIABILITY"),
-    equityRows: rowsOf("EQUITY"),
+    equityRows,
     totalAssets,
     totalLiabilities,
     totalEquity,

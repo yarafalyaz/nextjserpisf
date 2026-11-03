@@ -67,6 +67,15 @@ export async function loadFinancialRatios(period: {
       }
     } else if (account.type === "EQUITY") {
       totalEquity = safeAdd(totalEquity, balance, 2)
+    } else if (account.type === "REVENUE" || account.type === "EXPENSE") {
+      // Putaran 85: laba berjalan kumulatif (posisi s/d akhir periode,
+      // kredit-normal) adalah bagian ekuitas — computeBalanceSheet
+      // menyuntikkannya ke total ekuitas. Tanpa ini ROE & utang-terhadap-
+      // ekuitas laporan ini menyimpang dari Neraca.
+      totalEquity =
+        account.type === "REVENUE"
+          ? safeAdd(totalEquity, balance, 2)
+          : safeSubtract(totalEquity, balance, 2)
     }
   }
 

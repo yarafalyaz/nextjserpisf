@@ -95,6 +95,37 @@ describe("loadBalanceSheetStatement", () => {
     expect(notice?.kind === "notice" ? notice.text : "").toContain("selisih 1.500.000")
   })
 
+  it("putaran 85: rincian ekuitas memuat baris Laba/Rugi Berjalan yang menjumlah ke total", async () => {
+    mocks.accountFindMany.mockResolvedValue([
+      ASSET_ACCOUNT,
+      { id: 2, code: "3000", name: "Modal", type: "EQUITY", parentId: null, reportGroup: null },
+      { id: 3, code: "4000", name: "Pendapatan", type: "REVENUE", parentId: null, reportGroup: null },
+    ])
+    mocks.sumEntriesByAccount.mockResolvedValue(
+      new Map([
+        [1, { debit: 1_300_000_000, credit: 0 }],
+        [2, { debit: 0, credit: 1_000_000_000 }],
+        [3, { debit: 0, credit: 300_000_000 }],
+      ]),
+    )
+
+    const statement = await loadBalanceSheetStatement(
+      new Date(2026, 9, 31),
+      DEFAULT_STATEMENT_OPTIONS,
+    )
+
+    const niLine = statement.table.rows.find(
+      (row) => row.kind === "line" && row.name === "Laba/Rugi Berjalan",
+    )
+    expect(niLine).toBeTruthy()
+    const equitySubtotal = statement.table.rows.find(
+      (row) => row.kind === "subtotal" && row.label === "Jumlah Ekuitas",
+    )
+    expect(equitySubtotal).toMatchObject({ values: ["1.300.000.000"] })
+    // Identitas tetap seimbang (total MEMUAT laba; rincian kini cocok).
+    expect(statement.table.rows.some((row) => row.kind === "notice")).toBe(false)
+  })
+
   it("menyusun baris akun sesuai opsi tampilan yang aktif", async () => {
     mocks.sumEntriesByAccount.mockResolvedValue(new Map([[1, { debit: 1_000_000, credit: 0 }]]))
 

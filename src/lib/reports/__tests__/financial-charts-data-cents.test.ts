@@ -46,6 +46,25 @@ describe("financial-charts-data sen precision", () => {
     cumulative = accumulateAccountSums(cumulative, new Map([[3, { debit: 0, credit: 0.24 }]]))
     cumulative = accumulateAccountSums(cumulative, new Map([[3, { debit: 0, credit: 0.24 }]]))
     const totals = balanceTotals(accounts, cumulative)
-    expect(totals.totalEquity).toBe(0.48)
+    // Putaran 85: ekuitas diturunkan dari identitas (aset − kewajiban);
+    // tanpa aset/kewajiban pada fixture ini ekuitas posisi = 0.
+    expect(totals.totalEquity).toBe(0)
+  })
+
+  it("putaran 85: seri ekuitas = harta bersih (aset − kewajiban), memuat laba berjalan", () => {
+    const withRevenue: FinancialChartAccount[] = [
+      ...accounts,
+      { id: 4, code: "4100", name: "Pendapatan", type: "REVENUE", reportGroup: null },
+    ]
+    const sums = new Map<number, { debit: number; credit: number }>([
+      [1, { debit: 1_300, credit: 0 }],
+      [2, { debit: 0, credit: 0 }],
+      [3, { debit: 0, credit: 1_000 }],
+      [4, { debit: 0, credit: 300 }],
+    ])
+    const totals = balanceTotals(withRevenue, sums)
+    expect(totals.totalAssets).toBe(1_300)
+    expect(totals.totalEquity).toBe(1_300)
+    expect(totals.totalEquity).toBe(totals.totalAssets - totals.totalLiabilities)
   })
 })

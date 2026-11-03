@@ -87,6 +87,22 @@ export function parseMultiPeriodCount(raw: string | null | undefined): number {
   return value
 }
 
+/**
+ * Baris laba berjalan kumulatif untuk mode neraca multi-periode: laba
+ * bersih kumulatif sampai akhir kolom (bukan laba kolom itu saja).
+ * Putaran 85: tanpa baris ini Total Liabilitas + Ekuitas kurang sebesar
+ * laba berjalan, sehingga KPI "Selisih (harus 0)" permanen merah walau
+ * buku seimbang — laba berjalan adalah bagian ekuitas (computeBalanceSheet
+ * menyuntikkannya ke total ekuitas sebagai "Laba/Rugi Berjalan").
+ */
+export function cumulativeNetProfit(revenue: number[], expense: number[]): number[] {
+  let running = 0
+  return revenue.map((value, index) => {
+    running += value - (expense[index] ?? 0)
+    return running
+  })
+}
+
 export const MULTI_PERIOD_MODE_LABELS: Record<MultiPeriodMode, string> = {
   bulan: "Bulanan",
   kuartal: "Kuartalan",

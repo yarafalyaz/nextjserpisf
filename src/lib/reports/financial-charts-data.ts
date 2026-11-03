@@ -60,6 +60,12 @@ export function balanceTotals(
     }
   }
 
+  // Putaran 85: ekuitas posisi wajib memuat laba berjalan kumulatif, sama
+  // seperti computeBalanceSheet — diturunkan dari identitas akuntansi
+  // (Aset − Kewajiban) supaya seri "Ekuitas" selalu sama dengan seri
+  // "Harta Bersih" dan tak bisa drift dari definisi neraca.
+  totalEquity = safeSubtract(totalAssets, totalLiabilities, 2)
+
   return { totalAssets, totalLiabilities, totalEquity, currentAssets, currentLiabilities }
 }
 
