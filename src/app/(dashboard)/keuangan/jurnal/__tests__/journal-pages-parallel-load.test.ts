@@ -19,7 +19,9 @@ describe("halaman jurnal memuat master paralel", () => {
     expect(page).toContain(
       "const [accounts, costCenters, profitCenters] = await Promise.all([",
     )
-    expect(page).toContain("prisma.account.findMany({")
+    // Putaran 104: picker akun memakai loadPostableAccounts (hanya akun daun
+    // yang bisa diposting), bukan prisma.account.findMany mentah.
+    expect(page).toContain("loadPostableAccounts()")
     expect(page).toContain("prisma.costCenter.findMany({")
     expect(page).toContain("prisma.profitCenter.findMany({")
     expect(page).not.toContain("const accounts = await prisma.account.findMany")
