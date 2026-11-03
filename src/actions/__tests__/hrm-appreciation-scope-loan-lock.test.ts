@@ -24,14 +24,19 @@ const mocks = vi.hoisted(() => {
     }),
     // Putaran 62: createAppreciation kini menulis lewat tx (klaim
     // idempotency + create atomik), jadi tx mock wajib membawa modelnya.
+    $executeRaw: vi.fn(async () => 1),
     appreciation: {
       create: vi.fn().mockResolvedValue({ id: 1 }),
       // Putaran 70: update menilai ulang baris lewat delegate tx; slug
       // dihitung nextSlugWithClient atas bacaan delegate tx ini.
-      findUniqueOrThrow: vi.fn(async () => ({ employeeId: 7 })),
+      // Putaran 120: gerbang slip-final butuh employeeId + date.
+      findUniqueOrThrow: vi.fn(async () => ({ employeeId: 7, date: new Date("2026-06-12T00:00:00Z") })),
       findFirst: vi.fn(async () => null),
       update: vi.fn().mockResolvedValue({ id: 1 }),
+      delete: vi.fn().mockResolvedValue({}),
     },
+    // Putaran 120: gerbang slip-final membaca payroll dalam tx.
+    payroll: { findFirst: vi.fn(async (): Promise<{ id: number } | null> => null) },
     idempotencyKey: {
       create: vi.fn().mockResolvedValue({ id: 1 }),
       findUnique: vi.fn().mockResolvedValue(null),
@@ -68,6 +73,7 @@ const mocks = vi.hoisted(() => {
     employeeLoan: {
       findUniqueOrThrow: vi.fn(),
     },
+    payroll: { findFirst: vi.fn().mockResolvedValue(null) },
     employeeLoanRepayment: { findFirst: vi.fn().mockResolvedValue(null) },
     employeeLoanWriteOff: { findFirst: vi.fn().mockResolvedValue(null) },
     $transaction: vi.fn(async (cb: (t: typeof tx) => Promise<unknown>) => cb(tx)),
@@ -182,13 +188,24 @@ describe("BUGHUNT #9 — appreciation HR scope", () => {
     mocks.prismaMock.appreciation.findUniqueOrThrow.mockResolvedValue({ employeeId: 99 })
     const res = await deleteAppreciation(1)
     expect(res?.success).toBe(false)
-    expect(mocks.prismaMock.appreciation.delete).not.toHaveBeenCalled()
+    expect(mocks.tx.appreciation.delete).not.toHaveBeenCalled()
   })
 
   it("delete dalam scope lolos", async () => {
     const res = await deleteAppreciation(1)
     expect(res?.success).toBe(true)
-    expect(mocks.prismaMock.appreciation.delete).toHaveBeenCalled()
+    // Putaran 120: hapus berjalan lewat delegate tx berkunci, bukan root.
+    expect(mocks.tx.appreciation.delete).toHaveBeenCalled()
+  })
+
+  it("putaran 120: delete apresiasi bertanggal di slip final ditolak", async () => {
+    // Slip final menyimpan appreciationTotal apa adanya dan tidak dihitung
+    // ulang: hapus bonusnya membuat slip mengklaim bonus tanpa sumber.
+    mocks.tx.payroll.findFirst.mockResolvedValueOnce({ id: 5 })
+    const res = await deleteAppreciation(1)
+    expect(res?.success).toBe(false)
+    if (!res?.success) expect(res?.error).toContain("slip gaji final")
+    expect(mocks.tx.appreciation.delete).not.toHaveBeenCalled()
   })
 })
 

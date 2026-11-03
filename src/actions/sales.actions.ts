@@ -4632,13 +4632,21 @@ export async function updateSalesReturn(id: number, formData: FormData) {
     if (updInvoiceId) {
       await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${updInvoiceId} FOR UPDATE`
 
-      // Sama dengan createSalesReturn: faktur customer lain tak bisa ditempel.
+      // Sama dengan createSalesReturn: faktur customer lain tak bisa ditempel,
+      // dan status faktur dinilai ULANG dari baris terkunci. Gerbang status di
+      // luar tx hanya menangkap keadaan saat baca; `voidSalesInvoice` boleh
+      // membatalkan faktur sesudahnya, sehingga retur draft tetap menunjuk
+      // faktur cancelled — saat completion memulihkan stok + kredit AR kedua
+      // kali (STOK-03 lewat jalur create, tidak lewat jalur edit).
       const txInvoice = await tx.salesInvoice.findUnique({
         where: { id: updInvoiceId },
-        select: { customerId: true },
+        select: { customerId: true, status: true },
       })
       if (!txInvoice || txInvoice.customerId !== input.customerId) {
         throw new Error("Faktur yang dipilih milik customer lain, tidak bisa diretur untuk customer ini")
+      }
+      if (!(RETURNABLE_INVOICE_STATUSES as readonly string[]).includes(txInvoice.status)) {
+        throw new Error(`Faktur berstatus '${txInvoice.status}' tidak bisa diretur`)
       }
 
       const txInvItems = await tx.salesInvoiceItem.findMany({

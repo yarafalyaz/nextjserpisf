@@ -1757,6 +1757,39 @@ function buildTerSnapshot(o: {
  * draft/batal TIDAK ikut). */
 const FINAL_PAYROLL_STATUSES = ["approved", "paid"]
 
+const APPRECIATION_FINAL_PAYROLL_MESSAGE =
+  "Bonus bertanggal ini sudah masuk slip gaji final — koreksi lewat slip koreksi, bukan dengan mengubah/menghapus apresiasinya"
+
+/**
+ * Putaran 120: apresiasi adalah bonus yang masuk bruto slip lewat estimasi
+ * (`computePayrollEstimation` / `generateBulkPayroll`). Slip final TIDAK
+ * dihitung ulang — ia menyimpan `appreciationTotal` apa adanya, dan
+ * `recalcDraftPayrollFromLines` memakai ulang nilai tersimpan itu. Mengubah
+ * atau menghapus bonus bertanggal di rentang slip approved/paid membuat slip
+ * final mengklaim bonus yang sumbernya sudah hilang (atau tidak memuat bonus
+ * yang kini ada) — selisih tanpa gejala apa pun. Gerbang sama dengan absensi
+ * (013-V butir 8): koreksi lewat jalur slip koreksi, bukan edit sumber.
+ * Pemanggil WAJIB memegang kunci baris `employees` lebih dulu agar serial
+ * dengan `approvePayroll`/`markPayrollPaid` (yang mengunci karyawan sebelum
+ * draft -> approved/final).
+ */
+async function assertAppreciationDateNotInFinalPayroll(
+  client: Pick<PrismaTypes.TransactionClient, "payroll">,
+  employeeId: number,
+  date: Date,
+): Promise<void> {
+  const finalSlip = await client.payroll.findFirst({
+    where: {
+      employeeId,
+      status: { in: FINAL_PAYROLL_STATUSES },
+      startDate: { lte: date },
+      endDate: { gte: date },
+    },
+    select: { id: true },
+  });
+  if (finalSlip) throw new Error(APPRECIATION_FINAL_PAYROLL_MESSAGE);
+}
+
 function periodYearMonth(period: string, fallback: Date): { year: number; month: number } {
   const m = /^(\d{4})-(\d{2})/.exec(period)
   if (m) return { year: Number(m[1]), month: Number(m[2]) }
@@ -6243,6 +6276,14 @@ export async function createAppreciation(formData: FormData) {
     const idempotencyKey = formData.get("idempotencyKey") as string | null;
     const appreciation = await prisma.$transaction(async (tx) => {
       await checkIdempotency(idempotencyKey, tx, user.id);
+      // Putaran 120: kunci baris karyawan dulu (urutan kunci sama dengan
+      // approvePayroll/markPayrollPaid), lalu tolak bonus bertanggal di
+      // rentang slip final. Tanpa kunci ini slip bisa difinalkan di antara
+      // gerbang dan create sehingga bonusnya tidak pernah masuk slip final.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${v.employeeId} FOR UPDATE`;
+      }
+      await assertAppreciationDateNotInFinalPayroll(tx, v.employeeId, wibDateToUtcMidnight(v.date));
       return tx.appreciation.create({
         data: {
           slug: await nextSlugWithClient(tx as never, "appreciation", "apresiasi"),
@@ -6301,17 +6342,36 @@ export async function updateAppreciation(formData: FormData) {
     // yang nonaktif di jendela baca->tulis lolos, dan slug "apresiasi"
     // bertabrakan antar-update konkuren.
     const appreciation = await prisma.$transaction(async (tx) => {
+      // Putaran 120: kunci baris employees (pemilik lama ∪ pemilik baru, id
+      // menaik) SEBELUM bacaan konsisten pertama — gerbang slip-final di
+      // bawah harus menilai slip sesudah penulis slip (approvePayroll /
+      // markPayrollPaid, yang mengunci baris karyawan yang sama) selesai.
+      // Urutan employees -> appreciations sama dengan jalur absensi.
+      const lockEmployeeIds = [...new Set([existing.employeeId, v.employeeId])].sort((a, b) => a - b);
+      for (const lockEmployeeId of lockEmployeeIds) {
+        if (typeof tx.$executeRaw === "function") {
+          await tx.$executeRaw`SELECT id FROM employees WHERE id = ${lockEmployeeId} FOR UPDATE`;
+        }
+      }
       if (typeof tx.$executeRaw === "function") {
         await tx.$executeRaw`SELECT id FROM appreciations WHERE id = ${id} FOR UPDATE`;
       }
       const fresh = await tx.appreciation.findUniqueOrThrow({
         where: { id },
-        select: { employeeId: true },
+        select: { employeeId: true, date: true },
       });
       await assertHrEmployeeAccess(scope, fresh.employeeId);
       if (v.employeeId !== fresh.employeeId) {
         await assertHrEmployeeAccess(scope, v.employeeId);
         await assertLiveEmployee(v.employeeId, tx);
+      }
+      // Bonus lama DAN bonus baru dua-duanya wajib di luar slip final:
+      // mengubah/memindah bonus yang sudah dibayar slip final mengubah sumber
+      // angka yang slip itu simpan.
+      const nextDate = wibDateToUtcMidnight(v.date);
+      await assertAppreciationDateNotInFinalPayroll(tx, fresh.employeeId, fresh.date);
+      if (fresh.employeeId !== v.employeeId || nextDate.getTime() !== new Date(fresh.date).getTime()) {
+        await assertAppreciationDateNotInFinalPayroll(tx, v.employeeId, nextDate);
       }
       return tx.appreciation.update({
         where: { id },
@@ -6346,9 +6406,29 @@ export async function deleteAppreciation(id: number) {
       where: { id },
       select: { employeeId: true },
     });
-    await assertHrEmployeeAccess(await getHrScope(user), existing.employeeId);
+    const scope = await getHrScope(user);
+    await assertHrEmployeeAccess(scope, existing.employeeId);
 
-    await prisma.appreciation.delete({ where: { id } });
+    // Putaran 120: hapus berjalan dalam tx berkunci. Versi lama menghapus
+    // polos tanpa kunci dan tanpa gerbang slip-final, jadi (a) slip final
+    // yang menyimpan bonus ini sebagai appreciationTotal kehilangan sumber
+    // angkanya tanpa jejak, dan (b) baris yang disetujui slip di jendela
+    // baca->hapus tetap terhapus. Kunci employees dulu (urutan sama dengan
+    // approvePayroll), lalu appreciations, lalu nilai ulang scope + gerbang
+    // dari baris terkunci.
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${existing.employeeId} FOR UPDATE`;
+        await tx.$executeRaw`SELECT id FROM appreciations WHERE id = ${id} FOR UPDATE`;
+      }
+      const fresh = await tx.appreciation.findUniqueOrThrow({
+        where: { id },
+        select: { employeeId: true, date: true },
+      });
+      await assertHrEmployeeAccess(scope, fresh.employeeId);
+      await assertAppreciationDateNotInFinalPayroll(tx, fresh.employeeId, fresh.date);
+      await tx.appreciation.delete({ where: { id } });
+    });
 
     await logActivity("delete", "Appreciation", id, "Menghapus apresiasi");
     revalidatePath("/sdm/apresiasi");
@@ -6784,10 +6864,11 @@ export async function attachPkwtEventToPayroll(payrollId: number, formData: Form
     await assertDraftPayrollLineAccess(payrollId);
     const eventId = Number(formData.get("eventId"));
     if (!Number.isSafeInteger(eventId) || eventId <= 0) throw new Error("Peristiwa PKWT tidak valid");
-    const payroll = await prisma.payroll.findUniqueOrThrow({
-      where: { id: payrollId },
-      select: { employeeId: true },
-    });
+    // Putaran 120: employeeId diambil dari baris slip TERKUNCI di dalam tx,
+    // bukan baca pra-tx. Pemeriksaan "peristiwa milik karyawan lain" di
+    // `buildPkwtPayrollLineData` memakai nilai ini; `updatePayroll` boleh
+    // memindahkan slip ke karyawan lain sesudah baca pra-tx, sehingga guard
+    // itu bisa lolos untuk slip yang barisnya kini milik karyawan berbeda.
     // Snapshot peristiwa + akrual dibaca DI DALAM tx sesudah kunci baris
     // payroll: baca luar tx membekukan pkwtSettledViaAccrual dari agregat
     // akrual sesaat — akrual bulanan yang commit di antara baca dan create
@@ -6802,7 +6883,7 @@ export async function attachPkwtEventToPayroll(payrollId: number, formData: Form
       }
       const lineData = await buildPkwtPayrollLineData(tx as never, {
         eventId,
-        payrollEmployeeId: payroll.employeeId,
+        payrollEmployeeId: locked.employeeId,
       });
       const row = await tx.payrollComponentLine.create({
         data: { payrollId, ...lineData },

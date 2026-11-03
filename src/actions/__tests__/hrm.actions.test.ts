@@ -1392,6 +1392,46 @@ describe("Appreciation Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("putaran 120: createAppreciation menolak bonus bertanggal di rentang slip final", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
+    prismaMock.payroll.findFirst.mockResolvedValue({ id: 5 })
+    try {
+      const res = await actions.createAppreciation(fd({
+        employeeId: "1",
+        date: "2026-06-12",
+        title: "Star Performer",
+        amount: "500000",
+      }))
+      expect(res?.success).toBe(false)
+      if (!res?.success) expect(res?.error).toContain("slip gaji final")
+      expect(prismaMock.appreciation.create).not.toHaveBeenCalled()
+    } finally {
+      prismaMock.payroll.findFirst.mockResolvedValue(null)
+    }
+  })
+
+  it("putaran 120: updateAppreciation menolak pemindahan tanggal ke slip final", async () => {
+    // Tanggal lama di luar slip final, tanggal baru di dalamnya — gerbang
+    // kedua yang menahan pemindahan bonus ke masa yang sudah dibayar.
+    prismaMock.payroll.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 5 })
+    try {
+      const res = await actions.updateAppreciation(fd({
+        id: "1",
+        employeeId: "1",
+        date: "2026-07-12",
+        title: "Star Performer",
+        amount: "600000",
+      }))
+      expect(res?.success).toBe(false)
+      if (!res?.success) expect(res?.error).toContain("slip gaji final")
+      expect(prismaMock.appreciation.update).not.toHaveBeenCalled()
+    } finally {
+      prismaMock.payroll.findFirst.mockResolvedValue(null)
+    }
+  })
+
   it("putaran 70: updateAppreciation menilai scope + hidup dalam tx lewat delegate berbeda", async () => {
     // Bacaan global pra-tx: hidup. Delegate tx: karyawan sudah nonaktif.
     // Harness tx == global tidak bisa membedakan (hijau palsu); facade tx
@@ -1399,10 +1439,12 @@ describe("Appreciation Actions", () => {
     const txFindFirst = vi.fn().mockResolvedValue(null)
     const txFacade = {
       appreciation: {
-        findUniqueOrThrow: vi.fn().mockResolvedValue({ employeeId: 9 }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ employeeId: 9, date: new Date("2026-06-12T00:00:00Z") }),
         update: vi.fn().mockResolvedValue({ id: 1 }),
       },
       employee: { findFirst: txFindFirst },
+      // Putaran 120: gerbang slip-final membaca payroll dalam tx.
+      payroll: { findFirst: vi.fn().mockResolvedValue(null) },
       $executeRaw: vi.fn().mockResolvedValue(1),
       $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
     }
@@ -1427,11 +1469,13 @@ describe("Appreciation Actions", () => {
     const txFindFirst = vi.fn().mockResolvedValueOnce({ id: 77 }).mockResolvedValue(null)
     const txFacade = {
       appreciation: {
-        findUniqueOrThrow: vi.fn().mockResolvedValue({ employeeId: 1 }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ employeeId: 1, date: new Date("2026-06-12T00:00:00Z") }),
         update: vi.fn().mockResolvedValue({ id: 1 }),
         findFirst: txFindFirst,
       },
       employee: { findFirst: vi.fn().mockResolvedValue({ id: 1 }) },
+      // Putaran 120: gerbang slip-final membaca payroll dalam tx.
+      payroll: { findFirst: vi.fn().mockResolvedValue(null) },
       $executeRaw: vi.fn().mockResolvedValue(1),
       $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
     }
@@ -3348,6 +3392,48 @@ describe("Absensi Actions", () => {
     expect(createArg.data.pkwtSettledViaAccrual).toBe(true)
     expect(createArg.data.accountIdSnapshot).toBe(231)
     expect(eventOrder).toBeGreaterThan(lockOrder)
+  })
+
+  it("putaran 120: attachPkwtEventToPayroll memeriksa pemilik event terhadap baris slip terkunci", async () => {
+    // Baca pra-tx membekukan employeeId lama; `updatePayroll` boleh
+    // memindahkan slip ke karyawan lain sesudah baca itu, sehingga guard
+    // "peristiwa milik karyawan lain" dinilai terhadap karyawan yang salah.
+    // Bedakan dua bacaan lewat argumen `select` yang hanya dipakai baca
+    // pra-tx (assertDraftPayrollLineAccess dan bacaan terkunci tanpa select).
+    ;(prismaMock as any).pkwtCompensationEvent = {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 7, employeeId: 1, amount: 2_500_000, status: "approved",
+        segmentStart: new Date("2026-01-01T00:00:00Z"),
+      }),
+    }
+    ;(prismaMock as any).pkwtCompensationAccrual = {
+      aggregate: vi.fn().mockResolvedValue({ _sum: { amount: 0 } }),
+    }
+    ;(prismaMock as any).account = {
+      findUnique: vi.fn().mockResolvedValue({ code: "210207", isActive: true, deletedAt: null }),
+    }
+    const draftRow = {
+      id: 5, status: "draft", period: "2026-06", baseSalary: 4_000_000,
+      overtimeTotal: 0, appreciationTotal: 0, loanDeduction: 0, paymentDate: null,
+      lateDeduction: 0, lateMinutes: 0, workingDays: 22, presentDays: 22,
+      absentDays: 0, absentDeduction: 0, endDate: new Date("2026-06-30T00:00:00Z"), statutorySnapshot: null,
+    }
+    prismaMock.payroll.findUniqueOrThrow.mockImplementation(async (args: any) => (
+      args?.select ? { employeeId: 1 } : { ...draftRow, employeeId: 9 }
+    ))
+    prismaMock.payrollComponentLine.findFirst.mockResolvedValue(null)
+    prismaMock.systemSetting.findFirst.mockResolvedValue({
+      pkwtCompensationExpenseAccountId: 631,
+      pkwtCompensationPayableAccountId: 231,
+    })
+    try {
+      const res = await actions.attachPkwtEventToPayroll(5, fd({ eventId: "7" }))
+      expect(res?.success).toBe(false)
+      expect(res?.error).toMatch(/milik karyawan lain/i)
+      expect(prismaMock.payrollComponentLine.create).not.toHaveBeenCalled()
+    } finally {
+      prismaMock.payroll.findUniqueOrThrow.mockResolvedValue({})
+    }
   })
 })
 

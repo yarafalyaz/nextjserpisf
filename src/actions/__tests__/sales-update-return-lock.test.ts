@@ -26,7 +26,9 @@ const mocks = vi.hoisted(() => {
         update: vi.fn().mockResolvedValue({ id: 1 }),
       },
       salesInvoice: {
-        findUnique: vi.fn().mockResolvedValue({ customerId: 1 })
+        // Putaran 120: status faktur dinilai ulang dari baris terkunci —
+        // cancelled sesudah gerbang luar berarti retur tidak boleh disimpan.
+        findUnique: vi.fn().mockResolvedValue({ customerId: 1, status: "posted" })
       },
       salesInvoiceItem: {
         findMany: vi.fn().mockResolvedValue([{ itemId: 1, qty: 5, unitPrice: 100 }])
@@ -102,5 +104,35 @@ describe("Sales Return Actions - Update TOCTOU Lock", () => {
     // should have run *inside* it. In the buggy code, the validation runs outside,
     // fails early, and $transaction is never called.
     expect(mocks.transactionMock).toHaveBeenCalledTimes(1)
+  })
+
+  // Putaran 120: gerbang status faktur harus diulang di dalam tx. void
+  // konkuren sesudah gerbang luar meninggalkan retur draft menunjuk faktur
+  // cancelled; completion-nya lalu memulihkan stok + kredit AR kedua kali.
+  it("putaran 120: updateSalesReturn menolak faktur yang dibatalkan sesudah gerbang luar", async () => {
+    vi.mocked((await import("@/lib/sales/return-validation")).findOverReturn).mockReturnValueOnce(null)
+    const txFacade = {
+      $executeRaw: vi.fn(),
+      salesReturnItem: { findMany: vi.fn().mockResolvedValue([]), deleteMany: vi.fn() },
+      salesReturn: {
+        findUnique: vi.fn().mockResolvedValue({ status: "draft" }),
+        update: vi.fn().mockResolvedValue({ id: 1 }),
+      },
+      // Faktur terkunci SUDAH cancelled walau baca luar masih "paid".
+      salesInvoice: { findUnique: vi.fn().mockResolvedValue({ customerId: 1, status: "cancelled" }) },
+      salesInvoiceItem: { findMany: vi.fn().mockResolvedValue([{ itemId: 1, qty: 5, unitPrice: 100 }]) },
+    }
+    mocks.transactionMock.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => cb(txFacade))
+
+    const res = await updateSalesReturn(1, fdMap({
+      salesInvoiceId: "1",
+      customerId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1 }]),
+    }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak bisa diretur")
+    expect(txFacade.salesReturn.update).not.toHaveBeenCalled()
   })
 })
