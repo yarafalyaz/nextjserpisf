@@ -50,9 +50,12 @@ export async function commissionSnapshotForPaid(
     const lockedCustomer = await db.$queryRaw<Array<{ customerCategoryId: number | null }>>`
       SELECT customerCategoryId FROM customers WHERE id = ${invoice.customerId} FOR UPDATE`
     if (Array.isArray(lockedCustomer)) {
-      lockedCategoryId = lockedCustomer[0]?.customerCategoryId ?? null
-      if (lockedCategoryId != null) {
-        await db.$queryRaw`SELECT id FROM customer_categories WHERE id = ${lockedCategoryId} FOR UPDATE`
+      const row = lockedCustomer[0]
+      if (row && "customerCategoryId" in row) {
+        lockedCategoryId = row.customerCategoryId ?? null
+        if (lockedCategoryId != null) {
+          await db.$queryRaw`SELECT id FROM customer_categories WHERE id = ${lockedCategoryId} FOR UPDATE`
+        }
       }
     }
   }

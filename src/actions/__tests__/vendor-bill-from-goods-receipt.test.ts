@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => {
     vendorBillItem: {
       createMany: vi.fn().mockResolvedValue({ count: 2 }),
       deleteMany: vi.fn(),
+      findMany: vi.fn().mockResolvedValue([]),
       aggregate: vi.fn().mockResolvedValue({ _sum: { subtotal: 0 } }),
     },
     item: {
