@@ -2713,3 +2713,51 @@ Semua kandidat 3 agent diverifikasi sesi utama terhadap kode aktual + `prisma/sc
 
 ### Bukti
 - Merah tepat 5 kontrak/assertion yang diperbarui. Hijau: batch laporan 2519/2519 (292 berkas), guard 200/200, tsc/lint/diff-check bersih. Catatan: test scope ROP memakai mock yang mengabaikan `where`, jadi mengunci kontrak query tiga delegate, bukan hasil baris tersaring. CI `41599456637` (head `684c9a399`) **success** tanpa susulan.
+
+## Putaran 92 — opname processing, kendaraan, dasbor utama, katalog laporan (commit `022dd24ee`, CI `41600704234` success)
+
+### Vonis FIX
+1. Dokumen opname `processing` ikut total nilai selisih — FIX: `statusLabel` kini mengenal `processing` ("sedang diproses") dan `processed` ("terproses"); total periode tak lagi menjumlah dokumen `processing` (baris dokumen + subtotal per dokumen tetap tampil sebagai catatan fisik). Klaim proses menulis `processing`, sukses `processed`, gagal kembali `draft` — jendela crash tak lagi mengotori total.
+2. Pencarian `/kendaraan` bocor semua untuk kata non-numerik — FIX: cabang tahun `OR` sebelumnya `{ year: NaN ? undefined : ... }` yang runtuh menjadi objek kosong cocok-semua; kini spread kondisional `/^\d+$/`. `count` memakai `where` yang sama.
+3. Dasbor "Mobil Dikerjakan" menghitung proyek aktif tanpa kendaraan — FIX: count + daftar `workshopList` kini `customerVehicleId: { not: null }` menyamai judul kartu "Mobil di Bengkel".
+4. "Selesai bulan ini" memakai `updatedAt` — FIX: `status: "completed"` + `endDate >= awal bulan`; tak ada lagi status mati `"done"` maupun proksi `updatedAt`.
+5. Katalog `/laporan` menampilkan kartu payroll ke pemegang `view_reports` saja — FIX: hub kini `requireAnyPermission(groupPermissions("/laporan"))` lalu menyaring kartu per izin di server (any-of menang atas izin tunggal, super_admin bypass), mengikuti pola `ModuleGrid`; kategori kosong dibuang. Empat laporan payroll berizin `view_payroll_reports` kini tersembunyi dari pemegang `view_reports` saja dan terlihat oleh pemegang izin payroll saja.
+
+### Bukti
+- Merah perintah terpisah tepat 6 failed kontrak baru (2 dasbor, 1 stock-count, 1 kendaraan, 2 katalog); test halaman baru (kendaraan, katalog) bermock permissions/prisma sesuai preseden page test repo.
+- Hijau: inti 13/13 (4 berkas), terkait 117/117, batch luas `src/lib/reports` + `src/components/layout` + `src/app/(dashboard)/laporan` 2614 passed + 4 skipped (311 berkas), guard 200/200, `tsc --noEmit` bersih, ESLint berkas berubah bersih, `git diff --check` bersih.
+- CI `41600704234` (head `022dd24ee`) **success** tanpa susulan.
+
+## Putaran 93 — floor nomor dokumen, tiket kendaraan, guard CSV (commit `59ec652b2` + `eac61e203`, CI `41601249587` dan `41601492514` success)
+
+Sumber: laporan agent master-data (kandidat 3, 5, 6, 7 dari audit putaran ini) — terverifikasi satu per satu terhadap kode aktual + `prisma/schema.prisma`.
+
+### Vonis FIX
+1. Floor dokumen mengabaikan baris soft-deleted — FIX: `DOCUMENT_SOURCE_MAP` punya flag `softDelete` untuk QUO/SO/INV/LF sehingga `findMaxSequence` menyaring `deletedAt: null`, padahal kolom nomor `@unique` mencakup baris terhapus lunak. Counter rendah bisa mengembalikan nomor milik baris terhapus dan menabrak constraint. Flag dihapus: floor kini memindai semua baris untuk semua kunci (aturan CUST/VND kanonis sejak lama).
+2. Sequence SM/MRQ tanpa floor scan — FIX: dua kunci ini absen dari `DOCUMENT_SOURCE_MAP` (floor selalu 0; pola QCL putaran 77/12 entri putaran 85 berulang). Tambah `SM: stockMove.documentNo`, `MRQ: materialRequest.documentNo`; kedua model tak punya soft delete, kolom nomor `@unique` mencakup nomor legacy/manual.
+3. Hapus kendaraan tak menghitung tiket CRM — FIX: `deleteCustomerVehicle` mengunci baris lalu menghitung dependen `workOrders/quotations/projects` saja, tetapi `CrmTicket.customerVehicle` adalah relasi `onDelete: SetNull` — delete kendaraan melahirkan tiket tak bertautan senyap. Hitungan kini memuat `tickets`, pesan error menyebut tiket.
+4. Guard formula CSV jalur DOM tak merata — FIX: sel body dan kop memakai guard formula sejak putaran 87, tetapi judul/narasi/catatan terpotong/nama section ditulis dengan quote manual tanpa guard. `csvQuote` diekspor dan dipakai untuk keempatnya — satu helper, tanpa logika guard kedua.
+
+### Bukti
+- Merah perintah terpisah tepat 4 (3 floor + 1 tiket); merah CSV tepat 1 tetapi lemahnya dicatat apa adanya (`csvQuote` diekspor — test menabrak ekspor yang belum ada di produksi lama, bukan perilaku serializer).
+- Hijau: gabungan 320/320 (6 berkas: document-number, vehicle, material-request, manufacturing, document-sequence, export-buttons), guard 200/200, `tsc --noEmit` bersih, ESLint bersih, `git diff --check` bersih.
+- CI `41601249587` (head `59ec652b2`) dan `41601492514` (head `eac61e203`) **success** tanpa susulan.
+
+## Putaran 94 — mapping akun induk di pengaturan (commit `71242e952`, CI `41602201096` success)
+
+Sumber: laporan agent master-data kandidat 8 — terverifikasi terhadap kode aktual.
+
+### Vonis FIX
+1. Mapping akun pengaturan menerima akun induk — FIX: gerbang simpan putaran 67 memvalidasi 47 field `ACCOUNT_MAPPING_FIELDS` hanya untuk akun hidup (`isActive`, `deletedAt`), sedangkan `journal.service` menolak posting ke akun induk (`_count.children > 0`). Mapping induk lolos simpan, lalu posting jurnal pertama meledak. Query validasi yang sama kini select `_count.children` dan menolak induk dengan pesan sejajar `journal.service`, sebelum `systemSetting.update`.
+2. Picker pengaturan menawarkan akun soft-deleted dan induk — FIX: `loadSettingsForEdit` hanya menyaring `isActive: true`. Kini `deletedAt: null` dan hanya akun leaf ditawarkan; bentuk data kembalian tak berubah (8 halaman turunan tak terpengaruh). Berkas test baru untuk loader ini.
+
+Validasi tipe per field dari klaim agent tidak dipatch: tidak ada bukti pemanggil menuntutnya — default konservatif leaf saja.
+
+### Bukti
+- Merah perintah terpisah tepat 4 failed (2 induk settings, 1 kontrak select query, 1 picker load-settings); 23 passed.
+- Hijau: 29/29 tiga berkas settings (settings.actions, settings-period-lock, load-settings), guard 200/200, `tsc --noEmit` bersih, ESLint berkas berubah bersih, `git diff --check` bersih.
+- CI `41602201096` (head `71242e952`) **success** tanpa susulan.
+
+### Antrian lanjutan (belum dipatch)
+- Laporan operasional: A2 penanda "nilai perkiraan" transfer terkirim tak pernah menyala; A12 basis analisis penjualan (KPI baris vs tren `grandTotal`, retur tak dikurang — keputusan bruto/neto).
+- Laporan master-data: keluarga guard hapus di luar tx (Brand/ItemCategory/UoM, Bank, Department/Position/PaymentTerm) — vonis per titik terhadap kode aktual + penulis lawan, memperhatikan CATAT lama putaran 76/79 (kunci sepihak tanpa penulis lawan = CATAT).
