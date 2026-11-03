@@ -108,6 +108,9 @@ export function parseInspectionResults(
 ): { success: true; data: { checklistItemId: number; result: string; measuredValue?: string; notes?: string }[] } | { success: false; error: string } {
   const rows: { checklistItemId: number; result: string; measuredValue?: string; notes?: string }[] = []
   const errors: string[] = []
+  // Putaran 88: satu hasil per item — duplikat (mis. pass + fail item sama)
+  // melahirkan hasil bertentangan dan NCR otomatis dari baris fail.
+  const seenItemIds = new Set<number>()
 
   for (let i = 0; i < itemIds.length; i++) {
     const rawId = (itemIds[i] ?? "").trim()
@@ -117,6 +120,11 @@ export function parseInspectionResults(
       errors.push(`Baris hasil #${i + 1}: item checklist tidak valid`)
       continue
     }
+    if (seenItemIds.has(id)) {
+      errors.push(`Baris hasil #${i + 1}: item checklist duplikat`)
+      continue
+    }
+    seenItemIds.add(id)
     const result = ((results[i] ?? "").trim() || "na").toLowerCase()
     if (!["pass", "fail", "na"].includes(result)) {
       errors.push(`Baris hasil #${i + 1}: hasil harus pass/fail/na`)

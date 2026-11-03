@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
+import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope"
 import { StocktakeLineForm, StocktakeActions } from "../_components/stocktake-forms"
 
 import type { Metadata } from "next"
@@ -59,6 +60,10 @@ export default async function StocktakeSessionDetailPage({
   )
 
   if (!session) notFound()
+
+  // Putaran 88: batas gudang sama dengan daftar sesi + lampiran/cetak —
+  // detail gudang lain tidak boleh dibaca lewat tebak slug.
+  if (!(await canViewWarehouseScopedDocument("stocktake_session", session.id))) notFound()
 
   return (
     <div className="flex flex-col gap-6">

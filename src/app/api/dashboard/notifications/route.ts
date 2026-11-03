@@ -7,6 +7,7 @@ import { getDailyAttendanceMetrics } from "@/lib/services/daily-attendance.servi
 import { resolveActivityReferenceLabels, resolveActivityReferenceSlugs } from "@/lib/services/activity-reference.service";
 import { activityEntityHref } from "@/lib/utils/activity-href";
 import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status";
+import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions";
 
 export async function GET() {
   try {
@@ -30,12 +31,22 @@ export async function GET() {
         // bukan nama role (seed menahan manage_settings dari role admin).
         hasPermission("manage_settings"),
       ]);
-    // Approval totals span all modules. Don't reveal the global queue count to
-    // users who can only see their own module data.
-    const canViewApprovalQueue =
+    // Putaran 88: hitungan widget mengikuti scope halaman antrean persis —
+    // super_admin/approve_workflows melihat semua tipe; pemegang izin per
+    // tipe hanya tipenya; manage_settings sendiri BUKAN izin antrean
+    // (dulu memberi total global yang tautannya tak bisa dibuka, dan
+    // pemegang izin per tipe justru menerima 0).
+    const canSeeAllApprovals =
       user.roles.includes("super_admin") ||
-      user.permissions.includes("approve_workflows") ||
-      user.permissions.includes("manage_settings");
+      user.permissions.includes("approve_workflows");
+    const visibleApprovalTypes = Object.entries(APPROVAL_REFERENCE_PERMISSIONS)
+      .filter(([, permission]) => user.permissions.includes(permission))
+      .map(([referenceType]) => referenceType);
+    const approvalWhere = canSeeAllApprovals
+      ? { status: "pending" as const }
+      : visibleApprovalTypes.length > 0
+        ? { status: "pending" as const, referenceType: { in: visibleApprovalTypes } }
+        : null;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -66,8 +77,8 @@ export async function GET() {
             },
           })
         : Promise.resolve(0),
-      canViewApprovalQueue
-        ? prisma.approval.count({ where: { status: "pending" } })
+      approvalWhere
+        ? prisma.approval.count({ where: approvalWhere })
         : Promise.resolve(0),
       canViewAttendance
         ? getDailyAttendanceMetrics(today)

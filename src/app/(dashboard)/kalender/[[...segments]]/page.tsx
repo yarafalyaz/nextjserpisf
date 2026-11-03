@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import Link from "next/link"
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { formatCurrency } from "@/lib/utils/format"
 import {
   buildMonthGrid,
@@ -18,6 +18,7 @@ import { notFound, redirect } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { parsePathFilterSegments } from "@/lib/utils/path-filters"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
+import { RECOGNISED_AP_STATUSES, RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
 
 import type { Metadata } from "next"
 
@@ -53,6 +54,13 @@ export default async function CalendarPage({
   searchParams: Promise<{ bulan?: string }>
 }) {
   await requirePermission("view_calendar")
+  // Putaran 88: nominal dokumen keuangan hanya untuk pemegang izin modulnya —
+  // view_calendar saja tak membuka nomor/nominal faktur & tagihan lintas modul.
+  const [canViewSales, canViewPurchase, canViewFinance] = await Promise.all([
+    hasPermission("view_sales_invoices"),
+    hasPermission("view_vendor_bills"),
+    hasPermission("view_reports"),
+  ])
 
   const params = await searchParams
   // Tautan lama `?bulan=YYYY-MM` diarahkan ke bentuk path.
@@ -71,14 +79,20 @@ export default async function CalendarPage({
   gridEnd.setHours(23, 59, 59, 999)
 
   const [invoices, bills, deliveries, expected, recurring] = await Promise.all([
-    prisma.salesInvoice.findMany({
-      where: { deletedAt: null, OR: [{ date: { gte: gridStart, lte: gridEnd } }, { dueDate: { gte: gridStart, lte: gridEnd } }] },
-      select: { id: true, slug: true, documentNo: true, date: true, dueDate: true, grandTotal: true, status: true },
-    }),
-    prisma.vendorBill.findMany({
-      where: { deletedAt: null, OR: [{ date: { gte: gridStart, lte: gridEnd } }, { dueDate: { gte: gridStart, lte: gridEnd } }] },
-      select: { id: true, slug: true, documentNo: true, date: true, dueDate: true, grandTotal: true, status: true },
-    }),
+    // Putaran 88: hanya dokumen diakui (RECOGNISED_* kanonis) — draft belum
+    // terbit dan cancelled bukan kewajiban; konsisten dashboard/notifikasi.
+    canViewSales || canViewFinance
+      ? prisma.salesInvoice.findMany({
+          where: { deletedAt: null, status: { in: [...RECOGNISED_AR_STATUSES] }, OR: [{ date: { gte: gridStart, lte: gridEnd } }, { dueDate: { gte: gridStart, lte: gridEnd } }] },
+          select: { id: true, slug: true, documentNo: true, date: true, dueDate: true, grandTotal: true, status: true },
+        })
+      : Promise.resolve([] as { id: number; slug: string | null; documentNo: string; date: Date; dueDate: Date | null; grandTotal: unknown; status: string }[]),
+    canViewPurchase || canViewFinance
+      ? prisma.vendorBill.findMany({
+          where: { deletedAt: null, status: { in: [...RECOGNISED_AP_STATUSES] }, OR: [{ date: { gte: gridStart, lte: gridEnd } }, { dueDate: { gte: gridStart, lte: gridEnd } }] },
+          select: { id: true, slug: true, documentNo: true, date: true, dueDate: true, grandTotal: true, status: true },
+        })
+      : Promise.resolve([] as { id: number; slug: string | null; documentNo: string; date: Date; dueDate: Date | null; grandTotal: unknown; status: string }[]),
     prisma.salesOrder.findMany({
       where: { deletedAt: null, deliveryDate: { gte: gridStart, lte: gridEnd } },
       select: { id: true, slug: true, documentNo: true, deliveryDate: true },
@@ -100,10 +114,8 @@ export default async function CalendarPage({
   }
 
   for (const invoice of invoices) {
-    // Drafts carry no recognised receivable yet — only flag them as scheduled.
-    const settled = invoice.status !== "draft"
     push({ date: invoice.date, kind: "invoice", label: salesInvoiceLabel(invoice), amount: Number(invoice.grandTotal), href: `/penjualan/faktur/${invoice.slug ?? invoice.id}` })
-    if (invoice.dueDate && settled) {
+    if (invoice.dueDate) {
       push({ date: invoice.dueDate, kind: "invoice-due", label: `Tempo ${salesInvoiceLabel(invoice)}`, amount: Number(invoice.grandTotal), href: `/penjualan/faktur/${invoice.slug ?? invoice.id}` })
     }
   }

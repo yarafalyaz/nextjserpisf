@@ -22,6 +22,8 @@ const EXPECTED: Array<{ page: string; type: string }> = [
   { page: "inventaris/transfer/[slug]/ubah/page.tsx", type: "inventory_transfer" },
   { page: "inventaris/penyesuaian/[slug]/page.tsx", type: "stock_adjustment" },
   { page: "inventaris/penyesuaian/[slug]/ubah/page.tsx", type: "stock_adjustment" },
+  // Putaran 88: detail sesi opname (daftar + mutasinya sudah scoped sebelumnya).
+  { page: "inventaris/opname/sesi/[slug]/page.tsx", type: "stocktake_session" },
 ]
 
 describe("batas gudang di halaman dokumen", () => {

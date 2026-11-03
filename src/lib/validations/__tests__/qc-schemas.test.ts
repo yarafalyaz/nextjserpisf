@@ -3,6 +3,7 @@ import {
   QC_CHECKLIST_TYPES,
   createQcChecklistSchema,
   createQcInspectionSchema,
+  parseInspectionResults,
 } from "@/lib/validations/qc.schemas"
 import { QC_INSPECTION_TYPES } from "@/lib/services/qc.service"
 
@@ -13,6 +14,20 @@ import { QC_INSPECTION_TYPES } from "@/lib/services/qc.service"
 // F-2026-10-20-13a: vehicle intake/handover are first-class checklist types in
 // the same free-String column, so workshop staff can record existing damage at
 // reception and vehicle condition at handover without a schema migration.
+
+describe("putaran 88: parseInspectionResults satu hasil per item", () => {
+  it("menolak checklistItemId duplikat (pass + fail item sama)", () => {
+    const r = parseInspectionResults(["5", "5"], ["pass", "fail"], ["", ""], ["", ""])
+    expect(r.success).toBe(false)
+    if (!r.success) expect(r.error).toMatch(/duplikat/)
+  })
+
+  it("baris kosong tak dihitung duplikat; item beda lolos", () => {
+    const r = parseInspectionResults(["5", "", "7"], ["pass", "", "fail"], ["", "", ""], ["", "", ""])
+    expect(r.success).toBe(true)
+    if (r.success) expect(r.data.map((d) => d.checklistItemId)).toEqual([5, 7])
+  })
+})
 
 describe("QC checklist/inspection types include vehicle condition types", () => {
   it.each(["vehicle_intake", "vehicle_handover"])("lists '%s' among the accepted types", (type) => {

@@ -429,11 +429,16 @@ export async function createNonconformance(formData: FormData) {
     const v = parsed.data
 
     if (v.inspectionId) {
+      // Putaran 88: inspeksi tertaut wajib milik referensi NCR yang sama —
+      // tautan lintas referensi merusak atribusi defect & jejak audit gate.
       const inspection = await prisma.qcInspection.findUnique({
         where: { id: v.inspectionId },
-        select: { id: true },
+        select: { id: true, referenceType: true, referenceId: true },
       })
       if (!inspection) return { success: false, error: "Inspeksi tidak ditemukan" }
+      if (inspection.referenceType !== v.referenceType || inspection.referenceId !== v.referenceId) {
+        return { success: false, error: "Inspeksi terpilih bukan milik dokumen referensi NCR ini." }
+      }
     }
     await assertQcReferenceExists(v.referenceType, v.referenceId)
 
@@ -452,6 +457,17 @@ export async function createNonconformance(formData: FormData) {
       // Penilaian eksistensi otoritatif sesudah kunci (pola createQcInspection):
       // penghapus yang commit di jendela cek luar -> kunci menolak NCR yatim.
       await assertQcReferenceLockedExists(v.referenceType, v.referenceId, tx)
+      // Putaran 88: nilai ulang pasangan referensi inspeksi sesudah kunci.
+      if (v.inspectionId) {
+        const inspection = await tx.qcInspection.findUnique({
+          where: { id: v.inspectionId },
+          select: { id: true, referenceType: true, referenceId: true },
+        })
+        if (!inspection) throw new Error("Inspeksi tidak ditemukan")
+        if (inspection.referenceType !== v.referenceType || inspection.referenceId !== v.referenceId) {
+          throw new Error("Inspeksi terpilih bukan milik dokumen referensi NCR ini.")
+        }
+      }
       return tx.nonconformance.create({
         data: {
           documentNo,

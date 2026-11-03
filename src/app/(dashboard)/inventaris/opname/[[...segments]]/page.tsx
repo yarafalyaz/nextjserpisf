@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission, hasPermission } from '@/lib/auth/permissions'
+import { getWarehouseScope } from '@/lib/auth/warehouse-scope'
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { AppBreadcrumbs } from '@/components/ui/breadcrumbs'
 import { ReportSection } from '@/components/reports/report-section'
@@ -30,11 +31,21 @@ export default async function StockOpnamePage({
   params: Promise<{ segments?: string[] }>
   searchParams: Promise<{ warehouseId?: string; date?: string }>
 }) {
-  await requirePermission("view_stock_opname")
+  const user = await requirePermission("view_stock_opname")
   const canCreate = await hasPermission("create_stock_adjustments")
 
+  // Putaran 88: lembar hanya menawarkan gudang dalam cakupan sesi — posisi
+  // stok gudang lain tak boleh bocor di baca walau submit sudah ditolak action.
+  const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
+  const scopeWhere =
+    scope.kind === "assigned"
+      ? { id: { in: scope.warehouseIds } }
+      : scope.kind === "none"
+        ? { id: { in: [] as number[] } }
+        : {}
+
   const warehouses = await prisma.warehouse.findMany({
-    where: { isActive: true, deletedAt: null },
+    where: { isActive: true, deletedAt: null, ...scopeWhere },
     orderBy: { code: 'asc' },
     select: { id: true, slug: true, code: true, name: true },
   })

@@ -25,6 +25,7 @@ const qcChecklistUpdateManyMock = vi.fn()
 const qcChecklistDeleteMock = vi.fn()
 const qcChecklistDeleteManyMock = vi.fn()
 const qcInspectionCreateMock = vi.fn()
+const qcInspectionFindUniqueMock = vi.fn()
 const nonconformanceFindUniqueMock = vi.fn()
 const nonconformanceCreateMock = vi.fn()
 const nonconformanceUpdateMock = vi.fn()
@@ -69,6 +70,7 @@ vi.mock("@/lib/db/prisma", () => {
     qcInspection: {
       create: (...a: unknown[]) => qcInspectionCreateMock(...a),
       findFirst: vi.fn().mockResolvedValue(null),
+      findUnique: (...a: unknown[]) => qcInspectionFindUniqueMock(...a),
     },
     nonconformance: {
       findUnique: (...a: unknown[]) => nonconformanceFindUniqueMock(...a),
@@ -135,7 +137,7 @@ beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock, checkIdempotencyMock, generateDocumentNumberMock,
     assertWorkOrderQcClearedMock, qcChecklistFindUniqueMock, qcChecklistCreateMock,
-    qcChecklistUpdateMock, qcChecklistUpdateManyMock, qcChecklistDeleteMock, qcChecklistDeleteManyMock, qcInspectionCreateMock,
+    qcChecklistUpdateMock, qcChecklistUpdateManyMock, qcChecklistDeleteMock, qcChecklistDeleteManyMock, qcInspectionCreateMock, qcInspectionFindUniqueMock,
     nonconformanceFindUniqueMock, nonconformanceCreateMock, nonconformanceUpdateMock,
     raiseNcrFromInspectionMock, syncReworkCostMock, lockQcReferenceRowMock,
     workOrderFindUniqueQcMock, productionOrderFindUniqueQcMock, goodsReceiptFindUniqueQcMock,
@@ -408,6 +410,32 @@ describe("createNonconformance", () => {
     }))
 
     expect(res.success).toBe(true)
+    expect(nonconformanceCreateMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("putaran 88: inspeksi referensi lain ditolak; pasangan cocok lolos", async () => {
+    qcInspectionFindUniqueMock.mockResolvedValue({
+      id: 31, referenceType: "WorkOrder", referenceId: 5,
+    })
+
+    const mismatch = await createNonconformance(fd({
+      referenceType: "ProductionOrder", referenceId: 9, inspectionId: 31,
+      defectDescription: "cacat", responsibility: "internal", severity: "minor",
+    }))
+    expect(mismatch.success).toBe(false)
+    expect(mismatch.error).toMatch(/bukan milik dokumen referensi/)
+    expect(nonconformanceCreateMock).not.toHaveBeenCalled()
+
+    qcInspectionFindUniqueMock.mockReset()
+    qcInspectionFindUniqueMock.mockResolvedValue({
+      id: 31, referenceType: "ProductionOrder", referenceId: 9,
+    })
+    nonconformanceCreateMock.mockResolvedValue({ id: 8, slug: "ncr-8" })
+    const match = await createNonconformance(fd({
+      referenceType: "ProductionOrder", referenceId: 9, inspectionId: 31,
+      defectDescription: "cacat", responsibility: "internal", severity: "minor",
+    }))
+    expect(match.success).toBe(true)
     expect(nonconformanceCreateMock).toHaveBeenCalledTimes(1)
   })
 

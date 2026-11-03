@@ -39,6 +39,7 @@ async function getWarehouseData(user: { id: string; roles: string[] }) {
   if (scope.kind === "none") {
     return {
       lowStockItems: [] as LowStockItem[],
+      lowStockCount: 0,
       recentMoves: [],
       warehouseCount: 0,
       pendingReceipts: 0,
@@ -69,7 +70,8 @@ async function getWarehouseData(user: { id: string; roles: string[] }) {
     : await prisma.warehouse.count({ where: { isActive: true, deletedAt: null } })
 
   if (!scoped) {
-    const [lowStockItems, totalItems] = await Promise.all([
+    // Putaran 88: total kartu dari COUNT terpisah — daftar tetap sampel 8.
+    const [lowStockItems, lowStockCountRows, totalItems] = await Promise.all([
       prisma.$queryRaw<LowStockItem[]>`
         SELECT id, name, sku, qty_on_hand as qtyOnHand, min_stock as minStock
         FROM items
@@ -80,9 +82,17 @@ async function getWarehouseData(user: { id: string; roles: string[] }) {
         ORDER BY qty_on_hand ASC
         LIMIT 8
       `,
+      prisma.$queryRaw<[{ count: bigint }]>`
+        SELECT COUNT(*) as count FROM items
+        WHERE is_active = true
+          AND min_stock > 0
+          AND qty_on_hand <= min_stock
+          AND deleted_at IS NULL
+      `,
       prisma.item.count({ where: { isActive: true, deletedAt: null } }),
     ])
-    return { lowStockItems, recentMoves, warehouseCount, pendingReceipts, totalItems }
+    const lowStockCount = Number(lowStockCountRows[0]?.count ?? 0)
+    return { lowStockItems, lowStockCount, recentMoves, warehouseCount, pendingReceipts, totalItems }
   }
 
   // Stok per gudang kanonis = sisa InventoryLayer per (item, gudang);
@@ -121,7 +131,7 @@ async function getWarehouseData(user: { id: string; roles: string[] }) {
         select: { id: true, name: true, sku: true, minStock: true },
       })
     : []
-  const lowStockItems: LowStockItem[] = items
+  const lowStockAll: LowStockItem[] = items
     .map((item) => ({
       id: item.id,
       name: item.name,
@@ -131,10 +141,12 @@ async function getWarehouseData(user: { id: string; roles: string[] }) {
     }))
     .filter((row) => row.minStock > 0 && row.qtyOnHand <= row.minStock)
     .sort((a, b) => a.qtyOnHand - b.qtyOnHand)
-    .slice(0, 8)
+  // Putaran 88: kartu menampilkan total penuh; daftar tetap 8 teratas.
+  const lowStockItems = lowStockAll.slice(0, 8)
 
   return {
     lowStockItems,
+    lowStockCount: lowStockAll.length,
     recentMoves,
     warehouseCount,
     pendingReceipts,
@@ -174,7 +186,7 @@ export default async function WarehouseDashboard({
           {/* Stats */}
           <div className="grid grid-cols-2 gap-4 px-4 lg:grid-cols-4 lg:px-6">
             <StatCard label="Total Item" value={data.totalItems} icon={<Package className="size-5" />} />
-            <StatCard label="Stok Menipis" value={data.lowStockItems.length} icon={<AlertTriangle className="size-5" />} trend="down" />
+            <StatCard label="Stok Menipis" value={data.lowStockCount} icon={<AlertTriangle className="size-5" />} trend="down" />
             <StatCard label="Gudang" value={data.warehouseCount} icon={<Building2 className="size-5" />} />
             <StatCard label="Penerimaan Menunggu" value={data.pendingReceipts} icon={<PackageCheck className="size-5" />} />
           </div>

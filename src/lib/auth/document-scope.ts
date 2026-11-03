@@ -19,6 +19,9 @@ export const WAREHOUSE_SCOPED_DOCUMENTS: Record<string, { model: string; fields:
   goods_receipt: { model: "goodsReceipt", fields: ["warehouseId"] },
   inventory_transfer: { model: "inventoryTransfer", fields: ["sourceWarehouseId", "destinationWarehouseId"] },
   stock_adjustment: { model: "stockAdjustment", fields: ["warehouseId"] },
+  // Putaran 88: detail sesi opname sebelumnya tak scoped padahal daftar +
+  // mutasinya scoped — baris hitungan gudang lain terbaca lewat tebak slug.
+  stocktake_session: { model: "stocktakeSession", fields: ["warehouseId"] },
 }
 
 /**

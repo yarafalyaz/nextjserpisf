@@ -142,6 +142,31 @@ describe("vendor biaya hidup (putaran 36)", () => {
   })
 })
 
+describe("putaran 88: baris biaya bersumber sistem tak bisa edit/hapus langsung", () => {
+  it("update menolak baris rework NCR", async () => {
+    costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: 1, workOrderId: null, amount: 100, vendorId: null, nonconformanceId: 9, purchaseOrderId: null, sourceTimesheetId: null })
+    const res = await updateProductionCost(5, fd({ category: "rework", amount: 300 }))
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/dokumen sumber/)
+    expect(costUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("delete menolak baris bersumber timesheet", async () => {
+    costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: 1, workOrderId: null, amount: 100, nonconformanceId: null, purchaseOrderId: null, sourceTimesheetId: 7 })
+    const res = await deleteProductionCost(5)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/dokumen sumber/)
+    expect(costDeleteMock).not.toHaveBeenCalled()
+  })
+
+  it("baris manual tetap bisa diupdate", async () => {
+    costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: null, workOrderId: 10, amount: 100, vendorId: 3, nonconformanceId: null, purchaseOrderId: null, sourceTimesheetId: null })
+    woFindUniqueMock.mockResolvedValue({ id: 10, status: "in_progress" })
+    const res = await updateProductionCost(5, fd({ category: "other", amount: 300, vendorId: 3 }))
+    expect(res.success).toBe(true)
+  })
+})
+
 describe("kunci periode hari-ini (F-2026-10-20-24a)", () => {
   const LOCKED = new Error("Periode akuntansi sudah ditutup sampai 31/10/2026.")
 

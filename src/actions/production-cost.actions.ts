@@ -257,9 +257,15 @@ export async function updateProductionCost(id: number, formData: FormData) {
 
     const existing = await prisma.productionCost.findUnique({
       where: { id },
-      select: { id: true, productionOrderId: true, workOrderId: true, amount: true, vendorId: true },
+      select: { id: true, productionOrderId: true, workOrderId: true, amount: true, vendorId: true, nonconformanceId: true, purchaseOrderId: true, sourceTimesheetId: true },
     })
     if (!existing) return { success: false, error: "Biaya tidak ditemukan" }
+
+    // Putaran 88: baris bersumber sistem (rework NCR / PO / timesheet) adalah
+    // cermin dokumen sumbernya — edit langsung memutus sinkronisasi delta.
+    if (existing.nonconformanceId != null || existing.purchaseOrderId != null || existing.sourceTimesheetId != null) {
+      return { success: false, error: "Biaya ini dibuat otomatis dari dokumen sumber (NCR/PO/timesheet) — ubah dari dokumen sumbernya." }
+    }
 
     // Hanya relink vendor yang dinilai hidup; vendor lama tak berubah
     // (kini nonaktif) tidak memblokir edit biaya lain.
@@ -353,9 +359,15 @@ export async function deleteProductionCost(id: number) {
 
     const existing = await prisma.productionCost.findUnique({
       where: { id },
-      select: { id: true, productionOrderId: true, workOrderId: true, amount: true },
+      select: { id: true, productionOrderId: true, workOrderId: true, amount: true, nonconformanceId: true, purchaseOrderId: true, sourceTimesheetId: true },
     })
     if (!existing) return { success: false, error: "Biaya tidak ditemukan" }
+
+    // Putaran 88: baris bersumber sistem tak boleh dihapus langsung —
+    // sinkronisasi berikutnya akan melahirkannya kembali dengan delta penuh.
+    if (existing.nonconformanceId != null || existing.purchaseOrderId != null || existing.sourceTimesheetId != null) {
+      return { success: false, error: "Biaya ini dibuat otomatis dari dokumen sumber (NCR/PO/timesheet) — ubah dari dokumen sumbernya." }
+    }
 
     if (existing.productionOrderId) {
       const order = await prisma.productionOrder.findUnique({

@@ -64,7 +64,12 @@ const mocks = vi.hoisted(() => {
     $queryRaw: vi.fn().mockResolvedValue([]),
   }
 
+  const assertWorkOrderQcClearedMock = vi.fn()
+  const assertProductionOrderQcClearedMock = vi.fn()
+
   return {
+    assertWorkOrderQcClearedMock,
+    assertProductionOrderQcClearedMock,
     requirePermissionMock: vi.fn(),
     consumeFifoLayersMock: vi.fn(),
     productionIssueJournalMock: vi.fn(),
@@ -108,8 +113,8 @@ vi.mock("@/lib/services/period-lock.service", () => ({
 // live in qc.test.ts. Without this mock the real service would query unmocked
 // prisma models and fail every completeWorkOrder case.
 vi.mock("@/lib/services/qc.service", () => ({
-  assertWorkOrderQcCleared: vi.fn().mockResolvedValue(undefined),
-  assertProductionOrderQcCleared: vi.fn().mockResolvedValue(undefined),
+  assertWorkOrderQcCleared: mocks.assertWorkOrderQcClearedMock,
+  assertProductionOrderQcCleared: mocks.assertProductionOrderQcClearedMock,
   assertWorkOrderVehicleIntakeRecorded: vi.fn().mockResolvedValue(undefined),
   // Implementasi inline setara service: lock no-op pada mock, lalu hitung
   // inspeksi/NCR polimorfik dan tolak bila ada — supaya regresi delete
@@ -147,6 +152,11 @@ function fdMap(payload: Record<string, string | number | null | undefined>): For
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Putaran 88: mock gate QC di file ini adalah fn modul (bukan model mock) —
+  // clearAllMocks membuang implementasinya; test menolak menanam Once sendiri.
+  mocks.assertWorkOrderQcClearedMock.mockResolvedValue(undefined)
+  mocks.assertProductionOrderQcClearedMock.mockResolvedValue(undefined)
+  mocks.prismaMock.productionOrder.findUnique.mockResolvedValue(null)
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
   mocks.warehouseScopeMock.mockResolvedValue({ kind: "all" })
   mocks.consumeFifoLayersMock.mockResolvedValue({ consumedCost: 42, shortfall: 0 })
@@ -1010,6 +1020,48 @@ describe("Production Order Actions", () => {
     // Gate PO sendiri + WO induk bila tertaut.
     expect(vi.mocked(qc.assertProductionOrderQcCleared)).toHaveBeenCalledWith(8, expect.anything())
     expect(vi.mocked(qc.assertWorkOrderQcCleared)).toHaveBeenCalledWith(42, expect.anything())
+  })
+
+  it("putaran 88: completeProductionOrder mengunci WO induk SEBELUM PO (urutan global)", async () => {
+    mocks.prismaMock.productionOrder.findUnique.mockResolvedValue({ workOrderId: 42 })
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", qty: 2,
+      totalActualCost: 20, totalStandardCost: 18, workOrderId: 42,
+      product: { inventoryItem: {
+        id: 10, isProduct: true, isActive: true, deletedAt: null,
+        defaultWarehouseId: 5, trackBatch: false, trackSerial: false,
+      } },
+    })
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 456 })
+    const sqlSeen: string[] = []
+    mocks.prismaMock.$queryRaw.mockImplementation((...a: any[]) => {
+      const first = a[0]
+      sqlSeen.push(Array.isArray(first) ? first.join("?") : ((first as any)?.strings?.join("?") ?? String(first ?? "")))
+      return Promise.resolve([])
+    })
+    const res = await actions.completeProductionOrder(8)
+    expect(res.success).toBe(true)
+    const woLockIdx = sqlSeen.findIndex((s) => /work_orders/i.test(s) && /for update/i.test(s))
+    const poLockIdx = sqlSeen.findIndex((s) => /production_orders/i.test(s) && /for update/i.test(s))
+    expect(woLockIdx).toBeGreaterThanOrEqual(0)
+    expect(poLockIdx).toBeGreaterThan(woLockIdx)
+  })
+
+  it("putaran 88: completeProductionOrder menolak tautan WO berubah sesudah kunci", async () => {
+    mocks.prismaMock.productionOrder.findUnique.mockResolvedValue({ workOrderId: 42 })
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", qty: 2,
+      totalActualCost: 20, totalStandardCost: 18, workOrderId: 99,
+      product: { inventoryItem: {
+        id: 10, isProduct: true, isActive: true, deletedAt: null,
+        defaultWarehouseId: 5, trackBatch: false, trackSerial: false,
+      } },
+    })
+    const res = await actions.completeProductionOrder(8)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/berubah selama proses/)
+    expect(mocks.prismaMock.stockMove.create).not.toHaveBeenCalled()
   })
 
   it("refuses production completion when QC gate rejects (P1-2)", async () => {

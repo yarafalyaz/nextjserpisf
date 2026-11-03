@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma"
+import { OPEN_PURCHASE_ORDER_STATUSES } from "@/lib/reports/bom-revision-impact"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import {
@@ -26,11 +27,19 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 async function getPurchasingData() {
-  const [pendingPR, pendingPO, recentPOs, recentVendorBills, vendorCount] =
+  // Putaran 88: subpopulasi kanonis — PR lahir "draft" (tak ada penulis
+  // "pending"); PO aktif mengikuti OPEN_PURCHASE_ORDER_STATUSES
+  // (ordered/partial_received); nilai PO aktif dari agregat query sendiri,
+  // bukan sampel daftar terbaru take:8.
+  const [pendingPR, pendingPO, poActiveAgg, recentPOs, recentVendorBills, vendorCount] =
     await Promise.all([
-      prisma.purchaseRequest.count({ where: { status: "pending" } }),
+      prisma.purchaseRequest.count({ where: { status: { in: ["draft", "approved"] }, deletedAt: null } }),
       prisma.purchaseOrder.count({
-        where: { status: { in: ["draft", "ordered", "partial"] }, deletedAt: null },
+        where: { status: { in: [...OPEN_PURCHASE_ORDER_STATUSES] }, deletedAt: null },
+      }),
+      prisma.purchaseOrder.aggregate({
+        where: { status: { in: [...OPEN_PURCHASE_ORDER_STATUSES] }, deletedAt: null },
+        _sum: { grandTotal: true },
       }),
       prisma.purchaseOrder.findMany({
         where: { deletedAt: null },
@@ -47,9 +56,7 @@ async function getPurchasingData() {
       prisma.vendor.count({ where: { deletedAt: null } }),
     ])
 
-  const totalPendingValue = recentPOs
-    .filter((po) => po.status !== "completed")
-    .reduce((sum, po) => sum + Number(po.grandTotal), 0)
+  const totalPendingValue = Number(poActiveAgg._sum.grandTotal ?? 0)
 
   return { pendingPR, pendingPO, totalPendingValue, recentPOs, recentVendorBills, vendorCount }
 }

@@ -1406,7 +1406,18 @@ export async function completeProductionOrder(
     const warehouseScope = await getWarehouseScope(user);
     if (warehouseScope.kind === "none") throw new Error("Anda tidak memiliki akses ke gudang mana pun.");
 
+    // Putaran 88: tautan dibaca pra-tx (pola issueMaterial) supaya kunci
+    // mengikuti urutan global WO -> PO. Gate QC mengunci baris WO dari
+    // dalam; kunci PO dulu di sini deadlock melawan issueMaterial.
+    const link = await prisma.productionOrder.findUnique({
+      where: { id },
+      select: { workOrderId: true },
+    });
+
     const result = await prisma.$transaction(async (tx) => {
+      if (link?.workOrderId != null) {
+        await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${link.workOrderId} FOR UPDATE`;
+      }
       await tx.$queryRaw`SELECT id FROM production_orders WHERE id = ${id} FOR UPDATE`;
       const order = await tx.productionOrder.findUniqueOrThrow({
         where: { id },
@@ -1438,6 +1449,9 @@ export async function completeProductionOrder(
           },
         },
       });
+      if (link && order.workOrderId !== link.workOrderId) {
+        throw new Error("Tautan perintah kerja perintah produksi berubah selama proses; ulangi penyelesaian.");
+      }
       if (order.status !== "in_progress") {
         throw new Error(`Perintah produksi berstatus '${order.status}', hanya 'in_progress' yang bisa diselesaikan`);
       }

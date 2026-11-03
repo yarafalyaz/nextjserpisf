@@ -89,7 +89,9 @@ export default async function ProjectsPage({
 
   const tableData = toPlain(projects)
 
-  const statusChips = ["", "active", "completed", "cancelled"].map((dbStatus) => {
+  // Putaran 88: himpunan status proyek nyata (project-status.ts) — chip
+  // "cancelled" selalu kosong (tak ada penulis) dan in_progress tak terpilih.
+  const statusChips = ["", "active", "in_progress", "completed"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
     return (
       <Link
