@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => {
   const txDelegates = {
     employeeLoan: {
       findUniqueOrThrow: vi.fn(),
+      // Putaran 83: slug dihitung dari delegate tx (pemeriksa tabrakan).
+      findFirst: vi.fn().mockResolvedValue(null),
       updateMany: vi.fn(),
     },
     $queryRaw: vi.fn(),

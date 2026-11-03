@@ -314,9 +314,14 @@ describe("assertAnnualLeaveQuota — cuti lintas tahun memotong dua jatah", () =
     expect(err).toMatch(/tahun 2026/)
   })
 
-  it("guard statis: kedua gate aksi memakai helper lintas tahun", async () => {
+  it("guard statis: kedua gate aksi memakai helper gerbang bersama (putaran 83)", async () => {
     const { readFileSync } = await import("node:fs")
     const actions = readFileSync("src/actions/hrm.actions.ts", "utf8")
-    expect(actions.match(/assertAnnualLeaveQuota\(employeeId, startDate, endDate/g)).toHaveLength(2)
+    // Create + update menilai lewat assertLeaveRequestGates yang sama;
+    // helper itulah yang memanggil assertAnnualLeaveQuota lintas tahun
+    // (satu titik di service, dipakai juga penilaian ulang reopen).
+    expect(actions.match(/assertLeaveRequestGates\(tx as never/g)).toHaveLength(2)
+    const service = readFileSync("src/lib/services/leave-quota.service.ts", "utf8")
+    expect(service.match(/assertAnnualLeaveQuota\(employeeId, startDate, endDate/g)).toHaveLength(1)
   })
 })
