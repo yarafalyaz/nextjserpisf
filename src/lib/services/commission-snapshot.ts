@@ -48,7 +48,7 @@ export async function commissionSnapshotForPaid(
   let lockedCategoryId: number | null | undefined
   if (typeof db.$queryRaw === "function") {
     const lockedCustomer = await db.$queryRaw<Array<{ customerCategoryId: number | null }>>`
-      SELECT customerCategoryId FROM customers WHERE id = ${invoice.customerId} FOR UPDATE`
+      SELECT customer_category_id AS customerCategoryId FROM customers WHERE id = ${invoice.customerId} FOR UPDATE`
     if (Array.isArray(lockedCustomer)) {
       const row = lockedCustomer[0]
       if (row && "customerCategoryId" in row) {
