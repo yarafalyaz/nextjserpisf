@@ -210,6 +210,43 @@ describe("reverseJournalsByReferenceTx (P1-7)", () => {
     expect(journalCreate).not.toHaveBeenCalled()
   })
 
+  it("putaran 109: status tak dikenal (REVERSING) DITOLAK, bukan dihapus diam-diam", async () => {
+    // Cabang `status !== "POSTED"` memperlakukan setiap status lain sebagai
+    // "belum menyentuh GL" lalu hard-delete. REVERSING adalah status NYATA
+    // (klaim reverseJournal, dipulihkan cron) dan jurnal di posisi itu belum
+    // tentu tanpa efek GL — menghapusnya bisa menghapus jurnal yang lawannya
+    // sudah terlanjur lahir. Kontrak yang sama sudah ditegakkan
+    // deleteJournalByReferenceTx di berkas ini: status tak dikenal fail-closed.
+    const REVERSING = { ...POSTED, status: "REVERSING" }
+    journalFindMany
+      .mockResolvedValueOnce([REVERSING])
+      .mockResolvedValueOnce([{ id: 5, status: "REVERSING", transactionDate: POSTED.transactionDate }])
+
+    await expect(
+      reverseJournalsByReferenceTx(tx as never, "SalesInvoice", 7, "r", 1),
+    ).rejects.toThrow(/status/i)
+    expect(journalDelete).not.toHaveBeenCalled()
+    expect(entryDeleteMany).not.toHaveBeenCalled()
+  })
+
+  it("putaran 109: ejaan warisan huruf kecil 'posted' dibalik, bukan dihapus", async () => {
+    // deleteJournalByReferenceTx sudah menormalkan ejaan (`status.toUpperCase()`).
+    // Helper ini dulu membandingkan persis, jadi "posted" jatuh ke cabang
+    // hapus — efek GL hidup lenyap tanpa lawan. Setelah normalisasi ia
+    // mengikuti jalur POSTED: jurnal lawan lahir, asal menjadi REVERSED.
+    const legacy = { ...POSTED, status: "posted" }
+    journalFindMany
+      .mockResolvedValueOnce([legacy])
+      .mockResolvedValueOnce([{ id: 5, status: "posted", transactionDate: POSTED.transactionDate }])
+
+    await reverseJournalsByReferenceTx(tx as never, "SalesInvoice", 7, "r", 1)
+
+    expect(journalCreate).toHaveBeenCalled()
+    expect(journalUpdate).toHaveBeenCalledWith({ where: { id: 5 }, data: { status: "REVERSED" } })
+    expect(journalDelete).not.toHaveBeenCalled()
+    expect(entryDeleteMany).not.toHaveBeenCalled()
+  })
+
   it("regresi putaran 16: bacaan segar REVERSED di bawah kunci membatalkan reversal ganda", async () => {
     // Caller pertama membaca POSTED di snapshot; caller kedua (pemenang
     // kunci) sudah commit REVERSED. Bacaan segar sesudah FOR UPDATE wajib

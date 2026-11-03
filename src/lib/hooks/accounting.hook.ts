@@ -347,22 +347,33 @@ export async function reverseJournalsByReferenceTx(
   // Putaran 86: tolak reversal bila entri jurnal POSTED termasuk item
   // rekonsiliasi bank completed (sesudah kunci jurnal diambil di atas;
   // draft/REVERSED tak punya lawan GL baru sehingga tak perlu dijaga).
+  // Putaran 109: ejaan warisan huruf kecil ikut dinormalkan — filter persis
+  // "POSTED" melewatkan "posted", sehingga jurnal yang dibalik di bawah lolos
+  // dari pembekuan rekonsiliasi final.
   await assertJournalNotInCompletedReconciliation(
     tx,
-    journals.filter((j) => j.status === "POSTED").map((j) => j.id),
+    journals.filter((j) => j.status.toUpperCase() === "POSTED").map((j) => j.id),
   )
 
   for (const j of journals) {
-    // REVERSED sudah punya jurnal lawan POSTED (referenceType "Journal").
-    // Lewati tanpa hapus: menghapus asli akan meninggalkan counterpart
-    // POSTED yatim sebelah di GL. Cabang ini harus konsisten dengan
-    // pemeriksaan existing-reversal di bawah — keduanya berarti
-    // "sudah direversal, jangan buat dan jangan hapus apa pun".
-    // Pemeriksaan status REVERSED yang lama berada sesudah cabang
-    // `!== POSTED` sehingga tak pernah tercapai (dead code) dan
-    // REVERSED justru terhapus.
-    if (j.status === "REVERSED") continue;
-    if (j.status !== "POSTED") {
+    // Putaran 109: ejaan warisan huruf kecil dinormalkan dan status TAK dikenal
+    // fail-closed — kontrak yang sama yang sudah ditegakkan
+    // `deleteJournalByReferenceTx` di atas. Cabang lama `status !== "POSTED"`
+    // memperlakukan SETIAP status lain sebagai "belum menyentuh GL" lalu
+    // hard-delete: REVERSING (klaim nyata `reverseJournal`, dipulihkan cron)
+    // dan warisan "posted" ikut terhapus tanpa jejak, padahal keduanya menyimpan
+    // efek GL hidup.
+    //
+    // REVERSED dilewati tanpa hapus: aslinya sudah punya jurnal lawan POSTED
+    // (referenceType "Journal"), jadi menghapusnya meninggalkan lawan yatim.
+    const status = j.status.toUpperCase();
+    if (status === "REVERSED") continue;
+    if (status !== "POSTED" && status !== "DRAFT") {
+      throw new Error(
+        `Jurnal #${j.id} berstatus "${j.status}" yang tidak dikenal pembalikan otomatis — periksa jurnalnya secara manual sebelum pembatalan.`,
+      );
+    }
+    if (status === "DRAFT") {
       // DRAFT (belum GL): hapus aman (dokumen sumber tetap ada).
       await tx.journalEntry.deleteMany({ where: { journalId: j.id } });
       await tx.journal.delete({ where: { id: j.id } });
