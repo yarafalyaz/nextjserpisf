@@ -515,6 +515,37 @@ describe("Quotation Actions", () => {
     )
   })
 
+  // Putaran 107: reject/revise memindahkan dokumen ke status yang TIDAK
+  // pernah diterima klaim APPROVE_CLAIMS/REJECT_CLAIMS Quotation
+  // (from: draft|sent) — approval pending yang tertinggal mustahil
+  // diselesaikan dan memblokir edit/hapus workflow selamanya.
+  it("putaran 107: rejectQuotation menutup approval pending penawaran itu", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "sent", revisionNumber: 3 })
+    mocks.prismaMock.approval.deleteMany.mockResolvedValue({ count: 1 })
+    const res = await actions.rejectQuotation(1, "Harga kompetitor")
+    expect(res?.success).toBe(true)
+    // HANYA pending: baris approved/rejected adalah jejak keputusan atas
+    // dokumen yang barisnya tetap ada (pola cancelPurchaseOrder).
+    expect(mocks.prismaMock.approval.deleteMany).toHaveBeenCalledWith({
+      where: { referenceType: "Quotation", referenceId: 1, status: "pending" },
+    })
+  })
+  it("putaran 107: reviseQuotation menutup approval pending penawaran itu", async () => {
+    // Revisi juga melempar dokumen ke draft + revisi baru: approval pending
+    // atas revisi lama tak boleh tetap terbuka — approver bisa menyetujui
+    // isi yang sudah diganti.
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "sent", revisionNumber: 3, grandTotal: 100, subtotal: 100, discount: 0, tax: 0, sections: [],
+    })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ id: 1, status: "sent", revisionNumber: 3 })
+    mocks.prismaMock.approval.deleteMany.mockResolvedValue({ count: 1 })
+    const res = await actions.reviseQuotation(1, "Pelanggan minta revisi harga")
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.approval.deleteMany).toHaveBeenCalledWith({
+      where: { referenceType: "Quotation", referenceId: 1, status: "pending" },
+    })
+  })
+
   // === reviseQuotation ===
   it("reviseQuotation fails if status is not sent", async () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })

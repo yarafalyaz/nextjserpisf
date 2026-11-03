@@ -237,6 +237,21 @@ async function decideQuotation(
       data: { status: decision.status },
     })
 
+    // Putaran 107: keputusan pelanggan memindahkan penawaran ke status yang
+    // TIDAK diterima klaim approve/reject manapun (`APPROVE_CLAIMS.Quotation`
+    // hanya draft|sent). Approval `pending` yang tertinggal karena itu
+    // mustahil diselesaikan: setiap klik Setujui/Tolak berbalas 409, barisnya
+    // mengotori antrean, dan `updateApprovalWorkflow`/`deleteApprovalWorkflow`
+    // menolak selama pendingCount > 0 — konfigurasi alur Quotation terkunci
+    // permanen (kelas yang sama dengan putaran 105/107 cancelPurchaseOrder).
+    //
+    // HANYA pending: baris approved/rejected adalah jejak keputusan atas
+    // dokumen yang barisnya tetap ada. Pada jalur accept ini no-op (accept
+    // sudah digerbang assertApproved, jadi tidak mungkin ada pending).
+    await tx.approval.deleteMany({
+      where: { referenceType: "Quotation", referenceId: quotationId, status: "pending" },
+    })
+
     if (tx.quotationHistory) {
       await tx.quotationHistory.create({
         data: {
@@ -657,6 +672,16 @@ export async function reviseQuotation(quotationId: number, changeReason: string)
         status: "draft",
         revisionNumber: { increment: 1 },
       },
+    })
+
+    // Putaran 107: revisi mengganti ISI penawaran dan menaikkan nomor revisi.
+    // Approval `pending` atas revisi lama harus ditutup — dibiarkan berarti
+    // approver menyetujui isi yang sudah diganti (dan langkahnya tetap
+    // mustahil diselesaikan karena klaim Quotation hanya draft|sent saat
+    // approval lahir pada status sent). HANYA pending: keputusan final
+    // approved/rejected adalah jejak audit atas dokumen yang barisnya ada.
+    await tx.approval.deleteMany({
+      where: { referenceType: "Quotation", referenceId: quotationId, status: "pending" },
     })
   })
 
