@@ -2796,3 +2796,36 @@ Semua tetap CATAT sampai penulis lawan ikut mengunci.
 ### Bukti
 - Merah perintah terpisah tepat 2 (kedua test putaran 96 lawan produksi lama), 380 passed.
 - Hijau: `master.actions` 382/382, guard gabungan 568/568 (schema-usage, silent-failure, wired-transition-actions, action-wiring, action-permission-guard, permission-seed-parity), `tsc --noEmit` bersih, ESLint bersih, `git diff --check` bersih.
+- CI `41604814019` (head `3bd643172`) **success** tanpa susulan.
+
+## Putaran 97 — label pembayaran dibalik + jangkar grafik dasbor (commit `c364ca01f`, CI `41606236510` success)
+
+Sumber: sisa CATAT laporan agent laporan-operasional bagian B — terverifikasi terhadap kode aktual.
+
+### Vonis FIX
+1. Pembayaran reversed tampil tanpa penanda — FIX: `payment-status.ts` memutuskan baris reversed tetap tampil di daftar sebagai histori tetapi wajib berlabel; daftar Pembayaran Terbaru dasbor utama (mobile + desktop) dan `FinanceDashboard` menampilkannya polos, sehingga pembayaran yang sudah dibalik terlihat seperti uang masuk sah. Chip `StatusChip` "Dibalik" kini tampil di ketiga daftar; tone `reversed: danger` ditambahkan ke `status-chip.tsx` (labelnya sudah ada di `status-labels`).
+2. `RevenueChart` berjangkar tanggal data terakhir — FIX: jendela grafik berhenti di transaksi terakhir dan menyembunyikan kekosongan penjualan sesudahnya. Jangkar kini selalu hari ini. Agregat `getCharts` juga dikelompokkan `DATE_FORMAT(date)` (tanggal dokumen faktur, basis semua laporan penjualan) menggantikan `created_at` (tanggal input).
+
+### GUGUR
+- Tab "Semua (10)" `RecentInvoicesTable` disajikan sebagai populasi: kop kartu sudah jujur "10 faktur penjualan terakhir", jadi hitungan tab terbaca sebagai sampel terdeklarasi. Tak ada patch.
+
+### Bukti
+- Merah perintah terpisah: 3 (label) lalu gabungan 3 (label dasbor utama + jangkar + basis tanggal) lawan produksi lama.
+- Hijau: 24/24 (round97 + page + payment-status), batch final 56/56 termasuk guard schema-usage/silent-failure/navigation-targets/permission-seed-parity, `tsc` 0, ESLint 0, `git diff --check` bersih.
+- CI `41606236510` (head `c364ca01f`) **success** tanpa susulan.
+
+## Putaran 98 — prefix CSV log aktivitas + vonis CATAT lanjutan (commit `c83f69b8a`)
+
+Sumber: sisa CATAT laporan agent yang sama — terverifikasi satu per satu.
+
+### Vonis FIX
+1. Ekspor log aktivitas memakai prefix apostrof — FIX: `esc()` route ekspor memakai `"'"` sambil berkomentar "samakan dengan guard baku repo", padahal kelima penanding baku (`statement-csv`, `leave-balance`, `quotation-followup-export`, `withholding-certificates`, `export-buttons`) memakai prefix TAB; apostrof mengubah nilai tampil sel. Prefix diganti TAB persis; regex test lama yang mengunci apostrof diperbarui ke kontrak tab (disengaja) + test putaran 98.
+
+### Vonis CATAT
+- Jalur peran dasbor (`kepala_bengkel`/`purchasing`/`warehouse`/`finance`/karyawan) melewati `requirePermission("view_dashboard")` yang hanya ditegakkan untuk admin: menegakkannya mengubah akses role kustom = keputusan akses, bukan bug terbukti. Seed memberi `view_dashboard` luas.
+- Tanda "Terendah" `vendor-prices` membandingkan harga lintas tier `minQty` berbeda: semantik kolom laporan rujukan; per-tier = keputusan definisi.
+- Genealogy forward-trace tanpa limit: performa spekulatif, tanpa bukti insiden.
+
+### Bukti
+- Merah perintah terpisah tepat 2 lawan route lama; hijau 17/17 route, batch 44/44 (route + activity-log actions + silent-failure + path-filter-routes-wiring + report-url-convention), `tsc` 0, ESLint 0.
+- CI `41606994435` (head `c83f69b8a`) **success** tanpa susulan.
