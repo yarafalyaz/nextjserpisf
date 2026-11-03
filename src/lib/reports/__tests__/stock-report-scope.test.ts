@@ -306,6 +306,21 @@ describe("wiring scope halaman + registry + PDF (ROUND5-SCOPE)", () => {
     }
   })
 
+  it("putaran 90: layar umur-stok dan ringkasan-stok menyaring item hidup seperti loader PDF", () => {
+    expect(src("src/app/(dashboard)/laporan/umur-stok/page.tsx")).toContain(
+      "item: { isActive: true, deletedAt: null }",
+    )
+    expect(src("src/app/(dashboard)/laporan/ringkasan-stok/page.tsx")).toContain(
+      "item: { isActive: true, deletedAt: null }",
+    )
+  })
+
+  it("putaran 90: saldo awal kartu-stok tidak bocor untuk gudang di luar scope", () => {
+    expect(src("src/app/(dashboard)/laporan/kartu-stok/[[...segments]]/page.tsx")).toContain(
+      "scopeIds.includes(warehouseId)",
+    )
+  })
+
   it("halaman umur-stok (layar) memakai rumus umur asal STOK-08/09 yang sama dengan loadStockAging", () => {
     // Layar mengquery layer sendiri (bukan loader), jadi tanpa tes sumber ini
     // layar bisa diam-diam kembali memakai createdAt layer tujuan — stok

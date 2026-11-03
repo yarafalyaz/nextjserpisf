@@ -22,8 +22,13 @@ import {
   type SalesOrderFulfillmentInput,
 } from "@/lib/reports/order-fulfillment"
 
-/** Pesanan yang sudah jadi komitmen ke pelanggan. */
-export const FULFILLABLE_ORDER_STATUSES = ["confirmed", "processing", "completed"]
+/**
+ * Pesanan yang sudah jadi komitmen ke pelanggan. Wajib memuat `approved`:
+ * jalur workflow tanpa workflow terkonfigurasi menaikkan SO draft→approved
+ * dan status itu boleh dikirim (DELIVERABLE_ORDER_STATUSES kanonis); tanpa
+ * entri ini SO yang baru disetujui hilang dari kedua laporan.
+ */
+export const FULFILLABLE_ORDER_STATUSES = ["approved", "confirmed", "processing", "completed"]
 
 /** Surat jalan yang barangnya benar-benar sudah keluar. */
 export const SHIPPED_DELIVERY_STATUSES = ["shipped", "delivered"]

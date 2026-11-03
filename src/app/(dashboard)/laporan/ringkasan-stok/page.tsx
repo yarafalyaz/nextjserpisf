@@ -41,7 +41,9 @@ export default async function InventorySummaryPage() {
       orderBy: { name: 'asc' },
     }),
     prisma.inventoryLayer.findMany({
-      where: { remaining: { gt: 0 }, ...scopeWhere },
+      // Putaran 90: tapis item hidup seperti loadStockSummary sisi PDF,
+      // supaya layer item terhapus tak menaikkan KPI/total layar.
+      where: { remaining: { gt: 0 }, item: { isActive: true, deletedAt: null }, ...scopeWhere },
       select: { itemId: true, warehouseId: true, remaining: true, unitCost: true },
     }),
   ])
@@ -104,7 +106,7 @@ export default async function InventorySummaryPage() {
   const missingItemIds = [...new Set(layers.map((l) => l.itemId))].filter((id) => !itemById.has(id))
   const missingItems = missingItemIds.length
     ? await prisma.item.findMany({
-        where: { id: { in: missingItemIds } },
+        where: { id: { in: missingItemIds }, isActive: true, deletedAt: null },
         select: { id: true, category: { select: { name: true } } },
       })
     : []

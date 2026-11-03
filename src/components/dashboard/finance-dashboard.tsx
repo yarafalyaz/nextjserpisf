@@ -58,10 +58,13 @@ async function getFinanceData() {
       prisma.salesInvoice.count({
         where: { status: "draft", deletedAt: null },
       }),
+      // Putaran 90: status expense terbit = "paid" (approve menulis
+      // "approved", bayar menulis "paid"); "posted" tak pernah ditulis ke
+      // Expense sehingga kartu lama selalu Rp0.
       prisma.expense.aggregate({
         _sum: { amount: true },
         where: {
-          status: "posted",
+          status: "paid",
           date: { gte: startOfMonth },
         },
       }),

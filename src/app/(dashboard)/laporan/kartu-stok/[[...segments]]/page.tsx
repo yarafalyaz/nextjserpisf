@@ -124,8 +124,13 @@ export default async function StockCardPage({
         FROM stock_moves
         WHERE item_id = ${itemId} AND status = 'posted' AND transaction_date < ${startDate}
         ${
+          // Putaran 90: gudang terpilih di luar scope -> hasil kosong, jangan
+          // bocorkan saldo awal gudang lain (periodMoves sudah kosong lewat
+          // warehouseWhere; SQL saldo awal wajib menegakkan hal yang sama).
           warehouseId
-            ? Prisma.sql`AND warehouse_id = ${warehouseId}`
+            ? !scopeIds || scopeIds.includes(warehouseId)
+              ? Prisma.sql`AND warehouse_id = ${warehouseId}`
+              : Prisma.sql`AND 1 = 0`
             : scopeIds
               ? Prisma.sql`AND warehouse_id IN (${Prisma.join(scopeIds)})`
               : Prisma.empty

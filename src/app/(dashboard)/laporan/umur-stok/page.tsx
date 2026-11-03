@@ -32,6 +32,9 @@ export default async function StockAgingPage() {
   const layers = await prisma.inventoryLayer.findMany({
     where: {
       remaining: { gt: 0 },
+      // Putaran 90: item nonaktif/terhapus bukan posisi aktif (sama
+      // loadStockAging sisi PDF) — tanpa tapis ini layar > PDF.
+      item: { isActive: true, deletedAt: null },
       // ROUND5-SCOPE: hanya lapisan gudang dalam cakupan (all = tanpa tapis).
       ...(scope.kind === 'assigned'
         ? { warehouseId: { in: scope.warehouseIds } }

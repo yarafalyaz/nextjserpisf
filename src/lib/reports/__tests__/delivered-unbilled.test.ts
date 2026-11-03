@@ -191,7 +191,11 @@ describe("buildDeliveredUnbilledQueue (builder murni)", () => {
       expect(build([input({ status })]).rows, status).toHaveLength(0)
     }
     expect(build([input({ deletedAt: day(-1) })]).rows).toHaveLength(0)
-    expect([...FULFILLABLE_ORDER_STATUSES]).toEqual(["confirmed", "processing", "completed"])
+    expect([...FULFILLABLE_ORDER_STATUSES]).toEqual(["approved", "confirmed", "processing", "completed"])
+  })
+
+  it("putaran 90: SO approved (disetujui tanpa workflow) masuk populasi antrean tagih", () => {
+    expect(build([input({ status: "approved" })]).rows).toHaveLength(1)
   })
 
   it("AC-DU-6: multi-DO parsial (4+6) + multi-faktur sah (400rb+300rb) -> sisa Rp300rb", () => {
@@ -335,7 +339,7 @@ describe("getDeliveredUnbilledQueue (loader)", () => {
   it("query SO: populasi FULFILLABLE + deletedAt null; DO hanya shipped/delivered; faktur hanya RECOGNISED non-terhapus tertaut", async () => {
     await getDeliveredUnbilledQueue({ now: NOW })
     const soCall = mocks.salesOrderFindMany.mock.calls[0][0]
-    expect(soCall.where.status.in).toEqual(["confirmed", "processing", "completed"])
+    expect(soCall.where.status.in).toEqual(["approved", "confirmed", "processing", "completed"])
     expect(soCall.where.deletedAt).toBeNull()
 
     mocks.salesOrderFindMany.mockResolvedValue([orderRow()])
