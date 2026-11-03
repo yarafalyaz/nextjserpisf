@@ -77,9 +77,12 @@ function rate(v: number): string {
   return String(round2(v))
 }
 
-/** RFC 4180 dengan pemisah `;`: bungkus bila mengandung `;`, `"`, newline. */
+/** RFC 4180 dengan pemisah `;`: bungkus bila mengandung `;`, `"`, newline.
+ *  Putaran 87: guard formula-injection (prefix tab) sama seperti builder
+ *  server lain — nama karyawan dari master masuk baris data. */
 function csvField(v: string): string {
-  return /[;"\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
+  const safe = /^[=+\-@\t|%]/.test(v) ? `\t${v}` : v
+  return /[;"\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe
 }
 
 /** NPWP/NIK digit-saja (§I.3); null = kosong, "INVALID" = selain digit sesudah strip. */

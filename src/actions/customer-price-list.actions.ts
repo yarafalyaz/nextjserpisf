@@ -10,6 +10,7 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { customerPriceListSchema } from "@/lib/validations/price-list.schemas"
 import { getWibTodayUtcDate, wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
+import { checkIdempotency } from "@/lib/utils/idempotency"
 
 const REVALIDATE = "/penjualan/harga-pelanggan"
 
@@ -65,7 +66,12 @@ export async function createCustomerPriceList(formData: FormData): Promise<Custo
     // tanggal efektif kosong), jadi cek duplikat WAJIB di dalam tx sesudah
     // kunci baris items — dua create konkuren untuk item sama terserialkan
     // dan cek kedua melihat baris pertama (bukan snapshot lepas).
+    // Putaran 87: idempotency key — retry jaringan dengan key sama ditolak
+    // server sebelum cek duplikat, sehingga retry dengan satu digit berubah
+    // tidak melahirkan baris kedua yang terpilih senyap oleh resolver.
+    const idempotencyKey = formData.get("idempotencyKey") as string | null
     const outcome = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id)
       await tx.$queryRaw`SELECT id FROM items WHERE id = ${data.itemId} FOR UPDATE`
       // Putaran 68: kunci saja tak membuktikan hidup — nilai ulang dari
       // bacaan terkunci (FOR UPDATE adalah locking read, melihat commit

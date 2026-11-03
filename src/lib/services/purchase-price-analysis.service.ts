@@ -49,6 +49,9 @@ export interface PurchasePriceAnalysis {
   }[]
 }
 
+/** Putaran 87: status GR tercatat kanonis — GR tak pernah berstatus "posted". */
+const POSTED_RECEIPT_STATUSES = ["verified", "completed"]
+
 /**
  * Build the multi-source purchase price analysis for a period. Only posted
  * goods receipts are counted. `itemId` optionally narrows to a single item.
@@ -60,7 +63,7 @@ export async function buildPurchasePriceAnalysis(opts: {
 }): Promise<PurchasePriceAnalysis> {
   const receipts = await prisma.goodsReceipt.findMany({
     where: {
-      status: "posted",
+      status: { in: POSTED_RECEIPT_STATUSES },
       date: { gte: opts.startDate, lte: opts.endDate },
       ...(opts.itemId ? { items: { some: { itemId: opts.itemId } } } : {}),
     },

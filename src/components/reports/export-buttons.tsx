@@ -72,7 +72,10 @@ function openPdf(href: string, download: boolean) {
 export { formatPrintedAtWib }
 
 function csvQuote(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`
+  // Putaran 87: guard formula-injection sama seperti sel body (baris ~237) dan
+  // builder server — kop memuat nama perusahaan dari settings.
+  const safe = /^[=+\-@\t|%]/.test(value) ? `\t${value}` : value
+  return `"${safe.replace(/"/g, '""')}"`
 }
 
 /**

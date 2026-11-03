@@ -132,13 +132,25 @@ describe("AC-PX-B6: antrean segera berakhir (BR-PX-08)", () => {
   })
   it("loader: saring query aktif+bertanggal, normalisasi number, urutan antrean", async () => {
     const findMany = vi.fn().mockResolvedValue([
-      { id: 2, customerCategoryId: null, itemId: 1, price: "90000", minQty: "1", effectiveDate: null, expiresAt: d("2026-11-01"), isActive: true },
-      { id: 1, customerCategoryId: null, itemId: 1, price: "80000", minQty: "1", effectiveDate: null, expiresAt: d("2026-10-30"), isActive: true },
-      { id: 3, customerCategoryId: null, itemId: 1, price: "70000", minQty: "1", effectiveDate: null, expiresAt: null, isActive: true },
+      { id: 2, customerCategoryId: null, itemId: 1, price: "90000", minQty: "1", effectiveDate: null, expiresAt: d("2026-11-01"), isActive: true, notes: null, customerCategory: null, item: { sku: "A", name: "Barang", unitOfMeasure: "PCS" } },
+      { id: 1, customerCategoryId: null, itemId: 1, price: "80000", minQty: "1", effectiveDate: null, expiresAt: d("2026-10-30"), isActive: true, notes: "cat", customerCategory: { name: "Grosir" }, item: { sku: "A", name: "Barang", unitOfMeasure: "PCS" } },
+      { id: 3, customerCategoryId: null, itemId: 1, price: "70000", minQty: "1", effectiveDate: null, expiresAt: null, isActive: true, notes: null, customerCategory: null, item: { sku: "A", name: "Barang", unitOfMeasure: "PCS" } },
     ])
     const out = await loadExpiringPriceListRows({ customerPriceList: { findMany } } as never, ref)
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { isActive: true, expiresAt: { not: null } } }))
+    // Putaran 87: select membawa relasi nama — halaman tak lagi memetakan
+    // balik lewat daftar utama terpotong take:500.
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({
+        notes: true,
+        customerCategory: { select: { name: true } },
+        item: { select: { sku: true, name: true, unitOfMeasure: true } },
+      }),
+    }))
     expect(out.map((r) => r.id)).toEqual([1, 2])
     expect(out[0].price).toBe(80000)
+    expect(out[0].customerCategory?.name).toBe("Grosir")
+    expect(out[0].item.sku).toBe("A")
+    expect(out[0].notes).toBe("cat")
   })
 })

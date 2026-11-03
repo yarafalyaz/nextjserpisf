@@ -77,6 +77,15 @@ describe("AC-1 byte-persis + AC-8 determinisme", () => {
     expect(r.rows[0]).toMatchObject({ slipCount: 2, slipTypes: ["REGULAR", "THR"] })
   })
 
+  it("putaran 87: nama karyawan diawali karakter formula diberi prefix tab", () => {
+    const recap = buildPph21Recap([slip({ employeeName: "=Andi" })])
+    const r = buildPph21Export(recap, ["2026-01"])
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.csv).toContain(";\t=Andi;")
+    expect(r.csv).not.toContain(";=Andi;")
+  })
+
   it("AC-2: geser/tukar satu kolom membuat byte beda (tes byte-persis pasti MERAH)", () => {
     const r = buildPph21Export(fixture(), ["2026-01"])
     if (!r.ok) throw new Error("fixture harus lolos")

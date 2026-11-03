@@ -110,6 +110,10 @@ export function AddLeadActivityForm({ leadId, canCreate = true }: { leadId: numb
         <Label htmlFor="activityDesc">Deskripsi</Label>
         <Textarea id="activityDesc" name="description" rows={1} placeholder="Detail (opsional)..." />
       </div>
+      <div className="flex flex-col gap-1.5 sm:w-40">
+        <Label htmlFor="activityScheduledAt">Jadwal Follow-up</Label>
+        <Input id="activityScheduledAt" name="scheduledAt" type="date" />
+      </div>
       <Button type="submit" size="sm" disabled={isPending}>
         <Plus size={14} aria-hidden="true" /> {isPending ? "Menyimpan..." : "Tambah"}
       </Button>

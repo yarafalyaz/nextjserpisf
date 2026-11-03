@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 
 import {
   createCustomerPriceList,
@@ -46,6 +46,10 @@ export function CustomerPriceForm({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Putaran 87: key stabil per intent buat — retry jaringan memakai key sama
+  // (ditolak server sebelum cek duplikat). Tak perlu rotasi: sukses bernavigasi pergi.
+  const idempotencyKeyRef = useRef<string | null>(null)
+  if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
 
   const [categoryId, setCategoryId] = useState(initial?.customerCategoryId ?? "")
   const [itemId, setItemId] = useState(initial?.itemId ?? "")
@@ -71,6 +75,7 @@ export function CustomerPriceForm({
         formData.set("effectiveDate", effectiveDate)
         formData.set("expiresAt", expiresAt)
         formData.set("notes", notes)
+        if (!initial) formData.set("idempotencyKey", idempotencyKeyRef.current!)
 
         const result = initial
           ? await updateCustomerPriceList(initial.id, formData)

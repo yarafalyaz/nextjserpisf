@@ -30,4 +30,13 @@ describe("AC-REP-003 kop ekspor klien", () => {
       buildCsvHeaderLines({ companyName: "PT Contoh", printedAt: "28 Oktober 2026 07.30 WIB" }),
     ).toEqual(['"PT Contoh"', '"Dicetak: 28 Oktober 2026 07.30 WIB"'])
   })
+
+  it("putaran 87: kop diawali karakter formula diberi prefix tab (formula injection)", () => {
+    expect(
+      buildCsvHeaderLines({ companyName: "=SUM(A1:A9)", printedAt: "28 Oktober 2026 07.30 WIB" }),
+    ).toEqual(['"\t=SUM(A1:A9)"', '"Dicetak: 28 Oktober 2026 07.30 WIB"'])
+    expect(
+      buildCsvHeaderLines({ companyName: "@PT Contoh", printedAt: "28 Oktober 2026 07.30 WIB" }),
+    ).toEqual(['"\t@PT Contoh"', '"Dicetak: 28 Oktober 2026 07.30 WIB"'])
+  })
 })

@@ -44,15 +44,13 @@ export default async function CustomerPricesPage() {
     }),
   ])
 
-  const lookupById = new Map(prices.map((price) => [price.id, price]))
-
-  const toRow = (price: (typeof prices)[number]) => {
+  const toRow = (price: (typeof prices)[number] | (typeof expiringPrices)[number]) => {
     const expiryStatus = derivePriceListExpiryStatus(price, {
       referenceDate,
       expiringWindowDays: PRICE_LIST_EXPIRING_DEFAULT_WINDOW_DAYS,
     })
     return {
-      id: price.id,
+      id: price.id!,
       categoryName: price.customerCategory?.name ?? "Umum",
       itemLabel: `${price.item.sku} — ${price.item.name}`,
       unit: price.item.unitOfMeasure,
@@ -68,10 +66,10 @@ export default async function CustomerPricesPage() {
   }
 
   const rows = prices.map(toRow)
-  const expiringRows = expiringPrices
-    .map((row) => lookupById.get(row.id ?? 0))
-    .filter((price): price is (typeof prices)[number] => Boolean(price))
-    .map(toRow)
+  // Putaran 87: baris expiring membawa relasi nama sendiri dari loader —
+  // pemetaan balik lewat daftar utama yang terpotong take:500 menyembunyikan
+  // baris segera berakhir di luar 500 senyap dari antrean.
+  const expiringRows = expiringPrices.map(toRow)
 
   return (
     <div className="flex flex-col gap-6">

@@ -50,7 +50,8 @@ export default async function PurchasePriceAnalysisPage({
   // receipt items carry only itemId (no Prisma relation), so resolve SKUs via a
   // separate lookup on the distinct item ids.
   const receiptItemIds = await prisma.goodsReceiptItem.findMany({
-    where: { goodsReceipt: { status: 'posted' } },
+    // Putaran 87: status GR tercatat kanonis (tak pernah "posted").
+    where: { goodsReceipt: { status: { in: ['verified', 'completed'] } } },
     select: { itemId: true },
     distinct: ['itemId'],
   })

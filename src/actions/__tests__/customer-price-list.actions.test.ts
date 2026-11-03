@@ -17,6 +17,10 @@ const mocks = vi.hoisted(() => {
   const itemFindFirst = vi.fn()
   const categoryFindFirst = vi.fn()
 
+  const idemCreate = vi.fn()
+  const idemFindUnique = vi.fn()
+  const idemUpdateMany = vi.fn()
+
   const prismaMock: any = {
     customerPriceList: {
       findFirst: priceFindFirst,
@@ -26,6 +30,7 @@ const mocks = vi.hoisted(() => {
     },
     item: { findFirst: itemFindFirst },
     customerCategory: { findFirst: categoryFindFirst },
+    idempotencyKey: { create: idemCreate, findUnique: idemFindUnique, updateMany: idemUpdateMany },
     $queryRaw: queryRaw,
   }
   prismaMock.$transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prismaMock))
@@ -38,6 +43,9 @@ const mocks = vi.hoisted(() => {
     priceUpdate,
     itemFindFirst,
     categoryFindFirst,
+    idemCreate,
+    idemFindUnique,
+    idemUpdateMany,
     prismaMock,
     requirePermissionMock: vi.fn(),
     logActivityMock: vi.fn(),
@@ -81,6 +89,35 @@ beforeEach(() => {
   mocks.priceFindUnique.mockResolvedValue({ id: 11 })
   mocks.priceCreate.mockResolvedValue({ id: 21 })
   mocks.priceUpdate.mockResolvedValue({})
+  mocks.idemCreate.mockResolvedValue({})
+  mocks.idemFindUnique.mockResolvedValue(null)
+  mocks.idemUpdateMany.mockResolvedValue({ count: 0 })
+})
+
+describe("putaran 87: idempotency createCustomerPriceList", () => {
+  it("key segar tercatat per user dan create berjalan", async () => {
+    const res = await createCustomerPriceList(fd({ ...base, idempotencyKey: "key-1" }))
+    expect(res.success).toBe(true)
+    expect(mocks.idemCreate).toHaveBeenCalledWith({ data: { key: "1:key-1" } })
+    expect(mocks.priceCreate).toHaveBeenCalled()
+  })
+
+  it("retry key sama (P2002, masih segar) ditolak sebelum create baris kedua", async () => {
+    const p2002 = Object.assign(new Error("unique"), { code: "P2002" })
+    mocks.idemCreate.mockRejectedValue(p2002)
+    mocks.idemFindUnique.mockResolvedValue({ createdAt: new Date() })
+    const res = await createCustomerPriceList(fd({ ...base, idempotencyKey: "key-1" }))
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/duplikat/i)
+    expect(mocks.priceCreate).not.toHaveBeenCalled()
+  })
+
+  it("tanpa key: perilaku lama (create berjalan, tak ada klaim idempotency)", async () => {
+    const res = await createCustomerPriceList(fd(base))
+    expect(res.success).toBe(true)
+    expect(mocks.idemCreate).not.toHaveBeenCalled()
+    expect(mocks.priceCreate).toHaveBeenCalled()
+  })
 })
 
 describe("putaran 68: gerbang hidup barang/kategori harga pelanggan", () => {

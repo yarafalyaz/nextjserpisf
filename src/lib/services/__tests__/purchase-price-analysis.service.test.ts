@@ -52,6 +52,16 @@ describe("buildPurchasePriceAnalysis", () => {
     expect(res.bestByItem).toEqual([])
   })
 
+  it("putaran 87: query GR memakai status tercatat kanonis verified/completed (bukan posted)", async () => {
+    grFindManyMock.mockResolvedValue([])
+    await buildPurchasePriceAnalysis({ startDate: new Date(2026, 0, 1), endDate: new Date() })
+    expect(grFindManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: { in: ["verified", "completed"] } }),
+      }),
+    )
+  })
+
   it("groups by (item, vendor) and computes a qty-weighted landed unit cost", async () => {
     grFindManyMock.mockResolvedValue([
       receipt(1, new Date(2026, 0, 5), 100, "Toko A", [{ itemId: 20, qty: 10, unitCost: 100 }]),

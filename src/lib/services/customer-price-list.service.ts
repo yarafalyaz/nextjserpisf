@@ -314,6 +314,9 @@ export async function loadExpiringPriceListRows(
           effectiveDate: true
           expiresAt: true
           isActive: true
+          notes: true
+          customerCategory: { select: { name: true } }
+          item: { select: { sku: true; name: true; unitOfMeasure: true } }
         }
       }) => Promise<
         {
@@ -325,15 +328,27 @@ export async function loadExpiringPriceListRows(
           effectiveDate: Date | null
           expiresAt: Date | null
           isActive: boolean
+          notes: string | null
+          customerCategory: { name: string } | null
+          item: { sku: string; name: string; unitOfMeasure: string }
         }[]
       >
     }
   },
   input: { referenceDate: Date; windowDays: number },
-): Promise<PriceListRow[]> {
+): Promise<(PriceListRow & {
+  notes: string | null
+  customerCategory: { name: string } | null
+  item: { sku: string; name: string; unitOfMeasure: string }
+})[]> {
   const rows = await client.customerPriceList.findMany({
     where: { isActive: true, expiresAt: { not: null } },
-    select: { id: true, customerCategoryId: true, itemId: true, price: true, minQty: true, effectiveDate: true, expiresAt: true, isActive: true },
+    select: {
+      id: true, customerCategoryId: true, itemId: true, price: true, minQty: true,
+      effectiveDate: true, expiresAt: true, isActive: true, notes: true,
+      customerCategory: { select: { name: true } },
+      item: { select: { sku: true, name: true, unitOfMeasure: true } },
+    },
   })
   return pickExpiringPriceListRows(
     rows.map((r) => ({ ...r, price: Number(r.price), minQty: Number(r.minQty) })),
