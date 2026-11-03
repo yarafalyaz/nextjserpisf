@@ -2914,3 +2914,40 @@ Sumber: 3 agent audit paralel (aset tetap & pelepasan, anggaran & approval, wila
 - Merah perintah terpisah: register reklasifikasi 1, backdate service 1, inventory approval 2, revisi RAB 1, price-list expiry 1, akun induk kategori 3 / service 2 / cron 1, cron purchaseDate null + induk gabungan 2, price-list kunci+expiry gabungan 2.
 - Hijau: batch terkait 655/655, batch konsumen bersama 446/446, guard statis 200/200, `npx tsc --noEmit` 0 (tanpa pipe), ESLint berkas berubah 0, `git diff --check` bersih.
 - CI `41623037140` (head `329c29c15`) **success** tanpa susulan.
+
+## Putaran 102 — gerbang akun induk, tanggal kalender WIB, prefiks jurnal (commit `04a6d8fa9` + susulan `68feb6fe6`)
+
+Sumber: 3 agent audit paralel (akuntansi/hook jurnal, laporan tanggal, penomoran dokumen) — semua kandidat terverifikasi sesi utama terhadap kode aktual + `prisma/schema.prisma`. Pola putaran: "permukaan penilai memakai salinan definisi kanonis yang lebih lemah", kali ini dua bentuknya: gerbang posting akun dan pembacaan tanggal.
+
+### Vonis FIX
+1. `assertAccountsExist` (hook akuntansi) hanya menilai akun hidup, bukan induk — FIX: `journal.service` sudah menolak induk, tetapi lima keluarga hook jurnal POSTED langsung (beban, uang muka penjualan, denda keterlambatan, transaksi berulang, aset) melewati gerbang itu, sehingga mapping yang sah saat disimpan berubah menjadi induk begitu admin menambah akun anak di bawahnya dan jurnal POSTED menunjuk induk. Gerbang kini menambah `_count.children` dan menolak; semua pemanggil warisan ikut terlindungi. Merah 1 (`accounting-hook`), hijau seluruh konsumen.
+2. `customer-credit.service` memakai settings yang dibaca SEBELUM tx — FIX: `allocateCreditToInvoice`/`refundCredit` tidak menilai ulang akun DP/AR/kas/PPN di dalam tx, sehingga akun yang dinonaktifkan/diindukkan di jendela baca-tulis tetap menerima jurnal alokasi/refund. Keduanya kini memanggil `assertAccountsExist` di dalam tx sebelum klaim idempotensi. Merah 2.
+3. Enam titik memakai getter tanggal LOKAL proses atas tanggal dokumen yang disimpan sebagai tengah malam UTC hari WIB — FIX: di proses barat UTC tanggal 1 jatuh ke bulan sebelumnya; rincian bulan arus kas tertukar, tren penjualan salah bucket, CSV bukti potong menulis 31 Okt untuk dokumen 1 Nov, dan nomor jurnal setoran/uang muka/aset berprefiks bulan sebelumnya. Tiga helper (`wibDateOnly`, `wibPeriodKey`, `wibYearMonthCompact`) di `lib/utils/date-only.ts`, dipaku setara `wibDateKeyParts` (Intl `Asia/Jakarta`), dipakai di kedua builder arus kas, tren penjualan, CSV bukti potong, dan nomor jurnal setoran pajak, uang muka pembelian, perolehan/pelepasan aset, serta peristiwa perubahan aset. Merah 8 (TZ=America/New_York), hijau 230.
+4. Susulan CI `41682890485`: job "DB Integration Tests" merah dengan `Pembayaran penjualan: akun induk tidak bisa diposting (id: 1)` — FIX: gerbang baru benar, fixture tes integrasi PPh yang salah (`findFirst({ type: "ASSET" })` polos mengambil akun yang kebetulan induk di seed CI). Fixture kini meminta daun hidup (`isActive`, `deletedAt: null`, `children: { none: {} }`). Tidak ada perubahan kode produksi.
+
+### Vonis CATAT
+- Kunci counter `JRN-<prefix>-YYYY-MM` di `generateJournalNumber` sengaja tidak diubah: itu kunci sequence, bukan nomor dokumen; memindahkannya memecah namespace counter yang berjalan.
+- Cron penyusutan memakai `now` (instan nyata), konsisten dengan batas `periodStart`/`periodEnd` yang ia hitung sendiri dari getter yang sama — bukan bug.
+- `document-number.ts`: `DP` floor membaca `downPayment` sementara `purchase-advance.actions.ts` menulis `PurchaseAdvance.documentNo` dengan kunci yang sama; `PRD`/`AST` menunjuk field `SystemSetting` yang tidak ada (fallback diam-diam ke kunci); `LF` punya `salesLateFeePrefix` tetapi tanpa key zod; `"JOURNAL"` tidak punya floor. Dibawa ke putaran 104 — mengubah floor `DP` menggeser angka dokumen yang berjalan, jadi butuh keputusan konservatif tersendiri.
+
+### Bukti
+- Merah perintah terpisah: akun induk hook 1, customer-credit 2, getter WIB 8 (stash 8 berkas produksi + TZ=America/New_York).
+- Hijau: TZ=Asia/Jakarta 9 berkas terkait 230/230, batch konsumen 3591 passed | 4 skipped (365 berkas), guard statis 195 passed, `npx tsc --noEmit` 0 (tanpa pipe), ESLint berkas berubah 0, `git diff --check` bersih.
+- CI `41685685675` (head `68feb6fe6`) **success**: 6/6 job termasuk DB Integration.
+
+## Putaran 103 — identitas neraca perbandingan dan tanda siap mapping akun (commit `10017e15c`)
+
+Sumber: 3 agent audit paralel (laporan perbandingan, pengaturan/mapping akun, permukaan agregasi) — kandidat diverifikasi sesi utama. Pola putaran: "laporan yang tidak memakai definisi/identitas kanonis yang sudah ada di tempat lain".
+
+### Vonis FIX
+1. Mode Neraca pada `/laporan/perbandingan-periode` hanya memuat ASSET/LIABILITY/EQUITY lalu menjumlahkan ketiganya jadi satu KPI dan satu baris TOTAL — FIX: laba berjalan (Pendapatan − Beban) tak pernah ikut, jadi sisi ekuitas kurang sebesar laba/rugi periode berjalan dan `Aset = Kewajiban + Ekuitas` tidak pernah tertutup; angka kaki tabel (aset + kewajiban + ekuitas) tidak punya arti akuntansi. `buildBalanceComparison` + `groupBalancesByType` menyuntikkan baris sintetis `Laba/Rugi Berjalan` (kode `NI`) ke ekuitas, memberi total per sisi, dan menandai `isBalanced`; halaman memuat kelima tipe dan KPI menjadi Total Aset / Total Kewajiban / Total Ekuitas / Neraca Seimbang. Mode Laba Rugi tidak berubah. Merah 3 (`expected 1700 to be 1000/300`, `isBalanced false`), hijau 12.
+2. Layar ringkasan `/pengaturan/mapping-akun` menyelesaikan label dengan `{ isActive: true }` saja — FIX: mapping yang menunjuk akun induk atau akun terhapus lunak tampil hijau "tersambung" dan ikut dihitung pada progres, padahal `journal.service` menolak memposting keduanya; picker di halaman Ubah sudah memakai definisi kanonis putaran 94 (aktif + `deletedAt: null` + daun). `mapping-account-label.ts` + `load-mapping-accounts.ts` menyamakan definisi itu, dan mapping di luar daftar ditandai "Akun tidak valid — set ulang" tanpa dihitung terpetakan. Merah 3, hijau 7.
+
+### Vonis CATAT
+- `previousWindow` untuk mode neraca masih "jendela sama-panjang", sedangkan kolom pembanding neraca dibaca per `startDate - 1` (posisi awal periode). Keduanya didefinisikan eksplisit di header laporan, jadi bukan angka salah; menyamakannya mengubah semantik kolom dan ditunda.
+- `lowStockCount` di `src/app/api/dashboard/notifications/route.ts` memakai SQL global sementara laporan menghitung per item — perlu keputusan definisi widget lebih dulu (dibawa ke putaran 104).
+
+### Bukti
+- Merah perintah terpisah: neraca 3 failed | 9 passed (implementasi setara-perilaku-lama), mapping 3 failed | 4 passed (berkas baru, backup `/tmp` karena `git stash` tak bisa menyimpan berkas untracked).
+- Hijau: `period-comparison` 12/12, `mapping-account-label` 7/7, batch laporan+finance+guard 2893 passed | 4 skipped (329 berkas), guard statis 199 passed, `npx tsc --noEmit` 0, ESLint 0, `git diff --check` bersih.
+- CI `41685685675` (head `68feb6fe6`, memuat `10017e15c`) **success**.
