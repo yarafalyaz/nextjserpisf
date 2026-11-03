@@ -2829,3 +2829,30 @@ Sumber: sisa CATAT laporan agent yang sama — terverifikasi satu per satu.
 ### Bukti
 - Merah perintah terpisah tepat 2 lawan route lama; hijau 17/17 route, batch 44/44 (route + activity-log actions + silent-failure + path-filter-routes-wiring + report-url-convention), `tsc` 0, ESLint 0.
 - CI `41606994435` (head `c83f69b8a`) **success** tanpa susulan.
+
+## Putaran 99 — masa, populasi, dan rekonsiliasi lintas wilayah (commit `0b757c716` + susulan test `635593dee`)
+
+Sumber: 3 agent audit paralel (CRM/notifikasi, produksi/QC, pajak lanjutan) — semua kandidat terverifikasi sesi utama terhadap kode aktual + `prisma/schema.prisma` sebelum patch.
+
+### Vonis FIX
+1. Cron auto-reject menolak penawaran di hari terakhir `validUntil` — FIX: kandidat dibandingkan ke instant `now`, sedangkan `validUntil` disimpan tengah malam UTC hari kalender WIB dan hari itu sendiri masih berlaku (kontrak `assertQuotationNotExpired` di sales.actions). Batas kini `getWibTodayUtcDate()`. Merah 1, hijau 12/12.
+2. Laporan scrap membaca MI draft — FIX: `scrapQty` baris draft adalah input belum terbit; klasifikasi normal/abnormal baru dibekukan saat complete. `loadScrapMaterialReport` + `loadScrapReviewQueue` kini menyaring `materialIssue: { status: "completed" }`.
+3. Biaya bahan MI untuk laporan biaya pekerjaan memakai `cost` payload, bukan FIFO aktual — FIX: hook complete sudah menghitung `unitCost` dari `consumeFifoLayers` untuk StockMove + jurnal, tetapi tak pernah menulis balik ke baris. Writeback `cost: unitCost` di update snapshot yang sama; satu-satunya pembaca biaya baris (`job-order-data`) kini rekonsiliasi ke StockMove/jurnal.
+4. Kandidat rekalibrasi varians ikut PO draft — FIX: builder utama membuang draft sejak putaran 91, `findRecalibrationCandidates` tidak; standar draft penuh (aktual 0) menekan/menggelembungkan persen periode. Loop kini `if (order.status === "draft") continue`.
+5. `updateProductionOrder` relink mengunci PO→WO — FIX: urutan kunci global yang ditetapkan putaran 79 adalah WO→PO→produk; relink kini mengunci WO target (diketahui dari payload) sebelum baris PO. Penilaian status PO tetap di bawah kunci barisnya.
+6. Faktur PPN masukan tak rekonsiliasi bila nomor faktur vendor tak valid — FIX: bill tanpa TaxInvoice dengan nomor invalid menampilkan `vatShown = 0` tetapi `dppShown` dan `totalShown = grandTotal` tetap penuh, meniru penolakan di `tax-summary-data`. Total baris kini DPP + PPN yang ditampilkan. Merah: total grup 122.100.000 vs rekonsiliasi 111.100.000; hijau 4/4.
+7. Form ubah tiket menawarkan pelanggan nonaktif + semua user — FIX: halaman tambah sudah menyaring `isActive`; halaman ubah tidak. Kini keduanya hidup-only, dengan tautan tiket saat ini tetap dimuat (server mengizinkan edit tanpa mengganti tautan lama; menghilangkannya dari Combobox membuat simpan mengubah nilai senyap).
+8. Peringatan stok menipis menilai gudang nonaktif/terhapus — FIX: `loadWarehouseLowStock` hanya mengambil lapisan gudang `isActive: true, deletedAt: null`; mengingatkan soal gudang yang sudah dimatikan adalah noise bagi dua konsumen cron.
+
+### Vonis CATAT
+- Scrap jalur ProductionOrder disaring `productionOrder.createdAt` periode, bukan tanggal issue: baris PO kumulatif tanpa tanggal kejadian per issue di schema — mengubah kohort = keputusan definisi laporan. Header loader yang menjanjikan "tanggal dokumen issue" untuk kedua jalur dicatat tak akurat untuk jalur PO.
+- WIP `asOf` bukan snapshot historis (status + `totalActualCost` kondisi kini; PO tanpa histori status/biaya di schema) — perlu model histori.
+- Periode laporan produksi = kohort dokumen, biaya dibaca job-to-date (`ProductionCost.postedAt` dan `MaterialIssue.date` tak dipakai loader) — sah bila definisi resmi kohort; label/definisi wajib tegas.
+- Scope gudang tak masuk loader laporan produksi (`warehouseScope` hanya laporan stok; PO tanpa `warehouseId` di schema) — perlu keputusan model atribusi.
+- Pajak: getter tanggal lokal di ekspor Coretax/katalog PPh42/bupot lawan konvensi komponen UTC (nol dampak di runtime resmi WIB; naik FIX bila proses non-WIB didukung); nomor ketetapan SKP bisa didaftarkan ulang sesudah batal (register mengabaikan baris batal — risiko jejak audit saja); cek idempotency sengketa sesudah guard status (retry key sama bisa terima error guard, klaim atomik tetap mencegah putusan dobel).
+- CRM: `updateLead` tanpa idempotency (klaim status menahan sebagian; dampak duplikasi histori funnel); dedupe notifikasi cron tak atomik (perlu kolom dedupe-key `@unique` + keputusan scheduler); judul dedupe mengikat angka (angka berubah = notifikasi kedua di hari sama); cron generik `/api/cron` dan `daily-notifications` tumpang tindih tanpa jadwal produksi tunggal.
+
+### Bukti
+- Merah perintah terpisah: cron 1, produksi gabungan 5 (rekalibrasi, scrap 2, hook writeback, urutan kunci), CRM gabungan 2 (ubah tiket, alert gudang), VAT 1.
+- Hijau: batch terkait 652 (dua run), guard statis 200/200, `tsc --noEmit` bersih, ESLint berkas berubah bersih, `git diff --check` bersih.
+- CI pertama `41611542307` (head `0b757c716`) **failure** tepat 1: guard `vendor-bill-discount-wiring` — regex-nya hanya menerima penugasan properti langsung, patch VAT memakai variabel lokal `dppShown`. Susulan test-only `635593dee` memperluas bentuk sah ke variabel lokal (larangan menghilangkan pengurangan diskon tetap). CI `41613011569` **success**.
