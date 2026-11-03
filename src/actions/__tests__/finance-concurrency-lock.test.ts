@@ -138,8 +138,9 @@ describe("F-01 postJournal concurrency guard", () => {
     const result = await postJournal(7)
 
     expect(result.success).toBe(true)
-    // lock → re-read → conditional claim, strictly in this order
-    expectLockOrder(order, ["lock", "reread", "claim"], executeRawMock)
+    // Putaran 81 menambah lock baris accounts/cost_centers/profit_centers
+    // sesudah reread; urutan induk tetap lock → reread → … → claim terakhir.
+    expectLockOrder(order, ["lock", "reread", "lock", "claim"], executeRawMock)
   })
 
   it("rejects when the re-read status is no longer DRAFT (lost the race)", async () => {
