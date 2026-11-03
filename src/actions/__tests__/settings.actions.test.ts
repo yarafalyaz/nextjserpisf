@@ -70,12 +70,12 @@ beforeEach(() => {
 describe("updateSystemSettings happy-path akun lainnya", () => {
   beforeEach(() => {
     mocks.accountFindManyMock.mockImplementation(async ({ where }: { where: { id: { in: number[] } } }) =>
-      where.id.in.map((id) => ({ id })),
+      where.id.in.map((id) => ({ id, _count: { children: 0 } })),
     )
   })
 
   it("putaran 67: mapping ke akun nonaktif/fiktif ditolak sebelum update", async () => {
-    mocks.accountFindManyMock.mockResolvedValue([{ id: 710 }])
+    mocks.accountFindManyMock.mockResolvedValue([{ id: 710, _count: { children: 0 } }])
     await expect(
       updateSystemSettings(fd({ commissionExpenseAccountId: "710", commissionPayableAccountId: "720" })),
     ).rejects.toThrow(/tidak aktif\/terhapus atau tidak ditemukan \(id: 720\)/)
@@ -83,13 +83,51 @@ describe("updateSystemSettings happy-path akun lainnya", () => {
     expect(mocks.accountFindManyMock).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: { in: [710, 720] }, isActive: true, deletedAt: null },
-        select: { id: true },
+        select: { id: true, _count: { select: { children: true } } },
       }),
     )
   })
 
+  it("putaran 94: mapping ke akun induk hidup ditolak sebelum update (pesan sejajar journal.service)", async () => {
+    mocks.accountFindManyMock.mockResolvedValue([
+      { id: 710, _count: { children: 2 } },
+      { id: 720, _count: { children: 0 } },
+    ])
+    await expect(
+      updateSystemSettings(fd({ commissionExpenseAccountId: "710", commissionPayableAccountId: "720" })),
+    ).rejects.toThrow(/Akun induk tidak bisa diposting \(id: 710\)/)
+    expect(mocks.updateMock).not.toHaveBeenCalled()
+  })
+
+  it("putaran 94: mapping ke akun induk campuran pisah: induk dilaporkan setelah cek hidup", async () => {
+    // Induk hidup + leaf hidup: yang ditolak hanya induk.
+    mocks.accountFindManyMock.mockResolvedValue([
+      { id: 710, _count: { children: 0 } },
+      { id: 720, _count: { children: 1 } },
+    ])
+    await expect(
+      updateSystemSettings(fd({ commissionExpenseAccountId: "710", commissionPayableAccountId: "720" })),
+    ).rejects.toThrow(/Akun induk tidak bisa diposting \(id: 720\)/)
+    expect(mocks.updateMock).not.toHaveBeenCalled()
+  })
+
+  it("putaran 94: akun leaf hidup tetap lolos dengan cek children di query yang sama", async () => {
+    mocks.accountFindManyMock.mockResolvedValue([
+      { id: 710, _count: { children: 0 } },
+      { id: 720, _count: { children: 0 } },
+    ])
+    await expect(
+      updateSystemSettings(fd({ commissionExpenseAccountId: "710", commissionPayableAccountId: "720" })),
+    ).rejects.toThrow("NEXT_REDIRECT")
+    expect(mocks.updateMock).toHaveBeenCalledTimes(1)
+    expect(mocks.accountFindManyMock).toHaveBeenCalledTimes(1)
+  })
+
   it("putaran 67: mapping akun hidup lolos dan query memakai gerbang hidup", async () => {
-    mocks.accountFindManyMock.mockResolvedValue([{ id: 710 }, { id: 720 }])
+    mocks.accountFindManyMock.mockResolvedValue([
+      { id: 710, _count: { children: 0 } },
+      { id: 720, _count: { children: 0 } },
+    ])
     await expect(
       updateSystemSettings(fd({ commissionExpenseAccountId: "710", commissionPayableAccountId: "720" })),
     ).rejects.toThrow("NEXT_REDIRECT")
@@ -106,7 +144,7 @@ describe("updateSystemSettings happy-path akun lainnya", () => {
   })
 
   it("putaran 67: field absen tidak divalidasi; akun hidup tersimpan untuk yang dikirim", async () => {
-    mocks.accountFindManyMock.mockResolvedValue([{ id: 510104 }])
+    mocks.accountFindManyMock.mockResolvedValue([{ id: 510104, _count: { children: 0 } }])
     await expect(
       updateSystemSettings(fd({ warrantyExpenseAccountId: "510104" })),
     ).rejects.toThrow("NEXT_REDIRECT")
@@ -118,7 +156,7 @@ describe("updateSystemSettings happy-path akun lainnya", () => {
 describe("updateSystemSettings validasi Zod field tertulis", () => {
   beforeEach(() => {
     mocks.accountFindManyMock.mockImplementation(async ({ where }: { where: { id: { in: number[] } } }) =>
-      where.id.in.map((id) => ({ id })),
+      where.id.in.map((id) => ({ id, _count: { children: 0 } })),
     )
   })
 
@@ -235,7 +273,7 @@ describe("updateSystemSettings lima mapping akun fail-closed (t_de3aba0b)", () =
   // Fixture akun hidup supaya gerbang putaran 67 menerima ID mapping.
   beforeEach(() => {
     mocks.accountFindManyMock.mockImplementation(async ({ where }: { where: { id: { in: number[] } } }) =>
-      where.id.in.map((id) => ({ id })),
+      where.id.in.map((id) => ({ id, _count: { children: 0 } })),
     )
   })
 
@@ -314,7 +352,7 @@ describe("updateSystemSettings lima mapping akun — baca-balik penyimpanan (t_3
   beforeEach(() => {
     // Fixture akun hidup supaya gerbang putaran 67 menerima ID mapping.
     mocks.accountFindManyMock.mockImplementation(async ({ where }: { where: { id: { in: number[] } } }) =>
-      where.id.in.map((id) => ({ id })),
+      where.id.in.map((id) => ({ id, _count: { children: 0 } })),
     )
     baris = {
       id: 9,
@@ -387,7 +425,10 @@ describe("updateSystemSettings lima mapping akun — baca-balik penyimpanan (t_3
 
 describe("updateSystemSettings mapping akun komisi", () => {
   it("menyimpan commissionExpenseAccountId dan commissionPayableAccountId ke payload update", async () => {
-    mocks.accountFindManyMock.mockResolvedValue([{ id: 710 }, { id: 720 }])
+    mocks.accountFindManyMock.mockResolvedValue([
+      { id: 710, _count: { children: 0 } },
+      { id: 720, _count: { children: 0 } },
+    ])
     await expect(
       updateSystemSettings(fd({ commissionExpenseAccountId: "710", commissionPayableAccountId: "720" })),
     ).rejects.toThrow("NEXT_REDIRECT")

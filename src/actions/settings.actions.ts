@@ -167,15 +167,27 @@ export async function updateSystemSettings(formData: FormData) {
     }
     if (requested.size > 0) {
       const ids = [...requested]
+      // Putaran 94: akun INDUK hidup tidak punya anak yang bisa terposting —
+      // journal.service menolak posting ke induk, jadi mapping induk = simpan
+      // sukses tapi meledak di posting pertama. _count.children membaca jumlah
+      // relasi anak untuk memutuskan leaf tanpa query kedua.
       const live = await tx.account.findMany({
         where: { id: { in: ids }, isActive: true, deletedAt: null },
-        select: { id: true },
+        select: { id: true, _count: { select: { children: true } } },
       })
       const liveIds = new Set(live.map((account) => account.id))
       const missing = ids.filter((id) => !liveIds.has(id))
       if (missing.length > 0) {
         throw new Error(
           `Akun tidak aktif/terhapus atau tidak ditemukan (id: ${missing.join(", ")}). Pilih ulang akun sebelum menyimpan.`,
+        )
+      }
+      const parentIds = live
+        .filter((account) => account._count.children > 0)
+        .map((account) => account.id)
+      if (parentIds.length > 0) {
+        throw new Error(
+          `Akun induk tidak bisa diposting (id: ${parentIds.join(", ")}). Pilih akun anak yang terposting.`,
         )
       }
     }
