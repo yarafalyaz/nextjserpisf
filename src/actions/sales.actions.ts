@@ -4120,7 +4120,7 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
       // Insert new items
       if (items.length > 0) {
         await tx.salesInvoiceItem.createMany({
-          data: items.map((item, idx) => {
+          data: items.map((item) => {
             const master = item.itemId != null ? masterById.get(item.itemId) : undefined
             // Clamp per-line fields to >= 0: a negative qty/unitPrice/discount
             // sent by a tampered client (updateSalesInvoice does NOT run the
@@ -4141,7 +4141,11 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
               unitPrice: safePrice,
               discount: safeDiscount,
               total: Math.max(0, safeSubtract(safeMultiply(safeQty, safePrice, 0), safeDiscount, 0)),
-              sortOrder: idx,
+              // Putaran 115: SalesInvoiceItem tidak punya kolom sortOrder —
+              // menulisnya membuat Prisma menolak SELURUH createMany
+              // ("Unknown argument `sortOrder`"), jadi setiap simpan item
+              // faktur gagal. Urutan baris dibaca dari `id` (auto-increment
+              // = urutan sisip), bukan kolom urutan.
               serialNumbers: item.serialNumbers && item.serialNumbers.length > 0 ? item.serialNumbers : undefined,
             }
           }),

@@ -1405,6 +1405,34 @@ describe("Sales Invoice Actions", () => {
     expect(createManyArg.data[0]).toMatchObject({ uom: "JAM", isService: true })
   })
 
+  // Putaran 115: setiap unit test mem-mock Prisma, jadi nama kolom yang tidak
+  // ada di schema lolos tanpa suara — tsc pun diam karena `data` bertipe
+  // XOR<CreateManyInput> (excess-property check mati di union). Di runtime
+  // Prisma menolak seluruh panggilan: "Unknown argument `sortOrder`", jadi
+  // SETIAP penyuntingan item faktur gagal. Nilai kontraknya bukan daftar
+  // nama yang diharapkan, melainkan schema itu sendiri.
+  it("putaran 115: baris pengganti faktur hanya memuat kolom SalesInvoiceItem yang ada di schema", async () => {
+    const { Prisma } = await import("@prisma/client")
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", paidAmount: 0 })
+    mocks.prismaMock.item.findMany.mockResolvedValue([
+      { id: 1, unitOfMeasure: "PCS", isService: false, name: "Barang", isActive: true, deletedAt: null },
+    ])
+    const payload = {
+      customerId: 1,
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100, discount: 0 }]),
+    }
+    const res = await actions.updateSalesInvoice(1, fdMap(payload))
+    expect(res?.success).toBe(true)
+
+    const model = Prisma.dmmf.datamodel.models.find((m) => m.name === "SalesInvoiceItem")
+    expect(model).toBeDefined()
+    const columns = new Set(model!.fields.filter((f) => f.kind === "scalar" || f.kind === "enum").map((f) => f.name))
+    const createManyArg = mocks.prismaMock.salesInvoiceItem.createMany.mock.calls.at(-1)![0] as any
+    const unknownKeys = Object.keys(createManyArg.data[0]).filter((key) => !columns.has(key))
+    expect(unknownKeys).toEqual([])
+  })
+
   // F-2026-10-25-036-S lanjutan (arsip perilaku pra-GL-BR-003): transisi paid
   // via edit item DULU membekukan snapshot komisi. Sesudah G1 GL-BR-003, edit
   // posted DITOLAK di guard status — snapshot komisi posted hanya lewat jalur
