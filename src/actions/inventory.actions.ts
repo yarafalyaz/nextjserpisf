@@ -2282,12 +2282,21 @@ export async function deleteStockAdjustment(id: number) {
 
     // Klaim kondisional: process konkuren yang commit lebih dulu membuat
     // count 0 — dokumen non-draft tidak ikut terhapus dari bacaan basi.
-    const claim = await prisma.stockAdjustment.deleteMany({
-      where: { id, status: "draft" },
+    // Putaran 105: sapuan approval polimorfik (dibuat se-tx oleh
+    // createStockAdjustment) masuk transaksi yang sama — dokumen dan baris
+    // approval hilang bersama, atau tidak sama sekali. Approval tanpa FK ini
+    // dulu tertinggal dan mengotori antrean persetujuan.
+    await prisma.$transaction(async (tx) => {
+      const claim = await tx.stockAdjustment.deleteMany({
+        where: { id, status: "draft" },
+      });
+      if (claim.count === 0) {
+        throw new Error("Stock adjustment sudah berubah status; muat ulang halaman");
+      }
+      await tx.approval.deleteMany({
+        where: { referenceType: "StockAdjustment", referenceId: id },
+      });
     });
-    if (claim.count === 0) {
-      throw new Error("Stock adjustment sudah berubah status; muat ulang halaman");
-    }
 
     await logActivity(
       "delete",

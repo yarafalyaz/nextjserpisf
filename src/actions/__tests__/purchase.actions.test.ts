@@ -2387,6 +2387,20 @@ describe("Vendor Payment Actions", () => {
       where: { referenceType: "vendor_payment", referenceId: 1 },
     })
   })
+  it("putaran 105: deleteVendorPayment membersihkan baris Approval pembayaran itu", async () => {
+    await actions.deleteVendorPayment(31)
+    expect(mocks.prismaMock.approval.deleteMany).toHaveBeenCalledWith({
+      where: { referenceType: "VendorPayment", referenceId: 31 },
+    })
+  })
+  it("putaran 105: deleteVendorBill membersihkan baris Approval tagihan itu", async () => {
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({ id: 12, status: "draft", purchaseOrderId: null })
+    const res = await actions.deleteVendorBill(12)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.approval.deleteMany).toHaveBeenCalledWith({
+      where: { referenceType: "VendorBill", referenceId: 12 },
+    })
+  })
 })
 
 describe("Purchase Return Actions", () => {
@@ -2799,6 +2813,29 @@ describe("Purchase Return Actions", () => {
     mocks.prismaMock.vendorBill.count.mockResolvedValue(0)
     const res = await actions.deletePurchaseOrder(1)
     expect(res?.success).toBe(true)
+  })
+  it("putaran 105: deletePurchaseOrder membersihkan baris Approval PO itu", async () => {
+    // createPurchaseOrder membuat approval pending di dalam tx; tanpa sapuan
+    // ini hapus PO draft meninggalkan approval yatim yang memblokir
+    // updateApprovalWorkflow/deleteApprovalWorkflow selamanya.
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow
+      .mockResolvedValue({ id: 55, status: "draft", goodsReceipts: [] })
+    mocks.prismaMock.vendorBill.count.mockResolvedValue(0)
+    await actions.deletePurchaseOrder(55)
+    expect(mocks.prismaMock.approval.deleteMany).toHaveBeenCalledWith({
+      where: { referenceType: "PurchaseOrder", referenceId: 55 },
+    })
+  })
+  it("putaran 105: cancelPurchaseOrder menutup approval pending milik PO", async () => {
+    // PO cancelled tak akan pernah lolos klaim APPROVE_CLAIMS (from: draft),
+    // jadi approval pending-nya harus dihapus — bukan dibiarkan di antrean.
+    // Approval approved/rejected tetap disimpan sebagai jejak audit.
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 66, status: "draft", purchaseRequestId: null })
+    const res = await actions.cancelPurchaseOrder(66)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.approval.deleteMany).toHaveBeenCalledWith({
+      where: { referenceType: "PurchaseOrder", referenceId: 66, status: "pending" },
+    })
   })
   it("regresi putaran 22: deletePurchaseOrder menolak GR anak ber-catatan QC", async () => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow

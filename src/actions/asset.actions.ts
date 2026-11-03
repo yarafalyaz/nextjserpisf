@@ -629,6 +629,12 @@ export async function deleteAsset(id: number) {
       if (count > 0) return count;
       // AssetHistory + AssetTransfer cascade on delete (FK onDelete: Cascade).
       await tx.asset.delete({ where: { id } });
+      // Putaran 105: approval polimorfik aset (dibuat se-tx oleh
+      // createAsset/updateAsset) tak punya FK — tanpa sapuan ini aset yang
+      // dihapus meninggalkan approval pending yatim di antrean persetujuan.
+      await tx.approval.deleteMany({
+        where: { referenceType: "Asset", referenceId: id },
+      });
       return 0;
     });
     if (glJournals > 0) {

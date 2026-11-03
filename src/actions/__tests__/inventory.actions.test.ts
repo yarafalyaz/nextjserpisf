@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => {
   const prismaMock: any = {
     stockAdjustment: buildModelMock(),
     stockAdjustmentItem: buildModelMock(),
+    // Putaran 105: hapus draft membersihkan baris Approval polimorfik.
+    approval: buildModelMock(),
     // processStockAdjustment sekarang membaca id jurnal penyesuaian
     // (referenceType/referenceId) untuk mengisi StockAdjustment.journalId.
     journal: buildModelMock(),
@@ -343,6 +345,16 @@ describe("Stock Adjustment Actions", () => {
     expect(res?.success).toBe(true);
     expect(mocks.prismaMock.stockAdjustment.deleteMany).toHaveBeenCalledWith({
       where: { id: 1, status: "draft" },
+    });
+  });
+
+  it("putaran 105: deleteStockAdjustment membersihkan baris Approval penyesuaian itu", async () => {
+    // Approval penyesuaian dibuat se-tx oleh createStockAdjustment; tanpa
+    // sapuan ini draft yang dihapus meninggalkan approval pending yatim.
+    seedDraft(mocks.prismaMock.stockAdjustment);
+    await actions.deleteStockAdjustment(9);
+    expect(mocks.prismaMock.approval.deleteMany).toHaveBeenCalledWith({
+      where: { referenceType: "StockAdjustment", referenceId: 9 },
     });
   });
 

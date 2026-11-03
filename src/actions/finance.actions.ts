@@ -2558,6 +2558,12 @@ export async function deleteJournal(id: number) {
         referenceType: "Journal", referenceId: id,
       });
       await tx.journal.delete({ where: { id } });
+      // Putaran 105: approval polimorfik jurnal (dibuat se-tx oleh
+      // createJournal/updateJournal) tak punya FK — tanpa sapuan ini jurnal
+      // draft yang dihapus meninggalkan approval pending yatim di antrean.
+      await tx.approval.deleteMany({
+        where: { referenceType: "Journal", referenceId: id },
+      });
     });
     await removeAttachmentFiles(removedFiles);
 

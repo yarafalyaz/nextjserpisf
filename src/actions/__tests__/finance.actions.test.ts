@@ -908,6 +908,15 @@ describe("Journal Actions", () => {
     const res = await (actions as any).deleteJournal(1)
     expect(res?.success).toBe(true)
   })
+  it("putaran 105: deleteJournal membersihkan baris Approval jurnal itu", async () => {
+    // createJournal mengajukan approval se-tx; jurnal draft yang dihapus
+    // meninggalkan approval pending yatim di antrean + memblokir edit workflow.
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 49, status: "DRAFT" })
+    await (actions as any).deleteJournal(49)
+    expect(mocks.prismaMock.approval.deleteMany).toHaveBeenCalledWith({
+      where: { referenceType: "Journal", referenceId: 49 },
+    })
+  })
   it("deleteJournal menolak bila status berubah jadi POSTED sesudah pratinjau (race)", async () => {
     mocks.prismaMock.journal.findUniqueOrThrow
       .mockResolvedValueOnce({ id: 1, status: "DRAFT" })

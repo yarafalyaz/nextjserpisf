@@ -1409,6 +1409,13 @@ describe("Sales Invoice Actions", () => {
     // service so the invoice-edit flow can reuse it; assert the delegation.
     expect(vi.mocked(posting.reverseSalesInvoicePostingTx)).toHaveBeenCalled()
   })
+  it("putaran 105: deleteSalesInvoice membersihkan baris Approval faktur itu", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 77, status: "draft" })
+    await actions.deleteSalesInvoice(77)
+    expect(mocks.prismaMock.approval.deleteMany).toHaveBeenCalledWith({
+      where: { referenceType: "SalesInvoice", referenceId: 77 },
+    })
+  })
 })
 
 describe("completeSalesReturn STOK-03", () => {
@@ -2069,6 +2076,16 @@ describe("Quotation Actions (legacy happy paths)", () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await actions.deleteQuotation(1)
     expect(res?.success).toBe(true)
+  })
+  it("putaran 105: deleteQuotation membersihkan baris Approval penawaran itu", async () => {
+    // Approval polimorfik tak punya FK: tanpa sapuan ini baris pending
+    // yatim memblokir updateApprovalWorkflow/deleteApprovalWorkflow
+    // selamanya (pendingCount > 0) dan mengotori antrean persetujuan.
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 42, status: "draft" })
+    await actions.deleteQuotation(42)
+    expect(mocks.prismaMock.approval.deleteMany).toHaveBeenCalledWith({
+      where: { referenceType: "Quotation", referenceId: 42 },
+    })
   })
   it("regresi putaran 24: deleteQuotation menolak WO turunan ber-catatan QC", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})

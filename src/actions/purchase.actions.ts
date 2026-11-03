@@ -1395,6 +1395,16 @@ export async function cancelPurchaseOrder(poId: number) {
         data: { status: "cancelled" },
       });
 
+      // Putaran 105: PO cancelled tak akan pernah lolos klaim
+      // APPROVE_CLAIMS (from: draft), jadi approval pending-nya harus
+      // ditutup — dibiarkan berarti antrean persetujuan menyimpan langkah
+      // yang selalu 409 dan blokir edit/hapus workflow selamanya.
+      // HANYA pending: approval yang sudah approved/rejected adalah jejak
+      // audit keputusan atas dokumen yang barisnya tetap ada.
+      await tx.approval.deleteMany({
+        where: { referenceType: "PurchaseOrder", referenceId: poId, status: "pending" },
+      });
+
       // Putaran 16: PR dihitung ulang dari coverage PO yang masih hidup —
       // tanpa ini PR macet ordered/partial_ordered sesudah PO-nya batal.
       if (po.purchaseRequestId) {
@@ -3276,6 +3286,13 @@ export async function deletePurchaseOrder(id: number) {
 
       // 4. Delete the PO
       await tx.purchaseOrder.delete({ where: { id } });
+
+      // Putaran 105: approval polimorfik PO (dibuat createPurchaseOrder se-tx)
+      // tak punya FK — tanpa sapuan ini draft yang dihapus meninggalkan
+      // approval pending yatim di antrean dan memblokir edit/hapus workflow.
+      await tx.approval.deleteMany({
+        where: { referenceType: "PurchaseOrder", referenceId: id },
+      });
     });
 
     await logActivity(
@@ -3659,6 +3676,10 @@ export async function deleteVendorBill(id: number) {
         referenceType: "vendor_bill", referenceId: id,
       });
       await tx.vendorBill.delete({ where: { id } });
+      // Putaran 105: approval tagihan ini ikut disapu (polimorfik, tanpa FK).
+      await tx.approval.deleteMany({
+        where: { referenceType: "VendorBill", referenceId: id },
+      });
       // Recompute the service PO's subcontract HPP after removing the bill.
       await syncServicePoCostFromBills(tx, billRef.purchaseOrderId, null);
     });
@@ -3705,6 +3726,10 @@ export async function deleteVendorPayment(id: number) {
         referenceType: "vendor_payment", referenceId: id,
       });
       await tx.vendorPayment.delete({ where: { id } });
+      // Putaran 105: approval pembayaran ini ikut disapu (polimorfik, tanpa FK).
+      await tx.approval.deleteMany({
+        where: { referenceType: "VendorPayment", referenceId: id },
+      });
     });
     await removeAttachmentFiles(removedFiles);
 

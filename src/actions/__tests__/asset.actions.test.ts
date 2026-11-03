@@ -81,6 +81,10 @@ const mocks = vi.hoisted(() => {
     assetHistory: {
       create: vi.fn(),
     },
+    // Putaran 105: hapus aset membersihkan baris Approval polimorfik.
+    approval: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
     journal: {
       count: vi.fn(),
       findFirst: vi.fn(),
@@ -1961,6 +1965,15 @@ describe("deleteAsset", () => {
     const res = await deleteAsset(100)
     expect(res.success).toBe(true)
     expect(prismaMock.asset.delete).toHaveBeenCalledWith({ where: { id: 100 } })
+  })
+
+  it("putaran 105: deleteAsset membersihkan baris Approval aset itu", async () => {
+    // createAsset/updateAsset mengajukan approval se-tx; hapus aset tanpa
+    // sapuan meninggalkan approval pending yatim di antrean persetujuan.
+    await deleteAsset(100)
+    expect(prismaMock.approval.deleteMany).toHaveBeenCalledWith({
+      where: { referenceType: "Asset", referenceId: 100 },
+    })
   })
 
   it("refuses deletion when GL journals exist (acquisition/depreciation)", async () => {

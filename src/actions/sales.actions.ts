@@ -3445,6 +3445,12 @@ export async function deleteQuotation(id: number) {
     if (sectionIds.length) await tx.quotationItem.deleteMany({ where: { sectionId: { in: sectionIds } } })
     await tx.quotationSection.deleteMany({ where: { quotationId: id } })
     await tx.quotation.delete({ where: { id } })
+    // Putaran 105: approval penawaran ini ikut dibersihkan (approval
+    // polimorfik tanpa FK). Proyek yatim sudah disapu di blok di atas,
+    // tetapi approval milik penawarannya sendiri belum.
+    await tx.approval.deleteMany({
+      where: { referenceType: "Quotation", referenceId: id },
+    })
   })
 
   await logActivity("delete", "Quotation", id, `Menghapus penawaran #${id}`)
@@ -4946,6 +4952,12 @@ export async function deleteSalesInvoice(id: number) {
     await tx.salesPayment.deleteMany({ where: { salesInvoiceId: id } })
     await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: id } })
     await tx.salesInvoice.delete({ where: { id } })
+    // Putaran 105: Approval polimorfik tak punya FK — tanpa sapuan ini baris
+    // pending yatim tinggal di antrean persetujuan dan memblokir
+    // updateApprovalWorkflow/deleteApprovalWorkflow selamanya (pendingCount).
+    await tx.approval.deleteMany({
+      where: { referenceType: "SalesInvoice", referenceId: id },
+    })
   })
   await removeAttachmentFiles(removedFiles)
   await logActivity("delete", "SalesInvoice", id, `Menghapus faktur penjualan #${id}`)
