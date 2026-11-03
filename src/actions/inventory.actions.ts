@@ -2487,7 +2487,7 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
         where: { stockAdjustmentId: id },
       });
 
-      // Putaran 110: alasan dokumen bertaut transfer dipertahankan. Form
+      // Putaran 111: alasan dokumen bertaut transfer dipertahankan. Form
       // penyesuaian tidak punya field `reason` (hanya catatan per baris), jadi
       // setiap submit edit membawa kosong; menulis `v.reason ?? null` menghapus
       // penanda "selisih transfer" pada draft penutupan selisih. Sesudah itu
@@ -3244,17 +3244,43 @@ export async function postStocktakeSession(id: number) {
       // Baris opname kini bisa mencatatnya; yang masih kosong ditolak di
       // sini — sesi tetap approved, bukan gugur belakangan di hook.
       const lineByItem = new Map(session.lines.map((l) => [l.itemId, l]));
-      const surplusBatchItems = differing.filter((f) => {
-        if (f.finalCount - (live.get(f.itemId) ?? 0) <= 0) return false;
+      const surplusBatchItems: number[] = [];
+      const badSerialItems: number[] = [];
+      for (const f of differing) {
+        // Surplus = hitung final − stok live; persis `qtyDiff` yang nanti
+        // dinilai hook penyesuaian (actualQty di dokumen = finalCount,
+        // live = layer gudang ini).
+        const surplusQty = f.finalCount - (live.get(f.itemId) ?? 0);
+        if (surplusQty <= 0) continue;
         const line = lineByItem.get(f.itemId);
-        if (!line) return false;
-        const needsBatch = Boolean(line.item.trackBatch) && cleanStringList(line.batchNumbers) === undefined;
-        const needsSerial = Boolean(line.item.trackSerial) && cleanStringList(line.serialNumbers) === undefined;
-        return needsBatch || needsSerial;
-      });
+        if (!line) continue;
+        if (line.item.trackBatch && cleanStringList(line.batchNumbers) === undefined) {
+          surplusBatchItems.push(f.itemId);
+          continue;
+        }
+        if (line.item.trackSerial) {
+          // Putaran 112: hook mensyaratkan jumlah nomor seri PERSIS sebesar
+          // surplus dan unik. Gerbang lama hanya menilai daftar tidak kosong,
+          // sehingga sesi terlanjur "posted" lalu draft adjustment-nya gugur
+          // di hook selamanya — dan draft itu tak boleh dihapus karena
+          // dirujuk StocktakeSession.adjustmentId. Tolak sebelum status
+          // sesi berubah.
+          const serials = cleanStringList(line.serialNumbers) ?? [];
+          const mismatch =
+            !Number.isInteger(surplusQty) ||
+            serials.length !== surplusQty ||
+            new Set(serials).size !== serials.length;
+          if (mismatch) badSerialItems.push(f.itemId);
+        }
+      }
       if (surplusBatchItems.length > 0) {
         throw new Error(
-          `Item surplus belum bisa diposting dari opname (nomor lot/serial belum tercatat): item ${surplusBatchItems.map((f) => `#${f.itemId}`).join(", ")}. Lengkapi lot/serial pada hitungan sesi, atau catat selisih lewat Penyesuaian stok.`,
+          `Item surplus belum bisa diposting dari opname (nomor lot/serial belum tercatat): item ${surplusBatchItems.map((id) => `#${id}`).join(", ")}. Lengkapi lot/serial pada hitungan sesi, atau catat selisih lewat Penyesuaian stok.`,
+        );
+      }
+      if (badSerialItems.length > 0) {
+        throw new Error(
+          `Item surplus berseri memerlukan nomor seri sebanyak jumlah surplus dan tidak boleh duplikat: item ${badSerialItems.map((id) => `#${id}`).join(", ")}. Lengkapi nomor seri pada hitungan sesi, atau catat selisih lewat Penyesuaian stok.`,
         );
       }
       const snapByItem = new Map(finals.map((f) => [f.itemId, f.systemQty]));

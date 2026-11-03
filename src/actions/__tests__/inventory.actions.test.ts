@@ -282,7 +282,7 @@ describe("Stock Adjustment Actions", () => {
     expect(res?.error).toContain("tidak ditemukan");
     expect(mocks.prismaMock.stockAdjustmentItem.deleteMany).not.toHaveBeenCalled();
   });
-  it("putaran 110: edit draft penutupan selisih transfer tidak mengosongkan reason", async () => {
+  it("putaran 111: edit draft penutupan selisih transfer tidak mengosongkan reason", async () => {
     // Form penyesuaian tidak punya field `reason` (hanya catatan per baris),
     // sehingga submit edit selalu tanpa `reason`. Jalur lama menulis
     // `v.reason ?? null` sehingga penanda "selisih transfer" lenyap:
@@ -1960,6 +1960,65 @@ describe("stocktake session (P1-5)", () => {
     expect(res).toEqual({ success: true, adjustmentId: 99 });
     const createArg = mocks.prismaMock.stockAdjustment.create.mock.calls[0][0];
     expect(createArg.data.items.create[0].batchNumbers).toEqual(["LOT-A", "LOT-B"]);
+  });
+
+  // Putaran 112: gerbang lama hanya menilai KEBERADAAN daftar, sedangkan hook
+  // penyesuaian menuntut jumlah nomor seri persis = surplus. Sesi terlanjur
+  // "posted" + draft adjustment mati di hook, dan draft itu tak boleh dihapus
+  // (StocktakeSession.adjustmentId). Tolak sebelum sesi berubah status.
+  it("postStocktakeSession menolak surplus item berseri yang jumlah nomor serinya tidak cocok", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({ warehouseId: 1 });
+    mocks.prismaMock.inventoryLayer.groupBy.mockResolvedValueOnce([
+      { itemId: 10, _sum: { remaining: 10 } },
+    ]);
+    mocks.prismaMock.stocktakeSession.findUnique.mockResolvedValue({
+      id: 1,
+      warehouseId: 1,
+      status: "approved",
+      documentNo: "STK-1",
+      lines: [
+        {
+          itemId: 10,
+          systemQty: 10,
+          count1: 14,
+          count2: null,
+          serialNumbers: Array.from({ length: 14 }, (_, i) => `SN-${i + 1}`),
+          item: { cost: 5, trackBatch: false, trackSerial: true },
+        },
+      ],
+    });
+    const res = await actions.postStocktakeSession(1);
+    expect(res.success).toBe(false);
+    expect(res.error).toContain("nomor seri");
+    expect(mocks.prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.stocktakeSession.update).not.toHaveBeenCalled();
+  });
+
+  it("postStocktakeSession menolak surplus item berseri dengan nomor seri duplikat", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({ warehouseId: 1 });
+    mocks.prismaMock.inventoryLayer.groupBy.mockResolvedValueOnce([
+      { itemId: 10, _sum: { remaining: 10 } },
+    ]);
+    mocks.prismaMock.stocktakeSession.findUnique.mockResolvedValue({
+      id: 1,
+      warehouseId: 1,
+      status: "approved",
+      documentNo: "STK-1",
+      lines: [
+        {
+          itemId: 10,
+          systemQty: 10,
+          count1: 14,
+          count2: null,
+          serialNumbers: ["SN-1", "SN-2", "SN-3", "SN-3"],
+          item: { cost: 5, trackBatch: false, trackSerial: true },
+        },
+      ],
+    });
+    const res = await actions.postStocktakeSession(1);
+    expect(res.success).toBe(false);
+    expect(res.error).toContain("nomor seri");
+    expect(mocks.prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
   });
 
   it("postStocktakeSession menolak sesi yang sudah posted (kalah klaim)", async () => {
