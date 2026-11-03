@@ -35,4 +35,13 @@ describe("form edit men-seed field yang sudah ada", () => {
     expect(source).toMatch(/serialNumbers: row\.serialNumbers \}/)
     expect(source).toMatch(/description: row\.description \}/)
   })
+
+  it("editor item inline mengirim balik deskripsi baris yang dimuat dari record", () => {
+    // Putaran 114: editor inline di halaman detail faktur/pesanan adalah
+    // penulis KEDUA jalur yang sama (deleteMany + createMany). Putaran 110
+    // hanya memperbaiki form penuh, jadi menyunting baris lewat editor tetap
+    // menghapus deskripsi tersimpan.
+    const source = read("src/components/ui/invoice-items-editor.tsx")
+    expect(source).toMatch(/if \(item\.description\) payload\.description = item\.description/)
+  })
 })

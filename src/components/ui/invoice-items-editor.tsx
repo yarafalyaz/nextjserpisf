@@ -184,6 +184,7 @@ export function InvoiceItemsEditor({
                 qty: number;
                 unitPrice: number;
                 discount: number;
+                description?: string;
                 uom?: string;
                 serialNumbers?: string[];
               } = {
@@ -192,6 +193,11 @@ export function InvoiceItemsEditor({
                 unitPrice: item.unitPrice,
                 discount: item.discount,
               };
+              // Putaran 114: updateSalesInvoice/updateSalesOrder menghapus
+              // seluruh baris lalu menulis ulang dari payload ini — deskripsi
+              // yang tidak dikirim hilang diam-diam. Kirim hanya bila terisi
+              // supaya baris tanpa deskripsi tetap ringkas.
+              if (item.description) payload.description = item.description;
               if (item.uom) payload.uom = item.uom;
               if (item.serialNumbers && item.serialNumbers.length > 0)
                 payload.serialNumbers = item.serialNumbers;

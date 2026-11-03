@@ -199,4 +199,67 @@ describe("InvoiceItemsEditor", () => {
     unmount(root)
     container.remove()
   })
+
+  // Putaran 114: updateSalesInvoice menghapus SELURUH baris lalu menulis ulang
+  // dari payload editor. Deskripsi baris (nama barang/nomor seri/catatan baris)
+  // tidak ikut dikirim → hilang diam-diam setiap kali baris disimpan lewat
+  // editor inline, walau form faktur penuh sudah mengirimnya (putaran 110).
+  it("payload simpan membawa balik deskripsi baris yang dimuat dari record", async () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <InvoiceItemsEditor
+          invoiceId={1}
+          customerId={10}
+          date="2026-06-16"
+          taxRate={11}
+          discountTotal={0}
+          paidAmount={0}
+          editable={true}
+          availableItems={availableItems}
+          items={[
+            {
+              itemId: 1,
+              description: "Keyboard mekanik 87 tombol",
+              qty: 1,
+              unitPrice: 500000,
+              discount: 0,
+              total: 500000,
+            },
+          ]}
+        />
+      )
+    })
+
+    const editBtn = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Ubah Item"),
+    )
+    act(() => {
+      editBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    })
+
+    const saveBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "Simpan",
+    )
+    await act(async () => {
+      saveBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    const { updateSalesInvoice } = await import("@/actions/sales.actions")
+    const call = (updateSalesInvoice as unknown as { mock: { calls: unknown[][] } }).mock.calls.at(-1) as
+      | [number, FormData]
+      | undefined
+    expect(call).toBeDefined()
+    const payload = JSON.parse(String(call![1].get("items"))) as Array<Record<string, unknown>>
+    expect(payload[0]).toEqual(
+      expect.objectContaining({ itemId: 1, description: "Keyboard mekanik 87 tombol" }),
+    )
+
+    unmount(root)
+    container.remove()
+  })
 })
