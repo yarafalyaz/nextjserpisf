@@ -145,13 +145,19 @@ export async function loadTransferInTransit(
         items: [...remainingQtyByItem(transfer.items).entries()].map(([itemId, remaining]) => {
           const detail = itemById.get(itemId)
           const moved = valueByKey.get(`${transfer.id}-${itemId}`)
-          const unitCost = moved && moved.qty > 0 ? moved.value / moved.qty : detail ? Number(detail.cost ?? 0) : null
+          // Putaran 95: tandai asal harga. Tanpa pergerakan OUT, fallback
+          // harga pokok master adalah PERKIRAAN (fromMovement false) walau
+          // nilainya terisi — builder menaikkan estimatedLines dari tanda
+          // ini, bukan dari unitCost === null saja.
+          const fromMovement = Boolean(moved && moved.qty > 0)
+          const unitCost = fromMovement ? moved!.value / moved!.qty : detail ? Number(detail.cost ?? 0) : null
           return {
             sku: detail?.sku ?? null,
             name: detail?.name ?? "Barang",
             unit: detail?.unitOfMeasure ?? null,
             qty: remaining,
-            unitCost: moved ? unitCost : detail ? Number(detail.cost ?? 0) : null,
+            unitCost,
+            fromMovement,
           }
         }),
       })),

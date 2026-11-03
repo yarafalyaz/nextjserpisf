@@ -42,8 +42,15 @@ export interface InTransitItemInput {
   name: string
   unit: string | null
   qty: number
-  /** Harga per satuan dari pergerakan stok; `null` bila pergerakannya tak ditemukan. */
+  /** Harga per satuan; `null` bila tak ada sumber harga (muncul sebagai 0 + perkiraan). */
   unitCost: number | null
+  /**
+   * Putaran 95: true bila unitCost berasal dari pergerakan stok OUT (harga lot
+   * yang benar-benar keluar). false/absen = fallback harga pokok master —
+   * dihitung `estimatedLines` walau unitCost terisi: penanda perkiraan tidak
+   * boleh senyap hanya karena master kebetulan punya harga.
+   */
+  fromMovement?: boolean
 }
 
 export interface InTransitTransferInput {
@@ -137,7 +144,9 @@ export function buildTransferInTransit(input: TransferInTransitInput): TransferI
     for (const item of transfer.items) {
       const unitCost = item.unitCost
       const value = safeMultiply(item.qty, unitCost ?? 0, 2)
-      if (unitCost === null) totals.estimatedLines += 1
+      // Perkiraan = tanpa sumber harga ATAU sumbernya fallback harga pokok
+      // master (fromMovement false) — putaran 95.
+      if (unitCost === null || item.fromMovement === false) totals.estimatedLines += 1
       transferValue = safeAdd(transferValue, value, 2)
       totals.items += 1
       if (item.unit) units.add(item.unit)

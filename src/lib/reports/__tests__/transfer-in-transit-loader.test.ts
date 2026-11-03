@@ -66,6 +66,23 @@ describe("loadTransferInTransit — filter status partially_received", () => {
     expect(dataRow?.kind === "data" && dataRow.cells[1]).toBe("6")
   })
 
+  it("putaran 95: tanpa pergerakan OUT, fallback harga master ditandai perkiraan (nilai tetap dari master)", async () => {
+    mocks.prismaMock.inventoryTransfer.findMany.mockResolvedValue([partialTransfer()])
+    mocks.prismaMock.stockMove.findMany.mockResolvedValue([])
+    mocks.prismaMock.item.findMany.mockResolvedValue([
+      { id: 7, sku: "OLI-1", name: "Oli", unitOfMeasure: "PCS", cost: 99 },
+    ])
+    const { report } = await loadTransferInTransit(PERIOD)
+    // 6 sisa x harga master 99 = 594 (nilai tampil), tetapi estimatedLines 1:
+    // penanda perkiraan tidak boleh senyap hanya karena master punya harga.
+    expect(report.totals.value).toBe(594)
+    expect(report.totals.estimatedLines).toBe(1)
+    const rowsText = report.table.rows
+      .map((r) => (r.kind === "notice" ? r.text : ""))
+      .join("\n")
+    expect(rowsText).toContain("perkiraan, bukan nilai pasti")
+  })
+
   it("ROUND5-SCOPE: scope [2] menapis kueri ke asal ATAU tujuan dalam cakupan", async () => {
     mocks.prismaMock.inventoryTransfer.findMany.mockResolvedValue([])
     await loadTransferInTransit(PERIOD, [2])

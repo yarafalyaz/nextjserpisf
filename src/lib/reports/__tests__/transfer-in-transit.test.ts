@@ -70,6 +70,25 @@ describe("buildTransferInTransit", () => {
     expect(texts(result)).toContain("perkiraan, bukan nilai pasti")
   })
 
+  it("putaran 95: fallback harga pokok master (fromMovement=false) tetap perkiraan walau unitCost terisi", () => {
+    const result = buildTransferInTransit({
+      transfers: [
+        transfer({
+          items: [
+            { sku: "A", name: "Busi", unit: "PCS", qty: 2, unitCost: 500, fromMovement: false },
+            { sku: "B", name: "Oli", unit: "PCS", qty: 3, unitCost: 100, fromMovement: true },
+          ],
+        }),
+      ],
+      asOf,
+      periodEndIsToday: true,
+    })
+
+    expect(result.totals.estimatedLines).toBe(1)
+    expect(result.totals.value).toBe(1300)
+    expect(texts(result)).toContain("perkiraan, bukan nilai pasti")
+  })
+
   it("tidak menjumlahkan kuantitas lintas satuan", () => {
     const result = buildTransferInTransit({
       transfers: [
