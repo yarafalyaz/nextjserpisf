@@ -2661,3 +2661,43 @@ Semua kandidat 3 agent diverifikasi sesi utama terhadap kode aktual + `prisma/sc
 - Lokal hijau: batch inti 301/301 (7 berkas: manufacturing, qc, production-cost, qc-schemas, document-page-scope, document-scope-parity, permission-seed-parity) + guard 189/189 (7 berkas: schema-usage, silent-failure, wired-transition, navigation-targets, action-wiring, action-permission-guard, report-url-convention); manufacturing sendiri 158/158 sesudah perbaikan harness (mock gate QC hoisted + reset `productionOrder.findUnique` di beforeEach — `vi.clearAllMocks` membuang implementasi persisten mock model, kelas harness yang dikenal); `tsc --noEmit` bersih (dua error awal ditutup: izin `view_financial_reports` tak ter-seed → diganti `view_reports` kanonis, ketangkap guard `permission-seed-parity`; cabang scope-none dashboard gudang kehilangan `lowStockCount`); ESLint 17 berkas bersih; `git diff --check` bersih.
 - Bukti merah (perintah terpisah, stash produksi saja): tepat 7 failed — scope sesi opname, update+delete biaya bersumber sistem, duplikat hasil inspeksi, pasangan referensi NCR, kunci WO→PO, tautan berubah. FIX dasbor/kalender tanpa test komponen (server component membaca prisma langsung, pola repo) — bukti kontraknya query yang dibaca, dicatat apa adanya.
 - CI `41594561841` (head `115372616`) **success** tanpa susulan.
+
+## Putaran 89 — aset & garansi lanjutan (commit `9472ec7d7`, CI `41597410423` success)
+
+### Vonis FIX
+1. Total Mutasi Aset mengabaikan impairment — FIX: agregasi saldo awal/akhir memakai `addTo(cost, accumulated)` sementara baris kategori memakai `addTriple` yang mengurangi impairment. Impairment sebelum periode membuat total kelebihan persis sebesar impairment dengan tie-out lolos diam-diam (kedua sisi salah sama besar); impairment dalam periode memunculkan selisih tie-out palsu. Total kini mewarisi `bookValue` bucket; `addTo` tak diubah (pemakai blok penyusutan sah).
+2. Kartu penanda daftar aset memakai rumus sempit — FIX: `aset/page.tsx` menghitung nilai buku dari `purchaseCost − Σ header jurnal penyusutan POSTED`, mengabaikan jurnal peristiwa (revaluasi/impairment) dan pelepasan, sehingga aset masih bernilai bisa ditandai "tersusutkan penuh, masih dipakai" (pengungkapan Putusan 4 F-2026-10-23-117-V). Halaman kini memakai `journalBookValue` jurnal POSTED penuh (pola halaman detail) dengan fallback basis kolom untuk aset legacy tanpa jurnal perolehan; regression test halaman bermock prisma membuktikan revaluasi +50jt mengangkat aset keluar tanda.
+
+### Vonis CATAT
+- Status coverage garansi `revoked` tak punya penulis dan `expired` tak pernah ditulis — satu-satunya penulisan status coverage adalah `active` saat lahir; komentar skema menjanjikan pencabutan manual yang tak ada jalurnya. `expired` dirancang turunan tanggal (ember dari `expiresAt` vs hari WIB), tak ada pembaca salah angka hari ini; menambah jalur pencabutan adalah keputusan produk.
+
+### Vonis GUGUR
+- Lubang nomor jurnal cron penyusutan (`nextBatch` sebelum tx) — sequence atomik + `Journal.journalNumber @unique`; baris fiskal tanpa period lock — bukan jurnal, tak posting GL.
+
+### Bukti
+- Merah tepat 3 kontrak baru (2 mutasi + 1 halaman). Hijau: batch aset 200/200 (25 berkas), guard 200/200, tsc/lint/diff-check bersih. CI `41597410423` (head `9472ec7d7`) **success** tanpa susulan.
+
+## Putaran 90 — laporan operasional lanjutan (commit `5e8f8c1b2`, CI `41597714781` success)
+
+### Vonis FIX
+1. SO `approved` hilang dari Pemenuhan Pesanan + Terkirim Belum Terfaktur — FIX: `FULFILLABLE_ORDER_STATUSES` tanpa `approved`, padahal jalur workflow tanpa workflow terkonfigurasi menaikkan draft→approved dan status itu boleh dikirim (`DELIVERABLE_ORDER_STATUSES` kanonis). Kedua laporan memakai konstanta yang sama, jadi satu entri menutup keduanya. Test lama yang mengunci daftar lama diperbarui + test populasi builder.
+2. Kartu "Biaya Bulan Ini" dasbor finance selalu Rp0 — FIX: agregat mencari expense status `"posted"` yang tak pernah ditulis writer (approve → `"approved"`, bayar → `"paid"` dengan jurnal di titik bayar). Filter kini `"paid"`.
+3. Layar Umur Stok tak menyaring item mati — FIX: where hanya `remaining > 0` + scope; loader PDF `loadStockAging` menyaring `item: { isActive, deletedAt }`. Layar kini sama.
+4. Layar Ringkasan Stok item mati ikut total — FIX: query layer tanpa tapis item hidup (PDF menyaring); KPI/tabel melebihi PDF persis sebesar layer item terhapus. Tapis ditambah, termasuk lookup `missingItems`.
+5. Saldo awal Kartu Stok bocor gudang luar scope — FIX: SQL saldo awal memakai `warehouseId` mentah sementara `periodMoves` sudah kosong lewat `warehouseWhere`; user scoped membuka kartu gudang B menerima saldo awal/akhir B. SQL kini memaksa hasil kosong (`AND 1 = 0`) untuk gudang terpilih di luar scope. Test sumber untuk butir ini lemah (string acuan sudah ada di cabang lain) — bukti perilaku mengandalkan pembacaan SQL, dicatat.
+6. Dua assertion test diperbarui mengikuti konstanta baru (bukan produksi).
+
+### Vonis CATAT (dari laporan yang sama, belum dipatch — antrian putaran berikutnya)
+- A3 scope Perencanaan Material: agregat loader global, halaman hanya menyaring daftar baris; prefill Permintaan Pembelian dari angka global — perlu loader scoped, bukan tambalan filter.
+- A4 kartu Titik Pesan-Ulang + `reorderHref` di Stok Minimum tanpa scope sama sekali (divergensi terbalik: layar bocor, PDF bersih).
+- A5 basis `average` Ringkasan Stok: halaman mendokumentasikan pilihan FIFO-layer sebagai basis tie-out antar-tabelnya sendiri; mengganti ke `item.cost` mengubah definisi yang dinyatakan — keputusan definisi.
+- A8 dokumen opname `processing` ikut total nilai selisih (jendela crash sesaat); A9 varians produksi memuat PO `draft` (−100%); A10 WIP berjalan memuat PO bertanggal sesudah `asOf`; A11 estimasi-vs-aktual kehilangan bahan jalur PO-direct (`ProductionOrderMaterial.actualCost`); A12 analisis penjualan: KPI berbasis baris vs tren berbasis `grandTotal` dalam satu halaman.
+- A14/A16 dasbor utama: "Mobil Dikerjakan" menghitung proyek aktif tanpa kendaraan; "Selesai bulan ini" memakai `updatedAt`. A15 pencarian `/kendaraan` bocor semua untuk kata non-numerik (OR memuat objek kosong). A17 katalog `/laporan` menampilkan kartu payroll ke pemegang `view_reports` saja (fail-closed, bukan bocor).
+- A2 penanda "nilai perkiraan" transfer terkirim tak pernah menyala (fallback harga master mengisi `unitCost` semua baris).
+- Analisis penjualan tak mengurangi retur; selisih GRNI periode parsial; ekspor activity-log prefix apostrof; dashboard peran melewati cek izin granular; pembayaran reversed tanpa penanda; hitungan sampel `take:N` disajikan populasi; RevenueChart berjangkar tanggal data terakhir; status seri `reserved` mati (dokumentasi).
+
+### Vonis GUGUR
+- Hari terakhir periode jatuh (period.end 23:59:59.999 WIB tetap ≥ faktur UTC-midnight di TZ resmi); PO `cancelled` ikut varians (tak ada writer); halaman payroll/laba-rugi tanpa `requirePermission` langsung (didelegasikan fail-closed); jendela +24j target penjualan; CSV builder server berguard; StockMove draft/reversed bocor; layer draft/cancelled; StockAdjustment `cancelled`; loader laporan tanpa gerbang izin; selisih persediaan periode lampau (notice sudah ada).
+
+### Bukti
+- Merah tepat 4 kontrak baru (konstanta SO ×3 permukaan test + tapis hidup). Hijau: batch laporan 2514/2514 (292 berkas), guard 200/200, tsc/lint/diff-check bersih. CI `41597714781` (head `5e8f8c1b2`) **success** tanpa susulan.
