@@ -1935,6 +1935,51 @@ describe("Work Order Actions", () => {
     expect(mocks.prismaMock.deliveryOrderItem.createMany).toHaveBeenCalled()
   })
 
+  // Putaran 113: baris jasa/custom WO disimpan dengan itemId 0 (hook DP:
+  // `itemId: item.itemId ?? 0`, lihat work-order-material-needs-data "baris
+  // jasa (itemId=0)"). DeliveryOrderItem.itemId ber-FK RESTRICT ke items, dan
+  // items id 0 tidak pernah ada — createMany dengan itemId 0 melempar 1452 di
+  // dalam tx penyelesaian, sehingga WO ber-baris jasa TIDAK PERNAH bisa
+  // diselesaikan (pesan error FK mentah, bukan panduan).
+  it("putaran 113: completeWorkOrder tidak menyalin baris jasa itemId 0 ke surat jalan", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "in_progress", items: [{ id: 1 }] })
+      .mockResolvedValueOnce({
+        id: 1, documentNo: "WO-1", customerId: 5, quotationId: 7,
+        items: [
+          { id: 10, itemId: 0, qty: 1, description: "Jasa pasang" },
+          { id: 11, itemId: 7, qty: 3, description: "Busi" },
+        ],
+        customer: { name: "Cust" },
+      } as any)
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({ id: 1, status: "completed" })
+    mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
+    mocks.prismaMock.salesOrder.findFirst.mockResolvedValue({ id: 99 })
+    mocks.prismaMock.deliveryOrder.create.mockResolvedValue({ id: 100 })
+
+    const res = await actions.completeWorkOrder(1)
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.deliveryOrderItem.createMany.mock.calls.at(-1)?.[0]
+    expect(arg?.data).toEqual([expect.objectContaining({ itemId: 7, qty: 3 })])
+  })
+
+  it("putaran 113: completeWorkOrder tidak membuat surat jalan kosong bila WO hanya berisi jasa", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "in_progress", items: [{ id: 1 }] })
+      .mockResolvedValueOnce({
+        id: 1, documentNo: "WO-1", customerId: 5, quotationId: 7,
+        items: [{ id: 10, itemId: 0, qty: 1, description: "Jasa servis" }],
+        customer: { name: "Cust" },
+      } as any)
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({ id: 1, status: "completed" })
+    mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
+    mocks.prismaMock.salesOrder.findFirst.mockResolvedValue({ id: 99 })
+
+    const res = await actions.completeWorkOrder(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.deliveryOrder.create).not.toHaveBeenCalled()
+  })
+
   it("completeWorkOrder skips DO when no deliverable items", async () => {
     mocks.prismaMock.workOrder.findUniqueOrThrow
       .mockResolvedValueOnce({ id: 1, status: "in_progress", items: [{ id: 1 }] })

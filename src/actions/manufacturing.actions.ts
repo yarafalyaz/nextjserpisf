@@ -2028,8 +2028,15 @@ async function autoCreateDeliveryOrder(workOrderId: number, userId: number, txCl
     include: { items: true, customer: true },
   });
 
-  // Only create DO if there are items to deliver
-  const deliverableItems = wo.items.filter((i) => Number(i.qty) > 0);
+  // Only create DO if there are items to deliver.
+  // Putaran 113: baris jasa/custom tersimpan dengan itemId 0 (hook DP menulis
+  // `item.itemId ?? 0`, dan laporan kebutuhan material menyebut "baris jasa
+  // (itemId=0)"). DeliveryOrderItem.itemId ber-FK RESTRICT ke items dan id 0
+  // tak pernah ada — menyalinnya membuat createMany melempar 1452 di dalam tx
+  // penyelesaian, jadi WO berisi jasa TIDAK PERNAH bisa diselesaikan. Baris
+  // tanpa barang katalog juga tak bisa dikirim (createDeliveryOrder menolak
+  // baris tanpa itemId), jadi ia memang bukan isi surat jalan.
+  const deliverableItems = wo.items.filter((i) => Number(i.qty) > 0 && i.itemId > 0);
   if (deliverableItems.length === 0) return;
 
   // Guard: a DeliveryOrder must be attached to a SalesOrder derived from the WO's
