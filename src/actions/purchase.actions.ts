@@ -1767,11 +1767,35 @@ async function loadGrLineQueues(
     select: { id: true, itemId: true, qty: true },
     orderBy: { id: "asc" },
   });
+  // Putaran 80: antrian membawa SISA qty per baris GR — qty yang sudah
+  // tertaut ke tagihan non-cancelled lain dikurangi dulu. Tanpa ini dua
+  // tagihan bisa tertaut ke baris penerimaan yang sama dan laporan GR/IR
+  // per baris menghitung baris itu dua kali.
+  const lineIds = lines.map((l) => l.id);
+  const billedLines = lineIds.length
+    ? await tx.vendorBillItem.findMany({
+        where: {
+          goodsReceiptItemId: { in: lineIds },
+          vendorBill: { status: { notIn: ["cancelled"] } },
+        },
+        select: { goodsReceiptItemId: true, qty: true },
+      })
+    : [];
+  const billedByLine = new Map<number, number>();
+  for (const b of billedLines) {
+    if (b.goodsReceiptItemId == null) continue;
+    billedByLine.set(
+      b.goodsReceiptItemId,
+      (billedByLine.get(b.goodsReceiptItemId) ?? 0) + Number(b.qty),
+    );
+  }
   const queues: GrLineQueues = new Map();
   for (const line of lines) {
+    const remaining = Number(line.qty) - (billedByLine.get(line.id) ?? 0);
+    if (remaining <= 0) continue;
     const bucket = queues.get(line.itemId);
-    if (bucket) bucket.push({ id: line.id, qty: Number(line.qty) });
-    else queues.set(line.itemId, [{ id: line.id, qty: Number(line.qty) }]);
+    if (bucket) bucket.push({ id: line.id, qty: remaining });
+    else queues.set(line.itemId, [{ id: line.id, qty: remaining }]);
   }
   return queues;
 }
@@ -2954,6 +2978,40 @@ export async function processPurchaseReturn(returnId: number) {
 
     // Atomically process stock adjustment and post GL journal in a single transaction.
     await prisma.$transaction(async (tx) => {
+      // Putaran 80: nilai ulang status/SoD/scope DI DALAM tx sesudah kunci
+      // baris retur — cek pra-tx di atas hanya fast-fail; updatePurchaseReturn
+      // konkuren bisa mengganti PO/item/tautan GR di antaranya, dan resolusi
+      // pra-tx tak meneruskan baris tertaut jadi gudang yang dinilai bisa beda
+      // dari gudang yang benar-benar dikeluarkan hook.
+      await tx.$executeRaw`SELECT id FROM purchase_returns WHERE id = ${returnId} FOR UPDATE`;
+      const fresh = await tx.purchaseReturn.findUniqueOrThrow({
+        where: { id: returnId },
+        include: { items: true },
+      });
+      if (fresh.status !== "draft") {
+        throw new Error("Purchase return hanya bisa diproses dari status draft");
+      }
+      if (fresh.createdBy != null && Number(fresh.createdBy) === Number(user.id)) {
+        throw new Error("Retur pembelian tidak boleh diproses oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin approve_purchase_returns.");
+      }
+      const freshActive = fresh.items.filter((item) => Number(item.qty) > 0);
+      const ctx = await loadPurchaseReturnWarehouseContext(
+        tx as never,
+        fresh.purchaseOrderId,
+        freshActive.map((item) => item.itemId),
+        freshActive.map((item) => item.goodsReceiptItemId ?? 0),
+      );
+      const freshScope = await getWarehouseScope(user);
+      for (const item of freshActive) {
+        const receipt =
+          (item.goodsReceiptItemId != null ? ctx.receiptById.get(item.goodsReceiptItemId) : undefined) ??
+          ctx.receiptByItem.get(item.itemId);
+        const warehouseId = receipt?.warehouseId ?? receipt?.goodsReceipt?.warehouseId ??
+          resolvePurchaseReturnWarehouse(item.itemId, ctx.receiptByItem, ctx.defaultWarehouseByItem, ctx.activeWarehouseId, ctx.anyWarehouseId);
+        if (!warehouseId) throw new Error("Gudang retur pembelian tidak ditemukan.");
+        assertWarehouseAccess(freshScope, warehouseId);
+      }
+
       // Hook creates stock moves, layers, journal, and sets status → returned (idempotent).
       await onPurchaseReturnStock(returnId, Number(user.id), tx);
 

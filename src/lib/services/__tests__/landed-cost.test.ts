@@ -421,6 +421,39 @@ describe("allocateLandedCost — alokasi hanya baris barang (V7 vonis 125-V)", (
     expect(r.adminFee).toBe(1000)
   })
 
+  it("putaran 80: pool estimasi PO campuran diserap barang menurut nilai BARANG saja", () => {
+    const r = allocateLandedCost({
+      lines: [
+        { baseQty: 1, poNetUnitPrice: 100000 },
+        { baseQty: 1, poNetUnitPrice: 100000, weighted: false },
+      ],
+      poCostPool: 30000,
+      poNetValue: 100000,
+    })
+    expect(r.chargeAdditions).toEqual([30000, 0])
+    expect(r.absorbed).toBe(30000)
+    expect(r.unallocatedPool).toBe(0)
+  })
+
+  it("putaran 80: GR jasa lebih dulu tidak membebankan pool yang masih milik barang", () => {
+    const serviceFirst = allocateLandedCost({
+      lines: [{ baseQty: 1, poNetUnitPrice: 100000, weighted: false }],
+      poCostPool: 30000,
+      poNetValue: 100000,
+    })
+    expect(serviceFirst.absorbed).toBe(0)
+    expect(serviceFirst.unallocatedPool).toBe(0)
+
+    const finalGoods = allocateLandedCost({
+      lines: [{ baseQty: 1, poNetUnitPrice: 100000 }],
+      poCostPool: 30000,
+      poNetValue: 100000,
+      receivedValueBefore: 0,
+      isFinalReceipt: true,
+    })
+    expect(finalGoods.absorbed).toBe(30000)
+  })
+
   it("V5: dasar bobot fallback dilaporkan, bukan diam-diam (qty lalu rata)", () => {
     const byQty = allocateLandedCost({
       lines: [

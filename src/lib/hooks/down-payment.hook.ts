@@ -137,9 +137,25 @@ async function onDownPaymentConfirmedInner(
     // teralokasi ke dokumen batal (void menuntut payments kosong, jadi
     // invoice cancelled tak punya payment; DP yang masuk harus memicu
     // invoice pengganti, bukan menempel ke yang batal).
-    const existingInv = await tx.salesInvoice.findFirst({
+    let existingInv = await tx.salesInvoice.findFirst({
       where: { quotationId: quotation.id, status: { not: "cancelled" } },
     });
+    // Putaran 80: faktur manual dari form SO lahir quotationId=null — tanpa
+    // jembatan SO ini konversi DP membuat invoice KEDUA atas quotation sama.
+    if (!existingInv && typeof tx.salesOrder.findMany === "function") {
+      const bridgedOrders = await tx.salesOrder.findMany({
+        where: { quotationId: quotation.id, deletedAt: null },
+        select: { id: true },
+      });
+      if (bridgedOrders.length > 0) {
+        existingInv = await tx.salesInvoice.findFirst({
+          where: {
+            salesOrderId: { in: bridgedOrders.map((s) => s.id) },
+            status: { not: "cancelled" },
+          },
+        });
+      }
+    }
 
     // P0-1: DP lanjutan tanpa invoice (ambang 50% belum tercapai saat DP
     // sebelumnya): tandai CONFIRMED dulu agar kumulatif termasuk DP ini,

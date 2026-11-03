@@ -198,6 +198,11 @@ export function allocateLandedCost(input: AllocateLandedCostInput): AllocateLand
   const shareOf = (wholePool: number): number => {
     if (wholePool <= 0) return 0
     if (poNetValue > 0 && thisValue > 0) return (wholePool * thisValue) / poNetValue
+    // Putaran 80: GR tanpa baris barang atas PO yang masih punya nilai
+    // barang tidak menyerap pool apa pun — pool itu milik penerimaan
+    // barang berikutnya (true-up final), bukan beban periode di sini.
+    // Jatuh ke seluruh pool hanya bila PO memang tak punya nilai barang.
+    if (poNetValue > 0) return 0
     return wholePool
   }
 

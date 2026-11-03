@@ -296,7 +296,8 @@ describe("P2-4 updateSalesPayment dual-invoice lock guard", () => {
     const result = await updateSalesPayment(5, paymentFd(3))
 
     expect(result.success).toBe(true)
-    expect(locks).toEqual([3, 9])
+    // Putaran 80: baris payment (5) dikunci pertama, lalu faktur id-sorted.
+    expect(locks).toEqual([5, 3, 9])
     // Old row read inside the tx, never outside
     expect(paymentFindUniqueOrThrowMock).toHaveBeenCalledTimes(1)
   })
@@ -309,7 +310,8 @@ describe("P2-4 updateSalesPayment dual-invoice lock guard", () => {
     const result = await updateSalesPayment(5, paymentFd(3))
 
     expect(result.success).toBe(true)
-    expect(locks).toEqual([3])
+    // Putaran 80: baris payment (5) dikunci pertama, lalu faktur tunggal.
+    expect(locks).toEqual([5, 3])
   })
 
   it("recalcs the old invoice after a reassignment (stale-read guard)", async () => {

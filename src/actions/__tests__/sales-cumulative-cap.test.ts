@@ -315,6 +315,41 @@ describe("BUG-06 createSalesInvoice: cap kumulatif terhadap SO", () => {
   })
 })
 
+describe("putaran 80: faktur langsung dari quotation kena cap kumulatif quotation", () => {
+  beforeEach(() => {
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({
+      id: 9, documentNo: "Q-009", status: "accepted", customerId: 7,
+      grandTotal: 1000, salesEmployeeId: null, validUntil: null, deletedAt: null,
+    })
+    mocks.prismaMock.salesOrder.findMany.mockResolvedValue([])
+    mocks.prismaMock.workOrder.findMany.mockResolvedValue([])
+    mocks.prismaMock.salesInvoice.create.mockResolvedValue({ id: 78 })
+  })
+
+  it("create langsung kedua ditolak: 800 tertagih + kandidat 400 > quotation 1000", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      { id: 50, status: "posted", grandTotal: 800 },
+    ])
+    const res = await actions.createSalesInvoice(
+      fdMap({ customerId: 7, date: "2026-06-12", quotationId: 9, items: JSON.stringify([{ itemId: 11, qty: 4, unitPrice: 100 }]) }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("melebihi")
+    expect(mocks.prismaMock.salesInvoice.create).not.toHaveBeenCalled()
+  })
+
+  it("create langsung dalam sisa quotation lolos (800 + 200 = 1000)", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      { id: 50, status: "posted", grandTotal: 800 },
+    ])
+    const res = await actions.createSalesInvoice(
+      fdMap({ customerId: 7, date: "2026-06-12", quotationId: 9, items: JSON.stringify([{ itemId: 11, qty: 2, unitPrice: 100 }]) }),
+    )
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.salesInvoice.create).toHaveBeenCalled()
+  })
+})
+
 describe("BUG-06 postInvoice: posting kedua melebihi SO ditolak sebelum hook", () => {
   beforeEach(() => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
@@ -345,6 +380,27 @@ describe("BUG-06 postInvoice: posting kedua melebihi SO ditolak sebelum hook", (
     const res = await actions.postInvoice(21)
     expect(res?.success).toBe(true)
     expect(mocks.onSalesInvoicePostedMock).toHaveBeenCalled()
+  })
+
+  it("putaran 80: posting faktur quotation langsung ditolak bila kumulatif menembus quotation", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 21, status: "draft", salesOrderId: null, quotationId: 9, projectId: null, grandTotal: 400, customerId: 7, paidAmount: 0,
+    })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({
+      id: 9, documentNo: "Q-009", status: "accepted", customerId: 7,
+      grandTotal: 1000, salesEmployeeId: null, validUntil: null, deletedAt: null,
+    })
+    mocks.prismaMock.salesOrder.findMany.mockResolvedValue([])
+    mocks.prismaMock.workOrder.findMany.mockResolvedValue([])
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      { id: 50, status: "posted", grandTotal: 800 },
+      { id: 21, status: "draft", grandTotal: 400 },
+    ])
+    const res = await actions.postInvoice(21)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("melebihi")
+    expect(mocks.prismaMock.salesInvoice.updateMany).not.toHaveBeenCalled()
+    expect(mocks.onSalesInvoicePostedMock).not.toHaveBeenCalled()
   })
 })
 

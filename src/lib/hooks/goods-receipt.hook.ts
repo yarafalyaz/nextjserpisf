@@ -397,17 +397,39 @@ export async function onGoodsReceiptVerified(
       };
     });
 
-    const poNetValue = (landedPo?.items ?? []).reduce((s, pi) => s + Number(pi.total), 0);
+    // Putaran 80: penyebut pool adalah nilai BARANG PO saja — baris jasa
+    // tak menyerap ongkir (V7), jadi nilainya tak boleh mengecilkan porsi
+    // barang atau menganggap jasa sudah "diterima" untuk true-up.
+    const poItemIds = [...new Set((landedPo?.items ?? []).map((pi) => pi.itemId))];
+    const missingMetaIds = poItemIds.filter((id) => !metaByItem.has(id));
+    const extraMetas = missingMetaIds.length
+      ? await tx.item.findMany({
+          where: { id: { in: missingMetaIds } },
+          select: { id: true, isService: true },
+        })
+      : [];
+    const isServiceByItem = new Map<number, boolean>([
+      ...grItemMetas.map((it) => [it.id, it.isService] as const),
+      ...extraMetas.map((it) => [it.id, it.isService] as const),
+    ]);
+    const poNetValue = (landedPo?.items ?? []).reduce(
+      (s, pi) => s + (isServiceByItem.get(pi.itemId) ? 0 : Number(pi.total)),
+      0,
+    );
     const poCostPool =
       Number(landedPo?.shippingCost ?? 0) + Number(landedPo?.serviceFee ?? 0);
 
-    // V8: nilai barang yang sudah diterima SEBELUM GR ini, dasar true-up residu
-    // pool estimasi oleh penerimaan terakhir.
-    const receivedValueNow = landedLines.reduce(
-      (s, l) => s + (l.weighted ? l.baseQty * l.poNetUnitPrice : 0),
+    // V8: nilai barang yang sudah diterima SEBELUM GR ini, dasar true-up
+    // residu pool estimasi oleh penerimaan terakhir. Dihitung dari baris
+    // penerimaan terverifikasi aktual — bukan poNetValue − GR ini, yang
+    // menganggap semua sisa PO sudah diterima.
+    const receivedValueBefore = priorGRItems.reduce(
+      (s, it) =>
+        isServiceByItem.get(it.itemId)
+          ? s
+          : s + toBaseQty(it.itemId, Number(it.qty), it.uom) * poNetUnitPriceOf(it.itemId),
       0,
     );
-    const receivedValueBefore = Math.max(0, poNetValue - receivedValueNow);
 
     const landed = allocateLandedCost({
       lines: landedLines,

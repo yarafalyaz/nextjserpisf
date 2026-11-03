@@ -865,6 +865,28 @@ describe("Rack & WorkOrder & Others", () => {
     );
     expect(res?.success).toBe(true);
   });
+  it("putaran 80: updateRack menolak pindah gudang selama dirujuk default item", async () => {
+    mocks.prismaMock.item.count.mockResolvedValueOnce(2);
+    mocks.prismaMock.rack.findUnique.mockResolvedValueOnce({ warehouseId: 1 });
+    const res = await actions.updateRack(
+      1,
+      fdMap({ warehouseId: 2, code: "R1", name: "Rack 1" }),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("lokasi default item");
+    expect(mocks.prismaMock.rack.update).not.toHaveBeenCalled();
+  });
+  it("putaran 80: updateRackRow menolak pindah rak selama dirujuk default item", async () => {
+    mocks.prismaMock.item.count.mockResolvedValueOnce(1);
+    mocks.prismaMock.rackRow.findUnique.mockResolvedValueOnce({ rackId: 1 });
+    const res = await actions.updateRackRow(
+      1,
+      fdMap({ rackId: 2, code: "RR1", name: "Row 1", level: 1 }),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("lokasi default item");
+    expect(mocks.prismaMock.rackRow.update).not.toHaveBeenCalled();
+  });
   it("updateRackRow handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     mocks.prismaMock.rackRow.update.mockRejectedValue(new Error("db err"));

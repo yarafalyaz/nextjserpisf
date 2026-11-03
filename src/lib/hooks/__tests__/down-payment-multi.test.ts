@@ -65,9 +65,10 @@ function buildTx(dp: ReturnType<typeof buildDp>, existingInvoiceId: number) {
       update: mocks.downPaymentUpdate,
     },
     workOrder: { findFirst: mocks.workOrderFindFirst, create: vi.fn().mockResolvedValue({ id: 11, documentNo: "WO-1" }) },
-    salesOrder: { findFirst: mocks.salesOrderFindFirst, create: vi.fn().mockResolvedValue({ id: 12, documentNo: "SO-1" }) },
+    salesOrder: { findFirst: mocks.salesOrderFindFirst, findMany: vi.fn().mockResolvedValue([]), create: vi.fn().mockResolvedValue({ id: 12, documentNo: "SO-1" }) },
     salesInvoice: {
       findFirst: mocks.salesInvoiceFindFirst,
+      findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({ id: 101, documentNo: "INV-1" }),
       update: mocks.salesInvoiceUpdate,
     },
@@ -137,6 +138,24 @@ describe("onDownPaymentConfirmed — multi-DP support", () => {
     expect(lockCalls).toHaveLength(1)
     expect(lockCalls[0].sql).toMatch(/for update/i)
     expect(lockCalls[0].order).toBeLessThan(mocks.salesPaymentFindMany.mock.invocationCallOrder[0])
+  })
+
+  it("putaran 80: faktur manual lewat SO quotation ditemukan — invoice konversi kedua tidak lahir", async () => {
+    const dp2 = buildDp({ id: 2, amount: 500, status: "draft", docNo: "DP-2" })
+    const tx = buildTx(dp2, 100)
+    // Faktur existing hanya tertaut lewat SO (quotationId null di baris faktur).
+    ;(tx as any).salesOrder.findMany = vi.fn().mockResolvedValue([{ id: 12 }])
+    ;(tx as any).salesInvoice.findMany = vi.fn().mockResolvedValue([])
+    mocks.salesInvoiceFindFirst.mockImplementation(async (args: any) => {
+      if (args?.where?.quotationId != null) return null
+      return { id: 100, grandTotal: 1000 }
+    })
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(2, 1)
+
+    expectPaymentData(mocks, { salesInvoiceId: 100, amount: 500, paymentMethod: "down_payment" })
+    expect((tx as any).salesInvoice.create).not.toHaveBeenCalled()
   })
 
   it("marks the subsequent DP as CONFIRMED", async () => {

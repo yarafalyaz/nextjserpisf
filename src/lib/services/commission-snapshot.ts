@@ -41,17 +41,34 @@ export async function commissionSnapshotForPaid(
   if (!goingPaid) return {}
   if (invoice.commissionRatePercent !== null && invoice.commissionRatePercent !== undefined) return {}
 
+  // Putaran 80: resolusi tarif wajib terserialisasi dengan penulis tarif
+  // (create/update/delete CustomerCommissionRate mengunci baris kategori).
+  // Kategori dibaca lewat locking read baris customer, lalu baris kategori
+  // dikunci — bacaan polos di bawah terjadi sesudah kedua kunci.
+  let lockedCategoryId: number | null | undefined
+  if (typeof db.$queryRaw === "function") {
+    const lockedCustomer = await db.$queryRaw<Array<{ customerCategoryId: number | null }>>`
+      SELECT customerCategoryId FROM customers WHERE id = ${invoice.customerId} FOR UPDATE`
+    if (Array.isArray(lockedCustomer)) {
+      lockedCategoryId = lockedCustomer[0]?.customerCategoryId ?? null
+      if (lockedCategoryId != null) {
+        await db.$queryRaw`SELECT id FROM customer_categories WHERE id = ${lockedCategoryId} FOR UPDATE`
+      }
+    }
+  }
+
   const customer = await db.customer.findUnique({
     where: { id: invoice.customerId },
     select: { customerCategoryId: true },
   })
+  const categoryId = lockedCategoryId !== undefined ? lockedCategoryId : customer?.customerCategoryId
   const rates = await db.customerCommissionRate.findMany({
-    where: { customerCategoryId: customer?.customerCategoryId ?? -1 },
+    where: { customerCategoryId: categoryId ?? -1 },
     select: { id: true, customerCategoryId: true, commissionPercent: true, effectiveFrom: true, effectiveTo: true },
   })
   const resolved = resolveCommissionRate(
     rates.map((r) => ({ ...r, commissionPercent: Number(r.commissionPercent) })),
-    customer?.customerCategoryId ?? null,
+    categoryId ?? null,
     invoice.date,
   )
   return {

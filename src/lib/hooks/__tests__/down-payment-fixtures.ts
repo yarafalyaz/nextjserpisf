@@ -82,9 +82,10 @@ export function buildDpTx(mocks: Record<string, any>, dp: DpFixture, overrides: 
       update: mocks.downPaymentUpdate,
     },
     workOrder: { findFirst: vi.fn().mockResolvedValue({ id: 11 }), create: vi.fn() },
-    salesOrder: { findFirst: vi.fn().mockResolvedValue({ id: 12 }), create: vi.fn() },
+    salesOrder: { findFirst: vi.fn().mockResolvedValue({ id: 12 }), findMany: vi.fn().mockResolvedValue([]), create: vi.fn() },
     salesInvoice: {
       findFirst: mocks.salesInvoiceFindFirst ?? ((async () => null) as any),
+      findMany: vi.fn().mockResolvedValue([]),
       create: mocks.salesInvoiceCreate ?? (async () => ({ id: 101, documentNo: "INV-1", date: new Date(Date.UTC(2026, 9, 1)) })),
       update: mocks.salesInvoiceUpdate ?? vi.fn(),
     },

@@ -1653,6 +1653,38 @@ describe("Vendor Bill Actions", () => {
     expect(arg.data.map((r: { goodsReceiptItemId: number }) => r.goodsReceiptItemId)).toEqual([502, 501])
   })
 
+  it("putaran 80: tagihan kedua menautkan sisa qty baris GR, bukan baris pertama lagi", async () => {
+    mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValue({
+      id: 77, documentNo: "GR-077", status: "verified",
+      purchaseOrder: { vendorId: 1 },
+    })
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValue([
+      { id: 501, itemId: 7, qty: 2, unitCost: 100 },
+      { id: 502, itemId: 7, qty: 8, unitCost: 100 },
+    ])
+    // Tagihan lama sudah mengonsumsi seluruh baris 501 (qty 2).
+    mocks.prismaMock.vendorBillItem.findMany.mockResolvedValue([
+      { goodsReceiptItemId: 501, qty: 2 },
+    ])
+    mocks.prismaMock.vendorBillItem.aggregate.mockResolvedValue({ _sum: { subtotal: 200 } })
+    mocks.prismaMock.vendorBill.create.mockResolvedValue({ id: 2 })
+    mocks.prismaMock.item.findMany.mockResolvedValue([
+      { id: 7, sku: "BRG-01", name: "Baut", unitOfMeasure: "PCS", isActive: true, deletedAt: null },
+    ])
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      goodsReceiptId: "77",
+      date: "2026-06-12",
+      subtotal: "200",
+      tax: "0",
+      grandTotal: "200",
+      items: JSON.stringify([{ itemId: 7, qty: 2, unitPrice: 100 }]),
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.vendorBillItem.createMany.mock.calls.at(-1)![0]
+    expect(arg.data[0].goodsReceiptItemId).toBe(502)
+  })
+
   it("createVendorBill menerima tagihan kedua yang tepat menghabiskan nilai GR (BUG-09)", async () => {
     setupGrBill(60)
     const res = await actions.createVendorBill(fdMap({
@@ -2661,9 +2693,14 @@ describe("Purchase Return Actions", () => {
 
   it("processPurchaseReturn succeeds", async () => {
     mockDraftReturn()
-    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([])
-    mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 1, defaultWarehouseId: 3 }])
-    mocks.prismaMock.warehouse.findFirst.mockResolvedValueOnce({ id: 3 })
+    // Konteks gudang dimuat dua kali: fast-fail pra-tx + nilai ulang dalam tx.
+    mocks.prismaMock.goodsReceiptItem.findMany
+      .mockResolvedValueOnce([]).mockResolvedValueOnce([])
+    mocks.prismaMock.item.findMany
+      .mockResolvedValueOnce([{ id: 1, defaultWarehouseId: 3 }])
+      .mockResolvedValueOnce([{ id: 1, defaultWarehouseId: 3 }])
+    mocks.prismaMock.warehouse.findFirst
+      .mockResolvedValueOnce({ id: 3 }).mockResolvedValueOnce({ id: 3 })
     const res = await actions.processPurchaseReturn(1)
     expect(res?.success).toBe(true)
   })
@@ -2722,6 +2759,23 @@ describe("Purchase Return Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("pemisahan tugas")
     expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
+  it("putaran 80: processPurchaseReturn menilai scope dari baris GR tertaut eksplisit", async () => {
+    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", createdBy: 99,
+      items: [{ itemId: 1, qty: 3, goodsReceiptItemId: 501 }],
+      purchaseOrderId: 1,
+    })
+    // Baris terbaru per item di gudang 3; baris tertaut eksplisit 501 di gudang 9.
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValue([
+      { id: 502, itemId: 1, warehouseId: 3, goodsReceipt: { warehouseId: 3 } },
+      { id: 501, itemId: 1, warehouseId: 9, goodsReceipt: { warehouseId: 9 } },
+    ])
+    scopeUser([3])
+    const res = await actions.processPurchaseReturn(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak memiliki akses ke gudang")
   })
 
   it("processPurchaseReturn succeeds when receipt warehouse is within user scope", async () => {

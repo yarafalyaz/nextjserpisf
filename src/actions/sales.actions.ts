@@ -1524,6 +1524,32 @@ export async function postInvoice(invoiceId: number) {
           uom: line.uom,
         })),
       })
+    } else if (lockedInvoice.quotationId) {
+      // Putaran 80: posting adalah gerbang terakhir cap quotation untuk
+      // faktur langsung (draft pra-cap atau edit melewati sisa).
+      await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${lockedInvoice.quotationId} FOR UPDATE`
+      const lockedQuotation = await tx.quotation.findUnique({
+        where: { id: lockedInvoice.quotationId },
+        select: { grandTotal: true },
+      })
+      if (lockedQuotation) {
+        const prior = await collectQuotationInvoices(tx, lockedInvoice.quotationId)
+        const alreadyBilled = prior
+          .filter((inv) => inv.id !== invoiceId)
+          .reduce((sum, inv) => sum + Number(inv.grandTotal), 0)
+        const excess = cumulativeValueExcess(
+          alreadyBilled,
+          Number(lockedInvoice.grandTotal),
+          Number(lockedQuotation.grandTotal),
+        )
+        if (excess > 0.01) {
+          throw new Error(
+            `Faktur melebihi nilai Penawaran: sudah tertagih ${alreadyBilled}, ` +
+              `faktur ini ${Number(lockedInvoice.grandTotal)}, nilai penawaran ${Number(lockedQuotation.grandTotal)} (kelebihan ${excess}). ` +
+              `Kurangi nilai faktur atau ubah penawaran.`,
+          )
+        }
+      }
     }
 
     // Claim from EITHER "draft" or "approved". When a SalesInvoice approval
@@ -2233,6 +2259,7 @@ export async function createSalesInvoice(formData: FormData) {
     // pesanan konsep/ditolak. Faktur langsung dari penawaran (quotationId
     // tanpa salesOrderId) tetap boleh.
     let inheritedSalesEmployeeId: number | null = null
+    let directQuotationGrandTotal: number | null = null
     if (v.salesOrderId) {
       const so = await tx.salesOrder.findUnique({
         where: { id: v.salesOrderId },
@@ -2258,9 +2285,12 @@ export async function createSalesInvoice(formData: FormData) {
         inheritedSalesEmployeeId = q?.salesEmployeeId ?? null
       }
     } else if (v.quotationId) {
+      // Putaran 80: kunci baris quotation sebelum gerbang + cap kumulatif di
+      // bawah — tanpa kunci, dua faktur langsung bersamaan sama-sama lolos cap.
+      await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${v.quotationId} FOR UPDATE`
       const q = await tx.quotation.findUnique({
         where: { id: v.quotationId },
-        select: { salesEmployeeId: true, customerId: true, status: true, validUntil: true, deletedAt: true },
+        select: { salesEmployeeId: true, customerId: true, status: true, validUntil: true, deletedAt: true, grandTotal: true },
       })
       // Gerbang status penawaran langsung (paritas gerbang SO di atas):
       // "tetap boleh" berarti boleh tanpa SO, bukan boleh dari status apa
@@ -2277,6 +2307,7 @@ export async function createSalesInvoice(formData: FormData) {
       }
       assertQuotationNotExpired(q.validUntil)
       inheritedSalesEmployeeId = q.salesEmployeeId ?? null
+      directQuotationGrandTotal = Number(q.grandTotal)
     }
 
     // F-PRICELIST-01: baris langsung dari form mendapat harga price-list
@@ -2348,6 +2379,21 @@ export async function createSalesInvoice(formData: FormData) {
           uom: (item as { uom?: string | null }).uom ?? null,
         })),
       })
+    } else if (v.quotationId && directQuotationGrandTotal !== null) {
+      // Putaran 80: faktur langsung dari quotation kena cap yang sama seperti
+      // faktur progres/selisih (job-billing): Σ faktur non-cancelled lewat 3
+      // jembatan + kandidat ≤ Quotation.grandTotal. Baris quotation sudah
+      // dikunci di gerbang di atas.
+      const prior = await collectQuotationInvoices(tx, v.quotationId)
+      const alreadyBilled = prior.reduce((sum, inv) => sum + Number(inv.grandTotal), 0)
+      const excess = cumulativeValueExcess(alreadyBilled, grandTotal, directQuotationGrandTotal)
+      if (excess > 0.01) {
+        throw new Error(
+          `Faktur melebihi nilai Penawaran: sudah tertagih ${alreadyBilled}, ` +
+            `faktur ini ${grandTotal}, nilai penawaran ${directQuotationGrandTotal} (kelebihan ${excess}). ` +
+            `Kurangi nilai faktur atau ubah penawaran.`,
+        )
+      }
     }
     // F-2026-10-25-035-B titik tahan Q-CL2-4 butir 3 (sesudah
     // assertPeriodOpen di atas): nilai SEBELUM baris lahir dalam tx ini.
@@ -4178,6 +4224,11 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   // to the payment row, and the operator's just-uploaded attachments would
   // silently never get linked to the edited payment.
   const payment = await prisma.$transaction(async (tx) => {
+    // Putaran 80: kunci baris payment SEBELUM bacaan pertama — komentar lama
+    // mengklaim baris terkunci tetapi bacaan di bawah polos, jadi dua edit
+    // bersamaan sama-sama membaca status/amount basi (paritas
+    // reverseSalesPayment).
+    await tx.$executeRaw`SELECT id FROM sales_payments WHERE id = ${id} FOR UPDATE`
     // Lock BOTH invoices up front, id-sorted (anti-deadlock): two concurrent
     // reassigns swapping invoices A<->B must take locks in the same order.
     // Old row read here (not outside): baca luar + lock hanya baru = TOCTOU —

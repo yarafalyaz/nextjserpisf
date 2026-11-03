@@ -2212,6 +2212,24 @@ export async function updateRack(id: number, formData: FormData) {
     await assertRackIdInScope(user, id);
     await assertWarehouseIdInScope(user, v.warehouseId);
 
+    // Putaran 80: rak yang pindah gudang mematahkan triplet default item
+    // (Item.defaultWarehouseId → Rack tak lagi di gudang itu). Tolak selama
+    // plaintext updateItem menilainya dari baris terkunci.
+    const itemRefs = await prisma.item.count({
+        where: { defaultRackId: id, deletedAt: null },
+      });
+      if (itemRefs > 0) {
+        const current = await prisma.rack.findUnique({
+          where: { id },
+          select: { warehouseId: true },
+        });
+        if (current && current.warehouseId !== v.warehouseId) {
+          throw new Error(
+            "Rak tidak dapat dipindah gudang selama masih menjadi lokasi default item; ubah lokasi default item lebih dulu.",
+          );
+        }
+      }
+
     const rack = await prisma.rack.update({
       where: { id },
       data: {
@@ -2797,6 +2815,24 @@ export async function updateRackRow(id: number, formData: FormData) {
     const v = parsed.data;
     await assertRackRowIdInScope(user, id);
     await assertRackIdInScope(user, v.rackId);
+
+    // Putaran 80: baris rak yang pindah rak mematahkan triplet default item
+    // (Item.defaultRackRowId → RackRow tak lagi di rak itu). Tolak selama
+    // masih dirujuk.
+    const itemRefs = await prisma.item.count({
+      where: { defaultRackRowId: id, deletedAt: null },
+    });
+    if (itemRefs > 0) {
+      const current = await prisma.rackRow.findUnique({
+        where: { id },
+        select: { rackId: true },
+      });
+      if (current && current.rackId !== v.rackId) {
+        throw new Error(
+          "Baris rak tidak dapat dipindah rak selama masih menjadi lokasi default item; ubah lokasi default item lebih dulu.",
+        );
+      }
+    }
 
     const rackRow = await prisma.rackRow.update({
       where: { id },

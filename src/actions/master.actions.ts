@@ -16,6 +16,7 @@ import {
   requireString,
 } from "@/lib/utils/safe-parse";
 import { logActivity } from "@/lib/services/activity-log.service";
+import { getGlobalCostingMethod, resolveCostingMethod } from "@/lib/services/costing-method.service";
 import { validateItemTaxDefaults } from "@/lib/services/item-tax-default.service";
 import { validateCommissionRateWrite } from "@/lib/services/customer-commission-rate.service";
 import {
@@ -1045,6 +1046,24 @@ export async function updateItem(itemId: number, formData: FormData) {
       if ((v.defaultRackRowId ?? null) !== storedItem.defaultRackRowId) changedRefs.defaultRackRowId = v.defaultRackRowId ?? null;
       const masterRefError = await checkItemMasterReferences(changedRefs);
       if (masterRefError) return { success: false, error: masterRefError };
+      // Putaran 80: pasangan rantai dinilai atas triplet EFEKTIF
+      // (tersimpan digabung payload), bukan hanya sisi yang berubah —
+      // ganti gudang saja sebelumnya membiarkan rak gudang lama menempel,
+      // ganti rak saja membiarkan baris rak lama. Pasangan lengkap hanya
+      // dinilai bila field rantai mana pun berubah; tautan warisan yang
+      // tak disentuh tetap tak dinilai ulang (keputusan putaran 50).
+      const chainTouched =
+        (v.defaultWarehouseId ?? null) !== storedItem.defaultWarehouseId ||
+        (v.defaultRackId ?? null) !== storedItem.defaultRackId ||
+        (v.defaultRackRowId ?? null) !== storedItem.defaultRackRowId;
+      if (chainTouched) {
+        const tripletError = await checkItemMasterReferences({
+          defaultWarehouseId: v.defaultWarehouseId ?? null,
+          defaultRackId: v.defaultRackId ?? null,
+          defaultRackRowId: v.defaultRackRowId ?? null,
+        });
+        if (tripletError) return { success: false, error: tripletError };
+      }
     }
     const storedPercent = decimalToNumber(storedItem?.defaultDppPercent);
     const taxDefaultChanged =
@@ -1067,6 +1086,144 @@ export async function updateItem(itemId: number, formData: FormData) {
     // the item in the new unit. Wrapping all three in one tx makes the
     // "wipe + re-insert" either fully succeed or fully roll back.
     await prisma.$transaction(async (tx) => {
+      // Putaran 80: identitas tracking + metode HPP dibekukan selama stok
+      // hidup. Kunci baris item dulu (pasangan deleteItem/posting stok),
+      // lalu nilai dari bacaan terkunci: menyalakan serial/batch atas stok
+      // tanpa identitas membuat FIFO menolak/kehilangan lot-serial;
+      // mematikan meninggalkan serial available yatim. Metode efektif
+      // (kategori -> item -> global) yang berubah — atau Item.cost item
+      // average yang digeser — menulis ulang valuasi laporan atas layer
+      // existing tanpa jurnal revaluasi apa pun.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM items WHERE id = ${itemId} FOR UPDATE`;
+      }
+      const lockedItem = await tx.item.findUnique({
+        where: { id: itemId },
+        select: {
+          trackBatch: true,
+          trackSerial: true,
+          costingMethod: true,
+          cost: true,
+          categoryId: true,
+          defaultWarehouseId: true,
+          defaultRackId: true,
+          defaultRackRowId: true,
+          category: { select: { costingMethod: true } },
+        },
+      });
+      if (lockedItem) {
+        // Triplet efektif dari baris TERKUNCI (bukan snapshot pra-tx):
+        // pasangan yang tak konsisten menolak tulis walau field rantai
+        // tak berubah di form — lawan updateRack/updateRackRow bisa
+        // memindahkan induk rak/baris di jendela snapshot->tx.
+        const effWarehouseId = v.defaultWarehouseId ?? null;
+        const effRackId = v.defaultRackId ?? null;
+        const effRackRowId = v.defaultRackRowId ?? null;
+        if (effRackId != null) {
+          const rack = await tx.rack.findUnique({
+            where: { id: effRackId },
+            select: { id: true, warehouseId: true },
+          });
+          if (!rack) throw new Error("Rak default item tidak ditemukan di master rak. Pilih rak yang ada.");
+          if (effWarehouseId != null && rack.warehouseId !== effWarehouseId) {
+            throw new Error("Rak default item tidak mengarah ke gudang default yang dipilih. Pilih rak milik gudang default.");
+          }
+        }
+        if (effRackRowId != null) {
+          const row = await tx.rackRow.findUnique({
+            where: { id: effRackRowId },
+            select: { id: true, rackId: true },
+          });
+          if (!row) throw new Error("Baris rak default item tidak ditemukan di master baris rak. Pilih baris rak yang ada.");
+          if (effRackId != null && row.rackId !== effRackId) {
+            throw new Error("Baris rak default item tidak berada di rak default yang dipilih. Pilih baris rak milik rak default.");
+          }
+        }
+        const wantTrackBatch = v.trackBatch ?? false;
+        const wantTrackSerial = v.trackSerial ?? false;
+        const trackChanged =
+          wantTrackBatch !== lockedItem.trackBatch || wantTrackSerial !== lockedItem.trackSerial;
+        const newCategoryMethod =
+          (v.categoryId ?? null) !== lockedItem.categoryId
+            ? (
+                await tx.itemCategory.findUnique({
+                  where: { id: v.categoryId ?? -1 },
+                  select: { costingMethod: true },
+                })
+              )?.costingMethod ?? null
+            : lockedItem.category?.costingMethod ?? null;
+        const methodBefore = resolveCostingMethod({
+          categoryMethod: lockedItem.category?.costingMethod,
+          itemMethod: lockedItem.costingMethod,
+          globalMethod: await getGlobalCostingMethod(tx as never),
+        });
+        const methodAfter = resolveCostingMethod({
+          categoryMethod: newCategoryMethod,
+          itemMethod: v.costingMethod ?? lockedItem.costingMethod,
+          globalMethod: await getGlobalCostingMethod(tx as never),
+        });
+        const methodChanged = methodBefore !== methodAfter;
+        const costChanged =
+          methodAfter === "average" && Number(v.cost) !== Number(lockedItem.cost);
+        if (trackChanged || methodChanged || costChanged) {
+          const hasStock =
+            (await tx.inventoryLayer.count({
+              where: { itemId, remaining: { gt: 0 } },
+            })) > 0;
+          if (hasStock) {
+            if (trackChanged) {
+              if (!lockedItem.trackSerial && wantTrackSerial) {
+                const serials = await tx.itemSerial.count({ where: { itemId } });
+                if (serials === 0) {
+                  throw new Error(
+                    "Pelacakan serial tidak dapat diaktifkan: item masih memiliki stok tanpa nomor seri. Kosongkan stok item terlebih dahulu.",
+                  );
+                }
+              }
+              if (!lockedItem.trackBatch && wantTrackBatch) {
+                const unbatched = await tx.inventoryLayer.count({
+                  where: { itemId, remaining: { gt: 0 }, batchNumber: null },
+                });
+                if (unbatched > 0) {
+                  throw new Error(
+                    "Pelacakan batch tidak dapat diaktifkan: item masih memiliki stok tanpa nomor batch. Kosongkan stok item terlebih dahulu.",
+                  );
+                }
+              }
+              if (lockedItem.trackSerial && !wantTrackSerial) {
+                const available = await tx.itemSerial.count({
+                  where: { itemId, status: "available" },
+                });
+                if (available > 0) {
+                  throw new Error(
+                    "Pelacakan serial tidak dapat dinonaktifkan: masih ada nomor seri tersedia untuk item ini. Bereskan nomor seri terlebih dahulu.",
+                  );
+                }
+              }
+              if (lockedItem.trackBatch && !wantTrackBatch) {
+                const batched = await tx.inventoryLayer.count({
+                  where: { itemId, remaining: { gt: 0 }, batchNumber: { not: null } },
+                });
+                if (batched > 0) {
+                  throw new Error(
+                    "Pelacakan batch tidak dapat dinonaktifkan: masih ada stok ber-batch untuk item ini. Kosongkan stok ber-batch terlebih dahulu.",
+                  );
+                }
+              }
+            }
+            if (methodChanged) {
+              throw new Error(
+                "Metode HPP tidak dapat diubah selama item masih memiliki stok. Kosongkan stok item terlebih dahulu.",
+              );
+            }
+            if (costChanged) {
+              throw new Error(
+                "Harga pokok item rata-rata (average) tidak dapat diubah selama masih ada stok — perubahan menilai ulang persediaan tanpa jurnal. Kosongkan stok terlebih dahulu.",
+              );
+            }
+          }
+        }
+      }
       await tx.item.update({
         where: { id: itemId },
         data: {
@@ -4794,6 +4951,10 @@ export async function updateCustomerCommissionRate(id: number, formData: FormDat
     if ("error" in parsed) return { success: false, error: parsed.error }
 
     const result = await prisma.$transaction(async (tx) => {
+      // Putaran 80: kunci baris tarif SEBELUM bacaan polos pertama — target
+      // dibaca dari snapshot yang terbentuk sesudah kunci, bukan snapshot
+      // sebelum kunci kategori (komentar lama mengklaim urutan aman).
+      await tx.$executeRaw`SELECT id FROM customer_commission_rates WHERE id = ${id} FOR UPDATE`
       const target = await tx.customerCommissionRate.findUnique({ where: { id } })
       if (!target) return { error: "Baris tarif komisi tidak ditemukan" } as const
       // Kunci kategori target, lalu rowset + cek snapshot dibaca di bawah kunci.
@@ -4840,6 +5001,8 @@ export async function deleteCustomerCommissionRate(id: number) {
     await requirePermission("edit_customers")
 
     const result = await prisma.$transaction(async (tx) => {
+      // Putaran 80: kunci baris tarif SEBELUM bacaan polos pertama (paritas update).
+      await tx.$executeRaw`SELECT id FROM customer_commission_rates WHERE id = ${id} FOR UPDATE`
       const target = await tx.customerCommissionRate.findUnique({ where: { id } })
       if (!target) return { error: "Baris tarif komisi tidak ditemukan" } as const
       // Kunci kategori milik target, lalu cek snapshot dibaca di bawah kunci.

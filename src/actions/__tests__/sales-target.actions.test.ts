@@ -200,6 +200,19 @@ describe("updateSalesTarget (BR-TGT-09)", () => {
     expect(mocks.txMock.salesTarget.update).not.toHaveBeenCalled()
   })
 
+  it("putaran 80: baris target dikunci sebelum bacaan pertama (snapshot tak mendahului kunci karyawan)", async () => {
+    const res = await updateSalesTarget({ id: 1, ...INPUT, targetAmount: 1_100_000 })
+    expect(res.success).toBe(true)
+    const sqls = mocks.txMock.$queryRaw.mock.calls.map((c) =>
+      ((c[0] as string[]) ?? []).join("?"),
+    )
+    expect(sqls[0]).toMatch(/sales_targets/i)
+    expect(sqls[0]).toMatch(/for update/i)
+    expect(mocks.txMock.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.txMock.salesTarget.findFirst.mock.invocationCallOrder[0],
+    )
+  })
+
   it("target tidak ditemukan/terhapus ditolak", async () => {
     mocks.txMock.salesTarget.findFirst.mockResolvedValue(null)
     const res = await updateSalesTarget({ id: 99, ...INPUT })

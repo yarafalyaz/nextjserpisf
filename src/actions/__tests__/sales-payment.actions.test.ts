@@ -108,6 +108,21 @@ beforeEach(() => {
   wireTransaction()
 })
 
+describe("putaran 80: updateSalesPayment mengunci baris payment sebelum membaca", () => {
+  it("kunci sales_payments mendahului findUniqueOrThrow payment", async () => {
+    const result = await updateSalesPayment(9, fd({
+      salesInvoiceId: "50", amount: "100", paymentDate: "2026-06-09", paymentMethod: "cash",
+    }))
+    expect(result.success).toBe(true)
+    const firstSql = ((execRawMock.mock.calls[0]?.[0] as string[]) ?? []).join("?")
+    expect(firstSql).toMatch(/sales_payments/i)
+    expect(firstSql).toMatch(/for update/i)
+    expect(execRawMock.mock.invocationCallOrder[0]).toBeLessThan(
+      paymentFindUniqueOrThrowMock.mock.invocationCallOrder[0],
+    )
+  })
+})
+
 describe("updateSalesPayment overpay guard", () => {
   it("R8-KEU-09: edit legacy memperhitungkan kredit retur completed dalam sisa", async () => {
     wireTransaction()

@@ -73,6 +73,10 @@ const mocks = vi.hoisted(() => {
     userWarehouse: buildModelMock(),
     vehicleFitmentRule: buildModelMock(),
     itemSubstitute: buildModelMock(),
+    inventoryLayer: buildModelMock(),
+    itemBatch: buildModelMock(),
+    itemSerial: buildModelMock(),
+    systemSetting: buildModelMock(),
 
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
@@ -393,6 +397,37 @@ describe("FK fiktif customerCategoryId/paymentTermId (repro)", () => {
     const lockOrder = mocks.prismaMock.$executeRaw.mock.invocationCallOrder[0]
     expect(lockOrder).toBeLessThan(mocks.prismaMock.customerCommissionRate.findMany.mock.invocationCallOrder[0])
   })
+  it("putaran 80: updateCustomerCommissionRate mengunci baris tarif sebelum membaca target", async () => {
+    mocks.prismaMock.customerCommissionRate.findUnique.mockResolvedValue({
+      id: 4, customerCategoryId: 3, commissionPercent: 5,
+      effectiveFrom: new Date("2026-01-01"), effectiveTo: null,
+    })
+    mocks.prismaMock.customerCommissionRate.findMany.mockResolvedValue([])
+    const res = await actions.updateCustomerCommissionRate(4, fdMap({
+      customerCategoryId: "3", commissionPercent: "6", effectiveFrom: "2026-01-01",
+    }))
+    expect(res?.success).toBe(true)
+    const firstSql = ((mocks.prismaMock.$executeRaw.mock.calls[0]?.[0] as unknown as string[]) ?? []).join("?")
+    expect(firstSql).toMatch(/customer_commission_rates/i)
+    expect(firstSql).toMatch(/for update/i)
+    expect(mocks.prismaMock.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.prismaMock.customerCommissionRate.findUnique.mock.invocationCallOrder[0],
+    )
+  })
+  it("putaran 80: deleteCustomerCommissionRate mengunci baris tarif sebelum membaca target", async () => {
+    mocks.prismaMock.customerCommissionRate.findUnique.mockResolvedValue({
+      id: 4, customerCategoryId: 3, commissionPercent: 5,
+      effectiveFrom: new Date("2026-01-01"), effectiveTo: null,
+    })
+    const res = await actions.deleteCustomerCommissionRate(4)
+    expect(res?.success).toBe(true)
+    const firstSql = ((mocks.prismaMock.$executeRaw.mock.calls[0]?.[0] as unknown as string[]) ?? []).join("?")
+    expect(firstSql).toMatch(/customer_commission_rates/i)
+    expect(firstSql).toMatch(/for update/i)
+    expect(mocks.prismaMock.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.prismaMock.customerCommissionRate.findUnique.mock.invocationCallOrder[0],
+    )
+  })
   it("createVendor tolak paymentTermId fiktif", async () => {
     const res = await actions.createVendor(fdMap({ name: "V", paymentTermId: "999999" }))
     expect(res?.success).toBe(false)
@@ -659,6 +694,57 @@ describe("Item Actions", () => {
     const res = await actions.updateItem(1, fdMap({ name: "Item Test Updated", cost: "100", price: "200" }))
     expect(res?.success).toBe(true)
   })
+  // Putaran 80: identitas tracking/metode HPP beku selama stok hidup.
+  it("putaran 80: menolak menyalakan trackSerial saat layer berstok tanpa serial", async () => {
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ isScrapSaleItem: false, defaultSalesTaxId: null, defaultPurchaseTaxId: null, defaultDppPercent: null, trackBatch: false, trackSerial: false })
+    mocks.prismaMock.inventoryLayer.count.mockResolvedValue(2)
+    const res = await actions.updateItem(1, fdMap({ name: "Item Seri", cost: "100", price: "200", trackSerial: "true" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/serial/i)
+    expect(mocks.prismaMock.item.update).not.toHaveBeenCalled()
+  })
+  it("putaran 80: menolak mematikan trackBatch saat layer ber-batch masih berstok", async () => {
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ isScrapSaleItem: false, defaultSalesTaxId: null, defaultPurchaseTaxId: null, defaultDppPercent: null, trackBatch: true, trackSerial: false })
+    mocks.prismaMock.inventoryLayer.count.mockResolvedValue(1)
+    const res = await actions.updateItem(1, fdMap({ name: "Item Batch", cost: "100", price: "200" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/batch/i)
+    expect(mocks.prismaMock.item.update).not.toHaveBeenCalled()
+  })
+  it("putaran 80: toggle tracking tetap lolos saat tidak ada stok hidup", async () => {
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ isScrapSaleItem: false, defaultSalesTaxId: null, defaultPurchaseTaxId: null, defaultDppPercent: null, trackBatch: false, trackSerial: false })
+    mocks.prismaMock.inventoryLayer.count.mockResolvedValue(0)
+    mocks.prismaMock.itemSerial.count.mockResolvedValue(0)
+    const res = await actions.updateItem(1, fdMap({ name: "Item Bebas", cost: "100", price: "200", trackSerial: "true" }))
+    expect(res?.success).toBe(true)
+  })
+  it("putaran 80: menolak metode HPP efektif berubah (kategori) saat stok hidup", async () => {
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ isScrapSaleItem: false, defaultSalesTaxId: null, defaultPurchaseTaxId: null, defaultDppPercent: null, costingMethod: "fifo", categoryId: 1 })
+    mocks.prismaMock.itemCategory.findUnique.mockResolvedValueOnce({ id: 1, costingMethod: null }).mockResolvedValue({ id: 2, costingMethod: "average" })
+    mocks.prismaMock.inventoryLayer.count.mockResolvedValue(3)
+    const res = await actions.updateItem(1, fdMap({ name: "Item HPP", cost: "100", price: "200", categoryId: 2 }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/metode HPP/i)
+    expect(mocks.prismaMock.item.update).not.toHaveBeenCalled()
+  })
+  it("putaran 80: menolak ubah Item.cost pada item average berstok (valuasi tanpa jurnal)", async () => {
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ isScrapSaleItem: false, defaultSalesTaxId: null, defaultPurchaseTaxId: null, defaultDppPercent: null, costingMethod: "average", cost: 100 })
+    mocks.prismaMock.inventoryLayer.count.mockResolvedValue(1)
+    const res = await actions.updateItem(1, fdMap({ name: "Item Avg", cost: "150", price: "200" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/rata-rata/i)
+    expect(mocks.prismaMock.item.update).not.toHaveBeenCalled()
+  })
+  it("putaran 80: menolak triplet rak tidak konsisten dari gabungan payload+tersimpan", async () => {
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ isScrapSaleItem: false, defaultSalesTaxId: null, defaultPurchaseTaxId: null, defaultDppPercent: null, defaultWarehouseId: 1, defaultRackId: 5, defaultRackRowId: null, trackBatch: false, trackSerial: false, categoryId: null, category: null })
+    mocks.prismaMock.inventoryLayer.count.mockResolvedValue(0)
+    mocks.prismaMock.warehouse.findUnique.mockResolvedValue({ id: 2, isActive: true, deletedAt: null })
+    mocks.prismaMock.rack.findUnique.mockResolvedValue({ id: 5, warehouseId: 99 })
+    const res = await actions.updateItem(1, fdMap({ name: "Item Rak", cost: "100", price: "200", defaultWarehouseId: 2, defaultRackId: 5 }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/rak/i)
+    expect(mocks.prismaMock.item.update).not.toHaveBeenCalled()
+  })
   // E135-7 (simpan): isScrapSaleItem=true && isProduct=true ditolak
   // sebelum tulis; item besi tua tidak boleh masuk jalur stok/COGS.
   it("createItem menolak item besi tua berstatus produk", async () => {
@@ -720,7 +806,7 @@ describe("Item Actions", () => {
     expect(mocks.prismaMock.item.update).not.toHaveBeenCalled()
   })
   it("updateItem membiarkan tautan gudang tersimpan tidak berubah tanpa menilai ulang", async () => {
-    mocks.prismaMock.item.findUnique.mockResolvedValue({ isScrapSaleItem: false, defaultSalesTaxId: null, defaultPurchaseTaxId: null, defaultDppPercent: null, defaultWarehouseId: 77 })
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ isScrapSaleItem: false, defaultSalesTaxId: null, defaultPurchaseTaxId: null, defaultDppPercent: null, defaultWarehouseId: 77, defaultRackId: null, defaultRackRowId: null, trackBatch: false, trackSerial: false, categoryId: null, category: null, cost: 100 })
     const res = await actions.updateItem(1, fdMap({ name: "Item Gudang Sama", cost: "100", price: "200", defaultWarehouseId: 77 }))
     expect(res?.success).toBe(true)
     expect(mocks.prismaMock.warehouse.findUnique).not.toHaveBeenCalled()

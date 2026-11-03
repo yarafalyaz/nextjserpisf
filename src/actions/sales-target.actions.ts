@@ -224,6 +224,12 @@ export async function updateSalesTarget(input: { id: number } & SalesTargetWrite
     const data = normalizeInput(input)
 
     const old = await prisma.$transaction(async (tx) => {
+      // Putaran 80: kunci baris target SEBELUM bacaan pertama — snapshot
+      // REPEATABLE READ yang terbentuk dari findFirst polos membuat cek
+      // tumpang-tindih di bawah membaca baris basi walau karyawan dikunci.
+      if (typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT id FROM sales_targets WHERE id = ${id} FOR UPDATE`
+      }
       const current = await tx.salesTarget.findFirst({
         where: { id, deletedAt: null },
         select: {
