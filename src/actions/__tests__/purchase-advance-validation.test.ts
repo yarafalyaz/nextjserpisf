@@ -134,6 +134,15 @@ describe("createPurchaseAdvance zod validation", () => {
     expect(data.date).toEqual(new Date(Date.UTC(2026, 8, 15)))
   })
 
+  it("putaran 102: prefiks nomor jurnal memakai bulan WIB, bukan getter lokal proses", async () => {
+    // 2026-11-01 tersimpan 2026-11-01T00:00:00Z; di proses barat UTC getter
+    // lokal membaca 31 Okt → uang muka 1 Nov bernomor JRN-202610.
+    const res = await createPurchaseAdvance(form({ ...base, date: "2026-11-01" }))
+    expect(res.success).toBe(true)
+    const data = mocks.journalCreate.mock.calls[0][0].data
+    expect(data.journalNumber).toBe("JRN-202611-00001")
+  })
+
   it("periode menutup sesudah cek luar -> cek dalam tx (dengan tx) menolak sebelum jurnal", async () => {
     mocks.assertPeriodOpen
       .mockResolvedValueOnce(undefined)

@@ -28,6 +28,7 @@ import {
   buildDownPaymentRefundLines,
   snapshotFromDownPaymentRow,
 } from "@/lib/tax/down-payment-vat";
+import { assertAccountsExist } from "@/lib/hooks/accounting.hook";
 
 export async function creditBalance(creditId: number): Promise<number> {
   const c = await prisma.customerCredit.findUniqueOrThrow({ where: { id: creditId } });
@@ -74,6 +75,10 @@ export async function allocateCreditToInvoice(
         replayPaymentId = claim.resultRefId ?? undefined;
         return;
       }
+      // Putaran 102: akun jurnal dinilai ulang hidup + daun di dalam tx.
+      // Settings dibaca sebelum tx; akun yang dinonaktifkan/diindukkan di
+      // antaranya tidak boleh menerima jurnal POSTED alokasi.
+      await assertAccountsExist(tx, [dpAccountId, arAccountId], "Alokasi kredit");
       await tx.$queryRaw`SELECT id FROM customer_credits WHERE id = ${creditId} FOR UPDATE`;
       // AUD-R4-03: kunci baris FAKTUR juga — dua kredit paralel ke faktur yang
       // sama tanpa ini membaca owing yang sama → over-allocate. Urutan lock
@@ -227,6 +232,17 @@ export async function refundCredit(
         replayJournalId = claim.resultRefId ?? undefined;
         return;
       }
+      // Putaran 102: kaki refund dinilai ulang hidup + daun di dalam tx.
+      // Kaki PPN (210201) hanya terpakai bila refund DP terutang berpecah;
+      // ketiga kaki maksimum dinilai di sini agar tak ada jurnal setengah.
+      const refundAccountIds = [
+        (settings as { customerDownPaymentAccountId: number }).customerDownPaymentAccountId,
+        settings.cashBankAccountId!,
+        ...((settings as { salesTaxAccountId?: number | null }).salesTaxAccountId
+          ? [(settings as { salesTaxAccountId: number }).salesTaxAccountId]
+          : []),
+      ];
+      await assertAccountsExist(tx, refundAccountIds, "Refund kredit");
       await tx.$queryRaw`SELECT id FROM customer_credits WHERE id = ${creditId} FOR UPDATE`;
       const credit = await tx.customerCredit.findUniqueOrThrow({ where: { id: creditId } });
       const balance = Number(credit.receivedAmount) - Number(credit.allocatedAmount) - Number(credit.refundedAmount);

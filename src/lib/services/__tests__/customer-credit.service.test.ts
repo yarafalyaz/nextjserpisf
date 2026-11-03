@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   creditFindMany: vi.fn(),
   taxInvoiceFindFirst: vi.fn(),
   taxInvoiceFindMany: vi.fn(),
+  accountFindMany: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -66,10 +67,18 @@ vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: (...a: unknown[]) => mocks.docNo(...a),
 }))
 
-vi.mock("@/lib/hooks/accounting.hook", () => ({
-  onSalesPaymentCreated: vi.fn().mockResolvedValue(undefined),
-  onSalesInvoicePosted: vi.fn().mockResolvedValue(undefined),
-}))
+// Putaran 102: service kini memakai assertAccountsExist (gerbang hidup + daun).
+// Jangan stub modul ini utuh — stub menyeluruh membuat guard jadi `undefined`
+// dan setiap jalur jurnal "gagal" karena TypeError, bukan karena gerbang.
+// Hanya dua hook efek-samping yang diganti; sisanya implementasi asli.
+vi.mock("@/lib/hooks/accounting.hook", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/hooks/accounting.hook")>()
+  return {
+    ...actual,
+    onSalesPaymentCreated: vi.fn().mockResolvedValue(undefined),
+    onSalesInvoicePosted: vi.fn().mockResolvedValue(undefined),
+  }
+})
 
 vi.mock("@/lib/utils/settings", () => ({
   getSystemSettings: vi.fn().mockResolvedValue({
@@ -131,6 +140,7 @@ function buildTx() {
     commissionPayable: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn(), update: vi.fn() },
     downPayment: { findUnique: mocks.dpFindUnique, findMany: mocks.dpFindMany },
     taxInvoice: { findFirst: mocks.taxInvoiceFindFirst, findMany: mocks.taxInvoiceFindMany },
+    account: { findMany: mocks.accountFindMany },
     systemSetting: { findFirst: mocks.settingFindFirst },
     financialIdempotencyKey: {
       create: (...a: unknown[]) => mocks.idemCreate(...a),
@@ -187,6 +197,46 @@ describe("customer-credit.service", () => {
     mocks.creditFindMany.mockResolvedValue([])
     mocks.taxInvoiceFindFirst.mockResolvedValue(null)
     mocks.taxInvoiceFindMany.mockResolvedValue([])
+    // Putaran 102: akun DP/AR hidup dan daun secara default. findMany wajib
+    // MENYARING seperti Prisma — mengembalikan seluruh fixture membuat
+    // gerbang hitung `found.length !== ids.length` menolak semua jalur.
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const wanted: number[] = args?.where?.id?.in ?? []
+      const all = [
+        { id: 210102, _count: { children: 0 } },
+        { id: 110, _count: { children: 0 } },
+        { id: 100, _count: { children: 0 } },
+        { id: 210201, _count: { children: 0 } },
+      ]
+      return all.filter((a) => wanted.includes(a.id))
+    })
+  })
+
+  it("putaran 102: alokasi ditolak bila akun DP jadi induk, jurnal tidak lahir", async () => {
+    seedCredit()
+    seedInvoice()
+    mocks.accountFindMany.mockResolvedValue([
+      { id: 210102, _count: { children: 3 } },
+      { id: 110, _count: { children: 0 } },
+    ])
+    const r = await allocateCreditToInvoice(1, 101, 2000, 7, "99999999-9999-4999-8999-999999999999")
+    expect(r.success).toBe(false)
+    expect(r.error).toMatch(/akun induk/)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.paymentCreate).not.toHaveBeenCalled()
+  })
+
+  it("putaran 102: refund ditolak bila akun kas jadi induk, jurnal tidak lahir", async () => {
+    seedCredit()
+    mocks.accountFindMany.mockResolvedValue([
+      { id: 210102, _count: { children: 0 } },
+      { id: 100, _count: { children: 2 } },
+      { id: 210201, _count: { children: 0 } },
+    ])
+    const r = await refundCredit(1, 500, 7, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+    expect(r.success).toBe(false)
+    expect(r.error).toMatch(/akun induk/)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
 
   it("alokasi normal: kurangi saldo + lunasi faktur + jurnal Dr 210102 / Cr Piutang TANPA kas", async () => {

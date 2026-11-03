@@ -73,6 +73,21 @@ describe("serializeWithholdingCertificatesCsv (F-35a)", () => {
     expect(out.salesWithheld).toBe(20)
   })
 
+  it("putaran 102: tanggal CSV memakai hari kalender WIB (bukan getter lokal proses)", () => {
+    // Dua bentuk tanggal yang hidup di kolom ini: tanggal dokumen = tengah malam
+    // UTC hari WIB, dan `paymentDate` sisi penjualan = instan nyata. Di proses
+    // barat UTC getter lokal menulis 2026-10-31 untuk baris 1 Nov, sedangkan
+    // layar/PDF (formatDate WIB) menulis 01 Nov.
+    const out = serializeWithholdingCertificatesCsv([
+      row({ documentNo: "VB-NOV", date: new Date("2026-11-01T00:00:00Z") }),
+      row({ side: "sales", documentNo: "SP-NOV", date: new Date("2026-10-31T17:00:00Z") }),
+    ])
+    const vb = out.csv.split("\n").find((l) => l.includes("VB-NOV")) ?? ""
+    const sp = out.csv.split("\n").find((l) => l.includes("SP-NOV")) ?? ""
+    expect(vb).toContain('"2026-11-01"')
+    expect(sp).toContain('"2026-11-01"')
+  })
+
   it("purchaseDpp = subtotal − diskon presisi sen", () => {
     expect(purchaseDpp(100.1, 0.02)).toBe(100.08)
     expect(purchaseDpp(100, null)).toBe(100)

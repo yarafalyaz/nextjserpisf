@@ -14,6 +14,7 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { nextSlugWithClient } from "@/lib/utils/slug-db"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
+import { wibYearMonthCompact } from "@/lib/utils/date-only"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { purchaseAdvanceSchema } from "@/lib/validations/finance.schemas"
 import { reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
@@ -83,7 +84,8 @@ export async function createPurchaseAdvance(formData: FormData): Promise<Purchas
 
     const documentNo = await generateDocumentNumber("DP", "simple")
     const [sequence] = await DocumentSequenceService.nextBatch("JOURNAL", 1)
-    const journalNumber = `JRN-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}-${String(sequence).padStart(5, "0")}`
+    // Putaran 102: prefiks bulan dari hari kalender WIB (lihat tax-payment).
+    const journalNumber = `JRN-${wibYearMonthCompact(date)}-${String(sequence).padStart(5, "0")}`
 
     const entries = buildAdvanceJournalEntries({
       amount,

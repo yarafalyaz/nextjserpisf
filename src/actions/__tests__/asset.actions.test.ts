@@ -2108,6 +2108,24 @@ describe("disposeAsset", () => {
     expect(prismaMock.journal.create).toHaveBeenCalled()
   })
 
+  it("putaran 102: nomor jurnal pelepasan memakai prefiks bulan WIB, bukan getter lokal proses", async () => {
+    // disposalDate "2026-11-01" tersimpan sebagai 2026-11-01T00:00:00Z. Di proses
+    // barat UTC getter lokal membaca 31 Okt → jurnal 1 Nov berprefiks JRN-202610
+    // dan bertabrakan dengan namespace bulan sebelumnya.
+    prismaMock.journal.findFirst.mockResolvedValue({ id: 1 })
+    process.env.FIXED_ASSET_ACCOUNT_ID = "200"
+    process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID = "201"
+    process.env.ASSET_DISPOSAL_GAINLOSS_ACCOUNT_ID = "202"
+    process.env.ASSET_CASH_ACCOUNT_ID = "203"
+    prismaMock.documentSequence.upsert.mockResolvedValue({ currentValue: 7 })
+
+    const res = await disposeAsset(fd({ assetId: "100", proceeds: "700", disposalDate: "2026-11-01" }))
+
+    expect(res.success).toBe(true)
+    const call = prismaMock.journal.create.mock.calls.at(-1)?.[0]
+    expect(call.data.journalNumber).toMatch(/^JRN-202611-00007$/)
+  })
+
   it("putaran 37: menolak pelepasan bila akun dari entri terbit sudah mati", async () => {
     prismaMock.journal.findFirst.mockResolvedValue({ id: 1 })
     process.env.FIXED_ASSET_ACCOUNT_ID = "200"

@@ -81,11 +81,18 @@ export async function assertAccountsExist(
   if (ids.length === 0) return;
   const found = await db.account.findMany({
     where: { id: { in: ids }, isActive: true, deletedAt: null },
-    select: { id: true },
+    select: { id: true, _count: { select: { children: true } } },
   });
   if (found.length !== ids.length) {
     const missing = ids.filter((id) => !found.some((f) => f.id === id));
     throw new Error(`${label}: akun tidak aktif/terhapus atau tidak ditemukan (id: ${missing.join(", ")}). Pilih ulang akun sebelum posting.`);
+  }
+  // Putaran 102: akun induk tidak bisa diposting (kanonis journal.service).
+  // Mapping yang sah saat disimpan bisa jadi induk sesudah admin menambah
+  // akun anak di bawahnya — tanpa cek ini jurnal POSTED menunjuk induk.
+  const parentIds = found.filter((a) => (a._count?.children ?? 0) > 0).map((a) => a.id);
+  if (parentIds.length > 0) {
+    throw new Error(`${label}: akun induk tidak bisa diposting (id: ${parentIds.join(", ")}). Pilih akun anak yang terposting.`);
   }
 }
 

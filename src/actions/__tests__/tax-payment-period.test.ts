@@ -159,6 +159,15 @@ describe("createTaxPayment masa pajak", () => {
     const data = mocks.taxPaymentCreate.mock.calls[0][0].data
     expect(data.date).toEqual(new Date(Date.UTC(2026, 8, 15)))
   })
+
+  it("putaran 102: prefiks nomor jurnal memakai bulan WIB, bukan getter lokal proses", async () => {
+    // 2026-11-01 tersimpan 2026-11-01T00:00:00Z; di proses barat UTC getter
+    // lokal membaca 31 Okt → setoran masa Nov bernomor JRN-202610.
+    await createTaxPayment(form({ ...base, date: "2026-11-01", period: "2026-11" }))
+    const data = mocks.journalCreate.mock.calls[0][0].data
+    expect(data.journalNumber).toBe("JRN-202611-00001")
+    expect(data.transactionDate).toEqual(new Date(Date.UTC(2026, 10, 1)))
+  })
 })
 
 describe("createTaxPayment akun hidup + tipe", () => {

@@ -37,6 +37,7 @@ import { resolveFiscalGroup } from "@/lib/finance/asset-fiscal-groups";
 import { journalBookValue } from "@/lib/finance/asset-book-value";
 import { isRegisteredAssetUseStatus } from "@/lib/finance/asset-use-status";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
+import { wibYearMonthCompact } from "@/lib/utils/date-only";
 import { nextSlugWithClient } from "@/lib/utils/slug-db";
 import { checkIdempotency } from "@/lib/utils/idempotency";
 
@@ -92,9 +93,11 @@ async function nextAssetJournalNumber(
     update: { currentValue: { increment: 1 } },
     create: { key: "JOURNAL", currentValue: 1 },
   });
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  return `JRN-${y}${m}-${String(seq.currentValue).padStart(5, "0")}`;
+  // Putaran 102: prefiks bulan dari hari kalender WIB. `date` adalah tengah
+  // malam UTC hari WIB (wibDateToUtcMidnight), jadi getter lokal proses
+  // menulis perolehan 1 Nov sebagai JRN-202610 di runtime barat UTC — nomor
+  // tidak cocok dengan masa dokumennya dan bertabrakan dengan bulan sebelumnya.
+  return `JRN-${wibYearMonthCompact(date)}-${String(seq.currentValue).padStart(5, "0")}`;
 }
 
 // ==================== ASSET CATEGORY ACTIONS ====================

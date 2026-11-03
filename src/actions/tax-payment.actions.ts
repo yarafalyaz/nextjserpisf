@@ -13,6 +13,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { nextSlugWithClient } from "@/lib/utils/slug-db"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
+import { wibYearMonthCompact } from "@/lib/utils/date-only"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import { taxPaymentSchema } from "@/lib/validations/finance.schemas"
@@ -89,7 +90,11 @@ export async function createTaxPayment(formData: FormData): Promise<TaxPaymentAc
     const label = taxType?.name ?? "pajak"
     const documentNo = await generateDocumentNumber("PAJAK", "simple")
     const [sequence] = await DocumentSequenceService.nextBatch("JOURNAL", 1)
-    const journalNumber = `JRN-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}-${String(sequence).padStart(5, "0")}`
+    // Putaran 102: prefiks bulan dari hari kalender WIB. `date` adalah tengah
+    // malam UTC hari WIB, jadi getter lokal proses menulis setoran 1 Nov
+    // sebagai JRN-202610 di runtime barat UTC — nomor tidak cocok dengan masa
+    // dokumennya dan bertabrakan dengan namespace bulan sebelumnya.
+    const journalNumber = `JRN-${wibYearMonthCompact(date)}-${String(sequence).padStart(5, "0")}`
 
     const entries = buildTaxPaymentJournalEntries({
       amount,

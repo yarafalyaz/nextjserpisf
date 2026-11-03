@@ -81,6 +81,17 @@ describe("monthlySales", () => {
     expect(rows[0]).toMatchObject({ revenue: 1_000_000, invoiceCount: 1 })
   })
 
+  it("putaran 102: bucket bulan dari hari kalender WIB, bukan getter lokal proses", () => {
+    // Tanggal faktur = tengah malam UTC hari WIB. Di proses barat UTC, instan
+    // 1 Nov itu dibaca lokal sebagai 31 Okt → faktur jatuh di tren bulan lain.
+    const rows = monthlySales([
+      { date: new Date("2026-11-01T00:00:00Z"), items: [{ total: 1000 }] },
+      { date: new Date("2026-10-31T17:00:00Z"), items: [{ total: 500 }] },
+    ])
+    expect(rows.map((r) => r.month)).toEqual(["2026-11"])
+    expect(rows[0]).toMatchObject({ revenue: 1500, invoiceCount: 2 })
+  })
+
   it("is empty without invoices", () => {
     expect(monthlySales([])).toEqual([])
   })

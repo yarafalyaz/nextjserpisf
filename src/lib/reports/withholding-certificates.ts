@@ -13,6 +13,7 @@
 
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { formatAccounting, formatDate } from "@/lib/utils/format"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface WithholdingCertificateInput {
@@ -47,10 +48,12 @@ function csvCell(value: string): string {
 }
 
 function isoDate(date: Date): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, "0")
-  const d = String(date.getDate()).padStart(2, "0")
-  return `${y}-${m}-${d}`
+  // Putaran 102: tanggal CSV wajib hari kalender WIB. Kolom tanggal bupot
+  // adalah tengah malam UTC hari WIB, sedangkan `paymentDate` sisi penjualan
+  // instan nyata — getter lokal proses memberi 31 Okt untuk baris 1 Nov di
+  // runtime barat UTC, sedangkan tabel layar/PDF (formatDate WIB) menulis
+  // 01 Nov. Satu selisih hari antar-permukaan dari input yang sama.
+  return wibDateOnly(date)
 }
 
 function amount(value: number | null): string {

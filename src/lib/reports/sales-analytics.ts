@@ -7,6 +7,7 @@
 
 import { safeAdd } from "@/lib/utils/math"
 import { formatPeriod } from "@/lib/utils/format"
+import { wibPeriodKey } from "@/lib/utils/date-only"
 
 export type SalesDimension = "barang" | "pelanggan" | "merek"
 
@@ -84,7 +85,9 @@ export function monthlySales(
   const buckets = new Map<string, MonthlySalesRow>()
 
   for (const invoice of invoices) {
-    const month = `${invoice.date.getFullYear()}-${String(invoice.date.getMonth() + 1).padStart(2, "0")}`
+    // Putaran 102: bucket bulan dari hari kalender WIB — tanggal faktur
+    // disimpan tengah malam UTC hari WIB, getter lokal menggeser bulan.
+    const month = wibPeriodKey(invoice.date)
     const existing = buckets.get(month) ?? { month, label: formatPeriod(month), revenue: 0, invoiceCount: 0 }
     for (const item of invoice.items) {
       existing.revenue = safeAdd(existing.revenue, item.total, 2)

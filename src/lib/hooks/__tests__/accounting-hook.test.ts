@@ -2937,16 +2937,22 @@ describe("assertJournalClaimRef (UNIQUE NULL-bypass gate)", () => {
 });
 
 describe("assertAccountsExist (akun bare-int fail-closed)", () => {
-  const fakeDb = (existing: number[]) => ({
+  const fakeDb = (existing: number[], parentIds: number[] = []) => ({
     account: {
       findMany: async (args: any) => {
         expect(args.where).toMatchObject({ isActive: true, deletedAt: null });
-        return existing.filter((id) => args.where.id.in.includes(id)).map((id) => ({ id }));
+        return existing.filter((id) => args.where.id.in.includes(id)).map((id) => ({
+          id,
+          _count: { children: parentIds.includes(id) ? 2 : 0 },
+        }));
       },
     },
   });
   it("lolos bila semua akun ada", async () => {
     await expect(assertAccountsExist(fakeDb([10, 20]) as any, [10, 20], "Uji")).resolves.toBeUndefined();
+  });
+  it("menolak akun induk (putaran 102: induk tak bisa diposting)", async () => {
+    await expect(assertAccountsExist(fakeDb([10, 20], [20]) as any, [10, 20], "Uji")).rejects.toThrow(/akun induk.*20/);
   });
   it("menolak bila satu akun hilang", async () => {
     await expect(assertAccountsExist(fakeDb([10]) as any, [10, 99], "Uji")).rejects.toThrow(/99/);

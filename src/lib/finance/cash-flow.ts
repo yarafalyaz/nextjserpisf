@@ -13,6 +13,7 @@
  */
 
 import { safeAdd, safeRound, safeSubtract } from "@/lib/utils/math"
+import { wibPeriodKey } from "@/lib/utils/date-only"
 
 export type CashFlowActivity = "operating" | "investing" | "financing"
 
@@ -170,7 +171,12 @@ export function buildCashFlowTotals(
   for (const entry of entries) {
     const debit = safeRound(entry.debit, 2)
     const credit = safeRound(entry.credit, 2)
-    const monthKey = `${entry.date.getFullYear()}-${String(entry.date.getMonth() + 1).padStart(2, "0")}`
+    // Putaran 102: bucket bulan dari hari kalender WIB. `transactionDate`
+    // jurnal disimpan tengah malam UTC hari WIB, jadi getter lokal proses
+    // memindahkan tanggal 1 ke bulan sebelumnya di runtime barat UTC
+    // (CI/container non-WIB) — rincian bulan tertukar walau total periode
+    // tetap benar.
+    const monthKey = wibPeriodKey(entry.date)
     const bucket = byMonth.get(monthKey) ?? { inflow: 0, outflow: 0 }
     bucket.inflow = safeAdd(bucket.inflow, debit, 2)
     bucket.outflow = safeAdd(bucket.outflow, credit, 2)

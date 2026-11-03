@@ -21,6 +21,16 @@ describe("buildCashFlowTotals presisi sen", () => {
     expect(result.months[0]?.net).toBe(-1.02)
   })
 
+  it("putaran 102: bucket bulan dari hari kalender WIB, bukan getter lokal proses", () => {
+    // Jurnal bertanggal tengah malam UTC 1 Nov; di proses barat UTC getter
+    // lokal membaca 31 Okt dan transaksi jatuh ke bucket bulan sebelumnya.
+    const result = buildCashFlowTotals(
+      [entry(100, 0, new Date("2026-11-01T00:00:00Z")), entry(50, 0, new Date("2026-10-31T17:00:00Z"))],
+      0,
+    )
+    expect(result.months).toEqual([{ monthKey: "2026-11", inflow: 150, outflow: 0, net: 150 }])
+  })
+
   it("saldo awal/akhir sen-aman dan bulan terurut", () => {
     const result = buildCashFlowTotals(
       [entry(0.1, 0, new Date("2026-11-02T00:00:00")), entry(0.1, 0), entry(0.1, 0)],

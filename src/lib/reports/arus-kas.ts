@@ -15,6 +15,7 @@
  */
 
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
+import { wibPeriodKey } from "@/lib/utils/date-only"
 
 export interface CashFlowEntryInput {
   date: Date
@@ -23,7 +24,7 @@ export interface CashFlowEntryInput {
 }
 
 export interface CashMonthlyBucket {
-  /** Kunci `YYYY-MM` dari tanggal jurnal (kalender lokal server). */
+  /** Kunci `YYYY-MM` dari tanggal jurnal, kalender WIB. */
   month: string
   inflow: number
   outflow: number
@@ -54,7 +55,9 @@ export function buildCashFlowTotals(input: {
   for (const entry of input.entries) {
     const debit = safeAdd(entry.debit as never, 0, 2)
     const credit = safeAdd(entry.credit as never, 0, 2)
-    const monthKey = `${entry.date.getFullYear()}-${String(entry.date.getMonth() + 1).padStart(2, "0")}`
+    // Putaran 102: bucket bulan dari hari kalender WIB, bukan getter lokal
+    // proses — `transactionDate` jurnal adalah tengah malam UTC hari WIB.
+    const monthKey = wibPeriodKey(entry.date)
     const bucket = buckets.get(monthKey) ?? { inflow: 0, outflow: 0 }
     bucket.inflow = safeAdd(bucket.inflow, debit, 2)
     bucket.outflow = safeAdd(bucket.outflow, credit, 2)

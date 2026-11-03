@@ -235,6 +235,18 @@ describe("asset-change-event.service", () => {
     expect(contraCredit?.toString()).toBe("200")
   })
 
+  it("putaran 102: nomor jurnal peristiwa memakai prefiks bulan WIB, bukan getter lokal proses", async () => {
+    // effectiveDate = 2026-02-01T00:00:00Z (tengah malam UTC hari WIB). Di
+    // proses barat UTC getter lokal membaca 31 Jan → JRN-202601 untuk dokumen
+    // bulan Februari; nomor tidak cocok dengan masa dokumennya.
+    const posted = await postAssetChangeEvent({
+      assetId: 1,
+      request: { ...impairmentReq("DOC-WIB", 700), effectiveDate: new Date("2026-02-01T00:00:00Z") },
+    })
+    const journal = store.journals.find((j) => j.id === posted.journalId)
+    expect((journal as unknown as { journalNumber?: string }).journalNumber).toMatch(/^JRN-202602-/)
+  })
+
   it("E111-S2: reversal mirror snapshot asal (surplus kembali ke sebelum asal, akun tujuan dibalik)", async () => {
     const up = await postAssetChangeEvent({
       assetId: 1,

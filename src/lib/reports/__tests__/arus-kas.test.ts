@@ -46,6 +46,21 @@ describe("buildCashFlowTotals sen", () => {
     expect(result.closingBalance).toBe(0.51)
   })
 
+  it("putaran 102: bucket bulan memakai hari kalender WIB, bukan getter lokal proses", () => {
+    // `transactionDate` jurnal = tengah malam UTC hari WIB. Di proses barat UTC
+    // (CI/America/New_York) tanggal ini jatuh 31 Okt secara lokal, sehingga
+    // getter lokal menaruh transaksi 1 Nov di bucket 2026-10.
+    const result = buildCashFlowTotals({
+      entries: [
+        { date: new Date("2026-11-01T00:00:00Z"), debit: 100, credit: 0 },
+        { date: new Date("2026-10-31T17:00:00Z"), debit: 50, credit: 0 },
+      ],
+      priorBalances: [],
+      activities: noActivity,
+    })
+    expect(result.monthly).toEqual([{ month: "2026-11", inflow: 150, outflow: 0, net: 150 }])
+  })
+
   it("neto aktivitas operasi+investasi+pendanaan sen persis (0.1+0.2 bukan 0.30000000000000004)", () => {
     const result = buildCashFlowTotals({
       entries: [],

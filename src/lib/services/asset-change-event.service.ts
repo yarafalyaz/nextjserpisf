@@ -25,6 +25,7 @@ import { Prisma } from "@prisma/client"
 import { prisma, type TxClient } from "@/lib/db/prisma"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { journalBookValue } from "@/lib/finance/asset-book-value"
+import { wibYearMonthCompact } from "@/lib/utils/date-only"
 import {
   buildAssetChangeEvent,
   ASSET_CHANGE_EVENT_REFERENCE_TYPE,
@@ -257,9 +258,8 @@ async function nextJournalNumber(tx: TxClient, date: Date): Promise<string> {
     update: { currentValue: { increment: 1 } },
     create: { key: "JOURNAL", currentValue: 1 },
   })
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, "0")
-  return `JRN-${y}${m}-${String(seq.currentValue).padStart(5, "0")}`
+  // Putaran 102: prefiks bulan dari hari kalender WIB (lihat asset.actions).
+  return `JRN-${wibYearMonthCompact(date)}-${String(seq.currentValue).padStart(5, "0")}`
 }
 
 function isSourceKeyConflict(error: unknown): boolean {
