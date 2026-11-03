@@ -48,8 +48,14 @@ const PREFIX_FIELD_MAP: Record<string, string | undefined> = {
   CUST: 'customerCodePrefix',
   VND: 'vendorCodePrefix',
   ITM: 'itemCodePrefix',
-  PRD: 'productCodePrefix',
-  AST: 'assetCodePrefix',
+  // Putaran 104: PRD tidak punya field pengaturan sama sekali (dulu menunjuk
+  // `productCodePrefix` yang tak ada di SystemSetting — pemetaan yang mustahil
+  // berefek), jadi kunci tetap jatuh ke namanya sendiri: "PRD-0001".
+  PRD: undefined as string | undefined,
+  // AST dulu menunjuk `assetCodePrefix` yang juga tidak ada, sehingga
+  // pengaturan "Awalan Aset" (`assetPrefix`, tampil di pengaturan/penomoran)
+  // tidak pernah berpengaruh dan aset selalu lahir "AST-0001".
+  AST: 'assetPrefix',
   WH: 'warehouseCodePrefix',
   EMP: 'employeeCodePrefix',
   MTP: 'paymentMethodCodePrefix',

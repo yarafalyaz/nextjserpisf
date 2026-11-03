@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   bankReconciliationFindMany: vi.fn(),
   stockMoveFindMany: vi.fn(),
   materialRequestFindMany: vi.fn(),
+  assetFindMany: vi.fn(),
+  productFindMany: vi.fn(),
 }));
 
 vi.mock("@/lib/services/document-sequence.service", () => ({
@@ -37,6 +39,8 @@ vi.mock("@/lib/db/prisma", () => ({
     bankReconciliation: { findMany: mocks.bankReconciliationFindMany },
     stockMove: { findMany: mocks.stockMoveFindMany },
     materialRequest: { findMany: mocks.materialRequestFindMany },
+    asset: { findMany: mocks.assetFindMany },
+    product: { findMany: mocks.productFindMany },
   },
 }));
 
@@ -56,6 +60,8 @@ describe("utils/document-number", () => {
     mocks.bankReconciliationFindMany.mockResolvedValue([]);
     mocks.stockMoveFindMany.mockResolvedValue([]);
     mocks.materialRequestFindMany.mockResolvedValue([]);
+    mocks.assetFindMany.mockResolvedValue([]);
+    mocks.productFindMany.mockResolvedValue([]);
     mocks.next.mockResolvedValue(1);
     mocks.peek.mockResolvedValue(0);
   });
@@ -91,6 +97,39 @@ describe("utils/document-number", () => {
       expect(mocks.materialRequestFindMany).toHaveBeenCalled()
       expect(mocks.next).toHaveBeenCalledWith("MRQ", 17)
       expect(result).toBe("MRQ-0018")
+    })
+  })
+
+  describe("prefiks putaran 104: field pengaturan yang benar-benar ada", () => {
+    // AST menunjuk `assetCodePrefix` yang TIDAK ada di SystemSetting, jadi
+    // pengaturan "Awalan Aset" (kolom `assetPrefix`, tampil di
+    // pengaturan/penomoran dan formulir ubah) tidak pernah berpengaruh: aset
+    // lahir "AST-0001" apa pun isi pengaturannya.
+    it("AST memakai assetPrefix dari pengaturan, bukan kunci mentah", async () => {
+      mocks.getSystemSettings.mockResolvedValue({ companyName: "Yara ERP", assetPrefix: "AST" })
+      mocks.next.mockResolvedValue(4)
+
+      const result = await generateDocumentNumber("AST", "simple")
+
+      expect(result).toBe("AST-0004")
+      expect(mocks.next).toHaveBeenCalledWith("AST", 0)
+    })
+
+    it("AST: awalan kustom pengaturan tercermin di kode", async () => {
+      mocks.getSystemSettings.mockResolvedValue({ companyName: "Yara ERP", assetPrefix: "ISF" })
+      mocks.next.mockResolvedValue(1)
+
+      expect(await generateDocumentNumber("AST", "simple")).toBe("ISF-0001")
+    })
+
+    // PRD menunjuk `productCodePrefix` yang juga tidak ada; pemetaan itu
+    // mustahil berefek (resolvePrefix jatuh ke kunci), jadi kunci yang salah
+    // dihapus — perilaku tetap "PRD-000X".
+    it("PRD tetap memakai kunci sendiri", async () => {
+      mocks.getSystemSettings.mockResolvedValue({ companyName: "Yara ERP" })
+      mocks.next.mockResolvedValue(2)
+
+      expect(await generateDocumentNumber("PRD", "simple")).toBe("PRD-0002")
     })
   })
 
