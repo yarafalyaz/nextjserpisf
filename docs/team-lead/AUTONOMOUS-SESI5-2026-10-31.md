@@ -3111,3 +3111,19 @@ Sumber: kandidat agent audit inventaris "sesi opname buntu", diverifikasi di `po
 ### Bukti
 - Merah perintah terpisah: `inventory.actions.test.ts` sebelum patch → `2 failed | 7 passed`, keduanya `expected true to be false` (action mengembalikan sukses lalu sesi menjadi `posted`).
 - Hijau: berkas itu 9/9 untuk filter `postStocktakeSession`; `inventory.actions.test.ts` + `src/lib/inventory` 264/264; lima guard statis 168/168 (`--no-file-parallelism`); `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
+
+## Putaran 113 — baris jasa itemId 0 tak lagi membuat WO mustahil diselesaikan (commit `4ce3e1611`)
+
+Sumber: kandidat agent audit produksi "WO dengan baris jasa tidak pernah bisa diselesaikan", diverifikasi di `autoCreateDeliveryOrder` (`manufacturing.actions.ts:2031+`), `down-payment.hook.ts:623` (`itemId: item.itemId ?? 0`), `work-order-material-needs-data.ts` ("baris jasa (itemId=0)"), `DeliveryOrderItem` di `schema.prisma:6093-6108` (`itemId Int` non-null, FK `ON DELETE RESTRICT` ke `items`), dan `createDeliveryOrder` (jalur form sudah menolak baris tanpa barang katalog).
+
+### Vonis FIX
+1. **Surat jalan otomatis menyalin baris jasa `itemId: 0` — createMany melempar FK 1452 di dalam tx penyelesaian — FIX.** `autoCreateDeliveryOrder` menyaring hanya `Number(i.qty) > 0`, lalu menyalin `itemId` apa adanya. Baris jasa/custom WO tersimpan dengan `itemId = 0` (hook DP menulis `item.itemId ?? 0`), dan id 0 tak pernah ada — probe MySQL membuktikan `INSERT ... item_id = 0` → `ERROR 1452 (23000)`. Karena `autoCreateDeliveryOrder` dipanggil di dalam `completeWorkOrderTx` (penyelesaian manual maupun auto-close F-020 tahap terakhir), pengecualian itu me-rollback seluruh penyelesaian: **setiap WO yang memuat satu baris jasa tidak pernah bisa diselesaikan**. Perbaikan: saring `i.itemId > 0` sebelum pemetaan; WO berisi jasa saja juga tidak lagi membuat surat jalan kosong (jalur form sudah menolak baris tanpa katalog, jadi baris itu memang bukan isi surat jalan).
+
+### Vonis CATAT
+- Mock unit tidak menampilkan galat FK (default mock me-resolve `createMany`); bukti merah karena itu mengunci PERILAKU ("jangan salin baris itemId 0", "jangan buat surat jalan kosong"). Bukti fisik 1452 dicatat dari probe MySQL, bukan dari test.
+- Baris jasa yang memang harus dikirim (mis. jasa dengan barang pendamping) belum punya jalur: `DeliveryOrderItem.itemId` non-null. Mengubah kolom menjadi nullable = perubahan skema + seluruh pembaca surat jalan; tidak diambil tanpa keputusan bisnis. Jalur yang ada: catat baris jasa sebagai barang katalog bila memang dikirim.
+
+### Bukti
+- Merah perintah terpisah: `manufacturing.actions.test.ts` sebelum patch → `2 failed`, `expected [... {itemId: 0}] to equal [ObjectContaining {itemId: 7}]` dan `expected deliveryOrder.create to not have been called`.
+- Hijau: berkas itu 2/2 untuk filter putaran 113; suite manufacturing + pemanggil `completeWorkOrder` 205/205; lima guard statis 168/168 (`--no-file-parallelism`); `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
+- CI `41715546767` (head `4ce3e1611`) **success**.
