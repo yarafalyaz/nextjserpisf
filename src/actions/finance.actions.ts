@@ -472,6 +472,24 @@ export async function updateBankStatementLine(id: number, formData: FormData) {
         "Baris yang sudah masuk rekonsiliasi selesai tidak dapat diubah",
       );
 
+      // Putaran 108: kecocokan pada rekonsiliasi DRAFT pun membekukan baris.
+      // matchReconciliationLine membandingkan nominal + arah + akun saat
+      // mencocokkan, tetapi item `matched` hanya menyimpan id — mengubah
+      // nominal/tanggal/jenis sesudahnya membuat pasangannya tidak lagi sama,
+      // dan completeReconciliation tidak pernah membandingkan ulang (ia hanya
+      // memeriksa `matched`, saldo, dan status jurnal). Hasilnya rekonsiliasi
+      // yang tersertifikasi atas kecocokan palsu. Aturannya sama dengan
+      // deleteBankStatementLine: lepas kecocokannya dulu.
+      const matchedDraft = await tx.bankReconciliationItem.findFirst({
+        where: { bankStatementLineId: id, matched: true },
+        select: { id: true },
+      });
+      if (matchedDraft) {
+        throw new Error(
+          "Baris rekening koran sudah dicocokkan pada rekonsiliasi. Lepaskan kecocokannya terlebih dahulu sebelum mengubah.",
+        );
+      }
+
       await tx.bankStatementLine.update({
         where: { id },
         data: {

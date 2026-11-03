@@ -175,8 +175,10 @@ describe("R-04 parent lock sebelum cek completedMatch", () => {
 
     await updateBankStatementLine(11, bankStatementLineForm())
     // R-12 menyisipkan lock-header di antara reread-line dan lock-parent:
-    // urutan global baris -> header(s) -> rekonsiliasi.
-    expect(order).toEqual(["lock-line", "reread-line", "lock-header", "lock-parent", "check"])
+    // urutan global baris -> header(s) -> rekonsiliasi. Putaran 108 menambah
+    // cek kedua (kecocokan pada rekonsiliasi draft) sesudah cek completed,
+    // keduanya di bawah lock induk.
+    expect(order).toEqual(["lock-line", "reread-line", "lock-header", "lock-parent", "check", "check"])
   })
 
   it("delete: kunci BARIS jalan sebelum baca ulang + cek completedMatch", async () => {
@@ -247,5 +249,28 @@ describe("R-04 parent lock sebelum cek completedMatch", () => {
     const res = await updateBankStatementLine(11, bankStatementLineForm())
     expect(res.success).toBe(false)
     expect(String(res.error)).toContain("rekonsiliasi selesai")
+  })
+
+  it("putaran 108: update menolak baris yang sudah dicocokkan walau rekonsiliasinya masih draft", async () => {
+    // Kecocokan lahir dari matchReconciliationLine yang membandingkan
+    // nominal + arah + akun saat itu. Mengubah nominal/tanggal/jenis baris
+    // sesudahnya membuat item `matched` menyimpan pasangan yang sudah tidak
+    // sama, dan completeReconciliation tidak pernah membandingkan ulang —
+    // rekonsiliasi tersertifikasi atas kecocokan palsu. Aturannya sama
+    // dengan delete: lepas kecocokannya dulu.
+    wireLineGuards()
+    seedReconItems(mocks.guards.prismaMock)
+    mocks.guards.prismaMock.bankReconciliationItem.findFirst.mockImplementation(
+      async (args: any) => {
+        // Cek helper = completedMatch (belum selesai) → null.
+        if (args?.where?.bankReconciliation?.status === "completed") return null
+        // Cek baru = item matched pada rekonsiliasi draft → ada.
+        return { id: 55 }
+      },
+    )
+    const res = await updateBankStatementLine(11, bankStatementLineForm())
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("Lepaskan kecocokannya")
+    expect(mocks.guards.prismaMock.bankStatementLine.update).not.toHaveBeenCalled()
   })
 })
