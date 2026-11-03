@@ -4180,9 +4180,15 @@ export async function deleteItemCategory(id: number) {
     // category AND promotes all sub-categories to roots — no FK error, just
     // quiet data loss. Refuse while either still references this category
     // (mirrors deleteCustomerCategory / deleteTax).
-    const [childCount, itemCount] = await Promise.all([
+    const [childCount, itemCount, linked] = await Promise.all([
       prisma.itemCategory.count({ where: { parentId: id } }),
       prisma.item.count({ where: { categoryId: id } }),
+      // Putaran 96: tautan M2M merek (_BrandCategories) ber-CASCADE di join —
+      // hapus mentah memutus tautan merek senyap. Hitung sebagai pemakaian.
+      prisma.itemCategory.findUnique({
+        where: { id },
+        select: { _count: { select: { brands: true } } },
+      }),
     ]);
     if (childCount > 0) {
       throw new Error(
@@ -4192,6 +4198,12 @@ export async function deleteItemCategory(id: number) {
     if (itemCount > 0) {
       throw new Error(
         `Kategori masih dipakai oleh ${itemCount} barang. Pindahkan barang ke kategori lain terlebih dahulu.`,
+      );
+    }
+    const brandCount = linked?._count?.brands ?? 0;
+    if (brandCount > 0) {
+      throw new Error(
+        `Kategori masih tertaut ke ${brandCount} merek. Lepas tautan merek terlebih dahulu.`,
       );
     }
 
@@ -4536,6 +4548,20 @@ export async function deleteBrand(id: number) {
       return {
         success: false,
         error: `Merek masih dipakai oleh ${usedByItems} barang. Pindahkan barang ke merek lain terlebih dahulu.`,
+      };
+    }
+
+    // Putaran 96: tautan M2M kategori (_BrandCategories) ber-CASCADE di join —
+    // hapus mentah memutus tautan kategori senyap. Hitung sebagai pemakaian.
+    const linkedBrand = await prisma.brand.findUnique({
+      where: { id },
+      select: { _count: { select: { categories: true } } },
+    });
+    const categoryCount = linkedBrand?._count?.categories ?? 0;
+    if (categoryCount > 0) {
+      return {
+        success: false,
+        error: `Merek masih tertaut ke ${categoryCount} kategori. Lepas tautan kategori terlebih dahulu.`,
       };
     }
 

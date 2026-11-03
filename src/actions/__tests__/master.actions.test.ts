@@ -1284,6 +1284,18 @@ describe("ItemCategory Actions", () => {
     expect(itemRes?.error).toMatch(/barang/i)
     expect(mocks.prismaMock.itemCategory.delete).not.toHaveBeenCalled()
   })
+
+  it("deleteItemCategory menolak bila masih tertaut merek M2M (putaran 96)", async () => {
+    mocks.prismaMock.itemCategory.count.mockResolvedValue(0)
+    mocks.prismaMock.item.count.mockResolvedValue(0)
+    mocks.prismaMock.itemCategory.findUnique.mockResolvedValueOnce({
+      _count: { brands: 2 },
+    })
+    const res = await actions.deleteItemCategory(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/tertaut ke 2 merek/i)
+    expect(mocks.prismaMock.itemCategory.delete).not.toHaveBeenCalled()
+  })
 })
 
 describe("Department Actions", () => {
@@ -2276,6 +2288,16 @@ describe("Brand Actions", () => {
     const res = await actions.deleteBrand(1)
     expect(res?.success).toBe(false)
     expect(String(res?.error)).toMatch(/dipakai oleh 5 barang/)
+    expect(mocks.prismaMock.brand.delete).not.toHaveBeenCalled()
+  })
+  it("deleteBrand menolak bila masih tertaut kategori M2M (putaran 96)", async () => {
+    mocks.prismaMock.item.count.mockResolvedValue(0)
+    mocks.prismaMock.brand.findUnique.mockResolvedValueOnce({
+      _count: { categories: 3 },
+    })
+    const res = await actions.deleteBrand(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/tertaut ke 3 kategori/i)
     expect(mocks.prismaMock.brand.delete).not.toHaveBeenCalled()
   })
 })
