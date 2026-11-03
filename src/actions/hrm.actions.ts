@@ -3458,11 +3458,13 @@ export async function updatePayroll(id: number, formData: FormData) {
       absentDeduction = att.absentDeduction;
     }
 
-    const existingLines = await prisma.payrollComponentLine.findMany({
-      where: { payrollId: id },
-      orderBy: { componentId: "asc" },
-    });
-    const lineSummary = summarizePayrollComponentLines(existingLines);
+    // Putaran 119: baris komponen dibaca DI DALAM tx sesudah kunci baris
+    // slip (di bawah, `payrolls … FOR UPDATE`). Dulu dibaca di sini, lalu
+    // `buildPayrollWrite` memakai ringkasannya sebagai allowances/deductions
+    // FINAL. `addPayrollComponentLine` mengunci baris slip yang sama sebelum
+    // menulis baris + recalc, jadi tanpa kunci ini update yang sudah membaca
+    // baris lama menimpa recalc itu: barisnya tetap ada di tabel, tetapi
+    // total slip tidak lagi memuatnya — selisih tetap tanpa gejala apa pun.
     // R8-SDM-05: prorate ulang untuk rentang hasil edit (client baseSalary
     // eksplisit tetap menang sebagai override manual dokumen).
     const updateProrateEmployeeId = employeeId ?? updateEmployeeId;
@@ -3487,6 +3489,12 @@ export async function updatePayroll(id: number, formData: FormData) {
       adjustments: updateHistory.adjustments,
     });
     const payroll = await prisma.$transaction(async (tx) => {
+      // Putaran 119: kunci baris slip sebagai pernyataan pertama tx, sama
+      // dengan seluruh penulis baris komponen (`addPayrollComponentLine`,
+      // `updatePayrollComponentLineAmount`, `removePayrollComponentLine`,
+      // `attachPkwtEventToPayroll`). Tanpa kunci ini update slip berjalan
+      // paralel dengan penulis baris; lihat catatan di atas baris komponen.
+      await tx.$executeRaw`SELECT id FROM payrolls WHERE id = ${id} FOR UPDATE`;
       // F-076-S BR-PF-03: kunci baris karyawan + periksa irisan (di luar
       // slip ini sendiri) di transaksi sama dengan update — rentang hasil
       // edit tidak boleh menabrak slip aktif lain karyawan sama.
@@ -3514,6 +3522,13 @@ export async function updatePayroll(id: number, formData: FormData) {
       }
       // Putaran 76: agregat statutori memakai data sesudah kunci karyawan;
       // baca pra-tx dapat melewatkan slip WEEKLY konkuren periode sama.
+      // Putaran 119: baris komponen dibaca DI SINI sesudah kunci slip —
+      // ringkasannya menjadi allowances/deductions final yang ditulis.
+      const existingLines = await tx.payrollComponentLine.findMany({
+        where: { payrollId: id },
+        orderBy: { componentId: "asc" },
+      });
+      const lineSummary = summarizePayrollComponentLines(existingLines);
       const w = await buildPayrollWrite({
         db: tx as never,
         employeeId,

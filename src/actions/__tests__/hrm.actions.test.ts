@@ -1784,6 +1784,39 @@ describe("Payroll Actions", () => {
     expect(String((res as any)?.error ?? "")).toMatch(/draft/i)
   })
 
+  it("putaran 119: updatePayroll mengunci slip sebelum membaca baris komponen", async () => {
+    // `addPayrollComponentLine` menulis baris lalu recalc di bawah kunci
+    // `payrolls … FOR UPDATE`. Bila update membaca baris SEBELUM mengunci,
+    // ringkasan lamanya dipakai sebagai allowances/deductions final dan
+    // menimpa recalc itu: barisnya tetap ada, totalnya tidak memuatnya.
+    prismaMock.payrollComponentLine.findMany.mockImplementation(async () => (
+      // Baris komponen yang "terlihat" hanya sesudah kunci slip diambil —
+      // meniru penulis baris yang commit tepat sebelum kunci dilepas.
+      prismaMock.$executeRaw.mock.calls.length > 0
+        ? [{ componentId: 3, kindSnapshot: "earning", amount: 500000 }]
+        : []
+    ))
+    try {
+      const res = await actions.updatePayroll(1, fd({
+        period: "2026-05",
+        startDate: "2026-05-01",
+        endDate: "2026-05-31",
+        basicSalary: "6000000",
+        totalAllowances: "0",
+        totalDeductions: "0",
+        netPay: "6000000",
+      }))
+      expect(res?.success).toBe(true)
+      const lockOrder = prismaMock.$executeRaw.mock.invocationCallOrder[0]
+      const linesReadOrder = prismaMock.payrollComponentLine.findMany.mock.invocationCallOrder[0]
+      expect(lockOrder).toBeLessThan(linesReadOrder)
+      const claim = prismaMock.payroll.updateMany.mock.calls.at(-1)?.[0]
+      expect(claim.data.allowances).toBe(500000)
+    } finally {
+      prismaMock.payrollComponentLine.findMany.mockResolvedValue([])
+    }
+  })
+
   it("approvePayroll updates status", async () => {
     const res = await actions.approvePayroll(1)
     expect(res?.success).toBe(true)
