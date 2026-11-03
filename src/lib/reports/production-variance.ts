@@ -288,7 +288,10 @@ export function buildProductionVariance(
   const inPeriod = (date: Date) => date.getTime() >= start.getTime() && date.getTime() <= end.getTime()
 
   const visible = orders
-    .filter((order) => inPeriod(order.date))
+    // Putaran 91: PO draft belum dikonfirmasi — belum boleh issue, aktual
+    // selalu 0, jadi variansnya sampah -100% yang mengotori total. Builder
+    // menyaring ulang supaya loader yang berubah tak membocorkannya.
+    .filter((order) => order.status !== "draft" && inPeriod(order.date))
     .sort((a, b) => {
       const byDate = a.date.getTime() - b.date.getTime()
       return byDate !== 0 ? byDate : a.documentNo.localeCompare(b.documentNo, "id-ID")

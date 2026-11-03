@@ -38,7 +38,16 @@ export interface ReorderPointReport {
   usageWindowStart: Date
 }
 
-export async function loadReorderPoints(now = new Date()): Promise<ReorderPointReport> {
+export async function loadReorderPoints(
+  now = new Date(),
+  scopeWarehouseIds?: number[] | null,
+): Promise<ReorderPointReport> {
+  // Putaran 91: scope ditegakkan di loader seperti loader stok lain —
+  // tanpa tapis ini agregat semua gudang bocor ke user scoped lewat
+  // kartu ROP dan prefill permintaan. incomingQty per barang tetap
+  // global (PO tak punya warehouseId) per desain header file ini.
+  const pairScope =
+    scopeWarehouseIds != null ? { warehouseId: { in: scopeWarehouseIds } } : {}
   // Jendela 90 hari kalender WIB inklusif hari ini: mulai 00:00 WIB
   // 89 hari lalu. Server berjalan TZ=Asia/Jakarta (pola date-only repo),
   // jadi tengah malam lokal = tengah malam WIB.
@@ -58,15 +67,15 @@ export async function loadReorderPoints(now = new Date()): Promise<ReorderPointR
 
   const [settings, layers, issues, openPos] = await Promise.all([
     prisma.itemWarehouseSetting.findMany({
-      where: { itemId: { in: itemIds } },
+      where: { itemId: { in: itemIds }, ...pairScope },
       select: { itemId: true, warehouseId: true, minStock: true, leadTimeDays: true },
     }),
     prisma.inventoryLayer.findMany({
-      where: { itemId: { in: itemIds } },
+      where: { itemId: { in: itemIds }, ...pairScope },
       select: { itemId: true, warehouseId: true, remaining: true },
     }),
     prisma.materialIssue.findMany({
-      where: { status: "completed", date: { gte: start } },
+      where: { status: "completed", date: { gte: start }, ...pairScope },
       select: {
         warehouseId: true,
         items: { where: { itemId: { in: itemIds } }, select: { itemId: true, qty: true } },

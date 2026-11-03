@@ -117,6 +117,14 @@ describe("buildWipAging", () => {
     expect(wipBucketForDays(91)).toBe("over90")
   })
 
+  it("putaran 91: PO lahir sesudah asOf tidak masuk snapshot", () => {
+    const r = buildWipAging({
+      asOf: AS_OF,
+      orders: [order({ id: 1, createdAt: daysAgo(-5), startDate: null })],
+    })
+    expect(r.orders).toHaveLength(0)
+  })
+
   it("tanggal mulai masa depan dijepit umur nol, persen selesai dijepit 0..100", () => {
     const r = buildWipAging({
       asOf: AS_OF,
@@ -172,7 +180,10 @@ describe("getWipAging", () => {
     expect(mocks.prismaMock.productionOrder.findMany).toHaveBeenCalledTimes(1)
     expect(mocks.prismaMock.productionOrder.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { status: { in: ["draft", "confirmed", "in_progress"] } },
+        where: {
+          status: { in: ["draft", "confirmed", "in_progress"] },
+          createdAt: { lte: AS_OF },
+        },
       }),
     )
     expect(r.orders[0]).toMatchObject({

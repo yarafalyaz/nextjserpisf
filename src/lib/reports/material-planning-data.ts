@@ -24,8 +24,10 @@ export interface MaterialPlanningReport {
   usageWindowStart: Date
 }
 
-export async function loadMaterialPlanning(): Promise<MaterialPlanningReport> {
-  const reorder = await loadReorderPoints()
+export async function loadMaterialPlanning(
+  scopeWarehouseIds?: number[] | null,
+): Promise<MaterialPlanningReport> {
+  const reorder = await loadReorderPoints(new Date(), scopeWarehouseIds)
   return {
     plan: buildMaterialPlan(reorder.result.lines),
     pairLines: reorder.result.lines,

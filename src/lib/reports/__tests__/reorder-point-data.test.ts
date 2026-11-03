@@ -49,6 +49,28 @@ beforeEach(() => {
 })
 
 describe("loadReorderPoints", () => {
+  it("putaran 91: scope [2] menapis setting/layer/issue ke gudang 2 saja", async () => {
+    // Mock prisma mengabaikan where, jadi yang dikunci adalah kontrak
+    // query-nya; penyaringan baris sesudahnya kerja DB.
+    await loadReorderPoints(new Date(2026, 9, 26), [2])
+    for (const call of [
+      mocks.prismaMock.itemWarehouseSetting.findMany,
+      mocks.prismaMock.inventoryLayer.findMany,
+      mocks.prismaMock.materialIssue.findMany,
+    ]) {
+      expect(call.mock.calls[0][0].where).toEqual(
+        expect.objectContaining({ warehouseId: { in: [2] } }),
+      )
+    }
+  })
+
+  it("putaran 91: tanpa scope tidak ada tapis gudang (perilaku lama)", async () => {
+    await loadReorderPoints(new Date(2026, 9, 26))
+    expect(mocks.prismaMock.inventoryLayer.findMany.mock.calls[0][0].where).not.toHaveProperty(
+      "warehouseId",
+    )
+  })
+
   it("query laju: completed saja + jendela 90 hari; PO: status terbuka saja", async () => {
     const now = new Date(2026, 9, 26, 10, 0, 0)
     await loadReorderPoints(now)

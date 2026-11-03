@@ -111,6 +111,8 @@ export function buildWipAging(input: {
   const orders: WipAgingOrder[] = []
   for (const order of input.orders) {
     if (!(WIP_AGING_RUNNING_STATUSES as readonly string[]).includes(order.status)) continue
+    // Putaran 91: PO dari masa depan relatif ke asOf bukan posisi snapshot.
+    if (order.createdAt.getTime() > input.asOf.getTime()) continue
     const ageStart = order.startDate ?? order.createdAt
     const ageDays = wipAgeDays(ageStart, input.asOf)
     // totalActualCost TERSIMPAN sudah sisa pool WIP: penulis rilis

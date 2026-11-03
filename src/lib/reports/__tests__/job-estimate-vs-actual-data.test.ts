@@ -99,6 +99,22 @@ describe("loadJobEstimateVsActual — rantai loader F-2026-10-20-04", () => {
     expect(r.estimate.rows[0].actualMargin).toBe(-15_000_000)
   })
 
+  it("putaran 91: bahan PO-direct dari ProductionOrderMaterial.actualCost ikut aktual", async () => {
+    mocks.prismaMock.workOrder.findMany.mockResolvedValue([
+      wo({ productionOrders: [{ id: 50 }] }),
+    ])
+    mocks.prismaMock.productionCost.findMany.mockResolvedValue([
+      { workOrderId: 1, amount: 2_000_000, productionOrder: null },
+    ])
+    mocks.prismaMock.productionOrderMaterial.findMany.mockResolvedValue([
+      { actualCost: 10_000_000, productionOrder: { workOrderId: 1 } },
+    ])
+
+    const r = await loadJobEstimateVsActual(PERIOD)
+
+    expect(r.estimate.rows[0].actualCost).toBe(12_000_000)
+  })
+
   it("tanpa penawaran disetujui: estimasi null, selisih null (bukan nol)", async () => {
     mocks.prismaMock.workOrder.findMany.mockResolvedValue([
       wo({ quotation: { status: "draft", grandTotal: 100_000_000 } }),

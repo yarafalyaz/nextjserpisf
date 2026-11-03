@@ -17,7 +17,8 @@ import {
 
 export async function getWipAging(asOf: Date = new Date()): Promise<WipAging> {
   const orders = await prisma.productionOrder.findMany({
-    where: { status: { in: [...WIP_AGING_RUNNING_STATUSES] } },
+    // Putaran 91: snapshot asOf tak boleh memuat PO yang lahir sesudahnya.
+    where: { status: { in: [...WIP_AGING_RUNNING_STATUSES] }, createdAt: { lte: asOf } },
     select: {
       id: true,
       slug: true,

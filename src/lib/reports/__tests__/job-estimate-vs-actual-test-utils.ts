@@ -9,6 +9,7 @@ export function createJobEstimateMocks() {
     salesOrder: { findMany: vi.fn().mockResolvedValue([]) },
     salesInvoice: { findMany: vi.fn().mockResolvedValue([]) },
     productionCost: { findMany: vi.fn().mockResolvedValue([]) },
+    productionOrderMaterial: { findMany: vi.fn().mockResolvedValue([]) },
   }
   return { prismaMock, prismaModule: () => ({ prisma: prismaMock }) }
 }

@@ -105,7 +105,7 @@ export async function loadJobEstimateVsActual(period: {
   const workOrderIds = workOrders.map((w) => w.id)
   const productionOrderIds = workOrders.flatMap((w) => w.productionOrders.map((p) => p.id))
 
-  const [salesOrders, directInvoices, projectInvoices, costs] = await Promise.all([
+  const [salesOrders, directInvoices, projectInvoices, costs, poMaterials] = await Promise.all([
     quotationIds.length
       ? prisma.salesOrder.findMany({
           where: { quotationId: { in: quotationIds }, deletedAt: null },
@@ -175,6 +175,20 @@ export async function loadJobEstimateVsActual(period: {
         productionOrder: { select: { workOrderId: true } },
       },
     }),
+    // Putaran 91: bahan jalur PO-direct terakumulasi di
+    // ProductionOrderMaterial.actualCost (issueMaterial), bukan
+    // ProductionCost — eksklusif per job-order-data kanonis.
+    productionOrderIds.length
+      ? prisma.productionOrderMaterial.findMany({
+          where: { productionOrderId: { in: productionOrderIds } },
+          select: {
+            actualCost: true,
+            productionOrder: { select: { workOrderId: true } },
+          },
+        })
+      : Promise.resolve(
+          [] as { actualCost: unknown; productionOrder: { workOrderId: number | null } | null }[],
+        ),
   ])
 
   const salesOrderIds = salesOrders.map((s) => s.id)
@@ -253,6 +267,14 @@ export async function loadJobEstimateVsActual(period: {
     const workOrderId = cost.workOrderId ?? cost.productionOrder?.workOrderId ?? null
     if (workOrderId === null) continue
     costByWorkOrder.set(workOrderId, safeAdd(costByWorkOrder.get(workOrderId) ?? 0, Number(cost.amount), 2))
+  }
+  for (const material of poMaterials) {
+    const workOrderId = material.productionOrder?.workOrderId ?? null
+    if (workOrderId === null) continue
+    costByWorkOrder.set(
+      workOrderId,
+      safeAdd(costByWorkOrder.get(workOrderId) ?? 0, Number(material.actualCost), 2),
+    )
   }
 
   const jobs: JobEstimateVsActualInput[] = workOrders.map((w) => {

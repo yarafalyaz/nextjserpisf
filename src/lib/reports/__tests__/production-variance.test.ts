@@ -87,6 +87,16 @@ describe("splitMaterialVariance", () => {
 })
 
 describe("buildProductionVariance", () => {
+  it("putaran 91: PO draft (belum konfirmasi, aktual 0) tidak masuk laporan", () => {
+    const result = buildProductionVariance({
+      orders: [order({ id: 9, status: "draft", totalStandardCost: 10_000_000, releasedCost: 0, costs: [] })],
+      start: period.start,
+      end: period.end,
+    })
+    expect(result.orderCount).toBe(0)
+    expect(result.totals.computedVariance).toBe(0)
+  })
+
   it("menghitung varians order dan rekonsiliasi ke kolom variance order", () => {
     const result = buildProductionVariance({ orders: [order()], start: period.start, end: period.end })
 

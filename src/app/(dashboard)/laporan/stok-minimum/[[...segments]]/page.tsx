@@ -39,7 +39,9 @@ export default async function MinStockPage() {
     scope.kind === "all" ? undefined : scope.kind === "assigned" ? scope.warehouseIds : []
   const { report, warehouseShortages, warehouseNote, periodLabel, periodCaption } =
     await loadMinStock(asOf, scopeIds)
-  const reorderPointReport = await loadReorderPoints()
+  // Putaran 91: kartu titik pesan-ulang + href permintaannya ditegakkan
+  // scope yang sama seperti bagian utama halaman (sebelumnya global).
+  const reorderPointReport = await loadReorderPoints(asOf, scopeIds)
   const requestHref = buildMinStockRequestHref(report.shortageLines)
   const reorderHref = buildReorderPointRequestHref(reorderPointReport.result.lines)
   const canCreateRequest =

@@ -54,11 +54,13 @@ export default async function MaterialPlanningPage({
   const scopeIds: number[] | undefined =
     scope.kind === "all" ? undefined : scope.kind === "assigned" ? scope.warehouseIds : []
 
-  const { plan, pairLines, usageWindowDays, usageWindowStart } = await loadMaterialPlanning()
+  // Putaran 91: scope ditegakkan di loader (sebelumnya hanya daftar baris
+  // disaring di halaman, angka agregat per barang + totals tetap global).
+  const { plan, pairLines, usageWindowDays, usageWindowStart } =
+    await loadMaterialPlanning(scopeIds)
 
   const visiblePairs = pairLines.filter((line) => {
     if (warehouseRow && line.warehouseId !== warehouseRow.id) return false
-    if (scopeIds && !scopeIds.includes(line.warehouseId)) return false
     return true
   })
   const visiblePlan = {
