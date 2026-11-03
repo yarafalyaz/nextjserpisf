@@ -169,6 +169,15 @@ describe("createBackup", () => {
     expect(res.local).toBe(true)
   })
 
+  it("putaran 82: dua backup dalam detik yang sama mendapat nama berkas berbeda", async () => {
+    fsMocks.existsSync.mockReturnValue(false)
+    spawnMock.mockReturnValue(makeChildProcess(0))
+
+    const [a, b] = await Promise.all([createBackup("manual"), createBackup("manual")])
+    expect(a.filename).not.toBe(b.filename)
+    expect(a.filename).toMatch(/^backup-manual-.*\.sql$/)
+  })
+
   it("uploads to cloud and reports cloud=true when uploadToCloudIfEnabled returns true", async () => {
     fsMocks.existsSync.mockReturnValue(false)
     spawnMock.mockReturnValue(makeChildProcess(0))

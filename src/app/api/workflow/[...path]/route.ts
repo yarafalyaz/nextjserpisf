@@ -223,13 +223,23 @@ export async function POST(
           // lahir pending dan klaim finalnya hanya menerima pending — reset
           // HR ke draft mengunci dokumen selamanya (putaran 52).
           const resetStatus = HR_MODELS.has(config.model) ? "pending" : "draft"
+          let resetCount: number | null = null
           try {
-            await delegateReopen.updateMany({
+            const reset = await delegateReopen.updateMany({
               where: { id, status: "rejected" },
               data: { status: resetStatus },
             })
+            resetCount = reset.count
           } catch (err) {
             console.error(`[workflow] reset status ${config.model} #${id} gagal:`, err)
+          }
+          // Putaran 82: reset mengenai 0 baris = dokumen sudah tidak
+          // `rejected` (jalur lain menang) — jangan lahirkan approval baru
+          // dan jangan balas sukses palsu (pola reopenApproval di
+          // approval.actions yang melempar bila count === 0). Kegagalan
+          // delegate (model tak dikenal) tetap perilaku lama di atas.
+          if (resetCount === 0) {
+            return apiError("CONFLICT", `Alur persetujuan ditolak — dokumen sudah berubah status`)
           }
           // R7API-03: pencetus approval baru = requestedBy approval yang
           // ditolak (pengaju asal); fallback pembuat dokumen, lalu aktor.

@@ -38,6 +38,13 @@ beforeEach(() => {
 })
 
 describe("createFavoriteTransaction Zod validation", () => {
+  it("putaran 82: kalah balapan @@unique (P2002) → pesan duplikat yang sama", async () => {
+    createMock.mockRejectedValue(Object.assign(new Error("Unique constraint failed"), { code: "P2002" }))
+    const res = await createFavoriteTransaction(fd({ label: "Faktur", href: "/penjualan/faktur" }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("sudah ada di daftar favorit")
+  })
+
   it("rejects empty label without touching DB", async () => {
     const res = await createFavoriteTransaction(fd({ label: "", href: "/penjualan/faktur" }))
     expect(res.success).toBe(false)

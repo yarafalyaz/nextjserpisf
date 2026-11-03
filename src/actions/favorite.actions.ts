@@ -39,6 +39,11 @@ export async function createFavoriteTransaction(formData: FormData) {
     return { success: true, id: created.id }
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
+    // Putaran 82: kalah balapan @@unique([userId, href]) sesudah cek di atas
+    // — tampilkan pesan duplikat yang sama, bukan pesan generik P2002.
+    if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
+      return { success: false, error: "Tautan itu sudah ada di daftar favorit." }
+    }
     console.error("[createFavoriteTransaction]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }

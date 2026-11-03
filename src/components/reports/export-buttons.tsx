@@ -91,6 +91,40 @@ export function buildCsvHeaderLines(input: {
   return lines
 }
 
+/**
+ * Baris untuk PDF DOM: header `thead`, isi `tbody`, lalu total `tfoot`
+ * sebagai baris akhir. Tanpa `tfoot` total laporan hilang dari PDF walau
+ * tampil di layar/CSV (putaran 82).
+ */
+export function collectPdfTableRows(table: Element): { headers: string[]; body: string[][] } {
+  const headers: string[] = []
+  const headerRow = table.querySelector('thead tr')
+  if (headerRow) {
+    headerRow.querySelectorAll('th').forEach((th) => {
+      headers.push((th as HTMLElement).innerText.trim())
+    })
+  }
+  const body: string[][] = []
+  table.querySelectorAll('tbody tr, tfoot tr').forEach((row) => {
+    const rowData: string[] = []
+    row.querySelectorAll('td').forEach((td) => {
+      rowData.push((td as HTMLElement).innerText.trim())
+    })
+    if (rowData.length > 0) body.push(rowData)
+  })
+  return { headers, body }
+}
+
+/** Catatan pemotongan halaman — dibaca sekali, bukan per tabel (putaran 82). */
+export function collectTruncationNotes(root: ParentNode): string[] {
+  const notes: string[] = []
+  root.querySelectorAll('[data-report-truncation]').forEach((note) => {
+    const text = note.getAttribute('data-report-truncation') || ''
+    if (text) notes.push(`TERPOTONG: ${text}`)
+  })
+  return notes
+}
+
 function downloadCsv(csv: string, title: string) {
   const content = csv.startsWith("\ufeff") ? csv : `\ufeff${csv}`
   const blob = new Blob([content], { type: "text/csv;charset=utf-8;" })
@@ -348,23 +382,7 @@ export function ExportButtons({
         startY += 5.5
       }
 
-      const headers: string[] = []
-      const body: string[][] = []
-
-      const headerRow = tables[ti].querySelector('thead tr')
-      if (headerRow) {
-        headerRow.querySelectorAll('th').forEach((th) => {
-          headers.push((th as HTMLElement).innerText.trim())
-        })
-      }
-
-      tables[ti].querySelectorAll('tbody tr').forEach((row) => {
-        const rowData: string[] = []
-        row.querySelectorAll('td').forEach((td) => {
-          rowData.push((td as HTMLElement).innerText.trim())
-        })
-        if (rowData.length > 0) body.push(rowData)
-      })
+      const { headers, body } = collectPdfTableRows(tables[ti])
 
       if (headers.length > 0 && body.length > 0) {
         autoTable(doc, {
@@ -396,28 +414,27 @@ export function ExportButtons({
         if (last) startY = last.finalY
       }
 
-      const truncations: string[] = []
-      document.querySelectorAll('[data-report-truncation]').forEach((note) => {
-        const text = note.getAttribute('data-report-truncation') || ''
-        if (text) truncations.push(`TERPOTONG: ${text}`)
+    }
+
+    // Catatan pemotongan dicetak sekali sesudah tabel terakhir (putaran 82);
+    // di dalam loop ia berulang per tabel dan menyesatkan cakupan data.
+    const truncations = collectTruncationNotes(document)
+    if (truncations.length > 0) {
+      autoTable(doc, {
+        body: truncations.map((text) => [text]),
+        startY: startY + 6,
+        margin: { left: lm, right: rm, bottom: 26 },
+        tableWidth: usable,
+        styles: {
+          fontSize: 8,
+          cellPadding: 2.5,
+          overflow: 'linebreak',
+          textColor: [...C.text],
+          lineColor: [...C.line],
+          lineWidth: 0.2,
+        },
+        didDrawPage: drawFooter,
       })
-      if (truncations.length > 0) {
-        autoTable(doc, {
-          body: truncations.map((text) => [text]),
-          startY: startY + 6,
-          margin: { left: lm, right: rm, bottom: 26 },
-          tableWidth: usable,
-          styles: {
-            fontSize: 8,
-            cellPadding: 2.5,
-            overflow: 'linebreak',
-            textColor: [...C.text],
-            lineColor: [...C.line],
-            lineWidth: 0.2,
-          },
-          didDrawPage: drawFooter,
-        })
-      }
     }
 
     // Final footer

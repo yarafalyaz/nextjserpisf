@@ -1,4 +1,5 @@
 import "server-only"
+import { randomUUID } from "crypto"
 import { spawn } from "child_process"
 import { mkdir, readdir, stat, unlink, readFile, writeFile } from "fs/promises"
 import { createWriteStream, createReadStream, existsSync } from "fs"
@@ -123,7 +124,10 @@ export function createBackup(label?: string): Promise<BackupFile> {
 
       const ts = new Date().toISOString().replace(/[:.]/g, "-").replace("T", "-").slice(0, 19)
       const safeLabel = label ? `${label.replace(/[^a-zA-Z0-9]/g, "")}-` : ""
-      const filename = `backup-${safeLabel}${ts}.sql`
+      // Suffix unik: nama presisi detik bertabrakan pada dua backup dalam
+      // detik yang sama dan dua mysqldump menimpa berkas yang sama
+      // (putaran 82). Pola `backup-*.sql` untuk allowlist unduh tetap cocok.
+      const filename = `backup-${safeLabel}${ts}-${randomUUID().slice(0, 8)}.sql`
       const filepath = path.join(BACKUP_DIR, filename)
 
       const args = [

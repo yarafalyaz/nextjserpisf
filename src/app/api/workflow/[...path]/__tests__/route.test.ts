@@ -494,6 +494,18 @@ describe("POST /api/workflow/[...path]", () => {
       expect(mocks.approveStepMock).not.toHaveBeenCalled()
     })
 
+    it("putaran 82: reset reopen mengenai 0 baris → 409, tanpa approval baru", async () => {
+      mocks.authFn.mockResolvedValue(adminSession)
+      mocks.findFirstApproval.mockResolvedValueOnce({ id: 10, status: "rejected", requestedBy: 7 })
+      // Dokumen sudah tidak `rejected` — jalur lain menang sesudah approval dibaca.
+      mocks.updateMany.mockResolvedValueOnce({ count: 0 })
+
+      const res = await POST(makeReq(), makeParams(["penjualan", "pesanan", "5", "approve"]))
+      expect(res.status).toBe(409)
+      expect(mocks.requestApprovalMock).not.toHaveBeenCalled()
+      expect(mocks.approveStepMock).not.toHaveBeenCalled()
+    })
+
     it("initiates and approves workflow step and status becomes approved on last step", async () => {
       mocks.authFn.mockResolvedValue(adminSession)
       mocks.findFirstApproval.mockResolvedValueOnce(null)

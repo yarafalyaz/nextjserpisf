@@ -95,7 +95,14 @@ export default async function CashFlowPage({
           transactionDate: { gte: startDate, lte: endDate },
         },
       },
-      include: { journal: true },
+      // Hanya debit/credit/tanggal jurnal yang dikonsumsi — select sempit
+      // menghindari muat baris jurnal+entri utuh (putaran 82).
+      select: {
+        debit: true,
+        credit: true,
+        journalId: true,
+        journal: { select: { transactionDate: true } },
+      },
     }),
     // Saldo kas sebelum periode → dipakai untuk "Saldo Kas Awal".
     sumEntriesByAccount({ date: { lt: startDate } }),
@@ -125,7 +132,17 @@ export default async function CashFlowPage({
   const fullJournals = journalIds.length
     ? await prisma.journal.findMany({
         where: { id: { in: journalIds } },
-        include: { entries: { include: { account: true } } },
+        // Klasifikasi hanya membaca accountId + type/code/name akun lawan.
+        select: {
+          entries: {
+            select: {
+              accountId: true,
+              debit: true,
+              credit: true,
+              account: { select: { type: true, code: true, name: true } },
+            },
+          },
+        },
       })
     : [];
 

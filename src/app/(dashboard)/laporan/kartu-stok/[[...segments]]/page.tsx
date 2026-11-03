@@ -1,12 +1,14 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
+import { safeRound } from '@/lib/utils/math'
 import { requirePermission } from '@/lib/auth/permissions'
 import { getWarehouseScope } from '@/lib/auth/warehouse-scope'
 import { formatAccounting, formatDate, formatReferenceType, referenceHref } from '@/lib/utils/format'
 import { toLocalDateOnly } from '@/lib/utils/date-only'
-import { buildStockCard, openingBalance, type StockCardMove } from '@/lib/reports/stock-card'
+import { buildStockCard, type StockCardMove } from '@/lib/reports/stock-card'
 import { resolveReferenceSlugs, referenceSlugKey } from '@/lib/services/reference-slug.service'
 import { reportPeriodFromRoute, splitReportSegments } from '@/lib/reports/report-period'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
@@ -110,11 +112,26 @@ export default async function StockCardPage({
       ...warehouseWhere,
     }
 
-    const [priorMoves, periodMoves] = await Promise.all([
-      prisma.stockMove.findMany({
-        where: { ...baseWhere, date: { lt: startDate } },
-        select: { qty: true, cost: true, impact: true },
-      }),
+    const [priorAgg, periodMoves] = await Promise.all([
+      // Saldo awal diagregasi di DB (pola stock-flow-data PDF) — sebelumnya
+      // seluruh move pra-periode dimuat ke memori hanya untuk dijumlahkan
+      // (putaran 82). Selisih sub-sen vs penjumlahan per-baris diterima sama
+      // seperti jalur PDF. Scope kosong: jangan hasilkan `IN ()` invalid.
+      scopeIds && scopeIds.length === 0
+        ? Promise.resolve([] as Array<{ impact: string; qty: unknown; value: unknown }>)
+        : prisma.$queryRaw<Array<{ impact: string; qty: unknown; value: unknown }>>`
+        SELECT impact, SUM(qty) AS qty, SUM(qty * cost) AS value
+        FROM stock_moves
+        WHERE item_id = ${itemId} AND status = 'posted' AND transaction_date < ${startDate}
+        ${
+          warehouseId
+            ? Prisma.sql`AND warehouse_id = ${warehouseId}`
+            : scopeIds
+              ? Prisma.sql`AND warehouse_id IN (${Prisma.join(scopeIds)})`
+              : Prisma.empty
+        }
+        GROUP BY impact
+      `,
       prisma.stockMove.findMany({
         where: { ...baseWhere, date: { gte: startDate, lte: endDate } },
         include: { warehouse: { select: { code: true } } },
@@ -122,9 +139,20 @@ export default async function StockCardPage({
       }),
     ])
 
-    const opening = openingBalance(
-      priorMoves.map((m) => ({ qty: Number(m.qty), cost: Number(m.cost), impact: m.impact })),
+    const openingRaw = priorAgg.reduce(
+      (acc, row) => {
+        const qty = Number(row.qty ?? 0)
+        const value = Number(row.value ?? 0)
+        return row.impact === "IN"
+          ? { qty: acc.qty + qty, value: acc.value + value }
+          : { qty: acc.qty - qty, value: acc.value - value }
+      },
+      { qty: 0, value: 0 },
     )
+    const opening = {
+      qty: safeRound(openingRaw.qty, 2),
+      value: safeRound(openingRaw.value, 2),
+    }
 
     const moves: StockCardMove[] = periodMoves.map((m) => ({
       id: m.id,
