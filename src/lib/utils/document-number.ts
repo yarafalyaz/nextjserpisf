@@ -82,12 +82,15 @@ async function resolvePrefix(key: string): Promise<string> {
   return value && String(value).trim() !== '' ? normalize(String(value)) : normalize(key)
 }
 
-const DOCUMENT_SOURCE_MAP: Record<string, { model: keyof typeof prisma; field: string; softDelete?: boolean }> = {
-  QUO: { model: 'quotation', field: 'documentNo', softDelete: true },
-  SO: { model: 'salesOrder', field: 'documentNo', softDelete: true },
-  INV: { model: 'salesInvoice', field: 'documentNo', softDelete: true },
+const DOCUMENT_SOURCE_MAP: Record<string, { model: keyof typeof prisma; field: string }> = {
+  // Kolom nomor @unique mencakup baris soft-deleted, jadi floor wajib
+  // memindai semua baris. Menyaring deletedAt bisa mengembalikan nomor
+  // milik baris terhapus lunak dan menabrak constraint saat counter rendah.
+  QUO: { model: 'quotation', field: 'documentNo' },
+  SO: { model: 'salesOrder', field: 'documentNo' },
+  INV: { model: 'salesInvoice', field: 'documentNo' },
   PAY: { model: 'salesPayment', field: 'documentNo' },
-  LF: { model: 'salesLateFee', field: 'documentNo', softDelete: true },
+  LF: { model: 'salesLateFee', field: 'documentNo' },
   SR: { model: 'salesReturn', field: 'documentNo' },
   DP: { model: 'downPayment', field: 'documentNo' },
   DO: { model: 'deliveryOrder', field: 'documentNo' },
@@ -100,6 +103,11 @@ const DOCUMENT_SOURCE_MAP: Record<string, { model: keyof typeof prisma; field: s
   ADJ: { model: 'stockAdjustment', field: 'documentNo' },
   TRF: { model: 'inventoryTransfer', field: 'documentNo' },
   MI: { model: 'materialIssue', field: 'documentNo' },
+  // Putaran 93: dua kunci ini juga sebelumnya absen dari map (floor 0).
+  // StockMove/MaterialRequest tidak punya soft delete; semua baris wajib
+  // dipindai karena documentNo @unique mencakup nomor legacy/manual.
+  SM: { model: 'stockMove', field: 'documentNo' },
+  MRQ: { model: 'materialRequest', field: 'documentNo' },
   CO: { model: 'jobChangeOrder', field: 'documentNo' },
   WO: { model: 'workOrder', field: 'documentNo' },
   MO: { model: 'productionOrder', field: 'documentNo' },
@@ -169,7 +177,6 @@ async function findMaxSequence(key: string, prefix: string, format: 'complex' | 
     ...(format === 'complex'
       ? { [source.field]: { contains: `/${prefix}/`, endsWith: `/${month}/${year}` } }
       : { [source.field]: { startsWith: `${prefix}-` } }),
-    ...(source.softDelete ? { deletedAt: null } : {}),
   }
 
   const rows = await delegate.findMany({

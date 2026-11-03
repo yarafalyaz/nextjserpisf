@@ -1058,7 +1058,14 @@ export async function deleteCustomerVehicle(id: number) {
           customerId: true,
           vehicleId: true,
           _count: {
-            select: { workOrders: true, quotations: true, projects: true },
+            select: {
+              workOrders: true,
+              quotations: true,
+              projects: true,
+              // Putaran 93: tiket CRM juga relasi SetNull — tanpa hitungan
+              // ini tiket kehilangan tautan kendaraan senyap saat delete.
+              tickets: true,
+            },
           },
         },
       });
@@ -1070,7 +1077,8 @@ export async function deleteCustomerVehicle(id: number) {
       const relationDependents =
         locked._count.workOrders +
         locked._count.quotations +
-        locked._count.projects;
+        locked._count.projects +
+        locked._count.tickets;
 
       // SalesOrder.customerVehicleId and SalesInvoice.customerVehicleId are plain
       // (non-relation) Int columns — CustomerVehicle has no back-relation for them,
@@ -1109,7 +1117,7 @@ export async function deleteCustomerVehicle(id: number) {
       return {
         success: false,
         error:
-          `Kendaraan pelanggan ini punya ${vehicle.dependents} dokumen terkait (perintah kerja/penawaran/proyek/penjualan) ` +
+          `Kendaraan pelanggan ini punya ${vehicle.dependents} dokumen terkait (perintah kerja/penawaran/proyek/penjualan/tiket) ` +
           `dan tidak bisa dihapus karena akan menghilangkan riwayat servis. Nonaktifkan kendaraan sebagai gantinya.`,
       };
     }

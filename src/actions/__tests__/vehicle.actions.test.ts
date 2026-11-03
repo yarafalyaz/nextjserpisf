@@ -404,7 +404,7 @@ describe("Customer Vehicle Actions", () => {
       id: 1,
       customerId: 1,
       vehicleId: 9,
-      _count: { workOrders: 0, quotations: 0, projects: 0 }
+      _count: { workOrders: 0, quotations: 0, projects: 0, tickets: 0 }
     })
     const res = await actions.deleteCustomerVehicle(1)
     expect(res?.success).toBe(true)
@@ -416,7 +416,7 @@ describe("Customer Vehicle Actions", () => {
     // terkunci; gadai perilaku: delete wajib tidak terpanggil.
     mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({
       id: 1, customerId: 1, vehicleId: 9,
-      _count: { workOrders: 0, quotations: 0, projects: 0 }
+      _count: { workOrders: 0, quotations: 0, projects: 0, tickets: 0 }
     })
     mocks.prismaMock.salesOrder.count.mockResolvedValueOnce(2)
     mocks.prismaMock.salesInvoice.count.mockResolvedValueOnce(0)
@@ -444,7 +444,7 @@ describe("Customer Vehicle Actions", () => {
   })
   it("deleteCustomerVehicle fails if has dependents", async () => {
     mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({
-      id: 1, customerId: 1, _count: { workOrders: 1, quotations: 0, projects: 0 }
+      id: 1, customerId: 1, _count: { workOrders: 1, quotations: 0, projects: 0, tickets: 0 }
     })
     const res = await actions.deleteCustomerVehicle(1)
     expect(res?.success).toBe(false)
@@ -469,7 +469,7 @@ describe("Customer Vehicle Actions", () => {
   // the missing twin in deleteCustomerVehicle.
   it("deleteCustomerVehicle refuses if linked to a SalesOrder", async () => {
     mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({
-      id: 1, customerId: 1, _count: { workOrders: 0, quotations: 0, projects: 0 }
+      id: 1, customerId: 1, _count: { workOrders: 0, quotations: 0, projects: 0, tickets: 0 }
     })
     mocks.prismaMock.salesOrder.count.mockResolvedValueOnce(1)
     mocks.prismaMock.salesInvoice.count.mockResolvedValueOnce(0)
@@ -478,9 +478,20 @@ describe("Customer Vehicle Actions", () => {
     expect(res?.error).toContain("dokumen terkait")
     expect(mocks.prismaMock.customerVehicle.delete).not.toHaveBeenCalled()
   })
+  it("putaran 93: deleteCustomerVehicle menolak bila tiket CRM masih menautkan kendaraan", async () => {
+    mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({
+      id: 1, customerId: 1, vehicleId: 9,
+      _count: { workOrders: 0, quotations: 0, projects: 0, tickets: 2 }
+    })
+    const res = await actions.deleteCustomerVehicle(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("2 dokumen")
+    expect(String(res?.error)).toContain("tiket")
+    expect(mocks.prismaMock.customerVehicle.delete).not.toHaveBeenCalled()
+  })
   it("deleteCustomerVehicle refuses if linked to a SalesInvoice", async () => {
     mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({
-      id: 1, customerId: 1, _count: { workOrders: 0, quotations: 0, projects: 0 }
+      id: 1, customerId: 1, _count: { workOrders: 0, quotations: 0, projects: 0, tickets: 0 }
     })
     mocks.prismaMock.salesOrder.count.mockResolvedValueOnce(0)
     mocks.prismaMock.salesInvoice.count.mockResolvedValueOnce(1)
@@ -495,7 +506,7 @@ describe("Customer Vehicle Actions", () => {
   // remove the Vehicle too when this is its last owner, atomically.
   it("deleteCustomerVehicle also deletes the backing Vehicle when it is the last owner", async () => {
     mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({
-      id: 1, customerId: 1, vehicleId: 9, _count: { workOrders: 0, quotations: 0, projects: 0 }
+      id: 1, customerId: 1, vehicleId: 9, _count: { workOrders: 0, quotations: 0, projects: 0, tickets: 0 }
     })
     mocks.prismaMock.customerVehicle.count.mockResolvedValueOnce(0) // no other owners
     const res = await actions.deleteCustomerVehicle(1)
@@ -505,7 +516,7 @@ describe("Customer Vehicle Actions", () => {
   })
   it("deleteCustomerVehicle keeps a shared Vehicle when another CustomerVehicle still owns it", async () => {
     mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({
-      id: 1, customerId: 1, vehicleId: 9, _count: { workOrders: 0, quotations: 0, projects: 0 }
+      id: 1, customerId: 1, vehicleId: 9, _count: { workOrders: 0, quotations: 0, projects: 0, tickets: 0 }
     })
     mocks.prismaMock.customerVehicle.count.mockResolvedValueOnce(2) // shared
     const res = await actions.deleteCustomerVehicle(1)
@@ -751,7 +762,7 @@ describe("Vehicle Actions Error Paths", () => {
     expect(res?.error).toContain("dokumen terkait")
   })
   it("deleteVehicle refuses if has sales dependents (line 360-364 branch)", async () => {
-    mocks.prismaMock.customerVehicle.findMany.mockResolvedValue([{ id: 1, _count: { workOrders: 0, quotations: 0, projects: 0 } }])
+    mocks.prismaMock.customerVehicle.findMany.mockResolvedValue([{ id: 1, _count: { workOrders: 0, quotations: 0, projects: 0, tickets: 0 } }])
     mocks.prismaMock.salesOrder.count.mockResolvedValueOnce(1)
     mocks.prismaMock.salesInvoice.count.mockResolvedValueOnce(1)
     const res = await actions.deleteVehicle(1)

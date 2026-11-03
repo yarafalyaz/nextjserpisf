@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   taxPaymentFindMany: vi.fn(),
   vendorCreditFindMany: vi.fn(),
   bankReconciliationFindMany: vi.fn(),
+  stockMoveFindMany: vi.fn(),
+  materialRequestFindMany: vi.fn(),
 }));
 
 vi.mock("@/lib/services/document-sequence.service", () => ({
@@ -33,6 +35,8 @@ vi.mock("@/lib/db/prisma", () => ({
     taxPayment: { findMany: mocks.taxPaymentFindMany },
     vendorCredit: { findMany: mocks.vendorCreditFindMany },
     bankReconciliation: { findMany: mocks.bankReconciliationFindMany },
+    stockMove: { findMany: mocks.stockMoveFindMany },
+    materialRequest: { findMany: mocks.materialRequestFindMany },
   },
 }));
 
@@ -50,9 +54,45 @@ describe("utils/document-number", () => {
     mocks.taxPaymentFindMany.mockResolvedValue([]);
     mocks.vendorCreditFindMany.mockResolvedValue([]);
     mocks.bankReconciliationFindMany.mockResolvedValue([]);
+    mocks.stockMoveFindMany.mockResolvedValue([]);
+    mocks.materialRequestFindMany.mockResolvedValue([]);
     mocks.next.mockResolvedValue(1);
     mocks.peek.mockResolvedValue(0);
   });
+
+  describe("floor putaran 93", () => {
+    it("QUO memindai semua baris termasuk soft-deleted karena documentNo @unique", async () => {
+      mocks.quotationFindMany.mockResolvedValue([{ documentNo: "012/QUO/YAR/06/2026" }])
+      mocks.next.mockResolvedValue(13)
+
+      await generateDocumentNumber("QUO")
+
+      const where = mocks.quotationFindMany.mock.calls[0]?.[0]?.where
+      expect(where).not.toHaveProperty("deletedAt")
+      expect(mocks.next).toHaveBeenCalledWith(expect.any(String), 12)
+    })
+
+    it("SM membaca floor dari stockMove.documentNo existing", async () => {
+      mocks.stockMoveFindMany.mockResolvedValue([{ documentNo: "0009/SM/YAR/10/2026" }])
+      mocks.next.mockResolvedValue(10)
+
+      await generateDocumentNumber("SM")
+
+      expect(mocks.stockMoveFindMany).toHaveBeenCalled()
+      expect(mocks.next).toHaveBeenCalledWith(expect.any(String), 9)
+    })
+
+    it("MRQ membaca floor dari materialRequest.documentNo existing", async () => {
+      mocks.materialRequestFindMany.mockResolvedValue([{ documentNo: "MRQ-0017" }])
+      mocks.next.mockResolvedValue(18)
+
+      const result = await generateDocumentNumber("MRQ", "simple")
+
+      expect(mocks.materialRequestFindMany).toHaveBeenCalled()
+      expect(mocks.next).toHaveBeenCalledWith("MRQ", 17)
+      expect(result).toBe("MRQ-0018")
+    })
+  })
 
   describe("floor kunci putaran 85", () => {
     it("VC membaca floor dari vendorCredit.documentNo existing", async () => {
