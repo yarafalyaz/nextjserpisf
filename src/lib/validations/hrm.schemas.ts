@@ -197,15 +197,15 @@ export const payrollSchema = z.object({
 
 /**
  * Menormalkan hari kerja ke bentuk yang dibaca layanan absensi: angka hari
- * `0–6` (0 = Minggu) dipisah koma. Format ini DIVERIFIKASI dari pembacanya
- * (`daily-attendance.service.ts`, `attendance-summary.service.ts`,
- * `leave-quota.service.ts` yang memakai `workDays.split(",")` lalu menyaring
- * `0 <= hari <= 6`), bukan ditebak.
+ * `0–6` (0 = Minggu) dipisah koma. Format ini DIVERIFIKASI dari pembacanya —
+ * sekarang satu jalur lewat `src/lib/utils/work-days.ts` (`parseWorkDays`),
+ * bukan ditebak.
  *
  * Token kosong WAJIB dibuang sebelum `Number()`: `Number("")` bernilai 0, dan 0
  * adalah hari Minggu yang sah — sehingga teks dengan spasi/koma berlebih
  * ("1, 2") akan menyuntikkan hari Minggu secara diam-diam (terbukti: " 1 , 2 "
  * menghasilkan "0,1,2"). Hari yang salah = perhitungan absensi yang salah.
+ * Aturan ini TIDAK boleh ditulis ulang di pemanggil; util itu yang memegangnya.
  */
 export function normalizeWorkDays(raw: string | undefined | null): string {
   if (!raw) return ""

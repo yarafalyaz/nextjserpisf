@@ -25,17 +25,19 @@ import {
 
 import type { Metadata } from "next"
 
+import { parseWorkDaysWithFallback } from "@/lib/utils/work-days"
+
 export const metadata: Metadata = { title: "Kalender Kerja" }
 
 const DAY_NAMES = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"]
 
 /** "1,2,3,4,5" → "Sen, Sel, Rab, Kam, Jum" (angka hari dari layanan absensi). */
 function formatWorkDays(workDays: string): string {
-  const days = workDays
-    .split(",")
-    .map((value) => Number(value.trim()))
-    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
-  if (days.length === 0) return "-"
+  // Tampilan, bukan perhitungan: jadwal tanpa hari sah ditampilkan "-" —
+  // fallback Senin–Jumat hanya untuk angka slip/rekap, bukan untuk mengarang
+  // isi jadwal yang tersimpan kosong.
+  const { days, usedFallback } = parseWorkDaysWithFallback(workDays)
+  if (usedFallback) return "-"
   return days.map((day) => DAY_NAMES[day]).join(", ")
 }
 

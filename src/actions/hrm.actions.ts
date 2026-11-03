@@ -80,6 +80,7 @@ import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { onPayrollPaid, deleteJournalByReferenceTx, reverseJournalsByReferenceTx, onEmployeeLoanCashRepayment, onEmployeeLoanWrittenOff } from "@/lib/hooks/accounting.hook";
 import { SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status";
 import { getSystemSettings } from "@/lib/utils/settings";
+import { parseWorkDays } from "@/lib/utils/work-days";
 import { assertHrEmployeeAccess, getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope";
 import type { HrScope } from "@/lib/auth/hr-scope";
 import { evaluatePayrollEmploymentGate } from "@/lib/reports/employee-lifecycle";
@@ -2327,15 +2328,12 @@ async function computeBulkPayrollEstimations(
       (schedule) => schedule.employees.length === 0 && schedule.departments.length === 0,
     );
     const schedule = employeeSchedule ?? departmentSchedule ?? globalSchedule;
-    const workingWeekdays = new Set(
-      (schedule?.workDays ?? "")
-        .split(",")
-        .map((day) => Number(day.trim()))
-        .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6),
-    );
-    if (workingWeekdays.size === 0) {
-      for (const day of [1, 2, 3, 4, 5]) workingWeekdays.add(day);
-    }
+    // Putaran 116: penguraian lewat util bersama. Versi lama menulis
+    // `Number(day.trim())` tanpa membuang token kosong, sehingga workDays ""
+    // (default kolom) menjadi {Minggu} — `Number("") === 0` — dan fallback
+    // Senin–Jumat tak pernah hidup. Slip massal lalu menghitung 5 hari kerja
+    // (semuanya Minggu) alih-alih 21, dan potongan absen hari biasa hilang.
+    const workingWeekdays = new Set(parseWorkDays(schedule?.workDays));
     const presentSet = new Set(
       employeeAttendances
         .filter((attendance) => attendance.checkIn != null)

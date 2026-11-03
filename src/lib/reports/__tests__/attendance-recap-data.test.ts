@@ -153,6 +153,18 @@ describe("loadAttendanceRecap — rantai loader F-044-S", () => {
     expect(recap.employees[0].noRecordDays).toBe(3)
   })
 
+  // Putaran 116: `Number("")` = 0 = Minggu. Jadwal kosong dulu terbaca
+  // "terjadwal hanya hari Minggu" (0 hari kerja dalam periode Sen–Jum),
+  // bukan fallback Senin–Jumat yang dijanjikan doc loader.
+  it("jadwal workDays kosong tetap terjadwal dengan fallback Senin-Jumat", async () => {
+    mocks.scheduleFindMany.mockResolvedValue([
+      { workDays: "", employees: [], departments: [] },
+    ])
+    const recap = await loadAttendanceRecap({ kind: "all" }, PERIOD, TODAY)
+    expect(recap.employees[0].hasSchedule).toBe(true)
+    expect(recap.employees[0].scheduledWorkDays).toBe(5)
+  })
+
   it("karyawan terhapus lunak tidak tampil sebagai baris hantu populasi", async () => {
     const rows = [
       employeeRow({ id: 1, deletedAt: null }),

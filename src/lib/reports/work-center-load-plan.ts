@@ -33,6 +33,7 @@
  */
 
 import { ACTIVE_WORK_ORDER_STATUSES } from "@/lib/reports/work-order-queue"
+import { parseWorkDays } from "@/lib/utils/work-days"
 
 export const LOAD_PLAN_TITLE = "Beban Rencana Stasiun Kerja"
 export const LOAD_PLAN_UNASSIGNED_LABEL = "Belum ada stasiun"
@@ -163,18 +164,6 @@ function dateKey(date: Date): string {
     String(date.getMonth() + 1).padStart(2, "0"),
     String(date.getDate()).padStart(2, "0"),
   ].join("-")
-}
-
-/** Parse workDays pola daily-attendance.service.ts:48-50; token kosong dibuang
- * dulu (Number("") === 0 akan mengarang hari Minggu) — Q-LP-3: kosong = Senin–Jumat. */
-export function parseWorkDays(raw: string): number[] {
-  const days = raw
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .map((value) => Number(value))
-  const effective = days.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
-  return effective.length ? effective : [1, 2, 3, 4, 5]
 }
 
 /**

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/prisma"
 import type { Prisma } from "@prisma/client"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { parseWorkDaysWithFallback } from "@/lib/utils/work-days"
 
 type Db = Prisma.TransactionClient | typeof prisma
 
@@ -77,16 +78,12 @@ async function buildWorkingDayChecker(
     (schedule) => schedule._count.employees === 0 && schedule._count.departments === 0,
   )
   const schedule = employeeSchedule ?? departmentSchedule ?? globalSchedule
-  let weekdays = new Set(
-    (schedule?.workDays ?? "")
-      .split(",")
-      .map((day) => day.trim())
-      .filter(Boolean)
-      .map(Number)
-      .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6),
-  )
-  const usedScheduleFallback = weekdays.size === 0
-  if (usedScheduleFallback) weekdays = new Set([1, 2, 3, 4, 5])
+  // Putaran 116: util bersama — token kosong dibuang sebelum Number()
+  // (`Number("") === 0` = Minggu), dan fallback Senin–Jumat dilaporkan lewat
+  // `usedFallback` alih-alih disimpulkan ulang di sini.
+  const parsedWeekdays = parseWorkDaysWithFallback(schedule?.workDays)
+  const weekdays = new Set(parsedWeekdays.days)
+  const usedScheduleFallback = parsedWeekdays.usedFallback
 
   const [holidays, departmentHolidays] = await Promise.all([
     db.holiday.findMany({

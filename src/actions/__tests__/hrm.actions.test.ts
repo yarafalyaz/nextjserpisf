@@ -2054,6 +2054,31 @@ describe("generateBulkPayroll edge cases", () => {
       expect.objectContaining({ skipDuplicates: true })
     )
   })
+
+  // Putaran 116: jadwal dengan work_days kosong dulu terbaca "hanya Minggu"
+  // (`Number("") === 0`), sehingga fallback Senin–Jumat tak pernah hidup dan
+  // slip massal menghitung 5 hari kerja alih-alih 21 — potongan absen hari
+  // biasa hilang senyap.
+  it("estimasi massal memakai fallback Senin-Jumat saat workDays kosong", async () => {
+    // Sekali pakai: `vi.clearAllMocks()` tidak membuang implementasi, jadi
+    // mockResolvedValue() di sini akan bocor ke describe berikutnya.
+    prismaMock.workSchedule.findMany.mockResolvedValueOnce([
+      { workDays: "", employees: [], departments: [] },
+    ])
+    prismaMock.employee.findMany.mockResolvedValueOnce([
+      {
+        id: 1, baseSalary: 5000000, maritalStatus: "single", dependents: 0,
+        departmentId: null, paymentFrequency: "MONTHLY",
+        joinDate: new Date(2026, 0, 1), employmentEndedAt: null, employeeLoans: [],
+      },
+    ])
+    const est = await actions.getBulkPayrollEstimations([1], "2026-05-01", "2026-05-31")
+    const row = est.get(1)
+    expect(row).toBeDefined()
+    // Mei 2026: 21 hari Senin–Jumat, 5 hari Minggu, tanpa absensi tercatat.
+    expect(row!.workingDays).toBe(21)
+    expect(row!.absentDays).toBe(21)
+  })
 })
 
 describe("markPayrollPaid edge cases", () => {

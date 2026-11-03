@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { parseWorkDays } from "@/lib/utils/work-days"
 import { employmentDayWindow, isEmploymentDay } from "@/lib/services/attendance-summary.service"
 
 
@@ -54,9 +55,10 @@ export async function getDailyAttendanceMetrics(date = new Date()) {
     const schedule = employee.workSchedules[0]
       ?? employee.department?.workSchedules[0]
       ?? schedules[0]
-    const days = schedule?.workDays.split(",").map((value) => Number(value.trim()))
-    const effectiveDays = days?.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
-    const weekdays = effectiveDays?.length ? effectiveDays : [1, 2, 3, 4, 5]
+    // Putaran 116: lewat util bersama. Versi lama `Number(value.trim())` tanpa
+    // membuang token kosong: `Number("") === 0` = Minggu, jadi jadwal kosong
+    // membuat karyawan hanya dinilai absen pada hari Minggu.
+    const weekdays = parseWorkDays(schedule?.workDays)
     return weekdays.includes(start.getDay())
   })
 

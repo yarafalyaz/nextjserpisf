@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { parseWorkDays } from "@/lib/utils/work-days"
 
 export interface AttendanceSummary {
   totalWorkingDays: number
@@ -99,18 +100,10 @@ export async function calculateAttendanceSummary(
         candidate._count.employees === 0 && candidate._count.departments === 0,
     )
 
-  let weekdays = new Set(
-    (schedule?.workDays ?? "")
-      .split(",")
-      .map((day) => day.trim())
-      // String kosong WAJIB dibuang sebelum Number: Number("") === 0
-      // (Minggu), sehingga fallback Senin–Jumat di bawah tak pernah hidup
-      // dan ringkasan tanpa jadwal hanya menghitung hari Minggu.
-      .filter((day) => day.length > 0)
-      .map((day) => Number(day))
-      .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6),
-  )
-  if (weekdays.size === 0) weekdays = new Set([1, 2, 3, 4, 5])
+  // Putaran 116: penguraian lewat util bersama (satu jalur untuk semua pembaca
+  // `workDays`); util itu memuat aturan "token kosong dibuang sebelum Number()"
+  // dan fallback Senin–Jumat.
+  const weekdays = new Set(parseWorkDays(schedule?.workDays))
 
   const rangeStart = new Date(startDate)
   rangeStart.setHours(0, 0, 0, 0)

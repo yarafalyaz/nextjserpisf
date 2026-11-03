@@ -38,6 +38,7 @@
 import { prisma } from "@/lib/db/prisma"
 import { hrEmployeeScopeWhere, hrScopeWhere, type HrScope } from "@/lib/auth/hr-scope"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { parseWorkDays } from "@/lib/utils/work-days"
 import {
   buildAttendanceRecap,
   type AttendanceRecap,
@@ -92,14 +93,10 @@ function pickSchedule(
 function parseWeekdays(workDays: string): Set<number> {
   const cached = weekdayCache.get(workDays)
   if (cached) return cached
-  const weekdays = new Set(
-    workDays
-      .split(",")
-      .map((day) => Number(day.trim()))
-      .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6),
-  )
-  // Paritas service: workDays kosong -> fallback Senin-Jumat.
-  const parsed = weekdays.size === 0 ? new Set([1, 2, 3, 4, 5]) : weekdays
+  // Putaran 116: util bersama. Versi lama `Number(day.trim())` membuat token
+  // kosong menjadi Minggu (`Number("") === 0`), sehingga jadwal kosong dihitung
+  // "terjadwal setiap Minggu" alih-alih jatuh ke fallback Senin–Jumat.
+  const parsed = new Set(parseWorkDays(workDays))
   weekdayCache.set(workDays, parsed)
   return parsed
 }

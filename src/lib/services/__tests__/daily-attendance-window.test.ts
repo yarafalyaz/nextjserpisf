@@ -88,3 +88,35 @@ describe("getDailyAttendanceMetrics jendela masa kerja (putaran 86)", () => {
     expect(arg.select.employmentEndedAt).toBe(true)
   })
 })
+
+// Putaran 116: `Number("")` bernilai 0, dan 0 adalah hari MINGGU yang sah.
+// Jadwal dengan work_days kosong (default kolom, dan satu-satunya bentuk yang
+// bisa dibuat lewat jalur lain) dulu terbaca sebagai "hanya Minggu", sehingga
+// fallback Senin–Jumat tak pernah hidup: karyawan yang seharusnya absen pada
+// hari kerja tidak pernah masuk notifikasi.
+describe("getDailyAttendanceMetrics jadwal tanpa hari kerja (putaran 116)", () => {
+  it("jadwal workDays kosong -> fallback Senin-Jumat, Selasa tetap dinilai absent", async () => {
+    workScheduleFindMany.mockResolvedValue([{ id: 1, workDays: "" }])
+    employeeFindMany.mockResolvedValue([employee({})])
+    const { absentEmployees } = await getDailyAttendanceMetrics(DAY)
+    expect(absentEmployees.map((e) => e.id)).toEqual([1])
+  })
+
+  it("koma berlebih ('1,2,3,') tidak menjadi Minggu: Selasa absen, Minggu libur", async () => {
+    workScheduleFindMany.mockResolvedValue([{ id: 1, workDays: "1,2,3," }])
+    employeeFindMany.mockResolvedValue([employee({})])
+    const tuesday = await getDailyAttendanceMetrics(DAY)
+    expect(tuesday.absentEmployees.map((e) => e.id)).toEqual([1])
+    const sunday = await getDailyAttendanceMetrics(new Date(2026, 10, 1)) // Minggu 1 Nov 2026
+    expect(sunday.absentEmployees).toEqual([])
+  })
+
+  it("jadwal Minggu eksplisit ('0') tetap dihormati", async () => {
+    workScheduleFindMany.mockResolvedValue([{ id: 1, workDays: "0" }])
+    employeeFindMany.mockResolvedValue([employee({})])
+    const sunday = await getDailyAttendanceMetrics(new Date(2026, 10, 1))
+    expect(sunday.absentEmployees.map((e) => e.id)).toEqual([1])
+    const tuesday = await getDailyAttendanceMetrics(DAY)
+    expect(tuesday.absentEmployees).toEqual([])
+  })
+})
