@@ -18,6 +18,14 @@ import {
   updateUserWarehousesSchema,
 } from "@/lib/validations/auth.schemas"
 import { assertCanGrantRoles } from "@/lib/auth/role-grant"
+import { peekRateLimit, takeRateLimit } from "@/lib/security/rate-limit"
+
+// Verifikasi password-dalam-sesi (ganti password, konfirmasi ganti email)
+// dibatasi per user: tanpa limiter, sesi yang dibajak/ditinggal bisa
+// menebak password tanpa batas lalu mengunci pemilik secara permanen.
+// Pola sama dengan authorize login: peek dulu, take hanya saat gagal.
+const PASSWORD_VERIFY_LIMIT = { windowMs: 30 * 60 * 1000, max: 10 } as const
+const passwordVerifyKey = (userId: number) => `password-verify:user:${userId}`
 
 // Target-escalation guard: a non-super-admin must not be able to modify or
 // disable an existing super_admin's account.
@@ -99,12 +107,18 @@ export async function changePassword(formData: FormData) {
     }
     const { currentPassword, newPassword } = parsed.data
 
+    const limit = await peekRateLimit(passwordVerifyKey(userId), PASSWORD_VERIFY_LIMIT)
+    if (!limit.allowed) {
+      return { error: "Terlalu banyak percobaan password salah. Coba lagi nanti." }
+    }
+
     const user = await prisma.user.findUniqueOrThrow({
       where: { id: userId },
     })
 
     const valid = await bcrypt.compare(currentPassword, user.password)
     if (!valid) {
+      await takeRateLimit(passwordVerifyKey(userId), PASSWORD_VERIFY_LIMIT)
       return { error: "Password lama salah" }
     }
 
@@ -129,6 +143,7 @@ export async function changePassword(formData: FormData) {
 }
 
 export async function createUser(formData: FormData) {
+  let grantErrInTx: string | null = null
   try {
     // Halaman /pengaturan/pengguna dijaga izin `manage_users` (proxy + halaman +
     // action memakai aturan yang sama); super_admin bypass.
@@ -174,6 +189,15 @@ export async function createUser(formData: FormData) {
     // nama sama bisa memilih slug sama lalu satu kalah P2002 yang dulu
     // tersamar sebagai "Email sudah terdaftar".
     const user = await prisma.$transaction(async (tx) => {
+      // Putaran 84: nilai ulang grant dari bacaan tx — izin role bisa
+      // bertambah di antara cek pra-tx dan commit (super_admin mengedit
+      // role yang sama); tanpa penilaian ulang, user baru mewarisi izin
+      // yang tak pernah disetujui untuk aktor ini.
+      const grantErrTx = await assertCanGrantRoles(actor, roleIds ?? [], tx as never)
+      if (grantErrTx) {
+        grantErrInTx = grantErrTx
+        throw new Error("GRANT_CHECK_FAILED")
+      }
       const slug = await nextSlugWithClient(tx as never, "user", name)
       return tx.user.create({
         data: {
@@ -206,6 +230,7 @@ export async function createUser(formData: FormData) {
     return { success: true, id: user.id }
   } catch (e) {
     if (isNextRedirectError(e)) throw e
+    if (grantErrInTx) return { error: grantErrInTx }
     // Handle unique constraint violation (race condition on email). Bedakan
     // target: tabrakan slug bukan email — jangan menyesatkan pengguna.
     if (e instanceof Error && e.message.includes("Unique constraint")) {
@@ -262,6 +287,10 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
       // roles.set dari keputusan basi. Penulis lawan yang mengunci baris
       // employees saja terserialkan lewat kunci baris users ini.
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`
+      // Putaran 84: nilai ulang grant dari bacaan terkunci (konten izin role
+      // bisa berubah sejak cek pra-tx).
+      const grantErrTx = await assertCanGrantRoles(actor, cleanRoleIds, tx as never)
+      if (grantErrTx) return grantErrTx
       const targetRoles = await tx.role.findMany({
         where: { users: { some: { id: userId } } },
         select: { id: true, name: true },
@@ -497,8 +526,13 @@ export async function updateProfile(formData: FormData) {
       if (!passwordConfirm) {
         return { error: "Password wajib diisi untuk mengganti email" }
       }
+      const limit = await peekRateLimit(passwordVerifyKey(userId), PASSWORD_VERIFY_LIMIT)
+      if (!limit.allowed) {
+        return { error: "Terlalu banyak percobaan password salah. Coba lagi nanti." }
+      }
       const valid = await bcrypt.compare(passwordConfirm, current.password)
       if (!valid) {
+        await takeRateLimit(passwordVerifyKey(userId), PASSWORD_VERIFY_LIMIT)
         return { error: "Password salah" }
       }
     }

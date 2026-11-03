@@ -154,3 +154,40 @@ export async function loadReturnCreditByInvoiceId(
     await receivableAccountIdForGlobal(),
   )
 }
+
+/**
+ * Total piutang berjalan dashboard = Σ sisa per faktur terbuka, dengan
+ * returnCredit dikurangkan per faktur SEBELUM penjumlahan — faktur yang
+ * lunas murni oleh retur (sisa ≤ 0) menyumbang 0, bukan angka negatif
+ * yang menutupi piutang faktur lain. Putaran 84: dua dashboard (admin &
+ * finance) sebelumnya menjumlah `grand_total − paid_amount` mentah di
+ * SQL sehingga retur POSTED tak pernah mengurangi angka dashboard.
+ */
+export function sumOpenReceivables(
+  invoices: readonly { id: number; grandTotal: unknown; paidAmount: unknown }[],
+  returnCreditByInvoiceId: ReadonlyMap<number, number>,
+): number {
+  let total = 0
+  for (const inv of invoices) {
+    const credit = returnCreditByInvoiceId.get(inv.id) ?? 0
+    const outstanding = Math.max(
+      0,
+      Number(inv.grandTotal ?? 0) - Number(inv.paidAmount ?? 0) - credit,
+    )
+    total = safeAdd(total, outstanding, 2)
+  }
+  return safeAdd(total, 0, 2)
+}
+
+/** Total piutang berjalan dari faktur terbuka (dipakai dashboard admin & finance). */
+export async function loadOpenReceivablesTotal(): Promise<number> {
+  const invoices = await prisma.salesInvoice.findMany({
+    where: { status: { in: ["posted", "partial"] }, deletedAt: null },
+    select: { id: true, grandTotal: true, paidAmount: true },
+  })
+  if (invoices.length === 0) return 0
+  const returnCreditByInvoiceId = await loadReturnCreditByInvoiceId(
+    invoices.map((inv) => inv.id),
+  )
+  return sumOpenReceivables(invoices, returnCreditByInvoiceId)
+}

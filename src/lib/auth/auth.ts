@@ -131,6 +131,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             where: { id: Number(token.id) },
             select: {
               name: true,
+              email: true,
               avatar: true,
               isActive: true,
               password: true, // Fetch hash to check for password changes
@@ -145,6 +146,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           if (dbUser && dbUser.isActive && isPasswordValid) {
             token.name = dbUser.name;
+            // Putaran 84: email sesi ikut DB — tanpa ini, ganti email via
+            // profil tak pernah tercermin di session.user.email sampai
+            // login ulang (callback session hanya memetakan dari token).
+            token.email = dbUser.email;
             token.avatar = dbUser.avatar;
             token.isActive = true;
             token.roles = dbUser.roles.map((r) => r.name);
@@ -172,6 +177,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string;
         session.user.name = token.name as string;
+        session.user.email = token.email as string;
         session.user.image = token.avatar as string | null;
         session.user.roles = token.roles as string[];
         session.user.permissions = token.permissions as string[];

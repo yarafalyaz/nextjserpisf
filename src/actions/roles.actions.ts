@@ -31,6 +31,7 @@ function permissionValues(formData: FormData): string[] {
 export type RoleFormError = { success: false; error: string }
 
 export async function createRole(formData: FormData): Promise<RoleFormError> {
+  let grantErrInTx: string | null = null
   try {
   // Sama dengan aturan di proxy.ts + halaman /pengaturan/peran: izin `manage_roles`
   // (super_admin bypass). Dulu action-nya `manage_settings`, sehingga pemegang izin itu
@@ -66,6 +67,13 @@ export async function createRole(formData: FormData): Promise<RoleFormError> {
     if (typeof tx.$executeRaw === "function") {
       await tx.$executeRaw`SELECT id FROM roles FOR UPDATE`
     }
+    // Putaran 84: nilai ulang grant dari bacaan tx (izin bisa berubah
+    // sejak cek pra-tx).
+    const grantErrTx = await assertCanGrantPermissions(actor, permissionIds, tx as never)
+    if (grantErrTx) {
+      grantErrInTx = grantErrTx
+      throw new Error("GRANT_CHECK_FAILED")
+    }
     return tx.role.create({
       data: {
         name: name.trim(),
@@ -84,6 +92,7 @@ export async function createRole(formData: FormData): Promise<RoleFormError> {
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
+    if (grantErrInTx) return { success: false, error: grantErrInTx }
     console.error("[createRole]", getErrorMessage(e) || e)
     // Nama/slug peran unik di DB: duplikat adalah galat yang bisa diperbaiki
     // pengguna, jadi kembalikan sebagai error form (kontrak ActionForm),
@@ -128,6 +137,11 @@ export async function updateRole(id: number, formData: FormData): Promise<RoleFo
     }
     const existing = await tx.role.findUnique({ where: { id }, select: { name: true } })
     if (!existing) throw new Error("Role tidak ditemukan")
+
+    // Putaran 84: nilai ulang grant dari bacaan terkunci (konten izin bisa
+    // berubah sejak cek pra-tx).
+    const grantErrTx = await assertCanGrantPermissions(actor, permissionIds, tx as never)
+    if (grantErrTx) return grantErrTx
 
     // Protect the built-in super_admin role: only a super_admin may modify it.
     // Otherwise a manage_settings holder could strip its permissions or rename it,

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/shadcn/card"
 import { Button } from "@/components/ui/shadcn/button"
 import { StatCard } from "@/components/ui/empty-state"
+import { loadOpenReceivablesTotal } from "@/lib/reports/return-credit"
 import { StatusChip } from "@/components/ui/status-chip"
 
 async function getFinanceData() {
@@ -38,11 +39,9 @@ async function getFinanceData() {
           deletedAt: null,
         },
       }),
-      prisma.$queryRaw<{ total: number }[]>`
-        SELECT COALESCE(SUM(grand_total - paid_amount), 0) as total
-        FROM sales_invoices
-        WHERE status IN ('posted', 'partial') AND deleted_at IS NULL
-      `,
+      // Putaran 84: definisi kanonis laporan (kurangi returnCredit per
+      // faktur); SQL mentah lama mengabaikan retur POSTED.
+      loadOpenReceivablesTotal(),
       prisma.salesPayment.findMany({
         take: 6,
         orderBy: { createdAt: "desc" },
@@ -70,7 +69,7 @@ async function getFinanceData() {
 
   const totalRevenue = Number(revenueAgg._sum.paidAmount || 0)
   const totalInvoiced = Number(revenueAgg._sum.grandTotal || 0)
-  const receivables = Number(receivablesAgg[0]?.total || 0)
+  const receivables = Number(receivablesAgg || 0)
   const monthlyExpense = Number(expenseAgg._sum.amount || 0)
 
   return {

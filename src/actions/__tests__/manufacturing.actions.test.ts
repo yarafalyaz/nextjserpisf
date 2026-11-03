@@ -2172,6 +2172,9 @@ describe("Work Order Actions", () => {
     expect(createArg.data).toEqual([
       expect.objectContaining({ itemId: 1, workOrderItemId: 1 }),
     ])
+    // Putaran 84: MI lahir dari WO wajib membawa slug (detail/ubah via slug).
+    const miCreateArg = mocks.prismaMock.materialIssue.create.mock.calls.at(-1)?.[0]
+    expect(miCreateArg.data.slug).toBeTruthy()
   })
 
   it("putaran 55: createMaterialIssueFromWorkOrder tidak meng-issue baris WO replaced", async () => {

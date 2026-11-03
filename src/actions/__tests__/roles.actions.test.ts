@@ -176,6 +176,25 @@ describe("createRole least-privilege guard", () => {
     expect(redirectMock).toHaveBeenCalledWith("/pengaturan/peran")
   })
 
+  it("putaran 84: grant createRole dinilai ulang dalam tx — izin berubah sesudah cek pra-tx menolak", async () => {
+    requirePermissionMock.mockResolvedValue({
+      id: "1",
+      roles: ["admin"],
+      permissions: ["view_items"],
+    })
+    // Pra-tx: izin diminta masih view_items (dimiliki). Dalam tx: izin id 9
+    // kini bernama manage_users (tidak dimiliki aktor) → tolak, role tak lahir.
+    permissionFindManyMock
+      .mockResolvedValueOnce([{ name: "view_items" }])
+      .mockResolvedValueOnce([{ name: "manage_users" }])
+    const res = await createRole(fd({ name: "Viewer", permissions: ["9"] }))
+    expect(res).toMatchObject({
+      success: false,
+      error: expect.stringMatching(/tidak Anda miliki/),
+    })
+    expect(roleCreateMock).not.toHaveBeenCalled()
+  })
+
   it("lets a super_admin attach any permission without a lookup", async () => {
     requirePermissionMock.mockResolvedValue({
       id: "1",

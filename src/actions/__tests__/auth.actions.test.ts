@@ -69,6 +69,13 @@ vi.mock("@/lib/db/prisma", () => {
   }
 })
 
+const peekRateLimitMock = vi.fn()
+const takeRateLimitMock = vi.fn()
+vi.mock("@/lib/security/rate-limit", () => ({
+  peekRateLimit: (...a: unknown[]) => peekRateLimitMock(...a),
+  takeRateLimit: (...a: unknown[]) => takeRateLimitMock(...a),
+}))
+
 vi.mock("@/lib/utils/slug-db", () => ({
   nextSlug: vi.fn(async () => "test-slug"),
   nextSlugWithClient: vi.fn(async () => "test-slug"),
@@ -118,6 +125,10 @@ beforeEach(() => {
     roleFindManyMock, warehouseCountMock, userCountMock, bcryptCompareMock, bcryptHashMock,
     queryRawMock, transactionMock, executeRawMock,
   ]) m.mockReset()
+  peekRateLimitMock.mockReset()
+  takeRateLimitMock.mockReset()
+  peekRateLimitMock.mockResolvedValue({ allowed: true, remaining: 10, resetAt: 0 })
+  takeRateLimitMock.mockResolvedValue({ allowed: true, remaining: 9, resetAt: 0 })
   queryRawMock.mockResolvedValue([])
   executeRawMock.mockResolvedValue(1)
   transactionMock.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn(txMock))
@@ -212,6 +223,23 @@ describe("changePassword", () => {
     )
   })
 
+  it("putaran 84: percobaan password salah dibatasi per user (peek sebelum banding, take saat gagal)", async () => {
+    userFindMock.mockResolvedValue({ id: 7, password: "stored-hash" })
+    bcryptCompareMock.mockResolvedValue(false)
+    const res = await changePassword(fd({ [SECRET_KEY]: "oldvalue1", [NEW_KEY]: "brandnewvalue12" }))
+    expect(res).toEqual({ error: "Password lama salah" })
+    expect(peekRateLimitMock).toHaveBeenCalledWith("password-verify:user:7", expect.anything())
+    expect(takeRateLimitMock).toHaveBeenCalledWith("password-verify:user:7", expect.anything())
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("putaran 84: bucket habis menolak sebelum bcrypt dibanding", async () => {
+    peekRateLimitMock.mockResolvedValue({ allowed: false, remaining: 0, resetAt: 0 })
+    const res = await changePassword(fd({ [SECRET_KEY]: "oldvalue1", [NEW_KEY]: "brandnewvalue12" }))
+    expect(res.error).toMatch(/Terlalu banyak percobaan/)
+    expect(bcryptCompareMock).not.toHaveBeenCalled()
+  })
+
   it("returns generic error on exception", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     userFindMock.mockRejectedValue(new Error("DB Connection Error"))
@@ -264,6 +292,23 @@ describe("createUser", () => {
     userCreateMock.mockRejectedValue(new Error("Unique constraint failed on email"))
     const res = await createUser(fd({ name: "X", email: "x@y.z", password: "kata-sandi-baru-kuat" }))
     expect(res).toEqual({ error: "Email sudah terdaftar" })
+  })
+
+  it("putaran 84: grant dinilai ulang dalam tx — izin role bertambah sesudah cek pra-tx menolak create", async () => {
+    // Bacaan pra-tx (pertama): role tanpa izin asing → lolos. Bacaan dalam
+    // tx (kedua): role kini membawa manage_users yang tak dimiliki aktor.
+    roleFindManyMock
+      .mockResolvedValueOnce([{ name: "admin", permissions: [{ name: "manage_users" }] }])
+      .mockResolvedValueOnce([
+        { name: "admin", permissions: [{ name: "manage_users" }, { name: "approve_workflows" }] },
+      ])
+      .mockResolvedValue([])
+    userCreateMock.mockResolvedValue({ id: 12 })
+    const res = await createUser(
+      fd({ name: "X", email: "x@y.z", password: "kata-sandi-baru-kuat", roleIds: ["1"] }),
+    )
+    expect(res.error).toMatch(/tidak Anda miliki/)
+    expect(userCreateMock).not.toHaveBeenCalled()
   })
 
   it("putaran 77: tabrakan slug tidak dilaporkan sebagai email terdaftar", async () => {
@@ -446,7 +491,10 @@ describe("updateUserRoles", () => {
     // Panggilan findMany pertama = grant-guard luar atas peran diminta [5]
     // (peran biasa, izin aktor di beforeEach cukup) -> lolos.
     roleFindManyMock.mockResolvedValueOnce([{ name: "petugas" }])
-    // Bacaan peran DI DALAM tx sesudah kunci baris users: target kini
+    // Putaran 84: bacaan berikutnya = grant-guard dinilai ulang DI DALAM tx
+    // atas peran diminta [5] (masih peran biasa) -> lolos.
+    roleFindManyMock.mockResolvedValueOnce([{ name: "petugas" }])
+    // Bacaan peran target DI DALAM tx sesudah kunci baris users: target kini
     // super_admin (promosi konkuren commit di antaranya) -> wajib ditolak,
     // bukan ditimpa roles.set dari keputusan snapshot luar.
     roleFindManyMock.mockResolvedValue([{ id: 9, name: "super_admin" }])

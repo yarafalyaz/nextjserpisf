@@ -2177,6 +2177,11 @@ export async function createMaterialIssueFromWorkOrder(
       const created = await tx.materialIssue.create({
         data: {
           documentNo: miDocNo,
+          // Putaran 84: slug wajib terisi seperti jalur createMaterialIssue —
+          // tanpa slug, MI jalur WO ini tak bisa dibuka dari URL dokumen
+          // (detail/ubah menyelesaikan via slug). Stem documentNo sequence
+          // atomik sehingga tak ada tabrakan antar-tx.
+          slug: await nextSlugWithClient(tx as never, "materialIssue", miDocNo),
           warehouseId,
           workOrderId,
           projectId: lockedWo.projectId,

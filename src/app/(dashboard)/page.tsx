@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db/prisma"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
+import { loadOpenReceivablesTotal } from "@/lib/reports/return-credit"
 import { NotificationsWidget } from "@/components/dashboard/notifications-widget"
 import { RecentInvoicesTable } from "@/components/dashboard/recent-invoices-table"
 import { SectionCards } from "@/components/dashboard/section-cards"
@@ -179,11 +180,11 @@ async function getDashboardData() {
         },
       },
     }) as Promise<ActiveProject[]>,
-    prisma.$queryRaw<{ total: number }[]>`
-      SELECT COALESCE(SUM(grand_total - paid_amount), 0) as total
-      FROM sales_invoices
-      WHERE status IN ('posted', 'partial') AND deleted_at IS NULL
-    `,
+    // Putaran 84: piutang dashboard wajib definisi kanonis laporan
+    // (grandTotal − paidAmount − returnCredit per faktur); SQL mentah lama
+    // mengabaikan retur POSTED sehingga angka dashboard tak pernah
+    // konvergen dengan aging/statement.
+    loadOpenReceivablesTotal(),
     prisma.salesInvoice.aggregate({
       _sum: { paidAmount: true },
       where: { status: { in: ["posted", "partial", "paid"] } },
@@ -256,7 +257,7 @@ async function getDashboardData() {
     completedThisMonth,
     overdueProjects,
     cars,
-    receivables: Number(receivablesAgg[0]?.total || 0),
+    receivables: Number(receivablesAgg || 0),
     totalRevenue: Number(revenueAgg._sum.paidAmount || 0),
     recentPayments,
     lowStockItems,
