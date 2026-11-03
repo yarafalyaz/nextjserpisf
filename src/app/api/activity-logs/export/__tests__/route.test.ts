@@ -169,11 +169,35 @@ it("rejects a non-integer userId with 400 and never queries", async () => {
     expect(body.startsWith("Waktu,Pengguna,Aksi,Model,ID,Deskripsi,IP")).toBe(true)
 
     // None of these formula triggers may appear unescaped as the first
-    // character inside a quoted cell (`,X"`,X in {=, +, -, @, \t, \r}).
-    // We scan the raw bytes: a leading `=`, `+`, `-`, `@`, `\t`, or `\r`
-    // inside a `"..."` cell is the formula-injection sink.
-    const dangerousCell = /,"([=+\-@\t\r])[^"]*",/
+    // character inside a quoted cell (`,X"`,X in {=, +, -, @, \r}).
+    // We scan the raw bytes: a leading `=`, `+`, `-`, `@`, or `\r`
+    // inside a `"..."` cell is the formula-injection sink. Tab sebagai
+    // karakter pertama adalah prefix netral baku repo (putaran 98).
+    const dangerousCell = /,"([=+\-@\r])[^"]*",/
     expect(body).not.toMatch(dangerousCell)
+  })
+
+  it("putaran 98: prefix netral berupa TAB persis (baku repo), bukan apostrof", async () => {
+    mocks.authFn.mockResolvedValue({
+      user: { id: 1, roles: ["admin"], permissions: ["manage_settings"] },
+    })
+    mocks.findManyLogs.mockResolvedValue([
+      {
+        createdAt: new Date("2026-06-15T08:00:00Z"),
+        userId: 99,
+        action: "create",
+        modelType: "SalesInvoice",
+        modelId: 1,
+        description: "=2+5",
+        ipAddress: null,
+      },
+    ])
+    mocks.findManyUsers.mockResolvedValue([{ id: 99, name: "Admin" }])
+
+    const res = await GET(makeReq("http://localhost/api/activity-logs/export") as any)
+    const body = await res.text()
+    expect(body).toContain('"\t=2+5"')
+    expect(body).not.toContain("'=2+5")
   })
 
   it("R7PR-05: pemicu `|` dan `%` di awal sel ikut dineutralkan (pola baku repo)", async () => {
@@ -196,9 +220,10 @@ it("rejects a non-integer userId with 400 and never queries", async () => {
     const res = await GET(makeReq("http://localhost/api/activity-logs/export") as any)
     expect(res.status).toBe(200)
     const body = await res.text()
-    // Sel diawali `'` sebelum pemicu — tidak boleh ada "| atau "% polos.
-    expect(body).toContain("\"'|2+3\"")
-    expect(body).toContain("\"'%2+3\"")
+    // Sel diawali TAB sebelum pemicu (baku repo, putaran 98) — tidak
+    // boleh ada "| atau "% polos.
+    expect(body).toContain('"\t|2+3"')
+    expect(body).toContain('"\t%2+3"')
     expect(body).not.toMatch(/,"[|%]/)
   })
 })

@@ -80,7 +80,10 @@ export async function GET(req: NextRequest) {
           // R7PR-05: samakan dengan guard formula CSV baku repo
           // /^[=+\-@\t|%]/ (quotation-followup-export) — `|` dan `%`
           // membuka formula juga di beberapa aplikasi spreadsheet.
-          if (/^[=+\-@\t|%]/.test(str)) str = "'" + str;
+          // Putaran 98: prefix TAB persis seperti lima penanding baku
+          // repo (statement-csv, export-buttons, dst.) — apostrof lama
+          // mengubah nilai tampil sel.
+          if (/^[=+\-@\t|%]/.test(str)) str = "\t" + str;
           return str;
         };
 
