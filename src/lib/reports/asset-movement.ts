@@ -152,7 +152,11 @@ export function buildAssetMovement(input: AssetMovementInput): AssetMovementResu
   rows.push({ kind: "group", label: "Saldo Awal" })
   for (const category of [...openingByCategory.keys()].sort(sortId)) {
     const bucket = openingByCategory.get(category) ?? emptyTotals()
-    addTo(opening, bucket.cost, bucket.accumulated)
+    // Putaran 89: total wajib mewarisi bookValue bucket (sudah dikurangi
+    // impairment via addTriple) — addTo(cost, accumulated) mengabaikannya.
+    opening.cost = safeAdd(opening.cost, bucket.cost, 2)
+    opening.accumulated = safeAdd(opening.accumulated, bucket.accumulated, 2)
+    opening.bookValue = safeAdd(opening.bookValue, bucket.bookValue, 2)
     rows.push({ kind: "data", cells: [category, ...cellsOf(bucket.cost, bucket.accumulated, bucket.bookValue)] })
   }
   rows.push({
@@ -317,7 +321,12 @@ export function buildAssetMovement(input: AssetMovementInput): AssetMovementResu
     addTriple(bucket, tripleAt(asset, accumulatedToDate, eventToDate))
     closingByCategory.set(category, bucket)
   }
-  for (const bucket of closingByCategory.values()) addTo(closingByData, bucket.cost, bucket.accumulated)
+  for (const bucket of closingByCategory.values()) {
+    // Sama seperti saldo awal: bookValue bucket memuat kontra impairment.
+    closingByData.cost = safeAdd(closingByData.cost, bucket.cost, 2)
+    closingByData.accumulated = safeAdd(closingByData.accumulated, bucket.accumulated, 2)
+    closingByData.bookValue = safeAdd(closingByData.bookValue, bucket.bookValue, 2)
+  }
 
   rows.push({ kind: "group", label: "Saldo Akhir" })
   for (const category of [...closingByCategory.keys()].sort(sortId)) {

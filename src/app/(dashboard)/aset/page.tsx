@@ -9,6 +9,7 @@ import { AssetTable } from "./_components/asset-table"
 import { AssetUseFlagSummaryCard } from "./_components/asset-use-status"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { summarizeAssetUseFlags } from "@/lib/finance/asset-use-status"
+import { journalBookValue, type AssetJournalInput } from "@/lib/finance/asset-book-value"
 import { ASSET_DEPRECIATION_PREFIX } from "@/lib/reports/asset-journal"
 
 import type { Metadata } from "next"
@@ -54,39 +55,98 @@ export default async function AssetsPage({
 
   const tableData = toPlain(assets)
 
-  // Penanda registry F-2026-10-23-117-V (Putusan 4): nilai buku dari jurnal
-  // penyusutan POSTED (bukan cache `currentValue`) — perolehan dikurangi
-  // total debit jurnal ASSET_DEPRECIATION_* POSTED per aset. idleActive
-  // belum punya sumber peristiwa (inti BOT 3 ditunda) → false eksplisit,
-  // bukan tebakan dari status/teks bebas.
-  const [registryAssets, postedDepreciation] = await Promise.all([
+  // Penanda registry F-2026-10-23-117-V (Putusan 4): nilai buku jurnal POSTED
+  // penuh (journalBookValue: perolehan + peristiwa − akumulasi − pelepasan −
+  // kontra impairment), pola sama halaman detail; rumus lama purchaseCost −
+  // Σ header penyusutan mengabaikan revaluasi/impairment/disposal sehingga
+  // kartu salah menandai "tersusutkan penuh". idleActive belum punya sumber
+  // peristiwa (inti BOT 3 ditunda) → false eksplisit, bukan tebakan.
+  const [registryAssets, lifecycleJournals, postedChangeEvents] = await Promise.all([
     prisma.asset.findMany({
-      select: { id: true, status: true, purchaseCost: true, residualValue: true },
+      select: {
+        id: true,
+        status: true,
+        purchaseCost: true,
+        residualValue: true,
+        category: {
+          select: {
+            assetAccountId: true,
+            accumulatedDepreciationAccountId: true,
+            accumulatedImpairmentAccountId: true,
+          },
+        },
+      },
       orderBy: { id: "asc" },
     }),
-    prisma.journal.groupBy({
-      by: ["referenceId"],
+    prisma.journal.findMany({
       where: {
         status: "POSTED",
-        referenceType: { startsWith: ASSET_DEPRECIATION_PREFIX },
+        deletedAt: null,
         referenceId: { not: null },
+        OR: [
+          { referenceType: "ASSET_ACQUISITION" },
+          { referenceType: "ASSET_DISPOSAL" },
+          { referenceType: { startsWith: ASSET_DEPRECIATION_PREFIX } },
+        ],
       },
-      _sum: { totalDebit: true },
+      select: {
+        referenceId: true,
+        referenceType: true,
+        entries: { select: { accountId: true, debit: true, credit: true } },
+      },
+    }),
+    prisma.assetChangeEvent.findMany({
+      where: { status: "POSTED", journalId: { not: null } },
+      select: { assetId: true, journalId: true },
     }),
   ])
-  const postedByAssetId = new Map(
-    postedDepreciation.map((row) => [row.referenceId, row._sum.totalDebit]),
-  )
+  const eventJournalIds = [...new Set(postedChangeEvents.map((e) => e.journalId).filter((id): id is number => id != null))]
+  const eventJournals = eventJournalIds.length
+    ? await prisma.journal.findMany({
+        where: { id: { in: eventJournalIds }, status: "POSTED", deletedAt: null },
+        select: {
+          id: true,
+          referenceType: true,
+          entries: { select: { accountId: true, debit: true, credit: true } },
+        },
+      })
+    : []
+  const assetIdByEventJournalId = new Map<number, number>()
+  for (const event of postedChangeEvents) {
+    if (event.journalId != null) assetIdByEventJournalId.set(event.journalId, event.assetId)
+  }
+  const journalsByAssetId = new Map<number, AssetJournalInput[]>()
+  const pushJournal = (assetId: number | null, referenceType: string | null, entries: AssetJournalInput["lines"]) => {
+    if (assetId == null) return
+    const list = journalsByAssetId.get(assetId) ?? []
+    list.push({ referenceType: referenceType ?? "", lines: entries })
+    journalsByAssetId.set(assetId, list)
+  }
+  for (const journal of lifecycleJournals) pushJournal(journal.referenceId, journal.referenceType, journal.entries)
+  for (const journal of eventJournals) {
+    pushJournal(assetIdByEventJournalId.get(journal.id) ?? null, journal.referenceType, journal.entries)
+  }
   const flagSummary = summarizeAssetUseFlags(
-    registryAssets.map((asset) => ({
-      assetId: asset.id,
-      status: asset.status,
-      idleActive: false,
-      bookValue:
-        Number(asset.purchaseCost) - Number(postedByAssetId.get(asset.id) ?? 0),
-      residualValue: asset.residualValue,
-      purchaseCost: asset.purchaseCost,
-    })),
+    registryAssets.map((asset) => {
+      const posted = journalBookValue(journalsByAssetId.get(asset.id) ?? [], {
+        fixedAssetAccountId: asset.category?.assetAccountId ?? null,
+        accumulatedDepreciationAccountId: asset.category?.accumulatedDepreciationAccountId ?? null,
+        accumulatedImpairmentAccountId: asset.category?.accumulatedImpairmentAccountId ?? null,
+      })
+      // Aset legacy tanpa jurnal perolehan tak punya angka jurnal — basis
+      // kolom (perolehan − akumulasi kolom) seperti fallback halaman detail.
+      const bookValue = posted.hasAcquisitionJournal
+        ? Number(posted.bookValue)
+        : Number(asset.purchaseCost) - Number(posted.accumulatedPosted)
+      return {
+        assetId: asset.id,
+        status: asset.status,
+        idleActive: false,
+        bookValue,
+        residualValue: asset.residualValue,
+        purchaseCost: asset.purchaseCost,
+      }
+    }),
   )
 
   return (

@@ -146,6 +146,38 @@ describe("buildAssetMovement", () => {
     expect(result.isTiedOut).toBe(true)
   })
 
+  it("putaran 89: impairment sebelum periode ikut mengurangi total saldo awal dan akhir", () => {
+    const impairment = {
+      assetId: 1,
+      referenceType: "ASSET_CHANGE_EVENT",
+      date: new Date(2026, 8, 15),
+      grossDelta: 0,
+      accumulatedDelta: 0,
+      impairmentDelta: 10_000_000,
+    }
+    const result = buildAssetMovement({ ...fixture(), journals: [impairment], ...PERIOD })
+
+    expect(result.opening.bookValue).toBe(162_000_000)
+    expect(result.closing.bookValue).toBe(154_000_000)
+    expect(result.isTiedOut).toBe(true)
+  })
+
+  it("putaran 89: impairment dalam periode tidak memunculkan selisih tie-out palsu", () => {
+    const impairment = {
+      assetId: 1,
+      referenceType: "ASSET_CHANGE_EVENT",
+      date: new Date(2026, 9, 15),
+      grossDelta: 0,
+      accumulatedDelta: 0,
+      impairmentDelta: 10_000_000,
+    }
+    const result = buildAssetMovement({ ...fixture(), journals: [impairment], ...PERIOD })
+
+    expect(result.changes.bookValue).toBe(-10_000_000)
+    expect(result.closing.bookValue).toBe(154_000_000)
+    expect(result.isTiedOut).toBe(true)
+  })
+
   it("memakai akumulasi sampai tanggal pelepasan, bukan sampai akhir periode", () => {
     const { assets } = fixture()
     const entries = fixture().entries.filter(
