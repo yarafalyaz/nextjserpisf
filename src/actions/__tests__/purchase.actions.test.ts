@@ -892,6 +892,62 @@ describe("Purchase Order Actions", () => {
     mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue(undefined)
   })
 
+  // Putaran 118 — arah turun: PR lama yang dilepas wajib dihitung ulang.
+  // Cacat: PR-7 (2 item) ditutup penuh oleh PO #1 sehingga PR berstatus
+  // `ordered`. Edit PO #1 melepas tautan PR; tanpa hitung ulang PR-7 tetap
+  // `ordered` padahal tak ada lagi PO yang menutupinya, dan createPurchaseOrder
+  // (purchase.actions.ts:1094) hanya menerima PR `approved`/`partial_ordered`
+  // — PR itu macet permanen tanpa jalur UI untuk memesannya lagi. Pola yang
+  // sama sudah dipakai cancelPurchaseOrder/deletePurchaseOrder.
+  it("putaran 118: updatePurchaseOrder menghitung ulang PR lama yang dilepas", async () => {
+    const hook = await import("@/lib/hooks/purchase-order.hook") as any
+    ;(hook.recalcPurchaseRequestStatus as any).mockClear()
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue({
+      status: "draft", isService: false, workOrderId: null, vendorId: 1, purchaseRequestId: 7,
+    })
+    const res = await actions.updatePurchaseOrder(1, fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      // Tanpa purchaseRequestId — tautan ke PR-7 dilepas.
+      items: JSON.stringify([{ itemId: 1, qty: 5, unitPrice: 1000, discount: 0 }]),
+    }))
+    expect(res?.success).toBe(true)
+    expect(hook.recalcPurchaseRequestStatus).toHaveBeenCalledWith(7, expect.anything())
+    mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue(undefined)
+  })
+
+  // Putaran 118 — arah naik: hook PR harus dipanggil DI DALAM transaksi.
+  // Cacat: hook dulu dipanggil sesudah commit dengan NOTE yang keliru
+  // ("signature hanya menerima purchaseOrderId"), padahal
+  // onPurchaseOrderCreated(purchaseOrderId, txClient?) menerima txClient dan
+  // createPurchaseOrder (purchase.actions.ts:1144) sudah memanggilnya di
+  // dalam tx. Di luar tx, kegagalan hook sesudah commit dilaporkan
+  // `{ success: false }` padahal PO sudah tersimpan — operator menekan Simpan
+  // lagi dan status PR tak pernah dihitung ulang.
+  it("putaran 118: updatePurchaseOrder memanggil hook PR di dalam transaksi", async () => {
+    const hook = await import("@/lib/hooks/purchase-order.hook") as any
+    ;(hook.onPurchaseOrderCreated as any).mockClear()
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue({
+      status: "draft", isService: false, workOrderId: null, vendorId: 1, purchaseRequestId: null,
+    })
+    mocks.prismaMock.purchaseRequest.findUnique.mockResolvedValue({ status: "approved", documentNo: "PR-007" })
+    mocks.prismaMock.purchaseOrder.update.mockResolvedValueOnce({ id: 1 })
+    const res = await actions.updatePurchaseOrder(1, fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      purchaseRequestId: "7",
+      items: JSON.stringify([{ itemId: 1, qty: 5, unitPrice: 1000, discount: 0 }]),
+    }))
+    expect(res?.success).toBe(true)
+    // Argumen kedua = txClient: bukti hook berjalan di dalam $transaction,
+    // bukan sesudah commit.
+    expect(hook.onPurchaseOrderCreated).toHaveBeenCalledWith(1, mocks.prismaMock)
+    mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue(undefined)
+    mocks.prismaMock.purchaseRequest.findUnique.mockResolvedValue(null)
+  })
+
   // Regresi putaran 43: PO jasa dari work order — halaman/form edit tak pernah
   // mengirim workOrderId, dan form lama mengirim isService=false karena
   // halaman tak meneruskan nilai awal; server menulis keduanya dari payload
@@ -3260,6 +3316,53 @@ describe("Purchase Actions Additional Branch Coverage", () => {
     expect(res?.error).toContain("tidak dapat dibatalkan")
   })
 
+  it("putaran 118: cancelPurchaseOrder menolak PO jasa yang masih punya tagihan aktif", async () => {
+    // PO jasa tak punya GR sehingga tak pernah received/partial_received — ia
+    // duduk di approved/ordered dan lolos gerbang status walau AP-nya hidup.
+    // Membatalkannya meninggalkan AP atas PO batal dan HPP subkontrak tetap
+    // disinkronkan dari PO itu, tanpa jalur reopen.
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 9,
+      status: "approved",
+      isService: true,
+      purchaseRequestId: null,
+    })
+    mocks.prismaMock.vendorBill.count.mockResolvedValueOnce(1)
+    const res = await actions.cancelPurchaseOrder(9)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tagihan vendor aktif")
+    expect(mocks.prismaMock.purchaseOrder.update).not.toHaveBeenCalled()
+  })
+
+  it("putaran 118: tagihan jasa atas PO draft ditolak 3-way match", async () => {
+    // Halaman pembuat tagihan sudah menolak prefill PO jasa draft/rejected/
+    // cancelled; server dulu meloloskan POST langsung.
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 5,
+      status: "draft",
+      vendorId: 3,
+      purchaseOrderId: 9,
+      goodsReceiptId: null,
+      subtotal: 1000000,
+      grandTotal: 1000000,
+      createdBy: 2,
+      date: new Date("2026-11-01"),
+      notes: null,
+    })
+    mocks.prismaMock.purchaseOrder.findUnique.mockImplementation(async (arg: any) => {
+      if (arg?.select?.status) {
+        return { isService: true, status: "draft", grandTotal: 1000000, documentNo: "PO-0009" }
+      }
+      return { id: 9, isService: true, status: "draft", grandTotal: 1000000, documentNo: "PO-0009", vendorId: 3, workOrderId: null }
+    })
+    mocks.requirePermissionMock.mockResolvedValue({ id: 99, roles: ["super_admin"] })
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 3 })
+    const res = await actions.confirmVendorBill(5)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("berstatus 'draft'")
+    expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled()
+  })
+
   it("createGoodsReceipt fails if PO not approved or ordered", async () => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft", items: [] })
     const res = await actions.createGoodsReceipt(fdMap({
@@ -4178,8 +4281,41 @@ describe("PUR-BR-010 larangan hapus fisik dokumen pembelian posted", () => {
     const res = await actions.deletePurchaseReturn(1)
     expect(res?.success).toBe(true)
     expect(mocks.prismaMock.purchaseReturn.deleteMany).toHaveBeenCalledWith({
-      where: { id: 1, status: "draft" },
+      // Putaran 118: predikat penahan klaim ikut jadi syarat klaim kondisional.
+      where: { id: 1, status: "draft", supplierClaimHoldClaimId: null },
     })
+  })
+
+  it("putaran 118: deletePurchaseReturn menolak retur yang menahan klaim garansi supplier", async () => {
+    // `WarrantyClaim.purchaseReturnId` ON DELETE SET NULL: menghapus retur
+    // melepas klaim beserta penahannya diam-diam, lalu klaim `sent` tak bisa
+    // menuju `returned` selamanya. Retur tertahan klaim SELALU draft, jadi
+    // gerbang status tidak menahannya.
+    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1,
+      status: "draft",
+      supplierClaimHoldClaimId: 12,
+    })
+    expectRefused(await actions.deletePurchaseReturn(1), "klaim garansi supplier",
+      mocks.prismaMock.purchaseReturn.deleteMany)
+  })
+
+  it("putaran 118: updatePurchaseReturn menolak mengganti baris retur yang menahan klaim", async () => {
+    // Isi retur adalah dasar klaim (item + nomor seri dinilai saat penautan);
+    // mengganti barisnya di bawah klaim membuat klaim menunjuk part yang tak
+    // ada lagi di retur.
+    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1,
+      status: "draft",
+      documentNo: "PR-001",
+      supplierClaimHoldClaimId: 12,
+    })
+    const fd = new FormData()
+    fd.set("purchaseOrderId", "5")
+    fd.set("date", "2026-11-01")
+    fd.set("items", JSON.stringify([{ itemId: 1, qty: 1 }]))
+    expectRefused(await actions.updatePurchaseReturn(1, fd), "klaim garansi supplier",
+      mocks.prismaMock.purchaseReturnItem.deleteMany)
   })
 })
 

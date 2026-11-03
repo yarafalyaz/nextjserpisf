@@ -356,9 +356,26 @@ async function assertThreeWayMatch(
   // Untuk jasa, kecocokan yang ditegakkan adalah plafon total PO.
   const po = await tx.purchaseOrder.findUnique({
     where: { id: purchaseOrderId },
-    select: { isService: true, grandTotal: true, documentNo: true },
+    select: { isService: true, status: true, grandTotal: true, documentNo: true },
   });
   if (po?.isService) {
+    // Putaran 118: PO jasa tidak punya GR, jadi tidak ada yang menggating
+    // statusnya di jalur tagihan — padahal PO jasa lahir `draft`
+    // (createServicePurchaseOrderFromWorkOrder) dan bisa `rejected`/
+    // `cancelled`. Tanpa gerbang ini tagihan atas komitmen yang belum
+    // disetujui lolos menjadi AP + jurnal, lalu syncServicePoCostFromBills
+    // menulis HPP subkontraknya. Halaman pembuat tagihan sudah menolak
+    // prefill status ini; server wajib menegakkan hal yang sama.
+    if (
+      po.status === "draft" ||
+      po.status === "rejected" ||
+      po.status === "cancelled" ||
+      po.status === "pending"
+    ) {
+      throw new Error(
+        `3-way match gagal: Pesanan Pembelian ${po.documentNo} berstatus '${po.status}' — tagihan jasa hanya untuk PO yang sudah disetujui/dipesan.`,
+      );
+    }
     const otherBills = await tx.vendorBill.aggregate({
       where: {
         purchaseOrderId,
@@ -1390,6 +1407,21 @@ export async function cancelPurchaseOrder(poId: number) {
         throw new Error("PO ini tidak dapat dibatalkan");
       }
 
+      // Putaran 118: paritas deletePurchaseOrder. PO jasa tak punya GR
+      // sehingga tak pernah mencapai received/partial_received — ia duduk di
+      // approved/ordered dan lolos gerbang status di atas walau tagihannya
+      // sudah POSTED/paid. Membatalkannya meninggalkan AP hidup atas PO
+      // batal, `syncServicePoCostFromBills` (tanpa filter status) terus
+      // menulis HPP subkontrak darinya, dan tak ada jalur reopen PO.
+      const activeBills = await tx.vendorBill.count({
+        where: { purchaseOrderId: poId, status: { notIn: ["cancelled"] } },
+      });
+      if (activeBills > 0) {
+        throw new Error(
+          "PO tidak dapat dibatalkan karena masih memiliki tagihan vendor aktif. Batalkan/void tagihan terlebih dahulu.",
+        );
+      }
+
       await tx.purchaseOrder.update({
         where: { id: poId },
         data: { status: "cancelled" },
@@ -1661,6 +1693,7 @@ async function assertBillLinePricesWithinReference(
   tx: Prisma.TransactionClient,
   purchaseOrderId: number,
   itemsJson: string | null | undefined,
+  excludeBillId?: number,
 ): Promise<void> {
   const rows = safeJsonParse<VendorBillLineInput[]>(itemsJson ?? null) ?? [];
   const lines = rows.filter(
@@ -1692,20 +1725,54 @@ async function assertBillLinePricesWithinReference(
   // Acuan per LINE melintasi SEMUA GR milik PO: baris GR dikelompokkan per
   // itemId berurut id menaik, lalu dikonsumsi berurutan mengikuti urutan baris
   // bill (cermin loadGrLineQueues/mapVendorBillItems) — bukan first-GR saja.
+  //
+  // Putaran 118: antrean membawa SISA qty per baris GR, sama seperti
+  // `loadGrLineQueues` — qty yang sudah tertaut ke tagihan non-cancelled LAIN
+  // dikurangi dulu. Tanpa ini tagihan kedua untuk item yang sama selalu
+  // dibandingkan ke baris GR termurah yang sudah habis dikonsumsi tagihan
+  // pertama: unitCost 10.000 + 12.000, tagihan#1 menagih baris 10.000,
+  // tagihan#2 (baris 12.000) dinilai terhadap 10.000 dan ditolak sebagai
+  // over-bill padahal harganya persis harga penerimaan yang tersisa.
   const grRows = (await grModel.findMany({
     where: {
       goodsReceipt: { purchaseOrderId },
       itemId: { in: itemIds },
     },
-    select: { id: true, itemId: true, unitCost: true },
+    select: { id: true, itemId: true, unitCost: true, qty: true },
     orderBy: { id: "asc" },
-  })) as { id: number; itemId: number; unitCost: unknown }[];
-  const grQueuesByItem = new Map<number, number[]>();
+  })) as { id: number; itemId: number; unitCost: unknown; qty: unknown }[];
+  const grLineIds = grRows.map((g) => g.id);
+  const billItemModel = (tx as unknown as {
+    vendorBillItem?: { findMany: (a: unknown) => Promise<{ goodsReceiptItemId: number | null; qty: unknown }[]> };
+  }).vendorBillItem;
+  const billedByLine = new Map<number, number>();
+  if (billItemModel && grLineIds.length > 0) {
+    for (const b of await billItemModel.findMany({
+      where: {
+        goodsReceiptItemId: { in: grLineIds },
+        vendorBill: {
+          status: { notIn: ["cancelled"] },
+          ...(excludeBillId ? { id: { not: excludeBillId } } : {}),
+        },
+      },
+      select: { goodsReceiptItemId: true, qty: true },
+    })) {
+      if (b.goodsReceiptItemId == null) continue;
+      billedByLine.set(
+        b.goodsReceiptItemId,
+        (billedByLine.get(b.goodsReceiptItemId) ?? 0) + Number(b.qty ?? 0),
+      );
+    }
+  }
+  const grQueuesByItem = new Map<number, { remaining: number; unitCost: number }[]>();
   for (const g of grRows) {
     const unitCost = Number(g.unitCost ?? 0);
+    const remaining = Number(g.qty ?? 0) - (billedByLine.get(g.id) ?? 0);
+    if (remaining <= 0) continue;
+    const entry = { remaining, unitCost };
     const bucket = grQueuesByItem.get(g.itemId);
-    if (bucket) bucket.push(unitCost);
-    else grQueuesByItem.set(g.itemId, [unitCost]);
+    if (bucket) bucket.push(entry);
+    else grQueuesByItem.set(g.itemId, [entry]);
   }
   for (const row of lines) {
     const itemId = row.itemId != null && row.itemId !== "" ? Number(row.itemId) : Number.NaN;
@@ -1717,7 +1784,14 @@ async function assertBillLinePricesWithinReference(
     const amounts = computeBillLineAmounts(row);
     // Konsumsi acuan GR berurutan per baris bill; antrean habis = fallback
     // harga PO (jasa/tanpa GR). Acuan GR hanya dipakai bila unitCost > 0.
-    const grCost = grQueuesByItem.get(itemId)?.shift();
+    // Best-fit longgar cermin mapVendorBillItems: baris pertama yang sisa
+    // qty-nya menampung baris tagihan, kalau tidak ada baris pertama tersisa.
+    const queue = grQueuesByItem.get(itemId);
+    let grCost: number | undefined;
+    if (queue && queue.length > 0) {
+      const fitIdx = queue.findIndex((l) => l.remaining >= amounts.qty);
+      grCost = queue.splice(fitIdx >= 0 ? fitIdx : 0, 1)[0].unitCost;
+    }
     const refNetPerUnit =
       grCost != null && grCost > 0 ? grCost : refPrice;
     const tolerance = Math.max(1000, safeMultiply(amounts.qty * refNetPerUnit, 0.01, 2));
@@ -2419,6 +2493,10 @@ export async function confirmVendorBill(billId: number) {
               taxPercent: Number(l.taxPercent ?? 0),
             })),
           ),
+          // Putaran 118: tagihan ini dikecualikan dari pengurangan sisa qty GR
+          // — tanpa ini baris GR-nya sendiri sudah "habis" oleh tautannya
+          // sendiri dan acuan jatuh ke harga PO (lebih longgar).
+          billId,
         );
       }
 
@@ -3886,8 +3964,20 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
       // dinonaktifkan sesudahnya tidak boleh memblokir edit nominal PO
       // draft; titik pengakuan (confirm/verify) yang menilai ulang.
       const prRelinked = (v.purchaseRequestId ?? null) !== (latest?.purchaseRequestId ?? null);
+      // Putaran 118: edit kini menghitung ulang PR LAMA juga (arah turun),
+      // jadi dua baris PR bisa tersentuh dalam satu tx. Kunci keduanya
+      // berurutan id menaik SESUDAH kunci PO dan sebelum bacaan apa pun:
+      // tanpa urutan tetap, dua edit yang bertukar PR (A→B dan B→A) bisa
+      // saling menunggu kunci PR milik lawannya.
+      const prIdsToLock = prRelinked
+        ? ([latest?.purchaseRequestId, v.purchaseRequestId ?? null].filter(
+            (prId): prId is number => prId != null,
+          ).sort((a, b) => a - b))
+        : [];
+      for (const prId of new Set(prIdsToLock)) {
+        await tx.$queryRaw`SELECT id FROM purchase_requests WHERE id = ${prId} FOR UPDATE`;
+      }
       if (v.purchaseRequestId && prRelinked) {
-        await tx.$queryRaw`SELECT id FROM purchase_requests WHERE id = ${v.purchaseRequestId} FOR UPDATE`;
         const pr = await tx.purchaseRequest.findUnique({
           where: { id: v.purchaseRequestId },
           select: { status: true, documentNo: true },
@@ -3908,7 +3998,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
         await assertItemsExistAndActive(tx, poItems.map((i) => i.itemId));
       }
       await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } });
-      return tx.purchaseOrder.update({
+      const updated = await tx.purchaseOrder.update({
         where: { id },
         data: {
           slug,
@@ -3935,21 +4025,31 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
           },
         },
       });
-    });
 
-    // Update PR status if linked.
-    // NOTE: onPurchaseOrderCreated is intentionally called OUTSIDE the
-    // transaction above — its signature only accepts (purchaseOrderId: number)
-    // and internally opens its own $transaction (purchase-order.hook.ts:11-13).
-    // It also does not post a journal here (it only updates the linked PR's
-    // status), so there is no GL exposure to roll back. Moving it inside would
-    // require giving it an optional txClient parameter (mirroring
-    // deleteJournalByReference's txClient pattern) and re-checking that the
-    // nested $transaction does not deadlock against the outer one. Left as
-    // a follow-up.
-    if (v.purchaseRequestId) {
-      await onPurchaseOrderCreated(po.id);
-    }
+      // Putaran 118 — dua arah status PR, keduanya DI DALAM transaksi.
+      //
+      // Turun: PR lama yang dilepas wajib dihitung ulang. Tanpa ini PR yang
+      // tadinya tertutup penuh oleh PO ini macet `ordered`/`partial_ordered`
+      // selamanya, dan createPurchaseOrder menolaknya (hanya approved/
+      // partial_ordered yang boleh dipesan) — PR tak bisa dipesan ulang tanpa
+      // intervensi DB. Arah turun ini pola yang sama dengan
+      // cancelPurchaseOrder/deletePurchaseOrder.
+      //
+      // Naik: hook PR dulu dipanggil SESUDAH commit dengan NOTE yang keliru
+      // ("signature hanya menerima purchaseOrderId"); kenyataannya hook
+      // menerima `txClient` dan createPurchaseOrder memanggilnya di dalam tx.
+      // Di luar tx, kegagalan hook sesudah commit dilaporkan sebagai
+      // `{ success: false }` padahal PO sudah tersimpan — operator menekan
+      // Simpan lagi dan status PR tidak pernah dihitung ulang.
+      const oldPrId = latest?.purchaseRequestId ?? null;
+      if (prRelinked && oldPrId != null && oldPrId !== (v.purchaseRequestId ?? null)) {
+        await recalcPurchaseRequestStatus(oldPrId, tx);
+      }
+      if (v.purchaseRequestId) {
+        await onPurchaseOrderCreated(updated.id, tx);
+      }
+      return updated;
+    });
 
     // R6WN-11: update bukan PO baru — judul diperbarui + kegagalan notifikasi
     // tidak boleh melaporkan update yang sudah commit sebagai gagal.
@@ -4099,8 +4199,11 @@ export async function updateVendorBill(id: number, formData: FormData) {
         }
         // F-2026-10-28-157-V Putusan 1+3 di edit (titik kedua): sama seperti
         // create — guard per-baris + referensi termin atas input baru.
+        // Putaran 118: `id` dikecualikan dari pengurangan sisa qty GR — baris
+        // lama tagihan ini akan diganti di bawah, jadi menghitungnya membuat
+        // baris GR-nya sendiri "habis" dan acuan jatuh ke harga PO.
         assertTermsReference(v.terms);
-        await assertBillLinePricesWithinReference(tx, effectivePoId, v.items);
+        await assertBillLinePricesWithinReference(tx, effectivePoId, v.items, id);
       }
 
       await assertThreeWayMatch(
@@ -4418,6 +4521,13 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
     if (ret.status !== "draft") {
       throw new Error("Hanya retur draft yang dapat diedit");
     }
+    // Fast-fail sebelum menyentuh apa pun; penilaian otoritatif diulang di
+    // dalam tx di bawah kunci baris retur.
+    if (ret.supplierClaimHoldClaimId != null) {
+      throw new Error(
+        "Retur pembelian sedang menahan klaim garansi supplier; isinya tidak boleh diubah sebelum klaim itu selesai.",
+      );
+    }
 
     const slug = await nextSlug("purchaseReturn", ret.documentNo, { excludeId: id });
 
@@ -4450,10 +4560,20 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
       await tx.$executeRaw`SELECT id FROM purchase_returns WHERE id = ${id} FOR UPDATE`;
       const latestPr = await tx.purchaseReturn.findUnique({
         where: { id },
-        select: { status: true },
+        select: { status: true, supplierClaimHoldClaimId: true },
       });
       if (latestPr && latestPr.status !== "draft")
         throw new Error("Hanya retur draft yang dapat diedit");
+      // Putaran 118: retur yang menahan klaim supplier sedang menjadi dasar
+      // klaim garansi (isi item + nomor seri dinilai saat penautan di
+      // warranty.service). Mengganti barisnya di bawah klaim membuat klaim
+      // menunjuk part yang tak lagi ada di retur; status draft BUKAN penjaga
+      // yang cukup karena retur tertahan klaim selalu draft.
+      if (latestPr?.supplierClaimHoldClaimId != null) {
+        throw new Error(
+          "Retur pembelian sedang menahan klaim garansi supplier; isinya tidak boleh diubah sebelum klaim itu selesai.",
+        );
+      }
 
       if (v.purchaseOrderId) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
@@ -4889,19 +5009,35 @@ export async function deletePurchaseReturn(id: number) {
   try {
     await requirePermission("delete_purchase_returns");
 
-    const purchaseReturn = await prisma.purchaseReturn.findUniqueOrThrow({
-      where: { id },
+    await prisma.$transaction(async (tx) => {
+      // Kunci baris retur dulu: tautan klaim supplier (warranty.service
+      // linkSupplierClaim) mengunci baris yang SAMA sebelum menulis penahan,
+      // jadi sesudah titik ini penahan tidak bisa lahir di jendela.
+      await tx.$executeRaw`SELECT id FROM purchase_returns WHERE id = ${id} FOR UPDATE`;
+      const purchaseReturn = await tx.purchaseReturn.findUniqueOrThrow({
+        where: { id },
+        select: { status: true, supplierClaimHoldClaimId: true },
+      });
+      if (purchaseReturn.status !== "draft") {
+        throw new Error("Hanya retur draft yang dapat dihapus");
+      }
+      // Putaran 118: `WarrantyClaim.purchaseReturnId` ON DELETE SET NULL
+      // (schema.prisma:6081) — menghapus retur melepas klaim supplier diam-diam
+      // beserta penahannya. Warisan yang tertahan klaim tetap draft (itu syarat
+      // linkSupplierClaim), jadi gerbang status di atas tidak menahannya dan
+      // klaim menjadi `sent` tanpa retur: transisi `returned` selalu gagal.
+      if (purchaseReturn.supplierClaimHoldClaimId != null) {
+        throw new Error(
+          "Retur pembelian tidak dapat dihapus karena sedang menahan klaim garansi supplier. Selesaikan atau lepaskan klaimnya lebih dulu.",
+        );
+      }
+      const claim = await tx.purchaseReturn.deleteMany({
+        where: { id, status: "draft", supplierClaimHoldClaimId: null },
+      });
+      if (claim.count === 0) {
+        throw new Error("Retur pembelian sudah berubah status; muat ulang halaman");
+      }
     });
-    if (purchaseReturn.status !== "draft") {
-      throw new Error("Hanya retur draft yang dapat dihapus");
-    }
-
-    const claim = await prisma.purchaseReturn.deleteMany({
-      where: { id, status: "draft" },
-    });
-    if (claim.count === 0) {
-      throw new Error("Retur pembelian sudah berubah status; muat ulang halaman");
-    }
     await logActivity(
       "delete",
       "PurchaseReturn",

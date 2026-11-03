@@ -241,10 +241,11 @@ describe("F-2026-10-28-157-V E157B guard per-baris + referensi termin (create/ed
   // (unitCost 10000 + 12000) dikonsumsi berurutan oleh dua baris bill.
   // Plafon agregat GR ikut dinaikkan agar guard per-baris yang diuji,
   // bukan 3-way match. Satu penegak dipakai dua arah (lolos + tahan).
+  // Putaran 118: antrean membawa qty (sisa) — baris GR nyata selalu berqty.
   function grLineQueues() {
     mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([
-      { id: 11, itemId: 7, unitCost: 10000 },
-      { id: 12, itemId: 7, unitCost: 12000 },
+      { id: 11, itemId: 7, unitCost: 10000, qty: 10 },
+      { id: 12, itemId: 7, unitCost: 12000, qty: 10 },
     ])
     mocks.prismaMock.goodsReceipt.findMany.mockResolvedValueOnce([
       { items: [{ qty: 10, unitCost: 10000 }, { qty: 10, unitCost: 12000 }] },
@@ -263,5 +264,23 @@ describe("F-2026-10-28-157-V E157B guard per-baris + referensi termin (create/ed
     const res = await actions.createVendorBill(PO_BILL(lines))
     if (pass) expect(res?.success).toBe(true)
     else expectBillReject(res, /per baris/i)
+  })
+
+  // Putaran 118: antrean acuan harga GR wajib mengurangi qty yang sudah
+  // ditagih tagihan lain (cermin `loadGrLineQueues`). Tanpa ini tagihan kedua
+  // untuk item yang sama dibandingkan ke baris GR termurah yang sudah habis
+  // dikonsumsi tagihan pertama: GR 10 @ 10.000 ditagih penuh oleh tagihan#1,
+  // lalu tagihan#2 atas baris GR 10 @ 12.000 ditolak sebagai over-bill
+  // padahal harganya persis harga penerimaan yang tersisa.
+  it("putaran 118: tagihan kedua memakai sisa baris GR, bukan baris yang sudah ditagih", async () => {
+    grLineQueues()
+    // Tagihan#1 sudah menautkan seluruh baris GR 11 (10 @ 10.000).
+    mocks.prismaMock.vendorBillItem.findMany.mockResolvedValueOnce([
+      { goodsReceiptItemId: 11, qty: 10 },
+    ])
+    const res = await actions.createVendorBill(PO_BILL([
+      { itemId: 7, qty: 10, unitPrice: 12000, discountPercent: 0, taxPercent: 0 },
+    ]))
+    expect(res?.success).toBe(true)
   })
 })
