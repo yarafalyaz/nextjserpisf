@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => {
     salesOrder: { findMany: vi.fn(), update: vi.fn() },
     salesOrderItem: { deleteMany: vi.fn(), createMany: vi.fn() },
     salesInvoice: { findMany: vi.fn(), update: vi.fn(), findUniqueOrThrow: vi.fn() },
-    salesInvoiceItem: { deleteMany: vi.fn(), createMany: vi.fn() },
+    salesInvoiceItem: { findMany: vi.fn(), deleteMany: vi.fn(), createMany: vi.fn() },
+    item: { findMany: vi.fn() },
     salesPayment: { findMany: vi.fn(), count: vi.fn() },
     $queryRaw: vi.fn().mockResolvedValue([]),
     $transaction: vi.fn(async (fn: any) => fn(prismaMock)),
@@ -27,6 +28,39 @@ describe("quotation-sync.service / resyncOnEdit", () => {
     // No real (non-DP) settlement by default → documents remain editable.
     mocks.prismaMock.salesPayment.count.mockResolvedValue(0)
     mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([])
+    mocks.prismaMock.item.findMany.mockResolvedValue([])
+  })
+
+  // Putaran 114: resync menghapus SELURUH baris faktur draft lalu menulis
+  // ulang dari baris penawaran. Snapshot baris yang tidak ikut ditulis hilang
+  // diam-diam — `uom` menentukan konversi qty ke satuan dasar saat posting
+  // (accounting.hook), `isService` menentukan elemen Opt ekspor Coretax.
+  it("putaran 114: resync mempertahankan uom baris dan membekukan isService dari master", async () => {
+    const p = mocks.prismaMock
+    p.quotation.findUnique.mockResolvedValue({
+      id: 6, status: "draft", subtotal: 2400, discount: 0, tax: 0, grandTotal: 2400,
+      sections: [{ items: [{ itemId: 1, uom: "BOX", qty: 2, unitPrice: 1200, discount: 0, total: 2400 }] }],
+    })
+    p.salesOrder.findMany
+      .mockResolvedValueOnce([{ id: 10 }])
+      .mockResolvedValueOnce([{ id: 10, status: "draft" }])
+    p.salesOrder.update.mockResolvedValue({})
+    p.salesOrderItem.deleteMany.mockResolvedValue({ count: 0 })
+    p.salesOrderItem.createMany.mockResolvedValue({ count: 1 })
+    p.salesInvoice.findMany.mockResolvedValue([
+      { id: 101, salesOrderId: 10, status: "draft", grandTotal: 2400 },
+    ])
+    p.salesInvoiceItem.deleteMany.mockResolvedValue({ count: 0 })
+    p.salesInvoiceItem.createMany.mockResolvedValue({ count: 1 })
+    p.salesInvoice.update.mockResolvedValue({})
+    p.item.findMany.mockResolvedValue([{ id: 1, isService: false }])
+
+    await resyncOnEdit(6)
+
+    const arg = p.salesInvoiceItem.createMany.mock.calls.at(-1)?.[0] as any
+    expect(arg?.data).toEqual([
+      expect.objectContaining({ itemId: 1, uom: "BOX", isService: false }),
+    ])
   })
 
   it("putaran 73: SO/faktur calon dikunci lalu status dibaca ulang sebelum tulis", async () => {

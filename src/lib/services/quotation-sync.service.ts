@@ -15,6 +15,7 @@ interface QuotationItem {
   discount: number
   total: number
   description?: string | null
+  uom?: string | null
 }
 
 function flattenQuotationItems(sections: { items: any[] }[]): QuotationItem[] {
@@ -26,6 +27,7 @@ function flattenQuotationItems(sections: { items: any[] }[]): QuotationItem[] {
       discount: Number(item.discount ?? 0),
       total: Number(item.total ?? Number(item.qty) * Number(item.unitPrice) - Number(item.discount ?? 0)),
       description: item.description ?? null,
+      uom: item.uom ?? null,
     }))
   )
 }
@@ -58,6 +60,20 @@ export async function resyncOnEdit(quotationId: number, userId: number | null = 
     if (await quotationHasRealSettlement(quotationId, tx)) return
 
     const items = flattenQuotationItems(quotation.sections)
+    // R6IE-07: baris faktur membawa snapshot jenis jasa/barang — ekspor
+    // Coretax membaca kolom ini, bukan Item.isService berjalan. Resync
+    // menulis ulang seluruh baris, jadi snapshot wajib dibekukan ulang di
+    // sini; tanpa itu edit penawaran mengosongkan isService dan ekspor pajak
+    // menolak faktur tersebut selamanya. Baris tanpa itemId tetap null.
+    const syncItemIds = [...new Set(items.map((i) => i.itemId).filter((id): id is number => id != null))]
+    const isServiceById = new Map<number, boolean>()
+    if (syncItemIds.length > 0) {
+      const masters = await tx.item.findMany({
+        where: { id: { in: syncItemIds } },
+        select: { id: true, isService: true },
+      })
+      for (const m of masters) isServiceById.set(m.id, m.isService)
+    }
     const salesOrders = await tx.salesOrder.findMany({
       where: {
         quotationId,
@@ -204,6 +220,11 @@ export async function resyncOnEdit(quotationId: number, userId: number | null = 
               itemId: qi.itemId,
               description: qi.description,
               qty: qi.qty,
+              // Putaran 114: uom penawaran = satuan baris faktur; tanpa ini
+              // posting menghitung qty 1:1 (hook hanya melihat uom kosong).
+              uom: qi.uom,
+              // Snapshot jenis baris dari master (bukan klaim historis harga).
+              isService: qi.itemId != null ? (isServiceById.get(qi.itemId) ?? null) : null,
               unitPrice: qi.unitPrice,
               discount: qi.discount,
               total: qi.total,
