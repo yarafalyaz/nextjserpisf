@@ -77,7 +77,14 @@ describe("PPh dipotong pelanggan (DB integration)", () => {
 
     const [customer, assetAccount] = await Promise.all([
       prisma.customer.findFirst({ select: { id: true } }),
-      prisma.account.findFirst({ where: { type: "ASSET" }, select: { id: true } }),
+      // Putaran 102: akun induk tidak bisa diposting (`assertAccountsExist`
+      // menolak `_count.children > 0`, kanonis journal.service). Fixture wajib
+      // memilih daun yang hidup — `findFirst({ type: "ASSET" })` polos bisa
+      // mengembalikan akun induk di DB seed dan memerahkan gerbang yang benar.
+      prisma.account.findFirst({
+        where: { type: "ASSET", isActive: true, deletedAt: null, children: { none: {} } },
+        select: { id: true },
+      }),
     ])
     if (!customer || !assetAccount) {
       console.warn("DB ini tidak punya customer/akun — melewati tes")
