@@ -665,8 +665,9 @@ describe("Bank Statement Line Actions", () => {
     expect(res.success).toBe(false)
     expect(String(res.error)).toContain("rekonsiliasi selesai")
     expect(mocks.prismaMock.bankStatementLine.update).not.toHaveBeenCalled()
-    // Hanya kecocokan di rekonsiliasi COMPLETED yang membekukan barisnya;
-    // kecocokan pada rekonsiliasi draft masih boleh diperbaiki.
+    // Putaran 108: kecocokan pada rekonsiliasi COMPLETED tetap gerbang pertama
+    // (pesan "selesai"); kecocokan pada rekonsiliasi DRAFT kini juga membekukan
+    // baris lewat cek terpisah sesudahnya — lihat finance-recon-match-guard.
     expect(mocks.prismaMock.bankReconciliationItem.findFirst).toHaveBeenCalledWith({
       where: {
         bankStatementLineId: 11,
