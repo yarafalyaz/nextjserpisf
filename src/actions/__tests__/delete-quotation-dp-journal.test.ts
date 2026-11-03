@@ -35,6 +35,7 @@ const txQuotationSectionFindManyMock = vi.fn()
 const txQuotationItemDeleteManyMock = vi.fn()
 const txQuotationSectionDeleteManyMock = vi.fn()
 const txQuotationDeleteMock = vi.fn()
+const txApprovalDeleteManyMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -86,6 +87,10 @@ function wireTransaction() {
     quotationSection: { findMany: txQuotationSectionFindManyMock, deleteMany: txQuotationSectionDeleteManyMock },
     quotationItem: { deleteMany: txQuotationItemDeleteManyMock },
     quotation: { delete: txQuotationDeleteMock, findUniqueOrThrow: txQuotationFindUniqueOrThrowMock },
+    // Putaran 105: deleteQuotation ikut menyapu Approval polimorfik milik
+    // penawaran itu; tanpa delegate di stub ini tx melempar TypeError dan
+    // action mengembalikan { success: false } — palsu, bukan perilaku nyata.
+    approval: { deleteMany: txApprovalDeleteManyMock },
   }
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
 }
@@ -100,6 +105,7 @@ beforeEach(() => {
     txWorkOrderItemDeleteManyMock, txWorkOrderDeleteManyMock, txProjectDeleteManyMock,
     txDownPaymentFindManyMock, txDownPaymentDeleteManyMock, txQuotationSectionFindManyMock,
     txQuotationItemDeleteManyMock, txQuotationSectionDeleteManyMock, txQuotationDeleteMock,
+    txApprovalDeleteManyMock,
   ]) m.mockReset()
 
   requirePermissionMock.mockResolvedValue({ id: 1 })
@@ -124,6 +130,12 @@ describe("deleteQuotation reverses Down Payment journals", () => {
     expect(deleteJournalByReferenceTxMock).toHaveBeenCalledWith(expect.anything(), "DownPayment", 71)
     expect(deleteJournalByReferenceTxMock).toHaveBeenCalledWith(expect.anything(), "DownPayment", 72)
     expect(txDownPaymentDeleteManyMock).toHaveBeenCalledWith({ where: { quotationId: 5 } })
+    // Putaran 105: Approval polimorfik tanpa FK milik penawaran ini ikut
+    // dibersihkan — dibiarkan berarti baris pending yatim memblokir
+    // edit/hapus konfigurasi workflow selamanya (pendingCount > 0).
+    expect(txApprovalDeleteManyMock).toHaveBeenCalledWith({
+      where: { referenceType: "Quotation", referenceId: 5 },
+    })
   })
 
   it("does not call the reversal when the quotation has no down payments", async () => {
