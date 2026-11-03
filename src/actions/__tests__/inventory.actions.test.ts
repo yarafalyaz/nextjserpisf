@@ -282,6 +282,25 @@ describe("Stock Adjustment Actions", () => {
     expect(res?.error).toContain("tidak ditemukan");
     expect(mocks.prismaMock.stockAdjustmentItem.deleteMany).not.toHaveBeenCalled();
   });
+  it("putaran 110: edit draft penutupan selisih transfer tidak mengosongkan reason", async () => {
+    // Form penyesuaian tidak punya field `reason` (hanya catatan per baris),
+    // sehingga submit edit selalu tanpa `reason`. Jalur lama menulis
+    // `v.reason ?? null` sehingga penanda "selisih transfer" lenyap:
+    // processStockAdjustment lalu menolak selamanya ("wajib beralasan") dan
+    // createTransferShortageClosure menolak membuat pengganti karena draft
+    // lama masih aktif — dokumen menggantung tanpa jalan keluar di UI.
+    seedDraft(mocks.prismaMock.stockAdjustment, {
+      reason: "selisih transfer",
+      inventoryTransferId: 77,
+    });
+    const res = await actions.updateStockAdjustment(
+      1,
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 5, unitCost: 100 }]), reason: "" }),
+    );
+    expectSuccess(res);
+    const arg = mocks.prismaMock.stockAdjustment.update.mock.calls.at(-1)![0];
+    expect(arg.data.reason).toBe("selisih transfer");
+  });
   it("processStockAdjustment succeeds", async () => {
     seedDraft(mocks.prismaMock.stockAdjustment, { items: [] });
     const res = await actions.processStockAdjustment(1);

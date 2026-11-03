@@ -2487,13 +2487,24 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
         where: { stockAdjustmentId: id },
       });
 
+      // Putaran 110: alasan dokumen bertaut transfer dipertahankan. Form
+      // penyesuaian tidak punya field `reason` (hanya catatan per baris), jadi
+      // setiap submit edit membawa kosong; menulis `v.reason ?? null` menghapus
+      // penanda "selisih transfer" pada draft penutupan selisih. Sesudah itu
+      // `processStockAdjustment` menolak selamanya (mensyaratkan alasan itu) dan
+      // `createTransferShortageClosure` menolak membuat pengganti karena draft
+      // lama masih non-terminal — dokumen menggantung tanpa jalan keluar.
+      const reason = adj.inventoryTransferId != null
+        ? TRANSFER_SHORTAGE_REASON
+        : (v.reason ?? null);
+
       const updated = await tx.stockAdjustment.update({
         where: { id },
         data: {
           slug: await nextSlug("stockAdjustment", adj.documentNo, { excludeId: id }),
           warehouseId,
           date: wibDateToUtcMidnight(v.date),
-          reason: v.reason ?? null,
+          reason,
           type: v.type || "increase",
           notes: v.notes ?? null,
           items: {
