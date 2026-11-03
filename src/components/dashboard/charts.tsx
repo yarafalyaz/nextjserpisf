@@ -146,9 +146,10 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
     if (timeRange === "30d") days = 30
     else if (timeRange === "7d") days = 7
 
-    const refDate = data.length > 0
-      ? new Date(data[data.length - 1].date)
-      : new Date()
+    // Putaran 97: jendela selalu berjangkar HARI INI. Jangkar lama (tanggal
+    // data terakhir) membuat grafik berhenti di transaksi terakhir dan
+    // menyembunyikan kekosongan penjualan sesudahnya.
+    const refDate = new Date()
     refDate.setHours(0, 0, 0, 0)
 
     const dataMap = new Map<string, { lunas: number; tagihan: number }>()

@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/shadcn/button"
 import { StatCard } from "@/components/ui/empty-state"
 import { loadOpenReceivablesTotal } from "@/lib/reports/return-credit"
+import { isReversedPayment } from "@/lib/finance/payment-status"
 import { StatusChip } from "@/components/ui/status-chip"
 
 async function getFinanceData() {
@@ -169,6 +170,11 @@ export default async function FinanceDashboard() {
                           <p className="text-xs text-muted-foreground">
                             {payment.salesInvoice?.customer?.name || "-"}
                           </p>
+                          {/* Putaran 97: baris reversed tetap tampil (histori),
+                              wajib berlabel — payment-status.ts. */}
+                          {isReversedPayment(payment) && (
+                            <StatusChip status={payment.status} />
+                          )}
                         </div>
                         <div className="text-right">
                           <p className="text-xs tabular-nums font-medium">

@@ -28,6 +28,7 @@ const statusColors: Record<string, Tone> = {
   received: 'success',
   partially_received: 'warning',
   returned: 'danger',
+  reversed: 'danger',
   written_off: 'default',
   in_progress: 'accent',
   on_hold: 'warning',

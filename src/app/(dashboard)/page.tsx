@@ -9,6 +9,8 @@ import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { loadOpenReceivablesTotal } from "@/lib/reports/return-credit"
+import { isReversedPayment } from "@/lib/finance/payment-status"
+import { StatusChip } from "@/components/ui/status-chip"
 import { NotificationsWidget } from "@/components/dashboard/notifications-widget"
 import { RecentInvoicesTable } from "@/components/dashboard/recent-invoices-table"
 import { SectionCards } from "@/components/dashboard/section-cards"
@@ -70,14 +72,14 @@ async function getCharts() {
     prisma.$queryRaw<
       { date: string; lunas: number; tagihan: number }[]
     >`
-      SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date,
+      SELECT DATE_FORMAT(date, '%Y-%m-%d') as date,
              COALESCE(SUM(paid_amount), 0) as lunas,
              COALESCE(SUM(grand_total), 0) as tagihan
       FROM sales_invoices
-      WHERE created_at >= ${ninetyDaysAgo}
+      WHERE date >= ${ninetyDaysAgo}
         AND status IN ('posted', 'partial', 'paid')
         AND deleted_at IS NULL
-      GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
+      GROUP BY DATE_FORMAT(date, '%Y-%m-%d')
       ORDER BY date ASC
     `,
     prisma.$queryRaw<{ status: string; count: bigint }[]>`
@@ -623,6 +625,11 @@ export default async function DashboardPage() {
                           <p className="min-w-0 truncate break-words text-sm">
                             {payment.salesInvoice?.customer?.name || "-"}
                           </p>
+                          {/* Putaran 97: baris reversed tetap tampil (histori),
+                              wajib berlabel — payment-status.ts. */}
+                          {isReversedPayment(payment) && (
+                            <StatusChip status={payment.status} />
+                          )}
                           <p className="min-w-0 break-words text-sm font-medium tabular-nums">
                             {formatCurrency(Number(payment.amount))}
                           </p>
@@ -664,7 +671,10 @@ export default async function DashboardPage() {
                         data.recentPayments.map((payment) => (
                           <TableRow key={payment.id}>
                             <TableCell className="px-4 font-mono text-xs lg:px-6">
-                              {payment.documentNo}
+                              {payment.documentNo}{" "}
+                              {isReversedPayment(payment) && (
+                                <StatusChip status={payment.status} />
+                              )}
                             </TableCell>
                             <TableCell className="max-w-[180px] truncate px-4 lg:px-6">
                               {payment.salesInvoice?.customer?.name || "-"}
