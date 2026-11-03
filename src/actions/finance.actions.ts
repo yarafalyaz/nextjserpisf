@@ -50,6 +50,7 @@ import {
 import { getSystemSettings } from "@/lib/utils/settings";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { YEAR_END_CLOSING_REFERENCE_TYPE } from "@/lib/reports/year-end-closing";
+import { isOwnerManagedJournalReference } from "@/lib/services/journal-reversal-policy";
 import { REVERSAL_JOURNAL_REVERSAL_ERROR, YEAR_END_CLOSING_GENERIC_REVERSAL_ERROR } from "@/lib/services/journal.service";
 import {
   requestApprovalIfConfigured,
@@ -2939,6 +2940,26 @@ export async function reverseJournal(journalId: number) {
       ) {
         throw new Error(
           "Jurnal siklus aset tidak dapat dibalik lewat jurnal umum. Koreksi melalui jalur aset (peristiwa perubahan/pelepasan) atau jurnal koreksi manual.",
+        );
+      }
+
+      // Putaran 117: jurnal alur produksi juga tidak boleh lewat jalur generik
+      // ini. `onProductionCostAbsorbed` (stock-journal.service.ts) membangun
+      // ulang nilai jurnal dari SATU jurnal aktif `ProductionCost` per baris
+      // biaya: ia membaca jurnal aktif itu untuk menghitung `currentAmount`,
+      // membaliknya, lalu memposting ulang nilai KUMULATIF di kunci yang sama.
+      // Reversal generik menghasilkan jurnal lawan ber-referenceType "Journal"
+      // dan membuat aslinya REVERSED — bacaan itu tak lagi menemukan apa pun,
+      // `currentAmount` jatuh ke 0, dan hanya DELTA yang diposting: GL berhenti
+      // mencerminkan `ProductionOrder.totalActualCost` tanpa gejala. Jenis
+      // lainnya (penyelesaian, pengeluaran bahan, scrap abnormal) dibaca
+      // laporan sebagai POSTED-saja, jadi aslinya lenyap dari laporan tanpa
+      // lawannya dan WIP/varian tampak hilang. Koreksi lewat dokumen
+      // sumbernya: baris biaya (edit/hapus), pembatalan order, atau alur
+      // produksi yang membalik pasangannya sendiri.
+      if (isOwnerManagedJournalReference(journal.referenceType)) {
+        throw new Error(
+          "Jurnal alur produksi tidak dapat dibalik lewat jurnal umum. Koreksi lewat dokumen sumbernya (baris biaya produksi, pengeluaran material, atau pembatalan order) agar WIP dan nilai persediaan tetap selaras.",
         );
       }
 

@@ -524,6 +524,25 @@ describe("F-2026-10-21-009-V: guard job closed (production-cost actions)", () =>
     expect(res.error).toContain("closed")
     expect(costCreateMock).not.toHaveBeenCalled()
   })
+
+  // Putaran 117: `assertJobCostMutable` hanya mengambil workOrderId PO bila
+  // pemanggil TIDAK mengirimkannya. Form selalu mengirim workOrderId PO-nya,
+  // tetapi panggilan langsung bisa mengirim WO asing — guard closed lalu
+  // memeriksa WO yang salah dan PO yang tertutup lewat WO-nya lolos.
+  it("create menolak workOrderId yang bukan perintah kerja PO itu", async () => {
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress", completedQty: 0, workOrderId: 77 })
+    woFindUniqueMock.mockResolvedValue({ id: 88, status: "in_progress" })
+    costCreateMock.mockResolvedValue({ id: 99 })
+
+    const res = await createProductionCost(
+      fd({ productionOrderId: 1, workOrderId: 88, category: "labor", amount: 1000 }),
+    )
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/perintah kerja/i)
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
 })
 
 describe("STOK-14: biaya dibekukan sesudah release parsial", () => {

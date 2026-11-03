@@ -2395,6 +2395,15 @@ export async function deleteWorkOrder(id: number) {
     // dengan pencipta inspeksi — lalu klaim kondisional di tx yang sama.
     const claim = await prisma.$transaction(async (tx) => {
       await assertQcReferenceUnreferenced("WorkOrder", id, tx);
+      // Putaran 117: `ProductionCost.workOrder` juga ON DELETE CASCADE
+      // (schema.prisma:3484). Baris biaya milik PO yang tertaut WO ini
+      // menyimpan workOrderId-nya; menghapus WO menghapus baris itu tanpa
+      // mengurangi totalActualCost PO maupun membalik jurnal WIP-nya.
+      if ((await tx.productionCost.count({ where: { workOrderId: id } })) > 0) {
+        throw new Error(
+          "Dokumen tidak dapat dihapus karena masih menanggung baris biaya produksi. Hapus baris biaya itu lebih dulu — menghapus perintah kerja akan menghapus barisnya diam-diam dan meninggalkan jurnal WIP yang tak bisa dibalik.",
+        );
+      }
       return tx.workOrder.deleteMany({
         where: { id, status: { in: ["pending", "draft"] } },
       });
@@ -2435,6 +2444,17 @@ export async function deleteProductionOrder(id: number) {
     // di dalam tx sesudah baris PO dikunci, sebelum klaim kondisional.
     const claim = await prisma.$transaction(async (tx) => {
       await assertQcReferenceUnreferenced("ProductionOrder", id, tx);
+      // Putaran 117: `ProductionCost.productionOrder` ON DELETE CASCADE
+      // (schema.prisma:3483) sedangkan jurnal WIP-nya bergantung
+      // `referenceType: "ProductionCost"` tanpa FK. DeleteMany dulu
+      // menghapus baris biaya diam-diam; jurnal serapan biaya tetap POSTED
+      // dan jalur pembaliknya (delete/update baris biaya) ikut lenyap —
+      // Dr WIP menggantung selamanya, GL tak pernah bisa cocok lagi.
+      if ((await tx.productionCost.count({ where: { productionOrderId: id } })) > 0) {
+        throw new Error(
+          "Dokumen tidak dapat dihapus karena masih memiliki baris biaya produksi. Hapus baris biaya tersebut lebih dulu — menghapus order akan menghapus barisnya diam-diam dan meninggalkan jurnal WIP yang tak bisa dibalik.",
+        );
+      }
       return tx.productionOrder.deleteMany({
         where: { id, status: { in: ["draft", "pending"] } },
       });

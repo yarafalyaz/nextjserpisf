@@ -52,6 +52,7 @@ const mocks = vi.hoisted(() => {
     qcChecklist: buildModelMock(),
     qcInspection: buildModelMock(),
     nonconformance: buildModelMock(),
+    productionCost: buildModelMock(),
     idempotencyKey: buildModelMock(),
 
     $transaction: vi.fn(async (ops: any) => {
@@ -2263,6 +2264,38 @@ describe("Work Order Actions", () => {
     expect(mocks.prismaMock.productionOrder.deleteMany).not.toHaveBeenCalled()
   })
 
+  // Putaran 117: `ProductionCost.productionOrder` ON DELETE CASCADE, sedangkan
+  // `Journal.referenceType/referenceId` tidak punya FK. Menghapus PO draft
+  // yang punya baris biaya menghapus barisnya diam-diam dan meninggalkan
+  // jurnal WIP POSTED yatim — satu-satunya jalur pembaliknya (delete/update
+  // baris biaya) ikut hilang, jadi Dr WIP itu menggantung selamanya.
+  it("deleteProductionOrder menolak PO yang masih punya baris biaya produksi", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    // Sekali pakai: mockResolvedValue() bocor ke describe berikutnya (count QC
+    // dari test sebelumnya masih terpasang sebagai implementasi tetap).
+    mocks.prismaMock.qcInspection.count.mockResolvedValueOnce(0)
+    mocks.prismaMock.nonconformance.count.mockResolvedValueOnce(0)
+    mocks.prismaMock.productionCost.count.mockResolvedValueOnce(2)
+    const res = await actions.deleteProductionOrder(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/biaya produksi/i)
+    expect(mocks.prismaMock.productionOrder.deleteMany).not.toHaveBeenCalled()
+  })
+
+  // Kelas yang sama lewat FK kedua: `ProductionCost.workOrder` juga CASCADE,
+  // dan baris biaya PO ber-workOrderId ikut terhapus saat WO-nya dihapus —
+  // padahal PO-nya (dan baris biayanya) masih hidup.
+  it("deleteWorkOrder menolak WO yang masih menanggung baris biaya produksi", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.qcInspection.count.mockResolvedValueOnce(0)
+    mocks.prismaMock.nonconformance.count.mockResolvedValueOnce(0)
+    mocks.prismaMock.productionCost.count.mockResolvedValueOnce(1)
+    const res = await actions.deleteWorkOrder(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/biaya produksi/i)
+    expect(mocks.prismaMock.workOrder.deleteMany).not.toHaveBeenCalled()
+  })
+
   it("deleteWorkOrder fails when not draft/pending", async () => {
     mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "completed" })
     const res = await actions.deleteWorkOrder(1)
@@ -2391,7 +2424,7 @@ describe("F-2026-10-21-009-V: tutup/reopen job", () => {
     mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "WO-001", status: "completed" })
     mocks.prismaMock.productionOrder.findFirst.mockResolvedValue(null)
     mocks.prismaMock.materialIssue.findFirst.mockResolvedValue(null)
-    mocks.prismaMock.productionCost = { findFirst: vi.fn().mockResolvedValue(null) }
+    mocks.prismaMock.productionCost.findFirst.mockResolvedValue(null)
     mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
     const res = await actions.closeWorkOrder(1, "selesai")
     expect(res?.success).toBe(true)
@@ -2406,7 +2439,7 @@ describe("F-2026-10-21-009-V: tutup/reopen job", () => {
     mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "WO-001", status: "completed" })
     mocks.prismaMock.productionOrder.findFirst.mockResolvedValue(null)
     mocks.prismaMock.materialIssue.findFirst.mockResolvedValue(null)
-    mocks.prismaMock.productionCost = { findFirst: vi.fn().mockResolvedValue(null) }
+    mocks.prismaMock.productionCost.findFirst.mockResolvedValue(null)
     mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
     mocks.prismaMock.stockReservation.updateMany.mockResolvedValue({ count: 0 })
     const noop = await actions.closeWorkOrder(1, "selesai")
@@ -2496,7 +2529,7 @@ describe("F-2026-10-21-009-V: tutup/reopen job", () => {
     mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "WO-001", status: "completed" })
     mocks.prismaMock.productionOrder.findFirst.mockResolvedValue(null)
     mocks.prismaMock.materialIssue.findFirst.mockResolvedValue(null)
-    mocks.prismaMock.productionCost = { findFirst: vi.fn().mockResolvedValue(null) }
+    mocks.prismaMock.productionCost.findFirst.mockResolvedValue(null)
     mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
     expect((await actions.closeWorkOrder(1, "tutup pertama"))?.success).toBe(true)
     // reopen

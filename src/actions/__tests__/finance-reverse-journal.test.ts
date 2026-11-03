@@ -234,6 +234,75 @@ describe("reverseJournal", () => {
     expect(journalUpdateMock).not.toHaveBeenCalled()
   })
 
+  // Putaran 117: jurnal alur produksi tidak boleh dibalik lewat jalur generik.
+  // `onProductionCostAbsorbed` membangun ulang nilai jurnal dari SATU jurnal
+  // aktif `ProductionCost` per baris biaya (lalu membalik dan menggantinya
+  // dengan nilai KUMULATIF di kunci yang sama). Reversal generik menghapus
+  // jurnal aktif itu dari pandangannya (`status: { not: "REVERSED" }`), jadi
+  // `currentAmount` terbaca 0 dan hanya delta yang diposting: GL berhenti
+  // mencerminkan `ProductionOrder.totalActualCost`, permanen. Jenis lain
+  // (penyelesaian, pengeluaran bahan, scrap abnormal) dibaca laporan
+  // POSTED-saja sehingga aslinya lenyap dari laporan tanpa lawannya.
+  for (const referenceType of [
+    "ProductionCost",
+    "ProductionOrder",
+    "ProductionOrder_321",
+    "ProductionOrderCostVariance",
+    "ProductionOrderCostVariance_321",
+    "ProductionOrderMaterialIssue",
+    "ProductionOrderAbnormalScrap",
+    "MaterialIssue",
+  ]) {
+    it(`menolak reversal generik jurnal produksi (${referenceType}), nol jurnal ditulis`, async () => {
+      journalFindUniqueOrThrowMock.mockResolvedValue({
+        id: 70,
+        status: "POSTED",
+        referenceType,
+        referenceId: 88,
+        transactionDate: new Date("2026-06-15"),
+        journalNumber: "JRN-202606-00070",
+        description: "Jurnal produksi",
+        type: "PROD",
+        totalDebit: 500,
+        totalCredit: 500,
+        entries: [
+          { accountId: 300, debit: 500, credit: 0, memo: "wip", costCenterId: null, profitCenterId: null },
+          { accountId: 301, debit: 0, credit: 500, memo: "bahan", costCenterId: null, profitCenterId: null },
+        ],
+      })
+
+      const result = await reverseJournal(70)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain("produksi")
+      expect(journalCreateMock).not.toHaveBeenCalled()
+      expect(journalUpdateManyMock).not.toHaveBeenCalled()
+      expect(journalUpdateMock).not.toHaveBeenCalled()
+    })
+  }
+
+  it("jurnal non-produksi tetap bisa dibalik generik (kontrol positif)", async () => {
+    journalFindUniqueOrThrowMock.mockResolvedValue({
+      id: 71,
+      status: "POSTED",
+      referenceType: "PettyCash",
+      referenceId: 5,
+      transactionDate: new Date("2026-06-15"),
+      journalNumber: "JRN-202606-00071",
+      description: "Kas kecil",
+      type: "GENERAL",
+      totalDebit: 100,
+      totalCredit: 100,
+      entries: [
+        { accountId: 100, debit: 100, credit: 0, memo: "beban", costCenterId: null, profitCenterId: null },
+        { accountId: 200, debit: 0, credit: 100, memo: "kas", costCenterId: null, profitCenterId: null },
+      ],
+    })
+
+    const result = await reverseJournal(71)
+    expect(result.success).toBe(true)
+    expect(journalCreateMock).toHaveBeenCalled()
+  })
+
   it("rolls the tx back when the reversal body throws (atomic claim+reversal)", async () => {
     // The claim now lives INSIDE the same tx as the reversal: a tx failure
     // rolls both back atomically. No outer claim + compensating restore

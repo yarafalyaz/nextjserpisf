@@ -155,10 +155,20 @@ export async function createProductionCost(formData: FormData) {
     if (v.productionOrderId) {
       const order = await prisma.productionOrder.findUnique({
         where: { id: v.productionOrderId },
-        select: { id: true, status: true, documentNo: true, completedQty: true },
+        select: { id: true, status: true, documentNo: true, completedQty: true, workOrderId: true },
       })
       const invalid = mutableOrderError(order, "ditambahkan")
       if (invalid) return invalid
+      // Putaran 117: `assertJobCostMutable` hanya meminjam workOrderId PO bila
+      // pemanggil TIDAK mengirimkannya, jadi tautan WO asing membuat guard
+      // closed memeriksa perintah kerja yang salah (PO yang tertutup lewat
+      // WO-nya lolos). Tautan yang sah adalah milik PO itu sendiri atau kosong.
+      if (v.workOrderId && order?.workOrderId != null && v.workOrderId !== order.workOrderId) {
+        return {
+          success: false,
+          error: "Perintah kerja yang dipilih bukan perintah kerja dari perintah produksi ini.",
+        }
+      }
     }
     if (v.workOrderId) {
       const wo = await prisma.workOrder.findUnique({
