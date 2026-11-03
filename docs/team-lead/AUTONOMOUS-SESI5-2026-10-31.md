@@ -3162,3 +3162,20 @@ Sumber: verifikasi silang `updateSalesInvoice` (`sales.actions.ts:4119-4150`) te
 - Probe runtime (bukan mock): `createMany` dengan `sortOrder` di dalam `$transaction` yang di-rollback → `Unknown argument \`sortOrder\``.
 - Merah perintah terpisah: `sales.actions.test.ts` sebelum patch → `1 failed | 261 passed`, `expected [ 'sortOrder' ] to deeply equal []`.
 - Hijau: berkas itu 262/262; guard baru 3/3; keduanya bersama 265/265; suite guard terkait (`schema-usage`, `silent-failure`, `wired-transition-actions`, `form-edit-seeds-existing`, `quotation-sync`, `invoice-items-editor`) 174/174 (`--no-file-parallelism`); `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
+
+## Putaran 116 — jadwal kosong tak lagi terbaca "hanya Minggu" di semua pembaca workDays (commit `206a2f9c8`)
+
+Sumber: kandidat agent audit HR "workDays kosong membuat absensi hanya hari Minggu", diverifikasi terhadap enam pembaca `WorkSchedule.workDays`, skema `workDays String @default("") @map("work_days")` (`schema.prisma:3815`), penulis tunggal `createWorkSchedule`/`updateWorkSchedule` lewat `workScheduleSchema` → `normalizeWorkDays`, dan dua pembaca yang sudah benar (`attendance-summary.service.ts`, `leave-quota.service.ts`).
+
+### Vonis FIX
+1. **`Number("")` bernilai 0, dan 0 adalah hari Minggu yang sah — empat pembaca mengubah jadwal kosong menjadi `{Minggu}` — FIX.** Rantai `workDays.split(",").map((d) => Number(d.trim()))` tidak membuang token kosong, jadi default kolom `""` menghasilkan himpunan `{0}` yang lolos dari fallback Senin–Jumat di bawahnya. Akibat per pembaca: estimasi payroll MASSAL menghitung 5 hari kerja (semuanya Minggu) alih-alih 21 untuk Mei 2026 sehingga potongan absen hari biasa hilang senyap; notifikasi absen harian + cron hanya menyala pada hari Minggu; rekap kehadiran menandai jadwal kosong "terjadwal" padahal 0 hari kerja dalam periode Sen–Jum; sisa cuti dan papan beban stasiun sama salahnya. Perbaikan: satu util `src/lib/utils/work-days.ts` (`parseWorkDays` / `parseWorkDaysWithFallback`) yang membuang token kosong SEBELUM `Number()`, menghormati `0` eksplisit, membuang duplikat, dan melaporkan kapan fallback dipakai. Enam pembaca kini memakai jalur yang sama; halaman kalender kerja memakai `usedFallback` untuk menampilkan "-" (tampilan tidak boleh mengarang isi jadwal yang tersimpan kosong).
+
+### Vonis CATAT
+- Pengurai lokal `parseWorkDays` di `src/lib/reports/work-center-load-plan.ts` dihapus dan diganti impor util bersama — dua definisi dengan nama sama adalah pintu masuk penyimpangan berikutnya. Guard baru melarangnya secara statis.
+- Teks jadwal yang tersimpan berisi angka sah (bukan kosong) TIDAK diubah oleh util: `parseWorkDays("0")` tetap `[0]`. Yang diperbaiki hanya pembacaan teks kosong/rusak; data lama yang sengaja "hanya Minggu" tetap berlaku.
+- `normalizeWorkDays` (penulis) tidak dipindah ke util bersama: kontraknya berbeda (mengembalikan CSV, bukan himpunan hari) dan ia sudah benar. Komentarnya kini menunjuk util pembaca supaya aturan "buang token kosong" tak ditulis ulang di pemanggil.
+
+### Bukti
+- Merah perintah terpisah: `daily-attendance-window.test.ts` sebelum patch → `2 failed | 6 passed` (`expected [] to deeply equal [ 1 ]`); `hrm.actions.test.ts` → `expected 5 to be 21`; `attendance-recap-data.test.ts` → `expected +0 to be 5`.
+- Hijau: `hrm.actions.test.ts` 221/221; `daily-attendance-window.test.ts` 8/8; `work-days.test.ts` 7/7; `attendance-recap-data.test.ts` 11/11; `work-center-load-plan.test.ts` 19/19; `leave-quota` 21/21 + `hrm-parity` 4/4 + `late-penalty` 5/5 + `attendance-summary-employment-window` 7/7; `src/lib/reports/__tests__` 2537 passed | 4 skipped; `src/lib/services/__tests__` + `src/lib/utils/__tests__` 1658 passed | 3 skipped; guard statis 170/170 + 42/42 + 11/11 (`--no-file-parallelism`); `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
+- CI `41726840944` (head `206a2f9c8`) **success**.
