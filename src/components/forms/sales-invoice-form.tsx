@@ -75,14 +75,21 @@ interface InitialItem {
   qty: number
   unitPrice: number
   discount: number
+  /** Putaran 110: metadata baris tersimpan ikut dimuat ke form edit. Tanpa ini
+   *  simpan menulis ulang baris tanpa UoM/serial/deskripsi aslinya. */
+  uom?: string | null
+  serialNumbers?: string[] | null
 }
 
 interface LineItem {
   key: string
   itemId: number | null
+  description?: string | null
   qty: number
   unitPrice: number
   discount: number
+  uom?: string | null
+  serialNumbers?: string[] | null
 }
 
 let rowSeq = 0
@@ -96,9 +103,12 @@ function toRow(item: InitialItem): LineItem {
   return {
     key: `baris-${rowSeq}`,
     itemId: item.itemId,
+    description: item.description ?? null,
     qty: Number(item.qty) || 0,
     unitPrice: Number(item.unitPrice) || 0,
     discount: Number(item.discount) || 0,
+    uom: item.uom ?? null,
+    serialNumbers: item.serialNumbers ?? null,
   }
 }
 
@@ -193,6 +203,9 @@ export function SalesInvoiceForm({
         })
         // Hanya baris yang benar-benar punya barang yang dikirim. Baris kosong
         // sisa klik "Tambah Baris" tidak boleh menjadi item tanpa id.
+        // Putaran 110: uom/serialNumbers/description ikut dikirim — jalur edit
+        // menghapus SELURUH baris lalu menulis ulang dari payload ini, jadi
+        // field yang tidak dikirim hilang diam-diam dari faktur tersimpan.
         const payload = rows
           .filter((row) => row.itemId !== null)
           .map((row) => ({
@@ -200,6 +213,11 @@ export function SalesInvoiceForm({
             qty: Number(row.qty) || 0,
             unitPrice: Number(row.unitPrice) || 0,
             discount: Number(row.discount) || 0,
+            ...(row.description ? { description: row.description } : {}),
+            ...(row.uom ? { uom: row.uom } : {}),
+            ...(row.serialNumbers && row.serialNumbers.length > 0
+              ? { serialNumbers: row.serialNumbers }
+              : {}),
           }))
         if (payload.length === 0) throw new Error("Tambahkan minimal satu baris barang")
         formData.append("items", JSON.stringify(payload))
