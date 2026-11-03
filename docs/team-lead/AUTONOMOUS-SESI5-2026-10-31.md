@@ -3028,3 +3028,36 @@ Sumber: verifikasi sesi utama atas putaran 105/106 — pembacaan ulang peta klai
 - Hijau: berkas sama 261/261; lima suite terkait 383/383; delapan guard statis 202/202 (`schema-usage`, `silent-failure`, `wired-transition-actions`, `navigation-targets`, `action-wiring`, `permission-seed-parity`, `api-route-guard`, `status-actions-gating`, `--no-file-parallelism`); `npx tsc --noEmit` 0 (tanpa pipe); ESLint berkas berubah 0; `git diff --check` bersih.
 - CI `41704640513` (head `c41ac3682`) **success**.
 - DB dev: 0 baris `Approval` untuk `referenceType = "Quotation"`, jadi tidak ada yatim warisan yang perlu dibersihkan.
+
+## Putaran 108 — baris rekening koran yang sudah dicocokkan tak bisa diubah (commit `d3a6e7e53`)
+
+Sumber: verifikasi sesi utama atas kandidat audit keuangan "kecocokan basi pada rekonsiliasi draft" yang dikonfirmasi dengan membaca `matchReconciliationLine` (`finance.actions.ts:1695-1870`), `completeReconciliation` (`:1996-2262`), `lockReconParentsAndAssertNotCompleted` (`:222-249`), dan `BankReconciliationItem` (`schema.prisma:4960-4982`).
+
+### Vonis FIX
+1. **`updateBankStatementLine` hanya menolak kecocokan pada rekonsiliasi COMPLETED — FIX.** `matchReconciliationLine` memvalidasi nominal, arah, akun, dan tanggal saat mencocokkan, tetapi `BankReconciliationItem` hanya menyimpan `bankStatementLineId` + `journalEntryId` — tidak menyalin nominal/direksi. `lockReconParentsAndAssertNotCompleted` hanya melempar bila ada item matched pada rekonsiliasi berstatus `completed`, sedangkan `deleteBankStatementLine` punya gerbang tambahan (item apa pun menahan hapus). Akibatnya baris yang sudah dicocokkan di rekonsiliasi **draft** bebas diubah nominal/tanggal/jenisnya; `completeReconciliation` kemudian hanya memeriksa `matched`, saldo, tie-out GL, dan status jurnal — tidak pernah membandingkan ulang baris vs entri jurnal — sehingga rekonsiliasi tersertifikasi atas kecocokan yang nominal/arahnya sudah berbeda. Perbaikan: cek kedua sesudah lock induk (urutan lock baris → header → rekonsiliasi tidak berubah), menolak dengan pesan "Lepaskan kecocokannya terlebih dahulu sebelum mengubah" — aturan yang sama dengan jalur hapus. Jalur resmi mengubah baris yang sudah dicocokkan tetap ada: unmatch lalu match ulang.
+2. **Komentar tes lama mengabadikan kontrak yang baru saja ditutup — dibetulkan (`dfd04fe72`).** `finance.actions.test.ts:672` menulis "kecocokan pada rekonsiliasi draft masih boleh diperbaiki" sebagai justifikasi asersi. Asersinya sendiri masih benar (gerbang completed tetap yang pertama), jadi hanya komentarnya yang diperbarui agar tidak menyesatkan pembaca berikutnya.
+
+### Vonis CATAT
+- `item.amount` pada `BankReconciliationItem` tetap 0 untuk item pencocokan (hanya item penyesuaian yang mengisinya); halaman detail jatuh ke `line.amount` sebagai tampilan. Tidak diubah — mengisinya berarti mengubah semantik kolom yang dipakai perhitungan `outstandingDeposits`/`outstandingPayments` (yang memfilter `cleared`/`type`), dan nilai baris kini otomatis tidak bisa menyimpang lagi berkat butir 1.
+- `completeReconciliation` tetap tidak membandingkan ulang nominal pasangan secara eksplisit. Setelah butir 1, satu-satunya jalur yang bisa membuat pasangan menyimpang adalah perubahan pada sisi **jurnal** (bukan baris) — dan itu sudah dijaga pembekuan rekonsiliasi completed di putaran 86 serta status POSTED yang dibaca ulang di bawah kunci. Menambah pembandingan penuh akan menduplikasi empat guard R-03 tanpa menutup celah baru.
+
+### Bukti
+- Merah perintah terpisah: `finance-recon-match-guard.test.ts` sebelum patch → `1 failed | 12 passed`, gagal pada `expected true to be false` (action masih mengembalikan sukses).
+- Hijau: berkas itu 13/13; tiga suite keuangan terkait 229/229; delapan guard statis 202/202 (`--no-file-parallelism`); `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
+- CI `41707541096` (head `d3a6e7e53`) **success**.
+
+## Putaran 109 — status jurnal tak dikenal fail-closed di jalur reversal (commit `36fffac6c`)
+
+Sumber: pembacaan ulang `reverseJournalsByReferenceTx` (`accounting.hook.ts:295-410`) berdampingan dengan sibling-nya `deleteJournalByReferenceTx` (`:139-249`) di berkas yang sama.
+
+### Vonis FIX
+1. **`reverseJournalsByReferenceTx` menghapus jurnal berstatus apa pun selain POSTED/REVERSED — FIX.** Cabangnya berbunyi `if (j.status !== "POSTED") { delete entries; delete journal }` dengan komentar "DRAFT (belum GL): hapus aman". Setiap nilai lain ikut masuk: `REVERSING` — status nyata yang diklaim `reverseJournal` lalu dipulihkan cron setelah 15 menit — dan ejaan warisan huruf kecil seperti `posted`. Menghapus jurnal di posisi itu menghilangkan efek GL hidup tanpa jejak, sedangkan `deleteJournalByReferenceTx` di berkas yang sama sudah menerapkan kontrak sebaliknya: normalisasi `toUpperCase()`, DRAFT boleh hapus, POSTED hanya bila lawannya ikut terhapus, status tak dikenal fail-closed. Perbaikan: normalisasi ejaan lalu izinkan hanya DRAFT (hapus), POSTED (buat lawan), REVERSED (lewati); status lain ditolak dengan pesan yang menyebut id + status dan mengarahkan pemeriksaan manual. Efek sampingnya menguntungkan: `posted` huruf kecil kini dibalik dengan benar alih-alih dihapus.
+2. **Filter pembekuan rekonsiliasi bank completed ikut dinormalkan — FIX (bagian dari butir 1).** `journals.filter((j) => j.status === "POSTED")` melewatkan varian ejaan apa pun, sehingga jurnal yang hendak dibalik lolos dari `assertJournalNotInCompletedReconciliation` — guard putaran 86 jadi bisa diatapi hanya dengan ejaan status yang berbeda.
+
+### Vonis CATAT
+- Setelah normalisasi, `posted` huruf kecil dibalik sebagai POSTED. Ini pilihan konservatif (mempertahankan efek GL, tidak menghapusnya) dan konsisten dengan `deleteJournalByReferenceTx` yang menilai `status.toUpperCase()` untuk memilih cabang. Basis data dev tidak punya baris semacam itu (`SELECT COUNT(*) ... WHERE BINARY status <> UPPER(status)` = 0), jadi tidak ada data yang perlu dimigrasikan.
+- Perbandingan `status === "POSTED"` lain di repo (pembacaan di `matchReconciliationLine`, `completeReconciliation`, `asset-change-event.service`, `stock-journal.service`) semuanya **fail-safe**: salah ejaan hanya membuat jurnal dianggap bukan-POSTED sehingga operasi ditolak/dilewati, bukan dihapus. Tidak disentuh.
+
+### Bukti
+- Merah perintah terpisah: `journal-reversal.test.ts` sebelum patch → `2 failed | 9 passed`, keduanya `AssertionError: promise resolved "undefined" instead of rejecting` (helper mengembalikan normal padahal seharusnya menolak).
+- Hijau: berkas itu 11/11; hooks + finance + reversal terkait 731/731 (5 skipped by design); enam suite konsumen helper 616/616; delapan guard statis 202/202; `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
