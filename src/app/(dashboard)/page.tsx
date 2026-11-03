@@ -151,18 +151,28 @@ async function getDashboardData() {
     totalCustomers,
     recentInvoices,
   ] = await Promise.all([
-    prisma.project.count({ where: { status: { notIn: DONE_STATES } } }),
+    // Putaran 92: label kartu "Mobil Dikerjakan" — wajib ber-kendaraan
+    // (pola workshop-dashboard putaran 86); proyek non-kendaraan ikut
+    // kartu Proyek Aktif sendiri, bukan di sini.
+    prisma.project.count({
+      where: { status: { notIn: DONE_STATES }, customerVehicleId: { not: null } },
+    }),
+    // Putaran 92: "Selesai bulan ini" dari endDate transisi selesai
+    // (project-status menulisnya hanya saat completed), bukan updatedAt
+    // yang naik oleh edit apa pun. Status "done" tak pernah ditulis.
     prisma.project.count({
       where: {
-        status: { in: ["completed", "done"] },
-        updatedAt: { gte: startOfMonth },
+        status: "completed",
+        endDate: { gte: startOfMonth },
       },
     }),
     prisma.project.count({
       where: { status: { notIn: DONE_STATES }, endDate: { lt: now } },
     }),
     prisma.project.findMany({
-      where: { status: { notIn: DONE_STATES } },
+      // Kartu ini "Mobil di Bengkel" — sama seperti hitungan kartu di atas,
+      // proyek tanpa kendaraan tidak boleh masuk daftar (plat jadi "-").
+      where: { status: { notIn: DONE_STATES }, customerVehicleId: { not: null } },
       orderBy: [{ endDate: "asc" }, { createdAt: "desc" }],
       take: 8,
       select: {

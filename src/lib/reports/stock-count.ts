@@ -86,6 +86,10 @@ function statusLabel(status: string): string {
     posted: "terposting",
     completed: "selesai",
     cancelled: "dibatalkan",
+    // Status nyata StockAdjustment (klaim proses): tanpa entri ini label
+    // mentah Inggris dan dokumen nyangkut terbaca seperti status final.
+    processing: "sedang diproses",
+    processed: "terproses",
   }
   return map[status] ?? status
 }
@@ -152,7 +156,12 @@ export function buildStockCount(input: {
       label: `Nilai selisih ${document.documentNo}`,
       cells: [amount(documentValue)],
     })
-    totals.differenceValue = safeAdd(totals.differenceValue, documentValue, 2)
+    // Putaran 92: dokumen processing belum melahirkan StockMove/jurnal —
+    // nilai selisihnya belum terwujud, jangan kotori total periode.
+    // Barisnya tetap tampil sebagai catatan penghitungan fisik.
+    if (document.status !== "processing") {
+      totals.differenceValue = safeAdd(totals.differenceValue, documentValue, 2)
+    }
   }
 
   if (visible.length === 0) {

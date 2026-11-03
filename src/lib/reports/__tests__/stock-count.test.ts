@@ -123,4 +123,24 @@ describe("buildStockCount", () => {
     const group = result.table.rows.find((row) => row.kind === "group")
     expect(String(group?.label)).toBe("SA-0001 · 05 Okt 2026 · Gudang Utama · draft")
   })
+
+  it("putaran 92: processing tampil berlabel tetapi nilainya belum masuk total periode", () => {
+    const result = buildStockCount({
+      documents: [
+        document({ documentNo: "SA-PROC", status: "processing" }),
+        document({ documentNo: "SA-DONE", status: "processed" }),
+      ],
+      start: period.start,
+      end: period.end,
+    })
+
+    const groups = result.table.rows.filter((row) => row.kind === "group").map((row) => String(row.label))
+    expect(groups.some((label) => label.endsWith("sedang diproses"))).toBe(true)
+    expect(groups.some((label) => label.endsWith("terproses"))).toBe(true)
+    expect(result.totals.documents).toBe(2)
+    // Hanya dokumen processed (-2 × 50.000) yang sudah terwujud jadi nilai.
+    expect(result.totals.differenceValue).toBe(-100_000)
+    const grand = result.table.rows.find((row) => row.kind === "total" && row.grand)
+    expect(grand?.kind === "total" ? grand.cells : undefined).toEqual(["(100.000)"])
+  })
 })

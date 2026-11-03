@@ -32,7 +32,10 @@ export default async function VehiclesPage({
     ...(params.cari && {
       OR: [
         { name: { contains: params.cari } },
-        { year: Number.isNaN(Number(params.cari)) ? undefined : Number(params.cari) },
+        // Putaran 92: { year: undefined } di dalam OR adalah objek kosong
+        // yang cocok ke SEMUA baris — pencarian non-numerik dulu berarti
+        // "tampilkan semua". Pola kanonis repo: spread kondisional.
+        ...(/^\d+$/.test(params.cari) ? [{ year: Number(params.cari) }] : []),
         { variant: { name: { contains: params.cari } } },
         { variant: { model: { name: { contains: params.cari } } } },
         { variant: { model: { brand: { name: { contains: params.cari } } } } },
