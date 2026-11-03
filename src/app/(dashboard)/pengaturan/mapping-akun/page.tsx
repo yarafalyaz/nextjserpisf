@@ -9,12 +9,18 @@ import { Badge } from "@/components/ui/shadcn/badge"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction } from "@/components/ui/shadcn/card"
 import { AlertTriangle, CheckCircle2, Pencil } from "lucide-react"
 
+import {
+  isMappingFilled,
+  mappingAccountLabel,
+} from "./_lib/mapping-account-label"
+import { loadMappingAccounts } from "./_lib/load-mapping-accounts"
+
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Mapping Akun" }
 
 function AccountCard({ label, value }: { label: string; value: string }) {
-  const isSet = value !== "Belum diset"
+  const isSet = isMappingFilled(value)
   return (
     <div className={`rounded-lg border px-3 py-3 ${isSet ? "bg-card" : "border-destructive/30 bg-destructive/5"}`}>
       <p className="text-xs text-muted-foreground">{label}</p>
@@ -24,7 +30,7 @@ function AccountCard({ label, value }: { label: string; value: string }) {
 }
 
 function AccountSection({ title, items }: { title: string; items: { label: string; value: string }[] }) {
-  const mapped = items.filter((i) => i.value !== "Belum diset").length
+  const mapped = items.filter((i) => isMappingFilled(i.value)).length
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -44,12 +50,13 @@ export default async function AccountMappingPage() {
   await requirePermission("manage_settings")
 
   const settings = await prisma.systemSetting.findFirst()
-  const accounts = await prisma.account.findMany({ where: { isActive: true }, orderBy: { code: "asc" }, select: { id: true, code: true, name: true } })
+  // Putaran 103: definisi kanonis yang sama dengan picker load-settings.ts —
+  // aktif, belum dihapus, dan daun. Layar ini menjanjikan "siap posting";
+  // akun induk/terhapus tidak pernah bisa menerima jurnal POSTED.
+  const accounts = await loadMappingAccounts()
 
   function accountName(id: number | null | undefined): string {
-    if (!id) return "Belum diset"
-    const acc = accounts.find((a) => a.id === id)
-    return acc ? `${acc.code} - ${acc.name}` : "Belum diset"
+    return mappingAccountLabel(id, accounts)
   }
 
   const mappingGroups = [
@@ -142,7 +149,7 @@ export default async function AccountMappingPage() {
   ]
 
   const allMappings = mappingGroups.flatMap((g) => g.items)
-  const mappedCount = allMappings.filter((i) => i.value !== "Belum diset").length
+  const mappedCount = allMappings.filter((i) => isMappingFilled(i.value)).length
   const totalMappings = allMappings.length
   const unmappedCount = totalMappings - mappedCount
   const mappingProgress = totalMappings > 0 ? Math.round((mappedCount / totalMappings) * 100) : 0

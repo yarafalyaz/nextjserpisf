@@ -8,7 +8,7 @@ import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
 import { buildReportHref } from '@/lib/reports/report-href'
-import { buildComparison, previousWindow, toAccountBalances } from '@/lib/reports/period-comparison'
+import { buildBalanceComparison, buildComparison, groupBalancesByType, previousWindow, toAccountBalances } from '@/lib/reports/period-comparison'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ExportButtons } from '@/components/reports/export-buttons'
@@ -50,7 +50,11 @@ export default async function PeriodComparisonPage({
 
   const previous = previousWindow(startDate, endDate)
 
-  const types = isBalance ? ['ASSET', 'LIABILITY', 'EQUITY'] : ['REVENUE', 'EXPENSE']
+  // Neraca butuh kelima tipe: laba berjalan (Pendapatan − Beban) masuk ekuitas,
+  // kalau tidak `Aset = Kewajiban + Ekuitas` tidak pernah tertutup.
+  const types = isBalance
+    ? ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE']
+    : ['REVENUE', 'EXPENSE']
 
   const [accounts, currentSums, previousSums] = await Promise.all([
     prisma.account.findMany({
@@ -66,10 +70,12 @@ export default async function PeriodComparisonPage({
       : sumEntriesByAccount({ date: { gte: previous.start, lte: previous.end } }),
   ])
 
-  const comparison = buildComparison(
-    toAccountBalances(accounts, currentSums),
-    toAccountBalances(accounts, previousSums),
-  )
+  const currentBalances = toAccountBalances(accounts, currentSums)
+  const previousBalances = toAccountBalances(accounts, previousSums)
+  const comparison = buildComparison(currentBalances, previousBalances)
+  const balance = isBalance
+    ? buildBalanceComparison(groupBalancesByType(currentBalances), groupBalancesByType(previousBalances))
+    : null
 
   const title = isBalance ? "Neraca Perbandingan Periode" : "Laba Rugi Perbandingan Periode"
   const currentLabel = isBalance
@@ -120,16 +126,84 @@ export default async function PeriodComparisonPage({
       <ReportNarration text={`Laporan ini membandingkan ${isBalance ? "posisi neraca" : "kinerja laba rugi"} periode berjalan dengan pembandingnya. Kolom Selisih menunjukkan perubahan nominal dan kolom % menunjukkan perubahan relatif; sel kosong berarti pembandingnya nol sehingga persentase tidak bermakna.`} />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Total Periode Ini" value={formatCurrency(comparison.totalCurrent)} />
-        <ReportKpiCard label="Total Pembanding" value={formatCurrency(comparison.totalPrevious)} />
-        <ReportKpiCard
-          label="Selisih"
-          value={formatCurrency(comparison.totalVariance)}
-          valueClassName={comparison.totalVariance >= 0 ? 'text-success' : 'text-danger'}
-        />
+        {balance ? (
+          <>
+            <ReportKpiCard label="Total Aset" value={formatCurrency(balance.assets.totalCurrent)} />
+            <ReportKpiCard label="Total Kewajiban" value={formatCurrency(balance.liabilities.totalCurrent)} />
+            <ReportKpiCard label="Total Ekuitas" value={formatCurrency(balance.equity.totalCurrent)} />
+            <ReportKpiCard
+              label="Neraca Seimbang"
+              value={balance.isBalanced ? "Ya" : "Tidak"}
+              valueClassName={balance.isBalanced ? 'text-success' : 'text-danger'}
+            />
+          </>
+        ) : (
+          <>
+            <ReportKpiCard label="Total Periode Ini" value={formatCurrency(comparison.totalCurrent)} />
+            <ReportKpiCard label="Total Pembanding" value={formatCurrency(comparison.totalPrevious)} />
+            <ReportKpiCard
+              label="Selisih"
+              value={formatCurrency(comparison.totalVariance)}
+              valueClassName={comparison.totalVariance >= 0 ? 'text-success' : 'text-danger'}
+            />
+          </>
+        )}
       </div>
 
-      <ReportSection title={title} description={`${currentLabel} · pembanding ${previousLabel}`}>
+      {balance ? (
+        // Neraca: tiga blok, masing-masing dengan totalnya sendiri. Mengecilkan
+        // ketiganya menjadi satu "TOTAL" adalah penjumlahan aset + kewajiban +
+        // ekuitas — angka yang tidak punya arti (putaran 103).
+        <>
+          {[balance.assets, balance.liabilities, balance.equity].map((side) => (
+            <ReportSection
+              key={side.label}
+              title={side.label}
+              description={`${currentLabel} · pembanding ${previousLabel}`}
+            >
+              <DetailTable data-report-table={`${title} — ${side.label}`}>
+                <DetailTableHead>
+                  <DetailTableTh>Kode</DetailTableTh>
+                  <DetailTableTh>Nama Akun</DetailTableTh>
+                  <DetailTableTh align="right">Periode Ini</DetailTableTh>
+                  <DetailTableTh align="right">Pembanding</DetailTableTh>
+                  <DetailTableTh align="right">Selisih</DetailTableTh>
+                  <DetailTableTh align="right">%</DetailTableTh>
+                </DetailTableHead>
+                <DetailTableBody>
+                  {side.rows.map((row) => (
+                    <DetailTableRow key={`${side.label}-${row.key}`}>
+                      <DetailTableTd className="font-mono text-xs">{row.code}</DetailTableTd>
+                      <DetailTableTd>{row.name}</DetailTableTd>
+                      <DetailTableTd align="right">{formatAccounting(row.current, { zeroDash: false })}</DetailTableTd>
+                      <DetailTableTd align="right">{formatAccounting(row.previous, { zeroDash: false })}</DetailTableTd>
+                      <DetailTableTd align="right" className={row.variance >= 0 ? 'text-success' : 'text-danger'}>
+                        {formatAccounting(row.variance, { zeroDash: false })}
+                      </DetailTableTd>
+                      <DetailTableTd align="right">{row.percentage === null ? '–' : `${row.percentage.toFixed(1)}%`}</DetailTableTd>
+                    </DetailTableRow>
+                  ))}
+                  {side.rows.length === 0 && (
+                    <DetailTableRow>
+                      <DetailTableTd colSpan={6} className="text-center text-muted-foreground py-6">
+                        <EmptyState title="Tidak ada saldo pada kedua periode" className="py-0" />
+                      </DetailTableTd>
+                    </DetailTableRow>
+                  )}
+                  <DetailTableRow className="border-t-2 border-default font-bold">
+                    <DetailTableTd colSpan={2}>TOTAL {side.label.toUpperCase()}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(side.totalCurrent, { zeroDash: false })}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(side.totalPrevious, { zeroDash: false })}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(side.totalVariance, { zeroDash: false })}</DetailTableTd>
+                    <DetailTableTd align="right">{""}</DetailTableTd>
+                  </DetailTableRow>
+                </DetailTableBody>
+              </DetailTable>
+            </ReportSection>
+          ))}
+        </>
+      ) : (
+        <ReportSection title={title} description={`${currentLabel} · pembanding ${previousLabel}`}>
         <DetailTable data-report-table={title}>
           <DetailTableHead>
             <DetailTableTh>Kode</DetailTableTh>
@@ -169,6 +243,7 @@ export default async function PeriodComparisonPage({
           </DetailTableBody>
         </DetailTable>
       </ReportSection>
+      )}
     </ReportPageShell>
   )
 }
