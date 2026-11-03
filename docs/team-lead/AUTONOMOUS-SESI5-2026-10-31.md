@@ -2761,3 +2761,38 @@ Validasi tipe per field dari klaim agent tidak dipatch: tidak ada bukti pemanggi
 ### Antrian lanjutan (belum dipatch)
 - Laporan operasional: A2 penanda "nilai perkiraan" transfer terkirim tak pernah menyala; A12 basis analisis penjualan (KPI baris vs tren `grandTotal`, retur tak dikurang — keputusan bruto/neto).
 - Laporan master-data: keluarga guard hapus di luar tx (Brand/ItemCategory/UoM, Bank, Department/Position/PaymentTerm) — vonis per titik terhadap kode aktual + penulis lawan, memperhatikan CATAT lama putaran 76/79 (kunci sepihak tanpa penulis lawan = CATAT).
+
+## Putaran 95 — penanda perkiraan transfer + basis tren penjualan (commit `033fe17ef` CI `41603558311` success; commit `b3b800b8c`)
+
+Sumber: laporan agent laporan-operasional A2 + A12 — terverifikasi terhadap kode aktual.
+
+### Vonis FIX
+1. A2 penanda perkiraan tak pernah menyala — FIX: loader transfer terkirim mengisi fallback `Item.cost` master untuk semua baris ber-item, sedangkan builder hanya menaikkan `estimatedLines` bila `unitCost === null` — penanda praktiknya mati. Builder kini menerima tanda asal harga `fromMovement` (true hanya bila harga dari pergerakan stok OUT); fallback master dihitung perkiraan walau nilainya terisi. Nilai tampil tak berubah, hanya penanda menyala.
+2. A12 tren analisis penjualan beda basis dari KPI halaman yang sama — FIX: KPI/tabel/PDF memakai Σ `SalesInvoiceItem.total` (setelah diskon baris, sebelum diskon header + PPN), tren memakai Σ `grandTotal` — menyimpang persis sebesar diskon header + PPN. `monthlySales` kini berbasis baris; halaman memuat `items.total` untuk tren. Basis yang dipertahankan = basis mayoritas (satu permukaan diubah).
+
+### CATAT
+- Analisis penjualan tak mengurangi retur (bruto). Penanding kanonis target penjualan dan komisi mengurangi retur; mengubah analisis menjadi neto = keputusan definisi, bukan perbaikan konsistensi internal.
+
+### Bukti
+- A2: merah perintah terpisah tepat 2; hijau 22/22 (4 berkas transit), batch laporan 2522 passed + 4 skipped, guard 194/194, `tsc` 0, ESLint 0. CI `41603558311` **success**.
+- A12: merah perintah terpisah tepat 2 (bucket diperbarui + test putaran 95); hijau sales-analytics 9/9, batch laporan 2523 passed + 4 skipped, guard DONE=0, `tsc` 0, ESLint 0.
+
+## Putaran 96 — tautan M2M hapus kategori/merek (commit `3bd643172`)
+
+Sumber: verifikasi keluarga guard hapus master laporan master-data — temuan sesi di luar klaim agent.
+
+### Vonis FIX
+1. `deleteItemCategory`/`deleteBrand` tak menghitung relasi M2M `BrandCategories` — FIX: kedua guard hanya menghitung FK skalar (sub-kategori/barang), sedangkan join `_BrandCategories` ber-FK CASCADE: hapus mentah memutus tautan merek↔kategori senyap. Guard kini menghitung `_count.brands` / `_count.categories` dan menolak dengan pesan lepas-tautan dulu.
+
+### Vonis CATAT (keluarga hapus di luar tx, per titik)
+Memindahkan count guard ke tx berkunci baris tidak menutup balapan nyata bila penulis referensi silang tak mengambil kunci yang sama (prinsip putaran 75):
+- PaymentTerm: assignment customer/vendor menilai termin pra-tx saja; kunci delete hanya menserialkan create/update termin.
+- Department: penulis holiday non-tx, vacancy/employee tak berkunci; M2M `workSchedules` tak punya penulis produksi (hanya data seed/manual; delete memutus join CASCADE — dicatat, bukan FIX).
+- Position: penulis competency mengunci baris position, tetapi suksesi (`upsert` global, terverifikasi sesi ini) + vacancy/employee tak berkunci.
+- Bank: `createBankStatement` menilai bank dalam tx tanpa kunci baris bank; count rekonsiliasi + pembayaran vendor menjaga kolom bare-int tanpa penulis produksi hari ini.
+- UoM: referensi item string bebas, penulis item tak berkunci; `baseUnitId` tanpa penulis produksi.
+Semua tetap CATAT sampai penulis lawan ikut mengunci.
+
+### Bukti
+- Merah perintah terpisah tepat 2 (kedua test putaran 96 lawan produksi lama), 380 passed.
+- Hijau: `master.actions` 382/382, guard gabungan 568/568 (schema-usage, silent-failure, wired-transition-actions, action-wiring, action-permission-guard, permission-seed-parity), `tsc --noEmit` bersih, ESLint bersih, `git diff --check` bersih.
