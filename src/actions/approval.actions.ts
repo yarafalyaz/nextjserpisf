@@ -27,6 +27,7 @@ import { computeOvertimeApprovalValue } from "@/lib/services/overtime-approval.s
 import { notifyApprovalStepApprovers } from "@/lib/services/approval-workflow.service";
 import { assertLeaveRequestGates, resolveDayKind } from "@/lib/services/leave-quota.service";
 import { assertOvertimeWithinWorkdayLimits } from "@/lib/services/overtime-pay.service";
+import { APPROVE_CLAIMS, REJECT_CLAIMS } from "@/lib/approval/claims";
 
 type WorkflowStepInput = {
   name?: string;
@@ -167,45 +168,9 @@ async function assertHrScopeForApproval(
   await assertHrEmployeeAccess(scope, doc.employeeId);
 }
 
-// Klaim atomik status dokumen: hanya pre-state sah boleh flip ke status
-// terminal lewat jalur approval generik; count 0 = dokumen sudah terminal
-// (paid/active/rejected/paid_off/...) -> tolak, jangan resurrect/flip ulang.
-// Payroll: draft->approved | draft/approved->rejected (approvedBy ikut).
-// Leave/Overtime: pending->approved|rejected. EmployeeLoan: pending->active
-// (pencairan) | pending->rejected — loan active/paid_off/written_off TIDAK
-// boleh ditolak/dicairkan ulang dari sini.
-const APPROVE_CLAIMS: Record<string, { from: string[]; error: string }> = {
-  Payroll: { from: ["draft"], error: "Slip gaji hanya dapat disetujui dari status draft." },
-  LeaveRequest: { from: ["pending"], error: "Pengajuan cuti hanya dapat disetujui dari status menunggu." },
-  OvertimeRequest: { from: ["pending"], error: "Pengajuan lembur hanya dapat disetujui dari status menunggu." },
-  EmployeeLoan: { from: ["pending"], error: "Pinjaman hanya dapat disetujui dari status menunggu." },
-  // Dokumen dagang lahir draft; approval pending selalu berpasangan draft
-  // (reopen mereset rejected->draft sebelum pengajuan baru). Dokumen yang
-  // sudah melampaui draft (posted/cancelled/converted/dibayar) tidak boleh
-  // di-flip ulang oleh approval yang tertinggal — flip polos sebelumnya
-  // menghidupkan kembali PO yang sudah dibatalkan.
-  PurchaseRequest: { from: ["draft"], error: "Permintaan pembelian hanya dapat disetujui dari status draft." },
-  PurchaseOrder: { from: ["draft"], error: "Pesanan pembelian hanya dapat disetujui dari status draft." },
-  VendorBill: { from: ["draft"], error: "Tagihan vendor hanya dapat disetujui dari status draft." },
-  SalesOrder: { from: ["draft"], error: "Pesanan penjualan hanya dapat disetujui dari status draft." },
-  SalesInvoice: { from: ["draft"], error: "Faktur penjualan hanya dapat disetujui dari status draft." },
-  Expense: { from: ["draft"], error: "Pengeluaran hanya dapat disetujui dari status draft." },
-  // Pengajuan Quotation lahir saat status sent; reopen lahir saat draft.
-  Quotation: { from: ["draft", "sent"], error: "Penawaran hanya dapat disetujui dari status draft atau terkirim." },
-};
-const REJECT_CLAIMS: Record<string, { from: string[]; error: string }> = {
-  Payroll: { from: ["draft", "approved"], error: "Slip gaji hanya dapat ditolak dari status draft atau approved." },
-  LeaveRequest: { from: ["pending"], error: "Pengajuan cuti hanya dapat ditolak dari status menunggu." },
-  OvertimeRequest: { from: ["pending"], error: "Pengajuan lembur hanya dapat ditolak dari status menunggu." },
-  EmployeeLoan: { from: ["pending"], error: "Pinjaman hanya dapat ditolak dari status menunggu." },
-  PurchaseRequest: { from: ["draft"], error: "Permintaan pembelian hanya dapat ditolak dari status draft." },
-  PurchaseOrder: { from: ["draft"], error: "Pesanan pembelian hanya dapat ditolak dari status draft." },
-  VendorBill: { from: ["draft"], error: "Tagihan vendor hanya dapat ditolak dari status draft." },
-  SalesOrder: { from: ["draft"], error: "Pesanan penjualan hanya dapat ditolak dari status draft." },
-  SalesInvoice: { from: ["draft"], error: "Faktur penjualan hanya dapat ditolak dari status draft." },
-  Expense: { from: ["draft"], error: "Pengeluaran hanya dapat ditolak dari status draft." },
-  Quotation: { from: ["draft", "sent"], error: "Penawaran hanya dapat ditolak dari status draft atau terkirim." },
-};
+// Klaim atomik status dokumen (APPROVE_CLAIMS/REJECT_CLAIMS) tinggal di
+// src/lib/approval/claims.ts supaya route /api/workflow menilai pre-state
+// yang sama SEBELUM menginisiasi approval — lihat komentar di modul itu.
 
 const APPROVED_BY_MODELS = new Set([
   "PurchaseRequest",

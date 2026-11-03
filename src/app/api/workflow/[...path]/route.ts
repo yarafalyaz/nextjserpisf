@@ -12,6 +12,7 @@ import { onEmployeeLoanDisbursed } from "@/lib/hooks/accounting.hook"
 import { approveOvertime } from "@/actions/hrm.actions"
 import { assertCSRF } from "@/lib/security/csrf"
 import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions"
+import { APPROVE_CLAIMS, REJECT_CLAIMS } from "@/lib/approval/claims"
 import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope"
 
 
@@ -178,6 +179,32 @@ export async function POST(
           where: { referenceType: modelType, referenceId: id },
           orderBy: { id: "desc" },
         })
+
+        // Putaran 105: pre-state dokumen dinilai SEBELUM approval diinisiasi.
+        // Tanpa ini, klik Setujui pada dokumen yang sudah lewat draft
+        // (faktur posted, PO cancelled, cuti selesai) melahirkan baris
+        // `Approval` pending yang commit lebih dulu; klaim approveStep lalu
+        // gagal dan rollback HANYA transaksi langkahnya, sehingga approval
+        // yatim tertinggal — mengotori antrean dan memblokir edit/hapus
+        // konfigurasi workflow selamanya (pendingCount > 0). Dokumen
+        // `rejected` dikecualikan: jalur reopen di bawah memulihkan
+        // pre-state-nya lebih dulu.
+        if (!approval || approval.status === "rejected") {
+          const claims = action === "approve" ? APPROVE_CLAIMS : REJECT_CLAIMS
+          const claim = claims[modelType]
+          if (claim) {
+            const delegateStatus = prisma[config.model as keyof typeof prisma] as any
+            const current = await delegateStatus
+              .findUnique({ where: { id }, select: { status: true } })
+            const status = current?.status as string | undefined
+            if (status != null && status !== "rejected" && !claim.from.includes(status)) {
+              return apiError(
+                "CONFLICT",
+                `Tidak dapat mengubah status dari '${status}': ${claim.error}`,
+              )
+            }
+          }
+        }
 
         // R7API-03: pencetus approval — dipakai jalur inisiasi di bawah DAN
         // reopen. JANGAN aktor yang menekan tombol: maker-checker di

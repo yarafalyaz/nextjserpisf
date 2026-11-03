@@ -481,6 +481,33 @@ describe("POST /api/workflow/[...path]", () => {
       expect(mocks.approveStepMock).not.toHaveBeenCalled()
     })
 
+    it("putaran 105: dokumen terminal tidak menginisiasi approval — nol baris yatim", async () => {
+      // Faktur sudah posted sebelum workflow aktif. Tanpa cek pre-state,
+      // requestApprovalIfConfigured melahirkan approval pending yang commit,
+      // lalu klaim approveStep gagal & rollback: approval yatim tertinggal
+      // dan memblokir edit/hapus workflow selamanya.
+      mocks.authFn.mockResolvedValue(adminSession)
+      mocks.findUnique.mockResolvedValue({ id: 5, createdBy: 7, status: "posted" })
+      // Baris approval belum ada (belum pernah diajukan) — implementasi mock
+      // dari test sebelumnya bertahan karena clearAllMocks hanya membersihkan
+      // panggilan, bukan implementasi.
+      mocks.findFirstApproval.mockResolvedValue(null)
+
+      const res = await POST(makeReq(), makeParams(["penjualan", "pesanan", "5", "approve"]))
+      expect(res.status).toBe(409)
+      expect(mocks.requestApprovalMock).not.toHaveBeenCalled()
+      expect(mocks.approveStepMock).not.toHaveBeenCalled()
+    })
+
+    it("putaran 105: dokumen rejected tetap boleh dibuka ulang (bukan ditolak cek pre-state)", async () => {
+      mocks.authFn.mockResolvedValue(adminSession)
+      mocks.findUnique.mockResolvedValue({ id: 5, createdBy: 7, status: "rejected" })
+      mocks.findFirstApproval.mockResolvedValueOnce({ id: 10, status: "rejected", requestedBy: 7 })
+
+      await POST(makeReq(), makeParams(["penjualan", "pesanan", "5", "approve"]))
+      expect(mocks.requestApprovalMock).toHaveBeenCalled()
+    })
+
     it("putaran 54: error DB saat membaca pembuat dokumen tidak ditelan menjadi fallback aktor", async () => {
       mocks.authFn.mockResolvedValue(adminSession)
       mocks.findUnique.mockResolvedValueOnce({ id: 5 })
