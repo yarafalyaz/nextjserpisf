@@ -106,24 +106,88 @@ async function loadAssetLedger(historyUntil: Date): Promise<AssetLedger> {
     ]),
   )
 
+  // Himpunan akun peristiwa per aset dari jurnal peristiwa aset itu sendiri
+  // (akun asal + tujuan reklasifikasi). Peran akun dibedakan dari akun
+  // kategori berjalan; akun peristiwa lain (surplus, beban penurunan nilai,
+  // utang pajak) tidak masuk himpunan mana pun dan tak memengaruhi delta.
+  const assetEventAccountIds = new Map<
+    number,
+    { fixed: Set<number>; accumulated: Set<number>; impairment: Set<number> }
+  >()
+  for (const journal of eventJournals) {
+    if (journal.referenceId == null || !journal.referenceType) continue
+    const accounts = accountsByAsset.get(journal.referenceId)
+    if (!accounts) continue
+    let sets = assetEventAccountIds.get(journal.referenceId)
+    if (!sets) {
+      sets = { fixed: new Set(), accumulated: new Set(), impairment: new Set() }
+      assetEventAccountIds.set(journal.referenceId, sets)
+    }
+    if (accounts.fixedAssetAccountId != null) sets.fixed.add(accounts.fixedAssetAccountId)
+    if (accounts.accumulatedDepreciationAccountId != null) {
+      sets.accumulated.add(accounts.accumulatedDepreciationAccountId)
+    }
+    if (accounts.accumulatedImpairmentAccountId != null) {
+      sets.impairment.add(accounts.accumulatedImpairmentAccountId)
+    }
+  }
+
+  // Akun asal reklasifikasi tak dikenal dari kategori berjalan. Ia dikenali
+  // dari pola pasangan jurnal reklasifikasi itu sendiri: bruto berpasangan
+  // Dr akun-baru / Cr akun-lama dan akumulasi berpasangan terbalik, selalu
+  // dalam jurnal yang sama. Kaki asing yang berpasangan (jumlah neto lawan
+  // persis) dengan akun berjalan mewarisi peran akun berjalan itu; akun
+  // peristiwa lain (surplus, beban penurunan nilai, utang pajak) tak pernah
+  // berpasangan sebesar itu dengan akun berjalan sehingga tak terklasifikasi.
+  for (const journal of eventJournals) {
+    if (journal.referenceId == null || !journal.referenceType) continue
+    const sets = assetEventAccountIds.get(journal.referenceId)
+    if (!sets) continue
+    const classifyForeign = (line: { accountId: number; debit: unknown; credit: unknown }) => {
+      if (
+        sets.fixed.has(line.accountId) ||
+        sets.accumulated.has(line.accountId) ||
+        sets.impairment.has(line.accountId)
+      ) {
+        return
+      }
+      const net = Number(line.debit) - Number(line.credit)
+      if (Math.abs(net) <= 0.005) return
+      for (const partner of journal.entries) {
+        if (partner.accountId === line.accountId) continue
+        const partnerNet = Number(partner.debit) - Number(partner.credit)
+        if (Math.abs(partnerNet + net) > 0.005) continue
+        if (sets.fixed.has(partner.accountId)) sets.fixed.add(line.accountId)
+        else if (sets.accumulated.has(partner.accountId)) sets.accumulated.add(line.accountId)
+        else if (sets.impairment.has(partner.accountId)) sets.impairment.add(line.accountId)
+        else continue
+        break
+      }
+    }
+    for (const line of journal.entries) classifyForeign(line)
+  }
+
   const journals: AssetLedgerJournal[] = []
   for (const journal of eventJournals) {
     if (journal.referenceId == null || !journal.referenceType) continue
     const accounts = accountsByAsset.get(journal.referenceId)
     if (!accounts) continue
+    // Putaran 101: delta neto WAJIB dihitung atas himpunan akun PERISTIWA aset
+    // itu sendiri, bukan hanya akun kategori BERJALAN. Reklasifikasi menulis
+    // Dr akun-baru / Cr akun-lama; membaca satu akun berjalan saja menghitung
+    // kaki masuk tanpa kaki keluar, sehingga bruto + akumulasi terdobel
+    // persis nilai buku saat reklasifikasi (register/mutasi/pelepasan tampil
+    // 2x lipat). Kumpulan akun diambil dari baris jurnal aset ini sendiri:
+    // reklasifikasi hanya menulis akun kategori asal/tujuan aset yang sama.
+    const assetAccountIds = assetEventAccountIds.get(journal.referenceId)
     let grossDelta = 0
     let accumulatedNet = 0
     let impairmentNetCredit = 0
     for (const line of journal.entries) {
       const net = Number(line.debit) - Number(line.credit)
-      if (line.accountId === accounts.fixedAssetAccountId) grossDelta += net
-      if (line.accountId === accounts.accumulatedDepreciationAccountId) accumulatedNet += net
-      if (
-        accounts.accumulatedImpairmentAccountId != null &&
-        line.accountId === accounts.accumulatedImpairmentAccountId
-      ) {
-        impairmentNetCredit += -net
-      }
+      if (assetAccountIds?.fixed.has(line.accountId)) grossDelta += net
+      if (assetAccountIds?.accumulated.has(line.accountId)) accumulatedNet += net
+      if (assetAccountIds?.impairment.has(line.accountId)) impairmentNetCredit += -net
     }
     journals.push({
       assetId: journal.referenceId,

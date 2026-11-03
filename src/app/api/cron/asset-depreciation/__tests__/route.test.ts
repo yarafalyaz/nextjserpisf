@@ -327,6 +327,38 @@ describe("POST /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () =>
     expect(mocks.assertPeriodOpen.mock.calls[1][1]).toBeTruthy()
   })
 
+  it("regresi putaran 101: aset purchaseDate null berjurnal tetap diproses (jangkar jurnal)", async () => {
+    mocks.assetFindMany.mockResolvedValue([assetRow({ purchaseDate: null })])
+    mocks.journalFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(acquisitionJournals())
+
+    // Populasi cron WAJIB memuat kandidat purchaseDate null.
+    const res = await POST(makeReq())
+    const json = await res.json()
+    expect(json.processed).toBe(1)
+    const assetWhere = mocks.assetFindMany.mock.calls[0][0].where
+    expect(JSON.stringify(assetWhere)).toContain('"purchaseDate":null')
+  })
+
+  it("regresi putaran 101: akun akumulasi induk dilewati berisik, nol jurnal", async () => {
+    mocks.assetFindMany.mockResolvedValue([assetRow()])
+    mocks.journalFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(acquisitionJournals())
+    // Akun 701 (akumulasi) adalah akun induk menurut bacaan hidup cron.
+    mocks.accountFindMany.mockResolvedValue([
+      { id: 700, isActive: true, deletedAt: null, _count: { children: 0 } },
+      { id: 701, isActive: true, deletedAt: null, _count: { children: 3 } },
+    ])
+
+    const res = await POST(makeReq())
+    const json = await res.json()
+    expect(json.processed).toBe(0)
+    expect(json.missingAccounts).toBe(1)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
   it("F62-9: periode tertutup menolak di dalam tx — error tercatat, nol jurnal/history/currentValue", async () => {
     mocks.assetFindMany.mockResolvedValue([assetRow()])
     mocks.journalFindMany

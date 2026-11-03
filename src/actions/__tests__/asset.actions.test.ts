@@ -590,8 +590,18 @@ describe("Asset Category Actions", () => {
     expect(prismaMock.assetCategory.create).not.toHaveBeenCalled()
     expect(prismaMock.account.findMany).toHaveBeenCalledWith({
       where: { id: { in: [999] }, isActive: true, deletedAt: null },
-      select: { id: true },
+      select: { id: true, _count: { select: { children: true } } },
     })
+  })
+
+  it("regresi putaran 101: MENOLAK akun induk saat membuat kategori", async () => {
+    prismaMock.account.findMany.mockResolvedValueOnce([
+      { id: 999, _count: { children: 2 } },
+    ])
+    const res = await createAssetCategory(fd({ name: "Komputer", assetAccountId: "999" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/Akun induk tidak bisa diposting/)
+    expect(prismaMock.assetCategory.create).not.toHaveBeenCalled()
   })
 
   it("MENOLAK akun GL fiktif saat mengubah kategori", async () => {
@@ -602,7 +612,7 @@ describe("Asset Category Actions", () => {
     expect(prismaMock.assetCategory.update).not.toHaveBeenCalled()
     expect(prismaMock.account.findMany).toHaveBeenCalledWith({
       where: { id: { in: [888] }, isActive: true, deletedAt: null },
-      select: { id: true },
+      select: { id: true, _count: { select: { children: true } } },
     })
   })
 

@@ -72,11 +72,15 @@ function fd(payload: Record<string, string>): FormData {
 
 const base = { itemId: "7", price: "50000", minQty: "1" }
 
-function firstLockedSql(): string {
-  const arg = mocks.queryRaw.mock.calls[0]?.[0] as unknown
+function lockedSqlAt(index: number): string {
+  const arg = mocks.queryRaw.mock.calls[index]?.[0] as unknown
   if (Array.isArray(arg)) return arg.join("?")
   const obj = arg as { sql?: string; strings?: string[] }
   return obj?.sql ?? obj?.strings?.join("?") ?? ""
+}
+
+function firstLockedSql(): string {
+  return lockedSqlAt(0)
 }
 
 beforeEach(() => {
@@ -170,6 +174,37 @@ describe("putaran 68: gerbang hidup barang/kategori harga pelanggan", () => {
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/Kategori pelanggan tidak ditemukan atau tidak aktif/)
     expect(mocks.priceUpdate).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 101: update menolak tanggal berakhir lampau (BR-PX-06 paritas create)", async () => {
+    const res = await updateCustomerPriceList(11, fd({ ...base, expiresAt: "2020-01-01" }))
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Tanggal berakhir sudah lewat/)
+    expect(mocks.priceUpdate).not.toHaveBeenCalled()
+  })
+
+  it("regresi putaran 101: create/update mengunci baris kategori sebelum baca hidup (pasangan kunci deleteCustomerCategory)", async () => {
+    const created = await createCustomerPriceList(fd({ ...base, customerCategoryId: "3" }))
+    expect(created.success).toBe(true)
+    expect(lockedSqlAt(1)).toMatch(/FROM customer_categories[\s\S]*FOR UPDATE/)
+    expect(mocks.queryRaw.mock.invocationCallOrder[1]).toBeLessThan(
+      mocks.categoryFindFirst.mock.invocationCallOrder[0],
+    )
+
+    vi.clearAllMocks()
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["super_admin"] })
+    mocks.queryRaw.mockResolvedValue([{ id: 7 }])
+    mocks.itemFindFirst.mockResolvedValue({ id: 7 })
+    mocks.categoryFindFirst.mockResolvedValue({ id: 3 })
+    mocks.priceFindFirst.mockResolvedValue(null)
+    mocks.priceFindUnique.mockResolvedValue({ id: 11 })
+    mocks.priceUpdate.mockResolvedValue({})
+    const updated = await updateCustomerPriceList(11, fd({ ...base, customerCategoryId: "3" }))
+    expect(updated.success).toBe(true)
+    expect(lockedSqlAt(1)).toMatch(/FROM customer_categories[\s\S]*FOR UPDATE/)
+    expect(mocks.queryRaw.mock.invocationCallOrder[1]).toBeLessThan(
+      mocks.categoryFindFirst.mock.invocationCallOrder[0],
+    )
   })
 })
 

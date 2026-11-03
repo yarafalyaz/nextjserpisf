@@ -73,6 +73,8 @@ export interface MappedAccount {
   /** Account.reportGroup gaya Accurate: EQTY | EXPS | DEPR | FASS | ... */
   reportGroup: string | null
   isActive: boolean
+  /** Putaran 101: jumlah akun anak; induk tak boleh diposting (kanonis journal.service). */
+  childCount?: number
 }
 
 export interface CategoryAccountMapping {
@@ -207,6 +209,9 @@ function requireRoleAccount(
   }
   if (!account.isActive) {
     return `Akun ${roleLabel} (${account.code}) pada kategori ${categoryName} tidak aktif — aktifkan atau petakan akun lain di pengaturan kategori aset`
+  }
+  if ((account.childCount ?? 0) > 0) {
+    return `Akun ${roleLabel} (${account.code}) pada kategori ${categoryName} adalah akun induk — akun induk tidak bisa diposting, pilih akun anak yang terposting`
   }
   if (!expected(account)) {
     return `Akun ${roleLabel} (${account.code}) pada kategori ${categoryName} bertipe salah — wajib akun ${expectedLabel}`

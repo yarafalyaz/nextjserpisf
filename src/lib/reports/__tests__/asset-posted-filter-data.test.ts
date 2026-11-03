@@ -187,6 +187,51 @@ describe("penjaga POSTED loader laporan aset (t_d34601a0)", () => {
     expect(register.totalBookValue).toBe(1300)
   })
 
+  it("regresi putaran 101: loadAssetRegister — reklasifikasi beda akun tidak mendobel bruto/akumulasi", async () => {
+    // Kategori BERJALAN akun 11/21/31 (tujuan reklasifikasi). Peristiwa
+    // reklasifikasi menulis Dr11/Cr10 (bruto) dan Dr20/Cr21 (akumulasi) dalam
+    // jurnal yang sama. Membaca akun berjalan saja menghitung kaki masuk tanpa
+    // kaki keluar: bruto 200, akumulasi 80, buku 120. Benar: 100/40/60.
+    mocks.prismaMock.asset.findMany.mockResolvedValue([
+      {
+        id: 1,
+        code: "AST-1",
+        name: "Mesin",
+        purchaseDate: new Date(2026, 0, 1),
+        purchaseCost: dec(100),
+        status: "active",
+        category: {
+          name: "Mesin Baru",
+          assetAccountId: 11,
+          accumulatedDepreciationAccountId: 21,
+          accumulatedImpairmentAccountId: 31,
+        },
+      },
+    ])
+    mocks.prismaMock.assetHistory.findMany.mockResolvedValue([
+      { assetId: 1, type: "depreciation", amount: dec(40), date: new Date(2026, 5, 30) },
+    ])
+    mocks.prismaMock.journal.findMany.mockResolvedValue([
+      {
+        referenceType: "ASSET_CHANGE_EVENT",
+        referenceId: 1,
+        transactionDate: new Date(2026, 7, 1),
+        entries: [
+          { accountId: 11, debit: dec(100), credit: dec(0) },
+          { accountId: 10, debit: dec(0), credit: dec(100) },
+          { accountId: 20, debit: dec(40), credit: dec(0) },
+          { accountId: 21, debit: dec(0), credit: dec(40) },
+        ],
+      },
+    ])
+
+    const { register } = await loadAssetRegister(new Date(2026, 9, 31, 23, 59, 59, 999), false)
+
+    expect(register.totalCost).toBe(100)
+    expect(register.totalAccumulatedDepreciation).toBe(40)
+    expect(register.totalBookValue).toBe(60)
+  })
+
   it("loadAssetJournalBookRows: kueri jurnal POSTED + bookValue jurnal 700", async () => {
     mocks.prismaMock.asset.findMany.mockResolvedValue([
       {

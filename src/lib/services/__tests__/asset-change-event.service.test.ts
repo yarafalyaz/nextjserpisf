@@ -7,7 +7,7 @@ const D = (n: number) => new Prisma.Decimal(n)
 // supaya posting peristiwa ke-2 benar-benar membaca jurnal peristiwa ke-1
 // lewat jalur service (bukan builder murni).
 interface JEntry { accountId: number; debit: Prisma.Decimal; credit: Prisma.Decimal; memo?: string | null }
-interface JRow { id: number; referenceType: string | null; referenceId: number | null; status: string; deletedAt: Date | null; totalDebit: Prisma.Decimal; totalCredit: Prisma.Decimal; entries: JEntry[] }
+interface JRow { id: number; referenceType: string | null; referenceId: number | null; status: string; deletedAt: Date | null; totalDebit: Prisma.Decimal; totalCredit: Prisma.Decimal; entries: JEntry[]; transactionDate?: Date }
 interface ERow { id: number; assetId: number; kind: string; status: string; effectiveDate: Date; journalId: number | null; [k: string]: unknown }
 
 const store = vi.hoisted(() => ({
@@ -18,6 +18,7 @@ const store = vi.hoisted(() => ({
   seq: 0,
   assetUpdates: [] as Record<string, unknown>[],
   assetStatus: "active",
+  parentAccountId: null as number | null,
 }))
 
 const ACCOUNTS: Record<number, { id: number; code: string; type: string; reportGroup: string | null; isActive: boolean }> = {
@@ -56,7 +57,14 @@ vi.mock("@/lib/db/prisma", () => {
     },
     assetCategory: { findUnique: vi.fn(async () => CATEGORY) },
     account: {
-      findFirst: vi.fn(async (args: { where: { id: number } }) => ACCOUNTS[args.where.id] ?? null),
+      findFirst: vi.fn(async (args: { where: { id: number } }) => {
+        const base = ACCOUNTS[args.where.id]
+        if (!base) return null
+        // Putaran 101: akun yang ditandai induk membawa _count.children > 0.
+        return store.parentAccountId === args.where.id
+          ? { ...base, _count: { children: 2 } }
+          : { ...base, _count: { children: 0 } }
+      }),
     },
     systemSetting: { findFirst: vi.fn(async () => null) },
     documentSequence: {
@@ -68,7 +76,7 @@ vi.mock("@/lib/db/prisma", () => {
         let rows = store.journals.filter((j) => j.status === "POSTED" && j.deletedAt == null)
         if (w.id?.in) rows = rows.filter((j) => w.id!.in.includes(j.id))
         else if (w.referenceId != null) rows = rows.filter((j) => j.referenceId === w.referenceId)
-        return rows.map((j) => ({ referenceType: j.referenceType, entries: j.entries }))
+        return rows.map((j) => ({ referenceType: j.referenceType, transactionDate: j.transactionDate, entries: j.entries }))
       }),
       findUnique: vi.fn(async (args: { where: { id: number } }) => {
         const j = store.journals.find((x) => x.id === args.where.id)
@@ -180,6 +188,7 @@ beforeEach(() => {
   store.seq = 0
   store.assetUpdates = []
   store.assetStatus = "active"
+  store.parentAccountId = null
   lockCalls.length = 0
   seedAcquisition()
 })
@@ -354,5 +363,35 @@ describe("asset-change-event.service", () => {
 
     expect(lockCalls.length).toBeGreaterThanOrEqual(3)
     expect(lockCalls.every((s) => s.includes("assets") && s.includes("FOR UPDATE"))).toBe(true)
+  })
+
+  it("regresi putaran 101: peristiwa backdate mendahului jurnal POSTED terakhir ditolak", async () => {
+    // Jurnal perolehan POSTED tertanggal 2026-03-01; impairment bertanggal
+    // efektif 2026-02-01 mendahuluinya. Tanpa guard, fakta POSTED dinilai
+    // penuh untuk tanggal efektif yang sudah lewat jurnal lebih baru.
+    store.journals[0].transactionDate = new Date("2026-03-01")
+
+    await expect(
+      postAssetChangeEvent({ assetId: 1, request: impairmentReq("DOC-B1", 700) }),
+    ).rejects.toThrow(/tidak boleh sebelum tanggal jurnal aset terakhir/)
+
+    expect(store.events).toHaveLength(0)
+    expect(store.journals.filter((j) => j.referenceType === "ASSET_CHANGE_EVENT")).toHaveLength(0)
+
+    // Tanggal efektif sesudah jurnal terakhir tetap lolos.
+    const ok = await postAssetChangeEvent({
+      assetId: 1,
+      request: { ...impairmentReq("DOC-B2", 700), effectiveDate: new Date("2026-03-02") },
+    })
+    expect(ok.journalId).not.toBeNull()
+  })
+
+  it("regresi putaran 101: akun kategori induk ditolak di jalur peristiwa", async () => {
+    store.parentAccountId = 15 // akun Akumulasi Penurunan Nilai menjadi akun induk
+    await expect(
+      postAssetChangeEvent({ assetId: 1, request: impairmentReq("DOC-P1", 700) }),
+    ).rejects.toThrow(/akun induk/)
+    expect(store.events).toHaveLength(0)
+    expect(store.journals.filter((j) => j.referenceType === "ASSET_CHANGE_EVENT")).toHaveLength(0)
   })
 })

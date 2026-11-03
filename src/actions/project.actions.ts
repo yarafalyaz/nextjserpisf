@@ -28,6 +28,8 @@ import {
 import type { Prisma } from "@prisma/client"
 import {
   evaluateBudgetLock,
+  isProjectBudgetCategory,
+  PROJECT_BUDGET_CATEGORIES,
   PROJECT_BUDGET_LOG_ACTIONS,
   type ProjectBudgetItemInput,
 } from "@/lib/reports/project-budget"
@@ -1274,6 +1276,20 @@ function parseRevisionPayload(raw: string): RevisionPayload {
       qty: typeof dataRaw.qty === "number" ? dataRaw.qty : Number.NaN,
       cost: typeof dataRaw.cost === "number" ? dataRaw.cost : Number.NaN,
       sortOrder: typeof dataRaw.sortOrder === "number" ? dataRaw.sortOrder : undefined,
+    }
+    // Putaran 101: kategori baris wajib kanonis bila terisi. Parser dipakai
+    // propose DAN apply; tanpa ini payload langsung menanam kategori liar
+    // yang lolos skema form tetapi merusak invarian kunci RAB (BR-02:
+    // evaluateBudgetLock menolak kunci bila ada baris tanpa kategori
+    // kanonik) dan agregasi per kategori.
+    if (
+      (change.type === "create" || change.type === "update") &&
+      data.category !== undefined &&
+      !isProjectBudgetCategory(data.category)
+    ) {
+      throw new Error(
+        `Perubahan revisi #${index + 1}: kategori tidak dikenal — pakai ${PROJECT_BUDGET_CATEGORIES.join("/")}.`,
+      )
     }
     if (change.type === "create") {
       if (!(data.qty > 0) || !(data.cost >= 0)) {

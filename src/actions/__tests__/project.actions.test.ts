@@ -1666,6 +1666,23 @@ describe("RAB proyek F-2026-10-21-030", () => {
     expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
   })
 
+  it("regresi putaran 101: usulan revisi kategori non-kanonik ditolak sebelum log lahir", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({ budgetLockedAt: new Date(2026, 9, 20) }),
+    )
+    mocks.prismaMock.projectLog.create.mockResolvedValue({ id: 31 })
+    const payload = JSON.stringify({
+      changes: [{ type: "create", data: { qty: 1, cost: 1000, category: "liar" } }],
+    })
+    const res = await actions.proposeProjectBudgetRevision(
+      10,
+      fdMap({ reason: "Tambah plat", changes: payload }),
+    )
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/kategori tidak dikenal/)
+    expect(mocks.prismaMock.projectLog.create).not.toHaveBeenCalled()
+  })
+
   it("regresi putaran 47: usulan revisi kedua ditolak selagi usulan lain masih terbuka", async () => {
     mocks.prismaMock.project.findUnique.mockResolvedValue(
       unlockedProject({ budgetLockedAt: new Date(2026, 9, 20) }),

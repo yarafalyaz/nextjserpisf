@@ -62,7 +62,13 @@ export async function POST(request: Request) {
     const assets = await prisma.asset.findMany({
       where: {
         status: "active",
-        purchaseDate: { lte: periodEnd },
+        // Putaran 101: aset berjurnal dari create lama boleh purchaseDate null
+        // (create menyimpan null bila form tak mengisi, jurnal perolehan tetap
+        // terbit bertanggal hari buat). `lte` membuang null senyap, jadi aset
+        // itu keluar populasi selamanya; kandidat null dinilai dari jangkar
+        // jurnal perolehan di bawah, bukan tanggal kolom. Filter tanggal di
+        // AND sendiri: dua kunci OR dalam satu objek saling menimpa.
+        AND: [{ OR: [{ purchaseDate: { lte: periodEnd } }, { purchaseDate: null }] }],
         OR: [
           {
             depreciationMethod: {
@@ -114,14 +120,18 @@ export async function POST(request: Request) {
       addCandidate(asset.category?.depreciationExpenseAccountId)
       addCandidate(asset.category?.accumulatedDepreciationAccountId)
     }
+    // Putaran 101: "hidup" juga berarti akun daun — akun induk tak boleh
+    // diposting jurnal penyusutan (kanonis journal.service).
     const liveAccountIds = new Set(
       candidateAccountIds.size
         ? (
             await prisma.account.findMany({
               where: { id: { in: [...candidateAccountIds] }, isActive: true, deletedAt: null },
-              select: { id: true },
+              select: { id: true, _count: { select: { children: true } } },
             })
-          ).map((account) => account.id)
+          )
+            .filter((account) => (account._count?.children ?? 0) === 0)
+            .map((account) => account.id)
         : [],
     )
     const envAccount = (key: string) => Number.parseInt(process.env[key] || "0") || 0
@@ -161,6 +171,9 @@ export async function POST(request: Request) {
             select: {
               referenceType: true,
               referenceId: true,
+              // Putaran 101: tanggal jurnal perolehan = jangkar masa untuk
+              // aset purchaseDate null.
+              transactionDate: true,
               entries: { select: { accountId: true, debit: true, credit: true } },
             },
           }),
@@ -242,6 +255,20 @@ export async function POST(request: Request) {
           `Asset ${asset.id} (${asset.name}): belum berjurnal (tidak ada jurnal perolehan POSTED), penyusutan GL dilewati berisik`,
         )
         continue
+      }
+
+      // Putaran 101: kandidat purchaseDate null wajib berjangkar jurnal —
+      // perolehan sesudah akhir periode (mis. jangkar jurnal bulan depan)
+      // belum boleh disusutkan masa ini; aset null tanpa jurnal sudah
+      // tersaring berisik di gerbang hasAcquisitionJournal di atas.
+      if (asset.purchaseDate == null) {
+        const anchor = (journalsByAsset.get(asset.id) ?? []).find(
+          (j) => j.referenceType === "ASSET_ACQUISITION",
+        ) as { transactionDate?: Date } | undefined
+        if (anchor?.transactionDate && anchor.transactionDate > periodEnd) {
+          skipped++
+          continue
+        }
       }
 
       // F-118-V Putusan 2: analitis lewat resolver inti (parameter beku +
@@ -347,9 +374,12 @@ export async function POST(request: Request) {
           }
           const freshAccounts = await tx.account.findMany({
             where: { id: { in: accountIds }, isActive: true, deletedAt: null },
-            select: { id: true },
+            select: { id: true, _count: { select: { children: true } } },
           })
-          if (freshAccounts.length !== accountIds.length) {
+          // Putaran 101: akun induk yang baru lahir sesudah scan luar juga
+          // membatalkan — posting ke akun induk dilarang kanonis.
+          const freshLeaves = freshAccounts.filter((a) => (a._count?.children ?? 0) === 0)
+          if (freshLeaves.length !== accountIds.length) {
             throw new Error("Akun beban/akumulasi penyusutan tidak aktif atau sudah dihapus.")
           }
 

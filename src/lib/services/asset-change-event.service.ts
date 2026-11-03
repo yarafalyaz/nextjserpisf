@@ -44,6 +44,7 @@ interface AccountRow {
   type: string
   reportGroup: string | null
   isActive: boolean
+  _count?: { children: number }
 }
 
 interface CategoryRow {
@@ -70,14 +71,24 @@ async function lockAssetRow(tx: TxClient, assetId: number): Promise<void> {
 
 function toMapped(row: AccountRow | null | undefined): MappedAccount | null {
   if (!row) return null
-  return { id: row.id, code: row.code, type: row.type, reportGroup: row.reportGroup, isActive: row.isActive }
+  return {
+    id: row.id,
+    code: row.code,
+    type: row.type,
+    reportGroup: row.reportGroup,
+    isActive: row.isActive,
+    childCount: row._count?.children ?? 0,
+  }
 }
 
 async function loadAccount(tx: TxClient, id: number | null | undefined): Promise<MappedAccount | null> {
   if (id == null) return null
   const row = await tx.account.findFirst({
     where: { id, deletedAt: null },
-    select: { id: true, code: true, type: true, reportGroup: true, isActive: true },
+    select: {
+      id: true, code: true, type: true, reportGroup: true, isActive: true,
+      _count: { select: { children: true } },
+    },
   })
   return toMapped(row)
 }
@@ -113,7 +124,11 @@ const CATEGORY_SELECT = {
 } as const
 
 type JournalEntryRow = { accountId: number; debit: Prisma.Decimal; credit: Prisma.Decimal }
-type JournalRow = { referenceType: string | null; entries: JournalEntryRow[] }
+type JournalRow = {
+  referenceType: string | null
+  transactionDate?: Date
+  entries: JournalEntryRow[]
+}
 
 function sumAccountNet(journals: JournalRow[], accountId: number | null, side: "debit" | "credit"): Prisma.Decimal {
   if (accountId == null) return new Prisma.Decimal(0)
@@ -131,6 +146,7 @@ function sumAccountNet(journals: JournalRow[], accountId: number | null, side: "
 /** Nilai tercatat jurnal POSTED termasuk kontra impairment peristiwa F-111. */
 async function loadPostedFacts(tx: TxClient, assetId: number, mapping: CategoryAccountMapping): Promise<{
   facts: AssetPostedFacts
+  lastPostedJournalDate: Date | null
 }> {
   const asset = await tx.asset.findUniqueOrThrow({
     where: { id: assetId },
@@ -151,6 +167,7 @@ async function loadPostedFacts(tx: TxClient, assetId: number, mapping: CategoryA
     },
     select: {
       referenceType: true,
+      transactionDate: true,
       entries: { select: { accountId: true, debit: true, credit: true } },
     },
   })
@@ -173,11 +190,22 @@ async function loadPostedFacts(tx: TxClient, assetId: number, mapping: CategoryA
         where: { id: { in: eventJournalIds }, status: "POSTED", deletedAt: null },
         select: {
           referenceType: true,
+          transactionDate: true,
           entries: { select: { accountId: true, debit: true, credit: true } },
         },
       })
     : []
   const allJournals = [...lifecycleJournals, ...eventJournals]
+  // Putaran 101: tanggal jurnal POSTED terakhir aset ini. Peristiwa tak boleh
+  // efektif mendahuluinya (pola disposeAsset): carryingBefore dihitung dari
+  // SEMUA jurnal POSTED, jadi peristiwa backdate membawa nominal hari ini ke
+  // tanggal lampau dan laporan as-of di antaranya menerapkan delta atas dasar
+  // yang belum ada. Stub lama tanpa transactionDate diperlakukan tak dikenal.
+  const lastPostedJournalDate = allJournals.reduce<Date | null>((max, journal) => {
+    const date = journal.transactionDate
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return max
+    return max == null || date.getTime() > max.getTime() ? date : max
+  }, null)
   const posted = journalBookValue(
     allJournals.map((j) => ({
       referenceType: j.referenceType ?? "",
@@ -207,7 +235,20 @@ async function loadPostedFacts(tx: TxClient, assetId: number, mapping: CategoryA
     ),
     lastFiscalRevaluationDate: lastFiscal?.effectiveDate ?? null,
   }
-  return { facts }
+  return { facts, lastPostedJournalDate }
+}
+
+/** Peristiwa efektif mendahului jurnal POSTED terakhir = backdate terlarang. */
+function assertEventNotBeforeLastJournal(
+  effectiveDate: Date,
+  lastPostedJournalDate: Date | null,
+  label: string,
+): void {
+  if (lastPostedJournalDate && effectiveDate.getTime() < lastPostedJournalDate.getTime()) {
+    throw new Error(
+      `Tanggal efektif ${label} tidak boleh sebelum tanggal jurnal aset terakhir. Majukan tanggal efektif atau balik jurnal yang lebih baru lebih dulu.`,
+    )
+  }
 }
 
 async function nextJournalNumber(tx: TxClient, date: Date): Promise<string> {
@@ -413,7 +454,8 @@ export async function postAssetChangeEvent(
 
       const mapping = await loadMapping(tx, asset.category)
 
-      const { facts } = await loadPostedFacts(tx, assetId, mapping)
+      const { facts, lastPostedJournalDate } = await loadPostedFacts(tx, assetId, mapping)
+      assertEventNotBeforeLastJournal(request.effectiveDate, lastPostedJournalDate, "peristiwa")
 
       // Tarif + akun pajak fiskal dari master setting (data, bukan konstanta).
       let enriched: AssetChangeEventRequest = { ...request }
@@ -552,7 +594,8 @@ export async function postAssetReclassification(input: {
 
       const mapping = await loadMapping(tx, asset.category)
       const toMapping = await loadMapping(tx, toCategory)
-      const { facts } = await loadPostedFacts(tx, assetId, mapping)
+      const { facts, lastPostedJournalDate } = await loadPostedFacts(tx, assetId, mapping)
+      assertEventNotBeforeLastJournal(request.effectiveDate, lastPostedJournalDate, "reklasifikasi")
 
       const built = buildAssetChangeEvent({
         request: { ...request, kind: "RECLASSIFICATION", toMapping },

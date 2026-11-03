@@ -84,6 +84,13 @@ export async function createCustomerPriceList(formData: FormData): Promise<Custo
       })
       if (!item) return { deadItem: true as const }
       if (data.customerCategoryId != null) {
+        // Putaran 101: kunci baris kategori yang SAMA dengan yang diambil
+        // deleteCustomerCategory sebelum menghitung pemakaian — tanpa ini
+        // create bisa commit menunjuk kategori yang sedang dihapus (soft-
+        // delete di bawah hitungan nol yang sudah lewat).
+        if (typeof tx.$queryRaw === "function") {
+          await tx.$queryRaw`SELECT id FROM customer_categories WHERE id = ${data.customerCategoryId} FOR UPDATE`
+        }
         const category = await tx.customerCategory.findFirst({
           where: { id: data.customerCategoryId, deletedAt: null, isActive: true },
           select: { id: true },
@@ -135,6 +142,16 @@ export async function updateCustomerPriceList(id: number, formData: FormData): P
     if (!parsed.success) return { success: false, error: parsed.error }
     const data = priceListData(parsed.data)
 
+    // Putaran 101: BR-PX-06 berlaku sama di update — tanpa ini ubah bisa
+    // memasang tanggal berakhir lampau; baris aktif mati senyap dan harga
+    // faktur jatuh ke kandidat lain/harga master.
+    if (data.expiresAt && data.expiresAt < getWibTodayUtcDate()) {
+      return {
+        success: false,
+        error: "Tanggal berakhir sudah lewat. Isi tanggal berakhir di masa depan atau kosongkan untuk tanpa batas.",
+      }
+    }
+
     // Serialisasi per item sama seperti create: cek duplikat + update dalam
     // satu tx sesudah kunci baris items, dinilai dari bacaan terkunci.
     const outcome = await prisma.$transaction(async (tx) => {
@@ -147,6 +164,10 @@ export async function updateCustomerPriceList(id: number, formData: FormData): P
       })
       if (!item) return { deadItem: true as const }
       if (data.customerCategoryId != null) {
+        // Putaran 101: kunci baris kategori sama seperti create/delete.
+        if (typeof tx.$queryRaw === "function") {
+          await tx.$queryRaw`SELECT id FROM customer_categories WHERE id = ${data.customerCategoryId} FOR UPDATE`
+        }
         const category = await tx.customerCategory.findFirst({
           where: { id: data.customerCategoryId, deletedAt: null, isActive: true },
           select: { id: true },

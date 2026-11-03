@@ -322,7 +322,7 @@ export async function createStockAdjustment(formData: FormData) {
       // Anti double-submit: retry dengan key sama ditolak sebelum dokumen
       // draft kedua lahir; key kosong (pemanggil lama non-UI) no-op.
       await checkIdempotency(idempotencyKey, tx, user.id);
-      return tx.stockAdjustment.create({
+      const created = await tx.stockAdjustment.create({
       data: {
         documentNo,
         slug: await nextSlug("stockAdjustment", documentNo),
@@ -352,6 +352,12 @@ export async function createStockAdjustment(formData: FormData) {
         },
         },
       });
+      // P0-3 + putaran 101: ajukan ke alur persetujuan DI DALAM tx dokumen
+      // bila workflow StockAdjustment dikonfigurasi. Pengajuan pasca-commit
+      // yang crash di antaranya meninggalkan draft tanpa baris Approval, dan
+      // assertApproved tanpa baris = lolos — pola sama dengan Expense/Asset.
+      await requestApprovalIfConfigured("StockAdjustment", created.id, Number(user.id), tx);
+      return created;
     });
 
     await logActivity(
@@ -360,10 +366,6 @@ export async function createStockAdjustment(formData: FormData) {
       adjustment.id,
       `Membuat penyesuaian stok #${adjustment.id}`,
     );
-    // P0-3: ajukan ke alur persetujuan bila workflow StockAdjustment
-    // dikonfigurasi. Tanpa baris ini assertApproved di bawah tak pernah
-    // bisa menahan (tanpa record = lolos) — pola sama dengan Expense/Asset.
-    await requestApprovalIfConfigured("StockAdjustment", adjustment.id, Number(user.id));
     revalidatePath("/inventaris/penyesuaian");
     return { success: true, id: adjustment.id, slug: adjustment.slug };
   } catch (e: unknown) {
@@ -1029,7 +1031,7 @@ export async function closeInventoryTransferShortage(transferId: number) {
         );
       }
       const documentNo = await generateDocumentNumber("ADJ");
-      return tx.stockAdjustment.create({
+      const created = await tx.stockAdjustment.create({
         data: {
           documentNo,
           slug: await nextSlug("stockAdjustment", documentNo),
@@ -1058,9 +1060,11 @@ export async function closeInventoryTransferShortage(transferId: number) {
           },
         },
       });
+      // Putaran 101: pengajuan approval di dalam tx dokumen (lihat create).
+      await requestApprovalIfConfigured("StockAdjustment", created.id, Number(user.id), tx);
+      return created;
     });
 
-    await requestApprovalIfConfigured("StockAdjustment", adjustment.id, Number(user.id));
     await logActivity(
       "create",
       "StockAdjustment",
@@ -2474,7 +2478,7 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
         where: { stockAdjustmentId: id },
       });
 
-      return tx.stockAdjustment.update({
+      const updated = await tx.stockAdjustment.update({
         where: { id },
         data: {
           slug: await nextSlug("stockAdjustment", adj.documentNo, { excludeId: id }),
@@ -2502,11 +2506,13 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
           },
         },
       });
+      // R6WN-01 + putaran 101: pengajuan ulang di dalam tx dokumen (edit
+      // sesudah approval final membuka pengajuan ulang; service menilai
+      // kebasian dari updatedAt); tanpa workflow ini no-op.
+      await requestApprovalIfConfigured("StockAdjustment", updated.id, Number(user.id), tx);
+      return updated;
     });
 
-    // R6WN-01: edit sesudah approval final membuka pengajuan ulang (service
-    // menilai kebasian dari updatedAt); tanpa workflow ini no-op.
-    await requestApprovalIfConfigured("StockAdjustment", adjustment.id, Number(user.id));
     await logActivity(
       "update",
       "StockAdjustment",
@@ -3274,11 +3280,12 @@ export async function postStocktakeSession(id: number) {
         where: { id },
         data: { status: "posted", adjustmentId: adj.id },
       });
+      // Putaran 101: pengajuan approval di dalam tx dokumen (lihat create).
+      await requestApprovalIfConfigured("StockAdjustment", adj.id, Number(user.id), tx);
       return { adjustmentId: adj.id as number | null, documentNo: documentNo as string | null };
     });
 
     if (outcome.adjustmentId != null) {
-      await requestApprovalIfConfigured("StockAdjustment", outcome.adjustmentId, Number(user.id));
       await logActivity("post", "StocktakeSession", id, `Posting opname → adjustment ${outcome.documentNo}`);
     }
     revalidatePath(STOCKTAKE_PATH);

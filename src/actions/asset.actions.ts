@@ -130,13 +130,21 @@ async function assetCategoryAccountError(v: {
   const found = ids.length
     ? await prisma.account.findMany({
         where: { id: { in: ids }, isActive: true, deletedAt: null },
-        select: { id: true },
+        select: { id: true, _count: { select: { children: true } } },
       })
     : []
   const foundIds = new Set(found.map((a) => a.id))
+  // Putaran 101: akun induk tak boleh dipetakan — jurnal aset (perolehan,
+  // penyusutan, peristiwa, pelepasan) memposting ke akun ini, dan kanonis
+  // journal.service menolak posting ke akun induk. Tolak di simpan kategori
+  // supaya tak gagal jauh kemudian di jurnal.
+  const parentIds = new Set(found.filter((a) => (a._count?.children ?? 0) > 0).map((a) => a.id))
   for (const [accountId, message] of slots) {
     if (accountId == null) continue
     if (!foundIds.has(accountId)) return message
+    if (parentIds.has(accountId)) {
+      return "Akun induk tidak bisa diposting. Pilih akun anak yang terposting."
+    }
   }
   return null
 }

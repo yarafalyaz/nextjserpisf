@@ -320,7 +320,14 @@ describe("Stock Adjustment Actions", () => {
     const { requestApprovalIfConfigured } = await import("@/lib/services/approval-workflow.service");
     const res = await actions.createStockAdjustment(saFd());
     expectSuccess(res);
-    expect(requestApprovalIfConfigured).toHaveBeenCalledWith("StockAdjustment", expect.any(Number), 1);
+    // Putaran 101: pengajuan di dalam tx dokumen — argumen ke-4 wajib client
+    // transaksi (prismaMock harness), bukan undefined pasca-commit.
+    expect(requestApprovalIfConfigured).toHaveBeenCalledWith(
+      "StockAdjustment",
+      expect.any(Number),
+      1,
+      mocks.prismaMock,
+    );
   });
   it("processStockAdjustment does not duplicate journal (stock hook owns it)", async () => {
     vi.clearAllMocks();
@@ -1870,6 +1877,14 @@ describe("stocktake session (P1-5)", () => {
     mocks.prismaMock.stockAdjustment.create.mockResolvedValue({ id: 99 });
     const res = await actions.postStocktakeSession(1);
     expect(res).toEqual({ success: true, adjustmentId: 99 });
+    // Putaran 101: pengajuan approval adjustment dari stocktake di dalam tx.
+    const { requestApprovalIfConfigured } = await import("@/lib/services/approval-workflow.service");
+    expect(requestApprovalIfConfigured).toHaveBeenCalledWith(
+      "StockAdjustment",
+      99,
+      expect.any(Number),
+      mocks.prismaMock,
+    );
     const lockOrder = mocks.prismaMock.$queryRaw.mock.invocationCallOrder[0];
     const createOrder = mocks.prismaMock.stockAdjustment.create.mock.invocationCallOrder[0];
     expect(lockOrder).toBeLessThan(createOrder);
