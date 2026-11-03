@@ -69,7 +69,7 @@ export async function loadPeriodClose(periode: string | undefined): Promise<Peri
     draftVendorBills,
     unfinishedReconciliations,
     unverifiedGoodsReceipts,
-    unmatchedStatementLines,
+    candidateStatementLines,
     draftPayrolls,
     negativeStockItems,
   ] = await Promise.all([
@@ -79,12 +79,29 @@ export async function loadPeriodClose(periode: string | undefined): Promise<Peri
     prisma.vendorBill.count({ where: { status: "draft", deletedAt: null, date: range } }),
     prisma.bankReconciliation.count({ where: { status: { not: "completed" }, statementDate: range } }),
     prisma.goodsReceipt.count({ where: { status: "draft", date: range } }),
-    prisma.bankStatementLine.count({
+    // Putaran 100: "belum matched" dinilai dari definisi yang sama seperti
+    // laporan rekonsiliasi bank — baris matched bila statusnya "matched"
+    // ATAU dipakai item rekonsiliasi yang dicocokkan. Kolom status baris
+    // tak pernah ditulis "matched" oleh jalur produksi (pencocokan hidup
+    // di BankReconciliationItem.matched), jadi count mentah atas status
+    // menghitung SEMUA baris sebagai belum matched selamanya.
+    prisma.bankStatementLine.findMany({
       where: { status: { not: "matched" }, date: range, bankStatement: { deletedAt: null } },
+      select: { id: true },
     }),
     prisma.payroll.count({ where: { status: "draft", startDate: range } }),
     prisma.item.count({ where: { deletedAt: null, isActive: true, qtyOnHand: { lt: 0 } } }),
   ])
+
+  const candidateLineIds = candidateStatementLines.map((line) => line.id)
+  const matchedItems = candidateLineIds.length
+    ? await prisma.bankReconciliationItem.findMany({
+        where: { bankStatementLineId: { in: candidateLineIds }, matched: true },
+        select: { bankStatementLineId: true },
+      })
+    : []
+  const matchedLineIds = new Set(matchedItems.map((item) => item.bankStatementLineId))
+  const unmatchedStatementLines = candidateLineIds.filter((id) => !matchedLineIds.has(id)).length
 
   const result = buildPeriodCloseChecks({
     monthLabel: month.label,

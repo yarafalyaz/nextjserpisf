@@ -104,6 +104,19 @@ beforeEach(() => {
 })
 
 describe("createDisciplinaryRecord", () => {
+  it("putaran 100: tanggal kejadian fiktif 2026-02-30 ditolak, bukan digulir ke Maret", async () => {
+    const r = await createDisciplinaryRecord({
+      employeeId: 1,
+      level: "sp1",
+      violationCategory: "mangkir tanpa keterangan berulang",
+      violationDate: "2026-02-30",
+      description: "Uraian",
+      regulationReference: null,
+    })
+    expect(r.success).toBe(false)
+    expect(mocks.recCreate).not.toHaveBeenCalled()
+  })
+
   it("AC-DISC-9: kategori di luar daftar resmi Q-DISC-1 DITOLAK", async () => {
     const r = await createDisciplinaryRecord({
       employeeId: 1,

@@ -162,6 +162,18 @@ describe("createTaxPayment masa pajak", () => {
 })
 
 describe("createTaxPayment akun hidup + tipe", () => {
+  it("putaran 100: akun utang pajak induk ditolak sebelum jurnal", async () => {
+    mocks.accountFindMany.mockReset().mockResolvedValue([
+      { id: 101, isActive: true, deletedAt: null, type: "LIABILITY", reportGroup: "BANK", _count: { children: 2 } },
+      { id: 102, isActive: true, deletedAt: null, type: "ASSET", reportGroup: "BANK", _count: { children: 0 } },
+    ])
+    const res = await createTaxPayment(form(base))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toMatch(/Akun induk tidak bisa diposting/)
+    expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
   it("menolak akun utang pajak nonaktif dalam tx sebelum jurnal", async () => {
     mocks.accountFindMany.mockReset().mockResolvedValue([
       { id: 101, isActive: false, deletedAt: null, type: "LIABILITY", reportGroup: "BANK" },

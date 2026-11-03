@@ -11,6 +11,7 @@ import { resolveDueDate } from "@/lib/finance/vendor-bill";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { assertAccountsExist } from "@/lib/hooks/accounting.hook";
 import { stampWorkOrderFitmentSnapshot } from "@/lib/services/vehicle-fitment.service";
+import { assertInvoiceAllowedForWorkOrderBridges } from "@/lib/services/warranty-journal.service";
 import { Status, WorkOrderStatus, SalesStatus } from "@/lib/constants";
 import {
   computeInvoiceThresholdSen,
@@ -712,6 +713,15 @@ async function onDownPaymentConfirmedInner(
 
     let invoice: { id: number; documentNo: string | null } | null = null
     if (totalVerifiedSen >= thresholdSen && salesOrder) {
+    // Putaran 100: gerbang garansi di titik lahir, sama seperti createSalesInvoice.
+    // Tanpa ini konfirmasi DP melahirkan draft + alokasi pembayaran + jurnal
+    // reklas untuk WO repair klaim covered yang oleh semua jalur form ditolak
+    // — draft tak akan pernah bisa diposting (postInvoice fail-closed) tetapi
+    // uang muka sudah teralokasi ke dalamnya.
+    await assertInvoiceAllowedForWorkOrderBridges(tx, {
+      quotationId: quotation.id,
+      salesOrderId: salesOrder.id,
+    })
     // K5: faktur otomatis dari DP lahir draft tanpa nomor; nomor resmi
     // diterbitkan saat posting (postInvoice di sales.actions).
     // R8-JB-09: dueDate snapshot dari termin pelanggan; tanggal dokumen

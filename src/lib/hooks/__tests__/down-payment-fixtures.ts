@@ -205,6 +205,9 @@ export const dpNotificationFactory = (mocks: any) => ({
     notifyDocumentsReadyBatch: (...a: unknown[]) => mocks.notifyDocumentsReadyBatch(...a),
   },
 })
+export const dpWarrantyFactory = (mocks: any) => ({
+  assertInvoiceAllowedForWorkOrderBridges: (...a: unknown[]) => mocks.assertInvoiceAllowed(...a),
+})
 export const dpAccountingFactory = (mocks: any) => ({
   onSalesInvoicePosted: (...a: unknown[]) => mocks.onSalesInvoicePosted(...a),
   // Putaran 51: alokasi DP kini menilai akun hidup lewat assertAccountsExist —

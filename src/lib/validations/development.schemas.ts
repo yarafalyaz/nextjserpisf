@@ -1,10 +1,17 @@
 import { z } from "zod"
 import "./zod-locale";
+import { dateOnly } from "./finance.schemas";
 
+// Putaran 100: tanggal siklus/pelatihan wajib kalender-nyata (dateOnly) —
+// tanggal fiktif dulu bergulir senyap lewat wibDateToUtcMidnight — dan
+// rentang terbalik ditolak di skema (pola putaran 86 finance.schemas).
 export const performanceCycleSchema = z.object({
   name: z.string().min(1, "Nama siklus wajib diisi").max(191),
-  periodStart: z.string().min(1, "Tanggal mulai wajib diisi"),
-  periodEnd: z.string().min(1, "Tanggal akhir wajib diisi"),
+  periodStart: dateOnly,
+  periodEnd: dateOnly,
+}).refine((v) => v.periodStart <= v.periodEnd, {
+  message: "Tanggal mulai tidak boleh sesudah tanggal akhir",
+  path: ["periodStart"],
 })
 
 export const performanceGoalSchema = z.object({
@@ -39,11 +46,17 @@ export const employeeCompetencySchema = z.object({
 export const trainingSchema = z.object({
   title: z.string().min(1, "Judul pelatihan wajib diisi").max(191),
   provider: z.string().max(191).optional(),
-  startDate: z.string().min(1, "Tanggal mulai wajib diisi"),
-  endDate: z.string().optional(),
+  startDate: dateOnly,
+  endDate: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    dateOnly.optional(),
+  ),
   location: z.string().max(191).optional(),
   cost: z.coerce.number().min(0).default(0),
   description: z.string().max(10000).optional(),
+}).refine((v) => !v.endDate || v.startDate <= v.endDate, {
+  message: "Tanggal mulai tidak boleh sesudah tanggal akhir",
+  path: ["startDate"],
 })
 
 export const trainingParticipantSchema = z.object({

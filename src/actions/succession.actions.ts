@@ -38,49 +38,49 @@ export async function upsertSuccessorCandidate(formData: FormData) {
     if (!parsed.success) return { success: false as const, error: parsed.error };
     const v = parsed.data;
 
-    // Pemegang jabatan aktif tidak menjadi kandidat untuk jabatannya
-    // sendiri — suksesi menyiapkan pengganti, bukan orang yang sama.
-    const incumbent = await prisma.employee.findFirst({
-      where: { id: v.candidateEmployeeId, positionId: v.positionId, deletedAt: null },
-      select: { id: true },
-    });
-    if (incumbent) {
-      return {
-        success: false as const,
-        error: "Karyawan ini adalah pemegang jabatan tersebut saat ini",
-      };
-    }
-
-    const candidate = await prisma.employee.findFirst({
-      where: { id: v.candidateEmployeeId, deletedAt: null, isActive: true },
-      select: { id: true },
-    });
-    if (!candidate) {
-      return { success: false as const, error: "Kandidat tidak ditemukan atau nonaktif" };
-    }
-
     const scope = await getHrScope(actor);
     await assertHrEmployeeAccess(scope, v.candidateEmployeeId);
 
-    const row = await prisma.successionCandidate.upsert({
-      where: {
-        positionId_candidateEmployeeId: {
-          positionId: v.positionId,
-          candidateEmployeeId: v.candidateEmployeeId,
+    // Putaran 100: nilai ulang incumbent + kandidat hidup DI DALAM tx
+    // berkunci baris employee kandidat. Pemeriksaan pra-tx saja kalah
+    // balapan dengan updateEmployee yang memindahkan kandidat menjadi
+    // pemegang jabatan target di jendela cek→upsert (kunci baris yang
+    // sama diambil updateEmployee), sehingga kandidat bisa tampil
+    // sebagai pengganti dirinya sendiri. Pemegang jabatan aktif tidak
+    // menjadi kandidat untuk jabatannya sendiri — suksesi menyiapkan
+    // pengganti, bukan orang yang sama.
+    const row = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${v.candidateEmployeeId} FOR UPDATE`;
+      }
+      const candidate = await tx.employee.findFirst({
+        where: { id: v.candidateEmployeeId, deletedAt: null, isActive: true },
+        select: { id: true, positionId: true },
+      });
+      if (!candidate) throw new Error("Kandidat tidak ditemukan atau nonaktif");
+      if (candidate.positionId === v.positionId) {
+        throw new Error("Karyawan ini adalah pemegang jabatan tersebut saat ini");
+      }
+      return tx.successionCandidate.upsert({
+        where: {
+          positionId_candidateEmployeeId: {
+            positionId: v.positionId,
+            candidateEmployeeId: v.candidateEmployeeId,
+          },
         },
-      },
-      create: {
-        ...v,
-        notes: v.notes ?? null,
-        assessedBy: Number(actor.id),
-        createdBy: Number(actor.id),
-      },
-      update: {
-        readiness: v.readiness,
-        rank: v.rank,
-        notes: v.notes ?? null,
-        assessedBy: Number(actor.id),
-      },
+        create: {
+          ...v,
+          notes: v.notes ?? null,
+          assessedBy: Number(actor.id),
+          createdBy: Number(actor.id),
+        },
+        update: {
+          readiness: v.readiness,
+          rank: v.rank,
+          notes: v.notes ?? null,
+          assessedBy: Number(actor.id),
+        },
+      });
     });
 
     await logActivity("create", "SuccessionCandidate", row.id, "Menetapkan kandidat suksesi");

@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   notifyDocumentsReadyBatch: vi.fn(),
   onSalesInvoicePosted: vi.fn(),
   accountFindMany: vi.fn(),
+  assertInvoiceAllowed: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", async () => (await import("./down-payment-fixtures")).dpPrismaFactory(mocks))
@@ -31,6 +32,7 @@ vi.mock("@/lib/utils/document-number", async () => (await import("./down-payment
 
 vi.mock("@/lib/services/notification.service", async () => (await import("./down-payment-fixtures")).dpNotificationFactory(mocks))
 vi.mock("@/lib/hooks/accounting.hook", async () => (await import("./down-payment-fixtures")).dpAccountingFactory(mocks))
+vi.mock("@/lib/services/warranty-journal.service", async () => (await import("./down-payment-fixtures")).dpWarrantyFactory(mocks))
 
 import { onDownPaymentConfirmed } from "../down-payment.hook"
 
@@ -71,6 +73,8 @@ describe("ambang snapshot konversi DP ke invoice (F-2026-10-22-065-S)", () => {
     mocks.salesInvoiceFindFirst.mockResolvedValue(null)
     mocks.queryRaw.mockResolvedValue([{ id: 1, period_lock_date: null }])
     mocks.accountFindMany.mockImplementation(async (args: any) => (args?.where?.id?.in ?? []).map((id: number) => ({ id })))
+    mocks.assertInvoiceAllowed.mockReset()
+    mocks.assertInvoiceAllowed.mockResolvedValue(undefined)
   })
 
   it("DP 300 dari 1000 (30%): WO/SO dibuat, invoice TIDAK dibuat, posting TIDAK dipanggil", async () => {
@@ -122,6 +126,26 @@ describe("ambang snapshot konversi DP ke invoice (F-2026-10-22-065-S)", () => {
       expect.objectContaining({ where: expect.objectContaining({ status: "confirmed" }) })
     )
     expect(mocks.salesInvoiceCreate).not.toHaveBeenCalled()
+  })
+
+  it("putaran 100: gerbang garansi menolak di titik lahir — invoice/alokasi/jurnal TIDAK lahir", async () => {
+    const dp = buildDp({ id: 8, amount: 600, status: "draft", docNo: "DP-8" })
+    const tx = buildTx(dp)
+    // Ambang tercapai (600 >= 500) → jalur lahir invoice akan dievaluasi.
+    mocks.downPaymentFindMany.mockResolvedValue([{ amount: 600 }])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+    mocks.assertInvoiceAllowed.mockRejectedValue(new Error("WO repair adalah pekerjaan garansi covered"))
+
+    await expect(onDownPaymentConfirmed(8, 1)).rejects.toThrow("garansi covered")
+
+    // Gerbang dipanggil dengan jembatan invoice konversi (quotation + SO).
+    expect(mocks.assertInvoiceAllowed).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ quotationId: 10, salesOrderId: 12 }),
+    )
+    expect(mocks.salesInvoiceCreate).not.toHaveBeenCalled()
+    expect(mocks.salesPaymentCreate).not.toHaveBeenCalled()
+    expect((tx.journal.create as any)).not.toHaveBeenCalled()
   })
 
   it("DP lanjutan ke invoice existing: SalesPayment + jurnal Dr 210102 / Cr Piutang (AUD-FIN-04)", async () => {

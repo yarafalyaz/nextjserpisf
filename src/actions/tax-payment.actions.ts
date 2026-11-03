@@ -129,7 +129,7 @@ export async function createTaxPayment(formData: FormData): Promise<TaxPaymentAc
       await tx.$executeRaw`SELECT id FROM accounts WHERE id IN (${Prisma.join(sortedAccountIds)}) FOR UPDATE`
       const freshAccounts = await tx.account.findMany({
         where: { id: { in: [taxAccountId, paymentAccountId] } },
-        select: { id: true, isActive: true, deletedAt: true, type: true, reportGroup: true },
+        select: { id: true, isActive: true, deletedAt: true, type: true, reportGroup: true, _count: { select: { children: true } } },
       })
       if (freshAccounts.length !== 2) throw new Error("Akun yang dipilih tidak ditemukan.")
       if (freshAccounts.some((account) => account.deletedAt != null)) {
@@ -137,6 +137,11 @@ export async function createTaxPayment(formData: FormData): Promise<TaxPaymentAc
       }
       if (freshAccounts.some((account) => !account.isActive)) {
         throw new Error("Akun yang dipilih tidak aktif.")
+      }
+      // Putaran 100: akun induk tidak bisa menerima jurnal POSTED
+      // (journal.service); jurnal setoran pajak dibuat langsung POSTED.
+      if (freshAccounts.some((account) => (account._count?.children ?? 0) > 0)) {
+        throw new Error("Akun induk tidak bisa diposting. Pilih akun anak yang terposting.")
       }
       const freshTax = freshAccounts.find((a) => a.id === taxAccountId)
       const freshPay = freshAccounts.find((a) => a.id === paymentAccountId)

@@ -219,6 +219,18 @@ describe("createBankTransfer akun hidup + tipe (putaran 22)", () => {
     expect(res.success).toBe(true)
   })
 
+  it("putaran 100: menolak rekening asal akun induk walau hidup dan BANK", async () => {
+    mocks.accountFindManyInTx.mockResolvedValue([
+      { id: 101, isActive: true, deletedAt: null, reportGroup: "BANK", type: "ASSET", _count: { children: 2 } },
+      { id: 102, isActive: true, deletedAt: null, reportGroup: "BANK", type: "ASSET", _count: { children: 0 } },
+    ])
+    const res = await createBankTransfer(form(baseTransfer))
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toMatch(/Akun induk tidak bisa diposting/)
+    expect(mocks.transferCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
   it("menolak akun biaya nonaktif saat adminFee > 0", async () => {
     mocks.accountCount.mockResolvedValue(3)
     mocks.accountFindManyInTx.mockResolvedValue([

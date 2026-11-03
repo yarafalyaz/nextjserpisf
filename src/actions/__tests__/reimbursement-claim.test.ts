@@ -254,6 +254,20 @@ describe("setReimbursementClaimAccounts validasi akun final (FINHR-8)", () => {
 })
 
 describe("createReimbursementClaim self-scope (AC-RB-B1/B6)", () => {
+  it("putaran 100: tanggal kalender fiktif 2026-02-30 ditolak tanpa create", async () => {
+    getHrScopeMock.mockResolvedValue({ kind: "self", employeeId: 5 })
+    // Fixture happy-path penuh: tanpa patch tanggal valid-kan, klaim HARUS
+    // tersimpan — assertion di bawah hanya gagal bila tanggal ditolak.
+    accountFindFirstMock.mockResolvedValue({ id: 610 })
+    expenseFindManyMock.mockResolvedValue([])
+    expenseCreateMock.mockResolvedValue({ id: 99, documentNo: "EXP-0001" })
+    const r = await createReimbursementClaim(form({
+      amount: "150000", date: "2026-02-30", referenceNo: "NOTA-1",
+    }))
+    expect(r.success).toBe(false)
+    expect(expenseCreateMock).not.toHaveBeenCalled()
+  })
+
   it("employeeId payload karyawan lain ditimpa scope self", async () => {
     getHrScopeMock.mockResolvedValue({ kind: "self", employeeId: 5 })
     employeeFindUniqueMock.mockResolvedValue({ id: 5, isActive: true, deletedAt: null, employmentEndedAt: null })

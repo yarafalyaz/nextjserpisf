@@ -93,7 +93,7 @@ export async function createBankTransfer(formData: FormData) {
       }
       const liveAccounts = await tx.account.findMany({
         where: { id: { in: sortedAccountIds } },
-        select: { id: true, isActive: true, deletedAt: true, reportGroup: true, type: true },
+        select: { id: true, isActive: true, deletedAt: true, reportGroup: true, type: true, _count: { select: { children: true } } },
       })
       const byId = new Map(liveAccounts.map((a) => [a.id, a]))
       for (const accountId of sortedAccountIds) {
@@ -103,6 +103,12 @@ export async function createBankTransfer(formData: FormData) {
         }
         if (!account.isActive) {
           throw new Error("Rekening/akun terpilih tidak aktif.")
+        }
+        // Putaran 100: akun induk tidak bisa menerima jurnal POSTED
+        // (journal.service). Picker transfer menawarkan induk BANK/EXPENSE,
+        // dan jurnal di sini dibuat langsung POSTED tanpa lewat service itu.
+        if ((account._count?.children ?? 0) > 0) {
+          throw new Error("Akun induk tidak bisa diposting. Pilih akun anak yang terposting.")
         }
       }
       for (const accountId of [fromAccountId, toAccountId]) {

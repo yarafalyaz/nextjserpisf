@@ -1,13 +1,13 @@
 export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
-import { getSystemSettings } from '@/lib/utils/settings'
 import { sumEntriesByAccount } from '@/lib/services/report-aggregation.service'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
 import { safeAdd, safeSubtract } from '@/lib/utils/math'
 import { projectCash, buildReceivableProjectionItems, buildPayableProjectionItems, summarizeOpenCommitments, PAYROLL_PROJECTION_STATUSES, sumProjectionPayrollNet } from '@/lib/reports/cash-projection'
 import { loadReturnCreditByInvoiceId } from '@/lib/reports/return-credit'
+import { loadCashAccountIds } from '@/lib/reports/ledger-cash-data'
 import { RECOGNISED_AP_STATUSES, RECOGNISED_AR_STATUSES } from '@/lib/reports/document-status'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -39,12 +39,12 @@ export default async function CashProjectionPage({
   const months = Math.min(24, Math.max(1, Number(bulanParam) || 6))
   const now = new Date()
 
-  const settings = await getSystemSettings()
-  const cashAccountIds = [
-    settings.cashBankAccountId,
-    settings.pettyCashAccountId,
-    settings.defaultCashAccountId,
-  ].filter((id): id is number => typeof id === 'number' && id > 0)
+  // Putaran 100: himpunan kas/bank kanonis (putaran 75) — sama seperti Arus Kas
+  // dan Buku Bank. Definisi lokal lama ikut menghitung defaultCashAccountId dan
+  // akun mapping yang sudah mati, serta melewatkan akun reportGroup "BANK" yang
+  // belum termapping, jadi "Kas Saat Ini" halaman ini beda dari kedua laporan
+  // itu pada data yang sama.
+  const cashAccountIds = await loadCashAccountIds()
 
   const [sums, invoices, bills, openPos, lastPayroll] = await Promise.all([
     sumEntriesByAccount({ date: { lte: now } }),
@@ -204,7 +204,7 @@ export default async function CashProjectionPage({
         </DetailTable>
       </ReportSection>
 
-      <ReportNarration text={`Saldo kas dihitung dari akun kas/bank yang dipetakan pada Pengaturan → Mapping Akun. Bila akun kas belum dipetakan, saldo awal dianggap nol.`} />
+      <ReportNarration text={`Saldo kas dihitung dari akun kas/bank kanonis (akun yang dipetakan pada Pengaturan → Mapping Akun serta akun Aktiva bergolongan Bank yang masih aktif) — definisi yang sama dengan Arus Kas dan Buku Bank. Bila belum ada akun kas/bank aktif, saldo awal dianggap nol.`} />
     </ReportPageShell>
   )
 }

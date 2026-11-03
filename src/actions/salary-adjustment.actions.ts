@@ -48,6 +48,9 @@ async function assertSalaryEmployeeScope(
   const scope = await getHrScope({
     id: String(actor.id),
     roles: Array.isArray(actor.roles) ? [...(actor.roles as string[])] : [],
+    permissions: Array.isArray((actor as unknown as { permissions?: unknown }).permissions)
+      ? [...((actor as unknown as { permissions: string[] }).permissions)]
+      : [],
   });
   await assertHrEmployeeAccess(scope, employeeId);
   return scope;

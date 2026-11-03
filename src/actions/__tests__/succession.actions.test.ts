@@ -9,20 +9,28 @@ const employeeFindUnique = vi.fn()
 const positionFindMany = vi.fn()
 const getHrScope = vi.fn()
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    position: { update: (...a: unknown[]) => positionUpdate(...a), findMany: (...a: unknown[]) => positionFindMany(...a) },
-    successionCandidate: {
-      upsert: (...a: unknown[]) => candidateUpsert(...a),
-      findUnique: (...a: unknown[]) => candidateFindUnique(...a),
-      delete: (...a: unknown[]) => candidateDelete(...a),
+vi.mock("@/lib/db/prisma", () => {
+  const tx = {
+    $executeRaw: vi.fn(async () => 1),
+    employee: { findFirst: (...a: unknown[]) => employeeFindFirst(...a) },
+    successionCandidate: { upsert: (...a: unknown[]) => candidateUpsert(...a) },
+  }
+  return {
+    prisma: {
+      position: { update: (...a: unknown[]) => positionUpdate(...a), findMany: (...a: unknown[]) => positionFindMany(...a) },
+      successionCandidate: {
+        upsert: (...a: unknown[]) => candidateUpsert(...a),
+        findUnique: (...a: unknown[]) => candidateFindUnique(...a),
+        delete: (...a: unknown[]) => candidateDelete(...a),
+      },
+      employee: {
+        findFirst: (...a: unknown[]) => employeeFindFirst(...a),
+        findUnique: (...a: unknown[]) => employeeFindUnique(...a),
+      },
+      $transaction: (fn: (txArg: unknown) => unknown) => fn(tx),
     },
-    employee: {
-      findFirst: (...a: unknown[]) => employeeFindFirst(...a),
-      findUnique: (...a: unknown[]) => employeeFindUnique(...a),
-    },
-  },
-}))
+  }
+})
 
 vi.mock("@/lib/auth/hr-scope", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/auth/hr-scope")>()
@@ -74,21 +82,19 @@ describe("successor candidates", () => {
   })
 
   it("rejects the incumbent as their own successor", async () => {
-    employeeFindFirst.mockResolvedValueOnce({ id: 10 })
+    employeeFindFirst.mockResolvedValue({ id: 10, positionId: 3 })
     const fd = new FormData()
     fd.set("positionId", "3")
     fd.set("candidateEmployeeId", "10")
     fd.set("readiness", "ready_now")
     const res = await upsertSuccessorCandidate(fd)
     expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toContain("pemegang jabatan")
     expect(candidateUpsert).not.toHaveBeenCalled()
   })
 
   it("scope department menolak kandidat luar departemen, upsert tidak dipanggil", async () => {
     getHrScope.mockResolvedValue({ kind: "department", departmentId: 3, employeeId: 30 })
-    employeeFindFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 11 })
     employeeFindUnique.mockResolvedValue({ departmentId: 99 })
     const fd = new FormData()
     fd.set("positionId", "3")
@@ -102,9 +108,6 @@ describe("successor candidates", () => {
 
   it("scope self menolak kandidat lain, upsert tidak dipanggil", async () => {
     getHrScope.mockResolvedValue({ kind: "self", employeeId: 30 })
-    employeeFindFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 11 })
     const fd = new FormData()
     fd.set("positionId", "3")
     fd.set("candidateEmployeeId", "11")
@@ -112,6 +115,18 @@ describe("successor candidates", () => {
     const res = await upsertSuccessorCandidate(fd)
     expect(res.success).toBe(false)
     expect(candidateUpsert).not.toHaveBeenCalled()
+  })
+
+  it("kandidat sah di jabatan lain tetap tersimpan", async () => {
+    employeeFindFirst.mockResolvedValue({ id: 11, positionId: 8 })
+    candidateUpsert.mockResolvedValue({ id: 5 })
+    const fd = new FormData()
+    fd.set("positionId", "3")
+    fd.set("candidateEmployeeId", "11")
+    fd.set("readiness", "ready_now")
+    const res = await upsertSuccessorCandidate(fd)
+    expect(res.success).toBe(true)
+    expect(candidateUpsert).toHaveBeenCalled()
   })
 
   it("overview: scope department menyaring jabatan + kandidat per scope", async () => {
@@ -159,9 +174,7 @@ describe("successor candidates", () => {
   })
 
   it("upserts a valid candidate", async () => {
-    employeeFindFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 11 })
+    employeeFindFirst.mockResolvedValue({ id: 11, positionId: 8 })
     candidateUpsert.mockResolvedValue({ id: 5 })
     const fd = new FormData()
     fd.set("positionId", "3")

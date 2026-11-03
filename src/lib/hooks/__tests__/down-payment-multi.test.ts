@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   generateDocumentNumber: vi.fn(),
   notifyDocumentsReadyBatch: vi.fn(),
   onSalesInvoicePosted: vi.fn(),
+  assertInvoiceAllowed: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", async () => (await import("./down-payment-fixtures")).dpPrismaFactory(mocks))
@@ -48,6 +49,7 @@ vi.mock("@/lib/services/period-lock.service", async () => (await import("./down-
 
 vi.mock("@/lib/services/notification.service", async () => (await import("./down-payment-fixtures")).dpNotificationFactory(mocks))
 vi.mock("@/lib/hooks/accounting.hook", async () => (await import("./down-payment-fixtures")).dpAccountingFactory(mocks))
+vi.mock("@/lib/services/warranty-journal.service", async () => (await import("./down-payment-fixtures")).dpWarrantyFactory(mocks))
 
 import { onDownPaymentConfirmed } from "../down-payment.hook"
 
@@ -109,6 +111,8 @@ describe("onDownPaymentConfirmed — multi-DP support", () => {
     mocks.journalCreate.mockResolvedValue({ id: 9 })
     mocks.accountFindMany.mockImplementation(async (args: any) => (args?.where?.id?.in ?? []).map((id: number) => ({ id })))
     mocks.assertPeriodOpen.mockResolvedValue(undefined)
+    mocks.assertInvoiceAllowed.mockReset()
+    mocks.assertInvoiceAllowed.mockResolvedValue(undefined)
   })
 
   it("records a subsequent DP as SalesPayment on the existing invoice", async () => {

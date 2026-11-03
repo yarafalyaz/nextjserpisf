@@ -117,11 +117,16 @@ export async function createPurchaseAdvance(formData: FormData): Promise<Purchas
       await tx.$executeRaw`SELECT id FROM accounts WHERE id IN (${Prisma.join(sortedAccountIds)}) FOR UPDATE`
       const freshAccounts = await tx.account.findMany({
         where: { id: { in: [paymentAccountId, advanceAccountId] } },
-        select: { id: true, type: true, reportGroup: true, isActive: true, deletedAt: true },
+        select: { id: true, type: true, reportGroup: true, isActive: true, deletedAt: true, _count: { select: { children: true } } },
       })
       if (freshAccounts.length !== 2) throw new Error("Akun yang dipilih tidak ditemukan.")
       if (freshAccounts.some((account) => !account.isActive || account.deletedAt)) {
         throw new Error("Akun yang dipilih nonaktif atau sudah dihapus.")
+      }
+      // Putaran 100: akun induk tidak bisa menerima jurnal POSTED
+      // (journal.service); jurnal uang muka dibuat langsung POSTED.
+      if (freshAccounts.some((account) => (account._count?.children ?? 0) > 0)) {
+        throw new Error("Akun induk tidak bisa diposting. Pilih akun anak yang terposting.")
       }
       const freshPayment = freshAccounts.find((account) => account.id === paymentAccountId)
       const freshAdvance = freshAccounts.find((account) => account.id === advanceAccountId)

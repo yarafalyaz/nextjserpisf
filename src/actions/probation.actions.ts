@@ -24,6 +24,7 @@ import { assertHrEmployeeAccess, getHrScope, hrEmployeeScopeWhere } from "@/lib/
 import { prisma } from "@/lib/db/prisma"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
+import { dateOnly } from "@/lib/validations/finance.schemas"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import {
   evaluateExtendProbation,
@@ -49,10 +50,10 @@ function fail(e: unknown, context: string): ActionResult {
 }
 
 function parseDateOnly(value: string, label: string): Date {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error(`${label} tidak valid`)
-  const parsed = wibDateToUtcMidnight(value)
-  if (Number.isNaN(parsed.getTime())) throw new Error(`${label} tidak valid`)
-  return parsed
+  // dateOnly menolak tanggal kalender fiktif; wibDateToUtcMidnight sendiri
+  // menggulirkan 2026-02-30 menjadi 2 Maret (putaran 100).
+  if (!dateOnly.safeParse(value).success) throw new Error(`${label} tidak valid`)
+  return wibDateToUtcMidnight(value)
 }
 
 function requireText(value: string | null | undefined, message: string): string {

@@ -83,6 +83,7 @@ vi.mock("next/cache", () => ({ revalidatePath: () => {} }))
 
 import { computeWeightedScore } from "@/lib/hr/hcms-scoring"
 import {
+  createPerformanceCycle,
   finalizeReview,
   submitManagerReview,
   submitSelfReview,
@@ -157,6 +158,38 @@ describe("performance scoring", () => {
         data: expect.objectContaining({ selfScore: 88, status: "self_submitted" }),
       }),
     )
+  })
+})
+
+describe("tanggal siklus & pelatihan (putaran 100)", () => {
+  it("siklus dengan tanggal fiktif 2026-02-30 ditolak tanpa create", async () => {
+    const form = new FormData()
+    form.set("name", "Siklus 2026")
+    form.set("periodStart", "2026-02-30")
+    form.set("periodEnd", "2026-12-31")
+    const res = await createPerformanceCycle(form)
+    expect(res.success).toBe(false)
+    expect(cycleCreate).not.toHaveBeenCalled()
+  })
+
+  it("siklus rentang terbalik ditolak tanpa create", async () => {
+    const form = new FormData()
+    form.set("name", "Siklus 2026")
+    form.set("periodStart", "2026-12-31")
+    form.set("periodEnd", "2026-01-01")
+    const res = await createPerformanceCycle(form)
+    expect(res.success).toBe(false)
+    expect(cycleCreate).not.toHaveBeenCalled()
+  })
+
+  it("pelatihan rentang terbalik ditolak tanpa create", async () => {
+    const form = new FormData()
+    form.set("title", "Pelatihan K3")
+    form.set("startDate", "2026-11-20")
+    form.set("endDate", "2026-11-10")
+    const res = await createTraining(form)
+    expect(res.success).toBe(false)
+    expect(trainingCreate).not.toHaveBeenCalled()
   })
 })
 

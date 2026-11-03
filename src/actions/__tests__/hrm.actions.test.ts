@@ -1520,6 +1520,22 @@ describe("Payroll Actions", () => {
     expect(prismaMock.payroll.create).not.toHaveBeenCalled()
   })
 
+  it("putaran 100: getPayrollEstimation meneruskan permissions sesi ke getHrScope (scope team terjangkau)", async () => {
+    requirePermissionMock.mockResolvedValueOnce({ id: "1", roles: ["employee"], permissions: ["view_subordinate_data"] } as any)
+    prismaMock.employee.findUnique.mockResolvedValue({
+      baseSalary: 5000000, maritalStatus: "single",
+      employeeLoans: [],
+    })
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
+    const res = await actions.getPayrollEstimation(1, "2026-05-01", "2026-05-31")
+    if (!res || "error" in res) throw new Error("Expected success, got error: " + (res && "error" in res ? res.error : "undefined"))
+    // Tanpa forwarding ini getHrScope tak pernah melihat
+    // view_subordinate_data sehingga scope team tidak bisa lahir.
+    expect(mocks.getHrScopeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ permissions: ["view_subordinate_data"] }),
+    )
+  })
+
   it("getPayrollEstimation returns components", async () => {
     requirePermissionMock.mockResolvedValueOnce({ id: "1", roles: ["hr_admin"] } as any)
     prismaMock.employee.findUnique.mockResolvedValue({

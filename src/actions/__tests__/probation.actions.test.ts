@@ -130,6 +130,13 @@ beforeEach(() => {
 })
 
 describe("openProbation", () => {
+  it("putaran 100: tanggal akhir fiktif 2026-02-30 ditolak, bukan digulir ke Maret", async () => {
+    mocks.employeeFindUnique.mockResolvedValue(employeeRow())
+    const r = await openProbation(1, "2026-02-30")
+    expect(r.success).toBe(false)
+    expect(mocks.employeeUpdateMany).not.toHaveBeenCalled()
+  })
+
   it("AC-PROB-2: PKWT/null ditolak server walau payload langsung", async () => {
     mocks.employeeFindUnique.mockResolvedValue(employeeRow({ employmentStatus: "PKWT" }))
     const r = await openProbation(1, "2026-04-05")

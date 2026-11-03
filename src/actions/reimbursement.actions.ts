@@ -43,6 +43,7 @@ import { requestApprovalIfConfigured } from "@/lib/services/approval-workflow.se
 import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
+import { dateOnly } from "@/lib/validations/finance.schemas"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import { nextSlug } from "@/lib/utils/slug-db"
@@ -55,7 +56,10 @@ const claimSchema = z.object({
   // pengaju selalu karyawan tertaut user (BR-RB-02, AC-RB-B1).
   employeeId: z.coerce.number().int().positive().optional(),
   amount: z.coerce.number().positive("Nominal klaim harus lebih dari 0"),
-  date: z.string().min(1, "Tanggal pengeluaran wajib diisi"),
+  // Putaran 100: tanggal kalender-nyata (dateOnly) — tanggal fiktif seperti
+  // 2026-02-30 dulu bergulir senyap ke Maret lewat wibDateToUtcMidnight dan
+  // menggeser tanggal jurnal akrual + kunci periode.
+  date: dateOnly,
   referenceNo: z.string().max(100).optional(),
   description: z.string().max(1000).optional(),
   categoryId: z.coerce.number().int().positive().optional(),

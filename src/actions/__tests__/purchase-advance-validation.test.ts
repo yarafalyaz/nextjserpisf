@@ -174,6 +174,18 @@ describe("createPurchaseAdvance zod validation", () => {
     expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
 
+  it("putaran 100: akun uang muka induk ditolak sebelum jurnal", async () => {
+    mocks.accountFindMany.mockResolvedValue([
+      { id: 101, type: "ASSET", reportGroup: "BANK", isActive: true, deletedAt: null, _count: { children: 0 } },
+      { id: 102, type: "ASSET", reportGroup: "OCAS", isActive: true, deletedAt: null, _count: { children: 3 } },
+    ])
+    const res = await createPurchaseAdvance(form(base))
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toMatch(/Akun induk tidak bisa diposting/)
+    expect(mocks.advanceCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
   it("R8-KEU-03: akun nonaktif ditolak sebelum tx", async () => {
     mocks.accountFindMany.mockResolvedValue([
       { id: 101, type: "ASSET", reportGroup: "BANK", isActive: false, deletedAt: null },

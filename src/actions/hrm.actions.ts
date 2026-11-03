@@ -300,6 +300,9 @@ async function requirePayrollComponentAdmin(
     roles: Array.isArray((user as { roles?: unknown }).roles)
       ? [...((user as { roles: string[] }).roles)]
       : [],
+      permissions: Array.isArray((user as { permissions?: unknown }).permissions)
+        ? [...((user as { permissions: string[] }).permissions)]
+      : [],
   });
   if (scope.kind !== "all") {
     throw new Error("Komponen gaji hanya boleh dikelola oleh pengguna dengan cakupan semua karyawan");
@@ -660,6 +663,9 @@ export async function getPayrollComponentLines(payrollId: number) {
         roles: Array.isArray((user as { roles?: unknown }).roles)
           ? [...((user as { roles: string[] }).roles)]
           : [],
+          permissions: Array.isArray((user as { permissions?: unknown }).permissions)
+            ? [...((user as { permissions: string[] }).permissions)]
+          : [],
       });
       await assertHrEmployeeAccess(scope, payroll.employeeId);
     }
@@ -745,6 +751,9 @@ async function assertDraftPayrollLineAccess(payrollId: number, authenticatedUser
       id: String((user as { id: unknown }).id),
       roles: Array.isArray((user as { roles?: unknown }).roles)
         ? [...((user as { roles: string[] }).roles)]
+        : [],
+        permissions: Array.isArray((user as unknown as { permissions?: unknown }).permissions)
+          ? [...((user as unknown as { permissions: string[] }).permissions)]
         : [],
     });
     await assertHrEmployeeAccess(scope, payroll.employeeId);
@@ -1974,6 +1983,7 @@ export async function getPayrollEstimation(
     const scope = await getHrScope({
       id: String(sessionUser.id),
       roles: Array.isArray(sessionUser.roles) ? [...sessionUser.roles] : [],
+      permissions: Array.isArray(sessionUser.permissions) ? [...sessionUser.permissions] : [],
     });
     await assertHrEmployeeAccess(scope, employeeId);
     return await computePayrollEstimation(
@@ -2481,6 +2491,7 @@ export async function getBulkPayrollEstimations(
   const scope = await getHrScope({
     id: String(sessionUser.id),
     roles: Array.isArray(sessionUser.roles) ? [...sessionUser.roles] : [],
+    permissions: Array.isArray(sessionUser.permissions) ? [...sessionUser.permissions] : [],
   });
   const accessibleEmployees = await prisma.employee.findMany({
     where: {
@@ -4427,6 +4438,7 @@ export async function getEmployeeLeaveBalance(
     const scope = await getHrScope({
       id: String(user.id),
       roles: Array.isArray(user.roles) ? [...user.roles] : [],
+      permissions: Array.isArray(user.permissions) ? [...user.permissions] : [],
     });
     await assertHrEmployeeAccess(scope, employeeId);
     const quota = await getLeaveQuota(employeeId, { year });
@@ -4469,6 +4481,7 @@ export async function getAllLeaveBalances(
     const scope = await getHrScope({
       id: String(user.id),
       roles: Array.isArray(user.roles) ? [...user.roles] : [],
+      permissions: Array.isArray(user.permissions) ? [...user.permissions] : [],
     });
 
     const report = await loadLeaveBalanceReport(scope, targetYear, {
@@ -4521,6 +4534,7 @@ export async function exportLeaveBalancesCsv(
     const scope = await getHrScope({
       id: String(user.id),
       roles: Array.isArray(user.roles) ? [...user.roles] : [],
+      permissions: Array.isArray(user.permissions) ? [...user.permissions] : [],
     });
     const report = await loadLeaveBalanceReport(scope, targetYear, {
       departmentId: opts?.departmentId ?? null,
