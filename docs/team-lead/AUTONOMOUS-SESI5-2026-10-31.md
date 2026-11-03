@@ -3061,3 +3061,53 @@ Sumber: pembacaan ulang `reverseJournalsByReferenceTx` (`accounting.hook.ts:295-
 ### Bukti
 - Merah perintah terpisah: `journal-reversal.test.ts` sebelum patch → `2 failed | 9 passed`, keduanya `AssertionError: promise resolved "undefined" instead of rejecting` (helper mengembalikan normal padahal seharusnya menolak).
 - Hijau: berkas itu 11/11; hooks + finance + reversal terkait 731/731 (5 skipped by design); enam suite konsumen helper 616/616; delapan guard statis 202/202; `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
+
+## Putaran 110 — halaman Ubah Faktur memuat baris, PPN, dan daftar barang (commit `88207ee7d`)
+
+Sumber: verifikasi sesi utama atas kandidat audit penjualan "edit faktur menghapus baris" yang ditelusuri ke `updateSalesInvoice` (`sales.actions.ts:4039-4180`) dan direproduksi lewat pembacaan halaman `penjualan/faktur/[slug]/ubah/page.tsx` (sebelum patch).
+
+### Vonis FIX
+1. **Halaman Ubah tidak pernah memuat baris tersimpan — FIX.** `updateSalesInvoice` menulis ulang baris dengan `salesInvoiceItem.deleteMany` lalu `createMany` dari payload form. Halaman Ubah hanya mengoper header (`customerId`, `date`, `dueDate`, `taxInvoiceNumber`, `notes`) tanpa `initialItems`, sehingga tabel item di form selalu kosong; menekan Simpan mengirim `items` berisi baris yang diketik ulang saja (atau "Tambahkan minimal satu baris barang"), dan **seluruh baris lama terhapus**. Perbaikan: halaman memuat `salesInvoiceItem` (urutan id) dan mengoper `initialItems` berisi `itemId/description/qty/unitPrice/discount/uom/serialNumbers`.
+2. **Tarif PPN jatuh ke 0% setiap kali disunting — FIX.** Form memulai `taxRate` di 0 dan halaman tidak mengoper nilai awal, sehingga setiap simpan menulis `taxAmount = 0` dan `grandTotal` tanpa PPN. Perbaikan: tarif diturunkan dari nominal tersimpan (`taxAmount / (subtotal − discount)`, pembulatan 2 desimal) dan dioper sebagai `initialTaxRate` — pola yang sama dengan halaman detail.
+3. **Metadata baris (UoM, nomor seri, deskripsi) hilang saat edit — FIX.** Payload form dahulu hanya mengirim `itemId/qty/unitPrice/discount`. Perbaikan: `LineItem` membawa `description/uom/serialNumbers`, `toRow` menyalinnya dari record, dan payload mengirimnya balik hanya bila terisi (baris tanpa metadata tetap ringkas).
+4. **Pemilih pesanan penjualan menawarkan status yang ditolak server — FIX.** Pemilih membaca SEMUA SO. Gerbang server menuntut `DELIVERABLE_ORDER_STATUSES`; pesanan konsep/ditolak tampil di daftar lalu ditolak saat simpan, sementara pesanan yang sah bisa tersembunyi. Perbaikan: query memakai `DELIVERABLE_ORDER_STATUSES` yang sama, ditambah SO yang sekarang tertaut (`OR { id }`) supaya tautan lama berstatus lain tetap tampil dan bisa dipertahankan.
+5. **Daftar barang tidak dioper — FIX.** `availableItems` kosong membuat combobox barang tak punya opsi di halaman Ubah, sehingga baris tersimpan tak bisa ditampilkan/diganti. Perbaikan: halaman memuat `item` aktif non-terhapus dan mengoper `id/name/sku/price/isScrapSaleItem`.
+
+### Vonis CATAT
+- `updateSalesInvoice` tetap menghapus-lalu-menulis-ulang seluruh baris (`deleteMany` + `createMany`). Ini disengaja (baris boleh berubah bentuk total saat fabrikasi), dan yang menutup kerugian diam-diam adalah form kini mengirim balik seluruh field yang ia muat. Field baru pada `SalesInvoiceItem` di masa depan wajib ikut ditambahkan ke `InitialItem` + payload — dijaga tes statis butir baru di `form-edit-seeds-existing.test.ts`.
+- `priceSource`/`priceListId`/`priceListMinQty` tidak dibawa form Ubah (halaman tidak memuatnya). Nilainya kosong pada baris hasil edit — perilaku yang sama dengan `invoice-items-editor` di halaman detail dan sesuai komentar skema ("edit — BUKAN klaim historis").
+
+### Bukti
+- Merah perintah terpisah: `src/app/(dashboard)/penjualan/faktur/[slug]/ubah/__tests__/page.test.tsx` sebelum patch → `2 failed` (`initialItems` undefined, `where.OR[0]` undefined).
+- Hijau: berkas itu 2/2; suite penjualan terkait 509/509 (67 berkas); delapan guard statis 216/216 (`--no-file-parallelism`); `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
+- CI `41711159837` (head `88207ee7d`) **success**.
+
+## Putaran 111 — edit draft penutupan selisih transfer tidak mengosongkan reason (commit `86bb550b5`)
+
+Sumber: lanjutan verifikasi putaran 108-109 di `inventory.actions.ts`; kandidat dari agent audit inventaris, dikonfirmasi dengan membaca `stock-adjustment-form.tsx` (tidak punya field `reason`), `updateStockAdjustment` (`:2414-2530`), `processStockAdjustment` cabang transfer (`:404-455`), dan `createTransferShortageClosure` (`:1000-1060`).
+
+### Vonis FIX
+1. **Form penyesuaian tidak punya field `reason`; edit menghapus penanda "selisih transfer" — FIX.** `updateStockAdjustment` menulis `reason: v.reason ?? null` dari schema, sedangkan form hanya mengirim catatan per baris. Draft penutupan selisih transfer (lahir dengan `reason = TRANSFER_SHORTAGE_REASON = "selisih transfer"`) kehilangan penanda itu setiap kali disunting. Sesudahnya `processStockAdjustment` menolak selamanya ("Penyesuaian tertaut transfer wajib beralasan ..."), dan `createTransferShortageClosure` menolak membuat pengganti karena draft lama masih non-terminal — dokumen menggantung tanpa jalan keluar lewat UI. Perbaikan: untuk dokumen dengan `inventoryTransferId`, alasan dipaksa `TRANSFER_SHORTAGE_REASON` apa pun isi form. Dokumen biasa tetap mengikuti payload.
+
+### Vonis CATAT
+- `reason` pada form penyesuaian masih tidak ada sebagai kontrol. Menambahkan input alasan akan mengubah tata letak form untuk seluruh dokumen (dan membuka jalur mengubah penanda penutupan transfer oleh operator). Alternatif konservatif (mempertahankan penanda) dipilih karena tidak mengubah perilaku dokumen lain.
+
+### Bukti
+- Merah perintah terpisah: `inventory.actions.test.ts` sebelum patch → `1 failed`, `expected null to be 'selisih transfer'` (update menerima `reason` kosong dari payload).
+- Hijau: berkas itu 243/243; suite inventaris terkait 47/47 + 172/172; delapan guard statis 202/202; `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
+- CI `41711811613` (head `86bb550b5`) **success**.
+
+## Putaran 112 — posting opname menolak surplus berseri yang jumlah nomornya tak cocok (commit `d16747b49`)
+
+Sumber: kandidat agent audit inventaris "sesi opname buntu", diverifikasi di `postStocktakeSession` (`inventory.actions.ts:3186-3310`), `stock-adjustment.hook.ts:283-300`, `deleteStockAdjustment` (`:2259-2300`), dan `stocktake-forms.tsx` (tidak ada aksi setelah `approved`).
+
+### Vonis FIX
+1. **Gerbang surplus hanya menilai KEBERADAAN daftar lot/serial — FIX.** Kode lama: `needsSerial = trackSerial && cleanStringList(line.serialNumbers) === undefined`. Hook penyesuaian menuntut jauh lebih ketat: `serialNumbers.length === qtyDiff` (dan unik, `qtyDiff > 0`). Sesi dengan 4 nomor seri untuk surplus 5 lolos gerbang, langsung `status: "posted"`, lalu draft adjustment-nya gugur di hook. Draft itu **tak bisa diproses** (hook menolak lagi) dan **tak bisa dihapus** (`deleteStockAdjustment` menolak karena dirujuk `StocktakeSession.adjustmentId`), dan UI tidak menawarkan un-approve/cancel — sesi menggantung permanen. Perbaikan: gerbang menghitung surplus terhadap stok live gudang sesi (`finalCount − live`, angka yang sama dengan `qtyDiff` hook) dan menolak bila jumlah nomor seri tidak persis atau mengandung duplikat. Sesi tetap `approved`, jadi hitungan masih bisa dikoreksi lalu diposting ulang.
+
+### Vonis CATAT
+- Batch tidak diwajibkan berjumlah tertentu: hook membagi `qtyDiff` rata antar lot (`perBatchQty`), jadi daftar lot non-kosong memang cukup — hanya serial yang punya syarat jumlah eksak. Gerbang sengaja tidak menyamakan keduanya.
+- Surplus item berseri yang qty-nya pecahan (mis. 2,5) ditolak gerbang ini karena hook mensyaratkan `Number.isInteger(qtyDiff)`. Pesan menyarankan mencatat selisih lewat Penyesuaian stok, yang punya input nomor seri bebas.
+
+### Bukti
+- Merah perintah terpisah: `inventory.actions.test.ts` sebelum patch → `2 failed | 7 passed`, keduanya `expected true to be false` (action mengembalikan sukses lalu sesi menjadi `posted`).
+- Hijau: berkas itu 9/9 untuk filter `postStocktakeSession`; `inventory.actions.test.ts` + `src/lib/inventory` 264/264; lima guard statis 168/168 (`--no-file-parallelism`); `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
