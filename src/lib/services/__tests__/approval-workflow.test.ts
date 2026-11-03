@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   createApproval: vi.fn(),
   queryRaw: vi.fn().mockResolvedValue([]),
   docFindUnique: vi.fn(),
+  approvalSlugFindFirst: vi.fn().mockResolvedValue(null),
   // R6WN-03 notify mocks
   findWorkflowSteps: vi.fn().mockResolvedValue([]),
   findFirstUser: vi.fn().mockResolvedValue(null),
@@ -21,7 +22,10 @@ vi.mock("@/lib/db/prisma", () => {
         findFirst: mocks.findFirstWorkflow,
       },
       approval: {
-        findFirst: mocks.findFirstApproval,
+        findFirst: (...args: unknown[]) =>
+          (args[0] as { select?: unknown })?.select
+            ? mocks.approvalSlugFindFirst(...args)
+            : mocks.findFirstApproval(...args),
         create: mocks.createApproval,
       },
       journal: docModelMock,
@@ -38,7 +42,10 @@ vi.mock("@/lib/db/prisma", () => {
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
         approvalWorkflow: { findFirst: (...args: unknown[]) => mocks.findFirstWorkflow(...args) },
         approval: {
-          findFirst: (...args: unknown[]) => mocks.findFirstApproval(...args),
+          findFirst: (...args: unknown[]) =>
+            (args[0] as { select?: unknown })?.select
+              ? mocks.approvalSlugFindFirst(...args)
+              : mocks.findFirstApproval(...args),
           create: (...args: unknown[]) => mocks.createApproval(...args),
         },
         journal: docModelMock,
@@ -67,6 +74,7 @@ describe("approval-workflow.service", () => {
     vi.clearAllMocks();
     mocks.queryRaw.mockResolvedValue([{ id: 10 }]);
     mocks.docFindUnique.mockResolvedValue(null);
+    mocks.approvalSlugFindFirst.mockResolvedValue(null);
   });
 
   describe("requestApprovalIfConfigured", () => {
@@ -96,6 +104,37 @@ describe("approval-workflow.service", () => {
           status: "pending",
           requestedBy: 42,
         }),
+      });
+    });
+
+    it("putaran 78: slug approval dipilih lewat delegate transaksi pemanggil", async () => {
+      mocks.findFirstWorkflow.mockResolvedValue({ id: 10, modelType: "Asset", isActive: true });
+      mocks.findFirstApproval.mockResolvedValue(null);
+      // Slug "asset" sudah terlihat oleh delegate tx (approval tak-tercommit
+      // dari create konkuren) — slug berikutnya wajib asset-2, bukan asset.
+      mocks.approvalSlugFindFirst
+        .mockResolvedValueOnce({ slug: "asset" })
+        .mockResolvedValueOnce(null);
+      mocks.createApproval.mockResolvedValue({ id: 3, status: "pending" });
+
+      const txClient = {
+        $queryRaw: (...args: unknown[]) => mocks.queryRaw(...args),
+        approval: {
+          findFirst: (...args: unknown[]) =>
+            (args[0] as { select?: unknown })?.select
+              ? mocks.approvalSlugFindFirst(...args)
+              : mocks.findFirstApproval(...args),
+          create: (...args: unknown[]) => mocks.createApproval(...args),
+        },
+        approvalWorkflowStep: { findMany: mocks.findWorkflowSteps },
+        user: { findFirst: mocks.findFirstUser, findMany: mocks.findManyUsers },
+        notification: { createMany: mocks.createManyNotifications },
+      };
+      const result = await requestApprovalIfConfigured("Asset", 9, 42, txClient);
+
+      expect(result).toBe(true);
+      expect(mocks.createApproval).toHaveBeenCalledWith({
+        data: expect.objectContaining({ slug: "asset-2", referenceType: "Asset", referenceId: 9 }),
       });
     });
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useRef, useTransition } from "react"
 import {
   createPerformanceCycle,
   finalizeReview,
@@ -14,15 +14,23 @@ import { showError, showSuccess } from "@/lib/utils/toast"
 export function CycleForm() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Kunci idempotency per intent: stabil selama form tayang (retry jaringan
+  // memakai key sama), diganti hanya sesudah siklus benar-benar lahir.
+  const idempotencyKeyRef = useRef<string | null>(null)
 
   function onSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = event.currentTarget
     const formData = new FormData(form)
+    if (idempotencyKeyRef.current === null) {
+      idempotencyKeyRef.current = crypto.randomUUID()
+    }
+    formData.set("idempotencyKey", idempotencyKeyRef.current)
     startTransition(async () => {
       try {
         const result = await createPerformanceCycle(formData)
         if (!result?.success) throw new Error(result?.error || "Gagal membuat siklus")
+        idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess("Siklus penilaian dibuat")
         form.reset()
         router.refresh()

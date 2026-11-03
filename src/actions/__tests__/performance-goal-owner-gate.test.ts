@@ -9,27 +9,34 @@ const mocks = vi.hoisted(() => ({
   cycleFindFirst: vi.fn(),
 }))
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const tx = {
+    $executeRaw: vi.fn().mockResolvedValue(1),
     performanceGoal: {
       findUnique: mocks.goalFindUnique,
       update: mocks.goalUpdate,
       create: mocks.goalCreate,
     },
-    employee: {
-      findFirst: mocks.employeeFindFirst,
-      findUnique: mocks.employeeFindUnique,
-    },
     performanceCycle: { findFirst: mocks.cycleFindFirst },
-  },
-}))
+  }
+  return {
+    prisma: {
+      ...tx,
+      employee: {
+        findFirst: mocks.employeeFindFirst,
+        findUnique: mocks.employeeFindUnique,
+      },
+      $transaction: async (fn: (client: unknown) => unknown) => fn(tx),
+    },
+  }
+})
 
 const actor = { id: "7", roles: ["karyawan"], permissions: [] as string[] }
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: async () => actor,
   hasPermission: async () => true,
 }))
-vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: async () => "test-slug" }))
+vi.mock("@/lib/utils/slug-db", () => ({ nextSlugWithClient: async () => "test-slug" }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: async () => {} }))
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }))
 

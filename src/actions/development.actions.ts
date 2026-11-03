@@ -329,27 +329,39 @@ export async function addTrainingParticipant(formData: FormData) {
     const scope = await getHrScope(actor);
     await assertHrEmployeeAccess(scope, v.employeeId);
 
-    // Putaran 51: peserta hanya untuk pelatihan hidup yang masih terjadwal
-    // (UI menyembunyikan form di luar scheduled; server menegakkan sama) —
-    // roster training done/cancelled/terhapus tidak boleh berubah lagi.
-    const training = await prisma.training.findFirst({
-      where: { id: v.trainingId, deletedAt: null },
-      select: { id: true, status: true },
+    // Putaran 51 + 78: peserta hanya untuk pelatihan hidup yang masih
+    // terjadwal. Status dinilai ulang sesudah baris pelatihan dikunci di
+    // dalam transaksi; snapshot global saja bisa dilewati status terminal
+    // yang commit di jendela cek->tulis.
+    const outcome = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM trainings WHERE id = ${v.trainingId} FOR UPDATE`;
+      }
+      const training = await tx.training.findFirst({
+        where: { id: v.trainingId, deletedAt: null },
+        select: { id: true, status: true },
+      });
+      if (!training) {
+        return { success: false as const, error: "Pelatihan tidak ditemukan" };
+      }
+      if (training.status !== "scheduled") {
+        return {
+          success: false as const,
+          error: "Peserta hanya dapat ditambahkan pada pelatihan terjadwal",
+        };
+      }
+      const row = await tx.trainingParticipant.upsert({
+        where: {
+          trainingId_employeeId: { trainingId: v.trainingId, employeeId: v.employeeId },
+        },
+        create: v,
+        update: {},
+      });
+      return { success: true as const, id: row.id };
     });
-    if (!training) return { success: false as const, error: "Pelatihan tidak ditemukan" };
-    if (training.status !== "scheduled") {
-      return { success: false as const, error: "Peserta hanya dapat ditambahkan pada pelatihan terjadwal" };
-    }
-
-    const row = await prisma.trainingParticipant.upsert({
-      where: {
-        trainingId_employeeId: { trainingId: v.trainingId, employeeId: v.employeeId },
-      },
-      create: v,
-      update: {},
-    });
+    if (!outcome.success) return outcome;
     revalidatePath("/sdm/pelatihan");
-    return { success: true as const, id: row.id };
+    return outcome;
   } catch (e: unknown) {
     return resultError(e, "[addTrainingParticipant]");
   }
@@ -365,23 +377,64 @@ export async function setParticipantResult(
       where: { id: participantId },
       select: { employeeId: true },
     });
+    let scope: Awaited<ReturnType<typeof getHrScope>> | null = null;
     if (participant) {
-      const scope = await getHrScope(actor);
+      scope = await getHrScope(actor);
       await assertHrEmployeeAccess(scope, participant.employeeId);
     }
     if (input.score != null && (input.score < 0 || input.score > 100)) {
       return { success: false as const, error: "Skor harus 0-100" };
     }
-    await prisma.trainingParticipant.update({
-      where: { id: participantId },
-      data: {
-        status: input.status,
-        score: input.score ?? null,
-        certificateRef: input.certificateRef ?? null,
-      },
+    if (!participant) {
+      return { success: false as const, error: "Peserta tidak ditemukan" };
+    }
+    // Putaran 78: hasil hanya sah pada pelatihan hidup yang masih terjadwal
+    // (invarian roster file ini) — dinilai sesudah kunci baris pelatihan.
+    const outcome = await prisma.$transaction(async (tx) => {
+      const fresh = await tx.trainingParticipant.findUnique({
+        where: { id: participantId },
+        select: { employeeId: true, trainingId: true },
+      });
+      if (!fresh) return { success: false as const, error: "Peserta tidak ditemukan" };
+      if (scope) {
+        const inScope = await assertHrEmployeeAccess(scope, fresh.employeeId).then(
+          () => true,
+          () => false,
+        );
+        if (!inScope) {
+          return {
+            success: false as const,
+            error: "Anda tidak memiliki akses ke karyawan ini",
+          };
+        }
+      }
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM trainings WHERE id = ${fresh.trainingId} FOR UPDATE`;
+      }
+      const training = await tx.training.findFirst({
+        where: { id: fresh.trainingId, deletedAt: null },
+        select: { status: true },
+      });
+      if (!training) return { success: false as const, error: "Pelatihan tidak ditemukan" };
+      if (training.status !== "scheduled") {
+        return {
+          success: false as const,
+          error: "Hasil hanya dapat dicatat pada pelatihan terjadwal",
+        };
+      }
+      await tx.trainingParticipant.update({
+        where: { id: participantId },
+        data: {
+          status: input.status,
+          score: input.score ?? null,
+          certificateRef: input.certificateRef ?? null,
+        },
+      });
+      return { success: true as const, id: participantId };
     });
+    if (!outcome.success) return outcome;
     revalidatePath("/sdm/pelatihan");
-    return { success: true as const, id: participantId };
+    return outcome;
   } catch (e: unknown) {
     return resultError(e, "[setParticipantResult]");
   }
@@ -398,9 +451,34 @@ export async function removeTrainingParticipant(participantId: number) {
       const scope = await getHrScope(actor);
       await assertHrEmployeeAccess(scope, participant.employeeId);
     }
-    await prisma.trainingParticipant.delete({ where: { id: participantId } });
+    // Putaran 78: penghapusan roster tunduk pada invarian yang sama —
+    // dinilai sesudah kunci baris pelatihan di dalam transaksi.
+    const outcome = await prisma.$transaction(async (tx) => {
+      const fresh = await tx.trainingParticipant.findUnique({
+        where: { id: participantId },
+        select: { employeeId: true, trainingId: true },
+      });
+      if (!fresh) return { success: false as const, error: "Peserta tidak ditemukan" };
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM trainings WHERE id = ${fresh.trainingId} FOR UPDATE`;
+      }
+      const training = await tx.training.findFirst({
+        where: { id: fresh.trainingId, deletedAt: null },
+        select: { status: true },
+      });
+      if (!training) return { success: false as const, error: "Pelatihan tidak ditemukan" };
+      if (training.status !== "scheduled") {
+        return {
+          success: false as const,
+          error: "Roster hanya dapat diubah pada pelatihan terjadwal",
+        };
+      }
+      await tx.trainingParticipant.delete({ where: { id: participantId } });
+      return { success: true as const };
+    });
+    if (!outcome.success) return outcome;
     revalidatePath("/sdm/pelatihan");
-    return { success: true as const };
+    return outcome;
   } catch (e: unknown) {
     return resultError(e, "[removeTrainingParticipant]");
   }

@@ -1297,6 +1297,22 @@ describe("createAsset / updateAsset", () => {
     expect(generateDocNumMock).toHaveBeenCalled()
   })
 
+  it("putaran 78: approval aset diminta di dalam transaksi create (argumen ke-4 = tx)", async () => {
+    const res = await createAsset(fd({ name: "Laptop", purchasePrice: "1000" }))
+    expect(res?.success).toBe(true)
+    expect(requestApprovalMock).toHaveBeenCalledTimes(1)
+    const args = requestApprovalMock.mock.calls[0] as unknown[]
+    expect(args[0]).toBe("Asset")
+    expect(args[1]).toBe(100)
+    // tx facade mock = prismaMock itu sendiri; approval WAJIB menerimanya
+    // supaya rollback aset ikut menggulung approval.
+    expect(args[3]).toBe(prismaMock)
+    // Urutan: approval diminta sebelum transaksi selesai (create aset lebih dulu).
+    expect(prismaMock.asset.create.mock.invocationCallOrder[0]).toBeLessThan(
+      requestApprovalMock.mock.invocationCallOrder[0],
+    )
+  })
+
   it("menolak purchaseDate tak-kalender 2026-02-30 tanpa membuat aset", async () => {
     const res = await createAsset(fd({
       name: "Laptop",
@@ -1572,13 +1588,20 @@ describe("createAsset / updateAsset", () => {
   it("routes the new asset through the approval workflow if configured", async () => {
     // Without this request, disposeAsset's assertApproved("Asset", id) can never
     // block (no Approval row exists), so a configured disposal gate silently passes.
+    // Putaran 78: argumen keempat = client transaksi aset (rollback ikut
+    // menggulung approval); harness tx facade = prismaMock.
     const res = await createAsset(fd({
       name: "Laptop",
       code: "LAP-01",
       purchasePrice: "1000",
     }))
     expect(res.success).toBe(true)
-    expect(requestApprovalMock).toHaveBeenCalledWith("Asset", expect.any(Number), expect.any(Number))
+    expect(requestApprovalMock).toHaveBeenCalledWith(
+      "Asset",
+      expect.any(Number),
+      expect.any(Number),
+      prismaMock,
+    )
   })
 
   it("putaran 74: updateAsset membuka pengajuan approval baru atomik dengan edit", async () => {

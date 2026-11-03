@@ -636,21 +636,37 @@ describe("notification.service", () => {
       expect(ok).toBe(true);
       // Ownership is enforced inside the DB op: id AND userId. This prevents
       // an IDOR where another user's notification id silently gets marked read.
+      // Putaran 78: klaim berpredikat readAt: null menjaga waktu baca pertama.
       expect(mocks.updateManyNotif).toHaveBeenCalledWith({
-        where: { id: 5, userId: 42 },
+        where: { id: 5, userId: 42, readAt: null },
         data: { readAt: expect.any(Date) },
       });
     });
 
     it("returns false when no row matched (missing or not owned by user)", async () => {
       mocks.updateManyNotif.mockResolvedValue({ count: 0 });
+      mocks.findFirstNotif.mockResolvedValue(null);
 
       const ok = await notificationService.markAsRead(999, 42);
 
       expect(ok).toBe(false);
       expect(mocks.updateManyNotif).toHaveBeenCalledWith({
-        where: { id: 999, userId: 42 },
+        where: { id: 999, userId: 42, readAt: null },
         data: { readAt: expect.any(Date) },
+      });
+    });
+
+    it("putaran 78: sudah dibaca tetap true tanpa menimpa readAt pertama", async () => {
+      mocks.updateManyNotif.mockResolvedValue({ count: 0 });
+      mocks.findFirstNotif.mockResolvedValue({ id: 5 });
+
+      const ok = await notificationService.markAsRead(5, 42);
+
+      expect(ok).toBe(true);
+      expect(mocks.updateManyNotif).toHaveBeenCalledTimes(1);
+      expect(mocks.findFirstNotif).toHaveBeenCalledWith({
+        where: { id: 5, userId: 42 },
+        select: { id: true },
       });
     });
   });

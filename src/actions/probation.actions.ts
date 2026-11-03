@@ -113,7 +113,16 @@ export async function openProbation(employeeId: number, probationEndDate: string
     })
     if (!guard.allowed) throw new Error(guard.message)
 
-    await prisma.employee.update({ where: { id: employeeId }, data: { probationEndDate: end } })
+    // Putaran 78: tulis diklaim dari keadaan terbaca. Dua pembukaan konkuren
+    // dengan tanggal berbeda tidak boleh sama-sama sukses (last-writer-wins
+    // senyap), dan penutupan basi tidak boleh menimpa pembukaan baru.
+    const claimed = await prisma.employee.updateMany({
+      where: { id: employeeId, deletedAt: null, probationEndDate: null },
+      data: { probationEndDate: end },
+    })
+    if (claimed.count === 0) {
+      throw new Error("Karyawan ini sudah dalam masa percobaan")
+    }
     await logActivity("update", "Employee", employeeId, `Membuka masa percobaan untuk ${employee.name}`)
     revalidatePath(REVALIDATE)
     return { success: true }
@@ -133,7 +142,13 @@ export async function closeProbation(employeeId: number): Promise<ActionResult> 
     assertEmployeeUsable(employee)
     if (employee.probationEndDate == null) throw new Error("Karyawan ini tidak dalam masa percobaan")
 
-    await prisma.employee.update({ where: { id: employeeId }, data: { probationEndDate: null } })
+    const claimed = await prisma.employee.updateMany({
+      where: { id: employeeId, deletedAt: null, probationEndDate: { not: null } },
+      data: { probationEndDate: null },
+    })
+    if (claimed.count === 0) {
+      throw new Error("Karyawan ini tidak dalam masa percobaan")
+    }
     await logActivity("update", "Employee", employeeId, `Menutup masa percobaan untuk ${employee.name}`)
     revalidatePath(REVALIDATE)
     return { success: true }
@@ -314,6 +329,34 @@ export async function decideProbation(
     }
 
     await prisma.$transaction(async (tx) => {
+      // Putaran 78: kunci baris karyawan lalu nilai ulang fakta penentu dari
+      // bacaan terkunci — karyawan yang berhenti/terhapus atau masa
+      // percobaannya berubah di jendela snapshot->tx tidak boleh tetap
+      // diputus dari keadaan basi.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`
+      }
+      const fresh = await tx.employee.findUnique({
+        where: { id: employeeId },
+        select: {
+          id: true,
+          name: true,
+          employmentStatus: true,
+          joinDate: true,
+          probationEndDate: true,
+          contractStartDate: true,
+          contractEndDate: true,
+          employmentEndedAt: true,
+          deletedAt: true,
+        },
+      })
+      assertEmployeeUsable(fresh)
+      if (fresh.employmentEndedAt != null) throw new Error("Karyawan sudah berhenti bekerja")
+      if (fresh.probationEndDate == null) throw new Error("Karyawan ini tidak dalam masa percobaan")
+      const freshFinal = await loadFinalReview(employeeId, fresh, tx)
+      if (!freshFinal || freshFinal.id !== finalReview.id || freshFinal.status !== "submitted") {
+        throw new Error("Evaluasi final sudah diputus")
+      }
       // Klaim atomik: hanya review submitted yang bisa diklaim; keputusan
       // konkuren yang menang duluan membuat count 0 -> rollback.
       const claimed = await tx.probationReview.updateMany({
@@ -343,11 +386,15 @@ export interface ContractDecisionFormInput {
 }
 
 /** Review final karyawan (Q-PROB-2): slot final dari masa percobaan berjalan. */
-async function loadFinalReview(employeeId: number, employee: { joinDate: Date; probationEndDate: Date | null }) {
+async function loadFinalReview(
+  employeeId: number,
+  employee: { joinDate: Date; probationEndDate: Date | null },
+  client: { probationReview: Pick<Prisma.TransactionClient["probationReview"], "findFirst"> } = prisma,
+) {
   if (employee.probationEndDate == null) return null
   const finalSlot = probationMilestoneSlots(employee.joinDate, employee.probationEndDate).find((s) => s.isFinal)
   if (!finalSlot) return null
-  return prisma.probationReview.findFirst({
+  return client.probationReview.findFirst({
     where: { employeeId, milestone: finalSlot.milestone },
     select: { id: true, status: true, reviewerEmployeeId: true },
   })

@@ -1063,16 +1063,16 @@ export async function createAsset(formData: FormData) {
         });
       }
 
+      // Putaran 78: pengajuan approval ikut transaksi aset (pola updateAsset).
+      // Sesudah commit, kegagalan pembuatan approval bisa meninggalkan aset
+      // tanpa baris Approval; assertApproved memperlakukan keadaan itu sebagai
+      // "tanpa workflow" dan gerbang disposal hilang senyap.
+      await requestApprovalIfConfigured("Asset", created.id, Number(user.id), tx);
+
       return created;
     });
 
     await logActivity("create", "Asset", asset.id, "Membuat aset");
-
-    // Route the asset through the approval workflow if one is configured. This
-    // is what makes disposeAsset's `assertApproved("Asset", id)` gate actually
-    // able to block: without a requested Approval row, assertApproved treats the
-    // asset as "no workflow → allowed" and the disposal control silently passes.
-    await requestApprovalIfConfigured("Asset", asset.id, Number(user.id));
 
     revalidatePath("/aset");
     return { success: true, id: asset.id };

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   employeeFindUnique: vi.fn(),
   employeeFindFirst: vi.fn(),
   employeeUpdate: vi.fn(),
+  employeeUpdateMany: vi.fn(),
   reviewFindFirst: vi.fn(),
   reviewFindUnique: vi.fn(),
   reviewUpdate: vi.fn(),
@@ -43,6 +44,7 @@ vi.mock("@/lib/db/prisma", () => ({
       findUnique: mocks.employeeFindUnique,
       findFirst: mocks.employeeFindFirst,
       update: mocks.employeeUpdate,
+      updateMany: mocks.employeeUpdateMany,
     },
     probationReview: {
       findFirst: mocks.reviewFindFirst,
@@ -100,6 +102,7 @@ beforeEach(() => {
   mocks.logActivity.mockResolvedValue(undefined)
   mocks.employeeFindFirst.mockResolvedValue({ id: 99 }) // pemanggil = Employee 99
   mocks.executeRaw.mockResolvedValue(1)
+  mocks.employeeUpdateMany.mockResolvedValue({ count: 1 })
   mocks.reviewFindFirstTx.mockResolvedValue(null)
   mocks.requestFindManyTx.mockResolvedValue([])
   mocks.transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
@@ -108,10 +111,14 @@ beforeEach(() => {
       probationReview: {
         update: mocks.reviewUpdate,
         updateMany: mocks.reviewUpdateMany,
-        findFirst: mocks.reviewFindFirstTx,
+        findFirst: mocks.reviewFindFirst,
         create: mocks.reviewCreate,
       },
-      employee: { update: mocks.employeeUpdate, findUnique: mocks.employeeFindUnique },
+      employee: {
+        update: mocks.employeeUpdate,
+        updateMany: mocks.employeeUpdateMany,
+        findUnique: mocks.employeeFindUnique,
+      },
       contractDecisionRequest: {
         findMany: mocks.requestFindManyTx,
         updateMany: mocks.requestUpdateMany,
@@ -138,8 +145,8 @@ describe("openProbation", () => {
   it("AC-PROB-1: PKWTT tepat 3 bulan tersimpan; +1 hari ditolak", async () => {
     mocks.employeeFindUnique.mockResolvedValue(employeeRow())
     expect(await openProbation(1, "2026-04-05")).toEqual({ success: true })
-    expect(mocks.employeeUpdate).toHaveBeenCalledWith({
-      where: { id: 1 },
+    expect(mocks.employeeUpdateMany).toHaveBeenCalledWith({
+      where: { id: 1, deletedAt: null, probationEndDate: null },
       data: { probationEndDate: d("2026-04-05") },
     })
 
@@ -147,9 +154,21 @@ describe("openProbation", () => {
     mocks.requirePermission.mockResolvedValue(user)
     mocks.getHrScope.mockResolvedValue({ kind: "all" })
     mocks.employeeFindUnique.mockResolvedValue(employeeRow())
+    mocks.employeeUpdateMany.mockResolvedValue({ count: 1 })
     const r = await openProbation(1, "2026-04-06")
     expect(r.success).toBe(false)
-    expect(mocks.employeeUpdate).not.toHaveBeenCalled()
+    expect(mocks.employeeUpdateMany).not.toHaveBeenCalled()
+  })
+
+  it("putaran 78: dua pembukaan konkuren — klaim kalah (count 0) ditolak", async () => {
+    mocks.employeeFindUnique.mockResolvedValue(employeeRow())
+    mocks.employeeUpdateMany.mockResolvedValue({ count: 0 })
+    const r = await openProbation(1, "2026-04-05")
+    expect(r.success).toBe(false)
+    expect(mocks.employeeUpdateMany).toHaveBeenCalledWith({
+      where: { id: 1, deletedAt: null, probationEndDate: null },
+      data: { probationEndDate: d("2026-04-05") },
+    })
   })
 
   it("scope self tidak membuka percobaannya sendiri", async () => {
@@ -227,6 +246,26 @@ describe("decideProbation", () => {
     expect(mocks.employeeUpdate).not.toHaveBeenCalled()
   })
 
+  it("putaran 78: karyawan berhenti di jendela tx — decide ditolak, tidak ada tulis", async () => {
+    setupDecide()
+    mocks.employeeFindUnique
+      .mockResolvedValueOnce(employeeRow({ probationEndDate: d("2026-04-05") }))
+      .mockResolvedValue(
+        employeeRow({
+          probationEndDate: d("2026-04-05"),
+          employmentEndedAt: d("2026-02-01"),
+        }),
+      )
+    const r = await decideProbation(1, "passed")
+    expect(r.success).toBe(false)
+    if (!r.success) expect(r.error).toMatch(/berhenti/)
+    expect(mocks.reviewUpdateMany).not.toHaveBeenCalled()
+    expect(mocks.employeeUpdate).not.toHaveBeenCalled()
+    expect(mocks.executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.reviewUpdateMany.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
+    )
+  })
+
   it("extended: tanggal baru <= joinDate+3 bulan; lewat ditolak", async () => {
     setupDecide()
     mocks.employeeFindUnique.mockResolvedValue(
@@ -294,10 +333,12 @@ describe("saveProbationReviewDraft (F-5)", () => {
     setupDraft()
     expect(await saveProbationReviewDraft(draftInput)).toEqual({ success: true })
     expect(mocks.transaction).toHaveBeenCalled()
+    // Facade tx meneruskan decorator findFirst yang sama (reviewFindFirst);
+    // bacaan DALAM tx adalah panggilan sesudah kunci dieksekusi.
     const lockOrder = (mocks.executeRaw as any).mock.invocationCallOrder[0]
-    const findOrder = mocks.reviewFindFirstTx.mock.invocationCallOrder[0]
-    expect(lockOrder).toBeLessThan(findOrder)
-    expect(mocks.reviewFindFirst).not.toHaveBeenCalled()
+    const lastFindOrder = mocks.reviewFindFirst.mock.invocationCallOrder.at(-1)
+    expect(lastFindOrder).toBeDefined()
+    expect(lockOrder).toBeLessThan(lastFindOrder!)
   })
 })
 

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma"
-import { nextSlug } from "@/lib/utils/slug-db"
+import { nextSlugWithClient } from "@/lib/utils/slug-db"
 import { notificationService } from "@/lib/services/notification.service"
 import { APPROVAL_MODEL_LABELS } from "@/lib/constants/approval"
 
@@ -120,7 +120,11 @@ export async function requestApprovalIfConfigured(
   txClient?: any,
 ): Promise<boolean> {
   const createApproval = async (db: any, workflowId: number): Promise<true> => {
-    const slug = await nextSlug("approval", referenceType)
+    // Putaran 78: slug lewat delegate transaksi pemanggil — varian global tidak
+    // melihat approval tak-tercommit dari createAsset/pemanggil lain yang
+    // berbagi stem sama, sehingga dua dokumen konkuren bisa memilih slug sama
+    // dan yang kalah menerima P2002 sesudah dokumennya sudah ter-commit.
+    const slug = await nextSlugWithClient(db as never, "approval", referenceType)
     await db.approval.create({
       data: {
         workflowId,

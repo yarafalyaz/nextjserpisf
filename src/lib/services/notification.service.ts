@@ -465,11 +465,21 @@ export const notificationService = {
    * and let `prisma.notification.update` run unguarded.
    */
   async markAsRead(notificationId: number, userId: number): Promise<boolean> {
+    // Putaran 78: klaim atomik menjaga readAt pertama — pemanggilan ganda,
+    // double-click, atau retry jaringan tidak boleh menimpa waktu baca. Baris
+    // yang sudah dibaca diverifikasi terpisah di bawah.
     const { count } = await prisma.notification.updateMany({
-      where: { id: notificationId, userId },
+      where: { id: notificationId, userId, readAt: null },
       data: { readAt: new Date() },
     })
-    return count > 0
+    if (count > 0) return true
+    // Sudah dibaca ⇒ true; tidak ada / bukan milik user ⇒ false (cermin
+    // markAllAsRead yang berpredikat readAt: null).
+    const existing = await prisma.notification.findFirst({
+      where: { id: notificationId, userId },
+      select: { id: true },
+    })
+    return existing != null
   },
 
   /**

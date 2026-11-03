@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   recCreate: vi.fn(),
   recUpdateMany: vi.fn(),
   transaction: vi.fn(),
+  executeRaw: vi.fn(),
   logActivity: vi.fn(),
   generateDocumentNumber: vi.fn(),
 }))
@@ -88,8 +89,10 @@ beforeEach(() => {
   mocks.recCreate.mockResolvedValue({ id: 5 })
   mocks.recUpdateMany.mockResolvedValue({ count: 1 })
   mocks.generateDocumentNumber.mockResolvedValue("001/SP/YRA/01/2026")
+  mocks.executeRaw.mockResolvedValue(1)
   mocks.transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
+      $executeRaw: mocks.executeRaw,
       employeeDisciplinaryRecord: {
         findMany: mocks.recFindMany,
         findUnique: mocks.recFindUnique,
@@ -267,6 +270,7 @@ describe("approveDisciplinaryRecord", () => {
     ])
     mocks.transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
+        $executeRaw: mocks.executeRaw,
         employeeDisciplinaryRecord: {
           findMany: mocks.recFindMany,
           findUnique: mocks.recFindUnique,
@@ -280,6 +284,14 @@ describe("approveDisciplinaryRecord", () => {
       expect.objectContaining({
         data: expect.objectContaining({ workflowStatus: "issued", secondApprovedBy: 42 }),
       }),
+    )
+    // Putaran 78: persetujuan kedua wajib mengunci karyawan sebelum membaca
+    // rantai — urutan sama dengan jalur persetujuan biasa.
+    expect(mocks.executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.recFindUnique.mock.invocationCallOrder.at(-1)!,
+    )
+    expect(mocks.executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.recFindMany.mock.invocationCallOrder.at(-1)!,
     )
   })
 })

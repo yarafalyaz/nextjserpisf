@@ -10,31 +10,78 @@ const mocks = vi.hoisted(() => ({
   requirePermission: vi.fn(),
   getHrScope: vi.fn(),
   reviewFindFirst: vi.fn(),
+  reviewCreate: vi.fn(),
   reviewUpdateMany: vi.fn(),
+  goalFindUnique: vi.fn(),
   goalFindMany: vi.fn(),
+  goalCreate: vi.fn(),
+  goalUpdate: vi.fn(),
+  goalDelete: vi.fn(),
   cycleFindFirst: vi.fn(),
+  cycleCreate: vi.fn(),
+  cycleUpdateMany: vi.fn(),
+  executeRaw: vi.fn(),
+  transaction: vi.fn(),
+  checkIdempotency: vi.fn(),
 }))
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const tx = {
+    $executeRaw: (...args: unknown[]) => mocks.executeRaw(...args),
     performanceReview: {
       findFirst: mocks.reviewFindFirst,
+      create: mocks.reviewCreate,
       updateMany: mocks.reviewUpdateMany,
     },
-    performanceGoal: { findMany: mocks.goalFindMany },
-    performanceCycle: { findFirst: mocks.cycleFindFirst },
-  },
-}))
+    performanceGoal: {
+      findUnique: mocks.goalFindUnique,
+      findMany: mocks.goalFindMany,
+      create: mocks.goalCreate,
+      update: mocks.goalUpdate,
+      delete: mocks.goalDelete,
+    },
+    performanceCycle: {
+      findFirst: mocks.cycleFindFirst,
+      create: mocks.cycleCreate,
+      updateMany: mocks.cycleUpdateMany,
+    },
+    idempotencyKey: { create: vi.fn().mockResolvedValue({}) },
+  }
+  return {
+    prisma: {
+      ...tx,
+      performanceCycle: {
+        findFirst: mocks.cycleFindFirst,
+        create: mocks.cycleCreate,
+        updateMany: mocks.cycleUpdateMany,
+      },
+      $transaction: (fn: (client: unknown) => unknown) => mocks.transaction(fn),
+    },
+  }
+})
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: mocks.requirePermission }))
 vi.mock("@/lib/auth/hr-scope", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/auth/hr-scope")>()
   return { ...original, getHrScope: mocks.getHrScope }
 })
-vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: async () => "test-slug" }))
+vi.mock("@/lib/utils/slug-db", () => ({
+  nextSlugWithClient: async () => "test-slug",
+}))
+vi.mock("@/lib/utils/idempotency", () => ({
+  checkIdempotency: (...args: unknown[]) => mocks.checkIdempotency(...args),
+}))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: async () => {} }))
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }))
 
-import { finalizeReview, submitManagerReview, submitSelfReview } from "../performance.actions"
+import {
+  createPerformanceCycle,
+  deletePerformanceGoal,
+  finalizeReview,
+  setPerformanceCycleStatus,
+  submitManagerReview,
+  submitSelfReview,
+  upsertPerformanceGoal,
+} from "../performance.actions"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -47,8 +94,39 @@ beforeEach(() => {
     reviewerEmployeeId: 3,
   })
   mocks.reviewUpdateMany.mockResolvedValue({ count: 1 })
+  mocks.reviewCreate.mockResolvedValue({ id: 5, status: "draft" })
   mocks.goalFindMany.mockResolvedValue([])
-  mocks.cycleFindFirst.mockResolvedValue({ status: "active" })
+  mocks.goalFindUnique.mockResolvedValue({ employeeId: 2, cycleId: 1 })
+  mocks.goalCreate.mockResolvedValue({ id: 9, title: "Sasaran" })
+  mocks.goalUpdate.mockResolvedValue({ id: 9, title: "Sasaran" })
+  mocks.goalDelete.mockResolvedValue({})
+  mocks.cycleFindFirst.mockResolvedValue({ id: 1, status: "active" })
+  mocks.cycleCreate.mockResolvedValue({ id: 1, name: "Siklus", slug: "siklus" })
+  mocks.cycleUpdateMany.mockResolvedValue({ count: 1 })
+  mocks.executeRaw.mockResolvedValue(1)
+  mocks.checkIdempotency.mockResolvedValue(undefined)
+  mocks.transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+    fn({
+      $executeRaw: mocks.executeRaw,
+      performanceReview: {
+        findFirst: mocks.reviewFindFirst,
+        create: mocks.reviewCreate,
+        updateMany: mocks.reviewUpdateMany,
+      },
+      performanceGoal: {
+        findUnique: mocks.goalFindUnique,
+        findMany: mocks.goalFindMany,
+        create: mocks.goalCreate,
+        update: mocks.goalUpdate,
+        delete: mocks.goalDelete,
+      },
+      performanceCycle: {
+        findFirst: mocks.cycleFindFirst,
+        create: mocks.cycleCreate,
+        updateMany: mocks.cycleUpdateMany,
+      },
+    }),
+  )
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
 
@@ -113,5 +191,65 @@ describe("klaim transisi ulasan kinerja", () => {
     expect(res.success).toBe(false)
     if (!res.success) expect(res.error).toMatch(/siklus aktif/)
     expect(mocks.reviewUpdateMany).not.toHaveBeenCalled()
+  })
+
+  it("putaran 78: transisi siklus diklaim dari status terbaca; klaim kalah ditolak", async () => {
+    mocks.cycleFindFirst.mockResolvedValue({ id: 1, status: "active" })
+    mocks.cycleUpdateMany.mockResolvedValue({ count: 0 })
+    const res = await setPerformanceCycleStatus(1, "closed")
+    expect(res.success).toBe(false)
+    expect(mocks.cycleUpdateMany).toHaveBeenCalledWith({
+      where: { id: 1, deletedAt: null, status: "active" },
+      data: { status: "closed" },
+    })
+  })
+
+  it("putaran 78: siklus closed di bacaan berkunci menolak tulis sasaran", async () => {
+    mocks.cycleFindFirst.mockResolvedValue({ status: "closed" })
+    const fd = new FormData()
+    fd.set("cycleId", "1")
+    fd.set("employeeId", "2")
+    fd.set("title", "Sasaran")
+    fd.set("weight", "10")
+    const res = await upsertPerformanceGoal(fd)
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toMatch(/siklus aktif/)
+    expect(mocks.goalCreate).not.toHaveBeenCalled()
+    expect(mocks.executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.cycleFindFirst.mock.invocationCallOrder[0],
+    )
+  })
+
+  it("putaran 78: hapus sasaran pada siklus closed ditolak sesudah kunci", async () => {
+    mocks.cycleFindFirst.mockResolvedValue({ status: "closed" })
+    const res = await deletePerformanceGoal(9)
+    expect(res.success).toBe(false)
+    expect(mocks.goalDelete).not.toHaveBeenCalled()
+  })
+
+  it("putaran 78: create review kalah P2002 memakai review pemenang", async () => {
+    mocks.reviewFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: 5, status: "draft", managerScore: null, reviewerEmployeeId: null })
+    const p2002 = Object.assign(new Error("Unique constraint failed"), { code: "P2002" })
+    mocks.reviewCreate.mockRejectedValue(p2002)
+    const res = await submitSelfReview(1, 2, 75)
+    expect(res.success).toBe(true)
+    expect(mocks.reviewUpdateMany).toHaveBeenCalled()
+  })
+
+  it("putaran 78: createPerformanceCycle memakai idempotency + slug delegate tx", async () => {
+    const fd = new FormData()
+    fd.set("name", "Semester 1 2026")
+    fd.set("periodStart", "2026-01-01")
+    fd.set("periodEnd", "2026-06-30")
+    fd.set("idempotencyKey", "cycle-1")
+    const res = await createPerformanceCycle(fd)
+    expect(res.success).toBe(true)
+    expect(mocks.checkIdempotency).toHaveBeenCalledWith("cycle-1", expect.anything(), "7")
+    expect(mocks.transaction).toHaveBeenCalled()
+    expect(mocks.cycleCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ slug: "test-slug", status: "draft" }),
+    })
   })
 })

@@ -83,7 +83,7 @@ beforeEach(() => {
   mocks.getHrScope.mockResolvedValue({ kind: "all" })
   mocks.employeeCompetencyUpsert.mockResolvedValue({ id: 5 })
   mocks.participantUpsert.mockResolvedValue({ id: 5 })
-  mocks.participantFindUnique.mockResolvedValue({ employeeId: 7 })
+  mocks.participantFindUnique.mockResolvedValue({ employeeId: 7, trainingId: 3 })
   mocks.participantUpdate.mockResolvedValue({})
   mocks.participantDelete.mockResolvedValue({})
   mocks.employeeFindFirst.mockResolvedValue({ id: 7 })
@@ -99,6 +99,13 @@ beforeEach(() => {
       position: { findUnique: mocks.positionFindUnique },
       positionCompetency: { upsert: mocks.positionCompetencyUpsert },
       employeeCompetency: { upsert: mocks.employeeCompetencyUpsert },
+      training: { findFirst: mocks.trainingFindFirst },
+      trainingParticipant: {
+        upsert: mocks.participantUpsert,
+        findUnique: mocks.participantFindUnique,
+        update: mocks.participantUpdate,
+        delete: mocks.participantDelete,
+      },
       $executeRaw: mocks.executeRaw,
     }),
   )
@@ -268,6 +275,34 @@ describe("setParticipantResult HR scope", () => {
     const res = await setParticipantResult(5, { status: "attended", score: 80 })
     expect(res.success).toBe(true)
     expect(mocks.participantUpdate).toHaveBeenCalled()
+  })
+})
+
+describe("putaran 78: roster pelatihan dinilai ulang berkunci", () => {
+  it("status training berubah dalam tx menolak tambah peserta, kunci mendahului bacaan", async () => {
+    mocks.trainingFindFirst.mockResolvedValue({ id: 3, status: "done" })
+    const res = await addTrainingParticipant(participantForm())
+    expect(res.success).toBe(false)
+    expect(mocks.participantUpsert).not.toHaveBeenCalled()
+    expect(mocks.executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.trainingFindFirst.mock.invocationCallOrder[0],
+    )
+  })
+
+  it("hasil peserta pada pelatihan done ditolak tanpa update", async () => {
+    mocks.trainingFindFirst.mockResolvedValue({ id: 3, status: "done" })
+    const res = await setParticipantResult(5, { status: "attended", score: 80 })
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toMatch(/terjadwal/)
+    expect(mocks.participantUpdate).not.toHaveBeenCalled()
+  })
+
+  it("hapus peserta pada pelatihan cancelled ditolak tanpa delete", async () => {
+    mocks.trainingFindFirst.mockResolvedValue({ id: 3, status: "cancelled" })
+    const res = await removeTrainingParticipant(5)
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toMatch(/terjadwal/)
+    expect(mocks.participantDelete).not.toHaveBeenCalled()
   })
 })
 

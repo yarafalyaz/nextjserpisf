@@ -410,8 +410,14 @@ export async function approveDisciplinaryRecord(recordId: number): Promise<Actio
       })
       if (!sod.allowed) throw new Error(sod.message)
       // Jenjang dihitung ulang sesaat sebelum terbit (rantai bisa berubah
-      // sejak pengajuan diajukan).
+      // sejak pengajuan diajukan). Putaran 78: kunci baris karyawan SEBELUM
+      // bacaan rantai — simetri jalur biasa. Tanpa kunci ini dua SP3 berbeda
+      // untuk karyawan sama bisa diterbitkan bersamaan: klaim per-rekod
+      // sama-sama menang dan rantai basi tidak melihat SP lawan.
       await prisma.$transaction(async (tx) => {
+        if (typeof tx.$executeRaw === "function") {
+          await tx.$executeRaw`SELECT id FROM employees WHERE id = ${record.employeeId} FOR UPDATE`
+        }
         const fresh = await tx.employeeDisciplinaryRecord.findUnique({
           where: { id: recordId },
           select: RECORD_SELECT,
