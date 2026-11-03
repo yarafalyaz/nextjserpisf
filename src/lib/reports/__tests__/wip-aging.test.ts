@@ -60,6 +60,19 @@ describe("buildWipAging", () => {
     expect(r.totalWipAmount).toBe(1_000_000)
   })
 
+  it("putaran 83: PO confirmed ikut WIP; status WO 'pending' bukan status PO", () => {
+    const r = buildWipAging({
+      asOf: AS_OF,
+      orders: [
+        order({ id: 1, status: "confirmed", totalActualCost: 500_000, releasedCost: 0 }),
+        order({ id: 2, documentNo: "PO-2", status: "pending" }),
+      ],
+    })
+    expect(r.totalOrders).toBe(1)
+    expect(r.orders.map((o) => o.id)).toEqual([1])
+    expect(r.totalWipAmount).toBe(500_000)
+  })
+
   it("regresi: rilis parsial tidak mengurangi WIP dua kali (totalActualCost sudah sisa pool)", () => {
     // Penulis rilis (completeProductionOrder): aktual penuh 100, rilis 40%
     // → totalActualCost tersimpan 60, releasedCost 40. Sisa WIP benar 60;
@@ -159,7 +172,7 @@ describe("getWipAging", () => {
     expect(mocks.prismaMock.productionOrder.findMany).toHaveBeenCalledTimes(1)
     expect(mocks.prismaMock.productionOrder.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { status: { in: ["draft", "pending", "in_progress"] } },
+        where: { status: { in: ["draft", "confirmed", "in_progress"] } },
       }),
     )
     expect(r.orders[0]).toMatchObject({

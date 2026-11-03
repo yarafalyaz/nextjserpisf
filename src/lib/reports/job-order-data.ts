@@ -37,9 +37,14 @@ export interface JobOrderCostReport {
 /**
  * Bahan & biaya per pekerjaan pada satu periode.
  *
- * Bahan diambil hanya dari pengeluaran bahan berstatus `completed` — pengeluaran
+ * Bahan diambil dari pengeluaran bahan berstatus `completed` — pengeluaran
  * draft belum menggerakkan persediaan, jadi nilainya belum nyata (sama seperti
- * aturan pada laporan Laba Rugi per Proyek).
+ * aturan pada laporan Laba Rugi per Proyek) — ditambah bahan jalur perintah
+ * produksi langsung (`ProductionOrderMaterial.actualCost`, akumulasi FIFO saat
+ * issue). Dua jalur konsumsi ditegakkan eksklusif oleh server per pekerjaan
+ * (PO tertaut WO menolak bila ada Material Issue completed/processing;
+ * complete Material Issue menolak bila ada actualQty PO), jadi jumlahnya
+ * tidak terhitung dua kali (putaran 83).
  */
 export async function loadJobOrderCost(period: {
   start: Date
@@ -65,7 +70,7 @@ export async function loadJobOrderCost(period: {
 
   const workOrderIds = workOrders.map((workOrder) => workOrder.id)
 
-  const [issues, costs, productionOrders] = await Promise.all([
+  const [issues, costs, productionOrders, poMaterials] = await Promise.all([
     prisma.materialIssue.findMany({
       where: { workOrderId: { in: workOrderIds }, status: "completed" },
       select: { workOrderId: true, items: { select: { qty: true, cost: true } } },
@@ -89,6 +94,16 @@ export async function loadJobOrderCost(period: {
       where: { workOrderId: { in: workOrderIds } },
       select: { workOrderId: true, completedQty: true },
     }),
+    // Bahan jalur PO-direct: actualCost akumulasi biaya FIFO nyata saat
+    // issueMaterial. Tanpa ini WO jalur PO (eksklusif, tanpa Material
+    // Issue) tampil berbahan 0 padahal hasil selesai ikut terhitung.
+    prisma.productionOrderMaterial.findMany({
+      where: { productionOrder: { workOrderId: { in: workOrderIds } } },
+      select: {
+        actualCost: true,
+        productionOrder: { select: { workOrderId: true } },
+      },
+    }),
   ])
 
   const materialByWorkOrder = new Map<number, number>()
@@ -102,6 +117,15 @@ export async function loadJobOrderCost(period: {
     materialByWorkOrder.set(
       issue.workOrderId,
       safeAdd(materialByWorkOrder.get(issue.workOrderId) ?? 0, value, 2),
+    )
+  }
+
+  for (const material of poMaterials) {
+    const workOrderId = material.productionOrder?.workOrderId ?? null
+    if (workOrderId === null) continue
+    materialByWorkOrder.set(
+      workOrderId,
+      safeAdd(materialByWorkOrder.get(workOrderId) ?? 0, Number(material.actualCost), 2),
     )
   }
 

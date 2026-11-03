@@ -3,6 +3,7 @@ import { prisma, TxClient } from "@/lib/db/prisma"
 import { safeAdd, safeSubtract, safeMultiply } from "@/lib/utils/math"
 import { stockJournalService } from "@/lib/services/stock-journal.service"
 import { assertJobCostMutable } from "@/lib/services/job-closeout.service"
+import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 
 /**
  * Non-material production cost rollup (PRD FAB-06/07/08/09).
@@ -372,6 +373,17 @@ export async function syncReworkCostToOrder(
     select: { id: true, amount: true },
   })
   const currentAmount = existing ? Number(existing.amount) : 0
+
+  // Delta bukan nol menulis jurnal WIP bertanggal hari ini lewat
+  // applyProductionCostDelta -> onProductionCostAbsorbed: periode berjalan
+  // yang terkunci wajib menolak SEBELUM baris biaya berubah. Jalur resolusi
+  // NCR adalah satu-satunya pemanggil dan tak punya gerbang periode sendiri
+  // (aksi biaya lain menjaga di aksinya masing-masing) — putaran 83.
+  // Delta nol / PO selesai (skipped di atas) / non-produksi tidak menulis
+  // jurnal, jadi tidak digerbang.
+  if (desired !== currentAmount) {
+    await assertPeriodOpen(new Date(), client as TxClient)
+  }
 
   // Remove the line when the rework cost is cleared.
   if (desired === 0) {

@@ -360,6 +360,22 @@ describe("Leave Request Actions", () => {
     expect(prismaMock.$queryRaw).toHaveBeenCalled()
   })
 
+  it("putaran 83: createLeaveRequest slug dari delegate tx, bukan prisma global", async () => {
+    const res = await actions.createLeaveRequest(fd({
+      employeeId: "1",
+      startDate: "2026-06-15",
+      endDate: "2026-06-20",
+      type: "annual",
+      reason: "vacation",
+    }))
+    expect(res?.success).toBe(true)
+    const createArg = prismaMock.leaveRequest.create.mock.calls.at(-1)?.[0] as any
+    expect(createArg.data.slug).toContain("cuti-2026-06-15")
+    // Kontrak harness sama seperti putaran 81 timesheet: pemeriksa tabrakan
+    // slug terpanggil lewat delegate yang sama dengan transaksi dokumen.
+    expect(prismaMock.leaveRequest.findFirst).toHaveBeenCalled()
+  })
+
   it("createLeaveRequest fails if startDate is after endDate", async () => {
     const res = await actions.createLeaveRequest(fd({
       employeeId: "1",

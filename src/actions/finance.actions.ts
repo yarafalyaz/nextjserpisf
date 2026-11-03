@@ -1494,8 +1494,13 @@ export async function createPettyCash(formData: FormData) {
       // AUD-02: serialisasi menurut akun sumber. Kunci baris akun kas/bank
       // lalu hitung saldonya dari jurnal POSTED di dalam transaksi ini, agar
       // dua IN paralel tidak sama-sama lolos dari saldo sumber yang sama.
-      if (type === "IN" && settings.cashBankAccountId) {
-        const sourceId = settings.cashBankAccountId;
+      // Putaran 83: akun sumber EFEKTIF — form bisa memilih akun sumber
+      // non-default (tersimpan sebagai sourceAccountId dan dikredit jurnal
+      // oleh hook). Mengecek saldo akun default padahal jurnal mengkredit
+      // akun pilihan membuat cek lolos berbekal saldo akun lain dan jurnal
+      // overdraw akun pilihan.
+      if (type === "IN") {
+        const sourceId = v.accountId ?? settings.cashBankAccountId;
         await tx.$queryRaw`SELECT id FROM accounts WHERE id = ${sourceId} FOR UPDATE`;
         // Konvensi GL repo (report-aggregation.service.ts REPORT_JOURNAL_STATUSES):
         // jurnal asal REVERSED + jurnal lawan POSTED berpasangan net-zero. Hanya

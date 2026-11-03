@@ -1095,6 +1095,31 @@ describe("Petty Cash Actions", () => {
     expect(String(res?.error ?? "")).toMatch(/Saldo akun Kas\/Bank tidak mencukupi/)
     expect(mocks.prismaMock.pettyCash.create).not.toHaveBeenCalled()
   })
+  it("putaran 83: createPettyCash IN menilai saldo akun sumber PILIHAN form, bukan akun default setting", async () => {
+    // Jurnal akun pilihan hanya 500; IN 1000 wajib ditolak walau saldo
+    // akun default setting (id 2) besar — jurnal hook mengkredit akun
+    // pilihan (sourceAccountId), jadi cek atas akun default overdraw.
+    mocks.prismaMock.journalEntry.findMany.mockResolvedValue([{ debit: 500, credit: 0 }])
+    const res = await (actions as any).createPettyCash(fdMap({
+      type: "IN",
+      amount: 1000,
+      date: "2026-06-13",
+      accountId: 555,
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error ?? "")).toMatch(/Saldo akun Kas\/Bank tidak mencukupi/)
+    expect(mocks.prismaMock.pettyCash.create).not.toHaveBeenCalled()
+    // Saldo dibaca untuk akun pilihan 555...
+    expect(mocks.prismaMock.journalEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ accountId: 555 }) }),
+    )
+    // ...dan baris akun 555 yang dikunci FOR UPDATE sebelum bacaan saldo.
+    const lockCall = mocks.prismaMock.$queryRaw.mock.calls.find((c: any[]) => {
+      const sql = Array.isArray(c[0]) ? c[0].join("?") : String((c[0] as any)?.strings?.join("?") ?? c[0])
+      return sql.includes("FROM accounts") && c.slice(1).includes(555)
+    })
+    expect(lockCall).toBeTruthy()
+  })
   it("createPettyCash IN meloloskan saldo sumber 3x100.10 untuk IN 300.30 (anti float-drift)", async () => {
     // Regresi: reduce mentah s + Number(debit) - Number(credit) menghasilkan
     // 300.29999999999995 < 300.30 sehingga IN sah ditolak; safeAdd/safeSubtract

@@ -70,9 +70,7 @@ import { calculateLatePenalty } from "@/lib/services/late-penalty.service";
 import { calculateAttendanceSummary, employmentDayWindow, isEmploymentDay } from "@/lib/services/attendance-summary.service";
 import {
   getLeaveQuota,
-  assertAnnualLeaveQuota,
-  QUOTA_LEAVE_TYPES,
-  SPECIAL_LEAVE_DAY_CAPS,
+  assertLeaveRequestGates,
   resolveDayKind,
 } from "@/lib/services/leave-quota.service";
 import { assertOvertimeWithinWorkdayLimits } from "@/lib/services/overtime-pay.service";
@@ -1183,56 +1181,21 @@ export async function createLeaveRequest(formData: FormData) {
       // Putaran 72: hidup dinilai ulang di bawah kunci baris karyawan.
       await assertLiveEmployee(employeeId, tx as never);
 
-      const overlap = await tx.leaveRequest.findFirst({
-        where: {
-          employeeId,
-          status: { in: ["pending", "approved"] },
-          startDate: { lte: endDate },
-          endDate: { gte: startDate },
-        },
-        select: { id: true },
+      // Gerbang domain cuti (bentrok + batas statutori + jatah tahunan per
+      // tahun yang disentuh, dinilai per tanggal mulai) hidup bersama di
+      // leave-quota.service agar penilaian ulang reopen memakai gerbang
+      // yang sama persis.
+      const gateError = await assertLeaveRequestGates(tx as never, {
+        employeeId,
+        type: v.type,
+        startDate,
+        endDate,
       });
-      if (overlap) {
-        throw new Error(
-          "Terdapat pengajuan cuti lain yang bentrok di tanggal yang sama. Hapus atau tolak yang lama terlebih dahulu.",
-        );
-      }
-
-      // Cuti khusus statutori (Pasal 81 & 93 UU 13/2003): batas hari
-      // kalender per kejadian, ditegakkan di sini karena gerbang jatah
-      // tahunan hanya berlaku untuk tipe "annual".
-      const specialCap = SPECIAL_LEAVE_DAY_CAPS[v.type];
-      if (specialCap != null) {
-        const calendarDays =
-          Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1;
-        if (calendarDays > specialCap) {
-          throw new Error(
-            `Cuti jenis ini maksimal ${specialCap} hari per kejadian (diajukan ${calendarDays} hari).`,
-          );
-        }
-      }
-
-      // Annual-leave quota gate (only `annual` draws down the 12-day/calendar-year
-      // balance — see QUOTA_LEAVE_TYPES). Two enforced rules:
-      //  1. Tenure: employees with < 1 year of service (from joinDate) are not
-      //     entitled to paid annual leave at all (entitled = 0).
-      //  2. Balance: (already-used + days requested) must not exceed the 12-day
-      //     entitlement, PER TAHUN yang disentuh — cuti lintas tahun memotong
-      //     jatah kedua tahun (assertAnnualLeaveQuota).
-      // Runs inside the same tx as the overlap check + insert so the read used
-      // for the gate and the write are atomic.
-      // Kelayakan dinilai per TANGGAL MULAI cuti, bukan hari pengajuan:
-      // karyawan yang mengajukan dari sekarang untuk tanggal sesudah
-      // ulang tahun masa kerjanya yang ke-1 memang sudah berhak pada saat
-      // cuti itu berjalan (helper menerima now = startDate).
-      if (QUOTA_LEAVE_TYPES.has(v.type)) {
-        const quotaError = await assertAnnualLeaveQuota(employeeId, startDate, endDate, { db: tx });
-        if (quotaError) throw new Error(quotaError);
-      }
+      if (gateError) throw new Error(gateError);
 
       const created = await tx.leaveRequest.create({
         data: {
-          slug: await nextSlug("leaveRequest", `cuti-${startDate.toISOString().slice(0, 10)}`),
+          slug: await nextSlugWithClient(tx as never, "leaveRequest", `cuti-${startDate.toISOString().slice(0, 10)}`),
           employeeId,
           type: v.type,
           startDate,
@@ -1315,7 +1278,7 @@ export async function createOvertimeRequest(formData: FormData) {
 
       const created = await tx.overtimeRequest.create({
         data: {
-          slug: await nextSlug("overtimeRequest", `lembur-${v.date}`),
+          slug: await nextSlugWithClient(tx as never, "overtimeRequest", `lembur-${v.date}`),
           employeeId: v.employeeId,
           projectId: v.projectId ?? null,
           date: otDate,
@@ -5217,7 +5180,7 @@ export async function createAttendanceCorrection(formData: FormData) {
 
       return tx.attendanceCorrection.create({
         data: {
-          slug: await nextSlug("attendanceCorrection", `koreksi-absensi-${v.date}`),
+          slug: await nextSlugWithClient(tx as never, "attendanceCorrection", `koreksi-absensi-${v.date}`),
           employeeId: v.employeeId,
           date,
           proposedStatus: v.status,
@@ -5706,46 +5669,19 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
         await assertLiveEmployee(employeeId, tx as never);
       }
 
-      const overlap = await tx.leaveRequest.findFirst({
-        where: {
-          employeeId,
-          status: { in: ["pending", "approved"] },
-          startDate: { lte: endDate },
-          endDate: { gte: startDate },
-          id: { not: id },
-        },
-        select: { id: true },
+      const gateError = await assertLeaveRequestGates(tx as never, {
+        employeeId,
+        type: v.type,
+        startDate,
+        endDate,
+        excludeId: id,
       });
-      if (overlap) {
-        throw new Error(
-          "Terdapat pengajuan cuti lain yang bentrok di tanggal yang sama. Hapus atau tolak yang lama terlebih dahulu.",
-        );
-      }
-
-      const specialCap = SPECIAL_LEAVE_DAY_CAPS[v.type];
-      if (specialCap != null) {
-        const calendarDays =
-          Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1;
-        if (calendarDays > specialCap) {
-          throw new Error(
-            `Cuti jenis ini maksimal ${specialCap} hari per kejadian (diajukan ${calendarDays} hari).`,
-          );
-        }
-      }
-
-      if (QUOTA_LEAVE_TYPES.has(v.type)) {
-        // Sama seperti createLeaveRequest: per tahun yang disentuh.
-        const quotaError = await assertAnnualLeaveQuota(employeeId, startDate, endDate, {
-          excludeLeaveId: id,
-          db: tx,
-        });
-        if (quotaError) throw new Error(quotaError);
-      }
+      if (gateError) throw new Error(gateError);
 
       return await tx.leaveRequest.update({
         where: { id },
         data: {
-          slug: await nextSlug("leaveRequest", `cuti-${startDate.toISOString().slice(0, 10)}`, { excludeId: id }),
+          slug: await nextSlugWithClient(tx as never, "leaveRequest", `cuti-${startDate.toISOString().slice(0, 10)}`, { excludeId: id }),
           employeeId,
           type: v.type,
           startDate,
@@ -5866,7 +5802,7 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
       const changed = await tx.overtimeRequest.updateMany({
         where: { id, status: "pending" },
         data: {
-          slug: await nextSlug("overtimeRequest", `lembur-${v.date}`, { excludeId: id }),
+          slug: await nextSlugWithClient(tx as never, "overtimeRequest", `lembur-${v.date}`, { excludeId: id }),
           employeeId: v.employeeId,
           projectId: v.projectId ?? null,
           date: wibDateToUtcMidnight(v.date),
@@ -5954,7 +5890,7 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
       const changed = await tx.employeeLoan.updateMany({
         where: { id, status: "pending" },
         data: {
-          slug: await nextSlug("employeeLoan", `pinjaman-${v.loanDate}`, { excludeId: id }),
+          slug: await nextSlugWithClient(tx as never, "employeeLoan", `pinjaman-${v.loanDate}`, { excludeId: id }),
           employeeId: v.employeeId,
           loanDate: wibDateToUtcMidnight(v.loanDate),
           totalAmount,
@@ -6064,7 +6000,7 @@ export async function recordEmployeeLoanCashRepayment(formData: FormData) {
       if (dup) return dup;
       const created = await tx.employeeLoanRepayment.create({
         data: {
-          slug: await nextSlug("employeeLoanRepayment", `setor-pinjaman-${repaymentDateRaw}`, { fallback: `setor-pinjaman-${repaymentDateRaw}-${loanId}` }),
+          slug: await nextSlugWithClient(tx as never, "employeeLoanRepayment", `setor-pinjaman-${repaymentDateRaw}`, { fallback: `setor-pinjaman-${repaymentDateRaw}-${loanId}` }),
           loanId,
           amount: roundedAmount,
           excessAmount: 0,
@@ -6149,7 +6085,7 @@ export async function writeOffEmployeeLoan(formData: FormData) {
       if (dup) throw new Error(`Pinjaman #${loanId} sudah punya dokumen write-off #${dup.id} — ganda ditolak.`);
       const created = await tx.employeeLoanWriteOff.create({
         data: {
-          slug: await nextSlug("employeeLoanWriteOff", `writeoff-pinjaman-${writeOffDateRaw}`, { fallback: `writeoff-pinjaman-${writeOffDateRaw}-${loanId}` }),
+          slug: await nextSlugWithClient(tx as never, "employeeLoanWriteOff", `writeoff-pinjaman-${writeOffDateRaw}`, { fallback: `writeoff-pinjaman-${writeOffDateRaw}-${loanId}` }),
           loanId,
           amount: safeRound(remaining, 2),
           writeOffDate,

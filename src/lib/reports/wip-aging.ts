@@ -8,7 +8,7 @@
  * 0-30 / 31-60 / 61-90 / >90 hari.
  *
  * Batasan jujur:
- * - Hanya status berjalan yang dihitung (`in_progress`/`pending`/`draft` di
+ * - Hanya status berjalan yang dihitung (`draft`/`confirmed`/`in_progress` di
  *   builder disaring lagi agar loader yang berubah tidak membocorkan order
  *   selesai ke laporan). Order completed/cancelled bukan WIP berjalan.
  * - Total laporan adalah Σ sisa WIP order berjalan. Rekonsiliasi ke saldo
@@ -23,7 +23,11 @@
 
 import { safeRound } from "@/lib/utils/math"
 
-export const WIP_AGING_RUNNING_STATUSES = ["draft", "pending", "in_progress"] as const
+// Status berjalan PO nyata: draft → confirmed → in_progress. `pending`
+// adalah status WorkOrder, bukan ProductionOrder — memuatnya di sini dan
+// melewatkan `confirmed` membuat PO terkonfirmasi (sudah boleh menahan
+// biaya non-material) hilang dari laporan WIP (putaran 83).
+export const WIP_AGING_RUNNING_STATUSES = ["draft", "confirmed", "in_progress"] as const
 
 export type WipAgingBucketId = "d0_30" | "d31_60" | "d61_90" | "over90"
 

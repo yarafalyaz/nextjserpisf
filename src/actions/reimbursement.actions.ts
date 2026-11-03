@@ -238,11 +238,16 @@ export async function createReimbursementClaim(formData: FormData) {
           uploadedBy: Number(user.id),
         })
       }
+      // Putaran 83: pengajuan approval lahir dalam tx dokumen yang sama
+      // (pola createExpense/createAsset). Dipanggil sesudah commit, klaim
+      // bisa ter-commit tanpa baris Approval — assertApproved membaca
+      // tanpa-baris sebagai tanpa-workflow, jadi gerbang persetujuan
+      // hilang senyap dan approveExpense lolos tanpa approval.
+      await requestApprovalIfConfigured("Expense", created.id, Number(user.id), tx)
       return created
     })
 
     await logActivity("create", "Expense", claim.id, "Mengajukan klaim reimbursement")
-    await requestApprovalIfConfigured("Expense", claim.id, Number(user.id))
     revalidatePath(REVALIDATE)
     return {
       success: true as const,

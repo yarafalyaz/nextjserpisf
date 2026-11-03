@@ -1003,7 +1003,15 @@ describe("HR scope jalur approval generik (round2 temuan 2)", () => {
   it("putaran 52: reopenApproval LeaveRequest mereset dokumen ke pending, bukan draft", async () => {
     seedApproval({ status: "rejected", referenceType: "LeaveRequest", referenceId: 5, requestedBy: 2 });
     // HR dalam scope self: employee dokumen = employee aktor (7).
-    mocks.prismaMock.leaveRequest.findUnique.mockResolvedValue({ employeeId: 7 });
+    // Putaran 83: reopen menilai ulang gerbang domain — dokumen lengkap +
+    // tak ada bentrok (findFirst null) supaya gerbang lolos.
+    mocks.prismaMock.leaveRequest.findUnique.mockResolvedValue({
+      employeeId: 7,
+      type: "sick",
+      startDate: new Date("2026-06-15T00:00:00Z"),
+      endDate: new Date("2026-06-16T00:00:00Z"),
+    });
+    mocks.prismaMock.leaveRequest.findFirst = vi.fn().mockResolvedValue(null);
     mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 10 }]);
     const res: any = await actions.reopenApproval(1);
     expect(res.success).toBe(true);
@@ -1012,6 +1020,40 @@ describe("HR scope jalur approval generik (round2 temuan 2)", () => {
     expect(mocks.prismaMock.leaveRequest.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 5, status: "rejected" }, data: { status: "pending" } }),
     );
+  });
+
+  it("putaran 83: reopenApproval LeaveRequest ditolak bila kini bentrok dengan cuti lain", async () => {
+    silenceConsole();
+    seedApproval({ status: "rejected", referenceType: "LeaveRequest", referenceId: 5, requestedBy: 2 });
+    mocks.prismaMock.leaveRequest.findUnique.mockResolvedValue({
+      employeeId: 7,
+      type: "sick",
+      startDate: new Date("2026-06-15T00:00:00Z"),
+      endDate: new Date("2026-06-16T00:00:00Z"),
+    });
+    // Selama rejected, pengajuan lain mengambil tanggal yang sama.
+    mocks.prismaMock.leaveRequest.findFirst = vi.fn().mockResolvedValue({ id: 9 });
+    mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 10 }]);
+    const res: any = await actions.reopenApproval(1);
+    expect(res.success).toBe(false);
+    expect(String(res.error)).toContain("bentrok");
+    expect(mocks.prismaMock.leaveRequest.updateMany).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.approval.create).not.toHaveBeenCalled();
+  });
+
+  it("putaran 83: reopenApproval EmployeeLoan ditolak bila karyawan sudah nonaktif", async () => {
+    silenceConsole();
+    seedApproval({ status: "rejected", referenceType: "EmployeeLoan", referenceId: 5, requestedBy: 2 });
+    mocks.prismaMock.employeeLoan.findUnique.mockResolvedValue({ employeeId: 7 });
+    // Aktor super_admin: scope "all" tidak membaca employee, jadi bacaan
+    // hidup di gerbang reopen adalah panggilan findFirst pertama — null
+    // berarti karyawan dinonaktifkan selama dokumen rejected.
+    mocks.prismaMock.employee.findFirst.mockResolvedValue(null);
+    mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 10 }]);
+    const res: any = await actions.reopenApproval(1);
+    expect(res.success).toBe(false);
+    expect(String(res.error)).toContain("tidak ditemukan atau tidak aktif");
+    expect(mocks.prismaMock.employeeLoan.updateMany).not.toHaveBeenCalled();
   });
 
   it("reopenApproval non-HR tetap jalan (falsifikasi gerbang HR)", async () => {

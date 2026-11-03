@@ -284,6 +284,58 @@ export async function assertAnnualLeaveQuota(
   return null
 }
 
+/**
+ * Gerbang domain cuti lengkap (bentrok + batas statutori per kejadian +
+ * jatah tahunan), dipakai create/update pengajuan dan penilaian ulang saat
+ * approval yang ditolak dibuka kembali (putaran 83: reopen tidak boleh
+ * membangkitkan cuti yang kuota/bentroknya sudah berubah sejak penolakan).
+ * Return pesan error (string) bila ditolak, `null` bila lolos.
+ */
+export async function assertLeaveRequestGates(
+  db: Db,
+  input: {
+    employeeId: number
+    type: string
+    startDate: Date
+    endDate: Date
+    excludeId?: number
+  },
+): Promise<string | null> {
+  const { employeeId, type, startDate, endDate, excludeId } = input
+  const overlap = await db.leaveRequest.findFirst({
+    where: {
+      employeeId,
+      status: { in: ["pending", "approved"] },
+      startDate: { lte: endDate },
+      endDate: { gte: startDate },
+      ...(excludeId != null ? { id: { not: excludeId } } : {}),
+    },
+    select: { id: true },
+  })
+  if (overlap) {
+    return "Terdapat pengajuan cuti lain yang bentrok di tanggal yang sama. Hapus atau tolak yang lama terlebih dahulu."
+  }
+
+  // Cuti khusus statutori (Pasal 81 & 93 UU 13/2003): batas hari kalender
+  // per kejadian; gerbang jatah tahunan hanya berlaku untuk tipe "annual".
+  const specialCap = SPECIAL_LEAVE_DAY_CAPS[type]
+  if (specialCap != null) {
+    const calendarDays =
+      Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1
+    if (calendarDays > specialCap) {
+      return `Cuti jenis ini maksimal ${specialCap} hari per kejadian (diajukan ${calendarDays} hari).`
+    }
+  }
+
+  if (QUOTA_LEAVE_TYPES.has(type)) {
+    return assertAnnualLeaveQuota(employeeId, startDate, endDate, {
+      excludeLeaveId: excludeId,
+      db,
+    })
+  }
+  return null
+}
+
 export async function getLeaveQuota(
   employeeId: number,
   opts: { year?: number; now?: Date; excludeLeaveId?: number; db?: Db } = {},

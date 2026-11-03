@@ -69,6 +69,9 @@ beforeEach(() => {
   woFindUniqueMock.mockReset()
   woFindUniqueMock.mockResolvedValue({ status: "in_progress" })
   absorbedMock.mockClear()
+  // Kunci baris (PO/system_settings) tak mengembalikan baris berarti dalam
+  // harness ini; periode terbuka secara default (putaran 83).
+  executeRawMock.mockResolvedValue([{ id: 1, period_lock_date: null }])
 })
 
 describe("applyProductionCostDelta", () => {
@@ -208,6 +211,45 @@ describe("syncReworkCostToOrder", () => {
       where: { id: 55 },
       data: { totalActualCost: 0 },
     })
+  })
+
+  it("putaran 83: delta rework ditolak saat periode berjalan terkunci, sebelum baris biaya berubah", async () => {
+    costFindUniqueMock.mockResolvedValue(null)
+    executeRawMock.mockImplementation((strings: TemplateStringsArray) =>
+      Promise.resolve(
+        strings.join("").includes("system_settings")
+          ? [{ id: 1, period_lock_date: new Date("2999-01-01T00:00:00Z") }]
+          : [],
+      ),
+    )
+
+    await expect(syncReworkCostToOrder(base, client as never)).rejects.toThrow(
+      /Periode akuntansi sudah ditutup/,
+    )
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(costUpdateMock).not.toHaveBeenCalled()
+    expect(orderUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("putaran 83: delta nol tidak digerbang periode (tidak ada jurnal)", async () => {
+    costFindUniqueMock.mockResolvedValue({ id: 1, amount: 150000 })
+    orderFindUniqueMock.mockResolvedValue({ totalActualCost: 150000 })
+    orderUpdateMock.mockResolvedValue({})
+    executeRawMock.mockImplementation((strings: TemplateStringsArray) =>
+      Promise.resolve(
+        strings.join("").includes("system_settings")
+          ? [{ id: 1, period_lock_date: new Date("2999-01-01T00:00:00Z") }]
+          : [],
+      ),
+    )
+
+    const res = await syncReworkCostToOrder(base, client as never)
+
+    expect(res).toEqual({ posted: 150000, productionOrderId: 55 })
+    const sawSettingsLock = executeRawMock.mock.calls.some((call) =>
+      (call[0] as TemplateStringsArray).join("").includes("system_settings"),
+    )
+    expect(sawSettingsLock).toBe(false)
   })
 
   it("is a no-op when a cleared cost has no existing line", async () => {

@@ -24,6 +24,7 @@ const accrualMock = vi.fn()
 const paidMock = vi.fn()
 const expenseJournalMock = vi.fn()
 const assertApprovedMock = vi.fn()
+const requestApprovalMock = vi.fn(async (..._a: unknown[]) => false)
 const syncPettyCashMock = vi.fn()
 
 const txExpenseFindUniqueOrThrowMock = vi.fn()
@@ -94,7 +95,7 @@ vi.mock("@/lib/hooks/expense.hook", () => ({
   onExpenseApprovedSyncPettyCash: (...a: unknown[]) => syncPettyCashMock(...a),
 }))
 vi.mock("@/lib/services/approval-workflow.service", () => ({
-  requestApprovalIfConfigured: vi.fn(async () => false),
+  requestApprovalIfConfigured: (...a: unknown[]) => requestApprovalMock(...a),
   assertApproved: (...a: unknown[]) => assertApprovedMock(...a),
 }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: vi.fn() }))
@@ -136,6 +137,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   requirePermissionMock.mockResolvedValue({ id: 7, roles: ["karyawan"] })
   assertApprovedMock.mockResolvedValue(undefined)
+  requestApprovalMock.mockResolvedValue(false)
   syncPettyCashMock.mockResolvedValue(undefined)
   accrualMock.mockResolvedValue(undefined)
   paidMock.mockResolvedValue(undefined)
@@ -308,6 +310,25 @@ describe("createReimbursementClaim self-scope (AC-RB-B1/B6)", () => {
     expect(txQueryRawMock.mock.invocationCallOrder[0]).toBeLessThan(
       employeeFindUniqueMock.mock.invocationCallOrder[1],
     )
+  })
+
+  it("putaran 83: approval klaim diminta di dalam tx dokumen (argumen tx diteruskan)", async () => {
+    getHrScopeMock.mockResolvedValue({ kind: "self", employeeId: 5 })
+    employeeFindUniqueMock.mockResolvedValue({ id: 5, isActive: true, deletedAt: null, employmentEndedAt: null })
+    accountFindFirstMock.mockResolvedValue({ id: 610 })
+    expenseFindManyMock.mockResolvedValue([])
+    expenseCreateMock.mockResolvedValue({ id: 99, documentNo: "EXP-0001" })
+    const r = await createReimbursementClaim(form({
+      amount: "150000", date: "2026-10-25",
+    }))
+    expect(r.success).toBe(true)
+    expect(requestApprovalMock).toHaveBeenCalledTimes(1)
+    const args = requestApprovalMock.mock.calls[0] as unknown[]
+    expect(args[0]).toBe("Expense")
+    expect(args[1]).toBe(99)
+    // Argumen ke-4 wajib client transaksi dokumen (txMock harness), bukan
+    // undefined (panggilan pasca-commit di kode lama).
+    expect(args[3]).toBe(txMock)
   })
 
   it("user tanpa karyawan tertaut ditolak fail-closed", async () => {

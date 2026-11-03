@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 /**
- * Laporan Job Order menghitung biaya pekerjaan dari tiga sumber: bahan
- * (`MaterialIssue.workOrderId`), biaya produksi (`ProductionCost.workOrderId`
+ * Laporan Job Order menghitung biaya pekerjaan dari sumber-sumber: bahan
+ * (`MaterialIssue.workOrderId` jalur MI, atau
+ * `ProductionOrderMaterial.actualCost` jalur perintah produksi langsung),
+ * biaya produksi (`ProductionCost.workOrderId`
  * atau lewat perintah produksinya), dan hasil (`ProductionOrder.workOrderId` →
  * `completedQty`).
  *
@@ -19,6 +21,7 @@ const mocks = vi.hoisted(() => {
     materialIssue: { findMany: vi.fn().mockResolvedValue([]) },
     productionCost: { findMany: vi.fn().mockResolvedValue([]) },
     productionOrder: { findMany: vi.fn().mockResolvedValue([]) },
+    productionOrderMaterial: { findMany: vi.fn().mockResolvedValue([]) },
   }
   return { prismaMock: prismaMock as any }
 })
@@ -48,6 +51,7 @@ beforeEach(() => {
   mocks.prismaMock.materialIssue.findMany.mockResolvedValue([])
   mocks.prismaMock.productionCost.findMany.mockResolvedValue([])
   mocks.prismaMock.productionOrder.findMany.mockResolvedValue([])
+  mocks.prismaMock.productionOrderMaterial.findMany.mockResolvedValue([])
 })
 
 describe("loadJobOrderCost — data dari perintah produksi yang tertaut WO", () => {
@@ -111,6 +115,31 @@ describe("loadJobOrderCost — data dari perintah produksi yang tertaut WO", () 
 
     expect(cost.totals.productionCost).toBe(4.08)
     expect(cost.totals.totalCost).toBe(4.08)
+  })
+
+  it("putaran 83: bahan jalur perintah produksi langsung ikut sebagai biaya bahan", async () => {
+    // WO jalur PO eksklusif: tidak ada Material Issue sama sekali; bahan
+    // hanya hidup di ProductionOrderMaterial.actualCost (akumulasi FIFO
+    // issueMaterial) dan hasil selesai di PO yang sama.
+    mocks.prismaMock.productionOrder.findMany.mockResolvedValue([
+      { workOrderId: 1, completedQty: 5 },
+    ])
+    mocks.prismaMock.productionOrderMaterial.findMany.mockResolvedValue([
+      { actualCost: 35_000, productionOrder: { workOrderId: 1 } },
+      { actualCost: 15_000, productionOrder: { workOrderId: 1 } },
+      { actualCost: 9_999, productionOrder: { workOrderId: null } },
+    ])
+
+    const { cost } = await loadJobOrderCost(period)
+
+    expect(cost.totals.materialCost).toBe(50_000)
+    expect(cost.totals.completedQty).toBe(5)
+    expect(cost.totals.totalCost).toBe(50_000)
+    expect(mocks.prismaMock.productionOrderMaterial.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { productionOrder: { workOrderId: { in: [1] } } },
+      }),
+    )
   })
 
   it("mengabaikan pengeluaran material tanpa workOrderId (sisi orphan)", async () => {

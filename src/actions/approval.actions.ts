@@ -25,6 +25,8 @@ import { nextSlugWithClient } from "@/lib/utils/slug-db";
 import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope";
 import { computeOvertimeApprovalValue } from "@/lib/services/overtime-approval.service";
 import { notifyApprovalStepApprovers } from "@/lib/services/approval-workflow.service";
+import { assertLeaveRequestGates, resolveDayKind } from "@/lib/services/leave-quota.service";
+import { assertOvertimeWithinWorkdayLimits } from "@/lib/services/overtime-pay.service";
 
 type WorkflowStepInput = {
   name?: string;
@@ -718,6 +720,57 @@ export async function reopenApproval(approvalId: number) {
       assertApprovalPermission(user, refType);
 
       await assertHrScopeForApproval(tx, approval.referenceType, approval.referenceId, user);
+
+      // Putaran 83: dokumen SDM yang ditolak bisa berubah konteks selama
+      // menunggu — pengajuan lain menghabiskan jatah/bentrok/cap, atau
+      // karyawan dinonaktifkan. Membuka ulang tanpa menilai ulang gerbang
+      // domain membangkitkan dokumen yang tidak akan lolos create/edit
+      // hari ini dan bisa disetujui menembus gerbang itu. Nilai ulang di
+      // bawah kunci baris karyawan (urutan: approvals -> employees, sama
+      // seperti penulis SDM mengunci employees di dalam tx-nya).
+      const HR_REOPEN_GATE_TYPES = new Set(["LeaveRequest", "OvertimeRequest", "EmployeeLoan"]);
+      if (HR_REOPEN_GATE_TYPES.has(refType)) {
+        const gateModelKey = refType.charAt(0).toLowerCase() + refType.slice(1);
+        const gateDoc = await (tx as any)[gateModelKey].findUnique({
+          where: { id: refId },
+          select: {
+            employeeId: true,
+            ...(refType === "LeaveRequest"
+              ? { type: true, startDate: true, endDate: true }
+              : refType === "OvertimeRequest"
+                ? { date: true, hours: true }
+                : {}),
+          },
+        });
+        if (!gateDoc) throw new Error(`Dokumen ${refType} #${refId} tidak ditemukan.`);
+        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${gateDoc.employeeId} FOR UPDATE`;
+        const live = await tx.employee.findFirst({
+          where: { id: gateDoc.employeeId, isActive: true, deletedAt: null },
+          select: { id: true },
+        });
+        if (!live) throw new Error("Karyawan tidak ditemukan atau tidak aktif");
+        if (refType === "LeaveRequest") {
+          const gateError = await assertLeaveRequestGates(tx as never, {
+            employeeId: gateDoc.employeeId,
+            type: gateDoc.type,
+            startDate: gateDoc.startDate,
+            endDate: gateDoc.endDate,
+            excludeId: refId,
+          });
+          if (gateError) throw new Error(gateError);
+        } else if (refType === "OvertimeRequest") {
+          await assertOvertimeWithinWorkdayLimits(
+            tx as never,
+            (empId, d) => resolveDayKind(empId, d, tx as never),
+            {
+              employeeId: gateDoc.employeeId,
+              date: gateDoc.date,
+              hours: Number(gateDoc.hours),
+              excludeId: refId,
+            },
+          );
+        }
+      }
 
       // Reset source document status — klaim kondisional:
       // count 0 berarti dokumen tidak lagi 'rejected' (pindah jalur oleh
