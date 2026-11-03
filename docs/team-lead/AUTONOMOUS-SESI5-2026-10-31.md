@@ -3010,3 +3010,21 @@ Sumber: verifikasi sesi utama atas CATAT putaran 101 (baris 2909) ditambah pemba
 - Hijau: 5 suite terkait 298/298; guard statis 9 berkas 205/205 (`schema-usage`, `silent-failure`, `wired-transition-actions`, `navigation-targets`, `action-wiring`, `action-guard-coverage`, `permission-seed-parity`, `api-route-guard`, `status-actions-gating`, `--no-file-parallelism`); `npx tsc --noEmit` 0 (tanpa pipe); ESLint berkas berubah 0; `git diff --check` bersih.
 - CI `41698078323` (head `27b540061`) **success**; CI `41700513503` (head `d720c4afd`) **success**.
 - Koreksi catatan: baris 2909 putaran 101 menyebut dampaknya "stale-check `assertApproved` menutup posting". Verifikasi ulang menunjukkan dampaknya lebih berat — buntu permanen tanpa jalur reopen — sehingga dinaikkan dari CATAT ke FIX putaran ini.
+
+## Putaran 107 — tolak/revisi penawaran menutup approval pending yatim (commit `c41ac3682`)
+
+Sumber: verifikasi sesi utama atas putaran 105/106 — pembacaan ulang peta klaim `APPROVE_CLAIMS`/`REJECT_CLAIMS` (`src/lib/approval/claims.ts`) terhadap **setiap** penulis status `Quotation`. Pola putaran: "dokumen dipindah ke status yang tak pernah diterima klaim approval-nya sendiri".
+
+### Vonis FIX
+1. **`rejectQuotation` dan `reviseQuotation` meninggalkan approval `pending` yang mustahil diselesaikan — FIX.** Klaim Quotation hanya `from: ["draft","sent"]` di kedua peta (`claims.ts`), sementara `decideQuotation` (dipakai `acceptQuotation`/`rejectQuotation`) menulis `status: decision.status` (`rejected`) dan `reviseQuotation` menulis `status: "draft"` + `revisionNumber + 1`. Approval yang lahir di `sendQuotation` (F-37(a) — titik inisiasi sengaja di kirim, bukan di buat) tak pernah punya pre-state yang cocok lagi: setiap klik Setujui/Tolak berbalas 409 selamanya, barisnya mengotori antrean, dan `updateApprovalWorkflow`/`deleteApprovalWorkflow` menolak selama `pendingCount > 0` — konfigurasi alur Quotation terkunci permanen. Kelas yang sama persis dengan `cancelPurchaseOrder` putaran 105. Perbaikan: sapuan `approval.deleteMany` di dalam tx yang sama, **hanya** `status: "pending"` — baris `approved`/`rejected` adalah jejak keputusan atas dokumen yang barisnya tetap ada. Jalur accept berada di fungsi yang sama tetapi no-op: `acceptQuotation` sudah digerbang `assertApproved`, jadi pending tak mungkin ada di sana.
+2. **Revisi juga menutup approval pending karena isinya diganti — FIX (bagian dari butir 1).** `reviseQuotation` menaikkan nomor revisi dan mengganti total; membiarkan approval pending berarti approver dapat menyetujui isi yang sudah tidak ada. Alasan tambahan yang berdiri sendiri dari 409 di atas.
+
+### Vonis CATAT
+- `reopenApproval` hanya menerima `rejected`; tidak ada jalur memulihkan approval `approved` yang basi. Putaran 106 menutup kasus Quotation lewat pengajuan ulang se-tx, tetapi tipe lain di `STALE_ON_EDIT_TYPES` yang jalur editnya menggerbang ke `draft` aman hanya karena gerbang itu — bila suatu saat salah satunya dilonggarkan, kelas buntu yang sama kembali. Dicatat sebagai aturan desain, bukan bug.
+- Penyapuan approval di jalur void/cancel yang barisnya tetap ada masih belum seragam antar modul (putaran 106 CATAT, belum diputuskan). Putaran ini tidak mengubahnya; sapuan status `pending` di sini mengikuti pola `cancelPurchaseOrder`.
+
+### Bukti
+- Merah perintah terpisah: `src/actions/__tests__/sales.actions.test.ts` sebelum patch → `2 failed | 259 passed (261)`, kedua tes baru gagal pada `expected "vi.fn()" to be called with arguments: [ { where: { …(3) } } ] Number of calls: 0`.
+- Hijau: berkas sama 261/261; lima suite terkait 383/383; delapan guard statis 202/202 (`schema-usage`, `silent-failure`, `wired-transition-actions`, `navigation-targets`, `action-wiring`, `permission-seed-parity`, `api-route-guard`, `status-actions-gating`, `--no-file-parallelism`); `npx tsc --noEmit` 0 (tanpa pipe); ESLint berkas berubah 0; `git diff --check` bersih.
+- CI `41704640513` (head `c41ac3682`) **success**.
+- DB dev: 0 baris `Approval` untuk `referenceType = "Quotation"`, jadi tidak ada yatim warisan yang perlu dibersihkan.
