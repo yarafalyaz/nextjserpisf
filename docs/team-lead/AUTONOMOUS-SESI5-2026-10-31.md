@@ -2701,3 +2701,15 @@ Semua kandidat 3 agent diverifikasi sesi utama terhadap kode aktual + `prisma/sc
 
 ### Bukti
 - Merah tepat 4 kontrak baru (konstanta SO ×3 permukaan test + tapis hidup). Hijau: batch laporan 2514/2514 (292 berkas), guard 200/200, tsc/lint/diff-check bersih. CI `41597714781` (head `5e8f8c1b2`) **success** tanpa susulan.
+
+## Putaran 91 — scope perencanaan/ROP, varians, WIP, biaya PO-direct (commit `684c9a399`, CI `41599456637` success)
+
+### Vonis FIX
+1. Scope gudang Perencanaan Material hanya menyaring daftar — FIX: `loadMaterialPlanning(scopeWarehouseIds)` meneruskan scope ke `loadReorderPoints`; agregat barang, totals, dan prefill permintaan kini dihitung dari pair scoped, bukan global.
+2. Kartu ROP Stok Minimum tanpa scope — FIX: halaman meneruskan `scopeIds` yang sama ke `loadReorderPoints`; loader menerapkan scope ke setting per gudang, layer, dan issue material. Incoming PO tetap per barang karena PO tidak punya `warehouseId`.
+3. Varians produksi memuat PO `draft` — FIX: builder membuang draft; PO belum confirm belum boleh issue sehingga aktual selalu 0 dan varians -100% hanya mengotori total.
+4. WIP berjalan memuat PO masa depan — FIX: loader membatasi `createdAt <= asOf`, builder juga membuang PO yang lahir sesudah snapshot.
+5. Estimasi-vs-aktual kehilangan bahan PO-direct — FIX: loader menjumlahkan `ProductionOrderMaterial.actualCost` per Work Order, jalur yang sama seperti biaya pekerjaan kanonis dan eksklusif dari MaterialIssue/ProductionCost.
+
+### Bukti
+- Merah tepat 5 kontrak/assertion yang diperbarui. Hijau: batch laporan 2519/2519 (292 berkas), guard 200/200, tsc/lint/diff-check bersih. Catatan: test scope ROP memakai mock yang mengabaikan `where`, jadi mengunci kontrak query tiga delegate, bukan hasil baris tersaring. CI `41599456637` (head `684c9a399`) **success** tanpa susulan.
