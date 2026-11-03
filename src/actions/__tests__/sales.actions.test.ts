@@ -89,6 +89,9 @@ const mocks = vi.hoisted(() => {
     inventoryLayer: buildModelMock(),
     transactionAttachment: buildModelMock(),
     approvalWorkflow: buildModelMock(),
+    // requestApprovalIfConfigured membaca langkah workflow untuk notifikasi
+    // approver (notifyNewApprovalStep) — di luar try/catch helper notifikasi.
+    approvalWorkflowStep: buildModelMock(),
     approval: buildModelMock(),
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") {
@@ -164,7 +167,11 @@ vi.mock("@/lib/services/document-sequence.service", () => ({
   DocumentSequenceService: { next: () => Promise.resolve(42) },
 }));
 
-vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug") }))
+vi.mock("@/lib/utils/slug-db", () => ({
+  nextSlug: vi.fn(async () => "test-slug"),
+  // requestApprovalIfConfigured membuat slug approval lewat delegate tx.
+  nextSlugWithClient: vi.fn(async () => "test-slug"),
+}))
 
 vi.mock("@/lib/utils/safe-parse", async (importOriginal) => {
   const actual: any = await importOriginal()
@@ -627,6 +634,49 @@ describe("Quotation Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("Kendaraan pelanggan tidak aktif")
     expect(mocks.prismaMock.quotation.update).not.toHaveBeenCalled()
+  })
+  it("putaran 106: updateQuotation mengajukan ulang approval bila penawaran sudah punya approval", async () => {
+    // Penawaran approved yang diedit: approval final jadi basi (STALE_ON_EDIT)
+    // sehingga konversi SO menolak, sementara reopenApproval hanya menerima
+    // rejected. Edit wajib membuka pengajuan baru atomik (pola updateJournal).
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved", customerId: 1 })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({
+      id: 1, status: "approved", revisionNumber: 3, customerId: 1,
+      // updatedAt sesudah approval final = approval basi (STALE_ON_EDIT).
+      updatedAt: new Date("2026-10-02T00:00:00Z"),
+    })
+    mocks.prismaMock.approval.findFirst.mockResolvedValue({
+      id: 9, status: "approved", completedAt: new Date("2026-10-01T00:00:00Z"),
+    })
+    // requestApprovalIfConfigured mengunci workflow lewat $queryRaw FOR UPDATE
+    // (bukan findFirst) — tanpa baris terkunci ia mengembalikan false. Once:
+    // clearAllMocks tidak membuang implementasi, dan lock yang sama dipakai
+    // postInvoice/sendQuotation di tes lain (wajib tetap kosong).
+    mocks.prismaMock.$queryRaw.mockResolvedValueOnce([{ id: 10 }])
+    mocks.prismaMock.approval.create.mockResolvedValue({ id: 12 })
+
+    const res = await actions.updateQuotation(1, fdQuotation({ customerId: 1, sections: [], discount: 0, tax: 0 }))
+
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.approval.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ referenceType: "Quotation", referenceId: 1, status: "pending" }),
+    })
+  })
+  it("putaran 106: penawaran draft tanpa approval TIDAK diajukan (titik inisiasi tetap di kirim)", async () => {
+    // F-37(a): penawaran baru diajukan saat sendQuotation. Mengajukannya di
+    // jalur edit menggeser titik inisiasi — approver menyetujui draft lalu
+    // sendQuotation (draft-only) menolak mengirim selamanya.
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", customerId: 1 })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ id: 1, status: "draft", revisionNumber: 3, customerId: 1 })
+    mocks.prismaMock.approval.findFirst.mockResolvedValue(null)
+    // Workflow AKTIF: tanpa guard "sudah ada approval", requestApprovalIfConfigured
+    // akan benar-benar membuat baris pending — guard-lah yang menahannya.
+    mocks.prismaMock.$queryRaw.mockResolvedValueOnce([{ id: 10 }])
+
+    const res = await actions.updateQuotation(1, fdQuotation({ customerId: 1, sections: [], discount: 0, tax: 0 }))
+
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.approval.create).not.toHaveBeenCalled()
   })
   it("updateQuotation fails on invalid json", async () => {
     const res = await actions.updateQuotation(1, fdMap({ data: "invalid json" }))

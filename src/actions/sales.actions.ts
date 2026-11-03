@@ -966,6 +966,28 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
 
     // F-2026-10-22-063-S: evaluasi ulang snapshot fitment tiap simpan.
     await stampQuotationFitmentSnapshot(tx, quotationId)
+
+    // Putaran 106: penawaran ada di STALE_ON_EDIT_TYPES — approval final yang
+    // lebih tua dari edit terakhir membuat assertApproved fail-closed. Tetapi
+    // updateQuotation satu-satunya tipe basi yang TIDAK mengajukan ulang
+    // (Journal/VendorPayment/StockAdjustment/SalesInvoice/Asset/Project sudah),
+    // padahal edit status approved diizinkan (hanya cancelled + pelunasan nyata
+    // yang ditolak). Tanpa baris ini penawaran approved yang diedit terkunci
+    // permanen: konversi SO menolak "ajukan ulang", sementara reopenApproval
+    // hanya menerima rejected.
+    //
+    // Hanya bila approval SUDAH pernah diajukan: penawaran draft tanpa approval
+    // sengaja baru diajukan saat sendQuotation (F-37(a)). Mengajukannya di sini
+    // memindahkan titik inisiasi — approver bisa menyetujui draft, statusnya
+    // menjadi approved, dan sendQuotation (draft-only) menolak mengirim
+    // selamanya. Atomik dengan edit; tanpa workflow no-op.
+    const existingApproval = await tx.approval.findFirst({
+      where: { referenceType: "Quotation", referenceId: quotationId },
+      select: { id: true },
+    })
+    if (existingApproval) {
+      await requestApprovalIfConfigured("Quotation", quotationId, Number(user.id), tx)
+    }
   })
 
   // Re-sync linked SO/Invoice items
