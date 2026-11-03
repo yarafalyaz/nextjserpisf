@@ -75,6 +75,21 @@ describe("loadScrapMaterialReport — jurnal scrap REVERSED tidak terhitung (TAS
   })
 })
 
+describe("saring MI completed (putaran 99)", () => {
+  it("query laporan MI menyaring status completed — draft tak menyajikan scrap rencana", async () => {
+    await loadScrapMaterialReport(start, end)
+    const where = mocks.prismaMock.materialIssueItem.findMany.mock.calls[0][0].where
+    expect(where.materialIssue.status).toBe("completed")
+    expect(where.materialIssue.date).toEqual({ gte: start, lte: end })
+  })
+
+  it("query antrean tinjau menyaring status completed", async () => {
+    await loadScrapReviewQueue(start, end)
+    const where = mocks.prismaMock.materialIssueItem.findMany.mock.calls[0][0].where
+    expect(where.materialIssue.status).toBe("completed")
+  })
+})
+
 describe("loadScrapReviewQueue (butir c)", () => {
   it("gabung MI+PO menunggu_tinjau, urut tanggal, label alasan + kategori terpetakan", async () => {
     mocks.prismaMock.materialIssueItem.findMany.mockResolvedValue([

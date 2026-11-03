@@ -100,6 +100,11 @@ describe("loadVatInvoices return deduction period (round 18)", () => {
     const feb = await loadVatInvoices(period)
     expect(feb.report.input.vat).toBe(1_100_000)
     expect(feb.report.input.count).toBe(2)
+    // Putaran 99: kolom rekonsiliasi — total grup = Σ(DPP + PPN tampil).
+    // BILL-5 (PPN ditolkan): 100jt + 0; BILL-6: 10jt + 1,1jt.
+    expect(feb.report.input.dpp).toBe(110_000_000)
+    expect(feb.report.input.total).toBe(111_100_000)
+    expect(feb.report.input.total).toBe(feb.report.input.dpp + feb.report.input.vat)
   })
 
   it("query retur mengambil kandidat dari tanggal retur ATAU tanggal nota", async () => {

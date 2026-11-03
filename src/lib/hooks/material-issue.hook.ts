@@ -230,6 +230,12 @@ export async function onMaterialIssueCompleted(
         await tx.materialIssueItem.update({
           where: { id: item.id },
           data: {
+            // Putaran 99: tulis balik biaya FIFO aktual ke baris. `cost`
+            // lahir dari payload form (bisa 0/manual); pembaca biaya
+            // pekerjaan (job-order) mengalikan qty x cost baris, jadi
+            // tanpa writeback ini biaya job menyimpang dari StockMove +
+            // jurnal yang sama-sama memakai unitCost FIFO di bawah.
+            cost: unitCost,
             scrapClassifiedAt: new Date(),
             scrapPlannedQtySnapshot: plannedQty,
             scrapNormalQtySnapshot: classification.normalQty,

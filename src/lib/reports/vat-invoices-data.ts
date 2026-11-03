@@ -247,19 +247,26 @@ export async function loadVatInvoices(period: {
     vatShown: head ? head.taxAmount : Number(invoice.taxAmount),
     totalShown: head ? chainHeadTotal(head) : Number(invoice.grandTotal),
   }))
-  const inputDocs = applyChainHeads(vendorBills, taxInvoices, "vendorBillId", (bill, head) => ({
-    ...bill,
-    dppShown: head ? head.dpp : vatDpp(bill.subtotal, bill.discountAmount),
+  const inputDocs = applyChainHeads(vendorBills, taxInvoices, "vendorBillId", (bill, head) => {
+    const dppShown = head ? head.dpp : vatDpp(bill.subtotal, bill.discountAmount)
     // Tanpa TaxInvoice, PPN bill hanya bisa dikreditkan bila nomor faktur
     // pajaknya valid — jurnal melewati kaki PPN Masukan selain itu
     // (accounting.hook), read-model SPT menolkannya juga.
-    vatShown: head
+    const vatShown = head
       ? head.taxAmount
       : isValidVendorTaxInvoiceNumber(bill.taxInvoiceNumber ?? null)
         ? Number(bill.tax)
-        : 0,
-    totalShown: head ? chainHeadTotal(head) : Number(bill.grandTotal),
-  }))
+        : 0
+    return {
+      ...bill,
+      dppShown,
+      vatShown,
+      // Putaran 99: total baris = DPP + PPN yang DITAMPILKAN. grandTotal
+      // mentah memuat PPN penuh, jadi bill bernomor invalid (vatShown 0)
+      // membuat kolom tak rekonsiliasi dan menggelembungkan total grup.
+      totalShown: head ? chainHeadTotal(head) : safeAdd(dppShown, vatShown, 2),
+    }
+  })
 
   const output: VatInvoiceInput[] = outputDocs.map((invoice) => ({
     date: invoice.date,

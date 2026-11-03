@@ -82,8 +82,11 @@ export async function loadWarehouseLowStock(): Promise<WarehouseLowStockLine[]> 
   }
   if (qtyByPair.size === 0) return []
   const warehouseIds = [...new Set([...qtyByPair.values()].map((p) => p.warehouseId))]
+  // Putaran 99: peringatan stok hanya untuk gudang hidup. Gudang nonaktif/
+  // terhapus tetap punya lapisan sisa, tetapi mengingatkan pengguna soal
+  // gudang yang sudah dimatikan adalah noise operasional.
   const warehouses = await prisma.warehouse.findMany({
-    where: { id: { in: warehouseIds } },
+    where: { id: { in: warehouseIds }, isActive: true, deletedAt: null },
     select: { id: true, name: true },
   })
   const warehouseNameById = new Map(warehouses.map((w) => [w.id, w.name]))
@@ -91,7 +94,7 @@ export async function loadWarehouseLowStock(): Promise<WarehouseLowStockLine[]> 
   return findWarehouseLowStock({
     items: items.map((i) => ({ id: i.id, name: i.name, minStock: Number(i.minStock) })),
     settings: settings.map((s) => ({ itemId: s.itemId, warehouseId: s.warehouseId, minStock: s.minStock == null ? null : Number(s.minStock) })),
-    pairs: [...qtyByPair.values()].map((p) => ({
+    pairs: [...qtyByPair.values()].filter((p) => warehouseNameById.has(p.warehouseId)).map((p) => ({
       itemId: p.itemId,
       itemName: itemById.get(p.itemId)?.name ?? `#${p.itemId}`,
       warehouseId: p.warehouseId,

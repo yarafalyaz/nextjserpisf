@@ -190,6 +190,19 @@ describe("findRecalibrationCandidates (F-2026-10-21-010)", () => {
     expect(candidates[0].suggestedStandardCost).toBe(56_000)
   })
 
+  it("putaran 99: PO draft tak ikut rantai dan tak menyumbang qty usulan", () => {
+    // Draft belum boleh issue (aktual 0): standar penuhnya menekan persen
+    // periode pertama sekaligus. Qa diabaikan, kandidat tetap lahir hanya
+    // dari dua order hot.
+    const candidates = findRecalibrationCandidates({
+      periods: [[order({ id: 90, status: "draft" }), hotOrder(1)], [hotOrder(2)]],
+      thresholdPct: 5,
+      consecutivePeriods: 2,
+    })
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0].suggestedStandardCost).toBe(56_000)
+  })
+
   it("falsifikasi: rantai putus satu periode (item absen) → bukan kandidat", () => {
     const candidates = findRecalibrationCandidates({
       periods: [[hotOrder(1)], [], [hotOrder(3)], [hotOrder(4)]],

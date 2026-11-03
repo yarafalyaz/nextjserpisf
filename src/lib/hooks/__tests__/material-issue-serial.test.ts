@@ -114,6 +114,22 @@ describe("material issue serial attribution", () => {
     )
   })
 
+  it("putaran 99: tulis balik biaya FIFO aktual ke cost baris saat complete", async () => {
+    // Fixture beforeEach: consumedCost 200 untuk qty 2 → unitCost 100,
+    // sedangkan cost payload 999. Pembaca biaya pekerjaan membaca cost
+    // baris, jadi writeback wajib nilai FIFO aktual, bukan payload.
+    const spies = wireTx([{ id: 58, itemId: 3, qty: 2, cost: 999 }])
+
+    await onMaterialIssueCompleted(7, 9)
+
+    expect(spies.issueItemUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 58 },
+        data: expect.objectContaining({ cost: 100, scrapUnitCostSnapshot: 100 }),
+      }),
+    )
+  })
+
   it("falls back to auto-FIFO (null serials) when no selection is provided", async () => {
     wireTx([{ id: 56, itemId: 3, qty: 2, cost: 100 }])
 

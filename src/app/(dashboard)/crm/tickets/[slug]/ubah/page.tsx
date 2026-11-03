@@ -45,7 +45,32 @@ export default async function EditPage({
     resolutionNotes: data.resolutionNotes,
   }
 
-  const [customers, users] = await Promise.all([prisma.customer.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }), prisma.user.findMany({ orderBy: { name: "asc" } })])
+  // Putaran 99: daftar pilihan hanya entitas hidup, seperti halaman tambah.
+  // Tautan yang sudah terpasang tetap dimuat walau entitasnya kini nonaktif:
+  // server memang mengizinkan edit tanpa mengganti tautan lama, jadi
+  // menghilangkannya dari Combobox membuat simpan mengubah nilai senyap.
+  const [customers, users] = await Promise.all([
+    prisma.customer.findMany({
+      where: {
+        OR: [
+          { isActive: true, deletedAt: null },
+          ...(data.customerId != null ? [{ id: data.customerId }] : []),
+        ],
+      },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.user.findMany({
+      where: {
+        OR: [
+          { isActive: true },
+          ...(data.assignedTo != null ? [{ id: data.assignedTo }] : []),
+        ],
+      },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+  ])
 
   return (
     <div className="flex flex-col gap-6">

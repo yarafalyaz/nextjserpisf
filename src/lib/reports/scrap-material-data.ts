@@ -51,7 +51,9 @@ export async function loadScrapReviewQueue(start: Date, end: Date): Promise<Scra
     prisma.materialIssueItem.findMany({
       where: {
         scrapReviewStatus: SCRAP_REVIEW_STATUS_PENDING,
-        materialIssue: { date: { gte: start, lte: end } },
+        // Putaran 99: snapshot tinjau hanya lahir saat complete; kunci
+        // status eksplisit agar draft tak pernah masuk antrean.
+        materialIssue: { status: "completed", date: { gte: start, lte: end } },
       },
       select: { ...pendingSelect, materialIssue: { select: { documentNo: true, date: true } } },
       orderBy: { id: "asc" },
@@ -111,7 +113,10 @@ export async function loadScrapMaterialReport(start: Date, end: Date): Promise<S
     prisma.materialIssueItem.findMany({
       where: {
         scrapQty: { gt: 0 },
-        materialIssue: { date: { gte: start, lte: end } },
+        // Putaran 99: scrapQty baris DRAFT adalah input belum terbit —
+        // klasifikasi normal/abnormal baru dibekukan saat complete.
+        // Tanpa status ini laporan menyajikan scrap rencana sebagai aktual.
+        materialIssue: { status: "completed", date: { gte: start, lte: end } },
       },
       select: {
         id: true,

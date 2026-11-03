@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma"
 import { isValidCronRequest } from "@/lib/security/cron"
 import { apiError } from "@/lib/api-response"
 import { SalesStatus, Status } from "@/lib/constants"
+import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 
 /**
  * Cron: Auto-reject quotations that have been in 'sent' status for more than 14 days.
@@ -24,14 +25,18 @@ export async function POST(request: Request) {
     const days = 14
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - days)
-    const now = new Date()
+    // Putaran 99: validUntil disimpan tengah malam UTC hari kalender WIB dan
+    // hari itu sendiri masih berlaku (kontrak assertQuotationNotExpired di
+    // sales.actions). Membandingkan instant `now` menolak penawaran pada
+    // hari terakhir masa berlakunya.
+    const todayWib = getWibTodayUtcDate()
 
     const staleQuotations = await prisma.quotation.findMany({
       where: {
         status: SalesStatus.SENT,
         deletedAt: null,
         OR: [
-          { validUntil: { lt: now } },
+          { validUntil: { lt: todayWib } },
           { validUntil: null, updatedAt: { lt: cutoffDate } },
         ],
       },

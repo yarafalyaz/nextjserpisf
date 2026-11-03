@@ -232,6 +232,22 @@ describe("POST /api/cron/auto-reject-quotations", () => {
     expect(ageMs).toBeLessThan(15 * 24 * 3600 * 1000)
   })
 
+  it("putaran 99: batas validUntil = tengah malam UTC hari WIB ini, bukan instant sekarang", async () => {
+    // validUntil disimpan tengah malam UTC hari kalender WIB; hari itu
+    // sendiri masih berlaku. Batas `lt` wajib tepat tengah malam UTC hari
+    // ini — instant berjalan menolak penawaran di hari terakhirnya.
+    mocks.quotationFindMany.mockResolvedValue([])
+    await POST(makeReq())
+    const where = (mocks.quotationFindMany.mock.calls[0][0] as any).where
+    const lt: Date = where.OR[0].validUntil.lt
+    expect(lt.getUTCHours()).toBe(0)
+    expect(lt.getUTCMinutes()).toBe(0)
+    expect(lt.getUTCSeconds()).toBe(0)
+    const wibNow = new Date(Date.now() + 7 * 3600 * 1000)
+    expect(lt.getUTCDate()).toBe(wibNow.getUTCDate())
+    expect(lt.getUTCMonth()).toBe(wibNow.getUTCMonth())
+  })
+
   it("F-36(c): penawaran masih berlaku tidak masuk kandidat hanya karena updatedAt tua", async () => {
     // Query OR adalah satu-satunya gerbang kandidat: baris validUntil masa depan
     // tidak cocok cabang mana pun (cabang 1 validUntil<now gagal, cabang 2 butuh null).

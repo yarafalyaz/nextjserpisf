@@ -2484,6 +2484,14 @@ export async function updateProductionOrder(id: number, formData: FormData) {
     const poDocumentNo = po.documentNo;
 
     const productionOrder = await prisma.$transaction(async (tx) => {
+      // Putaran 99: urutan kunci global WO -> PO. Relink menilai WO target
+      // di bawah kunci barisnya; mengunci PO dulu baru WO membalik urutan
+      // issueMaterial/completeProductionOrder (WO -> PO) dan membuka
+      // deadlock. WO target diketahui dari payload sebelum tx; penilaian
+      // status PO tetap di bawah kunci baris PO sesudahnya.
+      if (v.workOrderId != null) {
+        await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${v.workOrderId} FOR UPDATE`;
+      }
       // Lock + re-check status INSIDE the transaction. The pre-check above is a
       // fast path only; without this, an approve/issue that lands between the
       // read and the update would let this call wipe the order's materials

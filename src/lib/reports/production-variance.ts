@@ -212,6 +212,10 @@ export function findRecalibrationCandidates(input: {
   periods.forEach((orders, periodIndex) => {
     const agg = new Map<number, { absPrice: number; standardTotal: number; weighted: number; qty: number }>()
     for (const order of orders) {
+      // Putaran 99: populasi sama dengan builder utama (putaran 91) — PO
+      // draft belum boleh issue (aktual 0), jadi standar draft menekan /
+      // menggelembungkan persen varians harga kandidat rekalibrasi.
+      if (order.status === "draft") continue
       for (const material of order.materials) {
         const line = splitMaterialVariance(material)
         if (line.uncalibrated) continue

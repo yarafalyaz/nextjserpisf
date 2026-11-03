@@ -1427,6 +1427,28 @@ describe("Production Order Actions", () => {
     })
   })
 
+  it("putaran 99: updateProductionOrder mengunci WO target sebelum PO (urutan global WO->PO)", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({ id: 1, materials: [] })
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 9, status: "in_progress" })
+    const sqlSeen: string[] = []
+    mocks.prismaMock.$queryRaw.mockImplementation((...a: any[]) => {
+      const first = a[0]
+      sqlSeen.push(Array.isArray(first) ? first.join("?") : ((first as any)?.strings?.join("?") ?? String(first ?? "")))
+      return Promise.resolve([])
+    })
+    const res = await actions.updateProductionOrder(1, fdMap({
+      productId: 1,
+      qty: 10,
+      workOrderId: 9,
+    }))
+    expect(res?.success).toBe(true)
+    const woLockIdx = sqlSeen.findIndex((s) => /work_orders/i.test(s) && /for update/i.test(s))
+    const poLockIdx = sqlSeen.findIndex((s) => /production_orders/i.test(s) && /for update/i.test(s))
+    expect(woLockIdx).toBeGreaterThanOrEqual(0)
+    expect(poLockIdx).toBeGreaterThan(woLockIdx)
+  })
+
   it("putaran 72: updateProductionOrder menilai ulang rollup produk dalam tx", async () => {
     // Bacaan luar biaya 100 (basi); baris segar dalam tx biaya 250. Tx dan
     // klien global berbagi mock di harness ini, jadi bacaan berurutan
