@@ -12,6 +12,8 @@ const entryCreateMany = vi.fn()
 const entryDeleteMany = vi.fn()
 const periodOpen = vi.fn()
 const executeRaw = vi.fn()
+const entryFindMany = vi.fn()
+const reconItemFindFirst = vi.fn()
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {},
@@ -37,6 +39,10 @@ const tx = {
   journalEntry: {
     createMany: (...a: unknown[]) => entryCreateMany(...a),
     deleteMany: (...a: unknown[]) => entryDeleteMany(...a),
+    findMany: (...a: unknown[]) => entryFindMany(...a),
+  },
+  bankReconciliationItem: {
+    findFirst: (...a: unknown[]) => reconItemFindFirst(...a),
   },
 }
 
@@ -67,6 +73,8 @@ beforeEach(() => {
   entryDeleteMany.mockResolvedValue({ count: 0 })
   periodOpen.mockResolvedValue(undefined)
   executeRaw.mockResolvedValue(1)
+  entryFindMany.mockResolvedValue([{ id: 101 }, { id: 102 }])
+  reconItemFindFirst.mockResolvedValue(null)
 })
 
 describe("reverseJournalsByReferenceTx (P1-7)", () => {
@@ -101,6 +109,27 @@ describe("reverseJournalsByReferenceTx (P1-7)", () => {
     // Nothing deleted.
     expect(journalDelete).not.toHaveBeenCalled()
     expect(entryDeleteMany).not.toHaveBeenCalled()
+  })
+
+  it("putaran 86: menolak reversal bila entri pada rekonsiliasi completed", async () => {
+    journalFindMany
+      .mockResolvedValueOnce([POSTED])
+      .mockResolvedValueOnce([{ id: 5, status: "POSTED", transactionDate: POSTED.transactionDate }])
+    reconItemFindFirst.mockResolvedValue({ id: 900 })
+
+    await expect(
+      reverseJournalsByReferenceTx(tx as never, "SalesInvoice", 7, "void faktur #7", 1),
+    ).rejects.toThrow("rekonsiliasi bank final")
+    expect(journalCreate).not.toHaveBeenCalled()
+    expect(journalUpdate).not.toHaveBeenCalled()
+    expect(reconItemFindFirst).toHaveBeenCalledWith({
+      where: {
+        journalEntryId: { in: [101, 102] },
+        matched: true,
+        bankReconciliation: { status: "completed" },
+      },
+      select: { id: true },
+    })
   })
 
   it("is idempotent: skips journals that already have a reversal", async () => {

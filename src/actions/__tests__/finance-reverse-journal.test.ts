@@ -13,6 +13,8 @@ const journalUpdateManyMock = vi.fn()
 const journalUpdateMock = vi.fn()
 const journalCreateMock = vi.fn()
 const entryCreateManyMock = vi.fn()
+const entryFindManyMock = vi.fn()
+const reconItemFindFirstMock = vi.fn()
 const transactionMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
@@ -62,6 +64,8 @@ beforeEach(() => {
     journalUpdateMock,
     journalCreateMock,
     entryCreateManyMock,
+    entryFindManyMock,
+    reconItemFindFirstMock,
     transactionMock,
   ]) m.mockReset()
 
@@ -95,12 +99,15 @@ beforeEach(() => {
       update: journalUpdateMock,
       create: journalCreateMock,
     },
-    journalEntry: { createMany: entryCreateManyMock },
+    journalEntry: { createMany: entryCreateManyMock, findMany: entryFindManyMock },
+    bankReconciliationItem: { findFirst: reconItemFindFirstMock },
   }
   transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(txClient))
   journalCreateMock.mockResolvedValue({ id: 99 })
   journalUpdateMock.mockResolvedValue({ id: 7 })
   entryCreateManyMock.mockResolvedValue({ count: 2 })
+  entryFindManyMock.mockResolvedValue([{ id: 500 }])
+  reconItemFindFirstMock.mockResolvedValue(null)
 })
 
 describe("reverseJournal", () => {
@@ -129,6 +136,24 @@ describe("reverseJournal", () => {
     expect(created.data.transactionDate).toEqual(originalDate)
     expect(created.data.status).toBe("POSTED")
     expect(created.data.referenceId).toBe(7)
+  })
+
+  it("putaran 86: menolak reversal jurnal pada rekonsiliasi completed", async () => {
+    reconItemFindFirstMock.mockResolvedValue({ id: 42 })
+
+    const result = await reverseJournal(7)
+
+    expect(result.success).toBe(false)
+    expect(String(result.error)).toContain("rekonsiliasi bank final")
+    expect(journalCreateMock).not.toHaveBeenCalled()
+    expect(reconItemFindFirstMock).toHaveBeenCalledWith({
+      where: {
+        journalEntryId: { in: [500] },
+        matched: true,
+        bankReconciliation: { status: "completed" },
+      },
+      select: { id: true },
+    })
   })
 
   it("TASK-025: menolak reversal atas jurnal reversal (referenceType Journal), nol jurnal ditulis", async () => {

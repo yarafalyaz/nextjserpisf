@@ -62,8 +62,11 @@ export async function createCheque(formData: FormData) {
       await checkIdempotency(idempotencyKey, tx, user.id)
       await assertPeriodOpen(dueDate, tx)
       if (accountId) {
+        // Putaran 86: picker hanya menawarkan akun reportGroup BANK —
+        // server menegakkan hal sama (pesan error sudah menyebut
+        // "Rekening bank"); akun kas/non-bank tak lagi lolos direct call.
         const live = await tx.account.findFirst({
-          where: { id: accountId, isActive: true, deletedAt: null },
+          where: { id: accountId, isActive: true, deletedAt: null, reportGroup: "BANK" },
           select: { id: true },
         })
         if (!live) throw new Error(`Rekening bank tidak aktif/terhapus atau tidak ditemukan (id: ${accountId}). Pilih ulang rekening sebelum menyimpan.`)

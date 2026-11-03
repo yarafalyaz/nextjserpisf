@@ -14,13 +14,20 @@ describe("validations/hrm.schemas", () => {
   describe("leaveRequestSchema", () => {
     it("accepts valid leave request", () => {
       expect(leaveRequestSchema.safeParse({
-        employeeId: 1, type: "Cuti Tahunan", startDate: "2026-06-09", endDate: "2026-06-11",
+        employeeId: 1, type: "annual", startDate: "2026-06-09", endDate: "2026-06-11",
       }).success).toBe(true);
     });
     it("rejects empty type", () => {
       expect(leaveRequestSchema.safeParse({
         employeeId: 1, type: "", startDate: "2026-06-09", endDate: "2026-06-11",
       }).success).toBe(false);
+    });
+    it("putaran 86: tipe bebas/label tampilan di luar kosakata tertutup ditolak", () => {
+      for (const type of ["libur_bebas", "Cuti Tahunan", "ANNUAL"]) {
+        expect(leaveRequestSchema.safeParse({
+          employeeId: 1, type, startDate: "2026-06-09", endDate: "2026-06-11",
+        }).success).toBe(false);
+      }
     });
   });
 
@@ -60,6 +67,23 @@ describe("validations/hrm.schemas", () => {
     it("rejects hours above the 24h per-row cap (F-2026-10-21-019)", () => {
       expect(timesheetSchema.safeParse({
         employeeId: 1, projectId: 2, date: "2026-06-09", hours: 25,
+      }).success).toBe(false);
+    });
+    it("putaran 86: hours tak boleh melebihi durasi jendela jam", () => {
+      expect(timesheetSchema.safeParse({
+        employeeId: 1, projectId: 2, date: "2026-06-09", startTime: "08:00", endTime: "09:00", hours: 24,
+      }).success).toBe(false);
+      expect(timesheetSchema.safeParse({
+        employeeId: 1, projectId: 2, date: "2026-06-09", startTime: "08:00", endTime: "17:00", hours: 8,
+      }).success).toBe(true);
+      expect(timesheetSchema.safeParse({
+        employeeId: 1, projectId: 2, date: "2026-06-09", startTime: "22:00", endTime: "06:00", hours: 8,
+      }).success).toBe(true);
+      expect(timesheetSchema.safeParse({
+        employeeId: 1, projectId: 2, date: "2026-06-09", startTime: "8am", endTime: "17:00", hours: 8,
+      }).success).toBe(false);
+      expect(timesheetSchema.safeParse({
+        employeeId: 1, projectId: 2, date: "2026-06-09", startTime: "24:00", endTime: "17:00", hours: 8,
       }).success).toBe(false);
     });
   });
@@ -107,10 +131,10 @@ describe("validations/hrm.schemas", () => {
   describe("fictitious calendar dates rejected (no silent JS rollover)", () => {
     it("leaveRequestSchema rejects 2026-02-30 start/end", () => {
       expect(leaveRequestSchema.safeParse({
-        employeeId: 1, type: "Cuti Tahunan", startDate: "2026-02-30", endDate: "2026-03-02",
+        employeeId: 1, type: "annual", startDate: "2026-02-30", endDate: "2026-03-02",
       }).success).toBe(false);
       expect(leaveRequestSchema.safeParse({
-        employeeId: 1, type: "Cuti Tahunan", startDate: "2026-06-09", endDate: "2026-02-30",
+        employeeId: 1, type: "annual", startDate: "2026-06-09", endDate: "2026-02-30",
       }).success).toBe(false);
     });
     it("overtimeRequestSchema rejects 2026-02-30", () => {
@@ -140,7 +164,7 @@ describe("validations/hrm.schemas", () => {
     });
     it("attendance-free valid dates still pass", () => {
       expect(leaveRequestSchema.safeParse({
-        employeeId: 1, type: "Cuti Tahunan", startDate: "2026-02-28", endDate: "2026-03-01",
+        employeeId: 1, type: "annual", startDate: "2026-02-28", endDate: "2026-03-01",
       }).success).toBe(true);
     });
   });
@@ -156,6 +180,6 @@ describe("hrm dateOnly kalender", () => {
     expect(holidaySchema.safeParse({ name: "Libur", date: "bukan-tanggal" }).success).toBe(false);
     expect(statutoryRuleSchema.safeParse({ key: "ptkp_tk0", value: 1, effectiveFrom: "2026-02-30" }).success).toBe(false);
     expect(statutoryRuleSchema.safeParse({ key: "ptkp_tk0", value: 1, effectiveFrom: "2026-01-01", effectiveTo: "2026-02-30" }).success).toBe(false);
-    expect(leaveRequestSchema.safeParse({ employeeId: 1, type: "Cuti", startDate: "2026-02-28", endDate: "2026-03-01" }).success).toBe(true);
+    expect(leaveRequestSchema.safeParse({ employeeId: 1, type: "annual", startDate: "2026-02-28", endDate: "2026-03-01" }).success).toBe(true);
   });
 });

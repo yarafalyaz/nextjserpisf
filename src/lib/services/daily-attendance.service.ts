@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { employmentDayWindow, isEmploymentDay } from "@/lib/services/attendance-summary.service"
 
 
 /** Return today's late and absent counts using each employee's effective work calendar. */
@@ -16,6 +17,8 @@ export async function getDailyAttendanceMetrics(date = new Date()) {
         id: true,
         name: true,
         departmentId: true,
+        joinDate: true,
+        employmentEndedAt: true,
         workSchedules: { where: { isActive: true }, orderBy: { id: "asc" }, select: { id: true, workDays: true } },
         department: { select: { id: true, name: true, workSchedules: { where: { isActive: true }, orderBy: { id: "asc" }, select: { id: true, workDays: true } } } },
       },
@@ -39,7 +42,13 @@ export async function getDailyAttendanceMetrics(date = new Date()) {
   const leaveIds = new Set(leaves.map((leave) => leave.employeeId))
   const nationalHoliday = new Set(holidays.map((holiday) => toLocalDateOnly(holiday.date))).has(toLocalDateOnly(start))
   const holidayDepartments = new Set(departmentHolidays.map((holiday) => holiday.departmentId))
+  const dayKey = toLocalDateOnly(start)
   const absentEmployees = nationalHoliday ? [] : employees.filter((employee) => {
+    // Putaran 86: hari di luar jendela masa kerja (sebelum joinDate /
+    // sesudah employmentEndedAt) bukan absent — pola employmentDayWindow
+    // yang sama dengan payroll; berhenti tak menonaktifkan otomatis,
+    // sehingga karyawan berakhir dulu masuk daftar + notifikasi palsu.
+    if (!isEmploymentDay(dayKey, employmentDayWindow(employee.joinDate, employee.employmentEndedAt))) return false
     if (attendedIds.has(employee.id) || leaveIds.has(employee.id)) return false
     if (employee.departmentId != null && holidayDepartments.has(employee.departmentId)) return false
     const schedule = employee.workSchedules[0]

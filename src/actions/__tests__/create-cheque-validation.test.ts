@@ -153,6 +153,15 @@ describe("createCheque zod validation", () => {
     expect(mocks.chequeCreate).not.toHaveBeenCalled()
   })
 
+  it("putaran 86: cek akun hidup wajib reportGroup BANK (samakan picker)", async () => {
+    const res = await createCheque(form({ ...base, accountId: "5" }))
+    expect(res.success).toBe(true)
+    expect(mocks.accountFindFirst).toHaveBeenCalledWith({
+      where: { id: 5, isActive: true, deletedAt: null, reportGroup: "BANK" },
+      select: { id: true },
+    })
+  })
+
   it("regresi putaran 45: assertPeriodOpen dinilai ulang di dalam transaksi", async () => {
     const res = await createCheque(form({ ...base, accountId: "5" }))
     expect(res.success).toBe(true)

@@ -30,13 +30,16 @@ async function getWorkshopData() {
   const now = new Date()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
-  const [activeProjects, workOrderStats, projects, wipProjects] =
+  const [activeProjects, workOrderStats, projects, wipProjects, carsInWorkshop] =
     await Promise.all([
       prisma.project.count({ where: { status: { notIn: DONE_STATES } } }),
       prisma.workOrder.groupBy({
         by: ["status"],
         _count: true,
-        where: { status: { notIn: ["cancelled", "completed"] } },
+        // Putaran 86: antrean aktif kanonis bengkel (ACTIVE_WORK_ORDER_
+        // STATUSES) — filter lama ikut menghitung WO closed sebagai
+        // perintah kerja aktif.
+        where: { status: { in: ["draft", "pending", "in_progress"] } },
       }),
       prisma.project.findMany({
         where: { status: { notIn: DONE_STATES } },
@@ -61,6 +64,12 @@ async function getWorkshopData() {
           status: { notIn: DONE_STATES },
           createdAt: { gte: startOfMonth },
         },
+      }),
+      // Putaran 86: kartu "Mobil di Bengkel" = count proyek aktif
+      // ber-kendaraan, bukan panjang daftar tampil (take: 8 di atas
+      // membuatnya mentok 8 dan kontradiksi kartu Proyek Aktif).
+      prisma.project.count({
+        where: { status: { notIn: DONE_STATES }, customerVehicleId: { not: null } },
       }),
     ])
 
@@ -89,7 +98,7 @@ async function getWorkshopData() {
     }
   })
 
-  return { activeProjects, totalWO, wipProjects, cars, workOrderStats }
+  return { activeProjects, totalWO, wipProjects, cars, workOrderStats, carsInWorkshop }
 }
 
 export default async function WorkshopDashboard() {
@@ -138,7 +147,7 @@ export default async function WorkshopDashboard() {
             />
             <StatCard
               label="Mobil di Bengkel"
-              value={data.cars.length}
+              value={data.carsInWorkshop}
               icon={<Car className="size-5" />}
             />
           </div>

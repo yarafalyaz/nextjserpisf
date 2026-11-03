@@ -14,6 +14,7 @@ import {
   REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE,
   assertAccountsExist,
   reverseJournalsByReferenceTx,
+  assertJournalNotInCompletedReconciliation,
 } from "@/lib/hooks/accounting.hook";
 import {
   evaluateReimbursementApprovalSod,
@@ -1654,6 +1655,11 @@ export async function createBankReconciliation(formData: FormData) {
       if (!lockedAccount) {
         throw new Error("Akun rekonsiliasi tidak ditemukan, tidak aktif atau bukan akun aset");
       }
+      // Putaran 86: jendela kandidat kosong permanen — draft tak bisa
+      // dihapus/dibatalkan, jadi periode terbalik hanya lahir sampah.
+      if (v.periodStart && v.periodEnd && v.periodStart > v.periodEnd) {
+        throw new Error("Tanggal mulai periode rekonsiliasi tidak boleh sesudah tanggal selesai.");
+      }
       return tx.bankReconciliation.create({
         data: {
           reconciliationNumber,
@@ -2924,6 +2930,11 @@ export async function reverseJournal(journalId: number) {
       if (claim.count === 0) {
         throw new Error("Jurnal tidak bisa dibalik (konflik konkurensi — coba lagi)");
       }
+
+      // Putaran 86: entri jurnal pada rekonsiliasi bank completed membeku
+      // (pola transfer/kas kecil) — reversal membuat item recon menunjuk
+      // jurnal REVERSED dan transaksi bank tetap terhitung terekonsiliasi.
+      await assertJournalNotInCompletedReconciliation(tx, [journalId]);
 
       // Cannot reverse a journal that belongs to a closed period
       await assertPeriodOpen(journal.transactionDate, tx);

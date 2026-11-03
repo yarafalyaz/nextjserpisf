@@ -23,7 +23,13 @@ export default async function PettyCashPage({
   const page = Number(params.halaman) || 1;
   const perPage = 100;
 
+  // Putaran 86: halaman hanya menampilkan rantai AKTIF (posted, tak
+  // terhapus lunak) — record void tetap terdaftar sebagai mutasi aktif
+  // dan record terakhir void menjadi "saldo saat ini" padahal rantai
+  // aktif/GL sudah mengeluarkannya (recalcPettyCashChain excludeVoid).
   const where = {
+    status: "posted",
+    deletedAt: null,
     ...(params.tipe === "masuk" ? { type: "IN" } : {}),
     ...(params.tipe === "keluar" ? { type: "OUT" } : {}),
     ...(params.cari && {
@@ -40,6 +46,7 @@ export default async function PettyCashPage({
   // surface a backdated entry (created later, dated earlier) whose balanceAfter
   // is NOT the current balance.
   const lastRecord = await prisma.pettyCash.findFirst({
+    where: { status: "posted", deletedAt: null },
     orderBy: [{ date: "desc" }, { id: "desc" }],
     select: { balanceAfter: true },
   });
@@ -51,6 +58,8 @@ export default async function PettyCashPage({
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const monthRecords = await prisma.pettyCash.findMany({
     where: {
+      status: "posted",
+      deletedAt: null,
       date: { gte: monthStart, lt: monthEnd },
     },
     select: { type: true, amount: true },

@@ -39,11 +39,32 @@ const optionalDate = z
 
 const optionalBool = z.boolean().optional()
 
+// Putaran 86: kosakata tipe cuti tertutup (sinkron LEAVE_TYPE_LABELS di
+// status-labels.ts + opsi form cuti). Tipe bebas dari panggil server
+// langsung melewati cap statutori/kuota, lalu approved dihitung hadir-cuti
+// oleh payroll — enum menolaknya di batas skema.
+export const LEAVE_TYPES = [
+  "annual",
+  "sick",
+  "personal",
+  "maternity",
+  "unpaid",
+  "marriage",
+  "child_marriage",
+  "child_circumcision",
+  "child_baptism",
+  "spouse_childbirth",
+  "family_death_core",
+  "family_death_household",
+  "menstrual",
+  "pilgrimage",
+] as const
+
 // ==================== Leave Request ====================
 
 export const leaveRequestSchema = z.object({
   employeeId: requiredId("Karyawan"),
-  type: requiredStr("Jenis cuti wajib diisi"),
+  type: z.enum(LEAVE_TYPES, { error: "Jenis cuti tidak dikenal" }),
   startDate: requiredDate("Tanggal mulai"),
   endDate: requiredDate("Tanggal selesai"),
   reason: optionalStr(500),
@@ -81,20 +102,60 @@ export const employeeLoanSchema = z.object({
 
 // ==================== Timesheet ====================
 
-export const timesheetSchema = z.object({
-  employeeId: requiredId("Karyawan"),
-  // F-2026-10-21-019: tepat satu konteks (proyek XOR perintah kerja) —
-  // keduanya opsional di skema; XOR ditegakkan di service (timesheet-context).
-  projectId: optionalId,
-  workOrderId: optionalId,
-  taskId: optionalId,
-  date: requiredDate("Tanggal"),
-  startTime: optionalStr(10),
-  endTime: optionalStr(10),
-  // Cap per baris 24 jam (satu baris = satu sesi kerja satu hari kalender).
-  hours: z.coerce.number().min(0.01).max(24),
-  description: optionalStr(1000),
-})
+export const timesheetSchema = z
+  .object({
+    employeeId: requiredId("Karyawan"),
+    // F-2026-10-21-019: tepat satu konteks (proyek XOR perintah kerja) —
+    // keduanya opsional di skema; XOR ditegakkan di service (timesheet-context).
+    projectId: optionalId,
+    workOrderId: optionalId,
+    taskId: optionalId,
+    date: requiredDate("Tanggal"),
+    startTime: optionalStr(10),
+    endTime: optionalStr(10),
+    // Cap per baris 24 jam (satu baris = satu sesi kerja satu hari kalender).
+    hours: z.coerce.number().min(0.01).max(24),
+    description: optionalStr(1000),
+  })
+  // Putaran 86: hours ditarik biaya per jam; bila jendela jam terisi,
+  // hours tak boleh melebihi durasi jendela (lintas tengah malam sah).
+  // Form menghitung hours dari jam dan menolak istirahat melebihi jam
+  // kerja, jadi baris sah selalu ≤ durasi; jam manual tanpa jam bebas.
+  .superRefine((v, ctx) => {
+    const clock = (raw: string) => {
+      const m = /^(\d{2}):(\d{2})$/.exec(raw.trim())
+      if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return null
+      return Number(m[1]) * 60 + Number(m[2])
+    }
+    let start: number | null = null
+    let end: number | null = null
+    for (const field of ["startTime", "endTime"] as const) {
+      const raw = v[field]
+      if (raw === undefined) continue
+      const minutes = clock(raw)
+      if (minutes === null) {
+        ctx.addIssue({
+          code: "custom",
+          path: [field],
+          message: "Format jam harus HH:MM (00:00–23:59)",
+        })
+      } else if (field === "startTime") {
+        start = minutes
+      } else {
+        end = minutes
+      }
+    }
+    if (start !== null && end !== null) {
+      const windowHours = (((end - start + 1440) % 1440) || 1440) / 60
+      if (v.hours > windowHours + 1e-9) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["hours"],
+          message: `Jam kerja (${v.hours}) melebihi durasi ${v.startTime}–${v.endTime} (${windowHours} jam).`,
+        })
+      }
+    }
+  })
 
 // ==================== Appreciation ====================
 

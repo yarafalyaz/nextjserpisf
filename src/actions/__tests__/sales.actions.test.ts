@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => {
   const reverseJournalsByReferenceTxMock = vi.fn()
   const resyncOnEditMock = vi.fn()
   const findOverReturnMock = vi.fn().mockReturnValue(null)
+  const assertInvoiceAllowedMock = vi.fn().mockResolvedValue(undefined)
 
   const buildModelMock = () => ({
     findFirst: vi.fn().mockResolvedValue(null),
@@ -120,6 +121,7 @@ const mocks = vi.hoisted(() => {
     reverseJournalsByReferenceTxMock,
     resyncOnEditMock,
     findOverReturnMock,
+    assertInvoiceAllowedMock,
     prismaMock,
   }
 })
@@ -206,6 +208,10 @@ vi.mock("@/lib/hooks/sales-return.hook", () => ({
 
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock("@/lib/services/warranty-journal.service", () => ({
+  assertInvoiceAllowedForWorkOrderBridges: (...a: unknown[]) => mocks.assertInvoiceAllowedMock(...a),
 }))
 
 vi.mock("@/lib/services/quotation-sync.service", () => ({
@@ -1096,6 +1102,25 @@ describe("Sales Invoice Actions", () => {
     expect(res?.error).toContain("melebihi nilai Pesanan Penjualan")
     // Cap menilai di dalam tx: baris tersimpan faktur dibaca untuk kandidat.
     expect(mocks.prismaMock.salesInvoiceItem.findMany).toHaveBeenCalled()
+  })
+
+  it("putaran 86: updateSalesInvoice menilai gerbang garansi atas jembatan hasil edit", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", customerId: 1, quotationId: 77, salesOrderId: 10, projectId: null, paidAmount: 0, grandTotal: 100,
+    })
+    mocks.assertInvoiceAllowedMock.mockRejectedValueOnce(
+      new Error("WO repair #5 adalah pekerjaan garansi covered (klaim #3) — SalesInvoice dilarang untuk pekerjaan ini"),
+    )
+    const res = await actions.updateSalesInvoice(1, fdMap({ customerId: 1, date: "2026-06-12", salesOrderId: 20 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("garansi covered")
+    // Jembatan yang dinilai = hasil edit: quotation lama dipertahankan,
+    // salesOrderId baru dari form.
+    expect(mocks.assertInvoiceAllowedMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ quotationId: 77, salesOrderId: 20 }),
+    )
+    expect(mocks.prismaMock.salesInvoice.update).not.toHaveBeenCalled()
   })
 
   it("putaran 85: cap SO ikut menghitung faktur direct-quotation sebelum konversi", async () => {

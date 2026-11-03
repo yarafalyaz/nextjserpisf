@@ -163,21 +163,28 @@ export const pettyCashSchema = z.object({
 
 // ==================== BANK RECONCILIATION ====================
 
-export const bankReconciliationSchema = z.object({
-  accountId: z.coerce
-    .number({ message: "accountId wajib diisi" })
-    .int()
-    .positive(),
-  statementDate: dateOnly,
-  statementBalance: moneyAmount("statementBalance wajib diisi"),
-  periodStart: optionalDateOnly,
-  periodEnd: optionalDateOnly,
-  bookBalance: z.preprocess(
-    (v) => (v === "" || v == null ? 0 : typeof v === "string" ? parseMoneyAmount(v) : v),
-    z.coerce.number().default(0),
-  ),
-  notes: optionalString(1000),
-});
+export const bankReconciliationSchema = z
+  .object({
+    accountId: z.coerce
+      .number({ message: "accountId wajib diisi" })
+      .int()
+      .positive(),
+    statementDate: dateOnly,
+    statementBalance: moneyAmount("statementBalance wajib diisi"),
+    periodStart: optionalDateOnly,
+    periodEnd: optionalDateOnly,
+    bookBalance: z.preprocess(
+      (v) => (v === "" || v == null ? 0 : typeof v === "string" ? parseMoneyAmount(v) : v),
+      z.coerce.number().default(0),
+    ),
+    notes: optionalString(1000),
+  })
+  // Putaran 86: periode terbalik membuat jendela kandidat kosong dan
+  // draft tak punya jalur hapus — sampah permanen; tolak di skema.
+  .refine((v) => !v.periodStart || !v.periodEnd || v.periodStart <= v.periodEnd, {
+    message: "Tanggal mulai periode tidak boleh sesudah tanggal selesai",
+    path: ["periodStart"],
+  });
 
 // ==================== COST CENTER ====================
 

@@ -132,6 +132,20 @@ describe("validations/finance.schemas", () => {
     it("rejects missing statementBalance", () => {
       expect(bankReconciliationSchema.safeParse({ accountId: 1, statementDate: "2026-06-09" }).success).toBe(false);
     });
+    it("putaran 86: periode terbalik ditolak, periode sah/sebagian lolos", () => {
+      expect(bankReconciliationSchema.safeParse({
+        accountId: 1, statementDate: "2026-06-09", statementBalance: 1,
+        periodStart: "2026-06-10", periodEnd: "2026-06-01",
+      }).success).toBe(false);
+      expect(bankReconciliationSchema.safeParse({
+        accountId: 1, statementDate: "2026-06-09", statementBalance: 1,
+        periodStart: "2026-06-01", periodEnd: "2026-06-30",
+      }).success).toBe(true);
+      expect(bankReconciliationSchema.safeParse({
+        accountId: 1, statementDate: "2026-06-09", statementBalance: 1,
+        periodStart: "2026-06-10",
+      }).success).toBe(true);
+    });
   });
 
 describe("dateOnly calendar validation (regression: z.coerce.date rollover)", () => {

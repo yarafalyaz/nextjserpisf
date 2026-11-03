@@ -78,6 +78,29 @@ vi.mock("@/lib/hooks/accounting.hook", () => ({
   onExpenseApproved: vi.fn().mockResolvedValue({}),
   onPettyCashCreated: vi.fn().mockResolvedValue({}),
   reverseJournalsByReferenceTx: vi.fn().mockResolvedValue(undefined),
+  // Tiru kontrak produksi putaran 86 atas prismaMock file ini: item
+  // matched pada recon completed membekukan reversal.
+  assertJournalNotInCompletedReconciliation: vi.fn(async (db: any, journalIds: number[], label = "Jurnal ini") => {
+    if (journalIds.length === 0) return
+    const entries = await db.journalEntry.findMany({
+      where: { journalId: { in: journalIds } },
+      select: { id: true },
+    })
+    if (entries.length === 0) return
+    const matched = await db.bankReconciliationItem.findFirst({
+      where: {
+        journalEntryId: { in: entries.map((e: { id: number }) => e.id) },
+        matched: true,
+        bankReconciliation: { status: "completed" },
+      },
+      select: { id: true },
+    })
+    if (matched) {
+      throw new Error(
+        `${label} sudah cocok pada rekonsiliasi bank final. Batalkan rekonsiliasi terlebih dahulu sebelum membatalkan.`,
+      )
+    }
+  }),
   // Tiru kontrak produksi assertAccountsExist: hanya id hidup lolos.
   assertAccountsExist: vi.fn(async (db: any, ids: (number | null | undefined)[], label: string) => {
     const wanted = [...new Set(ids.filter((v): v is number => typeof v === "number" && v > 0))]
@@ -1437,6 +1460,19 @@ describe("Bank Reconciliation Actions", () => {
     }))
     expect(res?.success).toBe(false)
     expect(res.error).toMatch(/tidak aktif atau bukan akun aset/i)
+    expect(mocks.prismaMock.bankReconciliation.create).not.toHaveBeenCalled()
+  })
+  it("putaran 86: createBankReconciliation menolak periode terbalik dalam tx", async () => {
+    mocks.prismaMock.account.findFirst.mockResolvedValue({ id: 1 })
+    const res = await (actions as any).createBankReconciliation(fdMap({
+      accountId: 1,
+      statementDate: "2026-06-13",
+      statementBalance: 5000,
+      periodStart: "2026-07-01",
+      periodEnd: "2026-06-01"
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Tanggal mulai periode")
     expect(mocks.prismaMock.bankReconciliation.create).not.toHaveBeenCalled()
   })
   it("matchReconciliationLine succeeds", async () => {

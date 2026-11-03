@@ -3949,6 +3949,16 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
     if (v.customerId !== existingInvoice.customerId) {
       await assertCustomerLiveForNewDocument(tx, v.customerId)
     }
+    // Putaran 86: gerbang invoiceForbidden garansi dinilai ulang atas
+    // jembatan HASIL edit — sebelumnya edit bisa memindah salesOrderId ke
+    // SO milik WO repair klaim covered dan draft terlarang lahir (baru
+    // tertahan saat posting, mengikat cap SO). Create (:2279) dan posting
+    // (:1502) sudah menilai jembatan yang sama.
+    await assertInvoiceAllowedForWorkOrderBridges(tx, {
+      quotationId: v.quotationId ?? existingInvoice.quotationId,
+      projectId: existingInvoice.projectId,
+      salesOrderId: v.salesOrderId ?? null,
+    })
     if (v.salesOrderId) {
       // Putaran 73: kunci baris SO tujuan sebelum pasangan dinilai —
       // bacaan polos dalam tx adalah snapshot; updateSalesOrder bisa

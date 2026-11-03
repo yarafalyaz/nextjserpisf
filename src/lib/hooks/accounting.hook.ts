@@ -252,6 +252,39 @@ export async function deleteJournalByReferenceTx(
  * sumber (faktur/pembayaran) tetap ada sebagai audit trail.
  * Period lock: reversal bertanggal asli → assertPeriodOpen(tanggal asli).
  */
+/**
+ * Putaran 86: jurnal yang salah satu entrinya sudah cocok pada rekonsiliasi
+ * bank FINAL (completed) tidak boleh di-REVERSED senyap — item recon tetap
+ * menunjuk entri asal sementara GL sudah net-zero. Sama seperti guard
+ * transfer bank & kas kecil yang hidup lebih dulu; pesan konsisten.
+ * `db` = tx pemanggil (bacaan ikut transaksi sesudah kunci jurnal asal).
+ */
+export async function assertJournalNotInCompletedReconciliation(
+  db: TxClient,
+  journalIds: number[],
+  label = "Jurnal ini",
+): Promise<void> {
+  if (journalIds.length === 0) return
+  const entries = await db.journalEntry.findMany({
+    where: { journalId: { in: journalIds } },
+    select: { id: true },
+  })
+  if (entries.length === 0) return
+  const matched = await db.bankReconciliationItem.findFirst({
+    where: {
+      journalEntryId: { in: entries.map((e) => e.id) },
+      matched: true,
+      bankReconciliation: { status: "completed" },
+    },
+    select: { id: true },
+  })
+  if (matched) {
+    throw new Error(
+      `${label} sudah cocok pada rekonsiliasi bank final. Batalkan rekonsiliasi terlebih dahulu sebelum membatalkan.`,
+    )
+  }
+}
+
 export async function reverseJournalsByReferenceTx(
   tx: TxClient,
   referenceType: string | string[],
@@ -303,6 +336,14 @@ export async function reverseJournalsByReferenceTx(
       j.transactionDate = fresh.transactionDate;
     }
   }
+
+  // Putaran 86: tolak reversal bila entri jurnal POSTED termasuk item
+  // rekonsiliasi bank completed (sesudah kunci jurnal diambil di atas;
+  // draft/REVERSED tak punya lawan GL baru sehingga tak perlu dijaga).
+  await assertJournalNotInCompletedReconciliation(
+    tx,
+    journals.filter((j) => j.status === "POSTED").map((j) => j.id),
+  )
 
   for (const j of journals) {
     // REVERSED sudah punya jurnal lawan POSTED (referenceType "Journal").
