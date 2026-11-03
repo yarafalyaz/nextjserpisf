@@ -12,6 +12,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { DocumentSequenceService } from "@/lib/services/document-sequence.service"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
+import { wibYearMonthCompact } from "@/lib/utils/date-only"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import { bankTransferSchema } from "@/lib/validations/finance.schemas"
@@ -71,9 +72,11 @@ export async function createBankTransfer(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("BTF", "simple")
     const [seq] = await DocumentSequenceService.nextBatch("JOURNAL", 1)
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, "0")
-    const journalNumber = `JRN-${year}${month}-${String(seq).padStart(5, "0")}`
+    // Putaran 104: prefiks bulan dari hari kalender WIB (lihat tax-payment).
+    // `date` adalah tengah malam UTC hari WIB (wibDateToUtcMidnight), jadi
+    // getter lokal proses menulis transfer 1 Nov sebagai JRN-202610 di runtime
+    // barat UTC — nomor tidak cocok dengan masa dokumennya.
+    const journalNumber = `JRN-${wibYearMonthCompact(date)}-${String(seq).padStart(5, "0")}`
 
     const totalMovement = amount + adminFee
 
