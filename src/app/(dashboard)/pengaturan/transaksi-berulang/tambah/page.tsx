@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { RecurringTransactionForm } from "@/components/forms/recurring-transaction-form"
@@ -13,7 +14,7 @@ export default async function CreateRecurringTransactionPage() {
   await requirePermission("manage_recurring_transactions")
 
   const [accounts, categories] = await Promise.all([
-    prisma.account.findMany({ where: { isActive: true }, orderBy: { code: "asc" }, select: { id: true, code: true, name: true } }),
+    loadPostableAccounts(),
     prisma.expenseCategory.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, label: true } }),
   ])
 

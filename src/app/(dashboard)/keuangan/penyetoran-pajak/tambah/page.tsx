@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TaxPaymentForm } from "../_components/tax-payment-form"
@@ -19,16 +20,8 @@ export default async function CreateTaxPaymentPage() {
       select: { id: true, name: true },
     }),
     // Akun utang pajak = akun kewajiban (mis. "210202 PPh 23 Pembelian").
-    prisma.account.findMany({
-      where: { isActive: true, type: "LIABILITY" },
-      orderBy: { code: "asc" },
-      select: { id: true, code: true, name: true },
-    }),
-    prisma.account.findMany({
-      where: { isActive: true, reportGroup: "BANK" },
-      orderBy: { code: "asc" },
-      select: { id: true, code: true, name: true },
-    }),
+    loadPostableAccounts({ type: "LIABILITY" }),
+    loadPostableAccounts({ reportGroup: "BANK" }),
   ])
 
   return (

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { requirePermission } from "@/lib/auth/permissions"
 import { JournalForm } from "@/components/forms/journal-form"
 
@@ -15,11 +16,7 @@ export default async function CreateJournalPage() {
   // ditandai pusat laba, sehingga laporan pusat laba selalu kosong.
   // Ketiga master independen — satu Promise.all, urutan hasil tetap.
   const [accounts, costCenters, profitCenters] = await Promise.all([
-    prisma.account.findMany({
-      where: { isActive: true },
-      orderBy: { code: "asc" },
-      select: { id: true, code: true, name: true, type: true },
-    }),
+    loadPostableAccounts(),
     prisma.costCenter.findMany({
       orderBy: { code: "asc" },
       select: { id: true, code: true, name: true },

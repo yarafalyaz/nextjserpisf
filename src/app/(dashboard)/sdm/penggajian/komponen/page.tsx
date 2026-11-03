@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import type { Metadata } from "next"
-import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { getPayrollComponents } from "@/actions/hrm.actions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
@@ -17,12 +17,7 @@ export default async function PayrollComponentsPage() {
   ])
   const [result, accounts] = await Promise.all([
     getPayrollComponents(),
-    prisma.account.findMany({
-      where: { isActive: true, deletedAt: null },
-      select: { id: true, code: true, name: true },
-      orderBy: { code: "asc" },
-      take: 500,
-    }),
+    loadPostableAccounts(),
   ])
 
   return (

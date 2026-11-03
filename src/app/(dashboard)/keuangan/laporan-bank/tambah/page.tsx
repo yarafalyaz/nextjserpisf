@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { BankStatementForm } from "./form"
@@ -14,11 +15,7 @@ export default async function CreateBankStatementPage() {
   await requirePermission("create_journals")
 
   const [accounts, banks] = await Promise.all([
-    prisma.account.findMany({
-      where: { isActive: true, type: "ASSET" },
-      orderBy: { code: "asc" },
-      select: { id: true, code: true, name: true },
-    }),
+    loadPostableAccounts({ type: "ASSET" }),
     prisma.bank.findMany({
       where: { isActive: true },
       orderBy: { code: "asc" },

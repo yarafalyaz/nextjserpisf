@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { notFound } from "next/navigation"
 import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { requirePermission } from "@/lib/auth/permissions"
 import { isNumericId } from "@/lib/utils/entity-url"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -17,17 +18,27 @@ export default async function EditRecurringTransactionPage({ params }: { params:
   await requirePermission("manage_recurring_transactions")
 
   const { slug } = await params
-  const [schedule, accounts, categories] = await Promise.all([
+  const [schedule, categories] = await Promise.all([
     isNumericId(slug)
       ? prisma.recurringTransaction.findUnique({ where: { id: Number(slug) } })
       : prisma.recurringTransaction.findFirst({ where: { slug } }),
-    prisma.account.findMany({ where: { isActive: true }, orderBy: { code: "asc" }, select: { id: true, code: true, name: true } }),
     prisma.expenseCategory.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, label: true } }),
   ])
 
   if (!schedule) notFound()
 
   const template = parseRecurringTemplate(schedule.template)
+
+  // Akun tersimpan tetap tampil walau kini induk/terhapus (lihat
+  // postable-accounts): template adalah dokumen tersimpan, bukan formulir baru.
+  const accounts = await loadPostableAccounts({
+    includeIds: [
+      template.accountId,
+      template.paidFromAccountId,
+      template.lines?.find((line) => line.debit > 0)?.accountId,
+      template.lines?.find((line) => line.credit > 0)?.accountId,
+    ],
+  })
   const debitLine = template.lines?.find((line) => line.debit > 0)
   const creditLine = template.lines?.find((line) => line.credit > 0)
 

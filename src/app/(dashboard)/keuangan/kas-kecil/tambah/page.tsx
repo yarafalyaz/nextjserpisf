@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { requirePermission } from "@/lib/auth/permissions"
 import { PettyCashForm } from "@/components/forms/petty-cash-form"
 
@@ -12,11 +13,7 @@ export default async function CreatePettyCashPage() {
   await requirePermission("create_petty_cash")
 
   const [accounts, projects, vendors, categories] = await Promise.all([
-    prisma.account.findMany({
-      where: { isActive: true },
-      orderBy: { code: "asc" },
-      select: { id: true, code: true, name: true, type: true },
-    }),
+    loadPostableAccounts(),
     prisma.project.findMany({
       where: { status: "active" },
       orderBy: { name: "asc" },

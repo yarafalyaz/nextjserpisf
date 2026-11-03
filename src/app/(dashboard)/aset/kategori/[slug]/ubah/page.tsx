@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { notFound } from "next/navigation"
 import { AssetCategoryForm } from "@/components/forms/asset-category-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -20,18 +21,29 @@ export default async function EditPage({
 
   const { slug } = await params
 
-  const [data, accounts] = await Promise.all([
-    resolveEntity(
-      { segment: slug, fallbackWhere: {} },
-      {
-        bySlug: (s) => prisma.assetCategory.findFirst({ where: { slug: s } }),
-        byId: (id) => prisma.assetCategory.findUnique({ where: { id } }),
-      },
-    ),
-    prisma.account.findMany({ where: { isActive: true }, orderBy: { code: "asc" }, select: { id: true, code: true, name: true } }),
-  ])
+  const data = await resolveEntity(
+    { segment: slug, fallbackWhere: {} },
+    {
+      bySlug: (s) => prisma.assetCategory.findFirst({ where: { slug: s } }),
+      byId: (id) => prisma.assetCategory.findUnique({ where: { id } }),
+    },
+  )
 
   if (!data) notFound()
+
+  // Akun tersimpan tetap tampil walau kini induk/terhapus, supaya nilai lama
+  // tidak diam-diam berganti ke opsi pertama saat halaman dibuka.
+  const accounts = await loadPostableAccounts({
+    includeIds: [
+      data.assetAccountId,
+      data.accumulatedDepreciationAccountId,
+      data.depreciationExpenseAccountId,
+      data.gainLossAccountId,
+      data.revaluationSurplusAccountId,
+      data.impairmentLossAccountId,
+      data.accumulatedImpairmentAccountId,
+    ],
+  })
 
   return (
     <div className="flex flex-col gap-6">

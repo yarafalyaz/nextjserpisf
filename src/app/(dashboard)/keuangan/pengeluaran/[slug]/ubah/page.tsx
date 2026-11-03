@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { notFound } from "next/navigation";
 import { ExpenseForm } from "@/components/forms/expense-form";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
@@ -31,11 +32,9 @@ export default async function EditPage({
   if (!data) notFound();
 
   const [accounts, projects, categories, vendors] = await Promise.all([
-    prisma.account.findMany({
-      where: { isActive: true },
-      orderBy: { code: "asc" },
-      select: { id: true, code: true, name: true, type: true },
-    }),
+    // Halaman ubah: akun tersimpan tetap tampil walau kini induk, supaya nilai
+    // lama tidak diam-diam berganti ke opsi pertama.
+    loadPostableAccounts({ includeIds: [data.accountId, data.paidFromAccountId] }),
     prisma.project.findMany({
       where: { status: "active" },
       orderBy: { name: "asc" },

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { notFound } from "next/navigation"
 import { PettyCashForm } from "@/components/forms/petty-cash-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -31,7 +32,7 @@ export default async function EditPage({
   if (!data) notFound()
 
   const [accounts, projects, vendors, categories] = await Promise.all([
-    prisma.account.findMany({ orderBy: { code: "asc" }, select: { id: true, code: true, name: true, type: true } }),
+    loadPostableAccounts({ includeIds: [data.accountId] }),
     prisma.project.findMany({ where: { status: "active" }, orderBy: { name: "asc" }, select: { id: true, name: true, documentNo: true } }),
     prisma.vendor.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.expenseCategory.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, label: true } }),

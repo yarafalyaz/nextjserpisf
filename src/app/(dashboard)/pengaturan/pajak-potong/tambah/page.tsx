@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic"
 
-import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { WithholdingTaxTypeForm } from "@/components/forms/withholding-tax-type-form"
@@ -12,11 +12,7 @@ export const metadata: Metadata = { title: "Tambah Jenis PPh" }
 export default async function CreateWithholdingTaxTypePage() {
   await requirePermission("manage_withholding_tax")
 
-  const accounts = await prisma.account.findMany({
-    where: { isActive: true },
-    orderBy: { code: "asc" },
-    select: { id: true, code: true, name: true },
-  })
+  const accounts = await loadPostableAccounts()
 
   return (
     <div className="flex flex-col gap-6">

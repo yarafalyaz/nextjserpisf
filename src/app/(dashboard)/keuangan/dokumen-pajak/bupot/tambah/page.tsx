@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import type { Metadata } from "next"
 
 import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 
 /**
@@ -53,16 +54,8 @@ export default async function CreateWithholdingCertificatePage() {
         take: 100,
         select: { id: true, certificateNumber: true, counterpartyName: true, withheldAmount: true },
       }),
-      prisma.account.findMany({
-        where: { isActive: true, type: "LIABILITY" },
-        orderBy: { code: "asc" },
-        select: { id: true, code: true, name: true },
-      }),
-      prisma.account.findMany({
-        where: { isActive: true, reportGroup: "BANK" },
-        orderBy: { code: "asc" },
-        select: { id: true, code: true, name: true },
-      }),
+      loadPostableAccounts({ type: "LIABILITY" }),
+      loadPostableAccounts({ reportGroup: "BANK" }),
       hasPermission("create_tax_payments"),
     ])
 

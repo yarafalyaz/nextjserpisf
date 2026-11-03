@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import type { Metadata } from "next"
 
 import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { requirePermission } from "@/lib/auth/permissions"
 import { getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -39,11 +40,7 @@ export default async function CreateDisciplinaryDeductionDecisionPage() {
         employee: { select: { name: true } },
       },
     }),
-    prisma.account.findMany({
-      where: { isActive: true, deletedAt: null },
-      orderBy: { code: "asc" },
-      select: { id: true, code: true, name: true },
-    }),
+    loadPostableAccounts(),
   ])
 
   return (

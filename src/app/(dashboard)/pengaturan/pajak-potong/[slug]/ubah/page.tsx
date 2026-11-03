@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { notFound } from "next/navigation"
 import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { requirePermission } from "@/lib/auth/permissions"
 import { isNumericId } from "@/lib/utils/entity-url"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -15,14 +16,15 @@ export default async function EditWithholdingTaxTypePage({ params }: { params: P
   await requirePermission("manage_withholding_tax")
 
   const { slug } = await params
-  const [taxType, accounts] = await Promise.all([
-    isNumericId(slug)
-      ? prisma.withholdingTaxType.findUnique({ where: { id: Number(slug) } })
-      : prisma.withholdingTaxType.findFirst({ where: { slug } }),
-    prisma.account.findMany({ where: { isActive: true }, orderBy: { code: "asc" }, select: { id: true, code: true, name: true } }),
-  ])
+  const taxType = isNumericId(slug)
+    ? await prisma.withholdingTaxType.findUnique({ where: { id: Number(slug) } })
+    : await prisma.withholdingTaxType.findFirst({ where: { slug } })
 
   if (!taxType) notFound()
+
+  const accounts = await loadPostableAccounts({
+    includeIds: [taxType.liabilityAccountId, taxType.receivableAccountId],
+  })
 
   return (
     <div className="flex flex-col gap-6">

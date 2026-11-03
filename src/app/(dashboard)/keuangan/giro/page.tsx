@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ChequeManager, type ChequeRow } from "./_components/cheque-manager"
@@ -26,11 +27,7 @@ export default async function ChequesPage() {
       orderBy: { dueDate: "asc" },
       take: 200,
     }),
-    prisma.account.findMany({
-      where: { isActive: true, reportGroup: "BANK" },
-      orderBy: { code: "asc" },
-      select: { id: true, code: true, name: true },
-    }),
+    loadPostableAccounts({ reportGroup: "BANK" }),
   ])
 
   // Seksi turunan baca-saja (F-2026-10-27-104-S, Q-CQ-3): gerbang

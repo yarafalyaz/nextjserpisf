@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic"
 
-import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { BankTransferForm } from "../_components/bank-transfer-form"
@@ -14,16 +14,8 @@ export default async function CreateBankTransferPage() {
 
   const [accounts, expenseAccounts] = await Promise.all([
     // Rekening kas/bank = akun dengan reportGroup BANK (lihat COA standar).
-    prisma.account.findMany({
-      where: { isActive: true, reportGroup: "BANK" },
-      orderBy: { code: "asc" },
-      select: { id: true, code: true, name: true },
-    }),
-    prisma.account.findMany({
-      where: { isActive: true, type: "EXPENSE" },
-      orderBy: { code: "asc" },
-      select: { id: true, code: true, name: true },
-    }),
+    loadPostableAccounts({ reportGroup: "BANK" }),
+    loadPostableAccounts({ type: "EXPENSE" }),
   ])
 
   return (

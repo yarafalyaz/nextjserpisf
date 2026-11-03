@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic"
 
-import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { BankReconciliationForm } from "./form"
@@ -12,11 +12,7 @@ export const metadata: Metadata = { title: "Tambah Rekonsiliasi Bank" }
 export default async function CreateBankReconciliationPage() {
   await requirePermission("manage_bank_reconciliation")
 
-  const accounts = await prisma.account.findMany({
-    where: { isActive: true, type: "ASSET" },
-    orderBy: { code: "asc" },
-    select: { id: true, code: true, name: true },
-  })
+  const accounts = await loadPostableAccounts({ type: "ASSET" })
 
   return (
     <div className="flex flex-col gap-6">

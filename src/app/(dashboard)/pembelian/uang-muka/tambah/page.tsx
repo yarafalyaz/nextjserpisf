@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { PurchaseAdvanceForm } from "../_components/purchase-advance-form"
@@ -19,11 +20,7 @@ export default async function CreatePurchaseAdvancePage() {
       select: { id: true, name: true },
     }),
     // Kas/bank = akun reportGroup BANK (lihat COA standar).
-    prisma.account.findMany({
-      where: { isActive: true, reportGroup: "BANK" },
-      orderBy: { code: "asc" },
-      select: { id: true, code: true, name: true },
-    }),
+    loadPostableAccounts({ reportGroup: "BANK" }),
     // Akun uang muka bisa ada di AREC (mis. "110302 Uang Muka Pembelian IDR")
     // maupun OCAS, jadi pilihannya seluruh akun aset — bukan disaring per kelompok,
     // supaya akun uang muka yang sah tidak ikut hilang dari daftar.

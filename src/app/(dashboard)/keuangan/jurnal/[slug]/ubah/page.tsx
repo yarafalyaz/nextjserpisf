@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { notFound } from "next/navigation"
 import { JournalForm } from "@/components/forms/journal-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -47,7 +48,7 @@ export default async function EditPage({
 
   // Ketiga master independen — satu Promise.all, urutan hasil tetap.
   const [accounts, costCenters, profitCenters] = await Promise.all([
-    prisma.account.findMany({ orderBy: { code: "asc" }, select: { id: true, code: true, name: true, type: true } }),
+    loadPostableAccounts({ includeIds: data.entries.map((e) => e.accountId) }),
     prisma.costCenter.findMany({
       orderBy: { code: "asc" },
       select: { id: true, code: true, name: true },
