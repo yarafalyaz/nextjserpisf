@@ -3127,3 +3127,38 @@ Sumber: kandidat agent audit produksi "WO dengan baris jasa tidak pernah bisa di
 - Merah perintah terpisah: `manufacturing.actions.test.ts` sebelum patch → `2 failed`, `expected [... {itemId: 0}] to equal [ObjectContaining {itemId: 7}]` dan `expected deliveryOrder.create to not have been called`.
 - Hijau: berkas itu 2/2 untuk filter putaran 113; suite manufacturing + pemanggil `completeWorkOrder` 205/205; lima guard statis 168/168 (`--no-file-parallelism`); `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
 - CI `41715546767` (head `4ce3e1611`) **success**.
+
+## Putaran 114 — resync penawaran membekukan ulang snapshot baris; editor inline mengirim balik deskripsi (commit `df09c7e3e`, `cce5d59be`)
+
+Sumber: lanjutan audit baris faktur putaran 110 dari dua arah sekaligus — penulis ketiga (`quotation-sync.service.ts` `resyncOnEdit`) dan penulis kedua di UI (`invoice-items-editor.tsx`), dibandingkan dengan `prisma/schema.prisma:2058-2089` (`SalesInvoiceItem.uom`, `.isService`) dan `src/lib/hooks/accounting.hook.ts:944-1000` (konversi qty saat posting) + `src/lib/tax/coretax-xml-export.ts` (elemen `Opt` wajib).
+
+### Vonis FIX
+1. **Resync penawaran menghapus `uom` dan `isService` setiap baris faktur draft — FIX.** `resyncOnEdit` menghapus SELURUH baris faktur draft lalu menulis ulang dari baris penawaran (`:215-233`). Baris penawaran tidak punya `isService`, dan `flattenQuotationItems` membuang `uom`. Dua kerugian berbeda: tanpa `uom`, `accounting.hook` memperlakukan qty sebagai satuan dasar (faktor 1) sehingga stok keluar dan HPP salah senyap; tanpa `isService`, ekspor Coretax menolak faktur bernama `UNMAPPED_REQUIRED_ELEMENT` — permanen, karena snapshot itu tak pernah ditulis lagi. Perbaikan: `QuotationItem`/`flattenQuotationItems` membawa `uom`, dan `resyncOnEdit` membekukan `isService` dari master item di dalam tx terkunci yang sama (`tx.item.findMany` sesudah kunci baris).
+2. **Editor item inline menghapus deskripsi baris — FIX.** `InvoiceItemsEditor` adalah penulis KEDUA jalur delete-then-recreate yang sama (`updateSalesInvoice`/`updateSalesOrder`). Putaran 110 memperbaiki form penuh saja; payload editor tidak memuat `description`, jadi menyunting qty lewat halaman detail menghapus deskripsi tersimpan. Perbaikan: payload membawa `description` bila terisi, dan `form-edit-seeds-existing.test.ts` mendapat butir baru supaya kelas ini tak bisa kembali lewat jalur mana pun.
+
+### Vonis CATAT
+- `SalesOrderItem` tidak punya kolom `uom`/`serialNumbers`/`isService` sama sekali (`schema.prisma:1897-1911`), jadi resync SO tidak punya snapshot yang bisa hilang. Yang wajib dijaga hanya sisi faktur.
+- `priceSource`/`priceListId`/`priceListMinQty` tetap kosong pasca-resync dan pasca-edit. Itu sesuai komentar skema ("edit — BUKAN klaim historis"): menyalin klaim harga penawaran ke baris faktur akan mengklaim sumber yang tak pernah dinilai resolver faktur.
+
+### Bukti
+- Merah perintah terpisah: `quotation-sync.test.ts` sebelum patch → `1 failed | 5 passed`; `invoice-items-editor.test.tsx` sebelum patch → `1 failed | 4 passed` (payload tanpa `description`).
+- Hijau: `quotation-sync.test.ts` 6/6 + suite penjualan terkait 274/274; `invoice-items-editor.test.tsx` 5/5 + suite sales 261/261; guard statis 167/167 + 31/31 dan 147/147 + 4/4 (`--no-file-parallelism`); `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
+- CI `41717930750` (head `df09c7e3e`) **success**; CI `41719152045` (head `cce5d59be`) **success**.
+
+## Putaran 115 — baris pengganti faktur menulis kolom `sortOrder` yang tak ada; Prisma menolak SELURUH createMany (commit `6c7b562c9`)
+
+Sumber: verifikasi silang `updateSalesInvoice` (`sales.actions.ts:4119-4150`) terhadap `prisma/schema.prisma:2058-2089` dan probe runtime di container. Ditemukan saat menelusuri kandidat "`createSalesInvoice` menjatuhkan nomor seri" — jalur update ternyata lebih parah daripada jalur create.
+
+### Vonis FIX
+1. **`sortOrder` bukan kolom `SalesInvoiceItem` — setiap simpan item faktur gagal di runtime — FIX.** Payload `salesInvoiceItem.createMany` memuat `sortOrder: idx`. Model itu tidak punya kolom tersebut (daftar skalar: `id, salesInvoiceId, itemId, description, qty, uom, serialNumbers, batchAllocations, unitPrice, discount, total, isService, priceSource, priceListId, priceListMinQty`). Prisma menolak seluruh panggilan: probe di dalam tx yang di-rollback menghasilkan `Unknown argument \`sortOrder\`. Available options are marked with ?.` Karena `createMany` adalah satu-satunya jalur penulisan ulang baris, **form penuh maupun editor inline di halaman detail sama-sama gagal** setiap kali item disimpan. Perbaikan: buang kunci `sortOrder` dan parameter `idx` yang jadi yatim; urutan baris faktur memang dibaca dari `id` auto-increment di semua konsumen, bukan kolom urutan.
+2. **Guard baru `src/__tests__/create-many-schema-parity.test.ts` — kelas cacat ini kini tertangkap statis.** Setiap kunci literal `createMany` di kode produksi diperiksa terhadap `prisma/schema.prisma` lewat AST (bukan regex), termasuk objek yang di-`return` callback `data.map(...)`. Diperiksa dua arah: menyisipkan kembali `sortOrder: 0` memerahkan guard (`"key": "sortOrder"`), mencabutnya menghijaukan.
+
+### Vonis CATAT
+- Cacat ini tak terlihat oleh `tsc` karena `data` bertipe `XOR<SalesInvoiceItemCreateManyInput, …>` — excess-property check mati di union. Diukur lewat probe: `create`/`update`/`updateMany`/`upsert` dengan kunci asing juga LOLOS tsc tanpa suara, sementara `select`/`orderBy` asing ditangkap. Karena itu guard statis adalah satu-satunya penangkap yang murah; memperluasnya ke `create`/`update` membutuhkan analisis tipe yang jauh lebih rapuh dan tidak diambil sekarang.
+- `sortOrder: idx` pada `updateSalesOrder` (`:3883`) dan `createSalesOrder` tidak senasib: `SalesOrderItem` juga tak punya kolom itu, tetapi jalur SO memakai `createMany` dengan payload tanpa `sortOrder` — sudah diperiksa guard baru dan bersih.
+- `coa.ts` menulis `type` ke `Account.type` yang bertipe enum; pemeriksa kunci berbasis DMMF melaporkan dua positif-palsu di sana karena kunci enum tidak masuk daftar skalar. Guard versi schema menangani enum dengan benar (semua field, bukan hanya skalar), jadi tidak perlu pengecualian.
+
+### Bukti
+- Probe runtime (bukan mock): `createMany` dengan `sortOrder` di dalam `$transaction` yang di-rollback → `Unknown argument \`sortOrder\``.
+- Merah perintah terpisah: `sales.actions.test.ts` sebelum patch → `1 failed | 261 passed`, `expected [ 'sortOrder' ] to deeply equal []`.
+- Hijau: berkas itu 262/262; guard baru 3/3; keduanya bersama 265/265; suite guard terkait (`schema-usage`, `silent-failure`, `wired-transition-actions`, `form-edit-seeds-existing`, `quotation-sync`, `invoice-items-editor`) 174/174 (`--no-file-parallelism`); `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
