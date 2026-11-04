@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
+import { formatAccountingExact, formatCurrencyExact, formatDate } from '@/lib/utils/format'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
@@ -173,7 +173,7 @@ export default async function BankBookPage({
               <DetailTableBody>
                 <DetailTableRow className="bg-muted/30">
                   <DetailTableTd colSpan={5} className="font-semibold">Saldo Awal</DetailTableTd>
-                  <DetailTableTd align="right" className="font-semibold">{formatAccounting(openingBalance)}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-semibold">{formatAccountingExact(openingBalance)}</DetailTableTd>
                 </DetailTableRow>
                 {rows.length === 0 && (
                   <DetailTableRow>
@@ -185,17 +185,17 @@ export default async function BankBookPage({
                     <DetailTableTd>{formatDate(row.date, { format: "numeric" })}</DetailTableTd>
                     <DetailTableTd>{row.journalNumber}</DetailTableTd>
                     <DetailTableTd>{row.description}</DetailTableTd>
-                    <DetailTableTd align="right">{formatAccounting(row.debit)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatAccounting(row.credit)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatAccounting(row.balance)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccountingExact(row.debit)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccountingExact(row.credit)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccountingExact(row.balance)}</DetailTableTd>
                   </DetailTableRow>
                 ))}
                 {rows.length > 0 && (
                   <DetailTableRow className="font-bold border-t-2 border-default">
                     <DetailTableTd colSpan={3}>TOTAL & Saldo Akhir</DetailTableTd>
-                    <DetailTableTd align="right">{formatAccounting(totalDebit)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatAccounting(totalCredit)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatAccounting(finalBalance)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccountingExact(totalDebit)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccountingExact(totalCredit)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccountingExact(finalBalance)}</DetailTableTd>
                   </DetailTableRow>
                 )}
               </DetailTableBody>
@@ -204,9 +204,9 @@ export default async function BankBookPage({
 
           {rows.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 print:hidden">
-              <ReportKpiCard label="Total Debit" value={formatCurrency(totalDebit)} />
-              <ReportKpiCard label="Total Kredit" value={formatCurrency(totalCredit)} />
-              <ReportKpiCard label="Saldo Akhir" value={formatCurrency(finalBalance)} />
+              <ReportKpiCard label="Total Debit" value={formatCurrencyExact(totalDebit)} />
+              <ReportKpiCard label="Total Kredit" value={formatCurrencyExact(totalCredit)} />
+              <ReportKpiCard label="Saldo Akhir" value={formatCurrencyExact(finalBalance)} />
             </div>
           )}
         </>

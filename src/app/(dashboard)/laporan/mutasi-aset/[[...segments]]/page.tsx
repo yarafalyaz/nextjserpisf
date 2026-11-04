@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -63,11 +63,11 @@ export default async function AssetMovementPage({
         tableLabel="Mutasi Aset Tetap"
       />
       <p className="doc-lines" style={{ marginTop: 8 }}>
-        Saldo awal nilai buku {formatCurrency(movement.opening.bookValue)} + penambahan{" "}
-        {formatCurrency(movement.additions.bookValue)} − penyusutan{" "}
-        {formatCurrency(movement.depreciation.accumulated)} − pelepasan{" "}
-        {formatCurrency(Math.abs(movement.disposals.bookValue))} = saldo akhir{" "}
-        {formatCurrency(movement.closing.bookValue)}.
+        Saldo awal nilai buku {formatCurrencyExact(movement.opening.bookValue)} + penambahan{" "}
+        {formatCurrencyExact(movement.additions.bookValue)} − penyusutan{" "}
+        {formatCurrencyExact(movement.depreciation.accumulated)} − pelepasan{" "}
+        {formatCurrencyExact(Math.abs(movement.disposals.bookValue))} = saldo akhir{" "}
+        {formatCurrencyExact(movement.closing.bookValue)}.
         {movement.disposalCount > 0 ? ` ${movement.disposalCount} aset dilepas pada periode ini.` : ""}
       </p>
     </ReportPageShell>

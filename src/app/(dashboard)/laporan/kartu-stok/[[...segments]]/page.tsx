@@ -6,7 +6,7 @@ import { prisma } from '@/lib/db/prisma'
 import { safeRound } from '@/lib/utils/math'
 import { requirePermission } from '@/lib/auth/permissions'
 import { getWarehouseScope } from '@/lib/auth/warehouse-scope'
-import { formatAccounting, formatDate, formatReferenceType, referenceHref } from '@/lib/utils/format'
+import { formatAccounting, formatAccountingExact, formatDate, formatReferenceType, referenceHref } from '@/lib/utils/format'
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { buildStockCard, type StockCardMove } from '@/lib/reports/stock-card'
 import { resolveReferenceSlugs, referenceSlugKey } from '@/lib/services/reference-slug.service'
@@ -264,7 +264,7 @@ export default async function StockCardPage({
                   <DetailTableTd align="right">–</DetailTableTd>
                   <DetailTableTd align="right" className="font-semibold">{formatAccounting(card.openingQty, { zeroDash: false })}</DetailTableTd>
                   <DetailTableTd align="right">–</DetailTableTd>
-                  <DetailTableTd align="right" className="font-semibold">{formatAccounting(card.openingValue, { zeroDash: false })}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-semibold">{formatAccountingExact(card.openingValue)}</DetailTableTd>
                 </DetailTableRow>
 
                 {card.rows.map((row) => {
@@ -286,8 +286,8 @@ export default async function StockCardPage({
                         {row.impact === 'OUT' ? formatAccounting(row.qty, { zeroDash: false }) : '–'}
                       </DetailTableTd>
                       <DetailTableTd align="right" className="font-semibold">{formatAccounting(row.balanceQty, { zeroDash: false })}</DetailTableTd>
-                      <DetailTableTd align="right">{formatAccounting(row.cost, { zeroDash: false })}</DetailTableTd>
-                      <DetailTableTd align="right">{formatAccounting(row.value, { zeroDash: false })}</DetailTableTd>
+                      <DetailTableTd align="right">{formatAccountingExact(row.cost)}</DetailTableTd>
+                      <DetailTableTd align="right">{formatAccountingExact(row.value)}</DetailTableTd>
                     </DetailTableRow>
                   )
                 })}
@@ -306,7 +306,7 @@ export default async function StockCardPage({
                   <DetailTableTd align="right" className="text-danger">{formatAccounting(card.totalOutQty, { zeroDash: false })}</DetailTableTd>
                   <DetailTableTd align="right">{formatAccounting(card.closingQty, { zeroDash: false })}</DetailTableTd>
                   <DetailTableTd align="right">–</DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(card.closingValue, { zeroDash: false })}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccountingExact(card.closingValue)}</DetailTableTd>
                 </DetailTableRow>
               </DetailTableBody>
             </DetailTable>
