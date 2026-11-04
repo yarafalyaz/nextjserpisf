@@ -15,7 +15,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -59,8 +59,13 @@ export interface PurchaseByDimensionResult {
   verdict: string
 }
 
+/**
+ * Sisa/nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, dua baris "1.000.001" bisa berjumlah "2.000.002" sementara
+ * totalnya "2.000.001" — total tidak cocok dengan penjumlahan barisnya.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 export function buildPurchasesByDimension(input: {
@@ -122,7 +127,7 @@ export function buildPurchasesByDimension(input: {
   const verdict =
     visible.length === 0
       ? "Tidak ada pembelian pada periode ini"
-      : `Pembelian ${formatCurrency(totals.dpp)} (DPP) + PPN ${formatCurrency(totals.tax)} dari ${totals.documents} tagihan`
+      : `Pembelian ${amount(totals.dpp)} (DPP) + PPN ${amount(totals.tax)} dari ${totals.documents} tagihan`
 
   return { table: { columns: COLUMNS, rows }, totals, verdict }
 }
@@ -131,7 +136,7 @@ export function buildPurchasesByDimension(input: {
 export function purchaseByDimensionSummary(result: PurchaseByDimensionResult): string {
   if (result.totals.documents === 0) return "Tidak ada pembelian pada periode ini"
   return (
-    `${result.totals.documents} tagihan · DPP ${formatCurrency(result.totals.dpp)} · ` +
-    `PPN ${formatCurrency(result.totals.tax)} · total ${formatCurrency(result.totals.total)}`
+    `${result.totals.documents} tagihan · DPP ${amount(result.totals.dpp)} · ` +
+    `PPN ${amount(result.totals.tax)} · total ${amount(result.totals.total)}`
   )
 }

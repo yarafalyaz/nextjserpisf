@@ -85,4 +85,20 @@ describe("buildSalesProcessHistory", () => {
     expect(grand).toBeTruthy()
     expect(salesProcessSummary(result)).toContain("pesanan")
   })
+
+  it("nominal ber-sen tampil hingga sen sehingga total cocok dengan barisnya", () => {
+    const result = buildSalesProcessHistory([
+      line({ orderNo: "SO-001", invoiced: 1_000_000.5, paid: 0 }),
+      line({ orderNo: "SO-002", invoiced: 1_000_000.5, paid: 0 }),
+    ])
+
+    const rows = result.table.rows.filter((row) => row.kind === "data")
+    const grand = result.table.rows.find((row) => row.kind === "total" && row.grand === true)
+    expect(rows.map((row) => (row.kind === "data" ? row.cells[5] : ""))).toEqual([
+      "1.000.000,50",
+      "1.000.000,50",
+    ])
+    expect(grand?.kind === "total" ? grand.cells[0] : "").toBe("2.000.001")
+    expect(salesProcessSummary(result)).toContain("2.000.001")
+  })
 })

@@ -13,7 +13,7 @@
  */
 
 import { isOutstandingSettled } from "@/lib/finance/settlement-status"
-import { formatAccounting, formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -59,8 +59,13 @@ export interface PurchaseProcessResult {
   verdict: string
 }
 
+/**
+ * Sisa/nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, dua baris "1.000.001" bisa berjumlah "2.000.002" sementara
+ * totalnya "2.000.001" — total tidak cocok dengan penjumlahan barisnya.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function shortDate(date: Date): string {
@@ -140,8 +145,8 @@ export function buildPurchaseProcessHistory(lines: PurchaseProcessLine[]): Purch
   const verdict =
     sorted.length === 0
       ? "Tidak ada pesanan pembelian pada periode ini"
-      : `${sorted.length} pesanan · ditagih ${formatCurrency(totals.billed)} · ` +
-        `dibayar ${formatCurrency(totals.paid)} · sisa ${formatCurrency(totals.outstanding)}`
+      : `${sorted.length} pesanan · ditagih ${amount(totals.billed)} · ` +
+        `dibayar ${amount(totals.paid)} · sisa ${amount(totals.outstanding)}`
 
   return { table: { columns: COLUMNS, rows }, totals, verdict }
 }
@@ -150,7 +155,7 @@ export function buildPurchaseProcessHistory(lines: PurchaseProcessLine[]): Purch
 export function purchaseProcessSummary(result: PurchaseProcessResult): string {
   if (result.totals.orders === 0) return "Tidak ada pesanan pembelian pada periode ini"
   return (
-    `${result.totals.orders} pesanan · ditagih ${formatCurrency(result.totals.billed)} · ` +
-    `dibayar ${formatCurrency(result.totals.paid)} · sisa ${formatCurrency(result.totals.outstanding)}`
+    `${result.totals.orders} pesanan · ditagih ${amount(result.totals.billed)} · ` +
+    `dibayar ${amount(result.totals.paid)} · sisa ${amount(result.totals.outstanding)}`
   )
 }
