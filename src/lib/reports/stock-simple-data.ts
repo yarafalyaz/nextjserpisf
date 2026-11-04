@@ -12,7 +12,7 @@
 import { prisma } from "@/lib/db/prisma"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import { reconcileInventory } from "@/lib/inventory/stock-reconciliation"
-import { formatAccounting, formatQuantity } from "@/lib/utils/format"
+import { formatAccountingExact, formatQuantity } from "@/lib/utils/format"
 import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -63,7 +63,7 @@ export function sumRemainingQty(layers: { remaining: unknown }[]): number {
   return layers.reduce((sum, layer) => safeAdd(sum, Number(layer.remaining), 2), 0)
 }
 
-const money = (value: number) => formatAccounting(value, { zeroDash: false })
+const money = (value: number) => formatAccountingExact(value)
 const qty = (value: number) => formatQuantity(value)
 const nowLabels = () => {
   const now = new Date()

@@ -25,7 +25,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency, formatQuantity, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatQuantity, formatDate } from "@/lib/utils/format"
 import { safeAdd } from "@/lib/utils/math"
 import { layerValue, resolveCostingMethod } from "@/lib/reports/stock-valuation"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
@@ -93,8 +93,12 @@ function quantity(value: number): string {
   return formatQuantity(value)
 }
 
+/**
+ * Nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, total tidak cocok dengan penjumlahan baris yang tercetak.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 export function buildSlowMovingStock(input: {
@@ -160,7 +164,7 @@ export function buildSlowMovingStock(input: {
   } else {
     verdict =
       `${slow.length} dari ${assessed.length} barang bersisa tidak bergerak ` +
-      `≥ ${threshold} hari, senilai ${formatCurrency(slowValue)}.`
+      `≥ ${threshold} hari, senilai ${amount(slowValue)}.`
     rows.push({
       kind: "total",
       grand: true,
@@ -239,5 +243,5 @@ export function slowMovingValueOfLayers(
 export function slowMovingSummary(result: SlowMovingResult): string {
   if (result.totals.assessed === 0) return "Tidak ada barang bersisa"
   if (result.totals.slow === 0) return "Tidak ada stok tidak bergerak"
-  return `${result.totals.slow} barang · nilai ${formatCurrency(result.totals.slowValue)}`
+  return `${result.totals.slow} barang · nilai ${amount(result.totals.slowValue)}`
 }

@@ -18,7 +18,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency, formatQuantity, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatQuantity, formatDate } from "@/lib/utils/format"
 import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -70,8 +70,12 @@ function quantity(value: number): string {
   return formatQuantity(value)
 }
 
+/**
+ * Nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, total tidak cocok dengan penjumlahan baris yang tercetak.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function shortDate(date: Date): string {
@@ -200,6 +204,6 @@ export function stockCountSummary(result: StockCountResult): string {
   return (
     `${result.totals.documents} lembar · ${result.totals.items} baris hitung · ` +
     `${result.totals.itemsWithDifference} baris berselisih · nilai selisih ` +
-    `${formatCurrency(result.totals.differenceValue)}`
+    `${amount(result.totals.differenceValue)}`
   )
 }

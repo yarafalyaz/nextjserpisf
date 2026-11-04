@@ -32,7 +32,7 @@
 /** Status pemindahan yang berarti barang masih di jalan (penuh / sebagian). Sumber tunggal murni — loader me-re-export. */
 export const IN_TRANSIT_TRANSFER_STATUSES = ["processed", "partially_received"] as const
 
-import { formatAccounting, formatCurrency, formatQuantity, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatQuantity, formatDate } from "@/lib/utils/format"
 import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import { AGING_BUCKETS, ageInDays } from "@/lib/reports/received-not-billed"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
@@ -82,8 +82,12 @@ export interface TransferInTransitResult {
   verdict: string
 }
 
+/**
+ * Nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, total tidak cocok dengan penjumlahan baris yang tercetak.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function quantity(value: number): string {
@@ -181,7 +185,7 @@ export function buildTransferInTransit(input: TransferInTransitInput): TransferI
       text: "Tidak ada pemindahan barang yang masih dalam perjalanan pada periode ini.",
     })
   } else {
-    verdict = `${totals.transfers} pemindahan senilai ${formatCurrency(totals.value)} masih di jalan.`
+    verdict = `${totals.transfers} pemindahan senilai ${amount(totals.value)} masih di jalan.`
     rows.push({
       kind: "total",
       grand: true,
@@ -242,5 +246,5 @@ export function buildTransferInTransit(input: TransferInTransitInput): TransferI
 /** Ringkasan satu baris untuk KPI di halaman laporan. */
 export function transferInTransitSummary(result: TransferInTransitResult): string {
   if (result.totals.transfers === 0) return "Tidak ada barang dalam perjalanan"
-  return `${result.totals.transfers} pemindahan · ${result.totals.items} baris · nilai ${formatCurrency(result.totals.value)}`
+  return `${result.totals.transfers} pemindahan · ${result.totals.items} baris · nilai ${amount(result.totals.value)}`
 }

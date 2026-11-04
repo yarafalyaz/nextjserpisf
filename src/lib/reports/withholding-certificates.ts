@@ -12,7 +12,7 @@
  */
 
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
-import { formatAccounting, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { wibDateOnly } from "@/lib/utils/date-only"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -144,7 +144,7 @@ export interface WithholdingCertificateTable {
   salesWithheld: number
 }
 
-const tableMoney = (value: number) => formatAccounting(value, { zeroDash: false })
+const tableMoney = (value: number) => formatAccountingExact(value)
 const tableDate = (date: Date) =>
   formatDate(date, { format: "short" })
 

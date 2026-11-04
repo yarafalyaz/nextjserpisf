@@ -5,7 +5,7 @@ import {
   type CustomerStatementEntryKind,
 } from "@/lib/reports/customer-statement"
 import { Badge } from "@/components/ui/shadcn/badge"
-import { formatAccounting, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -40,7 +40,7 @@ const ENTRY_KIND_LABEL: Record<CustomerStatementEntryKind, string> = {
  */
 export function CustomerStatementCard({ statement }: Readonly<{ statement: CustomerStatement }>) {
   const isEmpty = statement.entries.length === 0
-  const currency = (value: number) => formatAccounting(value, { zeroDash: false })
+  const currency = (value: number) => formatAccountingExact(value)
   const openingBalanceText = currency(statement.openingBalance)
   const closingBalanceText = currency(statement.closingBalance)
   const totalDebitText = currency(statement.totalDebit)
@@ -99,8 +99,8 @@ export function CustomerStatementCard({ statement }: Readonly<{ statement: Custo
                 {entry.description}
                 {entry.referenceDocumentNo && !entry.description.includes(entry.referenceDocumentNo) ? <span className="text-muted-foreground"> · Faktur {entry.referenceDocumentNo}</span> : null}
               </DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(entry.debit)}</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(entry.credit)}</DetailTableTd>
+              <DetailTableTd align="right">{currency(entry.debit)}</DetailTableTd>
+              <DetailTableTd align="right">{currency(entry.credit)}</DetailTableTd>
               <DetailTableTd align="right" className="font-semibold">{currency(entry.balance)}</DetailTableTd>
             </DetailTableRow>
           ))}

@@ -20,6 +20,6 @@ describe("buildStockCount sen", () => {
     const totals = result.table.rows.filter((r) => r.kind === "total")
     // Trailing-only (BUGHUNT round3 #1 lanjutan): 1 sel, mendarat di kolom
     // terakhir "Nilai Selisih" — dulu cells[5] dari 6 sel berawalan kosong.
-    expect(totals[totals.length - 1].cells).toEqual(["(8)"])
+    expect(totals[totals.length - 1].cells).toEqual(["(8,16)"])
   })
 })

@@ -22,7 +22,7 @@ import {
 } from "@/lib/reports/sales-analytics"
 import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
 import { safeAdd, safeMultiply, safeRound } from "@/lib/utils/math"
-import { formatAccounting, formatReferenceType, formatQuantity, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatReferenceType, formatQuantity, formatDate } from "@/lib/utils/format"
 import { getSystemSettings } from "@/lib/utils/settings"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -32,7 +32,7 @@ export interface StockFlowReport {
   periodCaption: string
 }
 
-const money = (value: number) => formatAccounting(value, { zeroDash: false })
+const money = (value: number) => formatAccountingExact(value)
 const qty = (value: number) => formatQuantity(value)
 const shortDate = (date: Date) =>
   formatDate(date, { format: "short" })

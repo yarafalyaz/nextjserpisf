@@ -58,3 +58,46 @@ describe("formatAccountingExact sweep: nominal bersen tidak dibulatkan", () => {
     expect(subtotal?.kind === "total" ? subtotal.cells : []).toEqual(["2.000.001", "0"])
   })
 })
+
+import { buildStockCount } from "../stock-count"
+import { buildTransferInTransit } from "../transfer-in-transit"
+
+describe("sapuan kedua: nilai selisih dan transfer bersen", () => {
+  it("stock count: nilai selisih bersen tampil hingga sen", () => {
+    const items = [
+      { sku: "A", name: "A", systemQty: 2, actualQty: 0, unit: "PCS", unitCost: 1_000_000.55 },
+      { sku: "B", name: "B", systemQty: 2, actualQty: 0, unit: "PCS", unitCost: 1_000_000.55 },
+    ]
+    const result = buildStockCount({
+      documents: [
+        { documentNo: "SA-1", date: new Date("2026-10-05"), warehouseName: "GU", status: "approved", items },
+      ],
+      start: new Date("2026-10-01"),
+      end: new Date("2026-10-31T23:59:59"),
+    })
+
+    const total = result.table.rows.filter((row) => row.kind === "total")
+    expect(total[total.length - 1].cells).toEqual(["(4.000.002,20)"])
+  })
+
+  it("transfer in transit: nilai per baris ber-sen tampil hingga sen", () => {
+    const result = buildTransferInTransit({
+      transfers: [
+        {
+          documentNo: "TRF-1",
+          date: new Date("2026-10-20T00:00:00.000Z"),
+          sourceName: "Gudang Utama",
+          destinationName: "Bengkel",
+          items: [{ sku: "BRG-1", name: "Busi", unit: "PCS", qty: 1, unitCost: 1_000_000.5 }],
+        },
+      ],
+      asOf: new Date("2026-10-31T00:00:00.000Z"),
+      periodEndIsToday: true,
+    })
+
+    const cells = result.table.rows
+      .filter((row) => row.kind === "data")
+      .flatMap((row) => (row.kind === "data" ? row.cells : []))
+    expect(cells.join(" ")).toContain("1.000.000,50")
+  })
+})
