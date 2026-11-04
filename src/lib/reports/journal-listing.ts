@@ -13,7 +13,7 @@
  */
 
 import { formatAccounting, formatDate } from "@/lib/utils/format"
-import { safeAdd } from "@/lib/utils/math"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 267mm, area isi A4 mendatar. */
@@ -52,6 +52,16 @@ export interface JournalListingResult {
 
 function amount(value: number): string {
   return formatAccounting(value, { zeroDash: false })
+}
+
+/**
+ * Baris total dan peringatan menentukan status seimbang, jadi saat tidak
+ * seimbang angkanya ditulis hingga sen: debit 100,01 vs kredit 100 tanpa sen
+ * akan mencetak dua total "100" dan "selisih 0" padahal `isBalanced` false.
+ * Baris akun dan laporan yang seimbang tetap rupiah penuh seperti sebelumnya.
+ */
+function preciseAmount(value: number): string {
+  return formatAccounting(value, { zeroDash: false, decimals: 2 })
 }
 
 export function shortJournalDate(date: Date): string {
@@ -104,12 +114,13 @@ export function buildJournalListing(input: {
   if (sorted.length === 0) rows.push({ kind: "notice", text: emptyNotice })
 
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.005
+  const totalAmount = isBalanced ? amount : preciseAmount
   if (sorted.length > 0 && !isBalanced) {
     rows.push({
       kind: "notice",
       text:
-        `Perhatian: total debit ${amount(totalDebit)} tidak sama dengan total kredit ${amount(totalCredit)} — ` +
-        `selisih ${amount(totalDebit - totalCredit)}. Periksa jurnal yang barisnya tidak lengkap.`,
+        `Perhatian: total debit ${preciseAmount(totalDebit)} tidak sama dengan total kredit ${preciseAmount(totalCredit)} — ` +
+        `selisih ${preciseAmount(safeSubtract(totalDebit, totalCredit, 2))}. Periksa jurnal yang barisnya tidak lengkap.`,
     })
   }
 
@@ -118,7 +129,7 @@ export function buildJournalListing(input: {
       kind: "total",
       grand: true,
       label: totalLabel,
-      cells: [amount(totalDebit), amount(totalCredit)],
+      cells: [totalAmount(totalDebit), totalAmount(totalCredit)],
     })
   }
 

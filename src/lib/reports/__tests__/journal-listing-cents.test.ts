@@ -27,6 +27,30 @@ describe("journal-listing presisi sen", () => {
     expect(r.isBalanced).toBe(true)
   })
 
+  it("total jurnal yang tidak seimbang memperlihatkan sen dan selisih nyata", () => {
+    const journals = centsJournals().slice(0, 1).map((j) => ({
+      ...j,
+      lines: [
+        { accountCode: "1101", accountName: "Kas", debit: 100.01, credit: 0 },
+        { accountCode: "4101", accountName: "Pendapatan", debit: 0, credit: 100 },
+      ],
+    }))
+    const r = buildJournalListing({ journals, emptyNotice: "kosong" })
+
+    expect(r.isBalanced).toBe(false)
+    const notice = r.table.rows.find((row) => row.kind === "notice")
+    expect(notice?.kind === "notice" ? notice.text : "").toContain("selisih 0,01")
+    const total = r.table.rows.find((row) => row.kind === "total")
+    expect(total?.kind === "total" ? total.cells : []).toEqual(["100,01", "100,00"])
+  })
+
+  it("total jurnal yang seimbang tetap rupiah penuh", () => {
+    const r = buildJournalListing({ journals: centsJournals(), emptyNotice: "kosong" })
+
+    const total = r.table.rows.find((row) => row.kind === "total")
+    expect(total?.kind === "total" ? total.cells : []).toEqual(["4", "4"])
+  })
+
   it("ringkasan aset per jenis persis sen", () => {
     const journals: AssetJournalInput[] = centsJournals().map((j) => ({
       id: j.id,
