@@ -4124,3 +4124,14 @@ Kartu `project-budget-card.tsx` (18 pemakaian `formatCurrency`) mencetak total R
 ### Bukti
 - Merah: 1 gagal/10 lulus; hijau 11/11; 3.012 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
 - CI `41819908766`, `41819946252`, `41820360914`, `41820431280` **success** (putaran 167–168).
+
+## Putaran 172 — kartu earned value proyek (commit `0f0c46237`)
+
+Kartu Progres Tertimbang Proyek mencetak total RAB, biaya aktual, earned value, planned value, dan nilai per tahap dengan 0 desimal. Nilai diturunkan dari biaya proyek bersen (RAB `safeSum`, realisasi dari builder L/R).
+
+### Vonis FIX
+- Kartu memakai `formatCurrencyExact`; regresi baru mengunci `Rp 50.000.000,25`.
+
+### Bukti
+- Merah: 1 gagal/6 lulus; hijau 7/7; 3.013 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
+- CI `41820360914`, `41820431280`, `41820771273`, `41820818949` **success** (putaran 168–169).
