@@ -68,3 +68,49 @@ describe("FIN-BR-009-S4 header Dokumen ringkasan aging", () => {
     }
   })
 })
+
+describe("KPI total aging ber-sen", () => {
+  it("KPI total menampilkan hingga sen, bukan dibulatkan ke rupiah penuh", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const root: Root = createRoot(container)
+    const rows = buildAgingRows(
+      [
+        { party: "V", documentNo: "B-1", dueDate: DUE, grandTotal: 1_000_000.25, paidAmount: 0 },
+        { party: "V", documentNo: "B-2", dueDate: DUE, grandTotal: 1_000_000.25, paidAmount: 0 },
+      ],
+      NOW,
+    )
+    act(() => {
+      root.render(
+        createElement(AgingReportView, {
+          rows,
+          texts: {
+            pageTitle: "Piutang Jatuh Tempo",
+            exportTitle: "Piutang_Jatuh_Tempo",
+            pdfSlug: "piutang-jatuh-tempo",
+            letterheadSubtitle: "Umur Piutang",
+            narration: "Ringkasan singkat.",
+            kpiLabel: "Total Piutang",
+            summaryTitle: "Ringkasan Umur Piutang",
+            chartTitle: "Grafik Umur Piutang",
+            chartValueLabel: "Nilai Piutang",
+            chartAriaLabel: "Grafik umur piutang per kategori umur",
+            detailTitle: "Detail Piutang",
+            partyHeader: "Pelanggan",
+            documentHeader: "No. Faktur",
+            emptyText: "Tidak ada piutang jatuh tempo",
+            outstandingClassName: "font-semibold",
+          },
+        }),
+      )
+    })
+    try {
+      const text = container.textContent ?? ""
+      expect(text).toContain("Rp 2.000.000,50")
+    } finally {
+      act(() => root.unmount())
+      container.remove()
+    }
+  })
+})

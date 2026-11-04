@@ -1,4 +1,4 @@
-import { formatCurrency, formatAccountingExact, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { buildReportPeriodSlug } from "@/lib/reports/report-period"
@@ -127,7 +127,7 @@ export function AgingReportView({ rows, texts }: { rows: ReturnType<typeof build
       <ReportNarration text={texts.narration} />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label={texts.kpiLabel} value={formatCurrency(totalOutstanding)} />
+        <ReportKpiCard label={texts.kpiLabel} value={formatCurrencyExact(totalOutstanding)} />
       </div>
 
       <ReportSection title={texts.summaryTitle}>
