@@ -363,7 +363,14 @@ export async function loadStockCard(
     { qty: safeRound(opening.qty, 2), value: safeRound(opening.value, 2) },
   )
   const rows: TableRow[] = [
-    { kind: "data", cells: ["", "Saldo Awal", "", "", qty(card.openingQty), "", qty(card.closingQty - card.totalInQty + card.totalOutQty), ""] },
+    // Saldo awal adalah POSISI, bukan mutasi periode: angkanya hanya di kolom
+    // Saldo. Menaruhnya juga di kolom Masuk membuat pembaca menjumlah kolom itu
+    // (20 + 2) padahal periode hanya memasukkan 2, dan baris Saldo Akhir di
+    // bawahnya menyatakan Masuk = 2. Layar sudah menulis "–" di Masuk/Keluar.
+    {
+      kind: "data",
+      cells: ["", "Saldo Awal", "", "", "", "", qty(card.openingQty), ""],
+    },
   ]
   for (const move of card.rows) {
     rows.push({

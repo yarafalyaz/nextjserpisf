@@ -116,6 +116,7 @@ describe("E140-3 paritas layar-vs-PDF kartu stok (D3)", () => {
     const pdf = await loadStockCard(period, 7, null)
     expect(mocks.$queryRaw).toHaveBeenCalledTimes(1)
     expect(mocks.stockMove.findMany).toHaveBeenCalledTimes(1)
+    const headers = pdf.table.columns.map((c) => c.header)
     const total = pdf.table.rows.find((r) => r.kind === "data" && r.cells[1] === "Saldo Akhir")
     if (total?.kind !== "data") throw new Error("baris Saldo Akhir PDF hilang")
     const nums = total.cells.map(cellNum).filter((n) => !Number.isNaN(n))
@@ -123,6 +124,15 @@ describe("E140-3 paritas layar-vs-PDF kartu stok (D3)", () => {
     expect(nums).toContain(22)
     const opening = pdf.table.rows.find((r) => r.kind === "data" && r.cells[1] === "Saldo Awal")
     if (opening?.kind !== "data") throw new Error("baris Saldo Awal PDF hilang")
+    // Saldo awal adalah posisi, bukan mutasi: hanya di kolom Saldo. Kalau ia
+    // juga ditaruh di Masuk, kolom itu menjumlah 22 sementara Saldo Akhir
+    // menyatakan Masuk 2 (tidak bisa direkonsiliasi oleh pembaca).
+    const saldoIdx = headers.indexOf("Saldo")
+    const masukIdx = headers.indexOf("Masuk")
+    const keluarIdx = headers.indexOf("Keluar")
+    expect(opening.cells[saldoIdx]).toBe("20")
+    expect(opening.cells[masukIdx]).toBe("")
+    expect(opening.cells[keluarIdx]).toBe("")
     expect(opening.cells.map(cellNum)).toContain(20)
   })
 
