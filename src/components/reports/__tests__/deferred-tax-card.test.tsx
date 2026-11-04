@@ -135,3 +135,24 @@ describe("DeferredTaxCard F-2026-10-23-112 + F-2026-10-23-124-V", () => {
     unmountCard(root)
   })
 })
+
+describe("DeferredTaxCard: nominal bersen", () => {
+  it("ringkasan liabilitas/aset tangguhan tampil hingga sen", () => {
+    const report = buildDeferredTaxTemporaryDifference({
+      assets: [
+        asset({ code: "A", bookValue: 13_000_000.5, frozenClosingBalance: 12_000_000, purchaseCost: 15_000_001 }),
+      ],
+      taxRatePercent: 22,
+      asOf: AS_OF,
+    })
+    const { container, root } = renderCard(<DeferredTaxCard report={report} />)
+    const summaryText =
+      container.querySelector(
+        'section[aria-label="Perbedaan Temporer Pajak Tangguhan"] div p',
+      )?.textContent ?? ""
+    // Selisih temporer 1.000.000,50 → tangguhan 22% = 220.000,11; ringkasan
+    // harus mempertahankan sen, bukan membulat ke Rp 220.000.
+    expect(summaryText).toContain("liabilitas Rp 220.000,11")
+    unmountCard(root)
+  })
+})

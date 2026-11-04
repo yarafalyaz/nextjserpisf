@@ -1,5 +1,5 @@
 import type { DeferredTaxResult } from "@/lib/reports/deferred-tax"
-import { formatCurrency, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatNumber } from "@/lib/utils/format"
 import { ReportTableView } from "./report-table-view"
 import { ReportCardShell } from "./report-card-shell"
 
@@ -23,7 +23,7 @@ export function DeferredTaxCard({ report }: Readonly<{ report: DeferredTaxResult
         <>
           {formatNumber(totals.assets)} aset · {formatNumber(totals.excluded)} tidak masuk perbandingan ·{" "}
           {formatNumber(totals.fiscalNotFrozen)} fiskal belum terbekukan · liabilitas{" "}
-          {formatCurrency(totals.deferredTaxLiability)} · aset {formatCurrency(totals.deferredTaxAsset)}
+          {formatCurrencyExact(totals.deferredTaxLiability)} · aset {formatCurrencyExact(totals.deferredTaxAsset)}
           {report.taxRatePercent !== null ? (
             <>
               {" "}

@@ -1,5 +1,5 @@
 import type { DeferredTaxNonAssetResult } from "@/lib/reports/deferred-tax-nonaset"
-import { formatCurrency, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatNumber } from "@/lib/utils/format"
 import { ReportTableView } from "./report-table-view"
 import { ReportCardShell } from "./report-card-shell"
 
@@ -30,7 +30,7 @@ export function DeferredTaxNonAssetCard({
       summary={
         <>
           {formatNumber(lines.length)} sumber · indikasi aset{" "}
-          {formatCurrency(totals.deferredTaxAssetIndication)}
+          {formatCurrencyExact(totals.deferredTaxAssetIndication)}
           {report.taxRatePercent !== null ? (
             <>
               {" "}

@@ -1,5 +1,5 @@
 import type { DeferredTaxValueEventResult } from "@/lib/reports/deferred-tax-value-events"
-import { formatCurrency, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatNumber } from "@/lib/utils/format"
 import { ReportTableView } from "./report-table-view"
 import { ReportCardShell } from "./report-card-shell"
 
@@ -31,9 +31,9 @@ export function DeferredTaxValueEventCard({
           <>
             {formatNumber(totals.events)} peristiwa · {formatNumber(totals.computed)} terhitung ·{" "}
             {formatNumber(totals.unavailable)} tidak dihitung · indikasi liabilitas{" "}
-            {formatCurrency(totals.deferredTaxLiabilityIndication)} · indikasi aset{" "}
-            {formatCurrency(totals.deferredTaxAssetIndication)} ({report.recognitionLabel}) ·
-            PPh final (pajak kini) {formatCurrency(totals.finalTaxCurrent)}
+            {formatCurrencyExact(totals.deferredTaxLiabilityIndication)} · indikasi aset{" "}
+            {formatCurrencyExact(totals.deferredTaxAssetIndication)} ({report.recognitionLabel}) ·
+            PPh final (pajak kini) {formatCurrencyExact(totals.finalTaxCurrent)}
             {report.taxRatePercent !== null ? (
               <>
                 {" "}
