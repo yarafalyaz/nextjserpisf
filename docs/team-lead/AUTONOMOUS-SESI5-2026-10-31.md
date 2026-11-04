@@ -4113,3 +4113,14 @@ Kartu Rekonsiliasi Bank Belum Selesai mencetak saldo rekening koran dan saldo bu
 
 ### Bukti
 - Merah: 1 gagal/5 lulus; hijau 6/6; 3.249 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
+
+## Putaran 171 — kartu RAB vs realisasi proyek (commit `0e151fd8b`)
+
+Kartu `project-budget-card.tsx` (18 pemakaian `formatCurrency`) mencetak total RAB, realisasi, selisih, nilai per tahap, per kategori, dan ember belum-teralokasi dengan 0 desimal. Builder menjumlah `safeAdd` dua desimal dan menghitung `varianceTotal` dengan `safeSubtract(..., 2)`, jadi selisih sen hilang dari tampilan.
+
+### Vonis FIX
+- Kartu memakai `formatCurrencyExact`; regresi baru mengunci `Rp 13.000.000,50` dan `Rp 6.000.000,25`.
+
+### Bukti
+- Merah: 1 gagal/10 lulus; hijau 11/11; 3.012 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
+- CI `41819908766`, `41819946252`, `41820360914`, `41820431280` **success** (putaran 167–168).
