@@ -14,7 +14,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatAccounting, formatDate } from "@/lib/utils/format"
 import { safeAdd, safeMultiply, safeRound, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -114,6 +114,17 @@ export interface VatInvoiceListResult {
 
 function amount(value: number): string {
   return formatAccounting(value, { zeroDash: false })
+}
+
+/**
+ * Angka posisi PPN menentukan "kurang/lebih bayar", jadi sen tidak boleh
+ * hilang: posisi 100,50 yang dibulatkan berbunyi "Rp 101" — angka yang tidak
+ * ada di buku. Nilai bulat tetap dicetak rupiah penuh agar laporan tidak
+ * berubah bentuk untuk data tanpa sen.
+ */
+function preciseAmount(value: number): string {
+  if (Number.isInteger(value)) return amount(value)
+  return formatAccounting(value, { zeroDash: false, decimals: 2 })
 }
 
 function shortDate(date: Date): string {
@@ -255,9 +266,9 @@ export function buildVatInvoiceList(input: {
     // tidak rekonsiliasi (DPP + PPN !== Total). Keluaran neto = keluaran −
     // retur, lalu dikurangi masukan — sama seperti `netVat` di sel PPN.
     cells: [
-      amount(safeSubtract(safeSubtract(output.dpp, returnDeduction.dpp, 2), inputGroup.dpp, 2)),
-      amount(netVat),
-      amount(safeSubtract(safeSubtract(output.total, returnDeduction.total, 2), inputGroup.total, 2)),
+      preciseAmount(safeSubtract(safeSubtract(output.dpp, returnDeduction.dpp, 2), inputGroup.dpp, 2)),
+      preciseAmount(netVat),
+      preciseAmount(safeSubtract(safeSubtract(output.total, returnDeduction.total, 2), inputGroup.total, 2)),
     ],
   })
 
@@ -299,10 +310,10 @@ export function buildVatInvoiceList(input: {
     output.count === 0 && inputGroup.count === 0
       ? "Tidak ada faktur ber-PPN pada periode ini"
       : `PPN keluaran ${output.count} faktur · PPN masukan ${inputGroup.count} faktur · ` +
-        `posisi ${netVat >= 0 ? "kurang" : "lebih"} bayar ${formatCurrency(Math.abs(netVat))}` +
+        `posisi ${netVat >= 0 ? "kurang" : "lebih"} bayar ${preciseAmount(Math.abs(netVat))}` +
         (missingTaxInvoiceCount > 0 ? ` · ${missingTaxInvoiceCount} tanpa nomor faktur pajak` : "") +
         (returnedInvoiceCount > 0 ? ` · ${returnedInvoiceCount} faktur ber-retur` : "") +
-        (returnDeduction.count > 0 ? ` · pengurang retur ${formatCurrency(returnDeduction.vat)}` : "")
+        (returnDeduction.count > 0 ? ` · pengurang retur ${preciseAmount(returnDeduction.vat)}` : "")
 
   return {
     table: { columns: COLUMNS, rows },
@@ -323,8 +334,8 @@ export function vatInvoiceSummary(result: VatInvoiceListResult): string {
     return "Tidak ada faktur ber-PPN pada periode ini"
   }
   return (
-    `Keluaran ${formatCurrency(result.output.vat)} (${result.output.count} faktur) · ` +
-    `Masukan ${formatCurrency(result.input.vat)} (${result.input.count} faktur) · ` +
-    `posisi ${result.netVat >= 0 ? "kurang" : "lebih"} bayar ${formatCurrency(Math.abs(result.netVat))}`
+    `Keluaran ${preciseAmount(result.output.vat)} (${result.output.count} faktur) · ` +
+    `Masukan ${preciseAmount(result.input.vat)} (${result.input.count} faktur) · ` +
+    `posisi ${result.netVat >= 0 ? "kurang" : "lebih"} bayar ${preciseAmount(Math.abs(result.netVat))}`
   )
 }

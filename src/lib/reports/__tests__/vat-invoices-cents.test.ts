@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { vatDpp } from "@/lib/reports/vat-invoices-data"
-import { buildVatInvoiceList, type VatInvoiceInput } from "@/lib/reports/vat-invoices"
+import { buildVatInvoiceList, vatInvoiceSummary, type VatInvoiceInput } from "@/lib/reports/vat-invoices"
 
 function invoice(overrides: Partial<VatInvoiceInput> = {}): VatInvoiceInput {
   return {
@@ -40,5 +40,27 @@ describe("Faktur PPN presisi sen", () => {
     expect(result.netVat).toBe(3.96)
     const grand = result.table.rows.find((r) => r.kind === "total" && r.grand)
     expect(grand?.kind === "total" ? grand.cells.join("|") : "").not.toContain("000000")
+  })
+
+  it("posisi PPN setengah rupiah tidak dibulatkan jadi Rp 1", () => {
+    const result = buildVatInvoiceList({
+      output: [invoice({ documentNo: "OUT-1", dpp: 100.5, vat: 100.5, total: 201 })],
+      input: [],
+    })
+
+    expect(result.netVat).toBe(100.5)
+    const grand = result.table.rows.find((r) => r.kind === "total" && r.grand)
+    expect(grand?.kind === "total" ? grand.cells[1] : "").toBe("100,50")
+    expect(result.verdict).toContain("100,50")
+    expect(result.verdict).not.toContain("Rp 101")
+  })
+
+  it("ringkasan faktur PPN menyebut posisi hingga sen", () => {
+    const result = buildVatInvoiceList({
+      output: [invoice({ documentNo: "OUT-1", dpp: 100.5, vat: 100.5, total: 201 })],
+      input: [],
+    })
+
+    expect(vatInvoiceSummary(result)).toContain("100,50")
   })
 })
