@@ -11,7 +11,7 @@ import {
   type JobPaymentTermWriteInput,
 } from "@/actions/job-payment-schedule.actions"
 import { createProgressInvoice } from "@/actions/sales.actions"
-import { formatCurrency, formatDate, formatPercentage } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate, formatPercentage } from "@/lib/utils/format"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import { useActionRunner } from "./use-action-runner"
 import { Button } from "@/components/ui/button"
@@ -200,11 +200,11 @@ export function JobPaymentScheduleCard({
           <dl className="mt-1 flex flex-wrap gap-x-6 gap-y-1 text-sm">
             <div className="flex gap-2">
               <dt className="text-muted-foreground">Nilai kontrak</dt>
-              <dd className="font-semibold tabular-nums">{formatCurrency(schedule.contractValue)}</dd>
+              <dd className="font-semibold tabular-nums">{formatCurrencyExact(schedule.contractValue)}</dd>
             </div>
             <div className="flex gap-2">
               <dt className="text-muted-foreground">Sudah ditagih</dt>
-              <dd className="tabular-nums">{formatCurrency(schedule.billedAmount)}</dd>
+              <dd className="tabular-nums">{formatCurrencyExact(schedule.billedAmount)}</dd>
             </div>
           </dl>
 
@@ -233,10 +233,10 @@ export function JobPaymentScheduleCard({
                       ) : null}
                     </td>
                     <td className="py-1.5 pr-2 text-right tabular-nums">
-                      {formatPercentage(term.cumulativePercent, 1)} · {formatCurrency(term.targetAmount)}
+                      {formatPercentage(term.cumulativePercent, 1)} · {formatCurrencyExact(term.targetAmount)}
                     </td>
-                    <td className="py-1.5 pr-2 text-right tabular-nums">{formatCurrency(term.termAmount)}</td>
-                    <td className="py-1.5 pr-2 text-right tabular-nums">{formatCurrency(term.fulfilledAmount)}</td>
+                    <td className="py-1.5 pr-2 text-right tabular-nums">{formatCurrencyExact(term.termAmount)}</td>
+                    <td className="py-1.5 pr-2 text-right tabular-nums">{formatCurrencyExact(term.fulfilledAmount)}</td>
                     <td className="py-1.5 pr-2 tabular-nums">{formatDate(term.dueDate)}</td>
                     <td className="py-1.5">
                       <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-medium", statusTone(term.status))}>
@@ -258,7 +258,7 @@ export function JobPaymentScheduleCard({
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <p className="text-sm text-muted-foreground">
                 Termin berikutnya: <span className="font-medium text-foreground">{nextTerm.name}</span> — target kumulatif{" "}
-                {formatPercentage(nextTerm.cumulativePercent, 1)} ({formatCurrency(nextTerm.targetAmount)})
+                {formatPercentage(nextTerm.cumulativePercent, 1)} ({formatCurrencyExact(nextTerm.targetAmount)})
               </p>
               <Button
                 variant="secondary"

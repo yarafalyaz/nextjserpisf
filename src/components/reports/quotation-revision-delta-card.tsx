@@ -1,5 +1,5 @@
 import type { QuotationRevisionDelta } from "@/lib/reports/quotation-revision-delta"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -44,9 +44,9 @@ export function QuotationRevisionDeltaCard({
         </DetailTableHead>
         <DetailTableBody>
           <DetailTableRow>
-            <DetailTableTd>{formatCurrency(delta.snapshotTotalCents / 100)}</DetailTableTd>
-            <DetailTableTd>{formatCurrency(delta.currentTotalCents / 100)}</DetailTableTd>
-            <DetailTableTd>{formatCurrency(delta.deltaCents / 100)}</DetailTableTd>
+            <DetailTableTd>{formatCurrencyExact(delta.snapshotTotalCents / 100)}</DetailTableTd>
+            <DetailTableTd>{formatCurrencyExact(delta.currentTotalCents / 100)}</DetailTableTd>
+            <DetailTableTd>{formatCurrencyExact(delta.deltaCents / 100)}</DetailTableTd>
             <DetailTableTd>
               {delta.billingPath ? BILLING_PATH_LABEL[delta.billingPath] : "—"}
             </DetailTableTd>

@@ -5,7 +5,7 @@ import type {
 } from "@/lib/reports/quotation-accepted-queue"
 import { ACCEPTED_QUOTATION_QUEUE_NOTICE_TEXT } from "@/lib/reports/quotation-accepted-queue"
 import { entityHref } from "@/lib/utils/entity-url"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -39,10 +39,10 @@ const TITLE = "Antrean Penawaran Diterima"
 function dpFactText(row: AcceptedQuotationRow): string | null {
   const parts: string[] = []
   if (row.dpPendingCount > 0) {
-    parts.push(`menunggu ${row.dpPendingCount} (${formatCurrency(row.dpPendingTotal)})`)
+    parts.push(`menunggu ${row.dpPendingCount} (${formatCurrencyExact(row.dpPendingTotal)})`)
   }
   if (row.dpConfirmedCount > 0) {
-    parts.push(`terkonfirmasi ${row.dpConfirmedCount} (${formatCurrency(row.dpConfirmedTotal)})`)
+    parts.push(`terkonfirmasi ${row.dpConfirmedCount} (${formatCurrencyExact(row.dpConfirmedTotal)})`)
   }
   return parts.length > 0 ? `Uang muka: ${parts.join(", ")}` : null
 }

@@ -67,3 +67,16 @@ describe("MinStockWarehouseCard F-2026-10-21-013 + label sumber F-2026-10-22-070
     unmountCard(root)
   })
 })
+
+describe("MinStockWarehouseCard: nominal bersen", () => {
+  it("nilai kekurangan ber-sen tampil hingga sen", () => {
+    const shortages = buildMinStockByWarehouse([
+      { itemId: 1, sku: "BRG-001", name: "Plat Besi", warehouseId: 2, warehouseName: "Gudang Bengkel", qtyAtWarehouse: 0, minStock: 5, minStockSource: "override", cost: 100_000.5 },
+    ])
+    const { container, root } = renderCard(
+      <MinStockWarehouseCard shortages={shortages} note="catatan" />,
+    )
+    expect(container.textContent ?? "").toContain("Rp 500.002,50")
+    unmountCard(root)
+  })
+})

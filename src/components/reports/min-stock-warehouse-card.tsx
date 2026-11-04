@@ -1,6 +1,6 @@
 import type { MinStockWarehouseLine } from "@/lib/reports/min-stock"
 import { MIN_STOCK_GLOBAL_LABEL, MIN_STOCK_OVERRIDE_LABEL } from "@/lib/reports/min-stock-data"
-import { formatCurrency, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatNumber } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -63,7 +63,7 @@ export function MinStockWarehouseCard({
                 {line.minStockSource === "override" ? MIN_STOCK_OVERRIDE_LABEL : MIN_STOCK_GLOBAL_LABEL}
               </DetailTableTd>
               <DetailTableTd align="right">{formatNumber(line.shortage)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(line.shortageValue)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(line.shortageValue)}</DetailTableTd>
             </DetailTableRow>
           ))}
         </DetailTableBody>
