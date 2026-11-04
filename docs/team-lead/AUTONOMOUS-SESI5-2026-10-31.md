@@ -3545,3 +3545,56 @@ Laporan `/laporan/perbedaan-penyusutan` adalah laporan **temuan selisih** antara
 - Merah: 1 gagal — sel `(0)`/`1.000.000` vs `(0,01)`/`100,01`.
 - Hijau: `format.test.ts` 64/64 dan `customer-credit-exposure-data.test.ts` 7/7; `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` + halaman piutang **3092 lulus / 4 dilewati** (396 berkas); guard statis **511/511**; `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
 - CI `41790684828` (head `87567df36`) **success** — keenam job.
+
+## Putaran 136 — DPP pembelian memotong diskon dua kali (commit `6eec86686`)
+
+Audit lanjutan pada laporan pembelian. `VendorBillItem.subtotal` **sudah neto** diskon baris: `computeBillLineAmounts` (`src/lib/finance/vendor-bill.ts`) menyimpan `gross − discountAmount` ke kolom itu, sementara header tagihan tetap bruto. Loader Pembelian per Pemasok/Barang/Biaya mengurangkan `discountAmount` sekali lagi:
+
+```ts
+const dpp = safeSubtract(Number(line.subtotal), Number(line.discountAmount), 2)
+```
+
+Probe dengan nilai tersimpan nyata (qty 3 × 100.000, diskon 10%, PPN 11%): baris menyimpan subtotal 270.000 / diskon 30.000, tetapi laporan mencetak **DPP 240.000** dan total 269.700. Laporan Pajak (`vat-invoices-data.ts`) memakai basis header (`subtotal − discountAmount`) dan mencetak 270.000 untuk dokumen yang sama — dua laporan berbeda untuk satu tagihan. Pada diskon 100%, DPP menjadi negatif dan tercetak sebagai pembelian minus karena tapis baris hanya membuang `dpp === 0 && tax === 0`.
+
+### Vonis FIX
+- DPP = `subtotal` baris apa adanya; PPN tetap `taxAmount` baris.
+- Regresi loader baru (`purchase-by-dimension-data.test.ts`) mengunci 270.000/29.700/299.700 dan memastikan baris diskon 100% tidak muncul sebagai angka negatif.
+
+### Vonis CATAT
+- **Basis DPP kini berbeda antara dua jalur untuk kasus tepi.** Laporan Pembelian memakai jumlah `subtotal` baris; laporan Pajak memakai `subtotal − discountAmount` header manual. Untuk tagihan berbaris keduanya sama (header = jumlah gross dan diskon baris), tetapi tagihan manual tanpa baris tidak punya `discountAmount` sehingga identik. Tidak ada perubahan pada laporan Pajak.
+
+### Bukti
+- Merah: 2 gagal/0 lulus (`240.000` vs `270.000`, dan baris minus muncul).
+- Hijau: 2/2 baru; seluruh `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` + halaman pembelian **3093 lulus / 4 dilewati**; guard statis 511/511; tsc, ESLint, diff-check bersih.
+
+## Putaran 137 — "Rp -0" dan "(0)" tercetak untuk nilai yang membulat habis (commit `8bfe674e9`)
+
+`Intl.NumberFormat` mempertahankan tanda negatif pada nilai yang membulat ke nol. Probe: `formatCurrency(-0.24)` → **"Rp -0"**, `formatAccounting(-0.24, { zeroDash: false })` → **"(0)"**. Ini muncul di ringkasan laporan yang memakai nilai ber-sen (mis. selisih pembulatan dua laporan), string yang tidak punya arti dan terbaca seperti saldo minus.
+
+### Vonis FIX
+- Kedua formatter membulatkan magnitudo pada jumlah desimal yang diminta, lalu hanya mempertahankan tanda bila hasil pembulatan bukan nol. `-0,5` tetap `(1)`, `-0,24` menjadi `0`.
+
+### Bukti
+- Merah: 2 gagal/64 lulus.
+- Hijau: 66/66; **seluruh suite unit 12.514 lulus / 23 dilewati** (1.167 berkas); tsc, ESLint, diff-check bersih.
+
+## Putaran 138 — faktur jatuh tempo hari ini dihitung "lewat jatuh tempo" pukul 07.00 (commit `27a29439b`)
+
+`dueDate` dokumen disimpan tengah malam UTC hari WIB (`wibDateToUtcMidnight`) = **07.00 WIB**. Dua loader memakai perbandingan instan:
+
+```ts
+if (inv.dueDate && inv.dueDate < now) bucket.overdue = ...
+```
+
+Probe: faktur jatuh tempo 4 Nov (`2026-11-04T00:00Z`) → pukul 05.00 WIB `overdue = 0`, pukul 12.00 WIB `overdue = 2.500.000`, padahal `daysOverdue(due, now) = 0` dan `agingBucket` menempatkannya di "Belum Jatuh Tempo". Pada laporan periode lampau, `period.end` = 23:59:59.999 lokal membuat faktur yang jatuh tempo **pada hari terakhir periode** masuk KPI "Jatuh Tempo" tetapi tidak masuk bucket umurnya — dua angka berbeda di satu laporan.
+
+### Vonis FIX
+- `aggregateCustomerReceivables` (dipakai Piutang per Pelanggan + ekspor) dan `groupReceivablesByVehicle` memakai `daysOverdue(inv.dueDate, now) > 0`, pembanding hari kalender yang sama dengan bucket umur dan `customer-statement.ts`.
+
+### Vonis CATAT
+- **Definisi "lewat jatuh tempo" kini satu: D+1 setelah tanggal jatuh tempo.** Daftar faktur dan cron notifikasi sudah memakai awal hari lokal; tidak ada perubahan di sana.
+- **`daysOverdue` memakai komponen tanggal lokal proses** (bukan WIB eksplisit). Di proses non-WIB nilai tengah malam UTC tetap terbaca sebagai tanggal yang sama karena selisih < 12 jam dari zona mana pun kecuali ekstrem; risiko yang tersisa adalah kelas yang sudah dicatat untuk helper kanonis, bukan cacat baru.
+
+### Bukti
+- Merah: 2 gagal/8 lulus (KPI berubah antara 05.00 dan 12.00 WIB).
+- Hijau: 10/10; `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` + seluruh halaman laporan **3160 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
