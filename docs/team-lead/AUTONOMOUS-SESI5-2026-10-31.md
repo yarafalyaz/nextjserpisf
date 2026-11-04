@@ -4565,3 +4565,18 @@ Empat belas tabel daftar mencetak nominal `Decimal(15,2)` dengan 0 desimal:
 ### Bukti
 - Merah: 1 gagal/18 lulus; hijau 137/137 suite terkait dan 19/19 tes sweep; tsc, ESLint, diff-check bersih.
 - CI `41856179812`, `41856223297`, `41856828372`, `41856863230` **success** (putaran 199–200).
+
+## Putaran 203 — 21 halaman detail/daftar (commit `3bb49846f`)
+
+Sapuan lanjutan pada halaman detail dan daftar yang belum tersentuh: mutasi stok, pengeluaran material, detail jurnal, laporan aset tetap / bukti potong / penerimaan belum ditagih / proyeksi kas, panel penyesuaian gaji, kendaraan pelanggan, perintah pembayaran, retur penjualan & pembelian, form tukar faktur, uang muka (tabel, snapshot PPN, detail), tombol PO jasa, change order pekerjaan, dan editor anggaran proyek.
+
+### Vonis FIX
+- Semua memakai `formatCurrencyExact`; guard statis menolak `formatCurrency(` tanpa `Exact` di 21 berkas itu.
+- Satu tes perf (`work-order-detail-perf.test.ts`) mengunci string `formatCurrency(...)` lama; diperbarui ke `formatCurrencyExact(...)` tanpa melemahkan maksudnya (masih memverifikasi tidak ada `new Intl` per render, kini helper bersama yang juga menjaga sen).
+
+### Vonis CATAT
+- **Pemakaian yang meneruskan `{ decimals: 2 }` dilewati oleh sapuan** — skrip sapuan memeriksa argumen sebelum mengganti, sehingga `asset-capitalization.tsx` tetap memakai `formatCurrency` di dua tempat. Ini perbaikan proses dari kesalahan Putaran 202.
+
+### Bukti
+- Merah: 1 gagal/19 lulus; hijau 3.180 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+- CI `41856828372`, `41856863230`, `41857966219`, `41858012875` **success** (putaran 200–201).
