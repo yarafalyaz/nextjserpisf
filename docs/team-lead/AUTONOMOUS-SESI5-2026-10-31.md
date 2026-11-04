@@ -4030,3 +4030,17 @@ Kartu `customer-credit-queue-card.tsx` mencetak saldo per baris, diterima/teralo
 
 ### Bukti
 - Merah: 1 gagal/7 lulus; hijau 8/8; 3.006 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
+
+## Putaran 164 — antrean penagihan (commit `f00ed5afa`)
+
+`collection-queue-card.tsx` mencetak total sisa, rekap per tingkat pengingat, grand total/dibayar/sisa per faktur, dan **teks pesan WhatsApp** dengan `formatCurrency` 0 desimal. Sisa Rp1.000.000,50 tampil `Rp 1.000.000`, dan rekap tidak cocok dengan penjumlahan baris.
+
+### Vonis FIX
+- Kartu memakai `formatCurrencyExact`; regresi render mengunci `Rp 1.000.000,50`.
+
+### Vonis CATAT
+- **Teks pesan WhatsApp ikut berubah** — nominal yang dikirim ke pelanggan sekarang menyebut sen bila ada. Itu disengaja: pesan yang menyebut angka berbeda dari layar adalah kelas cacat yang sama.
+
+### Bukti
+- Merah: 1 gagal/7 lulus; hijau 8/8; 3.007 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
+- CI `41817424251` (KPI aging) dan `41818435167` (dokumentasi) **success**.
