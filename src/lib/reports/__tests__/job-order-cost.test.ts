@@ -110,3 +110,30 @@ describe("buildJobOrderCost", () => {
     expect(notices.some((text) => text.includes("Tidak ada perintah kerja"))).toBe(true)
   })
 })
+
+describe("biaya pekerjaan: presisi sen", () => {
+  it("biaya ber-sen tampil hingga sen sehingga total cocok dengan barisnya", () => {
+    const result = buildJobOrderCost({
+      jobs: [
+        job({ id: 1, documentNo: "WO-A", materialCost: 1_000_000.5, productionCost: 400_000.25, completedQty: 0 }),
+        job({ id: 2, documentNo: "WO-B", materialCost: 1_000_000.5, productionCost: 400_000.25, completedQty: 0 }),
+      ],
+      start: period.start,
+      end: period.end,
+    })
+
+    const rows = result.table.rows.filter((row) => row.kind === "data")
+    expect(rows.map((row) => (row.kind === "data" ? row.cells.slice(1, 4) : []))).toEqual([
+      ["1.000.000,50", "400.000,25", "1.400.000,75"],
+      ["1.000.000,50", "400.000,25", "1.400.000,75"],
+    ])
+    const grand = result.table.rows.find((row) => row.kind === "total" && row.grand)
+    expect(grand?.kind === "total" ? grand.cells : []).toEqual([
+      "2.000.001",
+      "800.000,50",
+      "2.800.001,50",
+      "–",
+      "–",
+    ])
+  })
+})

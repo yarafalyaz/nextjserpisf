@@ -14,7 +14,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency, formatMonthYear, formatNumber, formatQuantity } from "@/lib/utils/format"
+import { formatAccountingExact, formatMonthYear, formatNumber, formatQuantity } from "@/lib/utils/format"
 import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -53,8 +53,13 @@ export interface JobOrderCompletionResult {
   documentCount: number
 }
 
+/**
+ * Biaya dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, dua baris "1.000.001" berjumlah "2.000.002" sementara
+ * totalnya "2.000.001" — total tidak cocok dengan penjumlahan barisnya.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function quantity(value: number): string {
@@ -145,6 +150,6 @@ export function jobOrderCompletionSummary(result: JobOrderCompletionResult): str
   const unitCost = result.totals.qty > 0 ? result.totals.totalCost / result.totals.qty : 0
   return (
     `${result.documentCount} dokumen penyelesaian · ${formatNumber(result.totals.qty)} unit · ` +
-    `nilai ${formatCurrency(result.totals.totalCost)} (rata-rata ${formatCurrency(unitCost)} per unit)`
+    `nilai ${amount(result.totals.totalCost)} (rata-rata ${amount(unitCost)} per unit)`
   )
 }

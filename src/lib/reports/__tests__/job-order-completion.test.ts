@@ -79,3 +79,24 @@ describe("buildJobOrderCompletion", () => {
     expect(notices.some((text) => text.includes("Tidak ada penyelesaian"))).toBe(true)
   })
 })
+
+describe("penyelesaian pekerjaan: presisi sen", () => {
+  it("biaya ber-sen tampil hingga sen sehingga total cocok dengan barisnya", () => {
+    const result = buildJobOrderCompletion({
+      completions: [
+        completion({ documentNo: "PG-A", qty: 1, unitCost: 1_000_000.5, totalCost: 1_000_000.5 }),
+        completion({ documentNo: "PG-B", qty: 1, unitCost: 1_000_000.5, totalCost: 1_000_000.5 }),
+      ],
+      start: period.start,
+      end: period.end,
+    })
+
+    const rows = result.table.rows.filter((row) => row.kind === "data")
+    expect(rows.map((row) => (row.kind === "data" ? row.cells[5] : ""))).toEqual([
+      "1.000.000,50",
+      "1.000.000,50",
+    ])
+    const grand = result.table.rows.find((row) => row.kind === "total" && row.grand)
+    expect(grand?.kind === "total" ? grand.cells : []).toEqual(["2", "", "2.000.001"])
+  })
+})

@@ -17,7 +17,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency, formatMonthYear, formatQuantity } from "@/lib/utils/format"
+import { formatAccountingExact, formatMonthYear, formatQuantity } from "@/lib/utils/format"
 import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -64,8 +64,13 @@ export interface JobOrderCostResult {
   withoutOutput: number
 }
 
+/**
+ * Biaya dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, dua baris "1.000.001" berjumlah "2.000.002" sementara
+ * totalnya "2.000.001" — total tidak cocok dengan penjumlahan barisnya.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function monthLabel(date: Date): string {
@@ -195,8 +200,8 @@ export function buildJobOrderCost(input: {
 /** Ringkasan satu baris untuk KPI di halaman laporan. */
 export function jobOrderCostSummary(result: JobOrderCostResult): string {
   return (
-    `${result.jobCount} pekerjaan: bahan ${formatCurrency(result.totals.materialCost)} · ` +
-    `biaya produksi ${formatCurrency(result.totals.productionCost)} · total ` +
-    `${formatCurrency(result.totals.totalCost)}`
+    `${result.jobCount} pekerjaan: bahan ${amount(result.totals.materialCost)} · ` +
+    `biaya produksi ${amount(result.totals.productionCost)} · total ` +
+    `${amount(result.totals.totalCost)}`
   )
 }
