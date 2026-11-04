@@ -3424,3 +3424,28 @@ Mapping keluaran dan masukan nullable **secara independen** di pengaturan. Bila 
 - Merah: `journalLiability: 220`, `journalVsSptDiff: 11022` pada fixture partial mapping.
 - Hijau: suite terkait 60/60; `npx tsc --noEmit` 0; ESLint 0 pada berkas berubah; `git diff --check` bersih.
 - CI `41769461574` (head `7590e8b09`) **success** semua enam job.
+
+## Putaran 130 — total neraca saldo & neraca menyembunyikan selisih sen (commit `f4ea267bf`)
+
+Sumber: lanjutan Putaran 128. Setelah rekonsiliasi PPN menampilkan sen, audit bertanya laporan mana lagi yang memakai `formatAccounting` default (0 desimal) untuk angka yang **menentukan status**. Dua tempat terbukti:
+
+1. **Neraca Saldo (`trial-balance-report.ts`).** `amount()` tanpa `decimals`. Untuk `grandTotalDebit = 10.000,01`, `grandTotalCredit = 10.000`, laporan mencetak `Total 10.000 | 10.000` dan peringatan `selisih 0` — pembaca melihat dua angka sama dan selisih nol padahal `isBalanced` false. Probe: sebelum fix `["10.000","10.000"]`.
+2. **Neraca (`statement-table.ts`).** `statementAmount()` tanpa `decimals` dipakai juga untuk `Jumlah Aset`, `Total Kewajiban dan Ekuitas`, dan teks peringatan. Probe: `totalAssets = 5.000.000,25` vs kewajiban+ekuitas `5.000.000` → `["5.000.000"]` di kedua total dan `selisih 0`.
+
+Keduanya adalah kelas "angka yang kebetulan seimbang" yang dilarang komentar `statement-table.ts` sendiri.
+
+### Vonis FIX
+- `preciseAmount`/`preciseStatementAmount` (`decimals: 2`) dipakai untuk: total neraca saldo, total & selisih kolom pembanding (termasuk baris akun pembanding — kolom itu seluruhnya saldo bersih komparatif), grand total neraca, dan seluruh angka di teks peringatan.
+- Baris akun biasa **tetap** rupiah penuh: konvensi statement dan `bank-ledger-equivalence-db.test.ts` memang membulatkan baris; mengubahnya akan mengubah setiap laporan keuangan.
+- Neraca tidak seimbang memakai dua desimal untuk subtotal & grand total (`balanceAmount = isBalanced ? statementAmount : preciseStatementAmount`); saat seimbang output tidak berubah sama sekali.
+- `totalLiabilitiesAndEquity` dan `balanceDifference` dihitung `safeAdd`/`safeSubtract(..., 2)`.
+- SPT: notice "Kewajiban jurnal tidak tersedia…" (bagian Putaran 129) ikut commit ini.
+
+### Vonis CATAT
+- **Baris akun statement tetap bulat — CATAT.** Termasuk Laba Rugi; keputusan ini menjaga konvensi cetak yang sudah diuji, dan tidak ada jalur di mana baris itu menentukan status seimbang.
+- **`skontro` (Neraca Induk Skontro) belum disamakan — CATAT.** `buildSkontroBalanceSheet` masih memakai `amount()` 0 desimal untuk jumlah aktiva/pasiva dan peringatan. Belum ada bukti E2E/pengguna; kandidat putaran berikutnya.
+
+### Bukti
+- Merah (`git stash push --` ketiga berkas sumber, lalu `vitest run` 4 berkas) → **9 gagal / 36 lulus**, termasuk `expected [ '10.000', '10.000' ] to deeply equal [ '10.000,01', '10.000,00' ]` dan `expected [ '5.000.000' ] to deeply equal [ '5.000.000,25' ]`.
+- Hijau (`git stash pop`) → 131/131 terarah; seluruh `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` **3078 lulus / 4 dilewati** (394 berkas); guard statis `src/__tests__ --no-file-parallelism` **511/511**; `npx tsc --noEmit` 0; ESLint 0 pada 10 berkas berubah; `git diff --check` bersih.
+- CI `41774166295` (head `f4ea267bf`) **success** semua enam job. CI dokumentasi `41774121833` (head `5bd60b194`) juga **success**.
