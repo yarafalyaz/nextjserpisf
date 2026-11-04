@@ -90,6 +90,17 @@ function amount(value: number): string {
   return formatAccounting(value, { zeroDash: false })
 }
 
+/**
+ * Selisih dan angka pembanding di teks temuan memakai dua desimal. Selisih
+ * 0,50 yang dibulatkan berbunyi "ada selisih Rp 1", dan saldo akun yang hanya
+ * berbeda sen tercetak identik dengan sisa dokumen — temuan yang menyangkal
+ * dirinya sendiri. Baris tabel tetap rupiah penuh.
+ */
+function preciseAmount(value: number): string {
+  if (Number.isInteger(value)) return amount(value)
+  return formatAccounting(value, { zeroDash: false, decimals: 2 })
+}
+
 function shortDate(date: Date): string {
   return formatDate(date, { format: "short" })
 }
@@ -237,17 +248,17 @@ export function buildReceivedNotBilled(input: ReceivedNotBilledInput): ReceivedN
     detailRows.push({
       kind: "notice",
       text:
-        `Saldo akun ${ledger.accountLabel} (${amount(ledger.balance)}) sama dengan sisa belum ditagih menurut ` +
+        `Saldo akun ${ledger.accountLabel} (${preciseAmount(ledger.balance)}) sama dengan sisa belum ditagih menurut ` +
         `dokumen — tidak ada selisih.`,
     })
   } else {
     const arah = (difference ?? 0) > 0 ? "buku besar lebih besar" : "sisa dokumen lebih besar"
-    verdict = `Ada selisih ${formatCurrency(Math.abs(difference ?? 0))} antara akun GRNI dan sisa dokumen.`
+    verdict = `Ada selisih ${preciseAmount(Math.abs(difference ?? 0))} antara akun GRNI dan sisa dokumen.`
     detailRows.push({
       kind: "notice",
       text:
-        `Saldo akun ${ledger.accountLabel} (${amount(ledger.balance)}) dibanding sisa dokumen ` +
-        `(${amount(totals.outstandingValue)}): ada selisih ${formatCurrency(Math.abs(difference ?? 0))} (${arah}). ` +
+        `Saldo akun ${ledger.accountLabel} (${preciseAmount(ledger.balance)}) dibanding sisa dokumen ` +
+        `(${preciseAmount(totals.outstandingValue)}): ada selisih ${preciseAmount(Math.abs(difference ?? 0))} (${arah}). ` +
         `Penyebab yang paling sering: ongkos angkut/biaya lain yang sudah masuk nilai persediaan tetapi tidak ` +
         `muncul di tagihan vendor, tagihan yang ditulis tanpa menautkan baris penerimaan, atau penerimaan yang ` +
         `dibatalkan setelah dijurnal.`,
@@ -289,5 +300,5 @@ export function receivedNotBilledSummary(result: ReceivedNotBilledResult): strin
   if (totals.isBalanced) {
     return `${totals.receipts} penerimaan bersisa ${formatCurrency(totals.outstandingValue)} · cocok dengan akun GRNI`
   }
-  return `${totals.receipts} penerimaan bersisa ${formatCurrency(totals.outstandingValue)} · selisih ${formatCurrency(Math.abs(totals.difference ?? 0))} dengan akun GRNI`
+  return `${totals.receipts} penerimaan bersisa ${formatCurrency(totals.outstandingValue)} · selisih ${preciseAmount(Math.abs(totals.difference ?? 0))} dengan akun GRNI`
 }

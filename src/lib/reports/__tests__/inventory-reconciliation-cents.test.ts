@@ -22,4 +22,17 @@ describe("buildInventoryReconciliation presisi sen", () => {
     })
     expect(result.totals.difference).toBe(-0.03)
   })
+
+  it("selisih setengah rupiah tidak dilebihkan menjadi Rp 1", () => {
+    const result = buildInventoryReconciliation({
+      valuation: { qty: 1, value: 100.3, byWarehouse: [] },
+      ledger: { accountLabel: "1-1300 Persediaan", balance: 99.8 },
+      periodEndIsToday: true,
+    })
+
+    const total = result.table.rows.find((row) => row.kind === "total")
+    expect(total?.kind === "total" ? total.cells : []).toEqual(["(0,50)"])
+    expect(result.verdict).toContain("0,50")
+    expect(result.verdict).not.toContain("Rp 1")
+  })
 })

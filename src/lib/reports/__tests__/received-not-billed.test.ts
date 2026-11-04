@@ -135,6 +135,20 @@ describe("buildReceivedNotBilled", () => {
     expect(notices).toContain("ongkos angkut")
   })
 
+  it("menyebut selisih sen tanpa melebihkan menjadi rupiah penuh", () => {
+    const result = buildReceivedNotBilled({
+      lines: [line({ receivedQty: 1, unitCost: 100.3, billedValue: 0 })],
+      ledger: { accountLabel: "2-1300 GRNI", balance: 100.8 },
+      asOf,
+      periodEndIsToday: true,
+    })
+
+    expect(result.totals.difference).toBe(0.5)
+    expect(result.verdict).toContain("0,50")
+    expect(result.verdict).not.toContain("Rp 1")
+    expect(noticeTexts(result).join(" ")).toContain("0,50")
+  })
+
   it("total uang presisi sen: 10 baris Rp10.000.000,10 tidak drift float", () => {
     const cents = 10_000_000.10
     const result = buildReceivedNotBilled({

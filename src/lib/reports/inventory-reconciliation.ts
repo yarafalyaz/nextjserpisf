@@ -22,7 +22,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccounting } from "@/lib/utils/format"
 import { safeRound, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -54,6 +54,16 @@ const BALANCE_TOLERANCE = 0.5
 
 function amount(value: number): string {
   return formatAccounting(value, { zeroDash: false })
+}
+
+/**
+ * Angka selisih dan teks temuan: rupiah penuh bila memang bulat, dua desimal
+ * bila ada sen. Selisih 0,50 yang dibulatkan akan berbunyi "Ada selisih Rp 1"
+ * — temuan dilebihkan dua kali lipat dan tidak bisa dicocokkan dengan buku.
+ */
+function preciseAmount(value: number): string {
+  if (Number.isInteger(value)) return amount(value)
+  return formatAccounting(value, { zeroDash: false, decimals: 2 })
 }
 
 export function buildInventoryReconciliation(
@@ -98,7 +108,7 @@ export function buildInventoryReconciliation(
     kind: "total",
     grand: true,
     label: "Selisih (buku besar − nilai barang)",
-    cells: [difference === null ? "–" : amount(difference)],
+    cells: [difference === null ? "–" : preciseAmount(difference)],
   })
 
   let verdict: string
@@ -117,11 +127,11 @@ export function buildInventoryReconciliation(
       text: "Saldo akun persediaan sama dengan nilai barang menurut lapisan persediaan — tidak ada selisih.",
     })
   } else {
-    verdict = `Ada selisih ${formatCurrency(Math.abs(difference ?? 0))} antara buku besar dan nilai barang.`
+    verdict = `Ada selisih ${preciseAmount(Math.abs(difference ?? 0))} antara buku besar dan nilai barang.`
     rows.push({
       kind: "notice",
       text:
-        `Ada selisih ${formatCurrency(Math.abs(difference ?? 0))} antara saldo akun persediaan dan nilai barang ` +
+        `Ada selisih ${preciseAmount(Math.abs(difference ?? 0))} antara saldo akun persediaan dan nilai barang ` +
         `(${difference !== null && difference > 0 ? "buku besar lebih besar" : "nilai barang lebih besar"}). ` +
         `Periksa mutasi stok yang belum terjurnal, penerimaan/pengeluaran bertanggal di luar periode, atau ` +
         `harga pokok yang berubah setelah transaksi dibukukan.`,
@@ -155,5 +165,5 @@ export function inventoryReconciliationSummary(result: InventoryReconciliationRe
   const { totals } = result
   if (totals.ledgerBalance === null) return "Akun persediaan belum dipetakan"
   if (totals.isBalanced) return "Cocok: saldo akun = nilai barang"
-  return `Selisih ${formatCurrency(Math.abs(totals.difference ?? 0))}`
+  return `Selisih ${preciseAmount(Math.abs(totals.difference ?? 0))}`
 }
