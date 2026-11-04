@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { prisma } from "@/lib/db/prisma"
-import { formatAccounting, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
 import { safeAdd, safeMultiply, safeSubtract } from "@/lib/utils/math"
 import { agingBucket, daysOverdue } from "@/lib/reports/aging"
@@ -295,10 +295,10 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
           />
 
           <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-            <ReportKpiCard label={isAr ? "Saldo Awal" : "Saldo Awal (Utang)"} value={formatAccounting(card.openingBalance, { zeroDash: false })} />
-            <ReportKpiCard label={debitLabel} value={formatAccounting(card.totalDebit, { zeroDash: false })} />
-            <ReportKpiCard label={creditLabel} value={formatAccounting(card.totalCredit, { zeroDash: false })} valueClassName="text-success" />
-            <ReportKpiCard label={balanceLabel} value={formatAccounting(card.closingBalance, { zeroDash: false })} valueClassName="text-danger" />
+            <ReportKpiCard label={isAr ? "Saldo Awal" : "Saldo Awal (Utang)"} value={formatAccountingExact(card.openingBalance)} />
+            <ReportKpiCard label={debitLabel} value={formatAccountingExact(card.totalDebit)} />
+            <ReportKpiCard label={creditLabel} value={formatAccountingExact(card.totalCredit)} valueClassName="text-success" />
+            <ReportKpiCard label={balanceLabel} value={formatAccountingExact(card.closingBalance)} valueClassName="text-danger" />
           </div>
 
           <ReportSection title={title}>
@@ -314,7 +314,7 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
               <DetailTableBody>
                 <DetailTableRow className="bg-muted/40">
                   <DetailTableTd colSpan={5} className="font-semibold">Saldo Awal</DetailTableTd>
-                  <DetailTableTd align="right" className="font-semibold">{formatAccounting(card.openingBalance, { zeroDash: false })}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-semibold">{formatAccountingExact(card.openingBalance)}</DetailTableTd>
                 </DetailTableRow>
 
                 {card.rows.map((row) => (
@@ -324,9 +324,9 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
                       {row.href ? <Link href={row.href} className="text-primary hover:underline">{row.documentNo}</Link> : row.documentNo}
                     </DetailTableTd>
                     <DetailTableTd className="text-xs">{row.description ?? "–"}</DetailTableTd>
-                    <DetailTableTd align="right">{row.debit ? formatAccounting(row.debit, { zeroDash: false }) : "–"}</DetailTableTd>
-                    <DetailTableTd align="right">{row.credit ? formatAccounting(row.credit, { zeroDash: false }) : "–"}</DetailTableTd>
-                    <DetailTableTd align="right" className="font-semibold">{formatAccounting(row.balance, { zeroDash: false })}</DetailTableTd>
+                    <DetailTableTd align="right">{row.debit ? formatAccountingExact(row.debit) : "–"}</DetailTableTd>
+                    <DetailTableTd align="right">{row.credit ? formatAccountingExact(row.credit) : "–"}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-semibold">{formatAccountingExact(row.balance)}</DetailTableTd>
                   </DetailTableRow>
                 ))}
 
@@ -340,9 +340,9 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
 
                 <DetailTableRow className="border-t-2 border-default font-bold">
                   <DetailTableTd colSpan={3}>TOTAL</DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(card.totalDebit, { zeroDash: false })}</DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(card.totalCredit, { zeroDash: false })}</DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(card.closingBalance, { zeroDash: false })}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccountingExact(card.totalDebit)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccountingExact(card.totalCredit)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccountingExact(card.closingBalance)}</DetailTableTd>
                 </DetailTableRow>
               </DetailTableBody>
             </DetailTable>
@@ -367,9 +367,9 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
                     </DetailTableTd>
                     <DetailTableTd>{formatDate(row.date)}</DetailTableTd>
                     <DetailTableTd>{row.dueDate ? formatDate(row.dueDate) : "–"}</DetailTableTd>
-                    <DetailTableTd align="right">{formatAccounting(row.total, { zeroDash: false })}</DetailTableTd>
-                    <DetailTableTd align="right">{formatAccounting(row.paid, { zeroDash: false })}</DetailTableTd>
-                    <DetailTableTd align="right" className="font-semibold text-danger">{formatAccounting(row.remaining, { zeroDash: false })}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccountingExact(row.total)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccountingExact(row.paid)}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-semibold text-danger">{formatAccountingExact(row.remaining)}</DetailTableTd>
                     <DetailTableTd>{row.dueDate ? agingBucket(daysOverdue(row.dueDate, now)) : "–"}</DetailTableTd>
                   </DetailTableRow>
                 ))}
@@ -383,7 +383,7 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
                 {outstanding.length > 0 && (
                   <DetailTableRow className="border-t-2 border-default font-bold">
                     <DetailTableTd colSpan={5}>TOTAL</DetailTableTd>
-                    <DetailTableTd align="right">{formatAccounting(totalOutstanding, { zeroDash: false })}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccountingExact(totalOutstanding)}</DetailTableTd>
                     <DetailTableTd>{""}</DetailTableTd>
                   </DetailTableRow>
                 )}

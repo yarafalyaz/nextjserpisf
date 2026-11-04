@@ -141,3 +141,19 @@ describe("sapuan ketiga: baris mutasi aset & rekonsiliasi persediaan", () => {
     expect(result.totals.isBalanced).toBe(false)
   })
 })
+
+import { readFileSync } from "node:fs"
+import path from "node:path"
+
+describe("sapuan keempat: buku pembantu piutang/utang", () => {
+  it("komponen buku pembantu hanya memakai formatter exact untuk nominal", () => {
+    const source = readFileSync(
+      path.resolve(__dirname, "../../../app/(dashboard)/laporan/_components/subledger-report.tsx"),
+      "utf8",
+    )
+    // Saldo/mutasi buku pembantu dihitung safeAdd dua desimal; formatter 0
+    // desimal akan membuang sen di KPI, baris, dan baris total.
+    expect(source).not.toMatch(/formatAccounting\((?!Exact)/)
+    expect(source).toContain("formatAccountingExact")
+  })
+})
