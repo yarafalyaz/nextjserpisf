@@ -4183,3 +4183,14 @@ Empat kartu lagi:
 ### Bukti
 - Merah: 1 gagal/3 lulus; hijau 426/426 tes komponen laporan; 3.017 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
 - CI `41821119537`, `41821144519`, `41821805224`, `41821833290` **success** (putaran 171–172).
+
+## Putaran 176 — antrean draft SO/faktur/PO/janji kirim (commit `da7cf2542`)
+
+Empat kartu antrean draft mencetak total grand total dan grand total per dokumen dengan 0 desimal: `sales-order-draft-queue-card`, `sales-invoice-draft-queue-card`, `purchase-order-draft-queue-card`, `sales-order-delivery-promise-queue-card`. Nominalnya dijumlah per sen di ringkasan builder.
+
+### Vonis FIX
+- Keempatnya memakai `formatCurrencyExact`; regresi baru mengunci `Rp 1.500.000,50`.
+
+### Bukti
+- Merah: 1 gagal/2 lulus; hijau 427/427 tes komponen laporan; 3.018 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
+- CI `41822110990`, `41822160259`, `41822646335`, `41822671433` **success** (putaran 172–173).
