@@ -53,10 +53,16 @@ describe("buildSkontroBalanceSheet", () => {
       "Jumlah Pasiva",
       "5.000.000,00",
     ])
+    expect(noticeOf(input)).toContain("Jumlah Aktiva (5.000.000,25)")
+    expect(noticeOf(input)).toContain("Jumlah Pasiva (5.000.000,00)")
     expect(noticeOf(input)).toContain("selisih 0,25")
   })
 
-  it("menjumlahkan pasiva pada presisi sen", () => {
+  it("jumlah pasiva dari dua nilai ber-sen tampil hingga dua desimal", () => {
+    // Catatan: untuk input Decimal(15,2) hasil penjumlahan float mentah dan
+    // safeAdd sama-sama membulat ke dua desimal yang sama, jadi tes ini menjaga
+    // tampilan (bukan membuktikan safeAdd); safeAdd tetap dipakai agar konsisten
+    // dengan laporan lain yang mengakumulasi nilai ber-sen.
     const input: SkontroBalanceSheetInput = {
       ...base,
       totalAssets: 5_000_000.35,

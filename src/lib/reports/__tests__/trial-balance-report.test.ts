@@ -62,7 +62,10 @@ describe("buildTrialBalanceReport", () => {
     const total = table.rows.find((row) => row.kind === "total")
     const notice = table.rows.find((row) => row.kind === "notice")
     expect(total?.kind === "total" ? total.cells : []).toEqual(["10.000,01", "10.000,00"])
-    expect(notice?.kind === "notice" ? notice.text : "").toContain("selisih 0,01")
+    const text = notice?.kind === "notice" ? notice.text : ""
+    expect(text).toContain("total debit (10.000,01)")
+    expect(text).toContain("total kredit (10.000,00)")
+    expect(text).toContain("selisih 0,01")
   })
 
   it("memberi peringatan bila debit tidak sama dengan kredit", () => {

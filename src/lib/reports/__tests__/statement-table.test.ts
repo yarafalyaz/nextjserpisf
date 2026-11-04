@@ -149,7 +149,10 @@ describe("buildBalanceSheetTable", () => {
     const notice = table.rows.find((r) => r.kind === "notice")
     expect(assetTotal?.kind === "subtotal" ? assetTotal.values : []).toEqual(["5.000.000,25"])
     expect(grand?.kind === "grand" ? grand.values : []).toEqual(["5.000.000,00"])
-    expect(notice?.kind === "notice" ? notice.text : "").toContain("selisih 0,25")
+    const text = notice?.kind === "notice" ? notice.text : ""
+    expect(text).toContain("Jumlah Aset (5.000.000,25)")
+    expect(text).toContain("Total Kewajiban dan Ekuitas (5.000.000,00)")
+    expect(text).toContain("selisih 0,25")
   })
 
   it("menjumlahkan kewajiban dan ekuitas pada presisi sen", () => {
