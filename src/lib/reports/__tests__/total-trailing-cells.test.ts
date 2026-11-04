@@ -529,8 +529,33 @@ describe("total trailing: BUGHUNT round3 #1 (leading blank geser kolom)", () => 
     expect(cols["Selisih"]).toContain("600")
   })
 
+  it("rekonsiliasi PPN mempertahankan presisi sen pada baris dan selisih bersih", async () => {
+    const { getSystemSettings } = await import("@/lib/utils/settings")
+    vi.mocked(getSystemSettings).mockResolvedValue({
+      costingMethod: "fifo",
+      salesTaxAccountId: 1,
+      purchaseTaxAccountId: 2,
+    } as never)
+    mocks.prismaMock.journalEntry.findMany
+      .mockResolvedValueOnce([{ debit: 0, credit: 0.29 }])
+      .mockResolvedValueOnce([])
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([{ taxAmount: 0 }])
+    mocks.prismaMock.vendorBill.findMany.mockResolvedValue([])
+    const recon = await loadVatReconciliation(period)
+    const outputRow = recon.table.rows.find((r) => r.kind === "data" && r.cells[0] === "PPN Keluaran")
+    const netTotal = recon.table.rows.find((r) => r.kind === "total" && r.label === "Selisih Bersih")
+    expect(outputRow?.kind === "data" ? outputRow.cells : []).toEqual(["PPN Keluaran", "0,29", "0,00", "0,29"])
+    expect(netTotal?.kind === "total" ? netTotal.cells : []).toEqual(["0,29"])
+  })
+
   it("rekonsiliasi PPN: Selisih 1 sel trailing; SPT: Neto SPT mendarat di kolom Neto SPT", async () => {
-    mocks.prismaMock.journalEntry.findMany.mockResolvedValue([{ debit: 0, credit: 1000 }])
+    const { getSystemSettings } = await import("@/lib/utils/settings")
+    vi.mocked(getSystemSettings).mockResolvedValue({
+      costingMethod: "fifo",
+      salesTaxAccountId: 1,
+      purchaseTaxAccountId: 2,
+    } as never)
+    mocks.prismaMock.journalEntry.findMany.mockResolvedValueOnce([{ debit: 0, credit: 1000 }]).mockResolvedValueOnce([])
     mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([{ taxAmount: 1000 }])
     mocks.prismaMock.vendorBill.findMany.mockResolvedValue([])
     const recon = await loadVatReconciliation(period)
@@ -540,6 +565,7 @@ describe("total trailing: BUGHUNT round3 #1 (leading blank geser kolom)", () => 
   })
 
   it("regression round 17: rekonsiliasi PPN document output net of return VAT on note-date period", async () => {
+    mocks.prismaMock.journalEntry.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([])
     mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([{ taxAmount: 1000 }])
     mocks.prismaMock.vendorBill.findMany.mockResolvedValue([])
     mocks.prismaMock.salesReturn.findMany.mockResolvedValue([
@@ -548,10 +574,11 @@ describe("total trailing: BUGHUNT round3 #1 (leading blank geser kolom)", () => 
     ])
     const recon = await loadVatReconciliation(period)
     const outputRow = recon.table.rows.find((r) => r.kind === "data" && r.cells[0] === "PPN Keluaran")
-    expect(outputRow?.kind === "data" ? outputRow.cells : []).toEqual(["PPN Keluaran", "0", "890", "(890)"])
+    expect(outputRow?.kind === "data" ? outputRow.cells : []).toEqual(["PPN Keluaran", "0,00", "890,00", "(890,00)"])
   })
 
   it("putaran 81: rekonsiliasi PPN docOutput net retur legacy hitung-ulang (tanpa snapshot)", async () => {
+    mocks.prismaMock.journalEntry.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([])
     mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([{ taxAmount: 11000 }])
     mocks.prismaMock.vendorBill.findMany.mockResolvedValue([])
     mocks.prismaMock.salesReturn.findMany.mockResolvedValue([
@@ -565,11 +592,11 @@ describe("total trailing: BUGHUNT round3 #1 (leading blank geser kolom)", () => 
     const recon = await loadVatReconciliation(period)
     const outputRow = recon.table.rows.find((r) => r.kind === "data" && r.cells[0] === "PPN Keluaran")
     // PPN retur legacy = 2 x 50.000 x 11% = 11.000 -> docOutput 0, bukan 11.000.
-    expect(outputRow?.kind === "data" ? outputRow.cells : []).toEqual(["PPN Keluaran", "0", "0", "0"])
+    expect(outputRow?.kind === "data" ? outputRow.cells : []).toEqual(["PPN Keluaran", "0,00", "0,00", "0,00"])
   })
 
   it("regression round 18: rekonsiliasi PPN docInput nol untuk bill tanpa nomor faktur pajak valid", async () => {
-    mocks.prismaMock.journalEntry.findMany.mockResolvedValue([])
+    mocks.prismaMock.journalEntry.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([])
     mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([])
     mocks.prismaMock.salesReturn.findMany.mockResolvedValue([])
     mocks.prismaMock.vendorBill.findMany.mockResolvedValue([
@@ -578,7 +605,7 @@ describe("total trailing: BUGHUNT round3 #1 (leading blank geser kolom)", () => 
     ])
     const recon = await loadVatReconciliation(period)
     const inputRow = recon.table.rows.find((r) => r.kind === "data" && r.cells[0] === "PPN Masukan")
-    expect(inputRow?.kind === "data" ? inputRow.cells : []).toEqual(["PPN Masukan", "0", "1.100.000", "(1.100.000)"])
+    expect(inputRow?.kind === "data" ? inputRow.cells : []).toEqual(["PPN Masukan", "0,00", "1.100.000,00", "(1.100.000,00)"])
   })
 
   it("SPT rows still render after reconciliation regression", async () => {
