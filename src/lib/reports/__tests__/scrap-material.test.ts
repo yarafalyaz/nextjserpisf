@@ -142,3 +142,21 @@ describe("F-2026-10-24-098-S: tinjau + kg + rekonsiliasi di laporan existing", (
     expect(total.kind === "total" && total.cells[3]).toBe("3,50")
   })
 })
+
+describe("scrap material: nilai abnormal bersen", () => {
+  it("nilai abnormal ber-sen tampil hingga sen di baris, total, dan ringkasan", () => {
+    const report = buildScrapMaterialReport({
+      lines: [line({ abnormalValue: 200.5 })],
+      abnormalJournalValue: 0,
+    })
+    const table = buildScrapMaterialTable(report)
+    const data = table.rows.find((row) => row.kind === "data")
+    expect(data?.kind === "data" ? data.cells : []).toContain("200,50")
+
+    const total = table.rows.find((row) => row.kind === "total")
+    expect(total?.kind === "total" ? total.cells : []).toContain("200,50")
+
+    expect(scrapMaterialSummary(report, true)).toContain("200,50")
+    expect(scrapMaterialSummary(report, true)).toContain("200,50")
+  })
+})

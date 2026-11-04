@@ -142,7 +142,7 @@ export function buildScrapMaterialReport(input: {
   }
 }
 
-import { formatAccounting, formatDate, formatNumber } from "@/lib/utils/format"
+import { formatDate, formatNumber, formatAccountingExact } from "@/lib/utils/format"
 import type { TableDocument } from "@/lib/pdf/engine/types"
 
 /** Label bentuk bahan kategori — sama verbatim dengan antrean tinjau UI. */
@@ -190,7 +190,7 @@ export function buildScrapMaterialTable(report: ScrapReportResult): TableDocumen
         l.scrapReasonLabel ?? l.scrapReasonCode ?? "-",
         formatNumber(l.normalQty, 2),
         formatNumber(l.abnormalQty, 2),
-        formatAccounting(l.abnormalValue, { zeroDash: false }),
+        formatAccountingExact(l.abnormalValue, { zeroDash: false }),
         l.lineRatePct == null ? "-" : `${formatNumber(l.lineRatePct, 2)}%`,
         l.uncalibrated ? "Belum kalibrasi" : "Terkalibrasi",
         l.allowanceNote ?? "Belum ditetapkan",
@@ -210,7 +210,7 @@ export function buildScrapMaterialTable(report: ScrapReportResult): TableDocumen
     { kind: "total", label: `Total (${t.lineCount} baris)`, grand: true, cells: [
       "", formatNumber(t.issueQty, 2), formatNumber(t.scrapQty, 2), formatNumber(t.remnantQtyTotal, 2),
       formatNumber(t.normalQty, 2), formatNumber(t.abnormalQty, 2),
-      formatAccounting(t.abnormalValue, { zeroDash: false }),
+      formatAccountingExact(t.abnormalValue, { zeroDash: false }),
       t.aggregateRatePct == null ? "-" : `${formatNumber(t.aggregateRatePct, 2)}%`, "", "",
       `${t.pendingReviewLines} belum ditinjau`,
       formatNumber(t.scrapWeightKgTotal, 2),
@@ -223,8 +223,8 @@ export function buildScrapMaterialTable(report: ScrapReportResult): TableDocumen
 export function scrapMaterialSummary(report: ScrapReportResult, postingEnabled: boolean): string {
   const t = report.totals
   const flag = postingEnabled ? "Mode posting: jurnal abnormal posting" : "Mode catat-dulu: jurnal abnormal tidak posting"
-  const parts = [flag, `Nilai abnormal ${formatAccounting(t.abnormalValue, { zeroDash: false })}`, `Terjurnal ${formatAccounting(t.abnormalJournalValue, { zeroDash: false })}`]
-  if (t.abnormalUnjournaledValue > 0) parts.push(`Temuan: abnormal belum terjurnal ${formatAccounting(t.abnormalUnjournaledValue, { zeroDash: false })}`)
+  const parts = [flag, `Nilai abnormal ${formatAccountingExact(t.abnormalValue, { zeroDash: false })}`, `Terjurnal ${formatAccountingExact(t.abnormalJournalValue, { zeroDash: false })}`]
+  if (t.abnormalUnjournaledValue > 0) parts.push(`Temuan: abnormal belum terjurnal ${formatAccountingExact(t.abnormalUnjournaledValue, { zeroDash: false })}`)
   if (t.uncalibratedLines > 0) parts.push(`${t.uncalibratedLines} baris belum kalibrasi`)
   if (t.pendingReviewLines > 0) parts.push(`${t.pendingReviewLines} abnormal belum ditinjau`)
   if (t.scrapWeightKgTotal > 0) parts.push(`Besi tua ${formatNumber(t.scrapWeightKgTotal, 2)} kg`)
