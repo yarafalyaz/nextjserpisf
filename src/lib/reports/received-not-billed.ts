@@ -24,7 +24,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { safeAdd, safeMultiply, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -86,8 +86,12 @@ export const AGING_BUCKETS: { label: string; min: number; max: number | null }[]
 
 const DAY = 86_400_000
 
+/**
+ * Nominal dokumen dicetak hingga sen bila memang bersen; rupiah penuh bila
+ * bulat. Dengan 0 desimal, baris tidak menjumlah ke subtotal yang tercetak.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 /**
@@ -97,8 +101,7 @@ function amount(value: number): string {
  * dirinya sendiri. Baris tabel tetap rupiah penuh.
  */
 function preciseAmount(value: number): string {
-  if (Number.isInteger(value)) return amount(value)
-  return formatAccounting(value, { zeroDash: false, decimals: 2 })
+  return formatAccountingExact(value)
 }
 
 function shortDate(date: Date): string {
@@ -295,10 +298,10 @@ export function buildReceivedNotBilled(input: ReceivedNotBilledInput): ReceivedN
 export function receivedNotBilledSummary(result: ReceivedNotBilledResult): string {
   const { totals } = result
   if (totals.ledgerBalance === null) {
-    return `${totals.receipts} penerimaan bersisa ${formatCurrency(totals.outstandingValue)} · akun GRNI belum dipetakan`
+    return `${totals.receipts} penerimaan bersisa ${formatCurrencyExact(totals.outstandingValue)} · akun GRNI belum dipetakan`
   }
   if (totals.isBalanced) {
-    return `${totals.receipts} penerimaan bersisa ${formatCurrency(totals.outstandingValue)} · cocok dengan akun GRNI`
+    return `${totals.receipts} penerimaan bersisa ${formatCurrencyExact(totals.outstandingValue)} · cocok dengan akun GRNI`
   }
-  return `${totals.receipts} penerimaan bersisa ${formatCurrency(totals.outstandingValue)} · selisih ${preciseAmount(Math.abs(totals.difference ?? 0))} dengan akun GRNI`
+  return `${totals.receipts} penerimaan bersisa ${formatCurrencyExact(totals.outstandingValue)} · selisih ${preciseAmount(Math.abs(totals.difference ?? 0))} dengan akun GRNI`
 }

@@ -182,3 +182,20 @@ describe("buildReceivedNotBilled", () => {
     expect(receivedNotBilledSummary(result)).toContain("cocok dengan akun GRNI")
   })
 })
+
+describe("penerimaan belum ditagih: baris bersen", () => {
+  it("baris diterima/ditagih/sisa tampil hingga sen dan cocok dengan subtotal", () => {
+    const result = buildReceivedNotBilled({
+      lines: [line({ receivedQty: 1, unitCost: 100.3, billedValue: 0 })],
+      ledger: { accountLabel: "2-1300 GRNI", balance: 100.3 },
+      asOf,
+      periodEndIsToday: true,
+    })
+
+    const data = result.detail.rows.find((row) => row.kind === "data")
+    expect(data?.kind === "data" ? data.cells.slice(1) : []).toEqual(["100,30", "0", "100,30"])
+    const total = result.detail.rows.find((row) => row.kind === "total" && row.grand)
+    expect(total?.kind === "total" ? total.cells : []).toEqual(["100,30", "0", "100,30"])
+    expect(receivedNotBilledSummary(result)).toContain("100,30")
+  })
+})
