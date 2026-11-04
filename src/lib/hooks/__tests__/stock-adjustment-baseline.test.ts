@@ -74,6 +74,7 @@ function wireTx(opts: {
       return rows
     }),
     serialCreateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    serialFindMany: vi.fn().mockResolvedValue([]),
     batchFindFirst: vi.fn().mockResolvedValue(null),
     batchCreate: vi.fn().mockResolvedValue({}),
     batchUpdate: vi.fn().mockResolvedValue({}),
@@ -95,7 +96,7 @@ function wireTx(opts: {
     stockAdjustmentItem: { update: spies.adjItemUpdate },
     stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
     item: { findUnique: spies.itemFindUnique, findMany: spies.itemFindMany },
-    itemSerial: { createMany: spies.serialCreateMany },
+    itemSerial: { createMany: spies.serialCreateMany, findMany: spies.serialFindMany },
     itemBatch: { findFirst: spies.batchFindFirst, create: spies.batchCreate, update: spies.batchUpdate },
     inventoryLayer: {
       groupBy: vi.fn().mockImplementation(async ({ where }: { where?: { itemId?: { in?: number[] } } }) => {
@@ -191,6 +192,25 @@ describe("onStockAdjustmentProcessed live-qty baseline", () => {
       ],
     });
   });
+  it("putaran 125: serial yang sudah terdaftar ditolak dengan menyebut nomornya", async () => {
+    // `ItemSerial.serialNumber` unik global; tanpa cek pendahulu, bentrok
+    // jatuh ke P2002 dan pesannya disaring menjadi "Data dengan nilai
+    // tersebut sudah ada." — operator tak tahu serial mana yang konflik.
+    const spies = wireTx({
+      items: [{ itemId: 7, systemQty: 0, actualQty: 2, difference: 2, unitCost: 100, serialNumbers: ["S-1", "S-2"] }],
+      liveQty: { 7: 0 },
+      trackSerialItemIds: [7],
+    })
+    spies.serialFindMany.mockResolvedValue([{ serialNumber: "S-1" }])
+
+    await expect(onStockAdjustmentProcessed(50, 1)).rejects.toThrow(/S-1/)
+    expect(spies.serialFindMany).toHaveBeenCalledWith({
+      where: { serialNumber: { in: ["S-1", "S-2"] } },
+      select: { serialNumber: true },
+    })
+    expect(spies.serialCreateMany).not.toHaveBeenCalled()
+    spies.serialFindMany.mockResolvedValue([])
+  })
   it("creates the lot for a positive adjustment of a batch-tracked item (P1-1)", async () => {
     const spies = wireTx({
       items: [{ itemId: 9, systemQty: 0, actualQty: 6, difference: 6, unitCost: 50, batchNumbers: ["LOT-A"] }],

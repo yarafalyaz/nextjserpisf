@@ -289,6 +289,22 @@ export async function onStockAdjustmentProcessed(
             if (new Set(serialNumbers).size !== serialNumbers.length) {
               throw new Error(`Nomor seri duplikat untuk item #${item.itemId}.`);
             }
+            // Putaran 125: `ItemSerial.serialNumber` unik GLOBAL. Tanpa cek
+            // ini serial yang sudah terdaftar dari penerimaan/produksi lain
+            // jatuh ke P2002 Prisma dan pesannya disaring `getErrorMessage`
+            // menjadi "Data dengan nilai tersebut sudah ada." — operator tak
+            // tahu serial mana yang konflik, padahal seluruh transaksi
+            // penyesuaian ikut batal. Pola sama dengan goods-receipt.hook
+            // dan penerimaan hasil produksi: sebut serial yang tertabrak.
+            const existingSerials = await tx.itemSerial.findMany({
+              where: { serialNumber: { in: serialNumbers } },
+              select: { serialNumber: true },
+            });
+            if (existingSerials.length > 0) {
+              throw new Error(
+                `Nomor seri ${existingSerials.map((row) => row.serialNumber).join(", ")} sudah terdaftar pada item lain — penyesuaian dibatalkan.`,
+              );
+            }
             await tx.itemSerial.createMany({
               data: serialNumbers.map((serialNumber) => ({
                 itemId: item.itemId,
