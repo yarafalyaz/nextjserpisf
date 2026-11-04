@@ -108,3 +108,11 @@ describe("pemetaan izin halaman garansi", () => {
     expect(source).toContain("getCustomerVehicleHistory(cv.id, 20, {")
   })
 })
+
+describe("nominal jurnal garansi di halaman detail", () => {
+  it("total debit memakai formatter hingga sen, bukan formatCurrency 0 desimal", () => {
+    const source = read(DETAIL_PAGE)
+    expect(source).not.toMatch(/totalDebitLabel:\s*formatCurrency\(/)
+    expect(source).toContain("totalDebitLabel: formatCurrencyExact(")
+  })
+})

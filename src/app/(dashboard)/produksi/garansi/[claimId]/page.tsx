@@ -11,7 +11,7 @@ import { prisma } from "@/lib/db/prisma"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { StatusChip } from "@/components/ui/status-chip"
-import { formatCurrency, formatDate, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { WarrantyClaimActions, type WarrantyClaimFacts } from "../_components/warranty-claim-actions"
 import {
@@ -182,7 +182,7 @@ export default async function WarrantyClaimDetailPage({
     journalNumber: j.journalNumber,
     transactionDate: formatDate(j.transactionDate),
     status: j.status,
-    totalDebitLabel: formatCurrency(Number(j.totalDebit)),
+    totalDebitLabel: formatCurrencyExact(Number(j.totalDebit)),
     referenceType: j.referenceType,
     referenceId: j.referenceId,
   }))
