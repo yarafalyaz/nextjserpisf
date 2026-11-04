@@ -208,7 +208,7 @@ export function buildPkwtReconciliation(
     }
     if (accrualVsEventDiff !== 0 && r.frozenEventTotal > 0) {
       findings.push(
-        `Selisih peristiwa terbekukan vs (akrual + slip terbayar) Rp${formatNumber(accrualVsEventDiff)} — segmen belum terakrual penuh/belum dibayar; tampil sebagai temuan, bukan dipilih diam-diam.`,
+        `Selisih peristiwa terbekukan vs (akrual + slip terbayar) Rp${formatNumber(accrualVsEventDiff, 2)} — segmen belum terakrual penuh/belum dibayar; tampil sebagai temuan, bukan dipilih diam-diam.`,
       )
     }
     return { ...r, expectedPayable, accrualVsEventDiff, findings }
@@ -319,7 +319,7 @@ export function buildPkwtCompensationReport(input: {
     anomalies.push({
       code: "GL_VS_EVENT_DIFF",
       label: "GL vs peristiwa",
-      detail: `Saldo GL 210207 Rp${formatNumber(input.glPayableBalance)} vs utang seharusnya (peristiwa terbekukan − slip terbayar) Rp${formatNumber(expectedPayableTotal)} — selisih Rp${formatNumber(glDiff)}; tampil sebagai temuan, bukan dipilih diam-diam.`,
+      detail: `Saldo GL 210207 Rp${formatNumber(input.glPayableBalance, 2)} vs utang seharusnya (peristiwa terbekukan − slip terbayar) Rp${formatNumber(expectedPayableTotal, 2)} — selisih Rp${formatNumber(glDiff, 2)}; tampil sebagai temuan, bukan dipilih diam-diam.`,
     })
   }
   const subDiff = safeRound(accrualSubledgerTotal + paidSlipTotal - frozen.reduce((s, r) => s + r.amount, 0), 2)
@@ -327,7 +327,7 @@ export function buildPkwtCompensationReport(input: {
     anomalies.push({
       code: "ACCRUAL_VS_EVENT_DIFF",
       label: "Akrual vs peristiwa",
-      detail: `Subledger akrual + slip terbayar vs peristiwa terbekukan selisih Rp${formatNumber(subDiff)} — segmen belum terakrual penuh atau belum dibayar.`,
+      detail: `Subledger akrual + slip terbayar vs peristiwa terbekukan selisih Rp${formatNumber(subDiff, 2)} — segmen belum terakrual penuh atau belum dibayar.`,
     })
   }
   for (const r of rows) {

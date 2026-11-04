@@ -10,6 +10,7 @@ import {
   computeCompensationAmount,
   planSegmentAccruals,
   buildPkwtCompensationReport,
+  buildPkwtReconciliation,
 } from "../pkwt-compensation"
 
 const d = (s: string) => new Date(`${s}T00:00:00+07:00`)
@@ -117,5 +118,24 @@ describe("E132-5 rekonsiliasi 3 arah + daftar belum dibayar", () => {
     expect(report.unpaidList).toHaveLength(1)
     expect(report.unpaidList[0].label).toBe("Kompensasi PKWT belum dibayar")
     expect(report.anomalies.some((a) => a.code === "GL_VS_EVENT_DIFF")).toBe(true)
+  })
+})
+
+describe("buildPkwtReconciliation: selisih bersen", () => {
+  it("selisih Rp0,50 tidak dicetak Rp1 dan sen tidak hilang di teks temuan", () => {
+    const rows = buildPkwtReconciliation([
+      {
+        employeeId: 1,
+        glPayableBalance: 999_999.5,
+        frozenEventTotal: 1_000_000,
+        accrualSubledgerTotal: 999_999,
+        paidSlipTotal: 0.5,
+      },
+    ])
+
+    // Diff = 1.000.000 − 999.999 − 0,50 = 0,50
+    expect(rows[0].accrualVsEventDiff).toBe(0.5)
+    const finding = rows[0].findings.find((text) => text.includes("Selisih peristiwa"))
+    expect(finding).toContain("Rp0,50")
   })
 })
