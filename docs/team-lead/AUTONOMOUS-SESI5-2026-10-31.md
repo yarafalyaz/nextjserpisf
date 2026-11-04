@@ -3725,3 +3725,22 @@ Ringkasan KPI kedua laporan juga memakai `formatCurrency` sehingga angka jamak d
 - Merah: 1 gagal/1 lulus.
 - Hijau: 71/71 terkait; `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` **3104 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
 - CI `41800871905` (head `8bf4551e4`) dan `41800899210` (head `3d3a9ea6b`) **success**.
+
+## Putaran 145 — laba kotor dan biaya pekerjaan pesanan tampil 0 desimal (commit `2dd173faf`, `ab769ea44`)
+
+Dua kelompok laporan lagi memutuskan/menjumlah dari nilai bersen tetapi mencetak rupiah penuh:
+
+1. **Profitabilitas per Faktur/Barang/Pelanggan (`profitability.ts`).** Baris, total, notice "pendapatan tanpa HPP", verdict, dan KPI memakai `formatAccounting`/`formatCurrency` 0 desimal. Probe dua baris pendapatan Rp1.000.000,50 / HPP 400.000,25 → baris `1.000.001 | 400.000 | 600.000`, total `2.000.001`; laba kotor yang sebenarnya `1.200.000,50` hilang 50 sen.
+2. **Biaya Pesanan Pekerjaan & Penyelesaian Pesanan (`job-order-cost.ts`, `job-order-completion.ts`).** Bahan/produksi/total/biaya-per-unit, subtotal bulan, total, verdict, dan KPI memakai formatter yang sama. Probe dua baris biaya Rp1.400.000,75 → baris `1.400.001` masing-masing, total `2.800.001` (bukan `2.800.001,50`).
+
+### Vonis FIX
+- Formatter lokal ketiga berkas menjadi `formatAccountingExact`; verdict/KPI tidak lagi memakai `formatCurrency` terpisah supaya tabel dan ringkasan tidak bisa berbeda.
+- Regresi baru mengunci baris bersen + total pada ketiga laporan (Profitabilitas, Biaya WO, Penyelesaian WO); mutasi balik formatter membuat ketiganya merah.
+
+### Vonis CATAT
+- **Biaya per unit pada laporan Biaya WO tetap boleh pecahan** — nilainya `total / completedQty` dan memang bukan uang tersimpan; dengan `formatAccountingExact` ia tampil hingga dua desimal, bukan dibulatkan ke rupiah penuh yang menyesatkan.
+
+### Bukti
+- Merah: Profitabilitas 1 gagal/7 lulus; Biaya WO + Penyelesaian WO 2 gagal/7 lulus.
+- Hijau: 8/8 dan 9/9 terkait; `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` **3105–3107 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
+- CI `41802712582` (head `c8790a83e`) dan `41802736829` (head `d3cd059ae`) **success**.
