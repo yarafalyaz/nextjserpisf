@@ -16,7 +16,7 @@ import {
   DetailTableTd,
   DetailTableTh,
 } from "@/components/ui/detail-table"
-import { formatCurrency, formatDate, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { ReportCardShell } from "./report-card-shell"
 
 /**
@@ -61,7 +61,7 @@ export function CustomerCreditQueueCard({
       title={CUSTOMER_CREDIT_QUEUE_TITLE}
       summary={
         <>
-          {CUSTOMER_CREDIT_QUEUE_TOTAL_LABEL}: {formatCurrency(summary.totalSaldo)} ·{" "}
+          {CUSTOMER_CREDIT_QUEUE_TOTAL_LABEL}: {formatCurrencyExact(summary.totalSaldo)} ·{" "}
           {formatNumber(summary.jumlahBaris)} baris · {formatNumber(summary.jumlahPenandaFpUangMuka)}{" "}
           berpenanda {CUSTOMER_CREDIT_FP_UM_MARKER_LABEL}
         </>
@@ -111,11 +111,11 @@ export function CustomerCreditQueueCard({
               <DetailTableTd>{row.customerName}</DetailTableTd>
               <DetailTableTd>{row.sourceType}</DetailTableTd>
               <DetailTableTd>{formatNumber(row.umurMenungguHari)} hari</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.receivedAmount)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.allocatedAmount)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.refundedAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.receivedAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.allocatedAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.refundedAmount)}</DetailTableTd>
               <DetailTableTd align="right">
-                <span className="font-medium">{formatCurrency(row.saldo)}</span>
+                <span className="font-medium">{formatCurrencyExact(row.saldo)}</span>
               </DetailTableTd>
               <DetailTableTd>
                 {row.penandaFpUangMuka && row.penandaFpUangMukaLabel ? (

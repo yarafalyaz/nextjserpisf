@@ -316,3 +316,27 @@ describe("CustomerCreditQueueCard 083-F AC-CCQ-F1..F3", () => {
     expect(text).not.toContain("Anomali warisan terpisah")
   })
 })
+
+describe("CustomerCreditQueueCard: nominal bersen", () => {
+  it("baris dan label rekap tampil hingga sen, tidak dibulatkan ke rupiah penuh", () => {
+    const queue = buildCustomerCreditQueue(
+      [
+        credit({
+          creditId: 1,
+          documentNo: "CC-1",
+          customerName: "CV Sen",
+          receivedAmount: 1_000_000.5,
+          allocatedAmount: 0,
+          refundedAmount: 0,
+          createdAt: day(-3),
+        }),
+      ],
+      [dp({ downPaymentId: 100 })],
+      new Set([100]),
+      { now: NOW },
+    )
+    const { container } = renderCard(<CustomerCreditQueueCard queue={queue} />)
+    const text = container.textContent ?? ""
+    expect(text).toContain("Rp 1.000.000,50")
+  })
+})
