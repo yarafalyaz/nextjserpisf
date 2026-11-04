@@ -15,7 +15,7 @@ import {
   WithholdingLifecycleActions,
   type TaxOption,
 } from "@/app/(dashboard)/keuangan/dokumen-pajak/_components/withholding-certificate-form"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 
 export const metadata: Metadata = { title: "Terbitkan Bukti Potong" }
 
@@ -83,17 +83,17 @@ export default async function CreateWithholdingCertificatePage() {
         withholdingTypes={typeOptions}
         vendorBills={vendorBills.map((bill) => ({
           value: String(bill.id),
-          label: `${bill.documentNo} — ${bill.vendor.name} (${formatCurrency(Number(bill.grandTotal))})`,
+          label: `${bill.documentNo} — ${bill.vendor.name} (${formatCurrencyExact(Number(bill.grandTotal))})`,
         }))}
         salesPayments={salesPayments.map((pay) => ({
           value: String(pay.id),
-          label: `${pay.documentNo ?? `Pembayaran #${pay.id}`} — ${formatCurrency(Number(pay.amount))}`,
+          label: `${pay.documentNo ?? `Pembayaran #${pay.id}`} — ${formatCurrencyExact(Number(pay.amount))}`,
         }))}
       />
       <WithholdingLifecycleActions
         certificates={certificates.map((cert) => ({
           value: String(cert.id),
-          label: `${cert.certificateNumber} — ${cert.counterpartyName} (${formatCurrency(Number(cert.withheldAmount))})`,
+          label: `${cert.certificateNumber} — ${cert.counterpartyName} (${formatCurrencyExact(Number(cert.withheldAmount))})`,
         }))}
         withholdingTypes={typeOptions}
         liabilityAccounts={liabilityAccounts.map(accountOption)}

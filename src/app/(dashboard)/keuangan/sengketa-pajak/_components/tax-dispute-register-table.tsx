@@ -6,7 +6,7 @@ import {
   TAX_DISPUTE_REGISTER_COLUMN_LABELS,
   TAX_DISPUTE_REGISTER_TITLE,
 } from "@/lib/reports/tax-dispute-register-queue"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import { entityHref } from "@/lib/utils/entity-url"
 import {
@@ -72,13 +72,13 @@ export function TaxDisputeRegisterTable({ report }: { report: TaxDisputeRegister
               </DetailTableTd>
               <DetailTableTd>{taxDisputeAssessmentKindLabel(row.kind)}</DetailTableTd>
               <DetailTableTd align="right">
-                {formatCurrency(row.assessedAmount)}
+                {formatCurrencyExact(row.assessedAmount)}
               </DetailTableTd>
               <DetailTableTd align="right">
-                {formatCurrency(row.disputedAmount)}
+                {formatCurrencyExact(row.disputedAmount)}
               </DetailTableTd>
               <DetailTableTd align="right">
-                {formatCurrency(row.paidUnderProtest)}
+                {formatCurrencyExact(row.paidUnderProtest)}
               </DetailTableTd>
               <DetailTableTd>{row.nearestDeadline ? formatDate(row.nearestDeadline) : "-"}</DetailTableTd>
               <DetailTableTd>

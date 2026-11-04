@@ -7,7 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
 import { getTaxDisputeRegisterQueue } from "@/lib/reports/tax-dispute-register-queue-data"
 import { TAX_DISPUTE_REGISTER_TITLE } from "@/lib/reports/tax-dispute-register-queue"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { TaxDisputeRegisterTable } from "./_components/tax-dispute-register-table"
 
 import type { Metadata } from "next"
@@ -60,7 +60,7 @@ export default async function TaxDisputeRegisterPage() {
         <div className="rounded-xl border border-default bg-surface p-4 shadow-sm">
           <p className="text-sm text-muted-foreground">Nominal disengketakan</p>
           <p className="mt-1 text-2xl font-bold text-foreground">
-            {formatCurrency(report.totals.disputedAmount)}
+            {formatCurrencyExact(report.totals.disputedAmount)}
           </p>
         </div>
         <div className="rounded-xl border border-default bg-surface p-4 shadow-sm">

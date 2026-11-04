@@ -6,7 +6,7 @@ import { issueDownPaymentTaxInvoiceAction } from "@/actions/tax-documents.action
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import {
   DownPaymentTaxStatusBadge,
   type DownPaymentVatSnapshotView,
@@ -113,9 +113,9 @@ function FragmentRow({
         <td className="py-2 pr-3">{row.documentNo ?? "—"}</td>
         <td className="py-2 pr-3">{row.customerName ?? "—"}</td>
         <td className="py-2 pr-3">{formatDate(row.paymentDate)}</td>
-        <td className="py-2 pr-3 text-right">{formatCurrency(row.amount)}</td>
-        <td className="py-2 pr-3 text-right">{row.vatDpp === null ? "—" : formatCurrency(row.vatDpp)}</td>
-        <td className="py-2 pr-3 text-right">{row.vatAmount === null ? "—" : formatCurrency(row.vatAmount)}</td>
+        <td className="py-2 pr-3 text-right">{formatCurrencyExact(row.amount)}</td>
+        <td className="py-2 pr-3 text-right">{row.vatDpp === null ? "—" : formatCurrencyExact(row.vatDpp)}</td>
+        <td className="py-2 pr-3 text-right">{row.vatAmount === null ? "—" : formatCurrencyExact(row.vatAmount)}</td>
         <td className="py-2 pr-3">{row.vatTaxPeriod ?? "—"}</td>
         <td className="py-2 pr-3">{row.pkpSnapshotLabel}</td>
         <td className="py-2 pr-3">

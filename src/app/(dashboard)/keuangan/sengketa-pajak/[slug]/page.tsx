@@ -11,7 +11,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { BackButton } from "@/components/ui/page-header"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { TAX_DISPUTE_REGISTER_TITLE } from "@/lib/reports/tax-dispute-register-queue"
 import {
@@ -104,9 +104,9 @@ export default async function TaxAssessmentDetailPage({
         <DetailField label="Jenis Ketetapan" value={taxDisputeAssessmentKindLabel(assessment.kind)} />
         <DetailField label="Jenis Pajak" value={assessment.taxKind ?? "-"} />
         <DetailField label="Masa Pajak" value={assessment.taxPeriod ?? "-"} />
-        <DetailField label="Nominal Ketetapan" value={formatCurrency(Number(assessment.assessedAmount))} />
-        <DetailField label="Nominal Disengketakan" value={formatCurrency(Number(assessment.disputedAmount))} />
-        <DetailField label="Dibayar di Bawah Protes" value={formatCurrency(Number(assessment.paidUnderProtest))} />
+        <DetailField label="Nominal Ketetapan" value={formatCurrencyExact(Number(assessment.assessedAmount))} />
+        <DetailField label="Nominal Disengketakan" value={formatCurrencyExact(Number(assessment.disputedAmount))} />
+        <DetailField label="Dibayar di Bawah Protes" value={formatCurrencyExact(Number(assessment.paidUnderProtest))} />
         <DetailField label="Tanggal Kirim SKP" value={assessment.sentAt ? formatDate(assessment.sentAt) : "-"} />
         <DetailField
           label="Status"

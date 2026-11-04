@@ -13,13 +13,13 @@ import { TaxInvoiceForm, TaxInvoiceLifecycleActions, type TaxOption } from "@/ap
 import { CoretaxExportPanel } from "@/app/(dashboard)/keuangan/dokumen-pajak/_components/coretax-export-panel"
 import { TaxInvoiceDraftQueueCard } from "@/components/reports/tax-invoice-draft-queue-card"
 import { getTaxInvoiceDraftQueue } from "@/lib/reports/tax-invoice-draft-queue-data"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 
 export const metadata: Metadata = { title: "Terbitkan Faktur Pajak" }
 
 const moneyOption = (documentNo: string | null, amount: unknown, party: string): TaxOption => ({
   value: "",
-  label: `${documentNo ?? "Tanpa nomor"} — ${party} (${formatCurrency(Number(amount))})`,
+  label: `${documentNo ?? "Tanpa nomor"} — ${party} (${formatCurrencyExact(Number(amount))})`,
 })
 
 /**
@@ -85,7 +85,7 @@ export default async function CreateTaxInvoicePage() {
         <TaxInvoiceLifecycleActions
           invoices={issued.map((inv) => ({
             value: String(inv.id),
-            label: `${inv.taxInvoiceNumber} — ${inv.direction === "out" ? "Keluaran" : "Masukan"}${inv.counterpartyName ? ` — ${inv.counterpartyName}` : ""} (${formatCurrency(Number(inv.taxAmount))})`,
+            label: `${inv.taxInvoiceNumber} — ${inv.direction === "out" ? "Keluaran" : "Masukan"}${inv.counterpartyName ? ` — ${inv.counterpartyName}` : ""} (${formatCurrencyExact(Number(inv.taxAmount))})`,
           }))}
         />
       )}
@@ -95,7 +95,7 @@ export default async function CreateTaxInvoicePage() {
             .filter((inv) => inv.direction === "out")
             .map((inv) => ({
               value: String(inv.id),
-              label: `${inv.taxInvoiceNumber} — Keluaran${inv.counterpartyName ? ` — ${inv.counterpartyName}` : ""} (${formatCurrency(Number(inv.taxAmount))})`,
+              label: `${inv.taxInvoiceNumber} — Keluaran${inv.counterpartyName ? ` — ${inv.counterpartyName}` : ""} (${formatCurrencyExact(Number(inv.taxAmount))})`,
             }))}
         />
       )}

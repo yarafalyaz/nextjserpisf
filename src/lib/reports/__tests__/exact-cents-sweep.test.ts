@@ -259,3 +259,20 @@ describe("sapuan kesebelas: produksi, penerimaan, pinjaman, payroll", () => {
     }
   })
 })
+
+describe("sapuan kedua belas: dokumen pajak dan sengketa pajak", () => {
+  it("halaman dokumen/sengketa pajak memakai formatter currency exact", () => {
+    for (const rel of [
+      "src/app/(dashboard)/keuangan/dokumen-pajak/faktur/tambah/page.tsx",
+      "src/app/(dashboard)/keuangan/dokumen-pajak/bupot/tambah/page.tsx",
+      "src/app/(dashboard)/keuangan/dokumen-pajak/_components/down-payment-tax-panel.tsx",
+      "src/app/(dashboard)/keuangan/sengketa-pajak/page.tsx",
+      "src/app/(dashboard)/keuangan/sengketa-pajak/[slug]/page.tsx",
+      "src/app/(dashboard)/keuangan/sengketa-pajak/_components/tax-dispute-register-table.tsx",
+    ]) {
+      const source = readFileSync(path.resolve(process.cwd(), rel), "utf8")
+      expect(source, rel).not.toMatch(/formatCurrency\((?!Exact)/)
+      expect(source, rel).toContain("formatCurrencyExact")
+    }
+  })
+})
