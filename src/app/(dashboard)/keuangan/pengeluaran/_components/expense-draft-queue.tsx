@@ -11,7 +11,7 @@ import {
   EXPENSE_DRAFT_QUEUE_TITLE,
   EXPENSE_DRAFT_QUEUE_TRUNCATED_LABEL,
 } from "@/lib/reports/expense-draft-queue"
-import { formatAccounting, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
 import {
   DetailTable,
@@ -54,7 +54,7 @@ export function ExpenseDraftQueueSection({
             <p key={bucket}>
               {EXPENSE_DRAFT_APPROVAL_BUCKET_LABELS[bucket]}:{" "}
               {queue.bucketRecap[bucket].count} ·{" "}
-              {formatAccounting(queue.bucketRecap[bucket].totalAmount)}
+              {formatAccountingExact(queue.bucketRecap[bucket].totalAmount)}
             </p>
           ))}
           <p>
@@ -65,7 +65,7 @@ export function ExpenseDraftQueueSection({
           </p>
           <p>
             {queue.totalLabel}: {queue.displayedCount} baris ·{" "}
-            {formatAccounting(queue.totalNominalBarisTampil)}
+            {formatAccountingExact(queue.totalNominalBarisTampil)}
           </p>
           {queue.terpotong ? (
             <p className="font-medium text-foreground">
@@ -129,7 +129,7 @@ export function ExpenseDraftQueueSection({
                     )}
                   </DetailTableTd>
                   <DetailTableTd align="right" className="tabular-nums">
-                    {formatAccounting(row.amount)}
+                    {formatAccountingExact(row.amount)}
                   </DetailTableTd>
                   <DetailTableTd align="right">{row.umurMenungguLabel}</DetailTableTd>
                   <DetailTableTd>{row.tingkatLabel}</DetailTableTd>
