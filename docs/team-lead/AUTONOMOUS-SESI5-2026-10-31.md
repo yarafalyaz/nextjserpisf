@@ -3965,3 +3965,17 @@ Sisa dua halaman dengan formatter 0 desimal untuk nominal:
 ### Bukti
 - 65/65 tes halaman laporan; tsc, ESLint, diff-check bersih.
 - CI `41814543710`, `41814661674`, `41815022788`, `41815122636`, `41815528350`, `41815881242` **success** (putaran 155–158).
+
+## Putaran 160 — kartu Laba Rugi per Proyek (commit `9006078e6`)
+
+Komponen bersama `project-pl-card.tsx` mencetak pendapatan/material/biaya
+produksi/beban lain/total biaya/laba dengan 0 desimal dan menjumlah footer dengan `+` float mentah (`sumRows`). Total footer bisa drift dari jumlah baris yang tercetak.
+
+### Vonis FIX
+- Semua sel dan footer memakai `formatAccountingExact`; `sumRows` memakai `safeAdd(..., 2)`.
+
+### Vonis CATAT
+- **46 komponen kartu laporan lain masih memakai `formatCurrency` 0 desimal.** Mayoritas adalah antrean kerja (queue) dan kartu ringkasan di dashboard yang menampilkan nilai per dokumen, bukan total tabel yang dijumlah pembaca. Migrasi menyeluruh butuh keputusan desain tampilan per kartu (mis. nominal percobaan kredit boleh tetap rupiah penuh) dan tidak dilakukan sepihak — dicatat sebagai kandidat, bukan sisa bug yang terbukti.
+
+### Bukti
+- 414/414 tes komponen laporan; tsc, ESLint bersih.
