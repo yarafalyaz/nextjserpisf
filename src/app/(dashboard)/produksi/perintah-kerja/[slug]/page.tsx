@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission, hasPermission } from "@/lib/auth/permissions";
-import { formatCurrency, formatDate } from "@/lib/utils/format";
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusChip } from "@/components/ui/status-chip";
@@ -454,7 +454,7 @@ export default async function WorkOrderDetailPage({
         />
         <DetailField
           label="Total Biaya Bahan"
-          value={formatCurrency(totalCost)}
+          value={formatCurrencyExact(totalCost)}
         />
         {wo.customerVehicle && (
           <DetailField
@@ -544,7 +544,7 @@ export default async function WorkOrderDetailPage({
                       <DetailTableRow key={p.id}>
                         <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/pesanan", p)}>{p.documentNo}</Link></DetailTableTd>
                         <DetailTableTd>{p.isService ? "Jasa" : "Barang"}</DetailTableTd>
-                        <DetailTableTd align="right">{formatCurrency(Number(p.grandTotal))}</DetailTableTd>
+                        <DetailTableTd align="right">{formatCurrencyExact(Number(p.grandTotal))}</DetailTableTd>
                         <DetailTableTd><StatusChip status={p.status} /></DetailTableTd>
                       </DetailTableRow>
                     ))}
@@ -783,10 +783,10 @@ export default async function WorkOrderDetailPage({
                       {Number(item.qty)}
                     </DetailTableTd>
                     <DetailTableTd align="right">
-                      {formatCurrency(Number(item.cost))}
+                      {formatCurrencyExact(Number(item.cost))}
                     </DetailTableTd>
                     <DetailTableTd align="right">
-                      {formatCurrency(Number(item.qty) * Number(item.cost))}
+                      {formatCurrencyExact(Number(item.qty) * Number(item.cost))}
                     </DetailTableTd>
                   </DetailTableRow>
                 ))}
@@ -801,7 +801,7 @@ export default async function WorkOrderDetailPage({
                     Total
                   </DetailTableTd>
                   <DetailTableTd align="right" className="font-bold">
-                    {formatCurrency(totalCost)}
+                    {formatCurrencyExact(totalCost)}
                   </DetailTableTd>
                 </DetailTableFootRow>
               </DetailTableFoot>

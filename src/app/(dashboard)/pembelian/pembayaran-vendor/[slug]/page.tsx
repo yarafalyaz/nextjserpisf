@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
@@ -87,9 +87,9 @@ export default async function VendorPaymentDetailPage({
           label="Vendor"
           value={<Link href={entityHref("/master/vendor", payment.vendor)}>{payment.vendor.name}</Link>}
         />
-        <DetailField label="Jumlah" value={<span className="text-xl">{formatCurrency(Number(payment.amount))}</span>} />
-        <DetailField label="Biaya Admin Bank" value={formatCurrency(Number(payment.adminFee))} />
-        <DetailField label="Total Keluar dari Bank" value={formatCurrency(Number(payment.amount) + Number(payment.adminFee))} />
+        <DetailField label="Jumlah" value={<span className="text-xl">{formatCurrencyExact(Number(payment.amount))}</span>} />
+        <DetailField label="Biaya Admin Bank" value={formatCurrencyExact(Number(payment.adminFee))} />
+        <DetailField label="Total Keluar dari Bank" value={formatCurrencyExact(Number(payment.amount) + Number(payment.adminFee))} />
         <DetailField label="Tanggal Bayar" value={formatDate(payment.paymentDate)} />
         <DetailField label="Metode Pembayaran" value={resolvePaymentMethodName(payment.paymentMethod, pmMap)} />
         <DetailField label="Dibuat" value={formatDate(payment.createdAt)} />
@@ -111,7 +111,7 @@ export default async function VendorPaymentDetailPage({
                 {payment.allocations.map((alloc) => (
                   <DetailTableRow key={alloc.id}>
                     <DetailTableTd><Link href={`/pembelian/tagihan/${alloc.vendorBillId}`}>Tagihan #{alloc.vendorBillId}</Link></DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(Number(alloc.amount))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(Number(alloc.amount))}</DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>

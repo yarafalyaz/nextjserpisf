@@ -6,7 +6,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
-import { formatCurrency, formatPeriod } from "@/lib/utils/format"
+import { formatCurrencyExact, formatPeriod } from "@/lib/utils/format"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface PayrollData {
@@ -44,19 +44,19 @@ const columns = [
   }),
   columnHelper.accessor("baseSalary", {
     header: "Gaji Pokok",
-    cell: (info) => <span className="text-right block">{formatCurrency(info.getValue())}</span>,
+    cell: (info) => <span className="text-right block">{formatCurrencyExact(info.getValue())}</span>,
   }),
   columnHelper.accessor("allowances", {
     header: "Tunjangan",
-    cell: (info) => <span className="text-right block">{formatCurrency(info.getValue())}</span>,
+    cell: (info) => <span className="text-right block">{formatCurrencyExact(info.getValue())}</span>,
   }),
   columnHelper.accessor("deductions", {
     header: "Potongan",
-    cell: (info) => <span className="text-right block">{formatCurrency(info.getValue())}</span>,
+    cell: (info) => <span className="text-right block">{formatCurrencyExact(info.getValue())}</span>,
   }),
   columnHelper.accessor("netSalary", {
     header: "Gaji Bersih",
-    cell: (info) => <span className="text-right block font-medium">{formatCurrency(info.getValue())}</span>,
+    cell: (info) => <span className="text-right block font-medium">{formatCurrencyExact(info.getValue())}</span>,
   }),
   columnHelper.accessor("status", {
     header: "Status",

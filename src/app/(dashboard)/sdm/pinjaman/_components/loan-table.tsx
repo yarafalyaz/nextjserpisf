@@ -7,7 +7,7 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteEmployeeLoan } from "@/actions/hrm.actions"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface LoanData {
@@ -40,15 +40,15 @@ const columns = [
   }),
   columnHelper.accessor("totalAmount", {
     header: "Jumlah",
-    cell: (info) => formatCurrency(info.getValue()),
+    cell: (info) => formatCurrencyExact(info.getValue()),
   }),
   columnHelper.accessor("monthlyInstallment", {
     header: "Angsuran/Bulan",
-    cell: (info) => formatCurrency(info.getValue()),
+    cell: (info) => formatCurrencyExact(info.getValue()),
   }),
   columnHelper.accessor("remainingAmount", {
     header: "Sisa",
-    cell: (info) => formatCurrency(info.getValue()),
+    cell: (info) => formatCurrencyExact(info.getValue()),
   }),
   columnHelper.accessor("status", {
     header: "Status",

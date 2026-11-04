@@ -2,7 +2,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
-import { formatCurrency, formatDate } from "@/lib/utils/format";
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format";
 import { statusLabel } from "@/lib/utils/status-labels";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -270,7 +270,7 @@ export default async function GoodsReceiptDetailPage({
             </span>
             <span className="text-[0.9375rem] text-foreground font-medium">
               {Number(receipt.shippingCost) > 0 ? (
-                formatCurrency(Number(receipt.shippingCost))
+                formatCurrencyExact(Number(receipt.shippingCost))
               ) : (
                 <span className="text-muted-foreground">
                   Pakai estimasi PO
@@ -283,7 +283,7 @@ export default async function GoodsReceiptDetailPage({
               Biaya Lain
             </span>
             <span className="text-[0.9375rem] text-foreground font-medium">
-              {formatCurrency(Number(receipt.otherCost))}
+              {formatCurrencyExact(Number(receipt.otherCost))}
             </span>
           </div>
           <div className="flex flex-col gap-1">
@@ -291,7 +291,7 @@ export default async function GoodsReceiptDetailPage({
               Admin Bank
             </span>
             <span className="text-[0.9375rem] text-foreground font-medium">
-              {formatCurrency(Number(receipt.adminFee))}
+              {formatCurrencyExact(Number(receipt.adminFee))}
             </span>
           </div>
         </div>
@@ -312,7 +312,7 @@ export default async function GoodsReceiptDetailPage({
                 Ongkir (PO)
               </span>
               <span className="text-[0.9375rem] text-foreground font-medium">
-                {formatCurrency(Number(receipt.purchaseOrder.shippingCost))}
+                {formatCurrencyExact(Number(receipt.purchaseOrder.shippingCost))}
               </span>
             </div>
             <div className="flex flex-col gap-1">
@@ -320,7 +320,7 @@ export default async function GoodsReceiptDetailPage({
                 Biaya Layanan (PO)
               </span>
               <span className="text-[0.9375rem] text-foreground font-medium">
-                {formatCurrency(Number(receipt.purchaseOrder.serviceFee))}
+                {formatCurrencyExact(Number(receipt.purchaseOrder.serviceFee))}
               </span>
             </div>
             <div className="flex flex-col gap-1">
@@ -328,7 +328,7 @@ export default async function GoodsReceiptDetailPage({
                 Diskon Nota (PO)
               </span>
               <span className="text-[0.9375rem] text-foreground font-medium">
-                − {formatCurrency(Number(receipt.purchaseOrder.discount))}
+                − {formatCurrencyExact(Number(receipt.purchaseOrder.discount))}
               </span>
             </div>
           </div>
@@ -392,7 +392,7 @@ export default async function GoodsReceiptDetailPage({
                         ) : null}
                       </DetailTableTd>
                       <DetailTableTd align="right">
-                        {formatCurrency(Number(item.unitCost))}
+                        {formatCurrencyExact(Number(item.unitCost))}
                       </DetailTableTd>
                       <DetailTableTd>
                         {warehouseMap.get(item.warehouseId) ||
@@ -461,7 +461,7 @@ export default async function GoodsReceiptDetailPage({
                         {bill.documentNo}
                       </Link>
                     </DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(Number(bill.grandTotal))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(Number(bill.grandTotal))}</DetailTableTd>
                     <DetailTableTd><StatusChip status={bill.status} /></DetailTableTd>
                   </DetailTableRow>
                 ))}
@@ -505,7 +505,7 @@ export default async function GoodsReceiptDetailPage({
                       : "Nilai Persediaan"}
                   </span>
                   <span className="text-[0.9375rem] text-foreground font-medium tabular-nums">
-                    {formatCurrency(Number(journal.totalDebit))}
+                    {formatCurrencyExact(Number(journal.totalDebit))}
                   </span>
                 </div>
                 <div className="flex flex-col gap-1">

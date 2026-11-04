@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatDate, formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
@@ -88,10 +88,10 @@ export default async function EmployeeLoanDetailPage({
         <DetailField label="Karyawan" value={loan.employee.name} />
         <DetailField label="No. Karyawan" value={loan.employee.employeeNo} mono />
         <DetailField label="Tanggal Pinjaman" value={formatDate(loan.loanDate)} />
-        <DetailField label="Jumlah Pinjaman" value={formatCurrency(Number(loan.totalAmount))} />
-        <DetailField label="Angsuran/Bulan" value={formatCurrency(Number(loan.monthlyInstallment))} />
-        <DetailField label="Cicilan Mingguan (Perjanjian Tertulis)" value={loan.weeklyInstallment === null ? "-" : formatCurrency(Number(loan.weeklyInstallment))} />
-        <DetailField label="Sisa Pinjaman" value={formatCurrency(Number(loan.remainingAmount))} />
+        <DetailField label="Jumlah Pinjaman" value={formatCurrencyExact(Number(loan.totalAmount))} />
+        <DetailField label="Angsuran/Bulan" value={formatCurrencyExact(Number(loan.monthlyInstallment))} />
+        <DetailField label="Cicilan Mingguan (Perjanjian Tertulis)" value={loan.weeklyInstallment === null ? "-" : formatCurrencyExact(Number(loan.weeklyInstallment))} />
+        <DetailField label="Sisa Pinjaman" value={formatCurrencyExact(Number(loan.remainingAmount))} />
         <DetailField label="Status" value={<StatusChip status={loan.status} />} />
         {loan.notes && (
           <DetailField label="Catatan" value={loan.notes} colSpan="full" />

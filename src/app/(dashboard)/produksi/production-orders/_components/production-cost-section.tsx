@@ -5,7 +5,7 @@ import { useRef, useState, useTransition } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { Pencil } from "lucide-react"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { CurrencyInput } from "@/components/ui/currency-input"
@@ -178,7 +178,7 @@ export function ProductionCostSection({
         return
       }
       overheadIdempotencyKeyRef.current = crypto.randomUUID()
-      showSuccess(`Overhead ${formatCurrency((result as { amount?: number }).amount ?? 0)} diterapkan`)
+      showSuccess(`Overhead ${formatCurrencyExact((result as { amount?: number }).amount ?? 0)} diterapkan`)
       setOverheadOpen(false)
       setDriverQty("")
       setDriverRate(null)
@@ -202,7 +202,7 @@ export function ProductionCostSection({
         showError(result.error || "Gagal menarik lembar waktu")
         return
       }
-      showSuccess(`Ditarik ${result.count} lembar waktu → ${formatCurrency(result.added ?? 0)}`)
+      showSuccess(`Ditarik ${result.count} lembar waktu → ${formatCurrencyExact(result.added ?? 0)}`)
       router.refresh()
     })
   }
@@ -253,7 +253,7 @@ export function ProductionCostSection({
             <div className="flex flex-col gap-1.5">
               <Label>Overhead Diterapkan</Label>
               <div className="flex h-9 items-center rounded-md border border-default px-3 text-sm font-semibold">
-                {formatCurrency(overheadPreview)}
+                {formatCurrencyExact(overheadPreview)}
               </div>
             </div>
           </div>
@@ -354,8 +354,8 @@ export function ProductionCostSection({
                   <DetailTableTd>{CATEGORY_LABELS[c.category] ?? c.category}</DetailTableTd>
                   <DetailTableTd>{c.description ?? "-"}</DetailTableTd>
                   <DetailTableTd align="right">{c.hours ?? "-"}</DetailTableTd>
-                  <DetailTableTd align="right">{c.rate != null ? formatCurrency(c.rate) : "-"}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(c.amount)}</DetailTableTd>
+                  <DetailTableTd align="right">{c.rate != null ? formatCurrencyExact(c.rate) : "-"}</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrencyExact(c.amount)}</DetailTableTd>
                   <DetailTableTd>
                     <span className="inline-flex flex-wrap items-center gap-2">
                       {c.sourceTimesheetId ? (
@@ -403,7 +403,7 @@ export function ProductionCostSection({
                 <DetailTableTd>{" "}</DetailTableTd>
                 <DetailTableTd align="right">{" "}</DetailTableTd>
                 <DetailTableTd align="right">{" "}</DetailTableTd>
-                <DetailTableTd align="right"><span className="font-semibold">{formatCurrency(total)}</span></DetailTableTd>
+                <DetailTableTd align="right"><span className="font-semibold">{formatCurrencyExact(total)}</span></DetailTableTd>
                 <DetailTableTd>{" "}</DetailTableTd>
                 {canManage && <DetailTableTd>{" "}</DetailTableTd>}
               </DetailTableRow>

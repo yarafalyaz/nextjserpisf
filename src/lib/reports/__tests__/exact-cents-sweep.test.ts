@@ -239,3 +239,23 @@ describe("sapuan kesepuluh: detail dokumen penjualan/pembelian", () => {
     }
   })
 })
+
+describe("sapuan kesebelas: produksi, penerimaan, pinjaman, payroll", () => {
+  it("halaman/komponen terkait memakai formatter currency exact", () => {
+    for (const rel of [
+      "src/app/(dashboard)/produksi/production-orders/[slug]/page.tsx",
+      "src/app/(dashboard)/produksi/production-orders/_components/production-cost-section.tsx",
+      "src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx",
+      "src/app/(dashboard)/pembelian/penerimaan/[slug]/page.tsx",
+      "src/app/(dashboard)/pembelian/pembayaran-vendor/[slug]/page.tsx",
+      "src/app/(dashboard)/sdm/pinjaman/[slug]/page.tsx",
+      "src/app/(dashboard)/sdm/pinjaman/_components/loan-installment-history-section.tsx",
+      "src/app/(dashboard)/sdm/pinjaman/_components/loan-table.tsx",
+      "src/app/(dashboard)/sdm/penggajian/_components/payroll-table.tsx",
+    ]) {
+      const source = readFileSync(path.resolve(process.cwd(), rel), "utf8")
+      expect(source, rel).not.toMatch(/formatCurrency\((?!Exact)/)
+      expect(source, rel).toContain("formatCurrencyExact")
+    }
+  })
+})

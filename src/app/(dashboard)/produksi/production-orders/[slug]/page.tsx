@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { StatusChip } from '@/components/ui/status-chip'
@@ -307,16 +307,16 @@ export default async function ProductionOrderDetailPage({
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Biaya Standar</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(Number(order.totalStandardCost))}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrencyExact(Number(order.totalStandardCost))}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Biaya Aktual</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(Number(order.totalActualCost))}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrencyExact(Number(order.totalActualCost))}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Varians</span>
             <span className={`text-[0.9375rem] font-semibold ${Number(order.variance) > 0 ? "text-danger" : Number(order.variance) < 0 ? "text-success" : "text-foreground"}`}>
-              {formatCurrency(Number(order.variance))}
+              {formatCurrencyExact(Number(order.variance))}
             </span>
           </div>
         </div>
@@ -328,15 +328,15 @@ export default async function ProductionOrderDetailPage({
           <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
             <div className="flex flex-col gap-1">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Selisih Harga Bahan</span>
-              <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(productionVariance.materialPriceVariance)}</span>
+              <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrencyExact(productionVariance.materialPriceVariance)}</span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Selisih Pemakaian</span>
-              <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(productionVariance.materialUsageVariance)}</span>
+              <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrencyExact(productionVariance.materialUsageVariance)}</span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tenaga Kerja & Lainnya</span>
-              <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(productionVariance.laborAndOtherCost)}</span>
+              <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrencyExact(productionVariance.laborAndOtherCost)}</span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Varians %</span>
@@ -376,8 +376,8 @@ export default async function ProductionOrderDetailPage({
                     <DetailTableTd>{itemNameMap.get(mat.itemId) ?? `Barang #${mat.itemId}`}</DetailTableTd>
                     <DetailTableTd align="right">{Number(mat.qty)}</DetailTableTd>
                     <DetailTableTd align="right">{Number(mat.actualQty ?? 0)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(Number(mat.standardCost))}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(Number(mat.actualCost))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(Number(mat.standardCost))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(Number(mat.actualCost))}</DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>
@@ -455,7 +455,7 @@ export default async function ProductionOrderDetailPage({
                 ) : null}
                 <div className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">HPP / Unit</span>
-                  <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(Number(order.genealogy.unitCost))}</span>
+                  <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrencyExact(Number(order.genealogy.unitCost))}</span>
                 </div>
               </div>
 
@@ -508,8 +508,8 @@ export default async function ProductionOrderDetailPage({
                                 <span className="text-muted-foreground">—</span>
                               )}
                             </DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(m.unitCost))}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(m.totalCost))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrencyExact(Number(m.unitCost))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrencyExact(Number(m.totalCost))}</DetailTableTd>
                           </DetailTableRow>
                         )
                       })}

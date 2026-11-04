@@ -12,7 +12,7 @@ import {
   DetailTableTd,
   DetailTableTh,
 } from "@/components/ui/detail-table"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 
 /**
  * Histori cicilan per pinjaman (F-2026-10-25-019-S, AC-LH-F1/F2).
@@ -38,16 +38,16 @@ export function LoanInstallmentHistorySection({
       </div>
 
       <DetailCard>
-        <DetailField label={loan.paidLabel} value={formatCurrency(loan.totalPaidToDate)} />
-        <DetailField label="Jumlah Pinjaman" value={formatCurrency(loan.totalAmount)} />
-        <DetailField label="Sisa Pinjaman" value={formatCurrency(loan.remainingAmount)} />
+        <DetailField label={loan.paidLabel} value={formatCurrencyExact(loan.totalPaidToDate)} />
+        <DetailField label="Jumlah Pinjaman" value={formatCurrencyExact(loan.totalAmount)} />
+        <DetailField label="Sisa Pinjaman" value={formatCurrencyExact(loan.remainingAmount)} />
         {history.nextInstallment ? (
           <DetailField
             label={history.nextInstallment.label}
             value={
               history.nextInstallment.amount === null
                 ? "Tanpa jadwal mingguan"
-                : formatCurrency(history.nextInstallment.amount)
+                : formatCurrencyExact(history.nextInstallment.amount)
             }
           />
         ) : null}
@@ -65,7 +65,7 @@ export function LoanInstallmentHistorySection({
           className="rounded-xl border border-default bg-surface px-4 py-3 text-sm text-foreground"
         >
           {history.unallocatedLabel}:{" "}
-          <span className="font-semibold tabular-nums">{formatCurrency(history.unallocatedAmount)}</span>
+          <span className="font-semibold tabular-nums">{formatCurrencyExact(history.unallocatedAmount)}</span>
         </p>
       ) : null}
 
@@ -87,7 +87,7 @@ export function LoanInstallmentHistorySection({
                   {row.paymentDate ? formatDate(row.paymentDate, { format: "short" }) : "—"}
                 </DetailTableTd>
                 <DetailTableTd>{row.label}</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(row.amount)}</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrencyExact(row.amount)}</DetailTableTd>
               </DetailTableRow>
             ))}
             {history.aggregateSlipRows.map((row) => (
@@ -98,7 +98,7 @@ export function LoanInstallmentHistorySection({
                   {row.paymentDate ? formatDate(row.paymentDate, { format: "short" }) : "—"}
                 </DetailTableTd>
                 <DetailTableTd>{row.label}</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(row.loanDeduction)}</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrencyExact(row.loanDeduction)}</DetailTableTd>
               </DetailTableRow>
             ))}
           </DetailTableBody>
