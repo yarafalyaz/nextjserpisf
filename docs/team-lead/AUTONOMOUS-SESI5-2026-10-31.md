@@ -4382,3 +4382,14 @@ Halaman detail klaim garansi (`produksi/garansi/[claimId]/page.tsx`) mencetak `t
 ### Bukti
 - Merah: 1 gagal/5 lulus; hijau 6/6 dan 582/582 (guard + modul produksi); tsc, ESLint, diff-check bersih.
 - CI `41842075122`, `41842112570`, `41842529990`, `41842562544` **success** (putaran 186–188).
+
+## Putaran 190 — buku pembantu piutang & utang (commit `99eb4254a`)
+
+Komponen bersama `laporan/_components/subledger-report.tsx` (dipakai Buku Besar Pembantu Piutang & Utang) mencetak KPI saldo awal/debit/kredit/saldo akhir, mutasi per baris, total, saldo berjalan, serta total tagihan belum lunas dengan `formatAccounting` 0 desimal — padahal akumulasinya `safeAdd`/`safeSubtract(..., 2)` dan sisa per tagihan juga dihitung dua desimal.
+
+### Vonis FIX
+- Seluruh nominal memakai `formatAccountingExact`; guard statis di `exact-cents-sweep.test.ts` menolak `formatAccounting(` tanpa `Exact` di komponen itu, dan merah bila dikembalikan.
+
+### Bukti
+- Merah: 1 gagal/7 lulus; hijau 3.092 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+- CI `41844175480` (garansi) dan `41844210303` (dokumentasi) **success**.
