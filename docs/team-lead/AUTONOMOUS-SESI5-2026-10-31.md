@@ -3644,3 +3644,38 @@ Probe dengan satu tagihan terbuka Rp500.000: baris `"PT B" | "1" | "500.000" | "
 ### Bukti
 - Merah: 2 gagal/0 lulus.
 - Hijau: 2/2; `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` + halaman laporan **3165 lulus / 4 dilewati** (413 berkas); tsc, ESLint, diff-check bersih.
+
+## Putaran 141 — total laporan umur/AR-AP tidak sama dengan jumlah barisnya (commit `191bd8383`)
+
+Sisa piutang/hutang disimpan `Decimal(15,2)`, tetapi laporan umur (`aging-reports-data.ts`), ringkasan AR/AP (`ar-ap-summary-data.ts`), dan layar aging (`aging-report-view.tsx`) mencetak dengan 0 desimal. Probe dua faktur sisa Rp1.000.000,50:
+
+```
+baris tercetak : "1.000.001" + "1.000.001"   (jumlah yang dibaca pembaca = 2.000.002)
+total bucket   : "2.000.001"
+```
+
+Dua angka berlabel sama dalam satu laporan tidak bisa direkonsiliasi, dan selisihnya bergantung arah pembulatan `Intl` per baris. Ini kelas yang sama dengan Putaran 130 tetapi pada laporan populasi.
+
+### Vonis FIX
+- `money()` di `aging-reports-data.ts` dan `ar-ap-summary-data.ts`, serta tiga tempat di `aging-report-view.tsx`, memakai `formatAccountingExact` (rupiah penuh bila bulat, dua desimal bila bersen).
+- Regresi `aging-total-matches-rows.test.ts` mengunci baris bersen dan totalnya; mutasi balik formatter membuat tes merah.
+
+### Vonis CATAT
+- **Total yang kebetulan bulat tetap rupiah penuh ("2.000.001"), bukan "2.000.001,00".** Itu konsekuensi `formatAccountingExact` yang disengaja: laporan tanpa sen tidak berubah bentuk.
+- **`sales-late-fee.ts` tidak disentuh** (denda, bukan populasi sisa) — dicatat Putaran 139.
+
+### Bukti
+- Merah: 1 gagal/0 lulus.
+- Hijau: 60/60 terkait + 1 baru; reports+PDF+halaman 3166 lulus/4 dilewati; tsc, ESLint, diff-check bersih.
+
+## Putaran 142 — nominal bersen pada Pembelian per Kelompok dan Histori Proses (commit `2fc3b5803`)
+
+Tiga laporan lagi memakai formatter 0 desimal untuk nilai yang dipakai menjumlah: `purchase-by-dimension.ts` (DPP/PPN/Total + verdict + KPI), `sales-process-history.ts` dan `purchase-process-history.ts` (ditagih/dibayar/sisa + verdict + KPI). Probe dua baris Rp1.000.000,50: baris tercetak `1.000.001` masing-masing sementara total `2.000.001`; verdict/KPI `formatCurrency` juga membulat ke rupiah penuh sehingga ringkasan tidak cocok dengan tabelnya.
+
+### Vonis FIX
+- Formatter lokal ketiganya menjadi `formatAccountingExact`; verdict dan KPI ikut formatter itu (bukan `formatCurrency` terpisah) supaya tabel dan ringkasan tidak bisa berbeda.
+- Regresi baru di `sales-process-history.test.ts` mengunci baris bersen + total + KPI.
+
+### Bukti
+- Merah: 1 gagal/6 lulus.
+- Hijau: 21/21 terkait; reports+PDF 3102 lulus/4 dilewati; tsc, ESLint, diff-check bersih.
