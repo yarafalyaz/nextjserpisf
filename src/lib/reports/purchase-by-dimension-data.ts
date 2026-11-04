@@ -13,7 +13,7 @@ import {
   type PurchaseLineInput,
 } from "@/lib/reports/purchase-by-dimension"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
-import { safeAdd, safeSubtract } from "@/lib/utils/math"
+import { safeAdd } from "@/lib/utils/math"
 
 const RECOGNISED_BILL_STATUSES = ["posted", "partial", "paid"] as const
 
@@ -81,7 +81,11 @@ export async function loadPurchasesByDimension(
 
   for (const bill of bills) {
     for (const line of bill.items) {
-      const dpp = safeSubtract(Number(line.subtotal), Number(line.discountAmount), 2)
+      // `VendorBillItem.subtotal` SUDAH neto diskon baris: `computeBillLineAmounts`
+      // menyimpan gross − discountAmount di kolom itu (`src/lib/finance/vendor-bill.ts`).
+      // Mengurangkan `discountAmount` sekali lagi memotong diskon dua kali, dan pada
+      // diskon 100% membuat DPP negatif yang tercetak sebagai pembelian minus.
+      const dpp = Number(line.subtotal)
       const tax = Number(line.taxAmount)
 
       let key: string
