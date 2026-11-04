@@ -192,3 +192,26 @@ describe("buildDeferredTaxTemporaryDifference", () => {
     expect(texts(result)).toContain("Tidak ada aset")
   })
 })
+
+describe("pajak tangguhan: nilai bersen", () => {
+  it("baris dan total tampil hingga sen sehingga total cocok dengan barisnya", () => {
+    const result = buildDeferredTaxTemporaryDifference({
+      assets: [
+        asset({ code: "A", bookValue: 1_000_000.5, frozenClosingBalance: 1_000_000.5 }),
+        asset({ code: "B", bookValue: 1_000_000.5, frozenClosingBalance: 1_000_000.5 }),
+      ],
+      taxRatePercent: 22,
+      asOf: AS_OF_2025,
+    })
+
+    const data = result.table.rows.filter((row) => row.kind === "data")
+    expect(data.map((row) => (row.kind === "data" ? row.cells[1] : ""))).toEqual([
+      "1.000.000,50",
+      "1.000.000,50",
+    ])
+    // Baris total memakai konvensi trailing: label membentang di kolom nama,
+    // jadi empat sel terakhir adalah Nilai Buku/Pajak/Selisih/Tangguhan.
+    const total = result.table.rows.find((row) => row.kind === "total")
+    expect(total?.kind === "total" ? total.cells : []).toEqual(["2.000.001", "2.000.001", "0", "0"])
+  })
+})

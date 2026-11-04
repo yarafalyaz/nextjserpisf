@@ -46,7 +46,7 @@ import {
   validateTaxRatePercent,
   type DeferredTaxRateSource,
 } from "@/lib/reports/deferred-tax"
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { safeAdd, safeDivide, safeMultiply, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -183,8 +183,12 @@ const COLUMNS: TableColumn[] = [
   { header: "Indikasi Aset Tangguhan", align: "right", width: 40 },
 ]
 
+/**
+ * Nilai pajak tangguhan dicetak hingga sen bila memang bersen; rupiah penuh
+ * bila bulat. Dengan 0 desimal, total tidak cocok dengan penjumlahan baris.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function indication(deductible: number, rate: number): number {
@@ -544,7 +548,7 @@ export function buildDeferredTaxNonAssetSources(input: {
   if (totals.expiredFiscalLoss > 0) {
     rows.push({
       kind: "notice",
-      text: `Rugi fiskal kedaluwarsa ${formatCurrency(totals.expiredFiscalLoss)} dikeluarkan dari stok dapat dikurangkan.`,
+      text: `Rugi fiskal kedaluwarsa ${amount(totals.expiredFiscalLoss)} dikeluarkan dari stok dapat dikurangkan.`,
     })
   }
   if (rateSourceLabel) {
@@ -556,7 +560,7 @@ export function buildDeferredTaxNonAssetSources(input: {
   const verdict =
     computedCount === 0
       ? "Sumber temporer non-aset: tidak ada sumber terhitung (nol terverifikasi / belum tersedia bernama)"
-      : `Sumber non-aset: aset tangguhan indikasi ${formatCurrency(totals.deferredTaxAssetIndication)} ` +
+      : `Sumber non-aset: aset tangguhan indikasi ${amount(totals.deferredTaxAssetIndication)} ` +
         `pada tarif ${rate}%${rateSourceLabel ? ` (${rateSourceLabel})` : ""} (read-model, bukan jurnal; tanpa salinghapus antar sumber)`
 
   return {

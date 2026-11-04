@@ -33,7 +33,7 @@ import {
   DEFERRED_TAX_NOTICE,
   validateTaxRatePercent,
 } from "@/lib/reports/deferred-tax"
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { safeAdd, safeDivide, safeMultiply, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -134,8 +134,12 @@ const KIND_LABEL: Record<AssetValueEventKind, string> = {
   FISCAL_REVALUATION_APPROVED: "Revaluasi fiskal berpersetujuan DJP",
 }
 
+/**
+ * Nilai pajak tangguhan dicetak hingga sen bila memang bersen; rupiah penuh
+ * bila bulat. Dengan 0 desimal, total tidak cocok dengan penjumlahan baris.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function assetLabel(event: AssetValueEventInput): string {
@@ -417,7 +421,7 @@ export function buildDeferredTaxValueEventSource(input: {
   if (totals.finalTaxCurrent > 0) {
     rows.push({
       kind: "notice",
-      text: `PPh final revaluasi fiskal ${formatCurrency(totals.finalTaxCurrent)} adalah pajak kini peristiwa, bukan komponen pajak tangguhan dan tidak di-netting.`,
+      text: `PPh final revaluasi fiskal ${amount(totals.finalTaxCurrent)} adalah pajak kini peristiwa, bukan komponen pajak tangguhan dan tidak di-netting.`,
     })
   }
   if (rateSourceLabel) {
@@ -428,8 +432,8 @@ export function buildDeferredTaxValueEventSource(input: {
   const verdict =
     totals.computed === 0
       ? `Sumber revaluasi/impairment ${VALUE_EVENT_SOURCE_UNAVAILABLE_LABEL}`
-      : `Sumber nilai: liabilitas tangguhan indikasi ${formatCurrency(totals.deferredTaxLiabilityIndication)} · ` +
-        `aset tangguhan indikasi ${formatCurrency(totals.deferredTaxAssetIndication)} (${recognitionLabel}) ` +
+      : `Sumber nilai: liabilitas tangguhan indikasi ${amount(totals.deferredTaxLiabilityIndication)} · ` +
+        `aset tangguhan indikasi ${amount(totals.deferredTaxAssetIndication)} (${recognitionLabel}) ` +
         `pada tarif ${rate}%${rateSourceLabel ? ` (${rateSourceLabel})` : ""} (read-model, bukan jurnal)`
 
   return {

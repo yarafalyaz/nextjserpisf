@@ -38,7 +38,7 @@
  * `src/lib/utils/math`, bukan float mentah ke kolom uang.
  */
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { safeAdd, safeDivide, safeMultiply, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -157,8 +157,12 @@ function directionLabel(direction: TemporaryDifferenceDirection): string {
   return "Tidak ada perbedaan"
 }
 
+/**
+ * Nilai pajak tangguhan dicetak hingga sen bila memang bersen; rupiah penuh
+ * bila bulat. Dengan 0 desimal, total tidak cocok dengan penjumlahan baris.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function rateCaption(rate: number, source: DeferredTaxRateSource): string {
@@ -328,8 +332,8 @@ export function buildDeferredTaxTemporaryDifference(input: {
         ? totals.fiscalNotFrozen === sorted.length
           ? `${FISCAL_NOT_FROZEN_LABEL} untuk semua aset: perbedaan temporer belum dapat dihitung`
           : "Perbedaan temporer belum dapat dihitung untuk aset mana pun"
-        : `Liabilitas tangguhan indikasi ${formatCurrency(totals.deferredTaxLiability)} · ` +
-          `aset tangguhan indikasi ${formatCurrency(totals.deferredTaxAsset)} ` +
+        : `Liabilitas tangguhan indikasi ${amount(totals.deferredTaxLiability)} · ` +
+          `aset tangguhan indikasi ${amount(totals.deferredTaxAsset)} ` +
           `${rateCaption(rate, source)} (read-model, bukan jurnal)`
 
   return {
@@ -357,8 +361,8 @@ export function deferredTaxSummary(result: DeferredTaxResult): string {
   const sourceSuffix =
     result.rateSource === "operator" ? `, ${OPERATOR_RATE_LABEL}` : result.rateSource === "master" ? ", tarif master" : ""
   return (
-    `Liabilitas tangguhan indikasi ${formatCurrency(result.totals.deferredTaxLiability)} · ` +
-    `aset tangguhan indikasi ${formatCurrency(result.totals.deferredTaxAsset)} ` +
+    `Liabilitas tangguhan indikasi ${amount(result.totals.deferredTaxLiability)} · ` +
+    `aset tangguhan indikasi ${amount(result.totals.deferredTaxAsset)} ` +
     `(tarif ${result.taxRatePercent}%${sourceSuffix}, read-model bukan jurnal)`
   )
 }
