@@ -14,7 +14,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -63,7 +63,7 @@ export interface PostDatedChequesResult {
 }
 
 function amountCell(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function shortDate(date: Date): string {
@@ -172,9 +172,9 @@ export function buildPostDatedCheques(input: {
   const verdict =
     notDue.count === 0 && overdue.count === 0
       ? "Tidak ada giro mundur"
-      : `${notDue.count} belum jatuh tempo (${formatCurrency(notDue.amount)})` +
+      : `${notDue.count} belum jatuh tempo (${amountCell(notDue.amount)})` +
         (overdue.count > 0
-          ? ` · ${overdue.count} sudah jatuh tempo belum dicairkan (${formatCurrency(overdue.amount)})`
+          ? ` · ${overdue.count} sudah jatuh tempo belum dicairkan (${amountCell(overdue.amount)})`
           : "")
 
   return { table: { columns: COLUMNS, rows }, notDue, overdue, verdict }
@@ -186,9 +186,9 @@ export function postDatedChequesSummary(result: PostDatedChequesResult): string 
     return "Tidak ada giro/cek belum cair"
   }
   return (
-    `Belum jatuh tempo ${formatCurrency(result.notDue.amount)} (${result.notDue.count})` +
+    `Belum jatuh tempo ${amountCell(result.notDue.amount)} (${result.notDue.count})` +
     (result.overdue.count > 0
-      ? ` · sudah jatuh tempo ${formatCurrency(result.overdue.amount)} (${result.overdue.count})`
+      ? ` · sudah jatuh tempo ${amountCell(result.overdue.amount)} (${result.overdue.count})`
       : "")
   )
 }

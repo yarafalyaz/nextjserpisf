@@ -14,7 +14,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -51,8 +51,13 @@ export interface PaymentExpensesResult {
   totals: { count: number; adminFee: number }
 }
 
+/**
+ * Nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, dua baris "1.000.001" berjumlah "2.000.002" sementara
+ * totalnya "2.000.001" — total tidak cocok dengan penjumlahan barisnya.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function shortDate(date: Date): string {
@@ -136,7 +141,7 @@ export function buildPaymentExpenses(input: {
 /** Ringkasan satu baris untuk KPI di halaman laporan. */
 export function paymentExpensesSummary(result: PaymentExpensesResult): string {
   const perSource = result.bySource
-    .map((summary) => `${summary.source} ${summary.count} dokumen (${formatCurrency(summary.adminFee)})`)
+    .map((summary) => `${summary.source} ${summary.count} dokumen (${amount(summary.adminFee)})`)
     .join(" · ")
-  return `${result.totals.count} dokumen · total beban ${formatCurrency(result.totals.adminFee)}${perSource ? ` — ${perSource}` : ""}`
+  return `${result.totals.count} dokumen · total beban ${amount(result.totals.adminFee)}${perSource ? ` — ${perSource}` : ""}`
 }

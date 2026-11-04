@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildPaymentExpenses, type PaymentExpenseInput } from "@/lib/reports/payment-expenses"
+import { buildPaymentExpenses, paymentExpensesSummary, type PaymentExpenseInput } from "@/lib/reports/payment-expenses"
 
 const period = { start: new Date("2026-10-01T00:00:00"), end: new Date("2026-10-31T23:59:59") }
 
@@ -90,5 +90,27 @@ describe("buildPaymentExpenses", () => {
 
     const row = result.table.rows.find((row) => row.kind === "data")
     expect(row?.cells).toEqual(["05 Okt 2026", "GR-0007", "Penerimaan Barang", "–", "1.500"])
+  })
+})
+
+describe("buildPaymentExpenses: beban bersen tampil hingga sen", () => {
+  it("baris dan total tidak dibulatkan sehingga total cocok dengan penjumlahan baris", () => {
+    const result = buildPaymentExpenses({
+      expenses: [
+        expense({ documentNo: "VP-A", adminFee: 500_000.5 }),
+        expense({ documentNo: "VP-B", adminFee: 500_000.5 }),
+      ],
+      start: period.start,
+      end: period.end,
+    })
+
+    const rows = result.table.rows.filter((row) => row.kind === "data")
+    expect(rows.map((row) => (row.kind === "data" ? row.cells[4] : ""))).toEqual([
+      "500.000,50",
+      "500.000,50",
+    ])
+    const total = result.table.rows.find((row) => row.kind === "total" && row.grand)
+    expect(total?.kind === "total" ? total.cells : []).toEqual(["1.000.001"])
+    expect(paymentExpensesSummary(result)).toContain("1.000.001")
   })
 })

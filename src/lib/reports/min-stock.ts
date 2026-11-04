@@ -24,7 +24,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency, formatQuantity } from "@/lib/utils/format"
+import { formatAccountingExact, formatQuantity } from "@/lib/utils/format"
 import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -121,8 +121,13 @@ export function buildMinStockByWarehouse(rows: MinStockWarehouseInput[]): MinSto
 
 const EPSILON = 0.0001
 
+/**
+ * Nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, dua baris "1.000.001" berjumlah "2.000.002" sementara
+ * totalnya "2.000.001" — total tidak cocok dengan penjumlahan barisnya.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function quantity(value: number): string {
@@ -252,6 +257,6 @@ export function minStockSummary(result: MinStockResult): string {
   return (
     `${result.totals.items} barang mencapai minimum` +
     `${result.totals.outOfStock > 0 ? ` (${result.totals.outOfStock} habis)` : ""} · ` +
-    `perkiraan belanja ${formatCurrency(result.totals.shortageValue)}`
+    `perkiraan belanja ${amount(result.totals.shortageValue)}`
   )
 }
