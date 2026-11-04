@@ -642,6 +642,40 @@ describe("Material Issue Actions", () => {
     expect(res?.success).toBe(true);
     expect(mocks.prismaMock.materialIssue.update).toHaveBeenCalledTimes(1);
   });
+  // Putaran 123: edit menghapus SELURUH baris lalu menulis ulang. Jalur lama
+  // tak pernah menulis workOrderItemId, jadi menyunting catatan saja melepas
+  // lineage MI hasil "Buat dari WO": hook material issue memakai planned =
+  // qty (klasifikasi scrap salah), status part WO jatuh ke atribusi per itemId,
+  // dan baris WO yang sudah di-issue terbuka lagi untuk change order.
+  it("putaran 123: updateMaterialIssue mempertahankan tautan baris WO asal", async () => {
+    seedDraft(mocks.prismaMock.materialIssue, { documentNo: "MI-1", workOrderId: 42 });
+    mocks.prismaMock.materialIssueItem.findMany.mockResolvedValue([
+      { itemId: 1, workOrderItemId: 11 },
+      { itemId: 1, workOrderItemId: 12 },
+    ]);
+    const res = await actions.updateMaterialIssue(
+      1,
+      miFd({
+        items: itemsJson([
+          { itemId: 1, qty: 3, unitCost: 100 },
+          { itemId: 1, qty: 4, unitCost: 100 },
+          // Baris baru tanpa padanan baris lama: tidak ditebak.
+          { itemId: 1, qty: 5, unitCost: 100 },
+        ]),
+      }),
+    );
+    expectSuccess(res);
+    const arg = mocks.prismaMock.materialIssue.update.mock.calls.at(-1)![0] as any;
+    expect(arg.data.items.create.map((row: any) => row.workOrderItemId)).toEqual([11, 12, null]);
+  });
+  it("putaran 123: MI tanpa WO tidak membaca lineage dan menulis null", async () => {
+    seedDraft(mocks.prismaMock.materialIssue, { documentNo: "MI-2", workOrderId: null });
+    const res = await actions.updateMaterialIssue(1, miFd());
+    expectSuccess(res);
+    expect(mocks.prismaMock.materialIssueItem.findMany).not.toHaveBeenCalled();
+    const arg = mocks.prismaMock.materialIssue.update.mock.calls.at(-1)![0] as any;
+    expect(arg.data.items.create[0].workOrderItemId).toBeNull();
+  });
   // Regresi: workOrderId & projectId tidak punya input di form MI, jadi update
   // dulu menulis `?? null` dan memutus keduanya. Hilangnya workOrderId membuat
   // "Buat Pengeluaran Material" bisa dijalankan lagi untuk WO yang sama.

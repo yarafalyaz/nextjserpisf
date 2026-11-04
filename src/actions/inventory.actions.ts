@@ -1127,9 +1127,16 @@ function parseMaterialIssuePayloadItems(raw: string | null | undefined): Materia
   return items;
 }
 
-function materialIssueItemCreateData(it: MaterialIssuePayloadItem, scrapPercentSnapshot: number | null) {
+function materialIssueItemCreateData(
+  it: MaterialIssuePayloadItem,
+  scrapPercentSnapshot: number | null,
+  // Putaran 123: tautan baris WO asal. Null untuk MI manual / baris yang
+  // tautannya memang tak bisa dipastikan (lihat updateMaterialIssue).
+  workOrderItemId: number | null = null,
+) {
   return {
     itemId: it.itemId,
+    workOrderItemId,
     qty: it.qty,
     cost: it.cost,
     scrapQty: it.scrapQty ?? 0,
@@ -2637,6 +2644,36 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
         }
       }
 
+      // Putaran 123: tautan baris WO asal dipertahankan. Edit menghapus SELURUH
+      // baris lalu menulis ulang, dan jalur lama tak pernah menulis
+      // workOrderItemId — menyunting catatan saja melepas lineage MI hasil
+      // "Buat dari WO". Consumer-nya: material-issue.hook menghitung
+      // plannedQty dari baris WO tertaut (tanpa tautan: planned = qty, jadi
+      // scrap normal bisa diklasifikasi abnormal), status part WO jatuh ke
+      // atribusi per itemId (salah baris bila WO punya dua baris item sama),
+      // dan computeLockedWorkOrderItemIds membuka baris WO yang sudah di-issue
+      // untuk change order. Dibaca SEBELUM deleteMany, lalu dipetakan
+      // berurutan per itemId; baris baru tanpa padanan tetap null — tidak
+      // ditebak. Dipakai hanya bila MI tetap tertaut WO yang sama: ganti WO
+      // berarti baris lama bukan lagi sumber baris baru.
+      const keepsWorkOrderLineage =
+        mi.workOrderId != null && (v.workOrderId === undefined || v.workOrderId === mi.workOrderId);
+      const pendingLineage = new Map<number, number[]>();
+      if (keepsWorkOrderLineage) {
+        const priorLines = await tx.materialIssueItem.findMany({
+          where: { materialIssueId: id, workOrderItemId: { not: null } },
+          select: { itemId: true, workOrderItemId: true },
+          orderBy: { id: "asc" },
+        });
+        for (const line of priorLines) {
+          if (line.workOrderItemId == null) continue;
+          const key = Number(line.itemId);
+          pendingLineage.set(key, [...(pendingLineage.get(key) ?? []), line.workOrderItemId]);
+        }
+      }
+      const takeLineage = (itemId: number): number | null =>
+        pendingLineage.get(Number(itemId))?.shift() ?? null;
+
       await tx.materialIssueItem.deleteMany({ where: { materialIssueId: id } });
       // F-008: baris lahir ulang saat update draft -> snapshot beku ulang.
       const snapshotByItem = await resolveMaterialIssueScrapSnapshots(
@@ -2660,7 +2697,11 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
           notes: v.notes ?? null,
           items: {
             create: miItems.map((it) =>
-              materialIssueItemCreateData(it, snapshotByItem.get(Number(it.itemId)) ?? null),
+              materialIssueItemCreateData(
+                it,
+                snapshotByItem.get(Number(it.itemId)) ?? null,
+                takeLineage(it.itemId),
+              ),
             ),
           },
         },
