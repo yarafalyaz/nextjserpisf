@@ -412,6 +412,7 @@ describe("sapuan kedelapan belas: payroll dan kartu laporan", () => {
       "src/components/reports/wip-aging-card.tsx",
       "src/components/reports/work-order-load-card.tsx",
       "src/components/reports/workshop-closeout-queue-card.tsx",
+      "src/components/reports/aging-chart.tsx",
     ]) {
       const source = readFileSync(path.resolve(process.cwd(), rel), "utf8")
       expect(source, rel).not.toMatch(/formatCurrency\((?!Exact)/)

@@ -8,7 +8,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/shadcn/chart"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 
 export interface AgingChartDatum {
   /** Kategori umur, mis. "31–60 Hari". */
@@ -56,7 +56,7 @@ export function AgingChart({
         <ChartTooltip
           content={
             <ChartTooltipContent
-              formatter={(value) => formatCurrency(Number(value))}
+              formatter={(value) => formatCurrencyExact(Number(value))}
               labelFormatter={(_, payload) => {
                 const datum = payload?.[0]?.payload as AgingChartDatum | undefined
                 return datum ? `${datum.label} · ${datum.count} dokumen` : String(_)
