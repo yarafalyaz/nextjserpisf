@@ -122,3 +122,17 @@ describe("BankReconciliationDraftQueueCard F-2026-10-27-097-S", () => {
     expect(text).not.toContain("status seimbang:")
   })
 })
+
+describe("BankReconciliationDraftQueueCard: saldo bersen", () => {
+  it("saldo rekening koran dan buku tampil hingga sen, bukan dibulatkan", () => {
+    const queue = buildBankReconciliationDraftQueue(
+      [input({ statementBalance: 1_500_000.5, bookBalance: 1_400_000.25 })],
+      NOW,
+    )
+    const container = render(<BankReconciliationDraftQueueCard queue={queue} />)
+    const text = container.textContent ?? ""
+
+    expect(text).toContain("Rp 1.500.000,50")
+    expect(text).toContain("Rp 1.400.000,25")
+  })
+})

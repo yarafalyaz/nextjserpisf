@@ -12,7 +12,7 @@ import {
   BANK_RECONCILIATION_DRAFT_TITLE,
 } from "@/lib/reports/bank-reconciliation-draft-queue"
 import { entityHref } from "@/lib/utils/entity-url"
-import { formatCurrency, formatDate, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import {
   DetailTable,
@@ -84,8 +84,8 @@ function QueueTable({ rows }: Readonly<{ rows: BankReconciliationDraftRow[] }>) 
                   {row.umurDraftHari === 0 ? "hari ini" : `${formatNumber(row.umurDraftHari)} hari`}
                 </span>
               </DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.statementBalance)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.bookBalance)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.statementBalance)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.bookBalance)}</DetailTableTd>
             </DetailTableRow>
           ))}
         </DetailTableBody>
