@@ -20,7 +20,8 @@ import {
   buildPph21Export,
   type Pph21ExportResult,
 } from "@/lib/reports/pph21-export"
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
+import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export type { Pph21Recap, Pph21RecapEmployeeRow, Pph21RecapPeriodRow }
@@ -55,7 +56,12 @@ const ANNUAL_COLUMNS: TableColumn[] = [
   { header: "Bersih", align: "right", width: 40 },
 ]
 
-const money = (v: number) => formatAccounting(v, { zeroDash: false })
+/**
+ * Nominal PPh21 dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, dua baris "1.000.001" berjumlah "2.000.002" sementara
+ * totalnya "2.000.001" — total tidak cocok dengan penjumlahan barisnya.
+ */
+const money = (v: number) => formatAccountingExact(v)
 
 function periodTable(recap: Pph21Recap): { columns: TableColumn[]; rows: TableRow[] } {
   const rows: TableRow[] = recap.periods.map((p) => ({
@@ -90,12 +96,12 @@ function annualTable(recap: Pph21Recap, year: number): { columns: TableColumn[];
     kind: "total", grand: true, label: "Jumlah",
     cells: [
       String(emps.length), "",
-      money(emps.reduce((s, e) => s + e.gross, 0)),
-      money(emps.reduce((s, e) => s + e.pph21, 0)),
-      money(emps.reduce((s, e) => s + e.net, 0)),
+      money(emps.reduce((s, e) => safeAdd(s, e.gross, 2), 0)),
+      money(emps.reduce((s, e) => safeAdd(s, e.pph21, 2), 0)),
+      money(emps.reduce((s, e) => safeAdd(s, e.net, 2), 0)),
     ],
   })
-  const over = emps.reduce((s, e) => s + e.overWithheld, 0)
+  const over = emps.reduce((s, e) => safeAdd(s, e.overWithheld, 2), 0)
   if (over > 0) rows.push({ kind: "notice", text: `Lebih potong masa final wajib kembali ke karyawan: ${money(over)}.` })
   return { columns: ANNUAL_COLUMNS, rows }
 }

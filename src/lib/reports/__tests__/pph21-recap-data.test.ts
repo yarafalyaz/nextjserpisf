@@ -76,3 +76,18 @@ describe("loadPph21Recap", () => {
     )
   })
 })
+
+describe("tabel PPh21: nominal bersen", () => {
+  it("baris dan total masa tampil hingga sen sehingga total cocok dengan barisnya", async () => {
+    mocks.prismaMock.payroll.findMany.mockResolvedValue([
+      row({ id: 1, period: "2026-01", pph21: 1_000_000.5, grossSalary: 1_000_000.5, netSalary: 1_000_000.5 }),
+      row({ id: 2, period: "2026-02", pph21: 1_000_000.5, grossSalary: 1_000_000.5, netSalary: 1_000_000.5, employeeId: 2, employee: { name: "Budi", npwp: null } }),
+    ])
+    const r = await loadPph21Recap(RANGE)
+
+    const data = r.periodTable.rows.filter((x) => x.kind === "data")
+    expect(data.map((x) => (x.kind === "data" ? x.cells[4] : ""))).toEqual(["1.000.000,50", "1.000.000,50"])
+    const total = r.periodTable.rows.find((x) => x.kind === "total")
+    expect(total?.kind === "total" ? total.cells[4] : "").toBe("2.000.001")
+  })
+})
