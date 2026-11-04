@@ -4360,3 +4360,14 @@ Dua halaman yang sebelumnya hanya diperbaiki pada KPI ternyata masih mencetak **
 ### Bukti
 - Merah: 1 gagal/5 lulus; hijau 84/84 terkait dan 3.090 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
 - CI `41840220374` (piutang/total hutang) dan `41840283205` (dokumentasi) **success**.
+
+## Putaran 188 — Penerimaan Belum Ditagih (commit `b1da25aef`)
+
+`received-not-billed.ts` mencetak baris diterima/ditagih/sisa, subtotal per penerimaan, total periode, dan KPI ringkasan dengan 0 desimal — padahal nilainya per sen dan selisih terhadap akun GRNI adalah temuan rekonsiliasi. Probe `unitCost 100,30`: baris dan total tampil `100` (bukan `100,30`).
+
+### Vonis FIX
+- `amount` dan `preciseAmount` memakai `formatAccountingExact`; ringkasan KPI memakai `formatCurrencyExact`. Satu perilaku formatter dalam berkas, bukan dua.
+
+### Bukti
+- Merah: 1 gagal/9 lulus; hijau 63/63 terkait dan 3.091 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+- CI `41840220374`, `41840283205`, `41840859517`, `41840894099` **success** (putaran 185–186).
