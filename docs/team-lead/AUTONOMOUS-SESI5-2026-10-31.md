@@ -4519,3 +4519,17 @@ Enam berkas:
 ### Bukti
 - Merah: 1 gagal/15 lulus; hijau 2.673 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
 - CI `41854362180` (detail dokumen) dan `41854399521` (dokumentasi) **success**.
+
+## Putaran 200 — detail master karyawan/barang/vendor/pelanggan (commit `ec87511a1`)
+
+Empat halaman detail master mencetak nominal `Decimal(15,2)` dengan 0 desimal: gaji pokok, riwayat gaji, pinjaman karyawan (total/cicilan/sisa), harga beli & jual barang, serta nominal master lain (vendor/pelanggan). Nilai gaji hanya dirender bila pemegang izin berhak melihatnya (`canSeeSalary`).
+
+### Vonis FIX
+- Keempatnya memakai `formatCurrencyExact`; guard statis di `exact-cents-sweep.test.ts` menolak `formatCurrency(` tanpa `Exact`.
+
+### Vonis CATAT
+- **Pagar izin gaji tidak diubah** — hanya formatter. Perubahan ini tidak memperluas data yang terlihat oleh pengguna tanpa izin.
+
+### Bukti
+- Merah: 1 gagal/16 lulus; hijau 2.667 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+- CI `41854362180`, `41854399521`, `41854822301`, `41854865791` **success** (putaran 197–198).
