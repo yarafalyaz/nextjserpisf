@@ -64,3 +64,25 @@ describe("Faktur PPN presisi sen", () => {
     expect(vatInvoiceSummary(result)).toContain("100,50")
   })
 })
+
+describe("Faktur PPN: baris dokumen bersen", () => {
+  it("DPP/PPN/total per faktur tampil hingga sen dan cocok dengan subtotal", () => {
+    const result = buildVatInvoiceList({
+      output: [invoice({ documentNo: "OUT-1", dpp: 100.5, vat: 11.06, total: 111.56 })],
+      input: [],
+    })
+
+    const data = result.table.rows.find((r) => r.kind === "data")
+    expect(data?.kind === "data" ? data.cells.slice(5) : []).toEqual([
+      "100,50",
+      "11,06",
+      "111,56",
+    ])
+    const subtotal = result.table.rows.find((r) => r.kind === "total" && !r.grand)
+    expect(subtotal?.kind === "total" ? subtotal.cells : []).toEqual([
+      "100,50",
+      "11,06",
+      "111,56",
+    ])
+  })
+})

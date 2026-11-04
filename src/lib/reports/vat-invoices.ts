@@ -14,7 +14,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { safeAdd, safeMultiply, safeRound, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -112,8 +112,13 @@ export interface VatInvoiceListResult {
   verdict: string
 }
 
+/**
+ * Nominal faktur/DPP/PPN dicetak hingga sen bila memang bersen; rupiah penuh
+ * bila bulat. Dengan 0 desimal, baris tidak menjumlah ke subtotal yang
+ * tercetak pada faktur bersen.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 /**
@@ -123,8 +128,7 @@ function amount(value: number): string {
  * berubah bentuk untuk data tanpa sen.
  */
 function preciseAmount(value: number): string {
-  if (Number.isInteger(value)) return amount(value)
-  return formatAccounting(value, { zeroDash: false, decimals: 2 })
+  return formatAccountingExact(value)
 }
 
 function shortDate(date: Date): string {
