@@ -196,8 +196,11 @@ export function buildPkwtReconciliation(
 ): PkwtReconciliationRow[] {
   return rows.map((r) => {
     const expectedPayable = safeRound(r.frozenEventTotal - r.paidSlipTotal, 2)
+    // Sama dengan agregat: akrual dibandingkan dengan nominal peristiwa.
+    // `accrual + paid − event` menghitung pembayaran dua kali sehingga segmen
+    // lunas penuh selalu menjadi temuan.
     const accrualVsEventDiff = safeRound(
-      r.frozenEventTotal - r.accrualSubledgerTotal - r.paidSlipTotal,
+      r.frozenEventTotal - r.accrualSubledgerTotal,
       2,
     )
     const findings: string[] = []
@@ -208,7 +211,7 @@ export function buildPkwtReconciliation(
     }
     if (accrualVsEventDiff !== 0 && r.frozenEventTotal > 0) {
       findings.push(
-        `Selisih peristiwa terbekukan vs (akrual + slip terbayar) Rp${formatNumber(accrualVsEventDiff, 2)} — segmen belum terakrual penuh/belum dibayar; tampil sebagai temuan, bukan dipilih diam-diam.`,
+        `Selisih nominal peristiwa terbekukan vs akrual subledger Rp${formatNumber(accrualVsEventDiff, 2)} — segmen belum terakrual penuh (negatif = akrual melebihi); tampil sebagai temuan, bukan dipilih diam-diam.`,
       )
     }
     return { ...r, expectedPayable, accrualVsEventDiff, findings }
@@ -322,12 +325,17 @@ export function buildPkwtCompensationReport(input: {
       detail: `Saldo GL 210207 Rp${formatNumber(input.glPayableBalance, 2)} vs utang seharusnya (peristiwa terbekukan − slip terbayar) Rp${formatNumber(expectedPayableTotal, 2)} — selisih Rp${formatNumber(glDiff, 2)}; tampil sebagai temuan, bukan dipilih diam-diam.`,
     })
   }
-  const subDiff = safeRound(accrualSubledgerTotal + paidSlipTotal - frozen.reduce((s, r) => s + r.amount, 0), 2)
+  // Akrual subledger TIDAK pernah dikurangi pembayaran (hanya `create`), jadi
+  // ia dibandingkan dengan NOMINAL PERISTIWA, bukan peristiwa − bayar. Dulu
+  // `accrual + paid − event` menghitung pembayaran dua kali: segmen yang
+  // terakrual penuh DAN terbayar penuh selalu muncul sebagai temuan sebesar
+  // dua kali nominal bayar.
+  const subDiff = safeRound(frozen.reduce((s, r) => s + r.amount, 0) - accrualSubledgerTotal, 2)
   if (subDiff !== 0 && frozen.length > 0) {
     anomalies.push({
       code: "ACCRUAL_VS_EVENT_DIFF",
       label: "Akrual vs peristiwa",
-      detail: `Subledger akrual + slip terbayar vs peristiwa terbekukan selisih Rp${formatNumber(subDiff, 2)} — segmen belum terakrual penuh atau belum dibayar.`,
+      detail: `Subledger akrual Rp${formatNumber(accrualSubledgerTotal, 2)} vs peristiwa terbekukan Rp${formatNumber(frozen.reduce((s, r) => s + r.amount, 0), 2)} — selisih Rp${formatNumber(subDiff, 2)}; akrual belum menutup penuh peristiwa (negatif = akrual melebihi), periksa baris akrual segmen.`,
     })
   }
   for (const r of rows) {

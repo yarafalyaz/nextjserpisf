@@ -128,14 +128,56 @@ describe("buildPkwtReconciliation: selisih bersen", () => {
         employeeId: 1,
         glPayableBalance: 999_999.5,
         frozenEventTotal: 1_000_000,
-        accrualSubledgerTotal: 999_999,
+        accrualSubledgerTotal: 999_999.5,
         paidSlipTotal: 0.5,
       },
     ])
 
-    // Diff = 1.000.000 − 999.999 − 0,50 = 0,50
+    // Akrual vs peristiwa: 1.000.000 − 999.999,50 = 0,50. Pembayaran tidak
+    // ikut dikurangkan — akrual subledger tidak pernah dikurangi pembayaran.
     expect(rows[0].accrualVsEventDiff).toBe(0.5)
-    const finding = rows[0].findings.find((text) => text.includes("Selisih peristiwa"))
+    const finding = rows[0].findings.find((text) => text.includes("Selisih"))
     expect(finding).toContain("Rp0,50")
+  })
+})
+
+describe("PKWT rekonsiliasi: segmen lunas penuh bukan temuan", () => {
+  it("terakrual penuh dan terbayar penuh tidak menghasilkan ACCRUAL_VS_EVENT_DIFF", () => {
+    const report = buildPkwtCompensationReport({
+      events: [
+        {
+          eventId: 1, employeeId: 1, employeeName: "Budi",
+          segmentStart: d("2026-01-01"), segmentEnd: d("2026-12-31"),
+          serviceMonths: 12, amount: 2_500_000, status: "paid",
+          isLegacy: false, accruedToDate: 2_500_000, paidAmount: 2_500_000,
+        },
+      ],
+      glPayableBalance: 0,
+      mappingMissing: false,
+    })
+
+    expect(report.expectedPayableTotal).toBe(0)
+    expect(report.anomalies.some((a) => a.code === "ACCRUAL_VS_EVENT_DIFF")).toBe(false)
+  })
+
+  it("akrual kurang dari peristiwa tetap menjadi temuan", () => {
+    const report = buildPkwtCompensationReport({
+      events: [
+        {
+          eventId: 1, employeeId: 1, employeeName: "Budi",
+          segmentStart: d("2026-01-01"), segmentEnd: d("2026-12-31"),
+          serviceMonths: 12, amount: 2_500_000, status: "approved",
+          isLegacy: false, accruedToDate: 2_000_000, paidAmount: 0,
+        },
+      ],
+      glPayableBalance: 500_000,
+      mappingMissing: false,
+    })
+
+    const anomaly = report.anomalies.find((a) => a.code === "ACCRUAL_VS_EVENT_DIFF")
+    expect(anomaly).toBeDefined()
+    // Kurang akrual = peristiwa di atas akrual; arah selisih harus positif.
+    expect(anomaly?.detail).toContain("Rp500.000,00")
+    expect(anomaly?.detail).not.toContain("Rp-500.000,00")
   })
 })
