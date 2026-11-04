@@ -33,6 +33,17 @@ describe("groupReceivablesByVehicle (F-2026-10-20-22)", () => {
     expect(plate.buckets["31–60 Hari"]).toBe(99.9)
     expect(rows.find((r) => r.plateLabel === UNASSIGNED_VEHICLE_LABEL)?.outstanding).toBe(75)
   })
+
+  it("faktur jatuh tempo hari ini tidak dihitung lewat jatuh tempo di ringkasan kendaraan", () => {
+    const now = new Date("2026-11-04T05:00:00Z") // 12.00 WIB
+    const rows = groupReceivablesByVehicle(
+      [{ plateLabel: "B 2 BB", grandTotal: 1_000_000, paidAmount: 0, dueDate: new Date("2026-11-04T00:00:00Z") }],
+      now,
+    )
+
+    expect(rows[0].overdue).toBe(0)
+    expect(rows[0].buckets["Belum Jatuh Tempo"]).toBe(1_000_000)
+  })
 })
 
 describe("groupReceivablesByVehicle returnCredit (F-104-V)", () => {

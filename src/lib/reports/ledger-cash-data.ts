@@ -29,6 +29,7 @@ import {
   type CustomerCreditExposureRow,
 } from "@/lib/reports/customer-receivables"
 import { payableOutstanding, receivableOutstanding } from "@/lib/reports/aging-amounts"
+import { daysOverdue } from "@/lib/reports/aging"
 import { loadReturnCreditByInvoiceId, loadReturnCreditByReturnId } from "@/lib/reports/return-credit"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
@@ -569,7 +570,12 @@ export function aggregateCustomerReceivables(
       invoiceCount: 0,
     }
     bucket.outstanding = safeAdd(bucket.outstanding, outstanding, 2)
-    if (inv.dueDate && inv.dueDate < now) bucket.overdue = safeAdd(bucket.overdue, outstanding, 2)
+    // Bandingkan TANGGAL, bukan instan: `dueDate` jurnal disimpan tengah malam
+    // UTC (= 07.00 WIB), jadi `dueDate < now` membuat faktur yang jatuh tempo
+    // HARI INI berubah status "lewat jatuh tempo" pada pukul 07.00, sementara
+    // aging (`daysOverdue`, pembanding hari kalender) tetap menempatkannya di
+    // "Belum Jatuh Tempo" — dua angka berbeda untuk satu laporan.
+    if (inv.dueDate && daysOverdue(inv.dueDate, now) > 0) bucket.overdue = safeAdd(bucket.overdue, outstanding, 2)
     bucket.invoiceCount += 1
     buckets.set(inv.customerId, bucket)
   }

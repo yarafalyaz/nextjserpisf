@@ -35,6 +35,29 @@ describe("aggregateCustomerReceivables (presisi sen)", () => {
     expect(buckets[0].outstanding).toBe(232.22)
     expect(buckets[0].overdue).toBe(222.22)
   })
+
+  it("faktur jatuh tempo HARI INI tidak dihitung lewat jatuh tempo", () => {
+    // dueDate jurnal = tengah malam UTC hari WIB (07.00 WIB). Dulu perbandingan
+    // `dueDate < now` membuat faktur ini berubah "lewat" pukul 07.00, sementara
+    // aging menempatkannya di "Belum Jatuh Tempo".
+    const dueToday = new Date("2026-11-04T00:00:00Z")
+    const invoice = {
+      customerId: 4,
+      customerName: "CV D",
+      creditLimit: 0,
+      grandTotal: 2_500_000,
+      paidAmount: 0,
+      dueDate: dueToday,
+    }
+
+    const morning = aggregateCustomerReceivables([invoice], new Date("2026-11-03T22:00:00Z"))
+    const noon = aggregateCustomerReceivables([invoice], new Date("2026-11-04T05:00:00Z"))
+    const tomorrow = aggregateCustomerReceivables([invoice], new Date("2026-11-04T22:00:00Z"))
+
+    expect(morning[0].overdue).toBe(0)
+    expect(noon[0].overdue).toBe(0)
+    expect(tomorrow[0].overdue).toBe(2_500_000)
+  })
 })
 
 describe("aggregateCustomerReceivables returnCredit (F-104-V)", () => {

@@ -52,7 +52,10 @@ export function groupReceivablesByVehicle(
       } as Record<AgingBucket, number>,
     }
     row.outstanding = safeAdd(row.outstanding, outstanding, 2)
-    if (inv.dueDate && inv.dueDate < now) row.overdue = safeAdd(row.overdue, outstanding, 2)
+    // Tanggal jatuh tempo dibandingkan sebagai HARI kalender, sama dengan
+    // `agingBucket` di baris berikutnya; `dueDate < now` menandai faktur yang
+    // jatuh tempo hari ini sebagai lewat, bertentangan dengan bucketnya sendiri.
+    if (inv.dueDate && daysOverdue(inv.dueDate, now) > 0) row.overdue = safeAdd(row.overdue, outstanding, 2)
     if (inv.dueDate) row.buckets[agingBucket(daysOverdue(inv.dueDate, now))] = safeAdd(row.buckets[agingBucket(daysOverdue(inv.dueDate, now))], outstanding, 2)
     row.invoiceCount += 1
     groups.set(label, row)
