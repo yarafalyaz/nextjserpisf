@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic"
 
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { requirePermission } from "@/lib/auth/permissions"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -43,7 +43,7 @@ export default async function JobOrderJournalPage({
   const perReference = journal.byReference
     .map(
       (summary) =>
-        `${summary.label} ${summary.count} jurnal (${formatCurrency(summary.amount)})`,
+        `${summary.label} ${summary.count} jurnal (${formatCurrencyExact(summary.amount)})`,
     )
     .join(" · ")
 
@@ -78,8 +78,8 @@ export default async function JobOrderJournalPage({
       <p className="doc-lines" style={{ marginTop: 8 }}>
         {journal.journalCount} jurnal terposting
         {perReference ? ` — ${perReference}` : ""} · total debit{" "}
-        {formatCurrency(journal.totalDebit)} = kredit{" "}
-        {formatCurrency(journal.totalCredit)}
+        {formatCurrencyExact(journal.totalDebit)} = kredit{" "}
+        {formatCurrencyExact(journal.totalCredit)}
         {journal.isBalanced ? "." : " — PERHATIAN: debit dan kredit tidak sama."}
       </p>
     </ReportPageShell>

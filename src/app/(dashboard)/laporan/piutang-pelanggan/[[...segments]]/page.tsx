@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatAccounting, formatAccountingExact, formatCurrency, formatDate, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatAccounting, formatAccountingExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { CREDIT_EXPOSURE_STATUS_LABEL } from "@/lib/reports/customer-receivables"
@@ -71,9 +71,9 @@ export default async function CustomerReceivablesPage({
       <ReportNarration text="Laporan ini menampilkan saldo piutang belum lunas setiap pelanggan beserta umur jatuh temponya, pemakaian limit kredit, dan rata-rata hari bayar (DSO) yang dihitung dari pembayaran pada periode terpilih. Pelanggan tanpa limit akan menampilkan tanda '–' pada kolom pemakaian karena persentasenya tidak bermakna." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Total Piutang" value={formatCurrency(totalOutstanding)} valueClassName="text-primary" />
-        <ReportKpiCard label="Sudah Jatuh Tempo" value={formatCurrency(totalOverdue)} valueClassName="text-danger" />
-        <ReportKpiCard label="Total Limit Kredit" value={formatCurrency(totalCreditLimit)} />
+        <ReportKpiCard label="Total Piutang" value={formatCurrencyExact(totalOutstanding)} valueClassName="text-primary" />
+        <ReportKpiCard label="Sudah Jatuh Tempo" value={formatCurrencyExact(totalOverdue)} valueClassName="text-danger" />
+        <ReportKpiCard label="Total Limit Kredit" value={formatCurrencyExact(totalCreditLimit)} />
         <ReportKpiCard label="Rata-rata Hari Bayar" value={portfolioDso === null ? "–" : `${portfolioDso.toFixed(1)} hari`} />
       </div>
 

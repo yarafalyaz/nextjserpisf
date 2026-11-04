@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -40,7 +40,7 @@ export default async function AssetJournalPage({
 
   const { journal, periodLabel, periodCaption } = await loadAssetJournal(period)
   const perKind = journal.byKind
-    .map((summary) => `${summary.kind} ${summary.count} jurnal (${formatCurrency(summary.amount)})`)
+    .map((summary) => `${summary.kind} ${summary.count} jurnal (${formatCurrencyExact(summary.amount)})`)
     .join(" · ")
 
   return (
@@ -73,8 +73,8 @@ export default async function AssetJournalPage({
       />
       <p className="doc-lines" style={{ marginTop: 8 }}>
         {journal.journalCount} jurnal terposting pada periode ini
-        {perKind ? ` — ${perKind}` : ""} · total debit {formatCurrency(journal.totalDebit)} = kredit{" "}
-        {formatCurrency(journal.totalCredit)}
+        {perKind ? ` — ${perKind}` : ""} · total debit {formatCurrencyExact(journal.totalDebit)} = kredit{" "}
+        {formatCurrencyExact(journal.totalCredit)}
         {journal.isBalanced ? "." : " — PERHATIAN: debit dan kredit tidak sama."}
       </p>
     </ReportPageShell>

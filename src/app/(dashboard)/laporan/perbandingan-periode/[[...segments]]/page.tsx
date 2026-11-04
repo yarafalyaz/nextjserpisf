@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/prisma'
 import Link from 'next/link'
 import { sumEntriesByAccount } from '@/lib/services/report-aggregation.service'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
+import { formatAccounting, formatAccountingExact, formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
 import { buildReportHref } from '@/lib/reports/report-href'
@@ -128,9 +128,9 @@ export default async function PeriodComparisonPage({
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         {balance ? (
           <>
-            <ReportKpiCard label="Total Aset" value={formatCurrency(balance.assets.totalCurrent)} />
-            <ReportKpiCard label="Total Kewajiban" value={formatCurrency(balance.liabilities.totalCurrent)} />
-            <ReportKpiCard label="Total Ekuitas" value={formatCurrency(balance.equity.totalCurrent)} />
+            <ReportKpiCard label="Total Aset" value={formatCurrencyExact(balance.assets.totalCurrent)} />
+            <ReportKpiCard label="Total Kewajiban" value={formatCurrencyExact(balance.liabilities.totalCurrent)} />
+            <ReportKpiCard label="Total Ekuitas" value={formatCurrencyExact(balance.equity.totalCurrent)} />
             <ReportKpiCard
               label="Neraca Seimbang"
               value={balance.isBalanced ? "Ya" : "Tidak"}
@@ -139,11 +139,11 @@ export default async function PeriodComparisonPage({
           </>
         ) : (
           <>
-            <ReportKpiCard label="Total Periode Ini" value={formatCurrency(comparison.totalCurrent)} />
-            <ReportKpiCard label="Total Pembanding" value={formatCurrency(comparison.totalPrevious)} />
+            <ReportKpiCard label="Total Periode Ini" value={formatCurrencyExact(comparison.totalCurrent)} />
+            <ReportKpiCard label="Total Pembanding" value={formatCurrencyExact(comparison.totalPrevious)} />
             <ReportKpiCard
               label="Selisih"
-              value={formatCurrency(comparison.totalVariance)}
+              value={formatCurrencyExact(comparison.totalVariance)}
               valueClassName={comparison.totalVariance >= 0 ? 'text-success' : 'text-danger'}
             />
           </>
@@ -192,9 +192,9 @@ export default async function PeriodComparisonPage({
                   )}
                   <DetailTableRow className="border-t-2 border-default font-bold">
                     <DetailTableTd colSpan={2}>TOTAL {side.label.toUpperCase()}</DetailTableTd>
-                    <DetailTableTd align="right">{formatAccounting(side.totalCurrent, { zeroDash: false })}</DetailTableTd>
-                    <DetailTableTd align="right">{formatAccounting(side.totalPrevious, { zeroDash: false })}</DetailTableTd>
-                    <DetailTableTd align="right">{formatAccounting(side.totalVariance, { zeroDash: false })}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccountingExact(side.totalCurrent, { zeroDash: false })}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccountingExact(side.totalPrevious, { zeroDash: false })}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccountingExact(side.totalVariance, { zeroDash: false })}</DetailTableTd>
                     <DetailTableTd align="right">{""}</DetailTableTd>
                   </DetailTableRow>
                 </DetailTableBody>
@@ -234,9 +234,9 @@ export default async function PeriodComparisonPage({
             {comparison.rows.length > 0 && (
               <DetailTableRow className="border-t-2 border-default font-bold">
                 <DetailTableTd colSpan={2}>TOTAL</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(comparison.totalCurrent, { zeroDash: false })}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(comparison.totalPrevious, { zeroDash: false })}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(comparison.totalVariance, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(comparison.totalCurrent, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(comparison.totalPrevious, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(comparison.totalVariance, { zeroDash: false })}</DetailTableTd>
                 <DetailTableTd align="right">{""}</DetailTableTd>
               </DetailTableRow>
             )}
