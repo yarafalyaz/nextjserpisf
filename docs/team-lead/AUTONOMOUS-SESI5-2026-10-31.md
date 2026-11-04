@@ -4503,3 +4503,19 @@ Sembilan berkas:
 
 ### Bukti
 - Merah: 1 gagal/14 lulus; hijau 2.782 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+
+## Putaran 199 — dokumen pajak & sengketa pajak (commit `10c8e9574`)
+
+Enam berkas:
+
+- Form tambah **faktur pajak** — label pilihan faktur & PPN.
+- Form tambah **bukti potong** — label tagihan/pembayaran/sertifikat.
+- Panel **pajak uang muka** — nominal, DPP, dan PPN.
+- **Sengketa pajak** — halaman daftar (nilai sengketa), detail, dan tabel register.
+
+### Vonis FIX
+- Keenamnya memakai `formatCurrencyExact`; guard statis di `exact-cents-sweep.test.ts` menolak `formatCurrency(` tanpa `Exact`.
+
+### Bukti
+- Merah: 1 gagal/15 lulus; hijau 2.673 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+- CI `41854362180` (detail dokumen) dan `41854399521` (dokumentasi) **success**.
