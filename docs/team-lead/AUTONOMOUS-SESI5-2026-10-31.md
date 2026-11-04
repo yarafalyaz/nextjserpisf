@@ -3281,3 +3281,4 @@ Sumber: pemindaian mandiri atas `createSalesInvoice` vs `updateSalesInvoice` di 
   - `sales.actions.test.ts -t 'putaran 121'` → 2 gagal: `expected undefined to be 'Kirim lewat ekspedisi siang'` untuk catatan, dan `expected undefined to equal ['SN-A','SN-B']` untuk serial baris pertama.
   - `create-update-field-parity.test.ts` → `src/actions/sales.actions.ts: createSalesInvoice membuang notes (updateSalesInvoice menulisnya)`.
 - Hijau: `sales.actions.test.ts` 262 → 264 (2 baru), `src/__tests__` 66 berkas/509 → 67 berkas/511 (guard baru, 2 tes), gabungan sales 264/264 + 266/266 (sales + update-return-lock + race-guards), FIFO/accounting 201/201; guard statis penuh `src/__tests__ --no-file-parallelism` 67/67 berkas 511/511; `npx tsc --noEmit` 0; ESLint 0 pada 3 berkas berubah; `git diff --check` bersih.
+- CI `41746428305` (head `dac7dc2a3`) **success**; CI `41746477277` (head `91311a3d5`) **success**.
