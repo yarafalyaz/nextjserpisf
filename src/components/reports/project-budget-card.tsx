@@ -1,6 +1,6 @@
 import { Fragment } from "react"
 import type { ProjectBudgetForProject } from "@/lib/reports/project-budget-data"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -61,9 +61,9 @@ function StageRealizedCells({
   }
   return (
     <>
-      <DetailTableTd align="right">{formatCurrency(realized)}</DetailTableTd>
+      <DetailTableTd align="right">{formatCurrencyExact(realized)}</DetailTableTd>
       <DetailTableTd align="right">
-        {budgetTotal === null ? "-" : formatCurrency(budgetTotal - realized)}
+        {budgetTotal === null ? "-" : formatCurrencyExact(budgetTotal - realized)}
       </DetailTableTd>
       <DetailTableTd align="right">
         {budgetTotal === null || budgetTotal <= 0 ? "-" : `${((realized / budgetTotal) * 100).toFixed(1)}%`}
@@ -121,7 +121,7 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
       summary={
         <>
           {budget.isLocked ? `Terkunci · Revisi #${budget.budgetRevisionNo}` : "Belum terkunci"}
-          {" · "}Total Estimasi (RAB) {formatCurrency(budget.totalBudget)}
+          {" · "}Total Estimasi (RAB) {formatCurrencyExact(budget.totalBudget)}
         </>
       }
       isEmpty={isEmpty}
@@ -131,7 +131,7 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
         <div>
           <span className="text-muted-foreground block">Nilai Kontrak (snapshot):</span>
           <span className="font-semibold text-foreground">
-            {budget.contractAmount === null ? "Belum ditetapkan" : formatCurrency(budget.contractAmount)}
+            {budget.contractAmount === null ? "Belum ditetapkan" : formatCurrencyExact(budget.contractAmount)}
           </span>
           {budget.contractSource && (
             <span className="text-muted-foreground"> ({budget.contractSource === "quotation" ? "dari penawaran" : "manual"})</span>
@@ -140,21 +140,21 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
         <div>
           <span className="text-muted-foreground block">Margin Rencana (kontrak − estimasi RAB):</span>
           <span className="font-semibold text-foreground">
-            {budget.marginRencana === null ? "-" : formatCurrency(budget.marginRencana)}
+            {budget.marginRencana === null ? "-" : formatCurrencyExact(budget.marginRencana)}
           </span>
         </div>
         <div>
           <span className="text-muted-foreground block">Total RAB:</span>
-          <span className="font-semibold text-foreground">{formatCurrency(budget.totalBudget)}</span>
+          <span className="font-semibold text-foreground">{formatCurrencyExact(budget.totalBudget)}</span>
         </div>
         <div>
           <span className="text-muted-foreground block">Total Aktual (terealisasi L/R proyek):</span>
-          <span className="font-semibold text-danger">{formatCurrency(budget.realizedTotal)}</span>
+          <span className="font-semibold text-danger">{formatCurrencyExact(budget.realizedTotal)}</span>
         </div>
         <div>
           <span className="text-muted-foreground block">Selisih Estimasi − Aktual:</span>
           <span className={`font-semibold ${budget.varianceTotal < 0 ? "text-danger" : "text-foreground"}`}>
-            {formatCurrency(budget.varianceTotal)}
+            {formatCurrencyExact(budget.varianceTotal)}
           </span>
         </div>
       </div>
@@ -177,7 +177,7 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
                   <DetailTableRow>
                     <DetailTableTd>{row.stageName ?? `Tahap #${row.projectStageId}`}</DetailTableTd>
                     <DetailTableTd align="right">
-                      {row.budgetStage === null ? "-" : formatCurrency(row.budgetStage.total)}
+                      {row.budgetStage === null ? "-" : formatCurrencyExact(row.budgetStage.total)}
                     </DetailTableTd>
                     <StageRealizedCells
                       budgetTotal={row.budgetStage?.total ?? null}
@@ -188,7 +188,7 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
                   {(row.budgetStage?.categories ?? []).map((cat) => (
                     <DetailTableRow key={`cat-${row.projectStageId}-${cat.category ?? "null"}`}>
                       <DetailTableTd className="pl-6 text-muted-foreground">{categoryLabel(cat.category)}</DetailTableTd>
-                      <DetailTableTd align="right">{formatCurrency(cat.amount)}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrencyExact(cat.amount)}</DetailTableTd>
                       <PendingCells />
                     </DetailTableRow>
                   ))}
@@ -198,10 +198,10 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
                 <Fragment key="unallocated">
                   <DetailTableRow>
                     <DetailTableTd>Belum Teralokasi</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(budget.unallocatedBudget.total)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(budget.unallocatedRealized)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(budget.unallocatedBudget.total)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(budget.unallocatedRealized)}</DetailTableTd>
                     <DetailTableTd align="right">
-                      {formatCurrency(budget.unallocatedBudget.total - budget.unallocatedRealized)}
+                      {formatCurrencyExact(budget.unallocatedBudget.total - budget.unallocatedRealized)}
                     </DetailTableTd>
                     <DetailTableTd align="right">
                       {budget.unallocatedBudget.total > 0
@@ -212,7 +212,7 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
                   {budget.unallocatedBudget.categories.map((cat) => (
                     <DetailTableRow key={`unalloc-${cat.category ?? "null"}`}>
                       <DetailTableTd className="pl-6 text-muted-foreground">{categoryLabel(cat.category)}</DetailTableTd>
-                      <DetailTableTd align="right">{formatCurrency(cat.amount)}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrencyExact(cat.amount)}</DetailTableTd>
                       <PendingCells />
                     </DetailTableRow>
                   ))}
@@ -222,9 +222,9 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
             <DetailTableFoot>
               <DetailTableFootRow>
                 <DetailTableTd>Total Estimasi vs Aktual</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(budget.totalBudget)}</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(budget.realizedTotal)}</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(budget.varianceTotal)}</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrencyExact(budget.totalBudget)}</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrencyExact(budget.realizedTotal)}</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrencyExact(budget.varianceTotal)}</DetailTableTd>
                 <DetailTableTd align="right">
                   {budgetUsedPercent === null ? "-" : `${budgetUsedPercent.toFixed(1)}%`}
                 </DetailTableTd>
@@ -233,7 +233,7 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
           </DetailTable>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Aktual per tahap belum terukur — kolom tahap belum ada di sumber biaya (pengeluaran material/beban hanya berkolom proyek, biaya produksi tanpa kolom proyek/tahap), sehingga seluruh aktual {formatCurrency(budget.unallocatedRealized)} tampil sebagai belum teralokasi, tidak dibagi rata ke tahap.
+            Aktual per tahap belum terukur — kolom tahap belum ada di sumber biaya (pengeluaran material/beban hanya berkolom proyek, biaya produksi tanpa kolom proyek/tahap), sehingga seluruh aktual {formatCurrencyExact(budget.unallocatedRealized)} tampil sebagai belum teralokasi, tidak dibagi rata ke tahap.
           </p>
         </section>
       )}

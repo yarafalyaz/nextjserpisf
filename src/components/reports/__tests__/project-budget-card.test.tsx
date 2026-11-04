@@ -168,3 +168,32 @@ describe("ProjectBudgetCard F-2026-10-21-030", () => {
     expect(text).toContain("Kunci awal")
   })
 })
+
+describe("ProjectBudgetCard: nominal bersen", () => {
+  it("RAB dan realisasi ber-sen tampil hingga sen", () => {
+    const { text } = renderBudgetText(
+      budgetFixture({
+        items: [{ id: 1, projectStageId: 10, category: "material", qty: 1, cost: 13_000_000.5, sortOrder: 1 }],
+        pl: {
+          projectId: 1,
+          revenue: 80_000_000,
+          materialCost: 4_000_000.25,
+          productionCost: 2_000_000,
+          expenseCost: 0,
+          pettyCashCost: 0,
+          vendorBillCost: 0,
+          totalCost: 6_000_000.25,
+          profit: 74_000_000,
+          marginPercent: 92.5,
+          revenueInvoiceIds: [1],
+          materialIssueIds: [1],
+          vendorBillIds: [],
+          unpulledTimesheetCount: 0,
+          unpulledTimesheetHours: 0,
+        },
+      }),
+    )
+    expect(text).toContain("Rp 13.000.000,50")
+    expect(text).toContain("Rp 6.000.000,25")
+  })
+})
