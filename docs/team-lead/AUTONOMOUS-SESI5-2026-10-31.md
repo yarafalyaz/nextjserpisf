@@ -4407,3 +4407,18 @@ Halaman daftar dan detail rekonsiliasi bank mencetak saldo buku, saldo laporan, 
 ### Bukti
 - Merah: 1 gagal/8 lulus setelah path dibetulkan; hijau 2.666 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
 - CI `41846320069` (buku pembantu) dan `41846359350` (dokumentasi) **success**.
+
+## Putaran 192 — kas kecil & pengeluaran (commit `c3b2ab472`)
+
+Lima berkas di modul keuangan mencetak nominal `Decimal(15,2)` dengan `formatCurrency` 0 desimal:
+
+- Halaman **Kas Kecil** — saldo berjalan, masuk/keluar bulan.
+- Detail **Mutasi Kas Kecil** — jumlah, saldo sebelum, saldo sesudah.
+- Tabel **Kas Kecil** dan tabel **Pengeluaran** — kolom nominal.
+- Detail **Pengeluaran** — jumlah.
+
+### Vonis FIX
+- Kelimanya memakai `formatCurrencyExact`; guard statis di `exact-cents-sweep.test.ts` menolak `formatCurrency(` tanpa `Exact` di kelima berkas.
+
+### Bukti
+- Merah: 1 gagal/9 lulus; hijau 2.667 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
