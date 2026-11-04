@@ -4436,3 +4436,14 @@ Guard Putaran 185 hanya memeriksa `formatAccounting(` di halaman Total Hutang, s
 ### Bukti
 - Merah: 1 gagal/2 lulus; hijau 3.094 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
 - CI `41848304340`, `41848348646`, `41848640500`, `41848674261` **success** (putaran 191–192).
+
+## Putaran 194 — detail aset & rekening koran (commit `878aa779a`)
+
+- **Detail Aset** (`aset/[slug]/page.tsx`) — nilai beli, nilai cache, akumulasi penyusutan, nilai buku jurnal, jadwal penyusutan (saldo awal/penyusutan/saldo akhir), dan riwayat.
+- **Detail Rekening Koran** (`keuangan/laporan-bank/[slug]/page.tsx`) — saldo awal, total debit/kredit, saldo akhir, dan baris.
+
+### Vonis FIX
+- Keduanya memakai `formatCurrencyExact`; guard statis di `exact-cents-sweep.test.ts` menolak `formatCurrency(` tanpa `Exact` di kedua berkas.
+
+### Bukti
+- Merah: 1 gagal/10 lulus; hijau 2.706 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
