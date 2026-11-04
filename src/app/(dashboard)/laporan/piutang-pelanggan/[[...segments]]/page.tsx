@@ -17,6 +17,7 @@ import { ReportLetterhead } from "@/components/reports/report-letterhead"
 
 import type { Metadata } from "next"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
+import { safeAdd } from "@/lib/utils/math"
 
 export const metadata: Metadata = { title: "Piutang per Pelanggan" }
 
@@ -46,10 +47,10 @@ export default async function CustomerReceivablesPage({
   // Baris TOTAL wajib 14 sel sejajar header; total per kolom dihitung dari
   // baris yang sama dengan layar (pola sama dengan ekspor PDF di loader).
   const totalInvoiceCount = rows.reduce((sum, row) => sum + row.invoiceCount, 0)
-  const totalOpenOrder = rows.reduce((sum, row) => sum + row.openOrderAmount, 0)
-  const totalWoUnrepresented = rows.reduce((sum, row) => sum + (row.woUnrepresented ?? 0), 0)
-  const totalConfirmedDp = rows.reduce((sum, row) => sum + (row.confirmedDownPayment ?? 0), 0)
-  const totalOpenCredit = rows.reduce((sum, row) => sum + (row.openCustomerCredit ?? 0), 0)
+  const totalOpenOrder = rows.reduce((sum, row) => safeAdd(sum, row.openOrderAmount, 2), 0)
+  const totalWoUnrepresented = rows.reduce((sum, row) => safeAdd(sum, row.woUnrepresented ?? 0, 2), 0)
+  const totalConfirmedDp = rows.reduce((sum, row) => safeAdd(sum, row.confirmedDownPayment ?? 0, 2), 0)
+  const totalOpenCredit = rows.reduce((sum, row) => safeAdd(sum, row.openCustomerCredit ?? 0, 2), 0)
   const periodLabel = `Pembayaran ${formatDate(startDate)} – ${formatDate(endDate)}`
 
   return (

@@ -18,6 +18,7 @@ import { ReportNarration } from '@/components/reports/report-narration'
 
 import type { Metadata } from 'next'
 import { ReportPageShell } from "@/components/reports/report-page-shell"
+import { safeAdd } from "@/lib/utils/math"
 
 export const metadata: Metadata = { title: "Analisis Penjualan" }
 
@@ -96,7 +97,7 @@ export default async function SalesAnalyticsPage({
     })),
   )
 
-  const totalRevenue = groups.reduce((sum, row) => sum + row.revenue, 0)
+  const totalRevenue = groups.reduce((sum, row) => safeAdd(sum, row.revenue, 2), 0)
   const totalQty = groups.reduce((sum, row) => sum + row.qty, 0)
   const maxMonthly = Math.max(1, ...monthly.map((m) => m.revenue))
   const dimensionLabel = SALES_DIMENSIONS.find((d) => d.value === dimension)?.label ?? 'Per Barang'

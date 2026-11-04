@@ -16,6 +16,7 @@ import { buildPurchasePriceAnalysis } from "@/lib/services/purchase-price-analys
 
 import type { Metadata } from "next"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
+import { safeAdd, safeMultiply } from "@/lib/utils/math"
 
 export const metadata: Metadata = { title: "Analisis Harga Beli Multi-Sumber" }
 
@@ -68,7 +69,7 @@ export default async function PurchasePriceAnalysisPage({
 
   const totalReceipts = rows.reduce((s, r) => s + r.receipts, 0)
   const totalQty = rows.reduce((s, r) => s + r.totalQty, 0)
-  const totalValue = rows.reduce((s, r) => s + r.totalQty * r.avgLandedUnitCost, 0)
+  const totalValue = rows.reduce((s, r) => safeAdd(s, safeMultiply(r.totalQty, r.avgLandedUnitCost, 2), 2), 0)
   // Largest landed-vs-listing uplift (a red flag that listing price is misleading).
   const maxUplift = rows.reduce((m, r) => Math.max(m, r.landedUplift), 0)
   const totalPotentialSaving = bestByItem.reduce((s, b) => s + b.savingVsWorst, 0)

@@ -14,6 +14,7 @@ import { ReportNarration } from "@/components/reports/report-narration"
 
 import type { Metadata } from "next"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
+import { safeAdd } from "@/lib/utils/math"
 
 export const metadata: Metadata = { title: "Ringkasan Stok" }
 
@@ -128,7 +129,7 @@ export default async function InventorySummaryPage() {
     .map(([name, data]) => ({ name, count: data.items.size, qty: data.qty, value: data.value }))
     .sort((a, b) => b.value - a.value)
   const categoryTotalQty = categoryRows.reduce((s, r) => s + r.qty, 0)
-  const categoryTotalValue = categoryRows.reduce((s, r) => s + r.value, 0)
+  const categoryTotalValue = categoryRows.reduce((s, r) => safeAdd(s, r.value, 2), 0)
 
   const periodLabel = `Per ${formatDate(new Date())}`
 

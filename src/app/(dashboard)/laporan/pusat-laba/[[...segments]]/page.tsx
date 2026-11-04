@@ -22,6 +22,7 @@ import { ReportNarration } from "@/components/reports/report-narration"
 
 import type { Metadata } from "next"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
+import { safeAdd } from "@/lib/utils/math"
 
 export const metadata: Metadata = { title: "Pusat Laba" }
 
@@ -137,8 +138,8 @@ export default async function ProfitCenterIncomePage({
     .filter((r) => r.totalRevenue !== 0 || r.totalExpense !== 0)
     .sort((a, b) => a.code.localeCompare(b.code))
 
-  const totalRevenue = rows.reduce((s, r) => s + r.totalRevenue, 0)
-  const totalExpense = rows.reduce((s, r) => s + r.totalExpense, 0)
+  const totalRevenue = rows.reduce((s, r) => safeAdd(s, r.totalRevenue, 2), 0)
+  const totalExpense = rows.reduce((s, r) => safeAdd(s, r.totalExpense, 2), 0)
   const netIncome = totalRevenue - totalExpense
 
   const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
