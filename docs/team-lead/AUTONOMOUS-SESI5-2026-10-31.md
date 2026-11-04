@@ -4315,3 +4315,20 @@ Sapuan modul penjualan/pembelian menemukan empat komponen dengan `formatAccounti
 ### Bukti
 - Merah: 1 gagal pada masing-masing tes baru; hijau 11/11 suite terkait; tsc, ESLint, diff-check bersih.
 - CI `41836722142` dan `41836747905` **success** (putaran 183).
+
+## Putaran 185 — sel tabel Piutang per Pelanggan & Total Hutang (commit `601d38be4`)
+
+Dua halaman yang sebelumnya hanya diperbaiki pada KPI ternyata masih mencetak **sel tabel** dengan 0 desimal:
+
+- **Piutang per Pelanggan** — kolom Limit Kredit, Piutang, Jatuh Tempo, SO Terbuka, Job Berjalan, DP Terkonfirmasi, Kredit Terbuka, dan baris TOTAL.
+- **Total Hutang** — ringkasan umur, per pemasok, rincian tagihan, dan total.
+
+### Vonis FIX
+- Seluruh sel uang memakai `formatAccountingExact`.
+- Piutang mendapat tes render ber-sen (merah sebelum fix); Total Hutang mendapat guard statis yang menolak `formatAccounting(` di halaman itu (merah sebelum fix).
+
+### Vonis CATAT
+- **Docker Image Build CI `41838264847` gagal karena `502 Bad Gateway` dari `auth.docker.io`** saat menarik `moby/buildkit` — kegagalan infrastruktur, bukan kode. Job dijalankan ulang (`gh run rerun --failed`); Unit/Lint/DB/Build semuanya hijau pada run yang sama.
+
+### Bukti
+- Merah: 1 gagal pada masing-masing tes baru; hijau 3.088 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
