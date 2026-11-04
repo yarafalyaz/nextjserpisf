@@ -25,7 +25,12 @@ const mocks = vi.hoisted(() => {
       findUnique: vi.fn().mockResolvedValue({ status: "draft" }),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
-    materialIssueItem: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    // Putaran 123: lineage baris WO dibaca SEBELUM deleteMany; fixture MI ini
+    // tertaut WO sehingga jalur baca itu pasti dilalui.
+    materialIssueItem: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     // Dokumen baru menolak master nonaktif/terhapus — fixture hidup.
     warehouse: {
       findMany: vi.fn(async (args: any) =>
@@ -116,6 +121,7 @@ beforeEach(() => {
   // mockResolvedValue persisten bertahan lintas test (clearAllMocks tak
   // membuang implementasi): status WO default hidup dipulihkan eksplisit.
   mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ status: "in_progress" })
+  mocks.prismaMock.materialIssueItem.findMany.mockResolvedValue([])
 })
 
 describe("createMaterialIssue — menyimpan kolom penaut", () => {
