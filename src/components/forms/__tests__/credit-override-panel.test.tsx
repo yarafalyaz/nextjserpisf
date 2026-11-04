@@ -218,3 +218,22 @@ describe("SalesOrderForm gerbang kredit (035-F, AC-CL2-F2)", () => {
     })
   })
 })
+
+describe("CreditOverrideQueue: nominal bersen", () => {
+  it("batas kredit dan paparan ber-sen tampil hingga sen", () => {
+    withContainer((container) => {
+      const root = mountInto(container, (
+        <CreditOverrideQueue
+          rows={[{ ...row(), creditLimit: 1_000_000.5, exposure: 1_000_000.25, attemptedAmount: 500_000.5 }]}
+          canApprove={false}
+          currentUserId={99}
+        />
+      ))
+      const text = container.textContent ?? ""
+      expect(text).toContain("Rp 1.000.000,50")
+      expect(text).toContain("Rp 1.000.000,25")
+      expect(text).toContain("Rp 500.000,50")
+      unmount(root, container)
+    })
+  })
+})

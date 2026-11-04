@@ -27,7 +27,7 @@ import {
   DetailTableTd,
   DetailTableTh,
 } from "@/components/ui/detail-table"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { showError, showSuccess } from "@/lib/utils/toast"
 
 export interface CreditOverrideRow {
@@ -144,9 +144,9 @@ export function CreditOverrideQueue({
                 <DetailTableTd>{row.customerName ?? `#${row.customerId}`}</DetailTableTd>
                 <DetailTableTd>{DOCUMENT_TYPE_LABEL[row.documentType] ?? row.documentType}</DetailTableTd>
                 <DetailTableTd>{CREDIT_EXPOSURE_STATUS_LABEL[row.exposureStatus as keyof typeof CREDIT_EXPOSURE_STATUS_LABEL] ?? row.exposureStatus}</DetailTableTd>
-                <DetailTableTd className="tabular-nums">{formatCurrency(row.creditLimit)}</DetailTableTd>
-                <DetailTableTd className="tabular-nums">{formatCurrency(row.exposure)}</DetailTableTd>
-                <DetailTableTd className="tabular-nums">{formatCurrency(row.attemptedAmount)}</DetailTableTd>
+                <DetailTableTd className="tabular-nums">{formatCurrencyExact(row.creditLimit)}</DetailTableTd>
+                <DetailTableTd className="tabular-nums">{formatCurrencyExact(row.exposure)}</DetailTableTd>
+                <DetailTableTd className="tabular-nums">{formatCurrencyExact(row.attemptedAmount)}</DetailTableTd>
                 <DetailTableTd>{row.requestReason}</DetailTableTd>
                 <DetailTableTd>
                   <StatusChip status={row.status} customLabel={CREDIT_OVERRIDE_STATUS_LABEL[row.status] ?? row.status} />
