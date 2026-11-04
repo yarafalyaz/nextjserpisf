@@ -3704,3 +3704,24 @@ Dua angka berlabel sama dalam satu laporan, berbeda 1.000.000, tanpa penjelasan 
 - Merah: 1 gagal/1 lulus pada tes label.
 - Hijau: 23/23 payables terkait; `src/lib/reports` + seluruh halaman laporan **2639 lulus / 4 dilewati** (314 berkas); tsc, ESLint, diff-check bersih.
 - CI `41798923663`, `41799221900`, `41799255388` (tiga commit sebelumnya) **success**.
+
+## Putaran 144 — nilai sisa pesanan bersen tidak cocok dengan totalnya (commit `c8790a83e`)
+
+`buildOutstandingLines` adalah mesin bersama dua laporan (Pesanan Belum Terkirim, PO Belum Diterima). Nilai sisa per baris dihitung `safeMultiply(remaining, unitPrice, 2)` dan dijumlah `safeAdd`, tetapi dicetak `formatAccounting` 0 desimal — termasuk subtotal per dokumen dan total. Probe dua baris sisa dari 2 × Rp500.000,25:
+
+```
+baris tercetak : "1.000.001" + "1.000.001"
+total tercetak : "2.000.001"
+```
+
+Ringkasan KPI kedua laporan juga memakai `formatCurrency` sehingga angka jamak di footer tidak cocok dengan tabelnya.
+
+### Vonis FIX
+- `amount()` di `outstanding-lines.ts` menjadi `formatAccountingExact`; baris, subtotal per dokumen, dan total ikut.
+- `orderFulfillmentSummary` dan `purchaseOutstandingSummary` memakai formatter yang sama, bukan `formatCurrency` terpisah.
+- Fixture tes lama (`17 × 0,24`) diperbarui ke ekspektasi sen (`4,08`/`8,16`/`0,24`) — nilainya memang bersen, jadi pembulatan 0 desimal itulah yang keliru.
+
+### Bukti
+- Merah: 1 gagal/1 lulus.
+- Hijau: 71/71 terkait; `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` **3104 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
+- CI `41800871905` (head `8bf4551e4`) dan `41800899210` (head `3d3a9ea6b`) **success**.
