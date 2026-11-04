@@ -9,7 +9,7 @@ import {
   type EmployeeLoanRecap,
 } from "@/lib/reports/employee-loan-recap"
 import { EmptyState } from "@/components/ui/empty-state"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableBody,
@@ -57,7 +57,7 @@ export function EmployeeLoanRecapTable({ recap }: Readonly<{ recap: EmployeeLoan
         </div>
         <div className="rounded-xl border border-default bg-surface p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total sisa pinjaman aktif</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{formatCurrency(totals.totalRemainingActive)}</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{formatCurrencyExact(totals.totalRemainingActive)}</p>
         </div>
         <div className="rounded-xl border border-default bg-surface p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{EMPLOYEE_LOAN_RECAP_PENDING_LABEL}</p>
@@ -92,15 +92,15 @@ export function EmployeeLoanRecapTable({ recap }: Readonly<{ recap: EmployeeLoan
                     {employee.departmentName ?? EMPLOYEE_LOAN_RECAP_NO_DEPARTMENT_LABEL}
                   </DetailTableTd>
                   <DetailTableTd align="right">{employee.activeCount}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(employee.totalPrincipalActive)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrencyExact(employee.totalPrincipalActive)}</DetailTableTd>
                   <DetailTableTd align="right">
                     <span className={employee.hasNegativeRemaining ? "font-semibold text-destructive" : undefined}>
-                      {formatCurrency(employee.totalRemainingActive)}
+                      {formatCurrencyExact(employee.totalRemainingActive)}
                     </span>
                   </DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(employee.totalPaidDerived)}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(employee.monthlyInstallmentTotal)}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(employee.weeklyInstallmentTotal)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrencyExact(employee.totalPaidDerived)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrencyExact(employee.monthlyInstallmentTotal)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrencyExact(employee.weeklyInstallmentTotal)}</DetailTableTd>
                   <DetailTableTd>
                     {employee.oldestActiveLoanDate
                       ? formatDate(employee.oldestActiveLoanDate, { format: "short" })
@@ -156,19 +156,19 @@ export function EmployeeLoanRecapTable({ recap }: Readonly<{ recap: EmployeeLoan
                   {totals.activeCount}
                 </DetailTableTd>
                 <DetailTableTd align="right" className="font-bold">
-                  {formatCurrency(totals.totalPrincipalActive)}
+                  {formatCurrencyExact(totals.totalPrincipalActive)}
                 </DetailTableTd>
                 <DetailTableTd align="right" className="font-bold">
-                  {formatCurrency(totals.totalRemainingActive)}
+                  {formatCurrencyExact(totals.totalRemainingActive)}
                 </DetailTableTd>
                 <DetailTableTd align="right" className="font-bold">
-                  {formatCurrency(totals.totalPaidDerived)}
+                  {formatCurrencyExact(totals.totalPaidDerived)}
                 </DetailTableTd>
                 <DetailTableTd align="right" className="font-bold">
-                  {formatCurrency(totals.monthlyInstallmentTotal)}
+                  {formatCurrencyExact(totals.monthlyInstallmentTotal)}
                 </DetailTableTd>
                 <DetailTableTd align="right" className="font-bold">
-                  {formatCurrency(totals.weeklyInstallmentTotal)}
+                  {formatCurrencyExact(totals.weeklyInstallmentTotal)}
                 </DetailTableTd>
                 <DetailTableTd className="font-bold">—</DetailTableTd>
                 <DetailTableTd className="font-bold">

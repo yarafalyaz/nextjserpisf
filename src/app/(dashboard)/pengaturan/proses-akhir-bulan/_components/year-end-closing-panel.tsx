@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/shadcn/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { FormSelect } from "@/components/ui/form-select"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import type { YearEndClosingPreview } from "@/lib/reports/year-end-closing"
 
@@ -90,7 +90,7 @@ export function YearEndClosingPanel({ preview }: { preview: YearEndClosingPrevie
 
       <p className="text-xs text-muted-foreground">
         Tanggal penutup {formatDate(preview.closingDate)}. Laba bersih tahun ini{" "}
-        {formatCurrency(preview.netProfit)} akan ditutup ke akun laba ditahan per pusat laba.
+        {formatCurrencyExact(preview.netProfit)} akan ditutup ke akun laba ditahan per pusat laba.
       </p>
 
       {preview.lines.length === 0 ? (
@@ -114,12 +114,12 @@ export function YearEndClosingPanel({ preview }: { preview: YearEndClosingPrevie
                     {line.accountCode} - {line.accountName}
                   </td>
                   <td className="px-3 py-2">{line.profitCenterCode ?? "—"}</td>
-                  <td className="px-3 py-2 text-right">{formatCurrency(line.balance)}</td>
+                  <td className="px-3 py-2 text-right">{formatCurrencyExact(line.balance)}</td>
                   <td className="px-3 py-2 text-right">
-                    {line.closingDirection === "debit" ? formatCurrency(line.closingAmount) : "—"}
+                    {line.closingDirection === "debit" ? formatCurrencyExact(line.closingAmount) : "—"}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {line.closingDirection === "credit" ? formatCurrency(line.closingAmount) : "—"}
+                    {line.closingDirection === "credit" ? formatCurrencyExact(line.closingAmount) : "—"}
                   </td>
                 </tr>
               ))}
@@ -127,12 +127,12 @@ export function YearEndClosingPanel({ preview }: { preview: YearEndClosingPrevie
                 <tr key={`retained-${line.profitCenterId ?? "null"}`} className="border-b bg-muted/20 last:border-0">
                   <td className="px-3 py-2 font-medium">Laba ditahan (lawan penutup)</td>
                   <td className="px-3 py-2">{line.profitCenterCode ?? "—"}</td>
-                  <td className="px-3 py-2 text-right">{formatCurrency(line.netProfit)}</td>
+                  <td className="px-3 py-2 text-right">{formatCurrencyExact(line.netProfit)}</td>
                   <td className="px-3 py-2 text-right">
-                    {line.direction === "debit" ? formatCurrency(Math.abs(line.netProfit)) : "—"}
+                    {line.direction === "debit" ? formatCurrencyExact(Math.abs(line.netProfit)) : "—"}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {line.direction === "credit" ? formatCurrency(Math.abs(line.netProfit)) : "—"}
+                    {line.direction === "credit" ? formatCurrencyExact(Math.abs(line.netProfit)) : "—"}
                   </td>
                 </tr>
               ))}
@@ -142,8 +142,8 @@ export function YearEndClosingPanel({ preview }: { preview: YearEndClosingPrevie
                 <td className="px-3 py-2" colSpan={3}>
                   Total
                 </td>
-                <td className="px-3 py-2 text-right">{formatCurrency(preview.totalDebit)}</td>
-                <td className="px-3 py-2 text-right">{formatCurrency(preview.totalCredit)}</td>
+                <td className="px-3 py-2 text-right">{formatCurrencyExact(preview.totalDebit)}</td>
+                <td className="px-3 py-2 text-right">{formatCurrencyExact(preview.totalCredit)}</td>
               </tr>
             </tfoot>
           </table>
@@ -152,7 +152,7 @@ export function YearEndClosingPanel({ preview }: { preview: YearEndClosingPrevie
 
       {!preview.balanced ? (
         <p className="text-xs text-destructive">
-          Pratinjau belum seimbang: selisih {formatCurrency(preview.difference)}.
+          Pratinjau belum seimbang: selisih {formatCurrencyExact(preview.difference)}.
         </p>
       ) : null}
       {!preview.retainedEarningsMapped ? (

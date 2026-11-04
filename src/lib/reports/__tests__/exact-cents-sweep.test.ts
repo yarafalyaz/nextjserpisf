@@ -201,3 +201,16 @@ describe("sapuan ketujuh: detail aset dan rekening koran", () => {
     }
   })
 })
+
+describe("sapuan kedelapan: penutupan buku & rekap pinjaman", () => {
+  it("panel penutupan buku & rekap pinjaman memakai formatter currency exact", () => {
+    for (const rel of [
+      "src/app/(dashboard)/pengaturan/proses-akhir-bulan/_components/year-end-closing-panel.tsx",
+      "src/app/(dashboard)/sdm/pinjaman/_components/employee-loan-recap-table.tsx",
+    ]) {
+      const source = readFileSync(path.resolve(process.cwd(), rel), "utf8")
+      expect(source, rel).not.toMatch(/formatCurrency\((?!Exact)/)
+      expect(source, rel).toContain("formatCurrencyExact")
+    }
+  })
+})
