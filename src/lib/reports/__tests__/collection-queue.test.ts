@@ -728,3 +728,20 @@ describe("collection-reminder-level (F-2026-10-26-050-S, Q-COLR-1..7)", () => {
     expect(q.rows[0].tingkatPengingat).toBe("tanpa_acuan")
   })
 })
+
+describe("collection-queue: tukar faktur tanpa jatuh tempo", () => {
+  it("dueDate exchange null jatuh kembali ke jatuh tempo faktur, bukan umur null", () => {
+    const queue = buildCollectionQueue(
+      [invoice({ invoiceId: 1, dueDate: day(-60) })],
+      [exchange({ dueDate: null })],
+      [],
+      { now: NOW },
+    )
+
+    expect(queue.rows).toHaveLength(1)
+    expect(queue.rows[0].dueAcuan).toEqual(day(-60))
+    expect(queue.rows[0].umurHari).toBe(60)
+    expect(queue.rows[0].tahap).toBe("lewat_janji")
+    expect(queue.rows[0].tingkatPengingat).toBe("pengingat_awal")
+  })
+})

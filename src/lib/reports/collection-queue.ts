@@ -346,7 +346,11 @@ export function buildCollectionQueue(
     const exchange = latestActiveExchange(
       exchangesByInvoice.get(invoice.invoiceId) ?? [],
     )
-    const dueAcuan = exchange ? exchange.dueDate : invoice.dueDate
+    // BR-COL-03: acuan = jatuh tempo tukar faktur BILA ADA; kolom itu nullable
+    // dan formulirnya boleh kosong, jadi kehadiran exchange saja tidak boleh
+    // menghapus acuan. Tanpa fallback ini faktur 60 hari lewat jatuh tempo
+    // jatuh ke "tanpa acuan" dan keluar dari bucket pengingat.
+    const dueAcuan = exchange?.dueDate ?? invoice.dueDate
 
     const invoiceFollowUps = followUpsByInvoice.get(invoice.invoiceId) ?? []
     let lastFollowUpAt: Date | null = null

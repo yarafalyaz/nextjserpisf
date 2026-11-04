@@ -103,6 +103,12 @@ export interface ProjectPlProductionCostInput {
   sourceTimesheetId: number | null
   /** PO sumber bila baris ini cerminan subkontrak PO jasa; null = bukan. */
   purchaseOrderId: number | null
+  /**
+   * WO pemilik `productionOrder` baris ini. Overhead teraplikasi dan rework NCR
+   * menulis `productionOrderId` tanpa `workOrderId`; tanpa medan ini biaya
+   * pekerjaan itu hilang dari L/R proyek (dan laporan yang memakainya).
+   */
+  productionOrderWorkOrderId?: number | null
 }
 
 export interface ProjectPlExpenseInput {
@@ -240,9 +246,14 @@ export function buildProjectPl(input: ProjectPlInput): ProjectPlResult {
     2,
   )
 
-  // ProductionCost: hanya yang terikat WO proyek ini.
+  // ProductionCost: terikat langsung ke WO proyek ini, atau lewat perintah
+  // produksi yang terikat ke WO itu — sumber kanonis yang sama dengan
+  // job-order-data dan vehicle-margin.
   const projectCosts = input.productionCosts.filter(
-    (c) => c.workOrderId !== null && projectWorkOrderIds.has(c.workOrderId),
+    (c) =>
+      (c.workOrderId !== null && projectWorkOrderIds.has(c.workOrderId)) ||
+      (c.productionOrderWorkOrderId != null &&
+        projectWorkOrderIds.has(c.productionOrderWorkOrderId)),
   )
   const productionCost = safeSum(projectCosts.map((c) => c.amount), 2)
 
@@ -255,8 +266,10 @@ export function buildProjectPl(input: ProjectPlInput): ProjectPlResult {
   )
 
   const expenseCost = safeSum(
+    // `paid` ikut: markExpensePaid mengubah approved → paid (satu-satunya
+    // transisi terminal), jadi biaya proyek tidak boleh hilang setelah dibayar.
     input.expenses
-      .filter((e) => e.projectId === projectId && e.status === "approved")
+      .filter((e) => e.projectId === projectId && (e.status === "approved" || e.status === "paid"))
       .map((e) => e.amount),
     2,
   )

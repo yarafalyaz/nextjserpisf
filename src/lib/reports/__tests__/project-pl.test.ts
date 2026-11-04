@@ -235,3 +235,31 @@ describe("buildProjectPl — kriteria terima F-2026-10-21-029", () => {
     expect(r.materialCost).toBe(0.07)
   })
 })
+
+describe("buildProjectPl — biaya yang hilang (red sebelum fix)", () => {
+  it("ProductionCost yang terikat lewat productionOrder tetap masuk biaya proyek", () => {
+    const r = buildProjectPl(
+      base({
+        workOrders: [wo()],
+        productionCosts: [
+          { workOrderId: null, amount: 2_000_000, sourceTimesheetId: null, purchaseOrderId: null, productionOrderWorkOrderId: 10 },
+          { workOrderId: 10, amount: 1_000_000, sourceTimesheetId: null, purchaseOrderId: null, productionOrderWorkOrderId: null },
+        ],
+      }),
+    )
+    expect(r.productionCost).toBe(3_000_000)
+    expect(r.totalCost).toBe(3_000_000)
+  })
+
+  it("expense berstatus paid tetap biaya proyek, bukan hilang setelah dibayar", () => {
+    const r = buildProjectPl(
+      base({
+        expenses: [
+          { projectId: 1, status: "approved", amount: 1_000_000 },
+          { projectId: 1, status: "paid", amount: 500_000 },
+        ],
+      }),
+    )
+    expect(r.expenseCost).toBe(1_500_000)
+  })
+})

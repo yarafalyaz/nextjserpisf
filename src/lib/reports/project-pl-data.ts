@@ -88,7 +88,15 @@ const PRODUCTION_COST_SELECT = {
   amount: true,
   sourceTimesheetId: true,
   purchaseOrderId: true,
+  // Overhead teraplikasi & rework menulis productionOrderId tanpa workOrderId.
+  productionOrder: { select: { workOrderId: true } },
 } as const
+
+/** WO pemilik baris biaya: langsung, atau lewat perintah produksinya. */
+const productionCostWorkOrderId = (c: {
+  workOrderId: number | null
+  productionOrder?: { workOrderId: number | null } | null
+}): number | null => c.workOrderId ?? c.productionOrder?.workOrderId ?? null
 
 const VENDOR_BILL_SELECT = {
   id: true,
@@ -123,6 +131,7 @@ function toBuilderInput(all: {
     amount: unknown
     sourceTimesheetId: number | null
     purchaseOrderId: number | null
+    productionOrder?: { workOrderId: number | null } | null
   }[]
   expenses: { projectId: number | null; status: string; amount: unknown }[]
   pettyCash: { projectId: number | null; type: string; amount: unknown }[]
@@ -160,6 +169,7 @@ function toBuilderInput(all: {
       amount: Number(c.amount),
       sourceTimesheetId: c.sourceTimesheetId,
       purchaseOrderId: c.purchaseOrderId,
+      productionOrderWorkOrderId: productionCostWorkOrderId(c),
     })),
     expenses: all.expenses.map((e) => ({
       projectId: e.projectId,
@@ -221,7 +231,7 @@ export async function loadProjectPlReport(period: {
       select: MATERIAL_ISSUE_SELECT,
     }),
     prisma.expense.findMany({
-      where: { projectId: { not: null }, status: "approved", ...dateWhere },
+      where: { projectId: { not: null }, status: { in: ["approved", "paid"] }, ...dateWhere },
       select: { projectId: true, status: true, amount: true },
     }),
     prisma.pettyCash.findMany({
@@ -298,7 +308,14 @@ export async function loadProjectPlReport(period: {
         : Promise.resolve([]),
       workOrderIds.length
         ? prisma.productionCost.findMany({
-            where: { workOrderId: { in: workOrderIds } },
+            // Biaya bisa terikat langsung ke WO atau lewat perintah produksinya
+            // (overhead teraplikasi & rework NCR menulis productionOrderId saja).
+            where: {
+              OR: [
+                { workOrderId: { in: workOrderIds } },
+                { productionOrder: { workOrderId: { in: workOrderIds } } },
+              ],
+            },
             select: PRODUCTION_COST_SELECT,
           })
         : Promise.resolve([]),
@@ -397,7 +414,14 @@ export async function loadProjectPlForProject(
       }),
       workOrderIds.length
         ? prisma.productionCost.findMany({
-            where: { workOrderId: { in: workOrderIds } },
+            // Biaya bisa terikat langsung ke WO atau lewat perintah produksinya
+            // (overhead teraplikasi & rework NCR menulis productionOrderId saja).
+            where: {
+              OR: [
+                { workOrderId: { in: workOrderIds } },
+                { productionOrder: { workOrderId: { in: workOrderIds } } },
+              ],
+            },
             select: PRODUCTION_COST_SELECT,
           })
         : Promise.resolve([]),

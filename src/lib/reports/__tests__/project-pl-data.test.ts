@@ -84,9 +84,15 @@ describe("loadProjectPlReport — rantai loader F-2026-10-21-029", () => {
       customerName: "PT Logistik",
       vehiclePlate: "B 1234 CD",
     })
-    // ProductionCost diminta lewat himpunan WO proyek — bukan query per proyek.
+    // ProductionCost diminta lewat himpunan WO proyek (langsung atau lewat
+    // perintah produksi) — bukan query per proyek.
     const costWhere = p.productionCost.findMany.mock.calls[0][0].where
-    expect(costWhere).toEqual({ workOrderId: { in: [10] } })
+    expect(costWhere).toEqual({
+      OR: [
+        { workOrderId: { in: [10] } },
+        { productionOrder: { workOrderId: { in: [10] } } },
+      ],
+    })
   })
 
   it("invoice jembatan quotation WO termuat lewat query kedua dan tidak dobel", async () => {
@@ -123,7 +129,16 @@ describe("loadProjectPlReport — rantai loader F-2026-10-21-029", () => {
     expect(miWhere.status).toBe("completed")
 
     const expWhere = p.expense.findMany.mock.calls[0][0].where
-    expect(expWhere.status).toBe("approved")
+    // `paid` ikut: markExpensePaid memindahkan approved → paid, biaya proyek
+    // tidak boleh hilang setelah dibayar.
+    expect(expWhere.status).toEqual({ in: ["approved", "paid"] })
+
+    const costWhere = p.productionCost.findMany.mock.calls[0][0].where
+    // Biaya lewat perintah produksi (overhead teraplikasi, rework NCR) harus ikut.
+    expect(costWhere.OR).toEqual([
+      { workOrderId: { in: [10] } },
+      { productionOrder: { workOrderId: { in: [10] } } },
+    ])
 
     const pettyWhere = p.pettyCash.findMany.mock.calls[0][0].where
     expect(pettyWhere.type).toBe("OUT")
