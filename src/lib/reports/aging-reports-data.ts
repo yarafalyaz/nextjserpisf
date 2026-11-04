@@ -31,7 +31,7 @@ import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
 import { isOutstandingSettled } from "@/lib/finance/settlement-status"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { safeAdd } from "@/lib/utils/math"
-import { formatAccounting, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 const COLUMNS: TableColumn[] = [
@@ -42,7 +42,12 @@ const COLUMNS: TableColumn[] = [
   { header: "Sisa", align: "right", width: 40 },
 ]
 
-const money = (value: number) => formatAccounting(value, { zeroDash: false })
+/**
+ * Sisa piutang/hutang dicetak hingga sen bila memang bersen. Dengan 0 desimal,
+ * dua baris "1.000.001" bisa berjumlah "2.000.002" sementara total bucket
+ * tercetak "2.000.001" — total tidak sama dengan jumlah baris yang tercetak.
+ */
+const money = (value: number) => formatAccountingExact(value)
 const shortDate = (date: Date) =>
   formatDate(date, { format: "short" })
 

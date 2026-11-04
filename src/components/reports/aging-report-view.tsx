@@ -1,4 +1,4 @@
-import { formatCurrency, formatAccounting, formatDate } from "@/lib/utils/format"
+import { formatCurrency, formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { buildReportPeriodSlug } from "@/lib/reports/report-period"
@@ -142,13 +142,13 @@ export function AgingReportView({ rows, texts }: { rows: ReturnType<typeof build
               <DetailTableRow key={g.key}>
                 <DetailTableTd>{g.key}</DetailTableTd>
                 <DetailTableTd align="right">{g.count}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(g.total)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(g.total)}</DetailTableTd>
               </DetailTableRow>
             ))}
             <DetailTableRow className="font-bold border-t-2 border-default">
               <DetailTableTd>TOTAL</DetailTableTd>
               <DetailTableTd align="right">{rows.length}</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(totalOutstanding)}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccountingExact(totalOutstanding)}</DetailTableTd>
             </DetailTableRow>
           </DetailTableBody>
         </DetailTable>
@@ -184,7 +184,7 @@ export function AgingReportView({ rows, texts }: { rows: ReturnType<typeof build
                 <DetailTableTd>{formatDate(r.dueDate)}</DetailTableTd>
                 <DetailTableTd>{r.ageGroup}</DetailTableTd>
                 <DetailTableTd align="right" className={texts.outstandingClassName}>
-                  {formatAccounting(r.outstanding)}
+                  {formatAccountingExact(r.outstanding)}
                 </DetailTableTd>
               </DetailTableRow>
             ))}
@@ -198,7 +198,7 @@ export function AgingReportView({ rows, texts }: { rows: ReturnType<typeof build
             {rows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={4}>TOTAL</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalOutstanding)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(totalOutstanding)}</DetailTableTd>
               </DetailTableRow>
             )}
           </DetailTableBody>

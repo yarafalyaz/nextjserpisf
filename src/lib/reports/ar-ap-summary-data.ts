@@ -12,7 +12,7 @@ import {
   RECOGNISED_AP_STATUSES,
   RECOGNISED_AR_STATUSES,
 } from "@/lib/reports/document-status"
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { buildApByVendor, buildArByCustomer, sumOutstanding } from "@/lib/reports/ar-ap-summary"
 import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
 import { isOutstandingSettled } from "@/lib/finance/settlement-status"
@@ -48,7 +48,7 @@ export async function loadArApSummary(): Promise<ArApSummaryReport> {
   ])
 
   const rows: TableRow[] = []
-  const money = (value: number) => formatAccounting(value, { zeroDash: false })
+  const money = (value: number) => formatAccountingExact(value)
 
   // F-104-V: returnCredit per faktur kurangi Belum Lunas; Sudah Dibayar
   // tetap paidAmount murni.
