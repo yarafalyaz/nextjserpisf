@@ -4065,3 +4065,19 @@ Kolom **Batas Kredit**, **PaparanBersih**, dan **Nominal Percobaan** pada `/penj
 
 ### Bukti
 - Merah: 1 gagal/8 lulus; hijau 9/9; 3.246 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
+
+## Putaran 167 — kartu Job Billing & Verifikasi DP (commit `fb4d7939b`)
+
+`job-billing-card.tsx` dan `down-payment-verification-queue-card.tsx` mencetak nominal dengan `formatCurrency` 0 desimal — total DP belum menjadi kas, sisa belum ditagih, nilai naik, dan ambang invoice konversi DP.
+
+### Vonis FIX
+- Keduanya memakai `formatCurrencyExact`.
+- **`formatCurrencyExact` diperbaiki untuk nilai negatif**: sebelumnya menghasilkan `Rp (50.000)` (kurung akuntansi), sedangkan pemanggil lama `formatCurrency` menghasilkan `Rp -50.000`. Dua tes kartu menangkap regresi bentuk ini; helper kini mempertahankan bentuk minus dan tetap menampilkan sen.
+
+### Vonis CATAT
+- **Bentuk minus `Rp -50.000` dipilih, bukan kurung.** Alasan: helper ini menggantikan `formatCurrency` di kartu/KPI non-statement; kurung akuntansi dipakai `formatAccountingExact` di tabel statement. Dua bentuk hidup berdampingan sesuai konteks, dan tes mengunci keduanya.
+
+### Bukti
+- Merah: 2 gagal/20 lulus (bentuk minus berubah).
+- Hijau: 89/89 terkait; 3.630 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
+- CI `41818435167`, `41818741098`, `41818790879` **success** (putaran 163–164).
