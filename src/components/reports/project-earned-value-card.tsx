@@ -1,5 +1,5 @@
 import type { ProjectEarnedValueResult } from "@/lib/reports/project-earned-value-data"
-import { formatCurrency, formatDate, formatNumber, formatPercentage } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate, formatNumber, formatPercentage } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -27,8 +27,8 @@ export function ProjectEarnedValueCard({
   if (earnedValue === null) return null
 
   const summary = earnedValue.hasEarnedValue
-    ? `Terkunci · Revisi #${earnedValue.budgetRevisionNo} · Total RAB ${formatCurrency(earnedValue.totalBudget)}`
-    : `Revisi #${earnedValue.budgetRevisionNo} · Total RAB ${formatCurrency(earnedValue.totalBudget)}`
+    ? `Terkunci · Revisi #${earnedValue.budgetRevisionNo} · Total RAB ${formatCurrencyExact(earnedValue.totalBudget)}`
+    : `Revisi #${earnedValue.budgetRevisionNo} · Total RAB ${formatCurrencyExact(earnedValue.totalBudget)}`
 
   return (
     <ReportCardShell
@@ -62,12 +62,12 @@ export function ProjectEarnedValueCard({
             <div>
               <span className="text-muted-foreground block">Earned Value:</span>
               <span className="font-semibold text-foreground">
-                {earnedValue.earnedValue === null ? "-" : formatCurrency(earnedValue.earnedValue)}
+                {earnedValue.earnedValue === null ? "-" : formatCurrencyExact(earnedValue.earnedValue)}
               </span>
             </div>
             <div>
               <span className="text-muted-foreground block">Biaya Aktual:</span>
-              <span className="font-semibold text-foreground">{formatCurrency(earnedValue.actualCost)}</span>
+              <span className="font-semibold text-foreground">{formatCurrencyExact(earnedValue.actualCost)}</span>
             </div>
             <div>
               <span className="text-muted-foreground block">CPI (proyek):</span>
@@ -78,7 +78,7 @@ export function ProjectEarnedValueCard({
             <div>
               <span className="text-muted-foreground block">Nilai Terencana (basis waktu):</span>
               <span className="font-semibold text-foreground">
-                {earnedValue.plannedValueTimeBasis === null ? "-" : formatCurrency(earnedValue.plannedValueTimeBasis)}
+                {earnedValue.plannedValueTimeBasis === null ? "-" : formatCurrencyExact(earnedValue.plannedValueTimeBasis)}
               </span>
             </div>
             <div>
@@ -123,19 +123,19 @@ export function ProjectEarnedValueCard({
                           <span className="text-muted-foreground"> ({stage.noBudgetLabel})</span>
                         )}
                       </DetailTableTd>
-                      <DetailTableTd align="right">{formatCurrency(stage.budgetTotal)}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrencyExact(stage.budgetTotal)}</DetailTableTd>
                       <DetailTableTd align="right">{formatPercentage(stage.weightPercent, 2)}</DetailTableTd>
                       <DetailTableTd align="right">{formatPercentage(stage.progressPercent, 2)}</DetailTableTd>
                       <DetailTableTd align="right">
                         {formatPercentage(stage.weightedContributionPercent, 2)}
                       </DetailTableTd>
-                      <DetailTableTd align="right">{formatCurrency(stage.earnedValue)}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrencyExact(stage.earnedValue)}</DetailTableTd>
                     </DetailTableRow>
                   ))}
                   {earnedValue.unallocatedBudget > 0 && (
                     <DetailTableRow>
                       <DetailTableTd>Belum Teralokasi</DetailTableTd>
-                      <DetailTableTd align="right">{formatCurrency(earnedValue.unallocatedBudget)}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrencyExact(earnedValue.unallocatedBudget)}</DetailTableTd>
                       <DetailTableTd align="right">
                         {formatPercentage(earnedValue.unallocatedWeightPercent, 2)}
                       </DetailTableTd>
@@ -148,7 +148,7 @@ export function ProjectEarnedValueCard({
                 <DetailTableFoot>
                   <DetailTableFootRow>
                     <DetailTableTd>Total</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(earnedValue.totalBudget)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(earnedValue.totalBudget)}</DetailTableTd>
                     <DetailTableTd align="right">
                       {formatPercentage(earnedValue.allocatedWeightTotalPercent, 2)}
                     </DetailTableTd>
@@ -163,7 +163,7 @@ export function ProjectEarnedValueCard({
                         : formatPercentage(earnedValue.weightedProgressPercent, 2)}
                     </DetailTableTd>
                     <DetailTableTd align="right">
-                      {earnedValue.earnedValue === null ? "-" : formatCurrency(earnedValue.earnedValue)}
+                      {earnedValue.earnedValue === null ? "-" : formatCurrencyExact(earnedValue.earnedValue)}
                     </DetailTableTd>
                   </DetailTableFootRow>
                 </DetailTableFoot>

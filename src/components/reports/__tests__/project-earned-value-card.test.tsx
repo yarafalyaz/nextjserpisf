@@ -116,3 +116,14 @@ describe("ProjectEarnedValueCard F-2026-10-21-031", () => {
     unmountCard(root)
   })
 })
+
+describe("ProjectEarnedValueCard: nominal bersen", () => {
+  it("RAB, biaya aktual, dan EV ber-sen tampil hingga sen", () => {
+    const { text } = renderEarnedValueText(
+      projectEarnedValueResultFixture({
+        budget: projectEarnedValueBudgetFixture({ realizedTotal: 50_000_000.25 }),
+      }),
+    )
+    expect(text).toContain("Rp 50.000.000,25")
+  })
+})
