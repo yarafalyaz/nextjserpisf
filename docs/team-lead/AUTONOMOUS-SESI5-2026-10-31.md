@@ -4580,3 +4580,18 @@ Sapuan lanjutan pada halaman detail dan daftar yang belum tersentuh: mutasi stok
 ### Bukti
 - Merah: 1 gagal/19 lulus; hijau 3.180 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
 - CI `41856828372`, `41856863230`, `41857966219`, `41858012875` **success** (putaran 200–201).
+
+## Putaran 204 — SDM, dashboard, dan form (commit `b8241d808`)
+
+Enam belas berkas:
+
+- **SDM** — tabel apresiasi, detail apresiasi, tabel klaim reimbursement, field snapshot dasar lembur, detail lembur, tabel slip gaji milik karyawan.
+- **Dashboard** — dashboard keuangan dan pembelian.
+- **Form** — panel override kredit, form penerimaan barang, form barang, form penawaran, form faktur penjualan, editor baris faktur, form pelunasan pinjaman tunai, tombol hapus-buku pinjaman.
+
+### Vonis FIX
+- Semua memakai `formatCurrencyExact`; guard statis di `exact-cents-sweep.test.ts` menolak `formatCurrency(` tanpa `Exact`.
+
+### Bukti
+- Merah: 1 gagal/20 lulus; hijau 1.042/1.042 suite SDM+komponen; tsc, ESLint, diff-check bersih.
+- CI `41857966219`, `41858012875`, `41858906044`, `41858944358` **success** (putaran 201–202).
