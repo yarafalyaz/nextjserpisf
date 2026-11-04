@@ -4151,3 +4151,19 @@ Keduanya mencetak 0 desimal padahal nilainya dijumlah/dikurangkan per sen.
 - Merah: 1 gagal/6 lulus dan 1 gagal/9 lulus.
 - Hijau: 7/7 + 10/10; 3.015 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
 - CI `41820771273`, `41820818949`, `41821119537`, `41821144519` **success** (putaran 170–171).
+
+## Putaran 174 — komisi, reimbursemen, kedaluwarsa (commit `e03d81613`)
+
+Empat kartu laporan mencetak nominal uang dengan 0 desimal:
+
+- **Rekap Komisi** — basis faktur/DPP/estimasi/potongan retur per baris dan ember tanpa-penjual.
+- **Utang Komisi** — akrual/reversal/pembayaran/saldo.
+- **Antrean Reimbursemen** — nominal pengajuan.
+- **Aksi Kedaluwarsa** — nilai yang akan kedaluwarsa.
+
+### Vonis FIX
+- Keempatnya memakai `formatCurrencyExact`; regresi baru mengunci `Rp 1.000.000,50` pada Rekap Komisi (merah bila dikembalikan).
+
+### Bukti
+- Merah: 1 gagal/7 lulus.
+- Hijau: 425/425 tes komponen laporan; 3.016 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
