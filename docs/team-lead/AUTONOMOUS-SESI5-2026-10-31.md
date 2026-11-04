@@ -3999,3 +3999,21 @@ teks lama          : "… selisih Rp1 …"   ← temuan 0,50 dilebihkan dua kali
 ### Bukti
 - Merah: 1 gagal/10 lulus.
 - Hijau: 11/11; 3.151 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
+
+## Putaran 162 — KPI total aging dibulatkan, tabel tidak (commit `94d4cfa33`)
+
+Di Piutang/Hutang Jatuh Tempo, tabel ringkasan dan detail sudah memakai `formatAccountingExact` (Putaran 141) tetapi **kartu KPI** masih `formatCurrency` 0 desimal. Probe dua baris Rp1.000.000,25:
+
+```
+KPI   : "Rp 2.000.000"
+baris : "1.000.000,25" + "1.000.000,25"
+```
+
+KPI tidak cocok dengan penjumlahan baris yang tercetak di laporan yang sama.
+
+### Vonis FIX
+- KPI memakai `formatCurrencyExact`; regresi render (jsdom) mengunci `Rp 2.000.000,50` dan **merah** bila formatter dikembalikan.
+
+### Bukti
+- Merah: 1 gagal/1 lulus; hijau 9/9 terkait, 3.121 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
+- CI putaran 159–160 (`41816036580`, `41816099988`, `41816505672`) **success**.
