@@ -18,7 +18,7 @@ import {
   COLLECTION_REMINDER_NOTICE_TEXT,
 } from "@/lib/reports/collection-queue"
 import { entityHref } from "@/lib/utils/entity-url"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import {
   DetailTable,
@@ -94,7 +94,7 @@ export function CollectionQueueCard({
           {COLLECTION_QUEUE_TITLE}
         </h2>
         <p className="text-xs text-muted-foreground">
-          {summary.total} faktur · Sisa {formatCurrency(summary.totalSisa)} ·
+          {summary.total} faktur · Sisa {formatCurrencyExact(summary.totalSisa)} ·
           Belum Diserahkan {summary.belumDiserahkan} · Sudah Diserahkan{" "}
           {summary.sudahDiserahkan} · Lewat Janji {summary.lewatJanji}
         </p>
@@ -109,7 +109,7 @@ export function CollectionQueueCard({
         <p className="mt-1 text-xs text-muted-foreground">
           {COLLECTION_REMINDER_LEVELS.map(
             (level) =>
-              `${COLLECTION_REMINDER_LEVEL_LABELS[level]} ${summary.reminderLevels[level].count} · ${formatCurrency(summary.reminderLevels[level].totalSisa)}`,
+              `${COLLECTION_REMINDER_LEVEL_LABELS[level]} ${summary.reminderLevels[level].count} · ${formatCurrencyExact(summary.reminderLevels[level].totalSisa)}`,
           ).join(" · ")}
         </p>
         {rows.length === 0 ? (
@@ -192,7 +192,7 @@ export function CollectionQueueCard({
                           ) : null}
                           {row.hasOutstandingLateFee ? (
                             <span className="block text-xs font-medium text-destructive">
-                              Ada denda terutang {formatCurrency(row.lateFeeOutstanding)}
+                              Ada denda terutang {formatCurrencyExact(row.lateFeeOutstanding)}
                             </span>
                           ) : null}
                         </DetailTableTd>
@@ -217,13 +217,13 @@ export function CollectionQueueCard({
                           {row.umurHari === null ? "—" : `${row.umurHari} hari`}
                         </DetailTableTd>
                         <DetailTableTd align="right">
-                          {formatCurrency(row.grandTotal)}
+                          {formatCurrencyExact(row.grandTotal)}
                         </DetailTableTd>
                         <DetailTableTd align="right">
-                          {formatCurrency(row.paidAmount)}
+                          {formatCurrencyExact(row.paidAmount)}
                         </DetailTableTd>
                         <DetailTableTd align="right">
-                          {formatCurrency(row.sisa)}
+                          {formatCurrencyExact(row.sisa)}
                         </DetailTableTd>
                         <DetailTableTd>
                           {row.lastFollowUpAt ? formatDate(row.lastFollowUpAt) : "—"}
@@ -256,7 +256,7 @@ export function CollectionQueueCard({
                                   modelId={row.invoiceId}
                                   surface="queue"
                                   label="Hubungi via WhatsApp"
-                                  message={`Halo ${row.customerName}, kami mengingatkan Faktur ${row.documentNo} dengan sisa ${formatCurrency(row.sisa)}. Terima kasih.`}
+                                  message={`Halo ${row.customerName}, kami mengingatkan Faktur ${row.documentNo} dengan sisa ${formatCurrencyExact(row.sisa)}. Terima kasih.`}
                                 />
                               </span>
                             ) : null}

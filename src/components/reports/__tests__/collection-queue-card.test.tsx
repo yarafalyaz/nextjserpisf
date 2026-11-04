@@ -360,3 +360,24 @@ describe("CollectionQueueCard tingkat pengingat F-2026-10-26-050-S", () => {
     )
   })
 })
+
+describe("CollectionQueueCard: sisa bersen", () => {
+  it("label rekap sisa tampil hingga sen, bukan dibulatkan ke rupiah penuh", () => {
+    const queue = buildCollectionQueue(
+      [invoice({ grandTotal: 1_000_000.5, paidAmount: 0 })],
+      [],
+      [],
+      { now: NOW },
+    )
+    const container = render(
+      <CollectionQueueCard
+        rows={queue.rows}
+        summary={queue.summary}
+        canCreateExchange={false}
+        canFollowUp={false}
+      />,
+    )
+    const text = container.textContent ?? ""
+    expect(text).toContain("Rp 1.000.000,50")
+  })
+})
