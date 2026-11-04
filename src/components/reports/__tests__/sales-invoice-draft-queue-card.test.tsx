@@ -154,3 +154,19 @@ describe("SalesInvoiceDraftQueueCard F-2026-10-26-057-S", () => {
     expect(container.querySelectorAll("button")).toHaveLength(0)
   })
 })
+
+describe("SalesInvoiceDraftQueueCard: nominal bersen", () => {
+  it("total dan grand total ber-sen tampil hingga sen", () => {
+    const rows = buildSalesInvoiceDraftQueue([input({ grandTotal: 1_500_000.5 })], NOW)
+    const { container, root } = renderCard(
+      <SalesInvoiceDraftQueueCard
+        rows={rows}
+        summary={summarizeSalesInvoiceDraftQueue(rows)}
+        noticeText={SALES_INVOICE_DRAFT_NOTICE_TEXT}
+        levelLabels={SALES_INVOICE_DRAFT_LEVEL_LABELS}
+      />,
+    )
+    expect(container.textContent ?? "").toContain("Rp 1.500.000,50")
+    unmountCard(root)
+  })
+})

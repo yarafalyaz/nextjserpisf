@@ -10,7 +10,7 @@ import {
   type PurchaseOrderDraftQueue,
 } from "@/lib/reports/purchase-order-draft-queue"
 import { entityHref } from "@/lib/utils/entity-url"
-import { formatCurrency, formatDate, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import { ReportCardShell } from "./report-card-shell"
 import {
@@ -55,7 +55,7 @@ export function PurchaseOrderDraftQueueCard({
           {PURCHASE_ORDER_DRAFT_LEVEL_LABELS.mengendap.toLowerCase()} ·{" "}
           {formatNumber(levelCounts.menunggu)}{" "}
           {PURCHASE_ORDER_DRAFT_LEVEL_LABELS.menunggu.toLowerCase()} ·{" "}
-          {formatNumber(totalDocuments)} pesanan draft — {formatCurrency(totalGrandTotal)}{" "}
+          {formatNumber(totalDocuments)} pesanan draft — {formatCurrencyExact(totalGrandTotal)}{" "}
           {totalLabel}
         </>
       }
@@ -114,7 +114,7 @@ export function PurchaseOrderDraftQueueCard({
                 </DetailTableTd>
                 <DetailTableTd>{row.vendorName ?? "—"}</DetailTableTd>
                 <DetailTableTd>{row.sumberLabel}</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(row.grandTotal)}</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrencyExact(row.grandTotal)}</DetailTableTd>
                 <DetailTableTd>
                   {row.punyaRencanaTerima && row.expectedDate
                     ? formatDate(row.expectedDate)

@@ -5,7 +5,7 @@ import type {
 } from "@/lib/reports/sales-order-delivery-promise-queue"
 import { SO_DELIVERY_PROMISE_QUEUE_NOTICE_TEXT } from "@/lib/reports/sales-order-delivery-promise-queue"
 import { entityHref } from "@/lib/utils/entity-url"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import {
   DetailTable,
@@ -52,7 +52,7 @@ export function SalesOrderDeliveryPromiseQueueCard({
       <div className="p-4 px-5">
         <p className="text-xs text-muted-foreground">
           {queue.totalDocuments} pesanan penjualan dalam antrean · Nilai sisa{" "}
-          {formatCurrency(queue.totalOutstandingValue)}
+          {formatCurrencyExact(queue.totalOutstandingValue)}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           {SO_DELIVERY_PROMISE_QUEUE_NOTICE_TEXT}
@@ -68,7 +68,7 @@ export function SalesOrderDeliveryPromiseQueueCard({
                 />
               </dt>
               <dd className="text-xs text-muted-foreground">
-                {total.documents} dokumen · {formatCurrency(total.outstandingValue)}
+                {total.documents} dokumen · {formatCurrencyExact(total.outstandingValue)}
               </dd>
             </div>
           ))}
@@ -112,7 +112,7 @@ export function SalesOrderDeliveryPromiseQueueCard({
                     <DetailTableTd align="right">{row.daysUntilDue}</DetailTableTd>
                     <DetailTableTd align="right">{row.linesRemaining}</DetailTableTd>
                     <DetailTableTd align="right">
-                      {formatCurrency(row.outstandingValue)}
+                      {formatCurrencyExact(row.outstandingValue)}
                     </DetailTableTd>
                     <DetailTableTd>
                       <StatusChip

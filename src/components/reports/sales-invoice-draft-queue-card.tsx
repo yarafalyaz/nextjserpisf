@@ -8,7 +8,7 @@ import {
   type SalesInvoiceDraftSummary,
 } from "@/lib/reports/sales-invoice-draft-queue"
 import { entityHref } from "@/lib/utils/entity-url"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import {
   DetailTable,
@@ -62,7 +62,7 @@ export function SalesInvoiceDraftQueueCard({
       </div>
       <div className="p-4 px-5">
         <p className="text-xs text-muted-foreground">
-          {summary.totalDocuments} dokumen — {formatCurrency(summary.totalGrandTotal)}{" "}
+          {summary.totalDocuments} dokumen — {formatCurrencyExact(summary.totalGrandTotal)}{" "}
           {summary.totalLabel}
         </p>
         <ul aria-label="Rekap tingkat antrean faktur draft" className="mt-2 flex flex-wrap gap-1.5">
@@ -120,7 +120,7 @@ export function SalesInvoiceDraftQueueCard({
                         : SALES_INVOICE_DRAFT_NO_DUE_DATE_TEXT}
                     </DetailTableTd>
                     <DetailTableTd>{row.sumberLabel}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(row.grandTotal)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(row.grandTotal)}</DetailTableTd>
                     <DetailTableTd>
                       <StatusChip
                         status={row.tingkat}
