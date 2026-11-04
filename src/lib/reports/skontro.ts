@@ -13,6 +13,7 @@
  */
 
 import { formatAccounting } from "@/lib/utils/format"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 264mm, area isi A4 mendatar. */
@@ -53,6 +54,15 @@ export interface SkontroBalanceSheetInput {
 
 function amount(value: number): string {
   return formatAccounting(value, { zeroDash: false })
+}
+
+/**
+ * Jumlah dan selisih yang menentukan status neraca memakai dua desimal:
+ * selisih 0,01 yang hilang membuat dua total tercetak identik dengan
+ * "selisih 0" padahal `isBalanced` false. Baris akun tetap rupiah penuh.
+ */
+function balanceAmount(value: number): string {
+  return formatAccounting(value, { zeroDash: false, decimals: 2 })
 }
 
 function linesToCells(rows: SkontroLine[]): SideCell[] {
@@ -96,19 +106,28 @@ export function buildSkontroBalanceSheet(input: SkontroBalanceSheetInput): {
     })
   }
 
-  const totalLiabilitiesAndEquity = input.totalLiabilities + input.totalEquity
+  const totalLiabilitiesAndEquity = safeAdd(input.totalLiabilities, input.totalEquity, 2)
+  const balanceDifference = safeSubtract(input.totalAssets, totalLiabilitiesAndEquity, 2)
+  const totalAmount = input.isBalanced ? amount : balanceAmount
   rows.push({
     kind: "data",
     bold: true,
-    cells: ["", "Jumlah Aktiva", amount(input.totalAssets), "", "Jumlah Pasiva", amount(totalLiabilitiesAndEquity)],
+    cells: [
+      "",
+      "Jumlah Aktiva",
+      totalAmount(input.totalAssets),
+      "",
+      "Jumlah Pasiva",
+      totalAmount(totalLiabilitiesAndEquity),
+    ],
   })
 
   if (!input.isBalanced) {
     rows.push({
       kind: "notice",
       text:
-        `Perhatian: Jumlah Aktiva (${amount(input.totalAssets)}) tidak sama dengan Jumlah Pasiva ` +
-        `(${amount(totalLiabilitiesAndEquity)}) — selisih ${amount(input.totalAssets - totalLiabilitiesAndEquity)}.`,
+        `Perhatian: Jumlah Aktiva (${balanceAmount(input.totalAssets)}) tidak sama dengan Jumlah Pasiva ` +
+        `(${balanceAmount(totalLiabilitiesAndEquity)}) — selisih ${balanceAmount(balanceDifference)}.`,
     })
   }
 
