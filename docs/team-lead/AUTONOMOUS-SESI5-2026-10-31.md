@@ -4081,3 +4081,14 @@ Kolom **Batas Kredit**, **PaparanBersih**, dan **Nominal Percobaan** pada `/penj
 - Merah: 2 gagal/20 lulus (bentuk minus berubah).
 - Hijau: 89/89 terkait; 3.630 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
 - CI `41818435167`, `41818741098`, `41818790879` **success** (putaran 163–164).
+
+## Putaran 168 — kartu pajak tangguhan (commit `eff8e3bbf`)
+
+Tiga kartu pajak tangguhan (`deferred-tax-card`, `deferred-tax-nonaset-card`, `deferred-tax-value-event-card`) mencetak liabilitas/aset/indikasi tangguhan dan PPh final dengan 0 desimal. Nilainya hasil tarif × selisih temporer yang bersen; probe 22% × 1.000.000,50 = 220.000,11 tampil `Rp 220.000`.
+
+### Vonis FIX
+- Ketiganya memakai `formatCurrencyExact`; regresi baru mengunci `liabilitas Rp 220.000,11` dan merah bila formatter dikembalikan.
+
+### Bukti
+- Merah: 1 gagal/5 lulus; hijau 6/6 dan 12/12 terkait; 3.247 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
+- CI `41818741098`, `41818790879`, `41819076386`, `41819347112` **success** (putaran 164–166).
