@@ -4422,3 +4422,17 @@ Lima berkas di modul keuangan mencetak nominal `Decimal(15,2)` dengan `formatCur
 
 ### Bukti
 - Merah: 1 gagal/9 lulus; hijau 2.667 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+
+## Putaran 193 — KPI Total Hutang lolos dari guard (commit `a4e784f0d`)
+
+Guard Putaran 185 hanya memeriksa `formatAccounting(` di halaman Total Hutang, sehingga **lima kartu KPI** yang memakai `formatCurrency` 0 desimal lolos: Total Hutang, Sudah Jatuh Tempo, Belum Jatuh Tempo, Total Ditagihkan, Sudah Dibayar.
+
+### Vonis FIX
+- KPI memakai `formatCurrencyExact`; guard diperluas menolak `formatCurrency(` tanpa `Exact` juga, dan terbukti merah bila dikembalikan.
+
+### Vonis CATAT
+- **Pelajaran: guard yang hanya memeriksa satu formatter memberi rasa aman palsu.** Saat menambah guard serupa di berkas lain, periksa kedua formatter (`formatAccounting` dan `formatCurrency`) sekaligus.
+
+### Bukti
+- Merah: 1 gagal/2 lulus; hijau 3.094 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+- CI `41848304340`, `41848348646`, `41848640500`, `41848674261` **success** (putaran 191–192).
