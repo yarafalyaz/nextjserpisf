@@ -238,6 +238,15 @@ describe("loadSptPeriodRowsForRange — filter periode di DB", () => {
     )
   })
 
+  it("partial VAT account mapping leaves journal liability unavailable", async () => {
+    mocks.getSystemSettings.mockResolvedValue({ salesTaxAccountId: 10, purchaseTaxAccountId: null })
+    const rows = await loadSptPeriodRowsForRange(RANGE)
+    expect(rows.find((row) => row.period === "2026-01")).toMatchObject({
+      journalLiability: null,
+      journalVsSptDiff: null,
+    })
+  })
+
   it("keluaran ekuivalen filter in-memory lama untuk fixture campuran", async () => {
     const rows = await loadSptPeriodRowsForRange(RANGE)
 

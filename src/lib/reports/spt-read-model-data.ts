@@ -397,7 +397,7 @@ export async function loadSptPeriodRowsForRange(range?: {
     const outLegs = journalByBucket.get(`ppn_out:${period}`) ?? []
     const inLegs = journalByBucket.get(`ppn_in:${period}`) ?? []
     const journalLiability =
-      outputAccountId == null && inputAccountId == null
+      outputAccountId == null || inputAccountId == null
         ? null
         : safeSubtract(
             outLegs.reduce((s, l) => s + (l.credit - l.debit), 0),
