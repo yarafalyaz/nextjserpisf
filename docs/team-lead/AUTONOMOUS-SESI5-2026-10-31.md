@@ -4167,3 +4167,19 @@ Empat kartu laporan mencetak nominal uang dengan 0 desimal:
 ### Bukti
 - Merah: 1 gagal/7 lulus.
 - Hijau: 425/425 tes komponen laporan; 3.016 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
+
+## Putaran 175 — stok minimum gudang, jadwal termin, penawaran (commit `355f57ec0`)
+
+Empat kartu lagi:
+
+- **Stok Minimum per Gudang** — nilai kekurangan per baris.
+- **Jadwal Pembayaran Pekerjaan** — nilai kontrak, tertagih, target/termin/terpenuhi per termin.
+- **Antrean Penawaran Diterima** — total DP menunggu/terkonfirmasi per baris.
+- **Delta Revisi Penawaran** — snapshot, total kini, dan **delta** (yang justru mengukur selisih).
+
+### Vonis FIX
+- Keempatnya memakai `formatCurrencyExact`; regresi baru mengunci `Rp 500.002,50`.
+
+### Bukti
+- Merah: 1 gagal/3 lulus; hijau 426/426 tes komponen laporan; 3.017 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
+- CI `41821119537`, `41821144519`, `41821805224`, `41821833290` **success** (putaran 171–172).
