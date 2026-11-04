@@ -223,3 +223,19 @@ describe("sapuan kesembilan: slip gaji karyawan", () => {
     expect(source, rel).toContain("formatCurrencyExact")
   })
 })
+
+describe("sapuan kesepuluh: detail dokumen penjualan/pembelian", () => {
+  it("halaman detail dokumen memakai formatter currency exact", () => {
+    for (const rel of [
+      "src/app/(dashboard)/penjualan/penawaran/[slug]/page.tsx",
+      "src/app/(dashboard)/penjualan/pesanan/[slug]/page.tsx",
+      "src/app/(dashboard)/penjualan/faktur/[slug]/page.tsx",
+      "src/app/(dashboard)/pembelian/pesanan/[slug]/page.tsx",
+      "src/app/(dashboard)/pembelian/tagihan/[slug]/page.tsx",
+    ]) {
+      const source = readFileSync(path.resolve(process.cwd(), rel), "utf8")
+      expect(source, rel).not.toMatch(/formatCurrency\((?!Exact)/)
+      expect(source, rel).toContain("formatCurrencyExact")
+    }
+  })
+})

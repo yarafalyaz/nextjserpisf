@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
@@ -139,7 +139,7 @@ export default async function PurchaseOrderDetailPage({
                       ) : "-"
                     }
                   />
-                  <DetailField label="Total Keseluruhan" value={formatCurrency(Number(po.grandTotal))} />
+                  <DetailField label="Total Keseluruhan" value={formatCurrencyExact(Number(po.grandTotal))} />
                 </DetailCard>
 
                 {/* Notes */}
@@ -174,15 +174,15 @@ export default async function PurchaseOrderDetailPage({
                           <DetailTableTd>{itemNameMap.get(item.itemId) || `Item #${item.itemId}`}</DetailTableTd>
                           <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
                           <DetailTableTd align="right">{Number(item.receivedQty)}</DetailTableTd>
-                          <DetailTableTd align="right">{formatCurrency(Number(item.unitPrice))}</DetailTableTd>
-                          <DetailTableTd align="right">{formatCurrency(Number(item.total))}</DetailTableTd>
+                          <DetailTableTd align="right">{formatCurrencyExact(Number(item.unitPrice))}</DetailTableTd>
+                          <DetailTableTd align="right">{formatCurrencyExact(Number(item.total))}</DetailTableTd>
                         </DetailTableRow>
                       ))}
                     </DetailTableBody>
                     <DetailTableFoot>
                       <DetailTableFootRow>
                         <DetailTableTd colSpan={4} align="right"><strong>Total Keseluruhan</strong></DetailTableTd>
-                        <DetailTableTd align="right"><strong>{formatCurrency(Number(po.grandTotal))}</strong></DetailTableTd>
+                        <DetailTableTd align="right"><strong>{formatCurrencyExact(Number(po.grandTotal))}</strong></DetailTableTd>
                       </DetailTableFootRow>
                     </DetailTableFoot>
                   </DetailTable>
@@ -292,7 +292,7 @@ export default async function PurchaseOrderDetailPage({
                         {po.vendorBills.map((b) => (
                           <DetailTableRow key={b.id}>
                             <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/tagihan", b)}>{b.documentNo}</Link></DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(b.grandTotal))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrencyExact(Number(b.grandTotal))}</DetailTableTd>
                           </DetailTableRow>
                         ))}
                       </DetailTableBody>

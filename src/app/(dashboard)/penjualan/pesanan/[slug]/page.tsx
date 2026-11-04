@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
-import { formatCurrency, formatDate } from "@/lib/utils/format";
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusChip } from "@/components/ui/status-chip";
@@ -198,7 +198,7 @@ export default async function SalesOrderDetailPage({
         />
         <DetailField
           label="Total Keseluruhan"
-          value={formatCurrency(Number(order.grandTotal))}
+          value={formatCurrencyExact(Number(order.grandTotal))}
         />
       </DetailCard>
 
@@ -248,18 +248,18 @@ export default async function SalesOrderDetailPage({
       <DetailCard columns={4}>
         <DetailField
           label="Subtotal"
-          value={formatCurrency(Number(order.subtotal))}
+          value={formatCurrencyExact(Number(order.subtotal))}
         />
         <DetailField
           label="Diskon"
-          value={formatCurrency(Number(order.discount))}
+          value={formatCurrencyExact(Number(order.discount))}
         />
-        <DetailField label="Pajak" value={formatCurrency(Number(order.tax))} />
+        <DetailField label="Pajak" value={formatCurrencyExact(Number(order.tax))} />
         <DetailField
           label="Total Keseluruhan"
           value={
             <span className="text-xl">
-              {formatCurrency(Number(order.grandTotal))}
+              {formatCurrencyExact(Number(order.grandTotal))}
             </span>
           }
         />
@@ -354,7 +354,7 @@ export default async function SalesOrderDetailPage({
                     </DetailTableTd>
                     <DetailTableTd>{formatDate(inv.date)}</DetailTableTd>
                     <DetailTableTd align="right">
-                      {formatCurrency(Number(inv.grandTotal))}
+                      {formatCurrencyExact(Number(inv.grandTotal))}
                     </DetailTableTd>
                     <DetailTableTd>
                       <StatusChip status={inv.status} />

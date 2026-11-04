@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
@@ -188,7 +188,7 @@ export default async function VendorBillDetailPage({
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Keseluruhan</span>
-            <span className="text-xl text-foreground font-medium">{formatCurrency(Number(bill.grandTotal))}</span>
+            <span className="text-xl text-foreground font-medium">{formatCurrencyExact(Number(bill.grandTotal))}</span>
           </div>
         </div>
       </div>
@@ -211,8 +211,8 @@ export default async function VendorBillDetailPage({
                 <DetailTableRow key={item.id}>
                   <DetailTableTd>{item.description || "-"}</DetailTableTd>
                   <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(Number(item.unitPrice))}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(Number(item.total))}</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrencyExact(Number(item.unitPrice))}</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrencyExact(Number(item.total))}</DetailTableTd>
                 </DetailTableRow>
               ))}
             </DetailTableBody>
@@ -225,15 +225,15 @@ export default async function VendorBillDetailPage({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Subtotal</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(Number(bill.subtotal))}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrencyExact(Number(bill.subtotal))}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pajak</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(Number(bill.tax))}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrencyExact(Number(bill.tax))}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Terbayar</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(Number(bill.paidAmount))}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrencyExact(Number(bill.paidAmount))}</span>
           </div>
         </div>
       </div>

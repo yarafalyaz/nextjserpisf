@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { hasPermission, requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
-import { formatCurrency, formatDate } from "@/lib/utils/format";
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format";
 import { statusLabel } from "@/lib/utils/status-labels";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -167,7 +167,7 @@ export default async function QuotationDetailPage({
       id: `dp-${dp.id}`,
       createdAt: dp.createdAt,
       action: "Uang Muka",
-      description: `Uang muka sebesar ${formatCurrency(Number(dp.amount))} diterima dengan status ${statusLabel(dp.status)} (${dp.documentNo})`,
+      description: `Uang muka sebesar ${formatCurrencyExact(Number(dp.amount))} diterima dengan status ${statusLabel(dp.status)} (${dp.documentNo})`,
     });
   });
 
@@ -177,7 +177,7 @@ export default async function QuotationDetailPage({
       id: `so-${so.id}`,
       createdAt: so.createdAt,
       action: "Pesanan Penjualan",
-      description: `Dikonversi menjadi Pesanan Penjualan ${so.documentNo} sebesar ${formatCurrency(Number(so.grandTotal))}`,
+      description: `Dikonversi menjadi Pesanan Penjualan ${so.documentNo} sebesar ${formatCurrencyExact(Number(so.grandTotal))}`,
     });
   });
 
@@ -197,7 +197,7 @@ export default async function QuotationDetailPage({
       id: `inv-${inv.id}`,
       createdAt: inv.createdAt,
       action: "Faktur",
-      description: `Dikonversi menjadi Faktur ${inv.documentNo} sebesar ${formatCurrency(Number(inv.grandTotal))} - ${statusLabel(inv.status)}`,
+      description: `Dikonversi menjadi Faktur ${inv.documentNo} sebesar ${formatCurrencyExact(Number(inv.grandTotal))} - ${statusLabel(inv.status)}`,
     });
   });
 
@@ -337,7 +337,7 @@ export default async function QuotationDetailPage({
                   />
                   <DetailField
                     label="Total Keseluruhan"
-                    value={formatCurrency(Number(quotation.grandTotal))}
+                    value={formatCurrencyExact(Number(quotation.grandTotal))}
                   />
                 </DetailCard>
 
@@ -345,25 +345,25 @@ export default async function QuotationDetailPage({
                 <DetailCard columns={3}>
                   <DetailField
                     label="Subtotal"
-                    value={formatCurrency(Number(quotation.subtotal))}
+                    value={formatCurrencyExact(Number(quotation.subtotal))}
                   />
                   <DetailField
                     label="Diskon"
-                    value={formatCurrency(Number(quotation.discount))}
+                    value={formatCurrencyExact(Number(quotation.discount))}
                   />
                   <DetailField
                     label="Pajak"
-                    value={formatCurrency(Number(quotation.tax))}
+                    value={formatCurrencyExact(Number(quotation.tax))}
                   />
                   <DetailField
                     label="Total Keseluruhan"
-                    value={formatCurrency(Number(quotation.grandTotal))}
+                    value={formatCurrencyExact(Number(quotation.grandTotal))}
                   />
                   <DetailField
                     label="Uang Muka Terbayar"
                     value={
                       <span className="text-emerald-600 font-semibold">
-                        {formatCurrency(totalDP)}
+                        {formatCurrencyExact(totalDP)}
                       </span>
                     }
                   />
@@ -371,7 +371,7 @@ export default async function QuotationDetailPage({
                     label="Sisa Pembayaran"
                     value={
                       <span className="text-lg font-bold text-foreground">
-                        {formatCurrency(remaining)}
+                        {formatCurrencyExact(remaining)}
                       </span>
                     }
                   />
@@ -433,7 +433,7 @@ export default async function QuotationDetailPage({
                           {quotation.downPayments.map((dp) => (
                             <DetailTableRow key={dp.id}>
                               <DetailTableTd>
-                                {formatCurrency(Number(dp.amount))}
+                                {formatCurrencyExact(Number(dp.amount))}
                               </DetailTableTd>
                               <DetailTableTd>
                                 <StatusChip status={dp.status} />
@@ -526,13 +526,13 @@ export default async function QuotationDetailPage({
                                 </DetailTableTd>
                                 <DetailTableTd>{item.uom || "-"}</DetailTableTd>
                                 <DetailTableTd align="right">
-                                  {formatCurrency(Number(item.unitPrice))}
+                                  {formatCurrencyExact(Number(item.unitPrice))}
                                 </DetailTableTd>
                                 <DetailTableTd align="right">
-                                  {formatCurrency(Number(item.discount))}
+                                  {formatCurrencyExact(Number(item.discount))}
                                 </DetailTableTd>
                                 <DetailTableTd align="right">
-                                  {formatCurrency(Number(item.total))}
+                                  {formatCurrencyExact(Number(item.total))}
                                 </DetailTableTd>
                               </DetailTableRow>
                             );
