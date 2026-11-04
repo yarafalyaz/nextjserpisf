@@ -8,7 +8,7 @@ import {
   statusToIndo,
   indoToStatus,
 } from "@/lib/utils/status-labels";
-import { formatCurrency, formatDate } from "@/lib/utils/format";
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format";
 import { StatusChip } from "@/components/ui/status-chip";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 import {
@@ -131,7 +131,7 @@ export default async function BankReconciliationPage({
                   <DetailTableRow key={r.id}>
                     <DetailTableTd>{formatDate(r.statementDate)}</DetailTableTd>
                     <DetailTableTd align="right">
-                      {formatCurrency(Number(r.statementBalance))}
+                      {formatCurrencyExact(Number(r.statementBalance))}
                     </DetailTableTd>
                     <DetailTableTd>
                       {r.items.filter((i) => i.matched).length} /{" "}

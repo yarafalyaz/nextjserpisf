@@ -157,3 +157,18 @@ describe("sapuan keempat: buku pembantu piutang/utang", () => {
     expect(source).toContain("formatAccountingExact")
   })
 })
+
+describe("sapuan kelima: rekonsiliasi bank", () => {
+  it("halaman rekonsiliasi memakai formatter exact untuk saldo dan selisih", () => {
+    for (const rel of [
+      "src/app/(dashboard)/keuangan/rekonsiliasi-bank/page.tsx",
+      "src/app/(dashboard)/keuangan/rekonsiliasi-bank/[slug]/page.tsx",
+    ]) {
+      const source = readFileSync(path.resolve(process.cwd(), rel), "utf8")
+      // Saldo/selisih rekonsiliasi dibandingkan pada toleransi 0,01; formatter
+      // 0 desimal menyembunyikan selisih yang justru menjadi alasan pemeriksaan.
+      expect(source, rel).not.toMatch(/formatCurrency\((?!Exact)/)
+      expect(source, rel).toContain("formatCurrencyExact")
+    }
+  })
+})

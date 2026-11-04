@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
@@ -157,14 +157,14 @@ export default async function BankReconciliationDetailPage({
 
       <DetailCard>
         <DetailField label="Tanggal Laporan" value={formatDate(recon.statementDate)} />
-        <DetailField label="Saldo Buku" value={formatCurrency(Number(recon.bookBalance))} />
-        <DetailField label="Saldo Laporan" value={formatCurrency(Number(recon.statementBalance))} />
-        <DetailField label="Setoran Beredar" value={formatCurrency(Number(recon.outstandingDeposits))} />
-        <DetailField label="Cek Beredar" value={formatCurrency(Number(recon.outstandingPayments))} />
-        <DetailField label="Saldo Buku Disesuaikan" value={formatCurrency(Number(recon.adjustedBookBalance))} />
+        <DetailField label="Saldo Buku" value={formatCurrencyExact(Number(recon.bookBalance))} />
+        <DetailField label="Saldo Laporan" value={formatCurrencyExact(Number(recon.statementBalance))} />
+        <DetailField label="Setoran Beredar" value={formatCurrencyExact(Number(recon.outstandingDeposits))} />
+        <DetailField label="Cek Beredar" value={formatCurrencyExact(Number(recon.outstandingPayments))} />
+        <DetailField label="Saldo Buku Disesuaikan" value={formatCurrencyExact(Number(recon.adjustedBookBalance))} />
         <DetailField label="Selisih" value={
           <span className={Math.abs(Number(recon.difference)) < 0.01 ? "text-success font-semibold" : "text-danger font-semibold"}>
-            {formatCurrency(Number(recon.difference))}
+            {formatCurrencyExact(Number(recon.difference))}
           </span>
         } />
         <DetailField label="Item Tercocok" value={`${matched} / ${recon.items.length}`} />
@@ -206,7 +206,7 @@ export default async function BankReconciliationDetailPage({
                         {journal ? `${journal.journal.journalNumber}${journal.memo ? ` — ${journal.memo}` : ""}` : "-"}
                       </DetailTableTd>
                       <DetailTableTd align="right">
-                        {formatCurrency(Number(line?.amount ?? item.amount))}
+                        {formatCurrencyExact(Number(line?.amount ?? item.amount))}
                       </DetailTableTd>
                       {canWrite && (
                         <DetailTableTd align="right">
@@ -240,11 +240,11 @@ export default async function BankReconciliationDetailPage({
             reconciliationId={recon.id}
             statementLines={unmatchedLines.map((l) => ({
               id: l.id,
-              label: `${formatDate(l.date)} — ${l.description || `#${l.id}`} — ${formatCurrency(Number(l.amount))}`,
+              label: `${formatDate(l.date)} — ${l.description || `#${l.id}`} — ${formatCurrencyExact(Number(l.amount))}`,
             }))}
             journalEntries={journalEntries.map((j) => ({
               id: j.id,
-              label: `${j.journal.journalNumber} — ${formatDate(j.journal.transactionDate)} — ${formatCurrency(Number(j.debit) || Number(j.credit))}${j.memo ? ` — ${j.memo}` : ""}`,
+              label: `${j.journal.journalNumber} — ${formatDate(j.journal.transactionDate)} — ${formatCurrencyExact(Number(j.debit) || Number(j.credit))}${j.memo ? ` — ${j.memo}` : ""}`,
             }))}
           />
         ) : (
@@ -291,7 +291,7 @@ export default async function BankReconciliationDetailPage({
                           : (item.type || "-")}
                     </DetailTableTd>
                     <DetailTableTd>{item.description || "-"}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(Number(item.amount))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(Number(item.amount))}</DetailTableTd>
                     {canWrite && (
                       <DetailTableTd align="right">
                         <div className="flex items-center justify-end">
