@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import { formatAccounting } from "@/lib/utils/format"
 import {
   buildTaxSummaryTotals,
   buildVatReconciliationTotals,
@@ -45,6 +46,17 @@ describe("tax-summary safe-math", () => {
     })
     expect(totals.docOutput).toBe(890)
     expect(totals.netDifference).toBe(0)
+  })
+
+  it("VAT PDF reconciliation exposes cent-level net differences", () => {
+    const totals = buildVatReconciliationTotals({
+      outputEntries: [{ debit: 0, credit: 0.29 }],
+      inputEntries: [{ debit: 0.1, credit: 0 }],
+      docOutputAmounts: [0],
+      docInputAmounts: [0.1],
+    })
+    expect(totals.netDifference).toBe(0.29)
+    expect(formatAccounting(totals.netDifference, { decimals: 2, zeroDash: false })).toBe("0,29")
   })
 
   it("total bukti potong PPh tanpa drift", () => {

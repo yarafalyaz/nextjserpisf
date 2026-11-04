@@ -132,11 +132,11 @@ export default async function VatReconciliationPage({
       )}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="PPN Keluaran (Buku)" value={formatCurrency(bookOutput)} />
-        <ReportKpiCard label="PPN Masukan (Buku)" value={formatCurrency(bookInput)} />
+        <ReportKpiCard label="PPN Keluaran (Buku)" value={formatCurrency(bookOutput, { decimals: 2 })} />
+        <ReportKpiCard label="PPN Masukan (Buku)" value={formatCurrency(bookInput, { decimals: 2 })} />
         <ReportKpiCard
           label={`Posisi: ${VAT_STATUS_LABELS[position.status]}`}
-          value={formatCurrency(Math.abs(position.difference))}
+          value={formatCurrency(Math.abs(position.difference), { decimals: 2 })}
           valueClassName={position.status === "kurang_bayar" ? "text-danger" : position.status === "lebih_bayar" ? "text-success" : ""}
         />
       </div>
@@ -152,21 +152,21 @@ export default async function VatReconciliationPage({
           <DetailTableBody>
             <DetailTableRow>
               <DetailTableTd className="font-medium">PPN Keluaran</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(bookOutput)}</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(docOutput)}</DetailTableTd>
-              <DetailTableTd align="right" className={Math.abs(outputDiff) < 0.005 ? "text-success" : "text-danger"}>{formatAccounting(outputDiff)}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccounting(bookOutput, { decimals: 2 })}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccounting(docOutput, { decimals: 2 })}</DetailTableTd>
+              <DetailTableTd align="right" className={Math.abs(outputDiff) < 0.005 ? "text-success" : "text-danger"}>{formatAccounting(outputDiff, { decimals: 2 })}</DetailTableTd>
             </DetailTableRow>
             <DetailTableRow>
               <DetailTableTd className="font-medium">PPN Masukan</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(bookInput)}</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(docInput)}</DetailTableTd>
-              <DetailTableTd align="right" className={Math.abs(inputDiff) < 0.005 ? "text-success" : "text-danger"}>{formatAccounting(inputDiff)}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccounting(bookInput, { decimals: 2 })}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccounting(docInput, { decimals: 2 })}</DetailTableTd>
+              <DetailTableTd align="right" className={Math.abs(inputDiff) < 0.005 ? "text-success" : "text-danger"}>{formatAccounting(inputDiff, { decimals: 2 })}</DetailTableTd>
             </DetailTableRow>
             <DetailTableRow className="font-bold border-t-2 border-default">
               <DetailTableTd>Posisi (Keluaran − Masukan)</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(bookPosition)}</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(documentPosition)}</DetailTableTd>
-              <DetailTableTd align="right" className="text-danger">{formatAccounting(positionDiff)}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccounting(bookPosition, { decimals: 2 })}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccounting(documentPosition, { decimals: 2 })}</DetailTableTd>
+              <DetailTableTd align="right" className="text-danger">{formatAccounting(positionDiff, { decimals: 2 })}</DetailTableTd>
             </DetailTableRow>
           </DetailTableBody>
         </DetailTable>
@@ -181,16 +181,16 @@ export default async function VatReconciliationPage({
           <DetailTableBody>
             <DetailTableRow>
               <DetailTableTd>PPN Keluaran (buku)</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(position.output)}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccounting(position.output, { decimals: 2 })}</DetailTableTd>
             </DetailTableRow>
             <DetailTableRow>
               <DetailTableTd>PPN Masukan (buku)</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(position.input)}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccounting(position.input, { decimals: 2 })}</DetailTableTd>
             </DetailTableRow>
             <DetailTableRow className="font-bold border-t-2 border-default">
               <DetailTableTd>{VAT_STATUS_LABELS[position.status]}</DetailTableTd>
               <DetailTableTd align="right" className={position.status === "kurang_bayar" ? "text-danger" : position.status === "lebih_bayar" ? "text-success" : undefined}>
-                {formatAccounting(Math.abs(position.difference))}
+                {formatAccounting(Math.abs(position.difference), { decimals: 2 })}
               </DetailTableTd>
             </DetailTableRow>
           </DetailTableBody>

@@ -16,6 +16,7 @@ import { loadWithholdingCertificateInputs } from "@/lib/reports/withholding-cert
 import { getSystemSettings } from "@/lib/utils/settings"
 import { REPORT_JOURNAL_STATUSES } from "@/lib/services/report-aggregation.service"
 import { formatAccounting } from "@/lib/utils/format"
+import { safeSubtract } from "@/lib/utils/math"
 import { loadSptPeriodRowsForRange, type SptPeriodRow } from "@/lib/reports/spt-read-model-data"
 import { isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice"
 import { snapshotReturnLine } from "@/lib/tax/return-snapshot"
@@ -28,6 +29,7 @@ export interface TaxSimpleReport {
 }
 
 const money = (value: number) => formatAccounting(value, { zeroDash: false })
+const vatMoney = (value: number) => formatAccounting(value, { zeroDash: false, decimals: 2 })
 const periodOf = (period: { start: Date; end: Date }) => rangePeriodLabels(period)
 
 type Period = { start: Date; end: Date }
@@ -164,17 +166,17 @@ export async function loadVatReconciliation(period: Period): Promise<TaxSimpleRe
   const rows: TableRow[] = [
     {
       kind: "data",
-      cells: ["PPN Keluaran", money(bookOutput), money(docOutput), money(bookOutput - docOutput)],
+      cells: ["PPN Keluaran", vatMoney(bookOutput), vatMoney(docOutput), vatMoney(safeSubtract(bookOutput, docOutput, 2))],
     },
     {
       kind: "data",
-      cells: ["PPN Masukan", money(bookInput), money(docInput), money(bookInput - docInput)],
+      cells: ["PPN Masukan", vatMoney(bookInput), vatMoney(docInput), vatMoney(safeSubtract(bookInput, docInput, 2))],
     },
     {
       kind: "total",
       grand: true,
       label: "Selisih Bersih",
-      cells: [money(bookOutput - docOutput - (bookInput - docInput))],
+      cells: [vatMoney(safeSubtract(safeSubtract(bookOutput, docOutput, 2), safeSubtract(bookInput, docInput, 2), 2))],
     },
   ]
   if (outputAccountId === null || inputAccountId === null) {
