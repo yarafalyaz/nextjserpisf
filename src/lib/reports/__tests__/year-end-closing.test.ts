@@ -27,6 +27,8 @@ import {
   fiscalYearPeriod,
   type YearEndClosingEntryInput,
 } from "../year-end-closing"
+import { wibDateOnly } from "@/lib/utils/date-only"
+import { parseReportPeriod } from "@/lib/reports/report-period"
 
 function entry(over: Partial<YearEndClosingEntryInput>): YearEndClosingEntryInput {
   return {
@@ -184,11 +186,32 @@ describe("buildYearEndClosingPreview", () => {
   })
 
   it("tanggal penutup mengikuti bulan mulai tahun fiskal", () => {
-    expect(fiscalYearPeriod(2026, 1).end.toISOString()).toBe("2026-12-31T23:59:59.999Z")
+    // Putaran 127: `end` = TANGGAL DOKUMEN (tengah malam UTC hari WIB
+    // terakhir), bukan instan 23:59:59.999Z yang di WIB jatuh pada 07:00 hari
+    // berikutnya — lihat komentar `fiscalYearPeriod`.
+    expect(fiscalYearPeriod(2026, 1).end.toISOString()).toBe("2026-12-31T00:00:00.000Z")
     const july = fiscalYearPeriod(2026, 7)
     expect(july.start.toISOString()).toBe("2026-07-01T00:00:00.000Z")
-    expect(july.end.toISOString()).toBe("2027-06-30T23:59:59.999Z")
-    expect(preview([], { fiscalYearStartMonth: 7 }).closingDate.toISOString()).toBe("2027-06-30T23:59:59.999Z")
+    expect(july.end.toISOString()).toBe("2027-06-30T00:00:00.000Z")
+    expect(preview([], { fiscalYearStartMonth: 7 }).closingDate.toISOString()).toBe("2027-06-30T00:00:00.000Z")
+  })
+
+  it("putaran 127: kunci periode 31 Des menahan posting penutup, tanggalnya jatuh di periode yang ditutup", async () => {
+    const { end } = fiscalYearPeriod(2026, 1)
+    // Hari kalender WIB tanggal penutup = 31 Des 2026, bukan 1 Jan 2027.
+    expect(wibDateOnly(end)).toBe("2026-12-31")
+    // Tanggalnya masuk periode laporan Desember 2026 (batas periode memakai
+    // komponen lokal proses, lihat report-period.ts).
+    const december = parseReportPeriod("2026-12", { start: new Date(), end: new Date() })
+    expect(end.getTime()).toBeGreaterThanOrEqual(december.start.getTime())
+    expect(end.getTime()).toBeLessThanOrEqual(december.end.getTime())
+    // Kunci periode s/d 31 Des 2026 menolak jurnal bertanggal 31 Des 2026.
+    const lock = new Date(Date.UTC(2026, 11, 31, 23, 59, 59, 999))
+    const lockDay = new Date(lock)
+    lockDay.setHours(23, 59, 59, 999)
+    const endDay = new Date(end)
+    endDay.setHours(0, 0, 0, 0)
+    expect(endDay.getTime()).toBeLessThanOrEqual(lockDay.getTime())
   })
 })
 
@@ -213,7 +236,9 @@ describe("getYearEndClosingPreview", () => {
         where: expect.objectContaining({
           journal: expect.objectContaining({
             status: { in: ["POSTED", "REVERSED"] },
-            transactionDate: { gte: new Date("2026-04-01T00:00:00.000Z"), lte: new Date("2027-03-31T23:59:59.999Z") },
+            // Putaran 127: batas atas EKSKLUSIF hari berikutnya, supaya seluruh
+            // hari terakhir tahun fiskal ikut terhitung.
+            transactionDate: { gte: new Date("2026-04-01T00:00:00.000Z"), lt: new Date("2027-04-01T00:00:00.000Z") },
           }),
         }),
       }),

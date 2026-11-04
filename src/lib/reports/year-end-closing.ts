@@ -87,12 +87,30 @@ export interface YearEndClosingPreview {
   alreadyClosed: boolean
 }
 
-/** Tahun fiskal (kalender tahun mulai) + tanggal penutup dari bulan mulai. */
+/**
+ * Tahun fiskal (kalender tahun mulai) + tanggal penutup dari bulan mulai.
+ *
+ * `start` dan `end` sama-sama TANGGAL DOKUMEN: tengah malam UTC untuk hari
+ * kalender WIB (konvensi `wibDateToUtcMidnight`, dipakai seluruh dokumen
+ * keuangan). `end` adalah hari terakhir tahun fiskal, bukan instan
+ * 23:59:59.999Z.
+ *
+ * Putaran 127: `end` dulu `Date.UTC(..., 23, 59, 59, 999)`, yang di WIB jatuh
+ * pada 07:00 hari BERIKUTNYA. Tiga akibat nyata, semua senyap: (a)
+ * `assertPeriodOpen(end)` membandingkan hari kalender lokal sehingga kunci
+ * periode 31 Des TIDAK menahan jurnal penutup bertanggal 31 Des — posting
+ * masuk ke periode yang sudah ditutup; (b) `journal.transactionDate` jatuh di
+ * luar periode laporan tahun yang ditutup, jadi jurnal penutup tidak muncul di
+ * laporan Desember; (c) `formatDate` (selalu Asia/Jakarta) menampilkan
+ * "Tanggal penutup" sebagai 1 Jan. Rentang baca penutup memakai batas ATAS
+ * eksklusif `endOfUtcDayExclusive(end)`, jadi seluruh hari terakhir tetap ikut.
+ */
 export function fiscalYearPeriod(fiscalYear: number, fiscalYearStartMonth: number): { start: Date; end: Date } {
   const month = Math.min(12, Math.max(1, Math.trunc(fiscalYearStartMonth) || 1))
   const start = new Date(Date.UTC(fiscalYear, month - 1, 1))
-  // Hari terakhir bulan sebelum bulan mulai, tahun fiskal berikutnya.
-  const end = new Date(Date.UTC(fiscalYear + 1, month - 1, 0, 23, 59, 59, 999))
+  // Hari terakhir bulan sebelum bulan mulai, tahun fiskal berikutnya —
+  // komponen tanggal saja (`Date.UTC(y, m, 0)`), jam 00:00:00.000.
+  const end = new Date(Date.UTC(fiscalYear + 1, month - 1, 0))
   return { start, end }
 }
 

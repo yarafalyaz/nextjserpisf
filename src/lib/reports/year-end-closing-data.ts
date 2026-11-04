@@ -17,6 +17,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { endOfUtcDayExclusive } from "@/lib/utils/date-only"
 import { REPORT_JOURNAL_STATUSES } from "@/lib/services/report-aggregation.service"
 import { getSystemSettings } from "@/lib/utils/settings"
 import {
@@ -45,7 +46,12 @@ export async function collectYearEndClosingEntries(
         journal: {
           status: { in: [...REPORT_JOURNAL_STATUSES] },
           deletedAt: null,
-          transactionDate: { gte: start, lte: end },
+          // Putaran 127: `end` adalah TANGGAL DOKUMEN (tengah malam UTC hari
+          // WIB terakhir tahun fiskal), jadi batas atas wajib EKSKLUSIF hari
+          // berikutnya — `lte: end` membuang seluruh mutasi pada hari terakhir
+          // tahun fiskal, dan jurnal penutup tahun sebelumnya yang bertanggal
+          // tengah malam justru ikut terhitung sebagai saldo tahun ini.
+          transactionDate: { gte: start, lt: endOfUtcDayExclusive(end) },
         },
         account: { type: { in: ["REVENUE", "EXPENSE"] } },
       },

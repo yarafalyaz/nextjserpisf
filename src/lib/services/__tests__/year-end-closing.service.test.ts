@@ -145,11 +145,24 @@ describe("postYearEndClosing", () => {
     mocks.queryRaw.mockResolvedValue([{ id: 1, period_lock_date: null, fiscal_year_start_month: 7 }])
     await postYearEndClosing(2025, 3)
     const created = mocks.journalCreate.mock.calls[0][0].data
-    expect((created.transactionDate as Date).toISOString()).toBe("2026-06-30T23:59:59.999Z")
+    // Putaran 127: tanggal dokumen = tengah malam UTC hari WIB terakhir. Nilai
+    // lama `23:59:59.999Z` adalah 07:00 WIB keesokan harinya — jurnal penutup
+    // keluar dari periode yang ditutup dan lolos kunci periode hari itu.
+    expect((created.transactionDate as Date).toISOString()).toBe("2026-06-30T00:00:00.000Z")
   })
 
   it("E121-5b: periode terkunci melewati tanggal penutup -> ditolak, nol jurnal", async () => {
     mocks.queryRaw.mockResolvedValue([{ id: 1, period_lock_date: new Date("2026-06-30T00:00:00Z") }])
+    await expect(postYearEndClosing(2025, 3)).rejects.toThrow("Periode akuntansi sudah ditutup")
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("putaran 127: kunci periode TEPAT tanggal penutup menahan posting (dulu lolos karena 23:59:59.999Z = hari berikutnya WIB)", async () => {
+    // Tahun fiskal mulai Juli 2025 -> hari penutup WIB 30 Jun 2026. Kunci
+    // periode s/d 30 Jun 2026 wajib menolak. Dengan `end` lama
+    // (2026-06-30T23:59:59.999Z) `assertPeriodOpen` membaca hari kalender
+    // lokal 1 Jul 2026 sehingga jurnal penutup MASUK ke periode terkunci.
+    mocks.queryRaw.mockResolvedValue([{ id: 1, period_lock_date: new Date("2026-06-30T00:00:00Z"), fiscal_year_start_month: 7 }])
     await expect(postYearEndClosing(2025, 3)).rejects.toThrow("Periode akuntansi sudah ditutup")
     expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
