@@ -4259,3 +4259,14 @@ Halaman `/laporan/multi-periode` menjumlah kolom dan total dengan `+` float ment
 ### Bukti
 - Merah: 1 gagal/0 lulus. Hijau: 1/1; `src/app/(dashboard)/laporan` + reports + components **3.086 lulus / 4 dilewati** tanpa entri `Errors`; tsc, ESLint, diff-check bersih.
 - CI `41829329496` (posisi SPT) dan `41829381540` (dokumentasi) **success**.
+
+## Putaran 181 — antrean giro lewat jatuh tempo (commit `14eeaa9ba`)
+
+Seksi Giro/Cek Lewat Jatuh Tempo Belum Cair (`keuangan/giro/_components/cheque-overdue-queue.tsx`) mencetak **nominal tercatat** — rekap per arah/tingkat, arah tak dikenal, dan nominal per lembar — dengan `formatAccounting` 0 desimal. Builder menjumlahnya `safeAdd(..., 2)`. Probe `amount 1.000.000,50` → tampil `1.000.000`.
+
+### Vonis FIX
+- Komponen memakai `formatAccountingExact`; regresi render baru mengunci `1.000.000,50` dan **merah** bila formatter dikembalikan.
+
+### Bukti
+- Merah: 1 gagal/0 lulus. Hijau: 1/1 dan **82/82** suite keuangan; tsc, ESLint, diff-check bersih.
+- CI `41830983216` (multi periode) dan `41831015895` (dokumentasi) **success**.
