@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency, formatAccounting, formatDate } from '@/lib/utils/format'
+import { formatCurrency, formatAccounting, formatAccountingExact, formatDate } from '@/lib/utils/format'
+import { safeAdd } from '@/lib/utils/math'
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { buildReportPeriodSlug } from "@/lib/reports/report-period"
@@ -45,6 +46,11 @@ export default async function TotalPayablesPage() {
     now,
   )
 
+  // TOTAL seksi pemasok dijumlah dengan safeAdd: reduce `+` float mentah bisa
+  // menghasilkan 0,30000000000000004 pada nilai ber-sen.
+  const vendorBilledTotal = summary.vendors.reduce((sum, v) => safeAdd(sum, v.totalBilled, 2), 0)
+  const vendorPaidTotal = summary.vendors.reduce((sum, v) => safeAdd(sum, v.totalPaid, 2), 0)
+
   const period = `Per ${formatDate(now)}`
 
   return (
@@ -64,8 +70,12 @@ export default async function TotalPayablesPage() {
         <ReportKpiCard label="Total Hutang" value={formatCurrency(summary.totalOutstanding)} valueClassName="text-danger" />
         <ReportKpiCard label="Sudah Jatuh Tempo" value={formatCurrency(summary.overdueOutstanding)} valueClassName="text-danger" />
         <ReportKpiCard label="Belum Jatuh Tempo" value={formatCurrency(summary.notYetDueOutstanding)} />
-        <ReportKpiCard label="Total Ditagihkan" value={formatCurrency(summary.totalBilled)} />
-        <ReportKpiCard label="Sudah Dibayar" value={formatCurrency(summary.totalPaid)} valueClassName="text-success" />
+        {/* KPI ini mencakup SEMUA tagihan pada populasi (termasuk yang sudah
+            lunas); seksi "Hutang per Pemasok" hanya memuat tagihan bersisa.
+            Label dibedakan supaya dua angka berlabel sama tidak tampak
+            bertentangan — lihat total-hutang-kpi-population.test.ts. */}
+        <ReportKpiCard label="Total Ditagihkan (semua tagihan)" value={formatCurrency(summary.totalBilled)} />
+        <ReportKpiCard label="Sudah Dibayar (semua tagihan)" value={formatCurrency(summary.totalPaid)} valueClassName="text-success" />
       </div>
 
       <ReportSection title="Ringkasan Umur Hutang">
@@ -92,7 +102,10 @@ export default async function TotalPayablesPage() {
         </DetailTable>
       </ReportSection>
 
-      <ReportSection title="Hutang per Pemasok">
+      <ReportSection
+        title="Hutang per Pemasok"
+        description="Hanya tagihan yang masih bersisa (> Rp1); tagihan lunas tidak muncul, sehingga TOTAL seksi ini lebih kecil dari KPI Total Ditagihkan yang mencakup semua tagihan."
+      >
         <DetailTable data-report-table="Hutang per Pemasok">
           <DetailTableHead>
             <DetailTableTh>Pemasok</DetailTableTh>
@@ -118,8 +131,8 @@ export default async function TotalPayablesPage() {
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd>TOTAL</DetailTableTd>
                 <DetailTableTd align="right">{summary.billCount}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(summary.vendors.reduce((s, v) => s + v.totalBilled, 0))}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(summary.vendors.reduce((s, v) => s + v.totalPaid, 0))}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(vendorBilledTotal)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(vendorPaidTotal)}</DetailTableTd>
                 <DetailTableTd align="right" className="text-danger">{formatAccounting(summary.totalOutstanding)}</DetailTableTd>
               </DetailTableRow>
             )}
