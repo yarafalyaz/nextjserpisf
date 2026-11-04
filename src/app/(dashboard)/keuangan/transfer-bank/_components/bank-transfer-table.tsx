@@ -4,7 +4,7 @@ import { createColumnHelper } from "@/lib/table"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteBankTransfer } from "@/actions/bank-transfer.actions"
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 
 interface BankTransferRow {
   id: number
@@ -29,11 +29,11 @@ const columns = [
   columnHelper.accessor("to", { header: "Ke Rekening" }),
   columnHelper.accessor("amount", {
     header: "Jumlah",
-    cell: (info) => <span className="tabular-nums">{formatAccounting(info.getValue())}</span>,
+    cell: (info) => <span className="tabular-nums">{formatAccountingExact(info.getValue())}</span>,
   }),
   columnHelper.accessor("adminFee", {
     header: "Biaya Admin",
-    cell: (info) => <span className="tabular-nums">{formatAccounting(info.getValue())}</span>,
+    cell: (info) => <span className="tabular-nums">{formatAccountingExact(info.getValue())}</span>,
   }),
   columnHelper.display({
     id: "journal",

@@ -4,7 +4,7 @@ import { createColumnHelper } from "@/lib/table"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteTaxPayment } from "@/actions/tax-payment.actions"
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 
 interface TaxPaymentRow {
   id: number
@@ -36,7 +36,7 @@ const columns = [
   }),
   columnHelper.accessor("amount", {
     header: "Jumlah",
-    cell: (info) => <span className="tabular-nums">{formatAccounting(info.getValue())}</span>,
+    cell: (info) => <span className="tabular-nums">{formatAccountingExact(info.getValue())}</span>,
   }),
   columnHelper.display({
     id: "actions",
