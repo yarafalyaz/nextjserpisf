@@ -14,7 +14,7 @@ import {
   BANK_STATEMENT_DRAFT_QUEUE_TITLE,
   BANK_STATEMENT_DRAFT_QUEUE_TRUNCATED_LABEL,
 } from "@/lib/reports/bank-statement-draft-queue"
-import { formatAccounting, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
 import {
   DetailTable,
@@ -135,11 +135,11 @@ export function BankStatementDraftQueueSection({
                         <DetailTableTd align="right">{row.umurLabel}</DetailTableTd>
                         <DetailTableTd>{row.tingkatLabel}</DetailTableTd>
                         <DetailTableTd align="right" className="tabular-nums">
-                          {formatAccounting(row.openingBalance)} /{" "}
-                          {formatAccounting(row.closingBalance)}
+                          {formatAccountingExact(row.openingBalance)} /{" "}
+                          {formatAccountingExact(row.closingBalance)}
                           <span className="block text-xs text-muted-foreground">
-                            Debit {formatAccounting(row.totalDebits)} · Kredit{" "}
-                            {formatAccounting(row.totalCredits)} · {row.nominalLabel}
+                            Debit {formatAccountingExact(row.totalDebits)} · Kredit{" "}
+                            {formatAccountingExact(row.totalCredits)} · {row.nominalLabel}
                           </span>
                         </DetailTableTd>
                         <DetailTableTd>{row.uploadedByName ?? "—"}</DetailTableTd>

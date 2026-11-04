@@ -121,3 +121,19 @@ describe("halaman giro meneruskan izin ke ChequeManager", () => {
     expect(page).toContain("canDelete={canDelete}")
   })
 })
+
+describe("ChequeManager: nominal bersen", () => {
+  it("nominal giro tampil hingga sen", () => {
+    const { container, root } = mount(
+      <ChequeManager
+        cheques={[{ ...CHEQUES[0], amount: 1_000_000.5 }]}
+        accounts={[]}
+        canCreate={false}
+        canEdit={false}
+        canDelete={false}
+      />,
+    )
+    expect(container.textContent ?? "").toContain("1.000.000,50")
+    act(() => root.unmount())
+  })
+})

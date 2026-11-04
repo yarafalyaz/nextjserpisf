@@ -17,7 +17,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 
 export interface ChequeRow {
   id: number
@@ -242,7 +242,7 @@ export function ChequeManager({
               <DetailTableTd>{cheque.direction === "in" ? "Diterima" : "Dikeluarkan"}</DetailTableTd>
               <DetailTableTd>{cheque.party ?? "–"}</DetailTableTd>
               <DetailTableTd>{cheque.accountLabel ?? "–"}</DetailTableTd>
-              <DetailTableTd align="right" className="tabular-nums">{formatAccounting(cheque.amount)}</DetailTableTd>
+              <DetailTableTd align="right" className="tabular-nums">{formatAccountingExact(cheque.amount)}</DetailTableTd>
               <DetailTableTd>{STATUS_LABEL[cheque.status] ?? cheque.status}</DetailTableTd>
               <DetailTableTd align="right">
                 <div className="flex items-center justify-end gap-1.5">
