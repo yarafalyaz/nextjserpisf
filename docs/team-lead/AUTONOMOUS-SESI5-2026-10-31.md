@@ -4299,3 +4299,19 @@ Dua tabel keuangan masih memakai `formatAccounting` 0 desimal: **Transfer Antar 
 ### Bukti
 - Merah: 1 gagal pada masing-masing tes baru. Hijau: 68/68 suite keuangan; tsc, ESLint, diff-check bersih.
 - CI `41834302452`, `41834762192`, `41834794046` **success** (putaran 182).
+
+## Putaran 184 — penjualan & pembelian: empat tabel nominal (commit `33782f2a6`)
+
+Sapuan modul penjualan/pembelian menemukan empat komponen dengan `formatAccounting` 0 desimal pada nilai `Decimal(15,2)`:
+
+- **Tukar Faktur** — nilai dokumen dan sisa (`amount − paid`).
+- **Uang Muka Pembelian** — jumlah uang muka.
+- **Transfer Pemasok** — nominal transfer.
+- **Harga Pemasok** — harga per baris.
+
+### Vonis FIX
+- Keempatnya memakai `formatAccountingExact`; dua regresi render (tukar faktur, uang muka) mengunci nominal ber-sen dan merah bila formatter dikembalikan. Kedua tes butuh stub `matchMedia` karena DataTable memakai `useIsMobile` yang tidak tersedia di jsdom.
+
+### Bukti
+- Merah: 1 gagal pada masing-masing tes baru; hijau 11/11 suite terkait; tsc, ESLint, diff-check bersih.
+- CI `41836722142` dan `41836747905` **success** (putaran 183).
