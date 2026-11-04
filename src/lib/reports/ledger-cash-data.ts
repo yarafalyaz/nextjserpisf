@@ -30,6 +30,7 @@ import {
 } from "@/lib/reports/customer-receivables"
 import { payableOutstanding, receivableOutstanding } from "@/lib/reports/aging-amounts"
 import { daysOverdue } from "@/lib/reports/aging"
+import { isOutstandingSettled } from "@/lib/finance/settlement-status"
 import { loadReturnCreditByInvoiceId, loadReturnCreditByReturnId } from "@/lib/reports/return-credit"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
@@ -560,7 +561,7 @@ export function aggregateCustomerReceivables(
   for (const inv of invoices) {
     const settled = Number(inv.paidAmount ?? 0) + Number(inv.returnCreditAmount ?? 0)
     const outstanding = receivableOutstanding(inv.grandTotal as never, settled as never)
-    if (outstanding <= 0) continue
+    if (isOutstandingSettled(outstanding)) continue
     const bucket = buckets.get(inv.customerId) ?? {
       customerId: inv.customerId,
       customerName: inv.customerName,

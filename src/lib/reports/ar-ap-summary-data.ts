@@ -15,6 +15,7 @@ import {
 import { formatAccounting } from "@/lib/utils/format"
 import { buildApByVendor, buildArByCustomer, sumOutstanding } from "@/lib/reports/ar-ap-summary"
 import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
+import { isOutstandingSettled } from "@/lib/finance/settlement-status"
 import { safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -56,13 +57,13 @@ export async function loadArApSummary(): Promise<ArApSummaryReport> {
     customerId: inv.customerId, customerName: inv.customer.name, grandTotal: inv.grandTotal, paidAmount: inv.paidAmount,
     returnCreditAmount: returnCreditByInvoiceId.get(inv.id) ?? 0,
   })))
-  const arRows = arByCustomer.filter((r) => r.outstanding > 0)
+  const arRows = arByCustomer.filter((r) => !isOutstandingSettled(r.outstanding))
 
   // P0-2: utang supplier = NETO (grandTotal − withholding), bukan bruto.
   const apByVendor = buildApByVendor(bills.map((bill) => ({
     vendorId: bill.vendorId, vendorName: bill.vendor.name, grandTotal: bill.grandTotal, withholdingAmount: bill.withholdingAmount, paidAmount: bill.paidAmount, balanceDue: bill.balanceDue,
   })))
-  const apRows = apByVendor.filter((r) => r.outstanding > 0)
+  const apRows = apByVendor.filter((r) => !isOutstandingSettled(r.outstanding))
 
   const totalAR = sumOutstanding(arRows)
   const totalAP = sumOutstanding(apRows)

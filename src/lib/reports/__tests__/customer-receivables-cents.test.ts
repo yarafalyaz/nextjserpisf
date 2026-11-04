@@ -3,14 +3,16 @@ import { aggregateCustomerReceivables } from "../ledger-cash-data"
 
 describe("aggregateCustomerReceivables (presisi sen)", () => {
   it("outstanding per faktur dibulatkan sen sebelum dijumlah (bukan float mentah)", () => {
+    // Sisa per faktur 2,24 (di atas toleransi lunas Rp1) supaya baris tidak
+    // dibuang oleh FIN-BR-006; yang diuji adalah akumulasi sennya.
     const invoices = Array.from({ length: 17 }, () => ({
-      customerId: 1, customerName: "CV A", creditLimit: 0, grandTotal: 0.37, paidAmount: 0.13, dueDate: null,
+      customerId: 1, customerName: "CV A", creditLimit: 0, grandTotal: 1002.37, paidAmount: 1000.13, dueDate: null,
     }))
     const buckets = aggregateCustomerReceivables(invoices)
-    // Per faktur 0.37 - 0.13 = 0.24; 17x persis 4.08.
-    // Float mentah: 17x(0.37-0.13) terakumulasi 4.080000000000002.
+    // Per faktur 1002,37 − 1000,13 = 2,24; 17x persis 38,08.
+    // Float mentah: 17x(1002.37-1000.13) terakumulasi 38.080000000000155.
     expect(buckets).toHaveLength(1)
-    expect(buckets[0].outstanding).toBe(4.08)
+    expect(buckets[0].outstanding).toBe(38.08)
     expect(buckets[0].invoiceCount).toBe(17)
   })
 

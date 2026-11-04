@@ -8,6 +8,7 @@ import { safeAdd } from "@/lib/utils/math"
 
 import { receivableOutstanding } from "./aging-amounts"
 import { agingBucket, daysOverdue, type AgingBucket } from "./aging"
+import { isOutstandingSettled } from "@/lib/finance/settlement-status"
 
 export const UNASSIGNED_VEHICLE_LABEL = "Tanpa kendaraan"
 
@@ -36,7 +37,7 @@ export function groupReceivablesByVehicle(
   for (const inv of invoices) {
     const settled = Number(inv.paidAmount ?? 0) + Number(inv.returnCreditAmount ?? 0)
     const outstanding = receivableOutstanding(inv.grandTotal as never, settled as never)
-    if (outstanding <= 0) continue
+    if (isOutstandingSettled(outstanding)) continue
     const label = inv.plateLabel?.trim() ? inv.plateLabel : UNASSIGNED_VEHICLE_LABEL
     const row = groups.get(label) ?? {
       plateLabel: label,
