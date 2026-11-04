@@ -3330,3 +3330,34 @@ Sumber: audit mandiri atas `deleteWarehouse` (`src/actions/master.actions.ts:381
 - Merah perintah terpisah (berkas produksi di-stash): `master.actions.test.ts -t 'putaran 124'` → tepat 2 gagal, `expected "vi.fn()" to be called with arguments` untuk `inventoryLayer.count` dan `stockMove.count`.
 - Hijau: `master.actions.test.ts` 384/384 (2 tes baru; `-t deleteWarehouse` 8/8); guard statis penuh `src/__tests__ --no-file-parallelism` 67/67 berkas 511/511; `npx tsc --noEmit` 0; ESLint 0 pada 2 berkas berubah; `git diff --check` bersih.
 - CI `41754424214` (head `cf9decc7b`) **failure** — hanya kegagalan harness `material-issue-link-columns.test.ts` yang sudah diperbaiki di commit sesudahnya (`c88dd8ce3`); CI `41754632614` (head `c88dd8ce3`, memuat perbaikan ini) **success**.
+
+## Putaran 125 — serial penyesuaian menyebut nomor yang bertabrakan (commit `5517df8c2`)
+
+Sumber: audit mandiri atas cabang penambahan stok item berseri di `onStockAdjustmentProcessed` (`src/lib/hooks/stock-adjustment.hook.ts:280-316`). Skema: `ItemSerial.serialNumber` `@unique` **GLOBAL** (`prisma/schema.prisma`) — bukan per item, bukan per gudang. Dua jalur lain sudah memeriksa lebih dulu dan menyebut nomornya: `goods-receipt.hook.ts:676-684` dan penerimaan hasil produksi (`manufacturing.actions.ts:1542`).
+
+### Vonis FIX
+1. **Serial penyesuaian yang bertabrakan jatuh ke P2002 tanpa menyebut nomornya — FIX.** Hook penulisan langsung `itemSerial.createMany` tanpa cek pendahulu. Serial yang sudah terdaftar dari penerimaan/produksi lain memicu P2002, lalu `getErrorMessage` menyaringnya menjadi "Data dengan nilai tersebut sudah ada." — operator tidak tahu serial mana yang konflik, padahal seluruh transaksi penyesuaian (StockMove, lapisan FIFO, qtyOnHand, jurnal) ikut batal dan harus diulang dari nol. Satu `findMany` atas semua nomor seri baris itu sebelum `createMany`, tolak dengan daftar serial tertabrak. Duplikat di dalam satu baris tetap ditangkap cek sebelumnya.
+
+### Vonis CATAT
+- **Cek pendahulu tidak menutup balapan dua penyesuaian bersamaan — CATAT.** `ItemSerial` tidak punya kunci baris untuk dibaca lebih dulu (unique index yang menahan, bukan `FOR UPDATE` atas baris yang belum ada). Dua transaksi dengan serial sama tetap bisa sama-sama lolos `findMany` dan satu kena P2002. Yang diperbaiki adalah keterbacaan pesan untuk kasus normal (serial sudah lama terdaftar dari GR/produksi), bukan isolasi balapan; menutupnya menuntut advisory lock global di jalur tulis serial yang jauh lebih lebar blast radius-nya.
+- **Kata "sudah" pada pesan dibatasi guard idempotensi — CATAT.** Guard statis `src/lib/hooks/__tests__/idempotency.test.ts` memakai regex `/throw\s+new\s+Error\([^)]*(?:sudah|already)[^)]*\)/gi` untuk menandai lemparan duplikat. Interpolasi `${...map((row) => ...).join(...)}` mengandung `)` sehingga `[^)]*` berhenti sebelum kata "sudah" dan guard tetap lulus — bukan karena pesannya diakali, tetapi karena bentuk ekspresinya. Wording akhir: `Nomor seri <daftar> sudah terdaftar pada item lain — penyesuaian dibatalkan.`
+
+### Bukti
+- Merah perintah terpisah: `stock-adjustment-baseline.test.ts -t 'putaran 125'` → 1 gagal (`expected [Function] to throw error matching /S-1/`, `createMany` terpanggil).
+- Hijau: seluruh `src/lib/hooks/__tests__` 482 lulus / 5 dilewati (1 tes baru); guard statis penuh `src/__tests__ --no-file-parallelism` 67/67 berkas 511/511; `npx tsc --noEmit` 0; ESLint 0 pada 2 berkas berubah; `git diff --check` bersih.
+- CI `41756278488` (head `5517df8c2`) **success**.
+
+## Putaran 126 — penurunan WO ke pending melepas reservasi stok (commit `f3f7fb6d6`)
+
+Sumber: verifikasi kandidat agent audit inventaris+produksi atas siklus `stockReservation`. Jalur lahir: `createReservationsForWorkOrderStartTx` — dipanggil HANYA dari `startWorkOrder` (`manufacturing.actions.ts:1841`). Jalur lepas: `releaseActiveReservationsForWorkOrderTx` (`stock-reservation.service.ts:261`) — dipanggil HANYA dari complete (`:1983`), close (`:3035`), cancel (`:3154`). `syncProjectStatusTx` (`src/actions/project.actions.ts:752-763`) menurunkan WO `in_progress -> pending` lewat klaim bersyarat `updateMany` tetapi tidak melewati satu pun dari ketiganya. Invarian backlog yang berlaku: "WO draft/pending: TIDAK ada reservasi".
+
+### Vonis FIX
+1. **WO yang diturunkan ke pending tetap memegang reservasi aktif — FIX.** Akibatnya: stok gudang sumber tetap terikat WO yang tidak berjalan; saat WO dimulai lagi, `createReservationsForWorkOrderStartTx` melewati kunci yang sudah ada sehingga reservasi basi (qty kebutuhan lama, mungkin dari BOM yang sudah direvisi) tetap dipakai; laporan reservasi menampilkan cadangan untuk job pending, bertentangan dengan invarian backlog. Perbaikan: panggil `releaseActiveReservationsForWorkOrderTx` **di dalam blok `claim.count === 1`** yang sama, supaya hanya pemenang balapan yang melepas — release-nya sendiri idempoten (`updateMany` dengan filter `status: "active"`).
+
+### Vonis CATAT
+- **Hanya jalur turun-status proyek yang diperbaiki — CATAT.** WO juga bisa kembali ke pending lewat jalur lain (mis. pembatalan tahap di modul produksi). Semua jalur itu tidak ditemukan menulis `status: "pending"` pada WO sesudah start selain `syncProjectStatusTx`, jadi tidak ada tempat kedua yang perlu ditambal; bila kelak muncul, pola yang sama (lepaskan di klaim yang menang) harus dipakai.
+- **Reservasi basi yang sudah telanjur ada tidak dibersihkan — CATAT.** Perbaikan ini mencegah pembentukan baru; baris `active` milik WO `pending` yang sudah ada di DB pengguna tidak disapu otomatis (tidak ada migrasi data). Menyapu lewat skrip menuntut keputusan bisnis tentang reservasi yang mungkin sengaja dipertahankan, jadi dibiarkan dan dicatat.
+
+### Bukti
+- Merah perintah terpisah (`git stash push -- src/actions/project.actions.ts`, lalu `npx vitest run src/actions/__tests__/project.actions.test.ts -t "putaran 126"`) → 1 gagal / 1 lulus / 158 dilewati, `AssertionError: expected "vi.fn()" to be called with arguments: [ { where: { …(2) }, …(1) } ]`.
+- Hijau (`git stash pop`, perintah sama) → 2 lulus / 158 dilewati; berkas penuh 160/160 lulus; guard statis penuh `src/__tests__ --no-file-parallelism` 67/67 berkas 511/511; `npx tsc --noEmit` 0; ESLint 0 pada 2 berkas berubah; `git diff --check` bersih.
