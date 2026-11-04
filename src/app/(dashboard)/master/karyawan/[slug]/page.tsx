@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -349,7 +349,7 @@ export default async function EmployeeDetailPage({
                   <DetailField label="Email" value={employee.email || "-"} />
                   <DetailField label="Telepon" value={employee.phone || "-"} />
                   <DetailField label="Tanggal Masuk" value={formatDate(employee.joinDate)} />
-                  <DetailField label="Gaji Pokok" value={canSeeSalary ? formatCurrency(Number(employee.baseSalary)) : "••••••"} />
+                  <DetailField label="Gaji Pokok" value={canSeeSalary ? formatCurrencyExact(Number(employee.baseSalary)) : "••••••"} />
                   <DetailField label="Peran (Akun)" value={
                     employee.user
                       ? employee.user.roles.map(r => r.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())).join(", ") || "-"
@@ -393,8 +393,8 @@ export default async function EmployeeDetailPage({
                               {salaryRows.map((r) => (
                                 <tr key={r.id} className="border-b border-default last:border-0">
                                   <td className="px-4 py-3">{formatDate(new Date(r.effectiveDate))}</td>
-                                  <td className="px-4 py-3">{formatCurrency(r.previousBaseSalary)}</td>
-                                  <td className="px-4 py-3">{formatCurrency(r.newBaseSalary)}</td>
+                                  <td className="px-4 py-3">{formatCurrencyExact(r.previousBaseSalary)}</td>
+                                  <td className="px-4 py-3">{formatCurrencyExact(r.newBaseSalary)}</td>
                                   <td className="px-4 py-3">{r.changePercent != null ? `${r.changePercent > 0 ? "+" : ""}${r.changePercent}%` : "-"}</td>
                                   <td className="px-4 py-3">{SALARY_REASON_LABELS[r.reason] ?? r.reason}</td>
                                   <td className="px-4 py-3">{SALARY_STATUS_LABELS[r.status] ?? r.status}</td>
@@ -452,9 +452,9 @@ export default async function EmployeeDetailPage({
                       <DetailTableBody>
                         {employee.employeeLoans.map((loan) => (
                           <DetailTableRow key={loan.id}>
-                            <DetailTableTd>{canSeeSalary ? formatCurrency(Number(loan.totalAmount)) : "••••••"}</DetailTableTd>
-                            <DetailTableTd>{canSeeSalary ? formatCurrency(Number(loan.monthlyInstallment)) : "••••••"}</DetailTableTd>
-                            <DetailTableTd className="text-danger">{canSeeSalary ? formatCurrency(Number(loan.remainingAmount)) : "••••••"}</DetailTableTd>
+                            <DetailTableTd>{canSeeSalary ? formatCurrencyExact(Number(loan.totalAmount)) : "••••••"}</DetailTableTd>
+                            <DetailTableTd>{canSeeSalary ? formatCurrencyExact(Number(loan.monthlyInstallment)) : "••••••"}</DetailTableTd>
+                            <DetailTableTd className="text-danger">{canSeeSalary ? formatCurrencyExact(Number(loan.remainingAmount)) : "••••••"}</DetailTableTd>
                             <DetailTableTd>{formatDate(loan.loanDate)}</DetailTableTd>
                           </DetailTableRow>
                         ))}
@@ -585,8 +585,8 @@ export default async function EmployeeDetailPage({
                           <DetailTableRow key={p.id}>
                             <DetailTableTd className="font-mono">{p.documentNo}</DetailTableTd>
                             <DetailTableTd>{p.period}</DetailTableTd>
-                            <DetailTableTd>{canSeeSalary ? formatCurrency(Number(p.baseSalary)) : "••••••"}</DetailTableTd>
-                            <DetailTableTd className="font-semibold">{canSeeSalary ? formatCurrency(Number(p.netSalary)) : "••••••"}</DetailTableTd>
+                            <DetailTableTd>{canSeeSalary ? formatCurrencyExact(Number(p.baseSalary)) : "••••••"}</DetailTableTd>
+                            <DetailTableTd className="font-semibold">{canSeeSalary ? formatCurrencyExact(Number(p.netSalary)) : "••••••"}</DetailTableTd>
                             <DetailTableTd><StatusChip status={p.status} /></DetailTableTd>
                           </DetailTableRow>
                         ))}

@@ -6,7 +6,7 @@ import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { entityEditHref } from "@/lib/utils/entity-url"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { formatCurrency, formatDate, formatReferenceType } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate, formatReferenceType } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -331,9 +331,9 @@ export default async function ItemDetailPage({
                     </span>
                   } />
                   <DetailField label="Stok Minimum" value={String(Number(item.minStock))} />
-                  <DetailField label="Harga Beli" value={formatCurrency(Number(item.cost))} />
-                  <DetailField label="Harga Jual" value={formatCurrency(Number(item.price))} />
-                  <DetailField label="Nilai Stok" value={formatCurrency(Number(item.qtyOnHand) * Number(item.cost))} />
+                  <DetailField label="Harga Beli" value={formatCurrencyExact(Number(item.cost))} />
+                  <DetailField label="Harga Jual" value={formatCurrencyExact(Number(item.price))} />
+                  <DetailField label="Nilai Stok" value={formatCurrencyExact(Number(item.qtyOnHand) * Number(item.cost))} />
                 </DetailCard>
 
                 <DetailCard>
@@ -433,7 +433,7 @@ export default async function ItemDetailPage({
                           <DetailTableTd align="right">{Number(layer.qtyIn)}</DetailTableTd>
                           <DetailTableTd align="right">{Number(layer.qtyOut)}</DetailTableTd>
                           <DetailTableTd align="right"><strong>{Number(layer.remaining)}</strong></DetailTableTd>
-                          <DetailTableTd align="right">{formatCurrency(Number(layer.unitCost))}</DetailTableTd>
+                          <DetailTableTd align="right">{formatCurrencyExact(Number(layer.unitCost))}</DetailTableTd>
                         </DetailTableRow>
                       ))}
                     </DetailTableBody>
@@ -512,7 +512,7 @@ export default async function ItemDetailPage({
                               <StatusChip status={sm.impact === "IN" ? "received" : "returned"} />
                             </DetailTableTd>
                             <DetailTableTd align="right">{Number(sm.qty)}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(sm.cost))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrencyExact(Number(sm.cost))}</DetailTableTd>
                             <DetailTableTd>
                               {sm.partyLabel && <span className="text-xs text-muted-foreground">{sm.partyLabel}: </span>}
                               <span className="text-sm">{sm.party}</span>

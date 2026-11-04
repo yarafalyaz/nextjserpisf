@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Pencil } from "lucide-react"
@@ -133,7 +133,7 @@ export default async function VendorDetailPage({
                           <DetailTableRow key={po.id}>
                             <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/pesanan", po)}>{po.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(po.date)}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(po.grandTotal))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrencyExact(Number(po.grandTotal))}</DetailTableTd>
                             <DetailTableTd><StatusChip status={po.status} /></DetailTableTd>
                           </DetailTableRow>
                         ))}
@@ -244,8 +244,8 @@ export default async function VendorDetailPage({
                           <DetailTableRow key={bill.id}>
                             <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/tagihan", bill)}>{bill.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(bill.date)}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(bill.grandTotal))}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(bill.paidAmount))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrencyExact(Number(bill.grandTotal))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrencyExact(Number(bill.paidAmount))}</DetailTableTd>
                             <DetailTableTd><StatusChip status={bill.status} /></DetailTableTd>
                           </DetailTableRow>
                         ))}
@@ -281,7 +281,7 @@ export default async function VendorDetailPage({
                           <DetailTableRow key={item.id}>
                             <DetailTableTd className="font-mono"><Link href={entityHref("/master/barang", item)}>{item.sku}</Link></DetailTableTd>
                             <DetailTableTd>{item.name}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(item.cost))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrencyExact(Number(item.cost))}</DetailTableTd>
                             <DetailTableTd align="right">{Number(item.qtyOnHand)}</DetailTableTd>
                           </DetailTableRow>
                         ))}

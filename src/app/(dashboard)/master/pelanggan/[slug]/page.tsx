@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -215,7 +215,7 @@ export default async function CustomerDetailPage({
                           <DetailTableRow key={q.id}>
                             <DetailTableTd className="font-mono"><Link href={entityHref("/penjualan/penawaran", q)}>{q.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(q.date)}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(q.grandTotal))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrencyExact(Number(q.grandTotal))}</DetailTableTd>
                             <DetailTableTd><StatusChip status={q.status} /></DetailTableTd>
                           </DetailTableRow>
                         ))}
@@ -252,8 +252,8 @@ export default async function CustomerDetailPage({
                           <DetailTableRow key={inv.id}>
                             <DetailTableTd className="font-mono"><Link href={entityHref("/penjualan/faktur", inv)}>{inv.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(inv.date)}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(inv.grandTotal))}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(inv.paidAmount))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrencyExact(Number(inv.grandTotal))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrencyExact(Number(inv.paidAmount))}</DetailTableTd>
                             <DetailTableTd><StatusChip status={inv.status} /></DetailTableTd>
                           </DetailTableRow>
                         ))}

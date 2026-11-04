@@ -276,3 +276,18 @@ describe("sapuan kedua belas: dokumen pajak dan sengketa pajak", () => {
     }
   })
 })
+
+describe("sapuan ketiga belas: master karyawan/barang/vendor/pelanggan", () => {
+  it("halaman detail master memakai formatter currency exact", () => {
+    for (const rel of [
+      "src/app/(dashboard)/master/karyawan/[slug]/page.tsx",
+      "src/app/(dashboard)/master/barang/[slug]/page.tsx",
+      "src/app/(dashboard)/master/vendor/[slug]/page.tsx",
+      "src/app/(dashboard)/master/pelanggan/[slug]/page.tsx",
+    ]) {
+      const source = readFileSync(path.resolve(process.cwd(), rel), "utf8")
+      expect(source, rel).not.toMatch(/formatCurrency\((?!Exact)/)
+      expect(source, rel).toContain("formatCurrencyExact")
+    }
+  })
+})
