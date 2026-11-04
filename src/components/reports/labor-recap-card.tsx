@@ -1,5 +1,5 @@
 import type { LaborRecap } from "@/lib/reports/labor-recap"
-import { formatCurrency, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatNumber } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -37,7 +37,7 @@ export function LaborRecapCard({ recap }: Readonly<{ recap: LaborRecap }>) {
       title="Rekap Borongan Teknisi"
       summary={
         <>
-          {recap.technicians.length} teknisi · total {formatCurrency(recap.totalAmount)}
+          {recap.technicians.length} teknisi · total {formatCurrencyExact(recap.totalAmount)}
         </>
       }
       isEmpty={!hasRows}
@@ -58,7 +58,7 @@ export function LaborRecapCard({ recap }: Readonly<{ recap: LaborRecap }>) {
               <DetailTableTd>{technicianName(tech.employeeId, tech.employeeName)}</DetailTableTd>
               <DetailTableTd align="right">{formatNumber(tech.lineCount)}</DetailTableTd>
               <DetailTableTd align="right">{formatNumber(tech.laborHours, 2)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(tech.totalAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(tech.totalAmount)}</DetailTableTd>
             </DetailTableRow>
           ))}
         </DetailTableBody>
@@ -72,7 +72,7 @@ export function LaborRecapCard({ recap }: Readonly<{ recap: LaborRecap }>) {
               {formatNumber(recap.totalLaborHours - recap.unattributed.laborHours, 2)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(recap.totalAmount - recap.unattributed.totalAmount)}
+              {formatCurrencyExact(recap.totalAmount - recap.unattributed.totalAmount)}
             </DetailTableTd>
           </DetailTableFootRow>
         </DetailTableFoot>
@@ -97,7 +97,7 @@ export function LaborRecapCard({ recap }: Readonly<{ recap: LaborRecap }>) {
                   {formatNumber(recap.unattributed.laborHours, 2)}
                 </DetailTableTd>
                 <DetailTableTd align="right">
-                  {formatCurrency(recap.unattributed.totalAmount)}
+                  {formatCurrencyExact(recap.unattributed.totalAmount)}
                 </DetailTableTd>
               </DetailTableRow>
             </DetailTableBody>
@@ -124,7 +124,7 @@ export function LaborRecapCard({ recap }: Readonly<{ recap: LaborRecap }>) {
                 <DetailTableTd>Tanggal kerja belum terbukti (di luar total periode)</DetailTableTd>
                 <DetailTableTd align="right">{formatNumber(undated.lineCount)}</DetailTableTd>
                 <DetailTableTd align="right">{formatNumber(undated.laborHours, 2)}</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(undated.totalAmount)}</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrencyExact(undated.totalAmount)}</DetailTableTd>
               </DetailTableRow>
             </DetailTableBody>
           </DetailTable>

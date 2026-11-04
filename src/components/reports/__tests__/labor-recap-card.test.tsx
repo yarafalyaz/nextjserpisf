@@ -81,3 +81,16 @@ describe("LaborRecapCard F-2026-10-20-97a", () => {
     unmountCard(root)
   })
 })
+
+describe("LaborRecapCard: nominal bersen", () => {
+  it("total borongan ber-sen tampil hingga sen", () => {
+    const recap = buildLaborRecap([
+      { employeeId: 7, employeeName: "Budi", category: "labor", hours: 8, amount: 500_000.5 },
+      { employeeId: 7, employeeName: "Budi", category: "labor", hours: 4, amount: 250_000.25 },
+    ])
+    const { container, root } = renderCard(<LaborRecapCard recap={recap} />)
+    const text = container.textContent ?? ""
+    expect(text).toContain("Rp 750.000,75")
+    unmountCard(root)
+  })
+})
