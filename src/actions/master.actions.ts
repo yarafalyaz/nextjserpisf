@@ -3833,6 +3833,19 @@ export async function deleteWarehouse(id: number) {
           // ke gudang mati (getWarehouseScope menyaring, tapi hapus keras
           // harus ditahan di sini seperti satelit lain).
           () => tx.userWarehouse.count({ where: { warehouseId: id } }),
+          // Putaran 124: stok di gudang ini menahan hapus keras. Kedua tabel
+          // di bawah TIDAK menolak sendiri: `stock_moves.warehouse_id` ON
+          // DELETE SET NULL dan `inventory_layers.warehouse_id` bahkan tanpa
+          // FK (Int? polos). Tanpa hitungan ini gudang yang stoknya datang
+          // dari jalur tanpa FK Restrict — penerimaan hasil produksi dan
+          // retur penjualan memakai gudang default item, bukan FK dokumen —
+          // benar-benar terhapus, meninggalkan lapisan FIFO `remaining > 0`
+          // tanpa gudang: Valuasi Stok tetap menjumlahkan nilainya (label
+          // gudang jatuh ke "-") sementara Kartu Stok menyaring gudang hidup,
+          // jadi dua laporan tak bisa direkonsiliasi dan stok itu tak bisa
+          // dipakai FIFO. Mutasi stok historis pun kehilangan gudangnya.
+          () => tx.inventoryLayer.count({ where: { warehouseId: id, remaining: { gt: 0 } } }),
+          () => tx.stockMove.count({ where: { warehouseId: id } }),
         ],
       );
     });
