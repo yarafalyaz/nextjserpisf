@@ -156,3 +156,24 @@ describe("buildBankMovements presisi sen", () => {
     expect(result.totals.net).toBe(30_000_000)
   })
 })
+
+describe("buildBankMovements: nominal ber-sen tampil hingga sen", () => {
+  it("baris dan total tidak dibulatkan sehingga total cocok dengan penjumlahan baris", () => {
+    const result = buildBankMovements({
+      movements: [
+        movement({ documentNo: "PAY-A", amount: 1_000_000.5 }),
+        movement({ documentNo: "PAY-B", amount: 1_000_000.5 }),
+      ],
+      start: period.start,
+      end: period.end,
+    })
+
+    const rows = result.detailTable.rows.filter((row) => row.kind === "data")
+    expect(rows.map((row) => (row.kind === "data" ? row.cells[4] : ""))).toEqual([
+      "1.000.000,50",
+      "1.000.000,50",
+    ])
+    const total = result.summaryTable.rows.find((row) => row.kind === "total")
+    expect(total?.kind === "total" ? total.cells : []).toEqual(["2.000.001", "0", "2.000.001", "2"])
+  })
+})

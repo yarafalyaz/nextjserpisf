@@ -15,7 +15,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency, formatDate, formatNumber } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -80,8 +80,13 @@ export interface BankMovementsResult {
   hasUnassigned: boolean
 }
 
+/**
+ * Arus kas rekening dicetak hingga sen bila memang bersen; rupiah penuh bila
+ * bulat. Dengan 0 desimal, dua baris "1.000.001" berjumlah "2.000.002"
+ * sementara totalnya "2.000.001" — total tidak cocok dengan barisnya.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function shortDate(date: Date): string {
@@ -221,7 +226,7 @@ export function buildBankMovements(input: {
 /** Ringkasan satu baris untuk KPI di halaman laporan. */
 export function bankMovementsSummary(result: BankMovementsResult): string {
   return (
-    `${result.summary.length} rekening · penerimaan ${formatCurrency(result.totals.inflow)} · ` +
-    `pengeluaran ${formatCurrency(result.totals.outflow)} · arus bersih ${formatCurrency(result.totals.net)}`
+    `${result.summary.length} rekening · penerimaan ${amount(result.totals.inflow)} · ` +
+    `pengeluaran ${amount(result.totals.outflow)} · arus bersih ${amount(result.totals.net)}`
   )
 }
