@@ -265,3 +265,27 @@ describe("findRecalibrationCandidates (F-2026-10-21-010)", () => {
     expect(notices.some((t) => t.includes("Kandidat re-cost"))).toBe(false)
   })
 })
+
+describe("varians produksi: presisi sen", () => {
+  it("selisih rekonsiliasi bersen disebut hingga sen di notice dan kolom", () => {
+    const result = buildProductionVariance({
+      orders: [
+        order({
+          status: "in_progress",
+          totalStandardCost: 1_000_000.5,
+          totalActualCost: 400_000.25,
+          releasedCost: 500_000.75,
+          recordedVariance: -50_000.4,
+        }),
+      ],
+      start: period.start,
+      end: period.end,
+    })
+
+    expect(result.totals.varianceDrift).toBe(-49_999.1)
+    const notices = result.table.rows.filter((row) => row.kind === "notice").map((row) => (row.kind === "notice" ? row.text : ""))
+    expect(notices.join(" ")).toContain("49.999,10")
+    const total = result.table.rows.find((row) => row.kind === "total")
+    expect(total?.kind === "total" ? total.cells[4] : "").toBe("(99.999,50)")
+  })
+})

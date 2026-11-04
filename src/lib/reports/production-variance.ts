@@ -24,7 +24,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency, formatQuantity } from "@/lib/utils/format"
+import { formatAccountingExact, formatQuantity } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 267mm, area isi A4 mendatar. */
@@ -140,8 +140,13 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100
 }
 
+/**
+ * Varians dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Notice "Selisih rekonsiliasi" memakai formatter yang sama supaya angka yang
+ * disebut di teks bisa dicocokkan dengan kolom tabel.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function percent(value: number | null): string {
@@ -417,7 +422,7 @@ export function buildProductionVariance(
           .map((c) => {
             const name = itemNames?.get(c.itemId)
             const label = name ? `${name} (#${c.itemId})` : `Barang #${c.itemId}`
-            return `${label} maks ${c.maxAbsVariancePct}% — usulan standar ${formatCurrency(c.suggestedStandardCost)} (tinjau manual, bukan tulisan otomatis)`
+            return `${label} maks ${c.maxAbsVariancePct}% — usulan standar ${amount(c.suggestedStandardCost)} (tinjau manual, bukan tulisan otomatis)`
           })
           .join("; ") +
         ".",
@@ -438,8 +443,8 @@ export function buildProductionVariance(
 /** Ringkasan satu baris untuk KPI di halaman laporan. */
 export function productionVarianceSummary(result: ProductionVarianceResult): string {
   return (
-    `${result.orderCount} perintah produksi: selisih harga bahan ${formatCurrency(result.totals.materialPriceVariance)} · ` +
-    `selisih pemakaian ${formatCurrency(result.totals.materialUsageVariance)} · tenaga kerja & lainnya ` +
-    `${formatCurrency(result.totals.laborAndOtherCost)} · total varians ${formatCurrency(result.totals.computedVariance)}`
+    `${result.orderCount} perintah produksi: selisih harga bahan ${amount(result.totals.materialPriceVariance)} · ` +
+    `selisih pemakaian ${amount(result.totals.materialUsageVariance)} · tenaga kerja & lainnya ` +
+    `${amount(result.totals.laborAndOtherCost)} · total varians ${amount(result.totals.computedVariance)}`
   )
 }
