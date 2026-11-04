@@ -4055,3 +4055,13 @@ Kartu `customer-credit-queue-card.tsx` mencetak saldo per baris, diterima/teralo
 
 ### Bukti
 - Merah: 1 gagal/3 lulus; hijau 4/4; 3.008 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
+
+## Putaran 166 — antrean override kredit (commit `916ae2585`)
+
+Kolom **Batas Kredit**, **PaparanBersih**, dan **Nominal Percobaan** pada `/penjualan/override-kredit` dicetak 0 desimal, padahal ambang kredit dinilai per sen (`utilization` dihitung dari nilai bersen). Nilai Rp1.000.000,50 tampil `Rp 1.000.000`.
+
+### Vonis FIX
+- Kartu memakai `formatCurrencyExact`; regresi baru mengunci ketiga nominal ber-sen.
+
+### Bukti
+- Merah: 1 gagal/8 lulus; hijau 9/9; 3.246 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
