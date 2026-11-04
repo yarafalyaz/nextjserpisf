@@ -4470,3 +4470,19 @@ Halaman `sdm/slip-gaji-saya/[slug]/page.tsx` mencetak gaji pokok/kotor/bersih, t
 ### Bukti
 - Merah: 1 gagal/12 lulus; hijau 2.705 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
 - CI `41850274955`, `41850310388`, `41850598148`, `41850630901`, `41851348171` **success** (putaran 193–194).
+
+## Putaran 197 — detail dokumen penjualan & pembelian (commit `93f794439`)
+
+Lima halaman detail dokumen mencetak nominal `Decimal(15,2)` dengan 0 desimal:
+
+- Penawaran Penjualan, Pesanan Penjualan, Faktur Penjualan
+- Pesanan Pembelian, Tagihan Vendor
+
+Nilai yang terdampak: subtotal, DPP, pajak, total, pembayaran, dan sisa (yang dihitung per sen).
+
+### Vonis FIX
+- Kelimanya memakai `formatCurrencyExact`; guard statis di `exact-cents-sweep.test.ts` menolak `formatCurrency(` tanpa `Exact` di kelima berkas.
+
+### Bukti
+- Merah: 1 gagal/13 lulus; hijau 2.641 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+- CI `41852218669`, `41852258161`, `41852549336`, `41852583538` **success** (putaran 195–196).
