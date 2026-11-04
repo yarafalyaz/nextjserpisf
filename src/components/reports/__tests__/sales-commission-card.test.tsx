@@ -131,3 +131,16 @@ describe("SalesCommissionCard F-2026-10-22-053-S", () => {
     unmountCard(root)
   })
 })
+
+describe("SalesCommissionCard: nominal bersen", () => {
+  it("basis dan estimasi komisi ber-sen tampil hingga sen", () => {
+    const report = buildSalesCommissionRecap([
+      { salesEmployeeId: 2, salesEmployeeName: "Sari", grandTotal: 1_000_000.5, commissionPercent: 0 },
+    ])
+    const { container, root } = renderCard(
+      <SalesCommissionCard report={report} selectedSalesEmployeeId={null} />,
+    )
+    expect(container.textContent ?? "").toContain("Rp 1.000.000,50")
+    unmountCard(root)
+  })
+})

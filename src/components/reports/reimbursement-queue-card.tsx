@@ -6,7 +6,7 @@ import type {
   ReimbursementQueueRow,
 } from "@/lib/reports/reimbursement-queue"
 import { entityHref } from "@/lib/utils/entity-url"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import {
   DetailTable,
@@ -74,7 +74,7 @@ function QueueTable({ rows }: Readonly<{ rows: ReimbursementQueueRow[] }>) {
               <DetailTableTd align="right">
                 {row.waitingDays === null ? "—" : `${row.waitingDays} hari`}
               </DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.amount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.amount)}</DetailTableTd>
             </DetailTableRow>
           ))}
         </DetailTableBody>
@@ -102,7 +102,7 @@ export function ReimbursementQueueCard({ queue }: Readonly<{ queue: Reimbursemen
         <h2 className="text-[0.9375rem] font-semibold text-foreground">{queue.title}</h2>
         <p className="text-xs text-muted-foreground">
           {queue.totalClaims} klaim · Mengendap {queue.levelCounts.mengendap} · Menunggu{" "}
-          {queue.levelCounts.menunggu} · {formatCurrency(queue.totalStoredAmount)} (
+          {queue.levelCounts.menunggu} · {formatCurrencyExact(queue.totalStoredAmount)} (
           {queue.totalLabel})
         </p>
       </div>

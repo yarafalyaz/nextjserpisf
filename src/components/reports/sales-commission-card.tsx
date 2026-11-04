@@ -1,5 +1,5 @@
 import type { SalesCommissionRecap } from "@/lib/reports/sales-commission"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -63,19 +63,19 @@ export function SalesCommissionCard({
             <DetailTableRow key={row.salesEmployeeId}>
               <DetailTableTd className="font-medium">{row.salesEmployeeName || "—"}</DetailTableTd>
               <DetailTableTd align="right">{row.invoiceCount}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.paidBase)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.dppBase)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.estimatedCommission)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.returnDeduction)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.netEstimatedCommission)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.paidBase)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.dppBase)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.estimatedCommission)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.returnDeduction)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.netEstimatedCommission)}</DetailTableTd>
             </DetailTableRow>
           ))}
           {showUnattributed ? (
             <DetailTableRow>
               <DetailTableTd className="font-medium">Tanpa penjual tercatat</DetailTableTd>
               <DetailTableTd align="right">{report.unattributed.invoiceCount}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(report.unattributed.paidBase)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(report.unattributed.dppBase)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(report.unattributed.paidBase)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(report.unattributed.dppBase)}</DetailTableTd>
               <DetailTableTd align="right">—</DetailTableTd>
               <DetailTableTd align="right">—</DetailTableTd>
               <DetailTableTd align="right">—</DetailTableTd>
@@ -89,7 +89,7 @@ export function SalesCommissionCard({
               —
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(report.totalPaidBase)}
+              {formatCurrencyExact(report.totalPaidBase)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
               —
@@ -113,7 +113,7 @@ export function SalesCommissionCard({
               —
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(report.totalDppBase)}
+              {formatCurrencyExact(report.totalDppBase)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
               —
@@ -137,7 +137,7 @@ export function SalesCommissionCard({
               —
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(report.totalEstimatedCommission)}
+              {formatCurrencyExact(report.totalEstimatedCommission)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
               —
@@ -161,7 +161,7 @@ export function SalesCommissionCard({
               —
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(report.totalReturnDeduction)}
+              {formatCurrencyExact(report.totalReturnDeduction)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
               —
@@ -185,7 +185,7 @@ export function SalesCommissionCard({
               —
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(report.totalNetEstimatedCommission)}
+              {formatCurrencyExact(report.totalNetEstimatedCommission)}
             </DetailTableTd>
           </DetailTableFootRow>
         </DetailTableFoot>

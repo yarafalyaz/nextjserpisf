@@ -1,5 +1,5 @@
 import type { SalesCommissionPayable } from "@/lib/reports/sales-commission-payable"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -55,10 +55,10 @@ export function SalesCommissionPayableCard({
               <DetailTableTd className="font-medium">
                 {row.salesEmployeeName || "Nama penjual tidak tercatat"}
               </DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.accruedAmount)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.reversalAmount)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.paidAmount)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.balance)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.accruedAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.reversalAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.paidAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.balance)}</DetailTableTd>
             </DetailTableRow>
           ))}
         </DetailTableBody>
@@ -75,7 +75,7 @@ export function SalesCommissionPayableCard({
               —
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(report.totalBalance)}
+              {formatCurrencyExact(report.totalBalance)}
             </DetailTableTd>
           </DetailTableFootRow>
         </DetailTableFoot>

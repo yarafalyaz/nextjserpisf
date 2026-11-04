@@ -1,5 +1,5 @@
 import type { ExpiryActionQueue } from "@/lib/reports/serial-batch-stock"
-import { formatCurrency, formatDate, formatQuantity } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate, formatQuantity } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -21,7 +21,7 @@ export function ExpiryActionCard({ queue }: Readonly<{ queue: ExpiryActionQueue 
   const { lines, totals } = queue
   const summary =
     `${totals.expiredLines} kedaluwarsa · ${totals.expiringSoonLines} segera kedaluwarsa · ` +
-    `estimasi nilai terancam ${formatCurrency(totals.expiredEstimatedValue + totals.expiringSoonEstimatedValue)}`
+    `estimasi nilai terancam ${formatCurrencyExact(totals.expiredEstimatedValue + totals.expiringSoonEstimatedValue)}`
   return (
     <ReportCardShell
       label="Antrean Aksi Kadaluarsa"
@@ -57,7 +57,7 @@ export function ExpiryActionCard({ queue }: Readonly<{ queue: ExpiryActionQueue 
                 <DetailTableTd align="right">{formatQuantity(line.qty)}</DetailTableTd>
                 <DetailTableTd>{formatDate(line.expiryDate, { format: "short" })}</DetailTableTd>
                 <DetailTableTd align="right">{formatQuantity(line.daysToExpiry)}</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(line.estimatedValue)}</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrencyExact(line.estimatedValue)}</DetailTableTd>
                 <DetailTableTd>
                   {line.bucket === "kedaluwarsa" ? "Kedaluwarsa" : "Segera kedaluwarsa"}
                 </DetailTableTd>
