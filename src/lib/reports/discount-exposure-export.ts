@@ -15,7 +15,7 @@ import {
   DISCOUNT_EXPOSURE_NOTICE_TEXT,
   type DiscountExposure,
 } from "@/lib/reports/discount-exposure"
-import { formatAccounting, formatDate, formatPercentage } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate, formatPercentage } from "@/lib/utils/format"
 import type { TableDocument } from "@/lib/pdf/engine/types"
 
 export interface DiscountExposureLoadResult {
@@ -38,7 +38,7 @@ export async function loadDiscountExposureReport(period: {
   }
 }
 
-const money = (value: number) => formatAccounting(value, { zeroDash: false })
+const money = (value: number) => formatAccountingExact(value)
 
 export function buildDiscountExposureTable(
   result: DiscountExposureLoadResult,

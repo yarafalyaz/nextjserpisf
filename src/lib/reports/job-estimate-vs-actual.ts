@@ -24,7 +24,7 @@
  * `job-estimate-vs-actual-data.ts`.
  */
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { safeRound, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -105,8 +105,12 @@ export interface JobEstimateVsActualResult {
   costOverBillingCount: number
 }
 
+/**
+ * Nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, total tidak cocok dengan penjumlahan baris yang tercetak.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function noteOf(row: JobEstimateVsActualRow): string | null {
@@ -258,10 +262,10 @@ export function buildJobEstimateVsActual(input: {
 /** Ringkasan satu baris untuk teks di bawah tabel laporan. */
 export function jobEstimateVsActualSummary(result: JobEstimateVsActualResult): string {
   return (
-    `${result.jobCount} pekerjaan: estimasi disetujui ${formatCurrency(result.totals.estimate)} · ` +
-    `penagihan aktual ${formatCurrency(result.totals.billed)} · ` +
-    `selisih ${formatCurrency(result.totals.billingVariance)} · ` +
-    `biaya aktual ${formatCurrency(result.totals.actualCost)} · ` +
-    `margin aktual ${formatCurrency(result.totals.actualMargin)}.`
+    `${result.jobCount} pekerjaan: estimasi disetujui ${amount(result.totals.estimate)} · ` +
+    `penagihan aktual ${amount(result.totals.billed)} · ` +
+    `selisih ${amount(result.totals.billingVariance)} · ` +
+    `biaya aktual ${amount(result.totals.actualCost)} · ` +
+    `margin aktual ${amount(result.totals.actualMargin)}.`
   )
 }

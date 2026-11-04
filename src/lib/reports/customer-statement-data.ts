@@ -67,7 +67,7 @@ import {
 } from "@/lib/reports/customer-statement"
 import { loadReturnCreditByReturnId } from "@/lib/reports/return-credit"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
-import { formatAccounting, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface CustomerStatementWhatsappTrailEntry {
@@ -110,7 +110,7 @@ const COLUMNS: TableColumn[] = [
   { header: "Saldo", align: "right", width: 32 },
 ]
 
-const money = (value: number) => formatAccounting(value, { zeroDash: false })
+const money = (value: number) => formatAccountingExact(value)
 const shortDate = (date: Date) =>
   formatDate(date, { format: "short" })
 

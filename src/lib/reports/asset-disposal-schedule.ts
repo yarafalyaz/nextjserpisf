@@ -15,7 +15,7 @@
  * Pure (tanpa Prisma/DOM) supaya perhitungan laba/rugi bisa diuji.
  */
 
-import { formatAccounting, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import {
   accumulatedDepreciationByAsset,
@@ -66,8 +66,12 @@ export interface AssetDisposalReportResult {
   count: number
 }
 
+/**
+ * Nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, total tidak cocok dengan penjumlahan baris yang tercetak.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 /**

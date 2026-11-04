@@ -18,7 +18,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -61,8 +61,12 @@ export interface BankTransactionReconciliationResult {
   verdict: string
 }
 
+/**
+ * Nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, total tidak cocok dengan penjumlahan baris yang tercetak.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function shortDate(date: Date): string {
@@ -190,6 +194,6 @@ export function bankTransactionSummary(result: BankTransactionReconciliationResu
   return (
     `${result.total.count} transaksi · terekonsiliasi ${result.reconciled.count} · ` +
     `belum ${result.unreconciled.count} · belum terekonsiliasi senilai ` +
-    `${formatCurrency(safeAdd(result.unreconciled.inflow, result.unreconciled.outflow, 2))}`
+    `${amount(safeAdd(result.unreconciled.inflow, result.unreconciled.outflow, 2))}`
   )
 }

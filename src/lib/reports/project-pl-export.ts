@@ -8,7 +8,7 @@
  * memo jam saja, bukan biaya dan tidak mengurangi laba.
  */
 import { loadProjectPlReport, type ProjectPlReport } from "@/lib/reports/project-pl-data"
-import { formatAccounting, formatNumber } from "@/lib/utils/format"
+import { formatAccountingExact, formatNumber } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 import type { TableDocument } from "@/lib/pdf/engine/types"
 
@@ -25,8 +25,12 @@ export async function loadProjectPlPdfReport(period: {
   return { report, periodCaption: report.periodCaption }
 }
 
+/**
+ * Nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, total tidak cocok dengan penjumlahan baris yang tercetak.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function otherCost(row: ProjectPlReport["rows"][number]): number {

@@ -16,7 +16,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -63,8 +63,12 @@ export function isRetainedEarningsAccount(name: string): boolean {
   return /laba\s*ditahan/i.test(name)
 }
 
+/**
+ * Nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, total tidak cocok dengan penjumlahan baris yang tercetak.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 const EQUITY_COLUMNS: TableColumn[] = [

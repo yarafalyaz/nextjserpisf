@@ -12,7 +12,7 @@
  */
 
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
-import { formatAccounting, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 import {
   accumulatedDepreciationByAsset,
@@ -76,8 +76,12 @@ export function assetStatusLabel(status: string): string {
   return ASSET_STATUS_LABELS[status] ?? statusLabel(status)
 }
 
+/**
+ * Nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, total tidak cocok dengan penjumlahan baris yang tercetak.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 /**

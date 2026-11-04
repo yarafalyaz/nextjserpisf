@@ -20,7 +20,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -83,8 +83,12 @@ export interface PayrollTotals {
   flooredNet: number
 }
 
+/**
+ * Nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, total tidak cocok dengan penjumlahan baris yang tercetak.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 function emptyTotals(): PayrollTotals {
@@ -241,7 +245,7 @@ export function buildPayrollByEmployee(input: {
   const verdict =
     groups.length === 0
       ? "Tidak ada slip gaji disetujui pada periode ini"
-      : `${totals.slips} slip · bruto ${formatCurrency(totals.gross)} · bersih ${formatCurrency(totals.net)}` +
+      : `${totals.slips} slip · bruto ${amount(totals.gross)} · bersih ${amount(totals.net)}` +
         (input.draftSlips > 0 ? ` · ${input.draftSlips} draft belum dihitung` : "")
 
   return { table: { columns: EMPLOYEE_COLUMNS, rows }, totals, verdict }
@@ -296,7 +300,7 @@ export function buildPph21(input: { rows: PayrollRowInput[]; draftSlips: number 
   const verdict =
     groups.length === 0
       ? "Tidak ada PPh 21 pada periode ini"
-      : `PPh 21 dipotong ${formatCurrency(totals.pph21)} dari bruto ${formatCurrency(totals.gross)} (${totals.slips} slip)`
+      : `PPh 21 dipotong ${amount(totals.pph21)} dari bruto ${amount(totals.gross)} (${totals.slips} slip)`
 
   return { table: { columns: PPH_COLUMNS, rows }, totals, verdict }
 }
@@ -354,7 +358,7 @@ export function buildPayrollComposition(input: { rows: PayrollRowInput[]; draftS
   const verdict =
     totals.slips === 0
       ? "Tidak ada slip gaji disetujui pada periode ini"
-      : `Bruto ${formatCurrency(totals.gross)} · potongan ${formatCurrency(safeAdd(safeAdd(totals.deductions, totals.bpjs, 2), totals.pph21, 2))} · bersih ${formatCurrency(totals.net)}`
+      : `Bruto ${amount(totals.gross)} · potongan ${amount(safeAdd(safeAdd(totals.deductions, totals.bpjs, 2), totals.pph21, 2))} · bersih ${amount(totals.net)}`
 
   return { table: { columns: COMPOSITION_COLUMNS, rows }, totals, verdict }
 }
@@ -367,25 +371,25 @@ function percent(value: number, base: number): string {
 export function payrollByEmployeeSummary(result: PayrollReportResult): string {
   if (result.totals.slips === 0) return "Tidak ada slip gaji disetujui pada periode ini"
   return (
-    `${result.totals.slips} slip · pokok ${formatCurrency(result.totals.baseSalary)} · ` +
-    `tunjangan ${formatCurrency(result.totals.allowances)} · lembur ${formatCurrency(result.totals.overtime)} · ` +
-    `potongan ${formatCurrency(result.totals.deductions)} · bruto ${formatCurrency(result.totals.gross)} · ` +
-    `bersih ${formatCurrency(result.totals.net)}`
+    `${result.totals.slips} slip · pokok ${amount(result.totals.baseSalary)} · ` +
+    `tunjangan ${amount(result.totals.allowances)} · lembur ${amount(result.totals.overtime)} · ` +
+    `potongan ${amount(result.totals.deductions)} · bruto ${amount(result.totals.gross)} · ` +
+    `bersih ${amount(result.totals.net)}`
   )
 }
 
 export function pph21Summary(result: PayrollReportResult): string {
   if (result.totals.slips === 0) return "Tidak ada PPh 21 pada periode ini"
   return (
-    `PPh 21 ${formatCurrency(result.totals.pph21)} · bruto ${formatCurrency(result.totals.gross)} · ` +
-    `bersih ${formatCurrency(result.totals.net)} (${result.totals.slips} slip)`
+    `PPh 21 ${amount(result.totals.pph21)} · bruto ${amount(result.totals.gross)} · ` +
+    `bersih ${amount(result.totals.net)} (${result.totals.slips} slip)`
   )
 }
 
 export function payrollCompositionSummary(result: PayrollReportResult): string {
   if (result.totals.slips === 0) return "Tidak ada slip gaji disetujui pada periode ini"
   return (
-    `Bruto ${formatCurrency(result.totals.gross)} · BPJS ${formatCurrency(result.totals.bpjs)} · ` +
-    `PPh 21 ${formatCurrency(result.totals.pph21)} · bersih ${formatCurrency(result.totals.net)}`
+    `Bruto ${amount(result.totals.gross)} · BPJS ${amount(result.totals.bpjs)} · ` +
+    `PPh 21 ${amount(result.totals.pph21)} · bersih ${amount(result.totals.net)}`
   )
 }
