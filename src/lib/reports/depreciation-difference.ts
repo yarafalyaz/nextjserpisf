@@ -39,7 +39,7 @@ import {
   fiscalGroupRule,
   resolveFiscalGroup,
 } from "@/lib/finance/asset-fiscal-groups"
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { safeAdd, safeMultiply, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -145,8 +145,12 @@ export interface DepreciationDifferenceResult {
   verdict: string
 }
 
+/**
+ * Nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, baris tidak menjumlah ke total yang tercetak.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 /**
@@ -155,8 +159,7 @@ function amount(value: number): string {
  * justru menjadi alasan laporan ini ada. Nilai bulat tetap rupiah penuh.
  */
 function preciseAmount(value: number): string {
-  if (Number.isInteger(value)) return amount(value)
-  return formatAccounting(value, { zeroDash: false, decimals: 2 })
+  return formatAccountingExact(value)
 }
 
 function assetLabel(asset: DepreciationAssetInput): string {

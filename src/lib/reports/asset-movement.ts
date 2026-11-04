@@ -15,7 +15,7 @@
  * Pure (tanpa Prisma/DOM) supaya perhitungan saldo awal/akhir bisa diuji.
  */
 
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import {
   accumulatedDepreciationByAsset,
   categoryLabelOf,
@@ -90,8 +90,12 @@ function cellsOf(cost: number, accumulated: number, bookValue: number): string[]
   return [amount(cost), amount(accumulated), amount(bookValue)]
 }
 
+/**
+ * Nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, baris tidak menjumlah ke total yang tercetak.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 /**
@@ -101,7 +105,7 @@ function amount(value: number): string {
  * rupiah penuh sesuai konvensi laporan aset.
  */
 function preciseAmount(value: number): string {
-  return formatAccounting(value, { zeroDash: false, decimals: 2 })
+  return formatAccountingExact(value)
 }
 
 /**

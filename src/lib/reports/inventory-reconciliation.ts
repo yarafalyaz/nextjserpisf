@@ -22,7 +22,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { safeRound, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -52,8 +52,12 @@ export interface InventoryReconciliationResult {
 /** Selisih di bawah setengah rupiah dianggap nol (pembulatan dua desimal). */
 const BALANCE_TOLERANCE = 0.5
 
+/**
+ * Nominal dicetak hingga sen bila memang bersen; rupiah penuh bila bulat.
+ * Dengan 0 desimal, baris tidak menjumlah ke total yang tercetak.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 /**
@@ -62,8 +66,7 @@ function amount(value: number): string {
  * — temuan dilebihkan dua kali lipat dan tidak bisa dicocokkan dengan buku.
  */
 function preciseAmount(value: number): string {
-  if (Number.isInteger(value)) return amount(value)
-  return formatAccounting(value, { zeroDash: false, decimals: 2 })
+  return formatAccountingExact(value)
 }
 
 export function buildInventoryReconciliation(

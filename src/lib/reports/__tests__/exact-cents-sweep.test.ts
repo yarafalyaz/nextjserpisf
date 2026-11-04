@@ -101,3 +101,43 @@ describe("sapuan kedua: nilai selisih dan transfer bersen", () => {
     expect(cells.join(" ")).toContain("1.000.000,50")
   })
 })
+
+import { buildAssetMovement } from "../asset-movement"
+import { buildInventoryReconciliation } from "../inventory-reconciliation"
+
+describe("sapuan ketiga: baris mutasi aset & rekonsiliasi persediaan", () => {
+  it("mutasi aset: baris kategori ber-sen tampil hingga sen, sejajar total", () => {
+    const result = buildAssetMovement({
+      assets: [
+        {
+          id: 1, code: "A", name: "Aset A", categoryName: "Kat",
+          purchaseDate: new Date("2024-01-01"), purchaseCost: 1_000_000.5, status: "active",
+        },
+      ],
+      entries: [],
+      journals: [],
+      start: new Date("2026-10-01"),
+      end: new Date("2026-10-31T23:59:59"),
+    } as never)
+
+    const cells = result.table.rows
+      .filter((row) => row.kind === "data")
+      .flatMap((row) => (row.kind === "data" ? row.cells : []))
+    expect(cells.join(" ")).toContain("1.000.000,50")
+  })
+
+  it("rekonsiliasi persediaan: nilai barang bersen tampil hingga sen", () => {
+    const result = buildInventoryReconciliation({
+      valuation: { qty: 1, value: 100.3, byWarehouse: [] },
+      ledger: { accountLabel: "1-1300 Persediaan", balance: 99.8 },
+      periodEndIsToday: true,
+    })
+
+    const nilaiBarang = result.table.rows.find((row) => row.kind === "data")
+    expect(nilaiBarang?.kind === "data" ? nilaiBarang.cells : []).toEqual([
+      "Nilai barang menurut lapisan persediaan",
+      "100,30",
+    ])
+    expect(result.totals.isBalanced).toBe(false)
+  })
+})
