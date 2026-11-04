@@ -4533,3 +4533,16 @@ Empat halaman detail master mencetak nominal `Decimal(15,2)` dengan 0 desimal: g
 ### Bukti
 - Merah: 1 gagal/16 lulus; hijau 2.667 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
 - CI `41854362180`, `41854399521`, `41854822301`, `41854865791` **success** (putaran 197–198).
+
+## Putaran 201 — dashboard, detail proyek, kalender (commit `8054d9ee3`)
+
+- **Dashboard utama** (`(dashboard)/page.tsx`) — total pendapatan, piutang, dan pembayaran terbaru.
+- **Detail proyek** — nilai item, penawaran, faktur, pembayaran, serta teks peringatan laba negatif (yang menyebut pendapatan dan total biaya).
+- **Kalender** — nominal peristiwa.
+
+### Vonis FIX
+- Ketiganya memakai `formatCurrencyExact`; guard statis di `exact-cents-sweep.test.ts` menolak `formatCurrency(` tanpa `Exact`.
+
+### Bukti
+- Merah: 1 gagal/17 lulus; hijau 2.609 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+- CI `41854822301`, `41854865791`, `41856179812`, `41856223297` **success** (putaran 198–199).
