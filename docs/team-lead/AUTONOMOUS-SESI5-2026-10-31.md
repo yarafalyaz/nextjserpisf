@@ -3493,3 +3493,20 @@ Dua laporan pemeriksaan lagi-lagi memutuskan status dari angka sen tetapi mencet
 ### Bukti
 - Merah: `inventory-reconciliation-cents.test.ts` 1 gagal (`"(1)"` vs `"(0,50)"`), `received-not-billed.test.ts` 1 gagal (`"Ada selisih Rp 1"` vs `"0,50"`).
 - Hijau: 4 berkas terkait **70/70**; seluruh `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` **3087 lulus / 4 dilewati** (395 berkas); guard statis **511/511**; `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
+
+## Putaran 133 — Posisi PPN faktur dibulatkan ke angka yang tidak ada di buku (commit `87567df36`, `c635937c2`)
+
+Lanjutan pola Putaran 132 pada laporan `faktur-ppn`. Baris **Posisi PPN (Keluaran − Masukan)**, verdict, dan ringkasan KPI memakai `formatAccounting`/`formatCurrency` 0 desimal, padahal posisi dihitung dari PPN dokumen ber-`Decimal(15,2)`. Probe: satu faktur `dpp 100,50 / vat 100,50` → sel PPN posisi `"101"`, verdict `"posisi kurang bayar Rp 101"`. Angka 101 tidak ada di dokumen mana pun; rekonsiliasi terhadap faktur mustahil.
+
+### Vonis FIX
+- `preciseAmount` lokal: rupiah penuh bila bulat, dua desimal bila ada sen. Dipakai untuk tiga sel baris posisi, angka posisi/pengurang di verdict, dan ketiga angka ringkasan KPI.
+- Baris faktur per dokumen dan subtotal kelompok **tidak** diubah — di sana konvensi cetak rupiah penuh sudah diuji `total-trailing-cells`.
+- Import `formatCurrency` dihapus karena tidak lagi dipakai.
+
+### Vonis CATAT
+- **Putaran ini juga memperkuat assertion**: review independen menemukan bahwa mutasi yang hanya mengembalikan formatter di dalam **teks** peringatan (sementara baris total tetap dua desimal) lolos semua tes Neraca/Neraca Saldo/Skontro karena hanya bagian "selisih …" yang diperiksa. Assertion sekarang mengunci angka pembanding di teks ("Jumlah Aset (5.000.000,25)", "total debit (10.000,01)", "Jumlah Pasiva (…)"), dan mutasi yang sama terbukti merah.
+
+### Bukti
+- Merah: 2 gagal (`"101"` vs `"100,50"`; KPI `"Rp 101"` vs `"100,50"`).
+- Hijau: VAT invoices 35/35 (23 tes fokus); seluruh `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` **3089 lulus / 4 dilewati**; guard statis **511/511**; `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
+- CI `41789494600` (head `2bc7bed42`) **success**.
