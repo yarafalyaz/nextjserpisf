@@ -3948,3 +3948,20 @@ Empat halaman masih memakai `formatCurrency` 0 desimal untuk nominal yang berasa
 ### Bukti
 - 2.654 lulus / 4 dilewati; tsc, ESLint, diff-check bersih.
 - CI `41813678521`/`41813767782` (putaran 154) dan batch putaran 155–156 **success**.
+
+## Putaran 159 — dua halaman terakhir: paparan diskon & riwayat harga (commit `1ae9ed29e`)
+
+Sisa dua halaman dengan formatter 0 desimal untuk nominal:
+
+- **Paparan Diskon Penjualan** — bruto, diskon baris/header/efektif per dokumen, total, dan KPI.
+- **Riwayat Harga Penawaran** — harga satuan terakhir, harga/diskon/total per peristiwa.
+
+### Vonis FIX
+- Sel dan KPI memakai `formatAccountingExact`.
+
+### Vonis CATAT
+- **Sapuan formatter sen di lapisan halaman selesai.** `grep -rn "formatCurrency\|formatAccounting(" 'src/app/(dashboard)/laporan' --include='*.tsx'` kini tidak menyisakan pemakaian lama selain komponen bersama yang sudah memakai exact (`subledger-report` tetap 0 desimal untuk baris akun, sesuai konvensi statement).
+
+### Bukti
+- 65/65 tes halaman laporan; tsc, ESLint, diff-check bersih.
+- CI `41814543710`, `41814661674`, `41815022788`, `41815122636`, `41815528350`, `41815881242` **success** (putaran 155–158).
