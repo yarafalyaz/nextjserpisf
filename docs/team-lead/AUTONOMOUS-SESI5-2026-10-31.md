@@ -3883,3 +3883,22 @@ Halaman `/laporan/buku-besar` adalah satu-satunya laporan buku besar yang menghi
 ### Bukti
 - Merah: 1 gagal/3871 lulus.
 - Hijau: `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` **3119 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
+
+## Putaran 155 — halaman laporan (bukan PDF) membulatkan nominal bersen (commit `8e2f69c1b`)
+
+Sapuan masuk ke lapisan halaman. Tiga belas halaman laporan mencetak nominal 0 desimal langsung di JSX, sementara builder/layanan di belakangnya menghitung sent:
+
+`pusat-laba`, `analisis-penjualan`, `analisis-harga-beli`, `laba-rugi-per-pusat-biaya`, `serapan-overhead`, `ringkasan-stok`, `valuasi-stok`, `stok-tidak-bergerak`, `mutasi-stok`, `rekonsiliasi-stok`, `transfer-terkirim`, `histori-aset`, `disposisi-aset`.
+
+Halaman-halaman ini juga menjumlah dengan `reduce((s, r) => s + …)` float mentah untuk KPI, jadi total bisa drift dari baris.
+
+### Vonis FIX
+- Helper baru `formatCurrencyExact` (simbol "Rp" + `formatAccountingExact`) di `src/lib/utils/format.ts`; sel tabel memakai `formatAccountingExact`, KPI memakai `formatCurrencyExact` sehingga awalan Rp yang sudah ada tidak hilang.
+- Ringkasan `slow-moving-stock` yang semula memakai `formatCurrency` dikembalikan ke bentuk ber-Rp lewat helper baru.
+- `analisis-penjualan` mengganti KPI qty yang sempat salah formatter menjadi `formatNumber`.
+
+### Vonis CATAT
+- **Jumlah KPI di halaman masih memakai `reduce` float** dan belum dipindah ke `safeAdd`. Untuk nilai `Decimal(15,2)` hasilnya sama setelah format dua desimal, tetapi konsistensi aritmetika menyusul di putaran tersendiri agar tidak mencampur perubahan besar dengan perubahan tampilan.
+
+### Bukti
+- reports+halaman **3150 lulus / 4 dilewati**; seluruh unit suite **12.541 lulus / 23 dilewati** (1.172 berkas); tes baru `formatCurrencyExact`; tsc, ESLint, diff-check bersih.
