@@ -2303,7 +2303,7 @@ export async function createSalesInvoice(formData: FormData) {
   // baris. Nilai di-clamp seperti updateSalesInvoice: baris negatif tak tersimpan.
   const itemsJson = v.items
   const rawItems = itemsJson
-    ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; uom?: string | null; description?: string | null }>>(itemsJson) ?? [])
+    ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; uom?: string | null; serialNumbers?: string[] | null; description?: string | null }>>(itemsJson) ?? [])
     : null
 
   const invoice = await prisma.$transaction(async (tx) => {
@@ -2506,6 +2506,12 @@ export async function createSalesInvoice(formData: FormData) {
           termDays: customerTerm?.paymentTerm?.isActive ? customerTerm.paymentTerm.days : null,
         }),
         taxInvoiceNumber: v.taxInvoiceNumber ?? null,
+        // Putaran 121: form faktur punya textarea Catatan dan mengirimnya,
+        // tetapi jalur create dulu tidak pernah menulisnya — catatan yang
+        // diketik saat membuat faktur hilang begitu simpan berhasil (jalur
+        // edit sudah lama menyimpannya). Draft tanpa catatan lalu lolos
+        // ke posting tanpa jejak alasan/keterangan operator.
+        notes: v.notes ?? null,
         subtotal,
         discount: discountTotal,
         tax: taxAmount,
@@ -2522,6 +2528,17 @@ export async function createSalesInvoice(formData: FormData) {
                   const safeQty = Math.max(0, Number(item.qty) || 0)
                   const safePrice = Math.max(0, Number(item.unitPrice) || 0)
                   const safeDiscount = Math.max(0, Number(item.discount) || 0)
+                  // Putaran 121: nomor seri pilihan operator ikut tersimpan.
+                  // Form mengirimnya, tetapi jalur create dulu membuangnya,
+                  // sehingga posting `consumeFifoLayers` memilih serial tertua
+                  // otomatis alih-alih serial yang benar-benar diserahkan
+                  // bersama fakturnya. Paritas updateSalesInvoice: hanya array
+                  // berisi yang ditulis; keaslian serial tetap dinilai FIFO
+                  // saat posting. Entri kosong dibuang supaya "" tak terbaca
+                  // sebagai pilihan manual.
+                  const serials = Array.isArray(item.serialNumbers)
+                    ? item.serialNumbers.map((s) => String(s).trim()).filter((s) => s !== "")
+                    : []
                   return {
                     itemId: item.itemId,
                     description: item.description ?? null,
@@ -2531,6 +2548,7 @@ export async function createSalesInvoice(formData: FormData) {
                     unitPrice: safePrice,
                     discount: safeDiscount,
                     total: Math.max(0, safeSubtract(safeMultiply(safeQty, safePrice, 0), safeDiscount, 0)),
+                    ...(serials.length > 0 ? { serialNumbers: serials } : {}),
                     // F-018 BR-TIER-09: hanya baris langsung hasil resolver
                     // yang membawa sumber; konversi SO tetap null (bukan klaim).
                     priceSource: "priceSource" in item ? (item.priceSource ?? null) : null,

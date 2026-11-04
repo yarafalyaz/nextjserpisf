@@ -2424,6 +2424,37 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     expect(Number(arg.data.items.create[0].discount)).toBe(0)
   })
 
+  // Putaran 121: form mengirim nomor seri per baris (dan jalur edit sudah
+  // menyimpannya), tetapi jalur create membuangnya — posting lalu memilih
+  // serial tertua otomatis, bukan yang benar-benar diserahkan.
+  it("putaran 121: createSalesInvoice menyimpan nomor seri baris dari form", async () => {
+    mocks.generateDocNumMock.mockResolvedValue("INV-SER")
+    const items = JSON.stringify([
+      { itemId: 11, qty: 2, unitPrice: 300, discount: 0, serialNumbers: ["SN-A", "SN-B"] },
+      { itemId: 12, qty: 1, unitPrice: 400, discount: 0 },
+    ])
+    const res = await actions.createSalesInvoice(fdMap({ customerId: "7", date: "2026-06-12", items }))
+    expect(res?.success).toBe(true)
+
+    const arg = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    expect(arg.data.items.create[0].serialNumbers).toEqual(["SN-A", "SN-B"])
+    // Baris tanpa pilihan manual tidak menulis apa pun (paritas jalur edit:
+    // auto-FIFO tetap milik posting).
+    expect(arg.data.items.create[1].serialNumbers).toBeUndefined()
+  })
+
+  // Putaran 121: textarea Catatan di form dikirim juga saat create, tetapi
+  // jalur create tidak pernah menulisnya — catatan hilang tanpa error.
+  it("putaran 121: createSalesInvoice menyimpan catatan dari form", async () => {
+    mocks.generateDocNumMock.mockResolvedValue("INV-NOTE")
+    const res = await actions.createSalesInvoice(
+      fdMap({ customerId: "7", date: "2026-06-12", notes: "Kirim lewat ekspedisi siang" }),
+    )
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    expect(arg.data.notes).toBe("Kirim lewat ekspedisi siang")
+  })
+
   // R8-JB-09: dueDate tak terisi diturunkan dari termin master pelanggan
   // (snapshot dokumen). Tanpa termin → tetap null. Lookup termin terpisah
   // dari lookup kategori price-list (field dipilih keduanya).
