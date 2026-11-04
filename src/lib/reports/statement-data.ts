@@ -187,6 +187,13 @@ export async function loadIncomeStatementStatement(
   return loadIncomeStatementByStatus(period, options, showPercent, REPORT_JOURNAL_STATUSES)
 }
 
+/** Buku Besar menampilkan POSTED+REVERSED saja; DRAFT report rows must not link there. */
+export function incomeStatementLineLink(statuses: readonly string[], periodSlug: string) {
+  return statuses.every((status) => status === "POSTED" || status === "REVERSED")
+    ? { basePath: "/laporan/buku-besar", periodSlug }
+    : undefined
+}
+
 /**
  * Laba rugi dengan pilihan status jurnal.
  *

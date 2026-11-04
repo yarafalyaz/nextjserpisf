@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
   loadBalanceSheetStatement,
+  incomeStatementLineLink,
   loadIncomeStatementByCostCenter,
   loadIncomeStatementStatement,
 } from "../statement-data"
@@ -38,6 +39,16 @@ const ASSET_ACCOUNT = {
   parentId: null,
   reportGroup: "CASH",
 }
+
+describe("incomeStatementLineLink", () => {
+  it("enables ledger drill-down only for realised journal statuses", () => {
+    expect(incomeStatementLineLink(["POSTED", "REVERSED"], "2026-10")).toEqual({
+      basePath: "/laporan/buku-besar",
+      periodSlug: "2026-10",
+    })
+    expect(incomeStatementLineLink(["DRAFT"], "2026-10")).toBeUndefined()
+  })
+})
 
 beforeEach(() => {
   vi.clearAllMocks()

@@ -6,7 +6,7 @@ import { StatementTableView } from "@/components/reports/statement-table-view"
 import { StatementOptions } from "@/components/reports/statement-options"
 import { statementOptionsToParams } from "@/lib/reports/statement-display"
 import { loadStatementOptionsContext } from "@/lib/reports/statement-options-context"
-import { loadIncomeStatementByStatus } from "@/lib/reports/statement-data"
+import { incomeStatementLineLink, loadIncomeStatementByStatus } from "@/lib/reports/statement-data"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { serializeStatementCsv } from "@/lib/reports/statement-csv"
 
@@ -39,10 +39,9 @@ export async function IncomeStatementPage({
   const user = await requirePermission("view_reports")
   const { period, options, showPercent } = await loadStatementOptionsContext(routeParams, searchParams)
 
-  const statement = await loadIncomeStatementByStatus(period, options, showPercent, statuses, {
-    basePath: "/laporan/buku-besar",
-    periodSlug: period.slug,
-  })
+  // Buku Besar hanya menampilkan POSTED+REVERSED; tautan DRAFT akan menampilkan saldo berbeda.
+  const lineLink = incomeStatementLineLink(statuses, period.slug)
+  const statement = await loadIncomeStatementByStatus(period, options, showPercent, statuses, lineLink)
 
   return (
     <ReportPageShell
