@@ -3298,3 +3298,35 @@ Sumber: kandidat agent audit inventaris+produksi, diverifikasi ulang di kode sen
 - Merah perintah terpisah: `inventory.actions.test.ts -t 'putaran 122'` → 1 gagal (`expected true to be false`), edit lolos dan `deleteMany` terpanggil.
 - Hijau: `inventory.actions.test.ts` 245 → 246, gabungan dengan seluruh `src/lib/hooks/__tests__` 727/727; guard statis penuh `src/__tests__ --no-file-parallelism` 67/67 berkas 511/511; `npx tsc --noEmit` 0; ESLint 0 pada 2 berkas berubah; `git diff --check` bersih.
 - CI `41751639824` (head `882645171`) **success**.
+
+## Putaran 123 — edit pengeluaran material mempertahankan tautan baris WO asal (commit `cac1002f0`)
+
+Sumber: kandidat agent audit inventaris+produksi (8 kandidat, 2 diverifikasi), diverifikasi ulang di kode sendiri. `updateMaterialIssue` (`src/actions/inventory.actions.ts:2574`) menghapus SELURUH baris (`materialIssueItem.deleteMany`) lalu menulis ulang dari payload; helper `materialIssueItemCreateData` (`:1133`) tak pernah menulis `workOrderItemId`. Jalur lahir yang menulisnya: `createMaterialIssueFromWorkOrder` (`manufacturing.actions.ts:2216-2230`, `workOrderItemId: i.id`). Konsumen lineage: `material-issue.hook.ts:217-219` (tanpa tautan, `plannedByItemId.get(...) ?? qty` → planned = qty sehingga scrap normal bisa diklasifikasi abnormal), `reports/work-order-part-status.ts:94-101` (fallback per `itemId`, salah baris bila WO punya dua baris item sama), `reports/job-change-order.ts:171-189` (`computeLockedWorkOrderItemIds` → baris WO yang sudah di-issue terbuka untuk change order). Skema: `MaterialIssueItem.workOrderItemId Int?` FK `onDelete: SetNull` (`prisma/schema.prisma`).
+
+### Vonis FIX
+1. **`updateMaterialIssue` menulis ulang baris tanpa `workOrderItemId` — FIX.** Menyunting catatan saja cukup untuk melepas seluruh lineage MI hasil "Buat dari WO", tanpa error. Baris tersimpan kini dibaca SEBELUM `deleteMany` (membacanya sesudahnya mustahil — barisnya sudah hilang), dipetakan berurutan per `itemId` (`orderBy: id asc`), lalu tiap baris baru mengambil satu tautan (`takeLineage`). Baris baru tanpa padanan tetap `null` — tidak ditebak dari itemId. Tautan hanya dipertahankan bila MI tetap menunjuk WO yang sama: ganti WO berarti baris lama bukan lagi sumber baris baru, jadi lineage dilepas (jalur pindah-WO sudah menilai ulang WO tujuan + gerbang job closed + cek satu-MI-aktif).
+
+### Vonis CATAT
+- **Pemetaan lineage memakai urutan `itemId`, bukan identitas baris — CATAT.** Tidak ada kunci alami antara baris payload dan baris tersimpan (form mengirim itemId/qty/cost saja), jadi baris diurutkan per `id asc` dan dipasangkan berurutan; MI dengan dua baris item sama yang disunting dengan urutan dibalik akan menukar tautan baris WO-nya. Alternatif (menulis `workOrderItemId` di payload form) mengubah kontrak form dan membuka spoofing tautan dari klien; dipilih yang konservatif.
+- **Baris baru yang ditambahkan saat edit tetap `null` — CATAT (disengaja).** Baris yang tak pernah ada saat MI lahir dari WO memang tak punya baris WO asal; menebaknya dari `itemId` akan mengunci baris WO yang salah untuk change order.
+
+### Bukti
+- Merah perintah terpisah (berkas produksi di-stash): `inventory.actions.test.ts -t 'putaran 123'` → tepat 2 gagal, `expected [ 11, 12, null ]` vs `[ null, null, null ]` dan `expected undefined to be null`.
+- Hijau: `inventory.actions.test.ts` 246 → 248, seluruh `src/lib/hooks/__tests__` 729/729; guard statis penuh `src/__tests__ --no-file-parallelism` 67/67 berkas 511/511; `npx tsc --noEmit` 0; ESLint 0 pada 2 berkas berubah; `git diff --check` bersih.
+- CI `41753470444` (head `cac1002f0`) **failure** — bukan bug produk: harness `material-issue-link-columns.test.ts` hanya menyediakan `materialIssueItem.deleteMany`, jadi jalur baca lineage baru melempar `tx.materialIssueItem.findMany is not a function` dan aksi mengembalikan `success: false`; ditambah berkas probe sementara `zz-tmp-check-lock.test.ts` yang ikut ter-`git add -A`. Ditriase lalu diperbaiki di `833aec7d5` (hapus probe) + `c88dd8ce3` (fixture `findMany`); CI `41754632614` (head `c88dd8ce3`) **success**.
+
+## Putaran 124 — gudang berstok menahan hapus keras (commit `cf9decc7b`)
+
+Sumber: audit mandiri atas `deleteWarehouse` (`src/actions/master.actions.ts:3811`) vs FK stok di skema. `hardDeleteOrSoftDelete` (`:183-209`) memutuskan hapus keras bila SEMUA hitungan satelit 0 (P2003 juga memaksa soft delete). Hitungan lama hanya `itemWarehouseSetting` + `userWarehouse`. Dua tabel stok tidak ikut dan tidak menolak sendiri: `stock_moves.warehouse_id` `ON DELETE SET NULL` (migrasi `20260527071611`), `inventory_layers.warehouse_id` **tanpa FK sama sekali** (`Int?` polos, `prisma/schema.prisma`). Jalur masuk stok tanpa FK Restrict ke gudang: penerimaan hasil produksi (`manufacturing.actions.ts:1473`, `defaultWarehouseId`) dan retur penjualan (hook retur, gudang item default).
+
+### Vonis FIX
+1. **`deleteWarehouse` bisa menghapus keras gudang yang masih berstok — FIX.** Gudang yang stoknya hanya datang dari jalur tanpa FK Restrict lolos hapus keras. Akibatnya lapisan FIFO `remaining > 0` tinggal dengan `warehouseId` null: Valuasi Stok (`laporan/valuasi-stok`, memuat `remaining > 0` tanpa join gudang) tetap menjumlahkan nilainya dengan label gudang "-", sementara Kartu Stok dan daftar gudang menyaring gudang hidup sehingga baris itu tak pernah muncul — dua laporan tak bisa direkonsiliasi dan stok tersebut tak bisa dikonsumsi FIFO. Mutasi stok historis juga kehilangan gudangnya (SET NULL) tanpa jejak. Dua hitungan baru: `inventoryLayer.count({ warehouseId, remaining: { gt: 0 } })` dan `stockMove.count({ warehouseId })`. Gudang yang belum pernah disentuh stok tetap bisa dihapus keras.
+
+### Vonis CATAT
+- **`remaining = 0` dan tanpa mutasi tetap boleh hapus keras — CATAT.** Lapisan habis bernilai nol tidak memengaruhi laporan mana pun, jadi tak perlu menahan hapus; yang dijaga adalah stok hidup dan jejak mutasi.
+- **Hitungan dibaca di bawah kunci baris gudang, bukan kunci tabel stok — CATAT.** Pola `deleteWarehouse` sudah `SELECT ... FOR UPDATE` baris gudang sejak putaran 71; penulis stok minimum mengunci baris gudang yang sama, jadi satelit baru tak ter-Cascade senyap. Menambah kunci tabel stok akan memperlebar kontensi tanpa menutup celah yang nyata di jalur ini.
+
+### Bukti
+- Merah perintah terpisah (berkas produksi di-stash): `master.actions.test.ts -t 'putaran 124'` → tepat 2 gagal, `expected "vi.fn()" to be called with arguments` untuk `inventoryLayer.count` dan `stockMove.count`.
+- Hijau: `master.actions.test.ts` 384/384 (2 tes baru; `-t deleteWarehouse` 8/8); guard statis penuh `src/__tests__ --no-file-parallelism` 67/67 berkas 511/511; `npx tsc --noEmit` 0; ESLint 0 pada 2 berkas berubah; `git diff --check` bersih.
+- CI `41754424214` (head `cf9decc7b`) **failure** — hanya kegagalan harness `material-issue-link-columns.test.ts` yang sudah diperbaiki di commit sesudahnya (`c88dd8ce3`); CI `41754632614` (head `c88dd8ce3`, memuat perbaikan ini) **success**.
