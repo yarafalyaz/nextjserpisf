@@ -4243,3 +4243,19 @@ Laporan menyatakan ada temuan sambil mencetak nol — kontradiksi di satu baris.
 
 ### Bukti
 - Merah: 1 gagal/6 lulus; hijau 62/62 terkait; 3.136 lulus / 4 dilewati lebih luas tanpa entri `Errors`; tsc, ESLint, diff-check bersih.
+
+## Putaran 180 — Multi Periode: selisih neraca dicetak "Rp 1" dari 0,50 (commit `6c03117e4`)
+
+Halaman `/laporan/multi-periode` menjumlah kolom dan total dengan `+` float mentah lalu mencetak KPI serta baris total dengan 0 desimal. Probe (tes halaman baru): aset `10.000.000,50` vs modal `10.000.000` → KPI **"Selisih (harus 0) Rp 1"** dan kedua sisi total tercetak `10.000.001`. Selisih 0,50 yang membuat neraca tidak seimbang tidak pernah terlihat, dan angka "Rp 1" itu sendiri salah.
+
+### Vonis FIX
+- Agregasi `sumByType`, `totalColumnValue`, laba bersih, total ekuitas+ekuitas berjalan, dan total kewajiban+ekuitas memakai `safeAdd(..., 2)`.
+- KPI memakai `formatCurrencyExact`; total kelompok/baris memakai `formatAccountingExact`. **Baris akun tetap rupiah penuh** (konvensi statement, Putaran 130).
+- Tes halaman baru (`multi-periode/__tests__/page.test.tsx`) memakai mock prisma + `reportPageShellModule`, me-render halaman sebenarnya; **merah** sebelum fix (`Rp 1` vs `Rp 0,50`).
+
+### Vonis CATAT
+- Sebelumnya saya sempat menerapkan perbaikan ini **tanpa** tes lalu membatalkannya sendiri; sekarang dikerjakan ulang dengan bukti merah-sebelum. Perubahan tampilan tanpa bukti tidak diklaim sebagai perbaikan.
+
+### Bukti
+- Merah: 1 gagal/0 lulus. Hijau: 1/1; `src/app/(dashboard)/laporan` + reports + components **3.086 lulus / 4 dilewati** tanpa entri `Errors`; tsc, ESLint, diff-check bersih.
+- CI `41829329496` (posisi SPT) dan `41829381540` (dokumentasi) **success**.
