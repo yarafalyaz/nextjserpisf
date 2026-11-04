@@ -4194,3 +4194,23 @@ Empat kartu antrean draft mencetak total grand total dan grand total per dokumen
 ### Bukti
 - Merah: 1 gagal/2 lulus; hijau 427/427 tes komponen laporan; 3.018 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
 - CI `41822110990`, `41822160259`, `41822646335`, `41822671433` **success** (putaran 172–173).
+
+## Putaran 177 — CI merah karena unhandled error dari tes yang tidak melepas render (commit `5afbc9d9b`)
+
+CI `41823370783` (head `355f57ec0`, putaran 175) **failure** pada job Unit Tests padahal ringkasannya: **1.164 berkas / 12.556 tes lulus, 8 berkas & 23 tes dilewati, 0 gagal**. Penyebabnya satu entri `Errors 1 error`:
+
+```
+This error originated in "src/components/reports/__tests__/customer-credit-queue-card.test.tsx"
+```
+
+Tes "nominal bersen" yang saya tambahkan di Putaran 163 memanggil `renderCard(...)` tetapi tidak memanggil `unmountCard(root)`; root React tertinggal saat worker dibongkar. Vitest memperlakukannya sebagai unhandled error dan keluar dengan kode 1.
+
+### Vonis FIX
+- `unmountCard(root)` ditambahkan setelah asersi, sama seperti tes lain di berkas itu.
+- Dua berkas tes lain yang juga "render > unmount" (`delivered-unbilled`, `sales-invoice-draft`) diperiksa: keduanya sudah melepas lewat `afterEach` dengan daftar `roots`, jadi aman.
+
+### Vonis CATAT
+- **Kegagalan kelas ini tidak terlihat dari hitungan tes.** Sejak sekarang, sebelum commit saya memeriksa keluaran `Errors` pada suite penuh, bukan hanya "Tests x passed".
+
+### Bukti
+- Full suite lokal: **12.557 lulus / 23 dilewati**, tanpa entri `Errors`; tsc, ESLint, diff-check bersih.
