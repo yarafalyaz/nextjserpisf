@@ -4017,3 +4017,16 @@ KPI tidak cocok dengan penjumlahan baris yang tercetak di laporan yang sama.
 ### Bukti
 - Merah: 1 gagal/1 lulus; hijau 9/9 terkait, 3.121 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
 - CI putaran 159–160 (`41816036580`, `41816099988`, `41816505672`) **success**.
+
+## Putaran 163 — kartu saldo kredit pelanggan (commit `92675b548`)
+
+Kartu `customer-credit-queue-card.tsx` mencetak saldo per baris, diterima/teralokasi/direfund, dan label rekap total dengan `formatCurrency` 0 desimal, sementara builder menjumlah `safeAdd(..., 2)`. Probe satu baris Rp1.000.000,50: kartu menampilkan `Rp 1.000.000` dan rekap total tidak cocok dengan barisnya.
+
+### Vonis FIX
+- Kartu memakai `formatCurrencyExact`; regresi render mengunci `Rp 1.000.000,50` dan merah bila formatter dikembalikan.
+
+### Vonis CATAT
+- **Migrasi 46 kartu laporan dilakukan selektif.** Yang diubah adalah kartu dengan **total yang dijumlah pembaca** (label rekap + kolom saldo). Kartu antrean lain yang menampilkan satu nominal per dokumen (mis. nominal percobaan kredit, saldo rekening koran) belum diubah — keputusan tampilan per kartu, bukan sapuan buta; dicatat sebagai kandidat.
+
+### Bukti
+- Merah: 1 gagal/7 lulus; hijau 8/8; 3.006 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
