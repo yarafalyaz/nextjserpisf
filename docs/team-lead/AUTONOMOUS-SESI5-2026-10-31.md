@@ -3282,3 +3282,19 @@ Sumber: pemindaian mandiri atas `createSalesInvoice` vs `updateSalesInvoice` di 
   - `create-update-field-parity.test.ts` → `src/actions/sales.actions.ts: createSalesInvoice membuang notes (updateSalesInvoice menulisnya)`.
 - Hijau: `sales.actions.test.ts` 262 → 264 (2 baru), `src/__tests__` 66 berkas/509 → 67 berkas/511 (guard baru, 2 tes), gabungan sales 264/264 + 266/266 (sales + update-return-lock + race-guards), FIFO/accounting 201/201; guard statis penuh `src/__tests__ --no-file-parallelism` 67/67 berkas 511/511; `npx tsc --noEmit` 0; ESLint 0 pada 3 berkas berubah; `git diff --check` bersih.
 - CI `41746428305` (head `dac7dc2a3`) **success**; CI `41746477277` (head `91311a3d5`) **success**.
+
+## Putaran 122 — edit penyesuaian menulis ulang baris draft hasil posting opname (commit `882645171`)
+
+Sumber: kandidat agent audit inventaris+produksi, diverifikasi ulang di kode sendiri. `postStocktakeSession` membuat `StockAdjustment(draft)` lalu menulis `StocktakeSession.adjustmentId` di tx yang sama dan mengubah sesi menjadi `posted` (`src/actions/inventory.actions.ts:3186-3345`, penulisan `status: "posted", adjustmentId: adj.id`). `deleteStockAdjustment` sudah menolak menghapus draft itu (`:2270-2281`, pesan "Penyesuaian hasil posting opname tidak dapat dihapus"), tetapi `updateStockAdjustment` (`:2414-2520`) hanya menilai `status !== "draft"`. Halaman detail menampilkan tombol Ubah untuk setiap draft (`penyesuaian/[slug]/page.tsx:106-120`) dan halaman ubah tak memeriksa rujukan opname; form menyunting warehouseId/tanggal/tipe serta seluruh baris. Skema: `StocktakeSession.adjustmentId Int?` tanpa relasi (`prisma/schema.prisma:4159`).
+
+### Vonis FIX
+1. **`updateStockAdjustment` tidak menolak draft hasil posting opname — FIX.** Edit menghapus seluruh baris (`stockAdjustmentItem.deleteMany`) dan menulis ulang dari payload: operator bisa menyamakan `actualQty` dengan stok live, menggeser gudang, atau mengubah tipe, sehingga satu-satunya jejak selisih sesi yang sudah `posted` (dan tak bisa diposting ulang) lenyap senyap, dan penyesuaian kelak diproses sebagai nol padahal sesi menyatakan ada selisih. Gerbang baru dipasang di dalam transaksi edit, sesudah baris dokumen dikunci (`FOR UPDATE`) dan status draft dinilai ulang dari bacaan segar, sebelum `deleteMany` — memakai hitungan `stocktakeSession.count({ adjustmentId: id })` yang sama dengan guard hapus. Penunjuk hanya lahir bersama adjustment-nya (satu tx posting), jadi draft penyesuaian biasa, draft penutupan selisih transfer, dan alur `processStockAdjustment` tidak berubah.
+
+### Vonis CATAT
+- **UI belum menyembunyikan tombol Ubah untuk draft hasil opname — CATAT.** Menyembunyikan tombol menuntut query tambahan di halaman detail untuk setiap draft; gerbang server sudah menolak dengan pesan yang jelas, sejajar dengan tombol Hapus yang juga tetap dirender. Dibiarkan supaya perubahan tetap kecil dan tidak menambah round-trip.
+- **Draft hasil opname kini tak bisa dikoreksi lewat edit — CATAT (disengaja).** Koreksi atas hitungan sesi tetap satu-satunya jalan yang sah (sesi `posted` tidak bisa dibuka lagi; jalur koreksi opname belum ada), jadi dokumen harus diproses apa adanya agar selisihnya masuk sebagai StockMove + jurnal.
+
+### Bukti
+- Merah perintah terpisah: `inventory.actions.test.ts -t 'putaran 122'` → 1 gagal (`expected true to be false`), edit lolos dan `deleteMany` terpanggil.
+- Hijau: `inventory.actions.test.ts` 245 → 246, gabungan dengan seluruh `src/lib/hooks/__tests__` 727/727; guard statis penuh `src/__tests__ --no-file-parallelism` 67/67 berkas 511/511; `npx tsc --noEmit` 0; ESLint 0 pada 2 berkas berubah; `git diff --check` bersih.
+- CI `41751639824` (head `882645171`) **success**.
