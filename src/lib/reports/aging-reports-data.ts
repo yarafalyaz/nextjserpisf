@@ -178,11 +178,20 @@ export async function loadPayablesAging(asOf: Date = new Date()): Promise<AgingR
   return { table: { columns: COLUMNS, rows: bucketRows(items, now) }, ...rangePeriodLabels({ start: now, end: now }) }
 }
 
+/**
+ * Kolom PDF Total Hutang. Satu tabel memuat tiga bagian berbeda, jadi
+ * header-nya netral dan setiap baris mengisi kolom yang maknanya sama:
+ * ringkasan umur (kategori, jumlah, sisa), hutang per pemasok (nama, jumlah
+ * tagihan, total tagihan, dibayar, sisa), rincian tagihan (nama, nomor,
+ * jatuh tempo, umur, sisa). Sebelumnya header bertanggal ("Jatuh Tempo")
+ * dipakai bersama sehingga nominal tagihan tercetak di bawah kolom tanggal.
+ */
 const TOTAL_COLUMNS: TableColumn[] = [
-  { header: "Pemasok", align: "left", width: 70 },
-  { header: "No. Tagihan", align: "left", width: 40 },
-  { header: "Jatuh Tempo", align: "left", width: 30 },
-  { header: "Umur", align: "left", width: 30 },
+  { header: "Keterangan / Pemasok", align: "left", width: 62 },
+  { header: "Dokumen / Jumlah", align: "left", width: 38 },
+  { header: "Jatuh Tempo / Umur", align: "left", width: 40 },
+  { header: "Total Tagihan", align: "right", width: 40 },
+  { header: "Dibayar", align: "right", width: 36 },
   { header: "Sisa", align: "right", width: 40 },
 ]
 
@@ -221,7 +230,10 @@ export async function loadPayablesTotal(asOf: Date = new Date()): Promise<AgingR
     text: "Total Hutang mencakup tagihan tanpa tanggal jatuh tempo (kelompok Tanpa Jatuh Tempo) — beda dengan laporan Hutang Jatuh Tempo yang hanya memuat tagihan ber-jatuh-tempo.",
   })
   for (const group of summary.aging) {
-    rows.push({ kind: "data", cells: [group.key, String(group.count), "", "", money(group.total)] })
+    rows.push({
+      kind: "data",
+      cells: [group.key, String(group.count), "", "", "", money(group.total)],
+    })
   }
   rows.push({ kind: "group", label: "Hutang per Pemasok" })
   for (const vendor of summary.vendors) {
@@ -230,6 +242,7 @@ export async function loadPayablesTotal(asOf: Date = new Date()): Promise<AgingR
       cells: [
         vendor.vendorName,
         String(vendor.billCount),
+        "",
         money(vendor.totalBilled),
         money(vendor.totalPaid),
         money(vendor.outstanding),
@@ -238,15 +251,15 @@ export async function loadPayablesTotal(asOf: Date = new Date()): Promise<AgingR
   }
   rows.push({ kind: "group", label: "Rincian Tagihan" })
   for (const row of summary.rows) {
+    // Tanggal dan umur berbagi satu kolom supaya indeks sel tetap sejajar
+    // dengan header (dulu lima sel mengisi header bertanggal yang berbeda arti).
+    const dueAndAge = [
+      row.dueDate ? shortDate(row.dueDate) : "Tanpa jatuh tempo",
+      row.ageBucket,
+    ].join(" · ")
     rows.push({
       kind: "data",
-      cells: [
-        row.vendorName,
-        row.documentNo,
-        row.dueDate ? shortDate(row.dueDate) : "Tanpa jatuh tempo",
-        row.ageBucket,
-        money(row.outstanding),
-      ],
+      cells: [row.vendorName, row.documentNo, dueAndAge, "", "", money(row.outstanding)],
     })
   }
   rows.push({
