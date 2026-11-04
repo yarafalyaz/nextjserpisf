@@ -12,7 +12,7 @@
  * pemanggil lama tidak perlu ikut berubah.
  */
 
-import { formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import {
   buildOutstandingLines,
   type OutstandingDocument,
@@ -108,6 +108,6 @@ export function purchaseOutstandingSummary(result: PurchaseOutstandingResult): s
   return (
     `${result.totals.orders} pesanan · ${result.totals.items} baris bersisa ` +
     `(${result.totals.partiallyReceived} diterima sebagian, ${result.totals.notReceived} belum menerima) · ` +
-    `nilai sisa ${formatCurrency(result.totals.outstandingValue)}`
+    `nilai sisa ${formatAccountingExact(result.totals.outstandingValue)}`
   )
 }

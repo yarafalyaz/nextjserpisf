@@ -14,7 +14,7 @@
  * belum keluar dari gudang dan tidak boleh mengurangi sisa.
  */
 
-import { formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import {
   buildOutstandingLines,
   type OutstandingDocument,
@@ -78,6 +78,6 @@ export function orderFulfillmentSummary(result: OrderFulfillmentResult): string 
   return (
     `${result.totals.orders} pesanan · ${result.totals.items} baris bersisa ` +
     `(${result.totals.partiallyShipped} terkirim sebagian, ${result.totals.notShipped} belum terkirim) · ` +
-    `nilai sisa ${formatCurrency(result.totals.outstandingValue)}`
+    `nilai sisa ${formatAccountingExact(result.totals.outstandingValue)}`
   )
 }

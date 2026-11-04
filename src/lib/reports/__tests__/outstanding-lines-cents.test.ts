@@ -28,10 +28,12 @@ describe("buildOutstandingLines presisi sen", () => {
     // 17 x 0.24 mentah = 4.080000000000002
     expect(result.totals.outstandingValue).toBe(8.16)
     const totals = result.table.rows.filter((r) => r.kind === "total")
-    expect(totals[0].cells).toEqual(["4"])
-    expect(totals[2].cells).toEqual(["8"])
+    // Nilai bersen wajib tampil hingga sen: "4"/"8" membuat total tidak bisa
+    // dicocokkan dengan penjumlahan baris yang tercetak.
+    expect(totals[0].cells).toEqual(["4,08"])
+    expect(totals[2].cells).toEqual(["8,16"])
     const data = result.table.rows.filter((r) => r.kind === "data")
-    expect(data[0].cells?.[5]).toBe("0")
+    expect(data[0].cells?.[5]).toBe("0,24")
   })
 
   it("kali sisa x harga dibulatkan per baris ke sen", () => {
