@@ -3361,3 +3361,24 @@ Sumber: verifikasi kandidat agent audit inventaris+produksi atas siklus `stockRe
 ### Bukti
 - Merah perintah terpisah (`git stash push -- src/actions/project.actions.ts`, lalu `npx vitest run src/actions/__tests__/project.actions.test.ts -t "putaran 126"`) → 1 gagal / 1 lulus / 158 dilewati, `AssertionError: expected "vi.fn()" to be called with arguments: [ { where: { …(2) }, …(1) } ]`.
 - Hijau (`git stash pop`, perintah sama) → 2 lulus / 158 dilewati; berkas penuh 160/160 lulus; guard statis penuh `src/__tests__ --no-file-parallelism` 67/67 berkas 511/511; `npx tsc --noEmit` 0; ESLint 0 pada 2 berkas berubah; `git diff --check` bersih.
+
+## Putaran 127 — tanggal penutup buku jatuh di hari WIB yang benar (commit `b5f409c38`)
+
+Sumber: kandidat agent audit keuangan, diverifikasi ulang sendiri di kode dan dengan dua probe terpisah. `fiscalYearPeriod` (`src/lib/reports/year-end-closing.ts:108`) mengembalikan `end = Date.UTC(tahun+1, bulan-1, 0, 23, 59, 59, 999)` — instan terakhir hari terakhir, bukan tanggal dokumen. Di WIB (`UTC+7`) instan itu jatuh pada **07:00 hari BERIKUTNYA**. Tiga konsumen daftar tanggal itu semuanya memakai konvensi lain:
+
+1. `assertPeriodOpen` (`src/lib/services/period-lock.service.ts`) membandingkan **hari kalender lokal**: `txDay.setHours(0,0,0,0)` vs `lockDay.setHours(23,59,59,999)`. Probe: kunci `2026-12-31T00:00:00Z` vs penutup `2026-12-31T23:59:59.999Z` → `OPEN`. Artinya kunci periode 31 Des **tidak menahan** jurnal penutup bertanggal 31 Des — posting masuk ke periode yang sudah ditutup, bertentangan dengan vonis accountant F-2026-10-20-86 di `docs/autonomous-board.md` ("tanggal jurnal = 31 Des tahun buku, `assertPeriodOpen(31 Des)` sebelum posting").
+2. `parseReportPeriod("2026-12")` → rentang lokal 1–31 Des 2026; probe: `end` **tidak** berada di dalam rentang itu, jadi jurnal penutup tidak muncul di laporan Desember tahun yang ditutup (hanya di Januari tahun berikutnya).
+3. `formatDate` selalu Asia/Jakarta → label "Tanggal penutup" berbunyi **1 Jan**, satu hari setelah tanggal jurnal yang sebenarnya.
+
+### Vonis FIX
+1. **Tanggal penutup buku adalah tanggal dokumen (tengah malam UTC hari WIB terakhir) — FIX.** `end` kini `new Date(Date.UTC(fiscalYear + 1, month - 1, 0))`, sama seperti `start` dan seluruh `journal.transactionDate` lain di sistem (`wibDateToUtcMidnight`). Kunci periode 31 Des kembali menahan posting; tanggal penutup jatuh di periode yang ditutup dan labelnya terbaca 31 Des.
+2. **Batas atas pembacaan saldo menjadi EKSKLUSIF — FIX (konsekuensi wajib).** `collectYearEndClosingEntries` (`src/lib/reports/year-end-closing-data.ts:54`) dulu `lte: end`. Dengan `end` kini tengah malam, `lte` akan membuang seluruh mutasi **pada hari terakhir tahun fiskal** dan justru ikut menghitung jurnal penutup tahun sebelumnya yang bertanggal tengah malam — saldo tahun ini salah di kedua ujung. Kini `gte: start, lt: endOfUtcDayExclusive(end)`.
+
+### Vonis CATAT
+- **Jurnal penutup lama yang telanjur bertanggal 07:00 WIB 1 Jan tidak dimigrasi — CATAT.** Perbaikan ini hanya menghentikan pembentukan baru; baris `YearEndClosing` yang sudah POSTED dengan tanggal lama tetap seperti adanya. Membetulkannya menuntut perubahan tanggal dokumen yang sudah dibukukan (dan mungkin sudah direversal) — keputusan akuntansi, bukan perbaikan kode, jadi dicatat dan tidak dikerjakan sepihak.
+- **Arti `end` berubah dari "instan akhir hari" menjadi "tanggal dokumen" — CATAT.** Setiap pembaca baru wajib memakai batas atas eksklusif (`lt: endOfUtcDayExclusive(end)`), persis seperti kolom tanggal dokumen lain. Komentar `fiscalYearPeriod` menyebutkan kontrak ini eksplisit; satu-satunya pembaca saat ini sudah disesuaikan.
+
+### Bukti
+- Merah perintah terpisah (`git stash push -- src/lib/reports/year-end-closing.ts src/lib/reports/year-end-closing-data.ts`, lalu `npx vitest run src/lib/reports/__tests__/year-end-closing.test.ts src/lib/services/__tests__/year-end-closing.service.test.ts`) → **5 gagal / 23 lulus**, termasuk `expected '2027-01-01' to be '2026-12-31'` dan uji service yang menerima hasil posting sukses padahal seharusnya menolak kunci periode.
+- Hijau (`git stash pop`, perintah sama) → **28 lulus / 28**. Cakupan lebih luas `src/lib/reports src/lib/services src/app/\(dashboard\)/pengaturan src/app/\(dashboard\)/proses-akhir-bulan*` 384 berkas / 3839 tes lulus; guard statis penuh `src/__tests__ --no-file-parallelism` 67/67 berkas 511/511; `npx tsc --noEmit` 0; ESLint 0 pada 4 berkas berubah; `git diff --check` bersih.
+- CI `41760606403` (head `b5f409c38`) **success**.
