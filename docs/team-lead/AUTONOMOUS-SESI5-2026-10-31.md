@@ -4371,3 +4371,14 @@ Dua halaman yang sebelumnya hanya diperbaiki pada KPI ternyata masih mencetak **
 ### Bukti
 - Merah: 1 gagal/9 lulus; hijau 63/63 terkait dan 3.091 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
 - CI `41840220374`, `41840283205`, `41840859517`, `41840894099` **success** (putaran 185–186).
+
+## Putaran 189 — total debit jurnal klaim garansi (commit `3cfb19f9b`)
+
+Halaman detail klaim garansi (`produksi/garansi/[claimId]/page.tsx`) mencetak `totalDebitLabel` dengan `formatCurrency` 0 desimal. Nilai itu berasal dari `Journal.totalDebit` (`Decimal(15,2)`) dan dipakai untuk memutuskan rute posting biaya klaim vs pemulihan pemasok.
+
+### Vonis FIX
+- Label memakai `formatCurrencyExact`; guard statis menolak kembalinya `formatCurrency(` pada baris itu dan merah bila dikembalikan.
+
+### Bukti
+- Merah: 1 gagal/5 lulus; hijau 6/6 dan 582/582 (guard + modul produksi); tsc, ESLint, diff-check bersih.
+- CI `41842075122`, `41842112570`, `41842529990`, `41842562544` **success** (putaran 186–188).
