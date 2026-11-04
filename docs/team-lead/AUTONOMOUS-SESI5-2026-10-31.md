@@ -3799,3 +3799,15 @@ Tabel masa dan tahunan Rekap PPh21 memakai `formatAccounting` 0 desimal. Probe d
 ### Bukti
 - Merah: 1 gagal/4 lulus.
 - Hijau: 5/5 dan 26/26 PPh21 terkait; reports+PDF **3111 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
+
+## Putaran 150 — pajak tangguhan membulatkan nilai buku dan dasar pajak (commit `bd6fcca82`)
+
+Tiga laporan pajak tangguhan (`deferred-tax.ts`, `deferred-tax-value-events.ts`, `deferred-tax-nonaset.ts`) mencetak nilai buku/dasar pajak/selisih temporer/tangguhan, notice, verdict, dan KPI dengan 0 desimal. Probe dua aset Rp1.000.000,50: baris `1.000.001` masing-masing, total `2.000.001` — total tidak cocok dengan penjumlahan barisnya.
+
+### Vonis FIX
+- Formatter lokal ketiga berkas menjadi `formatAccountingExact`; verdict/KPI memakai formatter yang sama, bukan `formatCurrency` terpisah.
+
+### Bukti
+- Merah: 1 gagal/11 lulus.
+- Hijau: 12/12 dan 34/34 terkait; reports+PDF **3112 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
+- Push pertama ditolak `fatal error in commit_refs_rules` (kegagalan sisi server, ruleset kosong); percobaan berulang berhasil tanpa perubahan isi commit.
