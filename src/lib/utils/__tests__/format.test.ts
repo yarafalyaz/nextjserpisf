@@ -90,6 +90,17 @@ describe("formatAccounting", () => {
     expect(formatAccountingExact(-1_000_000.25)).toBe("(1.000.000,25)")
   })
 
+  it("formatCurrency never prints -0", () => {
+    expect(formatCurrency(-0.24)).toBe("Rp 0")
+    expect(formatCurrency(-0.01)).toBe("Rp 0")
+    expect(formatCurrency(-1000)).toBe("Rp -1.000")
+  })
+
+  it("formatAccounting does not keep the sign of a value that rounds to zero", () => {
+    expect(formatAccounting(-0.24, { zeroDash: false })).toBe("0")
+    expect(formatAccounting(-0.5, { zeroDash: false })).toBe("(1)")
+  })
+
   it("respects decimals", () => {
     expect(formatAccounting(1500.5, { decimals: 2 })).toBe("1.500,50")
   })

@@ -37,7 +37,13 @@ export function formatCurrency(
 
   if (Number.isNaN(numericAmount)) return showSymbol ? `${symbol}0` : "0";
 
-  const formatted = idNumberFmt(decimals).format(numericAmount);
+  // Jangan pernah mencetak "-0": Intl mempertahankan tanda negatif pada nilai
+  // yang membulat habis ke nol (mis. −0,24 → "Rp -0"), string yang tidak punya
+  // arti dan terbaca seperti saldo negatif.
+  const scale = 10 ** decimals;
+  const roundedMagnitude = Math.round(Math.abs(numericAmount) * scale) / scale;
+  const safeAmount = numericAmount < 0 && roundedMagnitude === 0 ? 0 : numericAmount;
+  const formatted = idNumberFmt(decimals).format(safeAmount);
 
   return showSymbol ? `${symbol}${formatted}` : formatted;
 }
@@ -79,7 +85,11 @@ export function formatAccounting(
   const formatted = idNumberFmt(decimals).format(magnitude);
 
   const body = showSymbol ? `${symbol}${formatted}` : formatted;
-  return numericAmount < 0 ? `(${body})` : body;
+  // "(0)" juga bukan angka yang bermakna: nilainya membulat habis ke nol, jadi
+  // tanda negatif tidak boleh dipertahankan (pola sama dengan formatCurrency).
+  const scale = 10 ** decimals;
+  const roundedMagnitude = Math.round(magnitude * scale) / scale;
+  return numericAmount < 0 && roundedMagnitude !== 0 ? `(${body})` : body;
 }
 
 /**
