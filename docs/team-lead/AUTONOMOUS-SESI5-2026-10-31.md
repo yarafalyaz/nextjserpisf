@@ -3679,3 +3679,28 @@ Tiga laporan lagi memakai formatter 0 desimal untuk nilai yang dipakai menjumlah
 ### Bukti
 - Merah: 1 gagal/6 lulus.
 - Hijau: 21/21 terkait; reports+PDF 3102 lulus/4 dilewati; tsc, ESLint, diff-check bersih.
+
+## Putaran 143 — KPI "Total Ditagihkan" vs TOTAL seksi pemasok tampak bertentangan (commit `8bf4551e4`)
+
+`buildPayablesSummary` menjumlah `totalBilled`/`totalPaid` atas **semua** tagihan pada populasi, lalu membuang baris vendor untuk tagihan yang sudah lunas (`isOutstandingSettled`). Halaman menjumlah baris vendor untuk TOTAL seksinya. Probe (satu tagihan lunas 1.000.000 + satu terbuka 500.000):
+
+```
+KPI "Total Ditagihkan" = 1.500.000 | KPI "Sudah Dibayar" = 1.000.000
+TOTAL "Hutang per Pemasok" = 500.000 | 0
+```
+
+Dua angka berlabel sama dalam satu laporan, berbeda 1.000.000, tanpa penjelasan — pembaca tidak bisa merekonsiliasi seksi pemasok ke KPI. Ini kandidat audit yang tidak sempat diverifikasi pada sesi sebelumnya (agent kehabisan kredit sebelum tahap verify).
+
+### Vonis FIX
+- Label KPI menjadi `Total Ditagihkan (semua tagihan)` dan `Sudah Dibayar (semua tagihan)`; seksi pemasok diberi keterangan bahwa hanya tagihan bersisa yang dihitung.
+- TOTAL seksi pemasok dijumlah `safeAdd` dan dicetak `formatAccountingExact` (dua perbaikan kecil yang ikut terpakai).
+- **Populasi TIDAK diubah**: KPI tetap menjumlah semua tagihan (itu definisi "ditagihkan"), seksi pemasok tetap hanya yang bersisa (itu definisi "hutang"). Yang diperbaiki adalah label, bukan angka.
+- Regresi `total-hutang-kpi-population.test.ts` mengunci kedua populasi dan teks label; tes label merah bila halaman dikembalikan ke versi lama.
+
+### Vonis CATAT
+- **"Total Hutang" (utang berjalan) sengaja berbeda dari "Total Ditagihkan" (nilai belanja).** Keduanya bukan angka yang sama; jangan "disamakan" tanpa keputusan akuntansi.
+
+### Bukti
+- Merah: 1 gagal/1 lulus pada tes label.
+- Hijau: 23/23 payables terkait; `src/lib/reports` + seluruh halaman laporan **2639 lulus / 4 dilewati** (314 berkas); tsc, ESLint, diff-check bersih.
+- CI `41798923663`, `41799221900`, `41799255388` (tiga commit sebelumnya) **success**.
