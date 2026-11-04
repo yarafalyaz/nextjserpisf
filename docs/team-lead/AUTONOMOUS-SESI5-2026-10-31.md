@@ -3869,3 +3869,17 @@ Setelah total diperbaiki di putaran sebelumnya, baris masih 0 desimal pada tiga 
 - Merah: 2 gagal/5 lulus.
 - Hijau: reports+PDF **3119 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
 - CI `41810546207` (putaran 151) dan `41810680103` (dokumentasi) **success**.
+
+## Putaran 154 — Buku Besar: saldo berjalan drift dan total dibulatkan (commit `c08637af5`)
+
+Halaman `/laporan/buku-besar` adalah satu-satunya laporan buku besar yang menghitung saldo berjalan di halaman (bukan lewat `buildLedgerRows`), memakai `+ debit - credit` float mentah dan mencetak semuanya 0 desimal. Residu biner membuat saldo baris tidak sama dengan `totalDebit − totalCredit` yang tercetak; saldo Rp4,08 tampil `"4"`.
+
+### Vonis FIX
+- Saldo berjalan dan total memakai `safeAdd`/`safeSubtract(..., 2)`.
+- Saldo awal, mutasi, saldo baris, dan baris grand memakai `formatAccountingExact`.
+- Formatter `money` di `cash-data` (mesin buku besar/bank untuk layar & PDF) ikut exact — sebelumnya laporan yang sama bisa tampil beda antara halaman dan ekspor.
+- Fixture `ledger-cash-cents` yang mengharapkan `"4"` untuk saldo 4,08 diperbarui ke `"4,08"`.
+
+### Bukti
+- Merah: 1 gagal/3871 lulus.
+- Hijau: `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` **3119 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
