@@ -4459,3 +4459,14 @@ Guard Putaran 185 hanya memeriksa `formatAccounting(` di halaman Total Hutang, s
 ### Bukti
 - Merah: 1 gagal/11 lulus; hijau 2.753 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
 - CI `41850274955` (KPI Total Hutang) dan `41850310388` (dokumentasi) **success**.
+
+## Putaran 196 — slip gaji karyawan (commit `7ca1e41f7`)
+
+Halaman `sdm/slip-gaji-saya/[slug]/page.tsx` mencetak gaji pokok/kotor/bersih, tunjangan, potongan, lembur, apresiasi, potongan pinjaman, dan komponen lain dengan 0 desimal. Nilainya `Decimal(15,2)` dan halaman ini adalah bukti pembayaran yang dibaca karyawan.
+
+### Vonis FIX
+- Seluruh nominal memakai `formatCurrencyExact`; guard statis menolak `formatCurrency(` tanpa `Exact` di halaman itu.
+
+### Bukti
+- Merah: 1 gagal/12 lulus; hijau 2.705 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+- CI `41850274955`, `41850310388`, `41850598148`, `41850630901`, `41851348171` **success** (putaran 193–194).
