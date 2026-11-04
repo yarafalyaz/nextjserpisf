@@ -18,7 +18,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -74,8 +74,13 @@ const COLUMNS: TableColumn[] = [
   { header: "Margin", align: "right", width: 38 },
 ]
 
+/**
+ * Pendapatan/HPP/laba dicetak hingga sen bila memang bersen; rupiah penuh bila
+ * bulat. Dengan 0 desimal, dua baris "1.000.001" berjumlah "2.000.002" sementara
+ * totalnya "2.000.001" — total tidak cocok dengan penjumlahan barisnya.
+ */
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value)
 }
 
 /** Margin dalam persen, atau null bila pendapatan nol. */
@@ -150,7 +155,7 @@ export function buildProfitability(input: {
     rows.push({
       kind: "notice",
       text:
-        `${totals.missingCogsLines} baris barang berpendapatan (senilai ${formatCurrency(totals.revenueMissingCogs)}) ` +
+        `${totals.missingCogsLines} baris barang berpendapatan (senilai ${amount(totals.revenueMissingCogs)}) ` +
         "tidak punya HPP. Untuk barang stok ini bisa berarti pengeluaran stok belum diposting, jadi " +
         "marginnya jangan dianggap nyata sebelum diperiksa. Baris jasa memang tidak punya HPP.",
     })
@@ -167,7 +172,7 @@ export function buildProfitability(input: {
   const verdict =
     visible.length === 0
       ? "Tidak ada penjualan pada periode ini"
-      : `Laba kotor ${formatCurrency(totals.grossProfit)} dari pendapatan ${formatCurrency(totals.revenue)}` +
+      : `Laba kotor ${amount(totals.grossProfit)} dari pendapatan ${amount(totals.revenue)}` +
         (totals.missingCogsLines > 0 ? ` · ${totals.missingCogsLines} baris tanpa HPP` : "")
 
   return { table: { columns: COLUMNS, rows }, totals, verdict }
@@ -178,8 +183,8 @@ export function profitabilitySummary(result: ProfitabilityResult): string {
   if (result.totals.revenue === 0 && result.totals.cogs === 0) return "Tidak ada penjualan pada periode ini"
   const margin = grossMarginPercent(result.totals.revenue, result.totals.cogs)
   return (
-    `Pendapatan ${formatCurrency(result.totals.revenue)} · HPP ${formatCurrency(result.totals.cogs)} · ` +
-    `laba kotor ${formatCurrency(result.totals.grossProfit)}` +
+    `Pendapatan ${amount(result.totals.revenue)} · HPP ${amount(result.totals.cogs)} · ` +
+    `laba kotor ${amount(result.totals.grossProfit)}` +
     (margin === null ? "" : ` (${margin.toFixed(1).replace(".", ",")}%)`) +
     (result.totals.missingCogsLines > 0 ? ` · ${result.totals.missingCogsLines} baris tanpa HPP` : "")
   )

@@ -110,4 +110,30 @@ describe("buildProfitability", () => {
     expect(texts(result)).toContain("sebelum pajak")
     expect(texts(result)).toContain("Dimensi: per Faktur")
   })
+
+  it("nominal ber-sen tampil hingga sen sehingga total cocok dengan barisnya", () => {
+    const cents = (label: string) => ({
+      key: label,
+      label,
+      revenue: 1_000_000.5,
+      cogs: 400_000.25,
+      revenueLinesWithoutCogs: 0,
+      serviceLinesWithoutCogs: 0,
+      stockRevenueWithoutCogs: 0,
+    })
+    const result = buildProfitability({ lines: [cents("A"), cents("B")], dimension: "pelanggan" })
+
+    const rows = result.table.rows.filter((row) => row.kind === "data")
+    expect(rows.map((row) => (row.kind === "data" ? row.cells.slice(1, 4) : []))).toEqual([
+      ["1.000.000,50", "400.000,25", "600.000,25"],
+      ["1.000.000,50", "400.000,25", "600.000,25"],
+    ])
+    const total = result.table.rows.find((row) => row.kind === "total")
+    expect(total?.kind === "total" ? total.cells.slice(0, 3) : []).toEqual([
+      "2.000.001",
+      "800.000,50",
+      "1.200.000,50",
+    ])
+    expect(profitabilitySummary(result)).toContain("2.000.001")
+  })
 })
