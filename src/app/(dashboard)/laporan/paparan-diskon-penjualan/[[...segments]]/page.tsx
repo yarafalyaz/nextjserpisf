@@ -5,7 +5,7 @@ import Link from "next/link"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
-import { formatAccounting, formatDate, formatPercentage, referenceHref } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate, formatPercentage, referenceHref } from "@/lib/utils/format"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
@@ -91,7 +91,7 @@ export default async function DiscountExposurePage({
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Total Dokumen" value={String(exposure.totalDokumen)} />
-        <ReportKpiCard label="Total Diskon Efektif" value={formatAccounting(exposure.totalDiskonEfektif, { zeroDash: false })} />
+        <ReportKpiCard label="Total Diskon Efektif" value={formatAccountingExact(exposure.totalDiskonEfektif, { zeroDash: false })} />
         <ReportKpiCard label="% Efektif Tertimbang" value={formatPercentage(exposure.persenTertimbang, 2)} />
         <ReportKpiCard label="Melebihi Ambang" value={String(exposure.jumlahMelebihiAmbang)} />
       </div>
@@ -113,8 +113,8 @@ export default async function DiscountExposurePage({
                 <DetailTableTd>{DISCOUNT_EXPOSURE_DOC_TYPE_LABELS[row.docType]}</DetailTableTd>
                 <DetailTableTd>{row.penjualLabel}</DetailTableTd>
                 <DetailTableTd align="right">{row.jumlahDokumen}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.totalBruto, { zeroDash: false })}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.totalDiskonEfektif, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(row.totalBruto, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(row.totalDiskonEfektif, { zeroDash: false })}</DetailTableTd>
                 <DetailTableTd align="right">{formatPercentage(row.persenTertimbang, 2)}</DetailTableTd>
                 <DetailTableTd align="right">{row.jumlahMelebihiAmbang}</DetailTableTd>
               </DetailTableRow>
@@ -130,8 +130,8 @@ export default async function DiscountExposurePage({
               <DetailTableRow className="border-t-2 border-default font-bold">
                 <DetailTableTd colSpan={2}>Jumlah</DetailTableTd>
                 <DetailTableTd align="right">{exposure.totalDokumen}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(exposure.totalBruto, { zeroDash: false })}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(exposure.totalDiskonEfektif, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(exposure.totalBruto, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(exposure.totalDiskonEfektif, { zeroDash: false })}</DetailTableTd>
                 <DetailTableTd align="right">{formatPercentage(exposure.persenTertimbang, 2)}</DetailTableTd>
                 <DetailTableTd align="right">{exposure.jumlahMelebihiAmbang}</DetailTableTd>
               </DetailTableRow>
@@ -173,10 +173,10 @@ export default async function DiscountExposurePage({
                   <DetailTableTd>{DISCOUNT_EXPOSURE_DOC_TYPE_LABELS[row.docType]}</DetailTableTd>
                   <DetailTableTd>{row.customerName}</DetailTableTd>
                   <DetailTableTd>{row.penjualLabel}</DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(row.bruto, { zeroDash: false })}</DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(row.diskonBaris, { zeroDash: false })}</DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(row.diskonHeader, { zeroDash: false })}</DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(row.diskonEfektif, { zeroDash: false })}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccountingExact(row.bruto, { zeroDash: false })}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccountingExact(row.diskonBaris, { zeroDash: false })}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccountingExact(row.diskonHeader, { zeroDash: false })}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccountingExact(row.diskonEfektif, { zeroDash: false })}</DetailTableTd>
                   <DetailTableTd align="right">{formatPercentage(row.persenEfektif, 2)}</DetailTableTd>
                   <DetailTableTd>
                     <StatusChip
@@ -198,10 +198,10 @@ export default async function DiscountExposurePage({
             {exposure.dokumen.length > 0 && (
               <DetailTableRow className="border-t-2 border-default font-bold">
                 <DetailTableTd colSpan={5}>Jumlah ({exposure.totalDokumen} dokumen)</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(exposure.totalBruto, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(exposure.totalBruto, { zeroDash: false })}</DetailTableTd>
                 <DetailTableTd align="right">–</DetailTableTd>
                 <DetailTableTd align="right">–</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(exposure.totalDiskonEfektif, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(exposure.totalDiskonEfektif, { zeroDash: false })}</DetailTableTd>
                 <DetailTableTd align="right">{formatPercentage(exposure.persenTertimbang, 2)}</DetailTableTd>
                 <DetailTableTd>{exposure.jumlahMelebihiAmbang} melebihi ambang</DetailTableTd>
               </DetailTableRow>

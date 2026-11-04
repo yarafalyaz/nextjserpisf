@@ -5,7 +5,7 @@ import Link from "next/link"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
-import { formatAccounting, formatDate, formatNumber } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
@@ -193,7 +193,7 @@ export default async function QuotationPriceHistoryPage({
                       />
                     </DetailTableTd>
                     <DetailTableTd align="right">
-                      {formatAccounting(pair.penawaranTerakhir.unitPrice, { zeroDash: false })}
+                      {formatAccountingExact(pair.penawaranTerakhir.unitPrice, { zeroDash: false })}
                       {pair.penawaranTerakhir.hargaNol ? " (harga 0)" : ""}
                     </DetailTableTd>
                     <DetailTableTd align="right">{pair.jumlahKejadian}</DetailTableTd>
@@ -255,14 +255,14 @@ export default async function QuotationPriceHistoryPage({
                       <DetailTableTd align="right">{formatNumber(event.qty, 2)}</DetailTableTd>
                       <DetailTableTd>{event.uom ?? "—"}</DetailTableTd>
                       <DetailTableTd align="right">
-                        {formatAccounting(event.unitPrice, { zeroDash: false })}
+                        {formatAccountingExact(event.unitPrice, { zeroDash: false })}
                         {event.hargaNol ? " (harga 0)" : ""}
                       </DetailTableTd>
                       <DetailTableTd align="right">
-                        {formatAccounting(event.discount, { zeroDash: false })}
+                        {formatAccountingExact(event.discount, { zeroDash: false })}
                       </DetailTableTd>
                       <DetailTableTd align="right">
-                        {formatAccounting(event.total, { zeroDash: false })}
+                        {formatAccountingExact(event.total, { zeroDash: false })}
                       </DetailTableTd>
                     </DetailTableRow>
                   ))}
