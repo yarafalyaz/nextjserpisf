@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { EmptyState } from "@/components/ui/empty-state"
 import { DeleteButton } from "@/components/ui/delete-button"
@@ -283,13 +283,13 @@ export default async function AssetDetailPage({
         <DetailField label="Grup" value={asset.group?.name || "-"} />
         <DetailField label="Lokasi" value={asset.location || "-"} />
         <DetailField label="Tanggal Beli" value={formatDate(asset.purchaseDate)} />
-        <DetailField label="Nilai Beli" value={formatCurrency(Number(asset.purchaseCost))} />
-        <DetailField label="Nilai Saat Ini (cache)" value={formatCurrency(Number(asset.currentValue))} />
-        <DetailField label="Akumulasi Penyusutan" value={<span className="text-danger">{formatCurrency(depreciation)}</span>} />
+        <DetailField label="Nilai Beli" value={formatCurrencyExact(Number(asset.purchaseCost))} />
+        <DetailField label="Nilai Saat Ini (cache)" value={formatCurrencyExact(Number(asset.currentValue))} />
+        <DetailField label="Akumulasi Penyusutan" value={<span className="text-danger">{formatCurrencyExact(depreciation)}</span>} />
         <DetailField label="Metode Penyusutan (komersial)" value={asset.depreciationMethod ? (DEPRECIATION_METHOD_LABELS[asset.depreciationMethod] ?? asset.depreciationMethod) : "-"} />
         <DetailField label="Status Penyusutan Fiskal" value={asset.category ? <AssetFiscalStatus taxGroupCode={asset.category.taxGroupCode} taxTypeListed={asset.category.taxTypeListed} taxDjpDetermination={asset.category.taxDjpDetermination} fiscalMethod={asset.category.fiscalMethod} /> : "Tanpa kategori — fiskal belum dihitung"} />
         <DetailField label="Status Guna" value={<AssetUseStatus status={asset.status} />} />
-        <DetailField label="Nilai Buku (jurnal POSTED)" value={formatCurrency(postedBookValue)} />
+        <DetailField label="Nilai Buku (jurnal POSTED)" value={formatCurrencyExact(postedBookValue)} />
         <DetailField label="Disposisi Penyusutan" value={<AssetCronDisposition disposition={cronDisposition} />} />
         {/* The asset form labels this field "Deskripsi" and createAsset/
             updateAsset persist it to `notes` (the `description` column is
@@ -347,9 +347,9 @@ export default async function AssetDetailPage({
                     <DetailTableTd>{row.taxYear}</DetailTableTd>
                     <DetailTableTd>{fiscalMethodLabel(row.method)}</DetailTableTd>
                     <DetailTableTd>{row.source}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(Number(row.openingBalance))}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(Number(row.depreciation))}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(Number(row.closingBalance))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(Number(row.openingBalance))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(Number(row.depreciation))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(Number(row.closingBalance))}</DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>
@@ -408,7 +408,7 @@ export default async function AssetDetailPage({
                     <DetailTableTd>{formatDate(h.date)}</DetailTableTd>
                     <DetailTableTd><span className="inline-flex px-3 py-1 rounded-full text-xs font-medium border border-default bg-background text-muted-foreground">{labelFrom(ASSET_HISTORY_TYPE_LABELS, h.type)}</span></DetailTableTd>
                     <DetailTableTd>{h.description || "-"}</DetailTableTd>
-                    <DetailTableTd align="right">{h.amount ? formatCurrency(Number(h.amount)) : "-"}</DetailTableTd>
+                    <DetailTableTd align="right">{h.amount ? formatCurrencyExact(Number(h.amount)) : "-"}</DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>

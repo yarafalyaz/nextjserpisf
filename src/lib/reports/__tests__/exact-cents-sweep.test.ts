@@ -188,3 +188,16 @@ describe("sapuan keenam: kas kecil dan pengeluaran", () => {
     }
   })
 })
+
+describe("sapuan ketujuh: detail aset dan rekening koran", () => {
+  it("detail aset & rekening koran memakai formatter currency exact", () => {
+    for (const rel of [
+      "src/app/(dashboard)/aset/[slug]/page.tsx",
+      "src/app/(dashboard)/keuangan/laporan-bank/[slug]/page.tsx",
+    ]) {
+      const source = readFileSync(path.resolve(process.cwd(), rel), "utf8")
+      expect(source, rel).not.toMatch(/formatCurrency\((?!Exact)/)
+      expect(source, rel).toContain("formatCurrencyExact")
+    }
+  })
+})

@@ -5,7 +5,7 @@ import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
@@ -114,10 +114,10 @@ export default async function BankStatementDetailPage({
 
       {/* Ringkasan: saldo awal, total debit/kredit (dihitung aksi baris), saldo akhir. */}
       <DetailCard title="Ringkasan Mutasi" columns={4}>
-        <DetailField label="Saldo Awal" value={formatCurrency(Number(stmt.openingBalance))} />
-        <DetailField label="Total Debit" value={formatCurrency(Number(stmt.totalDebits))} />
-        <DetailField label="Total Kredit" value={formatCurrency(Number(stmt.totalCredits))} />
-        <DetailField label="Saldo Akhir" value={formatCurrency(Number(stmt.closingBalance))} />
+        <DetailField label="Saldo Awal" value={formatCurrencyExact(Number(stmt.openingBalance))} />
+        <DetailField label="Total Debit" value={formatCurrencyExact(Number(stmt.totalDebits))} />
+        <DetailField label="Total Kredit" value={formatCurrencyExact(Number(stmt.totalCredits))} />
+        <DetailField label="Saldo Akhir" value={formatCurrencyExact(Number(stmt.closingBalance))} />
       </DetailCard>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
@@ -174,8 +174,8 @@ export default async function BankStatementDetailPage({
                     <DetailTableTd>{line.description || "-"}</DetailTableTd>
                     <DetailTableTd>{line.reference || "-"}</DetailTableTd>
                     <DetailTableTd>{bankStatementLineTypeLabel(line.type)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(Number(line.debit))}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(Number(line.credit))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(Number(line.debit))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(Number(line.credit))}</DetailTableTd>
                     {canWrite && (
                       <DetailTableTd align="right">
                         <div className="flex items-center justify-end">
@@ -198,10 +198,10 @@ export default async function BankStatementDetailPage({
                     <strong>Total</strong>
                   </DetailTableTd>
                   <DetailTableTd align="right">
-                    <strong>{formatCurrency(Number(stmt.totalDebits))}</strong>
+                    <strong>{formatCurrencyExact(Number(stmt.totalDebits))}</strong>
                   </DetailTableTd>
                   <DetailTableTd align="right">
-                    <strong>{formatCurrency(Number(stmt.totalCredits))}</strong>
+                    <strong>{formatCurrencyExact(Number(stmt.totalCredits))}</strong>
                   </DetailTableTd>
                   {canWrite && <DetailTableTd>{null}</DetailTableTd>}
                 </DetailTableFootRow>
