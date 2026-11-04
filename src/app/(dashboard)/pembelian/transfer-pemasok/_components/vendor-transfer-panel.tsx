@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact, formatCurrency } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 
 export interface TransferInstructionRow {
@@ -94,7 +94,7 @@ export function VendorTransferPanel({ rows }: { rows: TransferInstructionRow[] }
         <span className="w-40 truncate text-xs text-muted-foreground">
           {row.bankAccount ?? row.paymentMethod}
         </span>
-        <span className="w-32 text-right tabular-nums">{formatAccounting(row.amount)}</span>
+        <span className="w-32 text-right tabular-nums">{formatAccountingExact(row.amount)}</span>
         <span className="w-20 text-xs text-muted-foreground">{statusLabel(row.status)}</span>
         <span className="w-40 text-right text-xs text-muted-foreground">
           {row.transferredAt ? `${row.transferredAt}${row.transferReference ? ` · ${row.transferReference}` : ""}` : "belum ditransfer"}

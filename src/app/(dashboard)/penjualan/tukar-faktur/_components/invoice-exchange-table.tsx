@@ -4,7 +4,7 @@ import { createColumnHelper } from "@/lib/table"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteInvoiceExchange } from "@/actions/invoice-exchange.actions"
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { settlementStatus, SETTLEMENT_LABEL } from "@/lib/finance/invoice-exchange"
 
 interface InvoiceExchangeRow {
@@ -42,7 +42,7 @@ const columns = [
   }),
   columnHelper.accessor("amount", {
     header: "Nilai",
-    cell: (info) => <span className="tabular-nums">{formatAccounting(info.getValue())}</span>,
+    cell: (info) => <span className="tabular-nums">{formatAccountingExact(info.getValue())}</span>,
   }),
   columnHelper.display({
     id: "outstanding",
@@ -50,7 +50,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <span className="tabular-nums">
-        {formatAccounting(info.row.original.amount - info.row.original.paid)}
+        {formatAccountingExact(info.row.original.amount - info.row.original.paid)}
       </span>
     ),
   }),

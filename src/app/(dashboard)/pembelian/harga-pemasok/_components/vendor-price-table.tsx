@@ -6,7 +6,7 @@ import { createColumnHelper } from "@/lib/table"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteVendorPrice } from "@/actions/vendor-price.actions"
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 
 interface VendorPriceRow {
   id: number
@@ -24,11 +24,11 @@ const columns = [
   columnHelper.accessor("itemLabel", { header: "Barang" }),
   columnHelper.accessor("minQty", {
     header: "Min. Jml",
-    cell: (info) => <span className="tabular-nums">{formatAccounting(info.getValue())}</span>,
+    cell: (info) => <span className="tabular-nums">{formatAccountingExact(info.getValue())}</span>,
   }),
   columnHelper.accessor("price", {
     header: "Harga",
-    cell: (info) => <span className="tabular-nums">{formatAccounting(info.getValue())}</span>,
+    cell: (info) => <span className="tabular-nums">{formatAccountingExact(info.getValue())}</span>,
   }),
   columnHelper.accessor("effectiveDate", {
     header: "Berlaku",
