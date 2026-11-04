@@ -3979,3 +3979,23 @@ produksi/beban lain/total biaya/laba dengan 0 desimal dan menjumlah footer denga
 
 ### Bukti
 - 414/414 tes komponen laporan; tsc, ESLint bersih.
+
+## Putaran 161 — selisih kompensasi PKWT dibulatkan ke rupiah penuh (commit `f1a171399`)
+
+Teks temuan rekonsiliasi PKWT (`buildPkwtReconciliation` dan anomali GL) mencetak empat angka dengan `formatNumber` 0 desimal: saldo GL, utang seharusnya, selisih GL, dan selisih akrual/peristiwa. Probe `frozenEventTotal 1.000.000 − accrualSubledgerTotal 999.999 − paidSlipTotal 0,50`:
+
+```
+accrualVsEventDiff = 0,50
+teks lama          : "… selisih Rp1 …"   ← temuan 0,50 dilebihkan dua kali
+```
+
+### Vonis FIX
+- Keempat angka memakai `formatNumber(..., 2)`; angka tidak berubah.
+- Regresi baru mengunci `Rp0,50` dan nilai `accrualVsEventDiff`.
+
+### Vonis CATAT
+- **`formatNumber` dipakai untuk nominal uang di sini, bukan `formatAccountingExact`** — konteksnya teks prosa dengan awalan "Rp" dan tidak boleh menghilangkan nol desimal pada nilai bulat, jadi dua desimal eksplisit lebih tepat. Pemakaian `formatNumber` untuk uang di tempat lain perlu ditinjau terpisah.
+
+### Bukti
+- Merah: 1 gagal/10 lulus.
+- Hijau: 11/11; 3.151 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
