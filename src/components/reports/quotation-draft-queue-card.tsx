@@ -7,7 +7,7 @@ import {
   type QuotationDraftStage,
 } from "@/lib/reports/quotation-draft-queue"
 import { entityHref } from "@/lib/utils/entity-url"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import {
   DetailTable,
@@ -145,7 +145,7 @@ export function QuotationDraftQueueCard({
                       {`${row.umurDrafHari} hari`}
                     </DetailTableTd>
                     <DetailTableTd align="right">
-                      {formatCurrency(row.grandTotal)}
+                      {formatCurrencyExact(row.grandTotal)}
                     </DetailTableTd>
                     <DetailTableTd>
                       <StatusChip

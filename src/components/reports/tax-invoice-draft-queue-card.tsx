@@ -3,7 +3,7 @@ import type {
   TaxInvoiceDraftQueue,
   TaxInvoiceDraftRow,
 } from "@/lib/reports/tax-invoice-draft-queue"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import {
   DetailTable,
@@ -63,9 +63,9 @@ function DraftTable({
                   <span className="block text-xs text-muted-foreground">{row.pastPeriodLabel}</span>
                 ) : null}
               </DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(Number(row.dpp))}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(Number(row.dpp))}</DetailTableTd>
               <DetailTableTd align="right">{String(row.taxRate)}%</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(Number(row.taxAmount))}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(Number(row.taxAmount))}</DetailTableTd>
               {showCreditStatus ? (
                 <DetailTableTd>
                   {row.creditStatus ?? (

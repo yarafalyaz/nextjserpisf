@@ -8,7 +8,7 @@ import {
   type VendorPaymentDraftQueue,
 } from "@/lib/reports/vendor-payment-draft-queue"
 import { entityHref } from "@/lib/utils/entity-url"
-import { formatCurrency, formatDate, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import { ReportCardShell } from "./report-card-shell"
 import {
@@ -56,7 +56,7 @@ export function VendorPaymentDraftQueueCard({
           {VENDOR_PAYMENT_DRAFT_LEVEL_LABELS.mengendap.toLowerCase()} ·{" "}
           {formatNumber(levelCounts.menunggu)}{" "}
           {VENDOR_PAYMENT_DRAFT_LEVEL_LABELS.menunggu.toLowerCase()} ·{" "}
-          {formatNumber(totalDocuments)} pembayaran draft — {formatCurrency(totalAmount)}{" "}
+          {formatNumber(totalDocuments)} pembayaran draft — {formatCurrencyExact(totalAmount)}{" "}
           {totalLabel}
         </>
       }
@@ -88,7 +88,7 @@ export function VendorPaymentDraftQueueCard({
               <li key={entry.vendorId}>
                 <StatusChip
                   status={entry.vendorName}
-                  customLabel={`${entry.vendorName}: ${formatNumber(entry.total)} pembayaran draft (${formatNumber(entry.levelCounts.mengendap)} ${VENDOR_PAYMENT_DRAFT_LEVEL_LABELS.mengendap.toLowerCase()}, ${formatNumber(entry.levelCounts.menunggu)} ${VENDOR_PAYMENT_DRAFT_LEVEL_LABELS.menunggu.toLowerCase()}) — ${formatCurrency(entry.totalAmount)} ${totalLabel}`}
+                  customLabel={`${entry.vendorName}: ${formatNumber(entry.total)} pembayaran draft (${formatNumber(entry.levelCounts.mengendap)} ${VENDOR_PAYMENT_DRAFT_LEVEL_LABELS.mengendap.toLowerCase()}, ${formatNumber(entry.levelCounts.menunggu)} ${VENDOR_PAYMENT_DRAFT_LEVEL_LABELS.menunggu.toLowerCase()}) — ${formatCurrencyExact(entry.totalAmount)} ${totalLabel}`}
                   customTone="default"
                 />
               </li>
@@ -130,7 +130,7 @@ export function VendorPaymentDraftQueueCard({
                   </Link>
                 </DetailTableTd>
                 <DetailTableTd>{row.vendorName}</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(row.amount)}</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrencyExact(row.amount)}</DetailTableTd>
                 <DetailTableTd>
                   {formatDate(row.paymentDate)}
                   {row.paymentDateLampau ? (

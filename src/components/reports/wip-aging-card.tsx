@@ -2,7 +2,7 @@ import Link from "next/link"
 import type { WipAging } from "@/lib/reports/wip-aging"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { entityHref } from "@/lib/utils/entity-url"
-import { formatCurrency, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatNumber } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -29,7 +29,7 @@ export function WipAgingCard({ aging }: Readonly<{ aging: WipAging }>) {
       summary={
         <>
           {aging.totalOrders} order produksi berjalan · sisa WIP{" "}
-          {formatCurrency(aging.totalWipAmount)}
+          {formatCurrencyExact(aging.totalWipAmount)}
         </>
       }
       isEmpty={aging.orders.length === 0}
@@ -67,7 +67,7 @@ export function WipAgingCard({ aging }: Readonly<{ aging: WipAging }>) {
               <DetailTableTd align="right">
                 {formatNumber(order.completionPercent, 2)}%
               </DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(order.wipAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(order.wipAmount)}</DetailTableTd>
             </DetailTableRow>
           ))}
         </DetailTableBody>
@@ -85,7 +85,7 @@ export function WipAgingCard({ aging }: Readonly<{ aging: WipAging }>) {
               <DetailTableRow key={bucket.id}>
                 <DetailTableTd>{bucket.label}</DetailTableTd>
                 <DetailTableTd align="right">{formatNumber(bucket.orderCount)}</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(bucket.wipAmount)}</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrencyExact(bucket.wipAmount)}</DetailTableTd>
               </DetailTableRow>
             ))}
           </DetailTableBody>

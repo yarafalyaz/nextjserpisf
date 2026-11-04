@@ -1,7 +1,7 @@
 import Link from "next/link"
 
 import type { DownPaymentQueueRow } from "@/lib/reports/down-payment-verification-queue"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
@@ -38,13 +38,13 @@ export function DpQueueRow({
       <DetailTableTd>{row.quotationStatus}</DetailTableTd>
       <DetailTableTd>{formatDate(row.paymentDate)}</DetailTableTd>
       <DetailTableTd>{`${row.umurMenungguHari} hari`}</DetailTableTd>
-      <DetailTableTd align="right">{formatCurrency(row.amount)}</DetailTableTd>
+      <DetailTableTd align="right">{formatCurrencyExact(row.amount)}</DetailTableTd>
       <DetailTableTd>{row.buktiLabel}</DetailTableTd>
       <DetailTableTd>
         {row.jarakTeks}
         {row.menungguLainSen > 0 ? (
           <span className="block text-xs text-muted-foreground">
-            Menunggu lain {formatCurrency(row.menungguLainSen / 100)} (belum terhitung ambang)
+            Menunggu lain {formatCurrencyExact(row.menungguLainSen / 100)} (belum terhitung ambang)
           </span>
         ) : null}
         <span className="block text-xs text-muted-foreground">{row.ambangSumberLabel}</span>

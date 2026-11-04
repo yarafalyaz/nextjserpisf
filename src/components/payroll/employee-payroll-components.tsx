@@ -7,7 +7,7 @@ import {
   updateEmployeePayrollComponent,
 } from "@/actions/hrm.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { AppDatePicker } from "@/components/ui/date-picker"
@@ -97,7 +97,7 @@ export function EmployeePayrollComponents({
                 <tr key={a.id} className="border-b border-default last:border-0">
                   <td className="px-3 py-2 font-medium text-foreground">{a.component.name}</td>
                   <td className="px-3 py-2">{kindLabel(a.component.kind)}</td>
-                  <td className="px-3 py-2">{formatCurrency(a.defaultAmount)}</td>
+                  <td className="px-3 py-2">{formatCurrencyExact(a.defaultAmount)}</td>
                   <td className="px-3 py-2">
                     {formatDate(a.effectiveFrom)} — {a.effectiveTo ? formatDate(a.effectiveTo) : "seterusnya"}
                   </td>

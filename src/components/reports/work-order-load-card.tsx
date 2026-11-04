@@ -2,7 +2,7 @@ import Link from "next/link"
 import type { WorkOrderLoad } from "@/lib/reports/work-order-load"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { entityHref } from "@/lib/utils/entity-url"
-import { formatCurrency, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatNumber } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -31,7 +31,7 @@ export function WorkOrderLoadCard({ load }: Readonly<{ load: WorkOrderLoad }>) {
         <>
           {load.totalActive} perintah kerja aktif · {formatNumber(load.totalLaborHours)} jam tenaga
           kerja · {formatNumber(load.totalMachineHours)} jam mesin ·{" "}
-          {formatCurrency(load.totalAmount)}
+          {formatCurrencyExact(load.totalAmount)}
         </>
       }
       isEmpty={load.workOrders.length === 0}
@@ -59,7 +59,7 @@ export function WorkOrderLoadCard({ load }: Readonly<{ load: WorkOrderLoad }>) {
                   <DetailTableTd>{statusLabel(row.status)}</DetailTableTd>
                   <DetailTableTd align="right">{formatNumber(row.laborHours)} jam</DetailTableTd>
                   <DetailTableTd align="right">{formatNumber(row.machineHours)} jam</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(row.totalAmount)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrencyExact(row.totalAmount)}</DetailTableTd>
                 </DetailTableRow>
               ))}
             </DetailTableBody>

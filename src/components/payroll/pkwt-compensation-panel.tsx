@@ -9,7 +9,7 @@ import {
   runPkwtAccrual,
 } from "@/actions/hrm.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import { Button } from "@/components/ui/button"
 import { CurrencyInput } from "@/components/ui/currency-input"
@@ -103,9 +103,9 @@ function PkwtSlipRowsTable({ caption, suffix, rows }: { caption: string; suffix:
             <tr key={`${row.employeeId}-${row.segmentEnd.toISOString()}-${suffix}`} className="border-b border-default last:border-0">
               <td className="px-3 py-2 font-medium text-foreground">{row.name}</td>
               <td className="px-3 py-2">{formatDate(row.segmentEnd)}</td>
-              <td className="px-3 py-2 text-right">{formatCurrency(row.frozenAmount)}</td>
-              <td className="px-3 py-2 text-right">{formatCurrency(row.paidAmount)}</td>
-              <td className="px-3 py-2 text-right">{formatCurrency(row.outstandingAmount)}</td>
+              <td className="px-3 py-2 text-right">{formatCurrencyExact(row.frozenAmount)}</td>
+              <td className="px-3 py-2 text-right">{formatCurrencyExact(row.paidAmount)}</td>
+              <td className="px-3 py-2 text-right">{formatCurrencyExact(row.outstandingAmount)}</td>
               <td className="px-3 py-2">{row.label}</td>
             </tr>
           ))}
@@ -334,10 +334,10 @@ export function PkwtCompensationPanel({
                         {formatDate(row.segmentStart)} – {formatDate(row.segmentEnd)}
                       </td>
                       <td className="px-3 py-2 text-right">{row.serviceMonths}</td>
-                      <td className="px-3 py-2 text-right">{formatCurrency(row.amount)}</td>
-                      <td className="px-3 py-2 text-right">{formatCurrency(row.accruedToDate)}</td>
-                      <td className="px-3 py-2 text-right">{formatCurrency(row.paidAmount)}</td>
-                      <td className="px-3 py-2 text-right">{formatCurrency(row.outstandingAmount)}</td>
+                      <td className="px-3 py-2 text-right">{formatCurrencyExact(row.amount)}</td>
+                      <td className="px-3 py-2 text-right">{formatCurrencyExact(row.accruedToDate)}</td>
+                      <td className="px-3 py-2 text-right">{formatCurrencyExact(row.paidAmount)}</td>
+                      <td className="px-3 py-2 text-right">{formatCurrencyExact(row.outstandingAmount)}</td>
                       <td className="px-3 py-2">
                         <StatusChip status={row.status} />
                       </td>
@@ -395,7 +395,7 @@ export function PkwtCompensationPanel({
                 <option value="">Pilih peristiwa...</option>
                 {approvedRows.map((row) => (
                   <option key={row.eventId} value={row.eventId}>
-                    {row.employeeName} — {formatDate(row.segmentStart)} – {formatDate(row.segmentEnd)} — {formatCurrency(row.amount)}
+                    {row.employeeName} — {formatDate(row.segmentStart)} – {formatDate(row.segmentEnd)} — {formatCurrencyExact(row.amount)}
                   </option>
                 ))}
               </select>
@@ -451,7 +451,7 @@ export function PkwtCompensationPanel({
                 Saldo GL Utang Kompensasi (210207)
                 {report.glIsCompanyWide && " — saldo perusahaan"}
               </dt>
-              <dd className="text-base font-semibold text-foreground">{formatCurrency(report.glPayableBalance)}</dd>
+              <dd className="text-base font-semibold text-foreground">{formatCurrencyExact(report.glPayableBalance)}</dd>
               {report.glIsCompanyWide && (
                 <p className="mt-1 text-xs text-muted-foreground">
                   Saldo GL mencakup seluruh perusahaan; baris dan total lain di panel ini hanya karyawan dalam cakupan Anda, jadi saldo GL tidak diperbandingkan dengan total panel.
@@ -460,15 +460,15 @@ export function PkwtCompensationPanel({
             </div>
             <div className="rounded-lg border border-default bg-surface-secondary/40 p-3">
               <dt className="text-xs text-muted-foreground">Utang Seharusnya (peristiwa terbekukan − slip terbayar)</dt>
-              <dd className="text-base font-semibold text-foreground">{formatCurrency(report.expectedPayableTotal)}</dd>
+              <dd className="text-base font-semibold text-foreground">{formatCurrencyExact(report.expectedPayableTotal)}</dd>
             </div>
             <div className="rounded-lg border border-default bg-surface-secondary/40 p-3">
               <dt className="text-xs text-muted-foreground">Total Subledger Akrual</dt>
-              <dd className="text-base font-semibold text-foreground">{formatCurrency(report.accrualSubledgerTotal)}</dd>
+              <dd className="text-base font-semibold text-foreground">{formatCurrencyExact(report.accrualSubledgerTotal)}</dd>
             </div>
             <div className="rounded-lg border border-default bg-surface-secondary/40 p-3">
               <dt className="text-xs text-muted-foreground">Total Terbayar via Slip</dt>
-              <dd className="text-base font-semibold text-foreground">{formatCurrency(report.paidSlipTotal)}</dd>
+              <dd className="text-base font-semibold text-foreground">{formatCurrencyExact(report.paidSlipTotal)}</dd>
             </div>
           </dl>
 

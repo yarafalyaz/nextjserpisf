@@ -389,3 +389,33 @@ describe("sapuan ketujuh belas: SDM, dashboard, form", () => {
     }
   })
 })
+
+describe("sapuan kedelapan belas: payroll dan kartu laporan", () => {
+  it("komponen payroll dan kartu laporan memakai formatter currency exact", () => {
+    for (const rel of [
+      "src/components/payroll/employee-payroll-components.tsx",
+      "src/components/payroll/payroll-bpjs-aggregate-snapshot.tsx",
+      "src/components/payroll/payroll-commission-lines.tsx",
+      "src/components/payroll/payroll-component-lines.tsx",
+      "src/components/payroll/pkwt-compensation-panel.tsx",
+      "src/components/reports/dp-queue-row.tsx",
+      "src/components/reports/lead-priority-queue-card.tsx",
+      "src/components/reports/quotation-approval-gate-card.tsx",
+      "src/components/reports/quotation-draft-queue-card.tsx",
+      "src/components/reports/quotation-queue-cells.tsx",
+      "src/components/reports/sales-late-fee-panel.tsx",
+      "src/components/reports/sales-target-achievement-card.tsx",
+      "src/components/reports/sales-target-manage-panel.tsx",
+      "src/components/reports/sales-target-reconciliation-card.tsx",
+      "src/components/reports/tax-invoice-draft-queue-card.tsx",
+      "src/components/reports/vendor-payment-draft-queue-card.tsx",
+      "src/components/reports/wip-aging-card.tsx",
+      "src/components/reports/work-order-load-card.tsx",
+      "src/components/reports/workshop-closeout-queue-card.tsx",
+    ]) {
+      const source = readFileSync(path.resolve(process.cwd(), rel), "utf8")
+      expect(source, rel).not.toMatch(/formatCurrency\((?!Exact)/)
+      expect(source, rel).toContain("formatCurrencyExact")
+    }
+  })
+})

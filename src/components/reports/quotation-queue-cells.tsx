@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { entityHref } from "@/lib/utils/entity-url"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DetailTableTd } from "@/components/ui/detail-table"
 
@@ -60,7 +60,7 @@ export function QuotationGrandTotalCell({
   grandTotal,
 }: Readonly<{ grandTotal: number }>) {
   return (
-    <DetailTableTd align="right">{formatCurrency(grandTotal)}</DetailTableTd>
+    <DetailTableTd align="right">{formatCurrencyExact(grandTotal)}</DetailTableTd>
   )
 }
 

@@ -5,7 +5,7 @@ import {
   removePayrollComponentLine,
   updatePayrollComponentLineAmount,
 } from "@/actions/hrm.actions"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { DeleteButton } from "@/components/ui/delete-button"
@@ -103,7 +103,7 @@ export function PayrollComponentLines({
                   <td className="px-3 py-2">{recurrenceLabel(l.recurrenceSnapshot)}</td>
                   <td className="px-3 py-2">{taxableLabel(l.isTaxableSnapshot, l.kindSnapshot)}</td>
                   <td className="px-3 py-2">{SOURCE_LABEL[l.source] ?? l.source}</td>
-                  <td className="px-3 py-2 text-right">{formatCurrency(l.amount)}</td>
+                  <td className="px-3 py-2 text-right">{formatCurrencyExact(l.amount)}</td>
                   {editable && l.source !== "pkwt_compensation" && (
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap items-end gap-2">
@@ -145,11 +145,11 @@ export function PayrollComponentLines({
       <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="rounded-lg border border-default bg-surface-secondary/40 p-3">
           <dt className="text-xs text-muted-foreground">Total Tunjangan (turunan baris pendapatan)</dt>
-          <dd className="text-base font-semibold text-foreground">{formatCurrency(allowances)}</dd>
+          <dd className="text-base font-semibold text-foreground">{formatCurrencyExact(allowances)}</dd>
         </div>
         <div className="rounded-lg border border-default bg-surface-secondary/40 p-3">
           <dt className="text-xs text-muted-foreground">Total Potongan Komponen (turunan baris potongan)</dt>
-          <dd className="text-base font-semibold text-foreground">{formatCurrency(deductions)}</dd>
+          <dd className="text-base font-semibold text-foreground">{formatCurrencyExact(deductions)}</dd>
         </div>
       </dl>
 

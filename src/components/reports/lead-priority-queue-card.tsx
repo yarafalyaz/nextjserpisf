@@ -1,7 +1,7 @@
 import Link from "next/link"
 import type { LeadPriorityQueue } from "@/lib/reports/lead-priority"
 import { entityHref } from "@/lib/utils/entity-url"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import {
   DetailTable,
@@ -55,7 +55,7 @@ export function LeadPriorityQueueCard({
               </dt>
               <dd className="text-xs text-muted-foreground">
                 {bucket.count} prospek · total nilai estimasi{" "}
-                {formatCurrency(bucket.totalEstimatedValue)} ·{" "}
+                {formatCurrencyExact(bucket.totalEstimatedValue)} ·{" "}
                 {bucket.noValueCount} prospek tanpa nilai estimasi
               </dd>
             </div>
@@ -116,7 +116,7 @@ export function LeadPriorityQueueCard({
                     <DetailTableTd>{row.assigneeLabel}</DetailTableTd>
                     <DetailTableTd align="right">
                       {row.hasEstimatedValue && row.estimatedValue != null
-                        ? formatCurrency(row.estimatedValue)
+                        ? formatCurrencyExact(row.estimatedValue)
                         : row.noValueLabel}
                     </DetailTableTd>
                   </DetailTableRow>

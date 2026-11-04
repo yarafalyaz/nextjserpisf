@@ -3,7 +3,7 @@ import type {
   SalesTargetPeriodReconciliation,
 } from "@/lib/reports/sales-target-achievement"
 import { SALES_TARGET_UNATTRIBUTED_LABEL } from "@/lib/reports/sales-target-achievement"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -70,23 +70,23 @@ export function SalesTargetReconciliationCard({
           {reconciliation.rows.map((row) => (
             <DetailTableRow key={row.salesEmployeeId ?? "unattributed"}>
               <DetailTableTd className="font-medium">{sellerLabel(row.salesEmployeeId)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.grossPaidAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.grossPaidAmount)}</DetailTableTd>
               <DetailTableTd align="right">
-                {row.commissionPaidBase !== null ? formatCurrency(row.commissionPaidBase) : ""}
+                {row.commissionPaidBase !== null ? formatCurrencyExact(row.commissionPaidBase) : ""}
               </DetailTableTd>
               <DetailTableTd align="right">
-                {row.commissionDifference !== null ? formatCurrency(row.commissionDifference) : ""}
+                {row.commissionDifference !== null ? formatCurrencyExact(row.commissionDifference) : ""}
               </DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.returnDeductionAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.returnDeductionAmount)}</DetailTableTd>
               <DetailTableTd align="right">
                 {row.independentReturnDeductionAmount !== null
-                  ? formatCurrency(row.independentReturnDeductionAmount)
+                  ? formatCurrencyExact(row.independentReturnDeductionAmount)
                   : ""}
               </DetailTableTd>
               <DetailTableTd align="right">
-                {row.independentDifference !== null ? formatCurrency(row.independentDifference) : ""}
+                {row.independentDifference !== null ? formatCurrencyExact(row.independentDifference) : ""}
               </DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.achievedAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.achievedAmount)}</DetailTableTd>
             </DetailTableRow>
           ))}
         </DetailTableBody>
@@ -94,25 +94,25 @@ export function SalesTargetReconciliationCard({
           <DetailTableFootRow>
             <DetailTableTd className="font-bold">Total</DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(reconciliation.totals.grossPaidAmount)}
+              {formatCurrencyExact(reconciliation.totals.grossPaidAmount)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(reconciliation.totals.commissionPaidBase)}
+              {formatCurrencyExact(reconciliation.totals.commissionPaidBase)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(reconciliation.totals.commissionDifference)}
+              {formatCurrencyExact(reconciliation.totals.commissionDifference)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(reconciliation.totals.returnDeductionAmount)}
+              {formatCurrencyExact(reconciliation.totals.returnDeductionAmount)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(reconciliation.totals.independentReturnDeductionAmount)}
+              {formatCurrencyExact(reconciliation.totals.independentReturnDeductionAmount)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(reconciliation.totals.independentDifference)}
+              {formatCurrencyExact(reconciliation.totals.independentDifference)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(reconciliation.totals.achievedAmount)}
+              {formatCurrencyExact(reconciliation.totals.achievedAmount)}
             </DetailTableTd>
           </DetailTableFootRow>
         </DetailTableFoot>
@@ -121,10 +121,10 @@ export function SalesTargetReconciliationCard({
       <p className="mt-4 text-sm text-muted-foreground">
         Kaki Retur Penjualan jurnal retur POSTED:{" "}
         {reconciliation.totals.postedJournalReturnAmount !== null
-          ? formatCurrency(reconciliation.totals.postedJournalReturnAmount)
+          ? formatCurrencyExact(reconciliation.totals.postedJournalReturnAmount)
           : "Belum terukur — akun Retur Penjualan belum dipetakan."}
         {reconciliation.totals.journalDifference !== null
-          ? ` · Selisih terhadap retur read-model: ${formatCurrency(reconciliation.totals.journalDifference)}`
+          ? ` · Selisih terhadap retur read-model: ${formatCurrencyExact(reconciliation.totals.journalDifference)}`
           : ""}
       </p>
 
@@ -151,9 +151,9 @@ export function SalesTargetReconciliationCard({
             {reconciliation.invoiceDeductionClampFindings.map((finding) => (
               <li key={finding.salesInvoiceId}>
                 Faktur #{finding.salesInvoiceId}: pengurang mentah{" "}
-                {formatCurrency(finding.rawDeductionAmount)} ditahan pada total faktur{" "}
-                {formatCurrency(finding.grandTotal)} menjadi{" "}
-                {formatCurrency(finding.clampedDeductionAmount)}.
+                {formatCurrencyExact(finding.rawDeductionAmount)} ditahan pada total faktur{" "}
+                {formatCurrencyExact(finding.grandTotal)} menjadi{" "}
+                {formatCurrencyExact(finding.clampedDeductionAmount)}.
               </li>
             ))}
           </ul>

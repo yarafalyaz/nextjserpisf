@@ -6,7 +6,7 @@ import {
   deleteSalesTarget,
   updateSalesTarget,
 } from "@/actions/sales-target.actions"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { useActionRunner } from "./use-action-runner"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -134,7 +134,7 @@ export function SalesTargetManagePanel({
                     <td>
                       {formatDate(row.periodStart, { format: "numeric" })} – {formatDate(row.periodEnd, { format: "numeric" })}
                     </td>
-                    <td className="num">{formatCurrency(row.targetAmount)}</td>
+                    <td className="num">{formatCurrencyExact(row.targetAmount)}</td>
                     <td>{row.notes || "—"}</td>
                     {canManage ? (
                       <td>

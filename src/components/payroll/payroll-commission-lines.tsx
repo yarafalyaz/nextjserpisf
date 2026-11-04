@@ -4,7 +4,7 @@ import {
   addPayrollCommissionLine,
   removePayrollComponentLine,
 } from "@/actions/hrm.actions"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { DeleteButton } from "@/components/ui/delete-button"
@@ -75,7 +75,7 @@ export function PayrollCommissionLines({
                   <td className="px-3 py-2 font-medium text-foreground">
                     {l.commissionInvoiceId != null ? `Faktur #${l.commissionInvoiceId}` : `Utang #${l.commissionPayableId}`}
                   </td>
-                  <td className="px-3 py-2 text-right">{formatCurrency(l.amount)}</td>
+                  <td className="px-3 py-2 text-right">{formatCurrencyExact(l.amount)}</td>
                   {editable && (
                     <td className="px-3 py-2">
                       <DeleteButton id={l.id} action={removePayrollComponentLine} />
@@ -114,7 +114,7 @@ export function PayrollCommissionLines({
               <option value="">Pilih utang...</option>
               {available.map((d) => (
                 <option key={d.id} value={d.id}>
-                  {d.invoiceNo ?? `Faktur #${d.salesInvoiceId}`} — sisa {formatCurrency(d.balance)}
+                  {d.invoiceNo ?? `Faktur #${d.salesInvoiceId}`} — sisa {formatCurrencyExact(d.balance)}
                 </option>
               ))}
             </select>

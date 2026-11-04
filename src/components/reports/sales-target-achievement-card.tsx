@@ -8,7 +8,7 @@ import {
   SALES_TARGET_NO_TARGET_LABEL,
   SALES_TARGET_PARTIAL_PERIOD_LABEL,
 } from "@/lib/reports/sales-target-achievement"
-import { formatCurrency, formatDate, formatPercentage } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate, formatPercentage } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -42,7 +42,7 @@ function legacyNote(hasLegacyReturnLines: boolean, legacyReturnDeductionAmount: 
   if (!hasLegacyReturnLines || legacyReturnDeductionAmount <= 0) return null
   return (
     <span className="block text-xs font-normal text-muted-foreground">
-      Retur {SALES_TARGET_LEGACY_LABEL}: {formatCurrency(legacyReturnDeductionAmount)}
+      Retur {SALES_TARGET_LEGACY_LABEL}: {formatCurrencyExact(legacyReturnDeductionAmount)}
     </span>
   )
 }
@@ -70,17 +70,17 @@ function TargetRow({ row }: Readonly<{ row: SalesTargetAchievementRow }>) {
       </DetailTableTd>
       <DetailTableTd>{periodLabel(row)}</DetailTableTd>
       <DetailTableTd align="right">
-        {row.targetAmount !== null ? formatCurrency(row.targetAmount) : SALES_TARGET_NO_TARGET_LABEL}
+        {row.targetAmount !== null ? formatCurrencyExact(row.targetAmount) : SALES_TARGET_NO_TARGET_LABEL}
       </DetailTableTd>
-      <DetailTableTd align="right">{formatCurrency(row.grossPaidAmount)}</DetailTableTd>
-      <DetailTableTd align="right">{formatCurrency(row.returnDeductionAmount)}</DetailTableTd>
+      <DetailTableTd align="right">{formatCurrencyExact(row.grossPaidAmount)}</DetailTableTd>
+      <DetailTableTd align="right">{formatCurrencyExact(row.returnDeductionAmount)}</DetailTableTd>
       <DetailTableTd align="right">{row.returnCount}</DetailTableTd>
-      <DetailTableTd align="right">{formatCurrency(row.achievedAmount)}</DetailTableTd>
+      <DetailTableTd align="right">{formatCurrencyExact(row.achievedAmount)}</DetailTableTd>
       <DetailTableTd align="right">
         {row.achievementPercent !== null ? formatPercentage(row.achievementPercent, 2) : ""}
       </DetailTableTd>
       <DetailTableTd align="right">
-        {row.gapAmount !== null ? formatCurrency(row.gapAmount) : ""}
+        {row.gapAmount !== null ? formatCurrencyExact(row.gapAmount) : ""}
       </DetailTableTd>
       <DetailTableTd align="right">{row.invoiceCount}</DetailTableTd>
     </DetailTableRow>
@@ -132,10 +132,10 @@ export function SalesTargetAchievementCard({
               </DetailTableTd>
               <DetailTableTd>{SALES_TARGET_NO_TARGET_LABEL}</DetailTableTd>
               <DetailTableTd align="right">{SALES_TARGET_NO_TARGET_LABEL}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(report.unattributed.grossPaidAmount)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(report.unattributed.returnDeductionAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(report.unattributed.grossPaidAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(report.unattributed.returnDeductionAmount)}</DetailTableTd>
               <DetailTableTd align="right">{""}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(report.unattributed.achievedAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(report.unattributed.achievedAmount)}</DetailTableTd>
               <DetailTableTd align="right">{""}</DetailTableTd>
               <DetailTableTd align="right">{""}</DetailTableTd>
               <DetailTableTd align="right">{report.unattributed.invoiceCount}</DetailTableTd>
@@ -147,17 +147,17 @@ export function SalesTargetAchievementCard({
             <DetailTableTd className="font-bold">Total</DetailTableTd>
             <DetailTableTd>{""}</DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(report.totalTargetAmount)}
+              {formatCurrencyExact(report.totalTargetAmount)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(report.totalGrossPaidAmount)}
+              {formatCurrencyExact(report.totalGrossPaidAmount)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(report.totalReturnDeductionAmount)}
+              {formatCurrencyExact(report.totalReturnDeductionAmount)}
             </DetailTableTd>
             <DetailTableTd align="right">{""}</DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(report.totalAchievedAmount)}
+              {formatCurrencyExact(report.totalAchievedAmount)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
               {report.companyPercent !== null ? formatPercentage(report.companyPercent, 2) : ""}
@@ -174,7 +174,7 @@ export function SalesTargetAchievementCard({
             {report.legacyReturns.map((legacyReturn) => (
               <li key={legacyReturn.returnId}>
                 Retur #{legacyReturn.returnId} (Faktur #{legacyReturn.salesInvoiceId}):{" "}
-                {legacyReturn.label} {formatCurrency(legacyReturn.deductionAmount)}.
+                {legacyReturn.label} {formatCurrencyExact(legacyReturn.deductionAmount)}.
               </li>
             ))}
           </ul>
@@ -187,9 +187,9 @@ export function SalesTargetAchievementCard({
             {report.invoiceDeductionClampFindings.map((finding) => (
               <li key={finding.salesInvoiceId}>
                 Faktur #{finding.salesInvoiceId}: pengurang mentah{" "}
-                {formatCurrency(finding.rawDeductionAmount)} ditahan pada total faktur{" "}
-                {formatCurrency(finding.grandTotal)} menjadi{" "}
-                {formatCurrency(finding.clampedDeductionAmount)}.
+                {formatCurrencyExact(finding.rawDeductionAmount)} ditahan pada total faktur{" "}
+                {formatCurrencyExact(finding.grandTotal)} menjadi{" "}
+                {formatCurrencyExact(finding.clampedDeductionAmount)}.
               </li>
             ))}
           </ul>

@@ -1,5 +1,5 @@
 import type { QuotationApprovalGate } from "@/lib/reports/quotation-approval-gate"
-import { formatCurrency, formatPercentage } from "@/lib/utils/format"
+import { formatCurrencyExact, formatPercentage } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -16,7 +16,7 @@ function thresholdText(
 ): string {
   const parts: string[] = []
   if (minDiscountPercent !== null) parts.push(`diskon ≥ ${formatPercentage(minDiscountPercent, 2)}`)
-  if (minAmount !== null) parts.push(`total ≥ ${formatCurrency(minAmount)}`)
+  if (minAmount !== null) parts.push(`total ≥ ${formatCurrencyExact(minAmount)}`)
   return parts.join(" dan ")
 }
 

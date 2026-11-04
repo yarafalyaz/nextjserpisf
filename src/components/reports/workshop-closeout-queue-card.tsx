@@ -19,7 +19,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { entityHref } from "@/lib/utils/entity-url"
-import { formatCurrency, formatDate, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 
 /**
@@ -189,7 +189,7 @@ export function WorkshopCloseoutQueueCard({
                               : ""}
                           </span>
                           {job.kind === "production_order" && job.totalActualCost != null ? (
-                            <span>Sisa WIP {formatCurrency(job.totalActualCost)}</span>
+                            <span>Sisa WIP {formatCurrencyExact(job.totalActualCost)}</span>
                           ) : null}
                           <span
                             className={

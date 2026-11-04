@@ -1,4 +1,4 @@
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { readBpjsAggregateSnapshot } from "@/lib/reports/payroll-weekly"
 
 /**
@@ -24,7 +24,7 @@ export function PayrollBpjsAggregateSnapshot({ snapshot }: { snapshot: unknown }
         {rows.map(([label, value]) => (
           <div key={label} className="flex flex-col gap-0.5">
             <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-            <dd className="text-sm font-medium text-foreground">{formatCurrency(value)}</dd>
+            <dd className="text-sm font-medium text-foreground">{formatCurrencyExact(value)}</dd>
           </div>
         ))}
       </dl>

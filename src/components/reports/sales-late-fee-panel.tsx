@@ -33,7 +33,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/shadcn/dialog"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import {
   SALES_LATE_FEE_ACCOUNT_UNSET_TEXT,
@@ -277,7 +277,7 @@ function PayForm({
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <input type="hidden" name="salesLateFeeId" value={doc.id} />
       <p className="text-sm text-muted-foreground">
-        Sisa saldo {doc.documentNo}: {formatCurrency(doc.outstanding)}
+        Sisa saldo {doc.documentNo}: {formatCurrencyExact(doc.outstanding)}
       </p>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`late-fee-pay-amount-${doc.id}`}>Nominal Pembayaran</Label>
@@ -386,7 +386,7 @@ function ReverseForm({
         <input type="hidden" name="salesLateFeeId" value={doc.id} />
         <p className="text-sm text-muted-foreground">
           Pembalikan membuat dokumen reversal untuk {doc.documentNo} sebesar{" "}
-          {formatCurrency(doc.amount)}. Dokumen asal tidak dihapus.
+          {formatCurrencyExact(doc.amount)}. Dokumen asal tidak dihapus.
         </p>
         <AppDatePicker label="Tanggal Pembalikan" name="date" defaultValue={new Date()} />
         <div className="flex flex-col gap-1.5">
@@ -480,7 +480,7 @@ export function SalesLateFeePanel({
         </h2>
         <p className="text-xs text-muted-foreground">
           {panel.documents.length} dokumen · Saldo denda terutang{" "}
-          {formatCurrency(panel.totalOutstanding)}
+          {formatCurrencyExact(panel.totalOutstanding)}
         </p>
       </div>
       <div className="flex flex-col gap-4 p-4 px-5">
@@ -530,12 +530,12 @@ export function SalesLateFeePanel({
                       <DetailTableTd>{term.rateLabel}</DetailTableTd>
                       <DetailTableTd align="right">
                         {term.flatAmountPerDay != null
-                          ? formatCurrency(term.flatAmountPerDay)
+                          ? formatCurrencyExact(term.flatAmountPerDay)
                           : "—"}
                       </DetailTableTd>
                       <DetailTableTd align="right">
                         {term.capAmount != null
-                          ? formatCurrency(term.capAmount)
+                          ? formatCurrencyExact(term.capAmount)
                           : "—"}
                       </DetailTableTd>
                       <DetailTableTd>{formatDate(term.effectiveFrom)}</DetailTableTd>
@@ -587,7 +587,7 @@ export function SalesLateFeePanel({
                 <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                   <div>
                     <dt className="text-xs text-muted-foreground">Basis Piutang</dt>
-                    <dd>{formatCurrency(doc.basisAmount)}</dd>
+                    <dd>{formatCurrencyExact(doc.basisAmount)}</dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Tarif Snapshot</dt>
@@ -595,27 +595,27 @@ export function SalesLateFeePanel({
                       {doc.ratePercentPerDay != null
                         ? `${doc.ratePercentPerDay}% per hari`
                         : doc.flatAmountPerDay != null
-                          ? `${formatCurrency(doc.flatAmountPerDay)} per hari`
+                          ? `${formatCurrencyExact(doc.flatAmountPerDay)} per hari`
                           : "—"}
                     </dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Plafon</dt>
                     <dd>
-                      {doc.capAmount != null ? formatCurrency(doc.capAmount) : "—"}
+                      {doc.capAmount != null ? formatCurrencyExact(doc.capAmount) : "—"}
                     </dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Nominal Denda</dt>
-                    <dd className="font-medium">{formatCurrency(doc.amount)}</dd>
+                    <dd className="font-medium">{formatCurrencyExact(doc.amount)}</dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Dibayar</dt>
-                    <dd>{formatCurrency(doc.paidAmount)}</dd>
+                    <dd>{formatCurrencyExact(doc.paidAmount)}</dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Sisa Saldo Denda</dt>
-                    <dd className="font-medium">{formatCurrency(doc.outstanding)}</dd>
+                    <dd className="font-medium">{formatCurrencyExact(doc.outstanding)}</dd>
                   </div>
                 </dl>
                 {doc.notes ? (
@@ -645,7 +645,7 @@ export function SalesLateFeePanel({
                               {payment.referenceNo ?? "—"}
                             </DetailTableTd>
                             <DetailTableTd align="right">
-                              {formatCurrency(payment.amount)}
+                              {formatCurrencyExact(payment.amount)}
                             </DetailTableTd>
                           </DetailTableRow>
                         ))}
