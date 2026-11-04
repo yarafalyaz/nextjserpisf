@@ -4225,3 +4225,21 @@ Tes "nominal bersen" yang saya tambahkan di Putaran 163 memanggil `renderCard(..
 ### Bukti
 - Merah: 1 gagal/13 lulus; hijau 14/14; 3.019 lulus / 4 dilewati lebih luas tanpa entri `Errors`; tsc, ESLint, diff-check bersih.
 - CI `41825232375` (perbaikan teardown) dan `41825259414` (dokumentasi 177) **success** — job Unit Tests kembali hijau.
+
+## Putaran 179 — posisi SPT per masa (commit `ad23f4c8e`)
+
+Tabel Posisi SPT (`buildSptTableRows`) mencetak PPN keluaran/retur/masukan/neto, kewajiban per jurnal, **selisih jurnal–SPT**, setoran, dan sisa dengan `formatAccounting` 0 desimal. Probe `net 700.000,29`, `journalLiability 700.000`, `journalVsSptDiff -0,29`:
+
+```
+Selisih Jurnal–SPT = "0"
+notice             = "Ada selisih kewajiban per jurnal POSTED vs posisi SPT dokumen"
+```
+
+Laporan menyatakan ada temuan sambil mencetak nol — kontradiksi di satu baris.
+
+### Vonis FIX
+- Formatter tabel SPT menjadi `formatAccountingExact`; `vatMoney` (PDF rekonsiliasi) yang sudah dua desimal eksplisit tidak diubah.
+- Regresi baru mengunci `(0,29)` pada sel selisih, dan merah bila formatter dikembalikan.
+
+### Bukti
+- Merah: 1 gagal/6 lulus; hijau 62/62 terkait; 3.136 lulus / 4 dilewati lebih luas tanpa entri `Errors`; tsc, ESLint, diff-check bersih.
