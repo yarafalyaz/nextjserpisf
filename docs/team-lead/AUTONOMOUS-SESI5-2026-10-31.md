@@ -4214,3 +4214,14 @@ Tes "nominal bersen" yang saya tambahkan di Putaran 163 memanggil `renderCard(..
 
 ### Bukti
 - Full suite lokal: **12.557 lulus / 23 dilewati**, tanpa entri `Errors`; tsc, ESLint, diff-check bersih.
+
+## Putaran 178 — laporan scrap material (commit `510d15574`)
+
+`scrap-material.ts` mencetak **nilai abnormal** per baris, total, dan ringkasan (termasuk kalimat temuan "abnormal belum terjurnal") dengan `formatAccounting` 0 desimal. Nilai itu dijumlah `safeAdd(..., 2)` dan selisihnya terhadap nilai terjurnal adalah temuan audit — pembulatan ke rupiah penuh menyembunyikan temuan sen. Kolom kuantitas sudah memakai `formatNumber(…, 2)` dan tidak diubah.
+
+### Vonis FIX
+- Nilai abnormal memakai `formatAccountingExact` di tiga tempat; regresi baru mengunci `200,50` pada baris, total, dan ringkasan.
+
+### Bukti
+- Merah: 1 gagal/13 lulus; hijau 14/14; 3.019 lulus / 4 dilewati lebih luas tanpa entri `Errors`; tsc, ESLint, diff-check bersih.
+- CI `41825232375` (perbaikan teardown) dan `41825259414` (dokumentasi 177) **success** — job Unit Tests kembali hijau.
