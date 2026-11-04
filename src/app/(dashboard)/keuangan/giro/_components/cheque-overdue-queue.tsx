@@ -12,7 +12,7 @@ import {
   CHEQUE_OVERDUE_TRUNCATED_LABEL,
   CHEQUE_UNKNOWN_STATUS_LABEL,
 } from "@/lib/reports/cheque-overdue-queue"
-import { formatAccounting, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableBody,
@@ -54,14 +54,14 @@ export function ChequeOverdueQueueSection({
               {CHEQUE_OVERDUE_DIRECTION_LABELS[direction]}:{" "}
               {CHEQUE_OVERDUE_TIERS.map(
                 (tier) =>
-                  `${CHEQUE_OVERDUE_TIER_LABELS[tier]} ${queue.recap[direction][tier].count} · ${formatAccounting(queue.recap[direction][tier].nominalTercatat)}`,
+                  `${CHEQUE_OVERDUE_TIER_LABELS[tier]} ${queue.recap[direction][tier].count} · ${formatAccountingExact(queue.recap[direction][tier].nominalTercatat)}`,
               ).join(" · ")}
             </p>
           ))}
           {queue.unknownDirection.count > 0 ? (
             <p>
               Arah Tidak Dikenal: {queue.unknownDirection.count} ·{" "}
-              {formatAccounting(queue.unknownDirection.nominalTercatat)}
+              {formatAccountingExact(queue.unknownDirection.nominalTercatat)}
             </p>
           ) : null}
           {queue.terpotong ? (
@@ -110,7 +110,7 @@ export function ChequeOverdueQueueSection({
                   <DetailTableTd>{row.tierLabel}</DetailTableTd>
                   <DetailTableTd align="right">{row.umurLewatLabel}</DetailTableTd>
                   <DetailTableTd align="right" className="tabular-nums">
-                    {formatAccounting(row.amount)}
+                    {formatAccountingExact(row.amount)}
                   </DetailTableTd>
                 </DetailTableRow>
               ))}
@@ -132,7 +132,7 @@ export function ChequeOverdueQueueSection({
                   <DetailTableTd>{row.statusLabel}</DetailTableTd>
                   <DetailTableTd align="right">{row.umurLewatLabel}</DetailTableTd>
                   <DetailTableTd align="right" className="tabular-nums">
-                    {formatAccounting(row.amount)}
+                    {formatAccountingExact(row.amount)}
                   </DetailTableTd>
                 </DetailTableRow>
               ))}
