@@ -4610,3 +4610,16 @@ Sembilan belas berkas:
 ### Bukti
 - Merah: 1 gagal/21 lulus; hijau 459/459 suite payroll+komponen; tsc, ESLint, diff-check bersih.
 - CI `41860301812`, `41860330960`, `41860885167`, `41860920274` **success** (putaran 203–204).
+
+## Putaran 206 — tooltip grafik aging (commit `532d7be75`)
+
+Rupanya "pengecualian" yang saya catat di Putaran 205 tidak berdasar: tooltip grafik umur piutang/hutang adalah nilai uang yang dibaca pengguna, dan dengan 0 desimal ia berbeda dari tabel di bawah grafik. Saya periksa ulang, ubah, dan hapus pengecualian itu dari catatan.
+
+### Vonis FIX
+- Tooltip memakai `formatCurrencyExact`; guard statis kini mencakup `aging-chart.tsx` dan merah bila dikembalikan.
+
+### Vonis CATAT
+- **Satu-satunya berkas tersisa dengan `formatCurrency` 0 desimal adalah `asset-capitalization.tsx`**, dan itu disengaja: dua pemakaiannya meneruskan `{ decimals: 2 }` eksplisit, jadi sen tidak hilang.
+
+### Bukti
+- Merah: 1 gagal/21 lulus; hijau 22/22 sweep dan 459/459 komponen; tsc, ESLint, diff-check bersih.
