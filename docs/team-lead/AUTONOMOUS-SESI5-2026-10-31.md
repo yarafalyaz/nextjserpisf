@@ -3902,3 +3902,18 @@ Halaman-halaman ini juga menjumlah dengan `reduce((s, r) => s + …)` float ment
 
 ### Bukti
 - reports+halaman **3150 lulus / 4 dilewati**; seluruh unit suite **12.541 lulus / 23 dilewati** (1.172 berkas); tes baru `formatCurrencyExact`; tsc, ESLint, diff-check bersih.
+
+## Putaran 156 — jumlah KPI halaman memakai aritmetika sen (commit `ef929415e`)
+
+Utang yang dicatat Putaran 155: lima halaman laporan menjumlah uang per baris dengan `reduce((sum, row) => sum + …)` float mentah, sementara seluruh builder di belakangnya memakai `safeAdd`. Halaman: Pusat Laba (pendapatan/beban), Analisis Penjualan (pendapatan), Piutang per Pelanggan (SO terbuka, WO belum terwakili, DP terkonfirmasi, kredit terbuka), Ringkasan Stok (nilai kategori), Analisis Harga Beli (nilai = Σ qty × biaya landed).
+
+### Vonis FIX
+- Jumlah uang memakai `safeAdd(..., 2)`; perkalian qty × biaya memakai `safeMultiply(..., 2)`.
+- Kolom non-uang (qty, jumlah faktur, jumlah dokumen) tetap `reduce` biasa.
+
+### Vonis CATAT
+- **Ini pengerasan konsistensi, bukan perbaikan tampilan yang terbukti salah.** Untuk `Decimal(15,2)` pada magnitudo normal, hasil float dan `safeAdd` sama setelah format dua desimal; yang dihapus adalah kelas risiko drift untuk magnitudo besar. Tidak ada regression test "merah" karena tidak ada output salah yang bisa direproduksi — dinyatakan apa adanya, bukan diklaim sebagai bug.
+
+### Bukti
+- 65/65 tes halaman laporan; tsc, ESLint, diff-check bersih.
+- CI `41813678521` (putaran 154), `41813767782` (dokumentasi 154) **success**.
