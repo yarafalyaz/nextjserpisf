@@ -155,3 +155,32 @@ describe("DeliveredUnbilledQueueCard F-2026-10-26-058-S", () => {
     expect(container.querySelector("table")).toBeNull()
   })
 })
+
+describe("DeliveredUnbilledQueueCard: nominal bersen", () => {
+  it("total dan sel baris tampil hingga sen, tidak dibulatkan ke rupiah penuh", () => {
+    const queue = {
+      rows: [
+        {
+          salesOrderId: 1,
+          slug: null,
+          documentNo: "SO-0001",
+          customerName: "PT Sen",
+          date: new Date(Date.UTC(2026, 9, 20)),
+          lastDeliveryAt: new Date(Date.UTC(2026, 9, 24)),
+          ageDays: 1,
+          deliveredValue: 1_000_000.5,
+          billedValue: 0,
+          unbilledValue: 1_000_000.5,
+        },
+      ],
+      totalDocuments: 1,
+      totalDeliveredValue: 1_000_000.5,
+      totalBilledValue: 0,
+      totalUnbilledValue: 1_000_000.5,
+    }
+    const { container, root } = renderCard(<DeliveredUnbilledQueueCard queue={queue} />)
+    roots.push(root)
+    const text = container.textContent ?? ""
+    expect(text).toContain("Belum Terfaktur Rp 1.000.000,50")
+  })
+})

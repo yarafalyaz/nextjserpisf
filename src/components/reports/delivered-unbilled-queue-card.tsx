@@ -7,7 +7,7 @@ import {
   DELIVERED_UNBILLED_NOTICE_TEXT,
 } from "@/lib/reports/delivered-unbilled"
 import { entityHref } from "@/lib/utils/entity-url"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -36,9 +36,9 @@ export function DeliveredUnbilledQueueCard({
       summary={
         <>
           {queue.totalDocuments} pesanan penjualan · Terkirim{" "}
-          {formatCurrency(queue.totalDeliveredValue)} · Terfaktur{" "}
-          {formatCurrency(queue.totalBilledValue)} · Belum Terfaktur{" "}
-          {formatCurrency(queue.totalUnbilledValue)}
+          {formatCurrencyExact(queue.totalDeliveredValue)} · Terfaktur{" "}
+          {formatCurrencyExact(queue.totalBilledValue)} · Belum Terfaktur{" "}
+          {formatCurrencyExact(queue.totalUnbilledValue)}
         </>
       }
       isEmpty={queue.rows.length === 0}
@@ -67,13 +67,13 @@ export function DeliveredUnbilledQueueCard({
                 <DetailTableTd>{formatDate(row.lastDeliveryAt)}</DetailTableTd>
                 <DetailTableTd align="right">{row.ageDays} hari</DetailTableTd>
                 <DetailTableTd align="right">
-                  {formatCurrency(row.deliveredValue)}
+                  {formatCurrencyExact(row.deliveredValue)}
                 </DetailTableTd>
                 <DetailTableTd align="right">
-                  {formatCurrency(row.billedValue)}
+                  {formatCurrencyExact(row.billedValue)}
                 </DetailTableTd>
                 <DetailTableTd align="right">
-                  {formatCurrency(row.unbilledValue)}
+                  {formatCurrencyExact(row.unbilledValue)}
                 </DetailTableTd>
                 <DetailTableTd>
                   <a
