@@ -4623,3 +4623,24 @@ Rupanya "pengecualian" yang saya catat di Putaran 205 tidak berdasar: tooltip gr
 
 ### Bukti
 - Merah: 1 gagal/21 lulus; hijau 22/22 sweep dan 459/459 komponen; tsc, ESLint, diff-check bersih.
+
+## Putaran 207 — empat cacat laporan non-format (commit `bb57c9c7c`, `7162aa55f`, `520744b84`)
+
+Audit beralih dari format sen ke kelas cacat lain. Workflow 8-agent (hunt → verify adversarial, termasuk verifikasi lewat DB scratch hasil replay 172 migrasi) mengonfirmasi empat cacat; semuanya diperbaiki dengan tes merah lebih dulu.
+
+1. **Acuan jatuh tempo tukar faktur** (`collection-queue.ts:349`) — `exchange ? exchange.dueDate : invoice.dueDate` memilih dari KEBERADAAN exchange, bukan dari ada-tidaknya `dueDate` (kolom nullable, form boleh kosong). Faktur 60 hari lewat jatuh tempo + retur tukar faktur tanpa due date → `dueAcuan null`, `tingkatPengingat "tanpa_acuan"`, tahap `sudah_diserahkan`, dan kalah urut dari faktur 2 hari. Fix: `exchange?.dueDate ?? invoice.dueDate` (pola `customer-statement` dan `sales-late-fee`).
+2. **Biaya lewat perintah produksi hilang dari L/R proyek** (`project-pl*.ts`) — loader memfilter `workOrderId: { in: woIds }` padahal overhead teraplikasi dan rework NCR menulis `productionOrderId` saja. `job-order-data` dan `vehicle-margin-data` sudah memakai `OR` pada `productionOrder.workOrderId`. Probe: biaya 2.000.000 + 750.000 + 1.000.000 terbaca 1.000.000, seharusnya 3.750.000.
+3. **Expense `paid` hilang dari biaya proyek** — `markExpensePaid` memindahkan `approved → paid` (satu-satunya transisi terminal); loader dan builder hanya menerima `approved`, jadi biaya proyek menghilang tepat setelah dibayar. Fix: `approved` + `paid` di keduanya.
+4. **Saldo awal Kartu Stok di kolom Masuk** (`stock-flow-data.ts:366`) — kuantitas pembuka ditaruh di kolom Masuk sekaligus Saldo; pembaca menjumlah kolom Masuk 20+2=22 sementara baris Saldo Akhir menyatakan Masuk 2. Layar sudah menulis "–". Fix: hanya kolom Saldo; tes paritas PDF diperketat.
+5. **Rekonsiliasi PKWT menghitung pembayaran dua kali** (`pkwt-compensation.ts`) — `akrual + slip terbayar − peristiwa`: akrual subledger tidak pernah dikurangi pembayaran, jadi segmen lunas penuh selalu menjadi temuan sebesar 2× nominal bayar dan kekurangan akrual bisa tertutup. Fix: `peristiwa − akrual`, arah dijelaskan di teks.
+
+### Vonis CATAT
+- **`stock-count.ts:166` menyertakan draft/rejected ke total selisih** (grand total ≠ jumlah subtotal yang tercetak). Dilaporkan agent, belum diubah: perlu keputusan apakah laporan opname hanya boleh mengakui dokumen `approved` — dicatat sebagai kandidat, bukan diperbaiki sepihak.
+- **`ar-ap-summary` menerapkan toleransi Rp1 pada agregat pihak, bukan per dokumen** — sisa lunas satu dokumen bisa bocor ke baris pihak yang masih terbuka (0,50 menempel) dan dua dokumen lunas memunculkan baris hantu. Dicatat; perlu keputusan apakah laporan populasi harus per dokumen.
+- **`payroll-reports` kunci duplikat slip `${employeeId}|${period}`** untuk payroll mingguan (periode yang sama = satu label bulan) → slip mingguan sah dilaporkan sebagai duplikat. Dicatat.
+
+### Bukti
+- `bb57c9c7c`: 6 berkas; tes merah 3 cacat (1/2/3) → hijau 3131 lulus / 4 dilewati.
+- `7162aa55f`: tes paritas PDF diperketat (Masuk/Keluar kosong, Saldo 20) → merah sebelum fix, hijau 3042 lulus.
+- `520744b84`: tiga tes PKWT merah → hijau 32/32 dan 3930 lulus / 7 dilewati.
+- tsc, ESLint, diff-check bersih pada ketiganya.
