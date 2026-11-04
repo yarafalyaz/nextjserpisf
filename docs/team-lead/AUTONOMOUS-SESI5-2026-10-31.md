@@ -3756,3 +3756,16 @@ Dua kelompok laporan lagi memutuskan/menjumlah dari nilai bersen tetapi mencetak
 ### Bukti
 - Merah: 1 gagal/16 lulus.
 - Hijau: 17/17; reports+PDF **3108 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
+
+## Putaran 147 — pergerakan bank membulatkan arus kas (commit `7e4961c49`)
+
+`bank-movements.ts` mencetak penerimaan/pengeluaran/arus bersih per baris, subtotal per rekening, baris jumlah, dan KPI ringkasan dengan 0 desimal. Probe dua penerimaan Rp1.000.000,50: baris `1.000.001` masing-masing sementara total `2.000.001`; jumlah yang dibaca pembaca 2.000.002.
+
+### Vonis FIX
+- Formatter lokal `amount` menjadi `formatAccountingExact`; KPI tidak lagi memakai `formatCurrency` terpisah.
+- Regresi baru mengunci baris dan total pada tabel ringkasan dan detail.
+
+### Bukti
+- Merah: 1 gagal/6 lulus.
+- Hijau: 7/7; reports+PDF **3109 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
+- CI `41804355083`, `41804702036`, `41804741397`, `41805032061`, `41805056398` **success** (lima commit sebelumnya).
