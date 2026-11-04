@@ -1,5 +1,6 @@
 import type { ProjectPlRow } from "@/lib/reports/project-pl-data"
-import { formatAccounting, formatNumber } from "@/lib/utils/format"
+import { formatAccountingExact, formatNumber } from "@/lib/utils/format"
+import { safeAdd } from "@/lib/utils/math"
 import { statusLabel } from "@/lib/utils/status-labels"
 import {
   DetailTable,
@@ -14,7 +15,9 @@ import {
 import { ReportCardShell } from "./report-card-shell"
 
 function sumRows(rows: ProjectPlRow[], pick: (row: ProjectPlRow) => number): number {
-  return rows.reduce((total, row) => total + pick(row), 0)
+  // Total kolom uang di footer harus sen-aman seperti builder di belakangnya:
+  // `+` float mentah bisa drift dari jumlah baris yang tercetak.
+  return rows.reduce((total, row) => safeAdd(total, pick(row), 2), 0)
 }
 
 /**
@@ -64,18 +67,18 @@ export function ProjectPlCard({ rows }: Readonly<{ rows: ProjectPlRow[] }>) {
               <DetailTableTd>{row.customerName}</DetailTableTd>
               <DetailTableTd className="text-sm">{row.vehiclePlate || "-"}</DetailTableTd>
               <DetailTableTd>{statusLabel(row.projectStatus)}</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(row.revenue)}</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(row.materialCost)}</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(row.productionCost)}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccountingExact(row.revenue)}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccountingExact(row.materialCost)}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccountingExact(row.productionCost)}</DetailTableTd>
               <DetailTableTd align="right">
-                {formatAccounting(row.expenseCost + row.pettyCashCost + row.vendorBillCost)}
+                {formatAccountingExact(row.expenseCost + row.pettyCashCost + row.vendorBillCost)}
               </DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(row.totalCost)}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccountingExact(row.totalCost)}</DetailTableTd>
               <DetailTableTd
                 align="right"
                 className={row.profit >= 0 ? "text-success font-medium" : "text-danger font-medium"}
               >
-                {formatAccounting(row.profit)}
+                {formatAccountingExact(row.profit)}
               </DetailTableTd>
               <DetailTableTd
                 align="right"
@@ -89,15 +92,15 @@ export function ProjectPlCard({ rows }: Readonly<{ rows: ProjectPlRow[] }>) {
         <DetailTableFoot>
           <DetailTableFootRow>
             <DetailTableTd colSpan={5} className="font-bold">TOTAL</DetailTableTd>
-            <DetailTableTd align="right" className="font-bold">{formatAccounting(totalRevenue)}</DetailTableTd>
-            <DetailTableTd align="right" className="font-bold">{formatAccounting(sumRows(rows, (r) => r.materialCost))}</DetailTableTd>
-            <DetailTableTd align="right" className="font-bold">{formatAccounting(sumRows(rows, (r) => r.productionCost))}</DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">{formatAccountingExact(totalRevenue)}</DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">{formatAccountingExact(sumRows(rows, (r) => r.materialCost))}</DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">{formatAccountingExact(sumRows(rows, (r) => r.productionCost))}</DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatAccounting(sumRows(rows, (r) => r.expenseCost + r.pettyCashCost + r.vendorBillCost))}
+              {formatAccountingExact(sumRows(rows, (r) => r.expenseCost + r.pettyCashCost + r.vendorBillCost))}
             </DetailTableTd>
-            <DetailTableTd align="right" className="font-bold">{formatAccounting(sumRows(rows, (r) => r.totalCost))}</DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">{formatAccountingExact(sumRows(rows, (r) => r.totalCost))}</DetailTableTd>
             <DetailTableTd align="right" className={totalProfit >= 0 ? "font-bold text-success" : "font-bold text-danger"}>
-              {formatAccounting(totalProfit)}
+              {formatAccountingExact(totalProfit)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">{avgMargin.toFixed(1)}%</DetailTableTd>
           </DetailTableFootRow>
