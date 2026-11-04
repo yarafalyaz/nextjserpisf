@@ -3,7 +3,7 @@
 import { createColumnHelper } from "@/lib/table"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
-import { formatDate, formatCurrency } from "@/lib/utils/format"
+import { formatDate, formatCurrencyExact } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
 import type { OwnPayslipListRow } from "@/lib/reports/payslip-self"
 
@@ -50,7 +50,7 @@ const columns = [
   columnHelper.accessor("netSalary", {
     header: "Gaji Bersih",
     // Angka rekod final apa adanya; UI tidak menghitung ulang (BR-PS-04).
-    cell: (info) => <span className="text-right block">{formatCurrency(info.getValue())}</span>,
+    cell: (info) => <span className="text-right block">{formatCurrencyExact(info.getValue())}</span>,
   }),
 ]
 

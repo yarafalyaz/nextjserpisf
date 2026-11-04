@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/shadcn/input";
 import { showError } from "@/lib/utils/toast";
 import { useConfirmReasonAction } from "@/components/ui/confirm-reason-action";
 import { writeOffEmployeeLoan } from "@/actions/hrm.actions";
-import { formatCurrency } from "@/lib/utils/format";
+import { formatCurrencyExact } from "@/lib/utils/format"
 
 /**
  * BR-LOAN-08 (F-2026-10-29-162-V): tombol dokumen write-off piutang pinjaman
@@ -87,7 +87,7 @@ export function LoanWriteOffButton({
         isOpen={isOpen}
         onOpenChange={handleOpenChangeWithReset}
         title="Hapusbukukan sisa pinjaman ini?"
-        body={`Sisa ${formatCurrency(remainingAmount)} dinolkan dan status menjadi Dihapusbukukan (final, bukan populasi aktif). Jurnal Dr beban write-off / Cr piutang karyawan. Bukan objek PPh21.`}
+        body={`Sisa ${formatCurrencyExact(remainingAmount)} dinolkan dan status menjadi Dihapusbukukan (final, bukan populasi aktif). Jurnal Dr beban write-off / Cr piutang karyawan. Bukan objek PPh21.`}
         confirmLabel="Hapusbukukan"
         cancelLabel="Kembali"
         variant="danger"

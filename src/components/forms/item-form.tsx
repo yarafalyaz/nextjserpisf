@@ -21,7 +21,7 @@ import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Upload, X, AlertCircle } from "lucide-react"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { QrCodeDisplay } from "@/components/ui/qr-code-display"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 import { Button } from "@/components/ui/button"
@@ -435,7 +435,7 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
             <Controller name="price" control={control} render={({ field: f }) => <CurrencyInput id="price" required value={f.value} onChange={f.onChange} onBlur={f.onBlur} placeholder="0" prefix="Rp" />} />
             {!priceBelowCost && watchedPrice > 0 && (
               <span className="text-xs text-emerald-600 dark:text-emerald-500 mt-1">
-                Untung {formatCurrency(profit)}{watchedCost > 0 ? ` (${formatPct(marginPct)}% dari modal)` : ""}
+                Untung {formatCurrencyExact(profit)}{watchedCost > 0 ? ` (${formatPct(marginPct)}% dari modal)` : ""}
               </span>
             )}
             {errors.price && <span className="text-xs text-danger mt-1">{errors.price.message}</span>}
@@ -445,7 +445,7 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
               <AlertCircle />
               <AlertTitle>Harga jual di bawah modal</AlertTitle>
               <AlertDescription>
-                Harga jual ({formatCurrency(watchedPrice)}) lebih rendah dari harga beli ({formatCurrency(watchedCost)}). Item tidak dapat disimpan. Diskon diterapkan saat penawaran/penjualan, bukan di master.
+                Harga jual ({formatCurrencyExact(watchedPrice)}) lebih rendah dari harga beli ({formatCurrencyExact(watchedCost)}). Item tidak dapat disimpan. Diskon diterapkan saat penawaran/penjualan, bukan di master.
               </AlertDescription>
             </Alert>
           )}

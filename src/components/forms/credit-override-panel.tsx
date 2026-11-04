@@ -12,7 +12,7 @@ import { getMyCreditOverrideStatus } from "@/actions/credit-override.actions"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/shadcn/alert"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 
 export const CREDIT_OVERRIDE_STATUS_LABEL: Record<string, string> = {
@@ -130,11 +130,11 @@ export function CreditOverridePanel({
           </div>
           <div>
             <dt className="text-muted-foreground">Batas Kredit</dt>
-            <dd className="font-medium tabular-nums">{formatCurrency(blocked.creditLimit)}</dd>
+            <dd className="font-medium tabular-nums">{formatCurrencyExact(blocked.creditLimit)}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">PaparanBersih</dt>
-            <dd className="font-medium tabular-nums">{formatCurrency(blocked.creditExposure)}</dd>
+            <dd className="font-medium tabular-nums">{formatCurrencyExact(blocked.creditExposure)}</dd>
           </div>
         </dl>
 

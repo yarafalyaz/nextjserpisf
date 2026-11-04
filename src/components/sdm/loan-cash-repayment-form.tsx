@@ -12,7 +12,7 @@ import { QUICK_ADD } from "@/lib/quick-add/registry";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
-import { formatCurrency } from "@/lib/utils/format";
+import { formatCurrencyExact } from "@/lib/utils/format"
 
 /**
  * BR-LOAN-07 (F-2026-10-29-162-V): form dokumen setoran tunai pinjaman.
@@ -67,7 +67,7 @@ export function LoanCashRepaymentForm({
             <p className="text-sm text-muted-foreground">
               Sisa pinjaman saat ini:{" "}
               <span className="font-semibold tabular-nums text-foreground">
-                {formatCurrency(remainingAmount)}
+                {formatCurrencyExact(remainingAmount)}
               </span>
               . Setoran melebihi sisa ditolak — kelebihan dikembalikan ke karyawan.
             </p>

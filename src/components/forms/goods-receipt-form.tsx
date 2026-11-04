@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { allocateLandedCost } from "@/lib/services/landed-cost.service"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 
 interface ItemMeta {
   name: string;
@@ -606,20 +606,20 @@ export function GoodsReceiptForm({
                             )}
                           </td>
                           <td className="py-2.5 px-3 text-right tabular-nums">
-                            {formatCurrency(Number(row.unitCost || 0))}
+                            {formatCurrencyExact(Number(row.unitCost || 0))}
                           </td>
                           <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
                             {chargePerUnit > 0
-                              ? `+ ${formatCurrency(chargePerUnit)}`
+                              ? `+ ${formatCurrencyExact(chargePerUnit)}`
                               : "—"}
                           </td>
                           <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
                             {discountPerUnit > 0
-                              ? `− ${formatCurrency(discountPerUnit)}`
+                              ? `− ${formatCurrencyExact(discountPerUnit)}`
                               : "—"}
                           </td>
                           <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-foreground">
-                            {formatCurrency(hppPerUnit)}
+                            {formatCurrencyExact(hppPerUnit)}
                           </td>
                           <td className="py-2.5 px-3">
                             <QuickAddSelect
@@ -776,25 +776,25 @@ export function GoodsReceiptForm({
               <div className="rounded-lg border border-default bg-surface-secondary p-3">
                 <p className="text-xs text-muted-foreground">Ongkir Terserap</p>
                 <p className="mt-0.5 text-sm font-medium tabular-nums text-foreground">
-                  {formatCurrency(landedPreview.shippingCost)}
+                  {formatCurrencyExact(landedPreview.shippingCost)}
                 </p>
               </div>
               <div className="rounded-lg border border-default bg-surface-secondary p-3">
                 <p className="text-xs text-muted-foreground">Biaya Lain</p>
                 <p className="mt-0.5 text-sm font-medium tabular-nums text-foreground">
-                  {formatCurrency(landedPreview.otherCost)}
+                  {formatCurrencyExact(landedPreview.otherCost)}
                 </p>
               </div>
               <div className="rounded-lg border border-default bg-surface-secondary p-3">
                 <p className="text-xs text-muted-foreground">Admin Bank</p>
                 <p className="mt-0.5 text-sm font-medium tabular-nums text-foreground">
-                  {formatCurrency(landedPreview.adminFee)}
+                  {formatCurrencyExact(landedPreview.adminFee)}
                 </p>
               </div>
               <div className="rounded-lg border border-default bg-surface-secondary p-3">
                 <p className="text-xs text-muted-foreground">Diskon Terserap</p>
                 <p className="mt-0.5 text-sm font-medium tabular-nums text-foreground">
-                  {formatCurrency(landedPreview.discount)}
+                  {formatCurrencyExact(landedPreview.discount)}
                 </p>
               </div>
               <div className="rounded-lg border border-primary/40 bg-primary/5 p-3">
@@ -802,7 +802,7 @@ export function GoodsReceiptForm({
                   Total Masuk HPP
                 </p>
                 <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
-                  {formatCurrency(landedPreview.absorbed)}
+                  {formatCurrencyExact(landedPreview.absorbed)}
                 </p>
               </div>
             </div>

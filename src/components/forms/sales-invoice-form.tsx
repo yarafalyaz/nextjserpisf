@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Input } from "@/components/ui/shadcn/input"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 import { AlertCircle } from "lucide-react"
 
@@ -342,7 +342,7 @@ export function SalesInvoiceForm({
                         aria-label={`Diskon baris ${index + 1}`}
                       />
                     </td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{formatCurrency(lineTotal(row))}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{formatCurrencyExact(lineTotal(row))}</td>
                     <td className="py-2">
                       <button
                         type="button"
@@ -363,7 +363,7 @@ export function SalesInvoiceForm({
         <div className="mt-4 flex flex-col items-end gap-1.5 text-sm">
           <div className="flex items-center gap-3">
             <span className="text-muted-foreground">Subtotal</span>
-            <span className="tabular-nums w-32 text-right">{formatCurrency(subtotal)}</span>
+            <span className="tabular-nums w-32 text-right">{formatCurrencyExact(subtotal)}</span>
           </div>
           <div className="flex items-center gap-3">
             <Label htmlFor="taxRate">PPN (%)</Label>
@@ -373,11 +373,11 @@ export function SalesInvoiceForm({
               onChange={(val) => setTaxRate(Number(val) || 0)}
               className="w-24 text-right"
             />
-            <span className="tabular-nums w-32 text-right">{formatCurrency(taxAmount)}</span>
+            <span className="tabular-nums w-32 text-right">{formatCurrencyExact(taxAmount)}</span>
           </div>
           <div className="flex items-center gap-3 font-semibold">
             <span>Total</span>
-            <span className="tabular-nums w-32 text-right">{formatCurrency(grandTotal)}</span>
+            <span className="tabular-nums w-32 text-right">{formatCurrencyExact(grandTotal)}</span>
           </div>
         </div>
       </div>

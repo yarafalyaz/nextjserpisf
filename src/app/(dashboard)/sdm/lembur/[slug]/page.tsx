@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatDate, formatCurrency } from "@/lib/utils/format"
+import { formatDate, formatCurrencyExact } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
@@ -100,7 +100,7 @@ export default async function OvertimeRequestDetailPage({
           <DetailField label="Jam Dapat Ditagih" value={`${Number(overtime.billableHours)} jam`} />
         )}
         {overtime.calculatedValue != null && (
-          <DetailField label="Nilai Kalkulasi" value={formatCurrency(Number(overtime.calculatedValue))} />
+          <DetailField label="Nilai Kalkulasi" value={formatCurrencyExact(Number(overtime.calculatedValue))} />
         )}
         <OvertimeBaseSnapshotFields canViewPayroll={canViewPayroll} snapshot={overtimeBaseSnapshot} />
         <DetailField label="Status" value={<StatusChip status={overtime.status} />} />

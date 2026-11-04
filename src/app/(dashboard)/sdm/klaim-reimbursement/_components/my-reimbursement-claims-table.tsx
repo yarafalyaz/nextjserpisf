@@ -3,7 +3,7 @@
 import { createColumnHelper } from "@/lib/table"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
-import { formatDate, formatCurrency } from "@/lib/utils/format"
+import { formatDate, formatCurrencyExact } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
 
 export interface MyReimbursementClaimRow {
@@ -58,7 +58,7 @@ const columns = [
   }),
   columnHelper.accessor("amount", {
     header: "Jumlah",
-    cell: (info) => <span className="text-right block">{formatCurrency(info.getValue())}</span>,
+    cell: (info) => <span className="text-right block">{formatCurrencyExact(info.getValue())}</span>,
   }),
   columnHelper.accessor("stageLabel", {
     header: "Tahap",

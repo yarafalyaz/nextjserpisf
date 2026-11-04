@@ -454,7 +454,7 @@ function SectionItemRow({
       <td>
         <input
           aria-label={`Total baris ${itemIndex + 1}`}
-          value={formatCurrency(watchedItem?.total || 0)}
+          value={formatCurrencyExact(watchedItem?.total || 0)}
           className="form-input"
           style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right", background: "var(--color-surface-alt)", fontWeight: 600 }}
           readOnly
@@ -486,7 +486,7 @@ function calculateItemTotal(qty: number, unitPrice: number, discountType: string
   return Math.max(0, subtotal - discount)
 }
 
-function formatCurrency(value: number): string {
+function formatCurrencyExact(value: number): string {
   return new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(value)
 }
 
@@ -518,7 +518,7 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
       <div className="totals-grid">
         <div className="totals-row">
           <span className="totals-label">Subtotal</span>
-          <span className="totals-value">Rp {formatCurrency(subtotal)}</span>
+          <span className="totals-value">Rp {formatCurrencyExact(subtotal)}</span>
         </div>
         <div className="totals-row">
           <span className="totals-label">Diskon</span>
@@ -551,7 +551,7 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
         </div>
         <div className="totals-row totals-grand">
           <span className="totals-label">Total Keseluruhan</span>
-          <span className="totals-value">Rp {formatCurrency(grandTotal)}</span>
+          <span className="totals-value">Rp {formatCurrencyExact(grandTotal)}</span>
         </div>
       </div>
     </div>

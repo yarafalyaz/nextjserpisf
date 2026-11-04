@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/prisma"
 import { OPEN_PURCHASE_ORDER_STATUSES } from "@/lib/reports/bom-revision-impact"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import {
   ShoppingBag,
@@ -92,7 +92,7 @@ export default async function PurchaseDashboard() {
             <StatCard label="PO Aktif" value={data.pendingPO} icon={<FileCheck className="size-5" />} />
             <StatCard
               label="Nilai PO Aktif"
-              value={formatCurrency(data.totalPendingValue)}
+              value={formatCurrencyExact(data.totalPendingValue)}
               icon={<ShoppingBag className="size-5" />}
             />
             <StatCard label="Pemasok" value={data.vendorCount} icon={<Factory className="size-5" />} />
@@ -138,7 +138,7 @@ export default async function PurchaseDashboard() {
                             <DetailTableTd className="font-mono text-xs">{po.documentNo}</DetailTableTd>
                             <DetailTableTd className="max-w-[180px] truncate">{po.vendor.name}</DetailTableTd>
                             <DetailTableTd align="right" className="tabular-nums">
-                              {formatCurrency(Number(po.grandTotal))}
+                              {formatCurrencyExact(Number(po.grandTotal))}
                             </DetailTableTd>
                             <DetailTableTd>
                               <StatusChip status={po.status} />
@@ -186,7 +186,7 @@ export default async function PurchaseDashboard() {
                           <p className="text-xs text-muted-foreground">{bill.vendor.name}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs tabular-nums">{formatCurrency(Number(bill.grandTotal))}</p>
+                          <p className="text-xs tabular-nums">{formatCurrencyExact(Number(bill.grandTotal))}</p>
                           <StatusChip status={bill.status} />
                         </div>
                       </div>

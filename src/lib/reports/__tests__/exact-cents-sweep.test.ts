@@ -362,3 +362,30 @@ describe("sapuan keenam belas: halaman detail dokumen & inventaris", () => {
     }
   })
 })
+
+describe("sapuan ketujuh belas: SDM, dashboard, form", () => {
+  it("komponen terkait memakai formatter currency exact", () => {
+    for (const rel of [
+      "src/app/(dashboard)/sdm/apresiasi/_components/appreciation-table.tsx",
+      "src/app/(dashboard)/sdm/apresiasi/[slug]/page.tsx",
+      "src/app/(dashboard)/sdm/klaim-reimbursement/_components/my-reimbursement-claims-table.tsx",
+      "src/app/(dashboard)/sdm/lembur/[slug]/_components/overtime-base-snapshot-fields.tsx",
+      "src/app/(dashboard)/sdm/lembur/[slug]/page.tsx",
+      "src/app/(dashboard)/sdm/slip-gaji-saya/_components/own-payslip-table.tsx",
+      "src/components/dashboard/finance-dashboard.tsx",
+      "src/components/dashboard/purchase-dashboard.tsx",
+      "src/components/forms/credit-override-panel.tsx",
+      "src/components/forms/goods-receipt-form.tsx",
+      "src/components/forms/item-form.tsx",
+      "src/components/forms/quotation-form.tsx",
+      "src/components/forms/sales-invoice-form.tsx",
+      "src/components/ui/invoice-items-editor.tsx",
+      "src/components/sdm/loan-cash-repayment-form.tsx",
+      "src/components/sdm/loan-write-off-button.tsx",
+    ]) {
+      const source = readFileSync(path.resolve(process.cwd(), rel), "utf8")
+      expect(source, rel).not.toMatch(/formatCurrency\((?!Exact)/)
+      expect(source, rel).toContain("formatCurrencyExact")
+    }
+  })
+})

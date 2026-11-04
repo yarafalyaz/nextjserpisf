@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import {
   Receipt,
@@ -115,19 +115,19 @@ export default async function FinanceDashboard() {
           <div className="grid grid-cols-2 gap-4 px-4 lg:grid-cols-4 lg:px-6">
             <StatCard
               label="Pendapatan Dibayar"
-              value={formatCurrency(data.totalRevenue)}
+              value={formatCurrencyExact(data.totalRevenue)}
               icon={<TrendingUp className="size-5" />}
               trend="up"
             />
             <StatCard
               label="Piutang"
-              value={formatCurrency(data.receivables)}
+              value={formatCurrencyExact(data.receivables)}
               icon={<AlertTriangle className="size-5" />}
               trend={data.receivables > 0 ? "down" : "neutral"}
             />
             <StatCard
               label="Biaya Bulan Ini"
-              value={formatCurrency(data.monthlyExpense)}
+              value={formatCurrencyExact(data.monthlyExpense)}
               icon={<TrendingDown className="size-5" />}
               trend={data.monthlyExpense > 0 ? "down" : "neutral"}
             />
@@ -178,7 +178,7 @@ export default async function FinanceDashboard() {
                         </div>
                         <div className="text-right">
                           <p className="text-xs tabular-nums font-medium">
-                            {formatCurrency(Number(payment.amount))}
+                            {formatCurrencyExact(Number(payment.amount))}
                           </p>
                           <p className="text-[10px] text-muted-foreground">
                             {formatDate(payment.paymentDate, { format: "short" })}
@@ -222,7 +222,7 @@ export default async function FinanceDashboard() {
                         </div>
                         <div className="text-right">
                           <p className="text-xs tabular-nums font-medium">
-                            {formatCurrency(Number(inv.grandTotal))}
+                            {formatCurrencyExact(Number(inv.grandTotal))}
                           </p>
                           <StatusChip status={inv.status} />
                         </div>

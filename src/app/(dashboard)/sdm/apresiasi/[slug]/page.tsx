@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatDate, formatCurrency } from "@/lib/utils/format"
+import { formatDate, formatCurrencyExact } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteAppreciation } from "@/actions/hrm.actions"
@@ -69,7 +69,7 @@ export default async function AppreciationDetailPage({
         <DetailField label="Karyawan" value={appreciation.employee.name} />
         <DetailField label="Tanggal" value={formatDate(appreciation.date)} />
         <DetailField label="Tipe" value={typeLabels[appreciation.type] || appreciation.type} />
-        <DetailField label="Jumlah" value={formatCurrency(Number(appreciation.amount))} />
+        <DetailField label="Jumlah" value={formatCurrencyExact(Number(appreciation.amount))} />
         {appreciation.notes && (
           <DetailField label="Catatan" value={appreciation.notes} colSpan="full" />
         )}

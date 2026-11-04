@@ -1,5 +1,5 @@
 import { DetailField } from "@/components/ui/detail-card"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import type { OvertimeBaseSnapshot } from "@/lib/reports/overtime-base-snapshot-data"
 
 /**
@@ -30,19 +30,19 @@ export function OvertimeBaseSnapshotFields({
 
   return (
     <>
-      <DetailField label="Gaji Pokok" value={formatCurrency(snapshot.baseSalary)} />
+      <DetailField label="Gaji Pokok" value={formatCurrencyExact(snapshot.baseSalary)} />
       {snapshot.components.map((component) => (
         <DetailField
           key={component.name}
           label={component.name}
-          value={formatCurrency(component.amount)}
+          value={formatCurrencyExact(component.amount)}
         />
       ))}
       {(snapshot.variableComponents ?? []).map((component) => (
         <DetailField
           key={component.name}
           label={`${component.name} (tidak tetap)`}
-          value={formatCurrency(component.amount)}
+          value={formatCurrencyExact(component.amount)}
         />
       ))}
       {snapshot.floor75Applied ? (
@@ -51,7 +51,7 @@ export function OvertimeBaseSnapshotFields({
           value="Berlaku — pokok + tunjangan tetap di bawah 75% upah total"
         />
       ) : null}
-      <DetailField label="Dasar Upah Lembur" value={formatCurrency(snapshot.baseTotal)} />
+      <DetailField label="Dasar Upah Lembur" value={formatCurrencyExact(snapshot.baseTotal)} />
     </>
   )
 }

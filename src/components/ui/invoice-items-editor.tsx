@@ -10,7 +10,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { QuickAddSelect } from "@/components/ui/quick-add-select";
 import { QUICK_ADD } from "@/lib/quick-add/registry";
 import { showSuccess, showError } from "@/lib/utils/toast";
-import { formatCurrency } from "@/lib/utils/format";
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { PriceSourceChip } from "@/components/ui/price-source-chip";
 
 interface InvoiceItem {
@@ -250,7 +250,7 @@ export function InvoiceItemsEditor({
                     {item.description || `Item #${item.itemId}`}
                   </span>
                   <span className="text-sm font-semibold text-foreground shrink-0">
-                    {formatCurrency(item.total)}
+                    {formatCurrencyExact(item.total)}
                   </span>
                 </div>
                 {variant === "invoice" && (
@@ -270,11 +270,11 @@ export function InvoiceItemsEditor({
                   </div>
                   <div className="min-w-0">
                     <span className="block text-muted-foreground">Harga</span>
-                    <span className="font-medium text-foreground break-all">{formatCurrency(item.unitPrice)}</span>
+                    <span className="font-medium text-foreground break-all">{formatCurrencyExact(item.unitPrice)}</span>
                   </div>
                   <div className="min-w-0">
                     <span className="block text-muted-foreground">Diskon</span>
-                    <span className="font-medium text-foreground break-all">{formatCurrency(item.discount)}</span>
+                    <span className="font-medium text-foreground break-all">{formatCurrencyExact(item.discount)}</span>
                   </div>
                 </div>
               </li>
@@ -335,13 +335,13 @@ export function InvoiceItemsEditor({
                       {item.uom ? ` ${item.uom}` : ""}
                     </td>
                     <td className="text-right py-2 px-2">
-                      {formatCurrency(item.unitPrice)}
+                      {formatCurrencyExact(item.unitPrice)}
                     </td>
                     <td className="text-right py-2 px-2">
-                      {formatCurrency(item.discount)}
+                      {formatCurrencyExact(item.discount)}
                     </td>
                     <td className="text-right py-2 px-2">
-                      {formatCurrency(item.total)}
+                      {formatCurrencyExact(item.total)}
                     </td>
                   </tr>
                 ))}
@@ -352,7 +352,7 @@ export function InvoiceItemsEditor({
                     Subtotal
                   </td>
                   <td className="text-right py-1 px-2 font-medium">
-                    {formatCurrency(subtotal)}
+                    {formatCurrencyExact(subtotal)}
                   </td>
                 </tr>
                 {discount > 0 && (
@@ -361,7 +361,7 @@ export function InvoiceItemsEditor({
                       Diskon
                     </td>
                     <td className="text-right py-1 px-2">
-                      -{formatCurrency(discount)}
+                      -{formatCurrencyExact(discount)}
                     </td>
                   </tr>
                 )}
@@ -371,7 +371,7 @@ export function InvoiceItemsEditor({
                       Pajak ({tax}%)
                     </td>
                     <td className="text-right py-1 px-2">
-                      {formatCurrency(taxAmount)}
+                      {formatCurrencyExact(taxAmount)}
                     </td>
                   </tr>
                 )}
@@ -380,7 +380,7 @@ export function InvoiceItemsEditor({
                     Total Keseluruhan
                   </td>
                   <td className="text-right py-1 px-2 font-bold">
-                    {formatCurrency(grandTotal)}
+                    {formatCurrencyExact(grandTotal)}
                   </td>
                 </tr>
                 {variant === "invoice" && (
@@ -390,7 +390,7 @@ export function InvoiceItemsEditor({
                         Terbayar
                       </td>
                       <td className="text-right py-1 px-2 text-success">
-                        {formatCurrency(paidAmount)}
+                        {formatCurrencyExact(paidAmount)}
                       </td>
                     </tr>
                     <tr>
@@ -401,7 +401,7 @@ export function InvoiceItemsEditor({
                         Sisa
                       </td>
                       <td className="text-right py-1 px-2 text-danger font-bold">
-                        {formatCurrency(sisa)}
+                        {formatCurrencyExact(sisa)}
                       </td>
                     </tr>
                   </>
@@ -413,33 +413,33 @@ export function InvoiceItemsEditor({
           <div className="md:hidden rounded-lg border border-default bg-surface-secondary p-3 space-y-1.5 text-sm">
             <div className="flex items-center justify-between gap-2">
               <span className="text-muted-foreground">Subtotal</span>
-              <span className="font-medium">{formatCurrency(subtotal)}</span>
+              <span className="font-medium">{formatCurrencyExact(subtotal)}</span>
             </div>
             {discount > 0 && (
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">Diskon</span>
-                <span>-{formatCurrency(discount)}</span>
+                <span>-{formatCurrencyExact(discount)}</span>
               </div>
             )}
             {taxAmount > 0 && (
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">Pajak ({tax}%)</span>
-                <span>{formatCurrency(taxAmount)}</span>
+                <span>{formatCurrencyExact(taxAmount)}</span>
               </div>
             )}
             <div className="flex items-center justify-between gap-2 font-bold border-t border-default pt-2 mt-2">
               <span>Total Keseluruhan</span>
-              <span>{formatCurrency(grandTotal)}</span>
+              <span>{formatCurrencyExact(grandTotal)}</span>
             </div>
             {variant === "invoice" && (
               <>
                 <div className="flex items-center justify-between gap-2 text-success">
                   <span>Terbayar</span>
-                  <span>{formatCurrency(paidAmount)}</span>
+                  <span>{formatCurrencyExact(paidAmount)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-2 text-danger font-bold">
                   <span>Sisa</span>
-                  <span>{formatCurrency(sisa)}</span>
+                  <span>{formatCurrencyExact(sisa)}</span>
                 </div>
               </>
             )}
@@ -560,7 +560,7 @@ export function InvoiceItemsEditor({
                   </div>
                   <div>
                     <span className="block text-xs text-muted-foreground mb-1">Total</span>
-                    <span className="block text-sm font-semibold text-foreground">{formatCurrency(item.total)}</span>
+                    <span className="block text-sm font-semibold text-foreground">{formatCurrencyExact(item.total)}</span>
                   </div>
                   <div>
                     <label className="block text-xs text-muted-foreground mb-1" htmlFor={`m-invoice-item-price-${i}`}>
@@ -745,7 +745,7 @@ export function InvoiceItemsEditor({
                       />
                     </td>
                     <td className="text-right py-2 px-1 font-medium align-top">
-                      {formatCurrency(item.total)}
+                      {formatCurrencyExact(item.total)}
                     </td>
                     <td className="py-2 px-1 align-top">
                       <Button
@@ -834,17 +834,17 @@ export function InvoiceItemsEditor({
           </div>
           <div className="flex items-center gap-3 text-sm font-bold">
             <span>Total Keseluruhan:</span>
-            <span>{formatCurrency(grandTotal)}</span>
+            <span>{formatCurrencyExact(grandTotal)}</span>
           </div>
           {variant === "invoice" && (
             <>
               <div className="flex items-center gap-3 text-sm text-success">
                 <span>Terbayar:</span>
-                <span>{formatCurrency(paidAmount)}</span>
+                <span>{formatCurrencyExact(paidAmount)}</span>
               </div>
               <div className="flex items-center gap-3 text-sm text-danger font-bold">
                 <span>Sisa:</span>
-                <span>{formatCurrency(sisa)}</span>
+                <span>{formatCurrencyExact(sisa)}</span>
               </div>
             </>
           )}

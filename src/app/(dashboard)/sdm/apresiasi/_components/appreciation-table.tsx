@@ -6,7 +6,7 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteAppreciation } from "@/actions/hrm.actions"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface AppreciationData {
@@ -55,7 +55,7 @@ const columns = [
   }),
   columnHelper.accessor("amount", {
     header: "Jumlah",
-    cell: (info) => formatCurrency(info.getValue()),
+    cell: (info) => formatCurrencyExact(info.getValue()),
   }),
   columnHelper.accessor("notes", {
     header: "Catatan",
