@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccounting, formatCurrency } from '@/lib/utils/format'
+import { formatAccounting, formatAccountingExact, formatCurrencyExact } from '@/lib/utils/format'
+import { safeAdd } from '@/lib/utils/math'
 import { buildPeriodColumns, cumulativeNetProfit, MULTI_PERIOD_MODE_LABELS, parseMultiPeriodCount, type MultiPeriodMode } from '@/lib/reports/multi-period'
 import { reportPeriodFromRoute, splitReportSegments } from '@/lib/reports/report-period'
 import type { AccountType } from '@prisma/client'
@@ -105,20 +106,20 @@ export default async function MultiPeriodReportPage({
     columns.map((column) =>
       rows
         .filter((account) => account.type === type)
-        .reduce((total, account) => total + (cells.get(account.id)?.get(column.key) ?? 0), 0),
+        .reduce((total, account) => safeAdd(total, cells.get(account.id)?.get(column.key) ?? 0, 2), 0),
     )
 
   const netProfit = columns.map((_, index) => {
     const revenue = sumByType('REVENUE')[index]
     const expense = sumByType('EXPENSE')[index]
-    return revenue - expense
+    return safeAdd(revenue, -expense, 2)
   })
 
   const totalColumnValue = (accountId: number) => {
     const bucket = cells.get(accountId)
     if (!bucket) return 0
     if (statement === 'neraca') return bucket.get(columns[columns.length - 1].key) ?? 0
-    return [...bucket.values()].reduce((total, value) => total + value, 0)
+    return [...bucket.values()].reduce((total, value) => safeAdd(total, value, 2), 0)
   }
 
   const totalAssets = sumByType('ASSET')
@@ -126,8 +127,8 @@ export default async function MultiPeriodReportPage({
   // computeBalanceSheet "Laba/Rugi Berjalan"). Tanpa ini neraca tak pernah
   // seimbang dan KPI selisih permanen merah sebesar laba berjalan.
   const currentEarnings = cumulativeNetProfit(sumByType('REVENUE'), sumByType('EXPENSE'))
-  const totalEquityWithEarnings = columns.map((_, index) => sumByType('EQUITY')[index] + currentEarnings[index])
-  const totalLiabilitiesEquity = columns.map((_, index) => sumByType('LIABILITY')[index] + totalEquityWithEarnings[index])
+  const totalEquityWithEarnings = columns.map((_, index) => safeAdd(sumByType('EQUITY')[index], currentEarnings[index], 2))
+  const totalLiabilitiesEquity = columns.map((_, index) => safeAdd(sumByType('LIABILITY')[index], totalEquityWithEarnings[index], 2))
 
   const columnCount = columns.length + 2 // label + total
   const periodLabel = `${MULTI_PERIOD_MODE_LABELS[mode]} — ${columns[0].label} s/d ${columns[columns.length - 1].label}`
@@ -157,13 +158,12 @@ export default async function MultiPeriodReportPage({
           <td className="px-3 py-2 text-sm">Total {title}</td>
           {columns.map((column, index) => (
             <td key={column.key} className="px-3 py-2 text-right text-sm tabular-nums">
-              {formatAccounting(values[index], { zeroDash: false })}
+              {formatAccountingExact(values[index])}
             </td>
           ))}
           <td className="px-3 py-2 text-right text-sm tabular-nums">
-            {formatAccounting(
-              statement === 'neraca' ? values[values.length - 1] : values.reduce((a, b) => a + b, 0),
-              { zeroDash: false },
+            {formatAccountingExact(
+              statement === 'neraca' ? values[values.length - 1] : values.reduce((a, b) => safeAdd(a, b, 2), 0),
             )}
           </td>
         </tr>
@@ -209,18 +209,18 @@ export default async function MultiPeriodReportPage({
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         {statement === 'neraca' ? (
           <>
-            <ReportKpiCard label={`Total Aset (${columns[columns.length - 1].label})`} value={formatCurrency(totalAssets[totalAssets.length - 1])} />
-            <ReportKpiCard label="Total Liabilitas + Ekuitas" value={formatCurrency(totalLiabilitiesEquity[totalLiabilitiesEquity.length - 1])} />
+            <ReportKpiCard label={`Total Aset (${columns[columns.length - 1].label})`} value={formatCurrencyExact(totalAssets[totalAssets.length - 1])} />
+            <ReportKpiCard label="Total Liabilitas + Ekuitas" value={formatCurrencyExact(totalLiabilitiesEquity[totalLiabilitiesEquity.length - 1])} />
             <ReportKpiCard
               label="Selisih (harus 0)"
-              value={formatCurrency(totalAssets[totalAssets.length - 1] - totalLiabilitiesEquity[totalLiabilitiesEquity.length - 1])}
-              valueClassName={Math.abs(totalAssets[totalAssets.length - 1] - totalLiabilitiesEquity[totalLiabilitiesEquity.length - 1]) < 0.005 ? 'text-success' : 'text-danger'}
+              value={formatCurrencyExact(safeAdd(totalAssets[totalAssets.length - 1], -totalLiabilitiesEquity[totalLiabilitiesEquity.length - 1], 2))}
+              valueClassName={Math.abs(safeAdd(totalAssets[totalAssets.length - 1], -totalLiabilitiesEquity[totalLiabilitiesEquity.length - 1], 2)) < 0.005 ? 'text-success' : 'text-danger'}
             />
           </>
         ) : (
           <>
-            <ReportKpiCard label={`Laba Bersih (${columns[columns.length - 1].label})`} value={formatCurrency(netProfit[netProfit.length - 1])} />
-            <ReportKpiCard label="Total Laba Bersih Periode" value={formatCurrency(netProfit.reduce((a, b) => a + b, 0))} />
+            <ReportKpiCard label={`Laba Bersih (${columns[columns.length - 1].label})`} value={formatCurrencyExact(netProfit[netProfit.length - 1])} />
+            <ReportKpiCard label="Total Laba Bersih Periode" value={formatCurrencyExact(netProfit.reduce((a, b) => safeAdd(a, b, 2), 0))} />
             <ReportKpiCard label="Jumlah Periode" value={`${columns.length} ${MULTI_PERIOD_MODE_LABELS[mode]}`} />
           </>
         )}
@@ -252,33 +252,33 @@ export default async function MultiPeriodReportPage({
                     <td className="px-3 py-1.5 text-sm whitespace-nowrap italic">Laba/Rugi Berjalan</td>
                     {columns.map((column, index) => (
                       <td key={column.key} className="px-3 py-1.5 text-right text-sm tabular-nums">
-                        {formatAccounting(currentEarnings[index], { zeroDash: true })}
+                        {formatAccountingExact(currentEarnings[index], { zeroDash: true })}
                       </td>
                     ))}
                     <td className="px-3 py-1.5 text-right text-sm font-semibold tabular-nums">
-                      {formatAccounting(currentEarnings[currentEarnings.length - 1], { zeroDash: true })}
+                      {formatAccountingExact(currentEarnings[currentEarnings.length - 1], { zeroDash: true })}
                     </td>
                   </tr>
                   <tr className="border-b border-default bg-surface-muted/40 font-semibold">
                     <td className="px-3 py-2 text-sm">Total Ekuitas (termasuk Laba Berjalan)</td>
                     {columns.map((column, index) => (
                       <td key={column.key} className="px-3 py-2 text-right text-sm tabular-nums">
-                        {formatAccounting(totalEquityWithEarnings[index], { zeroDash: false })}
+                        {formatAccountingExact(totalEquityWithEarnings[index])}
                       </td>
                     ))}
                     <td className="px-3 py-2 text-right text-sm tabular-nums">
-                      {formatAccounting(totalEquityWithEarnings[totalEquityWithEarnings.length - 1], { zeroDash: false })}
+                      {formatAccountingExact(totalEquityWithEarnings[totalEquityWithEarnings.length - 1])}
                     </td>
                   </tr>
                   <tr className="border-t-2 border-default bg-surface-muted/40 font-bold">
                     <td className="px-3 py-2 text-sm">Total Liabilitas + Ekuitas</td>
                     {columns.map((column, index) => (
                       <td key={column.key} className="px-3 py-2 text-right text-sm tabular-nums">
-                        {formatAccounting(totalLiabilitiesEquity[index], { zeroDash: false })}
+                        {formatAccountingExact(totalLiabilitiesEquity[index])}
                       </td>
                     ))}
                     <td className="px-3 py-2 text-right text-sm tabular-nums">
-                      {formatAccounting(totalLiabilitiesEquity[totalLiabilitiesEquity.length - 1], { zeroDash: false })}
+                      {formatAccountingExact(totalLiabilitiesEquity[totalLiabilitiesEquity.length - 1])}
                     </td>
                   </tr>
                 </>
@@ -290,11 +290,11 @@ export default async function MultiPeriodReportPage({
                     <td className="px-3 py-2 text-sm">Laba Bersih</td>
                     {columns.map((column, index) => (
                       <td key={column.key} className="px-3 py-2 text-right text-sm tabular-nums">
-                        {formatAccounting(netProfit[index], { zeroDash: false })}
+                        {formatAccountingExact(netProfit[index])}
                       </td>
                     ))}
                     <td className="px-3 py-2 text-right text-sm tabular-nums">
-                      {formatAccounting(netProfit.reduce((a, b) => a + b, 0), { zeroDash: false })}
+                      {formatAccountingExact(netProfit.reduce((a, b) => safeAdd(a, b, 2), 0))}
                     </td>
                   </tr>
                 </>
