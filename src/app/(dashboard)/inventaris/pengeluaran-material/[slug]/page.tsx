@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatDate, formatCurrency } from "@/lib/utils/format"
+import { formatDate, formatCurrencyExact } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { StatusChip } from '@/components/ui/status-chip'
@@ -156,7 +156,7 @@ export default async function MaterialIssueDetailPage({
                   <DetailTableRow key={item.id}>
                     <DetailTableTd>{itemNameMap.get(item.itemId) || `Item #${item.itemId}`}</DetailTableTd>
                     <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(Number(item.cost))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(Number(item.cost))}</DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>

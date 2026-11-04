@@ -15,7 +15,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { FormSelect } from "@/components/ui/form-select"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import {
@@ -200,8 +200,8 @@ export function SalaryAdjustmentPanel(props: SalaryAdjustmentPanelProps) {
                     return (
                       <tr key={row.id} className="border-b border-default align-top last:border-0">
                         <td className="py-2 pr-4">{formatDate(row.effectiveDate)}</td>
-                        <td className="py-2 pr-4">{formatCurrency(row.previousBaseSalary)}</td>
-                        <td className="py-2 pr-4">{formatCurrency(row.newBaseSalary)}</td>
+                        <td className="py-2 pr-4">{formatCurrencyExact(row.previousBaseSalary)}</td>
+                        <td className="py-2 pr-4">{formatCurrencyExact(row.newBaseSalary)}</td>
                         <td className="py-2 pr-4">
                           {row.changePercent != null ? `${row.changePercent > 0 ? "+" : ""}${row.changePercent}%` : "-"}
                         </td>

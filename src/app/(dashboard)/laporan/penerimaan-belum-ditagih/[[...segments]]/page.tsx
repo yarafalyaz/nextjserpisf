@@ -10,7 +10,7 @@ import { ReportTableView } from "@/components/reports/report-table-view"
 import { receivedNotBilledSummary } from "@/lib/reports/received-not-billed"
 import { loadReceivedNotBilled } from "@/lib/reports/received-not-billed-data"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 
@@ -63,7 +63,7 @@ export default async function ReceivedNotBilledPage({
         {receivedNotBilledSummary(report)} · umur sisa:{" "}
         {report.aging
           .filter((bucket) => bucket.value > 0)
-          .map((bucket) => `${bucket.label} ${formatCurrency(bucket.value)}`)
+          .map((bucket) => `${bucket.label} ${formatCurrencyExact(bucket.value)}`)
           .join(" · ") || "tidak ada sisa"}
       </p>
     </ReportPageShell>

@@ -16,7 +16,7 @@ import {
   type JobChangeOrderStatus,
 } from "@/lib/reports/job-change-order"
 import type { ChangeOrderLineInput } from "@/lib/reports/job-change-order"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -266,7 +266,7 @@ export function JobChangeOrderPanel({
         <div className="flex flex-wrap items-center gap-3">
           {contractGrandTotal != null ? (
             <p className="text-xs text-muted-foreground">
-              Nilai kontrak (penawaran): <span className="font-medium text-foreground">{formatCurrency(contractGrandTotal)}</span>
+              Nilai kontrak (penawaran): <span className="font-medium text-foreground">{formatCurrencyExact(contractGrandTotal)}</span>
             </p>
           ) : null}
           {canCreate && woEligible && !hasActive ? (
@@ -318,9 +318,9 @@ export function JobChangeOrderPanel({
                   <p className="text-sm text-foreground">{co.reason}</p>
                   {co.selisihNilai != null ? (
                     <p className="text-xs text-muted-foreground">
-                      Selisih nilai (info persetujuan): <span className="font-medium text-foreground">{formatCurrency(co.selisihNilai)}</span>
+                      Selisih nilai (info persetujuan): <span className="font-medium text-foreground">{formatCurrencyExact(co.selisihNilai)}</span>
                       {co.grandTotalSebelum != null && co.grandTotalSesudah != null ? (
-                        <> · Nilai kontrak {formatCurrency(co.grandTotalSebelum)} → {formatCurrency(co.grandTotalSesudah)}</>
+                        <> · Nilai kontrak {formatCurrencyExact(co.grandTotalSebelum)} → {formatCurrencyExact(co.grandTotalSesudah)}</>
                       ) : null}
                     </p>
                   ) : null}
@@ -349,7 +349,7 @@ export function JobChangeOrderPanel({
                               <td className="py-1 pr-2">{it.description || itemNameById[it.itemId] || `Barang #${it.itemId}`}</td>
                               <td className="py-1 pr-2 text-right">{it.qtyBefore ?? "—"}</td>
                               <td className="py-1 pr-2 text-right">{it.qtyAfter ?? "—"}</td>
-                              <td className="py-1 text-right">{it.unitPriceAfter != null ? formatCurrency(it.unitPriceAfter) : "—"}</td>
+                              <td className="py-1 text-right">{it.unitPriceAfter != null ? formatCurrencyExact(it.unitPriceAfter) : "—"}</td>
                             </tr>
                           ))}
                         </tbody>

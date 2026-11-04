@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
-import { formatAccountingExact, formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact, formatCurrencyExact } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 
 export interface TransferInstructionRow {
@@ -108,8 +108,8 @@ export function VendorTransferPanel({ rows }: { rows: TransferInstructionRow[] }
       <div className="flex flex-wrap items-end gap-4 rounded-xl border border-default bg-surface p-4">
         <p className="flex-1 text-sm text-muted-foreground">
           {selected.length > 0
-            ? `${selected.length} pembayaran dipilih · ${formatCurrency(selectedAmount)}`
-            : `${pending.length} menunggu transfer · ${formatCurrency(pendingAmount)} · ${transferred.length} sudah ditransfer`}
+            ? `${selected.length} pembayaran dipilih · ${formatCurrencyExact(selectedAmount)}`
+            : `${pending.length} menunggu transfer · ${formatCurrencyExact(pendingAmount)} · ${transferred.length} sudah ditransfer`}
         </p>
         <div className="flex items-end gap-3">
           <AppDatePicker label="Tanggal Transfer" name="transferDate" value={date} onChange={setDate} />

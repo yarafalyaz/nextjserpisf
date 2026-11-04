@@ -5,7 +5,7 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteDownPayment } from "@/actions/sales.actions"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
 
 import { statusLabel } from "@/lib/utils/status-labels"
@@ -44,7 +44,7 @@ const columns = [
   }),
   columnHelper.accessor("amount", {
     header: "Jumlah Uang Muka",
-    cell: (info) => <span className="text-right">{formatCurrency(Number(info.getValue()))}</span>,
+    cell: (info) => <span className="text-right">{formatCurrencyExact(Number(info.getValue()))}</span>,
   }),
   columnHelper.accessor((row) => row.vatSnapshot ?? null, {
     id: "vatSnapshot",
@@ -54,7 +54,7 @@ const columns = [
       if (!snap) return <span className="text-muted-foreground">Belum ada snapshot PPN tercatat</span>
       return (
         <span className="flex flex-col items-start gap-1">
-          <span>{snap.vatAmount === null ? "PPN —" : `PPN ${formatCurrency(snap.vatAmount)}`} · {snap.pkpSnapshotLabel}</span>
+          <span>{snap.vatAmount === null ? "PPN —" : `PPN ${formatCurrencyExact(snap.vatAmount)}`} · {snap.pkpSnapshotLabel}</span>
           <DownPaymentTaxStatusBadge snapshot={snap} />
         </span>
       )

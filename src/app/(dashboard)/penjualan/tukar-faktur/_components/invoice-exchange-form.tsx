@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccounting, formatCurrencyExact } from "@/lib/utils/format"
 
 export interface Option {
   value: string
@@ -176,8 +176,8 @@ export function InvoiceExchangeForm({
         )}
         {selected.length > 0 ? (
           <p className="text-xs text-muted-foreground">
-            {totals.count} faktur · nilai {formatCurrency(totals.amount)} · sudah dibayar {formatCurrency(totals.paid)} ·
-            sisa {formatCurrency(totals.outstanding)}
+            {totals.count} faktur · nilai {formatCurrencyExact(totals.amount)} · sudah dibayar {formatCurrencyExact(totals.paid)} ·
+            sisa {formatCurrencyExact(totals.outstanding)}
           </p>
         ) : null}
       </fieldset>

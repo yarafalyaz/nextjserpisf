@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/shadcn/badge"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import type { DownPaymentTaxStatus } from "@/lib/tax/down-payment-vat"
 
 /**
@@ -57,8 +57,8 @@ export function DownPaymentVatSnapshotCard({ snapshot }: { snapshot: DownPayment
         Nilai dibekukan server saat uang muka dikonfirmasi dan tampil apa adanya — halaman ini tidak menghitung ulang PPN.
       </p>
       <dl className="mt-4 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Field label="DPP Uang Muka">{hasSnapshot ? formatCurrency(snapshot.vatDpp ?? 0) : "Belum ada snapshot PPN tercatat"}</Field>
-        <Field label="PPN Uang Muka">{hasSnapshot ? formatCurrency(snapshot.vatAmount ?? 0) : "Belum ada snapshot PPN tercatat"}</Field>
+        <Field label="DPP Uang Muka">{hasSnapshot ? formatCurrencyExact(snapshot.vatDpp ?? 0) : "Belum ada snapshot PPN tercatat"}</Field>
+        <Field label="PPN Uang Muka">{hasSnapshot ? formatCurrencyExact(snapshot.vatAmount ?? 0) : "Belum ada snapshot PPN tercatat"}</Field>
         <Field label="Masa Pajak">{snapshot.vatTaxPeriod ?? "—"}</Field>
         <Field label="Status PKP Perusahaan (snapshot)">{snapshot.pkpSnapshotLabel}</Field>
         <Field label="PKP Berlaku Sejak (snapshot)">

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -79,9 +79,9 @@ export default async function AssetRegisterPage({
         tableLabel="Daftar Aset Tetap"
       />
       <p className="doc-lines" style={{ marginTop: 8 }}>
-        {register.assetCount} aset di buku — harga perolehan {formatCurrency(register.totalCost)}, akumulasi
-        penyusutan {formatCurrency(register.totalAccumulatedDepreciation)}, nilai buku{" "}
-        {formatCurrency(register.totalBookValue)}.
+        {register.assetCount} aset di buku — harga perolehan {formatCurrencyExact(register.totalCost)}, akumulasi
+        penyusutan {formatCurrencyExact(register.totalAccumulatedDepreciation)}, nilai buku{" "}
+        {formatCurrencyExact(register.totalBookValue)}.
         {register.disposedCount > 0
           ? ` ${register.disposedCount} aset sudah dilepas dan tidak ikut dihitung.`
           : ""}

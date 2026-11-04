@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db/prisma'
 import { sumEntriesByAccount } from '@/lib/services/report-aggregation.service'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
+import { formatAccounting, formatCurrencyExact, formatDate } from '@/lib/utils/format'
 import { safeAdd, safeSubtract } from '@/lib/utils/math'
 import { projectCash, buildReceivableProjectionItems, buildPayableProjectionItems, summarizeOpenCommitments, PAYROLL_PROJECTION_STATUSES, sumProjectionPayrollNet } from '@/lib/reports/cash-projection'
 import { loadReturnCreditByInvoiceId } from '@/lib/reports/return-credit'
@@ -144,12 +144,12 @@ export default async function CashProjectionPage({
       <ReportNarration text="Proyeksi Kas memperkirakan posisi kas ke depan dari saldo kas/bank saat ini ditambah tagihan penjualan yang belum dibayar (masuk) dan tagihan pemasok yang belum dibayar (keluar), dikelompokkan menurut tanggal jatuh tempo. Dokumen tanpa tanggal jatuh tempo tidak ikut diproyeksikan." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Kas Saat Ini" value={formatCurrency(opening)} />
-        <ReportKpiCard label="Proyeksi Masuk" value={formatCurrency(totalInflow)} valueClassName="text-success" />
-        <ReportKpiCard label="Proyeksi Keluar" value={formatCurrency(totalOutflow)} valueClassName="text-danger" />
+        <ReportKpiCard label="Kas Saat Ini" value={formatCurrencyExact(opening)} />
+        <ReportKpiCard label="Proyeksi Masuk" value={formatCurrencyExact(totalInflow)} valueClassName="text-success" />
+        <ReportKpiCard label="Proyeksi Keluar" value={formatCurrencyExact(totalOutflow)} valueClassName="text-danger" />
         <ReportKpiCard
           label="Saldo Akhir Proyeksi"
-          value={formatCurrency(closing)}
+          value={formatCurrencyExact(closing)}
           valueClassName={closing >= 0 ? 'text-success' : 'text-danger'}
         />
       </div>

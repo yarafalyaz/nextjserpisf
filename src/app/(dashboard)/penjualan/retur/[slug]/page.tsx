@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
@@ -155,7 +155,7 @@ export default async function SalesReturnDetailPage({
                     <DetailTableTd>{itemById.get(item.itemId)?.name ?? `Barang #${item.itemId}`}</DetailTableTd>
                     <DetailTableTd className="font-mono">{itemById.get(item.itemId)?.sku ?? "-"}</DetailTableTd>
                     <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(Number(item.cost))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(Number(item.cost))}</DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatDate, formatCurrency, formatReferenceType, referenceHref } from "@/lib/utils/format"
+import { formatDate, formatCurrencyExact, formatReferenceType, referenceHref } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
@@ -108,16 +108,16 @@ export default async function JournalDetailPage({
                   <DetailTableRow key={entry.id}>
                     <DetailTableTd>{entry.account.code} - {entry.account.name}</DetailTableTd>
                     <DetailTableTd>{entry.memo || "-"}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(Number(entry.debit))}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(Number(entry.credit))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(Number(entry.debit))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrencyExact(Number(entry.credit))}</DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>
               <DetailTableFoot>
                 <DetailTableFootRow>
                   <DetailTableTd colSpan={2} align="right" className="font-bold">Total</DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold">{formatCurrency(Number(journal.totalDebit))}</DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold">{formatCurrency(Number(journal.totalCredit))}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-bold">{formatCurrencyExact(Number(journal.totalDebit))}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-bold">{formatCurrencyExact(Number(journal.totalCredit))}</DetailTableTd>
                 </DetailTableFootRow>
               </DetailTableFoot>
             </DetailTable>

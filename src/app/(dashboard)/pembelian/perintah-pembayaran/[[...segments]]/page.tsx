@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { Fragment } from 'react'
 import { prisma } from '@/lib/db/prisma'
 import { requireAnyPermission } from '@/lib/auth/permissions'
-import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
+import { formatAccounting, formatCurrencyExact, formatDate } from '@/lib/utils/format'
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { safeAdd, safeSubtract } from '@/lib/utils/math'
 import { agingBucket, daysOverdue } from '@/lib/reports/aging'
@@ -157,7 +157,7 @@ export default async function PaymentOrderPage({
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Jumlah Pemasok" value={String(grouped.length)} />
         <ReportKpiCard label="Jumlah Tagihan" value={String(rows.length)} />
-        <ReportKpiCard label="Total Akan Dibayar" value={formatCurrency(total)} valueClassName="text-danger" />
+        <ReportKpiCard label="Total Akan Dibayar" value={formatCurrencyExact(total)} valueClassName="text-danger" />
       </div>
 
       <ReportSection title="Daftar Tagihan per Pemasok">

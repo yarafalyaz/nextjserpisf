@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Image from "next/image";
 import { prisma } from "@/lib/db/prisma";
-import { formatCurrency, formatDate } from "@/lib/utils/format";
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DeleteButton } from "@/components/ui/delete-button";
@@ -160,7 +160,7 @@ export default async function DownPaymentDetailPage({
         <DetailField
           label="Jumlah"
           value={
-            <span className="text-xl">{formatCurrency(Number(dp.amount))}</span>
+            <span className="text-xl">{formatCurrencyExact(Number(dp.amount))}</span>
           }
         />
         <DetailField label="Tanggal Bayar" value={formatDate(dp.paymentDate)} />

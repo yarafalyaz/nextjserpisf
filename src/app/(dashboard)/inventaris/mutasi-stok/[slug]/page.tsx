@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatCurrency, formatDate, formatReferenceType, referenceHref } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate, formatReferenceType, referenceHref } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
@@ -63,7 +63,7 @@ export default async function StockMoveDetailPage({
         <DetailField label="Gudang" value={move.warehouse?.name || "-"} />
         <DetailField label="Arah" value={<StatusChip status={move.impact === "IN" ? "received" : "returned"} />} />
         <DetailField label="Jumlah" value={`${Number(move.qty)} ${move.item?.unitOfMeasure ?? ""}`} />
-        <DetailField label="Harga Satuan" value={formatCurrency(Number(move.cost))} />
+        <DetailField label="Harga Satuan" value={formatCurrencyExact(Number(move.cost))} />
         <DetailField
           label="Tipe"
           value={

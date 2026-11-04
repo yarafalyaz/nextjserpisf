@@ -330,3 +330,35 @@ describe("sapuan kelima belas: tabel daftar penjualan/pembelian/aset/barang", ()
     }
   })
 })
+
+describe("sapuan keenam belas: halaman detail dokumen & inventaris", () => {
+  it("halaman detail/daftar terkait memakai formatter currency exact", () => {
+    for (const rel of [
+      "src/app/(dashboard)/inventaris/mutasi-stok/[slug]/page.tsx",
+      "src/app/(dashboard)/inventaris/pengeluaran-material/[slug]/page.tsx",
+      "src/app/(dashboard)/keuangan/jurnal/[slug]/page.tsx",
+      "src/app/(dashboard)/laporan/aset-tetap/[[...segments]]/page.tsx",
+      "src/app/(dashboard)/laporan/bukti-potong-pph/[[...segments]]/page.tsx",
+      "src/app/(dashboard)/laporan/penerimaan-belum-ditagih/[[...segments]]/page.tsx",
+      "src/app/(dashboard)/laporan/proyeksi-kas/[[...segments]]/page.tsx",
+      "src/app/(dashboard)/master/karyawan/_components/salary-adjustment-panel.tsx",
+      "src/app/(dashboard)/master/pelanggan/[slug]/kendaraan/[vehicleSlug]/page.tsx",
+      "src/app/(dashboard)/pembelian/perintah-pembayaran/[[...segments]]/page.tsx",
+      "src/app/(dashboard)/pembelian/retur/[slug]/page.tsx",
+      "src/app/(dashboard)/pembelian/transfer-pemasok/_components/vendor-transfer-panel.tsx",
+      "src/app/(dashboard)/penjualan/pembayaran/[slug]/page.tsx",
+      "src/app/(dashboard)/penjualan/retur/[slug]/page.tsx",
+      "src/app/(dashboard)/penjualan/tukar-faktur/_components/invoice-exchange-form.tsx",
+      "src/app/(dashboard)/penjualan/uang-muka/_components/down-payment-table.tsx",
+      "src/app/(dashboard)/penjualan/uang-muka/_components/down-payment-vat-snapshot.tsx",
+      "src/app/(dashboard)/penjualan/uang-muka/[slug]/page.tsx",
+      "src/app/(dashboard)/produksi/perintah-kerja/[slug]/_components/create-service-po-button.tsx",
+      "src/app/(dashboard)/produksi/perintah-kerja/[slug]/_components/job-change-order-panel.tsx",
+      "src/app/(dashboard)/proyek/[slug]/_components/project-budget-editor.tsx",
+    ]) {
+      const source = readFileSync(path.resolve(process.cwd(), rel), "utf8")
+      expect(source, rel).not.toMatch(/formatCurrency\((?!Exact)/)
+      expect(source, rel).toContain("formatCurrencyExact")
+    }
+  })
+})

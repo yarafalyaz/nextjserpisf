@@ -14,7 +14,7 @@ import {
   rejectProjectBudgetRevision,
 } from "@/actions/project.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Label } from "@/components/ui/shadcn/label"
@@ -135,7 +135,7 @@ export function ProjectBudgetEditor({ projectId, items, stages, quotations, isLo
                   <td className="py-1.5 pr-2">{stages.find((s) => s.id === it.projectStageId)?.name ?? "Belum dialokasi"}</td>
                   <td className="py-1.5 pr-2">{CATEGORIES.find((c) => c.value === it.category)?.label ?? "Tanpa kategori"}</td>
                   <td className="py-1.5 pr-2 text-right">{it.qty}</td>
-                  <td className="py-1.5 pr-2 text-right">{formatCurrency(it.cost)}</td>
+                  <td className="py-1.5 pr-2 text-right">{formatCurrencyExact(it.cost)}</td>
                   <td className="py-1.5 text-right whitespace-nowrap">
                     {canEdit && <Button type="button" variant="secondary" isDisabled={isPending} onClick={() => { setEditing(it); setStageId(it.projectStageId ? String(it.projectStageId) : ""); setCategory(it.category ?? "") }}>Ubah</Button>}
                     {canEdit && (isLocked ? (
@@ -181,7 +181,7 @@ export function ProjectBudgetEditor({ projectId, items, stages, quotations, isLo
           {quotations.length > 0 && (
             <form onSubmit={(e) => { e.preventDefault(); if (!quotationId) { showError("Pilih penawaran sumber kontrak"); return } run(setProjectContractFromQuotation(projectId, Number(quotationId), contractKeyRef.current), "Kontrak dari penawaran tersimpan", () => { contractKeyRef.current = crypto.randomUUID() }) }} aria-label="Kontrak dari penawaran" className="flex flex-col gap-2">
               <span className="text-xs font-semibold text-foreground">Kontrak dari Penawaran</span>
-              <div className="flex flex-col gap-1.5"><Label htmlFor="rabQuotation">Penawaran (disetujui)</Label><FormSelect id="rabQuotation" value={quotationId} onValueChange={setQuotationId} options={quotations.map((q) => ({ value: String(q.id), label: `${q.documentNo} — ${formatCurrency(q.grandTotal)}` }))} /></div>
+              <div className="flex flex-col gap-1.5"><Label htmlFor="rabQuotation">Penawaran (disetujui)</Label><FormSelect id="rabQuotation" value={quotationId} onValueChange={setQuotationId} options={quotations.map((q) => ({ value: String(q.id), label: `${q.documentNo} — ${formatCurrencyExact(q.grandTotal)}` }))} /></div>
               <Button type="submit" variant="secondary" isDisabled={isPending}>Pakai Penawaran Ini</Button>
             </form>
           )}

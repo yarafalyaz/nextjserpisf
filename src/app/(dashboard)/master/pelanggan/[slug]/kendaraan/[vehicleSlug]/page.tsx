@@ -4,7 +4,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { EmptyState } from "@/components/ui/empty-state"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { StatusChip } from "@/components/ui/status-chip"
-import { formatDate, formatCurrency } from "@/lib/utils/format"
+import { formatDate, formatCurrencyExact } from "@/lib/utils/format"
 import Link from "next/link"
 import { Pencil } from "lucide-react"
 import { entityHref, entityNestedHref } from "@/lib/utils/entity-url"
@@ -300,7 +300,7 @@ export default async function CustomerVehicleDetailPage({
                     <span className="flex flex-wrap items-center gap-3">
                       {entry.grandTotal !== null && (
                         <span className="text-sm text-muted-foreground tabular-nums">
-                          {formatCurrency(entry.grandTotal)} · Terbayar {formatCurrency(entry.paidAmount ?? 0)}
+                          {formatCurrencyExact(entry.grandTotal)} · Terbayar {formatCurrencyExact(entry.paidAmount ?? 0)}
                         </span>
                       )}
                       <span className="text-sm text-muted-foreground">{formatDate(entry.date)}</span>

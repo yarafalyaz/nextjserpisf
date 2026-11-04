@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatAccounting, formatCurrency, formatDate, formatNumber } from "@/lib/utils/format"
+import { formatAccounting, formatCurrencyExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -127,9 +127,9 @@ export default async function WithholdingTaxReportPage({
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Jumlah Bukti Potong" value={formatNumber(rows.length)} />
-        <ReportKpiCard label="Total Dasar Pengenaan" value={formatCurrency(totalDpp)} />
-        <ReportKpiCard label="Total PPh Dipotong (Pembelian)" value={formatCurrency(totalWithheld)} valueClassName="text-primary" />
-        <ReportKpiCard label="PPh Dipotong Pelanggan (Penjualan)" value={formatCurrency(totalSalesWithheld)} valueClassName="text-primary" />
+        <ReportKpiCard label="Total Dasar Pengenaan" value={formatCurrencyExact(totalDpp)} />
+        <ReportKpiCard label="Total PPh Dipotong (Pembelian)" value={formatCurrencyExact(totalWithheld)} valueClassName="text-primary" />
+        <ReportKpiCard label="PPh Dipotong Pelanggan (Penjualan)" value={formatCurrencyExact(totalSalesWithheld)} valueClassName="text-primary" />
       </div>
 
       <ReportSection title="Rekap per Jenis PPh">

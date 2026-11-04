@@ -31,7 +31,7 @@ describe("detail WO: paralelisasi query", () => {
     expect(reservations).toBeGreaterThan(needs)
   })
 
-  it("button PO jasa pakai formatCurrency ter-cache, bukan new Intl per render", () => {
+  it("button PO jasa pakai formatter ter-cache, bukan new Intl per render", () => {
     const btn = readFileSync(
       path.join(
         process.cwd(),
@@ -40,7 +40,8 @@ describe("detail WO: paralelisasi query", () => {
       "utf8",
     )
     expect(btn).not.toContain("new Intl.")
-    expect(btn).toContain("formatCurrency(it.cost)")
-    expect(btn).toContain("formatCurrency(total)")
+    // Helper bersama menyimpan Intl per proses; sekaligus menjaga sen.
+    expect(btn).toContain("formatCurrencyExact(it.cost)")
+    expect(btn).toContain("formatCurrencyExact(total)")
   })
 })
