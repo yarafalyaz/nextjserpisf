@@ -105,3 +105,13 @@ describe("buildVendorPriceListing", () => {
     expect(result.verdict).toContain("2 pemasok")
   })
 })
+
+describe("vendor price listing: harga bersen", () => {
+  it("harga pemasok ber-sen tampil hingga sen", () => {
+    const result = buildVendorPriceListing([
+      row({ vendorName: "A", itemKey: "1", price: 50_000.5 }),
+    ])
+    const data = result.table.rows.find((r) => r.kind === "data")
+    expect(data?.kind === "data" ? data.cells[3] : "").toBe("50.000,50")
+  })
+})

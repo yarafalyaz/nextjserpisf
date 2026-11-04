@@ -13,7 +13,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatDate } from "@/lib/utils/format"
+import { formatAccounting, formatAccountingExact, formatDate } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 const COLUMNS: TableColumn[] = [
@@ -78,7 +78,7 @@ export function buildVendorPriceListing(rows: VendorPriceInput[]): VendorPriceRe
         row.vendorName,
         row.itemLabel,
         formatAccounting(row.minQty, { zeroDash: false }),
-        formatAccounting(row.price, { zeroDash: false }),
+        formatAccountingExact(row.price),
         row.effectiveDate ? formatDate(row.effectiveDate) : "—",
         cheapest !== undefined && row.price === cheapest ? "✓" : "",
       ],
