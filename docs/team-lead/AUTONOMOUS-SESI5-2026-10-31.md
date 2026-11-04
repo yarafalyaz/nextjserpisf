@@ -4447,3 +4447,15 @@ Guard Putaran 185 hanya memeriksa `formatAccounting(` di halaman Total Hutang, s
 
 ### Bukti
 - Merah: 1 gagal/10 lulus; hijau 2.706 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+
+## Putaran 195 — penutupan buku & rekap pinjaman (commit `57b9e5eba`)
+
+- **Panel Proses Akhir Bulan** (`year-end-closing-panel.tsx`) — laba yang ditutup, saldo akun, arah penutupan debit/kredit, dan laba bersih per pusat laba.
+- **Rekap Pinjaman Karyawan** (`employee-loan-recap-table.tsx`) — total sisa aktif, pokok aktif, terbayar, serta cicilan bulanan/mingguan.
+
+### Vonis FIX
+- Keduanya memakai `formatCurrencyExact`; guard statis di `exact-cents-sweep.test.ts` menolak `formatCurrency(` tanpa `Exact` di kedua berkas.
+
+### Bukti
+- Merah: 1 gagal/11 lulus; hijau 2.753 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+- CI `41850274955` (KPI Total Hutang) dan `41850310388` (dokumentasi) **success**.
