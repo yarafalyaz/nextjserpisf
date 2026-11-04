@@ -4332,3 +4332,17 @@ Dua halaman yang sebelumnya hanya diperbaiki pada KPI ternyata masih mencetak **
 
 ### Bukti
 - Merah: 1 gagal pada masing-masing tes baru; hijau 3.088 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+
+## Putaran 186 — daftar Harga Pemasok (commit `5853f1a31`)
+
+`vendor-prices.ts` mencetak **harga per baris** dengan `formatAccounting` 0 desimal; harga disimpan `Decimal(15,2)`. Probe `price 50.000,50` → tampil `50.001`. Kolom `minQty` sengaja tetap format penuh karena bukan uang.
+
+### Vonis FIX
+- Harga memakai `formatAccountingExact`; regresi baru mengunci `50.000,50` dan merah bila formatter dikembalikan.
+
+### Vonis CATAT
+- **`vehicle-margin-card` tidak diubah** setelah diperiksa: helper lokalnya `formatAccounting(value, { decimals: 2 })` — sudah dua desimal untuk semua nilai, jadi sen tidak hilang (hanya bentuk kurung vs minus yang berbeda dari helper exact, dan kartu ini bukan statement).
+
+### Bukti
+- Merah: 1 gagal/9 lulus; hijau 10/10 dan 3.089 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+- **Docker rerun `41838264847` sukses** — keenam job hijau, kegagalan sebelumnya murni 502 dari Docker Hub.
