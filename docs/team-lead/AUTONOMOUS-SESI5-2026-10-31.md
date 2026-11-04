@@ -4270,3 +4270,21 @@ Seksi Giro/Cek Lewat Jatuh Tempo Belum Cair (`keuangan/giro/_components/cheque-o
 ### Bukti
 - Merah: 1 gagal/0 lulus. Hijau: 1/1 dan **82/82** suite keuangan; tsc, ESLint, diff-check bersih.
 - CI `41830983216` (multi periode) dan `41831015895` (dokumentasi) **success**.
+
+## Putaran 182 — draft pengeluaran, rekening koran, register giro (commit `96b722026`, `7ee7c313b`)
+
+Sapuan Workflow atas sisa komponen `keuangan/` menemukan tiga tempat:
+
+1. **Antrean Draft Pengeluaran** — rekap nominal per bucket, total nominal baris tampil, dan nominal per baris. Builder menjumlah `safeAdd(..., 2)`; probe dua draft Rp1.000.000,50 + Rp500.000,25 tampil baris `1.000.001`/`500.000` dan rekap `1.500.001` (bukan `1.500.000,75`).
+2. **Antrean Rekening Koran Draft** — saldo awal/akhir serta total debit/kredit per dokumen. Tidak ada agregasi builder (nilai per dokumen), tetapi 0 desimal tetap membuang sen.
+3. **Register Giro (`cheque-manager`)** — nominal per lembar; `Cheque.amount` adalah `Decimal(15,2)`.
+
+### Vonis FIX
+- Ketiganya memakai `formatAccountingExact`; tiga regresi render baru mengunci nilai ber-sen dan merah bila formatter dikembalikan.
+
+### Vonis CATAT
+- **Dua dari tiga kasus bukan agregat.** Untuk nilai per dokumen, cacatnya bukan "total tidak cocok dengan baris" melainkan sen yang hilang dari setiap baris; tetap diperbaiki karena formatter yang sama dipakai lintas konteks dan kesalahan pembulatan per baris tidak saling meniadakan.
+
+### Bukti
+- Merah: 1 gagal pada masing-masing tes baru. Hijau: 82/82 dan 105/105 suite keuangan terkait; tsc, ESLint, diff-check bersih.
+- CI `41832640362` (antrean giro) dan `41832668167` (dokumentasi) **success**.
