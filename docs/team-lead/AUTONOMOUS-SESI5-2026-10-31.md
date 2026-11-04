@@ -3382,3 +3382,45 @@ Sumber: kandidat agent audit keuangan, diverifikasi ulang sendiri di kode dan de
 - Merah perintah terpisah (`git stash push -- src/lib/reports/year-end-closing.ts src/lib/reports/year-end-closing-data.ts`, lalu `npx vitest run src/lib/reports/__tests__/year-end-closing.test.ts src/lib/services/__tests__/year-end-closing.service.test.ts`) → **5 gagal / 23 lulus**, termasuk `expected '2027-01-01' to be '2026-12-31'` dan uji service yang menerima hasil posting sukses padahal seharusnya menolak kunci periode.
 - Hijau (`git stash pop`, perintah sama) → **28 lulus / 28**. Cakupan lebih luas `src/lib/reports src/lib/services src/app/\(dashboard\)/pengaturan src/app/\(dashboard\)/proses-akhir-bulan*` 384 berkas / 3839 tes lulus; guard statis penuh `src/__tests__ --no-file-parallelism` 67/67 berkas 511/511; `npx tsc --noEmit` 0; ESLint 0 pada 4 berkas berubah; `git diff --check` bersih.
 - CI `41760606403` (head `b5f409c38`) **success**.
+
+## Putaran 128 — rekonsiliasi PPN kehilangan sen pada akumulasi dan tampilan (commit `b775ffc8f`, `1e361a482`, `d8794a42a`)
+
+Sumber: kandidat agent audit laporan pajak, diverifikasi sesi utama pada layar `/laporan/rekonsiliasi-ppn` dan PDF `/laporan/pajak`. `JournalEntry.debit/credit` adalah `Decimal(15,2)`, jadi sen adalah bagian sah dari data; dua cacat berdiri sendiri:
+
+1. **Akumulasi memakai aritmetika float mentah — FIX.** `sumVatAmounts` menjumlahkan nilai tersimpan dengan `+`, dan `buildVatPosition` mengurangi kedua sisi tanpa pembulatan. Residu biner (mis. `0.1 + 0.2`) bisa menggeser selisih bersih satu sen dari nilai yang tertulis di buku.
+2. **Tampilan membulatkan ke rupiah penuh — FIX.** Semua nominal rekonsiliasi diformat lewat `formatAccounting` default (`decimals: 0`), sehingga selisih nyata `Rp0,29` tercetak **"0"** — laporan menyatakan rekonsiliasi cocok padahal ada temuan sen. Ini kelas yang sama dengan "angka yang kebetulan seimbang" yang dilarang komentar `statement-table.ts`.
+
+### Vonis FIX
+- `sumVatAmounts` dan `buildVatPosition` memakai `safeAdd`/`safeSubtract(..., 2)`; posisi dan selisih rekonsiliasi di halaman dihitung dengan aritmetika dua desimal.
+- Nominal rekonsiliasi (layar dan PDF) memakai `vatMoney` = `formatAccounting(..., { decimals: 2 })`; selisih neto PDF memakai `safeSubtract(..., 2)`. Pemformatan SPT/PPh umum **tidak** diubah — hanya sisi VAT yang butuh presisi sen.
+- Regresi: `vat-reconciliation.test.ts` (akumulasi), `tax-summary.test.ts` (`netDifference === 0.29`, tampil `0,29`), `total-trailing-cells.test.ts` (baris tabel yang dikonsumsi PDF: `0,29`, `0,00`, total `0,29`).
+
+### Vonis CATAT
+- **Baris akun laporan statement tetap rupiah penuh — CATAT.** Konvensi Neraca/Laba Rugi dan bukti `bank-ledger-equivalence-db.test.ts` memang membulatkan baris ke rupiah; mengubah seluruh baris akan mengubah setiap laporan keuangan. Yang diperbaiki hanya angka yang **menentukan status** (total pembanding, total neraca saldo, grand total neraca, peringatan selisih) — lihat Putaran 130.
+
+### Bukti
+- CI `41768473280` (head `d8794a42a`) **success** semua job: Detect Changes, Unit Tests, Lint, DB Integration Tests, Docker Image Build, Build Next.js.
+- Satu CI antara (`41767729418`, head `1e361a482`) merah karena tiga ekspektasi lama masih mengharapkan format VAT integer; diperbaiki di `d8794a42a` dan run berikutnya hijau.
+
+## Putaran 129 — SPT menyajikan kewajiban satu sisi sebagai kewajiban lengkap (commit `7590e8b09`)
+
+Sumber: kandidat agent audit laporan pajak, diverifikasi ulang di `spt-read-model-data.ts:399-406`. `journalLiability` hanya `null` bila **kedua** mapping akun PPN kosong:
+
+```ts
+outputAccountId == null && inputAccountId == null ? null : safeSubtract(outLegs..., inLegs..., 2)
+```
+
+Mapping keluaran dan masukan nullable **secara independen** di pengaturan. Bila hanya satu yang hilang, `inLegs`/`outLegs` kosong memberi 0 untuk sisi itu, lalu neto dihitung seolah lengkap: kewajiban PPN tampil penuh, dan `journalVsSptDiff` melaporkan "selisih" raksasa yang sebenarnya hanya sisi yang tidak dipetakan. Probe merah sebelum fix (fixture keluaran terpetakan, masukan `null`): `journalLiability: 220`, `journalVsSptDiff: 11022`.
+
+### Vonis FIX
+- Guard menjadi `outputAccountId == null || inputAccountId == null` → kedua kolom jurnal menjadi `null`, dirender `"-"` di layar dan PDF. Sisi yang terpetakan tetap tampil di laporan rekonsiliasi PPN per sisi (tidak ada informasi yang hilang di sana).
+- `buildSptTableRows` menambah notice netral saat ada baris ber-`journalLiability == null`: "Kewajiban jurnal tidak tersedia untuk sebagian masa; periksa pemetaan akun PPN dan pengaturan sistem sebelum lapor." Kata "pengaturan sistem" disengaja — `null` juga terjadi bila `getSystemSettings()` gagal, jadi notice tidak boleh menyatakan pemetaan sebagai sebab pasti.
+- Regresi: `spt-read-model-data.test.ts` (partial mapping → `null`/`null`) dan `spt-tax-summary.test.ts` (sel `"-"` + notice muncul).
+
+### Vonis CATAT
+- **Akumulasi mentah pada baris jurnal SPT dibiarkan — CATAT.** Reviewer mengusulkan `sumVatAmounts` di kedua kaki; tidak diterapkan karena tidak ada demonstrasi divergensi untuk nilai `Decimal(15,2)` yang tersimpan, dan `safeSubtract(..., 2)` di ujung sudah membulatkan hasil akhir. Mengubahnya tanpa test pembuktian akan menambah risiko tanpa manfaat terukur.
+
+### Bukti
+- Merah: `journalLiability: 220`, `journalVsSptDiff: 11022` pada fixture partial mapping.
+- Hijau: suite terkait 60/60; `npx tsc --noEmit` 0; ESLint 0 pada berkas berubah; `git diff --check` bersih.
+- CI `41769461574` (head `7590e8b09`) **success** semua enam job.
