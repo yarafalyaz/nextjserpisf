@@ -301,6 +301,25 @@ describe("Stock Adjustment Actions", () => {
     const arg = mocks.prismaMock.stockAdjustment.update.mock.calls.at(-1)![0];
     expect(arg.data.reason).toBe("selisih transfer");
   });
+  // Putaran 122: draft hasil posting opname adalah SATU-SATUNYA jejak selisih
+  // sesi itu (sesi sudah "posted" dan tak bisa diposting ulang).
+  // deleteStockAdjustment sudah menolaknya, tetapi edit masih menghapus lalu
+  // menulis ulang seluruh baris: operator dapat menyamakan actualQty dengan
+  // stok live sehingga selisih opname lenyap senyap dan dokumen diproses
+  // sebagai nol.
+  it("putaran 122: updateStockAdjustment menolak draft hasil posting opname", async () => {
+    seedDraft(mocks.prismaMock.stockAdjustment);
+    mocks.prismaMock.stocktakeSession.count.mockResolvedValue(1);
+    const res = await actions.updateStockAdjustment(
+      1,
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 5, unitCost: 100 }]) }),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("opname");
+    expect(mocks.prismaMock.stockAdjustmentItem.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.stockAdjustment.update).not.toHaveBeenCalled();
+    mocks.prismaMock.stocktakeSession.count.mockResolvedValue(0);
+  });
   it("processStockAdjustment succeeds", async () => {
     seedDraft(mocks.prismaMock.stockAdjustment, { items: [] });
     const res = await actions.processStockAdjustment(1);

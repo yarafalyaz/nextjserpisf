@@ -2477,6 +2477,22 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
       if (latest && latest.status !== "draft") {
         throw new Error("Hanya stock adjustment draft yang dapat diedit");
       }
+      // Putaran 122: draft hasil posting opname adalah satu-satunya jejak
+      // selisih sesi itu (sesi sudah "posted", tak bisa diposting ulang, dan
+      // deleteStockAdjustment menolak menghapusnya). Edit menulis ulang
+      // SELURUH baris, jadi tanpa gerbang ini operator bisa menyamakan
+      // actualQty dengan stok live — selisih opname lenyap senyap dan dokumen
+      // diproses sebagai nol, padahal sesi posted menyatakan ada selisih.
+      // Hanya dokumen yang benar-benar lahir dari posting opname yang punya
+      // penunjuk balik ini, jadi penyuntingan draft biasa tidak terpengaruh.
+      const stocktakeRefs = await tx.stocktakeSession.count({
+        where: { adjustmentId: id },
+      });
+      if (stocktakeRefs > 0) {
+        throw new Error(
+          "Penyesuaian hasil posting opname tidak dapat diedit; sesi opname sudah posted dan selisihnya wajib dipertahankan",
+        );
+      }
       // Dokumen bebas: master ditukar saat edit wajib hidup (pola create +
       // updateMaterialIssue); baris lama tidak dinilai, hanya payload baru.
       // Tanpa ini edit menanam item/gudang mati yang lalu diproses hook
