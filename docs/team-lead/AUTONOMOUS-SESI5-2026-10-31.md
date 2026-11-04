@@ -3832,3 +3832,23 @@ Probe: dua baris Rp1.000.000,50 → `1.000.001` + `1.000.001` vs total `2.000.00
 - Merah: 3 gagal/0 lulus (tes sweep).
 - Hijau: reports+PDF **3112 lulus / 4 dilewati**; seluruh suite unit **12.536 lulus / 23 dilewati** (1.172 berkas); tsc, ESLint, diff-check bersih.
 - CI `41808033558`, `41808453230`, `41808483885` **success** (putaran 148–150).
+
+## Putaran 152 — stok, transfer, bukti potong, dan kartu statement hingga sen (commit `f6bbe76d1`)
+
+Lanjutan sapuan Putaran 151 ke delapan berkas terakhir dengan pola yang sama:
+
+`stock-flow-data`, `slow-moving-stock`, `stock-count`, `stock-simple-data`, `transfer-in-transit`, `wip-aging-export`, `withholding-certificates`, `components/reports/customer-statement-card`.
+
+Probe: stock count dua baris × 2 × Rp1.000.000,55 → total `(4.000.002,20)` sedangkan sebelumnya `(4.000.002)`; transfer dalam perjalanan satu baris Rp1.000.000,50 tampil `1.000.001`.
+
+### Vonis FIX
+- Formatter lokal kedelapan berkas memakai `formatAccountingExact`; verdict/KPI ikut formatter itu.
+- Kartu statement pelanggan memakai helper `currency` yang sama sehingga saldo berjalan dan total tidak berbeda pembulatan.
+- Tes sweep diperluas ke stock count dan transfer (merah 2/2 sebelum fix). Fixture lama `stock-count-cents` yang mengharapkan `(8)` untuk 17 × 2 × 0,24 diperbarui ke `(8,16)` — nilainya memang bersen, jadi pembulatan 0 desimal itulah cacatnya.
+
+### Vonis CATAT
+- **Berkas yang masih memakai 0 desimal adalah yang sengaja**: baris akun statement/trial balance (Putaran 130), helper `amount` dua-lapis di laporan yang sudah punya `preciseAmount` terpisah, dan `financial-charts` (label grafik, bukan total tabel).
+
+### Bukti
+- Merah: 2 gagal/3 lulus (tes sweep).
+- Hijau: reports+PDF **3117 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
