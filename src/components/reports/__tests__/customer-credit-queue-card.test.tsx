@@ -335,8 +335,9 @@ describe("CustomerCreditQueueCard: nominal bersen", () => {
       new Set([100]),
       { now: NOW },
     )
-    const { container } = renderCard(<CustomerCreditQueueCard queue={queue} />)
+    const { container, root } = renderCard(<CustomerCreditQueueCard queue={queue} />)
     const text = container.textContent ?? ""
     expect(text).toContain("Rp 1.000.000,50")
+    unmountCard(root)
   })
 })
