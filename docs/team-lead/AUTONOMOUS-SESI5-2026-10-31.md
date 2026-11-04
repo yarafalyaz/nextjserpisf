@@ -3598,3 +3598,26 @@ Probe: faktur jatuh tempo 4 Nov (`2026-11-04T00:00Z`) → pukul 05.00 WIB `overd
 ### Bukti
 - Merah: 2 gagal/8 lulus (KPI berubah antara 05.00 dan 12.00 WIB).
 - Hijau: 10/10; `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` + seluruh halaman laporan **3160 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
+
+## Putaran 139 — ringkasan AR/AP & piutang menampilkan dokumen yang sudah lunas (commit berikutnya)
+
+Ambang lunas FIN-BR-006 (Rp1, `isOutstandingSettled`) sudah kanonis dan dipakai aging, collection queue, dan statement pelanggan. Tiga loader populasi masih memakai ambang nol:
+
+- `ar-ap-summary-data.ts`: `.filter((r) => r.outstanding > 0)` (AR dan AP)
+- `ledger-cash-data.ts:563`: `if (outstanding <= 0) continue` (Piutang per Pelanggan + ekspor)
+- `receivables-by-vehicle-data.ts:39`: `if (outstanding <= 0) continue` (ringkasan per kendaraan)
+
+Probe: faktur `grandTotal 1.000.000,50`, `paidAmount 999.999,70` → sisa `0,80`, `derivePaymentStatus` = **`paid`**, tetapi ringkasan AR/AP tetap menampilkannya sebagai baris "Belum Lunas 1" dan menambah KPI Total Piutang. Ini justru kasus yang menjadi alasan toleransi Rp1 ada (pembayaran rupiah penuh atas faktur bersen).
+
+### Vonis FIX
+- Ketiga loader memakai `isOutstandingSettled(outstanding)` — satu ambang dengan seluruh laporan populasi lain.
+- Regresi baru (`receivables-settlement-tolerance.test.ts`) mengunci ketiga jalur: baris sisa 0,80 dibuang, sisa material tetap tampil.
+
+### Vonis CATAT
+- **Fixture lama `customer-receivables-cents` memakai sisa Rp0,24 per faktur** — nilai itu kini (dengan sadar) dianggap lunas, jadi tes akumulasi sen diganti ke sisa Rp2,24 per faktur (di atas toleransi) agar tetap menguji presisi akumulasi, bukan toleransi lunas.
+- **`sales-late-fee.ts` masih memakai ambang `0,005`** untuk denda keterlambatan. Itu bukan populasi piutang (dasar hitung denda per dokumen), dan mengubahnya akan mengubah nominal denda — keputusan bisnis, dicatat dan tidak diubah.
+
+### Bukti
+- Merah: 3 gagal/0 lulus pada tes baru.
+- Hijau: 75/75 terkait; `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` + halaman laporan + penjualan **3195 lulus / 4 dilewati** (422 berkas); tsc, ESLint, diff-check bersih.
+- CI `41795328072`/`41795471199`/`41795797542`/`41795830106` (empat commit sebelumnya) **success**.
