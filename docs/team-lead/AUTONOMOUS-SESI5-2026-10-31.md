@@ -4092,3 +4092,14 @@ Tiga kartu pajak tangguhan (`deferred-tax-card`, `deferred-tax-nonaset-card`, `d
 ### Bukti
 - Merah: 1 gagal/5 lulus; hijau 6/6 dan 12/12 terkait; 3.247 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
 - CI `41818741098`, `41818790879`, `41819076386`, `41819347112` **success** (putaran 164–166).
+
+## Putaran 169 — antrean rekonsiliasi bank (commit `aa166036b`)
+
+Kartu Rekonsiliasi Bank Belum Selesai mencetak saldo rekening koran dan saldo buku dengan 0 desimal. Rekonsiliasi menilai kecocokan per sen, jadi saldo `Rp 1.500.000,50` tampil `Rp 1.500.000` dan selisih nyata hilang dari pandangan.
+
+### Vonis FIX
+- Kartu memakai `formatCurrencyExact`; regresi baru mengunci kedua saldo ber-sen.
+
+### Bukti
+- Merah: 1 gagal/3 lulus; hijau 4/4; 3.248 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
+- CI `41819076386`, `41819347112`, `41819708826`, `41819777895` **success** (putaran 165–166).
