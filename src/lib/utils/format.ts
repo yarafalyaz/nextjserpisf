@@ -83,6 +83,28 @@ export function formatAccounting(
 }
 
 /**
+ * Format an accounting amount without discarding cents.
+ *
+ * `formatAccounting` defaults to 0 decimals, which is right for ordinary
+ * statement rows but wrong whenever the figure explains a status: a remaining
+ * credit of −0,01 prints "(0)" next to the status "Lewat batas", and a
+ * 100,50 position prints "101". This helper keeps whole-rupiah output for
+ * integer values (so existing reports do not change shape) and switches to two
+ * decimals only when the value actually has cents.
+ */
+export function formatAccountingExact(
+  amount: number | string | null | undefined,
+  options?: { zeroDash?: boolean },
+): string {
+  const numericAmount = Number(amount ?? 0);
+  if (Number.isNaN(numericAmount)) return options?.zeroDash === false ? "0" : "–";
+  if (Number.isInteger(numericAmount)) {
+    return formatAccounting(numericAmount, { zeroDash: options?.zeroDash ?? false });
+  }
+  return formatAccounting(numericAmount, { zeroDash: false, decimals: 2 });
+}
+
+/**
  * Format a number with Indonesian locale (dot as thousands separator).
  * Example: 1500000.5 → "1.500.000,5"
  */

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest"
 import {
   formatCurrency,
   formatAccounting,
+  formatAccountingExact,
   formatNumber,
   formatDate,
   formatRelativeTime,
@@ -79,6 +80,14 @@ describe("formatAccounting", () => {
   it("formats cents with thousands separators and negative parentheses", () => {
     expect(formatAccounting(10000.01, { decimals: 2, zeroDash: false })).toBe("10.000,01")
     expect(formatAccounting(-10000.01, { decimals: 2, zeroDash: false })).toBe("(10.000,01)")
+  })
+
+  it("formatAccountingExact keeps whole rupiah but never drops real cents", () => {
+    expect(formatAccountingExact(1_000_000)).toBe("1.000.000")
+    expect(formatAccountingExact(0)).toBe("0")
+    expect(formatAccountingExact(-0.01)).toBe("(0,01)")
+    expect(formatAccountingExact(100.5)).toBe("100,50")
+    expect(formatAccountingExact(-1_000_000.25)).toBe("(1.000.000,25)")
   })
 
   it("respects decimals", () => {

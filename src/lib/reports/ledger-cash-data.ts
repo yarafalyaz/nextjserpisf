@@ -35,7 +35,7 @@ import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { classifyJournal, foldActivities } from "@/lib/finance/cash-flow"
 import { buildCashFlowTotals } from "@/lib/reports/arus-kas"
 import type { StatementTable } from "@/lib/reports/statement-table"
-import { formatAccounting, formatDate } from "@/lib/utils/format"
+import { formatAccounting, formatAccountingExact, formatDate } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface LedgerReportView {
@@ -50,6 +50,8 @@ export interface CashFlowReportView {
 }
 
 const money = (value: number) => formatAccounting(value, { zeroDash: false })
+/** Sisa kredit/paparan menentukan status kredit, jadi sennya tidak boleh hilang. */
+const moneyExact = (value: number) => formatAccountingExact(value)
 const shortDate = (date: Date) =>
   formatDate(date, { format: "short" })
 const periodOf = (period: { start: Date; end: Date }) => rangePeriodLabels(period)
@@ -868,13 +870,13 @@ export async function loadCustomerReceivables(period: Period): Promise<LedgerRep
       money(row.creditLimit),
       money(row.outstanding),
       money(row.overdue),
-      money(row.remainingCredit),
+      moneyExact(row.remainingCredit),
       row.utilization === null ? "\u2013" : `${row.utilization.toFixed(1)}%`,
       money(row.openOrderAmount),
       money(row.woUnrepresented ?? 0),
       money(row.confirmedDownPayment ?? 0),
       money(row.openCustomerCredit ?? 0),
-      money(row.exposure),
+      moneyExact(row.exposure),
       CREDIT_EXPOSURE_STATUS_LABEL[row.status],
       row.avgPaymentDays === null ? "\u2013" : String(row.avgPaymentDays),
     ],
@@ -890,13 +892,13 @@ export async function loadCustomerReceivables(period: Period): Promise<LedgerRep
         money(result.totalCreditLimit),
         money(result.totalOutstanding),
         money(result.totalOverdue),
-        money(result.totalRemainingCredit),
+        moneyExact(result.totalRemainingCredit),
         result.totalCreditLimit > 0 ? `${((result.totalExposure / result.totalCreditLimit) * 100).toFixed(1)}%` : "\u2013",
         money(sum((row) => row.openOrderAmount)),
         money(sum((row) => row.woUnrepresented ?? 0)),
         money(sum((row) => row.confirmedDownPayment ?? 0)),
         money(sum((row) => row.openCustomerCredit ?? 0)),
-        money(result.totalExposure),
+        moneyExact(result.totalExposure),
         "",
         result.portfolioDso === null ? "\u2013" : result.portfolioDso.toFixed(1),
       ],

@@ -149,6 +149,24 @@ describe("loadCustomerReceivables ekspor (F5-4)", () => {
     expect(total?.kind === "total" ? total.cells : []).toHaveLength(13)
     expect(total?.kind === "total" ? total.cells[4] : null).toBe("50")
   })
+
+  it("sisa kredit dan paparan sen tidak dibulatkan menjadi nol", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockImplementation(async (args: { where: Record<string, unknown> }) =>
+      args.where.date
+        ? [{ id: 11, customerId: 1, grandTotal: 100.01, paidAmount: 0, dueDate: null, customer: { name: "PT Sen", creditLimit: 100 } }]
+        : [],
+    )
+
+    const report = await loadCustomerReceivables(period)
+
+    const data = report.table.rows.find((r) => r.kind === "data")
+    const cells = data?.kind === "data" ? data.cells : []
+    // Paparan 100,01 melewati limit 100 → sisa kredit −0,01, status "Lewat batas".
+    expect(cells).toContain("100,01")
+    expect(cells).toContain("(0,01)")
+    expect(cells).toContain("Lewat batas")
+    expect(cells).not.toContain("(0)")
+  })
 })
 
 describe("FIN-BR-008 paparan kredit (loader)", () => {
