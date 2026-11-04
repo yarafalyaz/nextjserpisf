@@ -5,7 +5,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { postInvoice } from "@/actions/sales.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
@@ -54,11 +54,11 @@ const columns = [
   }),
   columnHelper.accessor("totalAmount", {
     header: "Total",
-    cell: (info) => <span className="text-right">{formatCurrency(Number(info.getValue()))}</span>,
+    cell: (info) => <span className="text-right">{formatCurrencyExact(Number(info.getValue()))}</span>,
   }),
   columnHelper.accessor("paidAmount", {
     header: "Terbayar",
-    cell: (info) => <span className="text-right">{formatCurrency(Number(info.getValue()))}</span>,
+    cell: (info) => <span className="text-right">{formatCurrencyExact(Number(info.getValue()))}</span>,
   }),
   columnHelper.accessor("status", {
     header: "Status",

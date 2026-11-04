@@ -4,7 +4,7 @@ import { Pencil } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/shadcn/badge"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { DataTable } from "@/components/ui/data-table"
 import { entityHref } from "@/lib/utils/entity-url"
 import { AssetUseStatus } from "./asset-use-status"
@@ -71,7 +71,7 @@ export function AssetTable({
       accessorKey: "purchaseCost",
       header: "Harga Beli",
       cell: ({ row }) => (
-        <span className="tabular-nums">{formatCurrency(row.original.purchaseCost)}</span>
+        <span className="tabular-nums">{formatCurrencyExact(row.original.purchaseCost)}</span>
       ),
       size: 150,
     },
@@ -80,7 +80,7 @@ export function AssetTable({
       accessorKey: "currentValue",
       header: "Nilai Saat Ini (cache)",
       cell: ({ row }) => (
-        <span className="tabular-nums">{formatCurrency(row.original.currentValue)}</span>
+        <span className="tabular-nums">{formatCurrencyExact(row.original.currentValue)}</span>
       ),
       size: 150,
     },

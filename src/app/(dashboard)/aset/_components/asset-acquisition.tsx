@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/shadcn/badge"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { cn } from "@/lib/utils"
 import type { AssetAcquisitionResult } from "@/lib/finance/asset-acquisition"
 import {
@@ -102,13 +102,13 @@ export function AssetAcquisitionSummary({
       <div>
         <dt className="text-xs text-muted-foreground">Dasar Komersial</dt>
         <dd className="text-sm font-medium text-foreground">
-          {formatCurrency(Number(result.commercialBasis))}
+          {formatCurrencyExact(Number(result.commercialBasis))}
         </dd>
       </div>
       <div>
         <dt className="text-xs text-muted-foreground">Dasar Fiskal</dt>
         <dd className="text-sm font-medium text-foreground">
-          {formatCurrency(Number(result.fiscalBasis))} ·{" "}
+          {formatCurrencyExact(Number(result.fiscalBasis))} ·{" "}
           {ACQUISITION_FISCAL_BASIS_SOURCE_LABELS[result.fiscalBasisSource]}
         </dd>
       </div>
@@ -123,7 +123,7 @@ export function AssetAcquisitionSummary({
       <div>
         <dt className="text-xs text-muted-foreground">PPN Masukan</dt>
         <dd className="text-sm font-medium text-foreground">
-          {formatCurrency(Number(result.inputVatAmount))} ·{" "}
+          {formatCurrencyExact(Number(result.inputVatAmount))} ·{" "}
           {ACQUISITION_VAT_EVIDENCE_LABELS[result.vatEvidence]}
         </dd>
       </div>

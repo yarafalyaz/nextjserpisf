@@ -6,7 +6,7 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteQuotation } from "@/actions/sales.actions"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
 import { isQuotationExpired } from "@/lib/utils/quotation-expiry"
 
@@ -49,7 +49,7 @@ const columns = [
   }),
   columnHelper.accessor("grandTotal", {
     header: "Total",
-    cell: (info) => <span className="text-right">{formatCurrency(Number(info.getValue()))}</span>,
+    cell: (info) => <span className="text-right">{formatCurrencyExact(Number(info.getValue()))}</span>,
   }),
   columnHelper.accessor("status", {
     header: "Status",

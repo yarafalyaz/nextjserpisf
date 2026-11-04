@@ -7,7 +7,7 @@ import { Package, MapPin } from "lucide-react"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteItem } from "@/actions/master.actions"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
 import { BULK_DELETE_PERMISSIONS, type BulkDeleteModel } from "@/lib/auth/bulk-delete-models"
 import { useBulkDeleteSessionUser } from "@/components/ui/data-table-bulk-select"
@@ -78,7 +78,7 @@ const columns = [
   }),
   columnHelper.accessor("price", {
     header: "Harga Jual",
-    cell: (info) => formatCurrency(Number(info.getValue())),
+    cell: (info) => formatCurrencyExact(Number(info.getValue())),
   }),
   columnHelper.accessor((row) => row.category?.name, {
     id: "categoryName",

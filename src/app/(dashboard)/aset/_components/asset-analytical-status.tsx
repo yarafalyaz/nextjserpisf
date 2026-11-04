@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/shadcn/badge"
-import { formatCurrency, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatNumber } from "@/lib/utils/format"
 import type { AssetAnalyticalStatusRow } from "@/lib/reports/asset-analytical-status-data"
 import { DEPRECIATION_METHOD_LABELS } from "./asset-fiscal-status"
 
@@ -33,7 +33,7 @@ export function AssetAnalyticalStatus({ row, periodLabel }: { row: AssetAnalytic
   let detail: string
   if (s.status === "computed") {
     badge = <Badge className="border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">Terhitung analitis</Badge>
-    detail = `Beban analitis ${periodLabel}: ${formatCurrency(s.amount.toString())}`
+    detail = `Beban analitis ${periodLabel}: ${formatCurrencyExact(s.amount.toString())}`
   } else if (s.status === "skip") {
     badge = <Badge className="border-transparent bg-slate-100 text-slate-700 dark:bg-slate-500/15 dark:text-slate-400">Tidak ada beban</Badge>
     detail = SKIP_TEXT[s.reason] ?? s.reason
@@ -53,7 +53,7 @@ export function AssetAnalyticalStatus({ row, periodLabel }: { row: AssetAnalytic
       <span className="text-xs text-muted-foreground">
         {row.depreciationMethod === "units_of_production" && <>Total estimasi unit: {row.totalEstimatedUnits ? `${formatNumber(row.totalEstimatedUnits.toString(), 2)}${unitSuffix}` : "belum terbekukan"} · Unit aktual masa ini: {row.actualUnits ? `${formatNumber(row.actualUnits.toString(), 2)}${unitSuffix}${row.actualSourceName ? ` (${row.actualSourceName})` : ""}` : "dokumen belum ada"} · </>}
         {row.depreciationMethod === "sum_of_years_digits" && <>Masa manfaat terbekukan: {row.usefulLifeMonths ? `${row.usefulLifeMonths} bulan` : "belum terbekukan"} · </>}
-        Nilai buku (jurnal POSTED): {formatCurrency(row.bookValue.toString())}
+        Nilai buku (jurnal POSTED): {formatCurrencyExact(row.bookValue.toString())}
       </span>
       <span className="text-xs text-muted-foreground">Analitis saja — tidak melahirkan jurnal dari kartu ini. Posting jurnal hanya untuk Garis Lurus dan Saldo Menurun.</span>
     </span>

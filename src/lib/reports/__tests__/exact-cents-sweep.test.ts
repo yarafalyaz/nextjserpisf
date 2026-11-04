@@ -305,3 +305,28 @@ describe("sapuan keempat belas: dashboard, proyek, kalender", () => {
     }
   })
 })
+
+describe("sapuan kelima belas: tabel daftar penjualan/pembelian/aset/barang", () => {
+  it("tabel daftar dokumen memakai formatter currency exact", () => {
+    for (const rel of [
+      "src/app/(dashboard)/penjualan/penawaran/_components/quotation-table.tsx",
+      "src/app/(dashboard)/penjualan/pesanan/_components/order-table.tsx",
+      "src/app/(dashboard)/penjualan/faktur/_components/invoice-table.tsx",
+      "src/app/(dashboard)/penjualan/pembayaran/_components/payment-table.tsx",
+      "src/app/(dashboard)/penjualan/harga-pelanggan/_components/customer-price-table.tsx",
+      "src/app/(dashboard)/pembelian/pesanan/_components/purchase-order-table.tsx",
+      "src/app/(dashboard)/pembelian/tagihan/_components/vendor-bill-table.tsx",
+      "src/app/(dashboard)/pembelian/pembayaran-vendor/_components/vendor-payment-table.tsx",
+      "src/app/(dashboard)/aset/_components/asset-table.tsx",
+      "src/app/(dashboard)/aset/_components/asset-acquisition.tsx",
+      "src/app/(dashboard)/aset/_components/asset-use-status.tsx",
+      "src/app/(dashboard)/aset/_components/asset-analytical-status.tsx",
+      "src/app/(dashboard)/aset/[slug]/_components/asset-change-event-panel.tsx",
+      "src/app/(dashboard)/master/barang/_components/item-table.tsx",
+    ]) {
+      const source = readFileSync(path.resolve(process.cwd(), rel), "utf8")
+      expect(source, rel).not.toMatch(/formatCurrency\((?!Exact)/)
+      expect(source, rel).toContain("formatCurrencyExact")
+    }
+  })
+})

@@ -7,7 +7,7 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { StatusChip } from "@/components/ui/status-chip"
 import { deleteCustomerPriceList } from "@/actions/customer-price-list.actions"
-import { formatCurrency, formatDate, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate, formatNumber } from "@/lib/utils/format"
 
 export interface CustomerPriceRow {
   id: number
@@ -38,7 +38,7 @@ const columns = [
   }),
   columnHelper.accessor("price", {
     header: "Harga",
-    cell: (info) => <span className="tabular-nums">{formatCurrency(info.getValue())}</span>,
+    cell: (info) => <span className="tabular-nums">{formatCurrencyExact(info.getValue())}</span>,
   }),
   columnHelper.accessor("effectiveDate", {
     header: "Berlaku Sejak",

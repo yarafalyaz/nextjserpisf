@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/shadcn/badge"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { cn } from "@/lib/utils"
 import type {
   AssetUseFlagSummary,
@@ -95,7 +95,7 @@ export function AssetUseFlagSummaryCard({
           </dt>
           <dd className="text-sm font-medium text-foreground">
             {summary.fullyDepreciatedInUseCount} aset ·{" "}
-            {formatCurrency(Number(summary.fullyDepreciatedInUseGross))} bruto
+            {formatCurrencyExact(Number(summary.fullyDepreciatedInUseGross))} bruto
           </dd>
         </div>
         <div>

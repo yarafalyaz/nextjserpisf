@@ -13,7 +13,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import {
   ASSET_CHANGE_EVENT_KIND_LABELS,
   ASSET_CHANGE_EVENT_STATUS_LABELS,
@@ -86,7 +86,7 @@ const selectClass =
   "h-11 w-full rounded-md border border-input bg-transparent px-3 text-base md:h-9 md:text-sm"
 
 function money(value: string | null): string {
-  return value == null ? "-" : formatCurrency(Number(value))
+  return value == null ? "-" : formatCurrencyExact(Number(value))
 }
 
 function Field({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {

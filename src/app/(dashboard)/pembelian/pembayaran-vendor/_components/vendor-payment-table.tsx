@@ -5,7 +5,7 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { confirmVendorPayment, deleteVendorPayment } from "@/actions/purchase.actions"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { entityHref } from "@/lib/utils/entity-url"
 
@@ -42,7 +42,7 @@ const columns = [
   }),
   columnHelper.accessor("amount", {
     header: "Jumlah",
-    cell: (info) => formatCurrency(Number(info.getValue())),
+    cell: (info) => formatCurrencyExact(Number(info.getValue())),
   }),
   columnHelper.accessor("paymentMethod", {
     header: "Metode",
