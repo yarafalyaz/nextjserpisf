@@ -3769,3 +3769,33 @@ Dua kelompok laporan lagi memutuskan/menjumlah dari nilai bersen tetapi mencetak
 - Merah: 1 gagal/6 lulus.
 - Hijau: 7/7; reports+PDF **3109 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
 - CI `41804355083`, `41804702036`, `41804741397`, `41805032061`, `41805056398` **success** (lima commit sebelumnya).
+
+## Putaran 148 — tiga laporan lagi membulatkan nominal bersen (commit `ebe8184f3`)
+
+Pola yang sama, tiga berkas:
+
+- **Beban Pembayaran (`payment-expenses.ts`)** — baris beban admin, subtotal per asal, jumlah, dan KPI.
+- **Stok Minimum (`min-stock.ts`)** — perkiraan belanja (nilai kekurangan × biaya).
+- **Giro Mundur (`post-dated-cheques.ts`)** — nominal per giro, subtotal kelompok, verdict, dan KPI.
+
+Probe dua baris Rp1.000.000,50: baris `1.000.001` sementara total `2.000.001`.
+
+### Vonis FIX
+- `amount()`/`amountCell()` ketiganya menjadi `formatAccountingExact`; verdict/KPI memakai formatter yang sama, bukan `formatCurrency` terpisah.
+- Saat mengganti nama helper di berita post-dated, verdict tertinggal memakai `amount` yang tidak ada → `ReferenceError`; tes lama menangkapnya dan diperbaiki ke `amountCell` (bukti nilai tes laporan tetap berfungsi).
+
+### Bukti
+- Merah: 1 gagal/5 lulus (Beban Pembayaran).
+- Hijau: 18/18 terkait; reports+PDF **3110 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
+- CI `41806730361` dan `41806756428` **success**.
+
+## Putaran 149 — rekap PPh21 membulatkan bruto/PPh21/bersih (commit `8c2e3214a`)
+
+Tabel masa dan tahunan Rekap PPh21 memakai `formatAccounting` 0 desimal. Probe dua slip PPh21 Rp1.000.000,50: baris `1.000.001` masing-masing, total `2.000.001`. Total tahunan juga dijumlah dengan `reduce((s, e) => s + ...)` float mentah dan notice lebih-potong memakai pola yang sama.
+
+### Vonis FIX
+- `money` menjadi `formatAccountingExact`; total tahunan dan `overWithheld` dijumlah `safeAdd(..., 2)`.
+
+### Bukti
+- Merah: 1 gagal/4 lulus.
+- Hijau: 5/5 dan 26/26 PPh21 terkait; reports+PDF **3111 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
