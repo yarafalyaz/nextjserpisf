@@ -172,3 +172,19 @@ describe("sapuan kelima: rekonsiliasi bank", () => {
     }
   })
 })
+
+describe("sapuan keenam: kas kecil dan pengeluaran", () => {
+  it("halaman/tabel kas kecil & pengeluaran memakai formatter exact", () => {
+    for (const rel of [
+      "src/app/(dashboard)/keuangan/kas-kecil/page.tsx",
+      "src/app/(dashboard)/keuangan/kas-kecil/[slug]/page.tsx",
+      "src/app/(dashboard)/keuangan/kas-kecil/_components/petty-cash-table.tsx",
+      "src/app/(dashboard)/keuangan/pengeluaran/[slug]/page.tsx",
+      "src/app/(dashboard)/keuangan/pengeluaran/_components/expense-table.tsx",
+    ]) {
+      const source = readFileSync(path.resolve(process.cwd(), rel), "utf8")
+      expect(source, rel).not.toMatch(/formatCurrency\((?!Exact)/)
+      expect(source, rel).toContain("formatCurrencyExact")
+    }
+  })
+})

@@ -5,7 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import Link from "next/link";
 import { AppSearchField } from "@/components/ui/search-field";
 import { PettyCashTable } from "./_components/petty-cash-table";
-import { formatCurrency } from "@/lib/utils/format";
+import { formatCurrencyExact } from "@/lib/utils/format";
 import { CanCreate } from "@/components/auth/can-create";
 
 import type { Metadata } from "next";
@@ -143,7 +143,7 @@ export default async function PettyCashPage({
             Saldo Kas Kecil
           </p>
           <p className={`text-2xl font-bold ${balanceColor}`}>
-            {formatCurrency(currentBalance)}
+            {formatCurrencyExact(currentBalance)}
           </p>
         </div>
         <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-5">
@@ -151,7 +151,7 @@ export default async function PettyCashPage({
             Pemasukan Bulan Ini
           </p>
           <p className="text-2xl font-bold text-green-600">
-            {formatCurrency(monthIn)}
+            {formatCurrencyExact(monthIn)}
           </p>
           <p className="text-xs text-muted-foreground mt-1">{monthRecords.filter(r => r.type === "IN").length} transaksi</p>
         </div>
@@ -160,7 +160,7 @@ export default async function PettyCashPage({
             Pengeluaran Bulan Ini
           </p>
           <p className="text-2xl font-bold text-red-600">
-            {formatCurrency(monthOut)}
+            {formatCurrencyExact(monthOut)}
           </p>
           <p className="text-xs text-muted-foreground mt-1">{monthRecords.filter(r => r.type === "OUT").length} transaksi</p>
         </div>

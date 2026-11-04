@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
-import { formatDate, formatCurrency } from "@/lib/utils/format";
+import { formatDate, formatCurrencyExact } from "@/lib/utils/format";
 import { statusLabel } from "@/lib/utils/status-labels";
 import { notFound } from "next/navigation";
 import { DeleteButton } from "@/components/ui/delete-button";
@@ -93,15 +93,15 @@ export default async function PettyCashDetailPage({
         <DetailField label="Tipe" value={statusLabel(pettyCash.type)} />
         <DetailField
           label="Jumlah"
-          value={formatCurrency(Number(pettyCash.amount))}
+          value={formatCurrencyExact(Number(pettyCash.amount))}
         />
         <DetailField
           label="Saldo Sebelum"
-          value={formatCurrency(Number(pettyCash.balanceBefore))}
+          value={formatCurrencyExact(Number(pettyCash.balanceBefore))}
         />
         <DetailField
           label="Saldo Setelah"
-          value={formatCurrency(Number(pettyCash.balanceAfter))}
+          value={formatCurrencyExact(Number(pettyCash.balanceAfter))}
         />
         <DetailField label="Tanggal" value={formatDate(pettyCash.date)} />
         {pettyCash.accountId && (

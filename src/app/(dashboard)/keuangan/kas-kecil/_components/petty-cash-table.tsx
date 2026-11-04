@@ -5,7 +5,7 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deletePettyCash } from "@/actions/finance.actions"
-import { formatDate, formatCurrency } from "@/lib/utils/format"
+import { formatDate, formatCurrencyExact } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { entityHref } from "@/lib/utils/entity-url"
 
@@ -60,11 +60,11 @@ const columns = [
   }),
   columnHelper.accessor("amount", {
     header: "Jumlah",
-    cell: (info) => <span className="text-right block">{formatCurrency(info.getValue())}</span>,
+    cell: (info) => <span className="text-right block">{formatCurrencyExact(info.getValue())}</span>,
   }),
   columnHelper.accessor("balanceAfter", {
     header: "Saldo Setelah",
-    cell: (info) => <span className="text-right block">{formatCurrency(info.getValue())}</span>,
+    cell: (info) => <span className="text-right block">{formatCurrencyExact(info.getValue())}</span>,
   }),
   columnHelper.display({
     id: "actions",

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
-import { formatDate, formatCurrency } from "@/lib/utils/format";
+import { formatDate, formatCurrencyExact } from "@/lib/utils/format";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusChip } from "@/components/ui/status-chip";
@@ -179,7 +179,7 @@ export default async function ExpenseDetailPage({
         <DetailField label="Tanggal" value={formatDate(expense.date)} />
         <DetailField
           label="Jumlah"
-          value={formatCurrency(Number(expense.amount))}
+          value={formatCurrencyExact(Number(expense.amount))}
         />
         <DetailField label="Kategori" value={expense.category?.label || "-"} />
         <DetailField label="Vendor" value={expense.vendor?.name || "-"} />

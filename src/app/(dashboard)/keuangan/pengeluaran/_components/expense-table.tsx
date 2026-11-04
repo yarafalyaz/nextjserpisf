@@ -6,7 +6,7 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { StatusChip } from "@/components/ui/status-chip"
 import { deleteExpense, approveExpense } from "@/actions/finance.actions"
-import { formatDate, formatCurrency } from "@/lib/utils/format"
+import { formatDate, formatCurrencyExact } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface ExpenseData {
@@ -50,7 +50,7 @@ const columns = [
   }),
   columnHelper.accessor("amount", {
     header: "Jumlah",
-    cell: (info) => <span className="text-right block">{formatCurrency(info.getValue())}</span>,
+    cell: (info) => <span className="text-right block">{formatCurrencyExact(info.getValue())}</span>,
   }),
   columnHelper.accessor("status", {
     header: "Status",
