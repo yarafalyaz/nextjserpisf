@@ -4595,3 +4595,18 @@ Enam belas berkas:
 ### Bukti
 - Merah: 1 gagal/20 lulus; hijau 1.042/1.042 suite SDM+komponen; tsc, ESLint, diff-check bersih.
 - CI `41857966219`, `41858012875`, `41858906044`, `41858944358` **success** (putaran 201–202).
+
+## Putaran 205 — komponen payroll & kartu laporan (commit `aa66c905f`)
+
+Sembilan belas berkas:
+
+- **Payroll** — komponen gaji karyawan, snapshot agregat BPJS, baris komisi, baris komponen, dan panel kompensasi PKWT.
+- **Kartu laporan** — antrean DP, prioritas prospek, approval penawaran, draft penawaran, sel antrean penawaran, panel denda penjualan, kartu pencapaian target penjualan, panel kelola target, rekonsiliasi target, draft faktur pajak, draft pembayaran vendor, WIP aging, beban kerja WO, dan penutupan bengkel.
+
+### Vonis FIX
+- Semua memakai `formatCurrencyExact`; guard statis di `exact-cents-sweep.test.ts` menolak `formatCurrency(` tanpa `Exact`.
+- Satu pengecualian dipertahankan: `aging-chart.tsx` memakai formatter pada label sumbu grafik (bukan nominal tabel) — belum diubah karena bukan nilai yang dibaca sebagai angka akuntansi.
+
+### Bukti
+- Merah: 1 gagal/21 lulus; hijau 459/459 suite payroll+komponen; tsc, ESLint, diff-check bersih.
+- CI `41860301812`, `41860330960`, `41860885167`, `41860920274` **success** (putaran 203–204).
