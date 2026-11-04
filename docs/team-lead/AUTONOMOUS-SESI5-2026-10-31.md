@@ -3449,3 +3449,27 @@ Keduanya adalah kelas "angka yang kebetulan seimbang" yang dilarang komentar `st
 - Merah (`git stash push --` ketiga berkas sumber, lalu `vitest run` 4 berkas) → **9 gagal / 36 lulus**, termasuk `expected [ '10.000', '10.000' ] to deeply equal [ '10.000,01', '10.000,00' ]` dan `expected [ '5.000.000' ] to deeply equal [ '5.000.000,25' ]`.
 - Hijau (`git stash pop`) → 131/131 terarah; seluruh `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` **3078 lulus / 4 dilewati** (394 berkas); guard statis `src/__tests__ --no-file-parallelism` **511/511**; `npx tsc --noEmit` 0; ESLint 0 pada 10 berkas berubah; `git diff --check` bersih.
 - CI `41774166295` (head `f4ea267bf`) **success** semua enam job. CI dokumentasi `41774121833` (head `5bd60b194`) juga **success**.
+
+## Putaran 131 — Neraca Skontro & total jurnal menyembunyikan sen (commit `cff8896af`, `9a06119fc`)
+
+Lanjutan pola Putaran 130: cari setiap tempat yang **memutuskan** status dari angka sen tetapi **mencetak** angka itu dalam rupiah penuh. Dua tempat terbukti, keduanya dari sumber data sah `Decimal(15,2)`:
+
+1. **Neraca Induk Skontro (`skontro.ts`).** `amount()` 0 desimal dipakai untuk `Jumlah Aktiva`/`Jumlah Pasiva` dan teks peringatan; pasiva juga dijumlahkan dengan `+`. Probe: aset `5.000.000,25` vs pasiva `5.000.000` → kedua jumlah tercetak `5.000.000`, peringatan `selisih 0`.
+2. **Daftar jurnal (`journal-listing.ts`).** Mesin bersama Jurnal Aset Tetap dan Rincian Jurnal Pekerjaan Pesanan. `isBalanced` dihitung dari total sen, tetapi baris total dan peringatan dicetak 0 desimal. Probe: debit `100,01` vs kredit `100` → total `["100","100"]` dan `selisih 0` walau `isBalanced` false.
+3. **Mutasi Aset (`asset-movement.ts`).** `isTiedOut` memakai toleransi 0,005, tetapi peringatan mencetak 0 desimal: probe `selisih (0)` — pesan yang menyangkal dirinya sendiri.
+4. **Rekonsiliasi Aset (`asset-reconciliation.ts`).** `differs()` membandingkan pada `toDecimalPlaces(2)`, tetapi detail temuan mencetak 0 desimal: probe `currentValue 8.000.000 != nilai buku jurnal 8.000.000` untuk selisih satu sen.
+
+### Vonis FIX
+- Keempatnya memakai formatter dua desimal untuk **angka yang menentukan atau menjelaskan status**, dan `safeAdd`/`safeSubtract(..., 2)` untuk total/selisih terkait.
+- Baris akun, kolom angka tabel, dan output saat seimbang **tidak berubah** (tetap rupiah penuh) — keputusan yang sama dengan Putaran 130.
+- Skontro kini konsisten dengan Neraca; jurnal aset/pekerjaan tetap kompatibel dengan `total-trailing-cells` karena bentuk sel tidak berubah.
+- Regresi: `skontro.test.ts` (3 tes baru, 2 merah sebelum fix), `journal-listing-cents.test.ts` (2 tes baru, 1 merah), `asset-movement.test.ts` (1 tes baru, merah), `asset-reconciliation.test.ts` (1 tes baru, merah).
+
+### Vonis CATAT
+- **`equity-changes.ts` belum disamakan — CATAT.** Laporan itu tidak punya boolean status seimbang; seluruh angkanya rupiah penuh dan tidak ada peringatan selisih, jadi tidak ada temuan yang bisa disangkal sendiri. Kandidat bila kelak muncul keluhan presisi.
+- **Ambang `BALANCE_TOLERANCE = 0.5` di rekonsiliasi persediaan/GRNI — CATAT.** Toleransi setengah rupiah disengaja (pembulatan dua desimal), bukan bug; jangan diubah tanpa keputusan akuntansi.
+
+### Bukti
+- Merah per-berkas: skontro 2 gagal/1 lulus; journal listing 1 gagal/4 lulus; asset movement 1 gagal/9 lulus; asset reconciliation 1 gagal/7 lulus.
+- Hijau: skontro 3/3; journal listing + aset + pekerjaan + trailing 68/68; mutasi 10/10; rekonsiliasi 14/14; `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` **3085 lulus / 4 dilewati** (395 berkas); guard statis 511/511; `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
+- CI `41781657909` (head `cff8896af`) **success**.
