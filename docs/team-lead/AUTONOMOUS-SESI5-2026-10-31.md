@@ -3932,3 +3932,19 @@ Tiga halaman yang nomor-akun/kuantitasnya memang rupiah penuh masih mencampur ko
 
 ### Bukti
 - 2.654 lulus / 4 dilewati (halaman laporan + reports); tsc, ESLint, diff-check bersih.
+
+## Putaran 158 — KPI Piutang, Jurnal, Perbandingan Periode (commit `e0e650b54`)
+
+Empat halaman masih memakai `formatCurrency` 0 desimal untuk nominal yang berasal dari nilai bersen:
+
+- **Piutang per Pelanggan** — KPI Total Piutang / Sudah Jatuh Tempo / Total Limit Kredit.
+- **Jurnal Aset & Jurnal Pekerjaan** — ringkasan per jenis/referensi dan total debit/kredit.
+- **Perbandingan Periode** — KPI total aset/kewajiban/ekuitas, total periode/pembanding/selisih, dan baris TOTAL tabel.
+
+### Vonis FIX
+- KPI/ringkasan → `formatCurrencyExact`; TOTAL tabel → `formatAccountingExact`.
+- **Baris akun Perbandingan Periode tetap `formatAccounting` 0 desimal** — itu konvensi baris akun yang sudah diuji (Putaran 130), bukan total.
+
+### Bukti
+- 2.654 lulus / 4 dilewati; tsc, ESLint, diff-check bersih.
+- CI `41813678521`/`41813767782` (putaran 154) dan batch putaran 155–156 **success**.
