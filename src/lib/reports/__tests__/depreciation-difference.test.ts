@@ -192,6 +192,26 @@ describe("buildDepreciationDifference", () => {
     expect(depreciationDifferenceSummary(result)).toContain("belum dapat dihitung")
   })
 
+  it("selisih sen tampil di baris Jumlah dan verdict, bukan dibulatkan", () => {
+    const result = buildDepreciationDifference(
+      [
+        asset({
+          taxGroupCode: "GROUP_1",
+          purchaseCost: 12_000_000.5,
+          bookValue: 12_000_000.5,
+        }),
+      ],
+      YEAR,
+    )
+
+    expect(result.totals.difference).toBe(-600000.01)
+    const total = result.table.rows.find((row) => row.kind === "total")
+    expect(total?.kind === "total" ? total.cells[3] : "").toBe("(600.000,01)")
+    expect(result.verdict).toContain("600.000,01")
+    expect(result.verdict).not.toContain("Rp -600.000")
+    expect(depreciationDifferenceSummary(result)).toContain("600.000,01")
+  })
+
   it("F62-7b: jenis tidak tercantum tanpa kelompok tetap terhitung kelompok 3, tanpa daftar tanpa-fiskal", () => {
     const result = buildDepreciationDifference([
       asset({ code: "A", taxTypeListed: false }),

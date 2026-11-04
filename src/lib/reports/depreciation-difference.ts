@@ -39,7 +39,7 @@ import {
   fiscalGroupRule,
   resolveFiscalGroup,
 } from "@/lib/finance/asset-fiscal-groups"
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccounting } from "@/lib/utils/format"
 import { safeAdd, safeMultiply, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -147,6 +147,16 @@ export interface DepreciationDifferenceResult {
 
 function amount(value: number): string {
   return formatAccounting(value, { zeroDash: false })
+}
+
+/**
+ * Angka yang menjelaskan selisih memakai dua desimal bila ada sen. Selisih
+ * 600.000,01 yang dibulatkan menjadi "Rp -600.000" menyembunyikan sen yang
+ * justru menjadi alasan laporan ini ada. Nilai bulat tetap rupiah penuh.
+ */
+function preciseAmount(value: number): string {
+  if (Number.isInteger(value)) return amount(value)
+  return formatAccounting(value, { zeroDash: false, decimals: 2 })
 }
 
 function assetLabel(asset: DepreciationAssetInput): string {
@@ -331,9 +341,9 @@ export function buildDepreciationDifference(
       label: "Jumlah",
       cells: [
         "",
-        amount(totals.accountingAnnual),
-        amount(totals.fiscalAnnual),
-        amount(totals.difference),
+        preciseAmount(totals.accountingAnnual),
+        preciseAmount(totals.fiscalAnnual),
+        preciseAmount(totals.difference),
         "",
         "",
       ],
@@ -369,7 +379,7 @@ export function buildDepreciationDifference(
       ? "Tidak ada aset untuk dinilai"
       : totals.withoutFiscal === sorted.length
         ? "Penyusutan fiskal belum dapat dihitung untuk aset mana pun"
-        : `Selisih penyusutan tahunan ${formatCurrency(totals.difference)}` +
+        : `Selisih penyusutan tahunan ${preciseAmount(totals.difference)}` +
           (totals.withoutFiscal > 0 ? ` · ${totals.withoutFiscal} aset belum dapat dihitung fiskal` : "")
 
   return { table: { columns: COLUMNS, rows }, totals, verdict }
@@ -382,8 +392,8 @@ export function depreciationDifferenceSummary(result: DepreciationDifferenceResu
     return "Penyusutan fiskal belum dapat dihitung untuk aset mana pun"
   }
   return (
-    `Akuntansi ${formatCurrency(result.totals.accountingComparable)} vs fiskal ` +
-    `${formatCurrency(result.totals.fiscalAnnual)} · selisih ${formatCurrency(result.totals.difference)}` +
+    `Akuntansi ${preciseAmount(result.totals.accountingComparable)} vs fiskal ` +
+    `${preciseAmount(result.totals.fiscalAnnual)} · selisih ${preciseAmount(result.totals.difference)}` +
     (result.totals.withoutFiscal > 0 ? ` · ${result.totals.withoutFiscal} aset belum dapat dihitung fiskal` : "")
   )
 }
