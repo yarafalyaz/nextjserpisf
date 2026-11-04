@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { notFound } from "next/navigation"
 import { requireAuth } from "@/lib/auth/permissions"
 import { loadOwnPayslipDetail } from "@/lib/reports/payslip-self-data"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { kindLabel } from "@/components/payroll/payroll-component-master"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
@@ -54,22 +54,22 @@ export default async function OwnPayslipDetailPage({
           label="Tanggal Bayar"
           value={detail.paymentDate ? formatDate(detail.paymentDate) : "Belum dibayar"}
         />
-        <DetailField label="Gaji Pokok" value={formatCurrency(detail.baseSalary)} />
-        <DetailField label="Gaji Kotor" value={formatCurrency(detail.grossSalary)} />
-        <DetailField label="Gaji Bersih" value={formatCurrency(detail.netSalary)} />
+        <DetailField label="Gaji Pokok" value={formatCurrencyExact(detail.baseSalary)} />
+        <DetailField label="Gaji Kotor" value={formatCurrencyExact(detail.grossSalary)} />
+        <DetailField label="Gaji Bersih" value={formatCurrencyExact(detail.netSalary)} />
       </DetailCard>
 
       <DetailCard title="Penghasilan & Potongan" columns={3}>
-        <DetailField label="Tunjangan" value={formatCurrency(detail.allowances)} />
-        <DetailField label="Potongan" value={formatCurrency(detail.deductions)} />
-        <DetailField label="Lembur" value={formatCurrency(detail.overtimeTotal)} />
-        <DetailField label="Apresiasi" value={formatCurrency(detail.appreciationTotal)} />
-        <DetailField label="Potongan Pinjaman" value={formatCurrency(detail.loanDeduction)} />
-        <DetailField label="Potongan Telat" value={formatCurrency(detail.lateDeduction)} />
-        <DetailField label="Potongan Absen" value={formatCurrency(detail.absentDeduction)} />
-        <DetailField label="BPJS Kesehatan (Karyawan)" value={formatCurrency(detail.bpjsHealthEmployee)} />
-        <DetailField label="BPJS Ketenagakerjaan (Karyawan)" value={formatCurrency(detail.bpjsEmploymentEmployee)} />
-        <DetailField label="PPh 21" value={formatCurrency(detail.pph21)} />
+        <DetailField label="Tunjangan" value={formatCurrencyExact(detail.allowances)} />
+        <DetailField label="Potongan" value={formatCurrencyExact(detail.deductions)} />
+        <DetailField label="Lembur" value={formatCurrencyExact(detail.overtimeTotal)} />
+        <DetailField label="Apresiasi" value={formatCurrencyExact(detail.appreciationTotal)} />
+        <DetailField label="Potongan Pinjaman" value={formatCurrencyExact(detail.loanDeduction)} />
+        <DetailField label="Potongan Telat" value={formatCurrencyExact(detail.lateDeduction)} />
+        <DetailField label="Potongan Absen" value={formatCurrencyExact(detail.absentDeduction)} />
+        <DetailField label="BPJS Kesehatan (Karyawan)" value={formatCurrencyExact(detail.bpjsHealthEmployee)} />
+        <DetailField label="BPJS Ketenagakerjaan (Karyawan)" value={formatCurrencyExact(detail.bpjsEmploymentEmployee)} />
+        <DetailField label="PPh 21" value={formatCurrencyExact(detail.pph21)} />
       </DetailCard>
 
       <DetailCard title="Kehadiran Periode" columns={4}>
@@ -103,7 +103,7 @@ export default async function OwnPayslipDetailPage({
                       {line.componentNameSnapshot}
                     </td>
                     <td className="px-3 py-2">{kindLabel(line.kindSnapshot)}</td>
-                    <td className="px-3 py-2 text-right">{formatCurrency(line.amount)}</td>
+                    <td className="px-3 py-2 text-right">{formatCurrencyExact(line.amount)}</td>
                   </tr>
                 ))}
               </tbody>

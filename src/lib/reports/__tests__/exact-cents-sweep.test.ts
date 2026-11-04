@@ -214,3 +214,12 @@ describe("sapuan kedelapan: penutupan buku & rekap pinjaman", () => {
     }
   })
 })
+
+describe("sapuan kesembilan: slip gaji karyawan", () => {
+  it("halaman slip gaji memakai formatter currency exact", () => {
+    const rel = "src/app/(dashboard)/sdm/slip-gaji-saya/[slug]/page.tsx"
+    const source = readFileSync(path.resolve(process.cwd(), rel), "utf8")
+    expect(source, rel).not.toMatch(/formatCurrency\((?!Exact)/)
+    expect(source, rel).toContain("formatCurrencyExact")
+  })
+})
