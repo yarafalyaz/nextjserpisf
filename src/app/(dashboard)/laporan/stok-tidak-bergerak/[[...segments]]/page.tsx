@@ -14,7 +14,7 @@ import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { buildReportPeriodSlug, splitReportSegments } from "@/lib/reports/report-period"
 import { slowMovingSummary } from "@/lib/reports/slow-moving-stock"
 import { loadSlowMovingStock } from "@/lib/reports/slow-moving-stock-data"
-import { formatCurrency, formatNumber } from "@/lib/utils/format"
+import { formatAccountingExact, formatNumber } from "@/lib/utils/format"
 export const metadata: Metadata = { title: "Stok Tidak Bergerak" }
 
 /**
@@ -102,7 +102,7 @@ export default async function SlowMovingStockPage({
         />
         <ReportKpiCard
           label="Nilai Stok Tidak Bergerak"
-          value={formatCurrency(report.totals.slowValue)}
+          value={formatAccountingExact(report.totals.slowValue)}
           valueClassName="text-primary"
         />
       </div>

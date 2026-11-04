@@ -25,7 +25,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccountingExact, formatQuantity, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatCurrencyExact, formatQuantity, formatDate } from "@/lib/utils/format"
 import { safeAdd } from "@/lib/utils/math"
 import { layerValue, resolveCostingMethod } from "@/lib/reports/stock-valuation"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
@@ -164,7 +164,7 @@ export function buildSlowMovingStock(input: {
   } else {
     verdict =
       `${slow.length} dari ${assessed.length} barang bersisa tidak bergerak ` +
-      `≥ ${threshold} hari, senilai ${amount(slowValue)}.`
+      `≥ ${threshold} hari, senilai ${formatCurrencyExact(slowValue)}.`
     rows.push({
       kind: "total",
       grand: true,
@@ -243,5 +243,5 @@ export function slowMovingValueOfLayers(
 export function slowMovingSummary(result: SlowMovingResult): string {
   if (result.totals.assessed === 0) return "Tidak ada barang bersisa"
   if (result.totals.slow === 0) return "Tidak ada stok tidak bergerak"
-  return `${result.totals.slow} barang · nilai ${amount(result.totals.slowValue)}`
+  return `${result.totals.slow} barang · nilai ${formatCurrencyExact(result.totals.slowValue)}`
 }

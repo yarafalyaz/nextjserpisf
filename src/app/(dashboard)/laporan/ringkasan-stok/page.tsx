@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
-import { formatAccounting, formatCurrency, formatDate, formatNumber } from '@/lib/utils/format'
+import { formatCurrencyExact, formatAccountingExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
@@ -148,7 +148,7 @@ export default async function InventorySummaryPage() {
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Total Jenis Item" value={formatNumber(totalItems)} />
         <ReportKpiCard label="Total Qty" value={formatNumber(totalQty)} />
-        <ReportKpiCard label="Total Nilai" value={formatCurrency(totalValue)} valueClassName="text-primary" />
+        <ReportKpiCard label="Total Nilai" value={formatCurrencyExact(totalValue)} valueClassName="text-primary" />
         <ReportKpiCard label="Item Kritis" value={criticalItems.length.toString()} valueClassName={criticalItems.length > 0 ? 'text-danger' : 'text-success'} />
       </div>
 
@@ -168,14 +168,14 @@ export default async function InventorySummaryPage() {
                 <DetailTableTd className="font-medium">{row.name}</DetailTableTd>
                 <DetailTableTd align="right">{row.items}</DetailTableTd>
                 <DetailTableTd align="right">{formatNumber(row.qty)}</DetailTableTd>
-                <DetailTableTd align="right" className="font-semibold">{formatAccounting(row.value)}</DetailTableTd>
+                <DetailTableTd align="right" className="font-semibold">{formatAccountingExact(row.value)}</DetailTableTd>
               </DetailTableRow>
             ))}
             <DetailTableRow className="font-bold border-t-2 border-default">
               <DetailTableTd colSpan={2}>TOTAL</DetailTableTd>
               <DetailTableTd align="right">{totalItems}</DetailTableTd>
               <DetailTableTd align="right">{formatNumber(totalQty)}</DetailTableTd>
-              <DetailTableTd align="right" className="text-primary">{formatAccounting(totalValue)}</DetailTableTd>
+              <DetailTableTd align="right" className="text-primary">{formatAccountingExact(totalValue)}</DetailTableTd>
             </DetailTableRow>
           </DetailTableBody>
         </DetailTable>
@@ -195,14 +195,14 @@ export default async function InventorySummaryPage() {
                 <DetailTableTd className="font-medium">{row.name}</DetailTableTd>
                 <DetailTableTd align="right">{row.count}</DetailTableTd>
                 <DetailTableTd align="right">{formatNumber(row.qty)}</DetailTableTd>
-                <DetailTableTd align="right" className="font-semibold">{formatAccounting(row.value)}</DetailTableTd>
+                <DetailTableTd align="right" className="font-semibold">{formatAccountingExact(row.value)}</DetailTableTd>
               </DetailTableRow>
             ))}
             {categoryRows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={2}>TOTAL</DetailTableTd>
                 <DetailTableTd align="right">{formatNumber(categoryTotalQty)}</DetailTableTd>
-                <DetailTableTd align="right" className="text-primary">{formatAccounting(categoryTotalValue)}</DetailTableTd>
+                <DetailTableTd align="right" className="text-primary">{formatAccountingExact(categoryTotalValue)}</DetailTableTd>
               </DetailTableRow>
             )}
           </DetailTableBody>

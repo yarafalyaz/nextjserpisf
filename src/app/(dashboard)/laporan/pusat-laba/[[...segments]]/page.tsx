@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatAccounting, formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -163,9 +163,9 @@ export default async function ProfitCenterIncomePage({
       <ReportNarration text="Laporan Pusat Laba mengukur kontribusi laba dari setiap divisi, departemen, atau unit bisnis dalam perusahaan. Analisis ini membantu dalam evaluasi kinerja, alokasi sumber daya, dan pengambilan keputusan strategis di tingkat unit." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Total Pendapatan" value={formatCurrency(totalRevenue)} valueClassName="text-success" />
-        <ReportKpiCard label="Total Beban" value={formatCurrency(totalExpense)} valueClassName="text-danger" />
-        <ReportKpiCard label="Laba (Rugi) Bersih" value={formatCurrency(netIncome)} valueClassName={netIncome >= 0 ? 'text-success' : 'text-danger'} />
+        <ReportKpiCard label="Total Pendapatan" value={formatCurrencyExact(totalRevenue)} valueClassName="text-success" />
+        <ReportKpiCard label="Total Beban" value={formatCurrencyExact(totalExpense)} valueClassName="text-danger" />
+        <ReportKpiCard label="Laba (Rugi) Bersih" value={formatCurrencyExact(netIncome)} valueClassName={netIncome >= 0 ? 'text-success' : 'text-danger'} />
       </div>
 
       <ReportSection title="Ringkasan per Pusat Laba">
@@ -182,9 +182,9 @@ export default async function ProfitCenterIncomePage({
               <DetailTableRow key={r.key}>
                 <DetailTableTd className="font-mono">{r.code}</DetailTableTd>
                 <DetailTableTd>{r.name}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(r.totalRevenue)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(r.totalExpense)}</DetailTableTd>
-                <DetailTableTd align="right" className={r.netIncome >= 0 ? "text-success font-medium" : "text-danger font-medium"}>{formatAccounting(r.netIncome)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(r.totalRevenue)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(r.totalExpense)}</DetailTableTd>
+                <DetailTableTd align="right" className={r.netIncome >= 0 ? "text-success font-medium" : "text-danger font-medium"}>{formatAccountingExact(r.netIncome)}</DetailTableTd>
               </DetailTableRow>
             ))}
             {rows.length === 0 && (
@@ -193,9 +193,9 @@ export default async function ProfitCenterIncomePage({
             {rows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={2}>TOTAL</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalRevenue)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalExpense)}</DetailTableTd>
-                <DetailTableTd align="right" className={netIncome >= 0 ? "text-success" : "text-danger"}>{formatAccounting(netIncome)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(totalRevenue)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(totalExpense)}</DetailTableTd>
+                <DetailTableTd align="right" className={netIncome >= 0 ? "text-success" : "text-danger"}>{formatAccountingExact(netIncome)}</DetailTableTd>
               </DetailTableRow>
             )}
           </DetailTableBody>
@@ -216,19 +216,19 @@ export default async function ProfitCenterIncomePage({
                 <DetailTableRow key={`rev-${item.code}`}>
                   <DetailTableTd className="font-mono">{item.code}</DetailTableTd>
                   <DetailTableTd>{item.name}</DetailTableTd>
-                  <DetailTableTd align="right" className="text-success">{formatAccounting(item.amount)}</DetailTableTd>
+                  <DetailTableTd align="right" className="text-success">{formatAccountingExact(item.amount)}</DetailTableTd>
                 </DetailTableRow>
               ))}
               {r.expenseItems.map((item) => (
                 <DetailTableRow key={`exp-${item.code}`}>
                   <DetailTableTd className="font-mono">{item.code}</DetailTableTd>
                   <DetailTableTd>{item.name}</DetailTableTd>
-                  <DetailTableTd align="right" className="text-danger">{formatAccounting(item.amount)}</DetailTableTd>
+                  <DetailTableTd align="right" className="text-danger">{formatAccountingExact(item.amount)}</DetailTableTd>
                 </DetailTableRow>
               ))}
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={2}>Laba (Rugi) {r.name}</DetailTableTd>
-                <DetailTableTd align="right" className={r.netIncome >= 0 ? "text-success" : "text-danger"}>{formatAccounting(r.netIncome)}</DetailTableTd>
+                <DetailTableTd align="right" className={r.netIncome >= 0 ? "text-success" : "text-danger"}>{formatAccountingExact(r.netIncome)}</DetailTableTd>
               </DetailTableRow>
             </DetailTableBody>
           </DetailTable>

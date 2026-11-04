@@ -3,6 +3,7 @@ import {
   formatCurrency,
   formatAccounting,
   formatAccountingExact,
+  formatCurrencyExact,
   formatNumber,
   formatDate,
   formatRelativeTime,
@@ -380,5 +381,14 @@ describe("referenceHref", () => {
     expect(formatReferenceType("RecurringTransaction_20261017")).toBe("Transaksi Berulang")
     expect(formatReferenceType(null)).toBe("-")
     expect(formatReferenceType("TipeBaruBelumDikenal")).toBe("TipeBaruBelumDikenal")
+  })
+})
+
+describe("formatCurrencyExact", () => {
+  it("keeps the Rp prefix while preserving real cents", () => {
+    expect(formatCurrencyExact(1_000_000)).toBe("Rp 1.000.000")
+    expect(formatCurrencyExact(1_000_000.5)).toBe("Rp 1.000.000,50")
+    expect(formatCurrencyExact(-0.24)).toBe("Rp (0,24)")
+    expect(formatCurrencyExact(null)).toBe("Rp 0")
   })
 })

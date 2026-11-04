@@ -11,7 +11,7 @@ import { transferInTransitSummary } from "@/lib/reports/transfer-in-transit"
 import { loadTransferInTransit } from "@/lib/reports/transfer-in-transit-data"
 import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 
@@ -68,7 +68,7 @@ export default async function TransferInTransitPage({
         {transferInTransitSummary(report)} · umur:{" "}
         {report.aging
           .filter((bucket) => bucket.value > 0)
-          .map((bucket) => `${bucket.label} ${formatCurrency(bucket.value)}`)
+          .map((bucket) => `${bucket.label} ${formatAccountingExact(bucket.value)}`)
           .join(" · ") || "tidak ada"}
       </p>
     </ReportPageShell>

@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { getWarehouseScope } from '@/lib/auth/warehouse-scope'
-import { formatCurrency, formatDate, formatNumber, formatReferenceType, referenceHref } from '@/lib/utils/format'
+import { formatCurrencyExact, formatDate, formatNumber, formatReferenceType, referenceHref } from "@/lib/utils/format"
 import { resolveReferenceSlugs, referenceSlugKey } from '@/lib/services/reference-slug.service'
 import Link from 'next/link'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
@@ -139,8 +139,8 @@ export default async function StockMovementPage({
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Total Masuk (Qty)" value={formatNumber(totalIn)} valueClassName="text-success" />
         <ReportKpiCard label="Total Keluar (Qty)" value={formatNumber(totalOut)} valueClassName="text-danger" />
-        <ReportKpiCard label="Nilai Masuk" value={formatCurrency(totalValueIn)} valueClassName="text-success" />
-        <ReportKpiCard label="Nilai Keluar" value={formatCurrency(totalValueOut)} valueClassName="text-danger" />
+        <ReportKpiCard label="Nilai Masuk" value={formatCurrencyExact(totalValueIn)} valueClassName="text-success" />
+        <ReportKpiCard label="Nilai Keluar" value={formatCurrencyExact(totalValueOut)} valueClassName="text-danger" />
       </div>
       <ReportSection title="Mutasi Stok">
         <DetailTable data-report-table="Mutasi Stok">

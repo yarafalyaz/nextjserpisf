@@ -115,6 +115,16 @@ export function formatAccountingExact(
 }
 
 /**
+ * `formatAccountingExact` dengan simbol mata uang di depan — untuk KPI dan
+ * ringkasan yang memang menampilkan "Rp …" sekaligus tidak boleh kehilangan sen.
+ */
+export function formatCurrencyExact(amount: number | string | null | undefined): string {
+  const numericAmount = Number(amount ?? 0);
+  if (Number.isNaN(numericAmount)) return "Rp 0";
+  return `Rp ${formatAccountingExact(numericAmount)}`;
+}
+
+/**
  * Format a number with Indonesian locale (dot as thousands separator).
  * Example: 1500000.5 → "1.500.000,5"
  */

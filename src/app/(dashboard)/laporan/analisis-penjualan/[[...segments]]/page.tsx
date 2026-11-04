@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
+import { formatCurrencyExact, formatAccountingExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
@@ -128,9 +128,9 @@ export default async function SalesAnalyticsPage({
       <ReportNarration text="Laporan Analisis Penjualan merangkum nilai penjualan per barang, pelanggan, atau merek pada periode terpilih, disertai tren penjualan bulanan. Laporan ini dipakai untuk melihat kontribusi tiap produk/pelanggan dan memantau arah penjualan dari bulan ke bulan." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Total Penjualan" value={formatCurrency(totalRevenue)} />
+        <ReportKpiCard label="Total Penjualan" value={formatCurrencyExact(totalRevenue)} />
         <ReportKpiCard label="Jumlah Faktur" value={String(invoices.length)} />
-        <ReportKpiCard label="Total Qty" value={formatAccounting(totalQty, { zeroDash: false })} />
+        <ReportKpiCard label="Total Qty" value={formatNumber(totalQty)} />
       </div>
 
       <ReportSection title={`Penjualan ${dimensionLabel}`}>
@@ -145,8 +145,8 @@ export default async function SalesAnalyticsPage({
             {groups.map((row) => (
               <DetailTableRow key={row.key}>
                 <DetailTableTd className="font-medium">{row.label}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.qty, { zeroDash: false })}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.revenue, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(row.qty, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(row.revenue, { zeroDash: false })}</DetailTableTd>
                 <DetailTableTd align="right">{totalRevenue > 0 ? `${((row.revenue / totalRevenue) * 100).toFixed(1)}%` : '–'}</DetailTableTd>
               </DetailTableRow>
             ))}
@@ -158,8 +158,8 @@ export default async function SalesAnalyticsPage({
             {groups.length > 0 && (
               <DetailTableRow className="border-t-2 border-default font-bold">
                 <DetailTableTd>TOTAL</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalQty, { zeroDash: false })}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalRevenue, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(totalQty, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(totalRevenue, { zeroDash: false })}</DetailTableTd>
                 <DetailTableTd align="right">100%</DetailTableTd>
               </DetailTableRow>
             )}
@@ -180,7 +180,7 @@ export default async function SalesAnalyticsPage({
               <DetailTableRow key={row.month}>
                 <DetailTableTd>{row.label}</DetailTableTd>
                 <DetailTableTd align="right">{row.invoiceCount}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.revenue, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(row.revenue, { zeroDash: false })}</DetailTableTd>
                 <DetailTableTd>
                   <div className="h-3 w-full min-w-[80px] rounded bg-muted">
                     <div className="h-3 rounded bg-primary" style={{ width: `${Math.round((row.revenue / maxMonthly) * 100)}%` }} />

@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { getWarehouseScope } from '@/lib/auth/warehouse-scope'
-import { formatAccounting, formatCurrency, formatDate, formatNumber } from '@/lib/utils/format'
+import { formatCurrencyExact, formatAccountingExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -145,7 +145,7 @@ export default async function StockValuationPage({
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Total Item" value={formatNumber(rows.length)} />
         <ReportKpiCard label="Total Qty" value={formatNumber(totalQty)} />
-        <ReportKpiCard label="Total Nilai" value={formatCurrency(totalValue)} valueClassName="text-primary" />
+        <ReportKpiCard label="Total Nilai" value={formatCurrencyExact(totalValue)} valueClassName="text-primary" />
         <ReportKpiCard label="Gudang Aktif" value={formatNumber(warehouseSummary.size)} />
       </div>
       {!warehouseId && warehouseSummary.size > 1 && (
@@ -163,7 +163,7 @@ export default async function StockValuationPage({
                   <DetailTableTd className="font-medium">{code} - {ws.name}</DetailTableTd>
                   <DetailTableTd align="right">{ws.items}</DetailTableTd>
                   <DetailTableTd align="right">{formatNumber(ws.qty)}</DetailTableTd>
-                  <DetailTableTd align="right" className="font-semibold">{formatAccounting(ws.value)}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-semibold">{formatAccountingExact(ws.value)}</DetailTableTd>
                 </DetailTableRow>
               ))}
             </DetailTableBody>
@@ -188,8 +188,8 @@ export default async function StockValuationPage({
                 <DetailTableTd>{row.uom}</DetailTableTd>
                 <DetailTableTd className="text-xs font-semibold text-muted-foreground">{{ FIFO: "FIFO (First-In, First-Out)", AVERAGE: "Rata-rata Bergerak" }[row.costingMethod] ?? row.costingMethod}</DetailTableTd>
                 <DetailTableTd align="right">{formatNumber(row.qty)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.qty > 0 ? row.value / row.qty : 0)}</DetailTableTd>
-                <DetailTableTd align="right" className="font-semibold">{formatAccounting(row.value)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(row.qty > 0 ? row.value / row.qty : 0)}</DetailTableTd>
+                <DetailTableTd align="right" className="font-semibold">{formatAccountingExact(row.value)}</DetailTableTd>
               </DetailTableRow>
             ))}
             {rows.length === 0 && (
@@ -200,7 +200,7 @@ export default async function StockValuationPage({
                 <DetailTableTd colSpan={6}>TOTAL</DetailTableTd>
                 <DetailTableTd align="right">{formatNumber(totalQty)}</DetailTableTd>
                 <DetailTableTd align="right">-</DetailTableTd>
-                <DetailTableTd align="right" className="text-primary">{formatAccounting(totalValue)}</DetailTableTd>
+                <DetailTableTd align="right" className="text-primary">{formatAccountingExact(totalValue)}</DetailTableTd>
               </DetailTableRow>
             )}
           </DetailTableBody>

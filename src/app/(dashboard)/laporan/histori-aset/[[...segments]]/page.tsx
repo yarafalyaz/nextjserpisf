@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -72,9 +72,9 @@ export default async function AssetHistoryPage({
       />
       <p className="doc-lines" style={{ marginTop: 8 }}>
         {history.assetCount} aset bergerak pada periode ini ({history.eventCount} kejadian): perolehan{" "}
-        {formatCurrency(history.totals.acquisition)} · penyusutan{" "}
-        {formatCurrency(history.totals.depreciation)} · pelepasan{" "}
-        {formatCurrency(history.totals.disposal)} · perpindahan lokasi {history.totals.transfers} kali.
+        {formatAccountingExact(history.totals.acquisition)} · penyusutan{" "}
+        {formatAccountingExact(history.totals.depreciation)} · pelepasan{" "}
+        {formatAccountingExact(history.totals.disposal)} · perpindahan lokasi {history.totals.transfers} kali.
       </p>
     </ReportPageShell>
   )

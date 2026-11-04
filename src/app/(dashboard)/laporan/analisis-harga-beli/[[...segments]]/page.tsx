@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency, formatDate, formatNumber } from '@/lib/utils/format'
+import { formatCurrencyExact, formatAccountingExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
@@ -102,9 +102,9 @@ export default async function PurchasePriceAnalysisPage({
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Jumlah Penerimaan" value={formatNumber(totalReceipts)} />
         <ReportKpiCard label="Total Qty Diterima" value={formatNumber(totalQty)} />
-        <ReportKpiCard label="Nilai Perolehan" value={formatCurrency(totalValue)} />
-        <ReportKpiCard label="Kenaikan Biaya Perolehan Tertinggi" value={formatCurrency(maxUplift)} valueClassName="text-danger" />
-        <ReportKpiCard label="Peluang Hemat (per unit)" value={formatCurrency(totalPotentialSaving)} valueClassName="text-success" />
+        <ReportKpiCard label="Nilai Perolehan" value={formatCurrencyExact(totalValue)} />
+        <ReportKpiCard label="Kenaikan Biaya Perolehan Tertinggi" value={formatCurrencyExact(maxUplift)} valueClassName="text-danger" />
+        <ReportKpiCard label="Peluang Hemat (per unit)" value={formatCurrencyExact(totalPotentialSaving)} valueClassName="text-success" />
       </div>
 
       {bestByItem.length > 0 && (
@@ -127,9 +127,9 @@ export default async function PurchasePriceAnalysisPage({
                   <DetailTableTd className="font-mono text-xs">{b.sku}</DetailTableTd>
                   <DetailTableTd className="font-medium">{b.itemName}</DetailTableTd>
                   <DetailTableTd>{b.vendorName}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(b.avgLandedUnitCost)}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(b.avgListingUnitPrice)}</DetailTableTd>
-                  <DetailTableTd align="right" className="text-success font-semibold">{formatCurrency(b.savingVsWorst)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccountingExact(b.avgLandedUnitCost)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccountingExact(b.avgListingUnitPrice)}</DetailTableTd>
+                  <DetailTableTd align="right" className="text-success font-semibold">{formatAccountingExact(b.savingVsWorst)}</DetailTableTd>
                 </DetailTableRow>
               ))}
             </DetailTableBody>
@@ -160,13 +160,13 @@ export default async function PurchasePriceAnalysisPage({
                 <DetailTableTd>{r.vendorName}</DetailTableTd>
                 <DetailTableTd align="right">{formatNumber(r.receipts)}</DetailTableTd>
                 <DetailTableTd align="right">{formatNumber(r.totalQty)}</DetailTableTd>
-                <DetailTableTd align="right" className="font-semibold">{formatCurrency(r.avgLandedUnitCost)}</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(r.avgListingUnitPrice)}</DetailTableTd>
+                <DetailTableTd align="right" className="font-semibold">{formatAccountingExact(r.avgLandedUnitCost)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(r.avgListingUnitPrice)}</DetailTableTd>
                 <DetailTableTd align="right" className={r.landedUplift > 0 ? 'text-danger' : 'text-success'}>
-                  {r.landedUplift > 0 ? '+' : ''}{formatCurrency(r.landedUplift)}
+                  {r.landedUplift > 0 ? '+' : ''}{formatAccountingExact(r.landedUplift)}
                 </DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(r.minLandedUnitCost)}</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(r.maxLandedUnitCost)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(r.minLandedUnitCost)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(r.maxLandedUnitCost)}</DetailTableTd>
                 <DetailTableTd className="text-xs">{r.lastReceiptDate ? formatDate(r.lastReceiptDate, { format: "numeric" }) : '-'}</DetailTableTd>
               </DetailTableRow>
             ))}

@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -93,10 +93,10 @@ export default async function PnLByCostCenterPage({
       <StatementTableView table={report.table} tableLabel="Laba Rugi per Pusat Biaya" />
       {costCenterId ? (
         <p className="doc-lines" style={{ marginTop: 8 }}>
-          Ringkasan {report.costCenterLabel}: pendapatan {formatCurrency(report.totals.totalRevenue)}, laba kotor{" "}
-          {formatCurrency(report.totals.grossProfit)}, beban operasional{" "}
-          {formatCurrency(report.totals.totalExpense)}, laba bersih{" "}
-          {formatCurrency(report.totals.netProfit)} (margin {report.totals.margin.toFixed(1)}%).
+          Ringkasan {report.costCenterLabel}: pendapatan {formatAccountingExact(report.totals.totalRevenue)}, laba kotor{" "}
+          {formatAccountingExact(report.totals.grossProfit)}, beban operasional{" "}
+          {formatAccountingExact(report.totals.totalExpense)}, laba bersih{" "}
+          {formatAccountingExact(report.totals.netProfit)} (margin {report.totals.margin.toFixed(1)}%).
         </p>
       ) : null}
     </ReportPageShell>

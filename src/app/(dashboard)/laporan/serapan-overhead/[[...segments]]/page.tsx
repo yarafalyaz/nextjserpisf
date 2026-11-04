@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { requirePermission } from '@/lib/auth/permissions'
 import { getSystemSettings } from '@/lib/utils/settings'
-import { formatCurrency, formatPeriod } from '@/lib/utils/format'
+import { formatCurrencyExact, formatAccountingExact, formatPeriod } from "@/lib/utils/format"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -71,14 +71,14 @@ export default async function OverheadAbsorptionPage({
       )}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Overhead Dibebankan" value={formatCurrency(result.appliedTotal)} />
-        <ReportKpiCard label="Overhead Aktual" value={formatCurrency(result.actualTotal)} />
+        <ReportKpiCard label="Overhead Dibebankan" value={formatCurrencyExact(result.appliedTotal)} />
+        <ReportKpiCard label="Overhead Aktual" value={formatCurrencyExact(result.actualTotal)} />
         <ReportKpiCard
           label={`Selisih (${varianceLabel})`}
-          value={formatCurrency(Math.abs(result.variance))}
+          value={formatAccountingExact(Math.abs(result.variance))}
           valueClassName={result.variance === 0 ? "" : overAbsorbed ? "text-warning" : "text-danger"}
         />
-        <ReportKpiCard label="Diantaranya Manual" value={formatCurrency(result.manualOverheadTotal)} />
+        <ReportKpiCard label="Diantaranya Manual" value={formatCurrencyExact(result.manualOverheadTotal)} />
       </div>
 
       <ReportSection title="Rincian Overhead Dibebankan per Perintah Produksi">
@@ -95,7 +95,7 @@ export default async function OverheadAbsorptionPage({
                 <DetailTableTd>
                   {l.driverType ? (OVERHEAD_DRIVER_LABELS[l.driverType as OverheadDriver] ?? l.driverType) : "Manual"}
                 </DetailTableTd>
-                <DetailTableTd align="right" className="font-semibold">{formatCurrency(l.applied)}</DetailTableTd>
+                <DetailTableTd align="right" className="font-semibold">{formatAccountingExact(l.applied)}</DetailTableTd>
               </DetailTableRow>
             ))}
             {result.lines.length === 0 && (

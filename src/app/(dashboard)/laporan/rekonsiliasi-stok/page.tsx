@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { requirePermission } from '@/lib/auth/permissions'
 import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { loadStockReconciliation } from "@/lib/reports/stock-simple-data"
-import { formatAccounting, formatCurrency, formatDate, formatNumber } from '@/lib/utils/format'
+import { formatCurrencyExact, formatAccountingExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
@@ -56,7 +56,7 @@ export default async function StockReconciliationPage() {
         />
         <ReportKpiCard label="Total Qty (Induk)" value={formatNumber(summary.totalMasterQty)} />
         <ReportKpiCard label="Total Qty (FIFO)" value={formatNumber(summary.totalLayerQty)} />
-        <ReportKpiCard label="Nilai Persediaan (FIFO)" value={formatCurrency(summary.totalLayerValue)} valueClassName="text-primary" />
+        <ReportKpiCard label="Nilai Persediaan (FIFO)" value={formatCurrencyExact(summary.totalLayerValue)} valueClassName="text-primary" />
       </div>
 
       <ReportSection title={`Item Selisih (${summary.mismatches.length})`}>
@@ -82,7 +82,7 @@ export default async function StockReconciliationPage() {
                 >
                   {row.variance > 0 ? '+' : ''}{formatNumber(row.variance)}
                 </DetailTableTd>
-                <DetailTableTd align="right" className="font-semibold">{formatAccounting(row.layerValue)}</DetailTableTd>
+                <DetailTableTd align="right" className="font-semibold">{formatAccountingExact(row.layerValue)}</DetailTableTd>
               </DetailTableRow>
             ))}
             {summary.mismatches.length === 0 && (

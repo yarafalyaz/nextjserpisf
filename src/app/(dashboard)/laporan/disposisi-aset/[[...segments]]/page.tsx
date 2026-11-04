@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -63,10 +63,10 @@ export default async function AssetDisposalPage({
         tableLabel="Daftar Disposisi Aset"
       />
       <p className="doc-lines" style={{ marginTop: 8 }}>
-        {disposal.count} aset dilepas — harga perolehan {formatCurrency(disposal.totals.cost)}, nilai buku{" "}
-        {formatCurrency(disposal.totals.bookValue)}, hasil penjualan{" "}
-        {formatCurrency(disposal.totals.proceeds)}, laba/(rugi){" "}
-        {formatCurrency(disposal.totals.gainLoss)}.
+        {disposal.count} aset dilepas — harga perolehan {formatAccountingExact(disposal.totals.cost)}, nilai buku{" "}
+        {formatAccountingExact(disposal.totals.bookValue)}, hasil penjualan{" "}
+        {formatAccountingExact(disposal.totals.proceeds)}, laba/(rugi){" "}
+        {formatAccountingExact(disposal.totals.gainLoss)}.
       </p>
     </ReportPageShell>
   )
