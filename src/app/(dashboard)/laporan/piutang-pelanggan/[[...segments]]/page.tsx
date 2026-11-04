@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatCurrencyExact, formatAccounting, formatAccountingExact, formatDate, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatAccountingExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { CREDIT_EXPOSURE_STATUS_LABEL } from "@/lib/reports/customer-receivables"
@@ -100,17 +100,17 @@ export default async function CustomerReceivablesPage({
               <DetailTableRow key={row.customerId}>
                 <DetailTableTd className="font-medium">{row.customerName}</DetailTableTd>
                 <DetailTableTd align="right">{formatNumber(row.invoiceCount)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.creditLimit)}</DetailTableTd>
-                <DetailTableTd align="right" className="font-semibold text-primary">{formatAccounting(row.outstanding)}</DetailTableTd>
-                <DetailTableTd align="right" className={row.overdue > 0 ? "text-danger" : undefined}>{formatAccounting(row.overdue)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(row.creditLimit)}</DetailTableTd>
+                <DetailTableTd align="right" className="font-semibold text-primary">{formatAccountingExact(row.outstanding)}</DetailTableTd>
+                <DetailTableTd align="right" className={row.overdue > 0 ? "text-danger" : undefined}>{formatAccountingExact(row.overdue)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccountingExact(row.remainingCredit)}</DetailTableTd>
                 <DetailTableTd align="right" className={row.utilization !== null && row.utilization > 100 ? "text-danger" : undefined}>
                   {row.utilization === null ? "–" : `${row.utilization.toFixed(1)}%`}
                 </DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.openOrderAmount)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.woUnrepresented ?? 0)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.confirmedDownPayment ?? 0)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.openCustomerCredit ?? 0)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(row.openOrderAmount)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(row.woUnrepresented ?? 0)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(row.confirmedDownPayment ?? 0)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(row.openCustomerCredit ?? 0)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccountingExact(row.exposure)}</DetailTableTd>
                 <DetailTableTd align="right">{CREDIT_EXPOSURE_STATUS_LABEL[row.status]}</DetailTableTd>
                 <DetailTableTd align="right">{row.avgPaymentDays === null ? "–" : formatNumber(row.avgPaymentDays)}</DetailTableTd>
@@ -123,17 +123,17 @@ export default async function CustomerReceivablesPage({
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd>TOTAL</DetailTableTd>
                 <DetailTableTd align="right">{formatNumber(totalInvoiceCount)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalCreditLimit)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalOutstanding)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalOverdue)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(totalCreditLimit)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(totalOutstanding)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(totalOverdue)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccountingExact(totalRemainingCredit)}</DetailTableTd>
                 <DetailTableTd align="right">
                   {totalCreditLimit > 0 ? `${((totalExposure / totalCreditLimit) * 100).toFixed(1)}%` : "–"}
                 </DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalOpenOrder)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalWoUnrepresented)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalConfirmedDp)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalOpenCredit)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(totalOpenOrder)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(totalWoUnrepresented)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(totalConfirmedDp)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(totalOpenCredit)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccountingExact(totalExposure)}</DetailTableTd>
                 <DetailTableTd align="right">{""}</DetailTableTd>
                 <DetailTableTd align="right">{portfolioDso === null ? "–" : portfolioDso.toFixed(1)}</DetailTableTd>

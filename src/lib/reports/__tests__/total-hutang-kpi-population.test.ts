@@ -69,3 +69,16 @@ describe("buildPayablesSummary — populasi KPI vs seksi pemasok", () => {
     expect(page).toContain("Hanya tagihan yang masih bersisa")
   })
 })
+
+describe("laporan Total Hutang: nilai bersen", () => {
+  it("halaman mencetak agregat hingga sen (bukan 0 desimal)", () => {
+    const page = readFileSync(
+      path.resolve(__dirname, "../../../app/(dashboard)/laporan/total-hutang/page.tsx"),
+      "utf8",
+    )
+    // Formatter 0 desimal pada nominal agregat membuang sen; halaman wajib
+    // memakai helper exact untuk seluruh sel uang.
+    expect(page).not.toMatch(/formatAccounting\((?!Exact)/)
+    expect(page).toContain("formatAccountingExact")
+  })
+})

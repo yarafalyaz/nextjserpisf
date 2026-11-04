@@ -100,3 +100,42 @@ describe("Piutang per Pelanggan — baris TOTAL sejajar 14 kolom", () => {
     unmountCard(root)
   })
 })
+
+describe("Piutang per Pelanggan — nominal bersen", () => {
+  beforeEach(() => {
+    mocks.requirePermission.mockResolvedValue(undefined)
+    mocks.loadCustomerCreditExposure.mockResolvedValue({
+      rows: [
+        {
+          ...ROW,
+          creditLimit: 100_000_000.5,
+          outstanding: 40_000_000.5,
+          overdue: 5_000_000.25,
+          openOrderAmount: 10_000_000.5,
+          remainingCredit: 55_000_000.25,
+          exposure: 45_000_000.25,
+        },
+      ],
+      totalOutstanding: 40_000_000.5,
+      totalOverdue: 5_000_000.25,
+      totalCreditLimit: 100_000_000.5,
+      totalExposure: 45_000_000.25,
+      totalRemainingCredit: 55_000_000.25,
+      portfolioDso: 21.5,
+    })
+  })
+  afterEach(() => clearRenderedCards())
+
+  it("sel piutang, limit, jatuh tempo, dan TOTAL tampil hingga sen", async () => {
+    const node = await CustomerReceivablesPage({
+      params: Promise.resolve({ segments: [] }),
+      searchParams: Promise.resolve({}),
+    })
+    const { container, root } = renderPageNode(node)
+    const text = container.textContent ?? ""
+    expect(text).toContain("100.000.000,50")
+    expect(text).toContain("40.000.000,50")
+    expect(text).toContain("5.000.000,25")
+    unmountCard(root)
+  })
+})

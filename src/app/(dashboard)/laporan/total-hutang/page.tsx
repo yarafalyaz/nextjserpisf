@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency, formatAccounting, formatAccountingExact, formatDate } from '@/lib/utils/format'
+import { formatCurrency, formatAccountingExact, formatDate } from '@/lib/utils/format'
 import { safeAdd } from '@/lib/utils/math'
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
@@ -90,13 +90,13 @@ export default async function TotalPayablesPage() {
               <DetailTableRow key={g.key}>
                 <DetailTableTd>{g.key}</DetailTableTd>
                 <DetailTableTd align="right">{g.count}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(g.total)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(g.total)}</DetailTableTd>
               </DetailTableRow>
             ))}
             <DetailTableRow className="font-bold border-t-2 border-default">
               <DetailTableTd>TOTAL</DetailTableTd>
               <DetailTableTd align="right">{summary.billCount}</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(summary.totalOutstanding)}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccountingExact(summary.totalOutstanding)}</DetailTableTd>
             </DetailTableRow>
           </DetailTableBody>
         </DetailTable>
@@ -119,9 +119,9 @@ export default async function TotalPayablesPage() {
               <DetailTableRow key={v.vendorId}>
                 <DetailTableTd className="font-medium">{v.vendorName}</DetailTableTd>
                 <DetailTableTd align="right">{v.billCount}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(v.totalBilled)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(v.totalPaid)}</DetailTableTd>
-                <DetailTableTd align="right" className="font-semibold text-danger">{formatAccounting(v.outstanding)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(v.totalBilled)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(v.totalPaid)}</DetailTableTd>
+                <DetailTableTd align="right" className="font-semibold text-danger">{formatAccountingExact(v.outstanding)}</DetailTableTd>
               </DetailTableRow>
             ))}
             {summary.vendors.length === 0 && (
@@ -133,7 +133,7 @@ export default async function TotalPayablesPage() {
                 <DetailTableTd align="right">{summary.billCount}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccountingExact(vendorBilledTotal)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccountingExact(vendorPaidTotal)}</DetailTableTd>
-                <DetailTableTd align="right" className="text-danger">{formatAccounting(summary.totalOutstanding)}</DetailTableTd>
+                <DetailTableTd align="right" className="text-danger">{formatAccountingExact(summary.totalOutstanding)}</DetailTableTd>
               </DetailTableRow>
             )}
           </DetailTableBody>
@@ -156,7 +156,7 @@ export default async function TotalPayablesPage() {
                 <DetailTableTd className="font-mono text-sm">{r.documentNo}</DetailTableTd>
                 <DetailTableTd>{r.dueDate ? formatDate(r.dueDate) : "Tanpa jatuh tempo"}</DetailTableTd>
                 <DetailTableTd>{r.ageBucket}</DetailTableTd>
-                <DetailTableTd align="right" className="font-semibold text-danger">{formatAccounting(r.outstanding)}</DetailTableTd>
+                <DetailTableTd align="right" className="font-semibold text-danger">{formatAccountingExact(r.outstanding)}</DetailTableTd>
               </DetailTableRow>
             ))}
             {summary.rows.length === 0 && (
@@ -165,7 +165,7 @@ export default async function TotalPayablesPage() {
             {summary.rows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={4}>TOTAL</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(summary.totalOutstanding)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(summary.totalOutstanding)}</DetailTableTd>
               </DetailTableRow>
             )}
           </DetailTableBody>
