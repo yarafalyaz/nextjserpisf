@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatDate, formatCurrency } from "@/lib/utils/format"
+import { formatDate, formatCurrencyExact } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Pencil, Activity, AlertCircle, Wrench, Shield } from "lucide-react"
@@ -210,7 +210,7 @@ export default async function ProjectDetailPage({
           <AlertCircle />
           <AlertTitle>Proyek rugi menurut L/R proyek</AlertTitle>
           <AlertDescription>
-            Laba (rugi) proyek dari builder L/R ({formatCurrency(projectPl.profit)}) negatif: pendapatan invoice diakui {formatCurrency(projectPl.revenue)} di bawah total biaya {formatCurrency(projectPl.totalCost)}. Tinjau kembali harga penawaran atau biaya proyek.
+            Laba (rugi) proyek dari builder L/R ({formatCurrencyExact(projectPl.profit)}) negatif: pendapatan invoice diakui {formatCurrencyExact(projectPl.revenue)} di bawah total biaya {formatCurrencyExact(projectPl.totalCost)}. Tinjau kembali harga penawaran atau biaya proyek.
           </AlertDescription>
         </Alert>
       )}
@@ -384,8 +384,8 @@ export default async function ProjectDetailPage({
                           <DetailTableRow key={item.id}>
                             <DetailTableTd>{item.description || `Item #${item.itemId}`}</DetailTableTd>
                             <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(item.cost))}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(item.qty) * Number(item.cost))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrencyExact(Number(item.cost))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrencyExact(Number(item.qty) * Number(item.cost))}</DetailTableTd>
                           </DetailTableRow>
                         ))}
                       </DetailTableBody>
@@ -445,7 +445,7 @@ export default async function ProjectDetailPage({
                           <DetailTableRow key={q.id}>
                             <DetailTableTd className="font-mono"><Link href={entityHref("/penjualan/penawaran", q)}>{q.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(q.date)}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(q.grandTotal))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrencyExact(Number(q.grandTotal))}</DetailTableTd>
                             <DetailTableTd><StatusChip status={q.status} /></DetailTableTd>
                           </DetailTableRow>
                         ))}
@@ -482,8 +482,8 @@ export default async function ProjectDetailPage({
                           <DetailTableRow key={inv.id}>
                             <DetailTableTd className="font-mono"><Link href={entityHref("/penjualan/faktur", inv)}>{inv.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(inv.date)}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(inv.grandTotal))}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(inv.paidAmount))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrencyExact(Number(inv.grandTotal))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrencyExact(Number(inv.paidAmount))}</DetailTableTd>
                             <DetailTableTd><StatusChip status={inv.status} /></DetailTableTd>
                           </DetailTableRow>
                         ))}

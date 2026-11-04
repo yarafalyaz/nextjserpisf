@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import Link from "next/link"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import {
   buildMonthGrid,
   monthParam,
@@ -188,7 +188,7 @@ export default async function CalendarPage({
                     <Link
                       key={`${event.kind}-${event.label}-${index}`}
                       href={event.href}
-                      title={`${KIND_STYLES[event.kind].label}: ${event.label}${event.amount !== null ? ` — ${formatCurrency(event.amount)}` : ""}`}
+                      title={`${KIND_STYLES[event.kind].label}: ${event.label}${event.amount !== null ? ` — ${formatCurrencyExact(event.amount)}` : ""}`}
                       className={`truncate rounded border px-1.5 py-0.5 text-[11px] leading-tight max-sm:hidden ${KIND_STYLES[event.kind].chip}`}
                     >
                       {event.label}

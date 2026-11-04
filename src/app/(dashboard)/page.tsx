@@ -5,7 +5,7 @@ import Link from "next/link"
 import { AlertTriangle, ArrowUpRight, Car } from "lucide-react"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { loadOpenReceivablesTotal } from "@/lib/reports/return-credit"
@@ -313,11 +313,11 @@ export default async function DashboardPage() {
           </div>
 
           <SectionCards
-            totalRevenue={formatCurrency(data.totalRevenue)}
+            totalRevenue={formatCurrencyExact(data.totalRevenue)}
             activeProjects={data.activeProjects}
             completedThisMonth={data.completedThisMonth}
             overdueProjects={data.overdueProjects}
-            receivables={formatCurrency(data.receivables)}
+            receivables={formatCurrencyExact(data.receivables)}
             totalCustomers={data.totalCustomers}
           />
 
@@ -631,7 +631,7 @@ export default async function DashboardPage() {
                             <StatusChip status={payment.status} />
                           )}
                           <p className="min-w-0 break-words text-sm font-medium tabular-nums">
-                            {formatCurrency(Number(payment.amount))}
+                            {formatCurrencyExact(Number(payment.amount))}
                           </p>
                         </li>
                       ))}
@@ -680,7 +680,7 @@ export default async function DashboardPage() {
                               {payment.salesInvoice?.customer?.name || "-"}
                             </TableCell>
                             <TableCell className="px-4 text-right tabular-nums lg:px-6">
-                              {formatCurrency(Number(payment.amount))}
+                              {formatCurrencyExact(Number(payment.amount))}
                             </TableCell>
                             <TableCell className="px-4 text-muted-foreground lg:px-6">
                               {formatDate(payment.paymentDate, {

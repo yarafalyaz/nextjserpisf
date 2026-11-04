@@ -291,3 +291,17 @@ describe("sapuan ketiga belas: master karyawan/barang/vendor/pelanggan", () => {
     }
   })
 })
+
+describe("sapuan keempat belas: dashboard, proyek, kalender", () => {
+  it("halaman dashboard/proyek/kalender memakai formatter currency exact", () => {
+    for (const rel of [
+      "src/app/(dashboard)/page.tsx",
+      "src/app/(dashboard)/proyek/[slug]/page.tsx",
+      "src/app/(dashboard)/kalender/[[...segments]]/page.tsx",
+    ]) {
+      const source = readFileSync(path.resolve(process.cwd(), rel), "utf8")
+      expect(source, rel).not.toMatch(/formatCurrency\((?!Exact)/)
+      expect(source, rel).toContain("formatCurrencyExact")
+    }
+  })
+})
