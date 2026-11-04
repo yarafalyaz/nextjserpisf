@@ -15,7 +15,7 @@ import { buildWithholdingCertificateTable } from "@/lib/reports/withholding-cert
 import { loadWithholdingCertificateInputs } from "@/lib/reports/withholding-certificates-data"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { REPORT_JOURNAL_STATUSES } from "@/lib/services/report-aggregation.service"
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccounting, formatAccountingExact } from "@/lib/utils/format"
 import { safeSubtract } from "@/lib/utils/math"
 import { loadSptPeriodRowsForRange, type SptPeriodRow } from "@/lib/reports/spt-read-model-data"
 import { isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice"
@@ -28,7 +28,12 @@ export interface TaxSimpleReport {
   periodCaption: string
 }
 
-const money = (value: number) => formatAccounting(value, { zeroDash: false })
+/**
+ * Nominal SPT per masa dicetak hingga sen bila memang bersen; rupiah penuh bila
+ * bulat. Selisih jurnal–SPT 0,29 yang dibulatkan menjadi "0" menyatakan
+ * rekonsiliasi cocok padahal ada temuan.
+ */
+const money = (value: number) => formatAccountingExact(value)
 const vatMoney = (value: number) => formatAccounting(value, { zeroDash: false, decimals: 2 })
 const periodOf = (period: { start: Date; end: Date }) => rangePeriodLabels(period)
 

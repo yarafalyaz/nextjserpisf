@@ -36,6 +36,17 @@ describe("buildSptTableRows (Posisi SPT Masa PPN)", () => {
     expect(rows.some((r) => r.kind === "notice" && r.text.includes("Kewajiban jurnal tidak tersedia"))).toBe(true)
   })
 
+  it("selisih jurnal sen tidak tercetak nol", () => {
+    const rows = buildSptTableRows([
+      row({ net: 700_000.29, journalLiability: 700_000, journalVsSptDiff: -0.29 }),
+    ])
+    const data = rows.find((r) => r.kind === "data")
+    // Selisih 0,29 adalah temuan; mencetak "0" menyatakannya seolah cocok.
+    expect(data?.kind === "data" ? data.cells[6] : null).toBe("700.000")
+    expect(data?.kind === "data" ? data.cells[7] : null).toBe("(0,29)")
+    expect(rows.some((r) => r.kind === "notice" && r.text.includes("Selisih"))).toBe(true)
+  })
+
   it("selisih jurnal POSTED vs SPT tampil sebagai notice temuan, bukan dipilih diam-diam", () => {
     const rows = buildSptTableRows([row({ journalLiability: 550_000, journalVsSptDiff: -50_000 })])
     const notice = rows.find((r) => r.kind === "notice")
