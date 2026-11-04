@@ -88,6 +88,15 @@ function amount(value: Prisma.Decimal): string {
   return formatAccounting(value.toNumber(), { zeroDash: false })
 }
 
+/**
+ * Teks temuan memakai dua desimal: `differs()` membandingkan pada presisi sen,
+ * sehingga selisih 0,01 yang dibulatkan akan mencetak "8.000.000 != 8.000.000"
+ * — temuan yang menyangkal dirinya sendiri. Kolom tabel tetap rupiah penuh.
+ */
+function preciseAmount(value: Prisma.Decimal): string {
+  return formatAccounting(value.toNumber(), { zeroDash: false, decimals: 2 })
+}
+
 export function reconcileAsset(input: AssetReconciliationInput): AssetReconciliationRow {
   const posted = journalBookValue(input.journals, input.categoryAccounts)
   const purchaseCost = dec(input.purchaseCost)
@@ -108,13 +117,13 @@ export function reconcileAsset(input: AssetReconciliationInput): AssetReconcilia
     if (differs(posted.grossCostPosted, purchaseCost)) {
       findings.push({
         kind: "gross-mismatch",
-        detail: `Harga perolehan kolom ${amount(purchaseCost)} != debit jurnal perolehan ${amount(posted.grossCostPosted)}.`,
+        detail: `Harga perolehan kolom ${preciseAmount(purchaseCost)} != debit jurnal perolehan ${preciseAmount(posted.grossCostPosted)}.`,
       })
     }
     if (differs(posted.bookValue, currentValue)) {
       findings.push({
         kind: "value-mismatch",
-        detail: `currentValue ${amount(currentValue)} != nilai buku jurnal ${amount(posted.bookValue)}.`,
+        detail: `currentValue ${preciseAmount(currentValue)} != nilai buku jurnal ${preciseAmount(posted.bookValue)}.`,
       })
     }
     // Akumulasi jurnal vs akumulasi riwayat hanya sebanding sebelum pelepasan
@@ -122,7 +131,7 @@ export function reconcileAsset(input: AssetReconciliationInput): AssetReconcilia
     if (posted.disposalGrossPosted.equals(0) && differs(posted.accumulatedPosted, historyAccumulated)) {
       findings.push({
         kind: "history-mismatch",
-        detail: `Akumulasi history ${amount(historyAccumulated)} != kredit akumulasi jurnal ${amount(posted.accumulatedPosted)}.`,
+        detail: `Akumulasi history ${preciseAmount(historyAccumulated)} != kredit akumulasi jurnal ${preciseAmount(posted.accumulatedPosted)}.`,
       })
     }
   }

@@ -95,6 +95,16 @@ function amount(value: number): string {
 }
 
 /**
+ * Angka di peringatan ketidakcocokan wajib hingga sen: selisih 0,25 yang
+ * dibulatkan membuat pesan berbunyi "tidak sama … selisih (0)" — kontradiktif
+ * dan menutupi temuan yang justru ingin disampaikan. Baris tabel tetap
+ * rupiah penuh sesuai konvensi laporan aset.
+ */
+function preciseAmount(value: number): string {
+  return formatAccounting(value, { zeroDash: false, decimals: 2 })
+}
+
+/**
  * Pergerakan aset periode [start, end]. Saldo awal dihitung pada akhir hari
  * sebelum periode: aset yang sudah diperoleh dan belum dilepas saat itu.
  */
@@ -349,9 +359,9 @@ export function buildAssetMovement(input: AssetMovementInput): AssetMovementResu
     rows.push({
       kind: "notice",
       text:
-        `Perhatian: saldo akhir menurut pergerakan (nilai buku ${amount(closing.bookValue)}) tidak sama ` +
-        `dengan saldo akhir menurut data aset (${amount(closingByData.bookValue)}) — selisih ` +
-        `${amount(closing.bookValue - closingByData.bookValue)}. Periksa riwayat penyusutan/pelepasan ` +
+        `Perhatian: saldo akhir menurut pergerakan (nilai buku ${preciseAmount(closing.bookValue)}) tidak sama ` +
+        `dengan saldo akhir menurut data aset (${preciseAmount(closingByData.bookValue)}) — selisih ` +
+        `${preciseAmount(safeSubtract(closing.bookValue, closingByData.bookValue, 2))}. Periksa riwayat penyusutan/pelepasan ` +
         `yang tanggalnya di luar periode atau aset tanpa kategori.`,
     })
   }

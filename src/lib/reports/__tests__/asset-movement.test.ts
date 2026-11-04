@@ -230,6 +230,31 @@ describe("buildAssetMovement", () => {
     expect(opening).toMatchObject({ cells: ["Peralatan Bengkel", "100.000.000", "5.000.000", "95.000.000"] })
   })
 
+  it("menyebut selisih sen pada peringatan yang tidak menutup", () => {
+    // Aset dilepas September lalu disusutkan 0,25 di Oktober: selisihnya nyata
+    // tetapi pembulatan rupiah penuh akan mencetak "selisih (0)".
+    const zombie = asset({
+      id: 9,
+      code: "AST-009",
+      name: "Aset Sudah Dilepas",
+      purchaseCost: 20_000_000,
+      purchaseDate: new Date(2020, 0, 1),
+      status: "disposed",
+    })
+    const entries = [
+      disposal(9, 0, new Date(2026, 8, 15)),
+      depreciation(9, 0.25, new Date(2026, 9, 31)),
+    ]
+
+    const result = buildAssetMovement({ assets: [zombie], entries, ...PERIOD })
+
+    expect(result.isTiedOut).toBe(false)
+    const notice = result.table.rows.at(-1)
+    const text = notice?.kind === "notice" ? notice.text : ""
+    expect(text).toContain("selisih (0,25)")
+    expect(text).not.toContain("selisih (0)")
+  })
+
   it("tetap menghasilkan tabel dengan total nol saat belum ada aset", () => {
     const result = buildAssetMovement({ assets: [], entries: [], ...PERIOD })
 

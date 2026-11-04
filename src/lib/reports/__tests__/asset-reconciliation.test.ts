@@ -80,6 +80,15 @@ describe("reconcileAsset", () => {
 
     expect(row.findings.map((f) => f.kind)).toContain("value-mismatch")
   })
+
+  it("teks temuan sen tidak mencetak dua angka identik", () => {
+    const row = reconcileAsset(input({ currentValue: 7_999_999.99 }))
+
+    const detail = row.findings.find((f) => f.kind === "value-mismatch")?.detail ?? ""
+    expect(detail).toContain("7.999.999,99")
+    expect(detail).toContain("8.000.000,00")
+    expect(detail).not.toBe("currentValue 8.000.000 != nilai buku jurnal 8.000.000.")
+  })
 })
 
 describe("buildAssetReconciliation", () => {
