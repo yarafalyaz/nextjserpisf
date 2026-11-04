@@ -8,6 +8,8 @@
  * Output exceeds input → the company still owes VAT (kurang bayar).
  */
 
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
+
 export type VatStatus = "kurang_bayar" | "lebih_bayar" | "nihil"
 
 export interface VatPosition {
@@ -20,8 +22,12 @@ export interface VatPosition {
 
 const round2 = (value: number) => Math.round(value * 100) / 100
 
+export function sumVatAmounts(values: readonly number[]): number {
+  return values.reduce((sum, value) => safeAdd(sum, value, 2), 0)
+}
+
 export function buildVatPosition(output: number, input: number): VatPosition {
-  const difference = round2(output - input)
+  const difference = safeSubtract(output, input, 2)
   const status: VatStatus =
     Math.abs(difference) < 0.005 ? "nihil" : difference > 0 ? "kurang_bayar" : "lebih_bayar"
   return { output: round2(output), input: round2(input), difference, status }

@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest"
-import { buildVatPosition } from "../vat-reconciliation"
+import { buildVatPosition, sumVatAmounts } from "../vat-reconciliation"
+
+describe("sumVatAmounts", () => {
+  it("adds persisted cent values without float residue", () => {
+    expect(sumVatAmounts(Array.from({ length: 17 }, () => 0.37))).toBe(6.29)
+    expect(sumVatAmounts(Array.from({ length: 17 }, () => 0.13))).toBe(2.21)
+  })
+})
 
 describe("buildVatPosition", () => {
   it("is 'kurang bayar' when output exceeds input", () => {

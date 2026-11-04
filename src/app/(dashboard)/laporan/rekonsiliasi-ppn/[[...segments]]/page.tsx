@@ -3,10 +3,11 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { formatAccounting, formatCurrency, formatDate } from "@/lib/utils/format"
+import { safeSubtract } from "@/lib/utils/math"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { REPORT_JOURNAL_STATUSES } from "@/lib/services/report-aggregation.service"
-import { buildVatPosition, VAT_STATUS_LABELS } from "@/lib/reports/vat-reconciliation"
+import { buildVatPosition, sumVatAmounts, VAT_STATUS_LABELS } from "@/lib/reports/vat-reconciliation"
 import { isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { loadReturnVatAmounts } from "@/lib/reports/tax-summary-data"
@@ -79,26 +80,29 @@ export default async function VatReconciliationPage({
   ])
 
   // PPN Keluaran akunnya bersaldo kredit, PPN Masukan bersaldo debit.
-  const bookOutput = outputAccountEntries.reduce((sum, e) => sum + Number(e.credit) - Number(e.debit), 0)
-  const bookInput = inputAccountEntries.reduce((sum, e) => sum + Number(e.debit) - Number(e.credit), 0)
-  const docOutput = salesInvoices.reduce((sum, inv) => sum + Number(inv.taxAmount), 0)
-    - returnVatAmounts.reduce((sum, amount) => sum + amount, 0)
+  const bookOutput = sumVatAmounts(outputAccountEntries.flatMap((e) => [Number(e.credit), -Number(e.debit)]))
+  const bookInput = sumVatAmounts(inputAccountEntries.flatMap((e) => [Number(e.debit), -Number(e.credit)]))
+  const docOutput = safeSubtract(
+    sumVatAmounts(salesInvoices.map((inv) => Number(inv.taxAmount))),
+    sumVatAmounts(returnVatAmounts),
+    2,
+  )
   // Paritas PDF/SPT (tax-summary-data): bill tax>0 tanpa nomor faktur pajak
   // vendor valid tidak punya kaki Dr PPN Masukan di jurnal (PPN gabung HPP
   // di accounting.hook) — sisi dokumen wajib 0 juga, kalau tidak layar
   // menampilkan selisih palsu permanen sebesar pajak bill tak bernomor.
-  const docInput = vendorBills.reduce(
-    (sum, bill) =>
-      sum +
-      (Number(bill.tax) > 0 && !isValidVendorTaxInvoiceNumber(bill.taxInvoiceNumber ?? null)
-        ? 0
-        : Number(bill.tax)),
-    0,
-  )
+  const docInput = sumVatAmounts(vendorBills.map((bill) =>
+    Number(bill.tax) > 0 && !isValidVendorTaxInvoiceNumber(bill.taxInvoiceNumber ?? null)
+      ? 0
+      : Number(bill.tax),
+  ))
 
   const position = buildVatPosition(bookOutput, bookInput)
-  const outputDiff = bookOutput - docOutput
-  const inputDiff = bookInput - docInput
+  const outputDiff = safeSubtract(bookOutput, docOutput, 2)
+  const inputDiff = safeSubtract(bookInput, docInput, 2)
+  const bookPosition = safeSubtract(bookOutput, bookInput, 2)
+  const documentPosition = safeSubtract(docOutput, docInput, 2)
+  const positionDiff = safeSubtract(bookPosition, documentPosition, 2)
   const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
 
   return (
@@ -160,9 +164,9 @@ export default async function VatReconciliationPage({
             </DetailTableRow>
             <DetailTableRow className="font-bold border-t-2 border-default">
               <DetailTableTd>Posisi (Keluaran − Masukan)</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(bookOutput - bookInput)}</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(docOutput - docInput)}</DetailTableTd>
-              <DetailTableTd align="right" className="text-danger">{formatAccounting((bookOutput - bookInput) - (docOutput - docInput))}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccounting(bookPosition)}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccounting(documentPosition)}</DetailTableTd>
+              <DetailTableTd align="right" className="text-danger">{formatAccounting(positionDiff)}</DetailTableTd>
             </DetailTableRow>
           </DetailTableBody>
         </DetailTable>
