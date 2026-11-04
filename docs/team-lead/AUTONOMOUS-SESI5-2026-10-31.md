@@ -3852,3 +3852,20 @@ Probe: stock count dua baris × 2 × Rp1.000.000,55 → total `(4.000.002,20)` s
 ### Bukti
 - Merah: 2 gagal/3 lulus (tes sweep).
 - Hijau: reports+PDF **3117 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
+
+## Putaran 153 — baris dan total memakai pembulatan berbeda di tiga laporan (commit `ffe3953b7`)
+
+Setelah total diperbaiki di putaran sebelumnya, baris masih 0 desimal pada tiga laporan — sehingga total dan baris tidak bisa direkonsiliasi, dan satu berkas memuat dua helper formatter dengan pembulatan berbeda:
+
+- **Mutasi Aset**: baris kategori, penambahan, penyusutan, pelepasan memakai `amount()` 0 desimal; total memakai `preciseAmount` dua desimal.
+- **Perbedaan Penyusutan**: baris per aset 0 desimal; baris Jumlah dua desimal.
+- **Rekonsiliasi Persediaan**: nilai barang dan saldo buku 0 desimal; selisih dua desimal.
+
+### Vonis FIX
+- `amount` menjadi `formatAccountingExact` di ketiga berkas; `preciseAmount` menjadi alias helper bersama (satu perilaku, bukan dua).
+- Regresi sweep diperluas: mutasi aset kategori Rp1.000.000,50 dan rekonsiliasi persediaan `100,30` — merah 2/2 sebelum fix.
+
+### Bukti
+- Merah: 2 gagal/5 lulus.
+- Hijau: reports+PDF **3119 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
+- CI `41810546207` (putaran 151) dan `41810680103` (dokumentasi) **success**.
