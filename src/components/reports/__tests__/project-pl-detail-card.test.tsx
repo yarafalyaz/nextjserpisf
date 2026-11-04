@@ -101,3 +101,23 @@ describe("ProjectPlDetailCard F-2026-10-21-029 + AC-PROJ-003", () => {
     unmountCard(root)
   })
 })
+
+describe("ProjectPlDetailCard: nominal bersen", () => {
+  it("pendapatan, biaya, dan laba ber-sen tampil hingga sen", () => {
+    const pl = buildProjectPl(
+      projectPlBase({
+        workOrders: [{ id: 10, projectId: 1, quotationId: 100, status: "in_progress" }],
+        invoices: [
+          { id: 1, projectId: 1, quotationId: null, status: "posted", subtotal: 20_000_000.5, discount: 0, deletedAt: null },
+        ],
+        productionCosts: [{ workOrderId: 10, amount: 5_000_000.25, sourceTimesheetId: 7, purchaseOrderId: null }],
+        timesheets: [{ id: 7, projectId: 1, hours: 40 }],
+      }),
+    )
+    const { container, root } = renderCard(<ProjectPlDetailCard pl={pl} />)
+    const text = container.textContent ?? ""
+    expect(text).toContain("Rp 20.000.000,50")
+    expect(text).toContain("Rp 15.000.000,25")
+    unmountCard(root)
+  })
+})

@@ -1,5 +1,5 @@
 import type { ProjectPlResult } from "@/lib/reports/project-pl"
-import { formatCurrency, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyExact, formatNumber } from "@/lib/utils/format"
 import { ReportCardShell } from "./report-card-shell"
 
 /**
@@ -23,7 +23,7 @@ function CostLine({ label, amount }: Readonly<{ label: string; amount: number }>
   return (
     <div>
       <span className="text-muted-foreground block">{label}:</span>
-      <span className="font-semibold text-danger">{formatCurrency(amount)}</span>
+      <span className="font-semibold text-danger">{formatCurrencyExact(amount)}</span>
     </div>
   )
 }
@@ -63,7 +63,7 @@ export function ProjectPlDetailCard({ pl }: Readonly<{ pl: ProjectPlResult }>) {
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <p className={`text-2xl font-black ${pl.profit < 0 ? "text-danger" : "text-foreground"}`}>
-            {formatCurrency(pl.profit)}
+            {formatCurrencyExact(pl.profit)}
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">Laba (Rugi) Proyek</p>
         </div>
@@ -78,12 +78,12 @@ export function ProjectPlDetailCard({ pl }: Readonly<{ pl: ProjectPlResult }>) {
       <div className="mt-3 grid grid-cols-1 gap-2 border-t border-default/50 pt-3 text-xs sm:grid-cols-2">
         <div>
           <span className="text-muted-foreground block">Pendapatan Aktual (invoice diakui):</span>
-          <span className="font-semibold text-foreground">{formatCurrency(pl.revenue)}</span>
+          <span className="font-semibold text-foreground">{formatCurrencyExact(pl.revenue)}</span>
           <SourceTrace label="Invoice sumber" ids={pl.revenueInvoiceIds} />
         </div>
         <div>
           <span className="text-muted-foreground block">Total Biaya Aktual:</span>
-          <span className="font-semibold text-danger">{formatCurrency(pl.totalCost)}</span>
+          <span className="font-semibold text-danger">{formatCurrencyExact(pl.totalCost)}</span>
         </div>
         <div>
           <CostLine label="Material Aktual" amount={pl.materialCost} />

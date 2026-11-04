@@ -10,7 +10,7 @@ import {
   buildSalesCommissionPayable,
   SALES_COMMISSION_PAYABLE_UNAVAILABLE_NOTICE,
 } from "@/lib/reports/sales-commission-payable"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
 
 afterEach(() => {
@@ -58,9 +58,9 @@ describe("SalesCommissionSubledgerCard F-2026-10-25-049-S", () => {
     // Agregat server: Sari 1.500.000-500.000-400.000=600.000; Budi -50.000; total 550.000.
     expect(view.payable.rows.find((r) => r.salesEmployeeId === 2)?.balance).toBe(600_000)
     expect(view.payable.rows.find((r) => r.salesEmployeeId === 1)?.balance).toBe(-50_000)
-    expect(text).toContain(formatCurrency(600_000))
-    expect(text).toContain(formatCurrency(-50_000))
-    expect(text).toContain(formatCurrency(550_000))
+    expect(text).toContain(formatCurrencyExact(600_000))
+    expect(text).toContain(formatCurrencyExact(-50_000))
+    expect(text).toContain(formatCurrencyExact(550_000))
     expect(text).toContain("Total Saldo Subledger Komisi")
     expect(text).toContain("210212")
     expect(text).not.toContain("210207")
@@ -175,7 +175,7 @@ describe("SalesCommissionSubledgerCard F-2026-10-25-049-S", () => {
     const text = container.textContent ?? ""
     expect(text).toContain("Sari")
     expect(text).not.toContain("Budi")
-    expect(text).toContain(formatCurrency(550_000))
+    expect(text).toContain(formatCurrencyExact(550_000))
     expect(text).toContain("filter hanya menyaring penerima yang tampil")
     unmountCard(root)
   })
@@ -186,6 +186,28 @@ describe("SalesCommissionSubledgerCard F-2026-10-25-049-S", () => {
       <SalesCommissionSubledgerCard payable={view.payable} lineStatuses={view.lineStatuses} />,
     )
     expect(container.querySelectorAll("button, a, form, input, select, textarea")).toHaveLength(0)
+    unmountCard(root)
+  })
+})
+
+describe("SalesCommissionSubledgerCard: nominal bersen", () => {
+  it("akrual/pembayaran/saldo ber-sen tampil hingga sen", () => {
+    const subledger = buildSalesCommissionSubledger([
+      {
+        salesInvoiceId: 201,
+        salesEmployeeId: 2,
+        salesEmployeeName: "Sari",
+        accruedAmount: 1_000_000.5,
+        reversalAmount: 0,
+        paidAmount: 400_000.25,
+      },
+    ])
+    const { container, root } = renderCard(
+      <SalesCommissionSubledgerCard payable={subledger.payable} lineStatuses={subledger.lineStatuses} />,
+    )
+    const text = container.textContent ?? ""
+    expect(text).toContain("Rp 1.000.000,50")
+    expect(text).toContain("Rp 400.000,25")
     unmountCard(root)
   })
 })

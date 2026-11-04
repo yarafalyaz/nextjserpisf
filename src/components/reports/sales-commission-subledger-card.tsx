@@ -3,7 +3,7 @@ import type {
   SalesCommissionPayableReconciliation,
 } from "@/lib/reports/sales-commission-payable"
 import type { SalesCommissionSubledgerLine } from "@/lib/reports/sales-commission-subledger"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import {
   DetailTable,
   DetailTableHead,
@@ -104,11 +104,11 @@ export function SalesCommissionSubledgerCard({
               </DetailTableTd>
               <DetailTableTd>—</DetailTableTd>
               <DetailTableTd>—</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.accruedAmount)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.reversalAmount)}</DetailTableTd>
-              <DetailTableTd align="right">{formatCurrency(row.paidAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.accruedAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.reversalAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrencyExact(row.paidAmount)}</DetailTableTd>
               <DetailTableTd align="right" className="font-medium">
-                {formatCurrency(row.balance)}
+                {formatCurrencyExact(row.balance)}
               </DetailTableTd>
             </DetailTableRow>,
             ...row.lines.map((line) => (
@@ -124,10 +124,10 @@ export function SalesCommissionSubledgerCard({
                     "—"
                   )}
                 </DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(line.accruedAmount)}</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(line.reversalAmount)}</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(line.paidAmount)}</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(line.balance)}</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrencyExact(line.accruedAmount)}</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrencyExact(line.reversalAmount)}</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrencyExact(line.paidAmount)}</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrencyExact(line.balance)}</DetailTableTd>
               </DetailTableRow>
             )),
           ])}
@@ -147,7 +147,7 @@ export function SalesCommissionSubledgerCard({
               —
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
-              {formatCurrency(payable.totalBalance)}
+              {formatCurrencyExact(payable.totalBalance)}
             </DetailTableTd>
           </DetailTableFootRow>
         </DetailTableFoot>
