@@ -3527,3 +3527,21 @@ Laporan `/laporan/perbedaan-penyusutan` adalah laporan **temuan selisih** antara
 ### Bukti
 - Merah: 1 gagal — `Expected "(600.000,01)"`, `Received "(600.000)"`.
 - Hijau: 24/24; seluruh `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` **3090 lulus / 4 dilewati**; guard statis **511/511**; `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
+
+## Putaran 135 — sisa kredit −0,01 tampil "(0)" di samping status "Lewat batas" (commit `3a29ad1a9`)
+
+`/laporan/piutang-pelanggan` (dan ekspornya) adalah laporan pengawasan kredit: status ditentukan dari paparan bersih ber-`Decimal(15,2)`, tetapi kolom **Sisa Kredit** dan **Paparan Kredit** dicetak `formatAccounting` 0 desimal. Probe: limit `1.000.000`, piutang `1.000.000,01` → `exposure = 1.000.000,01`, `remainingCredit = -0,01`, `utilization = 100`, `status = "over"`; layar mencetak `(0)` dan `1.000.000`, persis sama dengan pelanggan yang tepat di batas.
+
+### Vonis FIX
+- Helper bersama baru `formatAccountingExact` di `src/lib/utils/format.ts`: rupiah penuh bila bulat, dua desimal bila ada sen, nol tetap `"0"`. Ini menggantikan pola `preciseAmount` lokal yang sudah terduplikasi di enam berkas (dicatat Putaran 134).
+- Dipakai untuk Sisa Kredit + Paparan Kredit per pelanggan dan baris TOTAL, pada layar (`page.tsx`) dan ekspor (`ledger-cash-data.ts`) — keduanya membaca loader yang sama supaya tidak bisa berbeda.
+- Kolom Limit/Piutang/Jatuh Tempo/SO/K3/K4 tidak diubah: kolom itu tidak dipakai menentukan status kredit.
+
+### Vonis CATAT
+- **`formatAccountingExact(0)` → `"0"`, bukan `"–"`.** Laporan statement tetap memakai `formatAccounting` (nol = "–"); helper ini untuk sel angka yang memang harus menampilkan nol nyata.
+- **Formatter lokal `preciseAmount` di `skontro`/`journal-listing`/`inventory-reconciliation`/`received-not-billed`/`vat-invoices`/`depreciation-difference` belum dimigrasikan — CATAT.** Semuanya perilaku-identik dengan helper baru; migrasi menuntut menyentuh enam berkas uji sekaligus tanpa perubahan perilaku. Kandidat refactor terpisah.
+
+### Bukti
+- Merah: 1 gagal — sel `(0)`/`1.000.000` vs `(0,01)`/`100,01`.
+- Hijau: `format.test.ts` 64/64 dan `customer-credit-exposure-data.test.ts` 7/7; `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` + halaman piutang **3092 lulus / 4 dilewati** (396 berkas); guard statis **511/511**; `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
+- CI `41790684828` (head `87567df36`) **success** — keenam job.
