@@ -3917,3 +3917,18 @@ Utang yang dicatat Putaran 155: lima halaman laporan menjumlah uang per baris de
 ### Bukti
 - 65/65 tes halaman laporan; tsc, ESLint, diff-check bersih.
 - CI `41813678521` (putaran 154), `41813767782` (dokumentasi 154) **success**.
+
+## Putaran 157 — Kartu Stok, Buku Bank, Mutasi Aset (commit `67000dc99`)
+
+Tiga halaman yang nomor-akun/kuantitasnya memang rupiah penuh masih mencampur kolom uang dengan formatter yang sama:
+
+- **Kartu Stok**: saldo awal (nilai), harga satuan dan nilai per baris, serta nilai saldo akhir dicetak 0 desimal.
+- **Buku Bank**: saldo awal, debit/kredit/saldo berjalan, total debit/kredit, saldo akhir, dan dua KPI memakai `formatAccounting`/`formatCurrency` 0 desimal.
+- **Mutasi Aset**: narasi saldo awal + penambahan − penyusutan − pelepasan = saldo akhir memakai `formatCurrency` 0 desimal.
+
+### Vonis FIX
+- Sel dan KPI **uang** memakai `formatAccountingExact`/`formatCurrencyExact`.
+- Kolom **qty** (saldo kuantitas, total masuk/keluar, saldo akhir qty) **tidak diubah** — itu bukan uang dan dua desimal akan menyesatkan.
+
+### Bukti
+- 2.654 lulus / 4 dilewati (halaman laporan + reports); tsc, ESLint, diff-check bersih.
