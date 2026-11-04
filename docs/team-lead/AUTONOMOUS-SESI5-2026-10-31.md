@@ -3744,3 +3744,15 @@ Dua kelompok laporan lagi memutuskan/menjumlah dari nilai bersen tetapi mencetak
 - Merah: Profitabilitas 1 gagal/7 lulus; Biaya WO + Penyelesaian WO 2 gagal/7 lulus.
 - Hijau: 8/8 dan 9/9 terkait; `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` **3105–3107 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
 - CI `41802712582` (head `c8790a83e`) dan `41802736829` (head `d3cd059ae`) **success**.
+
+## Putaran 146 — varians produksi membulatkan selisih rekonsiliasi (commit `63e0d76c7`)
+
+`production-variance.ts` menghitung varians harga/pemakaian/total dengan `safeMultiply`/`safeAdd` dan mencetaknya lewat `formatAccounting` 0 desimal. Notice "Selisih rekonsiliasi" memakai formatter yang sama, sehingga angka yang disebut teks tidak bisa dicocokkan dengan kolom tabel. Probe order standar 1.000.000,50 / aktual 400.000,25 / released 500.000,75: `varianceDrift = -49.999,10` tetapi notice berbunyi **"Selisih rekonsiliasi (49.999)"** dan kolom total `"(99.999,50)"` tampil `"(100.000)"`.
+
+### Vonis FIX
+- Formatter lokal menjadi `formatAccountingExact`; baris, total, notice rekonsiliasi, dan usulan standar re-cost ikut.
+- Regresi baru mengunci drift sen dan dua angka yang tampil.
+
+### Bukti
+- Merah: 1 gagal/16 lulus.
+- Hijau: 17/17; reports+PDF **3108 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
