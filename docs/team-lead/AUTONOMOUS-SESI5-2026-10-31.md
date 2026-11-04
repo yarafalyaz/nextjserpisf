@@ -3621,3 +3621,26 @@ Probe: faktur `grandTotal 1.000.000,50`, `paidAmount 999.999,70` → sisa `0,80`
 - Merah: 3 gagal/0 lulus pada tes baru.
 - Hijau: 75/75 terkait; `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` + halaman laporan + penjualan **3195 lulus / 4 dilewati** (422 berkas); tsc, ESLint, diff-check bersih.
 - CI `41795328072`/`41795471199`/`41795797542`/`41795830106` (empat commit sebelumnya) **success**.
+
+## Putaran 140 — nominal uang tercetak di bawah kolom tanggal pada PDF Total Hutang (commit `a94281c7a`)
+
+PDF `total-hutang` (`loadPayablesTotal`, dipakai registry → `/api/pdf`) menumpuk tiga bagian dalam satu tabel dengan header bersama `Pemasok | No. Tagihan | Jatuh Tempo | Umur | Sisa`, padahal tiap bagian mengisi arti kolom yang berbeda:
+
+- Ringkasan umur: `[kategori, jumlah, "", "", sisa]`
+- Hutang per pemasok: `[nama, jumlah, totalBilled, totalPaid, sisa]` → **Total Tagihan tercetak di kolom "Jatuh Tempo"**, Total Dibayar di kolom "Umur"
+- Rincian tagihan: `[nama, no, jatuh tempo, umur, sisa]`
+
+Probe dengan satu tagihan terbuka Rp500.000: baris `"PT B" | "1" | "500.000" | "0" | "500.000"` — uang di bawah judul tanggal, dan CSV mewarisi header yang sama sehingga ekspor pun salah kolom.
+
+### Vonis FIX
+- Header netral per arti: `Keterangan / Pemasok | Dokumen / Jumlah | Jatuh Tempo / Umur | Total Tagihan | Dibayar | Sisa`.
+- Setiap baris mengisi kolom yang sesuai; rincian tagihan menggabungkan `tanggal · umur` di satu kolom. Baris total tetap memakai konvensi trailing (dirender engine sebagai label + sel kanan).
+- Regresi `payables-total-columns.test.ts` mengunci header dan posisi uang; mutasi balik header lama membuat kedua tes merah.
+
+### Vonis CATAT
+- **Layar `/laporan/total-hutang` tidak diubah.** Halaman memakai tiga tabel terpisah dengan header sendiri; cacat ini hanya pada payload PDF/CSV. Kedua jalur tetap membaca `buildPayablesSummary` yang sama sehingga angkanya identik.
+- **`hutang-jatuh-tempo` tidak terpengaruh** — laporan itu memakai `COLUMNS` sendiri yang memang berisi kolom tanggal.
+
+### Bukti
+- Merah: 2 gagal/0 lulus.
+- Hijau: 2/2; `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` + halaman laporan **3165 lulus / 4 dilewati** (413 berkas); tsc, ESLint, diff-check bersih.
