@@ -3473,3 +3473,23 @@ Lanjutan pola Putaran 130: cari setiap tempat yang **memutuskan** status dari an
 - Merah per-berkas: skontro 2 gagal/1 lulus; journal listing 1 gagal/4 lulus; asset movement 1 gagal/9 lulus; asset reconciliation 1 gagal/7 lulus.
 - Hijau: skontro 3/3; journal listing + aset + pekerjaan + trailing 68/68; mutasi 10/10; rekonsiliasi 14/14; `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` **3085 lulus / 4 dilewati** (395 berkas); guard statis 511/511; `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
 - CI `41781657909` (head `cff8896af`) **success**.
+
+## Putaran 132 — selisih sen dilebihkan menjadi "Rp 1" (commit `2bc7bed42`)
+
+Dua laporan pemeriksaan lagi-lagi memutuskan status dari angka sen tetapi mencetak lewat `formatCurrency` (0 desimal). Berbeda dari putaran sebelumnya, cacat di sini bukan "dua angka identik" melainkan **angka yang salah**:
+
+1. **Selisih Persediaan (`inventory-reconciliation.ts`).** `isBalanced` memakai `BALANCE_TOLERANCE = 0.5`; selisih `0,50` bukan "seimbang", tetapi `formatCurrency(0.5)` mencetak **"Rp 1"**. Probe: nilai barang `100,30`, buku besar `99,80` → `Selisih (buku besar − nilai barang)` = `-0,50` tetapi baris total berbunyi `"(1)"` dan verdict "Ada selisih Rp 1".
+2. **Penerimaan Belum Ditagih (`received-not-billed.ts`).** Cacat yang sama pada notice dan verdict: saldo GRNI `100,80` vs sisa dokumen `100,30` → "ada selisih Rp 1 (buku besar lebih besar)" padahal selisihnya `0,50`. Teks juga mencetak saldo `101` vs `100` sehingga pembaca tidak bisa merekonsiliasi angkanya.
+
+### Vonis FIX
+- Formatter lokal `preciseAmount`: **rupiah penuh bila nilainya bulat**, dua desimal bila ada sen. Dipakai untuk baris total selisih, seluruh angka di teks verdict/notice, dan ringkasan KPI.
+- Memilih integer-aware (bukan selalu dua desimal) karena ekspektasi publik yang sudah ada — `total-trailing-cells.test.ts` menuntut selisih `500` tampil `"500"`; memaksa `500,00` akan mengubah kontrak tampilan tanpa manfaat.
+- Perhitungan, `BALANCE_TOLERANCE`, dan baris tabel lain tidak diubah.
+
+### Vonis CATAT
+- **`vat-invoices.ts` belum disamakan — CATAT.** Posisi PPN di verdict/summary memakai `formatCurrency`; posisi itu bukan boolean status seimbang dan belum ada bukti tampilan yang menyesatkan. Kandidat putaran berikutnya bila ada laporan pengguna.
+- **Toleransi setengah rupiah dipertahankan — CATAT.** Itu keputusan akuntansi (pembulatan dua desimal), bukan sumber cacat; yang salah hanya tampilannya.
+
+### Bukti
+- Merah: `inventory-reconciliation-cents.test.ts` 1 gagal (`"(1)"` vs `"(0,50)"`), `received-not-billed.test.ts` 1 gagal (`"Ada selisih Rp 1"` vs `"0,50"`).
+- Hijau: 4 berkas terkait **70/70**; seluruh `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` **3087 lulus / 4 dilewati** (395 berkas); guard statis **511/511**; `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
