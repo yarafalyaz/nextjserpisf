@@ -4486,3 +4486,20 @@ Nilai yang terdampak: subtotal, DPP, pajak, total, pembayaran, dan sisa (yang di
 ### Bukti
 - Merah: 1 gagal/13 lulus; hijau 2.641 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
 - CI `41852218669`, `41852258161`, `41852549336`, `41852583538` **success** (putaran 195–196).
+
+## Putaran 198 — produksi, penerimaan, pembayaran vendor, pinjaman, payroll (commit `f7b363c3a`)
+
+Sembilan berkas:
+
+- **Produksi** — detail production order (biaya standar/aktual/varians; harga & pemakaian bahan; tenaga kerja), komponen biaya produksi, perintah kerja.
+- **Pembelian** — penerimaan barang (ongkos angkut, biaya lain, admin fee), pembayaran vendor.
+- **SDM** — detail pinjaman, riwayat cicilan, tabel pinjaman, tabel penggajian.
+
+### Vonis FIX
+- Kesembilannya memakai `formatCurrencyExact`; guard statis di `exact-cents-sweep.test.ts` menolak `formatCurrency(` tanpa `Exact`.
+
+### Vonis CATAT
+- **Kesalahan proses yang saya buat dan perbaiki dalam putaran ini:** penggantian import lewat regex sempat menghasilkan `from ""@/lib/utils/format""` (kutip ganda) di empat berkas. `tsc` langsung merah; saya perbaiki sebelum commit, bukan setelah. Dicatat supaya penggantian massal berikutnya memakai pola `replace` eksplisit, bukan regex dengan grup kutip.
+
+### Bukti
+- Merah: 1 gagal/14 lulus; hijau 2.782 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
