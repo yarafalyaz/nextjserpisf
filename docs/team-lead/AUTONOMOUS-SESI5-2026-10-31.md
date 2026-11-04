@@ -3811,3 +3811,24 @@ Tiga laporan pajak tangguhan (`deferred-tax.ts`, `deferred-tax-value-events.ts`,
 - Merah: 1 gagal/11 lulus.
 - Hijau: 12/12 dan 34/34 terkait; reports+PDF **3112 lulus / 4 dilewati**; tsc, ESLint, diff-check bersih.
 - Push pertama ditolak `fatal error in commit_refs_rules` (kegagalan sisi server, ruleset kosong); percobaan berulang berhasil tanpa perubahan isi commit.
+
+## Putaran 151 — sepuluh laporan lagi membulatkan nominal bersen (commit `4a57f1c15`)
+
+Sapuan sisa pola "hitung sen, cetak rupiah penuh" setelah putaran 128–150. Sepuluh berkas memakai `formatAccounting(..., { zeroDash: false })` (0 desimal) untuk nominal yang dijumlah `safeAdd`/`safeSubtract`, dan beberapa verdict/KPI memakai `formatCurrency` terpisah:
+
+`asset-register`, `asset-history`, `asset-disposal-schedule`, `job-estimate-vs-actual`, `equity-changes`, `bank-transaction-reconciliation`, `payroll-reports`, `project-pl-export`, `discount-exposure-export`, `customer-statement-data`.
+
+Probe: dua baris Rp1.000.000,50 → `1.000.001` + `1.000.001` vs total `2.000.001`.
+
+### Vonis FIX
+- Formatter lokal kesepuluh berkas memakai `formatAccountingExact`; verdict/KPI ikut formatter itu, bukan `formatCurrency` terpisah.
+- Regresi `exact-cents-sweep.test.ts` mengunci tiga perwakilan (register aset, ekuitas, rekonsiliasi transaksi bank); tes itu **merah 3/3** sebelum fix.
+
+### Vonis CATAT
+- **`financial-charts.ts` tidak diubah** — angka di sana dipakai grafik dan label KPI naratif, bukan total tabel yang bisa dijumlah pembaca; belum ada bukti tampilan menyesatkan.
+- **`statement-table.ts` dan `trial-balance-report.ts` tetap mempertahankan dua formatter** (baris akun rupiah penuh vs total/peringatan dua desimal) sesuai keputusan Putaran 130 — bukan sisa bug.
+
+### Bukti
+- Merah: 3 gagal/0 lulus (tes sweep).
+- Hijau: reports+PDF **3112 lulus / 4 dilewati**; seluruh suite unit **12.536 lulus / 23 dilewati** (1.172 berkas); tsc, ESLint, diff-check bersih.
+- CI `41808033558`, `41808453230`, `41808483885` **success** (putaran 148–150).
