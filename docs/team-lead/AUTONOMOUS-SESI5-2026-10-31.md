@@ -4103,3 +4103,13 @@ Kartu Rekonsiliasi Bank Belum Selesai mencetak saldo rekening koran dan saldo bu
 ### Bukti
 - Merah: 1 gagal/3 lulus; hijau 4/4; 3.248 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
 - CI `41819076386`, `41819347112`, `41819708826`, `41819777895` **success** (putaran 165–166).
+
+## Putaran 170 — kartu rekap borongan teknisi (commit `1ac0335c8`)
+
+`labor-recap-card.tsx` mencetak total per teknisi, total periode, kelompok tanpa teknisi, dan baris tanpa tanggal dengan `formatCurrency` 0 desimal, sementara builder menjumlahkan biaya per sen (`round2` per teknisi). Probe 500.000,50 + 250.000,25 tampil `Rp 750.000`.
+
+### Vonis FIX
+- Kartu memakai `formatCurrencyExact`; regresi baru mengunci `Rp 750.000,75`.
+
+### Bukti
+- Merah: 1 gagal/5 lulus; hijau 6/6; 3.249 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
