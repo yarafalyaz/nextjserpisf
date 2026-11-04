@@ -8,6 +8,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { computeProjectStatus } from "@/lib/services/project-status"
 import { assertWorkOrderQcCleared } from "@/lib/services/qc.service"
+import { releaseActiveReservationsForWorkOrderTx } from "@/lib/services/stock-reservation.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import { nextSlugWithClient } from "@/lib/utils/slug-db"
@@ -758,6 +759,20 @@ async function syncProjectStatusTx(projectId: number, tx: TxClient) {
           await tx.workOrderItem.updateMany({
             where: { workOrderId: project.workOrderId, status: { in: ["in_progress"] } },
             data: { status: "pending" },
+          })
+          // Putaran 126: reservasi lahir HANYA saat start (BR-RES-01) dan
+          // dilepas di complete/close/cancel (BR-RES-10). WO yang diturunkan
+          // ke pending oleh progres tahap tidak melewati ketiganya, jadi
+          // baris `active` miliknya tinggal hidup: stok gudang sumber tetap
+          // terikat WO yang tidak berjalan, `createReservationsForWorkOrderStartTx`
+          // melewati kunci yang sudah ada saat WO dimulai lagi (reservasi
+          // basi, qty kebutuhan lama), dan laporan reservasi menampilkan
+          // cadangan untuk job pending — bertentangan dengan invarian
+          // "WO draft/pending tidak punya reservasi". Dilepas di klaim yang
+          // sama supaya hanya pemenang balapan yang melepas.
+          await releaseActiveReservationsForWorkOrderTx(tx, {
+            workOrderId: project.workOrderId,
+            reason: "Perintah kerja dikembalikan ke pending (progres tahap proyek dibuka ulang)",
           })
         }
       }

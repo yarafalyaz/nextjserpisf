@@ -33,6 +33,8 @@ const mocks = vi.hoisted(() => {
     workOrderItem: buildModelMock(),
     employee: buildModelMock(),
     materialIssue: buildModelMock(),
+    // Putaran 126: penurunan WO in_progress -> pending melepas reservasi aktif.
+    stockReservation: buildModelMock(),
     approvalWorkflow: buildModelMock(),
     approvalWorkflowStep: buildModelMock(),
     approval: buildModelMock(),
@@ -500,6 +502,41 @@ describe("Project Stages Extended Branches", () => {
       where: { id: 99, status: "in_progress" },
       data: expect.objectContaining({ status: "pending" }),
     }))
+  })
+
+  it("putaran 126: syncProjectStatus melepas reservasi saat WO kembali ke pending", async () => {
+    // Reservasi lahir hanya saat start dan dilepas di complete/close/cancel;
+    // WO yang diturunkan progres tahap tidak melewati ketiganya. Tanpa
+    // pelepasan, stok tetap terikat WO yang tidak berjalan dan start
+    // berikutnya melewati baris basi itu.
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "in_progress", workOrderId: 99 })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([
+      { status: "pending" }, { status: "pending" },
+    ])
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 99, status: "in_progress" })
+    mocks.prismaMock.workOrder.updateMany.mockResolvedValueOnce({ count: 1 })
+    mocks.prismaMock.stockReservation.updateMany.mockResolvedValueOnce({ count: 2 })
+
+    await actions.syncProjectStatus(1)
+
+    expect(mocks.prismaMock.stockReservation.updateMany).toHaveBeenCalledWith({
+      where: { workOrderId: 99, status: "active" },
+      data: expect.objectContaining({ status: "released" }),
+    })
+    mocks.prismaMock.stockReservation.updateMany.mockReset().mockResolvedValue({ count: 0 })
+  })
+
+  it("putaran 126: klaim penurunan kalah race tidak melepas reservasi", async () => {
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "in_progress", workOrderId: 99 })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([
+      { status: "pending" }, { status: "pending" },
+    ])
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 99, status: "in_progress" })
+    mocks.prismaMock.workOrder.updateMany.mockResolvedValueOnce({ count: 0 })
+
+    await actions.syncProjectStatus(1)
+
+    expect(mocks.prismaMock.stockReservation.updateMany).not.toHaveBeenCalled()
   })
 
   it("syncProjectStatus menyelesaikan WO in_progress lewat klaim bersyarat saat QC bersih", async () => {
