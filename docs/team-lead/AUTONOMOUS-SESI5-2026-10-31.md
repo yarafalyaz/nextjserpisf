@@ -4288,3 +4288,14 @@ Sapuan Workflow atas sisa komponen `keuangan/` menemukan tiga tempat:
 ### Bukti
 - Merah: 1 gagal pada masing-masing tes baru. Hijau: 82/82 dan 105/105 suite keuangan terkait; tsc, ESLint, diff-check bersih.
 - CI `41832640362` (antrean giro) dan `41832668167` (dokumentasi) **success**.
+
+## Putaran 183 — transfer bank & setoran pajak (commit `be9285076`)
+
+Dua tabel keuangan masih memakai `formatAccounting` 0 desimal: **Transfer Antar Rekening** (jumlah, biaya admin) dan **Penyetoran Pajak** (jumlah setoran). Keduanya `Decimal(15,2)`.
+
+### Vonis FIX
+- Keduanya memakai `formatAccountingExact`; dua regresi render baru (termasuk stub `matchMedia` untuk DataTable) mengunci `1.000.000,50` dan `6.500,25`.
+
+### Bukti
+- Merah: 1 gagal pada masing-masing tes baru. Hijau: 68/68 suite keuangan; tsc, ESLint, diff-check bersih.
+- CI `41834302452`, `41834762192`, `41834794046` **success** (putaran 182).
