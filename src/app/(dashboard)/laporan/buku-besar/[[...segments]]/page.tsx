@@ -4,7 +4,8 @@ import { prisma } from '@/lib/db/prisma'
 import { sumNetForAccount } from "@/lib/services/report-aggregation.service"
 import { resolveReferenceSlugs, referenceSlugKey } from "@/lib/services/reference-slug.service"
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccounting, formatDate } from '@/lib/utils/format'
+import { formatAccountingExact, formatDate } from '@/lib/utils/format'
+import { safeAdd, safeSubtract } from '@/lib/utils/math'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { BookOpen } from 'lucide-react'
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -126,13 +127,16 @@ export default async function GeneralLedgerPage({
 
   const rows = entries.reduce<Array<(typeof entries)[number] & { balance: number }>>((acc, entry) => {
     const previousBalance = acc.length > 0 ? acc[acc.length - 1].balance : openingBalance
-    const nextBalance = previousBalance + entry.debit - entry.credit
+    // Saldo berjalan sen-aman: `+ debit - credit` float mentah meninggalkan
+    // residu (100.10 − 0.20 = 99.899999…) sehingga saldo baris drift dari
+    // total debit−kredit yang tercetak.
+    const nextBalance = safeSubtract(safeAdd(previousBalance, entry.debit, 2), entry.credit, 2)
     acc.push({ ...entry, balance: nextBalance })
     return acc
   }, [])
 
-  const totalDebit = entries.reduce((sum, e) => sum + e.debit, 0)
-  const totalCredit = entries.reduce((sum, e) => sum + e.credit, 0)
+  const totalDebit = entries.reduce((sum, e) => safeAdd(sum, e.debit, 2), 0)
+  const totalCredit = entries.reduce((sum, e) => safeAdd(sum, e.credit, 2), 0)
   // With no in-period entries the closing balance is the opening balance, NOT 0
   // (a 0 here hid the account's carried-forward balance entirely).
   const finalBalance = rows.length > 0 ? rows[rows.length - 1].balance : openingBalance
@@ -198,7 +202,7 @@ export default async function GeneralLedgerPage({
             <tbody>
               <tr className="subtotal">
                 <td colSpan={6}>Saldo Awal</td>
-                <td className="num">{formatAccounting(openingBalance, { zeroDash: false })}</td>
+                <td className="num">{formatAccountingExact(openingBalance)}</td>
               </tr>
               {/* Sisa terjustifikasi TASK-037: sel .stmt dokumen cetak — EmptyState (teks Tailwind px) merusak paritas layar/PDF 9pt. */}
               {rows.length === 0 ? (
@@ -231,18 +235,18 @@ export default async function GeneralLedgerPage({
                       )}
                     </td>
                     <td>{row.memo || row.description || '-'}</td>
-                    <td className="num">{row.debit ? formatAccounting(row.debit, { zeroDash: false }) : ''}</td>
-                    <td className="num">{row.credit ? formatAccounting(row.credit, { zeroDash: false }) : ''}</td>
-                    <td className="num">{formatAccounting(row.balance, { zeroDash: false })}</td>
+                    <td className="num">{row.debit ? formatAccountingExact(row.debit) : ''}</td>
+                    <td className="num">{row.credit ? formatAccountingExact(row.credit) : ''}</td>
+                    <td className="num">{formatAccountingExact(row.balance)}</td>
                   </tr>
                 ))
               )}
               {rows.length > 0 && (
                 <tr className="grand">
                   <td colSpan={4}>Total &amp; Saldo Akhir</td>
-                  <td className="num">{formatAccounting(totalDebit, { zeroDash: false })}</td>
-                  <td className="num">{formatAccounting(totalCredit, { zeroDash: false })}</td>
-                  <td className="num">{formatAccounting(finalBalance, { zeroDash: false })}</td>
+                  <td className="num">{formatAccountingExact(totalDebit)}</td>
+                  <td className="num">{formatAccountingExact(totalCredit)}</td>
+                  <td className="num">{formatAccountingExact(finalBalance)}</td>
                 </tr>
               )}
             </tbody>

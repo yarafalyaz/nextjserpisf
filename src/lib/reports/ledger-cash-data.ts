@@ -37,7 +37,7 @@ import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { classifyJournal, foldActivities } from "@/lib/finance/cash-flow"
 import { buildCashFlowTotals } from "@/lib/reports/arus-kas"
 import type { StatementTable } from "@/lib/reports/statement-table"
-import { formatAccounting, formatAccountingExact, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface LedgerReportView {
@@ -51,7 +51,12 @@ export interface CashFlowReportView {
   periodCaption: string
 }
 
-const money = (value: number) => formatAccounting(value, { zeroDash: false })
+/**
+ * Saldo/mutasi buku besar dicetak hingga sen bila memang bersen; rupiah penuh
+ * bila bulat. Dengan 0 desimal, saldo berjalan dan total tidak bisa dicocokkan
+ * dengan penjumlahan baris yang tercetak.
+ */
+const money = (value: number) => formatAccountingExact(value)
 /** Sisa kredit/paparan menentukan status kredit, jadi sennya tidak boleh hilang. */
 const moneyExact = (value: number) => formatAccountingExact(value)
 const shortDate = (date: Date) =>

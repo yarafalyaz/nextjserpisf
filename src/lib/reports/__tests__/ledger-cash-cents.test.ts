@@ -17,7 +17,9 @@ describe("buildLedgerRows sen", () => {
     expect(result.totalCredit).toBe(2.21)
     const last = result.rows.at(-1)
     expect(last?.kind).toBe("data")
-    if (last?.kind === "data") expect(last.cells[5]).toBe("4")
+    // Saldo 4,08 bersen: dulu tercetak "4" sehingga baris terakhir tidak
+    // menjumlah ke total debit−kredit (6,29 − 2,21).
+    if (last?.kind === "data") expect(last.cells[5]).toBe("4,08")
   })
 
   it("saldo awal dinormalkan sen (100.10-0.20 = 99.90, bukan 99.899999...)", () => {
