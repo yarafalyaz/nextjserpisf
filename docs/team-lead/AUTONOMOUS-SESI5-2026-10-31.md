@@ -4044,3 +4044,14 @@ Kartu `customer-credit-queue-card.tsx` mencetak saldo per baris, diterima/teralo
 ### Bukti
 - Merah: 1 gagal/7 lulus; hijau 8/8; 3.007 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
 - CI `41817424251` (KPI aging) dan `41818435167` (dokumentasi) **success**.
+
+## Putaran 165 — antrean terkirim-belum-terfaktur (commit `896774ae9`)
+
+`delivered-unbilled-queue-card.tsx` mencetak total terkirim/terfaktur/belum terfaktur dan tiga sel per dokumen dengan 0 desimal, sementara builder menjumlah `safeAdd(..., 2)`. Nilai Rp1.000.000,50 tampil `Rp 1.000.000`.
+
+### Vonis FIX
+- Kartu memakai `formatCurrencyExact`; regresi render mengunci `Rp 1.000.000,50`.
+- Asersi lama yang memastikan label rekap verbatim tetap hijau (tidak ada hitung-ulang di UI).
+
+### Bukti
+- Merah: 1 gagal/3 lulus; hijau 4/4; 3.008 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
