@@ -4346,3 +4346,17 @@ Dua halaman yang sebelumnya hanya diperbaiki pada KPI ternyata masih mencetak **
 ### Bukti
 - Merah: 1 gagal/9 lulus; hijau 10/10 dan 3.089 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
 - **Docker rerun `41838264847` sukses** — keenam job hijau, kegagalan sebelumnya murni 502 dari Docker Hub.
+
+## Putaran 187 — baris faktur PPN (commit `f74378939`)
+
+`vat-invoices.ts` mencetak baris DPP/PPN/total per faktur dan subtotal kelompok dengan 0 desimal, sementara baris Posisi PPN sudah dua desimal sejak Putaran 133. Pada faktur bersen ini membuat baris tidak menjumlah ke subtotalnya: `100,50 + 11,06 = 111,56` tampil `101 | 11 | 112`.
+
+### Vonis FIX
+- `amount` dan `preciseAmount` memakai `formatAccountingExact` (satu perilaku, bukan dua pembulatan berbeda dalam satu berkas).
+
+### Vonis CATAT
+- Bukan "total tidak cocok dengan baris" — di sini **barisnya sendiri** yang salah dibulatkan, dan pembulatan per baris tidak saling meniadakan.
+
+### Bukti
+- Merah: 1 gagal/5 lulus; hijau 84/84 terkait dan 3.090 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+- CI `41840220374` (piutang/total hutang) dan `41840283205` (dokumentasi) **success**.
