@@ -80,5 +80,8 @@ describe("laporan Total Hutang: nilai bersen", () => {
     // memakai helper exact untuk seluruh sel uang.
     expect(page).not.toMatch(/formatAccounting\((?!Exact)/)
     expect(page).toContain("formatAccountingExact")
+    // KPI juga memakai formatter exact — sebelumnya lolos dengan formatCurrency.
+    expect(page).not.toMatch(/formatCurrency\((?!Exact)/)
+    expect(page).toContain("formatCurrencyExact")
   })
 })
