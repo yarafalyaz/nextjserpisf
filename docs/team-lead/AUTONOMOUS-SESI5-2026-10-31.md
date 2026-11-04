@@ -4135,3 +4135,19 @@ Kartu Progres Tertimbang Proyek mencetak total RAB, biaya aktual, earned value, 
 ### Bukti
 - Merah: 1 gagal/6 lulus; hijau 7/7; 3.013 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
 - CI `41820360914`, `41820431280`, `41820771273`, `41820818949` **success** (putaran 168–169).
+
+## Putaran 173 — kartu L/R proyek & subledger komisi (commit `713e9f620`)
+
+- **`project-pl-detail-card.tsx`** — pendapatan, total biaya, laba, margin nominal.
+- **`sales-commission-subledger-card.tsx`** — akrual, reversal, pembayaran, saldo per penerima dan per baris.
+
+Keduanya mencetak 0 desimal padahal nilainya dijumlah/dikurangkan per sen.
+
+### Vonis FIX
+- Keduanya memakai `formatCurrencyExact`; tes kartu komisi yang membandingkan teks ikut memakai helper yang sama supaya asersi tidak mengunci bentuk lama.
+- Dua regresi baru mengunci `Rp 20.000.000,50`/`Rp 15.000.000,25` dan `Rp 1.000.000,50`/`Rp 400.000,25`.
+
+### Bukti
+- Merah: 1 gagal/6 lulus dan 1 gagal/9 lulus.
+- Hijau: 7/7 + 10/10; 3.015 lulus / 4 dilewati lebih luas; tsc, ESLint, diff-check bersih.
+- CI `41820771273`, `41820818949`, `41821119537`, `41821144519` **success** (putaran 170–171).
