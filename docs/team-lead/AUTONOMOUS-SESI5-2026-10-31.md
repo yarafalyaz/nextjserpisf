@@ -4393,3 +4393,17 @@ Komponen bersama `laporan/_components/subledger-report.tsx` (dipakai Buku Besar 
 ### Bukti
 - Merah: 1 gagal/7 lulus; hijau 3.092 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
 - CI `41844175480` (garansi) dan `41844210303` (dokumentasi) **success**.
+
+## Putaran 191 — rekonsiliasi bank (commit `5a401d833`)
+
+Halaman daftar dan detail rekonsiliasi bank mencetak saldo buku, saldo laporan, setoran/cek beredar, saldo buku disesuaikan, **selisih**, nominal baris koran, dan nominal item dengan `formatCurrency` 0 desimal. Selisih di halaman itu dibandingkan dengan toleransi `0,01` untuk pewarnaan status — jadi selisih sen yang justru memicu pemeriksaan tidak pernah terlihat.
+
+### Vonis FIX
+- Kedua halaman memakai `formatCurrencyExact`; guard statis di `exact-cents-sweep.test.ts` menolak `formatCurrency(` tanpa `Exact` di kedua berkas.
+
+### Vonis CATAT
+- Guard statis memakai `path.resolve(process.cwd(), rel)` — versi pertama memakai `__dirname` relatif yang salah resolusi dan gagal ENOENT, bukan gagal asersi. Dibetulkan sebelum commit; bukti merah kemudian benar (menolak isi berkas, bukan path).
+
+### Bukti
+- Merah: 1 gagal/8 lulus setelah path dibetulkan; hijau 2.666 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
+- CI `41846320069` (buku pembantu) dan `41846359350` (dokumentasi) **success**.
