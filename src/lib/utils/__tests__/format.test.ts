@@ -388,7 +388,8 @@ describe("formatCurrencyExact", () => {
   it("keeps the Rp prefix while preserving real cents", () => {
     expect(formatCurrencyExact(1_000_000)).toBe("Rp 1.000.000")
     expect(formatCurrencyExact(1_000_000.5)).toBe("Rp 1.000.000,50")
-    expect(formatCurrencyExact(-0.24)).toBe("Rp (0,24)")
+    expect(formatCurrencyExact(-50_000)).toBe("Rp -50.000")
+    expect(formatCurrencyExact(-0.24)).toBe("Rp -0,24")
     expect(formatCurrencyExact(null)).toBe("Rp 0")
   })
 })

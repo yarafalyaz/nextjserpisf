@@ -121,6 +121,12 @@ export function formatAccountingExact(
 export function formatCurrencyExact(amount: number | string | null | undefined): string {
   const numericAmount = Number(amount ?? 0);
   if (Number.isNaN(numericAmount)) return "Rp 0";
+  // Tanda minus memakai konvensi `formatCurrency` ("Rp -50.000"), bukan kurung
+  // akuntansi: helper ini menggantikan pemanggil formatCurrency, dan pembaca
+  // KPI/kartu sudah terbiasa dengan bentuk minus itu.
+  if (numericAmount < 0) {
+    return `Rp -${formatAccountingExact(Math.abs(numericAmount))}`;
+  }
   return `Rp ${formatAccountingExact(numericAmount)}`;
 }
 

@@ -2,14 +2,14 @@ import Link from "next/link"
 import { entityHref } from "@/lib/utils/entity-url"
 import type { JobBillingSummaryResult } from "@/lib/reports/job-billing-summary-data"
 import type { JobPaymentScheduleResult } from "@/lib/reports/job-payment-schedule-data"
-import { formatCurrency, formatPercentage } from "@/lib/utils/format"
+import { formatCurrencyExact, formatPercentage } from "@/lib/utils/format"
 import { JobPaymentScheduleCard } from "./job-payment-schedule-card"
 
 function Baris({ label, value, bold }: Readonly<{ label: string; value: number; bold?: boolean }>) {
   return (
     <div className="flex items-center justify-between gap-4 py-1.5">
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className={bold ? "text-sm font-semibold tabular-nums" : "text-sm tabular-nums"}>{formatCurrency(value)}</dd>
+      <dd className={bold ? "text-sm font-semibold tabular-nums" : "text-sm tabular-nums"}>{formatCurrencyExact(value)}</dd>
     </div>
   )
 }
@@ -19,7 +19,7 @@ function BarisProgres({ label, nominal, persen }: Readonly<{ label: string; nomi
     <div className="flex items-center justify-between gap-4 py-1.5">
       <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="text-sm tabular-nums">
-        {persen === null ? formatCurrency(nominal) : `${formatPercentage(persen, 1)} · ${formatCurrency(nominal)}`}
+        {persen === null ? formatCurrencyExact(nominal) : `${formatPercentage(persen, 1)} · ${formatCurrencyExact(nominal)}`}
       </dd>
     </div>
   )
@@ -44,7 +44,7 @@ export function JobBillingCard({
       ? null
       : {
           naik: deltaNilaiCents > 0,
-          nominal: formatCurrency(Math.abs(deltaNilaiCents) / 100),
+          nominal: formatCurrencyExact(Math.abs(deltaNilaiCents) / 100),
           // ponytail: persen presentasi saja dari 2 field builder existing; NaN hanya bila snapshot <=0 (grandTotal sen <=0) — guard null.
           persen:
             summary.nilaiBerjalan * 100 - deltaNilaiCents > 0
@@ -59,7 +59,7 @@ export function JobBillingCard({
       <h2 className="text-base font-semibold">Tagihan Berjalan — {summary.quotationDocumentNo}</h2>
       {summary.overbilled ? (
         <p role="alert" className="mt-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          Overbilled: sudah ditagih melebihi nilai berjalan sebesar {formatCurrency(-summary.sisaBelumDitagih)}.
+          Overbilled: sudah ditagih melebihi nilai berjalan sebesar {formatCurrencyExact(-summary.sisaBelumDitagih)}.
         </p>
       ) : null}
       <dl className="mt-3 divide-y divide-default">
@@ -70,7 +70,7 @@ export function JobBillingCard({
         <Baris label="Sisa belum dibayar" value={summary.sisaBelumDibayar} />
         <Baris label="Uang muka diterima" value={summary.uangMukaDiterima} />
         {summary.ambangInvoiceTercapai ? (
-          <p className="py-1.5 text-sm text-muted-foreground">Ambang invoice konversi DP tercapai ({formatCurrency(summary.ambangInvoice)}).</p>
+          <p className="py-1.5 text-sm text-muted-foreground">Ambang invoice konversi DP tercapai ({formatCurrencyExact(summary.ambangInvoice)}).</p>
         ) : (
           <Baris label="Kekurangan DP menuju invoice" value={summary.jarakKeAmbangInvoice} />
         )}
@@ -102,7 +102,7 @@ export function JobBillingCard({
             </div>
             <div className="flex items-center justify-between gap-4 py-1.5">
               <dt className="text-sm text-muted-foreground">Sisa belum ditagih kini</dt>
-              <dd className="text-sm font-semibold tabular-nums">{formatCurrency(summary.sisaBelumDitagih)}</dd>
+              <dd className="text-sm font-semibold tabular-nums">{formatCurrencyExact(summary.sisaBelumDitagih)}</dd>
             </div>
           </dl>
         </section>
@@ -128,7 +128,7 @@ export function JobBillingCard({
           {summary.openCredits.map((c) => (
             <li key={c.id} className="flex justify-between gap-4">
               <span>{c.documentNo}</span>
-              <span className="tabular-nums">{formatCurrency(c.saldo)}</span>
+              <span className="tabular-nums">{formatCurrencyExact(c.saldo)}</span>
             </li>
           ))}
         </ul>
@@ -138,7 +138,7 @@ export function JobBillingCard({
           {summary.billedInvoices.map((inv) => (
             <li key={inv.id} className="flex justify-between gap-4">
               <span>{inv.documentNo} · {inv.status}</span>
-              <span className="tabular-nums">{formatCurrency(inv.grandTotal)}</span>
+              <span className="tabular-nums">{formatCurrencyExact(inv.grandTotal)}</span>
             </li>
           ))}
         </ul>

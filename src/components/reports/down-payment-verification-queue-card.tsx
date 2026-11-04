@@ -8,7 +8,7 @@ import {
   type DownPaymentQueueSummary,
   type DpQueueLevel,
 } from "@/lib/reports/down-payment-verification-queue"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { ReportCardShell, ReportSummaryStrip } from "./report-card-shell"
 import { DpQueueRow } from "./dp-queue-row"
 import {
@@ -30,7 +30,7 @@ const LEVEL_TONES: Record<DpQueueLevel, "accent" | "default"> = {
  * `view_down_payments` fail-closed di loader + halaman) — umur, tingkat,
  * jarak ambang, penanda bukti, dan rekap ditampilkan apa adanya dari
  * builder; UI tidak menghitung ulang dan tidak mengurut ulang. Sen
- * ditampilkan lewat `formatCurrency(sen / 100)` tanpa perbandingan baru.
+ * ditampilkan lewat `formatCurrencyExact(sen / 100)` tanpa perbandingan baru.
  * Baca-saja: nol tombol Konfirmasi/Tolak/Ubah/Hapus di antrean —
  * konfirmasi tetap lewat detail uang muka existing. Isi/path bukti tidak
  * pernah masuk payload; baris hanya membawa boolean + label bukti.
@@ -66,7 +66,7 @@ export function DownPaymentVerificationQueueCard({
       summary={
         <>
           {summary.total} uang muka menunggu verifikasi —{" "}
-          {formatCurrency(summary.totalAmountSen / 100)} belum menjadi kas
+          {formatCurrencyExact(summary.totalAmountSen / 100)} belum menjadi kas
         </>
       }
       isEmpty={rows.length === 0}
