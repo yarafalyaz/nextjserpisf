@@ -76,6 +76,11 @@ describe("formatAccounting", () => {
     expect(formatAccounting(-1000, { showSymbol: true })).toBe("(Rp 1.000)")
   })
 
+  it("formats cents with thousands separators and negative parentheses", () => {
+    expect(formatAccounting(10000.01, { decimals: 2, zeroDash: false })).toBe("10.000,01")
+    expect(formatAccounting(-10000.01, { decimals: 2, zeroDash: false })).toBe("(10.000,01)")
+  })
+
   it("respects decimals", () => {
     expect(formatAccounting(1500.5, { decimals: 2 })).toBe("1.500,50")
   })

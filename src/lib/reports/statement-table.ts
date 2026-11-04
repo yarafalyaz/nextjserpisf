@@ -13,6 +13,7 @@
  */
 
 import { formatAccounting } from "@/lib/utils/format"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { buildReportHref } from "@/lib/reports/report-href"
 import type { StatementRow } from "@/lib/reports/statement-display"
 import type { IncomeStatementResult } from "@/lib/finance/income-statement"
@@ -58,6 +59,10 @@ export function statementAmount(value: number): string {
   return formatAccounting(value, { zeroDash: false })
 }
 
+function preciseStatementAmount(value: number): string {
+  return formatAccounting(value, { zeroDash: false, decimals: 2 })
+}
+
 export interface StatementLineLink {
   basePath: string
   periodSlug: string
@@ -100,22 +105,26 @@ export interface BalanceSheetTableInput {
  * bukan menampilkan angka yang kebetulan seimbang.
  */
 export function buildBalanceSheetTable(input: BalanceSheetTableInput): StatementTable {
-  const totalLiabilitiesAndEquity = input.totalLiabilities + input.totalEquity
+  // Total dan selisih dihitung pada presisi sen supaya angka yang tampil
+  // (dua desimal) konsisten dengan aritmetika yang dipakai laporan lain.
+  const totalLiabilitiesAndEquity = safeAdd(input.totalLiabilities, input.totalEquity, 2)
+  const balanceDifference = safeSubtract(input.totalAssets, totalLiabilitiesAndEquity, 2)
+  const balanceAmount = input.isBalanced ? statementAmount : preciseStatementAmount
 
   const rows: StatementTableRow[] = [
     { kind: "group", label: "Aset" },
     ...lineRows(input.assetRows, false, input.lineLink),
-    { kind: "subtotal", label: "Jumlah Aset", values: [statementAmount(input.totalAssets)] },
+    { kind: "subtotal", label: "Jumlah Aset", values: [balanceAmount(input.totalAssets)] },
     { kind: "group", label: "Kewajiban" },
     ...lineRows(input.liabilityRows, false, input.lineLink),
-    { kind: "subtotal", label: "Jumlah Kewajiban", values: [statementAmount(input.totalLiabilities)] },
+    { kind: "subtotal", label: "Jumlah Kewajiban", values: [balanceAmount(input.totalLiabilities)] },
     { kind: "group", label: "Ekuitas" },
     ...lineRows(input.equityRows, false, input.lineLink),
-    { kind: "subtotal", label: "Jumlah Ekuitas", values: [statementAmount(input.totalEquity)] },
+    { kind: "subtotal", label: "Jumlah Ekuitas", values: [balanceAmount(input.totalEquity)] },
     {
       kind: "grand",
       label: "Total Kewajiban dan Ekuitas",
-      values: [statementAmount(totalLiabilitiesAndEquity)],
+      values: [balanceAmount(totalLiabilitiesAndEquity)],
     },
   ]
 
@@ -123,9 +132,9 @@ export function buildBalanceSheetTable(input: BalanceSheetTableInput): Statement
     rows.push({
       kind: "notice",
       text:
-        `Perhatian: Jumlah Aset (${statementAmount(input.totalAssets)}) tidak sama dengan ` +
-        `Total Kewajiban dan Ekuitas (${statementAmount(totalLiabilitiesAndEquity)}) — ` +
-        `selisih ${statementAmount(input.totalAssets - totalLiabilitiesAndEquity)}.`,
+        `Perhatian: Jumlah Aset (${preciseStatementAmount(input.totalAssets)}) tidak sama dengan ` +
+        `Total Kewajiban dan Ekuitas (${preciseStatementAmount(totalLiabilitiesAndEquity)}) — ` +
+        `selisih ${preciseStatementAmount(balanceDifference)}.`,
     })
   }
 

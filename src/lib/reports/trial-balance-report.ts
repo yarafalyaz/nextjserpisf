@@ -58,6 +58,10 @@ function amount(value: number): string {
   return formatAccounting(value, { zeroDash: false })
 }
 
+function preciseAmount(value: number): string {
+  return formatAccounting(value, { zeroDash: false, decimals: 2 })
+}
+
 export function buildTrialBalanceReport(input: TrialBalanceReportInput): TrialBalanceReportResult {
   const comparison = input.comparison ?? null
 
@@ -77,7 +81,7 @@ export function buildTrialBalanceReport(input: TrialBalanceReportInput): TrialBa
       total2 = safeAdd(total2, row.net2, 2)
       return {
         kind: "data",
-        cells: [row.code, row.name, amount(row.net1), amount(row.net2), amount(safeSubtract(row.net1, row.net2, 2))],
+        cells: [row.code, row.name, preciseAmount(row.net1), preciseAmount(row.net2), preciseAmount(safeSubtract(row.net1, row.net2, 2))],
       }
     })
 
@@ -88,7 +92,7 @@ export function buildTrialBalanceReport(input: TrialBalanceReportInput): TrialBa
         kind: "total",
         grand: true,
         label: "Total",
-        cells: [amount(total1), amount(total2), amount(safeSubtract(total1, total2, 2))],
+        cells: [preciseAmount(total1), preciseAmount(total2), preciseAmount(safeSubtract(total1, total2, 2))],
       })
     }
 
@@ -114,15 +118,15 @@ export function buildTrialBalanceReport(input: TrialBalanceReportInput): TrialBa
       kind: "total",
       grand: true,
       label: "Total",
-      cells: [amount(input.grandTotalDebit), amount(input.grandTotalCredit)],
+      cells: [preciseAmount(input.grandTotalDebit), preciseAmount(input.grandTotalCredit)],
     })
 
     if (!input.isBalanced) {
       rows.push({
         kind: "notice",
         text:
-          `Perhatian: total debit (${amount(input.grandTotalDebit)}) tidak sama dengan total kredit ` +
-          `(${amount(input.grandTotalCredit)}) — selisih ${amount(safeSubtract(input.grandTotalDebit, input.grandTotalCredit, 2))}.`,
+          `Perhatian: total debit (${preciseAmount(input.grandTotalDebit)}) tidak sama dengan total kredit ` +
+          `(${preciseAmount(input.grandTotalCredit)}) — selisih ${preciseAmount(safeSubtract(input.grandTotalDebit, input.grandTotalCredit, 2))}.`,
       })
     }
   }

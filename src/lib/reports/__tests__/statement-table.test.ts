@@ -133,9 +133,37 @@ describe("buildBalanceSheetTable", () => {
     const notice = table.rows.at(-1)
     expect(notice?.kind).toBe("notice")
     const text = notice?.kind === "notice" ? notice.text : ""
-    expect(text).toContain("Jumlah Aset (5.000.000)")
-    expect(text).toContain("Total Kewajiban dan Ekuitas (4.000.000)")
-    expect(text).toContain("selisih 1.000.000")
+    expect(text).toContain("Jumlah Aset (5.000.000,00)")
+    expect(text).toContain("Total Kewajiban dan Ekuitas (4.000.000,00)")
+    expect(text).toContain("selisih 1.000.000,00")
+  })
+
+  it("mempertahankan selisih sen pada total dan peringatan neraca tidak seimbang", () => {
+    const table = buildBalanceSheetTable({
+      ...base,
+      totalAssets: 5_000_000.25,
+      isBalanced: false,
+    })
+    const assetTotal = table.rows.find((r) => r.kind === "subtotal" && r.label === "Jumlah Aset")
+    const grand = table.rows.find((r) => r.kind === "grand")
+    const notice = table.rows.find((r) => r.kind === "notice")
+    expect(assetTotal?.kind === "subtotal" ? assetTotal.values : []).toEqual(["5.000.000,25"])
+    expect(grand?.kind === "grand" ? grand.values : []).toEqual(["5.000.000,00"])
+    expect(notice?.kind === "notice" ? notice.text : "").toContain("selisih 0,25")
+  })
+
+  it("menjumlahkan kewajiban dan ekuitas pada presisi sen", () => {
+    const table = buildBalanceSheetTable({
+      ...base,
+      totalAssets: 5_000_000.35,
+      totalLiabilities: 2_000_000.1,
+      totalEquity: 3_000_000.2,
+      isBalanced: false,
+    })
+    const grand = table.rows.find((r) => r.kind === "grand")
+    const notice = table.rows.find((r) => r.kind === "notice")
+    expect(grand?.kind === "grand" ? grand.values : []).toEqual(["5.000.000,30"])
+    expect(notice?.kind === "notice" ? notice.text : "").toContain("selisih 0,05")
   })
 
   it("tidak menambahkan peringatan saat neraca seimbang", () => {

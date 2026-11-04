@@ -98,12 +98,12 @@ describe("loadBalanceSheetStatement", () => {
     const subtotal = statement.table.rows.find(
       (row) => row.kind === "subtotal" && row.label === "Jumlah Aset",
     )
-    expect(subtotal).toMatchObject({ values: ["1.500.000"] })
+    expect(subtotal).toMatchObject({ values: ["1.500.000,00"] })
 
     // Aset 1.500.000 tanpa kewajiban/ekuitas → tidak seimbang, harus diberitahukan.
     const notice = statement.table.rows.at(-1)
     expect(notice?.kind).toBe("notice")
-    expect(notice?.kind === "notice" ? notice.text : "").toContain("selisih 1.500.000")
+    expect(notice?.kind === "notice" ? notice.text : "").toContain("selisih 1.500.000,00")
   })
 
   it("putaran 85: rincian ekuitas memuat baris Laba/Rugi Berjalan yang menjumlah ke total", async () => {

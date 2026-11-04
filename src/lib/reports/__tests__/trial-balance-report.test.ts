@@ -40,7 +40,7 @@ describe("buildTrialBalanceReport", () => {
     expect(table.rows.map(rowSummary)).toEqual([
       "data:1101|Kas & Bank|1.000.000|",
       "data:2101|Utang Usaha||1.000.000",
-      "grand:Total|1.000.000|1.000.000",
+      "grand:Total|1.000.000,00|1.000.000,00",
     ])
   })
 
@@ -50,6 +50,19 @@ describe("buildTrialBalanceReport", () => {
     const [first, second] = table.rows
     expect(first?.kind === "data" ? first.cells[3] : null).toBe("")
     expect(second?.kind === "data" ? second.cells[2] : null).toBe("")
+  })
+
+  it("mempertahankan selisih sen pada total dan peringatan debit-kredit", () => {
+    const { table } = buildTrialBalanceReport({
+      ...BASE,
+      grandTotalDebit: 10_000.01,
+      grandTotalCredit: 10_000,
+      isBalanced: false,
+    })
+    const total = table.rows.find((row) => row.kind === "total")
+    const notice = table.rows.find((row) => row.kind === "notice")
+    expect(total?.kind === "total" ? total.cells : []).toEqual(["10.000,01", "10.000,00"])
+    expect(notice?.kind === "notice" ? notice.text : "").toContain("selisih 0,01")
   })
 
   it("memberi peringatan bila debit tidak sama dengan kredit", () => {
@@ -98,9 +111,26 @@ describe("buildTrialBalanceReport", () => {
       "Selisih",
     ])
     expect(table.rows.map(rowSummary)).toEqual([
-      "data:1101|Kas & Bank|1.000.000|400.000|600.000",
-      "data:2101|Utang Usaha|(1.000.000)|(400.000)|(600.000)",
-      "grand:Total|0|0|0",
+      "data:1101|Kas & Bank|1.000.000,00|400.000,00|600.000,00",
+      "data:2101|Utang Usaha|(1.000.000,00)|(400.000,00)|(600.000,00)",
+      "grand:Total|0,00|0,00|0,00",
+    ])
+  })
+
+  it("menampilkan selisih sen pada kolom pembanding", () => {
+    const { table } = buildTrialBalanceReport({
+      ...BASE,
+      comparison: {
+        label: "30 September 2026",
+        rows: [{ id: 1, code: "1101", name: "Kas & Bank", net1: 1_000_000.49, net2: 1_000_000 }],
+      },
+    })
+
+    const data = table.rows.find((row) => row.kind === "data")
+    expect(data?.kind === "data" ? data.cells.slice(2) : []).toEqual([
+      "1.000.000,49",
+      "1.000.000,00",
+      "0,49",
     ])
   })
 

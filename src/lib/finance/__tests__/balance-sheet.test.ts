@@ -111,6 +111,16 @@ describe("computeBalanceSheet", () => {
     expect(result.isBalanced).toBe(true)
   })
 
+  it("marks a one-cent assets imbalance as unbalanced", () => {
+    const result = computeBalanceSheet([
+      entry(1, "ASSET", 10_000.01, 0),
+      entry(2, "EQUITY", 0, 10_000),
+    ])
+    expect(result.totalAssets).toBe(10_000.01)
+    expect(result.totalLiabilities + result.totalEquity).toBe(10_000)
+    expect(result.isBalanced).toBe(false)
+  })
+
   it("regresi sen: akumulasi float tidak drift (pola PR #25)", () => {
     // 3 x 10.000.000,10 mentah = 30000000.299999997, bukan 30000000.3.
     const entries: BalanceSheetEntryInput[] = [

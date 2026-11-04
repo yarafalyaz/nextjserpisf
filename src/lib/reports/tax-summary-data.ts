@@ -219,10 +219,12 @@ export function buildSptTableRows(rows: SptPeriodRow[]): TableRow[] {
   let totalNet = 0
   let hasLegacy = false
   let hasJournalDiff = false
+  let hasUnavailableJournalLiability = false
   const overpaidPeriods: string[] = []
   for (const row of rows) {
     totalNet += row.net
     if (row.source !== "tax_invoice") hasLegacy = true
+    if (row.journalLiability == null) hasUnavailableJournalLiability = true
     if (row.journalVsSptDiff != null && Math.abs(row.journalVsSptDiff) > 0.005) hasJournalDiff = true
     if (row.overpaid) overpaidPeriods.push(row.period)
     out.push({
@@ -255,6 +257,12 @@ export function buildSptTableRows(rows: SptPeriodRow[]): TableRow[] {
     out.push({
       kind: "notice",
       text: "Sebagian masa tanpa dokumen TaxInvoice — angka berasal dari dokumen komersial berjalan (legacy) dan belum tentu merupakan faktur pajak.",
+    })
+  }
+  if (hasUnavailableJournalLiability) {
+    out.push({
+      kind: "notice",
+      text: "Kewajiban jurnal tidak tersedia untuk sebagian masa; periksa pemetaan akun PPN dan pengaturan sistem sebelum lapor.",
     })
   }
   if (hasJournalDiff) {
