@@ -4546,3 +4546,22 @@ Empat halaman detail master mencetak nominal `Decimal(15,2)` dengan 0 desimal: g
 ### Bukti
 - Merah: 1 gagal/17 lulus; hijau 2.609 lulus / 4 dilewati tanpa `Errors`; tsc, ESLint, diff-check bersih.
 - CI `41854822301`, `41854865791`, `41856179812`, `41856223297` **success** (putaran 198–199).
+
+## Putaran 202 — tabel daftar dokumen (commit `97cb01354`)
+
+Empat belas tabel daftar mencetak nominal `Decimal(15,2)` dengan 0 desimal:
+
+- Penjualan: penawaran, pesanan, faktur, pembayaran, harga pelanggan.
+- Pembelian: pesanan, tagihan vendor, pembayaran vendor.
+- Aset: tabel aset, perolehan, status pakai, status analitis, peristiwa nilai.
+- Master: tabel barang.
+
+### Vonis FIX
+- Keempat belas memakai `formatCurrencyExact`; guard statis di `exact-cents-sweep.test.ts` menolak `formatCurrency(` tanpa `Exact`.
+
+### Vonis CATAT
+- **`asset-capitalization.tsx` sengaja tetap memakai `formatCurrency`** pada dua pemakaian yang meneruskan `{ decimals: 2 }`. Penggantian massal sempat mengubah keduanya menjadi `formatCurrencyExact` dan `tsc` menangkap `Expected 1 arguments, but got 2` — dikembalikan sebelum commit. Ini contoh kedua (setelah kutip ganda di Putaran 198) bahwa sapuan massal harus diverifikasi oleh `tsc`, bukan dipercaya.
+
+### Bukti
+- Merah: 1 gagal/18 lulus; hijau 137/137 suite terkait dan 19/19 tes sweep; tsc, ESLint, diff-check bersih.
+- CI `41856179812`, `41856223297`, `41856828372`, `41856863230` **success** (putaran 199–200).
