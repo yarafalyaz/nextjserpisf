@@ -3510,3 +3510,20 @@ Lanjutan pola Putaran 132 pada laporan `faktur-ppn`. Baris **Posisi PPN (Keluara
 - Merah: 2 gagal (`"101"` vs `"100,50"`; KPI `"Rp 101"` vs `"100,50"`).
 - Hijau: VAT invoices 35/35 (23 tes fokus); seluruh `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` **3089 lulus / 4 dilewati**; guard statis **511/511**; `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
 - CI `41789494600` (head `2bc7bed42`) **success**.
+
+## Putaran 134 — selisih penyusutan fiskal dibulatkan, sen temuan hilang (commit `7c716ef26`)
+
+Laporan `/laporan/perbedaan-penyusutan` adalah laporan **temuan selisih** antara penyusutan akuntansi dan fiskal. Totals dihitung `safeAdd`/`safeSubtract(..., 2)`, tetapi baris `Jumlah`, `verdict`, dan KPI memakai `formatAccounting`/`formatCurrency` 0 desimal. Probe: aset dengan harga perolehan ber-sen menghasilkan `difference = -600.000,01`, dan laporan mencetak `Jumlah … (600.000)` serta `Selisih penyusutan tahunan Rp -600.000`. Sen yang menjadi alasan laporan itu ada justru menghilang, dan selisih `-600.000,00` yang sesungguhnya berbeda tampil identik.
+
+### Vonis FIX
+- `preciseAmount` lokal (rupiah penuh bila bulat, dua desimal bila ada sen) dipakai untuk tiga kolom baris `Jumlah`, verdict, dan ketiga angka KPI.
+- Perhitungan `accountingAnnual`/`fiscalAnnual`/`difference` tidak diubah; baris per aset juga tidak (konvensi cetak rupiah penuh).
+- Verdict kini juga tidak lagi mencetak "Rp -600.000" (tanda minus di dalam format mata uang) — bentuk `(600.000,01)` konsisten dengan konvensi akuntansi.
+
+### Vonis CATAT
+- **Formatter `preciseAmount` kini diduplikasi di empat berkas** (`skontro`, `journal-listing`, `inventory-reconciliation`, `received-not-billed`, `vat-invoices`, `depreciation-difference`). Duplikasi lokal dipilih karena tiap laporan punya tipe input berbeda (number vs `Prisma.Decimal`) dan pemindahan ke util bersama menuntut kontrak bersama yang belum ada. Bila jumlahnya bertambah, kandidat refactor `src/lib/utils/format.ts`.
+- **Pola "status dari sen, tampilan 0 desimal" belum tentu habis — CATAT.** `financial-charts.ts`, `production-variance.ts`, `job-estimate-vs-actual.ts` memakai `formatCurrency` untuk angka ringkasan yang bukan boolean status; belum ada bukti tampilan menyesatkan, jadi tidak diubah.
+
+### Bukti
+- Merah: 1 gagal — `Expected "(600.000,01)"`, `Received "(600.000)"`.
+- Hijau: 24/24; seluruh `src/lib/reports src/components/reports src/lib/pdf src/app/api/pdf` **3090 lulus / 4 dilewati**; guard statis **511/511**; `npx tsc --noEmit` 0; ESLint 0; `git diff --check` bersih.
