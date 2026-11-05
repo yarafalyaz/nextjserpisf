@@ -12,7 +12,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact, formatCurrency } from "@/lib/utils/format"
 import { buildMoneyListing } from "@/lib/finance/money-listing"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -84,7 +84,7 @@ export function buildAdvanceListing(lines: AdvanceReportLine[]): AdvanceReportRe
       line.documentNo,
       line.vendorName,
       line.description ?? "—",
-      formatAccounting(line.amount, { zeroDash: false }),
+      formatAccountingExact(line.amount, { zeroDash: false }),
     ],
     emptyNotice: "Tidak ada uang muka pembelian pada periode ini.",
     verdictNotice:
@@ -92,7 +92,7 @@ export function buildAdvanceListing(lines: AdvanceReportLine[]): AdvanceReportRe
       "penerapan uang muka ke tagihan vendor belum diotomatiskan.",
     emptyVerdict: "Tidak ada uang muka pembelian pada periode ini",
     verdict: (count, amount) => `${count} uang muka · total dibayar ${formatCurrency(amount)}`,
-    totalCells: (count, amount) => [String(count), "", "", "", formatAccounting(amount, { zeroDash: false })],
+    totalCells: (count, amount) => [String(count), "", "", "", formatAccountingExact(amount, { zeroDash: false })],
   })
 }
 

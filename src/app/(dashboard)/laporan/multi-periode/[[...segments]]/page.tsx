@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccounting, formatAccountingExact, formatCurrencyExact } from '@/lib/utils/format'
+import { formatAccountingExact, formatCurrencyExact } from '@/lib/utils/format'
 import { safeAdd } from '@/lib/utils/math'
 import { buildPeriodColumns, cumulativeNetProfit, MULTI_PERIOD_MODE_LABELS, parseMultiPeriodCount, type MultiPeriodMode } from '@/lib/reports/multi-period'
 import { reportPeriodFromRoute, splitReportSegments } from '@/lib/reports/report-period'
@@ -145,11 +145,11 @@ export default async function MultiPeriodReportPage({
             <td className="px-3 py-1.5 text-sm whitespace-nowrap">{account.code} — {account.name}</td>
             {columns.map((column) => (
               <td key={column.key} className="px-3 py-1.5 text-right text-sm tabular-nums">
-                {formatAccounting(cells.get(account.id)?.get(column.key) ?? 0, { zeroDash: true })}
+                {formatAccountingExact(cells.get(account.id)?.get(column.key) ?? 0, { zeroDash: true })}
               </td>
             ))}
             <td className="px-3 py-1.5 text-right text-sm font-semibold tabular-nums">
-              {formatAccounting(totalColumnValue(account.id), { zeroDash: true })}
+              {formatAccountingExact(totalColumnValue(account.id), { zeroDash: true })}
             </td>
           </tr>
         ))}

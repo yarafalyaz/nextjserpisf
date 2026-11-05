@@ -18,7 +18,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact, formatCurrency } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export const FINANCIAL_CHARTS = [
@@ -220,7 +220,7 @@ function averagePercent(metrics: MonthlyMetric[], pick: (m: MonthlyMetric) => nu
 
 export function formatTrendValue(value: number | null, unit: TrendUnit): string {
   if (value === null) return "n/a"
-  if (unit === "currency") return formatAccounting(value, { zeroDash: false })
+  if (unit === "currency") return formatAccountingExact(value, { zeroDash: false })
   if (unit === "percent") return `${value.toFixed(1).replace(".", ",")}%`
   return `${value.toFixed(2).replace(".", ",")}×`
 }

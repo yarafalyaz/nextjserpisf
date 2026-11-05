@@ -26,6 +26,23 @@ function noticeOf(input: SkontroBalanceSheetInput) {
 }
 
 describe("buildSkontroBalanceSheet", () => {
+  it("putaran 209: saldo akun bersen tampil sampai sen", () => {
+    // Baris akun dulu dibulatkan 0 desimal sementara baris jumlah memakai dua
+    // desimal, sehingga jumlah yang tercetak tidak sama dengan penjumlahan
+    // baris yang terbaca.
+    const input: SkontroBalanceSheetInput = {
+      ...base,
+      assetRows: [
+        { code: "1101", name: "Kas", balance: 5_000_000.75 },
+        { code: "1102", name: "Bank", balance: 1_000_000.25 },
+      ],
+      totalAssets: 6_000_001,
+    }
+    const rows = buildSkontroBalanceSheet(input).rows
+    const kas = rows.find((r) => r.kind === "data" && r.cells.includes("Kas"))
+    expect(kas && kas.kind === "data" ? kas.cells[2] : null).toBe("5.000.000,75")
+  })
+
   it("menyusun Aktiva dan Pasiva berdampingan dengan jumlah kedua sisi", () => {
     expect(totalRow(base)).toEqual([
       "",

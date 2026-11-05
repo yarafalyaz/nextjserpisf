@@ -74,4 +74,21 @@ describe("buildAdvanceListing presisi sen", () => {
     ])
     expect(result.totals.amount).toBe(30_000_000.30)
   })
+
+  it("putaran 209: nominal baris dan baris total tercetak sampai sen", () => {
+    // Total sudah eksak, tetapi barisnya dulu dibulatkan 0 desimal sehingga
+    // pembaca yang menjumlah kolom mendapat angka berbeda dari baris total.
+    const result = buildAdvanceListing([
+      { date: new Date("2026-09-10T00:00:00"), vendorName: "PT Sumber Jaya", description: null, documentNo: "DP-A", amount: 10_000_000.10 },
+      { date: new Date("2026-09-10T00:00:00"), vendorName: "PT Sumber Jaya", description: null, documentNo: "DP-B", amount: 10_000_000.10 },
+    ])
+
+    const dataCells = result.table.rows
+      .filter((row) => row.kind === "data")
+      .map((row) => (row.kind === "data" ? row.cells[4] : ""))
+    expect(dataCells).toEqual(["10.000.000,10", "10.000.000,10"])
+
+    const total = result.table.rows.find((row) => row.kind === "total" && row.cells[4])
+    expect(total?.kind === "total" ? total.cells[4] : null).toBe("20.000.000,20")
+  })
 })

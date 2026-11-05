@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { Fragment } from 'react'
 import { prisma } from '@/lib/db/prisma'
 import { requireAnyPermission } from '@/lib/auth/permissions'
-import { formatAccounting, formatCurrencyExact, formatDate } from '@/lib/utils/format'
+import { formatAccountingExact, formatCurrencyExact, formatDate } from '@/lib/utils/format'
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { safeAdd, safeSubtract } from '@/lib/utils/math'
 import { agingBucket, daysOverdue } from '@/lib/reports/aging'
@@ -180,12 +180,12 @@ export default async function PaymentOrderPage({
                     <DetailTableTd>{formatDate(row.date)}</DetailTableTd>
                     <DetailTableTd>{row.dueDate ? formatDate(row.dueDate) : "Tanpa jatuh tempo"}</DetailTableTd>
                     <DetailTableTd>{row.ageBucket}</DetailTableTd>
-                    <DetailTableTd align="right">{formatAccounting(row.remaining, { zeroDash: false })}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccountingExact(row.remaining, { zeroDash: false })}</DetailTableTd>
                   </DetailTableRow>
                 ))}
                 <DetailTableRow className="bg-muted/40">
                   <DetailTableTd colSpan={5} className="font-semibold">Subtotal {group.vendorName}</DetailTableTd>
-                  <DetailTableTd align="right" className="font-semibold">{formatAccounting(group.total, { zeroDash: false })}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-semibold">{formatAccountingExact(group.total, { zeroDash: false })}</DetailTableTd>
                 </DetailTableRow>
               </Fragment>
             ))}
@@ -197,7 +197,7 @@ export default async function PaymentOrderPage({
             {grouped.length > 0 && (
               <DetailTableRow className="border-t-2 border-default font-bold">
                 <DetailTableTd colSpan={5}>TOTAL AKAN DIBAYAR</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(total, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(total, { zeroDash: false })}</DetailTableTd>
               </DetailTableRow>
             )}
           </DetailTableBody>

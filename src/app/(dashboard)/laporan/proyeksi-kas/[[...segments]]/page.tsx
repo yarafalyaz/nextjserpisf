@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db/prisma'
 import { sumEntriesByAccount } from '@/lib/services/report-aggregation.service'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccounting, formatCurrencyExact, formatDate } from '@/lib/utils/format'
+import { formatAccountingExact, formatCurrencyExact, formatDate } from '@/lib/utils/format'
 import { safeAdd, safeSubtract } from '@/lib/utils/math'
 import { projectCash, buildReceivableProjectionItems, buildPayableProjectionItems, summarizeOpenCommitments, PAYROLL_PROJECTION_STATUSES, sumProjectionPayrollNet } from '@/lib/reports/cash-projection'
 import { loadReturnCreditByInvoiceId } from '@/lib/reports/return-credit'
@@ -162,15 +162,15 @@ export default async function CashProjectionPage({
           <DetailTableBody>
             <DetailTableRow>
               <DetailTableTd>PO terbuka ({commitments.openPurchaseOrderCount} dokumen, sisa qty belum diterima)</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(commitments.openPurchaseAmount, { zeroDash: false })}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccountingExact(commitments.openPurchaseAmount, { zeroDash: false })}</DetailTableTd>
             </DetailTableRow>
             <DetailTableRow>
               <DetailTableTd>Estimasi gaji bersih periode berikut{commitments.payrollPeriod ? ` (basis ${commitments.payrollPeriod})` : ''}</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(commitments.estimatedPayrollAmount, { zeroDash: false })}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccountingExact(commitments.estimatedPayrollAmount, { zeroDash: false })}</DetailTableTd>
             </DetailTableRow>
             <DetailTableRow>
               <DetailTableTd className="font-semibold">Total komitmen memo</DetailTableTd>
-              <DetailTableTd align="right" className="font-semibold">{formatAccounting(commitments.total, { zeroDash: false })}</DetailTableTd>
+              <DetailTableTd align="right" className="font-semibold">{formatAccountingExact(commitments.total, { zeroDash: false })}</DetailTableTd>
             </DetailTableRow>
           </DetailTableBody>
         </DetailTable>
@@ -189,10 +189,10 @@ export default async function CashProjectionPage({
             {rows.map((row) => (
               <DetailTableRow key={row.month}>
                 <DetailTableTd>{row.label}</DetailTableTd>
-                <DetailTableTd align="right" className="text-success">{formatAccounting(row.inflow, { zeroDash: false })}</DetailTableTd>
-                <DetailTableTd align="right" className="text-danger">{formatAccounting(row.outflow, { zeroDash: false })}</DetailTableTd>
-                <DetailTableTd align="right" className={row.net >= 0 ? 'text-success' : 'text-danger'}>{formatAccounting(row.net, { zeroDash: false })}</DetailTableTd>
-                <DetailTableTd align="right" className="font-semibold">{formatAccounting(row.closing, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right" className="text-success">{formatAccountingExact(row.inflow, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right" className="text-danger">{formatAccountingExact(row.outflow, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right" className={row.net >= 0 ? 'text-success' : 'text-danger'}>{formatAccountingExact(row.net, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right" className="font-semibold">{formatAccountingExact(row.closing, { zeroDash: false })}</DetailTableTd>
               </DetailTableRow>
             ))}
             {rows.length === 0 && (

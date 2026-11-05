@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/prisma'
 import Link from 'next/link'
 import { sumEntriesByAccount } from '@/lib/services/report-aggregation.service'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccounting, formatAccountingExact, formatCurrencyExact, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
 import { buildReportHref } from '@/lib/reports/report-href'
@@ -175,10 +175,10 @@ export default async function PeriodComparisonPage({
                     <DetailTableRow key={`${side.label}-${row.key}`}>
                       <DetailTableTd className="font-mono text-xs">{row.code}</DetailTableTd>
                       <DetailTableTd>{row.name}</DetailTableTd>
-                      <DetailTableTd align="right">{formatAccounting(row.current, { zeroDash: false })}</DetailTableTd>
-                      <DetailTableTd align="right">{formatAccounting(row.previous, { zeroDash: false })}</DetailTableTd>
+                      <DetailTableTd align="right">{formatAccountingExact(row.current, { zeroDash: false })}</DetailTableTd>
+                      <DetailTableTd align="right">{formatAccountingExact(row.previous, { zeroDash: false })}</DetailTableTd>
                       <DetailTableTd align="right" className={row.variance >= 0 ? 'text-success' : 'text-danger'}>
-                        {formatAccounting(row.variance, { zeroDash: false })}
+                        {formatAccountingExact(row.variance, { zeroDash: false })}
                       </DetailTableTd>
                       <DetailTableTd align="right">{row.percentage === null ? '–' : `${row.percentage.toFixed(1)}%`}</DetailTableTd>
                     </DetailTableRow>
@@ -218,10 +218,10 @@ export default async function PeriodComparisonPage({
               <DetailTableRow key={row.key}>
                 <DetailTableTd className="font-mono text-xs">{row.code}</DetailTableTd>
                 <DetailTableTd>{row.name}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.current, { zeroDash: false })}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.previous, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(row.current, { zeroDash: false })}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(row.previous, { zeroDash: false })}</DetailTableTd>
                 <DetailTableTd align="right" className={row.variance >= 0 ? 'text-success' : 'text-danger'}>
-                  {formatAccounting(row.variance, { zeroDash: false })}
+                  {formatAccountingExact(row.variance, { zeroDash: false })}
                 </DetailTableTd>
                 <DetailTableTd align="right">{row.percentage === null ? '–' : `${row.percentage.toFixed(1)}%`}</DetailTableTd>
               </DetailTableRow>

@@ -11,7 +11,7 @@
  * Pure (tanpa Prisma/DOM) supaya aturan kolom dan totalnya bisa diuji.
  */
 
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccounting, formatAccountingExact } from "@/lib/utils/format"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 import type { TrialBalanceLine } from "@/lib/finance/trial-balance"
@@ -55,7 +55,7 @@ export interface TrialBalanceReportResult {
 }
 
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value, { zeroDash: false })
 }
 
 function preciseAmount(value: number): string {

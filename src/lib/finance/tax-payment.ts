@@ -9,7 +9,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact, formatCurrency } from "@/lib/utils/format"
 import { buildMoneyListing } from "@/lib/finance/money-listing"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -78,7 +78,7 @@ export function buildTaxPaymentListing(lines: TaxPaymentReportLine[]): TaxPaymen
       line.period ?? "—",
       line.typeLabel,
       line.reference ?? "—",
-      formatAccounting(line.amount, { zeroDash: false }),
+      formatAccountingExact(line.amount, { zeroDash: false }),
     ],
     emptyNotice: "Tidak ada penyetoran pajak pada periode ini.",
     verdictNotice:
@@ -86,7 +86,7 @@ export function buildTaxPaymentListing(lines: TaxPaymentReportLine[]): TaxPaymen
       "bukan menambah beban pajak.",
     emptyVerdict: "Tidak ada penyetoran pajak pada periode ini",
     verdict: (count, amount) => `${count} penyetoran · total ${formatCurrency(amount)}`,
-    totalCells: (count, amount) => [String(count), "", "", "", "", formatAccounting(amount, { zeroDash: false })],
+    totalCells: (count, amount) => [String(count), "", "", "", "", formatAccountingExact(amount, { zeroDash: false })],
   })
 }
 

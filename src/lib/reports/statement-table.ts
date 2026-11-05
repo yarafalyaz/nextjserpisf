@@ -12,7 +12,7 @@
  * Pure (tanpa Prisma/DOM) supaya bisa diuji tanpa database.
  */
 
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccounting, formatAccountingExact } from "@/lib/utils/format"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { buildReportHref } from "@/lib/reports/report-href"
 import type { StatementRow } from "@/lib/reports/statement-display"
@@ -56,7 +56,7 @@ export interface StatementTable {
 
 /** Format angka statement: ribuan bertitik, nol sebagai "0" (bukan "–"). */
 export function statementAmount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value, { zeroDash: false })
 }
 
 function preciseStatementAmount(value: number): string {

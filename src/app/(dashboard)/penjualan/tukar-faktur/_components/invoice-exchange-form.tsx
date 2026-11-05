@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
-import { formatAccounting, formatCurrencyExact } from "@/lib/utils/format"
+import { formatAccountingExact, formatCurrencyExact } from "@/lib/utils/format"
 
 export interface Option {
   value: string
@@ -166,9 +166,9 @@ export function InvoiceExchangeForm({
                 />
                 <span className="font-mono">{invoice.documentNo}</span>
                 <span className="text-muted-foreground">{invoice.date}</span>
-                <span className="ml-auto tabular-nums">{formatAccounting(invoice.grandTotal)}</span>
+                <span className="ml-auto tabular-nums">{formatAccountingExact(invoice.grandTotal)}</span>
                 <span className="w-32 text-right text-xs text-muted-foreground tabular-nums">
-                  sisa {formatAccounting(invoice.grandTotal - invoice.paidAmount)}
+                  sisa {formatAccountingExact(invoice.grandTotal - invoice.paidAmount)}
                 </span>
               </label>
             ))}

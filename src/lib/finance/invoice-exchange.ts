@@ -13,7 +13,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccountingExact, formatCurrency } from "@/lib/utils/format"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { isSettled } from "@/lib/finance/settlement-status"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
@@ -105,9 +105,9 @@ export function buildInvoiceExchangeListing(lines: ExchangeReportLine[]): Exchan
         line.receiptNumber ?? "—",
         line.dueDate ? line.dueDate.toLocaleDateString("id-ID") : "—",
         String(line.invoiceCount),
-        formatAccounting(line.amount, { zeroDash: false }),
-        formatAccounting(line.paid, { zeroDash: false }),
-        formatAccounting(safeSubtract(line.amount, line.paid, 2), { zeroDash: false }),
+        formatAccountingExact(line.amount, { zeroDash: false }),
+        formatAccountingExact(line.paid, { zeroDash: false }),
+        formatAccountingExact(safeSubtract(line.amount, line.paid, 2), { zeroDash: false }),
         SETTLEMENT_LABEL[status],
       ],
     }
@@ -127,9 +127,9 @@ export function buildInvoiceExchangeListing(lines: ExchangeReportLine[]): Exchan
         "",
         "",
         "",
-        formatAccounting(totals.amount, { zeroDash: false }),
-        formatAccounting(totals.paid, { zeroDash: false }),
-        formatAccounting(totals.outstanding, { zeroDash: false }),
+        formatAccountingExact(totals.amount, { zeroDash: false }),
+        formatAccountingExact(totals.paid, { zeroDash: false }),
+        formatAccountingExact(totals.outstanding, { zeroDash: false }),
         "",
       ],
     })

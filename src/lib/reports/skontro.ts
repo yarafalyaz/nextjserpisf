@@ -12,7 +12,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccounting, formatAccountingExact } from "@/lib/utils/format"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -53,7 +53,7 @@ export interface SkontroBalanceSheetInput {
 }
 
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  return formatAccountingExact(value, { zeroDash: false })
 }
 
 /**

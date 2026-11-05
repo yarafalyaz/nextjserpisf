@@ -80,4 +80,21 @@ describe("buildTaxPaymentListing presisi sen", () => {
     ])
     expect(result.totals.amount).toBe(30_000_000.30)
   })
+
+  it("putaran 209: nominal setoran per baris dan total tercetak sampai sen", () => {
+    const result = buildTaxPaymentListing([
+      { date: new Date("2026-10-10T00:00:00"), period: "2026-09", typeLabel: "PPh 23", reference: null, documentNo: "PAJAK-A", amount: 2_500_000.75 },
+      { date: new Date("2026-10-10T00:00:00"), period: "2026-09", typeLabel: "PPh 23", reference: null, documentNo: "PAJAK-B", amount: 1_000_000.25 },
+    ])
+
+    const rowAmounts = result.table.rows
+      .filter((row) => row.kind === "data")
+      .map((row) => (row.kind === "data" ? row.cells[5] : ""))
+    expect(rowAmounts).toEqual(["2.500.000,75", "1.000.000,25"])
+
+    const total = result.table.rows.find((row) => row.kind === "total" && row.cells[5])
+    // 2.500.000,75 + 1.000.000,25 = 3.500.001,00 — nilai bulat, jadi
+    // formatAccountingExact mencetaknya sebagai rupiah penuh (kontrak helper).
+    expect(total?.kind === "total" ? total.cells[5] : null).toBe("3.500.001")
+  })
 })

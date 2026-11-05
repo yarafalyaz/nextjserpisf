@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
 import { sumEntriesByAccount } from "@/lib/services/report-aggregation.service";
-import { formatAccounting, formatPeriod } from "@/lib/utils/format";
+import { formatAccountingExact, formatPeriod } from "@/lib/utils/format";
 import { toLocalDateOnly } from "@/lib/utils/date-only";
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export";
@@ -176,7 +176,7 @@ export default async function CashFlowPage({
   }
 
   const periodLabel = `Periode ${formatDate(startDate, { format: "short" })} – ${formatDate(endDate, { format: "short" })}`;
-  const amount = (value: number) => formatAccounting(value, { zeroDash: false });
+  const amount = (value: number) => formatAccountingExact(value, { zeroDash: false });
 
   return (
     <ReportPageShell title="Arus Kas" sheet={false} actions={<>

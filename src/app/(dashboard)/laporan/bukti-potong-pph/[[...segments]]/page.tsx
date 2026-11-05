@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatAccounting, formatCurrencyExact, formatDate, formatNumber } from "@/lib/utils/format"
+import { formatAccountingExact, formatCurrencyExact, formatDate, formatNumber } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -146,7 +146,7 @@ export default async function WithholdingTaxReportPage({
                 <DetailTableTd>{bucket.label}</DetailTableTd>
                 <DetailTableTd align="right">{bucket.rate === null ? "–" : `${formatNumber(bucket.rate)}%`}</DetailTableTd>
                 <DetailTableTd align="right">{formatNumber(bucket.count)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(bucket.amount)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(bucket.amount)}</DetailTableTd>
               </DetailTableRow>
             ))}
             {byType.size === 0 && (
@@ -156,7 +156,7 @@ export default async function WithholdingTaxReportPage({
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={2}>TOTAL</DetailTableTd>
                 <DetailTableTd align="right">{formatNumber(rows.length)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalWithheld)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(totalWithheld)}</DetailTableTd>
               </DetailTableRow>
             )}
           </DetailTableBody>
@@ -184,8 +184,8 @@ export default async function WithholdingTaxReportPage({
                   {row.typeCode ? `${row.typeCode} — ${row.typeName}` : "Jenis PPh tidak ditemukan"}
                 </DetailTableTd>
                 <DetailTableTd align="right">{row.rate === null ? "–" : `${formatNumber(row.rate)}%`}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.dpp)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.withheld)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(row.dpp)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(row.withheld)}</DetailTableTd>
               </DetailTableRow>
             ))}
             {rows.length === 0 && (
@@ -194,8 +194,8 @@ export default async function WithholdingTaxReportPage({
             {rows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={5}>TOTAL</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalDpp)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalWithheld)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(totalDpp)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(totalWithheld)}</DetailTableTd>
               </DetailTableRow>
             )}
           </DetailTableBody>
@@ -226,7 +226,7 @@ export default async function WithholdingTaxReportPage({
                   {row.typeCode ? `${row.typeCode} — ${row.typeName}` : "Jenis PPh tidak ditemukan"}
                 </DetailTableTd>
                 <DetailTableTd align="right">{row.rate === null ? "–" : `${formatNumber(row.rate)}%`}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.withheld)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(row.withheld)}</DetailTableTd>
               </DetailTableRow>
             ))}
             {salesRows.length === 0 && (
@@ -239,7 +239,7 @@ export default async function WithholdingTaxReportPage({
             {salesRows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={7}>TOTAL</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalSalesWithheld)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccountingExact(totalSalesWithheld)}</DetailTableTd>
               </DetailTableRow>
             )}
           </DetailTableBody>

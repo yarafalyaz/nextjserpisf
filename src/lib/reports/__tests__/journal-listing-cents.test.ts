@@ -44,6 +44,27 @@ describe("journal-listing presisi sen", () => {
     expect(total?.kind === "total" ? total.cells : []).toEqual(["100,01", "100,00"])
   })
 
+  it("putaran 209: baris jurnal bersen tampil sampai sen", () => {
+    // Baris dulu dibulatkan 0 desimal sementara totalnya dua desimal, sehingga
+    // pembaca yang menjumlah baris tidak mendapat angka baris total.
+    const journals = centsJournals().slice(0, 1).map((j) => ({
+      ...j,
+      lines: [
+        { accountCode: "1101", accountName: "Kas", debit: 1_000_000.75, credit: 0 },
+        { accountCode: "4101", accountName: "Pendapatan", debit: 0, credit: 1_000_000.75 },
+      ],
+    }))
+    const r = buildJournalListing({ journals, emptyNotice: "kosong" })
+
+    const data = r.table.rows.find((row) => row.kind === "data")
+    expect(data?.kind === "data" ? data.cells : []).toEqual([
+      "",
+      "1101 Kas",
+      "1.000.000,75",
+      "0",
+    ])
+  })
+
   it("total jurnal yang seimbang tetap rupiah penuh", () => {
     const r = buildJournalListing({ journals: centsJournals(), emptyNotice: "kosong" })
 

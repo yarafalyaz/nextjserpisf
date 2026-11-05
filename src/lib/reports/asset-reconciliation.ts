@@ -16,7 +16,7 @@
 
 import { Prisma } from "@prisma/client"
 import { journalBookValue, type AssetJournalInput } from "@/lib/finance/asset-book-value"
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccounting, formatAccountingExact } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 const COLUMNS: TableColumn[] = [
@@ -85,7 +85,7 @@ function differs(a: Prisma.Decimal, b: Prisma.Decimal): boolean {
 }
 
 function amount(value: Prisma.Decimal): string {
-  return formatAccounting(value.toNumber(), { zeroDash: false })
+  return formatAccountingExact(value.toNumber(), { zeroDash: false })
 }
 
 /**

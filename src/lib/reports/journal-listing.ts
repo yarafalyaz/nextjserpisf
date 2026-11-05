@@ -12,7 +12,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatDate } from "@/lib/utils/format"
+import { formatAccounting, formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -51,7 +51,14 @@ export interface JournalListingResult {
 }
 
 function amount(value: number): string {
-  return formatAccounting(value, { zeroDash: false })
+  // Baris selalu tampil sampai sen: baris yang dibulatkan membuat jumlah
+  // baris yang dibaca pengguna tidak sama dengan baris total di bawahnya.
+  return formatAccountingExact(value, { zeroDash: false })
+}
+
+/** Baris TOTAL seimbang tetap rupiah penuh (kontrak `journal-listing-cents`). */
+function balancedTotalAmount(value: number): string {
+  return formatAccounting(value, { zeroDash: false }) // sweep-allow: balanced-total
 }
 
 /**
@@ -114,7 +121,7 @@ export function buildJournalListing(input: {
   if (sorted.length === 0) rows.push({ kind: "notice", text: emptyNotice })
 
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.005
-  const totalAmount = isBalanced ? amount : preciseAmount
+  const totalAmount = isBalanced ? balancedTotalAmount : preciseAmount
   if (sorted.length > 0 && !isBalanced) {
     rows.push({
       kind: "notice",
