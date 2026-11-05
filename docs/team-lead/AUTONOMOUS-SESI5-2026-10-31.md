@@ -4676,3 +4676,47 @@ dua gugur, satu diperbaiki.
   pada kode lama (1 gagal / 17 lulus); hijau sesudah fix 21/21.
 - Suite laporan 2.619 lulus / 4 dilewati; tsc 0; ESLint 0 error;
   `npm run build` exit 0 (428 halaman).
+
+## Putaran 209 — nominal laporan/keuangan tampil hingga sen (commit `294dd056a`)
+
+Sapuan 199–207 hanya menjaga `formatCurrency(`; `formatAccounting(` (default
+**0 desimal**) lolos. Workflow triase 23 berkas — satu agen per berkas, tiap
+situs diklasifikasi dari jenis nilai dan kolom sumbernya — memberi 15 berkas
+cacat uang dan 6 berkas bersih (kuantitas/persen/rasio: kartu stok, form
+opname, `vendor-prices.minQty`, `rekonsiliasi-ppn` yang sudah `decimals: 2`,
+`tax-summary-data`, `vehicle-margin-card`).
+
+### Vonis FIX
+Pola yang sama di semua berkas: helper `amount()` mencetak baris dengan 0
+desimal sementara baris TOTAL memakai formatter eksak — jumlah baris yang
+terbaca tidak sama dengan total yang tercetak.
+
+- **lib**: `invoice-exchange` (6 situs: amount/paid/sisa + tiga total),
+  `purchase-advance`, `tax-payment`, `journal-listing`, `asset-reconciliation`,
+  `financial-charts` (seri `unit === "currency"`), `trial-balance-report`,
+  `skontro`, `statement-table`.
+- **halaman**: arus kas (satu helper `amount()` untuk sepuluh situs),
+  proyeksi kas, perbandingan periode, multi periode, bukti potong PPh,
+  riwayat harga jual, perintah pembayaran, form tukar faktur.
+
+### Kontrak yang SENGAJA dipertahankan
+- `formatAccountingExact` tetap mencetak rupiah penuh untuk nilai bulat
+  (`format.ts:100-114`) — bukan cacat, itu kontrak helper.
+- Total **jurnal seimbang** tetap rupiah penuh (dikunci
+  `journal-listing-cents.test.ts`); hanya barisnya yang dieksakkan. Ditandai
+  `sweep-allow: balanced-total` pada baris panggilan.
+
+### Guard ratchet
+- `src/lib/reports/__tests__/exact-cents-accounting-sweep.test.ts` — 17 berkas,
+  menolak `formatAccounting(` tanpa `Exact` dan tanpa `decimals: 2`.
+  Pencocokan **per baris** (bukan regex lintas baris): panggilan memuat `)`
+  di dalamnya (`value.toNumber()`), regex berhenti di `)` pertama dan salah
+  menilai.
+
+### Bukti
+- Merah sebelum fix: uang muka dan penyetoran pajak (sel baris + total),
+  baris jurnal bersen, saldo akun skontro — semuanya gagal pada kode lama.
+- Falsifikasi guard: mengembalikan `purchase-advance` ke `formatAccounting(`
+  → 1 tes merah; dipulihkan → hijau.
+- Hijau 12.618 lulus / 23 dilewati (naik 21 dari 12.597); tsc 0; ESLint 0;
+  `npm run build` exit 0.
