@@ -4644,3 +4644,35 @@ Audit beralih dari format sen ke kelas cacat lain. Workflow 8-agent (hunt → ve
 - `7162aa55f`: tes paritas PDF diperketat (Masuk/Keluar kosong, Saldo 20) → merah sebelum fix, hijau 3042 lulus.
 - `520744b84`: tiga tes PKWT merah → hijau 32/32 dan 3930 lulus / 7 dilewati.
 - tsc, ESLint, diff-check bersih pada ketiganya.
+
+## Putaran 208 — slip mingguan & penyaringan ulang kandidat CATAT (commit `18f989a9d`)
+
+Kandidat CATAT putaran 207 diperiksa ulang satu per satu terhadap kode nyata;
+dua gugur, satu diperbaiki.
+
+### Vonis FIX
+- **Slip mingguan sah dilaporkan sebagai duplikat** (`payroll-reports.ts`). Kunci
+  `duplicateEmployeePeriods` adalah `${identitas}|${period}`, sementara
+  `Payroll.period` hanyalah label "YYYY-MM" turunan bulan `endDate`. Karyawan
+  bergaji mingguan wajar punya empat slip berlabel "2026-10", jadi laporan
+  menuduh data ganda pada data yang benar. Fix: kunci memakai rentang tanggal
+  nyata slip (`startDate..endDate`) bila tersedia, label periode hanya fallback
+  untuk pemanggil tanpa tanggal; loader kini memilih dan meneruskan kedua kolom.
+
+### Vonis GUGUR (kandidat CATAT ditarik dengan bukti)
+- **`stock-count.ts` menyertakan draft/rejected ke total** — sudah diklasifikasikan
+  by-design di catatan putaran sebelumnya ("penghitungan stok semua status
+  by-design tertulis + label per dokumen"), dan `processing` adalah status
+  transien yang dipulihkan ke `draft` saat transaksi gagal
+  (`inventory.actions.ts:545`). Tidak ada dokumen `rejected` yang bisa lahir:
+  status nyata hanya `draft|processing|processed`. Bukan cacat.
+- **`ar-ap-summary` toleransi Rp1 di agregat pihak** — `SETTLEMENT_TOLERANCE_IDR`
+  = Rp1 adalah keputusan FIN-BR-006 yang sudah diratifikasi (Q-EPS-1..5), dan
+  laporan ini sengaja menyaring pada agregat per pihak. Menyaring per dokumen
+  berarti mengubah populasi laporan, bukan memperbaiki cacat.
+
+### Bukti
+- Merah: `putaran 208: slip mingguan sah dalam satu bulan BUKAN duplikat` gagal
+  pada kode lama (1 gagal / 17 lulus); hijau sesudah fix 21/21.
+- Suite laporan 2.619 lulus / 4 dilewati; tsc 0; ESLint 0 error;
+  `npm run build` exit 0 (428 halaman).
