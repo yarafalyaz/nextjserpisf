@@ -26,6 +26,8 @@ function slip(status: string, baseSalary = 1_000_000, period = "2026-10") {
     id: 1,
     correctsPayrollId: null,
     period,
+    startDate: new Date(`${period}-01T00:00:00.000Z`),
+    endDate: new Date(`${period}-28T00:00:00.000Z`),
     status,
     baseSalary,
     allowances: 0,

@@ -35,6 +35,8 @@ export async function loadPayrollRows(period: { start: Date; end: Date }): Promi
         employeeId: true,
         correctsPayrollId: true,
         period: true,
+        startDate: true,
+        endDate: true,
         status: true,
         baseSalary: true,
         allowances: true,
@@ -107,6 +109,10 @@ export async function loadPayrollRows(period: { start: Date; end: Date }): Promi
       employeeId: payroll.employeeId ?? null,
       employeeName: payroll.employee?.name ?? "Tanpa karyawan",
       period: payroll.period,
+      // Rentang nyata slip: `period` hanya label bulan, jadi slip mingguan
+      // wajar berbagi label dan tidak boleh dilaporkan sebagai duplikat.
+      startDate: payroll.startDate.toISOString().slice(0, 10),
+      endDate: payroll.endDate.toISOString().slice(0, 10),
     })),
   )
 

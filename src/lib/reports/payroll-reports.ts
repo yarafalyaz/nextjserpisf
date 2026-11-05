@@ -147,14 +147,30 @@ function groupByEmployee(rows: PayrollRowInput[]): Grouped[] {
   return [...map.values()].sort((a, b) => a.employeeName.localeCompare(b.employeeName, "id-ID"))
 }
 
-/** Dua slip berurutan untuk periode yang sama pada satu karyawan = data ganda. */
+/**
+ * Slip ganda = dua slip untuk karyawan yang sama DAN rentang tanggal yang
+ * sama. Periode saja tidak cukup: `Payroll.period` hanyalah label "YYYY-MM"
+ * dari bulan `endDate`, sehingga karyawan bergaji mingguan wajar punya
+ * empat slip berlabel "2026-10". Kunci `identitas|period` melaporkan semuanya
+ * sebagai duplikat dan menyuruh memeriksa data yang sebenarnya benar.
+ *
+ * Slip tanpa rentang (pemanggil lama/unit test) tetap dinilai per periode —
+ * tanpa tanggal tidak ada cara membedakan mingguan sah dari slip ganda.
+ */
 export function duplicateEmployeePeriods(
-  rows: { employeeId?: number | null; employeeName: string; period: string }[],
+  rows: {
+    employeeId?: number | null
+    employeeName: string
+    period: string
+    startDate?: string | null
+    endDate?: string | null
+  }[],
 ): string[] {
   const seen = new Map<string, { count: number; employeeName: string }>()
   for (const row of rows) {
     const identity = row.employeeId != null ? `id:${row.employeeId}` : `name:${row.employeeName}`
-    const key = `${identity}|${row.period}`
+    const range = row.startDate && row.endDate ? `${row.startDate}..${row.endDate}` : null
+    const key = range != null ? `${identity}|${range}` : `${identity}|${row.period}`
     const entry = seen.get(key)
     if (entry) entry.count += 1
     else seen.set(key, { count: 1, employeeName: row.employeeName })

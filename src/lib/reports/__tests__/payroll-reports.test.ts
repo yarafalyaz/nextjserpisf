@@ -168,6 +168,39 @@ describe("duplicateEmployeePeriods", () => {
 
     expect(duplicates).toEqual(["Budi"])
   })
+
+  it("putaran 208: slip mingguan sah dalam satu bulan BUKAN duplikat", () => {
+    // Payroll.period adalah label "YYYY-MM" yang diambil dari bulan endDate,
+    // jadi empat slip mingguan Oktober berbagi label "2026-10". Kunci
+    // lama (identitas|period) melaporkan setiap karyawan mingguan sebagai
+    // duplikat, dan peringatan itu menyuruh memeriksa data yang sebenarnya benar.
+    const duplicates = duplicateEmployeePeriods([
+      { employeeId: 11, employeeName: "Budi", period: "2026-10", startDate: "2026-10-01", endDate: "2026-10-07" },
+      { employeeId: 11, employeeName: "Budi", period: "2026-10", startDate: "2026-10-08", endDate: "2026-10-14" },
+      { employeeId: 11, employeeName: "Budi", period: "2026-10", startDate: "2026-10-15", endDate: "2026-10-21" },
+      { employeeId: 11, employeeName: "Budi", period: "2026-10", startDate: "2026-10-22", endDate: "2026-10-31" },
+    ])
+
+    expect(duplicates).toEqual([])
+  })
+
+  it("putaran 208: dua slip dengan rentang tanggal identik tetap duplikat", () => {
+    const duplicates = duplicateEmployeePeriods([
+      { employeeId: 11, employeeName: "Budi", period: "2026-10", startDate: "2026-10-01", endDate: "2026-10-07" },
+      { employeeId: 11, employeeName: "Budi", period: "2026-10", startDate: "2026-10-01", endDate: "2026-10-07" },
+    ])
+
+    expect(duplicates).toEqual(["Budi"])
+  })
+
+  it("putaran 208: slip tanpa rentang tetap dinilai per periode (fallback input lama)", () => {
+    const duplicates = duplicateEmployeePeriods([
+      { employeeId: 11, employeeName: "Budi", period: "2026-10" },
+      { employeeId: 11, employeeName: "Budi", period: "2026-10" },
+    ])
+
+    expect(duplicates).toEqual(["Budi"])
+  })
 })
 
 describe("putaran 52: grouping per identitas karyawan, bukan nama", () => {
