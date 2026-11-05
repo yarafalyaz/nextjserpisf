@@ -4804,3 +4804,53 @@ dan data master.
   berkas lama.
 - 12.631 lulus / 23 dilewati (naik 6 berkas uji; total tes 12.625 → 12.654);
   `tsc --noEmit` bersih; ESLint `src` bersih.
+
+## Putaran 211 — chip filter mempertahankan pencarian di 29 halaman
+
+Lanjutan langsung butir CATAT putaran 210 ("chip filter menjatuhkan pencarian
+di 29 halaman lain"). Semua halaman itu sudah membaca `?cari=` di loader-nya,
+jadi cacatnya bukan pencarian yang mati melainkan **pencarian yang hilang saat
+pengguna berpindah filter**: chip membangun URL dari nol, sehingga
+`/pembelian/tagihan?cari=INV-001` berubah menjadi `/pembelian/tagihan?status=disetujui`
+tanpa `cari`. Pengguna lalu melihat jauh lebih banyak baris daripada yang ia
+cari, tanpa petunjuk apa pun bahwa filternya dibuang.
+
+### Vonis FIX
+
+Seluruh chip `filter-chip` pada halaman berkotak cari kini dibangun
+`withListParams(basePath, params, { <kunci>: nilai || undefined, halaman: undefined })`
+(`src/lib/utils/list-href.ts`): parameter yang sedang aktif terbawa, filter
+yang diganti di-`set`, dan `halaman` selalu dibuang supaya pindah filter tidak
+mendarat di halaman 5 dari hasil yang hanya punya 1 halaman.
+
+- **26 halaman pola seragam** — `penjualan/{penawaran,pesanan,surat-jalan,retur,uang-muka}`,
+  `pembelian/{permintaan,pesanan,penerimaan,tagihan,retur}`,
+  `inventaris/{pengeluaran-material,penyesuaian,transfer,mutasi-stok}`,
+  `sdm/{cuti,lembur,pinjaman,apresiasi}`, `produksi/{perintah-kerja,production-orders}`,
+  `proyek` + `proyek/tugas`, `crm/{leads,tickets}`, `pengaturan/persetujuan`,
+  `kendaraan/fitment`. Chip `mutasi-stok` memakai kunci `dampak`, `apresiasi`
+  memakai `tipe`, `fitment` memakai `hasil`.
+- **3 halaman berperiode di PATH** — `sdm/absensi`, `sdm/penggajian`,
+  `sdm/cuti/saldo`. Di sini base path ikut berubah per chip (`/tanggal/<tgl>`,
+  `/bulan/<bln>`, `filterPath`, `yearHref(y)`), jadi yang dibangun ulang hanya
+  query-nya; `sdm/cuti/saldo` sebelumnya menambal `?cari=` dengan
+  `encodeURIComponent` manual dan kini memakai helper yang sama.
+
+### Guard ratchet
+
+`link-wiring.test.ts` + 1 blok describe (2 tes): setiap `<Link>` berkelas
+`filter-chip` pada halaman berkotak cari (punya `AppSearchField` atau membaca
+`params.cari`) wajib dibangun `withListParams`/`listPageHref`. Href yang
+dirakit di variabel (`href={chip.href}` dari array `filterChips`) dinilai pada
+berkasnya: builder harus dipakai **dan** tidak boleh ada objek mana pun yang
+menulis `href:` berisi query literal. Kontrol positif: >20 halaman harus
+terdeteksi punya chip, supaya penjaga tidak hijau karena regex-nya meleset.
+
+### Bukti
+
+- Merah sebelum fix: dengan 29 halaman dikembalikan ke HEAD, penjaga gagal
+  dengan tepat 29 baris (satu per berkas), termasuk tiga halaman berperiode
+  path (`chip.href`, `${yearHref(y)}?cari=…`, `${filterPath}${qstr}`).
+  Dipulihkan → hijau.
+- `tsc --noEmit` bersih; ESLint bersih; `npm run build` exit 0.
+- Vitest penuh: 12.633 lulus / 23 dilewati (12.631 → 12.633, 2 tes baru).
