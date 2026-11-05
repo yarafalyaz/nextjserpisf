@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { notFound, redirect } from "next/navigation"
 import { requirePermission } from "@/lib/auth/permissions"
 import { getHrScope } from "@/lib/auth/hr-scope"
+import { withListParams } from "@/lib/utils/list-href"
 import { prisma } from "@/lib/db/prisma"
 import { getAllLeaveBalances } from "@/actions/hrm.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -136,7 +137,8 @@ export default async function LeaveBalancePage({
           {yearOptions.map((y) => (
             <Link
               key={y}
-              href={params.cari ? `${yearHref(y)}?cari=${encodeURIComponent(params.cari)}` : yearHref(y)}
+              // Tahun hidup di path; `?cari=` aktif harus ikut terbawa.
+              href={withListParams(yearHref(y), params)}
               className={`filter-chip ${year === y ? "active" : ""}`}
             >
               {y}

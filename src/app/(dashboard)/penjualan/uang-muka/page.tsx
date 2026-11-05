@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { toPlain } from "@/lib/utils/serialization";
 import { prisma } from "@/lib/db/prisma";
 import { parsePagination } from "@/lib/utils/pagination";
+import { withListParams } from "@/lib/utils/list-href";
 import { requirePermission } from "@/lib/auth/permissions";
 import Link from "next/link";
 import {
@@ -113,7 +114,7 @@ export default async function DownPaymentsPage({
               return (
                 <Link
                   key={dbStatus}
-                  href={`/penjualan/uang-muka${urlStatus ? `?status=${urlStatus}` : ""}`}
+                  href={withListParams("/penjualan/uang-muka", params, { status: urlStatus || undefined, halaman: undefined })}
                   className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
                 >
                   {dbStatus ? statusLabel(dbStatus) : "Semua"}

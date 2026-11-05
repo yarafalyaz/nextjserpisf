@@ -4,6 +4,7 @@ import { StockMoveImpact } from "@prisma/client"
 import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
+import { withListParams } from "@/lib/utils/list-href"
 import { requirePermission } from "@/lib/auth/permissions"
 import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { AppSearchField } from "@/components/ui/search-field"
@@ -79,7 +80,7 @@ export default async function StockMovesPage({
         {items.map((item) => (
           <Link
             key={item.label}
-            href={`/inventaris/mutasi-stok${item.url ? `?dampak=${item.url}` : ""}`}
+            href={withListParams("/inventaris/mutasi-stok", params, { dampak: item.url || undefined, halaman: undefined })}
             className={`filter-chip ${params.dampak === item.check || (!params.dampak && !item.check) ? "active" : ""}`}
           >
             {item.label}

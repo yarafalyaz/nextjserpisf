@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
+import { withListParams } from "@/lib/utils/list-href"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
@@ -85,7 +86,7 @@ export default async function VendorBillsPage({
               return (
                 <Link
                   key={dbStatus}
-                  href={`/pembelian/tagihan${urlStatus ? `?status=${urlStatus}` : ""}`}
+                  href={withListParams("/pembelian/tagihan", params, { status: urlStatus || undefined, halaman: undefined })}
                   className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
                 >
                   {dbStatus ? statusLabel(dbStatus) : "Semua"}

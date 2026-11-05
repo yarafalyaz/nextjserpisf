@@ -192,6 +192,78 @@ describe("keterhubungan UI: kotak cari mode server", () => {
   })
 })
 
+describe("keterhubungan UI: chip filter mempertahankan pencarian", () => {
+  // Kelas cacat yang dulu lolos di 26 halaman: chip filter membangun ulang URL
+  // dari nol (`href={/x${status ? `?status=${status}` : ""}}`), sehingga
+  // mengklik "Disetujui" saat kotak cari berisi "INV-001" membuang `?cari=`.
+  // Halaman tetap bekerja, tetapi pencarian pengguna hilang tanpa jejak — dan
+  // lebih buruk, chip berikutnya lalu menampilkan hasil yang lebih banyak.
+  // Kontraknya: chip pada halaman berkotak cari DIBANGUN helper
+  // (`withListParams` / `listPageHref`), bukan dari string kosong.
+
+  /** Potongan tag `<Link …>`: berhenti di `>` luar kuota/`{}` agar atribut
+   *  berisi template literal tetap utuh. */
+  function linkTags(source: string): string[] {
+    const out: string[] = []
+    for (let i = source.indexOf("<Link"); i !== -1; i = source.indexOf("<Link", i + 1)) {
+      let depth = 0
+      let quote: string | null = null
+      let j = i + 5
+      for (; j < source.length; j++) {
+        const ch = source[j]
+        if (quote) {
+          if (ch === "\\") j++
+          else if (ch === quote) quote = null
+          continue
+        }
+        if (ch === '"' || ch === "'" || ch === "`") quote = ch
+        else if (ch === "{") depth++
+        else if (ch === "}") depth--
+        else if (ch === ">" && depth === 0) break
+        else if (ch === "<") break
+      }
+      if (j < source.length && source[j] === ">") out.push(source.slice(i, j + 1))
+    }
+    return out
+  }
+
+  /** Halaman yang menampilkan kotak cari (default `cari`, atau `paramName`). */
+  const pagesWithSearch = tsxFiles.filter((f) => {
+    if (!f.endsWith("page.tsx")) return false
+    const body = readFileSync(f, "utf8")
+    return body.includes("AppSearchField") || /\b(?:params|searchParams)\.cari\b/.test(body)
+  })
+
+  it("chip filter di halaman berkotak cari dibangun ulang dari parameter saat ini", () => {
+    const broken: string[] = []
+    for (const page of pagesWithSearch) {
+      const body = readFileSync(page, "utf8")
+      for (const tag of linkTags(body)) {
+        if (!tag.includes("filter-chip")) continue
+        if (/\b(?:withListParams|listPageHref)\(/.test(tag)) continue
+        // Href yang sudah dirakit di variabel (mis. `href={chip.href}` dari
+        // array `filterChips`) tidak memperlihatkan builder di tag-nya, jadi
+        // yang diperiksa berkasnya: builder harus dipakai, dan tidak boleh ada
+        // `href:` di objek mana pun yang menyusun query dari nol.
+        const href = tag.match(/\bhref=\{([^}]*)\}/)?.[1]?.trim()
+        if (href && /^[A-Za-z_$][\w$]*(?:\.[\w$]+)*$/.test(href)) {
+          const rawObjectHref = /href:\s*`[^`]*\?/.test(body) || /href:\s*`\$\{[^}]*\}\?/.test(body)
+          if (/\b(?:withListParams|listPageHref)\(/.test(body) && !rawObjectHref) continue
+        }
+        broken.push(`${rel(page)}: ${tag.replace(/\s+/g, " ").slice(0, 120)}`)
+      }
+    }
+    expect(broken).toEqual([])
+  })
+
+  it("kontrol positif: chip filter benar-benar terdeteksi pada cukup banyak halaman", () => {
+    const pages = pagesWithSearch.filter((p) =>
+      linkTags(readFileSync(p, "utf8")).some((t) => t.includes("filter-chip")),
+    )
+    expect(pages.length).toBeGreaterThan(20)
+  })
+})
+
 describe("keterhubungan UI: setiap kotak cari halaman dibaca halamannya", () => {
   // Kelas cacat yang dulu lolos: `<AppSearchField action="/x" />` menulis
   // `?cari=` tetapi halaman `/x` tidak membacanya — kotak cari tampak ada dan

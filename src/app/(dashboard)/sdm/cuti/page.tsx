@@ -1,4 +1,6 @@
 import { parsePagination } from "@/lib/utils/pagination"
+import { withListParams } from "@/lib/utils/list-href"
+
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -64,7 +66,7 @@ export default async function LeaveRequestsPage({
     return (
       <Link
         key={dbStatus}
-        href={`/sdm/cuti${urlStatus ? `?status=${urlStatus}` : ""}`}
+        href={withListParams("/sdm/cuti", params, { status: urlStatus || undefined, halaman: undefined })}
         className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
       >
         {dbStatus ? statusLabel(dbStatus) : "Semua"}

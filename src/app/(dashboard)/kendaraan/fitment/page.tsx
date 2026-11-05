@@ -1,4 +1,6 @@
 import { parsePagination } from "@/lib/utils/pagination"
+import { withListParams } from "@/lib/utils/list-href"
+
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -94,7 +96,7 @@ export default async function VehicleFitmentsPage({
         {filters.map((f) => (
           <Link
             key={f || "all"}
-            href={`/kendaraan/fitment${f ? `?hasil=${f}` : ""}`}
+            href={withListParams("/kendaraan/fitment", params, { hasil: f || undefined, halaman: undefined })}
             className={`filter-chip ${(params.hasil ?? "") === f ? "active" : ""}`}
           >
             {f === "" ? "Semua" : f === "compatible" ? "Cocok" : f === "incompatible" ? "Tidak Cocok" : "Belum Diketahui"}

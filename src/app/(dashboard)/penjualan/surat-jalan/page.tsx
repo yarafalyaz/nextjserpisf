@@ -1,4 +1,6 @@
 import { parsePagination } from "@/lib/utils/pagination"
+import { withListParams } from "@/lib/utils/list-href"
+
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -71,7 +73,7 @@ export default async function DeliveryOrdersPage({
               return (
                 <Link
                   key={dbStatus}
-                  href={`/penjualan/surat-jalan${urlStatus ? `?status=${urlStatus}` : ""}`}
+                  href={withListParams("/penjualan/surat-jalan", params, { status: urlStatus || undefined, halaman: undefined })}
                   className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
                 >
                   {dbStatus ? statusLabel(dbStatus) : "Semua"}

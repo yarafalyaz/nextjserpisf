@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requireAnyPermission } from "@/lib/auth/permissions"
 import { canSearchAcrossEmployees, getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope"
 import { parsePagination } from "@/lib/utils/pagination"
+import { withListParams } from "@/lib/utils/list-href"
 import { formatDate } from "@/lib/utils/format"
 import { getWibTodayUtcDate, wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { endOfUtcDayExclusive } from "@/lib/utils/date-only"
@@ -201,16 +202,19 @@ export default async function AttendancePage({
 
   const filterPath = segments?.length ? `/sdm/absensi/${segments.join("/")}` : "/sdm/absensi"
 
+  // Periode hidup di PATH, jadi chip hanya mengganti path dan membiarkan
+  // query yang sedang aktif (`?cari=`, `?status=`) ikut terbawa — dulu chip
+  // menulis href polos sehingga pencarian hilang begitu periode diganti.
   const filterChips = [
-    { label: "Semua", href: "/sdm/absensi", active: !tanggal && !bulan },
+    { label: "Semua", href: withListParams("/sdm/absensi", params, { halaman: undefined }), active: !tanggal && !bulan },
     {
       label: "Hari Ini",
-      href: `/sdm/absensi/tanggal/${todayWib}`,
+      href: withListParams(`/sdm/absensi/tanggal/${todayWib}`, params, { halaman: undefined }),
       active: tanggal === todayWib,
     },
     {
       label: "Bulan Ini",
-      href: `/sdm/absensi/bulan/${monthWib}`,
+      href: withListParams(`/sdm/absensi/bulan/${monthWib}`, params, { halaman: undefined }),
       active: bulan === monthWib,
     },
   ]

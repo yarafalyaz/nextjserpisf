@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
+import { withListParams } from "@/lib/utils/list-href"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
@@ -68,7 +69,7 @@ export default async function LeadsPage({
     return (
       <Link
         key={dbStatus}
-        href={`/crm/leads${urlStatus ? `?status=${urlStatus}` : ""}`}
+        href={withListParams("/crm/leads", params, { status: urlStatus || undefined, halaman: undefined })}
         className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
       >
         {dbStatus ? statusLabel(dbStatus) : "Semua"}

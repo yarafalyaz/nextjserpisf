@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { parsePagination } from "@/lib/utils/pagination";
+import { withListParams } from "@/lib/utils/list-href";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getHrScope, hrScopeWhere, canSearchAcrossEmployees } from "@/lib/auth/hr-scope";
 import Link from "next/link";
@@ -179,11 +180,15 @@ export default async function PayrollPage({
 
   const statusChips = ["", "draft", "approved", "paid"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] : "";
-    const qstr = urlStatus ? `?status=${urlStatus}` : "";
     return (
       <Link
         key={dbStatus}
-        href={`${filterPath}${qstr}`}
+        // Periode hidup di path (`filterPath`); chip hanya mengganti status
+        // dan membiarkan `?cari=` aktif ikut terbawa.
+        href={withListParams(filterPath, params, {
+          status: urlStatus || undefined,
+          halaman: undefined,
+        })}
         className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
       >
         {dbStatus ? statusLabel(dbStatus) : "Semua"}

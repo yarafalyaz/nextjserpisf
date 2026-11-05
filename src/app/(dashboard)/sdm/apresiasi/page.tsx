@@ -1,4 +1,6 @@
 import { parsePagination } from "@/lib/utils/pagination"
+import { withListParams } from "@/lib/utils/list-href"
+
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -57,7 +59,7 @@ export default async function AppreciationsPage({
   const statusChips = ["", "bonus", "reward", "incentive"].map((s) => {
     const urlTipe = s ? statusToIndo[s] : ""
     return (
-      <Link key={s || "all"} href={`/sdm/apresiasi${urlTipe ? `?tipe=${urlTipe}` : ""}`} className={`filter-chip ${params.tipe === urlTipe || (!params.tipe && !urlTipe) ? "active" : ""}`}>
+      <Link key={s || "all"} href={withListParams("/sdm/apresiasi", params, { tipe: urlTipe || undefined, halaman: undefined })} className={`filter-chip ${params.tipe === urlTipe || (!params.tipe && !urlTipe) ? "active" : ""}`}>
         {s ? statusLabel(s) : "Semua"}
       </Link>
     )

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requireAnyPermission } from "@/lib/auth/permissions"
 import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions"
 import { parsePagination } from "@/lib/utils/pagination"
+import { withListParams } from "@/lib/utils/list-href"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
@@ -95,7 +96,7 @@ export async function renderApprovalsPage(
     return (
       <Link
         key={dbStatus}
-        href={`/pengaturan/persetujuan${urlStatus ? `?status=${urlStatus}` : ""}`}
+        href={withListParams("/pengaturan/persetujuan", params, { status: urlStatus || undefined, halaman: undefined })}
         className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
       >
         {dbStatus ? statusLabel(dbStatus) : "Semua"}

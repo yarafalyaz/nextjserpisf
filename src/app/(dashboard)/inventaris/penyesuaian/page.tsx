@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
+import { withListParams } from "@/lib/utils/list-href"
 import { requirePermission } from "@/lib/auth/permissions"
 import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import Link from "next/link"
@@ -64,7 +65,7 @@ export default async function StockAdjustmentsPage({
     return (
       <Link
         key={dbStatus}
-        href={`/inventaris/penyesuaian${urlStatus ? `?status=${urlStatus}` : ""}`}
+        href={withListParams("/inventaris/penyesuaian", params, { status: urlStatus || undefined, halaman: undefined })}
         className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
       >
         {dbStatus ? (dbStatus === "processed" ? "Diposting" : statusLabel(dbStatus)) : "Semua"}

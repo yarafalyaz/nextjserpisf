@@ -1,4 +1,6 @@
 import { parsePagination } from "@/lib/utils/pagination"
+import { withListParams } from "@/lib/utils/list-href"
+
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -78,7 +80,7 @@ export default async function EmployeeLoansPage({
     return (
       <Link
         key={dbStatus}
-        href={`/sdm/pinjaman${urlStatus ? `?status=${urlStatus}` : ""}`}
+        href={withListParams("/sdm/pinjaman", params, { status: urlStatus || undefined, halaman: undefined })}
         className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
       >
         {dbStatus ? statusLabel(dbStatus) : "Semua"}
