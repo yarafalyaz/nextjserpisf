@@ -4720,3 +4720,87 @@ terbaca tidak sama dengan total yang tercetak.
   → 1 tes merah; dipulihkan → hijau.
 - Hijau 12.618 lulus / 23 dilewati (naik 21 dari 12.597); tsc 0; ESLint 0;
   `npm run build` exit 0.
+
+## Putaran 210 — satu pemilik paginasi dan filter tak hilang saat pindah halaman (commit `6186852c7`)
+
+Kelas cacat baru setelah sapuan sen 199–209 menutup kelas tampilan nominal.
+Pemindaian statis tiga arah (paginasi ganda, footer yang membangun URL dari
+nol, kotak cari yang tidak dibaca) menemukan **tiga sub-kelas** di keuangan
+dan data master.
+
+### Vonis FIX
+
+1. **Paginasi ganda di tiga halaman daftar** — `keuangan/pengeluaran`,
+   `keuangan/kas-kecil`, `keuangan/jurnal` memotong data di server dengan
+   `const perPage = 100` sambil menyerahkan potongan itu ke tabel yang
+   memaginasi sendiri `pageSize={20}`. Baris 21–100 dari setiap potongan tak
+   terjangkau lewat kontrol tabel, dan tombol "Berikutnya" milik server
+   melompati seluruh sisa itu: pengguna hanya bisa melihat 20 dari setiap 100
+   baris. Ketiganya kini memakai kontrak kanonis `parsePagination()` +
+   `count()` + `serverPagination` pada `DataTable`; `perPage` hilang, pemilih
+   "baris per halaman" ikut bekerja, dan `pageSize` menjadi param URL yang sah.
+2. **Kotak cari mati di `/keuangan/pengeluaran`** — `AppSearchField` menulis
+   `?cari=`, anotasi `searchParams` menerimanya, tetapi loader tidak pernah
+   membacanya. Mengetik tidak menyaring apa pun, dan `?cari=` dari halaman
+   lain mendarat di daftar penuh. Loader kini menyaring `documentNo`/
+   `description`. Halaman ini satu-satunya dari 34 pemakai `AppSearchField`
+   dengan cacat itu.
+3. **Footer paginasi menjatuhkan filter di enam halaman** — `pengeluaran`,
+   `kas-kecil`, `jurnal`, `rekonsiliasi-bank`, `master/satuan`,
+   `pengaturan/pengguna` membangun tautan `?halaman=N` dari nol, sehingga
+   `cari`, `status`, `tipe`, `klaim`, dan `pageSize` aktif hilang setiap kali
+   pindah halaman: halaman 2 menampilkan potongan data yang berbeda dari yang
+   dijanjikan penghitung. Chip filter status/tipe di halaman yang sama juga
+   menjatuhkan `cari`. Helper baru `src/lib/utils/list-href.ts`
+   (`withListParams`, `listPageHref`) meneruskan seluruh param aktif dan hanya
+   menimpa yang disebut pemanggil; halaman pertama tidak menulis `?halaman=`.
+
+### Guard ratchet
+
+- `src/__tests__/single-pagination-owner.test.ts` (baru) — halaman yang
+  menjalankan `skip:` + `count()` tidak boleh merender komponen tabel yang
+  memaginasi sendiri (`pageSize={n}` tanpa `serverPagination`). **Terbukti
+  merah** pada ketiga halaman sebelum perbaikan (pesan menyebut ketiga pasang
+  halaman/tabel) dan hijau sesudah. Dua kontrol positif menjaga detektor tidak
+  hijau karena kosong.
+- `src/__tests__/link-wiring.test.ts` diperluas dua arah:
+  - penjaga "kotak cari mode server" kini mencakup **semua** halaman yang
+    merender `AppSearchField`, bukan hanya yang tabelnya ber-`serverPagination`
+    (itulah mengapa tabel mode klien lolos selama ini), dan mensyaratkan
+    pembacaan `params.<param>` — bukan sekadar kata yang muncul di anotasi
+    tipe `cari?: string`.
+  - kontrol positif menghitung tautan literal **dan** pemanggilan builder;
+    tanpa itu, memindahkan tautan ke `withListParams` memerahkan kontrol
+    tanpa ada regresi keterhubungan.
+
+### Vonis CATAT (tidak dipatch, alasan mengikat)
+
+- **Detail master menampilkan tombstone.** Delapan belas halaman detail
+  (`master/barang`, `master/karyawan`, `master/pajak`, `keuangan/kas-kecil`,
+  `penjualan/faktur`, `pembelian/tagihan`, dst.) memanggil `resolveEntity`
+  tanpa `deletedAt` dan tetap merender tombol Ubah/Hapus untuk baris yang
+  sudah dihapus lunak. Aksinya sendiri aman: `updateItem`/`updateEmployee`
+  menilai ulang tombstone pada baris terkunci (putaran 76), `updateTax` dan
+  `deleteX` memakai `hardDeleteOrSoftDelete` berkunci. Yang tersisa adalah
+  halaman detail yang bisa dibuka lewat URL lama/bookmark dan menampilkan
+  data yang "sudah tidak ada" — keputusan seragam (notFound vs banner
+  "dihapus") menyentuh 18 halaman + tes masing-masing, jadi dicatat sebagai
+  satu putaran UI tersendiri, bukan ditambal sebagian.
+- **Chip filter menjatuhkan pencarian di 29 halaman lain.** Halaman
+  server-paginasi di luar keuangan (`penjualan/*`, `pembelian/*`,
+  `inventaris/*`, `sdm/*`, `crm/*`, `proyek/*`) membangun chip `?status=`
+  dari nol sehingga `cari` aktif hilang saat pengguna berpindah filter.
+  Fungsi `withListParams` sudah tersedia; menyentuh 29 halaman sekaligus
+  antre putaran tersendiri supaya diff-nya dapat ditinjau per modul.
+
+### Bukti
+- Merah sebelum fix: `single-pagination-owner` gagal tepat pada tiga pasang
+  halaman/tabel (`keuangan/jurnal` ↔ `journal-table`, `keuangan/kas-kecil` ↔
+  `petty-cash-table`, `keuangan/pengeluaran` ↔ `expense-table`); dipulihkan →
+  hijau.
+- Positif-palsu yang dibuang: pengujian penjaga cari awal memakai pola kata
+  polos dan tetap hijau pada berkas pra-perbaikan karena `cari?: string` di
+  anotasi tipe — pola diubah ke `params.<param>` dan diverifikasi merah pada
+  berkas lama.
+- 12.631 lulus / 23 dilewati (naik 6 berkas uji; total tes 12.625 → 12.654);
+  `tsc --noEmit` bersih; ESLint `src` bersih.
