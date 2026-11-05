@@ -3,6 +3,8 @@ export const dynamic = "force-dynamic"
 import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { parsePagination } from "@/lib/utils/pagination"
+import { withListParams } from "@/lib/utils/list-href"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
@@ -32,19 +34,27 @@ function isNextRedirect(error: unknown): boolean {
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string; status?: string; halaman?: string; klaim?: string }>
+  searchParams: Promise<{ cari?: string; status?: string; halaman?: string; pageSize?: string; klaim?: string }>
 }) {
   await requirePermission("view_expenses")
 
   const params = await searchParams
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
-  const page = Number(params.halaman) || 1
-  const perPage = 100
+  const { page, pageSize, take } = parsePagination(params)
   const onlyClaims = params.klaim === "1"
+  // Kotak cari menulis `?cari=`; tanpa dibaca di sini pencarian tidak
+  // menyaring apa pun (dan tautan `?cari=` dari halaman lain jadi mati).
+  const cari = params.cari?.trim()
 
   const where = {
     ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
     ...(onlyClaims && { isReimbursementClaim: true }),
+    ...(cari && {
+      OR: [
+        { documentNo: { contains: cari } },
+        { description: { contains: cari } },
+      ],
+    }),
   }
 
   // Seksi turunan baca-saja (F-2026-10-27-107-S, Q-EXQ-5) dimuat
@@ -67,8 +77,8 @@ export default async function ExpensesPage({
     prisma.expense.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      skip: (page - 1) * perPage,
-      take: perPage,
+      skip: (page - 1) * pageSize,
+      take,
       include: { category: { select: { label: true } }, vendor: { select: { name: true } } },
     }),
     prisma.expense.count({ where }),
@@ -78,7 +88,6 @@ export default async function ExpensesPage({
   if (draftResult.redirectError !== undefined) throw draftResult.redirectError
   const draftQueue = draftResult.queue
 
-  const totalPages = Math.ceil(total / perPage)
   const data = toPlain(expenses).map((e) => ({
     ...e,
     categoryName: (e as Record<string, unknown>).category
@@ -94,7 +103,10 @@ export default async function ExpensesPage({
     return (
       <Link
         key={dbStatus}
-        href={`/keuangan/pengeluaran${urlStatus ? `?status=${urlStatus}` : ""}`}
+        href={withListParams("/keuangan/pengeluaran", params, {
+          status: urlStatus || undefined,
+          halaman: undefined,
+        })}
         className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
       >
         {dbStatus ? statusLabel(dbStatus) : "Semua"}
@@ -133,12 +145,18 @@ export default async function ExpensesPage({
 
       <ExpenseTable
         data={data}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari pengeluaran..." action="/keuangan/pengeluaran" />}
         filters={
           <div className="flex flex-wrap gap-1.5">
             {statusChips}
             <Link
-              href={onlyClaims ? "/keuangan/pengeluaran" : "/keuangan/pengeluaran?klaim=1"}
+              href={withListParams("/keuangan/pengeluaran", params, {
+                klaim: onlyClaims ? undefined : "1",
+                halaman: undefined,
+              })}
               className={`filter-chip ${onlyClaims ? "active" : ""}`}
             >
               Klaim Reimbursement
@@ -146,16 +164,6 @@ export default async function ExpensesPage({
           </div>
         }
       />
-
-      {totalPages > 1 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 p-3 px-5 border-t border-default">
-          <span className="text-[0.8125rem] text-muted-foreground">Hal {page} dari {totalPages} ({total} data)</span>
-          <div className="flex gap-1">
-            {page > 1 && <Link href={`/keuangan/pengeluaran?halaman=${page - 1}`} className="button button--ghost button--sm">← Sebelumnya</Link>}
-            {page < totalPages && <Link href={`/keuangan/pengeluaran?halaman=${page + 1}`} className="button button--ghost button--sm">Berikutnya →</Link>}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

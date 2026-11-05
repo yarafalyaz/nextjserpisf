@@ -73,9 +73,9 @@ function filesRelevantTo(pageFile: string): string[] {
   return [...out]
 }
 
-/** Semua tautan internal ber-parameter yang dikirim UI. */
-function parameterizedLinks(): Array<{ from: string; line: number; base: string; params: string[] }> {
-  const found: Array<{ from: string; line: number; base: string; params: string[] }> = []
+/** Semua tautan internal ber-parameter yang dikirim UI secara literal. */
+// Entri daftar-beku: kunci = "<url>|<param>", nilai = alasan tertulis.
+function parameterizedLinks(): Array<{ from: string; line: number; base: string; params: string[] }> {  const found: Array<{ from: string; line: number; base: string; params: string[] }> = []
   for (const f of tsxFiles) {
     const txt = readFileSync(f, "utf8")
     for (const m of txt.matchAll(/href=(?:"([^"]*)"|\{`([^`]*)`\}|\{'([^']*)'\})/g)) {
@@ -88,6 +88,17 @@ function parameterizedLinks(): Array<{ from: string; line: number; base: string;
     }
   }
   return found
+}
+
+/** Jumlah pemanggilan pembangun URL ber-parameter (`withListParams`,
+ *  `listPageHref`) di seluruh UI. Tautan filter/paginasi yang dulu literal
+ *  (`?status=`, `?halaman=`) kini dibangun helper ini, jadi kemampuan
+ *  detektor harus dinilai atas KEDUA bentuk — bukan hanya literal. */
+function builderLinkCount(): number {
+  return tsxFiles.reduce((n, f) => {
+    const txt = readFileSync(f, "utf8")
+    return n + (txt.match(/\b(?:withListParams|listPageHref)\(/g)?.length ?? 0)
+  }, 0)
 }
 
 // Entri daftar-beku: kunci = "<url>|<param>", nilai = alasan tertulis.
@@ -145,7 +156,11 @@ describe("keterhubungan UI: tautan ber-parameter", () => {
   it("mendeteksi tautan mati bila ada (kontrol positif)", () => {
     // Kontrol: pastikan pendeteksi memang melihat tautan ber-parameter, supaya
     // tes di atas tidak pernah hijau hanya karena regex-nya tidak cocok.
-    expect(links.length).toBeGreaterThan(20)
+    // Tautan filter/paginasi yang dibangun `withListParams`/`listPageHref`
+    // tidak muncul sebagai literal, jadi keduanya dihitung bersama — kalau
+    // tidak, memindahkan tautan ke builder akan memerahkan kontrol ini tanpa
+    // ada regresi keterhubungan.
+    expect(links.length + builderLinkCount()).toBeGreaterThan(20)
   })
 })
 
@@ -162,7 +177,10 @@ describe("keterhubungan UI: kotak cari mode server", () => {
       if (!existsSync(page)) continue
       const body = readFileSync(page, "utf8")
       const searchParam = readFileSync(comp, "utf8").match(/searchParam="([^"]+)"/)?.[1] ?? "cari"
-      if (new RegExp(`\\b${searchParam}\\b`).test(body)) continue
+      // Harus DIBACA dari loader (`params.<param>`), bukan sekadar kata yang
+      // muncul di nama tipe/placeholder — dulu `cari?: string` di anotasi
+      // searchParams sudah cukup membuat penjaga hijau meski nilainya tak dipakai.
+      if (new RegExp(`\\b(?:params|searchParams)\\.${searchParam}\\b`).test(body)) continue
       if (SERVER_SEARCH_ALLOWED[rel(page)]) continue
       broken.push(`${rel(page)} tidak membaca ?${searchParam}= (tabel: ${rel(comp)})`)
     }
@@ -171,5 +189,37 @@ describe("keterhubungan UI: kotak cari mode server", () => {
 
   it("kontrol positif: ada cukup banyak tabel mode server untuk diperiksa", () => {
     expect(tableComponents.length).toBeGreaterThan(30)
+  })
+})
+
+describe("keterhubungan UI: setiap kotak cari halaman dibaca halamannya", () => {
+  // Kelas cacat yang dulu lolos: `<AppSearchField action="/x" />` menulis
+  // `?cari=` tetapi halaman `/x` tidak membacanya — kotak cari tampak ada dan
+  // responsif, tetapi daftar tidak pernah menyaring. Penjaga di atas hanya
+  // melihat tabel ber-`serverPagination`, sehingga tabel mode klien (paginasi
+  // di browser) tidak pernah diperiksa.
+  const pagesWithSearchField = tsxFiles.filter(
+    (f) => f.endsWith("page.tsx") && readFileSync(f, "utf8").includes("AppSearchField"),
+  )
+
+  it("halaman yang merender AppSearchField membaca parameter yang ditulisnya", () => {
+    const broken: string[] = []
+    for (const page of pagesWithSearchField) {
+      const body = readFileSync(page, "utf8")
+      // Parameter yang ditulis kotak cari: default `cari`, atau `paramName="…"`.
+      const params = [...body.matchAll(/<AppSearchField[^>]*?paramName="([^"]+)"/g)].map((m) => m[1])
+      const effective = params.length > 0 ? params : ["cari"]
+      for (const param of new Set(effective)) {
+        // Enum/for-loop yang menyusun filter tidak relevan; yang dicari adalah
+        // pembacaan `params.<param>` / `searchParams.<param>` di loader.
+        if (new RegExp(`\\b(?:params|searchParams)\\.${param}\\b`).test(body)) continue
+        broken.push(`${rel(page)} merender AppSearchField tetapi tidak membaca ?${param}=`)
+      }
+    }
+    expect(broken).toEqual([])
+  })
+
+  it("kontrol positif: ada cukup banyak halaman berkotak cari untuk diperiksa", () => {
+    expect(pagesWithSearchField.length).toBeGreaterThan(20)
   })
 })

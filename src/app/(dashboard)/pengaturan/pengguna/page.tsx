@@ -1,5 +1,6 @@
 import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
 import { parsePagination } from "@/lib/utils/pagination";
+import { listPageHref } from "@/lib/utils/list-href";
 import { Pencil } from "lucide-react"
 export const dynamic = "force-dynamic"
 
@@ -101,12 +102,12 @@ export default async function UsersPage({
             </span>
             <div className="flex gap-1">
               {page > 1 && (
-                <Link href={`/pengaturan/pengguna?halaman=${page - 1}`} className="button button--ghost button--sm">
+                <Link href={listPageHref("/pengaturan/pengguna", params, page - 1)} className="button button--ghost button--sm">
                   ← Sebelumnya
                 </Link>
               )}
               {page < totalPages && (
-                <Link href={`/pengaturan/pengguna?halaman=${page + 1}`} className="button button--ghost button--sm">
+                <Link href={listPageHref("/pengaturan/pengguna", params, page + 1)} className="button button--ghost button--sm">
                   Berikutnya →
                 </Link>
               )}

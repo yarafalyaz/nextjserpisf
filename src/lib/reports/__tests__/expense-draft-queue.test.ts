@@ -434,6 +434,9 @@ describe("wiring permukaan antrean pengeluaran (AC-EXQ-F1..F3, BR-EXQ-07)", () =
     expect(pageSource).toContain("getExpenseDraftQueue")
     expect(pageSource).toContain("ExpenseDraftQueueSection")
     expect(pageSource).toContain("ExpenseTable")
-    expect(pageSource).toContain("perPage = 100")
+    // Putaran 210: daftar existing memakai paginasi server kanonis
+    // (`parsePagination` + `count`), bukan `perPage = 100` yang membuat
+    // baris 21–100 tak terjangkau kontrol tabel 20-baris.
+    expect(pageSource).toContain("parsePagination(params)")
   })
 })

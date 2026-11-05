@@ -4,6 +4,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { entityHref } from "@/lib/utils/entity-url";
 import { parsePagination } from "@/lib/utils/pagination";
+import { listPageHref } from "@/lib/utils/list-href";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -108,7 +109,7 @@ export default async function UomPage({
             <div className="flex gap-1">
               {page > 1 && (
                 <Link
-                  href={`/master/satuan?halaman=${page - 1}`}
+                  href={listPageHref("/master/satuan", params, page - 1)}
                   className="button button--ghost button--sm"
                 >
                   ← Sebelumnya
@@ -116,7 +117,7 @@ export default async function UomPage({
               )}
               {page < totalPages && (
                 <Link
-                  href={`/master/satuan?halaman=${page + 1}`}
+                  href={listPageHref("/master/satuan", params, page + 1)}
                   className="button button--ghost button--sm"
                 >
                   Berikutnya →

@@ -3,6 +3,8 @@ export const dynamic = "force-dynamic"
 import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { parsePagination } from "@/lib/utils/pagination"
+import { withListParams } from "@/lib/utils/list-href"
 import Link from "next/link"
 import { indoToStatus, statusToIndo, statusLabel } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
@@ -17,14 +19,13 @@ export const metadata: Metadata = { title: "Jurnal" }
 export default async function JournalsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string; status?: string; halaman?: string }>
+  searchParams: Promise<{ cari?: string; status?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("view_journals")
 
   const params = await searchParams
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
-  const page = Number(params.halaman) || 1
-  const perPage = 100
+  const { page, pageSize, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -43,13 +44,12 @@ export default async function JournalsPage({
         _count: { select: { entries: true } },
       },
       orderBy: { createdAt: "desc" },
-      skip: (page - 1) * perPage,
-      take: perPage,
+      skip: (page - 1) * pageSize,
+      take,
     }),
     prisma.journal.count({ where }),
   ])
 
-  const totalPages = Math.ceil(total / perPage)
   const data = toPlain(journals)
 
   const statusChips = (() => {
@@ -61,7 +61,10 @@ export default async function JournalsPage({
           return (
             <Link
               key={dbStatus || "all"}
-              href={`/keuangan/jurnal${urlStatus ? `?status=${urlStatus}` : ""}`}
+              href={withListParams("/keuangan/jurnal", params, {
+                status: urlStatus || undefined,
+                halaman: undefined,
+              })}
               className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
             >
               {dbStatus ? statusLabel(dbStatus) : "Semua"}
@@ -85,6 +88,9 @@ export default async function JournalsPage({
 
       <JournalTable
         data={data}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari no. jurnal atau deskripsi..." action="/keuangan/jurnal" />}
         filters={
           <>
@@ -95,16 +101,6 @@ export default async function JournalsPage({
           </>
         }
       />
-
-      {totalPages > 1 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 p-3 px-5 border-t border-default">
-          <span className="text-[0.8125rem] text-muted-foreground">Hal {page} dari {totalPages} ({total} data)</span>
-          <div className="flex gap-1">
-            {page > 1 && <Link href={`/keuangan/jurnal?halaman=${page - 1}`} className="button button--ghost button--sm">← Sebelumnya</Link>}
-            {page < totalPages && <Link href={`/keuangan/jurnal?halaman=${page + 1}`} className="button button--ghost button--sm">Berikutnya →</Link>}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

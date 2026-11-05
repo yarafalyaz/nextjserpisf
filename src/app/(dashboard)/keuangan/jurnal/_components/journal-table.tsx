@@ -127,17 +127,20 @@ const columns = [
 
 interface JournalTableProps {
   data: JournalData[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function JournalTable({ data, toolbar, filters }: JournalTableProps) {
+export function JournalTable({ data, total, page, pageSize, toolbar, filters }: JournalTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar jurnal"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

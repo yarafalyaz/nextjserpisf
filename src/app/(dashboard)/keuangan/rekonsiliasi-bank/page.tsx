@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
+import { parsePagination } from "@/lib/utils/pagination";
+import { withListParams, listPageHref } from "@/lib/utils/list-href";
 import Link from "next/link";
 import {
   statusLabel,
@@ -32,14 +34,13 @@ export const metadata: Metadata = { title: "Rekonsiliasi Bank" };
 export default async function BankReconciliationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ halaman?: string; status?: string }>;
+  searchParams: Promise<{ halaman?: string; status?: string; pageSize?: string }>;
 }) {
   await requirePermission("view_bank_reconciliation");
 
   const params = await searchParams;
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined;
-  const page = Number(params.halaman) || 1;
-  const perPage = 20;
+  const { page, pageSize, take } = parsePagination(params);
 
   const where = {
     deletedAt: null,
@@ -53,13 +54,13 @@ export default async function BankReconciliationPage({
       where,
       include: { items: true },
       orderBy: { createdAt: "desc" },
-      skip: (page - 1) * perPage,
-      take: perPage,
+      skip: (page - 1) * pageSize,
+      take,
     }),
     prisma.bankReconciliation.count({ where }),
   ]);
 
-  const totalPages = Math.ceil(total / perPage);
+  const totalPages = Math.ceil(total / pageSize);
 
   // Antrean draft mengendap (F-2026-10-27-097-S): seksi turunan verbatim
   // loader di atas daftar existing (Q-RBK-7) — antrean menunjuk, daftar
@@ -102,7 +103,10 @@ export default async function BankReconciliationPage({
               return (
                 <Link
                   key={dbStatus}
-                  href={`/keuangan/rekonsiliasi-bank${urlStatus ? `?status=${urlStatus}` : ""}`}
+                  href={withListParams("/keuangan/rekonsiliasi-bank", params, {
+                    status: urlStatus || undefined,
+                    halaman: undefined,
+                  })}
                   className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
                 >
                   {dbStatus ? statusLabel(dbStatus) : "Semua"}
@@ -163,7 +167,7 @@ export default async function BankReconciliationPage({
             <div className="flex gap-1">
               {page > 1 && (
                 <Link
-                  href={`/keuangan/rekonsiliasi-bank?halaman=${page - 1}`}
+                  href={listPageHref("/keuangan/rekonsiliasi-bank", params, page - 1)}
                   className="button button--ghost button--sm"
                 >
                   ← Sebelumnya
@@ -171,7 +175,7 @@ export default async function BankReconciliationPage({
               )}
               {page < totalPages && (
                 <Link
-                  href={`/keuangan/rekonsiliasi-bank?halaman=${page + 1}`}
+                  href={listPageHref("/keuangan/rekonsiliasi-bank", params, page + 1)}
                   className="button button--ghost button--sm"
                 >
                   Berikutnya →

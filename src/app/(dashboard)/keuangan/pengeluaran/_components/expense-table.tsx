@@ -94,17 +94,21 @@ const columns = [
 
 interface ExpenseTableProps {
   data: ExpenseData[]
+  /** Total baris di server (bukan hanya halaman ini) — mode paginasi server. */
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function ExpenseTable({ data, toolbar, filters }: ExpenseTableProps) {
+export function ExpenseTable({ data, total, page, pageSize, toolbar, filters }: ExpenseTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar pengeluaran"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}
