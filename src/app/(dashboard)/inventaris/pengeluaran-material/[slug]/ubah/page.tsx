@@ -45,7 +45,7 @@ export default async function EditPage({
   if (!(await canViewWarehouseScopedDocument("material_issue", data.id))) notFound();
 
   const [warehouses, items, costCenters, workOrders, projects] = await Promise.all([
-    prisma.warehouse.findMany({ orderBy: { name: "asc" } }),
+    prisma.warehouse.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" } }),
     prisma.item
       .findMany({
         where: { isActive: true, deletedAt: null },

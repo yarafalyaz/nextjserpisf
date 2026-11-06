@@ -35,159 +35,22 @@ import { describe, expect, it } from "vitest"
  * dan saat ini kosong: keempat model yang terjangkau hapus massal (customer,
  * item, vendor, warehouse) juga punya penulis `deletedAt` eksplisit di
  * `master.actions.ts`, jadi semuanya tetap diperiksa.
- */
-const ROOT = path.resolve(__dirname, "../..")
-const SCHEMA = path.join(ROOT, "prisma/schema.prisma")
-const PAGES_DIR = path.join(ROOT, "src/app/(dashboard)")
-const WRITER_DIRS = [path.join(ROOT, "src/actions"), path.join(ROOT, "src/lib")]
-
-function walk(dir: string, accept: (name: string) => boolean): string[] {
-  const out: string[] = []
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) {
-      if (entry.name === "__tests__" || entry.name === "node_modules") continue
-      out.push(...walk(full, accept))
-    } else if (accept(entry.name)) {
-      out.push(full)
-    }
-  }
-  return out
-}
-
-/** Indeks `}` yang menutup `{` di posisi `open`. -1 bila tak seimbang. */
-function matchingBrace(source: string, open: number): number {
-  let depth = 0
-  let quote: string | null = null
-  for (let i = open; i < source.length; i++) {
-    const ch = source[i]
-    if (quote) {
-      if (ch === "\\") i++
-      else if (ch === quote) quote = null
-      continue
-    }
-    if (ch === '"' || ch === "'" || ch === "`") quote = ch
-    else if (ch === "{") depth++
-    else if (ch === "}") {
-      depth--
-      if (depth === 0) return i
-    }
-  }
-  return -1
-}
-
-/** Indeks `)` yang menutup `(` di posisi `open`. -1 bila tak seimbang. */
-function matchingParen(source: string, open: number): number {
-  let depth = 0
-  let quote: string | null = null
-  for (let i = open; i < source.length; i++) {
-    const ch = source[i]
-    if (quote) {
-      if (ch === "\\") i++
-      else if (ch === quote) quote = null
-      continue
-    }
-    if (ch === '"' || ch === "'" || ch === "`") quote = ch
-    else if (ch === "(") depth++
-    else if (ch === ")") {
-      depth--
-      if (depth === 0) return i
-    }
-  }
-  return -1
-}
-
-/**
- * Nilai sebuah kunci TINGKAT-ATAS di dalam objek literal, sebagai teks mentah.
  *
- * Sengaja bukan regex atas seluruh blok: `select: { deletedAt: true }` di
- * dalam include bersarang akan cocok dengan pola naif dan membuat model
- * berhapus keras tampak seperti penulis tombstone (persis yang dulu membuat
- * pemindaian pertama salah menuduh `salesInvoice`).
+ * Pemindai (skema→penulis, `topLevelValues`, `argumentObject`) tinggal di
+ * `./support/tombstone-models` karena penjaga `form-picker-tombstone` memakai
+ * irisan yang sama; dua salinan akan menyimpang diam-diam.
  */
-function topLevelValues(objectText: string): Map<string, string> {
-  const values = new Map<string, string>()
-  const end = objectText.length - 1
-  let i = 1
-  while (i < end) {
-    while (i < end && /[\s,]/.test(objectText[i])) i++
-    const keyMatch = /^([A-Za-z_$][\w$]*)\s*:/.exec(objectText.slice(i, end))
-    if (!keyMatch) break
-    const key = keyMatch[1]
-    let v = i + keyMatch[0].length
-    while (v < end && /\s/.test(objectText[v])) v++
-    if (objectText[v] === "{") {
-      const close = matchingBrace(objectText, v)
-      if (close === -1) break
-      values.set(key, objectText.slice(v, close + 1))
-      i = close + 1
-    } else {
-      // Skalar/array hingga koma tingkat-atas.
-      let k = v
-      let depth = 0
-      let quote: string | null = null
-      for (; k < end; k++) {
-        const ch = objectText[k]
-        if (quote) {
-          if (ch === "\\") k++
-          else if (ch === quote) quote = null
-          continue
-        }
-        if (ch === '"' || ch === "'" || ch === "`") quote = ch
-        else if ("([{".includes(ch)) depth++
-        else if (")]}".includes(ch)) depth--
-        else if (ch === "," && depth === 0) break
-      }
-      values.set(key, objectText.slice(v, k).trim())
-      i = k + 1
-    }
-  }
-  return values
-}
+import {
+  ROOT,
+  argumentObject,
+  matchingParen,
+  schemaSoftModels,
+  topLevelValues,
+  walk,
+  writerSoftModels,
+} from "./support/tombstone-models"
 
-/** Objek argumen pertama dari satu pemanggilan yang diawali `(` di `open`. */
-function argumentObject(source: string, open: number): string | null {
-  const close = matchingParen(source, open)
-  if (close === -1) return null
-  const brace = source.indexOf("{", open)
-  if (brace === -1 || brace > close) return null
-  const end = matchingBrace(source, brace)
-  if (end === -1 || end > close) return null
-  return source.slice(brace, end + 1)
-}
-
-/** Model Prisma yang punya kolom `deletedAt` → nama properti di Prisma Client. */
-function schemaSoftModels(): Set<string> {
-  const schema = fs.readFileSync(SCHEMA, "utf8")
-  const models = new Set<string>()
-  for (const match of schema.matchAll(/^model\s+(\w+)\s*\{([\s\S]*?)^\}/gm)) {
-    const [, name, body] = match
-    if (/^\s*deletedAt\s+\S+/m.test(body)) {
-      models.add(name.charAt(0).toLowerCase() + name.slice(1))
-    }
-  }
-  return models
-}
-
-/** Model yang benar-benar ditulisi tombstone oleh kode produksi. */
-function writerSoftModels(): Set<string> {
-  const writers = new Set<string>()
-  const files = WRITER_DIRS.flatMap((dir) => walk(dir, (n) => n.endsWith(".ts")))
-  for (const file of files) {
-    const source = fs.readFileSync(file, "utf8")
-    for (const match of source.matchAll(/\b(?:tx|prisma)\.(\w+)\.(?:update|updateMany)\(/g)) {
-      const open = (match.index ?? 0) + match[0].length - 1
-      const argObject = argumentObject(source, open)
-      if (!argObject) continue
-      const data = topLevelValues(argObject).get("data")
-      if (!data) continue
-      const written = topLevelValues(data).get("deletedAt")
-      // `deletedAt: null` adalah RESTORE, bukan tombstone.
-      if (written && written !== "null") writers.add(match[1])
-    }
-  }
-  return writers
-}
+const PAGES_DIR = path.join(ROOT, "src/app/(dashboard)")
 
 /** Setiap pemanggilan `await resolveEntity(...)` di sebuah berkas. */
 function resolveBlocks(source: string): string[] {

@@ -54,7 +54,7 @@ export default async function EditPage({
   };
 
   const [warehouses, items] = await Promise.all([
-    prisma.warehouse.findMany({ orderBy: { name: "asc" } }),
+    prisma.warehouse.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" } }),
     prisma.item
       .findMany({
         where: { isActive: true, deletedAt: null },
