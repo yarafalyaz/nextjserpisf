@@ -4937,3 +4937,79 @@ pada kunci tingkat atas, bukan regex blok.
   → aturan kedua gagal dengan tepat berkas itu. Dipulihkan → hijau.
 - `tsc --noEmit` bersih; ESLint bersih; `npm run build` exit 0.
 - Vitest penuh: 12.638 lulus / 23 dilewati (12.633 → 12.638, 5 tes baru).
+
+## Putaran 213 — daftar opsi form menawarkan gudang yang sudah dihapus
+
+Lanjutan kelas cacat putaran 212, tetapi di sisi yang berlawanan: 212 menutup
+halaman **detail** yang membuka baris tombstone; putaran ini menutup **daftar
+opsi form** yang menawarkannya sebagai pilihan sah.
+
+### Vonis FIX (3 halaman)
+
+`inventaris/pengeluaran-material/[slug]/ubah`, `inventaris/penyesuaian/[slug]/ubah`,
+`inventaris/transfer/[slug]/ubah` memuat daftar gudang untuk `<select>` dengan
+`prisma.warehouse.findMany({ orderBy: { name: "asc" } })` — tanpa `where` sama
+sekali — sementara halaman `tambah` pasangannya memakai
+`where: { isActive: true }`. Gudang yang sudah dihapus lunak tetap muncul, dan
+form baru menolaknya **setelah** seluruh dokumen diisi:
+`updateStockAdjustment` dan `updateInventoryTransfer` memanggil
+`assertWarehousesExistAndActive`, jadi simpan gagal dengan
+`Gudang #<id> tidak ditemukan` pada nilai yang UI-nya sendiri tawarkan.
+Kegagalan ini tidak bisa dipulihkan pengguna — pilihan yang salah tidak
+kelihatan salah.
+
+### Vonis GUGUR (kandidat ditarik dengan bukti)
+
+Pemindaian awal menandai 14 situs. Setelah memeriksa penulisnya, **sebelas
+gugur**: untuk `warehouse`, `item`, `employee`, `tax`, `customer`, `vendor`,
+`customerCategory`, `approvalWorkflow`, dan `recurringTransaction`, penulis
+soft-delete menulis `isActive: false` **bersama** `deletedAt`, sehingga
+`where: { isActive: true }` sudah mengecualikan tombstone secara praktis.
+Menuntut `deletedAt: null` di sana hanya menghasilkan diff kosong.
+
+Sisanya tiga situs, dan semuanya nyata karena `where`-nya tidak ada sama
+sekali. Delapan situs lain yang sempat tersorot (`opname`, `disiplin/keputusan`,
+`surat-jalan/tambah`, bagian `where: { id: { in: ids } }` pada banyak halaman
+dokumen) adalah **pembacaan relasional**: baris itu dibaca untuk menampilkan
+nama pada dokumen yang sudah ada, dan menyaringnya justru menyembunyikan
+riwayat yang sah.
+
+### Guard ratchet
+
+`src/__tests__/form-picker-tombstone.test.ts` (2 tes). Setiap `findMany` atas
+model ber-tombstone di halaman yang merender `<...Form>` wajib menyaring siklus
+hidup (`deletedAt: null` **atau** `isActive`) — `isActive` diterima karena
+alasan di atas, dan itu bentuk yang sudah dipakai mayoritas halaman.
+
+Dua hal yang dijaga dari positif palsu, keduanya sempat menggigit saat
+menulis penjaga ini:
+
+- `where: employeeWhere` terbaca `topLevelValues` sebagai skalar bernama
+  variabel, bukan objek. Tanpa penyelesaian ke literal `const employeeWhere =
+  {...}` di berkas yang sama, `sdm/disiplin/keputusan` dituduh padahal
+  `where`-nya memuat `deletedAt: null`.
+- Pola `<[A-Z]\w*Form\b` juga cocok di dalam blok komentar; penjaga hanya
+  memakainya untuk menyaring **berkas** (apakah berkas ini merender form),
+  bukan untuk menilai kode komentar.
+
+Kontrol positif: ≥50 halaman harus terdeteksi merender form dan ≥5 di
+antaranya harus memakai `isActive: true` pada opsi master, supaya penjaga
+tidak hijau karena penandanya meleset.
+
+Pemindai skema→penulis (`schemaSoftModels`, `writerSoftModels`,
+`topLevelValues`, `argumentObject`) kini tinggal di
+`src/__tests__/support/tombstone-models.ts` dan dipakai **kedua** penjaga
+(212 dan 213). Dua salinan akan menyimpang diam-diam; `detail-page-tombstone`
+berubah dari 297 baris pemindai lokal menjadi import.
+
+### Bukti
+
+- Merah sebelum fix: penjaga gagal dengan tepat tiga berkas bernama
+  (`pengeluaran-material/[slug]/ubah:48`, `penyesuaian/[slug]/ubah:88`,
+  `transfer/[slug]/ubah:57`). Dua positif palsu (`disiplin/keputusan`,
+  `opname`) muncul pada iterasi pertama dan diperbaiki di penjaganya, bukan
+  dengan melonggarkan aturan.
+- Falsifikasi: `transfer/[slug]/ubah` dikembalikan ke HEAD → 1 tes merah
+  dengan tepat berkas itu; dipulihkan → hijau.
+- `tsc --noEmit` bersih; ESLint bersih; `npm run build` exit 0.
+- Vitest penuh: 12.640 lulus / 23 dilewati (12.638 → 12.640, 2 tes baru).
