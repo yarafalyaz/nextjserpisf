@@ -149,6 +149,17 @@ describe("paritas izin halaman detail/edit vs list/action (#53)", () => {
     expect(offenders, `Layout tanpa guard izin yang benar:\n${offenders.join("\n")}`).toEqual([])
   })
 
+  it("detail merek kendaraan menyembunyikan aksi sesuai izin tulis", () => {
+    const detail = readFileSync(
+      join(DASHBOARD, "kendaraan/merek/[slug]/page.tsx"),
+      "utf8",
+    )
+    expect(detail).toContain('hasPermission("edit_vehicle_brands")')
+    expect(detail).toContain('hasPermission("delete_vehicle_brands")')
+    expect(detail).toMatch(/canEdit\s*&&\s*\(\s*<Button href=/)
+    expect(detail).toContain("{canDelete && <DeleteButton")
+  })
+
   it("setiap halaman hub modul memiliki guard izin (requirePermission atau requireAnyPermission)", () => {
     const hubModules = [
       "master",

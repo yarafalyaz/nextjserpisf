@@ -5266,6 +5266,25 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 220 — tombol ubah/hapus merek kendaraan bocor ke role view-only
+
+Halaman detail `kendaraan/merek/[slug]` memeriksa `view_vehicle_brands`, tetapi
+selalu merender tombol **Ubah** dan **Hapus**. Action tetap menolak klik tanpa
+`edit_vehicle_brands`/`delete_vehicle_brands`, sehingga role read-only melihat
+tindakan yang pasti gagal; halaman daftar sudah menyembunyikan keduanya lewat
+`ActionDropdown` dan permission yang sesuai.
+
+Detail kini memeriksa kedua izin tulis terpisah dan hanya merender aksi yang
+boleh dipakai. Guard paritas menutup regresi pada halaman detail.
+
+### Bukti
+
+- Tes guard memastikan kedua izin diperiksa dan tombol dibungkus kondisi izin.
+- Tes `page-action-permission-parity`: lulus; full Vitest 12.665 lulus / 23 dilewati.
+- Typecheck dan ESLint lulus. Build pertama gagal saat Google Fonts fetch,
+  dengan `Can't resolve '@vercel/turbopack-next/internal/font/google/font'`;
+  retry build berjalan sebelum commit/push.
+
 ## Putaran 217 — edit aturan fitment terkunci oleh item nonaktif
 
 Halaman ubah fitment hanya memuat item aktif, sedangkan aturan lama tetap

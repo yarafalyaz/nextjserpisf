@@ -56,7 +56,11 @@ export default async function VehicleBrandDetailPage({
 
   if (!brand) notFound()
 
-  const canCreateModel = await hasPermission("create_vehicle_models")
+  const [canCreateModel, canEdit, canDelete] = await Promise.all([
+    hasPermission("create_vehicle_models"),
+    hasPermission("edit_vehicle_brands"),
+    hasPermission("delete_vehicle_brands"),
+  ])
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,8 +74,10 @@ export default async function VehicleBrandDetailPage({
         ]}
         actions={
           <>
-            <Button href={`${entityEditHref("/kendaraan/merek", brand)}`} variant="primary">Ubah</Button>
-            <DeleteButton id={brand.id} action={deleteVehicleBrand} />
+            {canEdit && (
+              <Button href={`${entityEditHref("/kendaraan/merek", brand)}`} variant="primary">Ubah</Button>
+            )}
+            {canDelete && <DeleteButton id={brand.id} action={deleteVehicleBrand} />}
             <BackButton href="/kendaraan/merek" />
           </>
         }
