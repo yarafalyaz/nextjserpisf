@@ -37,9 +37,16 @@ export async function updateSystemSettings(formData: FormData) {
     return formData.has(key)
   }
 
+  // Keep persisted values aligned with parseFormData, whose FormData iteration
+  // uses the last value when a key is repeated.
+  function last(key: string): FormDataEntryValue | null {
+    const values = formData.getAll(key)
+    return values.length ? values[values.length - 1] : null
+  }
+
   function str(key: string): string | undefined {
     if (!has(key)) return undefined
-    const v = formData.get(key)
+    const v = last(key)
     return v !== null ? String(v) : undefined
   }
 
@@ -51,13 +58,13 @@ export async function updateSystemSettings(formData: FormData) {
 
   function strNull(key: string): string | null | undefined {
     if (!has(key)) return undefined
-    const v = formData.get(key)
+    const v = last(key)
     return v && String(v).trim() !== "" ? String(v) : null
   }
 
   function int(key: string): number | undefined {
     if (!has(key)) return undefined
-    const v = formData.get(key)
+    const v = last(key)
     if (!v || String(v).trim() === "") return undefined
     const n = Number.parseInt(String(v), 10)
     return Number.isNaN(n) ? undefined : n
@@ -70,7 +77,7 @@ export async function updateSystemSettings(formData: FormData) {
 
   function intNull(key: string): number | null | undefined {
     if (!has(key)) return undefined
-    const v = formData.get(key)
+    const v = last(key)
     if (!v || String(v).trim() === "") return null
     const n = Number.parseInt(String(v), 10)
     return Number.isNaN(n) ? null : n
@@ -78,7 +85,7 @@ export async function updateSystemSettings(formData: FormData) {
 
   function decimal(key: string): number | undefined {
     if (!has(key)) return undefined
-    const v = formData.get(key)
+    const v = last(key)
     if (!v || String(v).trim() === "") return undefined
     const n = Number.parseFloat(String(v))
     return Number.isNaN(n) ? undefined : n
@@ -91,7 +98,7 @@ export async function updateSystemSettings(formData: FormData) {
 
   function decimalNull(key: string): number | null | undefined {
     if (!has(key)) return undefined
-    const v = formData.get(key)
+    const v = last(key)
     if (!v || String(v).trim() === "") return null
     const n = Number.parseFloat(String(v))
     return Number.isNaN(n) ? null : n

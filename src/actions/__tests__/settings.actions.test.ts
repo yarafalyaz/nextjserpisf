@@ -174,6 +174,14 @@ describe("updateSystemSettings validasi Zod field tertulis", () => {
     expect(mocks.updateMock).not.toHaveBeenCalled()
   })
 
+  it("FormData duplikat menyimpan nilai terakhir yang divalidasi", async () => {
+    const formData = fd({ payrollCutoffDay: "-1x" })
+    formData.append("payrollCutoffDay", "25")
+
+    await expect(updateSystemSettings(formData)).rejects.toThrow("NEXT_REDIRECT")
+    expect(mocks.updateMock.mock.calls.at(-1)![0].data.payrollCutoffDay).toBe(25)
+  })
+
   it("happy path: 3 field baru tersimpan, redirect jalan", async () => {
     await expect(
       updateSystemSettings(

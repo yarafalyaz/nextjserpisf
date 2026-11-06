@@ -5241,7 +5241,30 @@ terlihat dan ikut kalkulasi rekalibrasi; draft kosong tetap dikecualikan.
   kandidat rekalibrasi draft aktual, serta draft kosong yang memutus rantai.
 - Typecheck, ESLint, build lulus. Full Vitest: 12.663 lulus / 23 dilewati;
   dua warning tracing di `src/lib/db/backup.ts` tidak terkait patch.
-- CI dijalankan setelah push.
+- CI run `42275100601` lulus semua job.
+
+## Putaran 219 — nilai duplikat FormData divergen antara validasi dan simpan
+
+`parseFormData` membentuk objek dengan iterasi FormData; duplikat key terakhir
+menang. `updateSystemSettings` sebelumnya memvalidasi objek itu, lalu membaca
+field mentah via `FormData.get()` (nilai pertama). Akibatnya field numerik
+seperti `payrollCutoffDay` bisa divalidasi sebagai 25 tetapi menyimpan -1 dari
+nilai pertama `-1x` lewat `parseInt` parsial.
+
+Pembacaan string, integer, dan desimal kini memakai nilai terakhir (`getAll`);
+boolean sudah memakai `getAll` sebelumnya. Ini membuat nilai yang disimpan
+sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
+
+### Bukti
+
+- Regresi merah dengan `payrollCutoffDay=-1x` lalu `25`: Zod menerima nilai
+  terakhir, action semula tetap redirect sukses setelah menyimpan nilai pertama.
+- Tes settings 27/27 lulus; test memastikan nilai yang tersimpan adalah 25.
+- Typecheck, ESLint, `git diff --check` bersih; full Vitest: 12.664 lulus / 23 dilewati.
+- Build pertama gagal saat fetch Google Fonts (`fonts.gstatic.com`) dan Turbopack
+  melaporkan `Can't resolve '@vercel/turbopack-next/internal/font/google/font'`;
+  retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
+  tetap ada dan tidak terkait patch.
 
 ## Putaran 217 — edit aturan fitment terkunci oleh item nonaktif
 
