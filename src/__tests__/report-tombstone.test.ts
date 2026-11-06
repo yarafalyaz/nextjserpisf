@@ -22,9 +22,10 @@ import {
  * dua loader laporan ini yang tidak.
  *
  * Aturannya: setiap `findMany`/`findFirst`/`count`/`aggregate`/`groupBy` atas
- * model ber-tombstone di `src/lib/reports` wajib menyebut `deletedAt: null`,
- * baik langsung di `where` maupun lewat `const <nama> = {...}` yang
- * diselesaikan `resolvedWhere`.
+ * model ber-tombstone di permukaan laporan (`lib/reports`, halaman `laporan/`,
+ * `components/reports`) wajib menyebut `deletedAt: null`, baik langsung di
+ * `where` maupun lewat `const <nama> = {...}` yang diselesaikan
+ * `resolvedWhere`.
  *
  * Yang sengaja di luar aturan:
  *
@@ -37,7 +38,9 @@ import {
  *      akan memerahkan tes sampai daftarnya dipangkas.
  */
 
-/** Berkas → alasan mengapa pembacaan master tombstone di sana sengaja tanpa filter. */
+/**
+ * Berkas → alasan mengapa pembacaan master tombstone di sana sengaja tanpa filter.
+ */
 const EXEMPT: Record<string, string> = {
   "src/lib/reports/employee-loan-channel-data.ts":
     "pemetaan userId→employee pembuat pinjaman: identitas, bukan daftar pilihan",
@@ -45,7 +48,24 @@ const EXEMPT: Record<string, string> = {
     "pemetaan login→employee milik sendiri: identitas pemanggil, bukan data laporan",
 }
 
-const REPORTS_DIR = path.join(ROOT, "src/lib/reports")
+/**
+ * Tiga permukaan laporan. Loader (`src/lib/reports`) adalah pemilik angka,
+ * tetapi halaman `laporan/` melakukan 99 pembacaan master sendiri (chip
+ * filter, opsi, seksi ringkas) dan `components/reports` menyusun tabel yang
+ * sama — angka yang salah di sana sama mahalnya dengan angka yang salah di
+ * loader, jadi aturannya berlaku di ketiganya.
+ */
+const REPORT_ROOTS = [
+  "src/lib/reports",
+  "src/app/(dashboard)/laporan",
+  "src/components/reports",
+].map((dir) => path.join(ROOT, dir))
+
+function reportFiles(): string[] {
+  return REPORT_ROOTS.flatMap((dir) =>
+    walk(dir, (n) => n.endsWith(".ts") || n.endsWith(".tsx")),
+  )
+}
 
 function offences(): { file: string; line: number; model: string }[] {
   const tombstoned = writerSoftModels()
@@ -57,7 +77,7 @@ function offences(): { file: string; line: number; model: string }[] {
   )
   const bad: { file: string; line: number; model: string }[] = []
 
-  for (const file of walk(REPORTS_DIR, (n) => n.endsWith(".ts"))) {
+  for (const file of reportFiles()) {
     const rel = path.relative(ROOT, file)
     if (EXEMPT[rel]) continue
     const source = fs.readFileSync(file, "utf8")
@@ -109,13 +129,18 @@ describe("loader laporan menyaring baris tombstone", () => {
   })
 
   it("kontrol positif: pemindaian benar-benar memeriksa laporan", () => {
-    const files = walk(REPORTS_DIR, (n) => n.endsWith(".ts"))
-    expect(files.length).toBeGreaterThanOrEqual(40)
+    const files = reportFiles()
+    expect(files.length).toBeGreaterThanOrEqual(150)
     const withMasterReads = files.filter((f) =>
       /prisma\.(item|employee|customer|vendor|warehouse)\.(findMany|findFirst)\(/.test(
         fs.readFileSync(f, "utf8"),
       ),
     )
     expect(withMasterReads.length).toBeGreaterThanOrEqual(10)
+    // Halaman laporan ikut diperiksa, bukan hanya loader: 99 pembacaan
+    // master tersebar di 71 berkas permukaan laporan, dan mayoritas berada
+    // di luar `src/lib/reports`.
+    expect(files.some((f) => f.includes("/laporan/"))).toBe(true)
+    expect(files.some((f) => f.includes("/components/reports/"))).toBe(true)
   })
 })
