@@ -5013,3 +5013,85 @@ berubah dari 297 baris pemindai lokal menjadi import.
   dengan tepat berkas itu; dipulihkan → hijau.
 - `tsc --noEmit` bersih; ESLint bersih; `npm run build` exit 0.
 - Vitest penuh: 12.640 lulus / 23 dilewati (12.638 → 12.640, 2 tes baru).
+
+## Putaran 214 — L/R proyek menghitung kas kecil yang sudah dibatalkan (commit `b1b4c6190`)
+
+### Vonis FIX (2 query, 1 loader)
+
+`deletePettyCash` (`src/actions/finance.actions.ts:2643`) **tidak** menghapus
+baris kas kecil. Ia menulis `status: "void"`, `voidAt`, `voidReason`,
+`deletedAt`, lalu memanggil `reverseJournalsByReferenceTx(tx, "PettyCash", …)`
+— jurnalnya di-REVERSED. Barisnya tetap tinggal di tabel sebagai tombstone.
+
+Kedua loader L/R proyek membacanya tanpa filter:
+
+- `loadProjectPlReport` (laporan berperiode) —
+  `where: { projectId: { not: null }, type: "OUT", ...dateWhere }`
+- `loadProjectPlForProject` (detail proyek) — `where: { projectId }`
+
+Akibatnya biaya kas kecil yang sudah dibatalkan terus masuk ke total biaya
+proyek dan menekan laba, padahal di buku besar biaya itu sudah tidak ada.
+Angka laporan yang tidak cocok dengan buku besar adalah bentuk cacat yang
+paling mahal karena tidak terlihat salah dari layar.
+
+Kedua query kini menyaring `deletedAt: null`. Ini bukan perubahan angka
+akuntansi: kas kecil ber-status `void` memang sudah dibalik di jurnal, jadi
+yang berubah hanya laporan supaya **sama dengan** buku besar.
+
+### Vonis GUGUR (sumber lain diperiksa, tidak ada cacat)
+
+Sumber biaya lain yang dibaca builder `project-pl.ts` dicek satu per satu
+terhadap `schema.prisma` untuk kolom `deletedAt`:
+
+- `MaterialIssue`, `Expense`, `Timesheet`, `ProductionCost` — **tidak punya**
+  kolom `deletedAt`, jadi delete-nya keras dan baris yang terhapus tak pernah
+  terbaca. Tidak ada filter yang bisa ditambahkan.
+- `SalesInvoice`, `VendorBill` — sudah menyaring `deletedAt: null` di kedua
+  loader sejak awal (dan `buildProjectPl` juga membuangnya sendiri).
+
+Jadi defect-nya spesifik pada dua query petty cash, dan itu satu-satunya
+tempat ia bisa muncul.
+
+### Guard ratchet
+
+`src/__tests__/report-tombstone.test.ts` (3 tes). Setiap
+`findMany`/`findFirst`/`findUnique`/`count`/`aggregate`/`groupBy` atas model
+ber-tombstone di `src/lib/reports` wajib menyebut `deletedAt: null`, baik
+langsung di `where` maupun lewat `where: <identifier>` yang diselesaikan
+`resolvedWhere` ke literal `const`-nya.
+
+Yang sengaja di luar aturan, dan alasannya:
+
+- **Pembacaan relasional** (`where: { id }`, `where: { id: { in: ids } }`) —
+  baris master yang dibaca untuk menampilkan nama pada dokumen lama.
+  Menyaringnya mengosongkan nama pada laporan historis.
+- **Daftar pengecualian** (2 entri): `employee-loan-channel-data.ts` dan
+  `payslip-self-data.ts` memetakan identitas (userId→employee), bukan daftar
+  pilihan atau angka laporan. Daftarnya diperiksa **dua arah** sesuai konvensi
+  repo: entri yang alasannya sudah tidak berlaku memerahkan tes sampai
+  dipangkas. Itu betul-betul terjadi di putaran ini —
+  `customer-statement-data.ts` sempat masuk daftar, lalu pemindaian
+  mengonfirmasi pembacaan keduanya (`where: { id: customerId }`) memang sudah
+  tercakup aturan relasional, dan entrinya dibuang.
+
+Pemindai bersama harus diajari melewati **komentar `//` di dalam objek
+argumen Prisma**. Ini bukan kasus teoretis: setelah komentar penjelas
+ditambahkan ke `pettyCash.findMany` yang sudah diperbaiki, `topLevelValues`
+membaca `// …` sebagai awal skalar, `where` tak pernah terbaca, dan tes
+menuduh berkas yang filternya justru ada. Perbaikannya di pemindai
+(`skipComment` + lingkaran spasi/komentar bergantian), bukan dengan
+melonggarkan aturan.
+
+Kontrol positif: ≥40 berkas diperiksa dan ≥10 di antaranya benar-benar
+membaca master, supaya penjaga tidak hijau karena penandanya meleset.
+
+### Bukti
+
+- Merah sebelum fix: 2 tes regresi di `project-pl-data.test.ts` gagal —
+  `pettyCash.findMany` dipanggil dengan `where` tanpa `deletedAt` untuk
+  laporan berperiode maupun detail proyek.
+- Falsifikasi: `deletedAt: null` dicabut dari query berperiode saja →
+  tes regresi DAN penjaga memerah (penjaga menunjuk
+  `project-pl-data.ts` model `pettyCash`); dipulihkan → hijau.
+- `tsc --noEmit` bersih; ESLint bersih.
+- Vitest penuh: 12.645 lulus / 23 dilewati (12.640 → 12.645, 5 tes baru).
