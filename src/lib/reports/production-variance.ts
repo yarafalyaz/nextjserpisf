@@ -217,10 +217,23 @@ export function findRecalibrationCandidates(input: {
   periods.forEach((orders, periodIndex) => {
     const agg = new Map<number, { absPrice: number; standardTotal: number; weighted: number; qty: number }>()
     for (const order of orders) {
-      // Putaran 99: populasi sama dengan builder utama (putaran 91) — PO
-      // draft belum boleh issue (aktual 0), jadi standar draft menekan /
-      // menggelembungkan persen varians harga kandidat rekalibrasi.
-      if (order.status === "draft") continue
+      // Draft tanpa aktual tetap dikecualikan; draft dengan pemakaian atau
+      // biaya aktual harus ikut seperti populasi laporan utama.
+      const hasActual =
+        order.totalActualCost !== 0 ||
+        order.releasedCost !== 0 ||
+        order.materials.some((material) =>
+          (material.actualQty ?? 0) !== 0 || material.actualCost !== 0,
+        ) ||
+        order.costs.some((cost) => cost.amount !== 0)
+      if (order.status === "draft" && !hasActual) {
+        // Pad absence so an empty draft still breaks a consecutive-period run.
+        for (const list of byItem.values()) {
+          while (list.length < periodIndex) list.push({ pct: null, actualUnitWeighted: 0, qtySum: 0 })
+          list.push({ pct: null, actualUnitWeighted: 0, qtySum: 0 })
+        }
+        continue
+      }
       for (const material of order.materials) {
         const line = splitMaterialVariance(material)
         if (line.uncalibrated) continue
@@ -297,10 +310,19 @@ export function buildProductionVariance(
   const inPeriod = (date: Date) => date.getTime() >= start.getTime() && date.getTime() <= end.getTime()
 
   const visible = orders
-    // Putaran 91: PO draft belum dikonfirmasi — belum boleh issue, aktual
-    // selalu 0, jadi variansnya sampah -100% yang mengotori total. Builder
-    // menyaring ulang supaya loader yang berubah tak membocorkannya.
-    .filter((order) => order.status !== "draft" && inPeriod(order.date))
+    // Draft belum bisa menerima material issue, tetapi ProductionCost dapat
+    // dicatat sebelum konfirmasi dan tetap menambah totalActualCost. Buang
+    // hanya draft yang benar-benar belum punya aktual, bukan biaya sahnya.
+    .filter((order) => {
+      const hasActual =
+        order.totalActualCost !== 0 ||
+        order.releasedCost !== 0 ||
+        order.materials.some((material) =>
+          (material.actualQty ?? 0) !== 0 || material.actualCost !== 0,
+        ) ||
+        order.costs.some((cost) => cost.amount !== 0)
+      return (order.status !== "draft" || hasActual) && inPeriod(order.date)
+    })
     .sort((a, b) => {
       const byDate = a.date.getTime() - b.date.getTime()
       return byDate !== 0 ? byDate : a.documentNo.localeCompare(b.documentNo, "id-ID")

@@ -89,12 +89,43 @@ describe("splitMaterialVariance", () => {
 describe("buildProductionVariance", () => {
   it("putaran 91: PO draft (belum konfirmasi, aktual 0) tidak masuk laporan", () => {
     const result = buildProductionVariance({
-      orders: [order({ id: 9, status: "draft", totalStandardCost: 10_000_000, releasedCost: 0, costs: [] })],
+      orders: [order({
+        id: 9,
+        status: "draft",
+        totalStandardCost: 10_000_000,
+        totalActualCost: 0,
+        releasedCost: 0,
+        materials: [{ itemId: 7, qty: 10, actualQty: 0, standardCost: 50_000, actualCost: 0 }],
+        costs: [],
+      })],
       start: period.start,
       end: period.end,
     })
     expect(result.orderCount).toBe(0)
     expect(result.totals.computedVariance).toBe(0)
+  })
+
+  it("draft tanpa aktual hilang, tetapi draft dengan aktual/biaya tidak boleh hilang dari laporan", () => {
+    const result = buildProductionVariance({
+      orders: [
+        order({
+          id: 90,
+          status: "draft",
+          totalStandardCost: 1_000_000,
+          totalActualCost: 400_000,
+          releasedCost: 100_000,
+          recordedVariance: -500_000,
+          materials: [{ itemId: 7, qty: 10, actualQty: 5, standardCost: 50_000, actualCost: 275_000 }],
+          costs: [{ category: "labor", amount: 225_000 }],
+        }),
+      ],
+      start: period.start,
+      end: period.end,
+    })
+
+    expect(result.orderCount).toBe(1)
+    expect(result.totals.computedVariance).toBe(-500_000)
+    expect(result.totals.laborAndOtherCost).toBe(225_000)
   })
 
   it("menghitung varians order dan rekonsiliasi ke kolom variance order", () => {
@@ -190,12 +221,38 @@ describe("findRecalibrationCandidates (F-2026-10-21-010)", () => {
     expect(candidates[0].suggestedStandardCost).toBe(56_000)
   })
 
+  it("draft dengan aktual ikut varians rekalibrasi karena sudah ada biaya aktual", () => {
+    const candidates = findRecalibrationCandidates({
+      periods: [
+        [{ ...hotOrder(1), status: "draft" }],
+        [{ ...hotOrder(2), status: "draft" }],
+        [{ ...hotOrder(3), status: "draft" }],
+      ],
+      thresholdPct: 5,
+      consecutivePeriods: 3,
+    })
+
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0].consecutivePeriods).toBe(3)
+    expect(candidates[0].suggestedStandardCost).toBe(56_000)
+  })
+
   it("putaran 99: PO draft tak ikut rantai dan tak menyumbang qty usulan", () => {
     // Draft belum boleh issue (aktual 0): standar penuhnya menekan persen
     // periode pertama sekaligus. Qa diabaikan, kandidat tetap lahir hanya
     // dari dua order hot.
     const candidates = findRecalibrationCandidates({
-      periods: [[order({ id: 90, status: "draft" }), hotOrder(1)], [hotOrder(2)]],
+      periods: [[
+        order({
+          id: 90,
+          status: "draft",
+          totalActualCost: 0,
+          releasedCost: 0,
+          materials: [{ itemId: 7, qty: 10, actualQty: 0, standardCost: 50_000, actualCost: 0 }],
+          costs: [],
+        }),
+        hotOrder(1),
+      ], [hotOrder(2)]],
       thresholdPct: 5,
       consecutivePeriods: 2,
     })
@@ -206,6 +263,22 @@ describe("findRecalibrationCandidates (F-2026-10-21-010)", () => {
   it("falsifikasi: rantai putus satu periode (item absen) → bukan kandidat", () => {
     const candidates = findRecalibrationCandidates({
       periods: [[hotOrder(1)], [], [hotOrder(3)], [hotOrder(4)]],
+      thresholdPct: 5,
+      consecutivePeriods: 3,
+    })
+    expect(candidates).toHaveLength(0)
+  })
+
+  it("draft tanpa aktual tetap memutus rantai kandidat", () => {
+    const emptyDraft: ProductionVarianceOrderInput = {
+      ...order({ id: 80, status: "draft" }),
+      totalActualCost: 0,
+      releasedCost: 0,
+      materials: [{ itemId: 7, qty: 10, actualQty: 0, standardCost: 50_000, actualCost: 0 }],
+      costs: [],
+    }
+    const candidates = findRecalibrationCandidates({
+      periods: [[hotOrder(1)], [emptyDraft], [hotOrder(3)], [hotOrder(4)]],
       thresholdPct: 5,
       consecutivePeriods: 3,
     })

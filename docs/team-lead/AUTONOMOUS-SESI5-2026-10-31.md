@@ -5222,6 +5222,27 @@ cacat tambahan.
 - `npm run build` exit 0; dua peringatan tracing filesystem di
   `src/lib/db/backup.ts` tetap ada dan tidak terkait perubahan ini.
 
+## Putaran 218 — laporan varians menghilangkan produksi aktual pada draft
+
+Builder varians dan builder kandidat rekalibrasi membuang semua `ProductionOrder`
+berstatus `draft`. Aturan tersebut mencegah draft kosong membentuk selisih standar
+negatif palsu; namun biaya non-material bisa dicatat sebelum konfirmasi dan
+menambah `totalActualCost`, sehingga draft yang sudah punya biaya aktual juga
+hilang dari laporan meski nilai WIP/biaya sudah ada.
+
+Filter kini hanya membuang draft tanpa aktual. Draft berbiaya aktual tetap
+terlihat dan ikut kalkulasi rekalibrasi; draft kosong tetap dikecualikan.
+
+### Bukti
+
+- Tes regresi merah: draft dengan `totalActualCost`, `releasedCost`, material
+  terpakai, dan tenaga kerja hilang sebelum perbaikan.
+- Tes `production-variance`: 20/20 lulus; meliputi draft kosong, draft aktual,
+  kandidat rekalibrasi draft aktual, serta draft kosong yang memutus rantai.
+- Typecheck, ESLint, build lulus. Full Vitest: 12.663 lulus / 23 dilewati;
+  dua warning tracing di `src/lib/db/backup.ts` tidak terkait patch.
+- CI dijalankan setelah push.
+
 ## Putaran 217 — edit aturan fitment terkunci oleh item nonaktif
 
 Halaman ubah fitment hanya memuat item aktif, sedangkan aturan lama tetap
