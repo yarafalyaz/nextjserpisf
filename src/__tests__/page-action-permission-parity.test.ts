@@ -160,6 +160,26 @@ describe("paritas izin halaman detail/edit vs list/action (#53)", () => {
     expect(detail).toContain("{canDelete && <DeleteButton")
   })
 
+  it("detail pembelian menyembunyikan ubah/hapus sesuai izin tulis", () => {
+    const purchaseOrder = readFileSync(
+      join(DASHBOARD, "pembelian/pesanan/[slug]/page.tsx"),
+      "utf8",
+    )
+    expect(purchaseOrder).toContain('hasPermission("edit_purchase_orders")')
+    expect(purchaseOrder).toContain('hasPermission("delete_purchase_orders")')
+    expect(purchaseOrder).toMatch(/canEdit\s*&&\s*<Button href=\{entityEditHref\("\/pembelian\/pesanan"/)
+    expect(purchaseOrder).toContain("{canDelete && <DeleteButton")
+
+    const purchaseRequest = readFileSync(
+      join(DASHBOARD, "pembelian/permintaan/[slug]/page.tsx"),
+      "utf8",
+    )
+    expect(purchaseRequest).toContain('hasPermission("edit_purchase_requests")')
+    expect(purchaseRequest).toContain('hasPermission("delete_purchase_requests")')
+    expect(purchaseRequest).toMatch(/canEdit\s*&&\s*<Button href=\{entityEditHref\("\/pembelian\/permintaan"/)
+    expect(purchaseRequest).toContain("{canDelete && <DeleteButton")
+  })
+
   it("setiap halaman hub modul memiliki guard izin (requirePermission atau requireAnyPermission)", () => {
     const hubModules = [
       "master",

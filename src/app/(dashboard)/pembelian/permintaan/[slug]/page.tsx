@@ -28,7 +28,11 @@ export default async function PurchaseRequestDetailPage({
   params: Promise<{ slug: string }>
 }) {
   await requirePermission("view_purchase_requests")
-  const canApprove = await hasPermission("approve_purchase_requests")
+  const [canApprove, canEdit, canDelete] = await Promise.all([
+    hasPermission("approve_purchase_requests"),
+    hasPermission("edit_purchase_requests"),
+    hasPermission("delete_purchase_requests"),
+  ])
 
   const { slug } = await params
 
@@ -76,9 +80,9 @@ export default async function PurchaseRequestDetailPage({
                 Buat Pesanan
               </Button>
             )}
-            <Button href={entityEditHref("/pembelian/permintaan", request)} variant="primary">Ubah</Button>
+            {canEdit && <Button href={entityEditHref("/pembelian/permintaan", request)} variant="primary">Ubah</Button>}
             <PrintButton documentType="purchase-request" documentId={request.id} />
-            <DeleteButton id={request.id} action={deletePurchaseRequest} />
+            {canDelete && <DeleteButton id={request.id} action={deletePurchaseRequest} />}
             <BackButton href="/pembelian/permintaan" />
           </>
         }

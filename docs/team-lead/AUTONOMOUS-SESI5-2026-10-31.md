@@ -5266,6 +5266,26 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 221 — detail PO dan PR menampilkan aksi tanpa izin edit/hapus
+
+Dua halaman detail pembelian meminta izin view, tetapi selalu merender tombol
+Ubah/Hapus. `updatePurchaseOrder` / `deletePurchaseOrder` dan
+`updatePurchaseRequest` / `deletePurchaseRequest` memeriksa izin tulis masing-
+masing; pengguna view-only melihat tombol yang pasti gagal saat dipilih.
+
+Kedua halaman kini membaca izin edit dan delete secara terpisah, merender hanya
+tombol yang sesuai, dan tetap mempertahankan gerbang status untuk cancel/approve.
+Regression guard di `page-action-permission-parity.test.ts` mengunci kedua
+halaman.
+
+### Bukti
+
+- Targeted `page-action-permission-parity`: 8/8 lulus.
+- Typecheck, ESLint, dan `git diff --check` bersih; full Vitest 12.666 lulus / 23 dilewati.
+- Build awal gagal pada fetch Google Fonts (`fonts.gstatic.com`) dan resolusi
+  `@vercel/turbopack-next/internal/font/google/font`; retry berhasil. Dua warning
+  tracing dinamis di `src/lib/db/backup.ts` tetap ada dan tidak terkait patch.
+
 ## Putaran 220 — tombol ubah/hapus merek kendaraan bocor ke role view-only
 
 Halaman detail `kendaraan/merek/[slug]` memeriksa `view_vehicle_brands`, tetapi

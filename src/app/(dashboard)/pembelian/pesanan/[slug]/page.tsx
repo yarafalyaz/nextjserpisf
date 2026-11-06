@@ -30,7 +30,11 @@ export default async function PurchaseOrderDetailPage({
   params: Promise<{ slug: string }>
 }) {
   await requirePermission("view_purchase_orders")
-  const canApprove = await hasPermission("approve_purchase_orders")
+  const [canApprove, canEdit, canDelete] = await Promise.all([
+    hasPermission("approve_purchase_orders"),
+    hasPermission("edit_purchase_orders"),
+    hasPermission("delete_purchase_orders"),
+  ])
   const canCancelPurchaseOrder = await hasPermission("edit_purchase_orders")
   const { slug } = await params
 
@@ -89,7 +93,7 @@ export default async function PurchaseOrderDetailPage({
         badge={<StatusChip status={po.status} />}
         actions={
           <>
-            <Button href={entityEditHref("/pembelian/pesanan", po)} variant="primary">Ubah</Button>
+            {canEdit && <Button href={entityEditHref("/pembelian/pesanan", po)} variant="primary">Ubah</Button>}
             {po.vendorBills.length === 0 &&
               (po.isService
                 ? !["draft", "cancelled", "rejected"].includes(po.status)
@@ -104,7 +108,7 @@ export default async function PurchaseOrderDetailPage({
             {!["received", "cancelled", "partial_received"].includes(po.status) && (
               <VoidButton id={po.id} action={cancelPurchaseOrder} canVoid={canCancelPurchaseOrder} />
             )}
-            <DeleteButton id={po.id} action={deletePurchaseOrder} />
+            {canDelete && <DeleteButton id={po.id} action={deletePurchaseOrder} />}
             <BackButton href="/pembelian/pesanan" />
           </>
         }
