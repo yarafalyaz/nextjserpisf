@@ -5095,3 +5095,84 @@ membaca master, supaya penjaga tidak hijau karena penandanya meleset.
   `project-pl-data.ts` model `pettyCash`); dipulihkan → hijau.
 - `tsc --noEmit` bersih; ESLint bersih.
 - Vitest penuh: 12.645 lulus / 23 dilewati (12.640 → 12.645, 5 tes baru).
+
+## Putaran 215 — pemindai penjaga tombstone dikunci, cakupan laporan diperluas (commit `78521c1a0`, `423403695`)
+
+### Vonis FIX (pemindai) + GUGUR (tidak ada cacat data baru)
+
+Putaran 214 meninggalkan satu hal yang belum ditutup: pemindai bersama
+`src/__tests__/support/tombstone-models.ts` sudah tiga kali salah membaca,
+dan tiap kali gejalanya identik — penjaga menuduh kode yang justru benar.
+Saat memperluasnya untuk putaran ini, bentuk ketiga muncul:
+
+- **`where: employeeWhere`** terbaca sebagai skalar bernama variabel
+  (putaran 213) — diperbaiki dengan penyelesaian ke literal `const`.
+- **Komentar `//` di dalam objek argumen Prisma** membuat `topLevelValues`
+  berhenti sebelum `where` (putaran 214) — diperbaiki `skipComment`.
+- **Singkatan `{ where, orderBy }`** hanya dikenali bila didahului backtick,
+  sehingga 11 halaman daftar (`crm/leads`, `crm/tickets`, `keuangan/kas-kecil`,
+  `master/barang`, `master/gudang`, `master/karyawan`, `master/kategori-pelanggan`,
+  `master/pajak`, `master/pelanggan`, `master/vendor`, `pengaturan/workflow`)
+  terbaca "tanpa `where`" padahal variabel `where`-nya menyaring
+  `deletedAt: null`. Diperbaiki di pemindai — aturan penjaga **tidak**
+  dilonggarkan.
+
+Ketiga bentuk itu kini dikunci delapan tes di
+`src/__tests__/support/__tests__/tombstone-models.test.ts`: kunci tingkat
+atas, komentar baris dan blok, kunci bersarang yang tak boleh bocor
+(`select: { deletedAt: true }`), kedua bentuk singkatan, `where: <identifier>`,
+dan pemanggilan tanpa `where` yang memang harus dituntut.
+
+Alasan menulis tes ini sekarang: pemindai yang salah tuduh akan "diperbaiki"
+orang berikutnya dengan melonggarkan aturannya, dan kelas cacat yang dijaga
+hilang tanpa suara. Tes kecil ini membuat jalan itu merah.
+
+### Cakupan laporan diperluas
+
+Penjaga `report-tombstone` semula hanya memindai `src/lib/reports`. Ternyata
+permukaan laporan jauh lebih luas: halaman `laporan/` melakukan 99 pembacaan
+master sendiri (chip filter, pemilih entitas, seksi ringkas) dan
+`components/reports` menyusun tabel yang sama. Tiga akar sekarang dipindai —
+191 berkas, bukan 60.
+
+**Tidak ada cacat baru**: seluruh 99 pembacaan sudah menyaring `deletedAt`
+atau bersifat relasional (`where: { id }`). Nilainya ratchet, bukan patch.
+
+### Pemindaian menyeluruh yang tidak menghasilkan patch (dicatat)
+
+Semua ini dijalankan atas `src/` penuh (bukan sampel) dan hasilnya bersih:
+
+- **Pembacaan tak tersaring di luar laporan** (267 pembacaan model
+  ber-tombstone di halaman dashboard + `lib/*` + `api/` + `services/` +
+  `hooks/`): sisa temuan semuanya salah satu dari — `resolveEntity` dengan
+  `fallbackWhere` (dinilai penjaga putaran 212), `where: { userId }` untuk
+  memetakan login→employee (identitas, bukan daftar), atau pembacaan
+  relasional. Satu dugaan (`penerimaan/[slug]` memuat semua gudang untuk
+  label) memang tanpa filter, tetapi gudang terhapus hanya menyembunyikan
+  label dokumen lama — menyaringnya justru merusak riwayat.
+- **Model yang punya kolom `isActive` tetapi penulis soft-delete-nya lupa
+  `isActive: false`**: kosong. Semua penulis yang pasangannya penting memang
+  menulis keduanya (alasan `bulk.actions.ts`), dan 16 penulis yang tidak
+  menulis `isActive` memang model tanpa kolom itu.
+- **`bulkDelete` menjangkau soft-delete pada model yang tidak terdeteksi
+  penjaga** (dispatch dinamis): kosong. Keempat model yang terjangkau hapus
+  massal punya penulis eksplisit juga.
+- **Pembaca yang menyaring `deletedAt: null` tetapi tidak menyaring status
+  terminal (`void`/`cancelled`)**: 33 situs, semuanya diperiksa — builder-nya
+  menyaring status (`isBilledInvoice`, `BILLED_INVOICE_STATUSES`,
+  `RECOGNISED_AP_STATUSES`, `loadProjectPl`), atau barisnya memang ditampilkan
+  sebagai riwayat (linimasa kendaraan, daftar faktur proyek, dashboard).
+  Hanya putaran 214 (`pettyCash`) yang benar-benar menghitungnya sebagai uang.
+- **`findMany` ber-`take` tanpa `skip` pada halaman berpaginasi**: dua, dan
+  keduanya bukan daftar berpaginasi (opsi peran pengguna, antrean slip draft).
+
+### Bukti
+
+- Falsifikasi pemindai: `shorthand ? null :` dikembalikan → dua tes merah
+  (`{ where, orderBy }`, `{ where }`); dipulihkan → 8/8 hijau.
+- Falsifikasi cakupan laporan: `deletedAt: null` dicabut dari
+  `laporan/_components/price-history-shared.tsx` → tes merah menunjuk berkas
+  itu, `line: 21`, `model: "customer"`; dipulihkan → hijau.
+- `tsc --noEmit` bersih; ESLint bersih.
+- Vitest penuh: 12.653 lulus / 23 dilewati (12.645 → 12.653; 8 tes pemindai,
+  tanpa tes data baru karena putaran ini tidak menemukan cacat data).
