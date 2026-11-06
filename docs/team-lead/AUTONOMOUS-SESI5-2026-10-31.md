@@ -4854,3 +4854,86 @@ terdeteksi punya chip, supaya penjaga tidak hijau karena regex-nya meleset.
   Dipulihkan → hijau.
 - `tsc --noEmit` bersih; ESLint bersih; `npm run build` exit 0.
 - Vitest penuh: 12.633 lulus / 23 dilewati (12.631 → 12.633, 2 tes baru).
+
+## Putaran 212 — halaman detail menolak baris yang sudah dihapus lunak
+
+Lanjutan butir CATAT putaran 210 ("detail master menampilkan tombstone").
+Butir itu menaksir 18 halaman; angka sebenarnya jauh lebih kecil, dan
+memetakannya dengan benar adalah separuh pekerjaannya.
+
+### Vonis FIX (10 berkas, 2 aturan)
+
+Cacatnya nyata tetapi lebih sempit dari taksiran: baris yang dihapus lunak
+masih ada di tabel, `resolveEntity` menerima segmen URL berupa slug **atau id
+numerik**, dan tidak ada satu pun dari keduanya yang menyaring `deletedAt`.
+Akibatnya URL lama/bookmark tetap membuka data yang "sudah tidak ada" —
+lengkap dengan tombol Ubah/Hapus yang menawarkan mengedit mayat, dan halaman
+`ubah` yang formulirnya bisa menimpa baris tombstone. Halaman daftar sudah
+lama menyaringnya, jadi hanya jalur detail yang bolong; tsc, lint, dan tes
+biasa tak menangkapnya karena query-nya sah secara tipe.
+
+**Cakupan diturunkan dari penulis, bukan dari skema.** 42 model punya kolom
+`deletedAt`, tetapi kebanyakan delete-nya keras (guard status/FK), sehingga
+menambal ke-42-nya hanya menghasilkan diff kosong. Pemindaian `data:` tingkat
+atas pada setiap `update`/`updateMany` di `src/actions` + `src/lib`
+menghasilkan **25 model yang benar-benar ditulisi tombstone**
+(`new Date()` — `deletedAt: null` adalah restore, bukan hapus). Dari situ,
+hanya halaman yang membaca salah satu model itu lewat `resolveEntity` yang
+terdampak:
+
+- `master/barang/[slug]` + `/ubah` (item)
+- `master/pajak/[slug]` + `/ubah` (tax)
+- `master/karyawan/[slug]` + `/ubah` (employee)
+- `keuangan/kas-kecil/[slug]` + `/ubah` (pettyCash)
+- `pengaturan/transaksi-berulang/[slug]/ubah` (recurringTransaction — satu-
+  satunya halaman detail yang mengerjakan slug/id sendiri tanpa
+  `resolveEntity`)
+- `pembelian/perintah-pembayaran/[[...segments]]` (vendor — segmen `pemasok`
+  dan redirect `?vendorId=` lama)
+
+Delapan halaman pertama kini memakai bentuk yang sudah jadi konvensi di
+`master/gudang`, `master/pelanggan`, `master/vendor`, `crm/*`, `sdm/*`:
+`fallbackWhere: { deletedAt: null }` + `bySlug/byId` menerima `where` dan
+menyebarkannya. Dua yang terakhir menyaring langsung di `where` karena tidak
+memakai `resolveEntity` — termasuk jalur redirect `?vendorId=<id>` yang tanpa
+filter mengarahkan ke `/pemasok/<slug>` yang 404 (pemasok tombstone ber-slug).
+
+Yang **tidak** ditambal, dan alasannya: `penjualan/faktur`, `pembelian/tagihan`,
+`pembelian/pesanan`, `penjualan/penawaran`, `kendaraan`, `master/akun`,
+`inventaris/penyesuaian` — meski kolom `deletedAt` ada, tidak ada penulis
+soft-delete untuk model-model itu; delete-nya keras dan ber-guard, jadi
+filternya tak pernah menyala. `salesInvoice` khususnya adalah jebakan: blok
+`update`-nya memuat `select: { deletedAt: true }` di include bersarang, jadi
+pemindaian naif menuduhnya sebagai tombstone. Pemindaian final membaca kunci
+**tingkat atas** objek `data:`, bukan regex atas seluruh blok.
+
+### Guard ratchet
+
+`src/__tests__/detail-page-tombstone.test.ts`, 5 tes, dua aturan:
+
+1. **`resolveEntity`** — setiap blok `await resolveEntity(...)` di
+   `src/app/(dashboard)` yang membaca model ber-tombstone wajib memakai
+   `fallbackWhere: { deletedAt: null }` **dan** `...where` di tiap lookup
+   (tanpa penyebaran itu fallback diabaikan diam-diam — bentuk defect yang
+   paling rapi bersembunyi), atau menulis `deletedAt: null` langsung di
+   `where` setiap lookup. Himpunan model diturunkan tiap jalan dari skema
+   **irisan** penulis, jadi penulis soft-delete baru otomatis memperluas
+   cakupan tanpa menyunting tes.
+2. **Lookup bersegmen** — halaman yang mengerjakan slug/id sendiri (tanpa
+   `resolveEntity`) dan menyebut nama variabel segmen di `where` wajib
+   menyaring tombstone. Pembacaan relasional (`where: { id: rule.itemId }`,
+   `where: { userId }`) sengaja **tidak** termasuk: itu baris lain, dan
+   menyaringnya menyembunyikan riwayat yang sah.
+
+Kontrol positif (3 tes tambahan): skema→penulis harus sepakat; pemindaian
+harus benar-benar menemukan ≥15 blok yang diperiksa; dan `salesInvoice` /
+`quotation` harus **tetap** di luar himpunan penulis — mengunci pemindaian
+pada kunci tingkat atas, bukan regex blok.
+
+### Bukti
+
+- Merah sebelum fix: delapan berkas dikembalikan ke HEAD → penjaga gagal
+  dengan tepat 8 baris bernama; `pengaturan/transaksi-berulang` dikembalikan
+  → aturan kedua gagal dengan tepat berkas itu. Dipulihkan → hijau.
+- `tsc --noEmit` bersih; ESLint bersih; `npm run build` exit 0.
+- Vitest penuh: 12.638 lulus / 23 dilewati (12.633 → 12.638, 5 tes baru).
