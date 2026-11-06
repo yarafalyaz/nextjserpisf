@@ -5221,3 +5221,20 @@ cacat tambahan.
 - Vitest penuh: 12.658 lulus / 23 dilewati (12.653 → 12.658; 5 tes baru).
 - `npm run build` exit 0; dua peringatan tracing filesystem di
   `src/lib/db/backup.ts` tetap ada dan tidak terkait perubahan ini.
+
+## Putaran 217 — edit aturan fitment terkunci oleh item nonaktif
+
+Halaman ubah fitment hanya memuat item aktif, sedangkan aturan lama tetap
+menyimpan `itemId`. Form menginisialisasi Combobox dengan ID yang tidak ada di
+opsi; action `updateVehicleFitment` juga menolak item nonaktif. Operator tidak
+dapat menyimpan perubahan lain pada aturan tanpa mengganti makna aturan.
+
+Action kini membolehkan item nonaktif hanya saat mempertahankan `itemId` aturan
+itu; item yang dihapus tetap ditolak, dan pemeriksaan diulang di dalam transaksi.
+Halaman ubah menyertakan item tertaut yang masih ada agar label opsi tetap utuh.
+
+### Bukti
+
+- Tes merah sebelum fix; tes aksi fitment setelah fix: 23/23 lulus.
+- Guard form-picker, `npx tsc --noEmit`, ESLint, dan build lulus.
+- Vitest penuh: 12.660 lulus / 23 dilewati.

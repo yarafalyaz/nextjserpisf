@@ -33,7 +33,14 @@ export default async function EditVehicleFitmentPage({
 
   const [items, brands, models, variants] = await Promise.all([
     prisma.item.findMany({
-      where: { isActive: true, deletedAt: null },
+      where: {
+        OR: [
+          { isActive: true, deletedAt: null },
+          // Retain selected inactive item so existing rule keeps its label;
+          // server allows it only while that rule retains the same itemId.
+          { id: rule.itemId, deletedAt: null },
+        ],
+      },
       orderBy: { name: "asc" },
       select: { id: true, sku: true, name: true },
     }),

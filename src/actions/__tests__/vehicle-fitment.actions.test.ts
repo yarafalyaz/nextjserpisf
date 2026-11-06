@@ -56,8 +56,10 @@ beforeEach(() => {
   mocks.idemCreate.mockResolvedValue({ id: 1 })
   mocks.idemFindUnique.mockResolvedValue(null)
   mocks.idemUpdateMany.mockResolvedValue({ count: 1 })
-  // nextSlug() probes for a free slug via findFirst → null means it's free.
-  mocks.prisma.vehicleFitmentRule.findFirst.mockResolvedValue(null)
+  // Existing-rule reads resolve by id; nextSlug probes by slug and gets null.
+  mocks.prisma.vehicleFitmentRule.findFirst.mockImplementation(({ where }: { where?: { id?: number } }) =>
+    where?.id ? Promise.resolve({ id: where.id, itemId: 5, slug: `fitment-${where.id}` }) : Promise.resolve(null),
+  )
   // Default ref hidup & rantai utuh; test gerbang menimpa seperlunya.
   mocks.prisma.item.findFirst.mockResolvedValue({ id: 5, isActive: true })
   mocks.prisma.vehicleBrand.findFirst.mockResolvedValue({ id: 1 })
@@ -68,9 +70,11 @@ beforeEach(() => {
 
 describe("putaran 55 K2: gerbang ref fitment", () => {
   it("putaran 79: update menolak item yang mati di jendela cek pra-tx (nilai ulang berkunci)", async () => {
-    mocks.prisma.item.findFirst
-      .mockResolvedValueOnce({ id: 5, isActive: true }) // cek pra-tx: hidup
-      .mockResolvedValue({ id: 5, isActive: false }) // baca ulang dalam tx: mati
+    mocks.prisma.vehicleFitmentRule.findFirst.mockImplementation(({ where }: { where?: { id?: number; slug?: string } }) =>
+      Promise.resolve(where?.id ? { id: where.id, itemId: 6, slug: "fitment-4" } : null),
+    )
+
+    mocks.prisma.item.findFirst.mockResolvedValue({ id: 5, isActive: false }) // sudah nonaktif saat pra-tx
     const res = await updateVehicleFitment(4, fdMap({ itemId: "5", result: "compatible" }))
     expect(res.success).toBe(false)
     expect((res as { error?: string }).error).toContain("tidak aktif")
@@ -227,6 +231,23 @@ describe("createVehicleFitment", () => {
 })
 
 describe("updateVehicleFitment", () => {
+  it("allows unrelated edits while retaining the rule's now-inactive item", async () => {
+    mocks.prisma.item.findFirst.mockResolvedValue({ id: 5, isActive: false })
+    mocks.prisma.vehicleFitmentRule.findFirst.mockResolvedValue({ id: 9, itemId: 5, slug: "fitment-9" })
+    mocks.prisma.vehicleFitmentRule.update.mockResolvedValue({ id: 9, slug: "fitment-9" })
+
+    const res = await updateVehicleFitment(9, fdMap({
+      itemId: "5",
+      result: "incompatible",
+      isActive: "true",
+    }))
+
+    expect(res.success).toBe(true)
+    expect(mocks.prisma.vehicleFitmentRule.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 9 }, data: expect.objectContaining({ itemId: 5 }) }),
+    )
+  })
+
   it("updates a rule", async () => {
     mocks.prisma.vehicleFitmentRule.update.mockResolvedValue({ id: 9 })
     const res = await updateVehicleFitment(9, fdMap({

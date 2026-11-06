@@ -33,19 +33,23 @@ type FitmentRefsClient = Pick<
   "item" | "bomRevision" | "vehicleBrand" | "vehicleModel" | "vehicleVariant"
 >
 
-async function assertFitmentRefsLive(v: {
-  itemId: number
-  bomRevisionId?: number | null
-  vehicleBrandId?: number | null
-  vehicleModelId?: number | null
-  vehicleVariantId?: number | null
-}, client: FitmentRefsClient = prisma): Promise<string | null> {
+async function assertFitmentRefsLive(
+  v: {
+    itemId: number
+    bomRevisionId?: number | null
+    vehicleBrandId?: number | null
+    vehicleModelId?: number | null
+    vehicleVariantId?: number | null
+  },
+  client: FitmentRefsClient = prisma,
+  allowInactiveItem = false,
+): Promise<string | null> {
   const item = await client.item.findFirst({
     where: { id: v.itemId, deletedAt: null },
     select: { id: true, isActive: true },
   })
   if (!item) return "Item tidak ditemukan."
-  if (!item.isActive) return "Item tidak aktif; aturan kompatibilitas baru tidak dapat dibuat untuknya."
+  if (!item.isActive && !allowInactiveItem) return "Item tidak aktif; aturan kompatibilitas baru tidak dapat dibuat untuknya."
   if (v.bomRevisionId != null) {
     const revision = await client.bomRevision.findFirst({
       where: { id: v.bomRevisionId },
@@ -165,9 +169,9 @@ export async function updateVehicleFitment(id: number, formData: FormData) {
       return { success: false, error: "Tahun awal tidak boleh melebihi tahun akhir." };
     }
 
-    const refError = await assertFitmentRefsLive(v)
-    if (refError) return { success: false, error: refError }
-
+    // Retain existing rule's item if it was deactivated later. This permits
+    // edits to other fields without allowing a new rule to target inactive
+    // inventory, or changing an inactive rule to a different inactive item.
     // Putaran 79: nilai ulang ref DALAM tx sesudah kunci baris item — cek
     // pra-tx di atas fast-fail saja. deleteItem mengunci baris item yang
     // sama lalu soft-delete; tanpa nilai ulang ini update mendarat sesudah
@@ -176,7 +180,16 @@ export async function updateVehicleFitment(id: number, formData: FormData) {
       if (typeof tx.$executeRaw === "function") {
         await tx.$executeRaw`SELECT id FROM items WHERE id = ${v.itemId} FOR UPDATE`;
       }
-      const lockedRefError = await assertFitmentRefsLive(v, tx as FitmentRefsClient)
+      const lockedRule = await tx.vehicleFitmentRule.findFirst({
+        where: { id },
+        select: { itemId: true },
+      })
+      if (!lockedRule) throw new Error("Aturan kompatibilitas tidak ditemukan.")
+      const lockedRefError = await assertFitmentRefsLive(
+        v,
+        tx as FitmentRefsClient,
+        lockedRule.itemId === v.itemId,
+      )
       if (lockedRefError) throw new Error(lockedRefError)
       return tx.vehicleFitmentRule.update({
         where: { id },
