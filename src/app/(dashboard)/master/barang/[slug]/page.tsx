@@ -72,11 +72,11 @@ export default async function ItemDetailPage({
   const { slug } = await params
 
   const item = await resolveEntity(
-    { segment: slug },
+    { segment: slug, fallbackWhere: { deletedAt: null } },
     {
-      bySlug: (s) =>
+      bySlug: (s, where) =>
         prisma.item.findFirst({
-          where: { slug: s },
+          where: { slug: s, ...where },
           include: {
             category: true,
             warehouse: true,
@@ -89,9 +89,9 @@ export default async function ItemDetailPage({
             itemSerials: { orderBy: { createdAt: "desc" } },
           },
         }),
-      byId: (id) =>
+      byId: (id, where) =>
         prisma.item.findUnique({
-          where: { id },
+          where: { id, ...where },
           include: {
             category: true,
             warehouse: true,

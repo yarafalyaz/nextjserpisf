@@ -97,11 +97,11 @@ export default async function EmployeeDetailPage({
   const { slug } = await params
 
   const employee = await resolveEntity(
-    { segment: slug },
+    { segment: slug, fallbackWhere: { deletedAt: null } },
     {
-      bySlug: (s) =>
+      bySlug: (s, where) =>
         prisma.employee.findFirst({
-          where: { slug: s },
+          where: { slug: s, ...where },
           include: {
             department: true,
             position: true,
@@ -117,9 +117,9 @@ export default async function EmployeeDetailPage({
             employeeLoans: { where: { status: "active" } },
           },
         }),
-      byId: (id) =>
+      byId: (id, where) =>
         prisma.employee.findUnique({
-          where: { id },
+          where: { id, ...where },
           include: {
             department: true,
             position: true,

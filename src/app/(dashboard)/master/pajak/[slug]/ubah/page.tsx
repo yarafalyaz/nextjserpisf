@@ -20,10 +20,10 @@ export default async function EditTaxPage({
 
   const { slug } = await params
   const tax = await resolveEntity(
-    { segment: slug },
+    { segment: slug, fallbackWhere: { deletedAt: null } },
     {
-      bySlug: (s) => prisma.tax.findFirst({ where: { slug: s } }),
-      byId: (id) => prisma.tax.findUnique({ where: { id } }),
+      bySlug: (s, where) => prisma.tax.findFirst({ where: { slug: s, ...where } }),
+      byId: (id, where) => prisma.tax.findUnique({ where: { id, ...where } }),
     },
   )
 

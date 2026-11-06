@@ -20,10 +20,10 @@ export default async function EditItemPage({
   const { slug } = await params
 
   const item = await resolveEntity(
-    { segment: slug },
+    { segment: slug, fallbackWhere: { deletedAt: null } },
     {
-      bySlug: (s) => prisma.item.findFirst({ where: { slug: s }, include: { uomConversions: true } }),
-      byId: (id) => prisma.item.findUnique({ where: { id }, include: { uomConversions: true } }),
+      bySlug: (s, where) => prisma.item.findFirst({ where: { slug: s, ...where }, include: { uomConversions: true } }),
+      byId: (id, where) => prisma.item.findUnique({ where: { id, ...where }, include: { uomConversions: true } }),
     },
   )
 

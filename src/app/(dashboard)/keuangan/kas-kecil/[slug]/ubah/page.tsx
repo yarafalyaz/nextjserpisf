@@ -22,10 +22,10 @@ export default async function EditPage({
   const { slug } = await params
 
   const data = await resolveEntity(
-    { segment: slug, fallbackWhere: {} },
+    { segment: slug, fallbackWhere: { deletedAt: null } },
     {
-      bySlug: (s) => prisma.pettyCash.findFirst({ where: { slug: s } }),
-      byId: (id) => prisma.pettyCash.findUnique({ where: { id } }),
+      bySlug: (s, where) => prisma.pettyCash.findFirst({ where: { slug: s, ...where } }),
+      byId: (id, where) => prisma.pettyCash.findUnique({ where: { id, ...where } }),
     },
   )
 

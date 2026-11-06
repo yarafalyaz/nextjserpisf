@@ -22,11 +22,11 @@ export default async function EditEmployeePage({
   const user = await requirePermission("edit_employees");
 
   const data = await resolveEntity(
-    { segment: slug },
+    { segment: slug, fallbackWhere: { deletedAt: null } },
     {
-      bySlug: (s) =>
+      bySlug: (s, where) =>
         prisma.employee.findFirst({
-          where: { slug: s },
+          where: { slug: s, ...where },
           include: {
             user: {
               include: {
@@ -35,9 +35,9 @@ export default async function EditEmployeePage({
             },
           },
         }),
-      byId: (id) =>
+      byId: (id, where) =>
         prisma.employee.findUnique({
-          where: { id },
+          where: { id, ...where },
           include: {
             user: {
               include: {

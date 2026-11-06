@@ -19,9 +19,12 @@ export default async function EditRecurringTransactionPage({ params }: { params:
 
   const { slug } = await params
   const [schedule, categories] = await Promise.all([
+    // deleteRecurringTransaction menghapus lunak (`deletedAt` + `isActive:false`),
+    // jadi jadwal yang sudah dihapus tidak boleh tetap terbuka lewat tautan
+    // lama/bookmark dan bisa diedit (pola resolveEntity di halaman detail lain).
     isNumericId(slug)
-      ? prisma.recurringTransaction.findUnique({ where: { id: Number(slug) } })
-      : prisma.recurringTransaction.findFirst({ where: { slug } }),
+      ? prisma.recurringTransaction.findUnique({ where: { id: Number(slug), deletedAt: null } })
+      : prisma.recurringTransaction.findFirst({ where: { slug, deletedAt: null } }),
     prisma.expenseCategory.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, label: true } }),
   ])
 

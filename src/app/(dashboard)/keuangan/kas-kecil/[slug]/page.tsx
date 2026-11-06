@@ -30,18 +30,18 @@ export default async function PettyCashDetailPage({
   const { slug } = await params;
 
   const pettyCash = await resolveEntity(
-    { segment: slug, fallbackWhere: {} },
+    { segment: slug, fallbackWhere: { deletedAt: null } },
     {
-      bySlug: (s) => prisma.pettyCash.findFirst({
-        where: { slug: s },
+      bySlug: (s, where) => prisma.pettyCash.findFirst({
+        where: { slug: s, ...where },
         include: {
           project: { select: { id: true, name: true, documentNo: true } },
           vendor: { select: { name: true } },
           category: { select: { label: true } },
         },
       }),
-      byId: (id) => prisma.pettyCash.findUnique({
-        where: { id },
+      byId: (id, where) => prisma.pettyCash.findUnique({
+        where: { id, ...where },
         include: {
           project: { select: { id: true, name: true, documentNo: true } },
           vendor: { select: { name: true } },

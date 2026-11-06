@@ -48,7 +48,9 @@ export default async function PaymentOrderPage({
     const legacyVendor =
       legacyVendorId && Number.isInteger(legacyVendorId) && legacyVendorId > 0
         ? await prisma.vendor.findUnique({
-            where: { id: legacyVendorId },
+            // Pemasok terhapus lunak = tidak ada: tanpa filter ini tautan lama
+            // ber-redirect ke `/pemasok/<slug>` yang halaman ini 404-kan.
+            where: { id: legacyVendorId, deletedAt: null },
             select: { slug: true },
           })
         : null
@@ -71,10 +73,13 @@ export default async function PaymentOrderPage({
   dueThrough.setHours(23, 59, 59, 999)
 
   // Pemasok dari path (slug lebih dulu, id sebagai cadangan — pola laporan).
+  // `deletedAt: null` wajib: pemasok yang sudah dihapus lunak tidak boleh
+  // tetap menghasilkan daftar perintah pembayaran lewat tautan lama.
   const vendorSegment = filters.pemasok
   const selectedVendor = vendorSegment
     ? await prisma.vendor.findFirst({
         where: {
+          deletedAt: null,
           OR: [
             { slug: vendorSegment },
             ...(/^\d+$/.test(vendorSegment) ? [{ id: Number(vendorSegment) }] : []),
