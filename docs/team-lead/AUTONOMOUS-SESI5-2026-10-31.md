@@ -5176,3 +5176,48 @@ Semua ini dijalankan atas `src/` penuh (bukan sampel) dan hasilnya bersih:
 - `tsc --noEmit` bersih; ESLint bersih.
 - Vitest penuh: 12.653 lulus / 23 dilewati (12.645 → 12.653; 8 tes pemindai,
   tanpa tes data baru karena putaran ini tidak menemukan cacat data).
+
+## Putaran 216 — picker ubah retur menawarkan dokumen yang tidak bisa diretur
+
+### Vonis FIX (dua halaman + guard)
+
+Dua halaman ubah membacakan `salesInvoice` dan `purchaseOrder` tanpa `where`,
+berbeda dari halaman tambah yang sudah membatasi opsi. Faktur konsep/batal
+muncul di picker retur penjualan, padahal `createSalesReturn` dan
+`updateSalesReturn` menolak status di luar `RETURNABLE_INVOICE_STATUSES`.
+PO draft/batal juga muncul di picker retur pembelian, padahal kuantitas retur
+hanya dapat dipenuhi dari GR berstatus `verified`/`completed`. Ini defect sisi
+UI/action: pilihan tampak sah, lalu baru ditolak setelah operator mengisi form.
+
+- Picker faktur ubah kini memakai `RETURNABLE_INVOICE_STATUSES`, sama seperti
+  halaman tambah dan gerbang create/update. Faktur yang sudah tertaut pada
+  retur draft tetap disertakan melalui cabang `id`, supaya Combobox tetap
+  menampilkan label bila faktur itu kemudian dibatalkan.
+- Picker PO ubah kini menyaring status yang sama dengan halaman tambah dan
+  `deletedAt: null`; PO yang sudah tertaut tetap disertakan supaya label draft
+  tidak hilang setelah PO dibatalkan.
+- `form-picker-tombstone` kini mencakup empat picker retur. Sebelumnya guard
+  hanya melihat model yang punya penulis `deletedAt`; dua dokumen ini memakai
+  terminal status-only, sehingga cacatnya lolos. Guard terpisah memerlukan
+  status gate pada picker faktur/PO dan tetap mengabaikan lookup terarah lain.
+- Tes regresi `retur-edit-picker-status.test.ts` memanggil dua halaman, memeriksa
+  filter Prisma dan pengecualian dokumen yang sedang tertaut.
+
+### Vonis GUGUR (16 kandidat terminal tanpa reversal)
+
+Audit 16 aksi `delete*`/`void*`/`cancel*` yang ditandai pemindaian gugur:
+master dan CRM tanpa jurnal tidak memerlukan reversal; penghapusan master
+mengunci baris dan menghitung satelit sebelum hapus lunak/keras; recurring
+transaction meninggalkan jurnal historis yang sudah diposting; pembatalan
+assessment pajak hanya menutup register baca-saja tanpa jurnal. Tidak ditemukan
+cacat tambahan.
+
+### Bukti
+
+- Tes regresi dan guard form-picker: 8/8 lulus. Pencabutan filter di dua
+  halaman edit menghasilkan kegagalan tes terkait; kontrol anti-pelapukan
+  memastikan empat picker yang diperiksa guard masih ada.
+- `npx tsc --noEmit` bersih; ESLint bersih; `git diff --check` bersih.
+- Vitest penuh: 12.658 lulus / 23 dilewati (12.653 → 12.658; 5 tes baru).
+- `npm run build` exit 0; dua peringatan tracing filesystem di
+  `src/lib/db/backup.ts` tetap ada dan tidak terkait perubahan ini.

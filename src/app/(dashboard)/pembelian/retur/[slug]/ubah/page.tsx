@@ -52,6 +52,17 @@ export default async function EditPage({
 
   const [purchaseOrders, items, receiptLineRows] = await Promise.all([
     prisma.purchaseOrder.findMany({
+      where: {
+        OR: [
+          {
+            status: { in: ["received", "partial_received", "verified", "completed", "ordered"] },
+            deletedAt: null,
+          },
+          // Keep currently linked PO visible if it was cancelled after this
+          // draft return was created; otherwise Combobox loses its label.
+          { id: data.purchaseOrderId },
+        ],
+      },
       orderBy: { createdAt: "desc" },
       select: { id: true, documentNo: true },
     }),

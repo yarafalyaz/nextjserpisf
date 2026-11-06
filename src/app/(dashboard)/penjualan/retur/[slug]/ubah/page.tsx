@@ -10,6 +10,7 @@ import type { Metadata } from "next";
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label";
+import { RETURNABLE_INVOICE_STATUSES } from "@/lib/validations/sales.schemas";
 export const metadata: Metadata = { title: "Ubah Retur" };
 
 export default async function EditPage({
@@ -54,7 +55,23 @@ export default async function EditPage({
   };
 
   const [invoices, customers, items] = await Promise.all([
+    // Gerbang status yang sama dengan halaman TAMBAH dan dengan
+    // createSalesReturn/updateSalesReturn: faktur konsep/batal tidak bisa
+    // diretur, jadi menawarkannya di sini hanya menghasilkan penolakan
+    // sesudah pengguna mengisi seluruh form.
+    //
+    // Klausa `id` menjaga faktur yang SEDANG tertaut agar tetap punya label:
+    // faktur bisa dibatalkan setelah retur draft mereferensikannya, dan tanpa
+    // opsi itu Combobox jatuh ke placeholder padahal id-nya masih terkirim
+    // lewat hidden input — pengguna melihat nilai kosong pada dokumen yang
+    // sebenarnya terisi.
     prisma.salesInvoice.findMany({
+      where: {
+        OR: [
+          { status: { in: [...RETURNABLE_INVOICE_STATUSES] } },
+          ...(data.salesInvoiceId ? [{ id: data.salesInvoiceId }] : []),
+        ],
+      },
       orderBy: { createdAt: "desc" },
       select: { id: true, documentNo: true },
     }),
