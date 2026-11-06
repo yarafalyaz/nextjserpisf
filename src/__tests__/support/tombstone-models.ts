@@ -222,9 +222,13 @@ export function resolvedWhere(source: string, matchIndex: number, args: string):
   // harus diselesaikan ke literalnya, bukan dikembalikan apa adanya.
   const bareIdentifier = inline && /^[A-Za-z_$][\w$]*$/.test(inline) ? inline : null
   if (inline && !bareIdentifier) return inline
-  const shorthand = /\bwhere\s*,/.test(args)
+  const shorthand = /\{\s*where\s*(?:,|\})/.test(args)
   const named = /\bwhere\s*:\s*([A-Za-z_$][\w$]*)\s*(?:,|\}|$)/.exec(args)
-  const identifier = shorthand ? null : (bareIdentifier ?? named?.[1] ?? null)
+  // `findMany({ where, orderBy })` adalah singkatan dari `where: where` —
+  // variabelnya bernama `where`. Tanpa ini `identifier` jatuh ke `null` dan
+  // setiap pemanggilan bergaya singkat dituduh tak punya filter meski
+  // variabelnya menyaring tombstone.
+  const identifier = shorthand ? "where" : (bareIdentifier ?? named?.[1] ?? null)
   if (!identifier) return null
   const before = source.slice(0, matchIndex)
   const definitions = [...before.matchAll(new RegExp(`\\bconst\\s+${identifier}\\s*(?::[^=]+)?=\\s*\\{`, "g"))]
