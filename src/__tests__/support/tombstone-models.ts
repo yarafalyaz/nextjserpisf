@@ -86,6 +86,26 @@ export function matchingParen(source: string, open: number): number {
 }
 
 /**
+ * Lewati komentar `//` dan `/* *\/` pada posisi `i` (di luar string).
+ * Prisma/TS yang ditulis manusia memuat komentar DI DALAM objek argumen, dan
+ * tanpa ini pemindai berhenti di kunci pertama sesudahnya: `topLevelValues`
+ * melihat `// …,` sebagai awal skalar sehingga `where` tak pernah terbaca —
+ * persis yang membuat `project-pl-data.ts` dituduh meski filternya ada.
+ */
+function skipComment(source: string, i: number): number {
+  if (source[i] !== "/") return i
+  if (source[i + 1] === "/") {
+    const newline = source.indexOf("\n", i)
+    return newline === -1 ? source.length : newline
+  }
+  if (source[i + 1] === "*") {
+    const close = source.indexOf("*/", i + 2)
+    return close === -1 ? source.length : close + 2
+  }
+  return i
+}
+
+/**
  * Nilai sebuah kunci TINGKAT-ATAS di dalam objek literal, sebagai teks mentah.
  *
  * Sengaja bukan regex atas seluruh blok: `select: { deletedAt: true }` di
@@ -98,7 +118,21 @@ export function topLevelValues(objectText: string): Map<string, string> {
   const end = objectText.length - 1
   let i = 1
   while (i < end) {
-    while (i < end && /[\s,]/.test(objectText[i])) i++
+    // Spasi DAN komentar, bergantian: komentar biasanya didahului newline,
+    // jadi memeriksa komentar hanya di depan loop tidak cukup.
+    let skipped = true
+    while (skipped && i < end) {
+      skipped = false
+      while (i < end && /[\s,]/.test(objectText[i])) {
+        i++
+        skipped = true
+      }
+      const afterComment = skipComment(objectText, i)
+      if (afterComment !== i) {
+        i = afterComment
+        skipped = true
+      }
+    }
     const keyMatch = /^([A-Za-z_$][\w$]*)\s*:/.exec(objectText.slice(i, end))
     if (!keyMatch) break
     const key = keyMatch[1]

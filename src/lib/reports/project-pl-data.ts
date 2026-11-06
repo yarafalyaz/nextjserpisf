@@ -235,7 +235,11 @@ export async function loadProjectPlReport(period: {
       select: { projectId: true, status: true, amount: true },
     }),
     prisma.pettyCash.findMany({
-      where: { projectId: { not: null }, type: "OUT", ...dateWhere },
+      // Kas kecil yang dibatalkan tetap ada di tabel (`status: "void"` +
+      // `deletedAt`), jadi tanpa filter ini biaya proyek yang sudah
+      // dibatalkan terus terbaca — dan jurnal lawannya sudah di-REVERSED,
+      // jadi L/R proyek menampilkan biaya yang di buku besar tidak ada.
+      where: { projectId: { not: null }, type: "OUT", deletedAt: null, ...dateWhere },
       select: { projectId: true, type: true, amount: true },
     }),
     prisma.vendorBill.findMany({
@@ -430,7 +434,8 @@ export async function loadProjectPlForProject(
         select: { projectId: true, status: true, amount: true },
       }),
       prisma.pettyCash.findMany({
-        where: { projectId },
+        // Sama seperti laporan berperiode: void tidak boleh jadi biaya proyek.
+        where: { projectId, deletedAt: null },
         select: { projectId: true, type: true, amount: true },
       }),
       prisma.vendorBill.findMany({

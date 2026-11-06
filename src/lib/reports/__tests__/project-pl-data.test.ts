@@ -172,6 +172,31 @@ describe("loadProjectPlReport — rantai loader F-2026-10-21-029", () => {
   })
 })
 
+describe("kas kecil yang dibatalkan tidak dihitung sebagai biaya proyek", () => {
+  /**
+   * Kas kecil yang dibatalkan (`deletePettyCash` → `status: "void"` +
+   * `deletedAt`) tetap ada di tabel, jadi tanpa filter ia terus terbaca
+   * sebagai biaya proyek. Setiap pembaca pettyCash lain di repo
+   * (`kas-kecil/page.tsx`, `expense.hook`, `recalcPettyCashChain`) menyaring
+   * `deletedAt: null`; hanya dua loader L/R proyek ini yang tidak.
+   */
+  it("laporan berperiode menyaring tombstone kas kecil", async () => {
+    await loadProjectPlReport(PERIOD)
+
+    expect(mocks.prismaMock.pettyCash.findMany.mock.calls[0][0].where).toMatchObject({
+      deletedAt: null,
+    })
+  })
+
+  it("L/R satu proyek (detail) menyaring tombstone kas kecil", async () => {
+    await loadProjectPlForProject(1)
+
+    for (const [args] of mocks.prismaMock.pettyCash.findMany.mock.calls) {
+      expect(args.where).toMatchObject({ deletedAt: null })
+    }
+  })
+})
+
 describe("loadProjectPlForProject — kontrak detail proyek F-2026-10-21-029", () => {
   it("proyek tidak ada -> null tanpa query dokumen", async () => {
     mocks.prismaMock.project.findFirst.mockResolvedValue(null)
