@@ -5266,6 +5266,52 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 244 — verifikasi di aplikasi yang benar-benar berjalan
+
+Putaran 243 mencatat keterbatasan: semua bukti UI putaran 229–233 berasal dari
+tes komponen, bukan aplikasi yang berjalan. Putaran ini menutupnya.
+
+Stack dev dijalankan (`docker compose up -d db app`), login sungguhan lewat
+`/api/auth/callback/credentials`, lalu halaman diambil sebagai HTML terautentikasi
+dan diperiksa isinya.
+
+**Yang terbukti dengan data nyata:**
+
+- **Putaran 232** — WO `in_progress` (dibuat langsung di DB dengan satu baris
+  item) merender **Batalkan: present**. Tombol batal yang sebelumnya tidak ada
+  di mana pun kini tampil untuk status yang tepat.
+- **Putaran 233** — dengan reservasi `active`, halaman merender **Lepas:
+  present**. Setelah baris itu ditandai `released`, halaman merender **Lepas:
+  absent**. Kedua arah terbukti, bukan hanya arah positif.
+- **Putaran 230** — pembayaran vendor `draft` merender **Ubah: present,
+  Balikkan: absent**; gerbang "Balikkan hanya untuk `completed`" berperilaku
+  benar pada dokumen sungguhan.
+- Halaman daftar kas kecil dan perintah kerja mengembalikan 200.
+
+**Koreksi atas kekeliruan saya sendiri:** saat memeriksa grant izin saya sempat
+menyimpulkan tiga izin baru "diberikan ke nol peran" dan menyebutnya temuan
+penting. Itu salah — saya membalik kolom join `_RolePermissions` (A = izin,
+B = peran). Query yang benar menunjukkan `complete_work_orders` dipegang
+admin/kepala_bengkel/super_admin, `delete_petty_cash` dan
+`delete_vendor_payments` dipegang admin/finance/super_admin. Tidak ada cacat
+izin; saya mencabut klaim itu, bukan membiarkannya berdiri.
+
+Data verifikasi (satu WO + satu baris + satu reservasi) dihapus kembali;
+`git status` bersih dan DB dev tidak menyisakan baris uji.
+
+**Batasan yang tetap ada:** pembayaran vendor `completed` dan transaksi kas
+kecil tidak ada di DB dev, jadi kedua halaman itu tidak diuji end-to-end dengan
+data nyata — membuatnya berarti memalsukan dokumen keuangan, yang tidak saya
+lakukan di DB milik pengguna. Gerbangnya tetap terkunci oleh tes komponen.
+
+### Bukti
+
+- Render terautentikasi: WO in_progress → Batalkan present; +reservasi aktif →
+  Lepas present; reservasi released → Lepas absent; VPAY draft → Ubah present,
+  Balikkan absent.
+- Tidak ada perubahan kode; `git status` bersih.
+- Full Vitest tetap 12.774 lulus / 23 dilewati.
+
 ## Putaran 243 — permukaan izin bersih; tidak ada temuan
 
 Backlog audit aksi sudah habis di putaran 242, jadi putaran ini memeriksa kelas
