@@ -128,7 +128,8 @@ describe("createWorkOrder kendaraan dari quotation (putaran 58)", () => {
     // Jalur DP menyalin kendaraan quotation ke WO; jalur manual dari
     // halaman tambah tidak — snapshot fitment WO membaca kolom WO
     // langsung, jadi WO manual atas kendaraan tak pernah dievaluasi.
-    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ customerVehicleId: 33 })
+    // Putaran 237: guard pemilik penawaran membaca customerId juga.
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ customerVehicleId: 33, customerId: 7, documentNo: "QUO-9" })
     const res = await createWorkOrder(fd({ customerId: "7", quotationId: "9", date: "2026-11-01", items: JSON.stringify(LIVE_ITEMS) }))
     expect(res.success).toBe(true)
     const data = mocks.prismaMock.workOrder.create.mock.calls[0][0].data
@@ -136,7 +137,7 @@ describe("createWorkOrder kendaraan dari quotation (putaran 58)", () => {
   })
 
   it("quotation tanpa kendaraan → customerVehicleId tetap null", async () => {
-    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ customerVehicleId: null })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ customerVehicleId: null, customerId: 7, documentNo: "QUO-9" })
     const res = await createWorkOrder(fd({ customerId: "7", quotationId: "9", date: "2026-11-01", items: JSON.stringify(LIVE_ITEMS) }))
     expect(res.success).toBe(true)
     const data = mocks.prismaMock.workOrder.create.mock.calls[0][0].data

@@ -1382,6 +1382,7 @@ async function assertLiveWorkOrderRefs(
   db: typeof prisma | Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   customerId: number,
   itemIds: readonly number[],
+  quotationId?: number | null,
 ): Promise<void> {
   const customer = await db.customer.findFirst({
     where: { id: customerId, isActive: true, deletedAt: null },
@@ -1389,6 +1390,24 @@ async function assertLiveWorkOrderRefs(
   });
   if (!customer) {
     throw new Error("Pelanggan tidak ditemukan atau sudah nonaktif — pilih ulang pelanggan.");
+  }
+  // Tautan penawaran wajib milik pelanggan yang sama. Tanpa ini WO bisa
+  // menunjuk penawaran pihak lain: `createJobChangeOrder` menyalin
+  // `wo.quotationId` lalu `applyJobChangeOrder` MENULIS ULANG grandTotal/
+  // section penawaran itu dan menerbitkan faktur selisih — perubahan order
+  // untuk pelanggan B akan mengubah penawaran dan menagih pelanggan A.
+  // Sibling create SO/faktur menegakkan aturan yang sama.
+  if (quotationId != null) {
+    const quotation = await db.quotation.findUnique({
+      where: { id: quotationId },
+      select: { customerId: true, documentNo: true },
+    });
+    if (!quotation) throw new Error("Penawaran tidak ditemukan — pilih ulang penawaran.");
+    if (quotation.customerId !== customerId) {
+      throw new Error(
+        `Penawaran ${quotation.documentNo} milik pelanggan lain; tidak bisa ditautkan ke perintah kerja pelanggan ini.`,
+      );
+    }
   }
   await assertItemsExistAndActive(db as never, itemIds);
 }
@@ -1418,7 +1437,7 @@ export async function createWorkOrder(formData: FormData) {
     // rollback wajar). Pemanggil tanpa key tetap no-op.
     const wo = await prisma.$transaction(async (tx) => {
       await checkIdempotency(idempotencyKey, tx, user.id);
-      await assertLiveWorkOrderRefs(tx as never, v.customerId, items.map((i) => i.itemId));
+      await assertLiveWorkOrderRefs(tx as never, v.customerId, items.map((i) => i.itemId), v.quotationId ?? null);
 
       // Kendaraan mengikuti quotation (pola jalur DP down-payment.hook):
       // stampWorkOrderFitmentSnapshot membaca customerVehicleId WO langsung,
@@ -1623,7 +1642,7 @@ export async function updateWorkOrder(id: number, formData: FormData) {
           `Perintah Kerja tidak bisa diperbarui dengan status '${locked.status}'. Hanya status 'draft' atau 'pending' yang dapat diperbarui.`,
         );
       }
-      await assertLiveWorkOrderRefs(tx as never, v.customerId, items.map((i) => i.itemId));
+      await assertLiveWorkOrderRefs(tx as never, v.customerId, items.map((i) => i.itemId), v.quotationId ?? null);
 
       // Re-verify status inside the transaction (TOCTOU guard): two concurrent
       // edits could each read status=draft, both pass the pre-tx check, and

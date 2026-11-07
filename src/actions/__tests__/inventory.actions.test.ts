@@ -49,6 +49,8 @@ const mocks = vi.hoisted(() => {
     warehouse: buildModelMock(),
     userWarehouse: buildModelMock(),
     customer: buildModelMock(),
+    // Putaran 237: assertLiveWorkOrderRefs memeriksa pemilik penawaran.
+    quotation: buildModelMock(),
     item: buildModelMock(),
     stockMove: {
       ...buildModelMock(),
@@ -146,6 +148,8 @@ beforeEach(() => {
   );
   // Penulis WO menilai customer hidup (putaran 36) — fixture pelanggan aktif.
   mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 1 });
+  // Putaran 237: penawaran fixture milik pelanggan 1 (pemilik sama).
+  mocks.prismaMock.quotation.findUnique.mockResolvedValue({ customerId: 1, documentNo: "QUO-1" });
 });
 
 describe("Stock Adjustment Actions", () => {
@@ -881,6 +885,35 @@ describe("Rack & WorkOrder & Others", () => {
     );
     expect(res?.success).toBe(true);
   });
+  /**
+   * Regresi putaran 237: WO tidak boleh menautkan penawaran milik pelanggan
+   * lain. `createJobChangeOrder` menyalin `wo.quotationId` lalu
+   * `applyJobChangeOrder` MENULIS ULANG grandTotal/section penawaran itu dan
+   * menerbitkan faktur selisih — perubahan order untuk pelanggan B akan
+   * mengubah penawaran dan menagih pelanggan A. Sibling createSalesOrder /
+   * createSalesInvoice menegakkan aturan yang sama.
+   */
+  it("createWorkOrder menolak penawaran milik pelanggan lain", async () => {
+    mocks.prismaMock.quotation.findUnique.mockResolvedValueOnce({ customerId: 99, documentNo: "QUO-OTHER" });
+    const res = await actions.createWorkOrder(woFd({ quotationId: 7 }));
+    expect(res?.success).toBe(false);
+    expect(String((res as { error?: string }).error)).toMatch(/milik pelanggan lain/);
+    expect(mocks.prismaMock.workOrder.create).not.toHaveBeenCalled();
+  })
+
+  it("updateWorkOrder menolak memindah tautan ke penawaran pelanggan lain", async () => {
+    seedDraft(mocks.prismaMock.workOrder);
+    mocks.prismaMock.quotation.findUnique.mockResolvedValueOnce({ customerId: 99, documentNo: "QUO-OTHER" });
+    const res = await actions.updateWorkOrder(1, woFd({ quotationId: 7 }));
+    expect(res?.success).toBe(false);
+    expect(String((res as { error?: string }).error)).toMatch(/milik pelanggan lain/);
+  })
+
+  it("createWorkOrder menerima penawaran milik pelanggan yang sama", async () => {
+    const res = await actions.createWorkOrder(woFd({ quotationId: 7 }));
+    expect(res?.success).toBe(true);
+  })
+
   it("createRack succeeds", async () => {
     mocks.prismaMock.systemSetting.findFirst.mockResolvedValue({
       enableAutoRackCode: true,

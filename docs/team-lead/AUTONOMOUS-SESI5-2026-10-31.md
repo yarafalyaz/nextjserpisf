@@ -5266,6 +5266,45 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 237 — perintah kerja bisa menautkan penawaran milik pelanggan lain
+
+Temuan paling serius dari audit aksi. `assertLiveWorkOrderRefs` — dipakai
+`createWorkOrder` **dan** `updateWorkOrder` — hanya memeriksa pelanggan hidup
+dan item aktif. Ia **tidak** memeriksa bahwa `quotationId` milik pelanggan
+yang sama. `createWorkOrder` membaca penawaran itu hanya untuk mengambil
+`customerVehicleId`.
+
+Jalur kerusakannya nyata dan sudah tersambung:
+
+1. WO pelanggan A ditautkan ke penawaran Q-A; operator mengubah pelanggan WO
+   ke B (combobox pelanggan di form bisa diubah, `quotationId` ikut sebagai
+   hidden field). WO kini `customerId=B`, `quotationId=Q-A`.
+2. `createJobChangeOrder` menyalin `wo.quotationId` ke change order.
+3. `applyJobChangeOrder` **menulis ulang** grandTotal/section Q-A lalu memanggil
+   `createDifferenceInvoice(applied.quotationId)` — menerbitkan faktur selisih.
+
+Hasilnya: perubahan order untuk pelanggan B mengubah penawaran pelanggan A dan
+menagih pelanggan A. Snapshot fitment/garansi juga memakai kendaraan A.
+
+Saudara-saudaranya sudah menegakkan aturan ini: `createSalesOrder` dan
+`createSalesInvoice` sama-sama menolak `quotation.customerId !== v.customerId`.
+
+Perbaikannya menambahkan pemeriksaan kepemilikan itu ke
+`assertLiveWorkOrderRefs` (parameter `quotationId` opsional), sehingga kedua
+jalur — buat dan ubah — ikut terjaga lewat satu tempat.
+
+### Bukti
+
+- Tes merah→hijau: mencabut blok guard membuat dua tes gagal (253 lulus /
+  2 gagal), dikembalikan → 255/255.
+- Dua tes lama `work-order-live-gate.test.ts` memerah saat pertama dijalankan:
+  mock penawarannya hanya menyediakan `customerVehicleId`, tanpa `customerId`.
+  Fixture-nya dilengkapi (penawaran milik pelanggan yang sama), bukan
+  guard-nya dilonggarkan.
+- `npx tsc --noEmit` bersih; ESLint bersih.
+- Full Vitest: 12.768 lulus / 23 dilewati (dari 12.765; +3 tes).
+- `npm run build` lulus pada percobaan pertama (Compiled successfully, 16,8 s).
+
 ## Putaran 236 — tombol Ubah kas kecil selalu berakhir ditolak
 
 Audit aksi (agen terpisah) melaporkan `updatePettyCash` tidak menegakkan cek
