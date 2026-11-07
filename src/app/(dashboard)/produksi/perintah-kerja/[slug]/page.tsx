@@ -479,13 +479,15 @@ export default async function WorkOrderDetailPage({
                 <Link href={entityHref("/produksi/qc/inspeksi", vehicleIntake)} className="hover:underline">
                   {vehicleIntake.documentNo} — tercatat
                 </Link>
-              ) : (
+              ) : canVerifyPhoto ? (
                 <Link
                   href={`/produksi/qc/inspeksi/tambah/perintah-kerja/${wo.slug ?? wo.id}/tipe/vehicle_intake`}
                   className="hover:underline"
                 >
                   Belum tercatat — buat inspeksi masuk
                 </Link>
+              ) : (
+                <span className="text-muted-foreground">Belum tercatat</span>
               )
             }
           />
@@ -498,13 +500,15 @@ export default async function WorkOrderDetailPage({
                 <Link href={entityHref("/produksi/qc/inspeksi", vehicleHandover)} className="hover:underline">
                   {vehicleHandover.documentNo} — tercatat
                 </Link>
-              ) : (
+              ) : canVerifyPhoto ? (
                 <Link
                   href={`/produksi/qc/inspeksi/tambah/perintah-kerja/${wo.slug ?? wo.id}/tipe/vehicle_handover`}
                   className="hover:underline"
                 >
                   Belum tercatat — buat inspeksi serah terima
                 </Link>
+              ) : (
+                <span className="text-muted-foreground">Belum tercatat</span>
               )
             }
           />

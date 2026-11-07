@@ -16,6 +16,7 @@ import { StatusActions } from "@/components/ui/status-actions"
 import { PrintButton } from "@/components/ui/print-button"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
+import { CanCreate } from "@/components/auth/can-create"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -98,9 +99,11 @@ export default async function PurchaseOrderDetailPage({
               (po.isService
                 ? !["draft", "cancelled", "rejected"].includes(po.status)
                 : po.goodsReceipts.some((gr) => ["verified", "completed"].includes(gr.status))) && (
-              <Button href={`/pembelian/tagihan/tambah/po/${po.slug ?? po.id}`}>
-                {po.isService ? "Buat Tagihan Jasa" : "Buat Tagihan"}
-              </Button>
+              <CanCreate permission="create_vendor_bills">
+                <Button href={`/pembelian/tagihan/tambah/po/${po.slug ?? po.id}`}>
+                  {po.isService ? "Buat Tagihan Jasa" : "Buat Tagihan"}
+                </Button>
+              </CanCreate>
             )}
             <PrintButton documentType="purchase-order" documentId={po.id} />
             {/* Status yang sama dengan penjagaan di cancelPurchaseOrder: tombol tak
@@ -202,7 +205,9 @@ export default async function PurchaseOrderDetailPage({
                 <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Penerimaan Barang</h2>
                   {["approved", "ordered", "partial_received"].includes(po.status) && (
-                    <Link href={`/pembelian/penerimaan/tambah/po/${po.slug ?? po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Penerimaan</Link>
+                    <CanCreate permission="create_goods_receipts">
+                      <Link href={`/pembelian/penerimaan/tambah/po/${po.slug ?? po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Penerimaan</Link>
+                    </CanCreate>
                   )}
                 </div>
                 <div className="p-4 px-5">
@@ -245,7 +250,9 @@ export default async function PurchaseOrderDetailPage({
                       (GR terverifikasi/selesai); PO rejected/draft/belum
                       terima tidak punya apa pun untuk diretur. */}
                   {po.goodsReceipts.some((gr) => ["verified", "completed"].includes(gr.status)) && (
-                    <Link href={`/pembelian/retur/tambah/po/${po.slug ?? po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Retur</Link>
+                    <CanCreate permission="create_purchase_returns">
+                      <Link href={`/pembelian/retur/tambah/po/${po.slug ?? po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Retur</Link>
+                    </CanCreate>
                   )}
                 </div>
                 <div className="p-4 px-5">

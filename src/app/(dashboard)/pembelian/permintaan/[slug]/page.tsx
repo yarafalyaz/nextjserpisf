@@ -11,6 +11,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { PrintButton } from "@/components/ui/print-button"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
+import { CanCreate } from "@/components/auth/can-create"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -76,9 +77,11 @@ export default async function PurchaseRequestDetailPage({
         actions={
           <>
             {(request.status === "approved" || request.status === "partial_ordered") && (
-              <Button href={`/pembelian/pesanan/tambah/pr/${request.slug ?? request.id}`} variant="primary">
-                Buat Pesanan
-              </Button>
+              <CanCreate permission="create_purchase_orders">
+                <Button href={`/pembelian/pesanan/tambah/pr/${request.slug ?? request.id}`} variant="primary">
+                  Buat Pesanan
+                </Button>
+              </CanCreate>
             )}
             {canEdit && <Button href={entityEditHref("/pembelian/permintaan", request)} variant="primary">Ubah</Button>}
             <PrintButton documentType="purchase-request" documentId={request.id} />

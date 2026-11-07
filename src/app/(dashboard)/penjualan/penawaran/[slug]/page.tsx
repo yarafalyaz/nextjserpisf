@@ -17,6 +17,7 @@ import { ConvertQuotationButton } from "./_components/convert-quotation-button";
 import { PrintButton } from "@/components/ui/print-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
+import { CanCreate } from "@/components/auth/can-create";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { JobBillingCard } from "@/components/reports/job-billing-card";
@@ -243,20 +244,27 @@ export default async function QuotationDetailPage({
             <QuotationFlowActions status={quotation.status} id={quotation.id} />
             {["accepted", "approved"].includes(quotation.status) && (
               <>
-                <Button
-                  href={`/penjualan/uang-muka/tambah/penawaran/${quotation.slug ?? quotation.id}`}
-                  variant="secondary"
-                >
-                  + Uang Muka
-                </Button>
+                {/* Gerbang izin create halaman tujuan: keduanya
+                    requirePermission() lalu redirect("/") — tanpa gerbang ini
+                    peran lihat-saja melihat tombol yang memantulkan diam. */}
+                <CanCreate permission="create_down_payments">
+                  <Button
+                    href={`/penjualan/uang-muka/tambah/penawaran/${quotation.slug ?? quotation.id}`}
+                    variant="secondary"
+                  >
+                    + Uang Muka
+                  </Button>
+                </CanCreate>
                 {quotation.salesOrders.length === 0 ? (
                   <>
-                    <Button
-                      href={`/penjualan/pesanan/tambah/penawaran/${quotation.slug ?? quotation.id}`}
-                      variant="primary"
-                    >
-                      + Pesanan Penjualan
-                    </Button>
+                    {canCreateSalesOrder && (
+                      <Button
+                        href={`/penjualan/pesanan/tambah/penawaran/${quotation.slug ?? quotation.id}`}
+                        variant="primary"
+                      >
+                        + Pesanan Penjualan
+                      </Button>
+                    )}
                     {/* Cermin guard convertQuotationToOrder: blok ini hanya
                         untuk accepted/approved; konversi langsung hanya bila
                         berizin create_sales_orders dan belum lewat validUntil

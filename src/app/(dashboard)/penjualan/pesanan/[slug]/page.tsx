@@ -9,6 +9,7 @@ import { StatusActions } from "@/components/ui/status-actions";
 import { PrintButton } from "@/components/ui/print-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
+import { CanCreate } from "@/components/auth/can-create";
 import { DELIVERABLE_ORDER_STATUSES } from "@/lib/validations/sales.schemas";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -139,12 +140,14 @@ export default async function SalesOrderDetailPage({
               </Button>
             )}
             {order.quotationId && order.status !== "cancelled" && (
-              <Button
-                href={`/penjualan/uang-muka/tambah/pesanan/${order.slug ?? order.id}`}
-                variant="primary"
-              >
-                + Uang Muka
-              </Button>
+              <CanCreate permission="create_down_payments">
+                <Button
+                  href={`/penjualan/uang-muka/tambah/pesanan/${order.slug ?? order.id}`}
+                  variant="primary"
+                >
+                  + Uang Muka
+                </Button>
+              </CanCreate>
             )}
             <PrintButton documentType="order" documentId={order.id} />
             <BackButton href="/penjualan/pesanan" />
@@ -275,12 +278,14 @@ export default async function SalesOrderDetailPage({
           {DELIVERABLE_ORDER_STATUSES.includes(
             order.status as (typeof DELIVERABLE_ORDER_STATUSES)[number]
           ) && (
-            <Button
-              href={`/penjualan/surat-jalan/tambah/pesanan/${order.slug ?? order.id}`}
-              variant="primary"
-            >
-              + Surat Jalan
-            </Button>
+            <CanCreate permission="create_delivery_orders">
+              <Button
+                href={`/penjualan/surat-jalan/tambah/pesanan/${order.slug ?? order.id}`}
+                variant="primary"
+              >
+                + Surat Jalan
+              </Button>
+            </CanCreate>
           )}
         </div>
         <div className="p-4 px-5">
@@ -325,12 +330,14 @@ export default async function SalesOrderDetailPage({
           {DELIVERABLE_ORDER_STATUSES.includes(
             order.status as (typeof DELIVERABLE_ORDER_STATUSES)[number]
           ) && (
-            <Button
-              href={`/penjualan/faktur/tambah/pesanan/${order.slug ?? order.id}`}
-              variant="primary"
-            >
-              + Faktur
-            </Button>
+            <CanCreate permission="create_sales_invoices">
+              <Button
+                href={`/penjualan/faktur/tambah/pesanan/${order.slug ?? order.id}`}
+                variant="primary"
+              >
+                + Faktur
+              </Button>
+            </CanCreate>
           )}
         </div>
         <div className="p-4 px-5">

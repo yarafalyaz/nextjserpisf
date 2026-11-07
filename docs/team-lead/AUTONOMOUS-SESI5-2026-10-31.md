@@ -5266,6 +5266,42 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 222 — tombol "buat dokumen turunan" di halaman detail bocor ke role view-only
+
+Halaman detail merender tautan pembuatan dokumen turunan tanpa memeriksa izin
+create halaman tujuannya. Halaman tambah menegakkan izinnya dengan
+`requirePermission(...)` lalu `redirect("/")`; peran lihat-saja melihat
+"+ Buat Penerimaan", mengklik, dan terpental diam ke dasbor tanpa pesan apa pun.
+Sembilan tautan di lima halaman:
+
+- `penjualan/penawaran/[slug]` → uang muka (`create_down_payments`), pesanan
+  penjualan (`create_sales_orders`)
+- `penjualan/pesanan/[slug]` → uang muka, surat jalan (`create_delivery_orders`),
+  faktur (`create_sales_invoices`)
+- `pembelian/permintaan/[slug]` → pesanan pembelian (`create_purchase_orders`)
+- `pembelian/pesanan/[slug]` → tagihan (`create_vendor_bills`), penerimaan
+  (`create_goods_receipts`), retur (`create_purchase_returns`)
+- `produksi/perintah-kerja/[slug]` → inspeksi masuk/serah terima
+  (`manage_qc_inspections`) — di sini tautan diganti teks "Belum tercatat" tanpa
+  tautan bagi yang tak berizin, karena field-nya tetap harus terbaca.
+
+Penyebab penjaga lama lolos: `button-permission-gating.test.ts` memeriksa level
+BERKAS — satu `hasPermission` di mana saja sudah memuaskan penjaga, padahal satu
+halaman detail memuat tombol dengan izin berbeda-beda. Penjaga baru
+`detail-create-link-permission.test.ts` memeriksa PER TAUTAN: setiap `href`
+harus berada di dalam `<CanCreate permission="…">` (atau kondisi boolean
+`hasPermission` yang setara), dan ia juga memastikan halaman tambah tujuan
+benar-benar menuntut izin yang sama — sehingga kedua sisi tidak bisa menyimpang.
+
+### Bukti
+
+- Tes merah→hijau: mencabut satu gerbang `create_vendor_bills` membuat
+  `detail-create-link-permission` gagal tepat pada tautan itu (1 gagal / 26
+  lulus), dikembalikan → 27/27 lulus.
+- `npx tsc --noEmit` dan ESLint pada kelima halaman + berkas tes: bersih.
+- Full Vitest: 12.693 lulus / 23 dilewati (dari 12.666; +27 tes baru).
+- `npm run build` lulus pada percobaan pertama (tanpa kegagalan Google Fonts).
+
 ## Putaran 221 — detail PO dan PR menampilkan aksi tanpa izin edit/hapus
 
 Dua halaman detail pembelian meminta izin view, tetapi selalu merender tombol
