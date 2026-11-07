@@ -20,6 +20,7 @@ import type { Metadata } from "next"
 import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { DRAFT_ONLY_EDIT_STATUSES } from "@/lib/constants/status"
 import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Retur" }
 
@@ -57,6 +58,7 @@ export default async function PurchaseReturnDetailPage({
   if (!purchaseReturn) notFound()
 
   const canApprovePurchaseReturn = await hasPermission("approve_purchase_returns")
+  const isDraft = (DRAFT_ONLY_EDIT_STATUSES as readonly string[]).includes(purchaseReturn.status)
 
   return (
     <div className="flex flex-col gap-6">
@@ -71,9 +73,14 @@ export default async function PurchaseReturnDetailPage({
         badge={<StatusChip status={purchaseReturn.status} />}
         actions={
           <>
-            <CanCreate permission="edit_purchase_returns">
-              <Button href={entityEditHref("/pembelian/retur", purchaseReturn)} variant="primary">Ubah</Button>
-            </CanCreate>
+            {/* updatePurchaseReturn/deletePurchaseReturn/processPurchaseReturn
+                semuanya draft-only; retur yang sudah diproses mengembalikan
+                stok dan memposting jurnal, jadi tak boleh diubah lagi. */}
+            {isDraft && (
+              <CanCreate permission="edit_purchase_returns">
+                <Button href={entityEditHref("/pembelian/retur", purchaseReturn)} variant="primary">Ubah</Button>
+              </CanCreate>
+            )}
             <PrintButton documentType="purchase-return" documentId={purchaseReturn.id} />
             {/* processPurchaseReturn hanya menerima status draft (stok + jurnal). */}
             {purchaseReturn.status === "draft" && (
@@ -87,9 +94,11 @@ export default async function PurchaseReturnDetailPage({
                 successMessage="Retur berhasil diproses"
               />
             )}
-            <CanCreate permission="delete_purchase_returns">
-              <DeleteButton id={purchaseReturn.id} action={deletePurchaseReturn} />
-            </CanCreate>
+            {isDraft && (
+              <CanCreate permission="delete_purchase_returns">
+                <DeleteButton id={purchaseReturn.id} action={deletePurchaseReturn} />
+              </CanCreate>
+            )}
             <BackButton href="/pembelian/retur" />
           </>
         }

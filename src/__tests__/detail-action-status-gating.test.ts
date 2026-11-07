@@ -142,6 +142,29 @@ const CASES: Case[] = [
     gate: /\{isDeletable && \(\s*<CanCreate permission="delete_loans">/,
     variable: "isDeletable",
   },
+  // Putaran 228: dua halaman tersisa dengan pola yang sama.
+  {
+    page: "penjualan/surat-jalan/[slug]/page.tsx",
+    gate: /\{deliveryOrder\.status === "draft" && \(\s*<CanCreate permission="edit_delivery_orders">/,
+    variable: "deliveryOrder.status",
+  },
+  {
+    page: "penjualan/surat-jalan/[slug]/page.tsx",
+    gate: /\{deliveryOrder\.status === "draft" && \(\s*<CanCreate permission="delete_delivery_orders">/,
+    variable: "deliveryOrder.status",
+  },
+  {
+    page: "pembelian/retur/[slug]/page.tsx",
+    gate: /\{isDraft && \(\s*<CanCreate permission="edit_purchase_returns">/,
+    constant: "DRAFT_ONLY_EDIT_STATUSES",
+    variable: "isDraft",
+  },
+  {
+    page: "pembelian/retur/[slug]/page.tsx",
+    gate: /\{isDraft && \(\s*<CanCreate permission="delete_purchase_returns">/,
+    constant: "DRAFT_ONLY_EDIT_STATUSES",
+    variable: "isDraft",
+  },
 ]
 
 describe("tombol Ubah/Hapus halaman detail menghormati status dokumen (putaran 226)", () => {
@@ -220,6 +243,9 @@ describe("tombol Ubah/Hapus halaman detail menghormati status dokumen (putaran 2
       ["produksi/production-orders/[slug]/page.tsx", /<CanCreate permission="delete_production_orders">/],
       ["sdm/cuti/[slug]/page.tsx", /\{canEdit && \(\s*<Button href=\{entityEditHref\("\/sdm\/cuti"/],
       ["sdm/lembur/[slug]/page.tsx", /\{canEdit && \(\s*<Button href=\{entityEditHref\("\/sdm\/lembur"/],
+      // surat-jalan dan retur pembelian tidak masuk daftar ini: tombolnya
+      // memang dibungkus <CanCreate>, jadi pola "mentah"-nya tidak pernah
+      // tampak. Gerbangnya dikunci oleh pemeriksaan positif di atas.
     ]
     for (const [file, pattern] of raw) {
       expect(

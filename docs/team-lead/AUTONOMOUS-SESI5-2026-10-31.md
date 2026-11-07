@@ -5266,6 +5266,36 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 228 — dua halaman detail terlewat dari gerbang status putaran 226
+
+Putaran 226 memindai 65 halaman detail ber-edit-link dan memperbaiki sembilan.
+Pemindaian ulang yang lebih ketat — mencocokkan setiap `action={...}` ke status
+yang benar-benar diterima action itu, bukan sekadar mencari literal status di
+berkas — menemukan dua lagi:
+
+- `penjualan/surat-jalan/[slug]` — `updateDeliveryOrder` menolak
+  `shipped`/`delivered`, `deleteDeliveryOrder` menolak selain draft. Halaman
+  merender Ubah dan Hapus tanpa syarat; tombol transisi status di sebelahnya
+  sudah memakai `deliveryOrder.status === "draft"`, jadi gerbangnya konsisten
+  sekarang.
+- `pembelian/retur/[slug]` — `updatePurchaseReturn`,
+  `deletePurchaseReturn`, dan `processPurchaseReturn` semuanya draft-only.
+  Hanya tombol Proses yang sudah digerbangi status.
+
+Alasan keduanya lolos putaran 226: tombolnya dibungkus `<CanCreate>`, jadi
+pemindaian yang mencari pola "mentah" (`{canEdit && <Button …}`) tidak
+melihatnya. Penjaga `detail-action-status-gating` sekarang memeriksa keduanya
+secara positif (gerbang harus muncul persis), bukan hanya menolak pola mentah.
+
+### Bukti
+
+- Tes merah→hijau: mencabut `deliveryOrder.status === "draft"` dari tombol
+  Ubah surat jalan membuat penjaga gagal (25 lulus / 1 gagal), dikembalikan →
+  26/26.
+- `npx tsc --noEmit` bersih; ESLint pada kedua halaman bersih.
+- Full Vitest: 12.748 lulus / 23 dilewati (dari 12.744; +4 tes).
+- `npm run build` lulus pada percobaan pertama (Compiled successfully, 17,2 s).
+
 ## Putaran 227 — picker vendor/pelanggan di halaman ubah menawarkan rekaman nonaktif
 
 Lanjutan putaran 225, tetapi sasarannya master data, bukan status dokumen.
