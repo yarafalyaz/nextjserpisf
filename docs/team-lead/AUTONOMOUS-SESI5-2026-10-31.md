@@ -5266,6 +5266,49 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 243 — permukaan izin bersih; tidak ada temuan
+
+Backlog audit aksi sudah habis di putaran 242, jadi putaran ini memeriksa kelas
+berikutnya: **izin yang ditegakkan kode tetapi tidak pernah dibuat seed**, yang
+membuat fitur mati untuk semua peran selain super_admin.
+
+Tiga pemindaian, semuanya bersih:
+
+1. **`requirePermission`/`requireAnyPermission` di actions vs katalog** — 391
+   izin di katalog, **0** yang ditegakkan tetapi tidak ada di sana.
+2. **`hasPermission` di halaman/komponen vs katalog** — **0** yang bergerbang
+   tetapi tidak ada di katalog.
+3. **String mirip-izin di `src/app/api`, `src/lib`, `src/proxy.ts`** — 5
+   kandidat, semuanya sudah diketahui dan beralasan:
+   - `convert_pkwtt` dan `credit_limit_exceeded` — label/kode alasan di laporan,
+     bukan izin;
+   - `create_widgets` — hanya di tes label;
+   - `credit_overrides` — nama resource di katalog, bukan permissionKey;
+   - `edit_bank_statements` — disebut di komentar `attachment-permission-maps.ts`
+     justru untuk menjelaskan mengapa ia TIDAK dipakai (rekening koran memakai
+     `create_journals`).
+
+Saya juga memverifikasi bahwa tiga tombol yang saya tambahkan putaran 229–233
+benar-benar bisa dilihat peran selain super_admin: `complete_work_orders`,
+`delete_petty_cash`, dan `delete_vendor_payments` semuanya ada di
+`src/lib/setup/base-data.ts` (daftar otoritatif yang menghasilkan katalog dan
+seed).
+
+**Yang tidak bisa dilakukan putaran ini:** verifikasi di browser. Tidak ada dev
+server maupun container yang berjalan (`docker compose ps` kosong), dan
+menyalakannya bukan bagian dari mandat tanpa alasan yang lebih kuat. Semua bukti
+perilaku UI pada putaran 229–233 karena itu berasal dari tes komponen
+(`renderToStaticMarkup`/jsdom), bukan dari aplikasi yang berjalan — keterbatasan
+yang perlu dicatat apa adanya.
+
+### Bukti
+
+- Tidak ada perubahan kode; `git status` bersih.
+- Full Vitest tetap 12.774 lulus / 23 dilewati.
+- Tes komponen tiga tombol baru (WorkOrderActions, reservasi, kas kecil):
+  38 lulus, 0 gagal, 1 dilewati (suite konkurensi DB yang butuh
+  `INTEGRATION_DB_URL`).
+
 ## Putaran 242 — rak bisa dipindah ke gudang nonaktif/terhapus
 
 Temuan terakhir dari audit aksi, dan yang paling ringan dampaknya.
