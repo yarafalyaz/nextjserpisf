@@ -17,11 +17,11 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import type { Metadata } from "next"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { DRAFT_OR_PENDING_EDIT_STATUSES } from "@/lib/constants/status"
 
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { auth } from "@/lib/auth/auth"
 import { buildProductionVariance } from "@/lib/reports/production-variance"
-import { CanCreate } from "@/components/auth/can-create"
 import { listBomRevisionChangeRequests } from "@/actions/bom-revision-change.actions"
 import { BomRevisionChangePanel } from "@/components/reports/bom-revision-change-panel"
 import { BomRevisionImpactCard } from "@/components/reports/bom-revision-impact-card"
@@ -164,6 +164,10 @@ export default async function ProductionOrderDetailPage({
   // Bar aksi lifecycle (Konfirmasi/Keluarkan Bahan/Mulai/Selesaikan) semuanya
   // memanggil aksi ber-izin edit_production_orders.
   const canEditProductionOrder = canManageBomChange
+  const canDeleteProductionOrder = await hasPermission("delete_production_orders")
+  // updateProductionOrder/deleteProductionOrder hanya menerima draft/pending;
+  // PO yang sudah berjalan dikoreksi lewat reopen/alur produksinya, bukan edit.
+  const isEditableStatus = (DRAFT_OR_PENDING_EDIT_STATUSES as readonly string[]).includes(order.status)
   const bomRevisionOptions = order.bomRevision
     ? await prisma.bomRevision.findMany({
         where: {
@@ -256,12 +260,14 @@ export default async function ProductionOrderDetailPage({
             completedQty={Number(order.completedQty ?? 0)}
             canEdit={canEditProductionOrder}
           />
-          <CanCreate permission="edit_production_orders">
+          {/* updateProductionOrder/deleteProductionOrder hanya menerima draft
+              atau pending (lihat penjaganya). */}
+          {canEditProductionOrder && isEditableStatus && (
             <Link href={entityEditHref("/produksi/production-orders", order)} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
-          </CanCreate>
-          <CanCreate permission="delete_production_orders">
+          )}
+          {canDeleteProductionOrder && isEditableStatus && (
             <DeleteButton id={order.id} action={deleteProductionOrder} />
-          </CanCreate>
+          )}
                   <Link href="/produksi/production-orders" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
         </div>
         </div>

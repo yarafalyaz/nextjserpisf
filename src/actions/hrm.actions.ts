@@ -2,6 +2,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requireAnyPermission, requirePermission } from "@/lib/auth/permissions";
+import { PENDING_ONLY_EDIT_STATUSES } from "@/lib/constants/status";
 import { safeAdd, safeRound, safeSubtract, safeSum } from "@/lib/utils/math";
 import {
   computeBpjsEmployee,
@@ -5661,7 +5662,7 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
       where: { id },
       select: { status: true, employeeId: true },
     });
-    if (existing.status !== "pending") {
+    if (!(PENDING_ONLY_EDIT_STATUSES as readonly string[]).includes(existing.status)) {
       throw new Error(
         "Hanya pengajuan cuti berstatus menunggu yang dapat diedit",
       );
@@ -5784,7 +5785,7 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
       select: { status: true, employeeId: true, projectId: true },
     });
     await assertHrEmployeeAccess(scope, existing.employeeId);
-    if (existing.status !== "pending") {
+    if (!(PENDING_ONLY_EDIT_STATUSES as readonly string[]).includes(existing.status)) {
       throw new Error(
         "Hanya pengajuan lembur berstatus menunggu yang dapat diedit",
       );
@@ -5914,7 +5915,7 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
       select: { totalAmount: true, remainingAmount: true, status: true, employeeId: true },
     });
 
-    if (existing.status !== "pending") {
+    if (!(PENDING_ONLY_EDIT_STATUSES as readonly string[]).includes(existing.status)) {
       throw new Error("Hanya pinjaman berstatus menunggu yang dapat diedit");
     }
 

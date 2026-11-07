@@ -70,6 +70,7 @@ import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money";
 import { PurchaseStatus, Status } from "@/lib/constants";
 import {
+  DRAFT_ONLY_EDIT_STATUSES,
   PAYABLE_VENDOR_BILL_STATUSES,
   RECEIVABLE_PURCHASE_ORDER_STATUSES,
 } from "@/lib/constants/status";
@@ -3210,7 +3211,7 @@ export async function deletePurchaseOrder(id: number) {
     // selesai; menghapusnya menghanguskan jejak audit. Jalur koreksi PO
     // posted: cancelPurchaseOrder (status cancelled, baris tetap ada).
     // Pola sama deleteVendorBill/deleteVendorPayment/deletePurchaseReturn.
-    if (po.status !== "draft") {
+    if (!(DRAFT_ONLY_EDIT_STATUSES as readonly string[]).includes(po.status)) {
       throw new Error(
         "Hanya PO draft yang dapat dihapus. PO yang sudah diproses dibatalkan lewat tombol batal, bukan dihapus.",
       );
@@ -3750,7 +3751,7 @@ export async function deleteVendorBill(id: number) {
         await tx.$executeRaw`SELECT id FROM vendor_bills WHERE id = ${id} FOR UPDATE`;
       }
       const fresh = await tx.vendorBill.findUniqueOrThrow({ where: { id } });
-      if (fresh.status !== "draft") {
+      if (!(DRAFT_ONLY_EDIT_STATUSES as readonly string[]).includes(fresh.status)) {
         throw new Error("Hanya tagihan draft yang dapat dihapus");
       }
       // Reverse any journal posted at draft creation before removing the record.
@@ -3800,7 +3801,7 @@ export async function deleteVendorPayment(id: number) {
         await tx.$executeRaw`SELECT id FROM vendor_payments WHERE id = ${id} FOR UPDATE`;
       }
       const fresh = await tx.vendorPayment.findUniqueOrThrow({ where: { id } });
-      if (fresh.status !== "draft") {
+      if (!(DRAFT_ONLY_EDIT_STATUSES as readonly string[]).includes(fresh.status)) {
         throw new Error("Hanya pembayaran draft yang dapat dihapus");
       }
       // Reverse any journal posted at draft creation before removing the record.
@@ -3939,7 +3940,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
     const existingPo = await prisma.purchaseOrder.findUniqueOrThrow({
       where: { id },
     });
-    if (existingPo.status !== "draft") {
+    if (!(DRAFT_ONLY_EDIT_STATUSES as readonly string[]).includes(existingPo.status)) {
       throw new Error("Hanya PO draft yang dapat diedit");
     }
 
@@ -4095,7 +4096,7 @@ export async function updateVendorBill(id: number, formData: FormData) {
     const existingBill = await prisma.vendorBill.findUniqueOrThrow({
       where: { id },
     });
-    if (existingBill.status !== "draft") {
+    if (!(DRAFT_ONLY_EDIT_STATUSES as readonly string[]).includes(existingBill.status)) {
       throw new Error("Hanya tagihan draft yang dapat diedit");
     }
 
@@ -4643,7 +4644,7 @@ export async function updateVendorPayment(id: number, formData: FormData) {
     const existingPayment = await prisma.vendorPayment.findUniqueOrThrow({
       where: { id },
     });
-    if (existingPayment.status !== "draft") {
+    if (!(DRAFT_ONLY_EDIT_STATUSES as readonly string[]).includes(existingPayment.status)) {
       throw new Error("Hanya pembayaran draft yang dapat diedit");
     }
 

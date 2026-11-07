@@ -5266,6 +5266,57 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 226 — tombol Ubah/Hapus di halaman detail tanpa gerbang STATUS
+
+Kelas bug ketiga, berbeda dari 220–225: bukan izin, bukan daftar picker,
+melainkan **status dokumen**. Izinnya cukup, tetapi dokumennya sudah keluar
+dari status yang boleh diedit. Halaman detail merender tombol tanpa melihat
+status, jadi operator melihat "Ubah" pada PO yang sudah diposting, mengklik,
+mengisi form, lalu ditolak `updatePurchaseOrder` ("Hanya PO draft yang dapat
+diedit"). Untuk dokumen berjurnal lebih buruk: "Ubah" pada tagihan/pembayaran
+posted tampak seperti koreksi sah, padahal jalur koreksinya void / pembayaran
+pengganti.
+
+Sembilan halaman detail, tiga gerbang berbeda:
+
+- **draft-only** — `pembelian/pesanan`, `pembelian/permintaan` (Ubah saja;
+  hapus juga menolak approved/ordered), `pembelian/tagihan`,
+  `pembelian/pembayaran-vendor`, `penjualan/retur`.
+- **draft atau pending** — `produksi/production-orders` (`updateProductionOrder`
+  dan `deleteProductionOrder` menerima keduanya). Sekalian: tombol Hapus
+  sebelumnya digerbangi `edit_production_orders`, bukan
+  `delete_production_orders`.
+- **pending** — `sdm/cuti`, `sdm/lembur`, `sdm/pinjaman`. Di sini hapus punya
+  gerbang BERBEDA dari edit: `deleteLeaveRequest`/`deleteOvertimeRequest`
+  menolak `approved` tetapi masih menerima `rejected`, sedangkan edit hanya
+  menerima `pending`. `deleteEmployeeLoan` menerima `pending`/`rejected`.
+
+`src/lib/constants/status.ts` mendapat `DRAFT_ONLY_EDIT_STATUSES`,
+`DRAFT_OR_PENDING_EDIT_STATUSES`, dan `PENDING_ONLY_EDIT_STATUSES`; halaman dan
+action sama-sama mengimpornya (pola putaran 225). Penjaga baru
+`detail-action-status-gating.test.ts` (22 tes) memeriksa setiap gerbang persis,
+memastikan variabelnya dihitung dari konstanta bersama, dan — sebagai ratchet —
+menolak pola tanpa syarat status muncul kembali.
+
+Dua tes lama ikut disesuaikan, bukan dilonggarkan: `page-action-permission-
+parity` dan tes izin detail cuti/lembur memakai regex yang menuntut tombol
+langsung setelah `canEdit &&`; regex-nya kini membolehkan satu syarat tambahan
+karena memang syarat itu yang ditambahkan.
+
+Catatan cakupan: pemindaian 65 halaman detail ber-edit-link menemukan pola ini
+hanya di sembilan tempat di atas. Halaman inventaris (penyesuaian/transfer/
+pengeluaran-material/permintaan-gudang) dan penjualan (uang-muka/surat-jalan/
+pembayaran) sudah lebih dulu membungkus tombolnya dengan cek status.
+
+### Bukti
+
+- Tes merah→hijau: mencabut `isDraft` dari tombol Ubah PO membuat dua tes
+  gagal (20 lulus / 2 gagal), dikembalikan → 22/22.
+- `npx tsc --noEmit` bersih; ESLint pada 17 berkas tersentuh bersih (satu
+  impor `CanCreate` yang jadi tak terpakai ikut dibuang).
+- Full Vitest: 12.743 lulus / 23 dilewati (dari 12.721; +22 tes).
+- `npm run build` lulus pada percobaan pertama (Compiled successfully, 17,0 s).
+
 ## Putaran 225 — picker halaman ubah menawarkan nilai yang action-nya selalu tolak
 
 Kelas bug yang berbeda dari 220–224: bukan izin, melainkan **daftar nilai**.

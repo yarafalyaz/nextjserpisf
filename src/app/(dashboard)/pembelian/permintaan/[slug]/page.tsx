@@ -21,6 +21,7 @@ import type { Metadata } from "next"
 import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { DRAFT_ONLY_EDIT_STATUSES } from "@/lib/constants/status"
 export const metadata: Metadata = { title: "Permintaan Pembelian" }
 
 export default async function PurchaseRequestDetailPage({
@@ -63,6 +64,13 @@ export default async function PurchaseRequestDetailPage({
 
   if (!request) notFound()
 
+  // updatePurchaseRequest hanya menerima draft; deletePurchaseRequest menolak
+  // approved/partial_ordered/ordered (PR itu sudah melahirkan PO, jadi jejak
+  // auditnya wajib tinggal). Dua gerbang berbeda: PR `rejected`/`cancelled`
+  // masih boleh dihapus tetapi tidak boleh diedit.
+  const isDraft = (DRAFT_ONLY_EDIT_STATUSES as readonly string[]).includes(request.status)
+  const isDeletable = !["approved", "partial_ordered", "ordered"].includes(request.status)
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -83,9 +91,9 @@ export default async function PurchaseRequestDetailPage({
                 </Button>
               </CanCreate>
             )}
-            {canEdit && <Button href={entityEditHref("/pembelian/permintaan", request)} variant="primary">Ubah</Button>}
+            {canEdit && isDraft && <Button href={entityEditHref("/pembelian/permintaan", request)} variant="primary">Ubah</Button>}
             <PrintButton documentType="purchase-request" documentId={request.id} />
-            {canDelete && <DeleteButton id={request.id} action={deletePurchaseRequest} />}
+            {canDelete && isDeletable && <DeleteButton id={request.id} action={deletePurchaseRequest} />}
             <BackButton href="/pembelian/permintaan" />
           </>
         }

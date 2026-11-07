@@ -18,6 +18,7 @@ import { getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope"
 import { loadOvertimeBaseSnapshot } from "@/lib/reports/overtime-base-snapshot-data"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
+import { PENDING_ONLY_EDIT_STATUSES } from "@/lib/constants/status"
 import { OvertimeBaseSnapshotFields } from "./_components/overtime-base-snapshot-fields"
 export const metadata: Metadata = { title: "Lembur" }
 
@@ -49,6 +50,12 @@ export default async function OvertimeRequestDetailPage({
 
   if (!overtime) notFound()
 
+  // updateOvertimeRequest menolak selain pending; deleteOvertimeRequest
+  // menolak `approved` (jam lembur sudah masuk penggajian). Dua gerbang
+  // berbeda: lembur `rejected` masih boleh dihapus, tetapi tidak diedit.
+  const isPending = (PENDING_ONLY_EDIT_STATUSES as readonly string[]).includes(overtime.status)
+  const isApproved = overtime.status === "approved"
+
   const project = overtime.projectId
     ? await prisma.project.findUnique({ where: { id: overtime.projectId }, select: { name: true } })
     : null
@@ -68,10 +75,12 @@ export default async function OvertimeRequestDetailPage({
         badge={<StatusChip status={overtime.status} />}
         actions={
           <>
-            {canEdit && (
+            {/* updateOvertimeRequest hanya menerima status pending; lembur yang
+                sudah disetujui memengaruhi penggajian. */}
+            {canEdit && isPending && (
               <Button href={entityEditHref("/sdm/lembur", overtime)} variant="primary">Ubah</Button>
             )}
-            {canDelete && <DeleteButton id={overtime.id} action={deleteOvertimeRequest} />}
+            {canDelete && !isApproved && <DeleteButton id={overtime.id} action={deleteOvertimeRequest} />}
             <BackButton href="/sdm/lembur" />
           </>
         }

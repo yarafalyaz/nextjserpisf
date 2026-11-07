@@ -20,6 +20,7 @@ import type { Metadata } from "next"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
+import { DRAFT_ONLY_EDIT_STATUSES } from "@/lib/constants/status"
 import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Retur" }
 
@@ -61,6 +62,10 @@ export default async function SalesReturnDetailPage({
 
   if (!salesReturn) notFound()
 
+  // updateSalesReturn/deleteSalesReturn/completeSalesReturn semuanya
+  // draft-only. Tombol pada retur completed hanya bisa berakhir ditolak.
+  const isDraft = (DRAFT_ONLY_EDIT_STATUSES as readonly string[]).includes(salesReturn.status)
+
   // `SalesReturnItem` tidak punya relasi ke `Item` di skema (hanya `itemId`),
   // jadi nama barangnya diambil lewat satu kueri terpisah.
   const itemIds = [...new Set(salesReturn.items.map((item) => item.itemId))]
@@ -82,9 +87,13 @@ export default async function SalesReturnDetailPage({
         badge={<StatusChip status={salesReturn.status} />}
         actions={
           <>
-            <CanCreate permission="edit_sales_returns">
-              <Button href={entityEditHref("/penjualan/retur", salesReturn)} variant="primary">Ubah</Button>
-            </CanCreate>
+            {/* updateSalesReturn/deleteSalesReturn menolak selain draft;
+                retur yang sudah selesai dikoreksi lewat dokumen baru. */}
+            {isDraft && (
+              <CanCreate permission="edit_sales_returns">
+                <Button href={entityEditHref("/penjualan/retur", salesReturn)} variant="primary">Ubah</Button>
+              </CanCreate>
+            )}
             <PrintButton documentType="sales-return" documentId={salesReturn.id} />
             {salesReturn.status !== "completed" && canApproveSalesReturn && (
               <ProcessButton
@@ -96,9 +105,11 @@ export default async function SalesReturnDetailPage({
                 successMessage="Retur berhasil diselesaikan"
               />
             )}
-            <CanCreate permission="delete_sales_returns">
-              <DeleteButton id={salesReturn.id} action={deleteSalesReturn} />
-            </CanCreate>
+            {isDraft && (
+              <CanCreate permission="delete_sales_returns">
+                <DeleteButton id={salesReturn.id} action={deleteSalesReturn} />
+              </CanCreate>
+            )}
             <BackButton href="/penjualan/retur" />
           </>
         }

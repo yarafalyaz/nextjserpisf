@@ -18,6 +18,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
+import { PENDING_ONLY_EDIT_STATUSES } from "@/lib/constants/status"
 import { loadLoanInstallmentHistory } from "@/lib/reports/loan-installment-history-data"
 import { LoanInstallmentHistorySection } from "../_components/loan-installment-history-section"
 import { LoanCashRepaymentForm } from "@/components/sdm/loan-cash-repayment-form"
@@ -52,6 +53,11 @@ export default async function EmployeeLoanDetailPage({
   // active dan operator berizin process_payroll. Pinjaman final
   // (paid_off/written_off) tidak menawarkan aksi dokumen lagi.
   const canSettle = loan.status === "active" && await hasPermission("process_payroll")
+  // updateEmployeeLoan hanya menerima pending; deleteEmployeeLoan menerima
+  // pending/rejected (pinjaman yang sudah cair harus di-write-off, bukan
+  // dihapus, supaya jurnal pencairannya punya pasangan).
+  const isPending = (PENDING_ONLY_EDIT_STATUSES as readonly string[]).includes(loan.status)
+  const isDeletable = ["pending", "rejected"].includes(loan.status)
   const accounts = canSettle
     ? await prisma.account.findMany({
         where: { isActive: true, type: "ASSET", code: { startsWith: "1" } },
@@ -73,12 +79,19 @@ export default async function EmployeeLoanDetailPage({
         badge={<StatusChip status={loan.status} />}
         actions={
           <>
-            <CanCreate permission="create_loans">
-              <Button href={entityEditHref("/sdm/pinjaman", loan)} variant="primary">Ubah</Button>
-            </CanCreate>
-            <CanCreate permission="delete_loans">
-              <DeleteButton id={loan.id} action={deleteEmployeeLoan} />
-            </CanCreate>
+            {/* updateEmployeeLoan hanya menerima pending; deleteEmployeeLoan
+                menerima pending/rejected. Pinjaman active dikoreksi lewat
+                pelunasan, bukan edit. */}
+            {isPending && (
+              <CanCreate permission="create_loans">
+                <Button href={entityEditHref("/sdm/pinjaman", loan)} variant="primary">Ubah</Button>
+              </CanCreate>
+            )}
+            {isDeletable && (
+              <CanCreate permission="delete_loans">
+                <DeleteButton id={loan.id} action={deleteEmployeeLoan} />
+              </CanCreate>
+            )}
             <BackButton href="/sdm/pinjaman" />
           </>
         }

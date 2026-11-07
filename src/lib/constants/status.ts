@@ -123,6 +123,22 @@ export const PAYABLE_VENDOR_BILL_STATUSES = ["posted", "partial"] as const;
  */
 export const UNPAYABLE_SALES_INVOICE_STATUSES = ["draft", "approved", "cancelled"] as const;
 
+// ─── Dokumen yang hanya boleh diubah/dihapus saat masih draft ──────────────
+// Sama seperti kelompok di atas: halaman detail dan action-nya harus membaca
+// satu definisi. Halaman detail yang menampilkan Ubah/Hapus tanpa melihat
+// status membuat operator mengklik tombol yang server-nya pasti tolak — dan
+// untuk dokumen yang sudah memposting jurnal/stok, "Ubah" pada dokumen posted
+// tampak seperti koreksi yang sah padahal jalur koreksinya adalah void/retur.
+
+/** Dokumen yang siklus edit/hapus-nya berhenti begitu keluar dari draft. */
+export const DRAFT_ONLY_EDIT_STATUSES = ["draft"] as const;
+
+/** Dokumen yang boleh diubah selama masih konsep ATAU menunggu persetujuan. */
+export const DRAFT_OR_PENDING_EDIT_STATUSES = ["draft", "pending"] as const;
+
+/** Pengajuan HR (cuti/lembur/pinjaman) — hanya bisa diedit selama menunggu. */
+export const PENDING_ONLY_EDIT_STATUSES = ["pending"] as const;
+
 // ─── CRM ───────────────────────────────────────────────────────────────────
 export const CrmStatus = {
   NEW: "new",

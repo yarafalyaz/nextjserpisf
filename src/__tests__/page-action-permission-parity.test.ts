@@ -208,8 +208,12 @@ describe("paritas izin halaman detail/edit vs list/action (#53)", () => {
     )
     expect(purchaseOrder).toContain('hasPermission("edit_purchase_orders")')
     expect(purchaseOrder).toContain('hasPermission("delete_purchase_orders")')
-    expect(purchaseOrder).toMatch(/canEdit\s*&&\s*<Button href=\{entityEditHref\("\/pembelian\/pesanan"/)
-    expect(purchaseOrder).toContain("{canDelete && <DeleteButton")
+    // Putaran 226 menambah gerbang status (`isDraft`) di samping gerbang izin;
+    // regex membolehkan syarat tambahan setelah canEdit/canDelete.
+    expect(purchaseOrder).toMatch(
+      /canEdit\s*&&\s*(\w+\s*&&\s*)?<Button href=\{entityEditHref\("\/pembelian\/pesanan"/,
+    )
+    expect(purchaseOrder).toMatch(/\{canDelete\s*&&\s*(\w+\s*&&\s*)?<DeleteButton/)
 
     const purchaseRequest = readFileSync(
       join(DASHBOARD, "pembelian/permintaan/[slug]/page.tsx"),
@@ -217,8 +221,10 @@ describe("paritas izin halaman detail/edit vs list/action (#53)", () => {
     )
     expect(purchaseRequest).toContain('hasPermission("edit_purchase_requests")')
     expect(purchaseRequest).toContain('hasPermission("delete_purchase_requests")')
-    expect(purchaseRequest).toMatch(/canEdit\s*&&\s*<Button href=\{entityEditHref\("\/pembelian\/permintaan"/)
-    expect(purchaseRequest).toContain("{canDelete && <DeleteButton")
+    expect(purchaseRequest).toMatch(
+      /canEdit\s*&&\s*(\w+\s*&&\s*)?<Button href=\{entityEditHref\("\/pembelian\/permintaan"/,
+    )
+    expect(purchaseRequest).toMatch(/\{canDelete\s*&&\s*(\w+\s*&&\s*)?<DeleteButton/)
   })
 
   it("daftar harga pelanggan/pemasok menyembunyikan tautan Ubah tanpa izin edit", () => {

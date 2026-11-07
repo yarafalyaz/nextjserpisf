@@ -21,6 +21,7 @@ import type { Metadata } from "next"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { DRAFT_ONLY_EDIT_STATUSES } from "@/lib/constants/status"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { ProcessButton } from "@/components/ui/process-button"
 import { confirmVendorBill } from "@/actions/purchase.actions"
@@ -64,6 +65,10 @@ export default async function VendorBillDetailPage({
 
   if (!bill) notFound()
 
+  // updateVendorBill/deleteVendorBill menolak selain draft (baris posted sudah
+  // punya jurnal utang; jalur koreksinya voidVendorBill).
+  const isDraft = (DRAFT_ONLY_EDIT_STATUSES as readonly string[]).includes(bill.status)
+
   // F-2026-10-28-157-V Putusan 2: banner + tombol isi-nomor hanya bila
   // posted-ish, ber-PPN, dan belum bernomor valid. Server tetap fail-closed.
   const needsTaxInvoiceNumber =
@@ -99,9 +104,13 @@ export default async function VendorBillDetailPage({
               <Link href={`/pembelian/pembayaran-vendor/tambah/tagihan/${bill.slug ?? bill.id}`} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Bayar</Link>
             </CanCreate>
           )}
-          <CanCreate permission="edit_vendor_bills">
-            <Link href={entityEditHref("/pembelian/tagihan", bill)} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
-          </CanCreate>
+          {/* updateVendorBill/deleteVendorBill menolak selain draft; tagihan
+              posted dikoreksi lewat voidVendorBill, bukan edit. */}
+          {isDraft && (
+            <CanCreate permission="edit_vendor_bills">
+              <Link href={entityEditHref("/pembelian/tagihan", bill)} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
+            </CanCreate>
+          )}
           {needsTaxInvoiceNumber && canSetTaxInvoiceNumber && (
             <TaxInvoiceNumberButton id={bill.id} action={setVendorBillTaxInvoiceNumber} />
           )}
@@ -109,9 +118,11 @@ export default async function VendorBillDetailPage({
           {bill.status !== "draft" && bill.status !== "cancelled" && (
             <VoidButton id={bill.id} action={voidVendorBill} canVoid={canVoidVendorBill} />
           )}
-          <CanCreate permission="delete_vendor_bills">
-            <DeleteButton id={bill.id} action={deleteVendorBill} />
-          </CanCreate>
+          {isDraft && (
+            <CanCreate permission="delete_vendor_bills">
+              <DeleteButton id={bill.id} action={deleteVendorBill} />
+            </CanCreate>
+          )}
                   <Link href="/pembelian/tagihan" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
         </div>
         </div>

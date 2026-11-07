@@ -8,7 +8,7 @@ import { prisma, TxClient } from "@/lib/db/prisma";
 import { generateDocumentNumber, generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/services/activity-log.service";
-import { TERMINAL_WORK_ORDER_STATUSES } from "@/lib/constants/status";
+import { DRAFT_OR_PENDING_EDIT_STATUSES, TERMINAL_WORK_ORDER_STATUSES } from "@/lib/constants/status";
 import { parseFormData } from "@/lib/validations/parse-form";
 import {
   createProductSchema,
@@ -2494,7 +2494,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
       where: { id },
       include: { materials: true },
     });
-    if (po.status !== "draft" && po.status !== "pending") {
+    if (!(DRAFT_OR_PENDING_EDIT_STATUSES as readonly string[]).includes(po.status)) {
       return {
         success: false,
         error: `Tidak bisa memperbarui Perintah Produksi dengan status '${po.status}'. Hanya status 'draft' atau 'pending' yang bisa diubah.`,
@@ -2525,7 +2525,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
         where: { id },
         include: { materials: true },
       });
-      if (current.status !== "draft" && current.status !== "pending") {
+      if (!(DRAFT_OR_PENDING_EDIT_STATUSES as readonly string[]).includes(current.status)) {
         throw new Error(
           `Tidak bisa memperbarui Perintah Produksi dengan status '${current.status}'. Hanya status 'draft' atau 'pending' yang bisa diubah.`,
         );

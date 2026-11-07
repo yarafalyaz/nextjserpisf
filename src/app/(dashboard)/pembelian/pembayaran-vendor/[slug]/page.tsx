@@ -13,6 +13,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
+import { DRAFT_ONLY_EDIT_STATUSES } from "@/lib/constants/status"
 
 import type { Metadata } from "next"
 
@@ -55,6 +56,10 @@ export default async function VendorPaymentDetailPage({
 
   if (!payment) notFound()
 
+  // Hanya draft yang menerima edit/hapus (lihat updateVendorPayment /
+  // deleteVendorPayment). Pembayaran posted dikoreksi lewat pembayaran pengganti.
+  const isDraft = (DRAFT_ONLY_EDIT_STATUSES as readonly string[]).includes(payment.status)
+
   const pmMap = await getPaymentMethodMap()
 
   return (
@@ -69,13 +74,19 @@ export default async function VendorPaymentDetailPage({
         ]}
         actions={
           <>
-            <CanCreate permission="edit_vendor_payments">
-              <Button href={entityEditHref("/pembelian/pembayaran-vendor", payment)} variant="primary">Ubah</Button>
-            </CanCreate>
+            {/* updateVendorPayment/deleteVendorPayment menolak selain draft;
+                pembayaran posted dikoreksi lewat pembayaran pengganti. */}
+            {isDraft && (
+              <CanCreate permission="edit_vendor_payments">
+                <Button href={entityEditHref("/pembelian/pembayaran-vendor", payment)} variant="primary">Ubah</Button>
+              </CanCreate>
+            )}
             <PrintButton documentType="vendor-payment" documentId={payment.id} />
-            <CanCreate permission="delete_vendor_payments">
-              <DeleteButton id={payment.id} action={deleteVendorPayment} />
-            </CanCreate>
+            {isDraft && (
+              <CanCreate permission="delete_vendor_payments">
+                <DeleteButton id={payment.id} action={deleteVendorPayment} />
+              </CanCreate>
+            )}
             <BackButton href="/pembelian/pembayaran-vendor" />
           </>
         }

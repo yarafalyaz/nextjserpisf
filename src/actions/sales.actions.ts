@@ -35,7 +35,7 @@ import { assertInvoiceAllowedForWorkOrderBridges } from "@/lib/services/warranty
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse } from "@/lib/utils/safe-parse"
-import { UNPAYABLE_SALES_INVOICE_STATUSES } from "@/lib/constants/status"
+import { DRAFT_ONLY_EDIT_STATUSES, UNPAYABLE_SALES_INVOICE_STATUSES } from "@/lib/constants/status"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, updateDeliveryOrderSchema, createSalesReturnSchema, updateDownPaymentSchema, updateSalesOrderSchema, updateSalesInvoiceSchema, updateSalesPaymentSchema, updateSalesReturnSchema, quotationDatesSchema, quotationDatesUpdateSchema, DELIVERABLE_ORDER_STATUSES, DELIVERABLE_ORDER_STATUS_LABELS, RETURNABLE_INVOICE_STATUSES } from "@/lib/validations/sales.schemas"
 import {
@@ -4552,7 +4552,7 @@ export async function updateSalesReturn(id: number, formData: FormData) {
     select: { status: true, documentNo: true },
   })
   if (!existingReturn) throw new Error("Retur tidak ditemukan")
-  if (existingReturn.status !== "draft") {
+  if (!(DRAFT_ONLY_EDIT_STATUSES as readonly string[]).includes(existingReturn.status)) {
     throw new Error("Hanya retur berstatus draft yang dapat diedit")
   }
 
@@ -5122,7 +5122,7 @@ export async function deleteSalesReturn(id: number) {
       await tx.$executeRaw`SELECT id FROM sales_returns WHERE id = ${id} FOR UPDATE`
     }
     const fresh = await tx.salesReturn.findUniqueOrThrow({ where: { id }, select: { id: true, status: true } })
-    if (fresh.status !== "draft") {
+    if (!(DRAFT_ONLY_EDIT_STATUSES as readonly string[]).includes(fresh.status)) {
       throw new Error(
         `Retur berstatus "${fresh.status}" tidak bisa dihapus; hanya draf yang bisa dihapus.`
       )

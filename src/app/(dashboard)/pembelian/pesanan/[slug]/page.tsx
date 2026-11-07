@@ -5,6 +5,7 @@ import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
+import { DRAFT_ONLY_EDIT_STATUSES } from "@/lib/constants/status"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
@@ -38,7 +39,6 @@ export default async function PurchaseOrderDetailPage({
   ])
   const canCancelPurchaseOrder = await hasPermission("edit_purchase_orders")
   const { slug } = await params
-
   const po = await resolveEntity(
     { segment: slug, fallbackWhere: {} },
     {
@@ -73,6 +73,10 @@ export default async function PurchaseOrderDetailPage({
 
   if (!po) notFound()
 
+  // Satu-satunya status yang menerima edit/hapus (lihat updatePurchaseOrder /
+  // deletePurchaseOrder). PO posted dikoreksi lewat cancelPurchaseOrder.
+  const isDraft = (DRAFT_ONLY_EDIT_STATUSES as readonly string[]).includes(po.status)
+
   // Fetch item names dynamically
   const itemIds = po.items.map((i) => i.itemId)
   const items = await prisma.item.findMany({
@@ -94,7 +98,10 @@ export default async function PurchaseOrderDetailPage({
         badge={<StatusChip status={po.status} />}
         actions={
           <>
-            {canEdit && <Button href={entityEditHref("/pembelian/pesanan", po)} variant="primary">Ubah</Button>}
+            {/* updatePurchaseOrder/deletePurchaseOrder menolak selain draft.
+                Menampilkan Ubah/Hapus pada PO posted membuat operator mengira
+                PO bisa dikoreksi langsung; jalurnya cancelPurchaseOrder. */}
+            {canEdit && isDraft && <Button href={entityEditHref("/pembelian/pesanan", po)} variant="primary">Ubah</Button>}
             {po.vendorBills.length === 0 &&
               (po.isService
                 ? !["draft", "cancelled", "rejected"].includes(po.status)
@@ -111,7 +118,7 @@ export default async function PurchaseOrderDetailPage({
             {!["received", "cancelled", "partial_received"].includes(po.status) && (
               <VoidButton id={po.id} action={cancelPurchaseOrder} canVoid={canCancelPurchaseOrder} />
             )}
-            {canDelete && <DeleteButton id={po.id} action={deletePurchaseOrder} />}
+            {canDelete && isDraft && <DeleteButton id={po.id} action={deletePurchaseOrder} />}
             <BackButton href="/pembelian/pesanan" />
           </>
         }

@@ -17,6 +17,7 @@ import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
+import { PENDING_ONLY_EDIT_STATUSES } from "@/lib/constants/status"
 export const metadata: Metadata = { title: "Cuti" }
 
 export default async function LeaveRequestDetailPage({
@@ -46,6 +47,12 @@ export default async function LeaveRequestDetailPage({
 
   if (!leave) notFound()
 
+  // updateLeaveRequest menolak selain pending; deleteLeaveRequest menolak
+  // `approved` (penggajian sudah bisa memakainya). Dua gerbang berbeda,
+  // karena cuti `rejected` masih boleh dihapus tetapi tidak boleh diedit.
+  const isPending = (PENDING_ONLY_EDIT_STATUSES as readonly string[]).includes(leave.status)
+  const isApproved = leave.status === "approved"
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -59,10 +66,12 @@ export default async function LeaveRequestDetailPage({
         badge={<StatusChip status={leave.status} />}
         actions={
           <>
-            {canEdit && (
+            {/* updateLeaveRequest hanya menerima status pending; cuti yang
+                sudah disetujui/ditolak tidak boleh dibuka ulang. */}
+            {canEdit && isPending && (
               <Button href={entityEditHref("/sdm/cuti", leave)} variant="primary">Ubah</Button>
             )}
-            {canDelete && <DeleteButton id={leave.id} action={deleteLeaveRequest} />}
+            {canDelete && !isApproved && <DeleteButton id={leave.id} action={deleteLeaveRequest} />}
             <BackButton href="/sdm/cuti" />
           </>
         }

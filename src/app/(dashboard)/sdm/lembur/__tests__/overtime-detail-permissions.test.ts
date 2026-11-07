@@ -10,10 +10,11 @@ describe("detail lembur gerbang izin UI (edit_overtime_requests/delete_overtime_
     )
     expect(page).toContain('hasPermission("edit_overtime_requests")')
     expect(page).toContain('hasPermission("delete_overtime_requests")')
-    expect(page).toMatch(/\{canEdit && \(\s*<Button href=\{entityEditHref\("\/sdm\/lembur"/)
-    expect(page).toMatch(
-      /\{canDelete && <DeleteButton id=\{overtime\.id\} action=\{deleteOvertimeRequest\} \/>\}/,
-    )
+    // Putaran 226: gerbang status ditambahkan di samping gerbang izin —
+    // updateOvertimeRequest hanya menerima `pending`, deleteOvertimeRequest
+    // menolak `approved` (jam lembur sudah masuk penggajian).
+    expect(page).toMatch(/\{canEdit && isPending && \(\s*<Button href=\{entityEditHref\("\/sdm\/lembur"/)
+    expect(page).toMatch(/\{canDelete && !isApproved && <DeleteButton id=\{overtime\.id\} action=\{deleteOvertimeRequest\} \/>\}/)
     // Data baca tetap dirender tanpa gerbang tulis.
     expect(page).toContain("<DetailCard>")
   })
