@@ -5266,6 +5266,39 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 242 — rak bisa dipindah ke gudang nonaktif/terhapus
+
+Temuan terakhir dari audit aksi, dan yang paling ringan dampaknya.
+`createRack` menilai gudang hidup di dalam tx
+(`assertWarehousesExistAndActive`); `updateRack` hanya memanggil
+`assertWarehouseIdInScope` dan `assertRackIdInScope`.
+
+`assertWarehouseIdInScope` memeriksa **cakupan**, bukan kehidupan, dan
+langsung lolos untuk scope `"all"` — jadi admin yang mengirim POST langsung
+bisa memindahkan rak ke gudang yang sudah dinonaktifkan atau di-soft-delete.
+FK hanya menolak id yang tidak ada. Raknya lalu lenyap dari picker yang
+menyaring gudang hidup, sementara `Item.defaultRackId` dan atribusi rak pada
+mutasi stok masih menunjuknya.
+
+Perbaikannya menambahkan pemeriksaan yang sama di jalur edit.
+
+### Bukti
+
+- Tes merah→hijau: menonaktifkan blok guard membuat "updateRack menolak
+  gudang tujuan yang nonaktif/terhapus" gagal (255 lulus / 1 gagal),
+  dikembalikan → 256/256.
+- `npx tsc --noEmit` bersih; ESLint bersih.
+- Full Vitest: 12.774 lulus / 23 dilewati (dari 12.773; +1 tes).
+- `npm run build` lulus pada percobaan pertama (Compiled successfully, 23,8 s).
+
+### Status backlog audit
+
+Ketujuh temuan audit aksi kini tertangani: #1 (saldo sumber kas kecil)
+**sengaja tidak** diperbaiki karena jalurnya tak terjangkau (putaran 236),
+#2–#7 diperbaiki di putaran 237–242. Satu temuan yang saya turunkan
+derajatnya: #7 butuh POST langsung karena picker UI menyaring `ASSET`, tetapi
+guard-nya tetap harus di server — itu sebabnya tetap diperbaiki.
+
 ## Putaran 241 — setoran pinjaman menerima akun beban sebagai "kas/bank"
 
 `recordEmployeeLoanCashRepayment` memvalidasi `cashAccountId` hanya sebagai

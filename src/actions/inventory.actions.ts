@@ -2241,6 +2241,13 @@ export async function updateRack(id: number, formData: FormData) {
     const v = parsed.data;
     await assertRackIdInScope(user, id);
     await assertWarehouseIdInScope(user, v.warehouseId);
+    // Paritas createRack: gudang tujuan wajib hidup. assertWarehouseIdInScope
+    // hanya memeriksa cakupan (dan langsung lolos untuk scope "all"), jadi
+    // tanpa ini POST langsung bisa memindahkan rak ke gudang nonaktif/
+    // terhapus — FK hanya menolak id fiktif. Rak itu lalu hilang dari picker
+    // yang menyaring gudang hidup sementara Item.defaultRackId masih
+    // menunjuknya.
+    await assertWarehousesExistAndActive(prisma, [v.warehouseId]);
 
     // Putaran 80: rak yang pindah gudang mematahkan triplet default item
     // (Item.defaultWarehouseId → Rack tak lagi di gudang itu). Tolak selama

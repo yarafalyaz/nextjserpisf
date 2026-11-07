@@ -914,6 +914,24 @@ describe("Rack & WorkOrder & Others", () => {
     expect(res?.success).toBe(true);
   })
 
+  /**
+   * Regresi putaran 242: updateRack wajib menilai gudang tujuan hidup, sama
+   * seperti createRack. assertWarehouseIdInScope hanya memeriksa cakupan dan
+   * langsung lolos untuk scope "all", jadi tanpa gerbang ini rak bisa
+   * dipindah ke gudang nonaktif/terhapus lewat POST langsung.
+   */
+  it("updateRack menolak gudang tujuan yang nonaktif/terhapus", async () => {
+    mocks.prismaMock.rack.findUnique.mockResolvedValue({ warehouseId: 1 })
+    // warehouse.findMany hanya mengembalikan gudang hidup 1/2 (lihat beforeEach);
+    // id 9 = tidak hidup.
+    const res = await actions.updateRack(
+      1,
+      fdMap({ warehouseId: 9, code: "R1", name: "Rack 1" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.rack.update).not.toHaveBeenCalled()
+  })
+
   it("createRack succeeds", async () => {
     mocks.prismaMock.systemSetting.findFirst.mockResolvedValue({
       enableAutoRackCode: true,
