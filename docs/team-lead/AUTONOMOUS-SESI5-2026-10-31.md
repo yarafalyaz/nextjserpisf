@@ -5266,6 +5266,42 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 245 — smoke test runtime seluruh halaman yang digerbangi sesi ini
+
+Stack dev masih berjalan dari putaran 244, jadi putaran ini memakainya untuk
+memeriksa halaman yang **sudah punya dokumen nyata** di DB — hal yang tidak
+bisa ditangkap tes unit: apakah gerbang status/izin benar-benar mengevaluasi
+data sungguhan, dan apakah halaman render tanpa error runtime.
+
+Empat halaman detail + dua halaman ubah, semuanya HTTP 200:
+
+| Halaman | Kondisi data | Hasil render | Benar? |
+| --- | --- | --- | --- |
+| `/penjualan/pesanan/10` | draft, **ada** pembayaran nyata (`transfer` posted) | Ubah **absent** | ✓ gerbang pelunasan |
+| `/penjualan/pesanan/7` | approved, **tanpa** pembayaran nyata | Ubah **present** | ✓ |
+| `/pembelian/pesanan/e2e-po-chain` | `approved` (bukan draft) | Ubah **absent**, Batalkan **present** | ✓ gerbang status putaran 226 |
+| `/pembelian/tagihan/5` | draft | Ubah **present** | ✓ |
+| `/pembelian/tagihan/5/ubah` | — | 200, tanpa error | ✓ |
+| `/penjualan/pesanan/7/ubah` | — | 200, tanpa error | ✓ |
+
+**Satu alarm palsu yang saya kejar sampai tuntas:** SO 10 (draft) awalnya
+tampak tanpa tombol Ubah, dan saya curiga itu regresi dari putaran 223. Setelah
+memeriksa datanya, ternyata SO 10 punya pembayaran `transfer` berstatus
+`posted` — jadi `orderItemsEditable` memang `false` dan tombolnya benar
+disembunyikan. SO 7 (tanpa pembayaran) menampilkan Ubah, mengonfirmasi kedua
+sisi gerbang. Bukan regresi.
+
+Log aplikasi diperiksa: hanya baris entrypoint dan `watch error` dari file
+watcher Docker Desktop di macOS (dikenal, tercatat di AGENTS.md) — tidak ada
+`ColumnNotFound`, `TypeError`, maupun error Prisma.
+
+### Bukti
+
+- Enam halaman dirender terautentikasi, semua 200, gerbang sesuai data.
+- Log aplikasi bersih dari error runtime.
+- Tidak ada perubahan kode; `git status` bersih.
+- Full Vitest tetap 12.774 lulus / 23 dilewati.
+
 ## Putaran 244 — verifikasi di aplikasi yang benar-benar berjalan
 
 Putaran 243 mencatat keterbatasan: semua bukti UI putaran 229–233 berasal dari
