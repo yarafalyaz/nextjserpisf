@@ -4043,6 +4043,31 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
     if (v.customerId !== existingInvoice.customerId) {
       await assertCustomerLiveForNewDocument(tx, v.customerId)
     }
+    // Putaran 239: faktur yang MEMPERTAHANKAN quotationId harus tetap menunjuk
+    // penawaran milik pelanggan yang sama. Form edit tidak mengirim
+    // quotationId (sales-invoice-form hanya menyetelnya saat tambah), jadi
+    // mengganti pelanggan membuat header berganti pemilik sementara tautan
+    // penawarannya tetap milik pelanggan lama: cap nilai penawaran saat
+    // posting (collectQuotationInvoices) dan laporan job-billing progres/
+    // selisih lalu mencampur dua pelanggan. createSalesInvoice menolak
+    // kombinasi ini sejak awal.
+    const retainedQuotationId = v.quotationId ?? existingInvoice.quotationId
+    const customerMoved =
+      existingInvoice.customerId != null && v.customerId !== existingInvoice.customerId
+    if (retainedQuotationId != null && (v.quotationId != null || customerMoved)) {
+      const retainedQuotation = await tx.quotation.findUnique({
+        where: { id: retainedQuotationId },
+        select: { customerId: true, documentNo: true },
+      })
+      if (!retainedQuotation) throw new Error("Penawaran tidak ditemukan")
+      if (retainedQuotation.customerId !== v.customerId) {
+        throw new Error(
+          v.quotationId == null
+            ? "Pelanggan tidak bisa diganti selama faktur ini masih tertaut ke penawaran pelanggan lama. Hapus faktur konsep ini lalu buat faktur baru untuk pelanggan tersebut."
+            : "Penawaran yang dipilih milik customer lain, tidak bisa difaktur untuk customer ini",
+        )
+      }
+    }
     // Putaran 86: gerbang invoiceForbidden garansi dinilai ulang atas
     // jembatan HASIL edit — sebelumnya edit bisa memindah salesOrderId ke
     // SO milik WO repair klaim covered dan draft terlarang lahir (baru

@@ -1181,6 +1181,40 @@ describe("Sales Invoice Actions", () => {
   // Regresi kehilangan tautan: form faktur tidak punya input quotationId, jadi
   // payload tidak pernah memuatnya — `?? null` dulu menghapus tautan penawaran
   // setiap kali faktur disimpan.
+  /**
+   * Regresi putaran 239: faktur yang mempertahankan quotationId harus tetap
+   * menunjuk penawaran milik pelanggan yang sama. Form edit tidak mengirim
+   * quotationId, jadi mengganti pelanggan saja membuat header berganti
+   * pemilik sementara tautan penawarannya tetap milik pelanggan lama.
+   */
+  it("updateSalesInvoice menolak ganti pelanggan selama penawaran milik pelanggan lama", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", customerId: 1, quotationId: 77, paidAmount: 0, grandTotal: 0,
+    })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ customerId: 1, documentNo: "QUO-77" })
+    const res = await actions.updateSalesInvoice(1, fdMap({
+      customerId: 2, date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100, discount: 0 }]),
+      taxRate: 0, discount: 0,
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/tidak bisa diganti selama faktur ini masih tertaut/)
+    expect(mocks.prismaMock.salesInvoice.update).not.toHaveBeenCalled()
+  })
+
+  it("updateSalesInvoice tetap boleh diedit tanpa ganti pelanggan pada faktur ber-penawaran", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", customerId: 1, quotationId: 77, paidAmount: 0, grandTotal: 0,
+    })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({ customerId: 1, documentNo: "QUO-77" })
+    const res = await actions.updateSalesInvoice(1, fdMap({
+      customerId: 1, date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100, discount: 0 }]),
+      taxRate: 0, discount: 0,
+    }))
+    expect(res?.success).toBe(true)
+  })
+
   it("updateSalesInvoice mempertahankan quotationId yang tidak dikirim form", async () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
       id: 1, status: "draft", quotationId: 77, paidAmount: 0, grandTotal: 0,

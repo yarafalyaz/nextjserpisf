@@ -5266,6 +5266,43 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 239 — faktur penjualan tidak pernah memeriksa pemilik penawaran saat diedit
+
+Pasangan ketiga dari kelas yang sama (237 WO, 238 SO). `updateSalesInvoice`
+memeriksa kelayakan pelanggan baru (`assertCustomerLiveForNewDocument`),
+kelayakan SO tujuan, dan jembatan garansi — tetapi **tidak pernah** memeriksa
+`quotation.customerId`. Padahal `createSalesInvoice` menolaknya secara
+eksplisit ("Penawaran yang dipilih milik customer lain").
+
+Form edit faktur tidak mengirim `quotationId` sama sekali
+(`sales-invoice-form.tsx` hanya menyetelnya saat `!invoice?.id`), jadi
+mengganti pelanggan membuat header berganti pemilik sementara tautan
+penawarannya tetap milik pelanggan lama. Konsekuensinya saat posting: cap
+nilai penawaran (`collectQuotationInvoices`) dan laporan job-billing
+progres/selisih mencampur dua pelanggan.
+
+Perbaikannya menilai pemilik penawaran yang **dipertahankan** setiap kali
+pelanggan berpindah (atau saat `quotationId` dikirim eksplisit), dengan pesan
+yang menyebut jalan keluarnya: hapus faktur konsep dan buat baru.
+
+Satu detail implementasi yang perlu dicatat: percobaan pertama saya
+membandingkan `v.customerId !== existingInvoice.customerId` tanpa syarat.
+Itu membuat tes lama "mempertahankan quotationId yang tidak dikirim form"
+gagal — mock-nya tidak menyediakan `customerId` pada faktur, sehingga
+`undefined !== 1` terbaca sebagai "pelanggan berpindah". Gerbangnya sekarang
+mensyaratkan `existingInvoice.customerId != null` lebih dulu; data nyata
+selalu punya kolom itu, dan fixture lama tidak lagi memberi positif palsu.
+
+### Bukti
+
+- Tes merah→hijau: mencabut syarat `customerMoved` membuat "menolak ganti
+  pelanggan selama penawaran milik pelanggan lama" gagal (267 lulus /
+  1 gagal), dikembalikan → 268/268.
+- Tes pasangan memastikan edit tanpa ganti pelanggan tetap berhasil.
+- `npx tsc --noEmit` bersih; ESLint bersih.
+- Full Vitest: 12.772 lulus / 23 dilewati (dari 12.770; +2 tes).
+- `npm run build` lulus pada percobaan pertama (Compiled successfully, 12,8 s).
+
 ## Putaran 238 — ganti pelanggan pada pesanan penjualan melewati cek pemilik penawaran
 
 Kelas yang sama dengan putaran 237, satu langkah lebih halus. Blok penilaian
