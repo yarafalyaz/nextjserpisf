@@ -41,6 +41,13 @@ const mocks = vi.hoisted(() => {
     timesheet: { ...buildModelMock(), aggregate: vi.fn().mockResolvedValue({ _sum: { hours: 0 } }) },
     productionCost: { ...buildModelMock(), findMany: vi.fn().mockResolvedValue([]) },
     employeeLoan: buildModelMock(),
+    // Putaran 241: penerima setoran pinjaman kini wajib rekening kas/bank.
+    account: {
+      ...buildModelMock(),
+      findUnique: vi.fn().mockResolvedValue({
+        isActive: true, deletedAt: null, reportGroup: "BANK",
+      }),
+    },
     leaveRequest: buildModelMock(),
     overtimeRequest: buildModelMock(),
     // Eksistensi proyek pada jalur lembur: default ada; test putaran 38
@@ -3936,6 +3943,15 @@ describe("BR-LOAN E162-1/3/5 — guard bayar + dokumen setor/write-off", () => {
     restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     mocks.hrScopeOverride.current = { kind: "all" }
+    // Putaran 241: setoran pinjaman kini menilai penerima wajib rekening
+    // kas/bank. Blok "Payroll Actions" menimpa `prismaMock.account` utuh
+    // (hanya findMany), jadi pasang ulang findUnique di sini.
+    ;(prismaMock as any).account = {
+      ...(prismaMock as any).account,
+      findUnique: vi.fn().mockResolvedValue({
+        isActive: true, deletedAt: null, reportGroup: "BANK",
+      }),
+    }
   })
 
   it("E162-1 bayar: Σ potongan termasuk statutori > bruto = tolak sebelum klaim, nol status/nol jurnal", async () => {
@@ -3969,6 +3985,26 @@ describe("BR-LOAN E162-1/3/5 — guard bayar + dokumen setor/write-off", () => {
     )
     expect(lebih?.success).toBe(false)
     expect(lebih?.error).toMatch(/kelebihan/i)
+  })
+
+  /**
+   * Regresi putaran 241: penerima setoran pinjaman wajib rekening kas/bank.
+   * Tanpa gerbang ini POST langsung bisa mengirim akun beban: jurnalnya
+   * menjadi Dr <beban> / Cr Piutang Karyawan — pinjaman dianggap lunas
+   * padahal kas tidak pernah diterima, dan laba-rugi mengarang beban.
+   */
+  it("setoran pinjaman menolak akun penerima yang bukan kas/bank", async () => {
+    ;(prismaMock as any).account.findUnique.mockResolvedValue({
+      isActive: true, deletedAt: null, reportGroup: "EXPENSE",
+    })
+    prismaMock.employeeLoan.findUniqueOrThrow.mockResolvedValue({
+      id: 3, employeeId: 1, status: "active", remainingAmount: 400000,
+    })
+    const res = await actions.recordEmployeeLoanCashRepayment(
+      (() => { const f = new FormData(); f.set("loanId", "3"); f.set("amount", "100000"); f.set("cashAccountId", "100"); f.set("repaymentDate", "2026-10-29"); f.set("notes", "setoran"); return f })(),
+    )
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/bukan rekening kas\/bank/)
   })
 
   it("E162-3 write-off: alasan wajib; pinjaman lunas ditolak", async () => {

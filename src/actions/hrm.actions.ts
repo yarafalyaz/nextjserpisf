@@ -6023,6 +6023,27 @@ export async function recordEmployeeLoanCashRepayment(formData: FormData) {
       throw new Error("Tanggal setoran tidak valid (BR-LOAN-07)");
     }
     if (!notes) throw new Error("Bukti/alasan setoran wajib diisi (BR-LOAN-07)");
+    // Penerima setoran WAJIB rekening kas/bank — paritas dengan
+    // assertCashBankAccountForPayment (penjualan/pembelian). Tanpa ini POST
+    // langsung bisa mengirim akun beban/piutang: jurnalnya menjadi
+    // Dr <akun beban> / Cr Piutang Karyawan, sehingga pinjaman dianggap lunas
+    // padahal kas tidak pernah diterima dan bebannya mengarang laba-rugi.
+    {
+      const cashAccount = await prisma.account.findUnique({
+        where: { id: cashAccountId },
+        select: { isActive: true, deletedAt: true, reportGroup: true },
+      })
+      if (!cashAccount || cashAccount.deletedAt != null) {
+        throw new Error("Akun penerima setoran tidak ditemukan atau sudah dihapus.");
+      }
+      if (!cashAccount.isActive) {
+        throw new Error("Akun penerima setoran tidak aktif. Pilih ulang akun.");
+      }
+      if (cashAccount.reportGroup !== "BANK") {
+        throw new Error("Akun penerima setoran bukan rekening kas/bank (grup laporan BANK).");
+      }
+    }
+
 
     const repaymentDate = wibDateToUtcMidnight(repaymentDateRaw);
     const roundedAmount = safeRound(amount, 2);

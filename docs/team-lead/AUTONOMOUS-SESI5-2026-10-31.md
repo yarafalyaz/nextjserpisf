@@ -5266,6 +5266,41 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 241 — setoran pinjaman menerima akun beban sebagai "kas/bank"
+
+`recordEmployeeLoanCashRepayment` memvalidasi `cashAccountId` hanya sebagai
+bilangan bulat positif. Setiap aksi pembayaran lain di repo ini menuntut
+`reportGroup === "BANK"`:
+
+- `assertCashBankAccountForPayment` (penjualan)
+- `assertCashBankAccountForVendorPayment` (pembelian)
+- `assertCashBankAccountForLoanPayment`-setara di `sales-late-fee`
+
+Tanpa gerbang itu, POST langsung dengan akun beban menghasilkan jurnal
+**Dr <akun beban> / Cr Piutang Karyawan**: pinjaman dianggap lunas padahal kas
+tidak pernah diterima, dan laba-rugi mengarang beban. Picker di UI menyaring
+`type: "ASSET"`, jadi ini butuh request buatan — tetapi server action bisa
+dipanggil langsung dan guard-nya harus ada di server.
+
+Perbaikannya menambahkan penilaian hidup + `reportGroup` di action, dengan
+urutan **sesudah** validasi field lain (bukti/alasan, tanggal) supaya pesan
+yang lebih mendasar tetap menang — itu juga yang membuat tes lama tetap sah
+tanpa dilonggarkan.
+
+### Bukti
+
+- Tes merah→hijau: mencabut blok guard membuat "setoran pinjaman menolak akun
+  penerima yang bukan kas/bank" gagal (225 lulus / 1 gagal), dikembalikan →
+  226/226.
+- Dua berkas tes lama perlu fixture akun: `hrm-appreciation-scope-loan-lock`
+  tidak punya `prisma.account` sama sekali, dan blok "Payroll Actions" di
+  `hrm.actions.test.ts` menimpa `prismaMock.account` utuh (hanya `findMany`)
+  sehingga `findUnique` hilang. Fixture-nya dilengkapi, bukan guard-nya
+  dilonggarkan.
+- `npx tsc --noEmit` bersih; ESLint bersih.
+- Full Vitest: 12.773 lulus / 23 dilewati (dari 12.772; +1 tes).
+- `npm run build` lulus pada percobaan pertama (Compiled successfully, 13,1 s).
+
 ## Putaran 240 — pengeluaran material kosong bisa diselesaikan, WO ditutup tanpa material
 
 `createMaterialIssue` menolak dokumen tanpa satu pun baris berkuantitas > 0

@@ -73,6 +73,12 @@ const mocks = vi.hoisted(() => {
     employeeLoan: {
       findUniqueOrThrow: vi.fn(),
     },
+    // Putaran 241: penerima setoran kini dinilai wajib rekening kas/bank.
+    account: {
+      findUnique: vi.fn().mockResolvedValue({
+        isActive: true, deletedAt: null, reportGroup: "BANK",
+      }),
+    },
     payroll: { findFirst: vi.fn().mockResolvedValue(null) },
     employeeLoanRepayment: { findFirst: vi.fn().mockResolvedValue(null) },
     employeeLoanWriteOff: { findFirst: vi.fn().mockResolvedValue(null) },
