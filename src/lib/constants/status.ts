@@ -87,6 +87,42 @@ export const PaymentStatus = {
   PAID: "paid",
 } as const;
 
+// ─── Document-linkable statuses ────────────────────────────────────────────
+// Satu sumber untuk pasangan "picker menawarkan apa" vs "action menerima apa".
+// Sebelum ini setiap pasangan ditulis dua kali — sekali sebagai `where` di
+// halaman form, sekali sebagai `if (... !== "...")` di action — dan keduanya
+// menyimpang: halaman ubah pembayaran menawarkan faktur draft/approved/
+// cancelled yang selalu ditolak, halaman ubah transfer aset menawarkan aset
+// non-aktif, halaman ubah pembayaran pemasok menawarkan tagihan konsep, dan
+// halaman ubah penerimaan menawarkan PO `received`. Impor konstanta ini di
+// KEDUA sisi supaya penyimpangan berikutnya tidak bisa ditulis.
+
+/** Work order yang sudah final — tidak boleh menerima turunan baru. */
+export const TERMINAL_WORK_ORDER_STATUSES = ["completed", "cancelled", "closed"] as const;
+
+/** Aset yang boleh dipindahkan (transfer/penempatan). */
+export const TRANSFERABLE_ASSET_STATUSES = ["active"] as const;
+
+/** PO yang boleh melahirkan/menerima penerimaan barang. */
+export const RECEIVABLE_PURCHASE_ORDER_STATUSES = [
+  "approved",
+  "ordered",
+  "partial_received",
+] as const;
+
+/** Tagihan yang boleh dibayar (sudah dikonfirmasi/diposting). */
+export const PAYABLE_VENDOR_BILL_STATUSES = ["posted", "partial"] as const;
+
+/**
+ * Faktur penjualan yang boleh ditautkan saat MENGUBAH pembayaran.
+ * Sengaja bukan allowlist `posted`/`partial` seperti pembuatan: pembayaran yang
+ * sudah melunasi fakturnya meninggalkan faktur di `paid`, jadi allowlist itu
+ * akan memblokir kasus normal mengoreksi nominal/tanggal. `sent` dibiarkan
+ * karena action mengizinkannya; yang dilarang hanya yang belum pernah
+ * diposting (`draft`, `approved`) dan yang sudah dibatalkan (`cancelled`).
+ */
+export const UNPAYABLE_SALES_INVOICE_STATUSES = ["draft", "approved", "cancelled"] as const;
+
 // ─── CRM ───────────────────────────────────────────────────────────────────
 export const CrmStatus = {
   NEW: "new",

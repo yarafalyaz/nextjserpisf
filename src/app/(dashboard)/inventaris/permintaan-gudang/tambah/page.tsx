@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { MaterialRequestForm } from "@/components/forms/material-request-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { TERMINAL_WORK_ORDER_STATUSES } from "@/lib/constants/status"
 
 export const metadata: Metadata = { title: "Tambah Permintaan Antar Gudang" }
 
@@ -14,7 +15,15 @@ export default async function CreateMaterialRequestPage() {
   const [warehouses, items, workOrders] = await Promise.all([
     prisma.warehouse.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.item.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, sku: true, name: true, unitOfMeasure: true } }),
-    prisma.workOrder.findMany({ orderBy: { createdAt: "desc" }, take: 100, select: { id: true, documentNo: true } }),
+    // Picker dan assertWorkOrderLinkable membaca himpunan yang SAMA: WO
+    // completed/cancelled/closed tidak boleh ditautkan, jadi jangan
+    // ditawarkan sama sekali (dulu tanpa filter status).
+    prisma.workOrder.findMany({
+      where: { status: { notIn: [...TERMINAL_WORK_ORDER_STATUSES] } },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: { id: true, documentNo: true },
+    }),
   ])
 
   return (

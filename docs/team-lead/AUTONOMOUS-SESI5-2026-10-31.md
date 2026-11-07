@@ -5266,6 +5266,71 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 225 — picker halaman ubah menawarkan nilai yang action-nya selalu tolak
+
+Kelas bug yang berbeda dari 220–224: bukan izin, melainkan **daftar nilai**.
+Picker di halaman form dan penjaga di server action ditulis dua kali — sekali
+sebagai `where` Prisma, sekali sebagai rangkaian `if (status !== …)` — dan
+keduanya menyimpang. Form tampak sah, operator memilih, lalu simpan gagal
+dengan pesan yang tidak menjelaskan bahwa pilihannya memang mustahil.
+
+Audit menemukan empat pasangan yang selalu-gagal, **semuanya di halaman UBAH**
+sementara halaman TAMBAH pasangannya sudah benar:
+
+- `penjualan/pembayaran/[slug]/ubah` — `status: { not: "paid" }` menawarkan
+  faktur `draft`/`approved`/`cancelled`, ketiganya ditolak `updateSalesPayment`
+  ("hanya invoice yang sudah diposting"). Halaman tambah memakai
+  `["posted","partial"]` yang benar.
+- `aset/transfer/[slug]/ubah` — `findMany({})` tanpa filter memuat aset
+  disposed/held_for_sale yang ditolak `updateAssetTransfer` (hanya `active`).
+- `pembelian/pembayaran-vendor/[slug]/ubah` — `notIn: ["paid","cancelled"]`
+  menawarkan tagihan `draft`, yang selalu ditolak ("konfirmasi dulu"). Halaman
+  tambah sudah memakai `["posted","partial"]` dan komentarnya menyebut `notIn`
+  sebagai bug lama — halaman ubah tertinggal.
+- `pembelian/penerimaan/[slug]/ubah` — daftar PO menyertakan `received`, yang
+  selalu ditolak (`approved`/`ordered`/`partial_received` saja).
+
+Dua pasangan serupa (picker WO permintaan-gudang dan perintah-produksi) tanpa
+filter status sama sekali: WO `completed`/`cancelled`/`closed` ditawarkan
+padahal penjaga menolaknya.
+
+Perbaikannya bukan menyamakan literal, melainkan **satu sumber**:
+`src/lib/constants/status.ts` kini mengekspor `TERMINAL_WORK_ORDER_STATUSES`,
+`TRANSFERABLE_ASSET_STATUSES`, `RECEIVABLE_PURCHASE_ORDER_STATUSES`,
+`PAYABLE_VENDOR_BILL_STATUSES`, dan `UNPAYABLE_SALES_INVOICE_STATUSES`; picker
+dan action sama-sama mengimpornya. Penjaga baru
+`edit-picker-action-parity.test.ts` memeriksa (a) kedua sisi menyebut
+konstantanya, (b) picker benar-benar memakainya di klausa `where`, (c) action
+menilainya lewat `.includes(`, dan (d) setiap halaman ubah mempertahankan
+rekaman yang **sudah tertaut** walau di luar daftar.
+
+Poin (d) penting dan bukan hiasan: menyaring picker tanpa fallback
+mengosongkan Combobox untuk dokumen yang tertaut ke rekaman yang sejak itu
+keluar dari daftar — faktur menjadi `paid` justru karena pembayaran ini
+sendiri — lalu menyimpan ulang menghapus tautannya diam-diam. Setiap halaman
+ubah mendapat `linked*` fallback.
+
+Penjaga itu langsung menangkap satu celah yang belum saya perbaiki:
+`manufacturing.actions.ts` masih menuliskan tiga status WO secara literal di
+tiga tempat; kini ketiganya memakai `TERMINAL_WORK_ORDER_STATUSES`.
+
+Catatan audit: enam dari sembilan dugaan awal pada halaman TAMBAH ternyata
+salah — picker-nya sudah memakai allowlist yang sama dengan action. Yang benar
+hanya dua (WO picker), dan bug "not: paid"/"notIn" justru hidup di halaman ubah
+satu direktori sebelahnya.
+
+### Bukti
+
+- Tes merah→hijau: mengembalikan `received` ke daftar PO halaman ubah
+  penerimaan membuat penjaga gagal tepat pada pemeriksaan klausa `where`
+  (9 lulus / 1 gagal), dikembalikan → 10/10.
+- Penjaga juga memerah sendiri saat pertama dijalankan karena
+  `manufacturing.actions.ts` belum diimpor — itu bug nyata, bukan tes yang
+  terlalu ketat.
+- `npx tsc --noEmit` bersih; ESLint pada 15 berkas tersentuh bersih.
+- Full Vitest: 12.721 lulus / 23 dilewati (dari 12.711; +10 tes).
+- `npm run build` lulus pada percobaan pertama (Compiled successfully, 15,5 s).
+
 ## Putaran 224 — tautan Ubah di daftar harga pelanggan/pemasok tanpa gerbang izin
 
 Pola putaran 220–223 pada halaman LIST: `penjualan/harga-pelanggan` dan

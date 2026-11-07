@@ -8,6 +8,7 @@ import { assertMaterialRequestVisible } from "@/lib/services/material-request.se
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { MaterialRequestForm } from "@/components/forms/material-request-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { TERMINAL_WORK_ORDER_STATUSES } from "@/lib/constants/status"
 
 export const metadata: Metadata = { title: "Ubah Permintaan Antar Gudang" }
 
@@ -46,8 +47,26 @@ export default async function EditMaterialRequestPage({
   const [warehouses, items, workOrders] = await Promise.all([
     prisma.warehouse.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.item.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, sku: true, name: true, unitOfMeasure: true } }),
-    prisma.workOrder.findMany({ orderBy: { createdAt: "desc" }, take: 100, select: { id: true, documentNo: true } }),
+    // Picker dan assertWorkOrderLinkable membaca himpunan yang SAMA (lihat
+    // halaman tambah).
+    prisma.workOrder.findMany({
+      where: { status: { notIn: [...TERMINAL_WORK_ORDER_STATUSES] } },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: { id: true, documentNo: true },
+    }),
   ])
+
+  // WO yang SUDAH tertaut wajib tetap tampil walau kini final — update hanya
+  // menilai tautan BARU, jadi menyimpan ulang tanpa mengubah WO tetap sah.
+  const linkedWorkOrder =
+    data.workOrderId && !workOrders.some((wo) => wo.id === data.workOrderId)
+      ? await prisma.workOrder.findUnique({
+          where: { id: data.workOrderId },
+          select: { id: true, documentNo: true },
+        })
+      : null
+  const workOrderOptions = linkedWorkOrder ? [linkedWorkOrder, ...workOrders] : workOrders
 
   const request = {
     id: data.id,
@@ -69,7 +88,7 @@ export default async function EditMaterialRequestPage({
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah Permintaan Antar Gudang</h1>
       </div>
-      <MaterialRequestForm warehouses={warehouses} items={items} workOrders={workOrders} request={request} />
+      <MaterialRequestForm warehouses={warehouses} items={items} workOrders={workOrderOptions} request={request} />
     </div>
   )
 }

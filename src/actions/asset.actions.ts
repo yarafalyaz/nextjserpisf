@@ -11,6 +11,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { parseFormData } from "@/lib/validations/parse-form";
 import { assertApproved, requestApprovalIfConfigured } from "@/lib/services/approval-workflow.service";
+import { TRANSFERABLE_ASSET_STATUSES } from "@/lib/constants/status";
 import {
   assetCategorySchema,
   assetBrandSchema,
@@ -381,7 +382,7 @@ export async function createAssetTransfer(formData: FormData) {
           select: { status: true },
         });
         if (!lockedAsset) throw new Error("Aset tidak ditemukan.");
-        if (lockedAsset.status !== "active") {
+        if (!(TRANSFERABLE_ASSET_STATUSES as readonly string[]).includes(lockedAsset.status)) {
           throw new Error(
             `Aset berstatus '${lockedAsset.status}' tidak dapat ditransfer (hanya aset aktif).`,
           );
@@ -841,7 +842,7 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
           select: { status: true },
         });
         if (!targetAsset) throw new Error("Aset tidak ditemukan.");
-        if (targetAsset.status !== "active") {
+        if (!(TRANSFERABLE_ASSET_STATUSES as readonly string[]).includes(targetAsset.status)) {
           throw new Error(
             `Aset berstatus '${targetAsset.status}' tidak dapat ditransfer (hanya aset aktif).`,
           );

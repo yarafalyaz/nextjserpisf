@@ -8,6 +8,7 @@ import { prisma, TxClient } from "@/lib/db/prisma";
 import { generateDocumentNumber, generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/services/activity-log.service";
+import { TERMINAL_WORK_ORDER_STATUSES } from "@/lib/constants/status";
 import { parseFormData } from "@/lib/validations/parse-form";
 import {
   createProductSchema,
@@ -780,7 +781,7 @@ export async function createProductionOrder(formData: FormData) {
     // bacaan luar bisa basi bila WO difinalisasi di tengah persiapan BOM.
     if (
       outerWorkOrder &&
-      (outerWorkOrder.status === "closed" || outerWorkOrder.status === "completed" || outerWorkOrder.status === "cancelled")
+      (TERMINAL_WORK_ORDER_STATUSES as readonly string[]).includes(outerWorkOrder.status)
     ) {
       return {
         success: false,
@@ -863,11 +864,7 @@ export async function createProductionOrder(formData: FormData) {
         if (!freshWo) {
           throw new Error(`Perintah Kerja #${outerWorkOrder.id} tidak ditemukan.`);
         }
-        if (
-          freshWo.status === "closed" ||
-          freshWo.status === "completed" ||
-          freshWo.status === "cancelled"
-        ) {
+        if ((TERMINAL_WORK_ORDER_STATUSES as readonly string[]).includes(freshWo.status)) {
           throw new Error(
             `Perintah produksi tidak dapat dibuat untuk Perintah Kerja berstatus '${freshWo.status}'.`,
           );
@@ -2550,11 +2547,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
         if (!targetWo) {
           throw new Error(`Perintah Kerja #${v.workOrderId} tidak ditemukan.`);
         }
-        if (
-          targetWo.status === "closed" ||
-          targetWo.status === "completed" ||
-          targetWo.status === "cancelled"
-        ) {
+        if ((TERMINAL_WORK_ORDER_STATUSES as readonly string[]).includes(targetWo.status)) {
           throw new Error(
             `Perintah produksi tidak dapat dibuat untuk Perintah Kerja berstatus '${targetWo.status}'.`,
           );

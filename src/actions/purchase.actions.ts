@@ -70,6 +70,10 @@ import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money";
 import { PurchaseStatus, Status } from "@/lib/constants";
 import {
+  PAYABLE_VENDOR_BILL_STATUSES,
+  RECEIVABLE_PURCHASE_ORDER_STATUSES,
+} from "@/lib/constants/status";
+import {
   purchaseRequestSchema,
   purchaseOrderSchema,
   goodsReceiptSchema,
@@ -1516,11 +1520,7 @@ export async function createGoodsReceipt(formData: FormData) {
       for (const i of po.items) {
         orderedQtyByItem.set(i.itemId, (orderedQtyByItem.get(i.itemId) ?? 0) + Number(i.qty));
       }
-      if (
-        po.status !== "approved" &&
-        po.status !== "ordered" &&
-        po.status !== "partial_received"
-      ) {
+      if (!(RECEIVABLE_PURCHASE_ORDER_STATUSES as readonly string[]).includes(po.status)) {
         throw new Error(
           `Penerimaan barang hanya bisa dibuat dari PO berstatus 'approved', 'ordered', atau 'partial_received' (status saat ini: '${po.status}').`,
         );
@@ -2292,9 +2292,14 @@ export async function createVendorPayment(formData: FormData) {
       }
       // Tagihan konsep belum diposting (jurnal utang + balanceDue lahir saat
       // Konfirmasi); membayarnya sekarang mengakui pembayaran atas utang yang
-      // belum diakui. Tombol Bayar di UI memang tidak menawarkannya.
+      // belum diakui. Tombol Bayar di UI memang tidak menawarkannya. Picker
+      // halaman tambah/ubah membaca PAYABLE_VENDOR_BILL_STATUSES yang sama,
+      // jadi status yang lolos di sini == status yang ditawarkan di sana.
       if (target.status === "draft") {
         return { success: false, error: "Tagihan masih konsep — konfirmasi dulu sebelum dibayar" };
+      }
+      if (!(PAYABLE_VENDOR_BILL_STATUSES as readonly string[]).includes(target.status)) {
+        return { success: false, error: `Tagihan berstatus '${target.status}' tidak dapat dibayar` };
       }
       targetBillId = target.id;
     }
@@ -4402,9 +4407,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
         select: { status: true, items: { select: { itemId: true, qty: true } } },
       });
       if (
-        poForItems.status !== "approved" &&
-        poForItems.status !== "ordered" &&
-        poForItems.status !== "partial_received"
+        !(RECEIVABLE_PURCHASE_ORDER_STATUSES as readonly string[]).includes(poForItems.status)
       ) {
         throw new Error(
           `Penerimaan barang hanya bisa dibuat dari PO berstatus 'approved', 'ordered', atau 'partial_received' (status saat ini: '${poForItems.status}').`,
@@ -4700,6 +4703,9 @@ export async function updateVendorPayment(id: number, formData: FormData) {
         }
         if (target.status === "draft") {
           throw new Error("Tagihan masih konsep — konfirmasi dulu sebelum dibayar");
+        }
+        if (!(PAYABLE_VENDOR_BILL_STATUSES as readonly string[]).includes(target.status)) {
+          throw new Error(`Tagihan berstatus '${target.status}' tidak dapat dibayar`);
         }
       }
       const paymentDate = wibDateToUtcMidnight(v.paymentDate);

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { ProductionOrderForm } from "@/components/forms/production-order-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { TERMINAL_WORK_ORDER_STATUSES } from "@/lib/constants/status"
 import {
   parsePrefillSegments,
   redirectLegacyPrefillQuery,
@@ -74,7 +75,11 @@ export default async function CreateProductionOrderPage({
       orderBy: { name: "asc" },
       select: { id: true, name: true, sku: true },
     }),
+    // Picker dan createProductionOrder membaca himpunan yang SAMA: PO baru
+    // tidak boleh lahir di bawah WO closed/completed/cancelled, jadi WO
+    // final tidak ditawarkan (dulu tanpa filter status).
     prisma.workOrder.findMany({
+      where: { status: { notIn: [...TERMINAL_WORK_ORDER_STATUSES] } },
       orderBy: { createdAt: "desc" },
       take: 500,
       select: { id: true, documentNo: true },

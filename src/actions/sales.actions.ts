@@ -35,6 +35,7 @@ import { assertInvoiceAllowedForWorkOrderBridges } from "@/lib/services/warranty
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse } from "@/lib/utils/safe-parse"
+import { UNPAYABLE_SALES_INVOICE_STATUSES } from "@/lib/constants/status"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, updateDeliveryOrderSchema, createSalesReturnSchema, updateDownPaymentSchema, updateSalesOrderSchema, updateSalesInvoiceSchema, updateSalesPaymentSchema, updateSalesReturnSchema, quotationDatesSchema, quotationDatesUpdateSchema, DELIVERABLE_ORDER_STATUSES, DELIVERABLE_ORDER_STATUS_LABELS, RETURNABLE_INVOICE_STATUSES } from "@/lib/validations/sales.schemas"
 import {
@@ -4426,7 +4427,7 @@ export async function updateSalesPayment(id: number, formData: FormData) {
     // allowlist would block the normal case of correcting the amount/date/account
     // of a payment whose invoice is already fully paid. The overpay guard below
     // already excludes this payment from the sum, so it stays correct for "paid".
-    if (["draft", "approved", "cancelled"].includes(invoice.status)) {
+    if ((UNPAYABLE_SALES_INVOICE_STATUSES as readonly string[]).includes(invoice.status)) {
       throw new Error(
         `Pembayaran hanya bisa diubah untuk invoice yang sudah diposting (status saat ini: ${invoice.status})`
       )

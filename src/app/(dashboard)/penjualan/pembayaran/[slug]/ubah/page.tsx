@@ -12,6 +12,7 @@ import type { Metadata } from "next";
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label";
+import { UNPAYABLE_SALES_INVOICE_STATUSES } from "@/lib/constants/status";
 export const metadata: Metadata = { title: "Ubah Pembayaran" };
 
 export default async function EditPage({
@@ -79,7 +80,10 @@ export default async function EditPage({
 
   const [invoices, accounts] = await Promise.all([
     prisma.salesInvoice.findMany({
-      where: { status: { not: "paid" } },
+      // Picker dan updateSalesPayment membaca daftar yang SAMA. Dulu picker
+      // memakai `not: "paid"`, sehingga faktur draft/approved/cancelled
+      // ditawarkan padahal action selalu menolaknya ("sudah diposting").
+      where: { status: { notIn: [...UNPAYABLE_SALES_INVOICE_STATUSES] } },
       orderBy: { createdAt: "desc" },
       include: { customer: { select: { name: true } } },
     }),
@@ -95,7 +99,18 @@ export default async function EditPage({
     orderBy: { code: "asc" },
   });
 
-  const invoiceOptions = invoices.map((inv) => ({
+  // Faktur yang SUDAH tertaut wajib tetap tampil walau statusnya kini `paid`
+  // (dilunasi pembayaran ini sendiri) — tanpa fallback, Combobox kosong dan
+  // menyimpan ulang menghapus tautannya diam-diam.
+  const linkedInvoice =
+    data.salesInvoiceId && !invoices.some((inv) => inv.id === data.salesInvoiceId)
+      ? await prisma.salesInvoice.findUnique({
+          where: { id: data.salesInvoiceId },
+          include: { customer: { select: { name: true } } },
+        })
+      : null
+
+  const invoiceOptions = (linkedInvoice ? [linkedInvoice, ...invoices] : invoices).map((inv) => ({
     id: inv.id,
     documentNo: salesInvoiceLabel(inv),
     grandTotal: String(inv.grandTotal),

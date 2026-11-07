@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AssetTransferForm } from "@/components/forms/asset-transfer-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { TRANSFERABLE_ASSET_STATUSES } from "@/lib/constants/status"
 
 import type { Metadata } from "next"
 
@@ -13,7 +14,7 @@ export default async function CreateAssetTransferPage() {
   await requirePermission("create_asset_transfers")
 
   const assets = await prisma.asset.findMany({
-    where: { status: "active" },
+    where: { status: { in: [...TRANSFERABLE_ASSET_STATUSES] } },
     orderBy: { code: "asc" },
     select: { id: true, code: true, name: true, location: true },
   })

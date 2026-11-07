@@ -10,6 +10,7 @@ import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
+import { PAYABLE_VENDOR_BILL_STATUSES } from "@/lib/constants/status"
 export const metadata: Metadata = { title: "Ubah Pembayaran Pemasok" }
 
 export default async function EditPage({
@@ -44,10 +45,28 @@ export default async function EditPage({
     vendorBillId: data.vendorBillId,
   }
 
-  const [vendors, bills] = await Promise.all([prisma.vendor.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }), prisma.vendorBill.findMany({ where: { status: { notIn: ["paid", "cancelled"] }, deletedAt: null }, orderBy: { createdAt: "desc" } })])
+  const [vendors, bills] = await Promise.all([
+    prisma.vendor.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }),
+    // Picker dan updateVendorPayment membaca himpunan yang SAMA. Dulu halaman
+    // ini memakai `notIn: ["paid", "cancelled"]` sehingga tagihan KONSEP ikut
+    // ditawarkan padahal action selalu menolak draft ("konfirmasi dulu") —
+    // persis bug yang sudah diperbaiki di halaman tambah.
+    prisma.vendorBill.findMany({
+      where: { status: { in: [...PAYABLE_VENDOR_BILL_STATUSES] }, deletedAt: null },
+      orderBy: { createdAt: "desc" },
+    }),
+  ])
   const paymentMethods = await getActivePaymentMethods()
 
-  const billOptions = bills.map((b) => ({
+  // Tagihan yang SUDAH tertaut wajib tetap tampil walau statusnya kini `paid`
+  // (dilunasi pembayaran ini sendiri) — tanpa fallback, Combobox kosong dan
+  // menyimpan ulang menghapus tautannya diam-diam.
+  const linkedBill =
+    data.vendorBillId && !bills.some((b) => b.id === data.vendorBillId)
+      ? await prisma.vendorBill.findUnique({ where: { id: data.vendorBillId } })
+      : null
+
+  const billOptions = (linkedBill ? [linkedBill, ...bills] : bills).map((b) => ({
     id: b.id,
     documentNo: b.documentNo,
     vendorId: b.vendorId,

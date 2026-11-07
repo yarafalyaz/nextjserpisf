@@ -10,6 +10,7 @@ import type { Metadata } from "next";
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope";
+import { RECEIVABLE_PURCHASE_ORDER_STATUSES } from "@/lib/constants/status";
 export const metadata: Metadata = { title: "Ubah Penerimaan Barang" };
 
 export default async function EditPage({
@@ -62,9 +63,12 @@ export default async function EditPage({
   };
 
   const [purchaseOrders, warehouses, racks, rackRows, itemRecords, receivedGrItems] = await Promise.all([
+    // Picker dan updateGoodsReceipt membaca himpunan yang SAMA. Dulu daftar
+    // ini menyertakan `received`, yang selalu ditolak action ("hanya
+    // approved/ordered/partial_received") — memilihnya = gagal 100%.
     prisma.purchaseOrder.findMany({
       where: {
-        status: { in: ["approved", "ordered", "partial_received", "received"] },
+        status: { in: [...RECEIVABLE_PURCHASE_ORDER_STATUSES] },
       },
       orderBy: { createdAt: "desc" },
       include: { vendor: { select: { name: true } }, items: true },
@@ -155,7 +159,23 @@ export default async function EditPage({
     );
   }
 
-  const purchaseOrderOptions = purchaseOrders.map((po) => ({
+  // PO dokumen ini wajib tetap tampil walau statusnya sudah tidak "receivable"
+  // (mis. PO lunas oleh penerimaan LAIN sesudah GR draft ini dibuat). Tanpa
+  // fallback, Combobox tampil kosong dan operator tidak bisa melihat PO mana
+  // yang sedang diedit. Action tetap menolak simpan untuk PO tak-receivable —
+  // itu perilaku lama, bukan yang diperbaiki di sini.
+  const linkedPurchaseOrder =
+    data.purchaseOrderId && !purchaseOrders.some((po) => po.id === data.purchaseOrderId)
+      ? await prisma.purchaseOrder.findUnique({
+          where: { id: data.purchaseOrderId },
+          include: { vendor: { select: { name: true } }, items: true },
+        })
+      : null
+  const poOptionsSource = linkedPurchaseOrder
+    ? [linkedPurchaseOrder, ...purchaseOrders]
+    : purchaseOrders
+
+  const purchaseOrderOptions = poOptionsSource.map((po) => ({
     id: po.id,
     documentNo: po.documentNo,
     vendor: po.vendor ? { name: po.vendor.name } : undefined,

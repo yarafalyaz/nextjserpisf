@@ -22,6 +22,7 @@
 
 import { prisma, type TxClient } from "@/lib/db/prisma"
 import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
+import { TERMINAL_WORK_ORDER_STATUSES } from "@/lib/constants/status"
 import {
   deriveMaterialRequestFulfillment,
   isMaterialRequestFulfillable,
@@ -36,9 +37,11 @@ export const MATERIAL_REQUEST_DOCUMENT_PREFIX = "MRQ"
  * `closed` (tutup job F-009) ikut menolak — semantik sama dengan
  * completed/cancelled: job selesai tidak melahirkan permintaan baru.
  * Himpunan terminal kanonis repo: bom-revision-change WO_CLOSED,
- * closedWorkOrderError (timesheet-context).
+ * closedWorkOrderError (timesheet-context). Alias ke
+ * TERMINAL_WORK_ORDER_STATUSES supaya picker WO di halaman tambah/ubah
+ * membaca daftar yang sama dengan penjaga ini.
  */
-export const MATERIAL_REQUEST_WO_BLOCKED_STATUSES = ["completed", "cancelled", "closed"] as const
+export const MATERIAL_REQUEST_WO_BLOCKED_STATUSES = TERMINAL_WORK_ORDER_STATUSES
 
 export interface MaterialRequestItemWrite {
   itemId: number
