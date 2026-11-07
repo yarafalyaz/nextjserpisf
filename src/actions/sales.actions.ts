@@ -3810,16 +3810,29 @@ export async function updateSalesOrder(id: number, formData: FormData) {
       await assertCustomerLiveForNewDocument(tx, v.customerId)
     }
     const effectiveQuotationId = v.quotationId ?? existing.quotationId
-    if (effectiveQuotationId != null && effectiveQuotationId !== existing.quotationId) {
+    // Pindah pelanggan WAJIB menilai ulang pemilik penawaran yang dipertahankan.
+    // Dulu blok ini hanya jalan bila quotationId berubah, sehingga edit yang
+    // mengganti customerId saja (form tidak mengirim quotationId) lolos dengan
+    // SO milik B tetapi quotation milik A: cap nilai penawaran
+    // (collectQuotationInvoices) dan laporan job-estimate/vehicle-margin
+    // kemudian menghitung milik B ke job A. Pasangan create menolak kombinasi
+    // ini sejak awal (createSalesOrder / createSalesInvoice).
+    const quotationChanged = effectiveQuotationId !== existing.quotationId
+    const customerChanged = v.customerId !== existing.customerId
+    if (effectiveQuotationId != null && (quotationChanged || customerChanged)) {
       await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${effectiveQuotationId} FOR UPDATE`
-      const alreadyConverted = await tx.salesOrder.findFirst({
-        where: { quotationId: effectiveQuotationId, id: { not: id } },
-        select: { documentNo: true },
-      })
-      if (alreadyConverted) {
-        throw new Error(
-          `Penawaran ini sudah memiliki Pesanan Penjualan ${alreadyConverted.documentNo}`,
-        )
+      // Cek "sudah punya SO lain" hanya relevan saat tautannya berpindah;
+      // penilaian pemilik/status berlaku juga saat pelanggan berubah.
+      if (quotationChanged) {
+        const alreadyConverted = await tx.salesOrder.findFirst({
+          where: { quotationId: effectiveQuotationId, id: { not: id } },
+          select: { documentNo: true },
+        })
+        if (alreadyConverted) {
+          throw new Error(
+            `Penawaran ini sudah memiliki Pesanan Penjualan ${alreadyConverted.documentNo}`,
+          )
+        }
       }
       const quotation = await tx.quotation.findUnique({
         where: { id: effectiveQuotationId },
@@ -3827,13 +3840,22 @@ export async function updateSalesOrder(id: number, formData: FormData) {
       })
       if (!quotation) throw new Error("Penawaran tidak ditemukan")
       if (quotation.customerId !== v.customerId) {
-        throw new Error("Penawaran yang dipilih milik customer lain, tidak bisa dikonversi untuk customer ini")
+        // Jalur keluar harus disebut: form tidak punya cara mengosongkan
+        // quotationId, jadi mengganti pelanggan pada SO ber-penawaran memang
+        // bukan koreksi yang sah — pesanan itu adalah pesanan pelanggan asal.
+        throw new Error(
+          customerChanged && !quotationChanged
+            ? "Pelanggan tidak bisa diganti selama pesanan ini masih tertaut ke penawaran pelanggan lama. Hapus pesanan konsep ini lalu buat pesanan baru untuk pelanggan tersebut."
+            : "Penawaran yang dipilih milik customer lain, tidak bisa dikonversi untuk customer ini",
+        )
       }
-      if (!["accepted", "approved"].includes(quotation.status)) {
-        throw new Error("Hanya penawaran approved/accepted yang dapat dikonversi")
+      if (quotationChanged) {
+        if (!["accepted", "approved"].includes(quotation.status)) {
+          throw new Error("Hanya penawaran approved/accepted yang dapat dikonversi")
+        }
+        assertQuotationNotExpired(quotation.validUntil)
+        await assertApproved("Quotation", effectiveQuotationId)
       }
-      assertQuotationNotExpired(quotation.validUntil)
-      await assertApproved("Quotation", effectiveQuotationId)
     }
 
     // Fix #1: UPDATE bukan CREATE, dan jangan generate documentNo baru

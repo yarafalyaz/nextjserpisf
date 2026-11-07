@@ -5266,6 +5266,50 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 238 — ganti pelanggan pada pesanan penjualan melewati cek pemilik penawaran
+
+Kelas yang sama dengan putaran 237, satu langkah lebih halus. Blok penilaian
+penawaran di `updateSalesOrder` digerbangi:
+
+```ts
+if (effectiveQuotationId != null && effectiveQuotationId !== existing.quotationId) {
+```
+
+Padahal yang perlu dinilai bukan hanya "apakah tautannya berpindah", melainkan
+"apakah pasangan pelanggan–penawaran masih konsisten". Form edit tidak
+mengirim `quotationId` (ia hidden field bernilai lama), jadi mengganti
+pelanggan saja membuat `effectiveQuotationId === existing.quotationId` —
+seluruh blok dilewati, termasuk cek `quotation.customerId !== v.customerId`.
+
+Hasilnya SO milik pelanggan B tetap menunjuk penawaran A. `collectQuotationInvoices`
+menghitung faktur per `quotationId`, jadi cap nilai penawaran A dimakan oleh
+faktur B, dan laporan job-estimate/vehicle-margin mengatribusikan pendapatan B
+ke job A. Pasangan create (`createSalesOrder`, `createSalesInvoice`) menolak
+kombinasi ini sejak awal.
+
+Perbaikannya: blok berjalan bila tautan **atau** pelanggan berubah. Dua
+sub-penilaian dipisah karena cakupannya beda — "penawaran sudah punya SO lain"
+dan status/kedaluwarsa/approval hanya relevan saat tautannya berpindah,
+sedangkan cek pemilik berlaku untuk keduanya.
+
+Konsekuensi yang perlu dinyatakan: karena form tidak punya cara mengosongkan
+`quotationId`, mengganti pelanggan pada SO ber-penawaran sekarang **selalu**
+ditolak. Itu memang aturan yang benar (pesanan itu adalah pesanan pelanggan
+asal), tetapi pesannya harus menyebut jalan keluarnya — jadi cabang khusus
+memberi tahu operator menghapus pesanan konsep dan membuat yang baru, alih-alih
+pesan generik "milik customer lain" yang membingungkan.
+
+### Bukti
+
+- Tes merah→hijau: mengembalikan syarat ke `&& quotationChanged` membuat
+  "menolak ganti pelanggan selama penawaran milik pelanggan lama" gagal
+  (265 lulus / 1 gagal), dikembalikan → 266/266.
+- Tes pasangan memastikan jalur sah tidak ikut terkunci: edit tanpa ganti
+  pelanggan pada SO ber-penawaran tetap berhasil.
+- `npx tsc --noEmit` bersih; ESLint bersih.
+- Full Vitest: 12.770 lulus / 23 dilewati (dari 12.768; +2 tes).
+- `npm run build` lulus pada percobaan pertama (Compiled successfully, 16,8 s).
+
 ## Putaran 237 — perintah kerja bisa menautkan penawaran milik pelanggan lain
 
 Temuan paling serius dari audit aksi. `assertLiveWorkOrderRefs` — dipakai

@@ -941,6 +941,37 @@ describe("Sales Order Actions", () => {
     expect(res?.error).toContain("sudah posted")
     expect(mocks.prismaMock.salesOrder.update).not.toHaveBeenCalled()
   })
+  /**
+   * Regresi putaran 238: mengganti pelanggan pada SO ber-penawaran harus
+   * dinilai ulang. Dulu blok pemilik penawaran hanya jalan bila quotationId
+   * BERPINDAH, sehingga edit yang mengganti customerId saja lolos dengan SO
+   * milik B tetapi quotation milik A — cap nilai penawaran
+   * (collectQuotationInvoices) dan laporan job-estimate/vehicle-margin
+   * kemudian menghitung milik B ke job A.
+   */
+  it("updateSalesOrder menolak ganti pelanggan selama penawaran milik pelanggan lama", async () => {
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", customerId: 1, quotationId: 5,
+    })
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({
+      id: 5, customerId: 1, status: "accepted", validUntil: null,
+    })
+    // Form tidak mengirim quotationId saat edit → effectiveQuotationId = 5 (tetap),
+    // tetapi customerId berubah ke 2.
+    const res = await actions.updateSalesOrder(1, fdMap({ customerId: 2, date: "2026-06-12" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/tidak bisa diganti selama pesanan ini masih tertaut/)
+    expect(mocks.prismaMock.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it("updateSalesOrder tetap mengizinkan edit tanpa ganti pelanggan pada SO ber-penawaran", async () => {
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", customerId: 1, quotationId: 5,
+    })
+    const res = await actions.updateSalesOrder(1, fdMap({ customerId: 1, date: "2026-06-12", notes: "catatan baru" }))
+    expect(res?.success).toBe(true)
+  })
+
   it("updateSalesOrder blocks a cancelled order", async () => {
     mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "cancelled" })
     const res = await actions.updateSalesOrder(1, fdMap({ customerId: 1, date: "2026-06-12" }))
