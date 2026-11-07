@@ -5266,6 +5266,85 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 236 — tombol Ubah kas kecil selalu berakhir ditolak
+
+Audit aksi (agen terpisah) melaporkan `updatePettyCash` tidak menegakkan cek
+saldo akun sumber yang ada di `createPettyCash`. Saat memverifikasi itu, saya
+menemukan yang lebih besar: **`updatePettyCash` praktis tidak pernah bisa
+berhasil.**
+
+Penjaganya menolak lebih dulu, sebelum mutasi apa pun:
+
+```ts
+const journalGuard = await prisma.journal.findFirst({
+  where: { referenceType: "PettyCash", referenceId: id, status: "POSTED" },
+})
+if (journalGuard) return { success: false, error: "Transaksi kas kecil yang
+  sudah terposting tidak dapat diubah. Batalkan lewat pembatalan beralasan…" }
+```
+
+Dan setiap kas kecil lahir dengan jurnal POSTED:
+
+- `createPettyCash` memanggil `onPettyCashCreated`, yang menulis
+  `status: "POSTED"` (accounting.hook.ts);
+- jalur sinkronisasi expense (`expense.hook.ts`) membuat baris yang sama.
+
+Jadi tombol **Ubah** di halaman detail — dirender tanpa syarat apa pun —
+selalu mengantar operator ke form yang penyimpanannya pasti gagal. Sama
+kelasnya dengan putaran 229 (Hapus kas kecil), di tombol sebelahnya.
+
+Temuan saldo akun sumber dari audit **tidak** saya perbaiki: jalurnya tak
+terjangkau. Menambahkan guard di kode mati hanya menambah permukaan tanpa
+mengubah perilaku. Yang diperbaiki adalah gerbangnya.
+
+Halaman kini menghitung `isEditable = !postedJournal && status !== "void"` dan
+hanya merender Ubah bila benar. Koreksi sah tetap: pembatalan beralasan (void)
+lalu buat transaksi baru — jalur yang sudah disediakan dan kini benar-benar
+bisa dipakai sejak putaran 229.
+
+### Bukti
+
+- Tes merah→hijau: mengganti `{isEditable && (` menjadi `{(` membuat dua tes
+  gagal (2 lulus / 2 gagal), dikembalikan → 4/4.
+- Versi pertama ratchet-nya **lolos** terhadap kode yang sengaja dirusak:
+  regex multiline `^\s*<CanCreate…` menelan baris sebelumnya sehingga pola
+  bergerbang dan tidak bergerbang sama-sama cocok. Diganti pemeriksaan per
+  kemunculan (120 karakter sebelum marker harus memuat `isEditable &&`).
+- `npx tsc --noEmit` bersih; ESLint bersih.
+- Full Vitest: 12.765 lulus / 23 dilewati (dari 12.761; +4 tes).
+- `npm run build` lulus pada percobaan pertama (Compiled successfully, 16,6 s).
+
+## Putaran 235 — registry ROUTE_PERMS dikunci ke izin action-nya
+
+`ActionDropdown` memutuskan tampil/tidaknya Ubah & Hapus dari `ROUTE_PERMS`,
+bukan dari `requirePermission` action-nya. Bila keduanya menyimpang, tombol
+tampil bagi peran yang action-nya menolak (registry lebih longgar), atau
+hilang bagi peran yang berhak (registry lebih ketat — fitur mati senyap).
+
+`permission-seed-parity` hanya memastikan izin registry ADA di katalog; tidak
+membandingkannya dengan action. Penjaga baru
+`route-perms-action-parity.test.ts` menutup sisi itu dengan 30 pasangan
+prefix → action eksplisit.
+
+Dua temuan saat menulisnya, keduanya disengaja dan kini **dikunci**, bukan
+"diperbaiki":
+
+- `/pembelian/uang-muka` tidak punya entri `ROUTE_PERMS`; aksi barisnya ada di
+  tabel uang muka pembelian yang mengoper `deletePermission` eksplisit. Kasus
+  ini dikeluarkan dari daftar, bukan didaftarkan secara spekulatif.
+- `/sdm/penggajian`, `/sdm/aturan-statutori`, dan
+  `/keuangan/rekonsiliasi-bank` adalah entri edit-only menurut desain (tidak
+  ada izin hapus di katalog, tidak ada aksi hapusnya). Dikunci sebagai daftar
+  tepat tiga entri supaya entri edit-only baru memerah sampai diperiksa.
+
+### Bukti
+
+- Tes merah→hijau: mengubah `delete: "delete_products"` menjadi
+  `edit_products` di registry membuat penjaga gagal tepat pada
+  `/produksi/products` (2 lulus / 1 gagal), dikembalikan → 3/3.
+- `npx tsc --noEmit` bersih; ESLint bersih.
+- Full Vitest: 12.764 lulus / 23 dilewati (dari 12.758; +3 tes).
+
 ## Putaran 234 — `reserveStockForWorkOrder` sengaja dibiarkan tak terjangkau
 
 Aksi terakhir di `ALLOWED_UNWIRED`. Saya periksa dan memutuskan **tidak**

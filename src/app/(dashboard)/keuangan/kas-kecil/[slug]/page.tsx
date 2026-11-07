@@ -57,6 +57,17 @@ export default async function PettyCashDetailPage({
 
   if (!pettyCash) notFound();
 
+  // GL-BR-003 P6: record ber-jurnal POSTED BEKU total — updatePettyCash
+  // menolaknya lebih dulu sebelum mutasi apa pun. Setiap kas kecil lahir
+  // dengan jurnal POSTED (createPettyCash → onPettyCashCreated, dan jalur
+  // sinkronisasi expense), jadi tombol Ubah praktis SELALU berakhir ditolak.
+  // Sembunyikan tombolnya; koreksi jalurnya pembatalan beralasan + buat baru.
+  const postedJournal = await prisma.journal.findFirst({
+    where: { referenceType: "PettyCash", referenceId: pettyCash.id, status: "POSTED" },
+    select: { id: true },
+  })
+  const isEditable = !postedJournal && pettyCash.status !== "void"
+
   const account = pettyCash.accountId
     ? await prisma.account.findUnique({
         where: { id: pettyCash.accountId },
@@ -76,14 +87,16 @@ export default async function PettyCashDetailPage({
         ]}
         actions={
           <>
-            <CanCreate permission="edit_petty_cash">
-              <Button
-                href={entityEditHref("/keuangan/kas-kecil", pettyCash)}
-                variant="primary"
-              >
-                <Pencil size={14} /> Ubah
-              </Button>
-            </CanCreate>
+            {isEditable && (
+              <CanCreate permission="edit_petty_cash">
+                <Button
+                  href={entityEditHref("/keuangan/kas-kecil", pettyCash)}
+                  variant="primary"
+                >
+                  <Pencil size={14} /> Ubah
+                </Button>
+              </CanCreate>
+            )}
             {/* deletePettyCash bukan hapus fisik: ia VOID beralasan (status
                 "void" + jurnal asal dipertahankan) dan menolak alasan kosong.
                 DeleteButton memanggil action(id) tanpa argumen kedua, jadi
