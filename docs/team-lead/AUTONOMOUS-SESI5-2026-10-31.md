@@ -5266,6 +5266,42 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 240 — pengeluaran material kosong bisa diselesaikan, WO ditutup tanpa material
+
+`createMaterialIssue` menolak dokumen tanpa satu pun baris berkuantitas > 0
+("harus memiliki minimal 1 item dengan kuantitas > 0"). `updateMaterialIssue`
+**tidak** — ia mem-parse payload, lalu langsung `deleteMany` + `create` dari
+daftar itu, termasuk saat daftarnya kosong.
+
+Jalur kerusakannya:
+
+1. Edit MI draft, kosongkan semua baris (baris `itemId: 0` dibuang diam-diam
+   oleh parser). Simpan → baris MI terhapus, dokumen tetap `draft` dengan nol
+   baris.
+2. `completeMaterialIssue` menjalankan hook-nya; dengan `items` kosong ia tidak
+   membuat StockMove dan tidak memposting jurnal, tetapi tetap memindahkan
+   status ke `completed`.
+3. `completeWorkOrder` hanya menuntut MI berstatus `completed` — jadi WO bisa
+   ditutup dengan **nol material terpakai**. HPP dan stok kurang catat, tanpa
+   gejala apa pun.
+
+Perbaikannya menegakkan paritas yang sama di jalur edit.
+
+Satu tes lama justru **menegaskan perilaku cacat itu**: "updateMaterialIssue
+succeeds with empty valid items". Tesnya dibalik menjadi menuntut penolakan
+(plus memastikan `materialIssue.update` tidak dipanggil) — bukan guard-nya
+yang dilonggarkan agar tes lama tetap hijau.
+
+### Bukti
+
+- Tes merah→hijau: mencabut gerbang `miItems.length === 0` membuat
+  "updateMaterialIssue menolak payload tanpa satu pun baris sah" gagal
+  (254 lulus / 1 gagal), dikembalikan → 255/255.
+- `npx tsc --noEmit` bersih; ESLint bersih.
+- Full Vitest: 12.772 lulus / 23 dilewati (jumlah tes tidak berubah — satu
+  tes dibalik, bukan ditambah).
+- `npm run build` lulus pada percobaan pertama (Compiled successfully, 12,9 s).
+
 ## Putaran 239 — faktur penjualan tidak pernah memeriksa pemilik penawaran saat diedit
 
 Pasangan ketiga dari kelas yang sama (237 WO, 238 SO). `updateSalesInvoice`

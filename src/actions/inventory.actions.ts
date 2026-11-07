@@ -2617,6 +2617,17 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
 
     // Fix #2: Jangan generate documentNo baru saat update
     const miItems = parseMaterialIssuePayloadItems(v.items);
+    // Paritas createMaterialIssue: MI tanpa satu pun baris berkuantitas > 0
+    // tidak sah. Tanpa gerbang ini edit bisa mengosongkan semua baris, lalu
+    // completeMaterialIssue menandai dokumen selesai tanpa StockMove dan
+    // tanpa jurnal — completeWorkOrder hanya menuntut MI berstatus
+    // completed, sehingga WO bisa ditutup dengan NOL material terpakai
+    // (HPP/stok kurang catat).
+    if (miItems.length === 0) {
+      throw new Error(
+        "Pengeluaran Material harus memiliki minimal 1 item dengan kuantitas > 0",
+      );
+    }
 
     const issue = await prisma.$transaction(async (tx) => {
       // Kunci baris dulu, BARU hapus item: recheck plain sesudah deleteMany

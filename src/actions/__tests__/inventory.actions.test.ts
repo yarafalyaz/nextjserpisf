@@ -1334,7 +1334,15 @@ describe("Material Issue Error & Edge Paths", () => {
     );
   });
 
-  it("updateMaterialIssue succeeds with empty valid items (no items create)", async () => {
+  /**
+   * Putaran 240: tes ini dulu menegaskan bahwa MI boleh disimpan TANPA baris
+   * sah. Itu justru cacatnya — createMaterialIssue menolak payload kosong,
+   * dan MI kosong yang diselesaikan tidak menghasilkan StockMove maupun
+   * jurnal, padahal statusnya jadi completed (completeWorkOrder hanya
+   * menuntut status itu), sehingga WO bisa ditutup dengan nol material
+   * terpakai. Paritas create kini ditegakkan di jalur edit juga.
+   */
+  it("updateMaterialIssue menolak payload tanpa satu pun baris sah", async () => {
     seedDraft(mocks.prismaMock.materialIssue);
     mocks.prismaMock.materialIssue.findUnique.mockResolvedValue({
       id: 1,
@@ -1345,7 +1353,9 @@ describe("Material Issue Error & Edge Paths", () => {
       1,
       miFd({ items: itemsJson([{ itemId: -1, qty: 0 }]) }),
     );
-    expect(res?.success).toBe(true);
+    expect(res?.success).toBe(false);
+    expect(String(res?.error)).toMatch(/minimal 1 item/);
+    expect(mocks.prismaMock.materialIssue.update).not.toHaveBeenCalled();
   });
 
   it("updateMaterialIssue fails if not draft initially", async () => {
