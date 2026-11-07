@@ -27,6 +27,7 @@ describe("WorkOrderActions menghormati izin tulis", () => {
         canIssueMaterial: false,
         canComplete: false,
         canCreateInspection: false,
+        canCancel: false,
       })
       expect(html, `status ${status} masih merender aksi`).not.toContain("<button")
       expect(html).not.toContain("Mulai Pengerjaan")
@@ -68,6 +69,23 @@ describe("WorkOrderActions menghormati izin tulis", () => {
     })
     expect(html).not.toContain("Selesaikan")
     expect(html).toContain("Buat Pengeluaran Material")
+  })
+
+  /**
+   * Regresi putaran 232: cancelWorkOrder adalah SATU-SATUNYA jalur
+   * in_progress -> cancelled (menolak status lain) dan menuntut alasan
+   * non-kosong. Tanpa tombol ini perintah kerja yang salah input tidak punya
+   * jalan keluar dari UI — Selesaikan memaksa job selesai, sedangkan
+   * closeWorkOrder hanya menerima status completed.
+   */
+  it("tombol Batalkan tampil untuk perintah kerja berjalan", () => {
+    const html = render({ status: "in_progress", canCancel: true })
+    expect(html).toContain("Batalkan")
+  })
+
+  it("tombol Batalkan digerbangi complete_work_orders", () => {
+    const html = render({ status: "in_progress", canCancel: false, canEdit: false, canIssueMaterial: false, canComplete: false })
+    expect(html).not.toContain("Batalkan")
   })
 
   it("gate intake: tombol buat inspeksi butuh manage_qc_inspections", () => {

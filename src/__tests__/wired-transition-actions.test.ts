@@ -141,6 +141,7 @@ const REQUIRED_CALLERS: Array<{ action: string; definedIn: string; callersIn: st
   { action: "reverseSalesLateFee", definedIn: "src/actions/sales-late-fee.actions.ts", callersIn: ["components/reports"] },
   { action: "reverseSalesPayment", definedIn: "src/actions/sales.actions.ts", callersIn: ["penjualan/pembayaran"] },
   { action: "reverseVendorPayment", definedIn: "src/actions/purchase.actions.ts", callersIn: ["pembelian/pembayaran-vendor"] },
+  { action: "cancelWorkOrder", definedIn: "src/actions/manufacturing.actions.ts", callersIn: ["produksi/perintah-kerja"] },
   { action: "reverseYearEndClosingAction", definedIn: "src/actions/year-end-closing.actions.ts", callersIn: ["pengaturan/proses-akhir-bulan"] },
   { action: "reviseQuotation", definedIn: "src/actions/sales.actions.ts", callersIn: ["penjualan/penawaran"] },
   { action: "sendJobChangeOrder", definedIn: "src/actions/job-change-order.actions.ts", callersIn: ["produksi/perintah-kerja"] },
@@ -174,12 +175,6 @@ const REQUIRED_CALLERS: Array<{ action: string; definedIn: string; callersIn: st
  * daftar diperbarui.
  */
 const ALLOWED_UNWIRED: Array<{ action: string; definedIn: string; reason: string }> = [
-  {
-    action: "cancelWorkOrder",
-    definedIn: "src/actions/manufacturing.actions.ts",
-    reason:
-      "F-2026-10-21-012 inti backend dulu; tombol batal perintah kerja menyusul (frontend) — selaras daftar-beku action-wiring; 0 rujukan produksi di luar pendefinisi (terverifikasi grep + detektor ini)",
-  },
   {
     action: "releaseStockReservation",
     definedIn: "src/actions/manufacturing.actions.ts",

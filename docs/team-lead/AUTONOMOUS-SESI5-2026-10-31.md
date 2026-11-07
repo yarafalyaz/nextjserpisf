@@ -5266,6 +5266,52 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 232 — perintah kerja berjalan tidak bisa dibatalkan dari UI
+
+Sisa utang kedua dari daftar `ALLOWED_UNWIRED` (putaran 230 membayar yang
+pertama). `cancelWorkOrder` adalah **satu-satunya** jalur `in_progress` →
+`cancelled`: ia menolak status lain secara eksplisit, dan tidak ada penulis
+`status: "cancelled"` lain untuk WorkOrder di seluruh action. Ia juga
+menuntut alasan non-kosong (`validateCancelReason`).
+
+Tidak ada UI yang memanggilnya. Akibatnya perintah kerja yang berjalan dan
+ternyata salah input tidak punya jalan keluar:
+
+- **Selesaikan** memaksa job selesai — biaya dan stok yang keliru ikut
+  terkunci sebagai hasil produksi;
+- **closeWorkOrder** hanya menerima status `completed`, jadi tidak bisa dipakai
+  membatalkan;
+- **hapus** tidak tersedia untuk WO (jejak audit).
+
+Satu-satunya jalan adalah menyentuh database. Ini kelas yang sama dengan
+putaran 229 (kas kecil) dan 230 (pembayaran vendor): aksi ada, lengkap dengan
+penjaganya, tetapi tak terjangkau.
+
+Perbaikannya menambah `VoidButton` beralasan di bar aksi `in_progress`,
+digerbangi `canCancel` (`complete_work_orders`, izin yang dituntut action-nya).
+Dua detail yang mudah terlewat dan ikut ditangani:
+
+- `canCancel` masuk ke syarat early-return cabang `in_progress`, supaya peran
+  yang HANYA boleh membatalkan tetap melihat tombolnya;
+- mock bersama `work-order-actions-test-utils` mendapat `cancelWorkOrder`,
+  kalau tidak seluruh suite komponen ini gagal karena ekspor yang hilang.
+
+Penjaga dua-arah memerah seperti seharusnya: `cancelWorkOrder` dipindahkan dari
+`ALLOWED_UNWIRED` ke `REQUIRED_CALLERS`, dan entri beku di
+`action-wiring.test.ts` dipangkas.
+
+### Bukti
+
+- Tes merah→hijau: mencabut blok `canCancel` dari komponen membuat
+  "tombol Batalkan tampil untuk perintah kerja berjalan" gagal (15 lulus /
+  1 gagal), dikembalikan → 16/16.
+- Tes izin lama "tanpa izin apa pun, bar aksi kosong total" ikut memerah saat
+  pertama dijalankan — itu benar: tanpa `canCancel: false` tombol batal
+  dirender (default permisif). Kasusnya ditambah, bukan dilonggarkan.
+- `npx tsc --noEmit` bersih; ESLint pada direktori tersentuh bersih.
+- Full Vitest: 12.754 lulus / 23 dilewati (dari 12.752; +2 tes).
+- `npm run build` lulus pada percobaan pertama (Compiled successfully, 17,1 s).
+
 ## Putaran 231 — empat pemindaian, nol temuan (dicatat supaya tidak diulang)
 
 Putaran ini **tidak menghasilkan perbaikan**. Saya catat begini supaya putaran

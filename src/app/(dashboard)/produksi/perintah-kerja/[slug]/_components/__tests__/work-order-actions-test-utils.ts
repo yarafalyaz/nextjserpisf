@@ -18,6 +18,9 @@ export const workOrderActionsManufacturingModule = {
   startWorkOrder: vi.fn(async () => ({ success: true })),
   completeWorkOrder: vi.fn(async () => ({ success: true })),
   createMaterialIssueFromWorkOrder: vi.fn(async () => ({ success: true })),
+  // Putaran 232: batal beralasan (VoidButton) — satu-satunya jalur
+  // in_progress -> cancelled.
+  cancelWorkOrder: vi.fn(async () => ({ success: true })),
 }
 
 export const workOrderActionsInventoryModule = {
@@ -38,6 +41,7 @@ type ActionsProps = ComponentProps<
     canIssueMaterial?: boolean
     canComplete?: boolean
     canCreateInspection?: boolean
+    canCancel?: boolean
   }>
 >
 

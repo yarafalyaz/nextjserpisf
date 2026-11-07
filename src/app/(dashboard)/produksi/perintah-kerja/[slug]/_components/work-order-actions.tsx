@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { startWorkOrder, completeWorkOrder, createMaterialIssueFromWorkOrder } from "@/actions/manufacturing.actions"
+import { startWorkOrder, completeWorkOrder, createMaterialIssueFromWorkOrder, cancelWorkOrder } from "@/actions/manufacturing.actions"
+import { VoidButton } from "@/components/ui/void-button"
 import { reviseWorkOrderItems } from "@/actions/inventory.actions"
 import { Button } from "@/components/ui/button"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -34,13 +35,15 @@ interface Props {
   canComplete?: boolean
   /** manage_qc_inspections — untuk tombol "Buat Inspeksi Masuk". */
   canCreateInspection?: boolean
+  /** complete_work_orders — izin yang dituntut cancelWorkOrder (batal beralasan). */
+  canCancel?: boolean
 }
 
 /**
  * Work Order lifecycle controls. Surfaces the manufacturing flow that previously
  * existed only in server actions but had no UI: start → issue materials → complete.
  */
-export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssue, hasActiveMaterialIssue = false, defaultWarehouseId, revisableItems = [], vehicleIntakeBlocked = false, vehicleIntakeHref, pendingStageCount, canEdit = true, canIssueMaterial = true, canComplete = true, canCreateInspection = true }: Props) {
+export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssue, hasActiveMaterialIssue = false, defaultWarehouseId, revisableItems = [], vehicleIntakeBlocked = false, vehicleIntakeHref, pendingStageCount, canEdit = true, canIssueMaterial = true, canComplete = true, canCreateInspection = true, canCancel = true }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [reviseOpen, setReviseOpen] = useState(false)
@@ -96,7 +99,7 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
 
   if (status === "in_progress") {
     const canRevise = canEdit && revisableItems.length > 0
-    if (!canEdit && !canIssueMaterial && !canComplete) return null
+    if (!canEdit && !canIssueMaterial && !canComplete && !canCancel) return null
     return (
       <>
         {/* WO-BR-004: server menolak pembuatan MI kedua untuk WO yang sama
@@ -168,6 +171,22 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
           >
             Selesaikan
           </Button>
+        )}
+        {/* cancelWorkOrder adalah SATU-SATUNYA jalur in_progress -> cancelled
+            (menolak status lain) dan menuntut alasan non-kosong. Tanpa tombol
+            ini perintah kerja yang salah input tidak punya jalan keluar dari
+            UI: Selesaikan memaksa job selesai, sedangkan closeWorkOrder hanya
+            menerima status completed. VoidButton mengumpulkan alasannya. */}
+        {canCancel && (
+          <VoidButton
+            id={workOrderId}
+            action={cancelWorkOrder}
+            canVoid={canCancel}
+            requireReason
+            label="Batalkan"
+            title="Batalkan perintah kerja ini?"
+            body="Perintah kerja ditandai dibatalkan dan reservasi stoknya dilepas. Baris tetap tersimpan untuk jejak audit. Hanya bisa dilakukan bila tidak ada pengeluaran material aktif atau order produksi anak yang berjalan."
+          />
         )}
       </>
     )

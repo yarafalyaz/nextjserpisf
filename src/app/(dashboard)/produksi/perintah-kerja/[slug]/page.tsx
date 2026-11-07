@@ -224,6 +224,7 @@ export default async function WorkOrderDetailPage({
     canReopenWorkOrder,
     canCreateMaterialIssue,
     canCompleteWorkOrder,
+    canCancelWorkOrder,
     whatsappTrail,
   ] = await Promise.all([
     getWorkOrderPartStatus(wo.id),
@@ -233,6 +234,8 @@ export default async function WorkOrderDetailPage({
     hasPermission("edit_work_orders"),
     hasPermission("complete_work_orders"),
     hasPermission("create_material_issues"),
+    hasPermission("complete_work_orders"),
+    // cancelWorkOrder menuntut complete_work_orders (lihat action-nya).
     hasPermission("complete_work_orders"),
     getWhatsappTrail("WorkOrder", wo.id),
   ]);
@@ -392,6 +395,7 @@ export default async function WorkOrderDetailPage({
               canEdit={canEditWo}
               canIssueMaterial={canCreateMaterialIssue}
               canComplete={canCompleteWorkOrder}
+              canCancel={canCancelWorkOrder}
               canCreateInspection={canVerifyPhoto}
               revisableItems={wo.items
                 .filter((i) => i.status !== "replaced")
