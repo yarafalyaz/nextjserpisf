@@ -5266,6 +5266,57 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 229 — transaksi kas kecil tidak pernah bisa dibatalkan dari UI
+
+Ini bukan bug tampilan: **fiturnya mati total**. `deletePettyCash` bukan hapus
+fisik melainkan void beralasan (GL-BR-003 P6) — ia menolak alasan kosong
+sebelum mutasi apa pun:
+
+```ts
+const cleanReason = (reason ?? "").trim();
+if (!cleanReason) {
+  return { success: false, error: "Alasan pembatalan kas kecil wajib diisi." };
+}
+```
+
+Kedua jalur UI memanggilnya tanpa argumen kedua:
+
+- `keuangan/kas-kecil/[slug]` memakai `<DeleteButton action={deletePettyCash}>`
+  — `DeleteButton` memanggil `action(id)`, satu argumen.
+- `keuangan/kas-kecil/_components/petty-cash-table` memakai `<ActionDropdown
+  deleteAction={deletePettyCash}>` tanpa `deleteReasonLabel` — ActionDropdown
+  hanya mengirim `(id, reason)` bila label itu diisi.
+
+Akibatnya tombol Hapus di detail dan menu Hapus di daftar **selalu** gagal
+dengan pesan yang menyuruh mengisi alasan, padahal tidak ada kolom alasan yang
+bisa diisi. Operator tidak punya jalan lain: tidak ada aksi void terpisah untuk
+kas kecil.
+
+Perbaikannya memakai komponen yang sudah ada:
+
+- Halaman detail → `VoidButton` dengan `requireReason` dan
+  `canVoid={canVoidPettyCash}` (`hasPermission("delete_petty_cash")`), label
+  "Batalkan", plus judul/body yang menjelaskan bahwa barisnya tetap tersimpan.
+- Tabel → `deleteReasonLabel`, `deleteConfirmTitle`, `deleteConfirmBody`.
+
+Penjaga baru `reason-action-wiring.test.ts` memindai seluruh action
+`(id, reason?)` yang benar-benar menolak alasan kosong, lalu memastikan setiap
+pemakaian `DeleteButton`/`ActionDropdown` atas action itu membawa jalur
+pengumpulan alasan. Ini menangkap kelasnya, bukan satu instansnya: pemasangan
+berikutnya yang salah akan memerah tanpa perlu diingat.
+
+### Bukti
+
+- Tes merah→hijau: mencabut `deleteReasonLabel` dari tabel kas kecil membuat
+  dua tes gagal (2 lulus / 2 gagal), dikembalikan → 4/4.
+- Versi pertama penjaga **vakum** (0 action terdeteksi) karena hanya mengenali
+  `!reason.trim()`, sedangkan repo memakai pola
+  `const cleanReason = (reason ?? "").trim()`; regexnya diperluas dan tes
+  "daftar tidak vakum" mencegah kekosongan itu lolos lagi.
+- `npx tsc --noEmit` bersih; ESLint pada kedua berkas + tes bersih.
+- Full Vitest: 12.752 lulus / 23 dilewati (dari 12.748; +4 tes).
+- `npm run build` lulus pada percobaan pertama (Compiled successfully, 16,8 s).
+
 ## Putaran 228 — dua halaman detail terlewat dari gerbang status putaran 226
 
 Putaran 226 memindai 65 halaman detail ber-edit-link dan memperbaiki sembilan.

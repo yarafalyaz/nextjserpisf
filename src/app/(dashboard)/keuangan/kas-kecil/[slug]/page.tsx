@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { formatDate, formatCurrencyExact } from "@/lib/utils/format";
 import { statusLabel } from "@/lib/utils/status-labels";
 import { notFound } from "next/navigation";
-import { DeleteButton } from "@/components/ui/delete-button";
+import { VoidButton } from "@/components/ui/void-button";
 import { deletePettyCash } from "@/actions/finance.actions";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { Pencil } from "lucide-react";
 
 import type { Metadata } from "next";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { hasPermission, requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityEditHref } from "@/lib/utils/entity-url";
 import { CanCreate } from "@/components/auth/can-create";
@@ -26,6 +26,10 @@ export default async function PettyCashDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   await requirePermission("view_petty_cash");
+
+  // delete_petty_cash memakai VoidButton (aksi void beralasan), jadi izinnya
+  // dihitung di sini dan dioper sebagai canVoid.
+  const canVoidPettyCash = await hasPermission("delete_petty_cash");
 
   const { slug } = await params;
 
@@ -80,9 +84,20 @@ export default async function PettyCashDetailPage({
                 <Pencil size={14} /> Ubah
               </Button>
             </CanCreate>
-            <CanCreate permission="delete_petty_cash">
-              <DeleteButton id={pettyCash.id} action={deletePettyCash} />
-            </CanCreate>
+            {/* deletePettyCash bukan hapus fisik: ia VOID beralasan (status
+                "void" + jurnal asal dipertahankan) dan menolak alasan kosong.
+                DeleteButton memanggil action(id) tanpa argumen kedua, jadi
+                tombol Hapus di sini selalu gagal "Alasan pembatalan kas kecil
+                wajib diisi". VoidButton yang mengumpulkan alasannya. */}
+            <VoidButton
+              id={pettyCash.id}
+              action={deletePettyCash}
+              canVoid={canVoidPettyCash}
+              requireReason
+              label="Batalkan"
+              title={`Batalkan transaksi kas kecil ${pettyCash.documentNo}?`}
+              body="Transaksi ditandai dibatalkan (void) dan jurnal aslinya dibalik, tetapi barisnya tetap tersimpan untuk jejak audit."
+            />
             <BackButton href="/keuangan/kas-kecil" />
           </>
         }

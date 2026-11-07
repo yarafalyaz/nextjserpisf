@@ -76,6 +76,12 @@ const columns = [
         deleteAction={deletePettyCash}
         deleteId={info.row.original.id}
         deletePermission="delete_petty_cash"
+        // deletePettyCash menolak alasan kosong (void beralasan, GL-BR-003
+        // P6). Tanpa label ini ActionDropdown memanggil action(id) tanpa
+        // argumen kedua, jadi menu Hapus selalu gagal dari daftar.
+        deleteReasonLabel="Alasan pembatalan"
+        deleteConfirmTitle="Batalkan transaksi kas kecil ini?"
+        deleteConfirmBody="Transaksi ditandai dibatalkan (void) dan jurnal aslinya dibalik, tetapi barisnya tetap tersimpan untuk jejak audit."
       />
     ),
   }),
