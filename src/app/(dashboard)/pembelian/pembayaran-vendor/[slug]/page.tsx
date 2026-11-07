@@ -5,8 +5,9 @@ import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
-import { deleteVendorPayment } from "@/actions/purchase.actions"
+import { deleteVendorPayment, reverseVendorPayment } from "@/actions/purchase.actions"
 import { PrintButton } from "@/components/ui/print-button"
+import { ReversePaymentButton } from "@/components/ui/reverse-payment-button"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
@@ -85,6 +86,22 @@ export default async function VendorPaymentDetailPage({
             {isDraft && (
               <CanCreate permission="delete_vendor_payments">
                 <DeleteButton id={payment.id} action={deleteVendorPayment} />
+              </CanCreate>
+            )}
+            {/* FIN-BR-008: pembayaran completed dikoreksi lewat pembalikan
+                beralasan — baris asal tetap ada (status `reversed`), jurnal
+                lawan dibukukan, alokasi tagihan dikembalikan. Tanpa tombol ini
+                pembayaran vendor yang sudah dibayar tidak punya jalur koreksi
+                apa pun dari UI (hanya Cetak), padahal jalur penjualan
+                (reverseSalesPayment) sudah tersambung sejak lama. */}
+            {payment.status === "completed" && (
+              <CanCreate permission="delete_vendor_payments">
+                <ReversePaymentButton
+                  id={payment.id}
+                  action={reverseVendorPayment}
+                  title={`Balikkan pembayaran ${payment.documentNo}?`}
+                  body="Pembayaran ditandai dibalik, jurnal kasnya dibalik, dan saldo tagihan yang dilunasi kembali seperti semula. Baris asal tetap tersimpan sebagai histori — bukan dihapus."
+                />
               </CanCreate>
             )}
             <BackButton href="/pembelian/pembayaran-vendor" />

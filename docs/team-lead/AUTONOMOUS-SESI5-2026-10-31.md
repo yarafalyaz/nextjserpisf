@@ -5266,6 +5266,45 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 230 — pembayaran vendor yang sudah dibayar tidak punya jalur koreksi
+
+`reverseVendorPayment` sudah ada di backend sejak FIN-BR-008 (jurnal lawan,
+alokasi tagihan dikembalikan per-baris, idempotensi, alasan wajib) — tetapi
+**tidak ada satu pun pemanggil UI**. Ini sudah tercatat jujur di
+`wired-transition-actions.test.ts` sebagai entri `ALLOWED_UNWIRED` dengan
+alasan "tombol vendor menyusul". Jadi bukan bug yang tersembunyi, melainkan
+utang yang tercatat dan tidak pernah dibayar.
+
+Akibatnya: pembayaran vendor berstatus `completed` hanya menawarkan **Cetak**.
+Tidak ada Ubah, tidak ada Hapus (keduanya draft-only), tidak ada pembalikan.
+Satu-satunya jalan koreksi adalah menyentuh database. Bandingkan dengan
+pembayaran penjualan, yang sudah memakai `ReversePaymentButton` +
+`reverseSalesPayment` sejak lama — asimetri yang tidak disengaja.
+
+Perbaikannya memasang `ReversePaymentButton` yang sama di halaman detail
+pembayaran pemasok, digerbangi `delete_vendor_payments` (izin yang dituntut
+action-nya) dan hanya dirender untuk status `completed` (action menolak
+`draft` — "hapus saja" — dan menolak yang sudah `reversed`).
+
+Penjaga `wired-transition-actions` bekerja dua arah, persis seperti yang
+dijelaskan AGENTS.md: begitu aksi tersambung, entri `ALLOWED_UNWIRED` harus
+dipangkas atau tes memerah. Pemasangan ini memerahkannya seperti seharusnya;
+entri dipindahkan ke `REQUIRED_CALLERS` dan entri beku di
+`action-wiring.test.ts` (daftar pengecualian kedua) ikut dibuang.
+
+### Bukti
+
+- Tes merah→hijau: mencabut blok `payment.status === "completed"` dari halaman
+  membuat `wired-transition-actions` gagal tepat pada
+  "reverseVendorPayment dipanggil dari pembelian/pembayaran-vendor"
+  (135 lulus / 1 gagal), dikembalikan → 136/136.
+- Pemasangan pertama memerahkan `action-wiring.test.ts` — itu perilaku
+  dua-arah yang benar, bukan regresi; entri pengecualiannya dipangkas.
+- `npx tsc --noEmit` bersih; ESLint pada berkas tersentuh bersih.
+- Full Vitest: 12.752 lulus / 23 dilewati (jumlah tes tidak berubah — ini
+  pemasangan UI + pemangkasan daftar, bukan tes baru).
+- `npm run build` lulus pada percobaan pertama (Compiled successfully, 16,5 s).
+
 ## Putaran 229 — transaksi kas kecil tidak pernah bisa dibatalkan dari UI
 
 Ini bukan bug tampilan: **fiturnya mati total**. `deletePettyCash` bukan hapus

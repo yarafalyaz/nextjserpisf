@@ -412,10 +412,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-25-036-S: 4 aksi histori tarif komisi kategori kini dirujuk UI
   // (komponen customer-commission-rates di master kategori + loader histori
   // di page ubah kategori, frontend t_87eb6220) — entri beku dibuang.
-  // FIN-BR-008: reversal vendor lewat UI pembelian (jalur koreksi posted
-  // tagihan vendor) — daftar-beku dilepas saat tombol vendor mendarat.
-  "src/actions/purchase.actions.ts::reverseVendorPayment":
-    "FIN-BR-008: reversal vendor menyusul tombol UI pembelian",
+  // FIN-BR-008: reversal vendor kini dirujuk ReversePaymentButton di detail
+  // pembayaran pemasok (putaran 230) — entri beku dibuang.
   // Aksi ekspor sinkron status proyek: pemanggilnya hanya tes unit;
   // UI memakai helper internal syncProjectStatusTx dalam transaksi modul
   // proyek/manufaktur — kandidat dihapus, bukan celah UI.
