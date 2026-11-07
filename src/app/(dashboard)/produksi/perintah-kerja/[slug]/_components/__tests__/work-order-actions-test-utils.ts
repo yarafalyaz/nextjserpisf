@@ -33,6 +33,11 @@ type ActionsProps = ComponentProps<
     defaultWarehouseId: number | null
     vehicleIntakeBlocked?: boolean
     vehicleIntakeHref?: string
+    // Putaran 223: izin tulis per tombol.
+    canEdit?: boolean
+    canIssueMaterial?: boolean
+    canComplete?: boolean
+    canCreateInspection?: boolean
   }>
 >
 

@@ -72,6 +72,15 @@ export default async function ProductDetailPage({
 
   // VEH-07 fitment checker (only when the user may view fitment rules).
   const canViewFitment = await hasPermission("view_vehicle_fitments")
+  // Halaman detail hanya menuntut view_production, sedangkan Ubah/Hapus/
+  // Hitung Ulang menuntut izin tulis masing-masing (updateProduct /
+  // deleteProduct / calculateStandardCost). Tanpa gerbang per tombol, peran
+  // lihat-saja melihat aksi yang server-nya pasti menolak.
+  const [canEdit, canDelete, canRecalculate] = await Promise.all([
+    hasPermission("edit_products"),
+    hasPermission("delete_products"),
+    hasPermission("edit_products"),
+  ])
   const [fitmentBrands, fitmentModels, fitmentVariants] = canViewFitment
     ? await Promise.all([
         prisma.vehicleBrand.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
@@ -95,9 +104,11 @@ export default async function ProductDetailPage({
         ]}
         actions={
           <>
-            <RecalculateStandardCostButton productId={product.id} />
-            <Button href={entityEditHref("/produksi/products", product)} variant="primary">Ubah</Button>
-            <DeleteButton id={product.id} action={deleteProduct} />
+            {canRecalculate && <RecalculateStandardCostButton productId={product.id} />}
+            {canEdit && (
+              <Button href={entityEditHref("/produksi/products", product)} variant="primary">Ubah</Button>
+            )}
+            {canDelete && <DeleteButton id={product.id} action={deleteProduct} />}
             <BackButton href="/produksi/products" />
           </>
         }

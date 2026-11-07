@@ -61,6 +61,7 @@ export default async function QuotationDetailPage({
   const canApprove = await hasPermission("approve_quotations");
   const canManagePaymentSchedule = await hasPermission("edit_quotations");
   const canCreateSalesOrder = await hasPermission("create_sales_orders");
+  const canConfirmQuotation = await hasPermission("confirm_quotations");
   const { slug } = await params;
 
   const quotationInclude = {
@@ -221,12 +222,14 @@ export default async function QuotationDetailPage({
             {/* GL-BR-003 K1: cermin guard server updateQuotation
                 (cancelled/setelah-pelunasan-nyata pasti ditolak). */}
             {quotationEditable && (
-              <Button
-                href={entityEditHref("/penjualan/penawaran", quotation)}
-                variant="secondary"
-              >
-                <Pencil size={14} /> Ubah
-              </Button>
+              <CanCreate permission="edit_quotations">
+                <Button
+                  href={entityEditHref("/penjualan/penawaran", quotation)}
+                  variant="secondary"
+                >
+                  <Pencil size={14} /> Ubah
+                </Button>
+              </CanCreate>
             )}
             <PrintButton documentType="quotation" documentId={quotation.id} />
             <WhatsappButton
@@ -241,7 +244,12 @@ export default async function QuotationDetailPage({
                 status: quotation.status,
               })}
             />
-            <QuotationFlowActions status={quotation.status} id={quotation.id} />
+            <QuotationFlowActions
+              status={quotation.status}
+              id={quotation.id}
+              canEdit={canManagePaymentSchedule}
+              canConfirm={canConfirmQuotation}
+            />
             {["accepted", "approved"].includes(quotation.status) && (
               <>
                 {/* Gerbang izin create halaman tujuan: keduanya

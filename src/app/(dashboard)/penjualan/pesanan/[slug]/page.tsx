@@ -132,12 +132,14 @@ export default async function SalesOrderDetailPage({
                 (cancelled/completed/setelah-pelunasan-nyata pasti ditolak).
                 posted tanpa pelunasan nyata tetap boleh Ubah. */}
             {orderItemsEditable && (
-              <Button
-                href={entityEditHref("/penjualan/pesanan", order)}
-                variant="primary"
-              >
-                Ubah
-              </Button>
+              <CanCreate permission="edit_sales_orders">
+                <Button
+                  href={entityEditHref("/penjualan/pesanan", order)}
+                  variant="primary"
+                >
+                  Ubah
+                </Button>
+              </CanCreate>
             )}
             {order.quotationId && order.status !== "cancelled" && (
               <CanCreate permission="create_down_payments">

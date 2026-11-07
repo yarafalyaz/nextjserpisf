@@ -160,6 +160,47 @@ describe("paritas izin halaman detail/edit vs list/action (#53)", () => {
     expect(detail).toContain("{canDelete && <DeleteButton")
   })
 
+  it("detail produk manufaktur menyembunyikan ubah/hapus/hitung-ulang", () => {
+    const detail = readFileSync(
+      join(DASHBOARD, "produksi/products/[slug]/page.tsx"),
+      "utf8",
+    )
+    expect(detail).toContain('hasPermission("edit_products")')
+    expect(detail).toContain('hasPermission("delete_products")')
+    expect(detail).toMatch(/canEdit\s*&&\s*\(\s*<Button href=\{entityEditHref\("\/produksi\/products"/)
+    expect(detail).toContain("{canDelete && <DeleteButton")
+    expect(detail).toMatch(/\{canRecalculate && <RecalculateStandardCostButton/)
+  })
+
+  it("detail kendaraan pelanggan menyembunyikan tautan Ubah", () => {
+    const detail = readFileSync(
+      join(DASHBOARD, "master/pelanggan/[slug]/kendaraan/[vehicleSlug]/page.tsx"),
+      "utf8",
+    )
+    expect(detail).toContain('hasPermission("edit_customers")')
+    // Tautan Ubah harus berada di dalam kondisi canEditVehicle.
+    const idx = detail.indexOf('entityNestedHref("/master/pelanggan", customer, "kendaraan", cv)}/ubah')
+    expect(idx, "tautan Ubah kendaraan pelanggan hilang").toBeGreaterThan(-1)
+    expect(detail.slice(Math.max(0, idx - 400), idx)).toMatch(/canEditVehicle\s*&&\s*\(/)
+  })
+
+  it("detail penjualan menyembunyikan Ubah dan aksi alur penawaran", () => {
+    const salesOrder = readFileSync(
+      join(DASHBOARD, "penjualan/pesanan/[slug]/page.tsx"),
+      "utf8",
+    )
+    expect(salesOrder).toContain('CanCreate permission="edit_sales_orders"')
+
+    const quotation = readFileSync(
+      join(DASHBOARD, "penjualan/penawaran/[slug]/page.tsx"),
+      "utf8",
+    )
+    expect(quotation).toContain('CanCreate permission="edit_quotations"')
+    expect(quotation).toContain('hasPermission("confirm_quotations")')
+    expect(quotation).toMatch(/canEdit=\{canManagePaymentSchedule\}/)
+    expect(quotation).toMatch(/canConfirm=\{canConfirmQuotation\}/)
+  })
+
   it("detail pembelian menyembunyikan ubah/hapus sesuai izin tulis", () => {
     const purchaseOrder = readFileSync(
       join(DASHBOARD, "pembelian/pesanan/[slug]/page.tsx"),

@@ -24,7 +24,19 @@ import {
  * acceptQuotation juga mengirim notifikasi ke admin. Bar generik tetap ada untuk
  * approval internal; tombol di sini melengkapi alur pelanggannya.
  */
-export function QuotationFlowActions({ status, id }: { status: string; id: number }) {
+export function QuotationFlowActions({
+  status,
+  id,
+  canEdit = false,
+  canConfirm = false,
+}: {
+  status: string
+  id: number
+  /** edit_quotations — izin yang dituntut sendQuotation/reviseQuotation. */
+  canEdit?: boolean
+  /** confirm_quotations — izin yang dituntut acceptQuotation/rejectQuotation. */
+  canConfirm?: boolean
+}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isReviseOpen, setIsReviseOpen] = useState(false)
@@ -95,6 +107,7 @@ export function QuotationFlowActions({ status, id }: { status: string; id: numbe
   }
 
   if (status === "draft") {
+    if (!canEdit) return null
     return (
       <Button
         variant="secondary"
@@ -107,29 +120,39 @@ export function QuotationFlowActions({ status, id }: { status: string; id: numbe
   }
 
   if (status === "sent") {
+    // Revisi butuh edit_quotations; Terima/Tolak butuh confirm_quotations.
+    // Tanpa cabang ini seluruh trio tampil bagi peran lihat-saja dan setiap
+    // klik berakhir FORBIDDEN dari action.
+    if (!canEdit && !canConfirm) return null
     return (
       <>
-        <Button
-          variant="secondary"
-          onPress={() => run(() => acceptQuotation(id), "Penawaran diterima", "Gagal menerima penawaran")}
-          isDisabled={isPending}
-        >
-          <CheckCircle size={14} aria-hidden="true" /> Terima
-        </Button>
-        <Button
-          variant="secondary"
-          onPress={() => setIsReviseOpen(true)}
-          isDisabled={isPending}
-        >
-          <FilePenLine size={14} aria-hidden="true" /> Revisi
-        </Button>
-        <Button
-          variant="danger"
-          onPress={() => setIsRejectOpen(true)}
-          isDisabled={isPending}
-        >
-          <XCircle size={14} aria-hidden="true" /> Tolak
-        </Button>
+        {canConfirm && (
+          <Button
+            variant="secondary"
+            onPress={() => run(() => acceptQuotation(id), "Penawaran diterima", "Gagal menerima penawaran")}
+            isDisabled={isPending}
+          >
+            <CheckCircle size={14} aria-hidden="true" /> Terima
+          </Button>
+        )}
+        {canEdit && (
+          <Button
+            variant="secondary"
+            onPress={() => setIsReviseOpen(true)}
+            isDisabled={isPending}
+          >
+            <FilePenLine size={14} aria-hidden="true" /> Revisi
+          </Button>
+        )}
+        {canConfirm && (
+          <Button
+            variant="danger"
+            onPress={() => setIsRejectOpen(true)}
+            isDisabled={isPending}
+          >
+            <XCircle size={14} aria-hidden="true" /> Tolak
+          </Button>
+        )}
 
         {/* Kategori kalah wajib + teks bebas opsional (F-2026-10-20-101,
             lanjutan F-38a): kategori dikirim sebagai awalan terstruktur

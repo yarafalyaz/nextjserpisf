@@ -5266,6 +5266,54 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 223 — tombol Ubah/Hapus/aksi alur di halaman detail tanpa gerbang izin
+
+Lanjutan pola putaran 220–222, kali ini pada tombol aksi (bukan tautan buat
+dokumen). Enam halaman detail hanya menuntut izin `view_*`, tetapi selalu
+merender tombol yang server action-nya menuntut izin tulis lain:
+
+- `produksi/products/[slug]` — nol gerbang. `updateProduct`/`calculateStandardCost`
+  menuntut `edit_products`, `deleteProduct` menuntut `delete_products`; sekarang
+  ketiganya dipisah (`canEdit`, `canDelete`, `canRecalculate`).
+- `master/pelanggan/[slug]/kendaraan/[vehicleSlug]` — tautan Ubah kini di dalam
+  `canEditVehicle` (`edit_customers`) yang sudah dihitung halaman untuk tombol lain.
+- `penjualan/pesanan/[slug]` — Ubah di dalam `<CanCreate permission="edit_sales_orders">`
+  (masih dibatasi `orderItemsEditable`).
+- `penjualan/penawaran/[slug]` — Ubah (`edit_quotations`) plus seluruh
+  `QuotationFlowActions`: `sendQuotation`/`reviseQuotation` → `edit_quotations`,
+  `acceptQuotation`/`rejectQuotation` → `confirm_quotations`.
+- `produksi/perintah-kerja/[slug]` — `WorkOrderActions`: `startWorkOrder`/
+  `reviseWorkOrderItems` → `edit_work_orders`, `createMaterialIssueFromWorkOrder`
+  → `create_material_issues`, `completeWorkOrder` → `complete_work_orders`.
+- `produksi/production-orders/[slug]` — `ProductionOrderActions`: keempat aksi
+  (`confirmProductionOrder`, `issueMaterial`, `startProductionOrder`,
+  `completeProductionOrder`) menuntut `edit_production_orders`; gerbangnya
+  `canManageBomChange` yang sudah dihitung halaman.
+
+Komponen klien menerima izin sebagai prop karena tidak bisa memanggil
+`hasPermission` (server-only). Dua gaya default yang berbeda dan disengaja:
+
+- `QuotationFlowActions` default **fail-closed** (`canEdit = false`,
+  `canConfirm = false`). Komponen ini hanya dipakai satu tempat, jadi lupa
+  mengoper izin harus menyembunyikan aksi, bukan menampilkannya.
+- `WorkOrderActions` / `ProductionOrderActions` default **permisif**
+  (`canEdit = true` dkk) agar pemanggil lama tidak berubah diam-diam, dan
+  halaman pemanggilnya sudah diwajibkan mengoper nilai sebenarnya; masing-masing
+  dikunci oleh tes "default tetap permisif".
+
+### Bukti
+
+- Tes baru `work-order-actions-permissions.test.tsx` (6 tes) menutup tiga
+  kombinasi izin terpisah plus gerbang intake; tes `quotation-flow-actions`
+  diperluas dari 3 → 7 tes dengan empat kasus izin (termasuk pemisahan
+  Terima/Tolak vs Revisi).
+- `page-action-permission-parity.test.ts` mendapat tiga penjaga baru (produk
+  manufaktur, kendaraan pelanggan, detail penjualan) sehingga regresi satu berkas
+  langsung merah.
+- `npx tsc --noEmit` bersih; ESLint pada seluruh direktori tersentuh bersih.
+- Full Vitest: 12.706 lulus / 23 dilewati (dari 12.693; +13 tes).
+- `npm run build` lulus pada percobaan pertama.
+
 ## Putaran 222 — tombol "buat dokumen turunan" di halaman detail bocor ke role view-only
 
 Halaman detail merender tautan pembuatan dokumen turunan tanpa memeriksa izin

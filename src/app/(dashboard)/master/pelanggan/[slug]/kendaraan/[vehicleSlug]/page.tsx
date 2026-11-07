@@ -98,9 +98,14 @@ export default async function CustomerVehicleDetailPage({
       <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Detail Kendaraan</h1>
         <div className="flex gap-2">
-          <Link href={`${entityNestedHref("/master/pelanggan", customer, "kendaraan", cv)}/ubah`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">
-            <Pencil size={14} /> Ubah
-          </Link>
+          {/* Halaman hanya menuntut view_customers; updateCustomerVehicle
+              menuntut edit_customers. Halaman daftar saudaranya sudah
+              membungkus tautan yang sama dengan CanCreate edit_customers. */}
+          {canEditVehicle && (
+            <Link href={`${entityNestedHref("/master/pelanggan", customer, "kendaraan", cv)}/ubah`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">
+              <Pencil size={14} /> Ubah
+            </Link>
+          )}
           <Link href={`/master/pelanggan/${customerKey}/kendaraan`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
         </div>
       </div>

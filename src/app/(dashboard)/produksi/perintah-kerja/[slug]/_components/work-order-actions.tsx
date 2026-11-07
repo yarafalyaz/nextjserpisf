@@ -23,13 +23,24 @@ interface Props {
   vehicleIntakeHref?: string
   /** F-020-B Q3: jumlah tahap pending dari builder; peringatan saja, tidak memblokir complete. */
   pendingStageCount?: number
+  /**
+   * Izin tulis per aksi, dihitung server di halaman pemanggil. Halaman detail
+   * hanya menuntut view_work_orders, sedangkan tiap aksi menuntut izinnya
+   * sendiri; tanpa prop ini peran lihat-saja melihat seluruh bar aksi dan
+   * setiap klik berakhir FORBIDDEN dari action.
+   */
+  canEdit?: boolean
+  canIssueMaterial?: boolean
+  canComplete?: boolean
+  /** manage_qc_inspections — untuk tombol "Buat Inspeksi Masuk". */
+  canCreateInspection?: boolean
 }
 
 /**
  * Work Order lifecycle controls. Surfaces the manufacturing flow that previously
  * existed only in server actions but had no UI: start → issue materials → complete.
  */
-export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssue, hasActiveMaterialIssue = false, defaultWarehouseId, revisableItems = [], vehicleIntakeBlocked = false, vehicleIntakeHref, pendingStageCount }: Props) {
+export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssue, hasActiveMaterialIssue = false, defaultWarehouseId, revisableItems = [], vehicleIntakeBlocked = false, vehicleIntakeHref, pendingStageCount, canEdit = true, canIssueMaterial = true, canComplete = true, canCreateInspection = true }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [reviseOpen, setReviseOpen] = useState(false)
@@ -58,12 +69,13 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
 
   if (status === "draft" || status === "pending") {
     if (vehicleIntakeBlocked) {
+      if (!canEdit && !canCreateInspection) return null
       return (
         <span className="flex flex-wrap items-center gap-2">
           <Button variant="primary" isDisabled aria-describedby="wo-intake-hint">
             Mulai Pengerjaan
           </Button>
-          {vehicleIntakeHref && (
+          {canCreateInspection && vehicleIntakeHref && (
             <Button href={vehicleIntakeHref} variant="secondary">
               Buat Inspeksi Masuk
             </Button>
@@ -74,6 +86,7 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
         </span>
       )
     }
+    if (!canEdit) return null
     return (
       <Button variant="primary" isDisabled={isPending} onPress={() => run(() => startWorkOrder(workOrderId), "Perintah Kerja dimulai")}>
         Mulai Pengerjaan
@@ -82,12 +95,14 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
   }
 
   if (status === "in_progress") {
+    const canRevise = canEdit && revisableItems.length > 0
+    if (!canEdit && !canIssueMaterial && !canComplete) return null
     return (
       <>
         {/* WO-BR-004: server menolak pembuatan MI kedua untuk WO yang sama
             (createMaterialIssueFromWorkOrder); sembunyikan tombol bila MI
             aktif sudah ada supaya pengguna tidak diarahkan ke kegagalan. */}
-        {!hasCompletedMaterialIssue && !hasActiveMaterialIssue && (
+        {canIssueMaterial && !hasCompletedMaterialIssue && !hasActiveMaterialIssue && (
           <Button
             variant="secondary"
             isDisabled={isPending || !defaultWarehouseId}
@@ -96,12 +111,12 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
             Buat Pengeluaran Material
           </Button>
         )}
-        {revisableItems.length > 0 && !reviseOpen && (
+        {canRevise && !reviseOpen && (
           <Button variant="secondary" isDisabled={isPending} onPress={() => setReviseOpen(true)}>
             Ganti Item
           </Button>
         )}
-        {reviseOpen && (
+        {canRevise && reviseOpen && (
           <span className="flex flex-wrap items-center gap-2">
             {revisableItems.map((it) => (
               <label key={it.id} className="flex items-center gap-1 text-sm">
@@ -140,18 +155,20 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
             dapat diselesaikan.
           </p>
         ) : null}
-        <Button
-          variant="primary"
-          isDisabled={isPending || !hasCompletedMaterialIssue}
-          aria-describedby={
-            typeof pendingStageCount === "number" && pendingStageCount > 0
-              ? "wo-stage-pending-note"
-              : undefined
-          }
-          onPress={() => run(() => completeWorkOrder(workOrderId), "Perintah Kerja selesai")}
-        >
-          Selesaikan
-        </Button>
+        {canComplete && (
+          <Button
+            variant="primary"
+            isDisabled={isPending || !hasCompletedMaterialIssue}
+            aria-describedby={
+              typeof pendingStageCount === "number" && pendingStageCount > 0
+                ? "wo-stage-pending-note"
+                : undefined
+            }
+            onPress={() => run(() => completeWorkOrder(workOrderId), "Perintah Kerja selesai")}
+          >
+            Selesaikan
+          </Button>
+        )}
       </>
     )
   }

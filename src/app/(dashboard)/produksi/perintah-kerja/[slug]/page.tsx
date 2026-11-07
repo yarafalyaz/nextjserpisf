@@ -222,6 +222,8 @@ export default async function WorkOrderDetailPage({
     stageProgress,
     canEditStages,
     canReopenWorkOrder,
+    canCreateMaterialIssue,
+    canCompleteWorkOrder,
     whatsappTrail,
   ] = await Promise.all([
     getWorkOrderPartStatus(wo.id),
@@ -229,6 +231,8 @@ export default async function WorkOrderDetailPage({
     hasPermission("edit_work_orders"),
     getWorkOrderProgress(wo.id),
     hasPermission("edit_work_orders"),
+    hasPermission("complete_work_orders"),
+    hasPermission("create_material_issues"),
     hasPermission("complete_work_orders"),
     getWhatsappTrail("WorkOrder", wo.id),
   ]);
@@ -385,6 +389,10 @@ export default async function WorkOrderDetailPage({
               vehicleIntakeBlocked={!!wo.customerVehicleId && !vehicleIntake}
               vehicleIntakeHref={`/produksi/qc/inspeksi/tambah/perintah-kerja/${wo.slug ?? wo.id}/tipe/vehicle_intake`}
               pendingStageCount={stageProgress?.pendingCount}
+              canEdit={canEditWo}
+              canIssueMaterial={canCreateMaterialIssue}
+              canComplete={canCompleteWorkOrder}
+              canCreateInspection={canVerifyPhoto}
               revisableItems={wo.items
                 .filter((i) => i.status !== "replaced")
                 .map((i) => ({ id: i.id, label: itemNameMap.get(i.itemId) || `Barang #${i.itemId}` }))}

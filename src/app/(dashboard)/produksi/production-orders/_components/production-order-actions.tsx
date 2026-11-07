@@ -51,9 +51,16 @@ interface Props {
   outputTracksSerial: boolean
   /** Units already released to stock (for partial completion, FAB-09). */
   completedQty?: number
+  /**
+   * Izin tulis, dihitung server di halaman pemanggil. Halaman detail hanya
+   * menuntut view_production_orders; keempat aksi menuntut
+   * edit_production_orders. Tanpa prop ini peran lihat-saja melihat seluruh
+   * tombol dan setiap klik berakhir FORBIDDEN dari action.
+   */
+  canEdit?: boolean
 }
 
-export function ProductionOrderActions({ orderId, status, items, outputQty, outputTracksSerial, completedQty = 0 }: Props) {
+export function ProductionOrderActions({ orderId, status, items, outputQty, outputTracksSerial, completedQty = 0, canEdit = true }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -146,6 +153,8 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
       router.refresh()
     })
   }
+
+  if (!canEdit) return null
 
   return (
     <div className="flex gap-2">

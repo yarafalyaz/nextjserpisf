@@ -161,6 +161,9 @@ export default async function ProductionOrderDetailPage({
   const bomChangeRequests = bomChangeList.success ? bomChangeList.requests : []
   // F-2026-10-21-009-V: izin tombol reopen job closed = izin server reopenProductionOrder.
   const canReopenProductionOrder = await hasPermission("edit_production_orders")
+  // Bar aksi lifecycle (Konfirmasi/Keluarkan Bahan/Mulai/Selesaikan) semuanya
+  // memanggil aksi ber-izin edit_production_orders.
+  const canEditProductionOrder = canManageBomChange
   const bomRevisionOptions = order.bomRevision
     ? await prisma.bomRevision.findMany({
         where: {
@@ -251,6 +254,7 @@ export default async function ProductionOrderDetailPage({
             outputQty={Number(order.qty)}
             outputTracksSerial={order.product.inventoryItem?.trackSerial ?? false}
             completedQty={Number(order.completedQty ?? 0)}
+            canEdit={canEditProductionOrder}
           />
           <CanCreate permission="edit_production_orders">
             <Link href={entityEditHref("/produksi/production-orders", order)} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
