@@ -5266,6 +5266,45 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 231 — empat pemindaian, nol temuan (dicatat supaya tidak diulang)
+
+Putaran ini **tidak menghasilkan perbaikan**. Saya catat begini supaya putaran
+berikutnya tidak mengulang empat jalur yang sudah terbukti kosong:
+
+1. **Field skema yang tidak ditulis action update** (8 kandidat). Semuanya
+   positif palsu: nilainya ditulis lewat helper, bukan inline —
+   `priceListData` (customer price list: `price`/`notes`),
+   `appreciationWriteData` (`type`/`notes`), `buildPayrollWrite`
+   (`overtimeTotal` dkk), `buildTemplate` (recurring), `updateData` objek
+   (customer), dan `updateVendor` (`code` — memang `readOnly` saat edit, jadi
+   tidak menulisnya adalah perilaku yang benar).
+2. **Action ber-`idempotencyKey` wajib** (5 kandidat). Kelimanya sudah
+   dipasangi key oleh pemanggilnya (`sales-late-fee-panel` memakai
+   `useRef(newIdempotencyKey())`; `recurring-transaction-form` menyetelnya
+   hanya pada jalur tambah, yang memang benar).
+3. **Action ber-`reason` opsional yang menolak alasan kosong** (4 kandidat).
+   Ketiganya yang punya UI sudah memakai `deleteReasonLabel`; yang keempat
+   (`reverseVendorPayment`) diselesaikan putaran 230.
+4. **Action ber-izin yang menulis tanpa `revalidatePath`** (7 kandidat).
+   Semuanya memakai helper bersama: `finishJournalMutation`,
+   `revalidatePeriodConsumers`, atau mengembalikan service yang me-revalidate.
+
+Dua kelas yang **sudah habis** dan tidak perlu dipindai lagi:
+`DeleteButton`/`ActionDropdown` tanpa jalur alasan (putaran 229, penjaga
+`reason-action-wiring`), dan tombol Ubah/Hapus tanpa gerbang status (putaran
+226/228, penjaga `detail-action-status-gating`).
+
+Pelajarannya: pemindai berbasis teks untuk "field X tidak disebut" atau
+"fungsi Y tidak dipanggil" mudah memberi positif palsu begitu repo memakai
+helper. Setiap kandidat harus diverifikasi per berkas sebelum dianggap bug —
+dan bila ternyata kosong, itu hasil yang sah untuk dilaporkan, bukan alasan
+mengarang perbaikan.
+
+### Bukti
+
+- Tidak ada perubahan kode; `git status` bersih, CI tetap di `ea5f18c78`.
+- Full Vitest terakhir: 12.752 lulus / 23 dilewati.
+
 ## Putaran 230 — pembayaran vendor yang sudah dibayar tidak punya jalur koreksi
 
 `reverseVendorPayment` sudah ada di backend sejak FIN-BR-008 (jurnal lawan,
