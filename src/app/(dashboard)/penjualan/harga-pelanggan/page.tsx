@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import Link from "next/link"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
 import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
@@ -21,6 +21,11 @@ export const metadata: Metadata = { title: "Daftar Harga Pelanggan" }
 
 export default async function CustomerPricesPage() {
   await requirePermission("view_customer_price_lists")
+
+  // Tautan Ubah per baris menuju halaman yang menuntut
+  // edit_customer_price_lists; tanpa gerbang, peran lihat-saja melihatnya lalu
+  // terpental diam ke dasbor.
+  const canEdit = await hasPermission("edit_customer_price_lists")
 
   const referenceDate = getWibTodayUtcDate()
 
@@ -99,7 +104,7 @@ export default async function CustomerPricesPage() {
         </CanCreate>
       </div>
 
-      <CustomerPriceTable data={rows} expiringRows={expiringRows} />
+      <CustomerPriceTable data={rows} expiringRows={expiringRows} canEdit={canEdit} />
     </div>
   )
 }

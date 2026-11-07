@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import Link from "next/link"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
 import { VendorPriceTable } from "./_components/vendor-price-table"
@@ -14,6 +14,10 @@ export const metadata: Metadata = { title: "Harga Pemasok" }
 
 export default async function VendorPricesPage() {
   await requirePermission("view_vendor_prices")
+
+  // Tautan Ubah per baris menuju halaman yang menuntut edit_vendor_prices;
+  // tanpa gerbang, peran lihat-saja melihatnya lalu terpental diam ke dasbor.
+  const canEdit = await hasPermission("edit_vendor_prices")
 
   const prices = await prisma.vendorItemPrice.findMany({
     orderBy: [{ vendorId: "asc" }, { itemId: "asc" }, { minQty: "asc" }],
@@ -61,7 +65,7 @@ export default async function VendorPricesPage() {
         </CanCreate>
       </div>
 
-      <VendorPriceTable data={rows} />
+      <VendorPriceTable data={rows} canEdit={canEdit} />
     </div>
   )
 }

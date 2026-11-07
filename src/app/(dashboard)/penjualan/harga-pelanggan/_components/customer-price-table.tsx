@@ -25,7 +25,8 @@ export interface CustomerPriceRow {
 
 const columnHelper = createColumnHelper<CustomerPriceRow>()
 
-const columns = [
+function buildColumns(canEdit: boolean) {
+  return [
   columnHelper.accessor("categoryName", { header: "Kategori Pelanggan" }),
   columnHelper.accessor("itemLabel", { header: "Barang" }),
   columnHelper.accessor("minQty", {
@@ -83,12 +84,16 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <div className="flex items-center gap-2">
-        <Link
-          href={`/penjualan/harga-pelanggan/${info.row.original.id}/ubah`}
-          className="text-sm text-primary hover:underline"
-        >
-          Ubah
-        </Link>
+        {/* Tautan Ubah menuju halaman `edit_customer_price_lists`; peran
+            lihat-saja yang melihatnya akan terpental diam ke dasbor. */}
+        {canEdit && (
+          <Link
+            href={`/penjualan/harga-pelanggan/${info.row.original.id}/ubah`}
+            className="text-sm text-primary hover:underline"
+          >
+            Ubah
+          </Link>
+        )}
         <ActionDropdown
           deleteAction={deleteCustomerPriceList}
           deleteId={info.row.original.id}
@@ -97,15 +102,20 @@ const columns = [
       </div>
     ),
   }),
-]
+  ]
+}
 
 export function CustomerPriceTable({
   data,
   expiringRows,
+  canEdit = false,
 }: {
   data: CustomerPriceRow[]
   expiringRows?: CustomerPriceRow[]
+  /** edit_customer_price_lists — dihitung server di halaman pemanggil. */
+  canEdit?: boolean
 }) {
+  const columns = buildColumns(canEdit)
   return (
     <div className="flex flex-col gap-6">
       <DataTable

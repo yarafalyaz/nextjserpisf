@@ -5266,6 +5266,41 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 224 — tautan Ubah di daftar harga pelanggan/pemasok tanpa gerbang izin
+
+Pola putaran 220–223 pada halaman LIST: `penjualan/harga-pelanggan` dan
+`pembelian/harga-pemasok` masing-masing hanya menuntut `view_customer_price_lists`
+/ `view_vendor_prices`, tetapi kolom Aksi merender tautan Ubah untuk setiap
+baris. Halaman tujuannya (`/[id]/ubah`) menuntut `edit_customer_price_lists` /
+`edit_vendor_prices` lalu `redirect("/")` saat gagal — peran lihat-saja
+mengklik Ubah dan terpental diam ke dasbor.
+
+Kedua tabel adalah komponen klien, jadi izin dioper sebagai prop `canEdit`
+(dihitung `hasPermission` di halaman server), mengikuti pola
+`PurchaseRequestTable.canCreatePurchaseOrder`. Default `canEdit = false`
+(fail-closed) karena kedua tabel hanya dipakai satu tempat.
+
+Catatan cakupan: pemindaian menyeluruh 45 `DeleteButton` di halaman detail
+menemukan semuanya sudah bergerbang (`<CanCreate permission="…">` atau
+`{canDelete && …}`), dan 7 `StatusActions` semuanya sudah menerima `canAct`.
+Satu-satunya sisa yang belum bergerbang adalah `DeleteButton` di
+`pengaturan/peran` — tetapi halaman itu sendiri menuntut `manage_roles`, izin
+yang sama dengan `deleteRole`, jadi tidak ada peran yang bisa melihat tanpa
+boleh menghapus. Itu sebabnya pemindaian generik harus dibaca bersama izin
+halaman, bukan hanya keberadaan `hasPermission` di berkas.
+
+### Bukti
+
+- Tes merah→hijau: mencabut `{canEdit && (` pada tabel harga pemasok membuat
+  penjaga paritas gagal tepat pada tes ini (11 lulus / 1 gagal), dikembalikan →
+  12/12.
+- Tes komponen baru `vendor-price-table.test.tsx` (3 tes) dan satu tes tambahan
+  di `customer-price-form.test.tsx` menutup kedua nilai `canEdit` plus default
+  fail-closed.
+- `npx tsc --noEmit` bersih; ESLint pada kedua direktori + berkas tes: bersih.
+- Full Vitest: 12.711 lulus / 23 dilewati (dari 12.706; +5 tes).
+- `npm run build` lulus pada percobaan pertama (Compiled successfully, 15,2 s).
+
 ## Putaran 223 — tombol Ubah/Hapus/aksi alur di halaman detail tanpa gerbang izin
 
 Lanjutan pola putaran 220–222, kali ini pada tombol aksi (bukan tautan buat

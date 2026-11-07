@@ -221,6 +221,37 @@ describe("paritas izin halaman detail/edit vs list/action (#53)", () => {
     expect(purchaseRequest).toContain("{canDelete && <DeleteButton")
   })
 
+  it("daftar harga pelanggan/pemasok menyembunyikan tautan Ubah tanpa izin edit", () => {
+    // Halaman list hanya menuntut view_*; halaman /[id]/ubah menuntut
+    // edit_* lalu redirect("/") saat gagal, jadi tautan tanpa gerbang
+    // mengantar peran lihat-saja ke dasbor tanpa pesan.
+    const customerTable = readFileSync(
+      join(DASHBOARD, "penjualan/harga-pelanggan/_components/customer-price-table.tsx"),
+      "utf8",
+    )
+    expect(customerTable).toMatch(/canEdit\s*&&\s*\(\s*<Link/)
+    expect(customerTable).toContain("canEdit = false")
+    const customerPage = readFileSync(
+      join(DASHBOARD, "penjualan/harga-pelanggan/page.tsx"),
+      "utf8",
+    )
+    expect(customerPage).toContain('hasPermission("edit_customer_price_lists")')
+    expect(customerPage).toMatch(/canEdit=\{canEdit\}/)
+
+    const vendorTable = readFileSync(
+      join(DASHBOARD, "pembelian/harga-pemasok/_components/vendor-price-table.tsx"),
+      "utf8",
+    )
+    expect(vendorTable).toMatch(/canEdit\s*&&\s*\(\s*<Link/)
+    expect(vendorTable).toContain("canEdit = false")
+    const vendorPage = readFileSync(
+      join(DASHBOARD, "pembelian/harga-pemasok/page.tsx"),
+      "utf8",
+    )
+    expect(vendorPage).toContain('hasPermission("edit_vendor_prices")')
+    expect(vendorPage).toMatch(/canEdit=\{canEdit\}/)
+  })
+
   it("setiap halaman hub modul memiliki guard izin (requirePermission atau requireAnyPermission)", () => {
     const hubModules = [
       "master",

@@ -192,4 +192,28 @@ describe("CustomerPriceTable (AC-B2-1)", () => {
     act(() => root.unmount())
     container.remove()
   })
+
+  /**
+   * Regresi putaran 224: daftar harga hanya menuntut view_customer_price_lists,
+   * sedangkan halaman `/[id]/ubah` menuntut edit_customer_price_lists lalu
+   * redirect("/") saat gagal. Tanpa prop canEdit, peran lihat-saja melihat
+   * tautan Ubah dan terpental diam ke dasbor.
+   */
+  it("tautan Ubah hanya tampil bila canEdit", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const root = render(container, <CustomerPriceTable data={[baseRow]} canEdit={false} />)
+    expect(container.textContent ?? "").not.toContain("Ubah")
+    expect(container.querySelector('a[href$="/ubah"]')).toBeNull()
+    act(() => root.unmount())
+    container.remove()
+
+    const allowed = document.createElement("div")
+    document.body.appendChild(allowed)
+    const allowedRoot = render(allowed, <CustomerPriceTable data={[baseRow]} canEdit />)
+    const link = allowed.querySelector('a[href="/penjualan/harga-pelanggan/1/ubah"]')
+    expect(link?.textContent).toContain("Ubah")
+    act(() => allowedRoot.unmount())
+    allowed.remove()
+  })
 })
