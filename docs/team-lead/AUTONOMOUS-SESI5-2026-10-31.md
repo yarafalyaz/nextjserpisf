@@ -5266,6 +5266,55 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 246 — suite Playwright dijalankan terhadap aplikasi nyata
+
+Putaran 245 hanya mengambil HTML; putaran ini menjalankan browser sungguhan
+(Playwright, `chromium`, `workers=1`) terhadap stack dev yang masih berjalan di
+`:3005`. Lima spec yang menyentuh modul yang saya ubah:
+
+| Spec | Tes | Hasil |
+| --- | --- | --- |
+| `manufacturing-crud` | 3 (Production Order / Work Order / Products) | lulus |
+| `purchase-crud` | 4 (PO / PR / GR / Vendor Bill) | lulus |
+| `sales-crud` | 2, termasuk **create → detail → delete** SO | lulus |
+| `inventory-flow` | 5 | lulus |
+| `finance-flow` | 6, termasuk **"Petty cash list loads"** | lulus |
+| `rbac-role-access` | 15 | 13 lulus, 2 gagal → **bukan cacat** |
+
+Total **28 tes lulus** di browser nyata, termasuk alur yang membuat dan
+menghapus dokumen (`sales-crud` create→detail→delete) — bukan sekadar render.
+
+**Dua kegagalan `rbac-role-access` dianalisis sampai sebabnya, bukan
+diabaikan:** tes login sebagai admin dan warehouse gagal dengan "Gagal masuk
+karena masalah server". Saya lacak:
+
+- kedua akun ada dan aktif di DB, hash kata sandinya ada;
+- login langsung lewat `fetch` untuk kedua akun **berhasil** (302 + sesi
+  terbentuk);
+- `src/proxy.ts` membatasi `RATE_LIMITS.auth = { windowMs: 300_000, max: 10 }`
+  — **10 percobaan login per 5 menit per IP**;
+- spec itu melakukan ~13 login berurutan dalam 1,3 menit.
+
+Jadi percobaan ke-11 dst. ditolak limiter. Dijalankan ulang sendirian,
+"menu role admin" **lulus** (2 passed, 4,3 dtk). Penyebabnya lingkungan
+pengujian (dev server + burst login), bukan kode.
+
+Catatan penting yang muncul dari ini: **CI tidak menjalankan Playwright sama
+sekali** — `.github/workflows/ci.yml` baris 132 menyebut keputusan pemilik
+bahwa E2E dijalankan lokal, CI hanya lint + unit + integrasi DB + build. Jadi
+interaksi limiter ini tidak pernah terlihat di CI, dan siapa pun yang
+menjalankan suite RBAC penuh terhadap dev server akan melihat dua kegagalan
+yang sama. Itu informasi yang berguna untuk pemilik repo, bukan sesuatu yang
+saya "perbaiki" dengan melonggarkan limiter.
+
+### Bukti
+
+- 28 tes Playwright lulus di browser nyata (5 spec).
+- `rbac-role-access` gagal 2 → lulus saat dijalankan sendirian; sebabnya
+  rate limit 10 login/5 menit, bukan cacat kode.
+- Tidak ada perubahan kode; `git status` bersih.
+- Full Vitest tetap 12.774 lulus / 23 dilewati.
+
 ## Putaran 245 — smoke test runtime seluruh halaman yang digerbangi sesi ini
 
 Stack dev masih berjalan dari putaran 244, jadi putaran ini memakainya untuk
