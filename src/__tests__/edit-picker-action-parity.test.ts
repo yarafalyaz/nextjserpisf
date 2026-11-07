@@ -171,9 +171,47 @@ describe("picker halaman form vs penjaga server action (putaran 225)", () => {
         "src/app/(dashboard)/inventaris/permintaan-gudang/[slug]/ubah/page.tsx",
         /linkedWorkOrder/,
       ],
+      // Putaran 227: vendor/pelanggan yang sudah tertaut pada dokumen draft.
+      ["src/app/(dashboard)/pembelian/tagihan/[slug]/ubah/page.tsx", /linkedVendor/],
+      ["src/app/(dashboard)/pembelian/pesanan/[slug]/ubah/page.tsx", /linkedVendor/],
+      [
+        "src/app/(dashboard)/pembelian/pembayaran-vendor/[slug]/ubah/page.tsx",
+        /linkedVendor/,
+      ],
+      ["src/app/(dashboard)/penjualan/pesanan/[slug]/ubah/page.tsx", /linkedCustomer/],
     ]
     for (const [file, pattern] of cases) {
       expect(pattern.test(read(file)), `${file}: fallback rekaman tertaut hilang`).toBe(true)
+    }
+  })
+
+  it("picker vendor/pelanggan di halaman ubah tidak menawarkan rekaman nonaktif (putaran 227)", () => {
+    // Action hanya menilai liveness saat vendor/pelanggan BERPINDAH, jadi
+    // menawarkan yang nonaktif berarti form menawarkan pilihan yang pasti
+    // ditolak tepat ketika operator memilihnya.
+    //
+    // Regex menempel pada pemanggilan delegate-nya: halaman ini juga memuat
+    // picker barang (`isActive: true, deletedAt: null`) yang akan memuaskan
+    // pemeriksaan longgar dan menyembunyikan regresi pada picker vendor.
+    const cases: Array<[string, string]> = [
+      ["src/app/(dashboard)/pembelian/tagihan/[slug]/ubah/page.tsx", "vendor"],
+      ["src/app/(dashboard)/pembelian/pesanan/[slug]/ubah/page.tsx", "vendor"],
+      ["src/app/(dashboard)/pembelian/pembayaran-vendor/[slug]/ubah/page.tsx", "vendor"],
+      ["src/app/(dashboard)/penjualan/pesanan/[slug]/ubah/page.tsx", "customer"],
+    ]
+    for (const [file, model] of cases) {
+      const src = read(file)
+      const filtered = new RegExp(
+        `prisma\\.${model}\\.findMany\\(\\{\\s*\\n?\\s*where:\\s*\\{\\s*isActive:\\s*true,\\s*deletedAt:\\s*null\\s*\\}`,
+      )
+      expect(
+        filtered.test(src),
+        `${file}: prisma.${model}.findMany masih memuat rekaman nonaktif/terhapus`,
+      ).toBe(true)
+      expect(
+        /vendorsRaw|customersRaw/.test(src),
+        `${file}: daftar mentah hilang — fallback rekaman tertaut butuh daftar tersaring`,
+      ).toBe(true)
     }
   })
 

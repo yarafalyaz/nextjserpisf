@@ -66,9 +66,12 @@ export default async function EditPage({
     })),
   };
 
-  const [vendors, items] = await Promise.all([
+  const [vendorsRaw, items] = await Promise.all([
+    // Vendor nonaktif/terhapus ditolak assertLiveVendorTx saat vendor
+    // BERPINDAH, jadi jangan ditawarkan. Vendor yang SUDAH tertaut tetap
+    // ditampilkan lewat fallback di bawah.
     prisma.vendor.findMany({
-      where: { deletedAt: null },
+      where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
       select: { id: true, name: true, paymentTerm: { select: { name: true, code: true, days: true } } },
     }),
@@ -86,6 +89,17 @@ export default async function EditPage({
       })
       .then((items) => items.map((i) => ({ ...i, cost: String(i.cost) }))),
   ]);
+
+  // Vendor yang sudah tertaut wajib tetap tampil walau kini nonaktif/terhapus
+  // (updatePurchaseOrder hanya menilai liveness saat vendor BERPINDAH).
+  const linkedVendor =
+    data.vendorId && !vendorsRaw.some((v) => v.id === data.vendorId)
+      ? await prisma.vendor.findUnique({
+          where: { id: data.vendorId },
+          select: { id: true, name: true, paymentTerm: { select: { name: true, code: true, days: true } } },
+        })
+      : null
+  const vendors = linkedVendor ? [linkedVendor, ...vendorsRaw] : vendorsRaw
 
   return (
     <div className="flex flex-col gap-6">

@@ -80,20 +80,20 @@ export default async function EditPage({
     })),
   };
 
-  const [vendors, withholdingTypes, items, projects] = await Promise.all([
+  const [vendorsRaw, withholdingTypes, items, projects] = await Promise.all([
+    // Vendor nonaktif/terhapus ditolak assertLiveVendorTx saat vendor
+    // BERPINDAH, jadi jangan ditawarkan. Vendor yang SUDAH tertaut tetap
+    // ditampilkan lewat fallback di bawah — kalau tidak, Combobox kosong dan
+    // menyimpan ulang memindah tagihan ke vendor pertama.
     prisma.vendor.findMany({
-      where: { deletedAt: null },
+      where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
       select: {
         id: true,
         name: true,
         paymentTerm: { select: { days: true, isActive: true } },
       },
-    }).then((rows) => rows.map((v) => ({
-      id: v.id,
-      name: v.name,
-      paymentTermDays: v.paymentTerm?.isActive ? v.paymentTerm.days : null,
-    }))),
+    }),
     prisma.withholdingTaxType.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { code: "asc" },
@@ -117,6 +117,21 @@ export default async function EditPage({
       select: { id: true, name: true, documentNo: true },
     }),
   ]);
+
+  // Vendor yang sudah tertaut wajib tetap tampil walau kini nonaktif/terhapus
+  // (updateVendorBill hanya menilai liveness saat vendor BERPINDAH).
+  const linkedVendor =
+    data.vendorId && !vendorsRaw.some((v) => v.id === data.vendorId)
+      ? await prisma.vendor.findUnique({
+          where: { id: data.vendorId },
+          select: { id: true, name: true, paymentTerm: { select: { days: true, isActive: true } } },
+        })
+      : null
+  const vendors = (linkedVendor ? [linkedVendor, ...vendorsRaw] : vendorsRaw).map((v) => ({
+    id: v.id,
+    name: v.name,
+    paymentTermDays: v.paymentTerm?.isActive ? v.paymentTerm.days : null,
+  }))
 
   return (
     <div className="flex flex-col gap-6">

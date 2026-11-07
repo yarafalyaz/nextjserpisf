@@ -64,12 +64,23 @@ export default async function EditPage({
     return orderLockedGuard();
   }
 
-  const [customers] = await Promise.all([
+  const [customersRaw] = await Promise.all([
+    // Pelanggan nonaktif/terhapus ditolak assertCustomerLiveForNewDocument
+    // saat pelanggan BERPINDAH, jadi jangan ditawarkan. Pelanggan yang SUDAH
+    // tertaut tetap ditampilkan lewat fallback di bawah.
     prisma.customer.findMany({
-      where: { deletedAt: null },
+      where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
     }),
-  ]);
+  ])
+
+  // Pelanggan yang sudah tertaut wajib tetap tampil walau kini nonaktif
+  // (updateSalesOrder hanya menilai liveness saat pelanggan BERPINDAH).
+  const linkedCustomer =
+    lockedOrder.customerId && !customersRaw.some((c) => c.id === lockedOrder.customerId)
+      ? await prisma.customer.findUnique({ where: { id: lockedOrder.customerId } })
+      : null
+  const customers = linkedCustomer ? [linkedCustomer, ...customersRaw] : customersRaw;
 
   return (
     <div className="flex flex-col gap-6">

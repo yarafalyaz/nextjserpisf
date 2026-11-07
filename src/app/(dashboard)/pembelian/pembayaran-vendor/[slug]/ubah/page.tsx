@@ -45,8 +45,11 @@ export default async function EditPage({
     vendorBillId: data.vendorBillId,
   }
 
-  const [vendors, bills] = await Promise.all([
-    prisma.vendor.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }),
+  const [vendorsRaw, bills] = await Promise.all([
+    // Vendor nonaktif/terhapus ditolak saat vendor BERPINDAH (lihat
+    // updateVendorPayment). Vendor yang sudah tertaut tetap ditampilkan lewat
+    // fallback di bawah.
+    prisma.vendor.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" } }),
     // Picker dan updateVendorPayment membaca himpunan yang SAMA. Dulu halaman
     // ini memakai `notIn: ["paid", "cancelled"]` sehingga tagihan KONSEP ikut
     // ditawarkan padahal action selalu menolak draft ("konfirmasi dulu") —
@@ -73,6 +76,14 @@ export default async function EditPage({
     grandTotal: Number(b.grandTotal),
     balanceDue: Number(b.balanceDue),
   }))
+
+  // Vendor yang sudah tertaut wajib tetap tampil walau kini nonaktif —
+  // updateVendorPayment hanya menilai liveness saat vendor BERPINDAH.
+  const linkedVendor =
+    data.vendorId && !vendorsRaw.some((v) => v.id === data.vendorId)
+      ? await prisma.vendor.findUnique({ where: { id: data.vendorId } })
+      : null
+  const vendors = linkedVendor ? [linkedVendor, ...vendorsRaw] : vendorsRaw
 
   return (
     <div className="flex flex-col gap-6">

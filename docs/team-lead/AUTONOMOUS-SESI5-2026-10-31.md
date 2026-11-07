@@ -5266,6 +5266,49 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 227 — picker vendor/pelanggan di halaman ubah menawarkan rekaman nonaktif
+
+Lanjutan putaran 225, tetapi sasarannya master data, bukan status dokumen.
+Empat halaman ubah memuat `findMany({ where: { deletedAt: null } })` — hanya
+menyaring yang terhapus, bukan yang dinonaktifkan:
+
+- `pembelian/tagihan/[slug]/ubah` — picker vendor
+- `pembelian/pesanan/[slug]/ubah` — picker vendor
+- `pembelian/pembayaran-vendor/[slug]/ubah` — picker vendor
+- `penjualan/pesanan/[slug]/ubah` — picker pelanggan
+
+Action-nya menilai kelayakan hanya saat vendor/pelanggan **BERPINDAH**
+(`v.vendorId !== latestBill.vendorId` → `assertLiveVendorTx`; pelanggan lewat
+`assertCustomerLiveForNewDocument`). Artinya: mempertahankan vendor lama yang
+sejak itu dinonaktifkan tetap sah, tetapi memilih vendor nonaktif dari daftar
+pasti ditolak. Picker yang menawarkannya berarti form memperlihatkan pilihan
+yang gagal tepat ketika operator memakainya — dan untuk tagihan/pesanan draft
+yang baru dibuat, operator memang harus memilih dari daftar itu.
+
+Halaman TAMBAH pasangannya sudah benar (`isActive: true, deletedAt: null`),
+jadi ini drift yang sama seperti putaran 225: satu sisi diperbaiki, sisi
+lainnya tertinggal.
+
+Menyaring picker tanpa fallback akan mengosongkan Combobox untuk dokumen yang
+sudah tertaut ke vendor/pelanggan yang sejak itu nonaktif — dan menyimpan
+ulang memindahkannya ke entri pertama daftar. Karena itu setiap halaman
+menyimpan daftar mentah (`vendorsRaw` / `customersRaw`) dan menambahkan
+rekaman tertaut lewat `linkedVendor` / `linkedCustomer`, pola yang sama dengan
+putaran 225.
+
+### Bukti
+
+- Tes merah→hijau: mengembalikan picker vendor halaman ubah PO ke
+  `where: { deletedAt: null }` membuat penjaga gagal (10 lulus / 1 gagal),
+  dikembalikan → 11/11.
+- Percobaan pertama penjaga ini **tidak** menangkap regresi itu karena
+  regexnya longgar dan halaman yang sama juga memuat picker barang dengan
+  `isActive: true, deletedAt: null`; regex ditempelkan ke pemanggilan
+  delegate (`prisma.vendor.findMany(`) supaya tidak bisa dipuaskan picker lain.
+- `npx tsc --noEmit` bersih; ESLint pada keempat halaman bersih.
+- Full Vitest: 12.744 lulus / 23 dilewati (dari 12.743; +1 tes).
+- `npm run build` lulus pada percobaan pertama (Compiled successfully, 16,7 s).
+
 ## Putaran 226 — tombol Ubah/Hapus di halaman detail tanpa gerbang STATUS
 
 Kelas bug ketiga, berbeda dari 220–225: bukan izin, bukan daftar picker,
