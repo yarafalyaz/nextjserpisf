@@ -1,5 +1,16 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from "vitest"
+import { describe, it, expect, afterEach, vi } from "vitest"
+
+// Kartu kini merender ReleaseReservationButton, yang menarik server action
+// (rantai next-auth -> next/server tak bisa dimuat di vitest). Yang diuji di
+// sini presentasi baris, bukan aksinya.
+vi.mock("@/actions/manufacturing.actions", () => ({
+  releaseStockReservation: vi.fn(async () => ({ success: true })),
+}))
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
+}))
+vi.mock("@/lib/utils/toast", () => ({ showSuccess: vi.fn(), showError: vi.fn() }))
 
 import { WorkOrderReservationsCard } from "../work-order-reservations-card"
 import {

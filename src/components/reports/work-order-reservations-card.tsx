@@ -8,6 +8,7 @@ import {
   DetailTableTd,
 } from "@/components/ui/detail-table"
 import { ReportCardShell } from "./report-card-shell"
+import { ReleaseReservationButton } from "./release-reservation-button"
 import { formatDate } from "@/lib/utils/format"
 
 /**
@@ -23,7 +24,8 @@ import { formatDate } from "@/lib/utils/format"
  */
 export function WorkOrderReservationsCard({
   reservations,
-}: Readonly<{ reservations: WorkOrderReservations }>) {
+  canRelease = false,
+}: Readonly<{ reservations: WorkOrderReservations; canRelease?: boolean }>) {
   const { rows, unreserved } = reservations
   const summary =
     rows.length > 0
@@ -47,6 +49,7 @@ export function WorkOrderReservationsCard({
             <DetailTableTh align="right">Sisa</DetailTableTh>
             <DetailTableTh>Status</DetailTableTh>
             <DetailTableTh>Dirilis</DetailTableTh>
+            {canRelease ? <DetailTableTh>Aksi</DetailTableTh> : null}
           </DetailTableHead>
           <DetailTableBody>
             {rows.map((row) => (
@@ -62,6 +65,15 @@ export function WorkOrderReservationsCard({
                     ? `${formatDate(row.releasedAt, { format: "numeric" })}${row.releasedByName ? ` oleh ${row.releasedByName}` : ""}${row.releaseReason ? ` — ${row.releaseReason}` : ""}`
                     : "-"}
                 </DetailTableTd>
+                {/* BR-RES-09: hanya baris yang masih aktif yang bisa dilepas;
+                    baris released/expired tidak menahan stok lagi. */}
+                {canRelease ? (
+                  <DetailTableTd>
+                    {row.status === "active" ? (
+                      <ReleaseReservationButton reservationId={row.id} />
+                    ) : null}
+                  </DetailTableTd>
+                ) : null}
               </DetailTableRow>
             ))}
           </DetailTableBody>

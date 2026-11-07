@@ -5266,6 +5266,48 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 233 — reservasi stok aktif tidak bisa dilepas manual dari UI
+
+Sisa utang ketiga dari `ALLOWED_UNWIRED`. BR-RES-09 / AC-RES-6 menyebut
+pelepasan reservasi manual sebagai fitur tersendiri — dengan alasan wajib dan
+jejak siapa/kapan/alasan di baris reservasi + ActivityLog — tetapi
+`releaseStockReservation` tidak punya pemanggil UI sama sekali. Yang tersambung
+hanya helper transaksional internal (`releaseStockReservationTx`) yang dipakai
+aksi lain.
+
+Severity-nya **lebih rendah** dari putaran 229–232 dan itu perlu dinyatakan
+jelas: reservasi punya `expiresAt` = `startDate + 14 hari`
+(`STOCK_RESERVATION_EXPIRY_DAYS`), dan loader kartu menjalankan lazy-expire
+setiap kali halaman dibuka. Jadi ini bukan jalan buntu permanen — stok akan
+kembali sendiri. Yang hilang adalah **kendali**: operator tidak bisa
+melepaskan stok yang masih ditahan padahal job-nya sudah tidak membutuhkannya,
+dan harus menunggu sampai 14 hari.
+
+Perbaikannya: komponen `ReleaseReservationButton` (pola `VoidButton` —
+`useConfirmReasonAction` + `ReasonField`, alasan wajib) dirender per baris
+`active` di kartu reservasi. Kolom Aksi hanya muncul bila `canRelease`, yang
+dioper halaman dari `complete_work_orders` (izin yang dituntut action-nya).
+
+Baris `released`/`expired` sengaja tidak menawarkan tombol: stoknya sudah
+tidak ditahan, jadi aksinya pasti ditolak.
+
+Penjaga dua-arah memerah seperti seharusnya; `releaseStockReservation`
+dipindahkan ke `REQUIRED_CALLERS` dan entri bekunya dipangkas. Tersisa satu
+aksi di `ALLOWED_UNWIRED`: `reserveStockForWorkOrder`.
+
+### Bukti
+
+- Tes merah→hijau: mencabut gerbang `row.status === "active"` membuat dua tes
+  gagal ("baris yang sudah dilepas…", "baris kedaluwarsa…"), dikembalikan →
+  4/4.
+- Tes kartu lama `work-order-reservations-card.test.tsx` ikut gagal saat
+  pertama dijalankan: kartu kini menarik rantai `next-auth` → `next/server`
+  yang tak bisa dimuat vitest. Mock aksi ditambahkan ke berkas itu (pola yang
+  sama dengan tes WorkOrderActions), bukan mengecualikan tesnya.
+- `npx tsc --noEmit` bersih; ESLint pada berkas tersentuh bersih.
+- Full Vitest: 12.758 lulus / 23 dilewati (dari 12.754; +4 tes).
+- `npm run build` lulus pada percobaan pertama (Compiled successfully, 18,0 s).
+
 ## Putaran 232 — perintah kerja berjalan tidak bisa dibatalkan dari UI
 
 Sisa utang kedua dari daftar `ALLOWED_UNWIRED` (putaran 230 membayar yang

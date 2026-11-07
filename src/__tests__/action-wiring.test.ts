@@ -301,11 +301,9 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // loader data langsung (pola RSC existing), aksi ini jalur client setara.
   "src/actions/item-substitute.actions.ts::getSubstituteSuggestionsForWorkOrder":
     "F-2026-10-22-069-S: detail WO membaca getWorkOrderSubstituteSuggestions-data langsung di RSC; aksi setara untuk pemanggil client",
-  // F-2026-10-21-012 inti (t_34bb293d): cancelWorkOrder kini dirujuk
-  // WorkOrderActions di detail perintah kerja (putaran 232) — entri batal
-  // dibuang; dua aksi reservasi masih menunggu tombolnya.
-  "src/actions/manufacturing.actions.ts::releaseStockReservation":
-    "F-2026-10-21-012 inti backend; tombol lepas reservasi menyusul (frontend)",
+  // F-2026-10-21-012 inti (t_34bb293d): cancelWorkOrder (putaran 232) dan
+  // releaseStockReservation (putaran 233) kini dirujuk UI detail perintah
+  // kerja — entri beku keduanya dibuang. Tersisa reserveStockForWorkOrder.
   "src/actions/manufacturing.actions.ts::reserveStockForWorkOrder":
     "F-2026-10-21-012 inti backend; tombol reservasi ulang menyusul (frontend)",
   // F-2026-10-22-072-S + F-2026-10-22-078-S: aksi catat-lepas registri

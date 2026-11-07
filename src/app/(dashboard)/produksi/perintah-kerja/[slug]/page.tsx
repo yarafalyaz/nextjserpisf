@@ -697,7 +697,9 @@ export default async function WorkOrderDetailPage({
         canEdit={canEditCo}
         canApply={canApplyCo}
       />
-      {reservations ? <WorkOrderReservationsCard reservations={reservations} /> : null}
+      {reservations ? (
+        <WorkOrderReservationsCard reservations={reservations} canRelease={canCancelWorkOrder} />
+      ) : null}
 
       <WhatsappTrailNote trail={whatsappTrail} />
 
