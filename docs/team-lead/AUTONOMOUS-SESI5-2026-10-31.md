@@ -5266,6 +5266,42 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 234 — `reserveStockForWorkOrder` sengaja dibiarkan tak terjangkau
+
+Aksi terakhir di `ALLOWED_UNWIRED`. Saya periksa dan memutuskan **tidak**
+menyambungkannya, karena ini bukan tombol yang lupa dipasang melainkan fitur
+yang butuh keputusan desain:
+
+`reserveStockForWorkOrder({ workOrderId, workOrderItemId, warehouseId, qty })`
+membuat reservasi **manual** untuk satu baris perintah kerja di gudang yang
+dipilih operator. Jalur otomatis sudah ada dan sudah tersambung: saat
+`startWorkOrder`, `createReservationsForWorkOrderStartTx` membuat reservasi
+untuk semua baris sekaligus (BR-RES-01/07).
+
+Yang belum ada bukan tombolnya, melainkan **daftar pilihannya**:
+
+- baris `unreserved` di kartu reservasi justru ada karena gudangnya **tidak
+  bisa ditentukan** (tidak ada MI, tidak ada `defaultWarehouseId`) — jadi
+  daftar itu tidak bisa langsung dipakai sebagai sumber pilihan;
+- membuat picker gudang + qty per baris berarti memutuskan aturan baru:
+  bolehkah operator mereservasi sebagian, apakah perlu menampilkan
+  ketersediaan per gudang, bagaimana bila gudangnya beda dengan MI yang sudah
+  berjalan.
+
+Itu keputusan produk, bukan perbaikan bug. Membangunnya sekarang berarti
+mengarang spesifikasi. Karena itu entri `ALLOWED_UNWIRED` dibiarkan — dengan
+alasan yang diperjelas — dan statusnya dicatat di sini.
+
+Cakupan lain yang diperiksa putaran ini: izin `complete_work_orders` dan
+`delete_petty_cash` yang dipakai tiga tombol baru putaran 229–233 ada di
+katalog modul dan `permission-seed-parity` lulus (11/11), jadi peran selain
+super_admin benar-benar bisa melihat tombolnya.
+
+### Bukti
+
+- Tidak ada perubahan kode; `git status` bersih.
+- `permission-seed-parity` 11/11 lulus.
+
 ## Putaran 233 — reservasi stok aktif tidak bisa dilepas manual dari UI
 
 Sisa utang ketiga dari `ALLOWED_UNWIRED`. BR-RES-09 / AC-RES-6 menyebut
