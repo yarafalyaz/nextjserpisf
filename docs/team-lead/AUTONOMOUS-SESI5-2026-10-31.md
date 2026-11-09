@@ -5266,6 +5266,41 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 252 — integritas keselarasan entitas (customer/vendor) lintas-dokumen berantai
+
+Putaran keenam jalur data: invarian yang memeriksa **keselarasan entitas induk/anak**
+pada dokumen berantai. Di tingkat schema database, kolom `customer_id` dan `vendor_id`
+disimpan redundan di level header masing-masing dokumen transaksi (`sales_orders`,
+`sales_invoices`, `delivery_orders`, `sales_payments`, `sales_returns`, `purchase_orders`,
+`vendor_bills`, `vendor_payments`, `purchase_returns`). Tanpa guard invarian, bug di UI
+atau action bisa memicu pembuatan dokumen anak yang tidak sengaja tertaut ke customer/vendor
+yang berbeda dari dokumen pesanannya (misal: faktur menunjuk SO customer A tetapi mencatat
+customer B).
+
+Tes baru `src/lib/services/__tests__/cross-document-entity-integrity-db.test.ts`
+(read-only, gate `RUN_DB_INTEGRATION=1`), menguji dua rantai utama:
+
+1. **Rantai Penjualan**:
+   - `SalesInvoice` yang merujuk `SalesOrder` wajib mewarisi `customerId` yang identik.
+   - `DeliveryOrder` yang merujuk `SalesOrder` wajib mewarisi `customerId` yang identik.
+   - `SalesPayment` yang memiliki `customerId` wajib identik dengan `customerId` pada
+     faktur yang dilunasinya (`SalesInvoice`).
+   - `SalesReturn` yang merujuk `SalesInvoice` wajib memiliki `customerId` yang identik.
+2. **Rantai Pembelian**:
+   - `VendorBill` yang merujuk `PurchaseOrder` wajib mewarisi `vendorId` yang identik.
+   - `VendorPayment` yang menargetkan `vendorBillId` wajib memiliki `vendorId` yang
+     identik dengan vendor pada tagihan terkait.
+
+**Hasil data dev: 0 ketidaksesuaian entitas (100% konsisten).**
+Seluruh 14 faktur ber-SO, 7 surat jalan ber-SO, serta pembayaran yang ada pada DB dev
+selaras sempurna dengan entitas pemesan asalnya.
+
+### Bukti
+
+- Tes baru 2 tes; lulus terhadap DB dev (`127.0.0.1:3309`), skip bersih tanpa gate (2 skipped).
+- `npx tsc --noEmit` bersih; ESLint pada berkas tes baru bersih (0 error, 0 warning).
+- DB dev hanya dibaca (SELECT `$queryRaw` dengan JOIN); `git status` hanya berkas tes baru + log ini.
+
 ## Putaran 251 — kabar state penomoran tersimpan (`document_sequences`) vs nomor terbit
 
 Putaran kelima jalur data: invarian yang khusus menangkap **restore-lag** —
