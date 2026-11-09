@@ -5266,6 +5266,41 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 253 — integritas relasi RBAC, pengguna, karyawan, dan alur persetujuan
+
+Putaran ketujuh jalur data: invarian yang memeriksa **struktur hak akses, relasi pengguna-karyawan,
+dan langkah alur persetujuan (approval)** di tingkat data tersimpan.
+
+Tes baru `src/lib/services/__tests__/rbac-approval-integrity-db.test.ts`
+(read-only, gate `RUN_DB_INTEGRATION=1`), tiga pemeriksaan:
+
+1. **Integritas Pivot RBAC & Pengguna Aktif**:
+   - Tabel pivot `_UserRoles` tidak boleh memiliki baris yatim (kedua foreign key `A` dan `B` wajib
+     menunjuk role dan user yang benar-benar ada).
+   - Tabel pivot `_RolePermissions` tidak boleh memiliki baris yatim (foreign key `A` dan `B` wajib
+     menunjuk permission dan role yang benar-benar ada).
+   - Seluruh pengguna aktif (`is_active = true`) wajib memiliki setidaknya satu peran (mencegah akun aktif
+     tanpa hak akses yang membingungkan otorisasi).
+2. **Penautan Karyawan ↔ Pengguna**:
+   - Karyawan hidup yang memiliki `user_id` wajib menunjuk user yang benar-benar ada.
+   - Satu akun pengguna tidak boleh ditautkan ke lebih dari satu karyawan aktif (semantik 1-ke-1).
+3. **Validitas Langkah Persetujuan (`ApprovalWorkflowStep`)**:
+   - Setiap langkah persetujuan wajib memiliki penanggung jawab (`role_id` atau `user_id` tidak boleh
+     keduanya NULL, karena langkah tanpa approver membuntukan transaksi).
+   - Bila `role_id` diisi, perannya wajib ada di tabel `roles`.
+   - Bila `user_id` diisi, penggunanya wajib ada di tabel `users`.
+
+**Hasil data dev: 0 cacat (100% valid).**
+Seluruh 10 pengguna dev memiliki peran sah (termasuk 391 permissions terdistribusi), 9 karyawan
+terhubung 1-ke-1 secara konsisten ke akun masing-masing, dan langkah-langkah alur persetujuan
+memiliki target peran yang valid.
+
+### Bukti
+
+- Tes baru 3 tes; semua lulus terhadap DB dev (`127.0.0.1:3309`), skip bersih tanpa gate (3 skipped).
+- `npx tsc --noEmit` bersih; ESLint pada berkas baru bersih.
+- DB dev hanya dibaca (SELECT `$queryRaw` dengan LEFT JOIN); `git status` hanya berkas tes baru + log ini.
+
 ## Putaran 252 — integritas keselarasan entitas (customer/vendor) lintas-dokumen berantai
 
 Putaran keenam jalur data: invarian yang memeriksa **keselarasan entitas induk/anak**
