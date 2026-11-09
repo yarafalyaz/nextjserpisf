@@ -5266,6 +5266,41 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 254 — integritas bagan akun (Chart of Accounts) dan entri pembukuan
+
+Putaran kedelapan jalur data: invarian yang memeriksa **struktur hirarki bagan akun (COA)
+dan baris entri pembukuan (`journal_entries`)**.
+
+Sebagai pondasi akuntansi, pohon akun tidak boleh memiliki referensi induk yang putus atau
+membentuk siklus melingkar (*circular parent*), dan setiap baris pembukuan wajib mematuhi
+prinsip akuntansi berpasangan (*double-entry bookkeeping*).
+
+Tes baru `src/lib/services/__tests__/coa-journal-entry-integrity-db.test.ts`
+(read-only, gate `RUN_DB_INTEGRATION=1`), dua kelompok pemeriksaan:
+
+1. **Integritas Bagan Akun (COA)**:
+   - Kode akun unik: tidak ada duplikasi `code` di antara akun-akun yang hidup (`deleted_at IS NULL`).
+   - Tautan `parent_id` valid: tidak ada baris yang menunjuk akun induk yang tidak ada.
+   - Pohon akun asiklik: diverifikasi menyeluruh menggunakan algoritma pelacakan DFS/Set bahwa
+     tidak ada akun yang terjebak dalam siklus hirarki melingkar (`A -> B -> A`).
+   - Saldo normal selaras: Akun tipe `ASSET` dan `EXPENSE` wajib bersaldo normal `debit`,
+     sedangkan `LIABILITY`, `EQUITY`, dan `REVENUE` wajib bersaldo normal `credit`.
+2. **Validitas Entri Jurnal (`journal_entries`)**:
+   - Integritas referensi: seluruh baris entri pembukuan menunjuk akun (`account_id`) dan
+     jurnal (`journal_id`) yang benar-benar ada (nol entri yatim).
+   - Validitas nilai: tidak ada nilai `debit < 0`, `credit < 0`, `debit = 0 AND credit = 0`,
+     atau bernilai positif di kedua sisi sekaligus (`debit > 0 AND credit > 0`).
+
+**Hasil data dev: 0 anomali (100% konsisten).**
+Seluruh 128 akun memiliki kode unik, pohon hirarki asiklik yang valid, saldo normal tepat,
+dan 114 entri jurnal memenuhi aturan double-entry tanpa cacat.
+
+### Bukti
+
+- Tes baru 2 tes; semua lulus terhadap DB dev (`127.0.0.1:3309`), skip bersih tanpa gate (2 skipped).
+- `npx tsc --noEmit` bersih; ESLint pada berkas baru bersih.
+- DB dev hanya dibaca (SELECT `$queryRaw` & findMany); `git status` hanya berkas tes baru + log ini.
+
 ## Putaran 253 — integritas relasi RBAC, pengguna, karyawan, dan alur persetujuan
 
 Putaran ketujuh jalur data: invarian yang memeriksa **struktur hak akses, relasi pengguna-karyawan,
