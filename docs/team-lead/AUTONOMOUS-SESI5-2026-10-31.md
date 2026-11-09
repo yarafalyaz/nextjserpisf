@@ -5266,6 +5266,59 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 251 — kabar state penomoran tersimpan (`document_sequences`) vs nomor terbit
+
+Putaran kelima jalur data: invarian yang khusus menangkap **restore-lag** —
+`document_sequences.current_value` per kunci wajib ≥ nomor tertinggi yang
+sudah terbit untuk keluarga itu. Kode (`findMaxSequence` + floor-sync di
+`document-number.ts`) memastikan kebenarannya *saat nomor diterbitkan*;
+setelah DB di-restore, tidak ada yang menjamin state counter masih
+mengalahkan data. Tes baru
+`src/lib/services/__tests__/sequence-state-integrity-db.test.ts`
+(read-only, gate `RUN_DB_INTEGRATION=1`).
+
+Format terkalibrasi persis dari bacaan kode:
+
+- **Kompleks** `NNN/PREFIX/CODE/MM/YYYY` → kunci `PREFIX-YYYY-MM`;
+  contoh `010/SO/IRO/10/2026` → keluarga `SO-2026-10`. Ditandai untuk 23
+  pasangan (tabel, kolom `document_no`) + `journals.journal_number`.
+- **Simple** `PREFIX-0001` → kunci = prefix; pasangan kolom master
+  (`customers.code`, `vendors.code`, `employees.employee_no`,
+  `positions.code`, `leads.lead_number`, `cheques.document_no`,
+  `bank_transfers.document_no`, `tax_payments.document_no`).
+- **Tiga rezim jurnal**: digit-first kompleks, stamp-slash
+  `PAY/19/stamp-0008` (date dari timestamp, kunci `JRN-PAY-...`, seq dari
+  pad `-0008` — segmen kedua BUKAN counter: kunci dev memuat pad 8 padahal
+  segmen 19), dan stamp polos `JRN-202610-00006` (kunci `JRN-2026-10`).
+
+Aturan penjaga per keluarga yang terdeteksi: kunci counter **wajib ada**
+(nomor keluarga sah selalu lahir BERSAMA kunci counter-nya via upsert
+layanan — keluarga tanpa kunci = nomor manual) dan `current_value ≥
+max(seq terbit)`. Pemindaian mencakup soft-deleted (kolom `@unique`),
+persis semantik komentar floor di `document-number.ts`.
+
+**Hasil data dev: semua keluarga mutakhir, counter tak tertinggal.**
+Baris di luar rezim yang ditemukan justru datang dari pemetaan; dua
+allowlist baru tercatat:
+
+1. `stock_moves/E2E-GR-POSTING` — baris `document_no` fixture yang lahir
+   lewat `stockMove.create` langsung di `scripts/seed-remaining-e2e.ts`
+   (bukan layanan), dipakai penjualan-posting E2E untuk lapisan FIFO yang
+   siap-posting. Entri dua-arah konsisten konvensi: kalau seed kembali ke
+   rezim kanonis, entri dipangkas.
+2. `customers/ITF021-1793412995628` — kode pelanggan manual (bukan output
+   layanan): kunci counter `ITF021` tak pernah lahir. Juga dua-arah.
+
+E2E-PO-CHAIN + dua kode vendor E2E tetap di allowlist round sebelumnya.
+
+### Bukti
+
+- Tes baru 2 tes; lulus terhadap DB dev (`127.0.0.1:3309`), skip bersih
+  tanpa gate (2 skipped).
+- `npx tsc --noEmit` bersih; ESLint pada berkas baru bersih.
+- DB dev hanya dibaca (SELECT `$queryRaw + groupBy`); `git status` sebelum
+  commit berisi berkas tes + log ini.
+
 ## Putaran 250 — matematika lapisan FIFO + tautan pembayaran di data nyata
 
 Putaran keempat jalur data: kali ini **matematika kecil lapisan stok**
