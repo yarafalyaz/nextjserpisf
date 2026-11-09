@@ -5266,6 +5266,50 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 250 — matematika lapisan FIFO + tautan pembayaran di data nyata
+
+Putaran keempat jalur data: kali ini **matematika kecil lapisan stok**
+yang menopang costing FIFO, sesuatu yang per-baris tidak akan dimintah
+laporan mana pun. Tes baru
+`src/lib/services/__tests__/inventory-payment-integrity-db.test.ts`
+(read-only, gate `RUN_DB_INTEGRATION=1`) — empat pemeriksaan:
+
+1. **Rumus lapisan** — setiap baris `inventory_layers` wajib memenuhi
+   `remaining = qty_in − qty_out`, `remaining ≥ 0`, dan
+   `qty_out ≤ qty_in`. Lapisan yang bocor membuat sampling FIFO melompat:
+   kotor kecil hari ini = laporan valuasi salah di bulan berikutnya.
+2. **Sumber lapisan** — `stock_move_id` adalah kolom WAJIB di schema;
+   setiap lapisan wajib menunjuk gerakan stok yang benar-benar ada
+   (anti-tautan yatim).
+3. **Agregat lintas tabel** — per (item, gudang):
+   `Σ layers.qty_in == Σ moves IN (posted)` dan sama untuk OUT. Kartu
+   stok dibangun dari `stock_moves`, valuasi dari `inventory_layers`;
+   dua pembaca tabel berbeda wajib meluluskan angka yang sama. (Join
+   memakai `<=>` supaya lapisan ber-`warehouseId NULL` — memang
+   dibolehkan schema — tidak salah kelompok.)
+4. **Baut pembayaran** — pembayaran penjualan `posted` wajib menunjuk
+   faktur yang hidup, nominal positif; pembayaran yang kehilangan
+   fakturnya = uang yatim.
+
+**Temuan: kelas pertama bersih di DB dev.** Di luar penjaga, satu sapuan
+mantab juga dijalankan (tanpa penjaga permanen, dengan alasan tersimpan):
+`sales_invoice.paid_amount == Σ pembayaran posted` ternyata PERSIS di
+seluruh faktur dev — tapi guard permanen untuk rumus ini **disengaja
+tidak ditulis**, sebab semantik kolom mengakomodir jalur sah yang tidak
+pembayaran (faktur konversi DP lahir dengan `paidAmount` terisi —
+`sales.actions.ts:1635`; denda telat menambah `paidAmount` tanpa baris
+pembayaran — sales-late-fee), dan mirror mentah akan salah vonis di
+faktur itu. Bila suatu hari angka ini menyarap di faktur biasa, atur
+tangan sebelum menaikkan penjaga.
+
+### Bukti
+
+- Tes baru 4 tes; semua lulus terhadap DB dev (`127.0.0.1:3309`), skip
+  bersih tanpa gate (4 skipped).
+- `npx tsc --noEmit` bersih; ESLint pada berkas baru bersih.
+- DB dev hanya dibaca; `git status` sebelum commit berisi berkas tes +
+  log ini.
+
 ## Putaran 249 — integritas referensi jurnal ↔ dokumen + rezim nomor di DB nyata
 
 Lanjutan langsung putaran 247–248: setelah invarian jumlah dan angka
