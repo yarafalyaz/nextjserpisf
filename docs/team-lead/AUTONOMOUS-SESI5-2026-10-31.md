@@ -5266,6 +5266,57 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 249 — integritas referensi jurnal ↔ dokumen + rezim nomor di DB nyata
+
+Lanjutan langsung putaran 247–248: setelah invarian jumlah dan angka
+laporan, kelas data berikutnya adalah **kaki hubungan yang tidak dilihat
+laporan mana pun** — jurnal yang merujuk dokumen, pasangan reversal, dan
+urutan nomor. Tes baru
+`src/lib/services/__tests__/journal-document-integrity-db.test.ts`
+(read-only, gate `RUN_DB_INTEGRATION=1`), empat pemeriksaan:
+
+1. **Tautan jurnal → baris referensi.** Setiap jurnal ber-`referenceType`
+   (delapan tipe terpeta: SalesPayment, SalesInvoice, SalesReturn,
+   VendorBill, VendorPayment, Expense, BANK_TRANSFER, Journal) wajib
+   menunjuk baris yang ada — dan bila tabel tujuan soft-delete, hanya
+   jurnal `REVERSED` yang boleh merujuk baris void (alur
+   `deleteBankTransfer` yang sah: transfer di-void → jurnal sumber
+   REVERSED menunjuk baris tak-hidup). Tipe baru yang muncul di DB tanpa
+   pemetaan membuat tes merah sebelum tautan itu diam-diam tak diperiksa.
+2. **Pasangan reversal** — setiap jurnal `REVERSED` wajib punya lawan
+   pembalik (`referenceType Journal` yang merujuknya), kemitraan yang
+   menjadi latar TASK-025.
+3. **Pembayaran penjualan `posted`** wajib punya jurnal SalesPayment yang
+   merujuknya (status `REVERSED` sumber tetap dihitung).
+4. **Rezim nomor dokumen** — parser tiga format sah
+   (`NNN/…/MM/YYYY` digit-awal, `PREFIX/NNN/stamp` huruf-awal, dan
+   `PREFIX-YYYYMM-NNN` tanpa slash), keluarga nomor turun ke bulan/tahun
+   supaya reset bulanan tetap sah; dalam satu keluarga, nomor wajib
+   menaik mengikuti id — layanan penomoran tidak bisa menurun.
+
+**Temuan:** satu-satunya baris di luar rezim di DB dev adalah fixture seed
+`E2E-PO-CHAIN` (`scripts/seed-remaining-e2e.ts` menulis `documentNo`
+khusus agar spec bisa mencari teksnya). Ia masuk **NUMBERING_EXCEPTIONS
+dihitung dua arah** sesuai konvensi penjaga repo: kalau suatu hari seed
+lulus ke rezim kanonis, entri itu wajib dipangkas — dan bila kode
+memimbulkan nomor liar baru, tes ini merah sebelum pola menular.
+
+Sisa-hasil putaran: 3 dari 4 pemeriksaan lulus langsung setelah dua
+putaran kalibrasi saya sendiri (parser keluarga nomor yang semula
+menggabungkan bulan berbeda jadi satu keluarga, dan baris void yang
+sempat dianggap tautan putus). Angka `sales_orders` id 17
+(`001/SO/IRO/11/2026`) sempat salah vonis menurun padahal keluarganya
+bulan November — akar masalahnya kalibrasi parser, bukan data. Ini
+contoh sungguhan mengapa keluarga nomor harus sadar-bulan, bukan global.
+
+### Bukti
+
+- Tes baru 4 tes; semua lulus terhadap DB dev (`127.0.0.1:3309`), dan
+  skip bersih tanpa gate (4 skipped).
+- `npx tsc --noEmit` bersih; ESLint pada berkas baru bersih.
+- DB dev hanya dibaca; sinkron `git status` menunjukkan berkas tes + log
+  ini saja.
+
 ## Putaran 248 — rekonsiliasi laporan inti melawan SQL mentah di DB nyata
 
 Putaran 247 mengaudit invarian pada **tabel mentah**; putaran ini naik satu
