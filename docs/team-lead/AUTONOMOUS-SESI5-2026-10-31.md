@@ -5266,6 +5266,52 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 248 — rekonsiliasi laporan inti melawan SQL mentah di DB nyata
+
+Putaran 247 mengaudit invarian pada **tabel mentah**; putaran ini naik satu
+tingkat: apakah **builder laporan** mengerjakan data nyata dengan benar.
+Untuk pertama kalinya sejak putaran 207, angka-angka laporan disilahkan
+— bukan diuji dengan fixture, melainkan dibandingkan dengan derivasi
+`$queryRaw` independen di DB yang sama. Bentuk berkas: tes baru
+`src/lib/reports/__tests__/report-reconciliation-db.test.ts` (gate
+`RUN_DB_INTEGRATION=1`, murni read-only sehingga aman juga terhadap DB dev
+yang dirawat tangan).
+
+Tiga laporan direkonsile, semuanya melawar jalur teknis berbeda:
+
+| Laporan | Jalur kode prod. | Jalur mirror independen |
+| --- | --- | --- |
+| Neraca Saldo | `sumEntriesByAccount` (Prisma `groupBy`) → `computeTrialBalance` → `buildTrialBalanceReport` | `$queryRaw` per-akun (join jurnal POSTED/REVERSED tak terhapus) + `computeTrialBalance` → tabel penuh dibandingkan `toEqual` |
+| Kartu Stok | `loadStockCard` (`stock_moves` + saldo awal agregat) | aritmetika `stock_moves` langsung **dan** sisa `inventory_layers` per item — dua tabel berbeda wajib setuju |
+| Umur Piutang | `loadReceivablesAging` (+ `loadReturnCreditByInvoiceId`) | `$queryRaw` `sisa = grand_total − paid_amount − Σ Cr Piutang jurnal SalesReturn POSTED retur completed`, gerbang sisa > Rp1 sama |
+
+**Hasil rekonsiliasi: semua identik, nol temuan angka.** Selain itu dua
+tenaga pemeriksaan ikut bertambah sebagai penjaga tetap:
+
+1. **Akun nonaktif ber-saldo** — pemindaian raw `HAVING SUM(debit) <>
+   SUM(credit)` pada `accounts.is_active = 0`: nol baris di DB dev. Bila
+   suatu hari muncul, uang itu tidak akan pernah muncul di laporan mana
+   pun (laporan hanya memuat akun aktif) — kini langsung merah saat tes
+   DB dibangunkan.
+2. **Invarian debit=kredit** — neraca laporan `isBalanced` dibuktikan dari
+   jalur SQL mentah, bukan hanya dari jalur kode yang diuji unit.
+
+Catatan metode: mirror memakai pembantu presensi yang sama (`salesInvoiceLabel`,
+`formatAccountingExact`, `formatQuantity`) supaya yang dibandingkan adalah
+**angka**, bukan gaya format; definisi laporan sendiri (filter status, gerbang
+toleransi Rp1, rumus Cr Piutang retur) dibaca dari kode dan diulang di mirror,
+bukan dipanggil — jadi kesilapan definisi di salah satu sisi tetap terlihat.
+
+### Bukti
+
+- Tes baru: 3 tes, semua lulus terhadap DB dev (`127.0.0.1:3309`), dan skip
+  bersih (3 skipped) saat `RUN_DB_INTEGRATION` tidak diset.
+- Suite folder laporan penuh: 300 berkas / 2.643 tes lulus (2 berkas skip
+  adalah suite ber-gate DB).
+- `npx tsc --noEmit` bersih; ESLint pada berkas baru bersih.
+- DB dev hanya dibaca (SELECT $queryRaw + findMany/groupBy); `git status`
+  sebelum commit hanya berkas tes baru + log ini.
+
 ## Putaran 247 — audit invarian data nyata di DB dev (read-only)
 
 Backlog audit kode sudah habis (putaran 243) dan verifikasi runtime sudah
