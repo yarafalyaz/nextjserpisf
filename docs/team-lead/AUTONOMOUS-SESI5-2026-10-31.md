@@ -5266,6 +5266,69 @@ sama dengan nilai yang telah divalidasi tanpa mengubah perilaku satu nilai.
   retry build berhasil. Dua warning tracing filesystem di `src/lib/db/backup.ts`
   tetap ada dan tidak terkait patch.
 
+## Putaran 247 — audit invarian data nyata di DB dev (read-only)
+
+Backlog audit kode sudah habis (putaran 243) dan verifikasi runtime sudah
+ditutup (putaran 244–246), jadi putaran ini membuka kelas pemeriksaan yang
+belum pernah dilakukan sesi mana pun: **invarian pada data tersimpan** — hal
+yang tidak bisa dilihat audit kode maupun tes, karena kebenarannya milik
+hasil data, bukan badan kode. Semua query SELECT terhadap DB dev
+(`silengkap_dev_db`); tidak ada satu pun tulis/hapus. Stack dev dihidupkan
+(`docker compose up -d db`) sesuai pola putaran 244.
+
+Lingkungan data yang diaudit: dataset tangan (57 jurnal, 17 faktur, 3 item,
+2 pemasok, 9 pelanggan) **plus** artefak seed E2E — lihat temuan (3) di bawah.
+Cakupan invarian sempit karena data aslinya kecil; hasilnya tetap disahkan
+per-pemeriksaan.
+
+| Pemeriksaan | Metode | Hasil |
+| --- | --- | --- |
+| Jurnal seimbang | `total_debit=total_credit=sum(entries)`, per jurnal hidup | 0 anomali |
+| Nomor dokumen dobel | `document_no` 15 tabel dokumen + `journal_number` | 0 dobel |
+| Catatan jurnal validitas | `debit/credit < 0`, keduanya 0 | 0 baris |
+| `stock_moves.transaction_date` NULL | hitungan baris | 0 (backfill sudah menyapu dev DB) |
+| Langkah approval tanpa pemilik | `role_id IS NULL AND user_id IS NULL` | 0 |
+| Master dihapus lunak dimuat dokumen hidup | item/customer/vendor pada invoice/SO/PO/lapisan | 0 |
+| Lapisan FIFO negatif/kosong | `inventory_layers.remaining` | 0 |
+| Faktur lunas/sisa tidak sinkron | `paid_amount` vs `grand_total` per status | 0 |
+| Pemeriksaan `slug` dobel | dup `slug` halaman hidup — ternyata grup NULL, bukan dobel nyata | 6 tabel terdampak, lihat (2) |
+
+**Dua temuan bukan-cacat + satu koreksi, tetap dicatat:**
+
+1. **Sweep pertama saya sempat salah vonis "nomor dobel"**: `GROUP BY slug`
+   menganggap semua `NULL` satu grup, jadi baris tanpa slug terhitung
+   "dobel". Koreksinya penting saya catat. Pemeriksaan ulang pada
+   `document_no` (kolom yang benar-benar diberi `UNIQUE`) menunjukkan
+   **0 dobel nyata** di 16 tabel.
+2. **Baris `slug = NULL` adalah baris seed E2E** (7 rantai: SO + faktur +
+   pembayaran + DO + vendor bill + vendor payment, `created_by = NULL`,
+   dibuat 2026-10-31 13:56–15:52 oleh `scripts/seed-remaining-e2e.ts`
+   lewat `prisma.create` dengan `documentNo` saja). Aplikasi sudah
+   dirancang untuk ini: seluruh tautan menyala dari satu gerbang
+   `entityHref` (`src/lib/utils/entity-url.ts`) yang jatuh ke `id` bila
+   slug kosong, dan `resolveEntity` menerima path numerik. Jadi baris itu
+   tetap terjangkau; tidak ada tautan mati. Catat: tidak ada penjaga tes
+   yang mengunci "tautan entitas wajib lewat `entityHref`" — hanya
+   konvensi; pengintaian statis ala putaran 231 terbukti mudah beri
+   positif palsu, jadi saya tidak menulis penjaga baru.
+3. **DB dev menyimpan layer fixture E2E** — 7 rantai dokumen bernilai
+   `created_by = NULL` master `e2e-*` (kendaraan, brand, model) dan jurnal
+   uji berdeskripsi "Jurnal E2E", "UJI CSRF ISF02". Pada sesi 5, log
+   Task #7 katanya scratch disposable — tapi layer ini ada di DB dev,
+   dipakai putaran 246 (Playwright) dan spesifikasi "empat baca data-demo"
+   di AGENTS.md. Adapun menghapusnya = destruktif terhadap data yang dirawat
+   ini: file fixture yang dipakai body spesifikasi (`e2e/sales-chain.spec.ts`
+   membaca `slug: "e2e-post-invoice-draft"`) jangan dihapus tanpa keputusan
+   pemilik.
+
+### Bukti
+
+- Tidak ada perubahan kode; `git status` bersih; DB dev tidak berubah
+  (SELECT murni, stack hanya `db` yang dihidupkan).
+- Penjaga statis sudah memuat semua invarian tingkat kode; putaran ini
+  melengkapi dimensi data yang tidak tersentuh penjaga mana pun.
+- Full Vitest tidak diulang; yang tercatat tetap 12.774 lulus / 23 dilewati.
+
 ## Putaran 246 — suite Playwright dijalankan terhadap aplikasi nyata
 
 Putaran 245 hanya mengambil HTML; putaran ini menjalankan browser sungguhan
