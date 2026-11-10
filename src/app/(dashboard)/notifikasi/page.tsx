@@ -31,6 +31,7 @@ export default async function NotificationsPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-foreground">Notifikasi</h1>
+        <span className="text-muted-foreground">{unreadCount} belum dibaca</span>
       </div>
 
       <NotificationsView

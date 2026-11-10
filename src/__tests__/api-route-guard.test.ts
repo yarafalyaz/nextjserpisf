@@ -47,6 +47,8 @@ const INTERNAL: Record<string, RegExp> = {
   "workflow/[...path]/route.ts": /APPROVAL_REFERENCE_PERMISSIONS/,
   "notifications/route.ts": /where:\s*\{\s*userId/,
   "notifications/[id]/read/route.ts": /markAsRead\(notificationId, userId\)/,
+  "notifications/[id]/decision/route.ts": /where:\s*\{\s*id:\s*notificationId,\s*userId\s*\}/,
+  "notifications/read-all/route.ts": /markAllAsRead\(userId\)/,
   "upload/attachments/route.ts": /canModifyAttachment/,
   "upload/attachments/[id]/route.ts": /canModifyAttachment/,
   "upload/avatar/route.ts": /where:\s*\{\s*id: userId \}/,

@@ -20,7 +20,29 @@ vi.mock("@/components/ui/breadcrumbs", () => ({
   AppBreadcrumbs: () => null,
 }))
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    refresh: vi.fn(),
+  }),
+  usePathname: () => "/notifikasi",
+  useSearchParams: () => new URLSearchParams(),
+}))
+
 import NotificationsPage from "../page"
+
+window.matchMedia =
+  window.matchMedia ??
+  (() => ({
+    matches: false,
+    media: "",
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }))
 
 beforeEach(() => {
   vi.clearAllMocks()
