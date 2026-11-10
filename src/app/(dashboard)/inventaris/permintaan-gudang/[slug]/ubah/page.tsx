@@ -7,7 +7,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { assertMaterialRequestVisible } from "@/lib/services/material-request.service"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { MaterialRequestForm } from "@/components/forms/material-request-form"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { TERMINAL_WORK_ORDER_STATUSES } from "@/lib/constants/status"
 
 export const metadata: Metadata = { title: "Ubah Permintaan Antar Gudang" }
@@ -79,15 +79,17 @@ export default async function EditMaterialRequestPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-        { label: "Dasbor", href: "/" },
-        { label: "Inventaris", href: "/inventaris" },
-        { label: "Permintaan Antar Gudang", href: "/inventaris/permintaan-gudang" },
-        { label: "Ubah" },
-      ]} />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah Permintaan Antar Gudang</h1>
-      </div>
+      <PageHeader
+        title={`Ubah Permintaan Antar Gudang ${data.documentNo}`}
+        breadcrumbs={[
+          { label: "Dasbor", href: "/" },
+          { label: "Inventaris", href: "/inventaris" },
+          { label: "Permintaan Antar Gudang", href: "/inventaris/permintaan-gudang" },
+          { label: data.documentNo, href: `/inventaris/permintaan-gudang/${slug}` },
+          { label: "Ubah" },
+        ]}
+        actions={<BackButton href={`/inventaris/permintaan-gudang/${slug}`} />}
+      />
       <MaterialRequestForm warehouses={warehouses} items={items} workOrders={workOrderOptions} request={request} />
     </div>
   )

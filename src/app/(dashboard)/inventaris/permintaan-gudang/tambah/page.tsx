@@ -4,7 +4,7 @@ import type { Metadata } from "next"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { MaterialRequestForm } from "@/components/forms/material-request-form"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { TERMINAL_WORK_ORDER_STATUSES } from "@/lib/constants/status"
 
 export const metadata: Metadata = { title: "Tambah Permintaan Antar Gudang" }
@@ -15,9 +15,6 @@ export default async function CreateMaterialRequestPage() {
   const [warehouses, items, workOrders] = await Promise.all([
     prisma.warehouse.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.item.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, sku: true, name: true, unitOfMeasure: true } }),
-    // Picker dan assertWorkOrderLinkable membaca himpunan yang SAMA: WO
-    // completed/cancelled/closed tidak boleh ditautkan, jadi jangan
-    // ditawarkan sama sekali (dulu tanpa filter status).
     prisma.workOrder.findMany({
       where: { status: { notIn: [...TERMINAL_WORK_ORDER_STATUSES] } },
       orderBy: { createdAt: "desc" },
@@ -28,15 +25,17 @@ export default async function CreateMaterialRequestPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-        { label: "Dasbor", href: "/" },
-        { label: "Inventaris", href: "/inventaris" },
-        { label: "Permintaan Antar Gudang", href: "/inventaris/permintaan-gudang" },
-        { label: "Tambah" },
-      ]} />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Buat Permintaan Antar Gudang</h1>
-      </div>
+      <PageHeader
+        title="Buat Permintaan Antar Gudang"
+        breadcrumbs={[
+          { label: "Dasbor", href: "/" },
+          { label: "Inventaris", href: "/inventaris" },
+          { label: "Permintaan Antar Gudang", href: "/inventaris/permintaan-gudang" },
+          { label: "Tambah" },
+        ]}
+        actions={<BackButton href="/inventaris/permintaan-gudang" />}
+      />
+
       <MaterialRequestForm warehouses={warehouses} items={items} workOrders={workOrders} />
     </div>
   )
