@@ -62,7 +62,7 @@
   - `AUTH_SECRET` & `CRON_SECRET` ≥32 karakter, bukan placeholder (`src/lib/env.ts`).
   - `TRUSTED_PROXY=1` **hanya** bila semua trafik lewat proxy yang menimpa header IP.
   - CSP & header keamanan di `src/proxy.ts` aktif di build standalone.
-- [ ] **2.5** `npm audit --omit=dev` — tangani kerentanan high/critical.
+- [x] **2.5** `npm audit --omit=dev` — tangani kerentanan high/critical (selesai: `dompurify` dan `fast-uri` telah diperbarui, hasil `npm audit --omit=dev` 0 vulnerabilities ✓).
 
 **Selesai bila:** nol `as any` pada jalur otorisasi/approval, tes IDOR lulus, checklist env produksi tercentang.
 
