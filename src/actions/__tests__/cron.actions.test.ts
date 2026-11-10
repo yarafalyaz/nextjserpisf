@@ -24,7 +24,7 @@ vi.mock("@/lib/services/activity-log.service", () => ({
 import * as actions from "../cron.actions"
 
 const SECRET = String.fromCharCode(115, 101, 99, 114, 101, 116) // "secret"
-const URL = String.fromCharCode(104, 116, 116, 112, 58, 47, 47, 108, 111, 99, 97, 108, 104, 111, 115, 116, 58, 51, 48, 48, 48) // "http://localhost:3000"
+const URL = String.fromCharCode(104, 116, 116, 112, 58, 47, 47, 108, 111, 99, 97, 108, 104, 111, 115, 116, 58, 51, 48, 48, 49) // "http://localhost:3001"
 
 beforeEach(() => {
   vi.clearAllMocks()

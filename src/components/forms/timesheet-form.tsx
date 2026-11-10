@@ -27,7 +27,7 @@ interface TimesheetFormProps {
   timesheet?: {
     id: number;
     employeeId: number;
-    projectId: number;
+    projectId?: number | null;
     taskId?: number | null;
     date: string;
     startTime?: string | null;

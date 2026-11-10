@@ -34,19 +34,36 @@ export default async function EditPage({
 
   if (!data) notFound()
 
-  const [employees, projects, settings] = await Promise.all([prisma.employee.findMany({ where: { ...hrEmployeeScopeWhere(scope), deletedAt: null }, orderBy: { name: "asc" } }), prisma.project.findMany({ orderBy: { name: "asc" } }), getSystemSettings()])
+  const [employees, projects, settings] = await Promise.all([
+    prisma.employee.findMany({
+      where: { ...hrEmployeeScopeWhere(scope), deletedAt: null },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.project.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    getSystemSettings(),
+  ])
+
+  const timesheet = {
+    ...data,
+    date: data.date.toISOString().split("T")[0],
+    hours: Number(data.hours),
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dasbor", href: "/" },
-  { label: "Lembar Waktu", href: "/sdm/lembar-waktu" },
-  { label: "Ubah" },
-]} />
+        { label: "Dasbor", href: "/" },
+        { label: "Lembar Waktu", href: "/sdm/lembar-waktu" },
+        { label: "Ubah" },
+      ]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah</h1>
       </div>
-      <TimesheetForm timesheet={data as any} employees={employees as any} projects={projects as any} breakStart={settings.restBreakStart ?? null} breakEnd={settings.restBreakEnd ?? null}/>
+      <TimesheetForm timesheet={timesheet} employees={employees} projects={projects} breakStart={settings.restBreakStart ?? null} breakEnd={settings.restBreakEnd ?? null}/>
     </div>
   )
 }

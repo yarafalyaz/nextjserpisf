@@ -54,7 +54,7 @@ export default async function LeaveRequestsPage({
   const data = toPlain(leaves)
 
   const userRoles: string[] = user.roles ?? [];
-  const userPerms: string[] = (user as any).permissions ?? [];
+  const userPerms: string[] = user.permissions ?? [];
   const showActions =
     userRoles.includes("super_admin") ||
     userPerms.includes("edit_leave_requests") ||

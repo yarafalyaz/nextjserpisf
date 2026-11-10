@@ -67,7 +67,7 @@ export default async function AppreciationsPage({
 
   // Only show action column if user has permission to edit or delete appreciations
   const userRoles: string[] = user.roles ?? [];
-  const userPerms: string[] = (user as any).permissions ?? [];
+  const userPerms: string[] = user.permissions ?? [];
   const showActions =
     userRoles.includes("super_admin") ||
     userPerms.includes("create_appreciations") ||

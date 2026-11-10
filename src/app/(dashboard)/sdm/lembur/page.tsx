@@ -54,7 +54,7 @@ export default async function OvertimePage({
   const data = toPlain(overtimes)
 
   const userRoles: string[] = user.roles ?? [];
-  const userPerms: string[] = (user as any).permissions ?? [];
+  const userPerms: string[] = user.permissions ?? [];
   const showActions =
     userRoles.includes("super_admin") ||
     userPerms.includes("edit_overtime_requests") ||

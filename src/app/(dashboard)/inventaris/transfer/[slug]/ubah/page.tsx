@@ -89,9 +89,9 @@ export default async function EditPage({
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah</h1>
       </div>
       <InventoryTransferForm
-        transfer={transfer as any}
-        warehouses={warehouses as any}
-        items={items as any}
+        transfer={transfer}
+        warehouses={warehouses}
+        items={items}
       />
     </div>
   );

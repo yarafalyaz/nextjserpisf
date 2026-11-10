@@ -123,9 +123,9 @@ export default async function EditPage({
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah</h1>
       </div>
       <StockAdjustmentForm
-        adjustment={adjustment as any}
-        warehouses={warehouses as any}
-        items={items as any}
+        adjustment={adjustment}
+        warehouses={warehouses}
+        items={items}
       />
     </div>
   );

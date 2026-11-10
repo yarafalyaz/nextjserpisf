@@ -133,7 +133,7 @@ export default async function PayrollPage({
   }));
 
   const userRoles: string[] = user.roles ?? [];
-  const userPerms: string[] = (user as any).permissions ?? [];
+  const userPerms: string[] = user.permissions ?? [];
   const showActions =
     userRoles.includes("super_admin") ||
     userPerms.includes("edit_payroll");

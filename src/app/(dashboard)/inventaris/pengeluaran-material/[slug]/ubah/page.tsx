@@ -96,10 +96,10 @@ export default async function EditPage({
         // `date` Prisma berupa Date sedangkan form bertipe string dan mengirimnya
         // saat submit — tanpa normalisasi ini pengeluaran material back-date
         // berpindah ke tanggal hari ini saat disimpan ulang.
-        issue={{ ...data, date: data.date.toISOString().split("T")[0] } as any}
-        warehouses={warehouses as any}
+        issue={{ ...data, date: data.date.toISOString().split("T")[0] }}
+        warehouses={warehouses}
         costCenters={JSON.parse(JSON.stringify(costCenters))}
-        items={items as any}
+        items={items}
         workOrders={workOrders}
         projects={projects}
       />

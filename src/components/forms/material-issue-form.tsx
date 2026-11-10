@@ -40,8 +40,8 @@ interface MaterialIssueFormProps {
     costCenterId?: number | null;
     items?: Array<{
       itemId: number;
-      qty: number;
-      scrapQty?: number;
+      qty: number | { toString(): string } | unknown;
+      scrapQty?: number | { toString(): string } | null;
       scrapReasonCode?: string | null;
       scrapNote?: string | null;
     }>;
@@ -163,7 +163,7 @@ export function MaterialIssueForm({
     issue?.items && issue.items.length > 0
       ? issue.items.map((it) => ({
           itemId: it.itemId,
-          qty: it.qty,
+          qty: Number(it.qty ?? 0),
           unitCost: Number(items.find((x) => x.id === it.itemId)?.cost ?? 0),
           scrapQty: Number(it.scrapQty ?? 0),
           scrapReasonCode: it.scrapReasonCode ?? "",
