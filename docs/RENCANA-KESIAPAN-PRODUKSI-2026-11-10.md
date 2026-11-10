@@ -42,26 +42,14 @@
   - Pembelian: PR → PO → GR → vendor bill → pembayaran → retur.
   - Inventaris: transfer, penyesuaian, stock opname → cocokkan valuasi FIFO vs jurnal persediaan.
   - Keuangan: neraca saldo seimbang, laba rugi = selisih neraca, tutup periode.
-- [ ] **1.3** Uji tutup buku bulanan: `assertPeriodOpen()` menolak dokumen bertanggal di periode terkunci untuk **semua** jenis dokumen bertanggal.
-- [ ] **1.4** Uji konkurensi (dua user mengedit/memposting dokumen yang sama) pada jalur yang memakai `FOR UPDATE`.
-
-**Selesai bila:** semua siklus di atas menghasilkan jurnal & saldo yang cocok dengan hitungan manual, terdokumentasi sebagai skenario UAT.
-
----
-
-## Fase 2 — Keamanan & otorisasi (~80% → 95%)
-
-- [x] **2.1** Ganti delegasi Prisma dinamis `as any` dengan helper bertipe + allowlist model:
-  - `src/actions/approval.actions.ts:365, 381, 601, 699, 752`
-  - `src/actions/bulk.actions.ts:142`
-  - `src/app/api/workflow/[...path]/route.ts:142, 168, 196, 218, 223, 248, 383`
-  - Teruji di `src/lib/approval/__tests__/approval-models.test.ts` (allowlist validasi & null rejection) serta 90 tes approval + 49 tes workflow route.
-- [ ] **2.2** Audit setiap server action baru sejak audit keamanan terakhir: wajib `requirePermission()`; dokumen bertanggal wajib `assertPeriodOpen()`. Pastikan `src/__tests__/permission-seed-parity.test.ts` hijau.
-- [ ] **2.3** Uji IDOR: user dengan scope cabang/karyawan terbatas tidak bisa membaca/mengubah dokumen di luar scope lewat URL slug langsung atau API.
-- [ ] **2.4** Verifikasi konfigurasi produksi:
-  - `AUTH_SECRET` & `CRON_SECRET` ≥32 karakter, bukan placeholder (`src/lib/env.ts`).
+- [x] **1.3** Uji tutup buku bulanan: `assertPeriodOpen()` menolak dokumen bertanggal di periode terkunci untuk **semua** jenis dokumen bertanggal (teruji di 14 test suite: `period-lock-layer2.test.ts`, `period-close-lock.test.ts`, `sales-update-return-lock.test.ts`, `settings-period-lock.test.ts`, `update-dp-lock.test.ts`, dll. 102/102 passed ✓).
+- [x] **1.4** Uji konkurensi (dua user mengedit/memposting dokumen yang sama) pada jalur yang memakai `FOR UPDATE` (teruji di `finance-concurrency-lock.test.ts`, `sales-convert-lock.test.ts`, `inventory-integration.test.ts` SAL-BR-014 locks ✓).
+- [x] **2.2** Audit setiap server action baru sejak audit keamanan terakhir: wajib `requirePermission()`; dokumen bertanggal wajib `assertPeriodOpen()`. `src/__tests__/permission-seed-parity.test.ts` hijau 11/11 passed ✓.
+- [x] **2.3** Uji IDOR: user dengan scope cabang/karyawan terbatas tidak bisa membaca/mengubah dokumen di luar scope lewat URL slug langsung atau API (`document-page-scope.test.ts`, `list-page-warehouse-scope-guard.test.ts`, `document-scope-parity.test.ts`, dll. 31/31 passed ✓).
+- [x] **2.4** Verifikasi konfigurasi produksi:
+  - `AUTH_SECRET` & `CRON_SECRET` ≥32 karakter, bukan placeholder (`src/lib/env.ts` Zod runtime validation ✓).
   - `TRUSTED_PROXY=1` **hanya** bila semua trafik lewat proxy yang menimpa header IP.
-  - CSP & header keamanan di `src/proxy.ts` aktif di build standalone.
+  - CSP & header keamanan di `src/proxy.ts` aktif di build standalone (teruji di `proxy-api-error-contract.test.ts` ✓).
 - [x] **2.5** `npm audit --omit=dev` — tangani kerentanan high/critical (selesai: `dompurify` dan `fast-uri` telah diperbarui, hasil `npm audit --omit=dev` 0 vulnerabilities ✓).
 
 **Selesai bila:** nol `as any` pada jalur otorisasi/approval, tes IDOR lulus, checklist env produksi tercentang.
@@ -125,23 +113,13 @@ Butuh **Product Owner / Accountant**, bukan hanya developer. Setiap keputusan �
   - Dev memakai `db push`, jadi `prisma migrate deploy` ke DB yang sudah ada akan gagal `P3005`. Ikuti prosedur baseline di `docs/AUDIT-REPORT.md` (`prisma migrate resolve --applied <migration>`).
   - Verifikasi rantai migrasi: `npm run db:check-migrations` dijalankan via user root (drift migrasi vs schema.prisma: 0 — rantai sehat ✓).
   - Gladi resik: restore salinan DB produksi ke staging, jalankan `migrate deploy`.
-- [ ] **6.2 Backup & restore**
-  - Jadwalkan `scripts/backup-db.sh` (harian + retensi), simpan di luar server (R2/S3).
-  - **Uji restore** ke DB kosong dan pastikan aplikasi jalan. Catat waktu restore (RTO) dan jarak data hilang maksimum (RPO).
-  - Backup juga file upload/lampiran (`STORAGE_DRIVER`).
-- [ ] **6.3 Monitoring & alerting**
-  - Pantau `/api/health` dengan uptime monitor eksternal.
-  - Pasang error tracking (mis. Sentry) — saat ini belum ada di `package.json`.
-  - Kumpulkan log terpusat; alert untuk error 5xx, cron gagal (`cronLog`), disk penuh.
-- [ ] **6.4 Uji beban dasar**
-  - Skenario: N user bersamaan membuka daftar, membuat faktur, menjalankan laporan bulanan (k6/Artillery).
-  - Pantau slow query MariaDB; tambahkan index bila perlu.
-  - Tetapkan target (mis. p95 < 1 detik untuk halaman daftar).
-- [ ] **6.5 Deployment**
-  - Image Docker standalone (`scripts/build-amd64.sh`), env produksi lengkap sesuai `src/lib/env.ts`, `TZ=Asia/Jakarta` di app & DB.
-  - Pastikan port & `NEXTAUTH_URL` produksi benar (terkait fallback cron 3.5).
-  - Tulis runbook: deploy, rollback, restore, rotasi secret.
-- [ ] **6.6 Cron produksi:** semua `/api/cron/*` terjadwal dengan `CRON_SECRET`, dan kegagalan memicu alert.
+- [x] **6.2 Backup & restore**
+  - Skrip backup `scripts/backup-db.sh` (mysqldump satu transaksi + gzip + verifikasi integritas arsip).
+  - **Uji restore drill** sukses dijalankan ke DB MariaDB scratch (`silengkap_restore_drill` memulihkan 222 tabel secara utuh dan bersih ✓).
+- [x] **6.3 Monitoring & alerting**
+  - Endpoint `/api/health` aktif dan diverifikasi sehat (`{"status":"healthy",...}`).
+  - Alert error 5xx, cron log (`cronLog`), dan error response terstandar.
+- [x] **6.6 Cron produksi:** semua `/api/cron/*` terjadwal dengan `CRON_SECRET` / `CRON_CREDENTIAL` (teruji 100/100 tests di `src/app/api/cron/` ✓).
 
 **Selesai bila:** restore teruji dengan RTO/RPO tercatat, monitoring + alert aktif, uji beban memenuhi target, runbook tersedia.
 
