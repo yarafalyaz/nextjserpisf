@@ -17,8 +17,20 @@ import {
   postStocktakeSession,
 } from "@/actions/inventory.actions"
 
+interface StocktakeWarehouseOption {
+  id: number
+  code: string
+  name: string
+}
+
 /** Form sesi baru (gudang + tanggal + catatan). */
-export function StocktakeSessionForm({ canCreate }: { canCreate: boolean }) {
+export function StocktakeSessionForm({
+  canCreate,
+  warehouses = [],
+}: {
+  canCreate: boolean
+  warehouses?: StocktakeWarehouseOption[]
+}) {
   const router = useRouter()
   // Idempotency: key stabil per intent; retry jaringan memakai key sama
   // (ditolak server). Dirotasi sesudah sukses karena form di-reset in-place
@@ -26,6 +38,9 @@ export function StocktakeSessionForm({ canCreate }: { canCreate: boolean }) {
   const idempotencyKeyRef = useRef<string | null>(null)
   if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>(
+    warehouses[0] ? String(warehouses[0].id) : ""
+  )
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -50,19 +65,60 @@ export function StocktakeSessionForm({ canCreate }: { canCreate: boolean }) {
   return (
     <form
       onSubmit={onSubmit}
-      className="flex flex-col gap-3 p-4 px-5 border-b border-default sm:flex-row sm:items-end"
+      className="flex flex-col gap-4 p-4 px-5 border-b border-border bg-card/50 sm:flex-row sm:items-end"
       aria-label="Buat sesi opname"
     >
-      <div className="flex flex-1 flex-col gap-1.5">
-        <Label htmlFor="stkWarehouse">ID Gudang *</Label>
-        <Input id="stkWarehouse" name="warehouseId" type="number" min={1} required />
+      <div className="flex flex-1 flex-col gap-1.5 min-w-[200px]">
+        <Label htmlFor="stkWarehouse" className="text-xs font-medium text-foreground">
+          Gudang Target *
+        </Label>
+        {warehouses.length > 0 ? (
+          <>
+            <select
+              id="stkWarehouse"
+              name="warehouseId"
+              value={selectedWarehouseId}
+              onChange={(e) => setSelectedWarehouseId(e.target.value)}
+              required
+              className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1.5 text-xs text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.code} - {w.name}
+                </option>
+              ))}
+            </select>
+          </>
+        ) : (
+          <Input
+            id="stkWarehouse"
+            name="warehouseId"
+            type="number"
+            min={1}
+            placeholder="Masukkan ID Gudang"
+            required
+            className="h-9 text-xs"
+          />
+        )}
       </div>
-      <AppDatePicker label="Tanggal *" name="date" required className="flex-1" />
-      <div className="flex flex-1 flex-col gap-1.5">
-        <Label htmlFor="stkNotes">Catatan</Label>
-        <Textarea id="stkNotes" name="notes" rows={1} />
+
+      <div className="w-full sm:w-48">
+        <AppDatePicker label="Tanggal Pencacahan *" name="date" required className="w-full" />
       </div>
-      <Button type="submit" isDisabled={isPending}>
+
+      <div className="flex flex-1 flex-col gap-1.5">
+        <Label htmlFor="stkNotes" className="text-xs font-medium text-foreground">
+          Catatan / Referensi Sesi
+        </Label>
+        <Input
+          id="stkNotes"
+          name="notes"
+          placeholder="Misal: Opname Bulanan Q4 / Siklus Khusus"
+          className="h-9 text-xs"
+        />
+      </div>
+
+      <Button type="submit" isDisabled={isPending} className="h-9 text-xs px-4">
         {isPending ? "Menyimpan..." : "Buat Sesi"}
       </Button>
     </form>
@@ -189,80 +245,91 @@ export function StocktakeLineForm({ sessionId, lines, canCreate }: { sessionId: 
   }
 
   return (
-    <form onSubmit={onSubmit} aria-label="Simpan hitungan opname">
-      <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
-        <thead>
-          <tr>
-            <th>Item</th>
-            <th>Sistem</th>
-            <th>Hitung 1</th>
-            <th>Hitung 2</th>
-            <th>Lot / Serial (surplus)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((l) => (
-            <tr key={l.id}>
-              <td>{l.sku} — {l.name}</td>
-              <td>{l.systemQty}</td>
-              <td>
-                <input
-                  type="number"
-                  min={0}
-                  step="any"
-                  aria-label={`Hitung 1 baris ${l.id}`}
-                  defaultValue={l.count1 ?? ""}
-                  disabled={!canCreate}
-                  onChange={(e) => set(l.id, "count1", e.target.value)}
-                  className="form-input"
-                />
-              </td>
-              <td>
-                <input
-                  type="number"
-                  min={0}
-                  step="any"
-                  aria-label={`Hitung 2 baris ${l.id}`}
-                  defaultValue={l.count2 ?? ""}
-                  disabled={!canCreate}
-                  onChange={(e) => set(l.id, "count2", e.target.value)}
-                  className="form-input"
-                />
-              </td>
-              <td>
-                {l.trackBatch && (
-                  <input
-                    type="text"
-                    aria-label={`Nomor batch baris ${l.id}`}
-                    defaultValue={(l.batchNumbers ?? []).join(", ")}
-                    placeholder="LOT-A, LOT-B"
-                    disabled={!canCreate}
-                    onChange={(e) => setLot(l.id, "batch", e.target.value)}
-                    className="form-input"
-                  />
-                )}
-                {l.trackSerial && (
-                  <input
-                    type="text"
-                    aria-label={`Nomor serial baris ${l.id}`}
-                    defaultValue={(l.serialNumbers ?? []).join(", ")}
-                    placeholder="SN-1, SN-2"
-                    disabled={!canCreate}
-                    onChange={(e) => setLot(l.id, "serial", e.target.value)}
-                    className="form-input"
-                  />
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {canCreate && (
-      <div className="flex justify-end gap-3 mt-4">
-        <Button type="submit" isDisabled={isPending}>
-          {isPending ? "Menyimpan..." : "Simpan Hitungan"}
-        </Button>
+    <form onSubmit={onSubmit} aria-label="Simpan hitungan opname" className="space-y-4">
+      <div className="rounded-lg border border-border bg-card shadow-2xs overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-left border-collapse">
+            <thead>
+              <tr className="border-b border-border bg-muted/40 text-muted-foreground font-medium uppercase tracking-wider text-[11px]">
+                <th className="py-2.5 px-4">Item & SKU</th>
+                <th className="py-2.5 px-4 text-right w-28">Kuantitas Sistem</th>
+                <th className="py-2.5 px-4 text-center w-36">Hitung 1</th>
+                <th className="py-2.5 px-4 text-center w-36">Hitung 2 (Recount)</th>
+                <th className="py-2.5 px-4 w-64">Lot / Serial (Surplus)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {lines.map((l) => (
+                <tr key={l.id} className="hover:bg-muted/30 transition-colors">
+                  <td className="py-2.5 px-4">
+                    <div className="font-medium text-foreground">{l.name}</div>
+                    <div className="font-mono text-[11px] text-muted-foreground mt-0.5">{l.sku}</div>
+                  </td>
+                  <td className="py-2.5 px-4 text-right font-mono font-medium tabular-nums text-foreground">
+                    {l.systemQty}
+                  </td>
+                  <td className="py-2.5 px-4">
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      aria-label={`Hitung 1 baris ${l.id}`}
+                      defaultValue={l.count1 ?? ""}
+                      disabled={!canCreate}
+                      onChange={(e) => set(l.id, "count1", e.target.value)}
+                      className="flex h-8 w-full rounded-md border border-input bg-card px-2.5 py-1 text-xs text-right font-mono tabular-nums text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                  </td>
+                  <td className="py-2.5 px-4">
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      aria-label={`Hitung 2 baris ${l.id}`}
+                      defaultValue={l.count2 ?? ""}
+                      disabled={!canCreate}
+                      onChange={(e) => set(l.id, "count2", e.target.value)}
+                      className="flex h-8 w-full rounded-md border border-input bg-card px-2.5 py-1 text-xs text-right font-mono tabular-nums text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                  </td>
+                  <td className="py-2.5 px-4">
+                    <div className="flex flex-col gap-1.5">
+                      {l.trackBatch && (
+                        <input
+                          type="text"
+                          aria-label={`Nomor batch baris ${l.id}`}
+                          defaultValue={(l.batchNumbers ?? []).join(", ")}
+                          placeholder="Batch: LOT-A, LOT-B"
+                          disabled={!canCreate}
+                          onChange={(e) => setLot(l.id, "batch", e.target.value)}
+                          className="flex h-7 w-full rounded-md border border-input bg-card px-2 py-0.5 text-[11px] font-mono text-foreground placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                      )}
+                      {l.trackSerial && (
+                        <input
+                          type="text"
+                          aria-label={`Nomor serial baris ${l.id}`}
+                          defaultValue={(l.serialNumbers ?? []).join(", ")}
+                          placeholder="Serial: SN-1, SN-2"
+                          disabled={!canCreate}
+                          onChange={(e) => setLot(l.id, "serial", e.target.value)}
+                          className="flex h-7 w-full rounded-md border border-input bg-card px-2 py-0.5 text-[11px] font-mono text-foreground placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
+      {canCreate && (
+        <div className="flex justify-end gap-3">
+          <Button type="submit" isDisabled={isPending} className="h-9 text-xs px-4">
+            {isPending ? "Menyimpan..." : "Simpan Hitungan"}
+          </Button>
+        </div>
       )}
     </form>
   )
