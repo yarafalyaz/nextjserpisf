@@ -1,12 +1,12 @@
-import { parsePagination } from "@/lib/utils/pagination"
-import { withListParams } from "@/lib/utils/list-href"
-
 export const dynamic = "force-dynamic"
 
+import { parsePagination } from "@/lib/utils/pagination"
+import { withListParams } from "@/lib/utils/list-href"
 import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
+import { redirect, notFound } from "next/navigation"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { DeliveryOrderTable } from "./_components/delivery-order-table"
@@ -17,22 +17,58 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Surat Jalan" }
 
-export default async function DeliveryOrdersPage({
+export const DELIVERY_ORDER_VALID_DB_STATUSES = [
+  "draft",
+  "shipped",
+  "delivered",
+] as const
+
+export interface DeliveryOrdersPageProps {
+  statusParam?: string
+  searchParams: Promise<{
+    cari?: string
+    status?: string
+    halaman?: string
+    pageSize?: string
+  }>
+}
+
+export async function renderDeliveryOrdersPage({
+  statusParam,
   searchParams,
-}: {
-  searchParams: Promise<{ cari?: string; status?: string; halaman?: string; pageSize?: string }>
-}) {
+}: DeliveryOrdersPageProps) {
   await requirePermission("view_delivery_orders")
 
   const params = await searchParams
+
+  if (!statusParam && params.status) {
+    const targetStatus = params.status
+    const query = new URLSearchParams()
+    if (params.cari) query.set("cari", params.cari)
+    if (params.halaman) query.set("halaman", params.halaman)
+    if (params.pageSize) query.set("pageSize", params.pageSize)
+    const qs = query.toString()
+    redirect(`/penjualan/surat-jalan/status/${targetStatus}${qs ? `?${qs}` : ""}`)
+  }
+
+  const validUrlStatuses = DELIVERY_ORDER_VALID_DB_STATUSES.map(
+    (s) => statusToIndo[s] || s,
+  )
+
+  if (statusParam && !validUrlStatuses.includes(statusParam)) {
+    notFound()
+  }
+
+  const activeUrlStatus = statusParam ?? ""
+  const dbStatus = activeUrlStatus ? indoToStatus[activeUrlStatus] || activeUrlStatus : undefined
+
   const { page, pageSize, take } = parsePagination(params)
-  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
     ...(params.cari && {
       documentNo: { contains: params.cari },
     }),
-    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
+    ...(dbStatus && { status: dbStatus }),
   }
 
   const orders = await prisma.deliveryOrder.findMany({
@@ -47,14 +83,54 @@ export default async function DeliveryOrdersPage({
 
   const tableData = toPlain(orders)
 
+  const statusChips = ["", ...DELIVERY_ORDER_VALID_DB_STATUSES].map((dbStatusKey) => {
+    const urlStatus = dbStatusKey ? statusToIndo[dbStatusKey] || dbStatusKey : ""
+    const targetPath = urlStatus
+      ? `/penjualan/surat-jalan/status/${urlStatus}`
+      : "/penjualan/surat-jalan"
+    const isActive = activeUrlStatus === urlStatus
+
+    return (
+      <Link
+        key={dbStatusKey}
+        href={withListParams(targetPath, params, { halaman: undefined })}
+        className={`filter-chip ${isActive ? "active" : ""}`}
+      >
+        {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
+      </Link>
+    )
+  })
+
+  const currentActionPath = activeUrlStatus
+    ? `/penjualan/surat-jalan/status/${activeUrlStatus}`
+    : "/penjualan/surat-jalan"
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Penjualan",href:"/penjualan"},{label:"Surat Jalan"}]} />
+      <AppBreadcrumbs
+        items={
+          activeUrlStatus
+            ? [
+                { label: "Dasbor", href: "/" },
+                { label: "Penjualan", href: "/penjualan" },
+                { label: "Surat Jalan", href: "/penjualan/surat-jalan" },
+                { label: statusLabel(dbStatus ?? activeUrlStatus) },
+              ]
+            : [
+                { label: "Dasbor", href: "/" },
+                { label: "Penjualan", href: "/penjualan" },
+                { label: "Surat Jalan" },
+              ]
+        }
+      />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Surat Jalan</h1>
         <CanCreate permission="create_delivery_orders">
-          <Link href="/penjualan/surat-jalan/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-do-btn">
+          <Link
+            href="/penjualan/surat-jalan/tambah"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+            id="create-do-btn"
+          >
             + Buat Surat Jalan
           </Link>
         </CanCreate>
@@ -65,24 +141,27 @@ export default async function DeliveryOrdersPage({
         total={total}
         page={page}
         pageSize={pageSize}
-        toolbar={<AppSearchField placeholder="Cari no. dokumen..." action="/penjualan/surat-jalan" />}
-        filters={
-          <div className="flex gap-1.5 flex-wrap">
-            {["", "draft", "shipped", "delivered"].map((dbStatus) => {
-              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
-              return (
-                <Link
-                  key={dbStatus}
-                  href={withListParams("/penjualan/surat-jalan", params, { status: urlStatus || undefined, halaman: undefined })}
-                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
-                >
-                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
-                </Link>
-              )
-            })}
-          </div>
+        toolbar={
+          <AppSearchField
+            placeholder="Cari no. dokumen..."
+            action={currentActionPath}
+          />
         }
+        filters={<div className="flex gap-1.5 flex-wrap">{statusChips}</div>}
       />
     </div>
   )
+}
+
+export default async function DeliveryOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    cari?: string
+    status?: string
+    halaman?: string
+    pageSize?: string
+  }>
+}) {
+  return renderDeliveryOrdersPage({ searchParams })
 }
