@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { getHrScope, hrScopeWhere, canSearchAcrossEmployees } from "@/lib/auth/hr-scope"
 import Link from "next/link"
+import { redirect, notFound } from "next/navigation"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { Banknote } from "lucide-react"
 import { AppSearchField } from "@/components/ui/search-field"
@@ -19,17 +20,53 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Pinjaman" }
 
-export default async function EmployeeLoansPage({
+export const EMPLOYEE_LOAN_VALID_DB_STATUSES = [
+  "active",
+  "paid_off",
+  "written_off",
+] as const
+
+export interface EmployeeLoansPageProps {
+  statusParam?: string
+  searchParams: Promise<{
+    status?: string
+    cari?: string
+    halaman?: string
+    pageSize?: string
+  }>
+}
+
+export async function renderEmployeeLoansPage({
+  statusParam,
   searchParams,
-}: {
-  searchParams: Promise<{ status?: string; cari?: string; halaman?: string; pageSize?: string }>
-}) {
+}: EmployeeLoansPageProps) {
   const user = await requirePermission("view_employee_loans")
   const scope = await getHrScope(user)
 
   const params = await searchParams
+
+  if (!statusParam && params.status) {
+    const targetStatus = params.status
+    const query = new URLSearchParams()
+    if (params.cari) query.set("cari", params.cari)
+    if (params.halaman) query.set("halaman", params.halaman)
+    if (params.pageSize) query.set("pageSize", params.pageSize)
+    const qs = query.toString()
+    redirect(`/sdm/pinjaman/status/${targetStatus}${qs ? `?${qs}` : ""}`)
+  }
+
+  const validUrlStatuses = EMPLOYEE_LOAN_VALID_DB_STATUSES.map(
+    (s) => statusToIndo[s] || s,
+  )
+
+  if (statusParam && !validUrlStatuses.includes(statusParam)) {
+    notFound()
+  }
+
+  const activeUrlStatus = statusParam ?? ""
+  const dbStatus = activeUrlStatus ? indoToStatus[activeUrlStatus] || activeUrlStatus : undefined
+
   const { page, pageSize, take } = parsePagination(params)
-  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
     ...hrScopeWhere(scope),
@@ -38,7 +75,7 @@ export default async function EmployeeLoansPage({
         { employee: { name: { contains: params.cari } } },
       ],
     }),
-    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
+    ...(dbStatus && { status: dbStatus }),
   }
 
   const loans = await prisma.employeeLoan.findMany({
@@ -64,37 +101,48 @@ export default async function EmployeeLoansPage({
     channel: channels.get(l.id) ? EMPLOYEE_LOAN_CHANNEL_LABELS[channels.get(l.id)!] : null,
   }))
 
-  const userRoles: string[] = user.roles ?? [];
-  const userPerms: string[] = user.permissions ?? [];
+  const userRoles: string[] = user.roles ?? []
+  const userPerms: string[] = user.permissions ?? []
   const showActions =
     userRoles.includes("super_admin") ||
     userPerms.includes("create_loans") ||
-    userPerms.includes("delete_loans");
-  const showEmployeeColumn = scope.kind !== "self";
+    userPerms.includes("delete_loans")
+  const showEmployeeColumn = scope.kind !== "self"
 
   // BR-LOAN 162-V: nilai DB valid = active (berjalan) | paid_off (lunas
   // via dokumen) | written_off (final hapus-buku, bukan populasi aktif).
   // pending/rejected wilayah persetujuan, bukan filter daftar berjalan.
-  const statusChips = ["", "active", "paid_off", "written_off"].map((dbStatus) => {
-    const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+  const statusChips = ["", ...EMPLOYEE_LOAN_VALID_DB_STATUSES].map((dbStatusKey) => {
+    const urlStatus = dbStatusKey ? statusToIndo[dbStatusKey] || dbStatusKey : ""
+    const targetPath = urlStatus ? `/sdm/pinjaman/status/${urlStatus}` : "/sdm/pinjaman"
+    const isActive = activeUrlStatus === urlStatus
+
     return (
       <Link
-        key={dbStatus}
-        href={withListParams("/sdm/pinjaman", params, { status: urlStatus || undefined, halaman: undefined })}
-        className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+        key={dbStatusKey}
+        href={withListParams(targetPath, params, { halaman: undefined })}
+        className={`filter-chip ${isActive ? "active" : ""}`}
       >
-        {dbStatus ? statusLabel(dbStatus) : "Semua"}
+        {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
       </Link>
     )
   })
+
+  const currentActionPath = activeUrlStatus
+    ? `/sdm/pinjaman/status/${activeUrlStatus}`
+    : "/sdm/pinjaman"
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Pinjaman Karyawan</h1>
         <CanCreate permission="create_loans">
-          <Link href="/sdm/pinjaman/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-loan-btn">
-            <Banknote size={16} /> Tambah Pinjaman
+          <Link
+            href="/sdm/pinjaman/tambah"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+            id="create-loan-btn"
+          >
+            <Banknote size={16} /> Ajukan Pinjaman
           </Link>
         </CanCreate>
       </div>
@@ -106,9 +154,26 @@ export default async function EmployeeLoansPage({
         pageSize={pageSize}
         showActions={showActions}
         showEmployeeColumn={showEmployeeColumn}
-        toolbar={<AppSearchField placeholder="Cari nama karyawan..." action="/sdm/pinjaman" />}
-        filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>}
+        toolbar={
+          canSearchAcrossEmployees(scope) ? (
+            <AppSearchField placeholder="Cari nama karyawan..." action={currentActionPath} />
+          ) : undefined
+        }
+        filters={<div className="flex gap-1.5 flex-wrap">{statusChips}</div>}
       />
     </div>
   )
+}
+
+export default async function EmployeeLoansPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    status?: string
+    cari?: string
+    halaman?: string
+    pageSize?: string
+  }>
+}) {
+  return renderEmployeeLoansPage({ searchParams })
 }

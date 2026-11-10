@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { withListParams } from "@/lib/utils/list-href"
 import Link from "next/link"
+import { redirect, notFound } from "next/navigation"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { requirePermission } from "@/lib/auth/permissions"
@@ -22,19 +23,55 @@ import { CanCreate } from "@/components/auth/can-create"
 
 export const metadata: Metadata = { title: "Prospek" }
 
-export default async function LeadsPage({
+export const LEAD_VALID_DB_STATUSES = [
+  "new",
+  "contacted",
+  "qualified",
+  "proposal",
+  "won",
+  "lost",
+] as const
+
+export interface LeadsPageProps {
+  statusParam?: string
+  searchParams: Promise<{
+    status?: string
+    cari?: string
+    halaman?: string
+    pageSize?: string
+  }>
+}
+
+export async function renderLeadsPage({
+  statusParam,
   searchParams,
-}: {
-  searchParams: Promise<{ status?: string; cari?: string 
-  halaman?: string
-  pageSize?: string}>
-}) {
+}: LeadsPageProps) {
   await requirePermission("view_leads")
 
   const params = await searchParams
 
+  if (!statusParam && params.status) {
+    const targetStatus = params.status
+    const query = new URLSearchParams()
+    if (params.cari) query.set("cari", params.cari)
+    if (params.halaman) query.set("halaman", params.halaman)
+    if (params.pageSize) query.set("pageSize", params.pageSize)
+    const qs = query.toString()
+    redirect(`/crm/leads/status/${targetStatus}${qs ? `?${qs}` : ""}`)
+  }
+
+  const validUrlStatuses = LEAD_VALID_DB_STATUSES.map(
+    (s) => statusToIndo[s] || s,
+  )
+
+  if (statusParam && !validUrlStatuses.includes(statusParam)) {
+    notFound()
+  }
+
+  const activeUrlStatus = statusParam ?? ""
+  const dbStatus = activeUrlStatus ? indoToStatus[activeUrlStatus] || activeUrlStatus : undefined
+
   const { page, pageSize, take } = parsePagination(params)
-  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
     deletedAt: null,
@@ -45,7 +82,7 @@ export default async function LeadsPage({
         { company: { contains: params.cari } },
       ],
     }),
-    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
+    ...(dbStatus && { status: dbStatus }),
   }
 
   // Independen semua: paralel, bukan 3 loader full-table serial.
@@ -64,49 +101,84 @@ export default async function LeadsPage({
 
   const data = toPlain(leads)
 
-  const statusChips = ["", "new", "contacted", "qualified", "proposal", "won", "lost"].map((dbStatus) => {
-    const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+  const statusChips = ["", ...LEAD_VALID_DB_STATUSES].map((dbStatusKey) => {
+    const urlStatus = dbStatusKey ? statusToIndo[dbStatusKey] || dbStatusKey : ""
+    const targetPath = urlStatus ? `/crm/leads/status/${urlStatus}` : "/crm/leads"
+    const isActive = activeUrlStatus === urlStatus
+
     return (
       <Link
-        key={dbStatus}
-        href={withListParams("/crm/leads", params, { status: urlStatus || undefined, halaman: undefined })}
-        className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+        key={dbStatusKey}
+        href={withListParams(targetPath, params, { halaman: undefined })}
+        className={`filter-chip ${isActive ? "active" : ""}`}
       >
-        {dbStatus ? statusLabel(dbStatus) : "Semua"}
+        {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
       </Link>
     )
   })
 
+  const currentActionPath = activeUrlStatus
+    ? `/crm/leads/status/${activeUrlStatus}`
+    : "/crm/leads"
+
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dasbor", href: "/" },
-  { label: "CRM", href: "/crm" },
-  { label: "Prospek" },
-]} />
+      <AppBreadcrumbs
+        items={
+          activeUrlStatus
+            ? [
+                { label: "Dasbor", href: "/" },
+                { label: "CRM", href: "/crm" },
+                { label: "Prospek", href: "/crm/leads" },
+                { label: statusLabel(dbStatus ?? activeUrlStatus) },
+              ]
+            : [
+                { label: "Dasbor", href: "/" },
+                { label: "CRM", href: "/crm" },
+                { label: "Prospek" },
+              ]
+        }
+      />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Prospek</h1>
         <CanCreate permission="create_leads">
-          <Link href="/crm/leads/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-lead-btn">
-          + Tambah Prospek
-        </Link>
+          <Link
+            href="/crm/leads/tambah"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+            id="create-lead-btn"
+          >
+            + Tambah Prospek
+          </Link>
         </CanCreate>
       </div>
 
-      <LeadFollowupsCard followups={leadFollowups} />
-
-      <LeadFunnelCard funnel={leadFunnel} />
-
-      <StaleLeadsCard stale={staleLeads} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <StaleLeadsCard stale={staleLeads} />
+        <LeadFollowupsCard followups={leadFollowups} />
+        <LeadFunnelCard funnel={leadFunnel} />
+      </div>
 
       <LeadTable
         data={data}
         total={total}
         page={page}
         pageSize={pageSize}
-        toolbar={<AppSearchField placeholder="Cari nama, email, atau perusahaan..." action="/crm/leads" />}
-        filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>}
+        toolbar={<AppSearchField placeholder="Cari prospek..." action={currentActionPath} />}
+        filters={<div className="flex gap-1.5 flex-wrap">{statusChips}</div>}
       />
     </div>
   )
+}
+
+export default async function LeadsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    status?: string
+    cari?: string
+    halaman?: string
+    pageSize?: string
+  }>
+}) {
+  return renderLeadsPage({ searchParams })
 }

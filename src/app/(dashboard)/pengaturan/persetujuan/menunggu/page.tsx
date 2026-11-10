@@ -11,5 +11,5 @@ export default async function PendingApprovalsPage({
 }: {
   searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
-  return renderApprovalsPage(searchParams, true)
+  return renderApprovalsPage({ searchParams }, true)
 }

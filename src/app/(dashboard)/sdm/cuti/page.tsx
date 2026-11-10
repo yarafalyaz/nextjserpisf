@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { getHrScope, hrScopeWhere, canSearchAcrossEmployees } from "@/lib/auth/hr-scope"
 import Link from "next/link"
+import { redirect, notFound } from "next/navigation"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { LeaveTable } from "./_components/leave-table"
@@ -17,19 +18,55 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Cuti" }
 
-export default async function LeaveRequestsPage({
+export const LEAVE_REQUEST_VALID_DB_STATUSES = [
+  "pending",
+  "approved",
+  "rejected",
+] as const
+
+export interface LeaveRequestsPageProps {
+  statusParam?: string
+  searchParams: Promise<{
+    status?: string
+    cari?: string
+    halaman?: string
+    pageSize?: string
+  }>
+}
+
+export async function renderLeaveRequestsPage({
+  statusParam,
   searchParams,
-}: {
-  searchParams: Promise<{ status?: string; cari?: string; halaman?: string; pageSize?: string }>
-}) {
+}: LeaveRequestsPageProps) {
   const user = await requirePermission("view_leave_requests")
   // Self-service scoping: karyawan hanya lihat cutinya sendiri, kepala_bengkel
   // se-departemen, HR/finance/admin/ga semua.
   const scope = await getHrScope(user)
 
   const params = await searchParams
+
+  if (!statusParam && params.status) {
+    const targetStatus = params.status
+    const query = new URLSearchParams()
+    if (params.cari) query.set("cari", params.cari)
+    if (params.halaman) query.set("halaman", params.halaman)
+    if (params.pageSize) query.set("pageSize", params.pageSize)
+    const qs = query.toString()
+    redirect(`/sdm/cuti/status/${targetStatus}${qs ? `?${qs}` : ""}`)
+  }
+
+  const validUrlStatuses = LEAVE_REQUEST_VALID_DB_STATUSES.map(
+    (s) => statusToIndo[s] || s,
+  )
+
+  if (statusParam && !validUrlStatuses.includes(statusParam)) {
+    notFound()
+  }
+
+  const activeUrlStatus = statusParam ?? ""
+  const dbStatus = activeUrlStatus ? indoToStatus[activeUrlStatus] || activeUrlStatus : undefined
+
   const { page, pageSize, take } = parsePagination(params)
-  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
     ...hrScopeWhere(scope),
@@ -38,7 +75,7 @@ export default async function LeaveRequestsPage({
         { employee: { name: { contains: params.cari } } },
       ],
     }),
-    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
+    ...(dbStatus && { status: dbStatus }),
   }
 
   const leaves = await prisma.leaveRequest.findMany({
@@ -53,37 +90,52 @@ export default async function LeaveRequestsPage({
 
   const data = toPlain(leaves)
 
-  const userRoles: string[] = user.roles ?? [];
-  const userPerms: string[] = user.permissions ?? [];
+  const userRoles: string[] = user.roles ?? []
+  const userPerms: string[] = user.permissions ?? []
   const showActions =
     userRoles.includes("super_admin") ||
     userPerms.includes("edit_leave_requests") ||
-    userPerms.includes("delete_leave_requests");
-  const showEmployeeColumn = scope.kind !== "self";
+    userPerms.includes("delete_leave_requests")
+  const showEmployeeColumn = scope.kind !== "self"
 
-  const statusChips = ["", "pending", "approved", "rejected"].map((dbStatus) => {
-    const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+  const statusChips = ["", ...LEAVE_REQUEST_VALID_DB_STATUSES].map((dbStatusKey) => {
+    const urlStatus = dbStatusKey ? statusToIndo[dbStatusKey] || dbStatusKey : ""
+    const targetPath = urlStatus ? `/sdm/cuti/status/${urlStatus}` : "/sdm/cuti"
+    const isActive = activeUrlStatus === urlStatus
+
     return (
       <Link
-        key={dbStatus}
-        href={withListParams("/sdm/cuti", params, { status: urlStatus || undefined, halaman: undefined })}
-        className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+        key={dbStatusKey}
+        href={withListParams(targetPath, params, { halaman: undefined })}
+        className={`filter-chip ${isActive ? "active" : ""}`}
       >
-        {dbStatus ? statusLabel(dbStatus) : "Semua"}
+        {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
       </Link>
     )
   })
+
+  const currentActionPath = activeUrlStatus
+    ? `/sdm/cuti/status/${activeUrlStatus}`
+    : "/sdm/cuti"
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Permintaan Cuti</h1>
         <div className="flex items-center gap-2 flex-wrap">
-          <Link href="/sdm/cuti/saldo" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default bg-surface text-foreground hover:border-primary hover:text-primary transition-all" id="leave-balance-btn">
+          <Link
+            href="/sdm/cuti/saldo"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default bg-surface text-foreground hover:border-primary hover:text-primary transition-all"
+            id="leave-balance-btn"
+          >
             Saldo Cuti
           </Link>
           <CanCreate permission="create_leave_requests">
-            <Link href="/sdm/cuti/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-leave-btn">
+            <Link
+              href="/sdm/cuti/tambah"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+              id="create-leave-btn"
+            >
               + Ajukan Cuti
             </Link>
           </CanCreate>
@@ -97,9 +149,26 @@ export default async function LeaveRequestsPage({
         pageSize={pageSize}
         showActions={showActions}
         showEmployeeColumn={showEmployeeColumn}
-        toolbar={<AppSearchField placeholder="Cari nama karyawan..." action="/sdm/cuti" />}
-        filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>}
+        toolbar={
+          canSearchAcrossEmployees(scope) ? (
+            <AppSearchField placeholder="Cari nama karyawan..." action={currentActionPath} />
+          ) : undefined
+        }
+        filters={<div className="flex gap-1.5 flex-wrap">{statusChips}</div>}
       />
     </div>
   )
+}
+
+export default async function LeaveRequestsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    status?: string
+    cari?: string
+    halaman?: string
+    pageSize?: string
+  }>
+}) {
+  return renderLeaveRequestsPage({ searchParams })
 }

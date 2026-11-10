@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { parsePagination } from "@/lib/utils/pagination"
 import { withListParams } from "@/lib/utils/list-href"
 import Link from "next/link"
+import { redirect, notFound } from "next/navigation"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { ExpenseTable } from "./_components/expense-table"
@@ -21,6 +22,14 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Pengeluaran" }
 
+export const EXPENSE_VALID_DB_STATUSES = [
+  "draft",
+  "pending",
+  "approved",
+  "paid",
+  "rejected",
+] as const
+
 /** Redirect Next.js (termasuk gerbang izin fail-closed) bukan error muat. */
 function isNextRedirect(error: unknown): boolean {
   return (
@@ -31,23 +40,53 @@ function isNextRedirect(error: unknown): boolean {
   )
 }
 
-export default async function ExpensesPage({
+export interface ExpensesPageProps {
+  statusParam?: string
+  searchParams: Promise<{
+    cari?: string
+    status?: string
+    halaman?: string
+    pageSize?: string
+    klaim?: string
+  }>
+}
+
+export async function renderExpensesPage({
+  statusParam,
   searchParams,
-}: {
-  searchParams: Promise<{ cari?: string; status?: string; halaman?: string; pageSize?: string; klaim?: string }>
-}) {
+}: ExpensesPageProps) {
   await requirePermission("view_expenses")
 
   const params = await searchParams
-  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
+
+  if (!statusParam && params.status) {
+    const targetStatus = params.status
+    const query = new URLSearchParams()
+    if (params.cari) query.set("cari", params.cari)
+    if (params.klaim) query.set("klaim", params.klaim)
+    if (params.halaman) query.set("halaman", params.halaman)
+    if (params.pageSize) query.set("pageSize", params.pageSize)
+    const qs = query.toString()
+    redirect(`/keuangan/pengeluaran/status/${targetStatus}${qs ? `?${qs}` : ""}`)
+  }
+
+  const validUrlStatuses = EXPENSE_VALID_DB_STATUSES.map(
+    (s) => statusToIndo[s] || s,
+  )
+
+  if (statusParam && !validUrlStatuses.includes(statusParam)) {
+    notFound()
+  }
+
+  const activeUrlStatus = statusParam ?? ""
+  const dbStatus = activeUrlStatus ? indoToStatus[activeUrlStatus] || activeUrlStatus : undefined
+
   const { page, pageSize, take } = parsePagination(params)
   const onlyClaims = params.klaim === "1"
-  // Kotak cari menulis `?cari=`; tanpa dibaca di sini pencarian tidak
-  // menyaring apa pun (dan tautan `?cari=` dari halaman lain jadi mati).
   const cari = params.cari?.trim()
 
   const where = {
-    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
+    ...(dbStatus && { status: dbStatus }),
     ...(onlyClaims && { isReimbursementClaim: true }),
     ...(cari && {
       OR: [
@@ -57,11 +96,6 @@ export default async function ExpensesPage({
     }),
   }
 
-  // Seksi turunan baca-saja (F-2026-10-27-107-S, Q-EXQ-5) dimuat
-  // paralel dengan daftar utama. Gerbang view_expenses ditegakkan
-  // ulang fail-closed di loader sebelum query: redirect izin tetap
-  // diteruskan, sedangkan kegagalan muat lain hanya mengosongkan
-  // seksi turunan — daftar pengeluaran existing tetap tampil.
   const draftQueuePromise: Promise<{
     queue: ExpenseDraftQueue | null
     redirectError?: unknown
@@ -98,28 +132,38 @@ export default async function ExpensesPage({
       : null,
   }))
 
-  const statusChips = ["", "draft", "pending", "approved", "paid", "rejected"].map((dbStatus) => {
-    const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+  const statusChips = ["", ...EXPENSE_VALID_DB_STATUSES].map((dbStatusKey) => {
+    const urlStatus = dbStatusKey ? statusToIndo[dbStatusKey] || dbStatusKey : ""
+    const targetPath = urlStatus ? `/keuangan/pengeluaran/status/${urlStatus}` : "/keuangan/pengeluaran"
+    const isActive = activeUrlStatus === urlStatus
+
     return (
       <Link
-        key={dbStatus}
-        href={withListParams("/keuangan/pengeluaran", params, {
-          status: urlStatus || undefined,
+        key={dbStatusKey}
+        href={withListParams(targetPath, params, {
           halaman: undefined,
         })}
-        className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+        className={`filter-chip ${isActive ? "active" : ""}`}
       >
-        {dbStatus ? statusLabel(dbStatus) : "Semua"}
+        {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
       </Link>
     )
   })
+
+  const currentActionPath = activeUrlStatus
+    ? `/keuangan/pengeluaran/status/${activeUrlStatus}`
+    : "/keuangan/pengeluaran"
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Pengeluaran</h1>
         <CanCreate permission="create_expenses">
-          <Link href="/keuangan/pengeluaran/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-expense-btn">
+          <Link
+            href="/keuangan/pengeluaran/tambah"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+            id="create-expense-btn"
+          >
             + Buat Pengeluaran
           </Link>
         </CanCreate>
@@ -148,12 +192,12 @@ export default async function ExpensesPage({
         total={total}
         page={page}
         pageSize={pageSize}
-        toolbar={<AppSearchField placeholder="Cari pengeluaran..." action="/keuangan/pengeluaran" />}
+        toolbar={<AppSearchField placeholder="Cari pengeluaran..." action={currentActionPath} />}
         filters={
           <div className="flex flex-wrap gap-1.5">
             {statusChips}
             <Link
-              href={withListParams("/keuangan/pengeluaran", params, {
+              href={withListParams(currentActionPath, params, {
                 klaim: onlyClaims ? undefined : "1",
                 halaman: undefined,
               })}
@@ -166,4 +210,12 @@ export default async function ExpensesPage({
       />
     </div>
   )
+}
+
+export default async function ExpensesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ cari?: string; status?: string; halaman?: string; pageSize?: string; klaim?: string }>
+}) {
+  return renderExpensesPage({ searchParams })
 }

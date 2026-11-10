@@ -6,7 +6,7 @@ import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions"
 import { parsePagination } from "@/lib/utils/pagination"
 import { withListParams } from "@/lib/utils/list-href"
 import Link from "next/link"
-import { redirect } from "next/navigation"
+import { redirect, notFound } from "next/navigation"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ApprovalTable } from "./_components/approval-table"
@@ -15,16 +15,30 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Persetujuan" }
 
+export const APPROVAL_VALID_DB_STATUSES = [
+  "pending",
+  "approved",
+  "rejected",
+] as const
+
+export interface ApprovalsPageProps {
+  statusParam?: string
+  searchParams: Promise<{ cari?: string; status?: string; halaman?: string; pageSize?: string }>
+}
+
 export default async function ApprovalsPage({
   searchParams,
 }: {
   searchParams: Promise<{ cari?: string; status?: string; halaman?: string; pageSize?: string }>
 }) {
-  return renderApprovalsPage(searchParams)
+  return renderApprovalsPage({ searchParams })
 }
 
 export async function renderApprovalsPage(
-  searchParams: Promise<{ cari?: string; status?: string; halaman?: string; pageSize?: string }>,
+  {
+    statusParam,
+    searchParams,
+  }: ApprovalsPageProps,
   pendingOnly = false,
 ) {
   // This list spans approvals from every module and exposes request metadata.
@@ -45,10 +59,30 @@ export async function renderApprovalsPage(
   const params = await searchParams
 
   // Rute lama ?status=menunggu pindah ke /pengaturan/persetujuan/menunggu.
-  if (params.status === "menunggu") redirect("/pengaturan/persetujuan/menunggu")
+  if (!statusParam && params.status === "menunggu") redirect("/pengaturan/persetujuan/menunggu")
+
+  if (!statusParam && params.status) {
+    const targetStatus = params.status
+    const query = new URLSearchParams()
+    if (params.cari) query.set("cari", params.cari)
+    if (params.halaman) query.set("halaman", params.halaman)
+    if (params.pageSize) query.set("pageSize", params.pageSize)
+    const qs = query.toString()
+    redirect(`/pengaturan/persetujuan/status/${targetStatus}${qs ? `?${qs}` : ""}`)
+  }
+
+  const validUrlStatuses = APPROVAL_VALID_DB_STATUSES.map(
+    (s) => statusToIndo[s] || s,
+  )
+
+  if (statusParam && !validUrlStatuses.includes(statusParam)) {
+    notFound()
+  }
+
+  const activeUrlStatus = pendingOnly ? "menunggu" : (statusParam ?? "")
+  const dbStatus = activeUrlStatus ? indoToStatus[activeUrlStatus] || activeUrlStatus : undefined
 
   const { page, pageSize, take } = parsePagination(params)
-  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
   const cari = params.cari?.trim()
 
   const where = {
@@ -56,8 +90,8 @@ export async function renderApprovalsPage(
     ...(pendingOnly
       ? { status: "pending" }
       : {
-          ...((dbStatusParam || params.status) && {
-            status: dbStatusParam || params.status,
+          ...(dbStatus && {
+            status: dbStatus,
           }),
         }),
     // Kotak cari DataTable menulis ?cari= (mode server) — terjemahkan ke query.
@@ -91,15 +125,18 @@ export async function renderApprovalsPage(
     createdAt: a.createdAt.toISOString(),
   }))
 
-  const statusChips = ["", "pending", "approved", "rejected"].map((dbStatus) => {
-    const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+  const statusChips = ["", ...APPROVAL_VALID_DB_STATUSES].map((dbStatusKey) => {
+    const urlStatus = dbStatusKey ? statusToIndo[dbStatusKey] || dbStatusKey : ""
+    const targetPath = urlStatus ? `/pengaturan/persetujuan/status/${urlStatus}` : "/pengaturan/persetujuan"
+    const isActive = activeUrlStatus === urlStatus
+
     return (
       <Link
-        key={dbStatus}
-        href={withListParams("/pengaturan/persetujuan", params, { status: urlStatus || undefined, halaman: undefined })}
-        className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+        key={dbStatusKey}
+        href={withListParams(targetPath, params, { halaman: undefined })}
+        className={`filter-chip ${isActive ? "active" : ""}`}
       >
-        {dbStatus ? statusLabel(dbStatus) : "Semua"}
+        {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
       </Link>
     )
   })
@@ -108,16 +145,24 @@ export async function renderApprovalsPage(
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={pendingOnly
         ? [
-  { label: "Dasbor", href: "/" },
-  { label: "Pengaturan", href: "/pengaturan" },
-  { label: "Persetujuan", href: "/pengaturan/persetujuan" },
-  { label: "Menunggu" },
-]
-        : [
-  { label: "Dasbor", href: "/" },
-  { label: "Pengaturan", href: "/pengaturan" },
-  { label: "Persetujuan" },
-]} />
+            { label: "Dasbor", href: "/" },
+            { label: "Pengaturan", href: "/pengaturan" },
+            { label: "Persetujuan", href: "/pengaturan/persetujuan" },
+            { label: "Menunggu" },
+          ]
+        : activeUrlStatus
+          ? [
+              { label: "Dasbor", href: "/" },
+              { label: "Pengaturan", href: "/pengaturan" },
+              { label: "Persetujuan", href: "/pengaturan/persetujuan" },
+              { label: statusLabel(dbStatus ?? activeUrlStatus) },
+            ]
+          : [
+              { label: "Dasbor", href: "/" },
+              { label: "Pengaturan", href: "/pengaturan" },
+              { label: "Persetujuan" },
+            ]}
+      />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">{pendingOnly ? "Menunggu Persetujuan" : "Alur Persetujuan"}</h1>
         {pendingOnly && (
