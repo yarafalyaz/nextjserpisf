@@ -4,7 +4,7 @@ import type { Metadata } from "next"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { MaterialRequestForm } from "@/components/forms/material-request-form"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { TERMINAL_WORK_ORDER_STATUSES } from "@/lib/constants/status"
 
 export const metadata: Metadata = { title: "Tambah Permintaan Antar Gudang" }
@@ -33,7 +33,6 @@ export default async function CreateMaterialRequestPage() {
           { label: "Permintaan Antar Gudang", href: "/inventaris/permintaan-gudang" },
           { label: "Tambah" },
         ]}
-        actions={<BackButton href="/inventaris/permintaan-gudang" />}
       />
 
       <MaterialRequestForm warehouses={warehouses} items={items} workOrders={workOrders} />

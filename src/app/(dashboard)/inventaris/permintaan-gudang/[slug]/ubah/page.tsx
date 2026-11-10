@@ -7,7 +7,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { assertMaterialRequestVisible } from "@/lib/services/material-request.service"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { MaterialRequestForm } from "@/components/forms/material-request-form"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { TERMINAL_WORK_ORDER_STATUSES } from "@/lib/constants/status"
 
 export const metadata: Metadata = { title: "Ubah Permintaan Antar Gudang" }
@@ -88,7 +88,6 @@ export default async function EditMaterialRequestPage({
           { label: data.documentNo, href: `/inventaris/permintaan-gudang/${slug}` },
           { label: "Ubah" },
         ]}
-        actions={<BackButton href={`/inventaris/permintaan-gudang/${slug}`} />}
       />
       <MaterialRequestForm warehouses={warehouses} items={items} workOrders={workOrderOptions} request={request} />
     </div>
