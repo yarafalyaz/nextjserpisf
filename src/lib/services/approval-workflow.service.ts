@@ -43,6 +43,15 @@ export async function notifyApprovalStepApprovers(
       recipientIds = roleUsers.map((u: { id: number }) => u.id)
     }
 
+    // Super admin selalu diikutsertakan sebagai penerima notifikasi persetujuan
+    // agar memiliki visibilitas atas semua antrean persetujuan yang sedang menunggu.
+    const superAdmins = await db.user.findMany({
+      where: { isActive: true, roles: { some: { name: "super_admin" } } },
+      select: { id: true },
+    })
+    const superAdminIds = superAdmins.map((u: { id: number }) => u.id)
+    recipientIds = [...recipientIds, ...superAdminIds]
+
     recipientIds = [...new Set(recipientIds)].filter((id) => id !== approval.requestedBy)
     if (recipientIds.length === 0) return
 
