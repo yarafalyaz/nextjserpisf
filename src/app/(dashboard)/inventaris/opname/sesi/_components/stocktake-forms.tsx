@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { AppDatePicker } from "@/components/ui/date-picker"
+import { Combobox } from "@/components/ui/combobox"
 import {
   createStocktakeSession,
   snapshotStocktakeSession,
@@ -68,27 +69,24 @@ export function StocktakeSessionForm({
       className="flex flex-col gap-4 p-4 px-5 border-b border-border bg-card/50 sm:flex-row sm:items-end"
       aria-label="Buat sesi opname"
     >
-      <div className="flex flex-1 flex-col gap-1.5 min-w-[200px]">
+      <div className="flex flex-1 flex-col gap-1.5 min-w-[220px]">
         <Label htmlFor="stkWarehouse" className="text-xs font-medium text-foreground">
           Gudang Target *
         </Label>
         {warehouses.length > 0 ? (
-          <>
-            <select
-              id="stkWarehouse"
-              name="warehouseId"
-              value={selectedWarehouseId}
-              onChange={(e) => setSelectedWarehouseId(e.target.value)}
-              required
-              className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1.5 text-xs text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.code} - {w.name}
-                </option>
-              ))}
-            </select>
-          </>
+          <Combobox
+            id="stkWarehouse"
+            name="warehouseId"
+            options={warehouses.map((w) => ({
+              value: String(w.id),
+              label: `${w.code} - ${w.name}`,
+            }))}
+            value={selectedWarehouseId}
+            onChange={(val) => setSelectedWarehouseId(val ?? "")}
+            placeholder="Pilih atau cari gudang..."
+            className="w-full text-xs"
+            required
+          />
         ) : (
           <Input
             id="stkWarehouse"
