@@ -1,13 +1,9 @@
 export const dynamic = "force-dynamic"
 
-import Link from "next/link"
-
 import { prisma } from "@/lib/db/prisma"
 import { requireAuth } from "@/lib/auth/permissions"
-import { formatDate } from "@/lib/utils/format"
-import { notificationBodyHref } from "@/lib/notifications/body-href"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-
+import { NotificationsView } from "./_components/notifications-view"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Notifikasi" }
@@ -19,59 +15,33 @@ export default async function NotificationsPage() {
     prisma.notification.findMany({
       where: { userId: Number(user.id) },
       orderBy: { createdAt: "desc" },
-      take: 50,
+      take: 100,
     }),
-    // R6WN-10: hitung dari DB, bukan dari jendela 50 terbaru.
     prisma.notification.count({ where: { userId: Number(user.id), readAt: null } }),
   ])
 
   return (
-    <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dasbor", href: "/" },
-  { label: "Notifikasi" },
-]} />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Notifikasi</h1>
-        <span className="text-muted-foreground">{unreadCount} belum dibaca</span>
+    <div className="flex flex-col gap-6 max-w-5xl">
+      <AppBreadcrumbs
+        items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Notifikasi" },
+        ]}
+      />
+
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between pb-2 border-b">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Notifikasi</h1>
+          <p className="text-sm text-muted-foreground">
+            Kelola seluruh pemberitahuan, aktivitas sistem, dan permohonan persetujuan Anda
+          </p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5">
-        {notifications.length === 0 ? (
-          <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada notifikasi</p>
-          </div>
-        ) : (
-          notifications.map((n) => {
-            const href = notificationBodyHref(n.body)
-            return (
-            <div
-              key={n.id}
-              className={`bg-surface rounded-xl border border-default shadow-sm px-5 py-4 border-l-3 ${!n.readAt ? "border-l-primary" : "border-l-transparent"} ${n.readAt ? "opacity-70" : ""}`}
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[0.9375rem] font-semibold">{n.title}</span>
-                    {!n.readAt && <span className="notification-badge static w-1.5 h-1.5" />}
-                  </div>
-                  {href ? (
-                    <Link href={href} className="text-[0.8125rem] text-primary hover:underline">
-                      Buka dokumen terkait
-                    </Link>
-                  ) : (
-                    <p className="text-[0.8125rem] text-secondary m-0">{n.body}</p>
-                  )}
-                </div>
-                <span className="text-muted-foreground text-xs whitespace-nowrap">
-                  {formatDate(n.createdAt)}
-                </span>
-              </div>
-            </div>
-            )
-          })
-        )}
-      </div>
+      <NotificationsView
+        initialNotifications={notifications}
+        initialUnreadCount={unreadCount}
+      />
     </div>
   )
 }
