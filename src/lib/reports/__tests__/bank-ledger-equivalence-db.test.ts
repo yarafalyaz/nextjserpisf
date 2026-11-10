@@ -94,10 +94,10 @@ describe.skipIf(SKIP)("bank-ledger equivalence (refactor perf S3-A, DB)", () => 
   it("saldo awal dari sumNetForAccount identik baseline manual SQL (1500.25; DRAFT/terhapus dibuang)", async () => {
     const report = await loadBankLedger(period, "eq-bank-ledger")
     const rows = report.table.rows
-    // 1500.25 terformat desimal-0 -> "1.500" (lihat catatan format di header).
+    // formatAccountingExact menampilkan hingga sen: 1500.25 -> "1.500,25".
     expect(rows[0]).toEqual({
       kind: "data",
-      cells: ["", "", "Saldo Awal", "", "", "1.500"],
+      cells: ["", "", "Saldo Awal", "", "", "1.500,25"],
     })
   })
 
@@ -106,14 +106,14 @@ describe.skipIf(SKIP)("bank-ledger equivalence (refactor perf S3-A, DB)", () => 
     const rows = report.table.rows as { kind: string; cells?: string[] }[]
     const dataRows = rows.filter((r) => r.kind === "data")
     expect(dataRows).toHaveLength(5) // Saldo Awal + 4 mutasi
-    expect(dataRows[1].cells?.[5]).toBe("1.500") // 1500.49 -> desimal-0
+    expect(dataRows[1].cells?.[5]).toBe("1.500,49") // 1500.49 exact
     expect(dataRows[2].cells?.[2]).toBe("Deskripsi EQ-IN-2") // memo null -> deskripsi jurnal
-    expect(dataRows[2].cells?.[5]).toBe("1.500") // 1500.36 -> desimal-0
-    expect(dataRows[3].cells?.[5]).toBe("1.600") // 1600.36 -> desimal-0
-    expect(dataRows[4].cells?.[5]).toBe("1.500") // pembalik B REVERSED dihitung (1500.36), bukan difilter
+    expect(dataRows[2].cells?.[5]).toBe("1.500,47") // 1500.47 exact
+    expect(dataRows[3].cells?.[5]).toBe("1.600,47") // 1600.47 exact
+    expect(dataRows[4].cells?.[5]).toBe("1.500,47") // pembalik B REVERSED dihitung (1500.47), bukan difilter
     const total = rows.at(-1) as { kind: string; cells?: string[] }
     expect(total.kind).toBe("total")
-    expect(total.cells).toEqual(["100", "100", "1.500"]) // 100.48/100.26/1500.36 desimal-0
+    expect(total.cells).toEqual(["100,48", "100,26", "1.500,47"]) // exact format
   })
 
   it("loadGeneralLedger berbagi hasil identik dengan loadBankLedger untuk akun kas/bank", async () => {
