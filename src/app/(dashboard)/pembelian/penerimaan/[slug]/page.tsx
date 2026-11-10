@@ -10,7 +10,7 @@ import { DeleteButton } from "@/components/ui/delete-button";
 import { deleteGoodsReceipt, verifyGoodsReceipt } from "@/actions/purchase.actions";
 import { PrintButton } from "@/components/ui/print-button";
 import { ProcessButton } from "@/components/ui/process-button";
-import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import {
   DetailTable,
@@ -193,7 +193,6 @@ export default async function GoodsReceiptDetailPage({
                 </Link>
               </CanCreate>
             )}
-            <BackButton href="/pembelian/penerimaan" />
           </>
         }
       />

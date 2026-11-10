@@ -6,7 +6,7 @@ import { notFound } from "next/navigation"
 import Link from "next/link"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteCostCenter } from "@/actions/finance.actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { Pencil, ChevronRight } from "@/components/ui/fontawesome-icons"
@@ -60,7 +60,6 @@ export default async function CostCenterDetailPage({
           <CanCreate permission="delete_cost_centers">
             <DeleteButton id={costCenter.id} action={deleteCostCenter} />
           </CanCreate>
-          <BackButton href="/keuangan/pusat-biaya" />
         </>}
       />
 

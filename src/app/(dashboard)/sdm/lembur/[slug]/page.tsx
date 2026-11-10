@@ -7,7 +7,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteOvertimeRequest } from "@/actions/hrm.actions"
 import { StatusActions } from "@/components/ui/status-actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
@@ -81,7 +81,6 @@ export default async function OvertimeRequestDetailPage({
               <Button href={entityEditHref("/sdm/lembur", overtime)} variant="primary">Ubah</Button>
             )}
             {canDelete && !isApproved && <DeleteButton id={overtime.id} action={deleteOvertimeRequest} />}
-            <BackButton href="/sdm/lembur" />
           </>
         }
       />

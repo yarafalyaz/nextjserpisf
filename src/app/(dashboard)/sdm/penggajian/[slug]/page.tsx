@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { formatDate, formatPeriod } from "@/lib/utils/format";
 import { notFound } from "next/navigation";
 import { StatusChip } from "@/components/ui/status-chip";
-import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { requirePermission } from "@/lib/auth/permissions";
@@ -118,7 +118,6 @@ export default async function PayrollDetailPage({
             {payroll.status === "paid" && canProcessPayroll && (
               <CorrectPaidPayrollButton payrollId={payroll.id} />
             )}
-            <BackButton href="/sdm/penggajian" />
           </div>
         }
       />

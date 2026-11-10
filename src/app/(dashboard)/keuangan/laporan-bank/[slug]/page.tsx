@@ -6,7 +6,7 @@ import Link from "next/link"
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import {
@@ -122,7 +122,6 @@ export default async function BankStatementDetailPage({
                 </Link>
               </>
             )}
-            <BackButton href="/keuangan/laporan-bank" />
           </div>
         }
       />

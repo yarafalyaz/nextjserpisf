@@ -5,7 +5,7 @@ import { formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteRack } from "@/actions/inventory.actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -70,7 +70,6 @@ export default async function RackDetailPage({
             <CanCreate permission="delete_warehouses">
               <DeleteButton id={rack.id} action={deleteRack} />
             </CanCreate>
-            <BackButton href="/inventaris/rak" />
           </>
         }
       />

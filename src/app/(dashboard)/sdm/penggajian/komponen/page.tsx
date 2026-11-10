@@ -4,7 +4,7 @@ import type { Metadata } from "next"
 import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { getPayrollComponents } from "@/actions/hrm.actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { PayrollComponentMaster } from "@/components/payroll/payroll-component-master"
 
 export const metadata: Metadata = { title: "Komponen Gaji" }
@@ -30,7 +30,6 @@ export default async function PayrollComponentsPage() {
           { label: "Penggajian", href: "/sdm/penggajian" },
           { label: "Komponen Gaji" },
         ]}
-        actions={<BackButton href="/sdm/penggajian" />}
       />
       {result.success ? (
         <PayrollComponentMaster components={result.data ?? []} accounts={accounts} canCreate={canCreate} canEdit={canEdit} />

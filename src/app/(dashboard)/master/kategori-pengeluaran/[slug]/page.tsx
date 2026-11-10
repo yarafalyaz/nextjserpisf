@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
@@ -42,7 +42,6 @@ export default async function ExpenseCategoryDetailPage({
         actions={
           <>
             <Button href={entityEditHref("/master/kategori-pengeluaran", category)} variant="primary">Ubah</Button>
-            <BackButton href="/master/kategori-pengeluaran" />
           </>
         }
       />

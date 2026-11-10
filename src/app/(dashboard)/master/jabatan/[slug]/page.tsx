@@ -8,7 +8,7 @@ import { Pencil } from "@/components/ui/fontawesome-icons"
 import { EmptyState } from "@/components/ui/empty-state"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deletePosition } from "@/actions/master.actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -72,7 +72,6 @@ export default async function PositionDetailPage({
             <CanCreate permission="delete_positions">
               <DeleteButton id={position.id} action={deletePosition} />
             </CanCreate>
-            <BackButton href="/master/jabatan" />
           </>
         }
       />

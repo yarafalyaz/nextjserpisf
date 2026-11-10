@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 import { StatusChip } from "@/components/ui/status-chip";
 import { StatusActions } from "@/components/ui/status-actions";
 import { PrintButton } from "@/components/ui/print-button";
-import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { CanCreate } from "@/components/auth/can-create";
 import { DELIVERABLE_ORDER_STATUSES } from "@/lib/validations/sales.schemas";
@@ -152,7 +152,6 @@ export default async function SalesOrderDetailPage({
               </CanCreate>
             )}
             <PrintButton documentType="order" documentId={order.id} />
-            <BackButton href="/penjualan/pesanan" />
           </>
         }
       />

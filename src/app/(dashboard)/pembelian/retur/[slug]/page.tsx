@@ -9,7 +9,7 @@ import { ProcessButton } from "@/components/ui/process-button"
 import { deletePurchaseReturn, processPurchaseReturn } from "@/actions/purchase.actions"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PrintButton } from "@/components/ui/print-button"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -108,7 +108,6 @@ export default async function PurchaseReturnDetailPage({
                 <DeleteButton id={purchaseReturn.id} action={deletePurchaseReturn} />
               </CanCreate>
             )}
-            <BackButton href="/pembelian/retur" />
           </>
         }
       />

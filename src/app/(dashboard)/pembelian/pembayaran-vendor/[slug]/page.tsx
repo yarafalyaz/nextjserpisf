@@ -8,7 +8,7 @@ import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteVendorPayment, reverseVendorPayment } from "@/actions/purchase.actions"
 import { PrintButton } from "@/components/ui/print-button"
 import { ReversePaymentButton } from "@/components/ui/reverse-payment-button"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
@@ -112,7 +112,6 @@ export default async function VendorPaymentDetailPage({
                 />
               </CanCreate>
             )}
-            <BackButton href="/pembelian/pembayaran-vendor" />
           </>
         }
       />

@@ -5,7 +5,7 @@ import { formatDate, formatCurrencyExact } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { requirePermission } from "@/lib/auth/permissions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
 import { NonconformanceResolveForm } from "../_components/nonconformance-resolve-form"
@@ -68,7 +68,6 @@ export default async function NonconformanceDetailPage({
           { label: "NCR", href: "/produksi/qc/ncr" },
           { label: "Detail" },
         ]}
-        actions={<BackButton href="/produksi/qc/ncr" />}
       />
 
       <DetailCard>

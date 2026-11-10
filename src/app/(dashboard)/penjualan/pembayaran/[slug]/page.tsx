@@ -8,7 +8,7 @@ import { DeleteButton } from "@/components/ui/delete-button";
 import { deleteSalesPayment, reverseSalesPayment } from "@/actions/sales.actions";
 import { ReversePaymentButton } from "@/components/ui/reverse-payment-button";
 import { PrintButton } from "@/components/ui/print-button";
-import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { TransactionAttachments } from "@/components/ui/transaction-attachments";
@@ -100,7 +100,6 @@ export default async function SalesPaymentDetailPage({
                 <DeleteButton id={payment.id} action={deleteSalesPayment} />
               </CanCreate>
             )}
-            <BackButton href="/penjualan/pembayaran" />
           </>
         }
       />

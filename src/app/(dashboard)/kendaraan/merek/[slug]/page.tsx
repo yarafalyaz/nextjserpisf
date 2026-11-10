@@ -6,7 +6,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteVehicleBrand } from "@/actions/vehicle.actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -78,7 +78,6 @@ export default async function VehicleBrandDetailPage({
               <Button href={`${entityEditHref("/kendaraan/merek", brand)}`} variant="primary">Ubah</Button>
             )}
             {canDelete && <DeleteButton id={brand.id} action={deleteVehicleBrand} />}
-            <BackButton href="/kendaraan/merek" />
           </>
         }
       />

@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { notFound } from "next/navigation"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { StatusChip } from "@/components/ui/status-chip"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope"
@@ -80,7 +80,6 @@ export default async function StocktakeSessionDetailPage({
         actions={
           <>
             <StocktakeActions id={session.id} status={session.status} canCreate={canCreate} canEdit={canEdit} />
-            <BackButton href="/inventaris/opname/sesi" />
           </>
         }
       />

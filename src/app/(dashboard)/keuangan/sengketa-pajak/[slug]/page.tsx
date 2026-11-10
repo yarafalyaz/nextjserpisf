@@ -9,7 +9,6 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { BackButton } from "@/components/ui/page-header"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
@@ -89,7 +88,6 @@ export default async function TaxAssessmentDetailPage({
       />
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <BackButton href="/keuangan/sengketa-pajak" label="Kembali ke register" />
           <h1 className="text-2xl font-bold text-foreground">
             {TAX_DISPUTE_REGISTER_TITLE} — {assessment.assessmentNumber ?? `#${assessment.id}`}
           </h1>

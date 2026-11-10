@@ -6,7 +6,7 @@ import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteEmployeeLoan } from "@/actions/hrm.actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { CanCreate } from "@/components/auth/can-create"
@@ -92,7 +92,6 @@ export default async function EmployeeLoanDetailPage({
                 <DeleteButton id={loan.id} action={deleteEmployeeLoan} />
               </CanCreate>
             )}
-            <BackButton href="/sdm/pinjaman" />
           </>
         }
       />

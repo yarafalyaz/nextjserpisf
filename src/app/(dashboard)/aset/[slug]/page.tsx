@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { DisposeAssetButton } from "./_components/dispose-asset-button"
 import { deleteAsset } from "@/actions/asset.actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -271,7 +271,6 @@ export default async function AssetDetailPage({
           <CanCreate permission="delete_assets">
             <DeleteButton id={asset.id} action={deleteAsset} />
           </CanCreate>
-          <BackButton href="/aset" />
         </>}
       />
 

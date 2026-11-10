@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { notFound } from "next/navigation";
-import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 
@@ -50,7 +50,6 @@ export default async function DetailPage({
                 Ubah
               </Button>
             </CanCreate>
-            <BackButton href="/master/akun" />
           </>
         }
       />

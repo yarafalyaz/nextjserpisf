@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { deleteAssetBrand } from "@/actions/asset.actions";
-import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import {
@@ -66,7 +66,6 @@ export default async function AssetBrandDetailPage({
             <CanCreate permission="delete_asset_brands">
               <DeleteButton id={brand.id} action={deleteAssetBrand} />
             </CanCreate>
-            <BackButton href="/aset/merek" />
           </>
         }
       />

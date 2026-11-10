@@ -9,7 +9,7 @@ import { deletePurchaseRequest } from "@/actions/purchase.actions"
 import { StatusActions } from "@/components/ui/status-actions"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PrintButton } from "@/components/ui/print-button"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { CanCreate } from "@/components/auth/can-create"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
@@ -112,7 +112,6 @@ export default async function PurchaseRequestDetailPage({
             {canEdit && isDraft && <Button href={entityEditHref("/pembelian/permintaan", request)} variant="primary">Ubah</Button>}
             <PrintButton documentType="purchase-request" documentId={request.id} />
             {canDelete && isDeletable && <DeleteButton id={request.id} action={deletePurchaseRequest} />}
-            <BackButton href="/pembelian/permintaan" />
           </>
         }
       />

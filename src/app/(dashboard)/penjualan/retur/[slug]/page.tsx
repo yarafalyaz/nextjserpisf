@@ -9,7 +9,7 @@ import { completeSalesReturn, deleteSalesReturn } from "@/actions/sales.actions"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PrintButton } from "@/components/ui/print-button"
 import { ProcessButton } from "@/components/ui/process-button"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -110,7 +110,6 @@ export default async function SalesReturnDetailPage({
                 <DeleteButton id={salesReturn.id} action={deleteSalesReturn} />
               </CanCreate>
             )}
-            <BackButton href="/penjualan/retur" />
           </>
         }
       />

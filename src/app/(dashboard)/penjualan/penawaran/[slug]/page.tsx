@@ -15,7 +15,7 @@ import { StatusActions } from "@/components/ui/status-actions";
 import { QuotationFlowActions } from "./_components/quotation-flow-actions";
 import { ConvertQuotationButton } from "./_components/convert-quotation-button";
 import { PrintButton } from "@/components/ui/print-button";
-import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { CanCreate } from "@/components/auth/can-create";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
@@ -315,7 +315,6 @@ export default async function QuotationDetailPage({
                 )}
               </>
             )}
-            <BackButton href="/penjualan/penawaran" />
           </>
         }
       />

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
 import { requirePermission } from "@/lib/auth/permissions"
 import { formatDate } from "@/lib/utils/format"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { UserAccessPanel } from "./_components/user-access-panel"
@@ -69,7 +69,6 @@ export default async function UserDetailPage({
           { label: "Pengguna", href: "/pengaturan/pengguna" },
           { label: "Detail" },
         ]}
-        actions={<BackButton href="/pengaturan/pengguna" />}
       />
 
       <DetailCard>

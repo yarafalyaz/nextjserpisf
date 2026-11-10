@@ -7,7 +7,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { ProcessButton } from "@/components/ui/process-button"
 import { deleteStockAdjustment, processStockAdjustment } from "@/actions/inventory.actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -120,7 +120,6 @@ export default async function StockAdjustmentDetailPage({
                 </CanCreate>
               </>
             )}
-            <BackButton href="/inventaris/penyesuaian" />
           </>
         }
       />

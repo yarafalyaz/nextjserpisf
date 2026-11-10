@@ -24,7 +24,7 @@ import { WhatsappTrailNote } from "@/components/reports/whatsapp-trail-note"
 import { getWhatsappTrail } from "@/lib/reports/whatsapp-trail-data"
 import { buildWhatsappMessage } from "@/lib/utils/whatsapp"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -226,7 +226,6 @@ export default async function InvoiceDetailPage({
                 <DeleteButton id={invoice.id} action={deleteSalesInvoice} />
               </CanCreate>
             )}
-            <BackButton href="/penjualan/faktur" />
           </>
         }
       />

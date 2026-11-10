@@ -10,7 +10,7 @@ import { deleteMaterialRequest } from "@/actions/material-request.actions"
 import { formatDate, formatNumber } from "@/lib/utils/format"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
@@ -111,7 +111,6 @@ export default async function MaterialRequestDetailPage({
                 </CanCreate>
               </>
             )}
-            <BackButton href="/inventaris/permintaan-gudang" />
           </>
         }
       />

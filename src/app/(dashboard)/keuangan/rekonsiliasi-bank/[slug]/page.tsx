@@ -6,7 +6,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import {
   DetailTable,
@@ -151,7 +151,6 @@ export default async function BankReconciliationDetailPage({
         badge={<StatusChip status={recon.status} />}
         actions={<>
           {canWrite && <CompleteReconciliationButton reconciliationId={recon.id} />}
-          <BackButton href="/keuangan/rekonsiliasi-bank" />
         </>}
       />
 

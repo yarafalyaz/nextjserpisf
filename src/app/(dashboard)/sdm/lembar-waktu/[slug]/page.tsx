@@ -5,7 +5,7 @@ import { formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteTimesheet } from "@/actions/hrm.actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { CanCreate } from "@/components/auth/can-create"
@@ -74,7 +74,6 @@ export default async function TimesheetDetailPage({
             <CanCreate permission="delete_timesheets">
               <DeleteButton id={timesheet.id} action={deleteTimesheet} />
             </CanCreate>
-            <BackButton href="/sdm/lembar-waktu" />
           </>
         }
       />

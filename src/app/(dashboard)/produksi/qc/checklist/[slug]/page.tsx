@@ -5,7 +5,7 @@ import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { requirePermission } from "@/lib/auth/permissions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
@@ -86,7 +86,6 @@ export default async function QcChecklistDetailPage({
                 <Button href={entityEditHref("/produksi/qc/checklist", checklist)} variant="primary">Ubah</Button>
               </CanCreate>
             )}
-            <BackButton href="/produksi/qc/checklist" />
           </>
         }
       />

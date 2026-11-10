@@ -6,7 +6,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteVehicle } from "@/actions/vehicle.actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { CanCreate } from "@/components/auth/can-create"
@@ -82,7 +82,6 @@ export default async function VehicleDetailPage({
             <CanCreate permission="delete_vehicles">
               <DeleteButton id={vehicle.id} action={deleteVehicle} />
             </CanCreate>
-            <BackButton href="/kendaraan" />
           </>
         }
       />

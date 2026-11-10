@@ -6,7 +6,7 @@ import { statusLabel } from "@/lib/utils/status-labels";
 import { notFound } from "next/navigation";
 import { VoidButton } from "@/components/ui/void-button";
 import { deletePettyCash } from "@/actions/finance.actions";
-import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { TransactionAttachments } from "@/components/ui/transaction-attachments";
@@ -127,7 +127,6 @@ export default async function PettyCashDetailPage({
               title={`Batalkan transaksi kas kecil ${pettyCash.documentNo}?`}
               body="Transaksi ditandai dibatalkan (void) dan jurnal aslinya dibalik, tetapi barisnya tetap tersimpan untuk jejak audit."
             />
-            <BackButton href="/keuangan/kas-kecil" />
           </div>
         }
       />

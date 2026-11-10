@@ -5,7 +5,7 @@ import { formatDate, formatCurrencyExact, formatReferenceType, referenceHref } f
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { resolveReferenceSlugs, referenceSlugKey } from "@/lib/services/reference-slug.service"
@@ -58,9 +58,6 @@ export default async function JournalDetailPage({
           { label: journal.journalNumber },
         ]}
         badge={<StatusChip status={journal.status.toLowerCase()} />}
-        actions={<>
-          <BackButton href="/keuangan/jurnal" />
-        </>}
       />
 
       <DetailCard>

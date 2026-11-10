@@ -5,7 +5,7 @@ import { requireAuth } from "@/lib/auth/permissions"
 import { loadOwnPayslipDetail } from "@/lib/reports/payslip-self-data"
 import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { kindLabel } from "@/components/payroll/payroll-component-master"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { EmptyState } from "@/components/ui/empty-state"
 
@@ -40,7 +40,6 @@ export default async function OwnPayslipDetailPage({
             {detail.statusLabel}
           </span>
         }
-        actions={<BackButton href="/sdm/slip-gaji-saya" />}
       />
 
       <DetailCard title="Ringkasan Slip" columns={3}>

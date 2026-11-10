@@ -6,7 +6,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteVehicleModel } from "@/actions/vehicle.actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -67,7 +67,6 @@ export default async function VehicleModelDetailPage({
             {canDelete && (
               <DeleteButton id={model.id} action={deleteVehicleModel} />
             )}
-            <BackButton href="/kendaraan/merek" />
           </>
         }
       />

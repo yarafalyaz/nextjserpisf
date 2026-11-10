@@ -14,7 +14,7 @@ import { JobReopenButton } from "@/components/reports/job-reopen-button";
 import { WorkOrderOperationActions, InitializeStagesButton, WorkOrderOperationWorkCenterSelect } from "./_components/work-order-operation-actions";
 import { getWorkCenters } from "@/lib/reports/work-center-load-plan-data";
 import { CreateServicePoButton } from "./_components/create-service-po-button";
-import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/ui/print-button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -436,7 +436,6 @@ export default async function WorkOrderDetailPage({
             <CanCreate permission="delete_work_orders">
               <DeleteButton id={wo.id} action={deleteWorkOrder} />
             </CanCreate>
-            <BackButton href="/produksi/perintah-kerja" />
           </>
         }
       />

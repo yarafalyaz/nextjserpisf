@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteAssetCategory } from "@/actions/asset.actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -85,7 +85,6 @@ export default async function AssetCategoryDetailPage({
           <CanCreate permission="delete_asset_categories">
             <DeleteButton id={category.id} action={deleteAssetCategory} />
           </CanCreate>
-          <BackButton href="/aset/kategori" />
         </>}
       />
 

@@ -8,7 +8,7 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { deleteExpense } from "@/actions/finance.actions";
 import { PrintButton } from "@/components/ui/print-button";
-import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { TransactionAttachments } from "@/components/ui/transaction-attachments";
@@ -150,7 +150,6 @@ export default async function ExpenseDetailPage({
             <CanCreate permission="delete_expenses">
               <DeleteButton id={expense.id} action={deleteExpense} />
             </CanCreate>
-            <BackButton href="/keuangan/pengeluaran" />
           </>
         }
       />

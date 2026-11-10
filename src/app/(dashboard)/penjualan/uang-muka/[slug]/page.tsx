@@ -9,7 +9,7 @@ import { DeleteButton } from "@/components/ui/delete-button";
 import { deleteDownPayment } from "@/actions/sales.actions";
 import { StatusChip } from "@/components/ui/status-chip";
 import { PrintButton } from "@/components/ui/print-button";
-import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { ConfirmDownPaymentButton } from "../_components/confirm-dp-button";
@@ -134,7 +134,6 @@ export default async function DownPaymentDetailPage({
                 <DeleteButton id={dp.id} action={deleteDownPayment} />
               </CanCreate>
             )}
-            <BackButton href="/penjualan/uang-muka" />
           </>
         }
       />

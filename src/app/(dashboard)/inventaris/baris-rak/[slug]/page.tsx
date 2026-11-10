@@ -5,7 +5,7 @@ import { formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteRackRow } from "@/actions/inventory.actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { RackRowItemsTable } from "../_components/rack-row-items-table"
@@ -134,7 +134,6 @@ export default async function RackRowDetailPage({
             <CanCreate permission="manage_inventory">
               <DeleteButton id={rackRow.id} action={deleteRackRow} />
             </CanCreate>
-            <BackButton href="/inventaris/baris-rak" />
           </>
         }
       />

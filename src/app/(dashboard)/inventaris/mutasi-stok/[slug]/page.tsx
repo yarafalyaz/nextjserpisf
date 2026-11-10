@@ -5,7 +5,7 @@ import { notFound } from "next/navigation"
 import { requirePermission } from "@/lib/auth/permissions"
 import { formatCurrencyExact, formatDate, formatReferenceType, referenceHref } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
 import type { Metadata } from "next"
@@ -54,7 +54,6 @@ export default async function StockMoveDetailPage({
           { label: "Pergerakan Stok", href: "/inventaris/mutasi-stok" },
           { label: "Detail" },
         ]}
-        actions={<BackButton href="/inventaris/mutasi-stok" />}
       />
 
       <DetailCard>

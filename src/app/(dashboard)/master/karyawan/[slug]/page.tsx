@@ -13,7 +13,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteEmployee } from "@/actions/master.actions"
 import { getLeaveQuota } from "@/lib/services/leave-quota.service"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -328,7 +328,6 @@ export default async function EmployeeDetailPage({
             <CanCreate permission="delete_employees">
               <DeleteButton id={employee.id} action={deleteEmployee} />
             </CanCreate>
-            <BackButton href="/master/karyawan" />
           </>
         }
       />

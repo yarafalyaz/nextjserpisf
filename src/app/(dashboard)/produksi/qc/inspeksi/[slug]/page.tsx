@@ -5,7 +5,7 @@ import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { requirePermission } from "@/lib/auth/permissions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -74,7 +74,6 @@ export default async function QcInspectionDetailPage({
           { label: "Inspeksi", href: "/produksi/qc/inspeksi" },
           { label: "Detail" },
         ]}
-        actions={<BackButton href="/produksi/qc/inspeksi" />}
       />
 
       <DetailCard>

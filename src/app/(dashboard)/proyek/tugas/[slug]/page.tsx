@@ -8,7 +8,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Pencil } from "@/components/ui/fontawesome-icons"
 import { StatusChip } from "@/components/ui/status-chip"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
@@ -54,7 +54,6 @@ export default async function TaskDetailPage({
             <CanCreate permission="edit_projects">
               <Button href={entityEditHref("/proyek/tugas", task)} variant="secondary"><Pencil size={14} /> Ubah</Button>
             </CanCreate>
-            <BackButton href="/proyek/tugas" />
           </>
         }
       />

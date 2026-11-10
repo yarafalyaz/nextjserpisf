@@ -7,7 +7,7 @@ import { notFound } from "next/navigation"
 import { StatusChip } from '@/components/ui/status-chip'
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteProduct } from "@/actions/manufacturing.actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -109,7 +109,6 @@ export default async function ProductDetailPage({
               <Button href={entityEditHref("/produksi/products", product)} variant="primary">Ubah</Button>
             )}
             {canDelete && <DeleteButton id={product.id} action={deleteProduct} />}
-            <BackButton href="/produksi/products" />
           </>
         }
       />

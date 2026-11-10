@@ -12,7 +12,7 @@ import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteLead } from "@/actions/crm.actions"
 import { CONVERTIBLE_STATUSES } from "@/lib/validations/crm.schemas"
 import { ConvertLeadButton, AddLeadActivityForm, LeadActivityCompletionButton } from "../_components/lead-actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -115,7 +115,6 @@ export default async function LeadDetailPage({
           <CanCreate permission="delete_leads">
             <DeleteButton id={lead.id} action={deleteLead} />
           </CanCreate>
-          <BackButton href="/crm/leads" />
         </>}
       />
 

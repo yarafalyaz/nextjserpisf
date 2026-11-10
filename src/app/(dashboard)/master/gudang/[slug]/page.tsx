@@ -8,7 +8,7 @@ import { Pencil } from "@/components/ui/fontawesome-icons"
 import { EmptyState } from "@/components/ui/empty-state"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { StatusChip } from "@/components/ui/status-chip"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -74,7 +74,6 @@ export default async function WarehouseDetailPage({
             <CanCreate permission="edit_warehouses">
               <Button href={entityEditHref("/master/gudang", warehouse)} variant="secondary"><Pencil size={14} /> Ubah</Button>
             </CanCreate>
-            <BackButton href="/master/gudang" />
           </>
         }
       />

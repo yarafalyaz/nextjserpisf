@@ -6,7 +6,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteAssetTransfer } from "@/actions/asset.actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { Pencil } from "@/components/ui/fontawesome-icons"
@@ -59,7 +59,6 @@ export default async function AssetTransferDetailPage({
           <CanCreate permission="delete_asset_transfers">
             <DeleteButton id={transfer.id} action={deleteAssetTransfer} />
           </CanCreate>
-          <BackButton href="/aset/transfer" />
         </>}
       />
 

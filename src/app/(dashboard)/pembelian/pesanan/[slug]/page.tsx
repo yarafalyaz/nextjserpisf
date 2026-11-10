@@ -15,7 +15,7 @@ import { VoidButton } from "@/components/ui/void-button"
 import { cancelPurchaseOrder, deletePurchaseOrder } from "@/actions/purchase.actions"
 import { StatusActions } from "@/components/ui/status-actions"
 import { PrintButton } from "@/components/ui/print-button"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { CanCreate } from "@/components/auth/can-create"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
@@ -119,7 +119,6 @@ export default async function PurchaseOrderDetailPage({
               <VoidButton id={po.id} action={cancelPurchaseOrder} canVoid={canCancelPurchaseOrder} />
             )}
             {canDelete && isDraft && <DeleteButton id={po.id} action={deletePurchaseOrder} />}
-            <BackButton href="/pembelian/pesanan" />
           </>
         }
       />
