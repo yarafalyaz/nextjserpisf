@@ -13,6 +13,7 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { MaterialIssueTable } from "./_components/material-issue-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
+import { Plus } from "@/components/ui/fontawesome-icons"
 
 import type { Metadata } from "next"
 
@@ -81,15 +82,25 @@ export async function renderMaterialIssuesPage({
     ...(dbStatus && { status: dbStatus }),
   }
 
-  const issues = await prisma.materialIssue.findMany({
-    where,
-    include: { warehouse: true, items: true },
-    take,
-    skip: (page - 1) * pageSize,
-    orderBy: { createdAt: "desc" },
-  })
+  const [issues, total, countsByStatus] = await Promise.all([
+    prisma.materialIssue.findMany({
+      where,
+      include: { warehouse: true, items: true },
+      take,
+      skip: (page - 1) * pageSize,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.materialIssue.count({ where }),
+    prisma.materialIssue.groupBy({
+      by: ["status"],
+      where: scopeWhere,
+      _count: { _all: true },
+    }),
+  ])
 
-  const total = await prisma.materialIssue.count({ where })
+  const draftCount = countsByStatus.find((c) => c.status === "draft")?._count._all ?? 0
+  const issuedCount = countsByStatus.find((c) => c.status === "issued")?._count._all ?? 0
+  const allScopeTotal = countsByStatus.reduce((acc, c) => acc + c._count._all, 0)
 
   const tableData = toPlain(issues)
 
@@ -133,17 +144,68 @@ export async function renderMaterialIssuesPage({
               ]
         }
       />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Pengeluaran Material</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-2 border-b border-border">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
+            Pengeluaran Material
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Pencatatan konsumsi material, pemakaian produksi internal, dan pengeluaran barang.
+          </p>
+        </div>
         <CanCreate permission="create_material_issues">
           <Link
             href="/inventaris/pengeluaran-material/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer shadow-2xs"
             id="create-mi-btn"
           >
-            + Buat Pengeluaran Material
+            <Plus className="size-3.5" />
+            <span>Buat Pengeluaran Material</span>
           </Link>
         </CanCreate>
+      </div>
+
+      {/* KPI Metric Strip Standar ERP */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs overflow-hidden">
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Total Dokumen
+          </span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-foreground">
+              {allScopeTotal}
+            </span>
+            <span className="text-xs text-muted-foreground">pengeluaran</span>
+          </div>
+        </div>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Konsep (Draft)
+          </span>
+          <div className="flex items-baseline gap-2">
+            <span
+              className={`text-2xl font-bold font-mono tracking-tight tabular-nums ${
+                draftCount > 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground"
+              }`}
+            >
+              {draftCount}
+            </span>
+            <span className="text-xs text-muted-foreground">belum dikeluarkan</span>
+          </div>
+        </div>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Dikeluarkan (Issued)
+          </span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-emerald-600 dark:text-emerald-400">
+              {issuedCount}
+            </span>
+            <span className="text-xs text-muted-foreground">stok terpotong</span>
+          </div>
+        </div>
       </div>
 
       <MaterialIssueTable

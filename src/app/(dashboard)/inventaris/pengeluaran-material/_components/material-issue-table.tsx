@@ -40,15 +40,19 @@ const columns = [
   }),
   columnHelper.accessor("warehouse.name", {
     header: "Gudang",
-    cell: (info) => info.getValue(),
+    cell: (info) => <span className="font-medium text-foreground">{info.getValue()}</span>,
   }),
   columnHelper.accessor("date", {
     header: "Tanggal",
-    cell: (info) => formatDate(info.getValue()),
+    cell: (info) => (
+      <span className="font-mono text-xs text-muted-foreground">{formatDate(info.getValue())}</span>
+    ),
   }),
   columnHelper.accessor("items", {
     header: "Barang",
-    cell: (info) => `${info.getValue().length} item`,
+    cell: (info) => (
+      <span className="font-mono tabular-nums">{info.getValue().length} item</span>
+    ),
   }),
   columnHelper.accessor("status", {
     header: "Status",
