@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import type { Metadata } from "next"
 import Link from "next/link"
+import { redirect, notFound } from "next/navigation"
 
 import { prisma } from "@/lib/db/prisma"
 import { hasPermission, requirePermission } from "@/lib/auth/permissions"
@@ -13,36 +14,47 @@ import {
   AttendanceCorrectionTable,
   ATTENDANCE_CORRECTION_TITLE,
 } from "../_components/attendance-correction-table"
+import { statusToIndo, statusLabel, indoToStatus } from "@/lib/utils/status-labels"
 
 export const metadata: Metadata = { title: ATTENDANCE_CORRECTION_TITLE }
 
-const STATUS_FILTERS = [
-  { value: "", label: "Semua" },
-  { value: "pending", label: "Menunggu" },
-  { value: "approved", label: "Disetujui" },
-  { value: "rejected", label: "Ditolak" },
-  { value: "cancelled", label: "Dibatalkan" },
+export const ATTENDANCE_CORRECTION_VALID_DB_STATUSES = [
+  "pending",
+  "approved",
+  "rejected",
+  "cancelled",
 ] as const
 
-/**
- * F-2026-10-25-010-S (konsumen UI PR #954): pengajuan + antrean putusan
- * koreksi absensi. Scope HR fail-closed dari `getHrScope` diteruskan utuh
- * ke loader (karyawan hanya melihat pengajuannya sendiri). Total per status
- * tampil verbatim dari builder; putusan tetap lewat aksi server per baris.
- */
-export default async function AttendanceCorrectionsPage({
-  searchParams,
-}: {
+export interface AttendanceCorrectionsPageProps {
+  statusParam?: string
   searchParams: Promise<{ status?: string }>
-}) {
+}
+
+export async function renderAttendanceCorrectionsPage({
+  statusParam,
+  searchParams,
+}: AttendanceCorrectionsPageProps) {
   const user = await requirePermission("view_attendance_corrections")
   const scope = await getHrScope(user)
   const params = await searchParams
-  const status = STATUS_FILTERS.some((f) => f.value === params.status && f.value)
-    ? params.status
-    : undefined
 
-  const { rows, totals } = await loadAttendanceCorrections(scope, { status })
+  if (!statusParam && params.status) {
+    const urlStatus = statusToIndo[params.status] || params.status
+    redirect(`/sdm/absensi/koreksi/status/${urlStatus}`)
+  }
+
+  const validUrlStatuses = ATTENDANCE_CORRECTION_VALID_DB_STATUSES.map(
+    (s) => statusToIndo[s] || s,
+  )
+
+  if (statusParam && !validUrlStatuses.includes(statusParam)) {
+    notFound()
+  }
+
+  const activeUrlStatus = statusParam ?? ""
+  const dbStatus = activeUrlStatus ? indoToStatus[activeUrlStatus] || activeUrlStatus : undefined
+
+  const { rows, totals } = await loadAttendanceCorrections(scope, { status: dbStatus })
   const [canCreate, canApprove, me] = await Promise.all([
     hasPermission("create_attendance_corrections"),
     hasPermission("approve_attendance_corrections"),
@@ -55,12 +67,22 @@ export default async function AttendanceCorrectionsPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs
-        items={[
-          { label: "Dasbor", href: "/" },
-          { label: "SDM", href: "/sdm" },
-          { label: "Absensi", href: "/sdm/absensi" },
-          { label: ATTENDANCE_CORRECTION_TITLE },
-        ]}
+        items={
+          activeUrlStatus
+            ? [
+                { label: "Dasbor", href: "/" },
+                { label: "SDM", href: "/sdm" },
+                { label: "Absensi", href: "/sdm/absensi" },
+                { label: ATTENDANCE_CORRECTION_TITLE, href: "/sdm/absensi/koreksi" },
+                { label: statusLabel(dbStatus ?? activeUrlStatus) },
+              ]
+            : [
+                { label: "Dasbor", href: "/" },
+                { label: "SDM", href: "/sdm" },
+                { label: "Absensi", href: "/sdm/absensi" },
+                { label: ATTENDANCE_CORRECTION_TITLE },
+              ]
+        }
       />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">
@@ -83,21 +105,23 @@ export default async function AttendanceCorrectionsPage({
           ["Disetujui", totals.approved],
           ["Ditolak", totals.rejected],
           ["Dibatalkan", totals.cancelled],
-          ["Menunggu Berkonflik", totals.conflictedPending],
         ]}
       />
 
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter status pengajuan">
-        {STATUS_FILTERS.map((f) => {
-          const active = (status ?? "") === f.value
+      <div className="flex flex-wrap gap-2">
+        {["", ...ATTENDANCE_CORRECTION_VALID_DB_STATUSES].map((dbStatusKey) => {
+          const urlStatus = dbStatusKey ? statusToIndo[dbStatusKey] || dbStatusKey : ""
+          const targetPath = urlStatus
+            ? `/sdm/absensi/koreksi/status/${urlStatus}`
+            : "/sdm/absensi/koreksi"
+          const active = activeUrlStatus === urlStatus
           return (
             <Link
-              key={f.label}
-              href={f.value ? `/sdm/absensi/koreksi?status=${f.value}` : "/sdm/absensi/koreksi"}
-              aria-current={active ? "page" : undefined}
+              key={dbStatusKey || "all"}
+              href={targetPath}
               className={`filter-chip ${active ? "active" : ""}`}
             >
-              {f.label}
+              {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
             </Link>
           )
         })}
@@ -105,10 +129,18 @@ export default async function AttendanceCorrectionsPage({
 
       <AttendanceCorrectionTable
         rows={rows}
-        currentEmployeeId={me?.id ?? null}
         canApprove={canApprove}
         canCreate={canCreate}
+        currentEmployeeId={me?.id ?? null}
       />
     </div>
   )
+}
+
+export default async function AttendanceCorrectionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>
+}) {
+  return renderAttendanceCorrectionsPage({ searchParams })
 }
