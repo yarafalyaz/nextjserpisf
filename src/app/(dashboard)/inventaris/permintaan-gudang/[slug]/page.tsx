@@ -121,11 +121,11 @@ export default async function MaterialRequestDetailPage({
         <DetailField label="Status" value={<StatusChip status={request.status} customLabel={statusLabel} />} />
         <DetailField label="Gudang Tujuan" value={request.requesterWarehouse.name} />
         <DetailField label="Gudang Sumber" value={request.sourceWarehouse.name} />
-        <DetailField label="Perintah Kerja" value={request.workOrder?.documentNo ?? "—"} />
-        <DetailField label="Tanggal Dibutuhkan" value={request.neededBy ? formatDate(request.neededBy) : "—"} />
+        <DetailField label="Perintah Kerja" value={request.workOrder?.documentNo ?? "-"} mono />
+        <DetailField label="Tanggal Dibutuhkan" value={request.neededBy ? formatDate(request.neededBy) : "-"} />
         <DetailField label="Tanggal Dibuat" value={formatDate(request.createdAt)} />
         {request.rejectionReason && (
-          <DetailField label="Alasan" value={request.rejectionReason} colSpan="full" />
+          <DetailField label="Alasan Penolakan" value={request.rejectionReason} colSpan="full" />
         )}
       </DetailCard>
 
@@ -152,12 +152,27 @@ export default async function MaterialRequestDetailPage({
                     const f = fulfillmentByItem.get(item.itemId)
                     return (
                       <DetailTableRow key={item.id}>
-                        <DetailTableTd>{item.item.name}{item.item.sku ? ` (${item.item.sku})` : ""}</DetailTableTd>
+                        <DetailTableTd>
+                          <div className="font-medium text-foreground">{item.item.name}</div>
+                          {item.item.sku && (
+                            <div className="font-mono text-xs text-muted-foreground mt-0.5">{item.item.sku}</div>
+                          )}
+                        </DetailTableTd>
                         <DetailTableTd>{item.item.unitOfMeasure}</DetailTableTd>
-                        <DetailTableTd align="right">{formatNumber(Number(item.qty))}</DetailTableTd>
-                        <DetailTableTd align="right">{formatNumber(f?.receivedQty ?? 0)}</DetailTableTd>
-                        <DetailTableTd align="right">{formatNumber(f?.remainingQty ?? Number(item.qty))}</DetailTableTd>
-                        <DetailTableTd>{item.notes ?? "—"}</DetailTableTd>
+                        <DetailTableTd align="right">
+                          <span className="font-mono tabular-nums font-medium">{formatNumber(Number(item.qty))}</span>
+                        </DetailTableTd>
+                        <DetailTableTd align="right">
+                          <span className="font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
+                            {formatNumber(f?.receivedQty ?? 0)}
+                          </span>
+                        </DetailTableTd>
+                        <DetailTableTd align="right">
+                          <span className="font-mono tabular-nums text-amber-600 dark:text-amber-400">
+                            {formatNumber(f?.remainingQty ?? Number(item.qty))}
+                          </span>
+                        </DetailTableTd>
+                        <DetailTableTd>{item.notes ?? "-"}</DetailTableTd>
                       </DetailTableRow>
                     )
                   })}
