@@ -60,29 +60,32 @@ export default async function PayrollPage({
 
   const params = await searchParams;
 
-  // Tautan lama `?bulan=&tahun=` diarahkan ke pasangan path (status/cari
-  // dipertahankan sebagai query).
-  if (params.bulan || params.tahun) {
-    const legacyPath = buildPathFilterHref("/sdm/penggajian", {
-      tahun: params.tahun,
-      bulan: params.bulan,
-    });
-    const legacy = new URLSearchParams();
-    if (params.status) legacy.set("status", params.status);
-    if (params.cari) legacy.set("cari", params.cari);
-    const legacyQuery = legacy.toString();
-    redirect(legacyQuery ? `${legacyPath}?${legacyQuery}` : legacyPath);
-  }
-
   const { segments } = await routeParams;
   const filters = parsePathFilterSegments(segments, {
     tahun: /^\d{4}$/,
     bulan: /^([1-9]|1[0-2])$/,
+    status: /^[a-z_-]+$/,
   });
   if (!filters) notFound();
 
+  // Redirect legacy ?status= or ?bulan=/?tahun=
+  if (params.bulan || params.tahun || params.status) {
+    const legacyPath = buildPathFilterHref("/sdm/penggajian", {
+      tahun: params.tahun ?? filters.tahun,
+      bulan: params.bulan ?? filters.bulan,
+      status: params.status ?? filters.status,
+    });
+    const legacy = new URLSearchParams();
+    if (params.cari) legacy.set("cari", params.cari);
+    if (params.halaman) legacy.set("halaman", params.halaman);
+    if (params.pageSize) legacy.set("pageSize", params.pageSize);
+    const legacyQuery = legacy.toString();
+    redirect(legacyQuery ? `${legacyPath}?${legacyQuery}` : legacyPath);
+  }
+
   const { page, pageSize, take } = parsePagination(params);
-  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined;
+  const activeUrlStatus = filters.status ?? "";
+  const dbStatus = activeUrlStatus ? indoToStatus[activeUrlStatus] || activeUrlStatus : undefined;
 
   const month = filters.bulan ? Number(filters.bulan) : undefined;
   const year = filters.tahun ? Number(filters.tahun) : undefined;
@@ -95,7 +98,7 @@ export default async function PayrollPage({
         { employee: { name: { contains: params.cari } } },
       ],
     }),
-    ...(dbStatusParam && { status: dbStatusParam }),
+    ...(dbStatus && { status: dbStatus }),
     ...(month &&
       year && {
         endDate: {
@@ -178,20 +181,22 @@ export default async function PayrollPage({
     bulan: filters.bulan,
   });
 
-  const statusChips = ["", "draft", "approved", "paid"].map((dbStatus) => {
-    const urlStatus = dbStatus ? statusToIndo[dbStatus] : "";
+  const statusChips = ["", "draft", "approved", "paid"].map((dbStatusKey) => {
+    const urlStatus = dbStatusKey ? statusToIndo[dbStatusKey] || dbStatusKey : "";
+    const chipFilterPath = buildPathFilterHref("/sdm/penggajian", {
+      tahun: filters.tahun,
+      bulan: filters.bulan,
+      status: urlStatus || undefined,
+    });
     return (
       <Link
-        key={dbStatus}
-        // Periode hidup di path (`filterPath`); chip hanya mengganti status
-        // dan membiarkan `?cari=` aktif ikut terbawa.
-        href={withListParams(filterPath, params, {
-          status: urlStatus || undefined,
+        key={dbStatusKey}
+        href={withListParams(chipFilterPath, params, {
           halaman: undefined,
         })}
-        className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+        className={`filter-chip ${activeUrlStatus === urlStatus ? "active" : ""}`}
       >
-        {dbStatus ? statusLabel(dbStatus) : "Semua"}
+        {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
       </Link>
     );
   });

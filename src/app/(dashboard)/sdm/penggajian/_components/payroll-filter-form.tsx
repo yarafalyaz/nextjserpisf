@@ -31,8 +31,9 @@ export function PayrollFilterForm({
     const path = buildPathFilterHref("/sdm/penggajian", {
       tahun: tahunValue || undefined,
       bulan: bulanValue || undefined,
+      status: status || undefined,
     })
-    router.push(status ? `${path}?status=${status}` : path)
+    router.push(path)
   }
 
   return (
@@ -67,7 +68,7 @@ export function PayrollFilterForm({
       </form>
       {(bulan || tahun) && (
         <Link
-          href={status ? `/sdm/penggajian?status=${status}` : "/sdm/penggajian"}
+          href={status ? `/sdm/penggajian/status/${status}` : "/sdm/penggajian"}
           className="text-xs text-primary hover:underline"
         >
           Atur ulang bulan
