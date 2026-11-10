@@ -45,18 +45,22 @@ export function NotificationsWidget() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let isMounted = true
     async function loadNotifications() {
       try {
         const r = await fetch("/api/dashboard/notifications")
         const d = r.ok ? await r.json() : null
-        if (d) setData(d)
+        if (d && isMounted) setData(d)
       } catch {
-        showError("Gagal memuat notifikasi")
+        if (isMounted) showError("Gagal memuat notifikasi")
       } finally {
-        setLoading(false)
+        if (isMounted) setLoading(false)
       }
     }
     void loadNotifications()
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   if (loading) {
