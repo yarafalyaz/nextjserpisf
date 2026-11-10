@@ -1,12 +1,29 @@
 import { safeAdd, safeSubtract, safeMultiply, safeDivide, safeRound } from "@/lib/utils/math"
 
+export interface QuotationLineInput {
+  qty?: number | string | null
+  unitPrice?: number | string | null
+  discount?: number | string | null
+  discountType?: string | null
+}
+
+export interface QuotationSectionInput {
+  items?: QuotationLineInput[] | null
+}
+
+export interface QuotationTotalsInput {
+  discount?: number | string | null
+  tax?: number | string | null
+  sections?: QuotationSectionInput[] | null
+}
+
 /**
  * AUD-R10-03: recompute total quotation server-side (dedup create/update).
  * Jangan percaya subtotal/grandTotal kiriman klien — hitung ulang + clamp.
  * Murni (tanpa Prisma) supaya aksi lain (JobChangeOrder F-2026-10-22-066-S)
  * bisa hitung ulang tanpa impor file "use server".
  */
-export function computeQuotationTotals(data: any): {
+export function computeQuotationTotals(data: QuotationTotalsInput): {
   computedSubtotal: number
   headerDiscount: number
   headerTax: number
@@ -15,8 +32,8 @@ export function computeQuotationTotals(data: any): {
   const rawHeaderDiscount = Number(data.discount) || 0
   const headerTax = Math.max(0, Number(data.tax) || 0)
   const computedSubtotal = (data.sections || []).reduce(
-    (acc: number, section: any) =>
-      safeAdd(acc, (section.items || []).reduce((s: number, it: any) => safeAdd(s, computeQuotationLine(it).total, 0), 0), 0),
+    (acc: number, section) =>
+      safeAdd(acc, (section?.items || []).reduce((s: number, it) => safeAdd(s, computeQuotationLine(it).total, 0), 0), 0),
     0,
   )
   const headerDiscount = Math.min(Math.max(0, rawHeaderDiscount), computedSubtotal)
@@ -28,7 +45,7 @@ export function computeQuotationTotals(data: any): {
  * AUD-R10-03: computeLine quotation di module-scope (dedup create/update).
  * Murni: clamp qty/diskon anti-tamper, hitung via safe* decimal-safe.
  */
-export function computeQuotationLine(item: any): { discountAmount: number; total: number } {
+export function computeQuotationLine(item: QuotationLineInput): { discountAmount: number; total: number } {
   const qty = Math.max(0.01, Number(item.qty) || 0)
   const unitPrice = Number(item.unitPrice) || 0
   const lineSubtotal = safeMultiply(qty, unitPrice, 0)

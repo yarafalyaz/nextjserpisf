@@ -91,7 +91,7 @@ export const itemSchema = z.object({
   brandId: z.number({ error: "Merek wajib dipilih" }).int().positive("Merek wajib dipilih"),
   vendorId: z.number({ error: "Vendor wajib dipilih" }).int().positive("Vendor wajib dipilih"),
   defaultWarehouseId: z.number({ error: "Gudang wajib dipilih" }).int().positive("Gudang wajib dipilih"),
-  defaultRackId: z.number({ error: "Rak wajib dipilih" }).int().positive("Rak wajib dipilih"),
+  defaultRackId: z.number({ error: "Rak wajib dipilih" }).int().positive("Rak wajib dipilih").optional(),
   defaultRackRowId: z.number().int().positive().optional(),
   unitOfMeasure: z.string().min(1, "Satuan wajib dipilih").default("PCS"),
   minStock: z.number().min(0).default(0),

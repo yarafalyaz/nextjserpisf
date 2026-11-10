@@ -489,7 +489,7 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => {
                       field.onChange(key ? Number(key) : undefined)
-                      setValue("defaultRackId", undefined as any)
+                      setValue("defaultRackId", undefined)
                       setValue("defaultRackRowId", undefined)
                     }}
                     placeholder="Cari gudang..."
@@ -499,7 +499,7 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
                     onCreated={(created) => {
                       setWarehouseOptions((prev) => [...prev, { id: created.id, name: created.label }])
                       field.onChange(created.id)
-                      setValue("defaultRackId", undefined as any)
+                      setValue("defaultRackId", undefined)
                       setValue("defaultRackRowId", undefined)
                     }}
                   />

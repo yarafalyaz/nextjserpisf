@@ -28,8 +28,14 @@ export async function runCronTask(task: string) {
     throw new Error("Credential cron belum di-set")
   }
 
-  const baseUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL || "http://localhost:3001"
-  const res = await fetch(`${baseUrl}/api/cron?task=${encodeURIComponent(task)}`, {
+  const baseUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL
+  if (!baseUrl) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Konfigurasi URL sistem (NEXTAUTH_URL / AUTH_URL) belum di-set di lingkungan produksi")
+    }
+  }
+  const resolvedBaseUrl = baseUrl || "http://localhost:3001"
+  const res = await fetch(`${resolvedBaseUrl}/api/cron?task=${encodeURIComponent(task)}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${cronEnv}` },
     cache: "no-store",

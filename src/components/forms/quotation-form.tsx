@@ -7,6 +7,9 @@ import { useTransition, useMemo, useRef, useState } from "react"
 import { useForm, useFieldArray, useWatch, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { quotationSchema, type QuotationInput } from "@/lib/validations/form.schemas"
+import { type z } from "zod"
+
+type QuotationFormValues = z.input<typeof quotationSchema>
 import { createQuotation, updateQuotation } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -576,8 +579,8 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
     setValue,
     control,
     formState: { errors },
-  } = useForm<QuotationInput>({
-    resolver: zodResolver(quotationSchema) as any,
+  } = useForm<QuotationFormValues, unknown, QuotationInput>({
+    resolver: zodResolver(quotationSchema),
     defaultValues: quotation
       ? quotation
       : {

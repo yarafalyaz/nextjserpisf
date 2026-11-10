@@ -29,6 +29,40 @@ const optionalId = z.coerce.number().int().min(1).optional();
 
 // ==================== QUOTATION ====================
 
+export const quotationItemPayloadSchema = z.object({
+  itemId: z.coerce.number().int().min(1).nullable().optional(),
+  description: z.string().max(1000).nullable().optional(),
+  qty: z.coerce.number().default(1),
+  uom: z.string().max(50).nullable().optional(),
+  unitPrice: z.coerce.number().default(0),
+  discountType: z.enum(["fixed", "percent", "amount"]).optional().default("fixed"),
+  discount: z.coerce.number().optional().default(0),
+  sortOrder: z.coerce.number().int().optional(),
+});
+
+export const quotationSectionPayloadSchema = z.object({
+  id: z.coerce.number().int().min(1).optional(),
+  name: z.string().max(200).optional().default(""),
+  sortOrder: z.coerce.number().int().optional(),
+  items: z.array(quotationItemPayloadSchema).optional().default([]),
+});
+
+export const quotationPayloadSchema = z.object({
+  customerId: optionalId,
+  customerVehicleId: optionalId,
+  salesEmployeeId: optionalId,
+  date: optionalDate,
+  validUntil: optionalDate,
+  discount: z.coerce.number().optional().default(0),
+  tax: z.coerce.number().optional().default(0),
+  paymentMethod: optionalString(200),
+  shippingMethod: optionalString(200),
+  notes: optionalString(500),
+  sections: z.array(quotationSectionPayloadSchema).optional().default([]),
+});
+
+export type QuotationPayload = z.infer<typeof quotationPayloadSchema>;
+
 export const updateQuotationSchema = z.object({
   customerId: optionalId,
   customerVehicleId: optionalId,
@@ -40,10 +74,7 @@ export const updateQuotationSchema = z.object({
 });
 
 /**
- * Tanggal quotation dari payload JSON mentah (`safeJsonParse as any`).
- * `createQuotation`/`updateQuotation` tidak mem-parse seluruh payload dengan
- * skema, jadi tanggal divalidasi terpisah di sini — tanpa ini "2026-02-30"
- * lolos dan `wibDateToUtcMidnight` menggulirkannya diam-diam ke 2 Mar.
+ * Tanggal quotation dari payload JSON mentah.
  * `date` wajib pada create; pada update keduanya opsional.
  */
 export const quotationDatesSchema = z.object({

@@ -178,7 +178,7 @@ export function PurchaseOrderForm({
           return prVendor?.paymentTerm?.name || prVendor?.paymentTerm?.code || "";
         })(),
       shippingCost: order?.shippingCost ?? 0,
-      serviceFee: (order as any)?.serviceFee ?? 0,
+      serviceFee: order?.serviceFee ?? 0,
       purchaseRequestId: order?.purchaseRequestId ?? defaultPrId,
       expectedDate: order?.expectedDate ?? "",
     },
