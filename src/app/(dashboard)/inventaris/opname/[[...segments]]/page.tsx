@@ -11,6 +11,8 @@ import { reportPeriodFromRoute } from '@/lib/reports/report-period'
 import { parseReportFilters } from '@/lib/reports/report-href'
 import { EmptyState } from "@/components/ui/empty-state"
 import { OpnameForm } from '../_components/opname-form'
+import { FontAwesomeIcon } from "@/components/ui/fontawesome-icons"
+import Link from 'next/link'
 
 import type { Metadata } from 'next'
 
@@ -108,12 +110,33 @@ export default async function StockOpnamePage({
         ]} />
       </div>
 
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Stok Opname</h1>
-        <p className="text-sm text-muted-foreground">
-          Isi hasil penghitungan fisik per barang. Selisih terhadap stok sistem akan dibuat sebagai
-          <strong> Penyesuaian Stok (draf)</strong> yang tinggal diposting di menu Penyesuaian.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-border">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+            <FontAwesomeIcon icon="box-archive" className="size-3.5 text-primary" />
+            <span>Manajemen Inventaris</span>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">Lembar Stok Opname</h1>
+          <p className="text-sm text-muted-foreground mt-1 max-w-2xl text-pretty">
+            Penghitungan fisik stok gudang. Selisih terhadap kuantitas sistem langsung membentuk draf penyesuaian stok untuk diposting ke jurnal buku besar.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            href="/inventaris/opname/sesi"
+            className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-md border border-border bg-card hover:bg-muted text-foreground transition-colors cursor-pointer shadow-2xs"
+          >
+            <FontAwesomeIcon icon="clipboard-list" className="size-3.5 text-muted-foreground" />
+            <span>Alur Sesi Bertahap</span>
+          </Link>
+          <Link
+            href="/inventaris/penyesuaian"
+            className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-md border border-border bg-card hover:bg-muted text-foreground transition-colors cursor-pointer shadow-2xs"
+          >
+            <FontAwesomeIcon icon="file-lines" className="size-3.5 text-muted-foreground" />
+            <span>Daftar Penyesuaian</span>
+          </Link>
+        </div>
       </div>
 
       <ReportPeriodFilter
@@ -123,10 +146,10 @@ export default async function StockOpnamePage({
           {
             param: "gudang",
             label: "Gudang",
-            placeholder: "Cari gudang (kode / nama)...",
+            placeholder: "Pilih gudang penghitungan...",
             required: true,
             value: warehouseRow ? (warehouseRow.slug ?? String(warehouseRow.id)) : "",
-            options: warehouses.map((w) => ({ value: w.slug ?? String(w.id), label: `${w.code} — ${w.name}` })),
+            options: warehouses.map((w) => ({ value: w.slug ?? String(w.id), label: `${w.code} - ${w.name}` })),
           },
         ]}
       />
