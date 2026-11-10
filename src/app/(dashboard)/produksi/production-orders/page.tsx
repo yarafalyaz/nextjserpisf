@@ -6,6 +6,7 @@ import { parsePagination } from "@/lib/utils/pagination"
 import { withListParams } from "@/lib/utils/list-href"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
+import { redirect, notFound } from "next/navigation"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { ProductionOrderTable } from "./_components/production-order-table"
@@ -16,19 +17,52 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Perintah Produksi" }
 
-export default async function ProductionOrdersPage({
+export const PRODUCTION_ORDER_VALID_DB_STATUSES = [
+  "draft",
+  "in_progress",
+  "completed",
+] as const
+
+export interface ProductionOrdersPageProps {
+  statusParam?: string
+  searchParams: Promise<{
+    status?: string
+    cari?: string
+    halaman?: string
+    pageSize?: string
+  }>
+}
+
+export async function renderProductionOrdersPage({
+  statusParam,
   searchParams,
-}: {
-  searchParams: Promise<{ status?: string; cari?: string 
-  halaman?: string
-  pageSize?: string}>
-}) {
+}: ProductionOrdersPageProps) {
   await requirePermission("view_production_orders")
 
   const params = await searchParams
 
+  if (!statusParam && params.status) {
+    const targetStatus = params.status
+    const query = new URLSearchParams()
+    if (params.cari) query.set("cari", params.cari)
+    if (params.halaman) query.set("halaman", params.halaman)
+    if (params.pageSize) query.set("pageSize", params.pageSize)
+    const qs = query.toString()
+    redirect(`/produksi/production-orders/status/${targetStatus}${qs ? `?${qs}` : ""}`)
+  }
+
+  const validUrlStatuses = PRODUCTION_ORDER_VALID_DB_STATUSES.map(
+    (s) => statusToIndo[s] || s,
+  )
+
+  if (statusParam && !validUrlStatuses.includes(statusParam)) {
+    notFound()
+  }
+
+  const activeUrlStatus = statusParam ?? ""
+  const dbStatus = activeUrlStatus ? indoToStatus[activeUrlStatus] || activeUrlStatus : undefined
+
   const { page, pageSize, take } = parsePagination(params)
-  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
     ...(params.cari && {
@@ -36,7 +70,7 @@ export default async function ProductionOrdersPage({
         { documentNo: { contains: params.cari } },
       ],
     }),
-    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
+    ...(dbStatus && { status: dbStatus }),
   }
 
   const orders = await prisma.productionOrder.findMany({
@@ -61,31 +95,60 @@ export default async function ProductionOrdersPage({
     })),
   )
 
-  const statusChips = ["", "draft", "in_progress", "completed"].map((dbStatus) => {
-    const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+  const statusChips = ["", ...PRODUCTION_ORDER_VALID_DB_STATUSES].map((dbStatusKey) => {
+    const urlStatus = dbStatusKey ? statusToIndo[dbStatusKey] || dbStatusKey : ""
+    const targetPath = urlStatus
+      ? `/produksi/production-orders/status/${urlStatus}`
+      : "/produksi/production-orders"
+    const isActive = activeUrlStatus === urlStatus
+
     return (
       <Link
-        key={dbStatus}
-        href={withListParams("/produksi/production-orders", params, { status: urlStatus || undefined, halaman: undefined })}
-        className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+        key={dbStatusKey}
+        href={withListParams(targetPath, params, { halaman: undefined })}
+        className={`filter-chip ${isActive ? "active" : ""}`}
       >
-        {dbStatus ? statusLabel(dbStatus) : "Semua"}
+        {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
       </Link>
     )
   })
 
+  const currentActionPath = activeUrlStatus
+    ? `/produksi/production-orders/status/${activeUrlStatus}`
+    : "/produksi/production-orders"
+
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dasbor", href: "/" },
-  { label: "Manufaktur", href: "/produksi" },
-  { label: "Perintah Produksi" },
-]} />
+      <AppBreadcrumbs
+        items={
+          activeUrlStatus
+            ? [
+                { label: "Dasbor", href: "/" },
+                { label: "Manufaktur", href: "/produksi" },
+                { label: "Perintah Produksi", href: "/produksi/production-orders" },
+                { label: statusLabel(dbStatus ?? activeUrlStatus) },
+              ]
+            : [
+                { label: "Dasbor", href: "/" },
+                { label: "Manufaktur", href: "/produksi" },
+                { label: "Perintah Produksi" },
+              ]
+        }
+      />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Perintah Produksi</h1>
-        <Link href="/produksi/telusur-genealogi" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">Telusur Genealogi</Link>
+        <Link
+          href="/produksi/telusur-genealogi"
+          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all"
+        >
+          Telusur Genealogi
+        </Link>
         <CanCreate permission="create_production_orders">
-          <Link href="/produksi/production-orders/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-prodorder-btn">
+          <Link
+            href="/produksi/production-orders/tambah"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+            id="create-prodorder-btn"
+          >
             + Buat Perintah Produksi
           </Link>
         </CanCreate>
@@ -96,9 +159,27 @@ export default async function ProductionOrdersPage({
         total={total}
         page={page}
         pageSize={pageSize}
-        toolbar={<AppSearchField placeholder="Cari no. dokumen..." action="/produksi/production-orders" />}
+        toolbar={
+          <AppSearchField
+            placeholder="Cari no. dokumen..."
+            action={currentActionPath}
+          />
+        }
         filters={<div className="flex gap-1.5 flex-wrap">{statusChips}</div>}
       />
     </div>
   )
+}
+
+export default async function ProductionOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    status?: string
+    cari?: string
+    halaman?: string
+    pageSize?: string
+  }>
+}) {
+  return renderProductionOrdersPage({ searchParams })
 }
