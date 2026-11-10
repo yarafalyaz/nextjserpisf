@@ -6,6 +6,7 @@ import { parsePagination } from "@/lib/utils/pagination"
 import { withListParams } from "@/lib/utils/list-href"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
+import { redirect, notFound } from "next/navigation"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { FolderKanban } from "lucide-react"
 import { AppSearchField } from "@/components/ui/search-field"
@@ -23,6 +24,9 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Proyek" }
 
+export const PROJECT_VALID_URL_STATUSES = ["aktif", "dalam-proses", "selesai"] as const
+export type ProjectUrlStatus = (typeof PROJECT_VALID_URL_STATUSES)[number]
+
 /** Redirect Next.js (termasuk gerbang izin fail-closed) bukan error muat. */
 function isNextRedirect(error: unknown): boolean {
   return (
@@ -33,22 +37,47 @@ function isNextRedirect(error: unknown): boolean {
   )
 }
 
-export default async function ProjectsPage({
+export interface ProjectListPageProps {
+  statusParam?: string
+  searchParams: Promise<{
+    cari?: string
+    status?: string
+    halaman?: string
+    pageSize?: string
+  }>
+}
+
+export async function renderProjectsPage({
+  statusParam,
   searchParams,
-}: {
-  searchParams: Promise<{ cari?: string; status?: string 
-  halaman?: string
-  pageSize?: string}>
-}) {
+}: ProjectListPageProps) {
   await requirePermission("view_projects")
 
   const params = await searchParams
 
+  // Jika URL query lama ?status=... dikunjungi di root /proyek, redirect ke /proyek/status/[status]
+  if (!statusParam && params.status) {
+    const targetStatus = params.status
+    const query = new URLSearchParams()
+    if (params.cari) query.set("cari", params.cari)
+    if (params.halaman) query.set("halaman", params.halaman)
+    if (params.pageSize) query.set("pageSize", params.pageSize)
+    const qs = query.toString()
+    redirect(`/proyek/status/${targetStatus}${qs ? `?${qs}` : ""}`)
+  }
+
+  // Jika diakses via /proyek/status/[status], validasi statusnya
+  if (statusParam && !PROJECT_VALID_URL_STATUSES.includes(statusParam as ProjectUrlStatus)) {
+    notFound()
+  }
+
+  const activeUrlStatus = statusParam ?? ""
+  const dbStatus = activeUrlStatus ? indoToStatus[activeUrlStatus] || activeUrlStatus : undefined
+
   const { page, pageSize, take } = parsePagination(params)
-  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
-    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
+    ...(dbStatus && { status: dbStatus }),
     ...(params.cari && {
       name: { contains: params.cari },
     }),
@@ -94,24 +123,46 @@ export default async function ProjectsPage({
   // "cancelled" selalu kosong (tak ada penulis) dan in_progress tak terpilih.
   const statusChips = ["", "active", "in_progress", "completed"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+    const targetPath = urlStatus ? `/proyek/status/${urlStatus}` : "/proyek"
+    const isActive = activeUrlStatus === urlStatus
+
     return (
       <Link
         key={dbStatus}
-        href={withListParams("/proyek", params, { status: urlStatus || undefined, halaman: undefined })}
-        className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+        href={withListParams(targetPath, params, { halaman: undefined })}
+        className={`filter-chip ${isActive ? "active" : ""}`}
       >
         {dbStatus ? statusLabel(dbStatus) : "Semua"}
       </Link>
     )
   })
 
+  const currentActionPath = activeUrlStatus ? `/proyek/status/${activeUrlStatus}` : "/proyek"
+
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Proyek"}]} />
+      <AppBreadcrumbs
+        items={
+          activeUrlStatus
+            ? [
+                { label: "Dasbor", href: "/" },
+                { label: "Proyek", href: "/proyek" },
+                { label: statusLabel(dbStatus ?? activeUrlStatus) },
+              ]
+            : [
+                { label: "Dasbor", href: "/" },
+                { label: "Proyek" },
+              ]
+        }
+      />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Proyek</h1>
         <CanCreate permission="create_projects">
-          <Link href="/proyek/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-project-btn">
+          <Link
+            href="/proyek/tambah"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+            id="create-project-btn"
+          >
             <FolderKanban size={16} /> Tambah Proyek
           </Link>
         </CanCreate>
@@ -140,9 +191,22 @@ export default async function ProjectsPage({
         total={total}
         page={page}
         pageSize={pageSize}
-        toolbar={<AppSearchField placeholder="Cari proyek..." action="/proyek" />}
+        toolbar={<AppSearchField placeholder="Cari proyek..." action={currentActionPath} />}
         filters={statusChips}
       />
     </div>
   )
+}
+
+export default async function ProjectsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    cari?: string
+    status?: string
+    halaman?: string
+    pageSize?: string
+  }>
+}) {
+  return renderProjectsPage({ searchParams })
 }
