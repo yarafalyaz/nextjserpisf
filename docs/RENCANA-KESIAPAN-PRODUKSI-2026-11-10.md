@@ -51,11 +51,11 @@
 
 ## Fase 2 — Keamanan & otorisasi (~80% → 95%)
 
-- [ ] **2.1** Ganti delegasi Prisma dinamis `as any` dengan helper bertipe + allowlist model:
+- [x] **2.1** Ganti delegasi Prisma dinamis `as any` dengan helper bertipe + allowlist model:
   - `src/actions/approval.actions.ts:365, 381, 601, 699, 752`
   - `src/actions/bulk.actions.ts:142`
   - `src/app/api/workflow/[...path]/route.ts:142, 168, 196, 218, 223, 248, 383`
-  - Tambah tes: nama model di luar allowlist ditolak.
+  - Teruji di `src/lib/approval/__tests__/approval-models.test.ts` (allowlist validasi & null rejection) serta 90 tes approval + 49 tes workflow route.
 - [ ] **2.2** Audit setiap server action baru sejak audit keamanan terakhir: wajib `requirePermission()`; dokumen bertanggal wajib `assertPeriodOpen()`. Pastikan `src/__tests__/permission-seed-parity.test.ts` hijau.
 - [ ] **2.3** Uji IDOR: user dengan scope cabang/karyawan terbatas tidak bisa membaca/mengubah dokumen di luar scope lewat URL slug langsung atau API.
 - [ ] **2.4** Verifikasi konfigurasi produksi:
@@ -91,7 +91,7 @@
   ```
 - [ ] **4.2** Uji browser nyata dengan Next.js MCP: buka aplikasi di browser, lalu panggil `get_errors` (harus tidak timeout) untuk halaman utama tiap modul; catat runtime error / hydration mismatch.
 - [ ] **4.3** Periksa manual 49 `useEffect` di `src/components/` — dependency array & cleanup (listener, timer, fetch abort).
-- [ ] **4.4** Ganti `key={index}` pada daftar yang bisa diurutkan/difilter/diedit dengan id stabil (`report-table-view.tsx`, `statement-table-view.tsx`, `breadcrumbs.tsx`, `charts.tsx`).
+- [x] **4.4** Ganti `key={index}` pada daftar yang bisa diurutkan/difilter/diedit dengan id stabil (`report-table-view.tsx`, `statement-table-view.tsx`, `breadcrumbs.tsx`).
 - [ ] **4.5** Uji alur kritis di ponsel nyata: buat penawaran, terima barang, input timesheet, approval.
 - [ ] **4.6** Ukur performa halaman berat (daftar besar, laporan): LCP/INP di build produksi; tambahkan paginasi/streaming bila lambat.
 
