@@ -45,7 +45,7 @@ export function ProjectStageQueueSection({
   return (
     <section
       aria-label={PROJECT_STAGE_QUEUE_TITLE}
-      className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
+      className="bg-surface rounded-xl border border-default shadow-sm"
     >
       <div className="flex flex-col gap-2 p-4 px-5 border-b border-default">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -58,7 +58,7 @@ export function ProjectStageQueueSection({
               title={queue.noticeText}
             >
               <Info size={15} />
-              <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover:block w-72 p-2 bg-popover text-popover-foreground text-xs rounded-lg shadow-md border border-default z-10 pointer-events-none">
+              <div className="absolute left-0 top-full mt-2 hidden group-hover:block w-72 sm:w-80 p-3 bg-popover text-popover-foreground text-xs leading-relaxed rounded-lg shadow-lg border border-default z-30 pointer-events-none">
                 {queue.noticeText}
               </div>
             </div>
