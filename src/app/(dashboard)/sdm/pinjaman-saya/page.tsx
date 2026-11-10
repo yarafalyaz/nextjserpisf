@@ -7,7 +7,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { getHrScope } from "@/lib/auth/hr-scope"
 import { loadEmployeeLoanChannels } from "@/lib/reports/employee-loan-channel-data"
 import { EMPLOYEE_LOAN_CHANNEL_LABELS } from "@/lib/reports/employee-loan-channel"
-import { Banknote } from "lucide-react"
+import { Banknote } from "@/components/ui/fontawesome-icons"
 import { EmptyState } from "@/components/ui/empty-state"
 import { LoanTable } from "../pinjaman/_components/loan-table"
 

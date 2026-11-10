@@ -125,9 +125,9 @@ describe("F-048 gerbang izin UI faktur/bupot — string izin persis per permukaa
     expect(laporanPajak).not.toContain('permission="create_tax_payments"')
   })
 
-  it("navigasi: Dokumen Pajak=create_tax_invoices, Bukti Potong=manage_withholding_certificates, Penyetoran=view_tax_payments", () => {
-    expect(navigation).toContain('label: "Dokumen Pajak", href: "/keuangan/dokumen-pajak/faktur/tambah", icon: FileCheck, permission: "create_tax_invoices"')
-    expect(navigation).toContain('label: "Bukti Potong", href: "/keuangan/dokumen-pajak/bupot/tambah", icon: Receipt, permission: "manage_withholding_certificates"')
+  it("navigasi: Faktur Pajak=create_tax_invoices, Bukti Potong=manage_withholding_certificates, Penyetoran=view_tax_payments", () => {
+    expect(navigation).toContain('label: "Faktur Pajak", href: "/keuangan/dokumen-pajak/faktur", icon: FileCheck, permission: "create_tax_invoices"')
+    expect(navigation).toContain('label: "Bukti Potong", href: "/keuangan/dokumen-pajak/bupot", icon: Receipt, permission: "manage_withholding_certificates"')
     expect(navigation).toContain('label: "Penyetoran Pajak", href: "/keuangan/penyetoran-pajak", icon: BadgeDollarSign, permission: "view_tax_payments"')
   })
 })

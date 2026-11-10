@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/shadcn/button';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from "@/components/ui/fontawesome-icons";
 
 export default function DashboardError({
   error,

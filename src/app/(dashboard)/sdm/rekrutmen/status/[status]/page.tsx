@@ -4,7 +4,7 @@ import { renderRecruitmentsPage } from "../../page"
 import type { Metadata } from "next"
 
 const STATUS_LABELS: Record<string, string> = {
-  draft: "Konsep",
+  draft: "Draft",
   open: "Terbuka",
   closed: "Ditutup",
 }

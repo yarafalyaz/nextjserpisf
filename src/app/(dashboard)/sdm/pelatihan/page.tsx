@@ -2,75 +2,108 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
-import Link from "next/link"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader } from "@/components/ui/page-header"
 import { CanCreate } from "@/components/auth/can-create"
-import { EmptyState } from "@/components/ui/empty-state"
 import { TrainingForm } from "./_components/training-actions"
+import { TrainingTable } from "./_components/training-table"
+import { toPlain } from "@/lib/utils/serialization"
+import { formatNumber } from "@/lib/utils/format"
+import { BookOpen, Calendar, CheckCircle2, Clock } from "@/components/ui/fontawesome-icons"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Pelatihan" }
 
-const STATUS_LABELS: Record<string, string> = {
-  scheduled: "Terjadwal",
-  done: "Selesai",
-  cancelled: "Dibatalkan",
-}
-
 export default async function TrainingsPage() {
   await requirePermission("view_trainings")
 
-  const trainings = await prisma.training.findMany({
-    where: { deletedAt: null },
-    include: { _count: { select: { participants: true } } },
-    orderBy: { startDate: "desc" },
-  })
+  const [trainings, countsByStatus, totalParticipantsCount] = await Promise.all([
+    prisma.training.findMany({
+      where: { deletedAt: null },
+      include: { _count: { select: { participants: true } } },
+      orderBy: { startDate: "desc" },
+    }),
+    prisma.training.groupBy({
+      by: ["status"],
+      where: { deletedAt: null },
+      _count: { _all: true },
+    }),
+    prisma.trainingParticipant.count(),
+  ])
+
+  const statusCountMap = countsByStatus.reduce<Record<string, number>>((acc, curr) => {
+    acc[curr.status] = curr._count._all
+    return acc
+  }, {})
+  const totalTrainings = countsByStatus.reduce((acc, curr) => acc + curr._count._all, 0)
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-        { label: "Dasbor", href: "/" },
-        { label: "SDM", href: "/sdm" },
-        { label: "Pelatihan" },
-      ]} />
-      <h1 className="text-xl font-bold text-foreground sm:text-2xl">Pelatihan & Pengembangan</h1>
+      <PageHeader
+        title="Pelatihan & Pengembangan"
+        subtitle="Program pelatihan keterampilan, peningkatan kompetensi staf, dan catatan partisipasi karyawan"
+        breadcrumbs={[
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
+          { label: "Pelatihan" },
+        ]}
+      />
+
+      {/* ERP Unified Metric Strip */}
+      <div
+        className="grid grid-cols-1 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs sm:grid-cols-4"
+        aria-label="Ringkasan program pelatihan SDM"
+      >
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Program</span>
+            <BookOpen className="size-4 text-primary/70" aria-hidden="true" />
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+            {formatNumber(totalTrainings)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Seluruh pelatihan terdaftar</p>
+        </div>
+
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Terjadwal</span>
+            <Clock className="size-4 text-blue-500/80" aria-hidden="true" />
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+            {formatNumber(statusCountMap["scheduled"] ?? 0)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Agenda mendatang</p>
+        </div>
+
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Selesai</span>
+            <CheckCircle2 className="size-4 text-emerald-500/80" aria-hidden="true" />
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+            {formatNumber(statusCountMap["done"] ?? 0)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Pelatihan rampung</p>
+        </div>
+
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Peserta</span>
+            <Calendar className="size-4 text-amber-500/80" aria-hidden="true" />
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+            {formatNumber(totalParticipantsCount)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Keikutsertaan terdata</p>
+        </div>
+      </div>
 
       <CanCreate permission="create_trainings">
         <TrainingForm />
       </CanCreate>
 
-      <div className="overflow-x-auto rounded-lg border border-default">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-default bg-surface-secondary text-left">
-              <th className="px-4 py-3 font-medium">Pelatihan</th>
-              <th className="px-4 py-3 font-medium">Penyelenggara</th>
-              <th className="px-4 py-3 font-medium">Mulai</th>
-              <th className="px-4 py-3 font-medium">Peserta</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {trainings.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8"><EmptyState title="Belum ada pelatihan." className="py-0" /></td>
-              </tr>
-            )}
-            {trainings.map((t) => (
-              <tr key={t.id} className="border-b border-default last:border-0">
-                <td className="px-4 py-3">
-                  <Link href={`/sdm/pelatihan/${t.slug ?? t.id}`} className="font-medium hover:underline">{t.title}</Link>
-                </td>
-                <td className="px-4 py-3">{t.provider ?? "-"}</td>
-                <td className="px-4 py-3">{t.startDate.toLocaleDateString("id-ID")}</td>
-                <td className="px-4 py-3">{t._count.participants}</td>
-                <td className="px-4 py-3">{STATUS_LABELS[t.status] ?? t.status}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <TrainingTable data={toPlain(trainings)} />
     </div>
   )
 }

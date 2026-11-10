@@ -15,8 +15,8 @@ export interface BreadcrumbItemData {
 
 export function AppBreadcrumbs({ items, ariaLabel = "Navigasi breadcrumb" }: { items: BreadcrumbItemData[]; ariaLabel?: string }) {
   return (
-    <Breadcrumb aria-label={ariaLabel} className="mb-4">
-      <BreadcrumbList>
+    <Breadcrumb aria-label={ariaLabel} className="mb-1">
+      <BreadcrumbList className="text-xs">
         {items.flatMap((item, index) => {
           const isLast = index === items.length - 1
           const itemKey = item.href ? `${item.href}-${item.label}` : `crumb-${item.label}-${index}`

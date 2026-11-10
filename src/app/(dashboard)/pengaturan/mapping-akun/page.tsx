@@ -7,7 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Button } from "@/components/ui/shadcn/button"
 import { Badge } from "@/components/ui/shadcn/badge"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction } from "@/components/ui/shadcn/card"
-import { AlertTriangle, CheckCircle2, Pencil } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Pencil } from "@/components/ui/fontawesome-icons"
 
 import {
   isMappingFilled,

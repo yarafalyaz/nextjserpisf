@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, Info, TriangleAlert } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, TriangleAlert } from "@/components/ui/fontawesome-icons";
 import {
   AlertDialog,
   AlertDialogAction,

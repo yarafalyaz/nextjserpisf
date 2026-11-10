@@ -2,8 +2,9 @@ export const dynamic = "force-dynamic"
 
 import { auth } from "@/lib/auth/auth"
 import Link from "next/link"
-import { AlertTriangle, ArrowUpRight, Car } from "lucide-react"
+import { AlertTriangle, ArrowUpRight, Car, FilePlus, Plus, TrendingUp } from "@/components/ui/fontawesome-icons"
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 import { prisma } from "@/lib/db/prisma"
 import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
@@ -47,7 +48,6 @@ import FinanceDashboard from "@/components/dashboard/finance-dashboard"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Dasbor" }
-
 
 const DONE_STATES = ["completed", "cancelled", "done", "closed"]
 const STAGE_DONE = ["completed", "skipped"]
@@ -99,7 +99,6 @@ async function getCharts() {
       GROUP BY ps.name
       ORDER BY MIN(ps.sort_order) ASC
     `,
-    // Top 5 customers this year by invoiced revenue (grand_total of non-cancelled invoices).
     prisma.$queryRaw<{ name: string; revenue: number }[]>`
       SELECT c.name as name, COALESCE(SUM(si.grand_total), 0) as revenue
       FROM sales_invoices si
@@ -153,15 +152,9 @@ async function getDashboardData() {
     totalCustomers,
     recentInvoices,
   ] = await Promise.all([
-    // Putaran 92: label kartu "Mobil Dikerjakan" — wajib ber-kendaraan
-    // (pola workshop-dashboard putaran 86); proyek non-kendaraan ikut
-    // kartu Proyek Aktif sendiri, bukan di sini.
     prisma.project.count({
       where: { status: { notIn: DONE_STATES }, customerVehicleId: { not: null } },
     }),
-    // Putaran 92: "Selesai bulan ini" dari endDate transisi selesai
-    // (project-status menulisnya hanya saat completed), bukan updatedAt
-    // yang naik oleh edit apa pun. Status "done" tak pernah ditulis.
     prisma.project.count({
       where: {
         status: "completed",
@@ -172,8 +165,6 @@ async function getDashboardData() {
       where: { status: { notIn: DONE_STATES }, endDate: { lt: now } },
     }),
     prisma.project.findMany({
-      // Kartu ini "Mobil di Bengkel" — sama seperti hitungan kartu di atas,
-      // proyek tanpa kendaraan tidak boleh masuk daftar (plat jadi "-").
       where: { status: { notIn: DONE_STATES }, customerVehicleId: { not: null } },
       orderBy: [{ endDate: "asc" }, { createdAt: "desc" }],
       take: 8,
@@ -192,10 +183,6 @@ async function getDashboardData() {
         },
       },
     }) as Promise<ActiveProject[]>,
-    // Putaran 84: piutang dashboard wajib definisi kanonis laporan
-    // (grandTotal − paidAmount − returnCredit per faktur); SQL mentah lama
-    // mengabaikan retur POSTED sehingga angka dashboard tak pernah
-    // konvergen dengan aging/statement.
     loadOpenReceivablesTotal(),
     prisma.salesInvoice.aggregate({
       _sum: { paidAmount: true },
@@ -307,11 +294,44 @@ export default async function DashboardPage() {
   return (
     <div data-dashboard-page="true" className="flex flex-1 flex-col">
       <div className="@container/main flex flex-1 flex-col gap-2">
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-          <div className="px-4 text-xs text-muted-foreground lg:px-6">
-            {today}
+        <div className="flex flex-col gap-4 py-4 md:gap-5 md:py-5">
+          {/* Executive Header & Quick Actions */}
+          <div className="flex flex-col justify-between gap-3 px-4 sm:flex-row sm:items-center lg:px-6">
+            <div>
+              <h1 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+                Dasbor Operasional
+              </h1>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {today} · Ringkasan finansial, pengerjaan bengkel, dan inventaris real-time
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button asChild variant="outline" size="sm" className="min-h-11 gap-1.5 text-xs sm:min-h-8 sm:h-8">
+                <Link href="/laporan/laba-rugi">
+                  <TrendingUp className="size-3.5" aria-hidden="true" />
+                  Laporan
+                </Link>
+              </Button>
+              <CanCreate permission="create_sales_invoices">
+                <Button asChild variant="outline" size="sm" className="min-h-11 gap-1.5 text-xs sm:min-h-8 sm:h-8">
+                  <Link href="/penjualan/faktur/tambah">
+                    <FilePlus className="size-3.5" aria-hidden="true" />
+                    Buat Faktur
+                  </Link>
+                </Button>
+              </CanCreate>
+              <CanCreate permission="create_projects">
+                <Button asChild size="sm" className="min-h-11 gap-1.5 text-xs sm:min-h-8 sm:h-8">
+                  <Link href="/proyek/tambah">
+                    <Plus className="size-3.5" aria-hidden="true" />
+                    Proyek Baru
+                  </Link>
+                </Button>
+              </CanCreate>
+            </div>
           </div>
 
+          {/* Row 1: Unified KPI Strip */}
           <SectionCards
             totalRevenue={formatCurrencyExact(data.totalRevenue)}
             activeProjects={data.activeProjects}
@@ -321,39 +341,35 @@ export default async function DashboardPage() {
             totalCustomers={data.totalCustomers}
           />
 
-          <div className="px-4 lg:px-6">
-            <RevenueChart data={charts.revenueData} />
-          </div>
-
-          <div className="grid grid-cols-1 items-stretch gap-4 px-4 lg:grid-cols-3 lg:px-6">
-            <div className="h-full lg:col-span-2">
-              <ProjectPipelineChart data={charts.pipeline} />
+          {/* Row 2: Revenue Trend (2/3) + Invoice Status Distribution (1/3) */}
+          <div className="grid grid-cols-1 items-stretch gap-4 px-4 xl:grid-cols-3 lg:px-6">
+            <div className="h-full xl:col-span-2">
+              <RevenueChart data={charts.revenueData} />
             </div>
             <SalesStatusChart data={charts.salesByStatus} />
           </div>
 
-          <div className="px-4 lg:px-6">
+          {/* Row 3: Active Workshop Pipeline (1/2) + Top Customers (1/2) */}
+          <div className="grid grid-cols-1 items-stretch gap-4 px-4 lg:grid-cols-2 lg:px-6">
+            <ProjectPipelineChart data={charts.pipeline} />
             <TopCustomersChart data={charts.topCustomers} />
           </div>
 
-          <div className="px-4 lg:px-6">
-            <RecentInvoicesTable data={data.invoiceRows} />
-          </div>
-
+          {/* Row 4: Workshop Floor Tracker (2/3) + Low Stock Watchlist (1/3) */}
           <div className="grid grid-cols-1 items-stretch gap-4 px-4 xl:grid-cols-3 lg:px-6">
-            <Card className="xl:col-span-2 min-w-0 overflow-x-clip">
-              <CardHeader>
+            <Card className="min-w-0 gap-0 overflow-x-clip py-0 xl:col-span-2">
+              <CardHeader className="py-4">
                 <CardTitle className="flex items-center gap-2">
-                  <Car className="size-4 text-primary" />
+                  <Car className="size-4 text-muted-foreground" />
                   Mobil di Bengkel
                 </CardTitle>
                 <CardDescription>
-                  Proyek aktif dan tahap pengerjaannya
+                  Proyek kendaraan aktif dan progres tahap pengerjaan saat ini
                 </CardDescription>
                 <CardAction>
-                  <Button asChild variant="ghost" size="sm">
+                  <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                     <Link href="/proyek">
-                      Semua <ArrowUpRight className="size-3.5" />
+                      Semua Proyek <ArrowUpRight className="size-3.5" />
                     </Link>
                   </Button>
                 </CardAction>
@@ -375,19 +391,19 @@ export default async function DashboardPage() {
                           <div className="flex min-w-0 items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
                               <div className="flex min-w-0 items-center gap-1.5">
-                                <span className="min-w-0 truncate break-all font-mono text-xs font-semibold">
+                                <span className="inline-flex items-center rounded border bg-muted/60 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-tight text-foreground">
                                   {car.plate}
                                 </span>
                                 {car.overdue ? (
                                   <Badge
                                     variant="outline"
-                                    className="shrink-0 border-transparent bg-red-100 text-[10px] text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                                    className="shrink-0 border-red-200/80 bg-red-50 text-[10px] text-red-800 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300"
                                   >
-                                    Lewat
+                                    Lewat Target
                                   </Badge>
                                 ) : null}
                               </div>
-                              <p className="min-w-0 truncate break-words text-sm font-medium">
+                              <p className="mt-1 min-w-0 truncate break-words text-sm font-medium text-foreground">
                                 {car.customer}
                               </p>
                               <p className="min-w-0 truncate break-words text-xs text-muted-foreground">
@@ -396,7 +412,7 @@ export default async function DashboardPage() {
                             </div>
                             <Badge
                               variant="outline"
-                              className="max-w-[110px] shrink-0 truncate"
+                              className="max-w-[120px] shrink-0 truncate"
                               title={car.currentStage}
                             >
                               {car.currentStage}
@@ -409,7 +425,7 @@ export default async function DashboardPage() {
                                 style={{ width: `${car.progress}%` }}
                               />
                             </div>
-                            <span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                            <span className="w-9 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
                               {car.progress}%
                             </span>
                           </div>
@@ -419,14 +435,14 @@ export default async function DashboardPage() {
                                 car.overdue ? (
                                   <Badge
                                     variant="outline"
-                                    className="border-transparent bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                                    className="border-red-200/80 bg-red-50 text-red-800 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300"
                                   >
                                     {formatDate(car.endDate, {
                                       format: "short",
                                     })}
                                   </Badge>
                                 ) : (
-                                  <span className="text-muted-foreground">
+                                  <span className="tabular-nums text-muted-foreground">
                                     Target{" "}
                                     {formatDate(car.endDate, {
                                       format: "short",
@@ -439,9 +455,9 @@ export default async function DashboardPage() {
                             </div>
                             <Link
                               href={entityHref("/proyek", car)}
-                              className="shrink-0 text-xs font-medium text-primary hover:underline"
+                              className="shrink-0 text-xs font-medium text-foreground underline-offset-4 hover:text-primary hover:underline"
                             >
-                              Detail
+                              Detail →
                             </Link>
                           </div>
                         </li>
@@ -454,18 +470,18 @@ export default async function DashboardPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="px-4 lg:px-6">Plat</TableHead>
-                        <TableHead className="px-4 lg:px-6">
+                        <TableHead className="px-4 lg:px-5">Plat</TableHead>
+                        <TableHead className="px-4 lg:px-5">
                           Pelanggan
                         </TableHead>
-                        <TableHead className="hidden px-4 sm:table-cell lg:px-6">
+                        <TableHead className="hidden px-4 sm:table-cell lg:px-5">
                           Pekerjaan
                         </TableHead>
-                        <TableHead className="px-4 lg:px-6">Tahap</TableHead>
-                        <TableHead className="w-[170px] px-4 lg:px-6">
+                        <TableHead className="px-4 lg:px-5">Tahap</TableHead>
+                        <TableHead className="w-[170px] px-4 lg:px-5">
                           Progres
                         </TableHead>
-                        <TableHead className="hidden px-4 sm:table-cell lg:px-6">
+                        <TableHead className="hidden px-4 sm:table-cell lg:px-5">
                           Target
                         </TableHead>
                       </TableRow>
@@ -483,21 +499,26 @@ export default async function DashboardPage() {
                       ) : (
                         data.cars.map((car) => (
                           <TableRow key={car.id}>
-                            <TableCell className="px-4 font-mono text-xs font-medium lg:px-6">
-                              {car.plate}
+                            <TableCell className="px-4 lg:px-5">
+                              <Link
+                                href={entityHref("/proyek", car)}
+                                className="inline-flex items-center rounded border bg-muted/50 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-tight text-foreground transition-colors hover:border-foreground/30 hover:bg-muted"
+                              >
+                                {car.plate}
+                              </Link>
                             </TableCell>
-                            <TableCell className="max-w-[160px] truncate px-4 lg:px-6">
+                            <TableCell className="max-w-[160px] truncate px-4 font-medium lg:px-5">
                               {car.customer}
                             </TableCell>
-                            <TableCell className="hidden max-w-[220px] truncate px-4 text-muted-foreground sm:table-cell lg:px-6">
+                            <TableCell className="hidden max-w-[220px] truncate px-4 text-muted-foreground sm:table-cell lg:px-5">
                               {car.name}
                             </TableCell>
-                            <TableCell className="px-4 lg:px-6">
+                            <TableCell className="px-4 lg:px-5">
                               <Badge variant="outline">
                                 {car.currentStage}
                               </Badge>
                             </TableCell>
-                            <TableCell className="px-4 lg:px-6">
+                            <TableCell className="px-4 lg:px-5">
                               <div className="flex items-center gap-2">
                                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                                   <div
@@ -505,24 +526,24 @@ export default async function DashboardPage() {
                                     style={{ width: `${car.progress}%` }}
                                   />
                                 </div>
-                                <span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                                <span className="w-9 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
                                   {car.progress}%
                                 </span>
                               </div>
                             </TableCell>
-                            <TableCell className="hidden px-4 sm:table-cell lg:px-6">
+                            <TableCell className="hidden px-4 sm:table-cell lg:px-5">
                               {car.endDate ? (
                                 car.overdue ? (
                                   <Badge
                                     variant="outline"
-                                    className="border-transparent bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                                    className="border-red-200/80 bg-red-50 text-red-800 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300"
                                   >
                                     {formatDate(car.endDate, {
                                       format: "short",
                                     })}
                                   </Badge>
                                 ) : (
-                                  <span className="text-sm text-muted-foreground">
+                                  <span className="text-xs tabular-nums text-muted-foreground">
                                     {formatDate(car.endDate, {
                                       format: "short",
                                     })}
@@ -541,16 +562,18 @@ export default async function DashboardPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
+            <Card className="gap-0 py-0">
+              <CardHeader className="py-4">
                 <CardTitle className="flex items-center gap-2">
                   <AlertTriangle className="size-4 text-amber-500" />
                   Stok Menipis
                 </CardTitle>
-                <CardDescription>Sparepart perlu dibeli ulang</CardDescription>
+                <CardDescription>Barang di bawah batas minimum stok</CardDescription>
                 <CardAction>
-                  <Button asChild variant="ghost" size="sm">
-                    <Link href="/master/barang">Semua</Link>
+                  <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                    <Link href="/master/barang/stokmenipis">
+                      Semua <ArrowUpRight className="size-3.5" />
+                    </Link>
                   </Button>
                 </CardAction>
               </CardHeader>
@@ -561,37 +584,57 @@ export default async function DashboardPage() {
                   </p>
                 ) : (
                   <ul className="divide-y">
-                    {data.lowStockItems.map((item) => (
-                      <li
-                        key={item.id}
-                        className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"
-                      >
-                        <span className="min-w-0 truncate text-sm">
-                          {item.name}
-                        </span>
-                        <Badge
-                          variant="outline"
-                          className="shrink-0 border-transparent bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
+                    {data.lowStockItems.map((item) => {
+                      const onHand = Number(item.qtyOnHand)
+                      const min = Number(item.minStock)
+                      const isEmpty = onHand <= 0
+                      return (
+                        <li
+                          key={item.id}
+                          className="flex items-center justify-between gap-3 px-5 py-3"
                         >
-                          {Number(item.qtyOnHand)} / {Number(item.minStock)}
-                        </Badge>
-                      </li>
-                    ))}
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[13px] font-medium text-foreground">
+                              {item.name}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              Minimum: <span className="tabular-nums">{min}</span> unit
+                            </p>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className={
+                              isEmpty
+                                ? "shrink-0 border-red-200/80 bg-red-50 font-mono tabular-nums text-red-800 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300"
+                                : "shrink-0 border-amber-200/80 bg-amber-50 font-mono tabular-nums text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300"
+                            }
+                          >
+                            {onHand} / {min}
+                          </Badge>
+                        </li>
+                      )
+                    })}
                   </ul>
                 )}
               </CardContent>
             </Card>
           </div>
 
+          {/* Row 5: Recent Invoices Table */}
+          <div className="px-4 lg:px-6">
+            <RecentInvoicesTable data={data.invoiceRows} />
+          </div>
+
+          {/* Row 6: Recent Payments (1/2) + Operational Signals & Activity (1/2) */}
           <div className="grid grid-cols-1 items-stretch gap-4 px-4 lg:grid-cols-2 lg:px-6">
-            <Card className="min-w-0 overflow-x-clip">
-              <CardHeader>
+            <Card className="min-w-0 gap-0 overflow-x-clip py-0">
+              <CardHeader className="py-4">
                 <CardTitle>Pembayaran Terbaru</CardTitle>
                 <CardDescription>
-                  6 pembayaran terakhir diterima
+                  6 penerimaan pembayaran faktur terakhir
                 </CardDescription>
                 <CardAction>
-                  <Button asChild variant="ghost" size="sm">
+                  <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                     <Link href="/penjualan/pembayaran">
                       Semua <ArrowUpRight className="size-3.5" />
                     </Link>
@@ -613,16 +656,16 @@ export default async function DashboardPage() {
                           className="flex min-w-0 flex-col gap-1.5 px-4 py-3"
                         >
                           <div className="flex min-w-0 items-start justify-between gap-2">
-                            <span className="min-w-0 truncate break-all font-mono text-xs font-medium">
+                            <span className="min-w-0 truncate break-all font-mono text-xs font-medium text-foreground">
                               {payment.documentNo}
                             </span>
-                            <span className="shrink-0 text-xs text-muted-foreground">
+                            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                               {formatDate(payment.paymentDate, {
                                 format: "short",
                               })}
                             </span>
                           </div>
-                          <p className="min-w-0 truncate break-words text-sm">
+                          <p className="min-w-0 truncate break-words text-sm text-foreground">
                             {payment.salesInvoice?.customer?.name || "-"}
                           </p>
                           {/* Putaran 97: baris reversed tetap tampil (histori),
@@ -630,7 +673,7 @@ export default async function DashboardPage() {
                           {isReversedPayment(payment) && (
                             <StatusChip status={payment.status} />
                           )}
-                          <p className="min-w-0 break-words text-sm font-medium tabular-nums">
+                          <p className="min-w-0 break-words font-mono text-sm font-medium tabular-nums text-foreground">
                             {formatCurrencyExact(Number(payment.amount))}
                           </p>
                         </li>
@@ -643,16 +686,16 @@ export default async function DashboardPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="px-4 lg:px-6">
+                        <TableHead className="px-4 lg:px-5">
                           No. Dokumen
                         </TableHead>
-                        <TableHead className="px-4 lg:px-6">
+                        <TableHead className="px-4 lg:px-5">
                           Pelanggan
                         </TableHead>
-                        <TableHead className="px-4 text-right lg:px-6">
+                        <TableHead className="px-4 text-right lg:px-5">
                           Jumlah
                         </TableHead>
-                        <TableHead className="px-4 lg:px-6">
+                        <TableHead className="px-4 lg:px-5">
                           Tanggal
                         </TableHead>
                       </TableRow>
@@ -670,19 +713,19 @@ export default async function DashboardPage() {
                       ) : (
                         data.recentPayments.map((payment) => (
                           <TableRow key={payment.id}>
-                            <TableCell className="px-4 font-mono text-xs lg:px-6">
+                            <TableCell className="px-4 font-mono text-xs font-medium lg:px-5">
                               {payment.documentNo}{" "}
                               {isReversedPayment(payment) && (
                                 <StatusChip status={payment.status} />
                               )}
                             </TableCell>
-                            <TableCell className="max-w-[180px] truncate px-4 lg:px-6">
+                            <TableCell className="max-w-[180px] truncate px-4 font-medium lg:px-5">
                               {payment.salesInvoice?.customer?.name || "-"}
                             </TableCell>
-                            <TableCell className="px-4 text-right tabular-nums lg:px-6">
+                            <TableCell className="px-4 text-right font-mono text-xs font-medium tabular-nums lg:px-5">
                               {formatCurrencyExact(Number(payment.amount))}
                             </TableCell>
-                            <TableCell className="px-4 text-muted-foreground lg:px-6">
+                            <TableCell className="px-4 text-xs tabular-nums text-muted-foreground lg:px-5">
                               {formatDate(payment.paymentDate, {
                                 format: "short",
                               })}

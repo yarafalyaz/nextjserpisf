@@ -3,7 +3,7 @@
 import { createColumnHelper } from "@/lib/table"
 import Link from "next/link"
 import Image from "next/image"
-import { Package, MapPin } from "lucide-react"
+import { Package, MapPin } from "@/components/ui/fontawesome-icons"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteItem } from "@/actions/master.actions"

@@ -18,7 +18,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { resolveAllAccountMappings } from "@/lib/utils/account-automap"
 import { Button } from "@/components/ui/button"
 import { SafeImage } from "@/components/ui/safe-image"
-import { Plus, Trash2 } from "lucide-react"
+import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 
 interface Account {
   id: number

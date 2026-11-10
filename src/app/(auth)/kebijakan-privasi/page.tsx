@@ -1,4 +1,4 @@
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft } from "@/components/ui/fontawesome-icons"
 import Link from "next/link"
 import {
   Card,

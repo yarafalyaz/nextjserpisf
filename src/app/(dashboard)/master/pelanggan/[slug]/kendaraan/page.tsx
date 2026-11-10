@@ -10,7 +10,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteCustomerVehicle } from "@/actions/vehicle.actions"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
-import { Eye, Pencil, Plus } from "lucide-react"
+import { Eye, Pencil, Plus } from "@/components/ui/fontawesome-icons"
 import { loadCustomerBySlug } from "./_components/load-customer-vehicle"
 
 import type { Metadata } from "next"

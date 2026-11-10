@@ -183,8 +183,9 @@ export async function loadIncomeStatementStatement(
   period: { start: Date; end: Date },
   options: StatementDisplayOptions,
   showPercent: boolean,
+  lineLink?: { basePath: string; periodSlug: string },
 ): Promise<IncomeStatementStatement> {
-  return loadIncomeStatementByStatus(period, options, showPercent, REPORT_JOURNAL_STATUSES)
+  return loadIncomeStatementByStatus(period, options, showPercent, REPORT_JOURNAL_STATUSES, lineLink)
 }
 
 /** Buku Besar menampilkan POSTED+REVERSED saja; DRAFT report rows must not link there. */

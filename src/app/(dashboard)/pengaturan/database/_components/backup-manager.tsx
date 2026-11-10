@@ -16,7 +16,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { Badge } from "@/components/ui/shadcn/badge"
-import { Database, Download, RotateCcw, Trash2, Loader2, DatabaseBackup, Cloud, HardDrive } from "lucide-react"
+import { Database, Download, RotateCcw, Trash2, Loader2, DatabaseBackup, Cloud, HardDrive } from "@/components/ui/fontawesome-icons"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import {
   createDatabaseBackup,

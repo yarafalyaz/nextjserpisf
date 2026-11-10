@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
-import { Lock, LockOpen } from "lucide-react"
+import { Lock, LockOpen } from "@/components/ui/fontawesome-icons"
 
 import { closeAccountingPeriod, reopenAccountingPeriod } from "@/actions/period-close.actions"
 import { Button } from "@/components/ui/shadcn/button"

@@ -37,6 +37,7 @@ interface SubledgerReportProps {
   /** Periode sudah diresolusi halaman dari slug path. */
   startDate: Date
   endDate: Date
+  hideFilterAndActions?: boolean
 }
 
 /**
@@ -45,7 +46,14 @@ interface SubledgerReportProps {
  * One component drives both sides so the running-balance logic, layout and
  * export stay identical; only the parties, documents and labels differ.
  */
-export async function SubledgerReport({ side, basePath, partyKey, startDate, endDate }: SubledgerReportProps) {
+export async function SubledgerReport({
+  side,
+  basePath,
+  partyKey,
+  startDate,
+  endDate,
+  hideFilterAndActions = false,
+}: SubledgerReportProps) {
   const isAr = side === "AR"
   const now = new Date()
 
@@ -246,44 +254,55 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
 
   return (
     <div className="flex flex-col gap-6">
-      <ReportPeriodFilter
-        basePath={basePath}
-        mode="range"
-        defaultStartDate={toLocalDateOnly(startDate)}
-        defaultEndDate={toLocalDateOnly(endDate)}
-        selects={[
-          {
-            param: "pihak",
-            label: partyLabel,
-            placeholder: `Cari ${partyLabel.toLowerCase()}...`,
-            required: true,
-            value: selected ? (selected.slug ?? String(selected.id)) : "",
-            options: parties.map((p) => ({
-              value: p.slug ?? String(p.id),
-              label: `${p.code ? `${p.code} — ` : ""}${p.name}`,
-            })),
-          },
-        ]}
-      />
+      {!hideFilterAndActions ? (
+        <ReportPeriodFilter
+          basePath={basePath}
+          mode="range"
+          defaultStartDate={toLocalDateOnly(startDate)}
+          defaultEndDate={toLocalDateOnly(endDate)}
+          selects={[
+            {
+              param: "pihak",
+              label: partyLabel,
+              placeholder: `Cari ${partyLabel.toLowerCase()}...`,
+              required: true,
+              value: selected ? (selected.slug ?? String(selected.id)) : "",
+              options: parties.map((p) => ({
+                value: p.slug ?? String(p.id),
+                label: `${p.code ? `${p.code} — ` : ""}${p.name}`,
+              })),
+            },
+          ]}
+        />
+      ) : null}
 
       {!selected ? (
-        <ReportSection title={title}>
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            Pilih {partyLabel.toLowerCase()} terlebih dahulu untuk menampilkan buku pembantu.
-          </p>
-        </ReportSection>
+        <>
+          <ReportLetterhead
+            title={title}
+            subtitle={`Pilih ${partyLabel.toLowerCase()}`}
+            periodLabel={periodLabel}
+          />
+          <ReportSection title={title}>
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Pilih {partyLabel.toLowerCase()} terlebih dahulu untuk menampilkan buku pembantu.
+            </p>
+          </ReportSection>
+        </>
       ) : (
         <>
-          <div className="flex items-center justify-end print:hidden">
-            <ExportButtons
-              title={isAr ? "Buku_Pembantu_Piutang" : "Buku_Pembantu_Utang"}
-              pdfHref={buildReportPdfHref(
-                isAr ? "buku-pembantu-piutang" : "buku-pembantu-utang",
-                buildReportPeriodSlug(startDate, endDate),
-                { pihak: selected ? (selected.slug ?? String(selected.id)) : "" },
-              )}
-            />
-          </div>
+          {!hideFilterAndActions ? (
+            <div className="flex items-center justify-end print:hidden">
+              <ExportButtons
+                title={isAr ? "Buku_Pembantu_Piutang" : "Buku_Pembantu_Utang"}
+                pdfHref={buildReportPdfHref(
+                  isAr ? "buku-pembantu-piutang" : "buku-pembantu-utang",
+                  buildReportPeriodSlug(startDate, endDate),
+                  { pihak: selected ? (selected.slug ?? String(selected.id)) : "" },
+                )}
+              />
+            </div>
+          ) : null}
 
           <ReportLetterhead
             title={title}

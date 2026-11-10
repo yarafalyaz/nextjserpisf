@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useRef, useState, useTransition } from "react"
 import { createQcChecklist, updateQcChecklist } from "@/actions/qc.actions"
-import { Plus, Trash2 } from "lucide-react"
+import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight } from "@/components/ui/fontawesome-icons"
 import { DayPicker, type DropdownProps } from "@daypicker/react"
 import { id as idLocale } from "date-fns/locale"
 

@@ -29,6 +29,7 @@ export interface StockValuationLayerInput {
   item: {
     sku: string
     name: string
+    slug?: string | null
     unitOfMeasure: string | null
     /** Harga pokok terkini barang (dipakai metode average). */
     cost: number
@@ -38,6 +39,8 @@ export interface StockValuationLayerInput {
 }
 
 export interface StockValuationRow {
+  itemId?: number
+  itemSlug?: string | null
   sku: string
   name: string
   uom: string | null
@@ -124,6 +127,7 @@ export function toValuationLayers(
     item: {
       sku: layer.item.sku,
       name: layer.item.name,
+      slug: (layer.item as { slug?: string | null }).slug,
       unitOfMeasure: layer.item.unitOfMeasure,
       cost: Number(layer.item.cost ?? 0),
       costingMethod: layer.item.costingMethod,
@@ -147,6 +151,8 @@ export function buildStockValuation(
     const warehouse = warehouseLookup(layer.warehouseId)
 
     const existing = aggregated.get(key) ?? {
+      itemId: layer.itemId,
+      itemSlug: layer.item.slug,
       sku: layer.item.sku,
       name: layer.item.name,
       // Satuan dibiarkan apa adanya (bisa kosong) supaya keluaran halaman

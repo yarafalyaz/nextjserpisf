@@ -106,7 +106,7 @@ export async function renderStockAdjustmentsPage({
         href={withListParams(targetPath, params, { halaman: undefined })}
         className={`filter-chip ${isActive ? "active" : ""}`}
       >
-        {dbStatusKey ? (dbStatusKey === "processed" ? "Diposting" : statusLabel(dbStatusKey)) : "Semua"}
+        {dbStatusKey ? (dbStatusKey === "processed" ? "Diterbitkan" : statusLabel(dbStatusKey)) : "Semua"}
       </Link>
     )
   })
@@ -124,7 +124,7 @@ export async function renderStockAdjustmentsPage({
                 { label: "Dasbor", href: "/" },
                 { label: "Inventaris", href: "/inventaris" },
                 { label: "Penyesuaian", href: "/inventaris/penyesuaian" },
-                { label: dbStatus === "processed" ? "Diposting" : statusLabel(dbStatus ?? activeUrlStatus) },
+                { label: dbStatus === "processed" ? "Diterbitkan" : statusLabel(dbStatus ?? activeUrlStatus) },
               ]
             : [
                 { label: "Dasbor", href: "/" },

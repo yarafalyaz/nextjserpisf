@@ -4,6 +4,7 @@ import { isInstalled } from "@/lib/setup/install-state"
 import { SessionProvider } from "next-auth/react"
 import { AppSidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav"
 import { CommandPalette } from "@/components/lazy/command-palette"
 import { SidebarInset, SidebarProvider } from "@/components/ui/shadcn/sidebar"
 import type { Metadata } from "next"
@@ -64,6 +65,7 @@ export default async function DashboardLayout({
         <SidebarInset id="konten-utama" tabIndex={-1}>
           <Header companyLogo={settings.companyLogo ?? undefined} companyLogoDark={settings.companyLogoDark ?? undefined} />
           <div className="app-content">{children}</div>
+          <MobileBottomNav />
         </SidebarInset>
       </SidebarProvider>
       <CommandPalette />

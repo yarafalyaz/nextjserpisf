@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 
 import { useState, useRef, useEffect } from "react"
-import { Bell } from "lucide-react"
+import { Bell } from "@/components/ui/fontawesome-icons"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -105,10 +105,10 @@ export function NotificationDropdown() {
         id="notification-btn"
       >
         <span className="relative inline-flex">
-          <Bell size={20} aria-hidden="true" />
+          <Bell size={18} aria-hidden="true" />
           {unreadCount > 0 && (
             <span
-              className="notification-badge absolute -top-1 -right-1 size-2.5 rounded-full bg-destructive ring-2 ring-background"
+              className="notification-badge absolute -top-1 -right-1 size-2 rounded-full bg-destructive ring-2 ring-background"
               aria-label={`${unreadCount} notifikasi belum dibaca`}
             />
           )}
@@ -116,28 +116,30 @@ export function NotificationDropdown() {
       </Button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-[min(20rem,calc(100vw-2rem))] bg-surface rounded-xl border border-default shadow-xl z-50 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-default">
-            <h3 className="text-sm font-semibold text-foreground">Notifikasi</h3>
+        <div className="absolute right-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-lg">
+          <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+            <h3 className="text-xs font-semibold tracking-tight text-foreground">Notifikasi</h3>
             {unreadCount > 0 && (
-              <span className="text-xs text-primary font-medium">{unreadCount} baru</span>
+              <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium tabular-nums text-foreground">
+                {unreadCount} baru
+              </span>
             )}
           </div>
 
           <div className="max-h-80 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
               </div>
             ) : loadFailed ? (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                <Bell size={24} className="mb-2 opacity-40" />
-                <p className="text-sm">Gagal memuat notifikasi</p>
+                <Bell size={20} className="mb-2 opacity-40" />
+                <p className="text-xs">Gagal memuat notifikasi</p>
               </div>
             ) : notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                <Bell size={24} className="mb-2 opacity-40" />
-                <p className="text-sm">Tidak ada notifikasi</p>
+                <Bell size={20} className="mb-2 opacity-40" />
+                <p className="text-xs">Tidak ada notifikasi</p>
               </div>
             ) : (
               notifications.slice(0, 5).map((notif) => {
@@ -147,7 +149,7 @@ export function NotificationDropdown() {
                   key={notif.id}
                   type="button"
                   aria-disabled={notif.readAt ? true : undefined}
-                  className={`w-full text-left flex gap-3 px-4 py-3 border-b border-default last:border-0 hover:bg-surface-secondary transition-colors cursor-pointer ${!notif.readAt ? "bg-primary/5" : ""}`}
+                  className={`flex w-full cursor-pointer gap-3 border-b border-border px-4 py-2.5 text-left transition-colors duration-150 last:border-0 hover:bg-muted/60 ${!notif.readAt ? "bg-muted/30" : ""}`}
                   onClick={() => {
                     if (!notif.readAt) void markAsRead(notif.id)
                     if (href) {
@@ -156,17 +158,17 @@ export function NotificationDropdown() {
                     }
                   }}
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm truncate ${!notif.readAt ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
+                  <div className="min-w-0 flex-1">
+                    <p className={`truncate text-xs ${!notif.readAt ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
                       {notif.title}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {href ? "Buka dokumen terkait" : notif.body}
                     </p>
-                    <p className="text-[10px] text-muted-foreground mt-1">{timeAgo(notif.createdAt)}</p>
+                    <p className="mt-1 text-[10px] text-muted-foreground">{timeAgo(notif.createdAt)}</p>
                   </div>
                   {!notif.readAt && (
-                    <div className="flex-shrink-0 w-2 h-2 mt-2 rounded-full bg-primary" />
+                    <div className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
                   )}
                 </button>
                 )
@@ -174,10 +176,10 @@ export function NotificationDropdown() {
             )}
           </div>
 
-          <div className="border-t border-default px-4 py-2.5">
+          <div className="border-t border-border bg-muted/20 px-4 py-2">
             <Link
               href="/notifikasi"
-              className="block text-center text-xs font-medium text-primary hover:text-primary-hover transition-colors"
+              className="block text-center text-xs font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
               onClick={() => setIsOpen(false)}
             >
               Lihat Semua Notifikasi

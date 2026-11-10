@@ -34,7 +34,11 @@ export function MultiPeriodFilter({ basePath, periodSlug, statement, mode, count
   }
 
   return (
-    <div role="search" aria-label="Filter multi periode" className="flex items-end gap-4 flex-wrap print:hidden">
+    <div
+      role="search"
+      aria-label="Filter multi periode"
+      className="rounded-xl border border-default bg-surface p-4 flex items-end gap-4 flex-wrap print:hidden"
+    >
       <div className="flex flex-col gap-1.5 w-full sm:w-[180px]">
         <span className="text-sm font-medium text-foreground">Jenis Laporan</span>
         <Select value={jenis} onValueChange={(value) => setJenis(value as "laba-rugi" | "neraca")}>

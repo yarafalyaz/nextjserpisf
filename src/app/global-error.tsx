@@ -3,7 +3,7 @@
 import { Inter } from 'next/font/google';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/shadcn/button';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle } from "@/components/ui/fontawesome-icons";
 
 const inter = Inter({ subsets: ['latin'] });
 

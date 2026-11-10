@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
-import { ArrowDown, ArrowUp, GripVertical, Plus, Trash2 } from "lucide-react"
+import { ArrowDown, ArrowUp, GripVertical, Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"

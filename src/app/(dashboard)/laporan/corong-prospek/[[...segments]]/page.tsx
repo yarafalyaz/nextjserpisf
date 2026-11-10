@@ -7,6 +7,7 @@ import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
+import { ExportButtons } from "@/components/reports/export-buttons"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { getLeadFunnel } from "@/lib/reports/lead-funnel-data"
 import { LeadFunnelCard } from "@/components/reports/lead-funnel-card"
@@ -61,6 +62,7 @@ export default async function LeadFunnelPage({
       periodCaption={periodCaption}
       printedBy={user.name ?? user.email}
       wide
+      actions={<ExportButtons title="Corong_Prospek" />}
       filter={
         <ReportPeriodFilter
           basePath="/laporan/corong-prospek"

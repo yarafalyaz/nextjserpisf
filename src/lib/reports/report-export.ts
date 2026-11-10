@@ -82,16 +82,14 @@ export type ReportPdfKey =
 /** Blok tanda tangan standar laporan keuangan — sama di layar dan di PDF. */
 export const STATEMENT_SIGNATURES = ["Dibuat oleh", "Diperiksa oleh", "Disetujui oleh"]
 
+import { buildReportHref } from "@/lib/reports/report-href"
+
 export function buildReportPdfHref(
   report: ReportPdfKey,
   periodSlug: string,
   params?: Record<string, string>,
 ): string {
-  const search = new URLSearchParams({ laporan: report, periode: periodSlug })
-  for (const [key, value] of Object.entries(params ?? {})) {
-    if (value) search.set(key, value)
-  }
-  return `/api/pdf?${search.toString()}`
+  return buildReportHref(`/api/pdf/${report}`, periodSlug, params ?? {})
 }
 
 /** Label berkas unduhan, mis. "Neraca-2026-10.pdf". */

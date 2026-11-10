@@ -15,8 +15,8 @@ export async function ReportSheet({
   periodLabel,
   /** Teks kiri pada baris periode (default: periodLabel). */
   periodCaption,
-  /** Info kanan, mis. "Mata Uang: Indonesian Rupiah". */
-  metaRight = "Mata Uang: Indonesian Rupiah",
+  /** Info kanan, mis. "Mata Uang: Rupiah (IDR)". */
+  metaRight = "Mata Uang: Rupiah (IDR)",
   printedBy,
   signatures,
   wide = false,
@@ -46,7 +46,7 @@ export async function ReportSheet({
 
   return (
     <div className={`report-sheet${wide ? " report-sheet-wide" : ""}`}>
-      <div className="doc-head">
+      <div className="doc-head doc-letterhead-block">
         {settings.companyLogo ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={settings.companyLogo} alt={companyName} className="doc-logo" />
@@ -58,18 +58,17 @@ export async function ReportSheet({
           </div>
         ))}
         {contactParts.length > 0 ? <div className="doc-lines">{contactParts.join("  •  ")}</div> : null}
+        <hr className="doc-rule" />
       </div>
 
-      <hr className="doc-rule" />
-
-      <div className="doc-head">
+      <div className="doc-head doc-header-bar">
+        <div className="doc-company doc-company-screen">{companyName}</div>
         <h1 className="doc-title">{title}</h1>
         {subtitle ? <div className="doc-subtitle">{subtitle}</div> : null}
-      </div>
-
-      <div className="doc-meta">
-        <span className="doc-period">{periodCaption ?? periodLabel}</span>
-        <span>{metaRight}</span>
+        <div className="doc-meta">
+          <span className="doc-period">{periodCaption ?? periodLabel}</span>
+          <span>{metaRight}</span>
+        </div>
       </div>
 
       <div data-report-period={periodLabel} hidden />
@@ -79,7 +78,7 @@ export async function ReportSheet({
       <div className="doc-foot">
         <span>
           Dicetak: {printedAt}
-          {printedBy ? ` oleh ${printedBy}` : ""}
+          {printedBy && printedBy !== companyName ? ` oleh ${printedBy}` : ""}
         </span>
         <span>{companyName}</span>
       </div>

@@ -113,7 +113,11 @@ const LINKS_PENDING: Record<string, string> = {
 }
 
 // Entri daftar-beku untuk pemeriksaan mode server.
-const SERVER_SEARCH_ALLOWED: Record<string, string> = {}
+const SERVER_SEARCH_ALLOWED: Record<string, string> = {
+  // Redirect hub murni ke /keuangan/dokumen-pajak/faktur (yang membaca params.cari).
+  "src/app/(dashboard)/keuangan/dokumen-pajak/page.tsx":
+    "Halaman indeks redirect murni ke /keuangan/dokumen-pajak/faktur; komponen tabel hidup di _components bersama faktur dan bupot.",
+}
 
 describe("keterhubungan UI: tautan ber-parameter", () => {
   const links = parameterizedLinks()

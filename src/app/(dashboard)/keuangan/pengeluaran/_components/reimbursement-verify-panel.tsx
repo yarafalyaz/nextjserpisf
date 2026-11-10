@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
-import { CheckCircle, XCircle } from "lucide-react"
+import { CheckCircle, XCircle } from "@/components/ui/fontawesome-icons"
 import { Button } from "@/components/ui/button"
 import { FormSelect } from "@/components/ui/form-select"
 import { Label } from "@/components/ui/shadcn/label"

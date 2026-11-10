@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { CheckCircle } from "lucide-react"
+import { CheckCircle } from "@/components/ui/fontawesome-icons"
 import { approvePayroll } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { useRouter } from "next/navigation"

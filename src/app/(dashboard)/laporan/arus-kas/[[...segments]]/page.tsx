@@ -179,97 +179,93 @@ export default async function CashFlowPage({
   const amount = (value: number) => formatAccountingExact(value, { zeroDash: false });
 
   return (
-    <ReportPageShell title="Arus Kas" sheet={false} actions={<>
-<div className="print:hidden flex flex-col gap-3">
+    <ReportPageShell
+      title="Arus Kas"
+      sheetTitle="Laporan Arus Kas"
+      subtitle="Per Aktivitas"
+      periodLabel={periodLabel}
+      periodCaption={`Periode ${formatDate(startDate, { format: "short" })} s/d ${formatDate(endDate, { format: "short" })}`}
+      printedBy={user.name ?? user.email}
+      signatures={["Dibuat oleh", "Diperiksa oleh", "Disetujui oleh"]}
+      filter={
         <StatementOptions
           basePath="/laporan/arus-kas"
           defaultStartDate={toLocalDateOnly(startDate)}
           defaultEndDate={toLocalDateOnly(endDate)}
           currentOptions={options}
         />
-        <div className="flex items-center justify-end">
+      }
+      actions={
+        <div className="flex items-center justify-end print:hidden">
           <ExportButtons title="Arus Kas" pdfHref={buildReportPdfHref("arus-kas", period.slug)} />
         </div>
-      </div>
-</>}>
-
-
-
-
-      <ReportSheet
-        title="Laporan Arus Kas"
-        subtitle="Per Aktivitas"
-        periodLabel={periodLabel}
-        periodCaption={`Periode ${formatDate(startDate, { format: "short" })} s/d ${formatDate(endDate, { format: "short" })}`}
-        printedBy={user.name ?? user.email}
-        signatures={["Dibuat oleh", "Diperiksa oleh", "Disetujui oleh"]}
-      >
-        <table className="stmt" data-report-table="Arus Kas">
-          <thead>
-            <tr>
-              <th>Deskripsi</th>
-              <th className="num">{periodLabel.replace("Periode ", "")}</th>
+      }
+    >
+      <table className="stmt" data-report-table="Arus Kas">
+        <thead>
+          <tr>
+            <th>Deskripsi</th>
+            <th className="num">{periodLabel.replace("Periode ", "")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {activityRows.map((row) => (
+            <tr key={row.key}>
+              <td className="indent-1">{row.label}</td>
+              <td className="num">{amount(row.value)}</td>
             </tr>
-          </thead>
-          <tbody>
-            {activityRows.map((row) => (
-              <tr key={row.key}>
-                <td className="indent-1">{row.label}</td>
-                <td className="num">{amount(row.value)}</td>
-              </tr>
-            ))}
+          ))}
+          <tr className="subtotal">
+            <td>Kenaikan/(Penurunan) Kas Bersih</td>
+            <td className="num">{amount(netCashFlow)}</td>
+          </tr>
+          <tr>
+            <td className="indent-1">Saldo Kas Awal Periode</td>
+            <td className="num">{amount(openingBalance)}</td>
+          </tr>
+          <tr className="grand">
+            <td>Saldo Kas Akhir Periode</td>
+            <td className="num">{amount(closingBalance)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div className="doc-head" style={{ marginTop: 24 }}>
+        <div className="doc-title" style={{ fontSize: "10.5pt" }}>Rincian per Bulan</div>
+      </div>
+      <table className="stmt" data-report-table="Arus Kas per Bulan" style={{ marginTop: 8 }}>
+        <thead>
+          <tr>
+            <th>Bulan</th>
+            <th className="num">Penerimaan</th>
+            <th className="num">Pengeluaran</th>
+            <th className="num">Arus Bersih</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedMonths.map(([month, data]) => (
+            <tr key={month}>
+              <td className="indent-1">{formatPeriod(month)}</td>
+              <td className="num">{amount(data.inflow)}</td>
+              <td className="num">{amount(data.outflow)}</td>
+              <td className="num">{amount(safeSubtract(data.inflow, data.outflow, 2))}</td>
+            </tr>
+          ))}
+          {/* Sisa terjustifikasi TASK-037: sel .stmt dokumen cetak — EmptyState (teks Tailwind px) merusak paritas layar/PDF 9pt. */}
+          {sortedMonths.length === 0 ? (
+            <tr>
+              <td colSpan={4} className="stmt-empty">Tidak ada mutasi kas pada periode ini</td>
+            </tr>
+          ) : (
             <tr className="subtotal">
-              <td>Kenaikan/(Penurunan) Kas Bersih</td>
+              <td>Total</td>
+              <td className="num">{amount(totalInflow)}</td>
+              <td className="num">{amount(totalOutflow)}</td>
               <td className="num">{amount(netCashFlow)}</td>
             </tr>
-            <tr>
-              <td className="indent-1">Saldo Kas Awal Periode</td>
-              <td className="num">{amount(openingBalance)}</td>
-            </tr>
-            <tr className="grand">
-              <td>Saldo Kas Akhir Periode</td>
-              <td className="num">{amount(closingBalance)}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div className="doc-head" style={{ marginTop: 24 }}>
-          <div className="doc-title" style={{ fontSize: "10.5pt" }}>Rincian per Bulan</div>
-        </div>
-        <table className="stmt" data-report-table="Arus Kas per Bulan" style={{ marginTop: 8 }}>
-          <thead>
-            <tr>
-              <th>Bulan</th>
-              <th className="num">Penerimaan</th>
-              <th className="num">Pengeluaran</th>
-              <th className="num">Arus Bersih</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedMonths.map(([month, data]) => (
-              <tr key={month}>
-                <td className="indent-1">{formatPeriod(month)}</td>
-                <td className="num">{amount(data.inflow)}</td>
-                <td className="num">{amount(data.outflow)}</td>
-                <td className="num">{amount(safeSubtract(data.inflow, data.outflow, 2))}</td>
-              </tr>
-            ))}
-            {/* Sisa terjustifikasi TASK-037: sel .stmt dokumen cetak — EmptyState (teks Tailwind px) merusak paritas layar/PDF 9pt. */}
-            {sortedMonths.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="stmt-empty">Tidak ada mutasi kas pada periode ini</td>
-              </tr>
-            ) : (
-              <tr className="subtotal">
-                <td>Total</td>
-                <td className="num">{amount(totalInflow)}</td>
-                <td className="num">{amount(totalOutflow)}</td>
-                <td className="num">{amount(netCashFlow)}</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </ReportSheet>
+          )}
+        </tbody>
+      </table>
     </ReportPageShell>
   );
 }

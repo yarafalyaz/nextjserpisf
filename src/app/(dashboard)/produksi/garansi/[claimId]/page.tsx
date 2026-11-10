@@ -56,16 +56,22 @@ export default async function WarrantyClaimDetailPage({
   const claim = detail.claim
   const coverage = claim.coverage
   const serialNumber = coverage.serialNumber?.trim() ? coverage.serialNumber : null
-  const [canDecide, canTransition] = await Promise.all([
+  const [canDecide, canTransition, decisionActor] = await Promise.all([
     hasPermission("approve_warranty_claims"),
     hasPermission("edit_warranty_claims"),
+    claim.decisionBy
+      ? prisma.user.findUnique({
+          where: { id: claim.decisionBy },
+          select: { name: true },
+        })
+      : null,
   ])
 
   const facts: WarrantyClaimFacts = {
     id: claim.id,
     status: claim.status,
     complaint: claim.complaint,
-    reportedAt: formatDate(claim.reportedAt),
+    reportedAt: formatDate(claim.reportedAt, { includeTime: true }),
     odometerKm: claim.odometerKm,
     coverageId: coverage.id,
     coverageStatus: coverage.status,
@@ -84,8 +90,10 @@ export default async function WarrantyClaimDetailPage({
       serialMatches: detail.eligibility.serialMatches,
       notes: detail.eligibility.notes,
     },
-    decisionByName: null,
-    decisionAt: claim.decisionAt ? formatDate(claim.decisionAt) : null,
+    decisionByName: claim.decisionBy
+      ? (decisionActor?.name ?? `Pengguna #${claim.decisionBy}`)
+      : null,
+    decisionAt: claim.decisionAt ? formatDate(claim.decisionAt, { includeTime: true }) : null,
     decisionNotes: claim.decisionNotes,
     resolutionType: claim.resolutionType,
     repairWorkOrderId: claim.repairWorkOrderId,
@@ -253,12 +261,12 @@ export default async function WarrantyClaimDetailPage({
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status Klaim</span>
             <span className="text-[0.9375rem] text-foreground font-medium">
-              <StatusChip status={claim.status} /> {statusLabel(claim.status)}
+              <StatusChip status={claim.status} />
             </span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tanggal Lapor</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(claim.reportedAt)}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(claim.reportedAt, { includeTime: true })}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Plat Nomor</span>

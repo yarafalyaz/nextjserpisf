@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Play, Check, SkipForward, RotateCcw, AlertCircle, Calendar, MessageSquare, Edit3, Clock } from "lucide-react"
+import { Play, Check, SkipForward, RotateCcw, AlertCircle, Calendar, MessageSquare, Edit3, Clock } from "@/components/ui/fontawesome-icons"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { StatusChip } from "@/components/ui/status-chip"

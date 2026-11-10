@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 
+import Link from 'next/link'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { getWarehouseScope } from '@/lib/auth/warehouse-scope'
@@ -74,6 +75,7 @@ export default async function StockValuationPage({
           id: true,
           sku: true,
           name: true,
+          slug: true,
           unitOfMeasure: true,
           cost: true,
           costingMethod: true,
@@ -181,8 +183,24 @@ export default async function StockValuationPage({
           <DetailTableBody>
             {rows.map((row, i) => (
               <DetailTableRow key={i}>
-                <DetailTableTd className="font-mono text-sm">{row.sku}</DetailTableTd>
-                <DetailTableTd className="font-medium">{row.name}</DetailTableTd>
+                <DetailTableTd className="font-mono text-sm">
+                  {row.itemId ? (
+                    <Link href={`/laporan/kartu-stok/barang/${row.itemSlug ?? row.itemId}`} className="hover:underline text-info font-medium">
+                      {row.sku}
+                    </Link>
+                  ) : (
+                    row.sku
+                  )}
+                </DetailTableTd>
+                <DetailTableTd className="font-medium">
+                  {row.itemId ? (
+                    <Link href={`/laporan/kartu-stok/barang/${row.itemSlug ?? row.itemId}`} className="hover:underline text-foreground">
+                      {row.name}
+                    </Link>
+                  ) : (
+                    row.name
+                  )}
+                </DetailTableTd>
                 <DetailTableTd>{row.category}</DetailTableTd>
                 <DetailTableTd>{row.warehouseCode}</DetailTableTd>
                 <DetailTableTd>{row.uom}</DetailTableTd>

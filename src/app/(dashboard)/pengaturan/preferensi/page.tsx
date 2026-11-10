@@ -7,7 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Button } from "@/components/ui/shadcn/button"
 import { Badge } from "@/components/ui/shadcn/badge"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction } from "@/components/ui/shadcn/card"
-import { Pencil } from "lucide-react"
+import { Pencil } from "@/components/ui/fontawesome-icons"
 import { formatDate } from "@/lib/utils/format"
 
 import type { Metadata } from "next"

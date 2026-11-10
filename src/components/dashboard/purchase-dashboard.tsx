@@ -12,7 +12,7 @@ import {
   Undo2,
   ArrowUpRight,
   Package,
-} from "lucide-react"
+} from "@/components/ui/fontawesome-icons"
 import {
   Card,
   CardAction,
@@ -27,10 +27,6 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 async function getPurchasingData() {
-  // Putaran 88: subpopulasi kanonis — PR lahir "draft" (tak ada penulis
-  // "pending"); PO aktif mengikuti OPEN_PURCHASE_ORDER_STATUSES
-  // (ordered/partial_received); nilai PO aktif dari agregat query sendiri,
-  // bukan sampel daftar terbaru take:8.
   const [pendingPR, pendingPO, poActiveAgg, recentPOs, recentVendorBills, vendorCount] =
     await Promise.all([
       prisma.purchaseRequest.count({ where: { status: { in: ["draft", "approved"] }, deletedAt: null } }),
@@ -83,32 +79,41 @@ export default async function PurchaseDashboard() {
   return (
     <div className="flex flex-1 flex-col">
       <div className="@container/main flex flex-1 flex-col gap-2">
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-          <div className="px-4 text-xs text-muted-foreground lg:px-6">{today}</div>
+        <div className="flex flex-col gap-4 py-4 md:gap-5 md:py-5">
+          <div className="flex flex-col justify-between gap-2 px-4 sm:flex-row sm:items-center lg:px-6">
+            <div>
+              <h1 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+                Dasbor Pembelian & Pengadaan
+              </h1>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {today} · Pemantauan permintaan barang, pesanan pemasok, dan tagihan pembelian
+              </p>
+            </div>
+          </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-4 px-4 lg:grid-cols-4 lg:px-6">
-            <StatCard label="PR Menunggu" value={data.pendingPR} icon={<ClipboardList className="size-5" />} />
-            <StatCard label="PO Aktif" value={data.pendingPO} icon={<FileCheck className="size-5" />} />
+          <div className="grid grid-cols-2 gap-3 px-4 lg:grid-cols-4 lg:px-6">
+            <StatCard label="PR Menunggu" value={data.pendingPR} icon={<ClipboardList className="size-4" />} />
+            <StatCard label="PO Aktif" value={data.pendingPO} icon={<FileCheck className="size-4" />} />
             <StatCard
               label="Nilai PO Aktif"
               value={formatCurrencyExact(data.totalPendingValue)}
-              icon={<ShoppingBag className="size-5" />}
+              icon={<ShoppingBag className="size-4" />}
             />
-            <StatCard label="Pemasok" value={data.vendorCount} icon={<Factory className="size-5" />} />
+            <StatCard label="Pemasok" value={data.vendorCount} icon={<Factory className="size-4" />} />
           </div>
 
-          {/* Recent POs */}
-          <div className="px-4 lg:px-6">
-            <Card>
-              <CardHeader>
+          {/* Recent POs + Vendor Bills */}
+          <div className="grid grid-cols-1 gap-4 px-4 xl:grid-cols-3 lg:px-6">
+            <Card className="gap-0 py-0 xl:col-span-2">
+              <CardHeader className="py-4">
                 <CardTitle className="flex items-center gap-2">
-                  <ShoppingBag className="size-4 text-primary" />
+                  <ShoppingBag className="size-4 text-muted-foreground" />
                   Pesanan Pembelian Terbaru
                 </CardTitle>
                 <CardDescription>8 PO terakhir</CardDescription>
                 <CardAction>
-                  <Button asChild variant="ghost" size="sm">
+                  <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                     <Link href="/pembelian/pesanan">
                       Semua <ArrowUpRight className="size-3.5" />
                     </Link>
@@ -135,15 +140,15 @@ export default async function PurchaseDashboard() {
                       ) : (
                         data.recentPOs.map((po) => (
                           <DetailTableRow key={po.id}>
-                            <DetailTableTd className="font-mono text-xs">{po.documentNo}</DetailTableTd>
-                            <DetailTableTd className="max-w-[180px] truncate">{po.vendor.name}</DetailTableTd>
-                            <DetailTableTd align="right" className="tabular-nums">
+                            <DetailTableTd className="font-mono text-xs font-medium">{po.documentNo}</DetailTableTd>
+                            <DetailTableTd className="max-w-[180px] truncate font-medium">{po.vendor.name}</DetailTableTd>
+                            <DetailTableTd align="right" className="font-mono text-xs font-medium tabular-nums">
                               {formatCurrencyExact(Number(po.grandTotal))}
                             </DetailTableTd>
                             <DetailTableTd>
                               <StatusChip status={po.status} />
                             </DetailTableTd>
-                            <DetailTableTd className="text-muted-foreground">
+                            <DetailTableTd className="text-xs tabular-nums text-muted-foreground">
                               {formatDate(po.date, { format: "short" })}
                             </DetailTableTd>
                           </DetailTableRow>
@@ -154,18 +159,17 @@ export default async function PurchaseDashboard() {
                 </div>
               </CardContent>
             </Card>
-          </div>
 
-          {/* Vendor Bills */}
-          <div className="grid grid-cols-1 gap-4 px-4 lg:grid-cols-2 lg:px-6">
-            <Card>
-              <CardHeader>
+            {/* Vendor Bills */}
+            <Card className="gap-0 py-0">
+              <CardHeader className="py-4">
                 <CardTitle className="flex items-center gap-2 text-sm">
-                  <FileSpreadsheet className="size-4 text-primary" />
+                  <FileSpreadsheet className="size-4 text-muted-foreground" />
                   Tagihan Pemasok Terbaru
                 </CardTitle>
+                <CardDescription>Tagihan terbuka & konsep</CardDescription>
                 <CardAction>
-                  <Button asChild variant="ghost" size="sm">
+                  <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                     <Link href="/pembelian/tagihan">
                       Semua <ArrowUpRight className="size-3.5" />
                     </Link>
@@ -180,13 +184,15 @@ export default async function PurchaseDashboard() {
                     </p>
                   ) : (
                     data.recentVendorBills.map((bill) => (
-                      <div key={bill.id} className="flex items-center justify-between px-5 py-3">
+                      <div key={bill.id} className="flex items-center justify-between gap-3 px-5 py-3">
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-mono">{bill.documentNo}</p>
-                          <p className="text-xs text-muted-foreground">{bill.vendor.name}</p>
+                          <p className="truncate font-mono text-xs font-medium text-foreground">{bill.documentNo}</p>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">{bill.vendor.name}</p>
                         </div>
-                        <div className="text-right">
-                          <p className="text-xs tabular-nums">{formatCurrencyExact(Number(bill.grandTotal))}</p>
+                        <div className="flex flex-col items-end gap-1 text-right">
+                          <p className="font-mono text-xs font-medium tabular-nums text-foreground">
+                            {formatCurrencyExact(Number(bill.grandTotal))}
+                          </p>
                           <StatusChip status={bill.status} />
                         </div>
                       </div>
@@ -199,20 +205,26 @@ export default async function PurchaseDashboard() {
 
           {/* Quick Links */}
           <div className="px-4 lg:px-6">
-            <h2 className="mb-3 text-sm font-semibold">Menu Cepat</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+            <h2 className="mb-2.5 text-xs font-semibold tracking-wider uppercase text-muted-foreground">
+              Menu Cepat
+            </h2>
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
               {quickLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="flex flex-col items-center gap-1.5 rounded-lg border p-4 text-center transition-colors hover:bg-accent"
+                  className="group flex items-center justify-between gap-3 rounded-lg border bg-card p-3.5 shadow-2xs transition-colors duration-150 hover:border-foreground/20 hover:bg-muted/40"
                 >
-                  <link.icon className="size-5 t
-  )
-}
-ext-primary" />
-                  <span className="text-xs font-medium">{link.label}</span>
-                  <span className="text-[10px] text-muted-foreground">{link.desc}</span>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-muted/50 text-muted-foreground transition-colors group-hover:text-foreground">
+                      <link.icon className="size-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-xs font-semibold text-foreground">{link.label}</div>
+                      <div className="truncate text-[11px] text-muted-foreground">{link.desc}</div>
+                    </div>
+                  </div>
+                  <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground/50 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground" />
                 </Link>
               ))}
             </div>

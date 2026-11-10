@@ -61,7 +61,7 @@ export default async function StockMoveDetailPage({
         <DetailField label="No. Dokumen" value={move.documentNo} mono />
         <DetailField label="Barang" value={<Link href={move.item ? entityHref("/master/barang", move.item) : `/master/barang/${move.itemId}`} className="hover:underline">{move.item?.name || `Barang #${move.itemId}`}</Link>} />
         <DetailField label="Gudang" value={move.warehouse?.name || "-"} />
-        <DetailField label="Arah" value={<StatusChip status={move.impact === "IN" ? "received" : "returned"} />} />
+        <DetailField label="Arah" value={<StatusChip status={move.impact === "IN" ? "IN" : "OUT"} />} />
         <DetailField label="Jumlah" value={`${Number(move.qty)} ${move.item?.unitOfMeasure ?? ""}`} />
         <DetailField label="Harga Satuan" value={formatCurrencyExact(Number(move.cost))} />
         <DetailField

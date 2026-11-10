@@ -164,9 +164,9 @@ export default async function ProfitCenterIncomePage({
       <ReportNarration text="Laporan Pusat Laba mengukur kontribusi laba dari setiap divisi, departemen, atau unit bisnis dalam perusahaan. Analisis ini membantu dalam evaluasi kinerja, alokasi sumber daya, dan pengambilan keputusan strategis di tingkat unit." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Total Pendapatan" value={formatCurrencyExact(totalRevenue)} valueClassName="text-success" />
-        <ReportKpiCard label="Total Beban" value={formatCurrencyExact(totalExpense)} valueClassName="text-danger" />
-        <ReportKpiCard label="Laba (Rugi) Bersih" value={formatCurrencyExact(netIncome)} valueClassName={netIncome >= 0 ? 'text-success' : 'text-danger'} />
+        <ReportKpiCard label="Total Pendapatan" value={formatAccountingExact(totalRevenue)} valueClassName="text-success" />
+        <ReportKpiCard label="Total Beban" value={formatAccountingExact(totalExpense)} valueClassName="text-danger" />
+        <ReportKpiCard label="Laba (Rugi) Bersih" value={formatAccountingExact(netIncome)} valueClassName={netIncome >= 0 ? 'text-success' : 'text-danger'} />
       </div>
 
       <ReportSection title="Ringkasan per Pusat Laba">

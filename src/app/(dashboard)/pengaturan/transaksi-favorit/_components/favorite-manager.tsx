@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
-import { ExternalLink, Plus, Trash2 } from "lucide-react"
+import { ExternalLink, Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 
 import { createFavoriteTransaction, deleteFavoriteTransaction } from "@/actions/favorite.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"

@@ -140,20 +140,48 @@ export default async function PurchaseOrderDetailPage({
                 />
                 <DetailCard>
                   <DetailField label="Pemasok" value={po.vendor.name} />
-                  <DetailField label="Tanggal" value={formatDate(po.date)} />
+                  <DetailField label="Tanggal PO" value={formatDate(po.date)} />
                   <DetailField label="Tanggal Diharapkan" value={formatDate(po.expectedDate)} />
-                  <DetailField label="No. PR" value={po.purchaseRequest?.documentNo || "-"} mono />
+                  <DetailField
+                    label="Permintaan Pembelian (PR)"
+                    value={
+                      po.purchaseRequest ? (
+                        <Link href={entityHref("/pembelian/permintaan", po.purchaseRequest)} className="text-primary hover:underline font-mono">
+                          {po.purchaseRequest.documentNo}
+                        </Link>
+                      ) : (
+                        "-"
+                      )
+                    }
+                  />
                   <DetailField
                     label={po.isService ? "Perintah Kerja (Jasa)" : "Perintah Kerja"}
                     value={
                       po.workOrder ? (
-                        <Link href={entityHref("/produksi/perintah-kerja", po.workOrder)} className="hover:underline">
+                        <Link href={entityHref("/produksi/perintah-kerja", po.workOrder)} className="text-primary hover:underline font-mono">
                           {po.workOrder.documentNo ?? `WO #${po.workOrder.id}`}
                         </Link>
                       ) : "-"
                     }
                   />
-                  <DetailField label="Total Keseluruhan" value={formatCurrencyExact(Number(po.grandTotal))} />
+                  <DetailField label="Dibuat" value={formatDate(po.createdAt, { includeTime: true })} />
+                </DetailCard>
+
+                {/* Ringkasan Finansial PO */}
+                <DetailCard title="Ringkasan Finansial">
+                  <DetailField label="Subtotal" value={formatCurrencyExact(Number(po.subtotal))} />
+                  <DetailField label="Diskon" value={formatCurrencyExact(Number(po.discount))} />
+                  <DetailField label="PPN / Pajak" value={formatCurrencyExact(Number(po.tax))} />
+                  {Number(po.shippingCost) > 0 && (
+                    <DetailField label="Ongkos Kirim" value={formatCurrencyExact(Number(po.shippingCost))} />
+                  )}
+                  {Number(po.serviceFee) > 0 && (
+                    <DetailField label="Biaya Layanan" value={formatCurrencyExact(Number(po.serviceFee))} />
+                  )}
+                  <DetailField
+                    label="Total Keseluruhan"
+                    value={<span className="text-lg font-bold text-foreground">{formatCurrencyExact(Number(po.grandTotal))}</span>}
+                  />
                 </DetailCard>
 
                 {/* Notes */}

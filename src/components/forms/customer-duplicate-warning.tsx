@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle } from "@/components/ui/fontawesome-icons"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 import { Button } from "@/components/ui/button"
 import { entityHref } from "@/lib/utils/entity-url"
@@ -31,11 +31,14 @@ export interface CustomerDuplicateWarningView {
 
 export function CustomerDuplicateCandidateRow({
   candidate,
+  as: Component = "li",
 }: {
   candidate: CustomerDuplicateCandidateView
+  as?: "li" | "div"
 }) {
+  const isLi = Component === "li"
   return (
-    <li className="rounded-lg border border-default bg-surface px-3 py-2.5 text-sm">
+    <Component className={isLi ? "rounded-lg border border-default bg-surface px-3 py-2.5 text-sm" : "text-sm"}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="font-medium">
           {candidate.name}
@@ -60,7 +63,7 @@ export function CustomerDuplicateCandidateRow({
             .join(" · ")}
         </p>
       )}
-    </li>
+    </Component>
   )
 }
 

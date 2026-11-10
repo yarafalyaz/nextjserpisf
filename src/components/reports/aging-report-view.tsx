@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { formatCurrencyExact, formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
@@ -19,6 +20,8 @@ export interface AgingRowInput {
   dueDate: Date | null
   grandTotal: SafeMathInput
   paidAmount: SafeMathInput
+  documentHref?: string | null
+  partyHref?: string | null
   /** F-104-V opsional (piutang saja): returnCredit jurnal SalesReturn POSTED
    * faktur ini dari loader — pengurang sisa, BUKAN bagian paidAmount.
    * Hutang tidak mengisinya (perilaku lama persis). */
@@ -81,6 +84,8 @@ export function buildAgingRows(items: AgingRowInput[], now: Date) {
         overdueDays: overdue,
         ageGroup: agingBucket(overdue),
         outstanding,
+        documentHref: item.documentHref,
+        partyHref: item.partyHref,
       }
     })
     .filter((r): r is NonNullable<typeof r> => r !== null)
@@ -179,8 +184,24 @@ export function AgingReportView({ rows, texts }: { rows: ReturnType<typeof build
           <DetailTableBody>
             {rows.map((r, i) => (
               <DetailTableRow key={i}>
-                <DetailTableTd className="font-medium">{r.party}</DetailTableTd>
-                <DetailTableTd className="font-mono text-sm">{r.documentNo}</DetailTableTd>
+                <DetailTableTd className="font-medium">
+                  {r.partyHref ? (
+                    <Link href={r.partyHref} className="hover:underline text-foreground">
+                      {r.party}
+                    </Link>
+                  ) : (
+                    r.party
+                  )}
+                </DetailTableTd>
+                <DetailTableTd className="font-mono text-sm">
+                  {r.documentHref ? (
+                    <Link href={r.documentHref} className="hover:underline text-info font-medium">
+                      {r.documentNo}
+                    </Link>
+                  ) : (
+                    r.documentNo
+                  )}
+                </DetailTableTd>
                 <DetailTableTd>{formatDate(r.dueDate)}</DetailTableTd>
                 <DetailTableTd>{r.ageGroup}</DetailTableTd>
                 <DetailTableTd align="right" className={texts.outstandingClassName}>

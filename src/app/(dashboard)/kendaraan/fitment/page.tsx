@@ -7,7 +7,7 @@ import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
-import { Wrench } from "lucide-react"
+import { Wrench } from "@/components/ui/fontawesome-icons"
 import { VehicleFitmentTable } from "./_components/vehicle-fitment-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 

@@ -105,7 +105,7 @@ export function TaxInvoiceForm({
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="sellingPrice">Harga Jual / Penggantian (DPP) <span className="text-destructive" aria-hidden="true">*</span></Label>
           <CurrencyInput id="sellingPrice" name="sellingPrice" required value={sellingPrice} onChange={setSellingPrice} />
-          <p className="text-xs text-muted-foreground">PPN dihitung service dari DPP dan tarif — tidak dihitung di form ini.</p>
+          <p className="text-xs text-muted-foreground">PPN dihitung service dari DPP dan tarif: tidak dihitung di form ini.</p>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="nominalRate">Tarif Nominal (%)</Label>
@@ -196,7 +196,7 @@ export function TaxInvoiceLifecycleActions({ invoices }: { invoices: TaxOption[]
     <section aria-label="Aksi faktur pajak terbit" className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <h2 className="text-base font-semibold text-foreground">Pengganti, Pembatalan, dan Kredit Masukan</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Pilih faktur terbit, lalu jenis aksi. Alasan dan nomor pengganti wajib — galat dari service tampil apa adanya.
+        Pilih faktur terbit, lalu jenis aksi. Alasan dan nomor pengganti wajib: galat dari service tampil apa adanya.
       </p>
       <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">

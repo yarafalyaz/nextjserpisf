@@ -61,8 +61,8 @@ export interface TableColumn {
 export type TableRow =
   /** Judul kelompok, membentang seluruh kolom. */
   | { kind: "group"; label: string }
-  /** Satu baris data; `cells` sejajar dengan kolom. */
-  | { kind: "data"; cells: string[]; bold?: boolean }
+  /** Satu baris data; `cells` sejajar dengan kolom. `href` dipakai tabel layar untuk interaktivitas drill-down. */
+  | { kind: "data"; cells: string[]; bold?: boolean; href?: string }
   /**
    * Subtotal/total: label di kolom kiri, `cells` hanya sel TRAILING (kolom
    * terakhir) — renderer menggambar mulai `columns.length - cells.length`.

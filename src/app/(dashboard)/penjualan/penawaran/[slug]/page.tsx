@@ -8,7 +8,7 @@ import { formatCurrencyExact, formatDate } from "@/lib/utils/format";
 import { statusLabel } from "@/lib/utils/status-labels";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Pencil } from "lucide-react";
+import { Pencil } from "@/components/ui/fontawesome-icons";
 import { StatusChip } from "@/components/ui/status-chip";
 import { DetailTabs } from "@/components/ui/detail-tabs";
 import { StatusActions } from "@/components/ui/status-actions";
@@ -137,12 +137,31 @@ export default async function QuotationDetailPage({
     .reduce((sum, dp) => sum + Number(dp.amount), 0);
   const remaining = Math.max(0, Number(quotation.grandTotal) - totalDP);
 
+  const historyUserIds = quotation.histories.map((h) => h.userId).filter(Boolean) as number[];
+  const historyUsers = historyUserIds.length > 0
+    ? await prisma.user.findMany({
+        where: { id: { in: historyUserIds } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const historyUserMap = new Map(historyUsers.map((u) => [u.id, u.name]));
+
+  const actionTranslation: Record<string, string> = {
+    revised: "Revisi",
+    created: "Pembuatan",
+    sent: "Pengiriman",
+    converted: "Konversi ke Pesanan",
+    approved: "Disetujui",
+    rejected: "Ditolak",
+  };
+
   // Synthesize timeline/history items
   const historyItems: Array<{
     id: string;
     createdAt: Date;
     action: string;
     description: string;
+    userName?: string;
   }> = [];
 
   // 1. Initial creation
@@ -158,8 +177,9 @@ export default async function QuotationDetailPage({
     historyItems.push({
       id: `h-${h.id}`,
       createdAt: h.createdAt,
-      action: h.action === "revised" ? "Revisi" : h.action,
+      action: actionTranslation[h.action.toLowerCase()] || h.action,
       description: h.description ?? "",
+      userName: h.userId ? (historyUserMap.get(h.userId) || `Pengguna #${h.userId}`) : undefined,
     });
   });
 
@@ -578,11 +598,19 @@ export default async function QuotationDetailPage({
                     historyItems.map((item) => (
                       <div
                         key={item.id}
-                        className="py-2 border-b border-default text-[0.8125rem]"
+                        className="py-2.5 border-b border-default text-[0.8125rem] flex items-center justify-between gap-3"
                       >
-                        <strong className="capitalize">{item.action}</strong> — {item.description || ""}{" "}
-                        <span className="text-muted-foreground">
-                          ({formatDate(item.createdAt, { includeTime: true })})
+                        <div>
+                          <strong className="capitalize">{item.action}</strong>
+                          {item.description ? ` — ${item.description}` : ""}
+                          {item.userName ? (
+                            <span className="text-muted-foreground ml-2 text-xs">
+                              oleh <span className="font-medium text-foreground">{item.userName}</span>
+                            </span>
+                          ) : null}
+                        </div>
+                        <span className="text-muted-foreground text-xs shrink-0">
+                          {formatDate(item.createdAt, { includeTime: true })}
                         </span>
                       </div>
                     ))

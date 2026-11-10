@@ -1,4 +1,5 @@
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
+import Link from "next/link"
 import {
   DetailTable,
   DetailTableBody,
@@ -58,15 +59,26 @@ export function ReportTableView({
             const dataRowKey = `data-${row.cells[0] ?? ""}-${row.cells[1] ?? ""}-${index}`
             return (
               <DetailTableRow key={dataRowKey}>
-                {row.cells.map((cell, cellIndex) => (
-                  <DetailTableTd
-                    key={`cell-${cellIndex}-${columns[cellIndex]?.header ?? ""}`}
-                    align={columns[cellIndex]?.align ?? "left"}
-                    className={row.bold ? "font-semibold" : undefined}
-                  >
-                    {cell}
-                  </DetailTableTd>
-                ))}
+                {row.cells.map((cell, cellIndex) => {
+                  const isFirstOrSecondText = cellIndex === 0 || (cellIndex === 1 && columns[cellIndex]?.align !== "right")
+                  const content = row.href && isFirstOrSecondText ? (
+                    <Link href={row.href} className="hover:underline">
+                      {cell}
+                    </Link>
+                  ) : (
+                    cell
+                  )
+
+                  return (
+                    <DetailTableTd
+                      key={`cell-${cellIndex}-${columns[cellIndex]?.header ?? ""}`}
+                      align={columns[cellIndex]?.align ?? "left"}
+                      className={row.bold ? "font-semibold" : undefined}
+                    >
+                      {content}
+                    </DetailTableTd>
+                  )
+                })}
               </DetailTableRow>
             )
           }

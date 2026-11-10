@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation"
 import { useRef, useState, useTransition } from "react"
-import { Plus, Trash2 } from "lucide-react"
-import { Pencil } from "lucide-react"
+import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
+import { Pencil } from "@/components/ui/fontawesome-icons"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { formatCurrencyExact } from "@/lib/utils/format"
 import { Label } from "@/components/ui/shadcn/label"

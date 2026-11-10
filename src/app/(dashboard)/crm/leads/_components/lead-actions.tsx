@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { UserCheck, Plus, Check, RotateCcw } from "lucide-react"
+import { UserCheck, Plus, Check, RotateCcw } from "@/components/ui/fontawesome-icons"
 import { Button } from "@/components/ui/shadcn/button"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"

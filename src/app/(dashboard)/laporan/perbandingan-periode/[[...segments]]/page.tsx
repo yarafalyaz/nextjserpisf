@@ -86,51 +86,50 @@ export default async function PeriodComparisonPage({
     : `Periode ${formatDate(previous.start)} – ${formatDate(previous.end)}`
 
   return (
-    <ReportPageShell title="Perbandingan Periode" sheet={false} wide filter={<>
-<div className="print:hidden">
-        <ReportPeriodFilter basePath="/laporan/perbandingan-periode" mode="range" filters={{ laporan: isBalance ? "neraca" : undefined }} defaultStartDate={toLocalDateOnly(startDate)} defaultEndDate={toLocalDateOnly(endDate)} />
-      </div>
-</>} actions={<>
-<div className="flex items-center justify-end print:hidden">
-        <ExportButtons title={isBalance ? "Neraca_Perbandingan" : "Laba_Rugi_Perbandingan"} />
-      </div>
-</>}>
-
-
-      <div className="flex items-center gap-2 print:hidden">
-        {[
-          { value: 'laba-rugi', label: 'Laba Rugi' },
-          { value: 'neraca', label: 'Neraca' },
-        ].map((tab) => {
-          // Mode laporan kini bagian dari path, jadi tab menautkan ke slug
-          // periode yang sedang dibuka, bukan menempelkan query string.
-          const active = (isBalance ? 'neraca' : 'laba-rugi') === tab.value
-          const href = buildReportHref("/laporan/perbandingan-periode", period.slug, { laporan: tab.value })
-          return (
-            <Link
-              key={tab.value}
-              href={href}
-              className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${active ? 'border-primary bg-primary/10 text-primary' : 'border-default text-muted-foreground hover:bg-muted'}`}
-            >
-              {tab.label}
-            </Link>
-          )
-        })}
-      </div>
-
-
-
-
-
+    <ReportPageShell
+      title="Perbandingan Periode"
+      sheet={false}
+      wide
+      actions={<ExportButtons title={isBalance ? "Neraca_Perbandingan" : "Laba_Rugi_Perbandingan"} />}
+      filter={
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            {[
+              { value: 'laba-rugi', label: 'Laba Rugi' },
+              { value: 'neraca', label: 'Neraca' },
+            ].map((tab) => {
+              const active = (isBalance ? 'neraca' : 'laba-rugi') === tab.value
+              const href = buildReportHref("/laporan/perbandingan-periode", period.slug, { laporan: tab.value })
+              return (
+                <Link
+                  key={tab.value}
+                  href={href}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-default text-muted-foreground hover:bg-muted'}`}
+                >
+                  {tab.label}
+                </Link>
+              )
+            })}
+          </div>
+          <ReportPeriodFilter
+            basePath="/laporan/perbandingan-periode"
+            mode="range"
+            filters={{ laporan: isBalance ? "neraca" : undefined }}
+            defaultStartDate={toLocalDateOnly(startDate)}
+            defaultEndDate={toLocalDateOnly(endDate)}
+          />
+        </div>
+      }
+    >
       <ReportLetterhead title={title} subtitle="Periode Ini vs Pembanding" periodLabel={`${currentLabel} vs ${previousLabel}`} />
       <ReportNarration text={`Laporan ini membandingkan ${isBalance ? "posisi neraca" : "kinerja laba rugi"} periode berjalan dengan pembandingnya. Kolom Selisih menunjukkan perubahan nominal dan kolom % menunjukkan perubahan relatif; sel kosong berarti pembandingnya nol sehingga persentase tidak bermakna.`} />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         {balance ? (
           <>
-            <ReportKpiCard label="Total Aset" value={formatCurrencyExact(balance.assets.totalCurrent)} />
-            <ReportKpiCard label="Total Kewajiban" value={formatCurrencyExact(balance.liabilities.totalCurrent)} />
-            <ReportKpiCard label="Total Ekuitas" value={formatCurrencyExact(balance.equity.totalCurrent)} />
+            <ReportKpiCard label="Total Aset" value={formatAccountingExact(balance.assets.totalCurrent)} />
+            <ReportKpiCard label="Total Kewajiban" value={formatAccountingExact(balance.liabilities.totalCurrent)} />
+            <ReportKpiCard label="Total Ekuitas" value={formatAccountingExact(balance.equity.totalCurrent)} />
             <ReportKpiCard
               label="Neraca Seimbang"
               value={balance.isBalanced ? "Ya" : "Tidak"}
@@ -139,11 +138,11 @@ export default async function PeriodComparisonPage({
           </>
         ) : (
           <>
-            <ReportKpiCard label="Total Periode Ini" value={formatCurrencyExact(comparison.totalCurrent)} />
-            <ReportKpiCard label="Total Pembanding" value={formatCurrencyExact(comparison.totalPrevious)} />
+            <ReportKpiCard label="Total Periode Ini" value={formatAccountingExact(comparison.totalCurrent)} />
+            <ReportKpiCard label="Total Pembanding" value={formatAccountingExact(comparison.totalPrevious)} />
             <ReportKpiCard
               label="Selisih"
-              value={formatCurrencyExact(comparison.totalVariance)}
+              value={formatAccountingExact(comparison.totalVariance)}
               valueClassName={comparison.totalVariance >= 0 ? 'text-success' : 'text-danger'}
             />
           </>

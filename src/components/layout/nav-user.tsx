@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from "next-auth/react"
 import Link from "next/link"
-import { ChevronsUpDown, User, LogOut } from "lucide-react"
+import { ChevronsUpDown, User, LogOut } from "@/components/ui/fontawesome-icons"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/shadcn/avatar"
 import { getInitials } from "@/lib/utils/format"
 import {

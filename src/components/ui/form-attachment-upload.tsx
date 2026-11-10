@@ -1,7 +1,7 @@
 "use client"
 
 import { useId, useRef, useState } from "react"
-import { FileText, Upload, X } from "lucide-react"
+import { FileText, Upload, X } from "@/components/ui/fontawesome-icons"
 import { SafeImage } from "./safe-image"
 import { showError } from "@/lib/utils/toast"
 import { apiErrorMessage } from "@/lib/utils/api-error-message"

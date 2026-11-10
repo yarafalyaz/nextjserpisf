@@ -28,6 +28,7 @@ export interface TrialBalanceComparisonRow {
   id: number
   code: string
   name: string
+  slug?: string | null
   /** Saldo bersih (debit − kredit) pada tanggal laporan. */
   net1: number
   /** Saldo bersih pada tanggal pembanding. */
@@ -46,6 +47,7 @@ export interface TrialBalanceReportInput {
     /** Label tanggal pembanding, mis. "30 September 2026". */
     label: string
   } | null
+  periodSlug?: string
 }
 
 export interface TrialBalanceReportResult {
@@ -82,6 +84,7 @@ export function buildTrialBalanceReport(input: TrialBalanceReportInput): TrialBa
       return {
         kind: "data",
         cells: [row.code, row.name, preciseAmount(row.net1), preciseAmount(row.net2), preciseAmount(safeSubtract(row.net1, row.net2, 2))],
+        href: input.periodSlug ? `/laporan/buku-besar/${input.periodSlug}/akun/${row.slug ?? row.id}` : undefined,
       }
     })
 
@@ -109,6 +112,7 @@ export function buildTrialBalanceReport(input: TrialBalanceReportInput): TrialBa
       line.totalDebit ? amount(line.totalDebit) : "",
       line.totalCredit ? amount(line.totalCredit) : "",
     ],
+    href: input.periodSlug ? `/laporan/buku-besar/${input.periodSlug}/akun/${line.slug ?? line.id}` : undefined,
   }))
 
   if (rows.length === 0) {

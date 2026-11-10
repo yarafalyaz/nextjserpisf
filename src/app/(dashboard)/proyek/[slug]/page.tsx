@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { formatDate, formatCurrencyExact } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { Pencil, Activity, AlertCircle, Wrench, Shield } from "lucide-react"
+import { Pencil, Activity, AlertCircle, Wrench, Shield } from "@/components/ui/fontawesome-icons"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
@@ -53,7 +53,10 @@ export default async function ProjectDetailPage({
       orderBy: { sortOrder: "asc" as const },
       include: { progress: { orderBy: { createdAt: "desc" as const }, take: 1 } },
     },
-    logs: { orderBy: { createdAt: "desc" as const }, take: 10 },
+    logs: {
+      orderBy: { createdAt: "desc" as const },
+      take: 50,
+    },
   }
 
   const project = await resolveEntity(
@@ -97,7 +100,7 @@ export default async function ProjectDetailPage({
   // (bukan lagi semua quotation pelanggan yang tercampur antar proyek).
   // Ringkasan uang proyek dibaca dari builder tunggal `loadProjectPlForProject`
   // — UI tidak mengagregasi invoice/material/beban sendiri.
-  const [quotations, invoices, projectPl, projectBudget, projectEarnedValue] = await Promise.all([
+  const [quotations, invoices, projectPl, projectBudget, projectEarnedValue, userMap] = await Promise.all([
     prisma.quotation.findMany({
       where: { projectId: project.id, deletedAt: null },
       take: 10,
@@ -137,6 +140,15 @@ export default async function ProjectDetailPage({
     loadProjectPlForProject(project.id),
     loadProjectBudgetForProject(project.id),
     loadProjectEarnedValueForProject(project.id),
+    (async () => {
+      const userIds = [...new Set(project.logs.map((l) => l.userId).filter((id): id is number => typeof id === "number"))]
+      if (userIds.length === 0) return new Map<number, string>()
+      const users = await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, name: true },
+      })
+      return new Map(users.map((u) => [u.id, u.name]))
+    })(),
   ])
 
   // Usulan revisi terbuka: log rab_revision_proposed terbaru yang belum
@@ -496,11 +508,12 @@ export default async function ProjectDetailPage({
           },
           {
             id: "logs",
-            label: "Log",
+            label: `Log (${project.logs.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
-                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Log Aktivitas</h2>
+                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Log Aktivitas &amp; Logbook</h2>
+                  <span className="text-xs text-muted-foreground">{project.logs.length} catatan tercatat</span>
                 </div>
                 <ProjectLogForm projectId={project.id} canCreate={canEdit} />
                 <div className="p-4 px-5">
@@ -509,18 +522,62 @@ export default async function ProjectDetailPage({
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
-                        <DetailTableTh>Aksi</DetailTableTh>
-                        <DetailTableTh>Catatan</DetailTableTh>
-                        <DetailTableTh>Tanggal</DetailTableTh>
+                        <DetailTableTh className="w-36">Aksi</DetailTableTh>
+                        <DetailTableTh>Catatan / Keterangan</DetailTableTh>
+                        <DetailTableTh className="w-36">Dicatat Oleh</DetailTableTh>
+                        <DetailTableTh className="w-44">Waktu (WIB)</DetailTableTh>
                       </DetailTableHead>
                       <DetailTableBody>
-                        {project.logs.map((log) => (
-                          <DetailTableRow key={log.id}>
-                            <DetailTableTd>{log.action}</DetailTableTd>
-                            <DetailTableTd>{log.notes || "-"}</DetailTableTd>
-                            <DetailTableTd>{formatDate(log.createdAt)}</DetailTableTd>
-                          </DetailTableRow>
-                        ))}
+                        {project.logs.map((log) => {
+                          const actionBadgeClass =
+                            log.action === "Kendala"
+                              ? "border-red-200/80 bg-red-50 text-red-800 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300"
+                              : log.action === "Keputusan"
+                              ? "border-blue-200/80 bg-blue-50 text-blue-800 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-blue-300"
+                              : log.action === "Progres"
+                              ? "border-emerald-200/80 bg-emerald-50 text-emerald-800 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300"
+                              : log.action === "Kunjungan"
+                              ? "border-amber-200/80 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300"
+                              : log.action.startsWith("rab_")
+                              ? "border-purple-200/80 bg-purple-50 text-purple-800 dark:border-purple-500/25 dark:bg-purple-500/10 dark:text-purple-300 font-mono text-[10px]"
+                              : "border-border bg-muted/50 text-muted-foreground"
+
+                          const actionLabel =
+                            log.action === "rab_locked"
+                              ? "RAB Dikunci"
+                              : log.action === "rab_revision_proposed"
+                              ? "Usulan Revisi RAB"
+                              : log.action === "rab_revision"
+                              ? "Revisi RAB Disetujui"
+                              : log.action === "rab_revision_rejected"
+                              ? "Revisi RAB Ditolak"
+                              : log.action === "rab_contract_snapshot"
+                              ? "Snapshot Kontrak RAB"
+                              : log.action === "rab_contract_manual"
+                              ? "Kontrak Manual RAB"
+                              : log.action
+
+                          const authorName = log.userId ? userMap.get(log.userId) ?? `Pengguna #${log.userId}` : "Sistem"
+
+                          return (
+                            <DetailTableRow key={log.id}>
+                              <DetailTableTd>
+                                <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${actionBadgeClass}`}>
+                                  {actionLabel}
+                                </span>
+                              </DetailTableTd>
+                              <DetailTableTd className="whitespace-pre-wrap leading-relaxed text-sm">
+                                {log.notes || "-"}
+                              </DetailTableTd>
+                              <DetailTableTd className="text-xs text-muted-foreground font-medium">
+                                {authorName}
+                              </DetailTableTd>
+                              <DetailTableTd className="text-xs tabular-nums text-muted-foreground">
+                                {formatDate(log.createdAt, { format: "short", includeTime: true })}
+                              </DetailTableTd>
+                            </DetailTableRow>
+                          )
+                        })}
                       </DetailTableBody>
                     </DetailTable>
                   )}

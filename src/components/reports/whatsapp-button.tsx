@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageCircle } from "lucide-react";
+import { MessageCircle } from "@/components/ui/fontawesome-icons";
 import { buttonVariants } from "@/components/ui/shadcn/button";
 import { cn } from "@/lib/utils";
 import { buildWhatsappUrl } from "@/lib/utils/whatsapp";

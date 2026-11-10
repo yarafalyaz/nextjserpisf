@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useState, useEffect, useRef, useId } from "react"
-import { Upload, FileText, Download, Trash2 } from "lucide-react"
+import { Upload, FileText, Download, Trash2 } from "@/components/ui/fontawesome-icons"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { apiErrorMessage } from "@/lib/utils/api-error-message"
 import { SafeImage } from "./safe-image"

@@ -17,7 +17,7 @@ import {
   DetailTableRow,
   DetailTableTd,
 } from "@/components/ui/detail-table";
-import { Pencil } from "lucide-react";
+import { Pencil } from "@/components/ui/fontawesome-icons";
 
 import type { Metadata } from "next";
 

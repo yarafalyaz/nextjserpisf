@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { Undo2 } from "lucide-react"
+import { Undo2 } from "@/components/ui/fontawesome-icons"
 import { Button } from "@/components/ui/shadcn/button"
 import { ReasonField } from "@/components/ui/reason-field"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -72,7 +72,7 @@ export function ReversePaymentButton({
         isOpen={isOpen}
         onOpenChange={handleOpen}
         title={title || "Balikkan pembayaran ini?"}
-        body={body || "Pembayaran ditandai dibalik dan jurnal kasnya dibalik. Baris asal tetap tersimpan sebagai histori — bukan dihapus."}
+        body={body || "Pembayaran ditandai dibalik dan jurnal kasnya dibalik. Baris asal tetap tersimpan sebagai histori, bukan dihapus."}
         confirmLabel="Balikkan Pembayaran"
         cancelLabel="Kembali"
         variant="danger"

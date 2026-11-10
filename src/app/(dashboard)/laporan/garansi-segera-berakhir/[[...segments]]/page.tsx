@@ -5,6 +5,8 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
+import { ExportButtons } from "@/components/reports/export-buttons"
+import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { splitReportSegments } from "@/lib/reports/report-period"
 import { getWarrantyExpiryQueue } from "@/lib/reports/warranty-expiry-queue-data"
 import { WARRANTY_EXPIRY_WINDOW_CHOICES } from "@/lib/reports/warranty-expiry-queue"
@@ -55,6 +57,7 @@ export default async function WarrantyExpiryReportPage({
     <ReportPageShell
       title="Garansi Segera Berakhir"
       sheet={false}
+      actions={<ExportButtons title="Garansi_Segera_Berakhir" />}
       filter={
         <ReportPeriodFilter
           basePath="/laporan/garansi-segera-berakhir"
@@ -79,6 +82,11 @@ export default async function WarrantyExpiryReportPage({
         />
       }
     >
+      <ReportLetterhead
+        title="Garansi Segera Berakhir"
+        subtitle={`Jendela Depan ${queue.windowAheadDays} hari · Jendela Lampau ${queue.windowPastDays} hari`}
+        periodLabel="Status Terkini"
+      />
       <WarrantyExpiryQueueCard queue={queue} />
     </ReportPageShell>
   )

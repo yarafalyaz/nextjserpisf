@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/shadcn/card"
 import { Badge } from "@/components/ui/shadcn/badge"
 import { Button } from "@/components/ui/shadcn/button"
-import { CheckCircle2, AlertTriangle, ChevronRight } from "lucide-react"
+import { CheckCircle2, AlertTriangle, ChevronRight } from "@/components/ui/fontawesome-icons"
 
 import type { Metadata } from "next"
 

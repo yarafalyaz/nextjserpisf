@@ -9,8 +9,8 @@ import {
   CalendarDays, Briefcase, PiggyBank, ScanBarcode, Grid3X3, Tag,
   ListOrdered, Layers, BadgeDollarSign, Gift, ListTodo, GitBranch, ShieldCheck, ClipboardCheck, Percent, ShieldAlert,
   Boxes, CalendarCheck, UserPlus, ReceiptText,
-} from "lucide-react"
-import type { LucideIcon } from "lucide-react"
+} from "@/components/ui/fontawesome-icons"
+import type { LucideIcon } from "@/components/ui/fontawesome-icons"
 
 import { settingsPermissions } from "./settings-sections"
 
@@ -203,7 +203,7 @@ export const navigation: NavItem[] = [
     children: [
       { label: "Jurnal", href: "/keuangan/jurnal", icon: BookOpenCheck, permission: "view_journals" },
       { label: "Biaya", href: "/keuangan/pengeluaran", icon: CircleDollarSign, permission: "view_expenses" },
-      { label: "Antrean Reimbursement", href: "/keuangan/antrean-reimbursement", icon: ListTodo, permission: "create_employee_reimbursements" },
+      { label: "Pencairan Klaim Karyawan", href: "/keuangan/antrean-reimbursement", icon: ListTodo, permission: "create_employee_reimbursements" },
       { label: "Kas Kecil", href: "/keuangan/kas-kecil", icon: Coins, permission: "view_petty_cash" },
       { label: "Pusat Biaya", href: "/keuangan/pusat-biaya", icon: Target, permission: "view_cost_centers" },
       { label: "Pusat Laba", href: "/keuangan/pusat-laba", icon: TrendingUp, permission: "view_profit_centers" },
@@ -212,8 +212,8 @@ export const navigation: NavItem[] = [
       { label: "Transfer Bank", href: "/keuangan/transfer-bank", icon: ArrowLeftRight, permission: "view_bank_transfers" },
       { label: "Penyetoran Pajak", href: "/keuangan/penyetoran-pajak", icon: BadgeDollarSign, permission: "view_tax_payments" },
       { label: "Sengketa Pajak", href: "/keuangan/sengketa-pajak", icon: Gavel, permission: "view_tax_disputes" },
-      { label: "Dokumen Pajak", href: "/keuangan/dokumen-pajak/faktur/tambah", icon: FileCheck, permission: "create_tax_invoices" },
-      { label: "Bukti Potong", href: "/keuangan/dokumen-pajak/bupot/tambah", icon: Receipt, permission: "manage_withholding_certificates" },
+      { label: "Faktur Pajak", href: "/keuangan/dokumen-pajak/faktur", icon: FileCheck, permission: "create_tax_invoices" },
+      { label: "Bukti Potong", href: "/keuangan/dokumen-pajak/bupot", icon: Receipt, permission: "manage_withholding_certificates" },
       { label: "Giro & Cek", href: "/keuangan/giro", icon: Banknote, permission: "view_cheques" },
     ],
   },

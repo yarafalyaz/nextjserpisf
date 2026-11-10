@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
+import { CalendarDays, ChevronLeft, ChevronRight } from "@/components/ui/fontawesome-icons"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
 

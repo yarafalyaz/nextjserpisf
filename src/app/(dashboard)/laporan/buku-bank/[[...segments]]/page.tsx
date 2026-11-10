@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 
+import Link from 'next/link'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatAccountingExact, formatCurrencyExact, formatDate } from '@/lib/utils/format'
@@ -67,7 +68,7 @@ export default async function BankBookPage({
   const notCashAccount = accountId != null && !selectedAccount
 
   let openingBalance = 0
-  let entries: { date: Date; journalNumber: string; description: string; debit: number; credit: number }[] = []
+  let entries: { date: Date; journalNumber: string; journalSlug: string | null; description: string; debit: number; credit: number }[] = []
 
   if (accountId && selectedAccount) {
     const openingEntries = await prisma.journalEntry.findMany({
@@ -84,7 +85,7 @@ export default async function BankBookPage({
         journal: { status: { in: ['POSTED', 'REVERSED'] }, deletedAt: null, transactionDate: { gte: startDate, lte: endDate } },
       },
       include: {
-        journal: { select: { journalNumber: true, transactionDate: true, description: true } },
+        journal: { select: { journalNumber: true, slug: true, transactionDate: true, description: true } },
       },
       orderBy: [
         { journal: { transactionDate: 'asc' } },
@@ -95,13 +96,14 @@ export default async function BankBookPage({
     entries = periodEntries.map(e => ({
       date: e.journal.transactionDate,
       journalNumber: e.journal.journalNumber,
+      journalSlug: e.journal.slug,
       description: e.memo || e.journal.description || '-',
       debit: Number(e.debit),
       credit: Number(e.credit),
     }))
   }
 
-  const rows = entries.reduce<Array<{ date: Date; journalNumber: string; description: string; debit: number; credit: number; balance: number }>>((acc, entry) => {
+  const rows = entries.reduce<Array<{ date: Date; journalNumber: string; journalSlug: string | null; description: string; debit: number; credit: number; balance: number }>>((acc, entry) => {
     const prev = acc.length > 0 ? acc[acc.length - 1].balance : openingBalance
     const next = prev + entry.debit - entry.credit
     acc.push({ ...entry, balance: next })
@@ -116,27 +118,33 @@ export default async function BankBookPage({
   const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
 
   return (
-    <ReportPageShell title="Buku Bank" sheet={false} wide filter={<>
-<ReportPeriodFilter
-        basePath="/laporan/buku-bank"
-        mode="range"
-        defaultStartDate={toLocalDateOnly(startDate)}
-        defaultEndDate={toLocalDateOnly(endDate)}
-        selects={[
-          {
-            param: "akun",
-            label: "Akun Kas/Bank",
-            placeholder: "Cari akun (kode / nama)...",
-            value: accountKey ?? "",
-            options: bankAccounts.map((acc) => ({ value: acc.slug ?? String(acc.id), label: `${acc.code} - ${acc.name}` })),
-          },
-        ]}
-      />
-</>} actions={<>
-<div className="flex items-center justify-end print:hidden">
-        <ExportButtons title="Buku Bank" pdfHref={buildReportPdfHref("buku-bank", period.slug, accountKey ? { akun: accountKey } : {})} />
-      </div>
-</>}>
+    <ReportPageShell
+      title="Buku Bank"
+      sheet={false}
+      wide
+      actions={
+        accountKey ? (
+          <ExportButtons title="Buku Bank" pdfHref={buildReportPdfHref("buku-bank", period.slug, { akun: accountKey })} />
+        ) : null
+      }
+      filter={
+        <ReportPeriodFilter
+          basePath="/laporan/buku-bank"
+          mode="range"
+          defaultStartDate={toLocalDateOnly(startDate)}
+          defaultEndDate={toLocalDateOnly(endDate)}
+          selects={[
+            {
+              param: "akun",
+              label: "Akun Kas/Bank",
+              placeholder: "Cari akun (kode / nama)...",
+              value: accountKey ?? "",
+              options: bankAccounts.map((acc) => ({ value: acc.slug ?? String(acc.id), label: `${acc.code} - ${acc.name}` })),
+            },
+          ]}
+        />
+      }
+    >
 
 
 
@@ -183,7 +191,15 @@ export default async function BankBookPage({
                 {rows.map((row, i) => (
                   <DetailTableRow key={i}>
                     <DetailTableTd>{formatDate(row.date, { format: "numeric" })}</DetailTableTd>
-                    <DetailTableTd>{row.journalNumber}</DetailTableTd>
+                    <DetailTableTd>
+                      {row.journalSlug ? (
+                        <Link href={`/keuangan/jurnal/${row.journalSlug}`} className="hover:underline font-mono text-info font-medium">
+                          {row.journalNumber}
+                        </Link>
+                      ) : (
+                        row.journalNumber
+                      )}
+                    </DetailTableTd>
                     <DetailTableTd>{row.description}</DetailTableTd>
                     <DetailTableTd align="right">{formatAccountingExact(row.debit)}</DetailTableTd>
                     <DetailTableTd align="right">{formatAccountingExact(row.credit)}</DetailTableTd>

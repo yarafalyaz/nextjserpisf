@@ -1,6 +1,6 @@
 "use client"
 
-import { HandCoins } from "lucide-react"
+import { HandCoins } from "@/components/ui/fontawesome-icons"
 import { createRevisionDownCredit } from "@/actions/sales.actions"
 import { RevisionActionButton } from "./revision-action-button"
 

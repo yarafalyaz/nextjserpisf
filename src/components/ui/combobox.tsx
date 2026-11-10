@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronsUpDown, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, Plus } from "@/components/ui/fontawesome-icons";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {

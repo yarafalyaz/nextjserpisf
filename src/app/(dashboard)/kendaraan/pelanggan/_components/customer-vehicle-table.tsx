@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Eye } from "lucide-react"
+import { Eye } from "@/components/ui/fontawesome-icons"
 import { DataTable } from "@/components/ui/data-table"
 import { StatusChip } from "@/components/ui/status-chip"
 import type { ErpColumnDef as ColumnDef } from "@/lib/table"

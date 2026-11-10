@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/components/ui/fontawesome-icons";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/shadcn/button";
 import {

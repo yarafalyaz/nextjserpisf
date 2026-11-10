@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Info } from "lucide-react"
+import { Info } from "@/components/ui/fontawesome-icons"
 import { cn } from "@/lib/utils"
 
 /**
@@ -36,7 +36,7 @@ export function PostedLockNotice({
         <Info size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
         <div className="min-w-0 space-y-0.5">
           <p className="font-medium tracking-tight">
-            {documentLabel} terkunci — sudah posted
+            {documentLabel} terkunci: sudah posted
           </p>
           <p className="opacity-90">
             Dokumen posted tidak bisa diubah atau dihapus. Koreksi hanya lewat{" "}

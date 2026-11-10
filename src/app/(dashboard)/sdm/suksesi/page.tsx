@@ -2,31 +2,18 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { hasPermission, requirePermission } from "@/lib/auth/permissions"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader } from "@/components/ui/page-header"
 import { CanCreate } from "@/components/auth/can-create"
-import { EmptyState } from "@/components/ui/empty-state"
 import { getSuccessionOverview } from "@/actions/succession.actions"
-import {
-  CriticalToggle,
-  RemoveSuccessorButton,
-  SuccessorForm,
-} from "./_components/succession-actions"
+import { SuccessorForm } from "./_components/succession-actions"
+import { SuccessionTable, PositionCriticalityTable } from "./_components/succession-table"
+import { toPlain } from "@/lib/utils/serialization"
+import { formatNumber } from "@/lib/utils/format"
+import { ShieldAlert, CheckCircle2, AlertTriangle, XCircle } from "@/components/ui/fontawesome-icons"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Perencanaan Suksesi" }
-
-const READINESS_LABELS: Record<string, string> = {
-  ready_now: "Siap Sekarang",
-  ready_1_2_years: "Siap 1-2 Tahun",
-  ready_future: "Siap Masa Depan",
-}
-
-const COVERAGE_LABELS: Record<string, string> = {
-  covered: "Aman",
-  at_risk: "Berisiko",
-  vacant: "Kosong",
-}
 
 export default async function SuccessionPage() {
   await requirePermission("view_succession")
@@ -49,24 +36,75 @@ export default async function SuccessionPage() {
   ])
 
   const criticalPositions = allPositions.filter((p) => p.isCritical)
-  const counts = {
-    covered: overview.filter((o) => o.coverage === "covered").length,
-    atRisk: overview.filter((o) => o.coverage === "at_risk").length,
-    vacant: overview.filter((o) => o.coverage === "vacant").length,
-  }
+  const coveredCount = overview.filter((o) => o.coverage === "covered").length
+  const atRiskCount = overview.filter((o) => o.coverage === "at_risk").length
+  const vacantCount = overview.filter((o) => o.coverage === "vacant").length
+
+  const overviewRows = overview.map((o) => ({
+    ...o,
+    id: o.positionId,
+  }))
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-        { label: "Dasbor", href: "/" },
-        { label: "SDM", href: "/sdm" },
-        { label: "Perencanaan Suksesi" },
-      ]} />
-      <div>
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Perencanaan Suksesi</h1>
-        <p className="text-sm text-muted-foreground">
-          {criticalPositions.length} jabatan kritis · {counts.covered} aman · {counts.atRisk} berisiko · {counts.vacant} kosong
-        </p>
+      <PageHeader
+        title="Perencanaan Suksesi"
+        subtitle="Identifikasi posisi strategis/kritis, pemetaan kader pengganti, dan mitigasi risiko suksesi kepemimpinan"
+        breadcrumbs={[
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
+          { label: "Perencanaan Suksesi" },
+        ]}
+      />
+
+      {/* ERP Unified Metric Strip */}
+      <div
+        className="grid grid-cols-1 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs sm:grid-cols-4"
+        aria-label="Ringkasan perencanaan suksesi jabatan kritis"
+      >
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Jabatan Kritis</span>
+            <ShieldAlert className="size-4 text-primary/70" aria-hidden="true" />
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+            {formatNumber(criticalPositions.length)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Posisi kunci perusahaan</p>
+        </div>
+
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Suksesi Aman</span>
+            <CheckCircle2 className="size-4 text-emerald-500/80" aria-hidden="true" />
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+            {formatNumber(coveredCount)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Kandidat siap menggantikan</p>
+        </div>
+
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Berisiko</span>
+            <AlertTriangle className="size-4 text-amber-500/80" aria-hidden="true" />
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+            {formatNumber(atRiskCount)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Kesiapan kandidat 1-2 tahun</p>
+        </div>
+
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Tanpa Kandidat</span>
+            <XCircle className="size-4 text-destructive/80" aria-hidden="true" />
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+            {formatNumber(vacantCount)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Perlu regenerasi segera</p>
+        </div>
       </div>
 
       <CanCreate permission="create_succession">
@@ -74,83 +112,26 @@ export default async function SuccessionPage() {
       </CanCreate>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">Jabatan Kritis & Kandidat</h2>
-        <div className="overflow-x-auto rounded-lg border border-default">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-default bg-surface-secondary text-left">
-                <th className="px-4 py-3 font-medium">Jabatan</th>
-                <th className="px-4 py-3 font-medium">Departemen</th>
-                <th className="px-4 py-3 font-medium">Pemegang Saat Ini</th>
-                <th className="px-4 py-3 font-medium">Kandidat Pengganti</th>
-                <th className="px-4 py-3 font-medium">Cakupan</th>
-                <th className="px-4 py-3 font-medium">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {overview.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8">
-                    <EmptyState title="Belum ada jabatan kritis." description="Tandai jabatan kritis pada daftar di bawah." className="py-0" />
-                  </td>
-                </tr>
-              )}
-              {overview.map((o) => (
-                <tr key={o.positionId} className="border-b border-default last:border-0 align-top">
-                  <td className="px-4 py-3 font-medium">{o.positionName}</td>
-                  <td className="px-4 py-3">{o.departmentName ?? "-"}</td>
-                  <td className="px-4 py-3">
-                    {o.incumbents.length > 0 ? o.incumbents.map((i) => i.name).join(", ") : "Lowong"}
-                  </td>
-                  <td className="px-4 py-3">
-                    {o.candidates.length === 0 ? (
-                      "-"
-                    ) : (
-                      <ul className="flex flex-col gap-1">
-                        {o.candidates.map((c) => (
-                          <li key={c.id} className="flex items-center gap-2">
-                            <span>{c.rank}. {c.employeeName} ({READINESS_LABELS[c.readiness] ?? c.readiness})</span>
-                            <RemoveSuccessorButton id={c.id} canDelete={canDelete} />
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">{COVERAGE_LABELS[o.coverage] ?? o.coverage}</td>
-                  <td className="px-4 py-3">
-                    <CriticalToggle positionId={o.positionId} isCritical={true} canEdit={canEdit} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold tracking-tight text-foreground">Jabatan Kritis & Kandidat</h2>
+          <span className="text-xs text-muted-foreground">{overview.length} jabatan terpantau</span>
         </div>
+        <SuccessionTable
+          data={toPlain(overviewRows)}
+          canEdit={canEdit}
+          canDelete={canDelete}
+        />
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">Semua Jabatan</h2>
-        <div className="overflow-x-auto rounded-lg border border-default">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-default bg-surface-secondary text-left">
-                <th className="px-4 py-3 font-medium">Jabatan</th>
-                <th className="px-4 py-3 font-medium">Kritis</th>
-                <th className="px-4 py-3 font-medium">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {allPositions.map((p) => (
-                <tr key={p.id} className="border-b border-default last:border-0">
-                  <td className="px-4 py-3">{p.name}</td>
-                  <td className="px-4 py-3">{p.isCritical ? "Ya" : "Tidak"}</td>
-                  <td className="px-4 py-3">
-                    <CriticalToggle positionId={p.id} isCritical={p.isCritical} canEdit={canEdit} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold tracking-tight text-foreground">Katalog Seluruh Jabatan</h2>
+          <span className="text-xs text-muted-foreground">{allPositions.length} jabatan terdaftar</span>
         </div>
+        <PositionCriticalityTable
+          data={toPlain(allPositions)}
+          canEdit={canEdit}
+        />
       </section>
     </div>
   )

@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useRef, useState, useTransition } from "react"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle } from "@/components/ui/fontawesome-icons"
 import { createLead, updateLead } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { formatDate } from "@/lib/utils/format"

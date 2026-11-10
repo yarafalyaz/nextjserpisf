@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { formatDate } from "@/lib/utils/format"
-import { Pencil } from "lucide-react"
+import { Pencil } from "@/components/ui/fontawesome-icons"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 

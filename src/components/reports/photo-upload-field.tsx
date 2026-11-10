@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Upload } from "lucide-react"
+import { Upload } from "@/components/ui/fontawesome-icons"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import { apiErrorMessage } from "@/lib/utils/api-error-message"
 import { Button } from "@/components/ui/button"

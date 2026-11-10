@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
-import { BookCheck, ClipboardCheck, Undo2 } from "lucide-react"
+import { BookCheck, ClipboardCheck, Undo2 } from "@/components/ui/fontawesome-icons"
 
 import {
   postYearEndClosingAction,

@@ -7,7 +7,7 @@ type Tone = 'success' | 'warning' | 'danger' | 'default' | 'accent'
 const statusColors: Record<string, Tone> = {
   active: 'success',
   draft: 'default',
-  posted: 'success',
+  posted: 'accent',
   cancelled: 'danger',
   pending: 'warning',
   approved: 'success',
@@ -15,6 +15,7 @@ const statusColors: Record<string, Tone> = {
   partial: 'warning',
   paid: 'success',
   paid_off: 'success',
+  unpaid: 'danger',
   new: 'accent',
   contacted: 'warning',
   qualified: 'success',
@@ -27,6 +28,9 @@ const statusColors: Record<string, Tone> = {
   ordered: 'warning',
   received: 'success',
   partially_received: 'warning',
+  partial_received: 'warning',
+  partial_ordered: 'warning',
+  delivered: 'success',
   returned: 'danger',
   reversed: 'danger',
   written_off: 'default',
@@ -48,15 +52,27 @@ const statusColors: Record<string, Tone> = {
   applied: 'success',
   in: 'success',
   out: 'warning',
+  low: 'default',
+  medium: 'warning',
+  high: 'danger',
+  urgent: 'danger',
 }
 
 const toneClasses: Record<Tone, string> = {
-  success: 'border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
+  success: 'border-emerald-200/80 bg-emerald-100 text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300',
   // amber-800 di amber-100: kontras 6.37 (amber-700 hanya 4.51, mepet AA di teks kecil).
-  warning: 'border-transparent bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-400',
-  danger: 'border-transparent bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400',
-  accent: 'border-transparent bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
-  default: 'border-transparent bg-muted text-muted-foreground',
+  warning: 'border-amber-200/80 bg-amber-100 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300',
+  danger: 'border-red-200/80 bg-red-100 text-red-700 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300',
+  accent: 'border-blue-200/80 bg-blue-100 text-blue-700 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-blue-300',
+  default: 'border-border bg-muted/60 text-muted-foreground dark:bg-muted/40',
+}
+
+const dotClasses: Record<Tone, string> = {
+  success: 'bg-emerald-600 dark:bg-emerald-400',
+  warning: 'bg-amber-600 dark:bg-amber-400',
+  danger: 'bg-red-600 dark:bg-red-400',
+  accent: 'bg-blue-600 dark:bg-blue-400',
+  default: 'bg-zinc-400 dark:bg-zinc-500',
 }
 
 export function StatusChip({
@@ -71,6 +87,7 @@ export function StatusChip({
   const tone = customTone || statusColors[status.toLowerCase().replace(/\s+/g, '_')] || 'default'
   return (
     <Badge variant="outline" className={cn('font-medium', toneClasses[tone])}>
+      <span className={cn('size-1.5 shrink-0 rounded-full', dotClasses[tone])} aria-hidden="true" />
       {customLabel || statusLabel(status)}
     </Badge>
   )

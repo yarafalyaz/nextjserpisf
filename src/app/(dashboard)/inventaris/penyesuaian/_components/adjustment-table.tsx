@@ -62,7 +62,7 @@ const columns = [
       return (
         <StatusChip
           status={val}
-          customLabel={val === "processed" ? "Diposting" : undefined}
+          customLabel={val === "processed" ? "Diterbitkan" : undefined}
           customTone={val === "processed" ? "success" : undefined}
         />
       )

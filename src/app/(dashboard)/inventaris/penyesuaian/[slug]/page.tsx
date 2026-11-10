@@ -97,7 +97,7 @@ export default async function StockAdjustmentDetailPage({
         badge={
           <StatusChip
             status={adjustment.status}
-            customLabel={adjustment.status === "processed" ? "Diposting" : undefined}
+            customLabel={adjustment.status === "processed" ? "Diterbitkan" : undefined}
             customTone={adjustment.status === "processed" ? "success" : undefined}
           />
         }
@@ -134,7 +134,7 @@ export default async function StockAdjustmentDetailPage({
           value={
             <StatusChip
               status={adjustment.status}
-              customLabel={adjustment.status === "processed" ? "Diposting" : undefined}
+              customLabel={adjustment.status === "processed" ? "Diterbitkan" : undefined}
               customTone={adjustment.status === "processed" ? "success" : undefined}
             />
           }
@@ -147,7 +147,7 @@ export default async function StockAdjustmentDetailPage({
           <DetailField label="Catatan" value={adjustment.notes} colSpan="full" />
         )}
         {adjustment.approvedBy && (
-          <DetailField label="Disetujui Oleh" value={approverName || `User #${adjustment.approvedBy}`} />
+          <DetailField label="Disetujui Oleh" value={approverName || `Pengguna #${adjustment.approvedBy}`} />
         )}
         {adjustment.approvedAt && (
           <DetailField label="Disetujui Pada" value={formatDate(adjustment.approvedAt)} />

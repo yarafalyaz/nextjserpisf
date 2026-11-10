@@ -18,7 +18,7 @@ export default async function AgingReceivablesPage() {
   // are not yet issued).
   const invoices = await prisma.salesInvoice.findMany({
     where: { status: { in: [...RECOGNISED_AR_STATUSES] }, deletedAt: null },
-    include: { customer: { select: { name: true } } },
+    include: { customer: { select: { id: true, name: true, slug: true } } },
     orderBy: { dueDate: 'asc' },
   })
 
@@ -34,6 +34,8 @@ export default async function AgingReceivablesPage() {
       grandTotal: inv.grandTotal,
       paidAmount: inv.paidAmount,
       returnCreditAmount: returnCreditByInvoiceId.get(inv.id) ?? 0,
+      documentHref: `/penjualan/faktur/${inv.slug ?? inv.id}`,
+      partyHref: `/laporan/buku-pembantu-piutang/pihak/${inv.customer.slug ?? inv.customer.id}`,
     })),
     new Date(),
   )

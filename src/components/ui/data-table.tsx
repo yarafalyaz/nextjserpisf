@@ -20,7 +20,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Search,
-} from "lucide-react"
+} from "@/components/ui/fontawesome-icons"
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 import {
   Table,
@@ -448,7 +448,7 @@ export function DataTable<TData extends { id: number | string }>({
         )}
 
         {/* Table (desktop) */}
-        <div className="hidden overflow-hidden rounded-md border md:block">
+        <div className="hidden overflow-hidden rounded-lg border border-border bg-card shadow-2xs md:block">
           <div className="overflow-x-auto">
             <Table aria-label={ariaLabel}>
               <TableHeader>

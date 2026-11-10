@@ -8,6 +8,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { deleteWorkOrder } from "@/actions/manufacturing.actions"
 import { formatDate } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
+import { Calendar, User } from "@/components/ui/fontawesome-icons"
 
 interface WorkOrder {
   id: number
@@ -24,7 +25,10 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={entityHref("/produksi/perintah-kerja", info.row.original)} className="text-foreground hover:underline font-mono">
+      <Link
+        href={entityHref("/produksi/perintah-kerja", info.row.original)}
+        className="font-mono text-sm font-semibold tracking-tight text-primary transition-colors hover:text-primary-hover hover:underline"
+      >
         {info.getValue()}
       </Link>
     ),
@@ -39,10 +43,21 @@ const columns = [
   columnHelper.accessor((row) => row.customer.name, {
     id: "customerName",
     header: "Pelanggan",
+    cell: (info) => (
+      <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+        <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
+        <span className="truncate max-w-[200px]">{info.getValue()}</span>
+      </span>
+    ),
   }),
   columnHelper.accessor("date", {
     header: "Tanggal Mulai",
-    cell: (info) => formatDate(info.getValue()),
+    cell: (info) => (
+      <span className="inline-flex items-center gap-1.5 font-mono text-xs tabular-nums text-muted-foreground">
+        <Calendar className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+        <span>{formatDate(info.getValue())}</span>
+      </span>
+    ),
   }),
   columnHelper.display({
     id: "actions",

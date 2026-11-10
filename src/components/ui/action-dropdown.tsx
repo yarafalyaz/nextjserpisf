@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
-import { MoreVertical, Eye, Pencil, Trash2, Printer, Check } from "lucide-react"
+import { MoreVertical, Eye, Pencil, Trash2, Printer, Check } from "@/components/ui/fontawesome-icons"
 import {
   DropdownMenu,
   DropdownMenuContent,

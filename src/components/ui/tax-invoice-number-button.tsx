@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { FileCheck2 } from "lucide-react"
+import { FileCheck2 } from "@/components/ui/fontawesome-icons"
 import { Button } from "@/components/ui/shadcn/button"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"

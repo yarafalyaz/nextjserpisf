@@ -8,7 +8,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
 import { CustomerVehicleTable } from "./_components/customer-vehicle-table"
 import Link from "next/link"
-import { Car } from "lucide-react"
+import { Car } from "@/components/ui/fontawesome-icons"
 
 import type { Metadata } from "next"
 

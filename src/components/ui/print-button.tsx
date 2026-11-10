@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Printer, Loader2 } from "lucide-react"
+import { Printer, Loader2 } from "@/components/ui/fontawesome-icons"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import { apiErrorMessage } from "@/lib/utils/api-error-message"
 

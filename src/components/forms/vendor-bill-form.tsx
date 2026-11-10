@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { AppDatePicker } from "@/components/ui/date-picker";
 import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "@/components/ui/fontawesome-icons";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
 import { Input } from "@/components/ui/shadcn/input";
@@ -453,37 +453,37 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
                 <thead>
                   <tr className="border-b border-default">
                     <th
-                      className="text-left py-2 px-2 font-medium text-secondary"
+                      className="text-left py-2 px-2 font-medium text-muted-foreground"
                       style={{ minWidth: "200px" }}
                     >
                       Item
                     </th>
                     <th
-                      className="text-left py-2 px-2 font-medium text-secondary"
+                      className="text-left py-2 px-2 font-medium text-muted-foreground"
                       style={{ width: "80px" }}
                     >
                       Jml
                     </th>
                     <th
-                      className="text-left py-2 px-2 font-medium text-secondary"
+                      className="text-left py-2 px-2 font-medium text-muted-foreground"
                       style={{ width: "120px" }}
                     >
                       Harga
                     </th>
                     <th
-                      className="text-left py-2 px-2 font-medium text-secondary"
+                      className="text-left py-2 px-2 font-medium text-muted-foreground"
                       style={{ width: "80px" }}
                     >
                       Diskon %
                     </th>
                     <th
-                      className="text-left py-2 px-2 font-medium text-secondary"
+                      className="text-left py-2 px-2 font-medium text-muted-foreground"
                       style={{ width: "80px" }}
                     >
                       Pajak %
                     </th>
                     <th
-                      className="text-right py-2 px-2 font-medium text-secondary"
+                      className="text-right py-2 px-2 font-medium text-muted-foreground"
                       style={{ width: "120px" }}
                     >
                       Total
@@ -595,7 +595,7 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
                   <tr className="border-t border-default">
                     <td
                       colSpan={5}
-                      className="text-right py-2 px-2 text-sm text-secondary"
+                      className="text-right py-2 px-2 text-sm text-muted-foreground"
                     >
                       Subtotal
                     </td>
@@ -608,7 +608,7 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
                     <tr>
                       <td
                         colSpan={5}
-                        className="text-right py-1 px-2 text-sm text-secondary"
+                        className="text-right py-1 px-2 text-sm text-muted-foreground"
                       >
                         Diskon
                       </td>
@@ -622,7 +622,7 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
                     <tr>
                       <td
                         colSpan={5}
-                        className="text-right py-1 px-2 text-sm text-secondary"
+                        className="text-right py-1 px-2 text-sm text-muted-foreground"
                       >
                         Pajak
                       </td>

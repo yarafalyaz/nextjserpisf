@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle } from "@/components/ui/fontawesome-icons";
 
 export default function AuthError({
   error,

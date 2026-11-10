@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useRef, useState, useTransition, useMemo } from "react"
 import { createBomRevision, updateBomRevision } from "@/actions/manufacturing.actions"
-import { Plus, Trash2 } from "lucide-react"
+import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"

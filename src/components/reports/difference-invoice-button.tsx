@@ -1,6 +1,6 @@
 "use client"
 
-import { ReceiptText } from "lucide-react"
+import { ReceiptText } from "@/components/ui/fontawesome-icons"
 import { createDifferenceInvoice } from "@/actions/sales.actions"
 import { RevisionActionButton } from "./revision-action-button"
 

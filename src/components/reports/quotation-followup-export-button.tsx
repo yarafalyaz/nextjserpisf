@@ -1,6 +1,6 @@
 "use client"
 
-import { Download } from "lucide-react"
+import { Download } from "@/components/ui/fontawesome-icons"
 import { buttonVariants } from "@/components/ui/shadcn/button"
 import { cn } from "@/lib/utils"
 

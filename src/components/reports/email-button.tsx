@@ -1,6 +1,6 @@
 "use client";
 
-import { Mail } from "lucide-react";
+import { Mail } from "@/components/ui/fontawesome-icons";
 import { buttonVariants } from "@/components/ui/shadcn/button";
 import { cn } from "@/lib/utils";
 import { recordEmailLinkOpened } from "@/actions/email-log.actions";

@@ -32,8 +32,8 @@ import {
   Cog, Truck, FileSpreadsheet, Car, FolderKanban,
   CalendarDays, Briefcase, PiggyBank, ScanBarcode, Grid3X3, Tag,
   Globe, ListOrdered, Layers, BadgeDollarSign,
-} from "lucide-react"
-import type { LucideIcon } from "lucide-react"
+} from "@/components/ui/fontawesome-icons"
+import type { LucideIcon } from "@/components/ui/fontawesome-icons"
 
 import { MODULE_ACTIONS, type CatalogAction, type CatalogVerb } from "./module-catalog.generated"
 

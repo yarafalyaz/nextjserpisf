@@ -202,10 +202,10 @@ export default async function InvoiceDetailPage({
                 id={invoice.id}
                 action={postInvoice}
                 canProcess={canPost}
-                label="Posting"
-                confirmTitle="Posting faktur ini?"
-                confirmBody="Faktur akan diposting: piutang diakui di jurnal dan stok barang berkurang sesuai barang pada faktur. Pastikan data sudah benar."
-                successMessage="Faktur berhasil diposting"
+                label="Terbitkan"
+                confirmTitle="Terbitkan faktur ini?"
+                confirmBody="Faktur akan diterbitkan: piutang diakui di jurnal dan stok barang berkurang sesuai barang pada faktur. Pastikan data sudah benar."
+                successMessage="Faktur berhasil diterbitkan"
               />
             )}
             {invoice.status !== "draft" && invoice.status !== "cancelled" && (
@@ -259,11 +259,65 @@ export default async function InvoiceDetailPage({
                     di header. */}
                 <DetailCard>
                   <DetailField label="Pelanggan" value={invoice.customer.name} />
-                  <DetailField label="Tanggal" value={formatDate(invoice.date)} />
+                  <DetailField label="Tanggal Faktur" value={formatDate(invoice.date)} />
                   <DetailField label="Jatuh Tempo" value={formatDate(invoice.dueDate)} />
-                  <DetailField label="Pesanan Penjualan" value={invoice.salesOrder?.documentNo || "-"} mono />
-                  <DetailField label="Penawaran" value={invoice.quotation?.documentNo || "-"} mono />
-                  <DetailField label="Status Bayar" value={invoice.paymentStatus || "-"} />
+                  <DetailField
+                    label="Pesanan Penjualan"
+                    value={
+                      invoice.salesOrder ? (
+                        <Link href={entityHref("/penjualan/pesanan", invoice.salesOrder)} className="text-primary hover:underline font-mono">
+                          {invoice.salesOrder.documentNo}
+                        </Link>
+                      ) : (
+                        "-"
+                      )
+                    }
+                  />
+                  <DetailField
+                    label="Penawaran"
+                    value={
+                      invoice.quotation ? (
+                        <Link href={entityHref("/penjualan/penawaran", invoice.quotation)} className="text-primary hover:underline font-mono">
+                          {invoice.quotation.documentNo}
+                        </Link>
+                      ) : (
+                        "-"
+                      )
+                    }
+                  />
+                  <DetailField
+                    label="Status Bayar"
+                    value={<StatusChip status={invoice.paymentStatus || "unpaid"} />}
+                  />
+                  <DetailField label="Dibuat" value={formatDate(invoice.createdAt, { includeTime: true })} />
+                </DetailCard>
+
+                {/* Ringkasan Finansial Faktur (Standar ERP) */}
+                <DetailCard title="Ringkasan Finansial">
+                  <DetailField label="Subtotal" value={formatCurrencyExact(Number(invoice.subtotal))} />
+                  <DetailField label="Diskon" value={formatCurrencyExact(Number(invoice.discount))} />
+                  <DetailField label="PPN / Pajak" value={formatCurrencyExact(Number(invoice.taxAmount))} />
+                  <DetailField
+                    label="Total Tagihan"
+                    value={<span className="text-lg font-bold text-foreground">{formatCurrencyExact(Number(invoice.totalAmount))}</span>}
+                  />
+                  <DetailField
+                    label="Sudah Terbayar"
+                    value={<span className="text-emerald-600 dark:text-emerald-400 font-semibold">{formatCurrencyExact(Number(invoice.paidAmount))}</span>}
+                  />
+                  <DetailField
+                    label="Sisa Tagihan"
+                    value={
+                      (() => {
+                        const balanceDue = Math.max(0, Number(invoice.totalAmount) - Number(invoice.paidAmount))
+                        return (
+                          <span className={balanceDue > 0 ? "text-amber-600 dark:text-amber-400 font-bold text-lg" : "text-foreground font-semibold"}>
+                            {formatCurrencyExact(balanceDue)}
+                          </span>
+                        )
+                      })()
+                    }
+                  />
                 </DetailCard>
 
                 {/* Notes */}

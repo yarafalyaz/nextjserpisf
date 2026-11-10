@@ -144,12 +144,12 @@ export default async function CashProjectionPage({
       <ReportNarration text="Proyeksi Kas memperkirakan posisi kas ke depan dari saldo kas/bank saat ini ditambah tagihan penjualan yang belum dibayar (masuk) dan tagihan pemasok yang belum dibayar (keluar), dikelompokkan menurut tanggal jatuh tempo. Dokumen tanpa tanggal jatuh tempo tidak ikut diproyeksikan." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Kas Saat Ini" value={formatCurrencyExact(opening)} />
-        <ReportKpiCard label="Proyeksi Masuk" value={formatCurrencyExact(totalInflow)} valueClassName="text-success" />
-        <ReportKpiCard label="Proyeksi Keluar" value={formatCurrencyExact(totalOutflow)} valueClassName="text-danger" />
+        <ReportKpiCard label="Kas Saat Ini" value={formatAccountingExact(opening)} />
+        <ReportKpiCard label="Proyeksi Masuk" value={formatAccountingExact(totalInflow)} valueClassName="text-success" />
+        <ReportKpiCard label="Proyeksi Keluar" value={formatAccountingExact(totalOutflow)} valueClassName="text-danger" />
         <ReportKpiCard
           label="Saldo Akhir Proyeksi"
-          value={formatCurrencyExact(closing)}
+          value={formatAccountingExact(closing)}
           valueClassName={closing >= 0 ? 'text-success' : 'text-danger'}
         />
       </div>

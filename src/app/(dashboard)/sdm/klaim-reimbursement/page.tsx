@@ -50,7 +50,7 @@ export default async function MyReimbursementClaimsPage() {
           href="/keuangan/antrean-reimbursement"
           className="inline-flex min-h-11 items-center font-medium text-primary hover:underline sm:min-h-9"
         >
-          Antrean Reimbursement
+          Pencairan Klaim Karyawan
         </Link>
       </p>
     </div>

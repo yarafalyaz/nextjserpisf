@@ -7,7 +7,7 @@ import {
   updatePurchaseRequest,
 } from "@/actions/purchase.actions";
 import { showSuccess, showError } from "@/lib/utils/toast";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "@/components/ui/fontawesome-icons";
 import { AppDatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/shadcn/label";
 import { Input } from "@/components/ui/shadcn/input";
@@ -280,18 +280,18 @@ export function PurchaseRequestForm({
                 <thead>
                   <tr className="border-b border-default">
                     <th
-                      className="text-left py-2 px-2 font-medium text-secondary"
+                      className="text-left py-2 px-2 font-medium text-muted-foreground"
                       style={{ minWidth: "250px" }}
                     >
                       Item <span className="text-destructive" aria-hidden="true">*</span>
                     </th>
                     <th
-                      className="text-left py-2 px-2 font-medium text-secondary"
+                      className="text-left py-2 px-2 font-medium text-muted-foreground"
                       style={{ width: "100px" }}
                     >
                       Jml <span className="text-destructive" aria-hidden="true">*</span>
                     </th>
-                    <th className="text-left py-2 px-2 font-medium text-secondary">
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">
                       Catatan
                     </th>
                     <th style={{ width: "50px" }}></th>

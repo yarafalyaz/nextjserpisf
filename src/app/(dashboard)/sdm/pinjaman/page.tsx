@@ -9,7 +9,7 @@ import { getHrScope, hrScopeWhere, canSearchAcrossEmployees } from "@/lib/auth/h
 import Link from "next/link"
 import { redirect, notFound } from "next/navigation"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
-import { Banknote } from "lucide-react"
+import { Banknote } from "@/components/ui/fontawesome-icons"
 import { AppSearchField } from "@/components/ui/search-field"
 import { LoanTable } from "./_components/loan-table"
 import { CanCreate } from "@/components/auth/can-create"

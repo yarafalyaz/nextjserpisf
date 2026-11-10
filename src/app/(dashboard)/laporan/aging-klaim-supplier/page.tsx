@@ -4,6 +4,8 @@ import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
+import { ExportButtons } from "@/components/reports/export-buttons"
+import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { getSupplierClaimAging } from "@/lib/reports/supplier-claim-aging-data"
 import { SUPPLIER_CLAIM_AGING_TITLE } from "@/lib/reports/supplier-claim-aging"
 import { SupplierClaimAgingCard } from "@/components/reports/supplier-claim-aging-card"
@@ -22,7 +24,12 @@ export default async function SupplierClaimAgingReportPage() {
   const aging = await getSupplierClaimAging()
 
   return (
-    <ReportPageShell title={SUPPLIER_CLAIM_AGING_TITLE} sheet={false}>
+    <ReportPageShell
+      title={SUPPLIER_CLAIM_AGING_TITLE}
+      sheet={false}
+      actions={<ExportButtons title="Aging_Klaim_Supplier" />}
+    >
+      <ReportLetterhead title={SUPPLIER_CLAIM_AGING_TITLE} subtitle="Umur Klaim Garansi ke Pemasok" periodLabel="Per Hari Ini" />
       <SupplierClaimAgingCard aging={aging} />
     </ReportPageShell>
   )

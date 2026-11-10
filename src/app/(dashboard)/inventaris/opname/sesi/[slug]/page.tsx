@@ -4,6 +4,7 @@ import { notFound } from "next/navigation"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { StatusChip } from "@/components/ui/status-chip"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope"
 import { StocktakeLineForm, StocktakeActions } from "../_components/stocktake-forms"
@@ -68,7 +69,8 @@ export default async function StocktakeSessionDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={`${session.documentNo} — ${session.status}`}
+        title={`Sesi Opname ${session.documentNo}`}
+        badge={<StatusChip status={session.status} />}
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Inventaris", href: "/inventaris" },

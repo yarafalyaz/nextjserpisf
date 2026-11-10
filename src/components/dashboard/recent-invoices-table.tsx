@@ -27,7 +27,6 @@ import {
   CardTitle,
   CardAction,
 } from "@/components/ui/shadcn/card"
-import { Badge } from "@/components/ui/shadcn/badge"
 import { Button } from "@/components/ui/shadcn/button"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import {
@@ -37,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/shadcn/dropdown-menu"
 import { Input } from "@/components/ui/shadcn/input"
+import { StatusChip } from "@/components/ui/status-chip"
 import { entityHref } from "@/lib/utils/entity-url"
 import {
   Tabs,
@@ -50,7 +50,7 @@ import {
   ChevronRight,
   Search,
   SlidersHorizontal,
-} from "lucide-react"
+} from "@/components/ui/fontawesome-icons"
 
 interface InvoiceRow {
   id: number
@@ -63,20 +63,17 @@ interface InvoiceRow {
   date: string
 }
 
-const statusConfig: Record<string, { label: string; className: string }> = {
-  draft: { label: "Konsep", className: "border-transparent bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400" },
-  posted: { label: "Diterbitkan", className: "border-transparent bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400" },
-  partial: { label: "Sebagian", className: "border-transparent bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400" },
-  paid: { label: "Lunas", className: "border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400" },
-  cancelled: { label: "Dibatalkan", className: "border-transparent bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" },
-}
-
 function formatRp(n: number) {
   return `Rp ${n.toLocaleString("id-ID")}`
 }
 
 function formatDate(d: string) {
-  return new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" })
+  return new Date(d).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  })
 }
 
 function SortButton({
@@ -92,14 +89,22 @@ function SortButton({
       type="button"
       variant="ghost"
       size="sm"
-      className="-ml-3 h-8 px-2 text-xs font-medium"
+      className="-ml-2.5 h-7 gap-1 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
       onClick={onClick}
       aria-label={`Urutkan ${label}`}
     >
       {children}
-      <ArrowUpDown className="size-3.5" aria-hidden="true" />
+      <ArrowUpDown className="size-3" aria-hidden="true" />
     </Button>
   )
+}
+
+const INVOICE_TABLE_STATUS_LABELS: Record<string, string> = {
+  draft: "Draft",
+  posted: "Menunggu Pembayaran",
+  partial: "Sebagian",
+  paid: "Lunas",
+  cancelled: "Dibatalkan",
 }
 
 const columns: ErpColumnDef<InvoiceRow>[] = [
@@ -133,7 +138,10 @@ const columns: ErpColumnDef<InvoiceRow>[] = [
       </SortButton>
     ),
     cell: ({ row }) => (
-      <Link href={entityHref("/penjualan/faktur", row.original)} className="font-mono text-xs font-medium text-primary hover:underline">
+      <Link
+        href={entityHref("/penjualan/faktur", row.original)}
+        className="font-mono text-xs font-medium text-foreground underline-offset-4 hover:text-primary hover:underline"
+      >
         {row.original.documentNo}
       </Link>
     ),
@@ -146,7 +154,7 @@ const columns: ErpColumnDef<InvoiceRow>[] = [
       </SortButton>
     ),
     cell: ({ row }) => (
-      <span className="block max-w-[180px] truncate font-medium" title={row.original.customerName}>
+      <span className="block max-w-[200px] truncate text-[13px] font-medium text-foreground" title={row.original.customerName}>
         {row.original.customerName}
       </span>
     ),
@@ -159,7 +167,7 @@ const columns: ErpColumnDef<InvoiceRow>[] = [
       </SortButton>
     ),
     cell: ({ row }) => (
-      <time className="text-xs text-muted-foreground" dateTime={row.original.date}>
+      <time className="text-xs tabular-nums text-muted-foreground" dateTime={row.original.date}>
         {formatDate(row.original.date)}
       </time>
     ),
@@ -167,12 +175,16 @@ const columns: ErpColumnDef<InvoiceRow>[] = [
   {
     accessorKey: "grandTotal",
     header: ({ column }) => (
-      <SortButton onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-        Total
-      </SortButton>
+      <div className="flex justify-end">
+        <SortButton onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+          Total
+        </SortButton>
+      </div>
     ),
     cell: ({ row }) => (
-      <span className="tabular-nums">{formatRp(row.original.grandTotal)}</span>
+      <div className="text-right font-mono text-xs font-medium tabular-nums text-foreground">
+        {formatRp(row.original.grandTotal)}
+      </div>
     ),
   },
   {
@@ -185,13 +197,13 @@ const columns: ErpColumnDef<InvoiceRow>[] = [
       const paidLabel = `Terbayar ${formatRp(paid)} dari ${formatRp(total)}, ${percent} persen`
 
       return (
-        <div className="min-w-[150px]">
+        <div className="min-w-[140px]">
           <div className="flex items-center justify-between gap-2" aria-hidden="true">
-            <span className="text-xs tabular-nums text-muted-foreground">{formatRp(paid)}</span>
-            <span className="text-xs tabular-nums text-muted-foreground">{percent}%</span>
+            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{formatRp(paid)}</span>
+            <span className="font-mono text-[11px] font-medium tabular-nums text-foreground">{percent}%</span>
           </div>
           <div
-            className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"
+            className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted"
             role="progressbar"
             aria-label={paidLabel}
             aria-valuemin={0}
@@ -200,7 +212,7 @@ const columns: ErpColumnDef<InvoiceRow>[] = [
             aria-valuetext={`${percent} persen terbayar`}
           >
             <div
-              className="h-full rounded-full bg-primary"
+              className={`h-full rounded-full ${percent >= 100 ? "bg-emerald-600 dark:bg-emerald-500" : "bg-primary"}`}
               style={{ width: `${percent}%` }}
               aria-hidden="true"
             />
@@ -212,14 +224,12 @@ const columns: ErpColumnDef<InvoiceRow>[] = [
   {
     accessorKey: "status",
     header: "Status",
-    cell: ({ row }) => {
-      const cfg = statusConfig[row.original.status] ?? { label: row.original.status, className: "" }
-      return (
-        <Badge variant="outline" className={cfg.className} aria-label={`Status: ${cfg.label}`}>
-          {cfg.label}
-        </Badge>
-      )
-    },
+    cell: ({ row }) => (
+      <StatusChip
+        status={row.original.status}
+        customLabel={INVOICE_TABLE_STATUS_LABELS[row.original.status]}
+      />
+    ),
   },
 ]
 
@@ -261,7 +271,6 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
     [data]
   )
 
-  // TanStack Table's useTable returns functions by design.
   const table = useTable({
     features: erpTableFeatures,
     data: filteredData,
@@ -275,26 +284,26 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
   })
 
   return (
-    <Card aria-labelledby={titleId}>
-      <CardHeader>
+    <Card aria-labelledby={titleId} className="gap-0 py-0">
+      <CardHeader className="py-4">
         <CardTitle id={titleId}>Faktur Terbaru</CardTitle>
-        <CardDescription>10 faktur penjualan terakhir</CardDescription>
+        <CardDescription>10 faktur penjualan terakhir beserta progres pelunasan</CardDescription>
         <CardAction>
-          <Button asChild variant="ghost" size="sm">
+          <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
             <Link href="/penjualan/faktur">
-              Semua <ArrowUpRight className="size-3.5" aria-hidden="true" />
+              Semua Faktur <ArrowUpRight className="size-3.5" aria-hidden="true" />
             </Link>
           </Button>
         </CardAction>
       </CardHeader>
       <CardContent className="p-0">
         <Tabs value={statusTab} onValueChange={setStatusTab} className="gap-0">
-          <div className="flex flex-col gap-3 border-t px-4 py-3 lg:flex-row lg:items-center lg:justify-between lg:px-6">
+          <div className="flex flex-col gap-3 border-t px-4 py-3 lg:flex-row lg:items-center lg:justify-between lg:px-5">
             <TabsList variant="line" className="w-full justify-start overflow-x-auto lg:w-auto">
               <TabsTrigger value="all">Semua ({counts.all})</TabsTrigger>
-              <TabsTrigger value="unpaid">Terbuka ({counts.unpaid})</TabsTrigger>
+              <TabsTrigger value="unpaid">Menunggu Pembayaran ({counts.unpaid})</TabsTrigger>
               <TabsTrigger value="paid">Lunas ({counts.paid})</TabsTrigger>
-              <TabsTrigger value="draft">Konsep ({counts.draft})</TabsTrigger>
+              <TabsTrigger value="draft">Draft ({counts.draft})</TabsTrigger>
             </TabsList>
 
             <div className="flex items-center gap-2">
@@ -346,7 +355,79 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
             </div>
           </div>
 
-          <div className="overflow-x-auto border-t">
+          {/* Mobile adaptive cards (<768px) */}
+          <div className="border-t md:hidden">
+            {table.getRowModel().rows.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-muted-foreground" role="status">
+                Belum ada faktur
+              </div>
+            ) : (
+              <ul className="divide-y divide-border/70">
+                {table.getRowModel().rows.map((row) => {
+                  const inv = row.original
+                  const percent = inv.grandTotal > 0 ? Math.min(100, Math.round((inv.paidAmount / inv.grandTotal) * 100)) : 0
+                  const selected = row.getIsSelected()
+                  return (
+                    <li
+                      key={row.id}
+                      data-state={selected ? "selected" : undefined}
+                      className={`flex flex-col gap-2.5 px-4 py-3.5 transition-colors ${selected ? "bg-muted/35" : ""}`}
+                    >
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex min-w-0 items-start gap-2.5">
+                          <span className="-m-3.5 shrink-0 p-3.5">
+                            <Checkbox
+                              aria-label={`Pilih faktur ${inv.documentNo}`}
+                              checked={selected}
+                              onCheckedChange={(value) => row.toggleSelected(!!value)}
+                            />
+                          </span>
+                          <div className="min-w-0">
+                            <Link
+                              href={entityHref("/penjualan/faktur", inv)}
+                              className="font-mono text-xs font-semibold text-foreground underline-offset-4 hover:text-primary hover:underline"
+                            >
+                              {inv.documentNo}
+                            </Link>
+                            <p className="mt-0.5 truncate text-[13px] font-medium text-foreground">
+                              {inv.customerName}
+                            </p>
+                          </div>
+                        </div>
+                        <StatusChip
+                          status={inv.status}
+                          customLabel={INVOICE_TABLE_STATUS_LABELS[inv.status]}
+                        />
+                      </div>
+
+                      <div className="flex items-baseline justify-between gap-2 pt-0.5">
+                        <time className="text-xs tabular-nums text-muted-foreground" dateTime={inv.date}>
+                          {formatDate(inv.date)}
+                        </time>
+                        <span className="font-mono text-sm font-semibold tabular-nums text-foreground">
+                          {formatRp(inv.grandTotal)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={`h-full rounded-full ${percent >= 100 ? "bg-emerald-600 dark:bg-emerald-500" : "bg-primary"}`}
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                        <span className="font-mono text-[11px] font-medium tabular-nums text-muted-foreground">
+                          {percent}% lunas
+                        </span>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+
+          <div className="hidden overflow-x-auto border-t md:block">
             <Table aria-label="Tabel faktur terbaru">
               <caption className="sr-only">Daftar faktur penjualan terbaru dengan nomor, pelanggan, tanggal, total, status pembayaran, dan status dokumen</caption>
               <TableHeader>
@@ -362,7 +443,7 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
                           key={header.id}
                           scope="col"
                           aria-sort={isSortable ? ariaSort : undefined}
-                          className="px-4 lg:px-6"
+                          className="px-4 lg:px-5"
                         >
                           {header.isPlaceholder
                             ? null
@@ -388,7 +469,7 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
                   table.getRowModel().rows.map((row) => (
                     <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
                       {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id} className="px-4 lg:px-6">
+                        <TableCell key={cell.id} className="px-4 lg:px-5">
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </TableCell>
                       ))}
@@ -399,8 +480,8 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
             </Table>
           </div>
 
-          <div className="flex flex-col gap-3 border-t px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between lg:px-6">
-            <span aria-live="polite" aria-atomic="true">
+          <div className="flex flex-col gap-3 border-t px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between lg:px-5">
+            <span aria-live="polite" aria-atomic="true" className="tabular-nums">
               {table.getSelectedRowModel().rows.length} dari {filteredData.length} faktur dipilih
             </span>
             <nav
@@ -408,7 +489,7 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
               aria-label="Navigasi halaman tabel faktur"
               className="flex items-center justify-between gap-3 sm:justify-end"
             >
-              <span aria-live="polite" aria-atomic="true">
+              <span aria-live="polite" aria-atomic="true" className="tabular-nums">
                 Halaman {table.state.pagination.pageIndex + 1} dari {Math.max(table.getPageCount(), 1)}
               </span>
               <div className="flex gap-1.5">

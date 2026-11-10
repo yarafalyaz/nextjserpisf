@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useState, useTransition, useEffect, useRef } from "react"
-import { ScanLine } from "lucide-react"
+import { ScanLine } from "@/components/ui/fontawesome-icons"
 import { lookupItemByScan } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Label } from "@/components/ui/shadcn/label"

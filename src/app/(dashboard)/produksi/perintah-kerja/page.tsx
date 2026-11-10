@@ -22,8 +22,10 @@ import { WorkOrderOperationQueueSection } from "./_components/work-order-operati
 import { getWorkOrderOperationQueue } from "@/lib/reports/work-order-operation-queue-data"
 import { WorkCenterMaster } from "@/components/manufacturing/work-center-master"
 import { hasPermission } from "@/lib/auth/permissions"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
+import { PageHeader } from "@/components/ui/page-header"
+import { Plus, ClipboardList, Clock, CheckCircle2, FileText } from "@/components/ui/fontawesome-icons"
+import { formatNumber } from "@/lib/utils/format"
 
 import type { Metadata } from "next"
 
@@ -96,20 +98,40 @@ export async function renderWorkOrdersPage({
 
   const total = await prisma.workOrder.count({ where })
 
-  const [queue, load, loadPlan, centers, canEditCenters, closeoutQueue, canCloseWorkOrder, canCloseProductionOrder, operationQueue] =
-    await Promise.all([
-      getWorkOrderQueue(),
-      getWorkOrderLoad(),
-      getWorkCenterLoadPlan(),
-      getWorkCenters(),
-      hasPermission("edit_work_orders"),
-      getWorkshopCloseoutQueue(),
-      hasPermission("complete_work_orders"),
-      // Izin tutup PO = izin server closeProductionOrder (edit_production_orders);
-      // tidak ada complete_production_orders di katalog. Server tetap penegak.
-      hasPermission("edit_production_orders"),
-      getWorkOrderOperationQueue(),
-    ])
+  const [
+    countsByStatus,
+    queue,
+    load,
+    loadPlan,
+    centers,
+    canEditCenters,
+    closeoutQueue,
+    canCloseWorkOrder,
+    canCloseProductionOrder,
+    operationQueue,
+  ] = await Promise.all([
+    prisma.workOrder.groupBy({
+      by: ["status"],
+      _count: { _all: true },
+    }),
+    getWorkOrderQueue(),
+    getWorkOrderLoad(),
+    getWorkCenterLoadPlan(),
+    getWorkCenters(),
+    hasPermission("edit_work_orders"),
+    getWorkshopCloseoutQueue(),
+    hasPermission("complete_work_orders"),
+    // Izin tutup PO = izin server closeProductionOrder (edit_production_orders);
+    // tidak ada complete_production_orders di katalog. Server tetap penegak.
+    hasPermission("edit_production_orders"),
+    getWorkOrderOperationQueue(),
+  ])
+
+  const statusCountMap = countsByStatus.reduce<Record<string, number>>((acc, curr) => {
+    acc[curr.status] = curr._count._all
+    return acc
+  }, {})
+  const totalAllOrders = countsByStatus.reduce((acc, curr) => acc + curr._count._all, 0)
 
   const tableData = toPlain(workOrders)
 
@@ -119,14 +141,16 @@ export async function renderWorkOrdersPage({
       ? `/produksi/perintah-kerja/status/${urlStatus}`
       : "/produksi/perintah-kerja"
     const isActive = activeUrlStatus === urlStatus
+    const count = dbStatusKey ? (statusCountMap[dbStatusKey] ?? 0) : totalAllOrders
 
     return (
       <Link
         key={dbStatusKey}
         href={withListParams(targetPath, params, { halaman: undefined })}
-        className={`filter-chip ${isActive ? "active" : ""}`}
+        className={`filter-chip inline-flex items-center gap-1.5 ${isActive ? "active" : ""}`}
       >
-        {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
+        <span>{dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}</span>
+        <span className="font-mono text-[11px] tabular-nums opacity-75">({formatNumber(count)})</span>
       </Link>
     )
   })
@@ -137,8 +161,10 @@ export async function renderWorkOrdersPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs
-        items={
+      <PageHeader
+        title="Perintah Kerja"
+        subtitle="Manajemen dan eksekusi perintah kerja manufaktur dan perakitan bengkel"
+        breadcrumbs={
           activeUrlStatus
             ? [
                 { label: "Dasbor", href: "/" },
@@ -152,18 +178,68 @@ export async function renderWorkOrdersPage({
                 { label: "Perintah Kerja" },
               ]
         }
+        actions={
+          <CanCreate permission="create_work_orders">
+            <Link
+              href="/produksi/perintah-kerja/tambah"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary-hover hover:-translate-y-px hover:shadow-md"
+              id="create-wo-btn"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Buat Perintah Kerja</span>
+            </Link>
+          </CanCreate>
+        }
       />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Perintah Kerja</h1>
-        <CanCreate permission="create_work_orders">
-          <Link
-            href="/produksi/perintah-kerja/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
-            id="create-wo-btn"
-          >
-            + Buat Perintah Kerja
-          </Link>
-        </CanCreate>
+
+      {/* ERP Unified Metric Strip (Non-Floating Linear Standard) */}
+      <div
+        className="grid grid-cols-1 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs sm:grid-cols-4"
+        aria-label="Ringkasan status perintah kerja"
+      >
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total WO</span>
+            <ClipboardList className="size-4 text-primary/70" aria-hidden="true" />
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+            {formatNumber(totalAllOrders)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Seluruh arsip perintah kerja</p>
+        </div>
+
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Konsep</span>
+            <FileText className="size-4 text-amber-500/80" aria-hidden="true" />
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+            {formatNumber(statusCountMap["draft"] ?? 0)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Menunggu rilis & jadwal</p>
+        </div>
+
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Dalam Proses</span>
+            <Clock className="size-4 text-blue-500/80" aria-hidden="true" />
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+            {formatNumber(statusCountMap["in_progress"] ?? 0)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Sedang dikerjakan di bengkel</p>
+        </div>
+
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Selesai</span>
+            <CheckCircle2 className="size-4 text-emerald-500/80" aria-hidden="true" />
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+            {formatNumber(statusCountMap["completed"] ?? 0)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Pekerjaan rampung</p>
+        </div>
       </div>
 
       <WorkOrderQueueCard queue={queue} />

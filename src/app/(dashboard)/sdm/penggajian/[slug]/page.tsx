@@ -10,7 +10,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { requirePermission } from "@/lib/auth/permissions";
 import { CanCreate } from "@/components/auth/can-create";
 import { getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope";
-import { Pencil } from "lucide-react";
+import { Pencil } from "@/components/ui/fontawesome-icons";
 import { ApprovePayrollButton } from "./_components/approve-button";
 import { MarkPaidPayrollButton } from "./_components/mark-paid-button";
 import { CorrectPaidPayrollButton } from "./_components/correct-paid-button";
@@ -235,7 +235,7 @@ export default async function PayrollDetailPage({
             </DetailTableRow>
             <DetailTableRow>
               <DetailTableTd className="font-medium text-muted-foreground">
-                Potongan Tidak Hadir ({payroll.absentDays} hari bolos /{" "}
+                Potongan Tidak Hadir ({payroll.absentDays} hari alfa /{" "}
                 {payroll.workingDays} hari kerja)
               </DetailTableTd>
               <DetailTableTd align="right">

@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { GalleryVerticalEnd } from "lucide-react"
+import { GalleryVerticalEnd } from "@/components/ui/fontawesome-icons"
 import { Suspense } from "react"
 import { LoginForm } from "@/components/login-form"
 import { getSystemSettings } from "@/lib/utils/settings"

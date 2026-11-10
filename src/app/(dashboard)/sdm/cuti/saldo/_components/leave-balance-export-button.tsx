@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Download } from "lucide-react"
+import { Download } from "@/components/ui/fontawesome-icons"
 import { exportLeaveBalancesCsv } from "@/actions/hrm.actions"
 import { Button } from "@/components/ui/button"
 import { showError } from "@/lib/utils/toast"

@@ -19,7 +19,7 @@ export default async function AgingPayablesPage() {
   // Only posted/partial/paid bills are real payables.
   const bills = await prisma.vendorBill.findMany({
     where: { status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null },
-    include: { vendor: { select: { name: true } } },
+    include: { vendor: { select: { id: true, name: true, slug: true } } },
     orderBy: { dueDate: 'asc' },
   })
 
@@ -34,6 +34,8 @@ export default async function AgingPayablesPage() {
       // Sisa kanonis balanceDue (neto PPh + relief retur), sama dengan PDF;
       // formula kop menghidupkan lagi saldo ter-relief.
       balanceDue: bill.balanceDue,
+      documentHref: `/pembelian/tagihan/${bill.slug ?? bill.id}`,
+      partyHref: `/laporan/buku-pembantu-utang/pihak/${bill.vendor.slug ?? bill.vendor.id}`,
     })),
     new Date(),
   )

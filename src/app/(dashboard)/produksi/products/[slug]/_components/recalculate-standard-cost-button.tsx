@@ -1,7 +1,7 @@
 "use client"
 
 import { useTransition } from "react"
-import { Calculator } from "lucide-react"
+import { Calculator } from "@/components/ui/fontawesome-icons"
 import { useRouter } from "next/navigation"
 import { calculateStandardCost } from "@/actions/manufacturing.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"

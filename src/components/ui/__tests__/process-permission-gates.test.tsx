@@ -153,7 +153,7 @@ describe("halaman meneruskan izin proses persis per permukaan", () => {
     const page = source("src/app/(dashboard)/pembelian/tagihan/[slug]/page.tsx")
     expect(page).toContain('hasPermission("approve_vendor_bills")')
     expect(page).toMatch(/action=\{confirmVendorBill\}[\s\S]{0,300}?canProcess=\{canApproveVendorBill\}/)
-    expect(page).toContain("{statusLabel(bill.status)}")
+    expect(page).toContain("<StatusChip status={bill.status} />")
   })
 
   it("pengeluaran-material: ProcessButton canProcess edit_material_issues, chip tetap tampil", () => {
@@ -176,7 +176,7 @@ describe("halaman meneruskan izin proses persis per permukaan", () => {
     expect(page).toContain('hasPermission("delete_vendor_bills")')
     expect(page).toMatch(/<VoidButton[\s\S]{0,300}?action=\{voidVendorBill\}/)
     expect(page).toMatch(/action=\{voidVendorBill\}[\s\S]{0,300}?canVoid=\{canVoidVendorBill\}/)
-    expect(page).toContain("{statusLabel(bill.status)}")
+    expect(page).toContain("<StatusChip status={bill.status} />")
   })
 
   it("pesanan pembelian: VoidButton canVoid edit_purchase_orders, chip tetap tampil", () => {

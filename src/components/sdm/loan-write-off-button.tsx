@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { HandCoins } from "lucide-react";
+import { HandCoins } from "@/components/ui/fontawesome-icons";
 import { Button } from "@/components/ui/shadcn/button";
 import { ReasonField } from "@/components/ui/reason-field";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";

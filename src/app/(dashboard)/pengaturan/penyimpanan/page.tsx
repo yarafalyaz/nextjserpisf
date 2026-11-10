@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/shadcn/button"
 import { Badge } from "@/components/ui/shadcn/badge"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction } from "@/components/ui/shadcn/card"
 import { Separator } from "@/components/ui/shadcn/separator"
-import { AlertTriangle, CheckCircle2, Cloud, HardDrive, Pencil } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Cloud, HardDrive, Pencil } from "@/components/ui/fontawesome-icons"
 
 import type { Metadata } from "next"
 

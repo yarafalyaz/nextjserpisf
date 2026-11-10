@@ -12,7 +12,8 @@
 
 import { prisma } from "@/lib/db/prisma"
 import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
-import { REPORT_JOURNAL_STATUSES, sumEntriesByAccount, sumNetForAccount } from "@/lib/services/report-aggregation.service"
+import { REPORT_JOURNAL_STATUSES, sumEntriesByAccount, sumNetForAccount, sumNetForAccounts } from "@/lib/services/report-aggregation.service"
+import { collectDescendantAccountIds } from "@/lib/reports/account-hierarchy"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import {
   RECOGNISED_AP_STATUSES,

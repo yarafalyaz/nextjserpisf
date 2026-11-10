@@ -2,7 +2,7 @@
 
 import { useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Check } from "lucide-react"
+import { Check } from "@/components/ui/fontawesome-icons"
 import { Button } from "@/components/ui/button"
 import { confirmDownPayment } from "@/actions/sales.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"

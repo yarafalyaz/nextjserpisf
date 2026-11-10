@@ -40,12 +40,12 @@ describe("pemetaan izin halaman garansi", () => {
     expect(source).toContain(`requirePermission("${VIEW}")`)
     expect(source).toContain(`hasPermission("${APPROVE}")`)
     expect(source).toContain(`hasPermission("${EDIT}")`)
-    expect(source).toContain("const [canDecide, canTransition] = await Promise.all([")
+    expect(source).toContain("const [canDecide, canTransition, decisionActor] = await Promise.all([")
     // Urutan destructure menentukan sumber: canDecide=approve, canTransition=edit.
     // Keberadaan string saja tidak cukup — tertukar tetap hijau tanpa kunci ini.
     const promiseAllBlock = source.slice(
-      source.indexOf("const [canDecide, canTransition] = await Promise.all(["),
-      source.indexOf("])", source.indexOf("const [canDecide, canTransition] = await Promise.all([")),
+      source.indexOf("const [canDecide, canTransition, decisionActor] = await Promise.all(["),
+      source.indexOf("])", source.indexOf("const [canDecide, canTransition, decisionActor] = await Promise.all([")),
     )
     expect(promiseAllBlock.indexOf(APPROVE)).toBeGreaterThanOrEqual(0)
     expect(promiseAllBlock.indexOf(EDIT)).toBeGreaterThan(promiseAllBlock.indexOf(APPROVE))

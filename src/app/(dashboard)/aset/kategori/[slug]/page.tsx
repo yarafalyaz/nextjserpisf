@@ -12,7 +12,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
-import { Pencil } from "lucide-react"
+import { Pencil } from "@/components/ui/fontawesome-icons"
 
 import type { Metadata } from "next"
 

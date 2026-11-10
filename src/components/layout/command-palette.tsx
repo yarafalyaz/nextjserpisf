@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react"
 import {
   CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem,
 } from "@/components/ui/shadcn/command"
-import { Plus } from "lucide-react"
+import { Plus } from "@/components/ui/fontawesome-icons"
 import {
   flattenNavigation,
   canSeeNavItem,
@@ -157,7 +157,10 @@ export function CommandPalette() {
                       onSelect={() => handleSelect(item.href)}
                     >
                       <Icon size={16} aria-hidden="true" />
-                      <span>{item.label}</span>
+                      <span className="flex-1 truncate">{item.label}</span>
+                      <span className="hidden text-[11px] text-muted-foreground/70 sm:inline">
+                        {item.group}
+                      </span>
                     </CommandItem>
                   )
                 })}
@@ -165,6 +168,26 @@ export function CommandPalette() {
             )
           })}
       </CommandList>
+      <div
+        aria-hidden="true"
+        className="hidden items-center justify-between border-t border-border/60 bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground sm:flex"
+      >
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center gap-1">
+            <kbd className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px]">↑↓</kbd>
+            <span>Navigasi</span>
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <kbd className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px]">↵</kbd>
+            <span>Buka</span>
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <kbd className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px]">ESC</kbd>
+            <span>Tutup</span>
+          </span>
+        </div>
+        <span className="font-mono text-[10px] text-muted-foreground/70">YaraERP Command</span>
+      </div>
     </CommandDialog>
   )
 }

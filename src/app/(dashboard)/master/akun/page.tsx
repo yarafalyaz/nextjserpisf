@@ -1,5 +1,5 @@
 import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
-import { Pencil } from "lucide-react"
+import { Pencil } from "@/components/ui/fontawesome-icons"
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"

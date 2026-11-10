@@ -7,7 +7,7 @@ import { withListParams } from "@/lib/utils/list-href"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { redirect, notFound } from "next/navigation"
-import { ListTodo } from "lucide-react"
+import { ListTodo } from "@/components/ui/fontawesome-icons"
 import { AppSearchField } from "@/components/ui/search-field"
 import { TaskTable } from "./_components/task-table"
 import {

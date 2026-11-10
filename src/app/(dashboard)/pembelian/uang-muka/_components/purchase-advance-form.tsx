@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useRef, useState, useTransition } from "react"
-import { ArrowRight } from "lucide-react"
+import { ArrowRight } from "@/components/ui/fontawesome-icons"
 
 import { createPurchaseAdvance } from "@/actions/purchase-advance.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"

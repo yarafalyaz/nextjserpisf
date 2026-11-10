@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle } from "@/components/ui/fontawesome-icons"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"

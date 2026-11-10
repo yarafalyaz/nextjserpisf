@@ -8,7 +8,7 @@ import { SafeImage } from "@/components/ui/safe-image"
 import { Button } from "@/components/ui/shadcn/button"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction } from "@/components/ui/shadcn/card"
 import { Separator } from "@/components/ui/shadcn/separator"
-import { Pencil } from "lucide-react"
+import { Pencil } from "@/components/ui/fontawesome-icons"
 
 import type { Metadata } from "next"
 

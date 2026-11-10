@@ -14,7 +14,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Detail Siklus Penilaian" }
 
 const CYCLE_STATUS_LABELS: Record<string, string> = {
-  draft: "Konsep",
+  draft: "Draft",
   active: "Aktif",
   closed: "Ditutup",
 }

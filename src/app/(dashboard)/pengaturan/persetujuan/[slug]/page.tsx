@@ -18,6 +18,7 @@ import {
 import { approveStep, rejectStep, reopenApproval } from "@/actions/approval.actions";
 import { APPROVAL_MODEL_LABELS } from "@/lib/constants/approval";
 import { statusLabel } from "@/lib/utils/status-labels";
+import { StatusChip } from "@/components/ui/status-chip";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 
@@ -53,6 +54,15 @@ export default async function ApprovalDetailPage({
   );
 
   if (!approval) notFound();
+
+  const historyUserIds = approval.histories.map((h) => h.userId).filter(Boolean) as number[];
+  const historyUsers = historyUserIds.length > 0
+    ? await prisma.user.findMany({
+        where: { id: { in: historyUserIds } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const historyUserMap = new Map(historyUsers.map((u) => [u.id, u.name]));
 
   const referencePermission = APPROVAL_REFERENCE_PERMISSIONS[approval.referenceType];
   const canViewApproval =
@@ -153,7 +163,7 @@ export default async function ApprovalDetailPage({
                   </span>
                   {step.approverType && (
                     <span className="text-xs text-muted-foreground ml-2">
-                      ({step.approverType})
+                      ({step.approverType === "role" ? "Peran" : step.approverType === "user" ? "Pengguna" : step.approverType})
                     </span>
                   )}
                 </div>
@@ -253,13 +263,14 @@ export default async function ApprovalDetailPage({
             <DetailTableHead>
               <DetailTableTh>Langkah</DetailTableTh>
               <DetailTableTh>Aksi</DetailTableTh>
+              <DetailTableTh>Oleh</DetailTableTh>
               <DetailTableTh>Catatan</DetailTableTh>
               <DetailTableTh>Waktu</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
               {approval.histories.length === 0 ? (
                 <DetailTableRow>
-                  <DetailTableTd colSpan={4} className="py-10">
+                  <DetailTableTd colSpan={5} className="py-10">
                     <EmptyState title="Belum ada riwayat" className="py-0" />
                   </DetailTableTd>
                 </DetailTableRow>
@@ -268,14 +279,16 @@ export default async function ApprovalDetailPage({
                   <DetailTableRow key={h.id}>
                     <DetailTableTd>Langkah {h.step}</DetailTableTd>
                     <DetailTableTd>
-                      <span
-                        className={`status-badge ${h.action === "approve" ? "status-approved" : "status-rejected"}`}
-                      >
-                        {h.action === "approve" ? "Disetujui" : "Ditolak"}
-                      </span>
+                      <StatusChip
+                        status={h.action === "approve" ? "approved" : "rejected"}
+                        customLabel={h.action === "approve" ? "Disetujui" : "Ditolak"}
+                      />
+                    </DetailTableTd>
+                    <DetailTableTd className="font-medium text-foreground">
+                      {h.userId ? (historyUserMap.get(h.userId) || `Pengguna #${h.userId}`) : "-"}
                     </DetailTableTd>
                     <DetailTableTd>{h.notes || "-"}</DetailTableTd>
-                    <DetailTableTd>{formatDate(h.createdAt)}</DetailTableTd>
+                    <DetailTableTd>{formatDate(h.createdAt, { includeTime: true })}</DetailTableTd>
                   </DetailTableRow>
                 ))
               )}

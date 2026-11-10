@@ -104,27 +104,29 @@ export default async function SalesAnalyticsPage({
   const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
 
   return (
-    <ReportPageShell title="Analisis Penjualan" sheet={false} wide actions={<><ExportButtons title="Analisis_Penjualan" pdfHref={buildReportPdfHref("analisis-penjualan", period.slug, { dimensi: dimension })} /></>}>
-
-
-      <ReportPeriodFilter
-        basePath="/laporan/analisis-penjualan"
-        mode="range"
-        defaultStartDate={toLocalDateOnly(startDate)}
-        defaultEndDate={toLocalDateOnly(endDate)}
-        selects={[
-          {
-            param: "dimensi",
-            label: "Kelompokkan",
-            placeholder: "Pilih pengelompokan...",
-            value: dimension,
-            options: SALES_DIMENSIONS.map((d) => ({ value: d.value, label: d.label })),
-          },
-        ]}
-      />
-
-
-
+    <ReportPageShell
+      title="Analisis Penjualan"
+      sheet={false}
+      wide
+      actions={<ExportButtons title="Analisis_Penjualan" pdfHref={buildReportPdfHref("analisis-penjualan", period.slug, { dimensi: dimension })} />}
+      filter={
+        <ReportPeriodFilter
+          basePath="/laporan/analisis-penjualan"
+          mode="range"
+          defaultStartDate={toLocalDateOnly(startDate)}
+          defaultEndDate={toLocalDateOnly(endDate)}
+          selects={[
+            {
+              param: "dimensi",
+              label: "Kelompokkan",
+              placeholder: "Pilih pengelompokan...",
+              value: dimension,
+              options: SALES_DIMENSIONS.map((d) => ({ value: d.value, label: d.label })),
+            },
+          ]}
+        />
+      }
+    >
       <ReportLetterhead title="Analisis Penjualan" subtitle={dimensionLabel} periodLabel={periodLabel} />
       <ReportNarration text="Laporan Analisis Penjualan merangkum nilai penjualan per barang, pelanggan, atau merek pada periode terpilih, disertai tren penjualan bulanan. Laporan ini dipakai untuk melihat kontribusi tiap produk/pelanggan dan memantau arah penjualan dari bulan ke bulan." />
 

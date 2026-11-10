@@ -19,8 +19,8 @@ import {
   Users,
   Wallet,
   Workflow,
-} from "lucide-react"
-import type { LucideIcon } from "lucide-react"
+} from "@/components/ui/fontawesome-icons"
+import type { LucideIcon } from "@/components/ui/fontawesome-icons"
 
 /**
  * Satu-satunya daftar halaman di hub Pengaturan (grup + kartu).

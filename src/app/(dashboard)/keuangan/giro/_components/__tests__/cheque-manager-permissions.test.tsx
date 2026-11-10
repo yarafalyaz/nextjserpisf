@@ -5,12 +5,31 @@ import { resolve } from "node:path"
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
+window.matchMedia =
+  window.matchMedia ??
+  ((query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+    onchange: null,
+  }) as MediaQueryList)
+
 import { createRoot, type Root } from "react-dom/client"
 import { act } from "react"
 
 vi.mock("next/navigation", () => ({
   useRouter() {
     return { refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }
+  },
+  usePathname() {
+    return "/keuangan/giro"
+  },
+  useSearchParams() {
+    return new URLSearchParams()
   },
 }))
 

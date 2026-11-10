@@ -12,7 +12,7 @@ import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, Loader2 } from "lucide-react"
+import { CheckCircle, Loader2 } from "@/components/ui/fontawesome-icons"
 
 interface PayrollFormProps {
   employees: { id: number; name: string }[]

@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { formatCurrencyExact } from "@/lib/utils/format"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle } from "@/components/ui/fontawesome-icons"
 
 const salesInvoiceSchema = z.object({
   customerId: z.number({ error: "Pelanggan wajib dipilih" }).min(1, "Pelanggan wajib dipilih"),

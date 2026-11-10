@@ -52,6 +52,7 @@ const INTERNAL: Record<string, RegExp> = {
   "upload/attachments/route.ts": /canModifyAttachment/,
   "upload/attachments/[id]/route.ts": /canModifyAttachment/,
   "upload/avatar/route.ts": /where:\s*\{\s*id: userId \}/,
+  "pdf/[...segments]/route.ts": /handlePdfGet\(request\)/,
 }
 
 /** Route publik by design: handler NextAuth, health check, data referensi alamat. */

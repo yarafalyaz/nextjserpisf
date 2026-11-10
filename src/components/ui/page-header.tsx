@@ -17,24 +17,26 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, subtitle, breadcrumbs, actions, badge }: PageHeaderProps) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-1.5 border-b border-border/60 pb-3.5">
       {breadcrumbs && breadcrumbs.length > 0 && (
         <AppBreadcrumbs items={breadcrumbs} />
       )}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-foreground">{title}</h1>
-          {badge}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">{title}</h1>
+            {badge}
+          </div>
+          {subtitle && (
+            <p className="text-xs leading-relaxed text-muted-foreground sm:text-[13px]">{subtitle}</p>
+          )}
         </div>
         {actions && (
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             {actions}
           </div>
         )}
       </div>
-      {subtitle && (
-        <p className="text-sm text-muted-foreground">{subtitle}</p>
-      )}
     </div>
   )
 }

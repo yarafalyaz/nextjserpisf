@@ -187,35 +187,47 @@ export default async function StockCardPage({
     : undefined
 
   return (
-    <ReportPageShell title="Kartu Stok" sheet={false} wide filter={<>
-<ReportPeriodFilter
-        basePath="/laporan/kartu-stok"
-        mode="range"
-        defaultStartDate={toLocalDateOnly(startDate)}
-        defaultEndDate={toLocalDateOnly(endDate)}
-        selects={[
-          {
-            param: "barang",
-            label: "Barang",
-            placeholder: "Cari barang (SKU / nama)...",
-            required: true,
-            value: selectedItem ? (selectedItem.slug ?? String(selectedItem.id)) : "",
-            options: items.map((item) => ({ value: item.slug ?? String(item.id), label: `${item.sku} — ${item.name}` })),
-          },
-          {
-            param: "gudang",
-            label: "Gudang",
-            placeholder: "Semua Gudang",
-            value: selectedWarehouse ? (selectedWarehouse.slug ?? String(selectedWarehouse.id)) : "",
-            options: scopedWarehouses.map((w) => ({ value: w.slug ?? String(w.id), label: `${w.code} — ${w.name}` })),
-          },
-        ]}
-      />
-</>}>
-
-
-
-
+    <ReportPageShell
+      title="Kartu Stok"
+      sheet={false}
+      wide
+      actions={
+        card ? (
+          <ExportButtons
+            title="Kartu_Stok"
+            pdfHref={buildReportPdfHref("kartu-stok", period.slug, {
+              barang: selectedItem ? (selectedItem.slug ?? String(selectedItem.id)) : "",
+              ...(selectedWarehouse ? { gudang: selectedWarehouse.slug ?? String(selectedWarehouse.id) } : {}),
+            })}
+          />
+        ) : null
+      }
+      filter={
+        <ReportPeriodFilter
+          basePath="/laporan/kartu-stok"
+          mode="range"
+          defaultStartDate={toLocalDateOnly(startDate)}
+          defaultEndDate={toLocalDateOnly(endDate)}
+          selects={[
+            {
+              param: "barang",
+              label: "Barang",
+              placeholder: "Cari barang (SKU / nama)...",
+              required: true,
+              value: selectedItem ? (selectedItem.slug ?? String(selectedItem.id)) : "",
+              options: items.map((item) => ({ value: item.slug ?? String(item.id), label: `${item.sku} — ${item.name}` })),
+            },
+            {
+              param: "gudang",
+              label: "Gudang",
+              placeholder: "Semua Gudang",
+              value: selectedWarehouse ? (selectedWarehouse.slug ?? String(selectedWarehouse.id)) : "",
+              options: scopedWarehouses.map((w) => ({ value: w.slug ?? String(w.id), label: `${w.code} — ${w.name}` })),
+            },
+          ]}
+        />
+      }
+    >
       {!card ? (
         <ReportSection title="Kartu Stok">
           <p className="py-8 text-center text-sm text-muted-foreground">
@@ -224,15 +236,6 @@ export default async function StockCardPage({
         </ReportSection>
       ) : (
         <>
-          <div className="flex items-center justify-end print:hidden">
-            <ExportButtons
-              title="Kartu_Stok"
-              pdfHref={buildReportPdfHref("kartu-stok", period.slug, {
-                barang: selectedItem ? (selectedItem.slug ?? String(selectedItem.id)) : "",
-                ...(selectedWarehouse ? { gudang: selectedWarehouse.slug ?? String(selectedWarehouse.id) } : {}),
-              })}
-            />
-          </div>
 
           <ReportLetterhead title="Kartu Stok" subtitle={eyebrow} periodLabel={periodLabel} />
           <ReportNarration text="Kartu Stok menampilkan riwayat pergerakan persediaan satu barang secara kronologis beserta saldo berjalan (kuantitas dan nilai). Laporan ini dipakai untuk menelusuri sumber setiap kenaikan/penurunan stok dan mencocokkan saldo fisik dengan catatan." />

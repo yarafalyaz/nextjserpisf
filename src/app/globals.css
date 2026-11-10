@@ -14,15 +14,60 @@
   ::before {
     border-color: var(--border, #e2e8f0);
   }
+
+  /* Interaction affordance & Native Touch Polish (antislop R-39 + mobile-native) */
+  button,
+  a[href],
+  select,
+  summary,
+  label[for],
+  [role="button"],
+  [role="tab"],
+  [role="switch"] {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="switch"],
+  .filter-chip {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  :disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  /* Prevent iOS Safari auto-zoom on form fields (<16px) on coarse pointers */
+  @media (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]),
+    textarea,
+    select {
+      font-size: 16px;
+    }
+  }
 }
 
+/* Single source of truth for brand + semantic colours (light mode).
+   Dark-mode overrides live only in `html.dark` below. Legacy `:root`
+   duplicates were removed so these values cannot drift again. */
 @theme {
-  --color-primary: #171717;
-  --color-primary-hover: #262626;
-  --color-success: #10b981;
-  --color-danger: #ef4444;
-  --color-warning: #f59e0b;
-  --color-info: #3b82f6;
+  --color-primary: #18181b;
+  --color-primary-hover: #27272a;
+  --color-success: #059669;
+  --color-danger: #dc2626;
+  --color-warning: #d97706;
+  --color-info: #2563eb;
+
+  /* next/font sets --font-inter / --font-jetbrains on <html>. Keep the
+     fallback inside var() so the stack stays valid if a font fails. */
+  --font-sans: var(--font-inter, "Inter"), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains, "JetBrains Mono"), "Fira Code", monospace;
   --color-surface: var(--bg-card, #ffffff);
   --color-surface-secondary: var(--bg-secondary, #f8fafc);
   --color-foreground: var(--text-primary, #0f172a);
@@ -67,6 +112,7 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-accent: var(--accent-bg);
   --color-accent-foreground: var(--accent-fg);
@@ -92,152 +138,124 @@
   --color-sidebar: var(--sidebar);
 }
 
+/* shadcn tokens are aliases, not a second palette. They resolve against the
+   legacy app tokens below, so light/dark values stay in one place. */
 :root {
-  --radius: 0.625rem;
+  --radius: 0.5rem;
 
-  --background: #ffffff;
-  --foreground: #0f172a;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #475569;
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+  --card: var(--bg-card);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-card);
+  --popover-foreground: var(--text-primary);
+  --muted: var(--bg-tertiary);
+  --muted-foreground: var(--text-secondary);
 
-  --primary: #171717;
+  --primary: var(--color-primary);
   --primary-foreground: #fafafa;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
+  --secondary: var(--bg-tertiary);
+  --secondary-foreground: var(--color-primary);
 
   /* shadcn neutral hover surface (distinct from HeroUI red --accent bridge) */
-  --accent-bg: #f1f5f9;
-  --accent-fg: #0f172a;
+  --accent-bg: var(--bg-tertiary);
+  --accent-fg: var(--text-primary);
 
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
+  --destructive: var(--color-danger);
+  --destructive-foreground: var(--bg-primary);
 
-  /* Success/warning surfaces use dark ink in dark mode (--success/--warning
-     become light there), mirroring --destructive-foreground. */
+  /* Success/warning surfaces use the page ink, mirroring destructive. */
   --success-foreground: #ffffff;
   --warning-foreground: #ffffff;
 
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #171717;
-  /* Sidebar — senada dengan latar konten (#ffffff) */
-  --sidebar: #ffffff;
-  --sidebar-foreground: #475569;
-  --sidebar-primary: #171717;
+  --border: var(--border-color);
+  --input: var(--border-color);
+  --ring: var(--color-primary);
+  /* Sidebar — elevated subtle neutral frame */
+  --sidebar: #fafafa;
+  --sidebar-foreground: #52525b;
+  --sidebar-primary: #18181b;
   --sidebar-primary-foreground: #fafafa;
-  --sidebar-accent: #f5f5f5;
-  --sidebar-accent-foreground: #171717;
-  --sidebar-border: #e8edf3;
-  --sidebar-ring: #171717;
+  --sidebar-accent: #f4f4f5;
+  --sidebar-accent-foreground: #09090b;
+  --sidebar-border: #e4e4e7;
+  --sidebar-ring: #18181b;
 
-  /* Chart palette */
-  --chart-1: #e11d48;
-  --chart-2: #2563eb;
-  --chart-3: #16a34a;
-  --chart-4: #f59e0b;
-  --chart-5: #7c3aed;
-  --chart-6: #0891b2;
+  /* Chart palette — high-contrast analytical distinction */
+  --chart-1: #18181b;
+  --chart-2: #0d9488;
+  --chart-3: #2563eb;
+  --chart-4: #d97706;
+  --chart-5: #e11d48;
+  --chart-6: #4f46e5;
 }
 
 html.dark {
-  --background: #0f1219;
-  --foreground: #f1f5f9;
-  --card: #161b26;
-  --card-foreground: #f1f5f9;
-  --popover: #161b26;
-  --popover-foreground: #f1f5f9;
-  --muted: #242938;
-  --muted-foreground: #94a3b8;
-
-  --primary: #fafafa;
-  --primary-foreground: #171717;
-  --secondary: #242938;
-  --secondary-foreground: #f1f5f9;
-
-  --accent-bg: #242938;
-  --accent-fg: #f1f5f9;
-
-  --destructive: #f87171;
-  --destructive-foreground: #0f172a;
-
-  --success-foreground: #0f172a;
-  --warning-foreground: #0f172a;
-
-  --border: #2d3548;
-  --input: #2d3548;
-  --ring: #d4d4d4;
-  /* Sidebar — senada dengan latar konten (#0f1219) */
-  --sidebar: #0f1219;
-  --sidebar-foreground: #94a3b8;
+  /* Derived tokens (background, card, muted, primary, border, ...) follow the
+     app-token aliases automatically; only non-derivable values live here. */
+  --primary-foreground: #18181b;
+  --success-foreground: #09090b;
+  --warning-foreground: #09090b;
+  --ring: #d4d4d8;
+  /* Sidebar — dark obsidian frame */
+  --sidebar: #0c0c0e;
+  --sidebar-foreground: #a1a1aa;
   --sidebar-primary: #fafafa;
-  --sidebar-primary-foreground: #171717;
-  --sidebar-accent: #262626;
+  --sidebar-primary-foreground: #18181b;
+  --sidebar-accent: #1f1f23;
   --sidebar-accent-foreground: #fafafa;
-  --sidebar-border: #1c2331;
-  --sidebar-ring: #d4d4d4;
+  --sidebar-border: #1f1f23;
+  --sidebar-ring: #d4d4d8;
 
   /* Chart palette (dark) */
-  --chart-1: #f87171;
-  --chart-2: #60a5fa;
-  --chart-3: #4ade80;
+  --chart-1: #e4e4e7;
+  --chart-2: #2dd4bf;
+  --chart-3: #60a5fa;
   --chart-4: #fbbf24;
-  --chart-5: #a78bfa;
-  --chart-6: #22d3ee;
+  --chart-5: #fb7185;
+  --chart-6: #818cf8;
 }
 
 /* HeroUI v3 styles must be imported after Tailwind CSS. */
 
-/* ==================== CSS VARIABLES ==================== */
+/* ==================== CSS VARIABLES ====================
+   Brand/semantic colours are declared once in `@theme` above. This block owns
+   only the surface/text tokens that shadcn aliases resolve against. */
 :root {
-  --color-primary: #171717;
-  --color-primary-hover: #262626;
-  --color-primary-light: #f5f5f5;
-  --color-secondary: #404040;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-info: #3b82f6;
+  --color-primary-light: #f4f4f5;
 
   --bg-primary: #ffffff;
-  --bg-secondary: #f8fafc;
-  --bg-tertiary: #f1f5f9;
-  --bg-sidebar: #0f172a;
+  --bg-secondary: #fafafa;
+  --bg-tertiary: #f4f4f5;
   --bg-card: #ffffff;
-  --color-surface-alt: #f1f5f9;
+  --color-surface-alt: #f4f4f5;
 
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
+  --text-primary: #09090b;
+  --text-secondary: #52525b;
+  --text-muted: #71717a;
   --text-inverse: #ffffff;
 
-  --border-color: #e2e8f0;
-  --border-radius: 8px;
-  --border-radius-lg: 12px;
-  --border-radius-xl: 16px;
+  --border-color: #e4e4e7;
+  --border-radius: 6px;
+  --border-radius-lg: 8px;
+  --border-radius-xl: 12px;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 16px -4px rgba(0, 0, 0, 0.08), 0 2px 6px -2px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 16px 24px -6px rgba(0, 0, 0, 0.1), 0 4px 10px -4px rgba(0, 0, 0, 0.05);
 
-  --sidebar-width: 260px;
-  --header-height: 64px;
+  --sidebar-width: 248px;
+  --header-height: 48px;
 
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: "JetBrains Mono", "Fira Code", monospace;
-
-  --transition: all 0.2s ease;
+  --transition: color 0.15s ease-out, background-color 0.15s ease-out, border-color 0.15s ease-out, box-shadow 0.15s ease-out;
 
   /* Bridge HeroUI v3 accent tokens to the app's neutral brand system. */
   --accent: var(--color-primary);
   --accent-hover: var(--color-primary-hover);
   --accent-foreground: #ffffff;
-  --accent-soft: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  --accent-soft-hover: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  --accent-soft: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  --accent-soft-hover: color-mix(in srgb, var(--color-primary) 16%, transparent);
   --accent-soft-foreground: var(--color-primary);
   --focus: var(--color-primary);
 }
@@ -251,48 +269,46 @@ html.dark {
 
 .button.button--secondary {
   --button-bg: var(--color-primary-light);
-  --button-bg-hover: color-mix(in srgb, var(--color-primary) 16%, transparent);
-  --button-bg-pressed: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  --button-bg-hover: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  --button-bg-pressed: color-mix(in srgb, var(--color-primary) 20%, transparent);
   --button-fg: var(--color-primary);
 }
 
 /* ==================== DARK THEME ==================== */
 html.dark {
   --color-primary: #fafafa;
-  --color-primary-hover: #d4d4d4;
-  --color-primary-light: #262626;
-  --color-secondary: #a3a3a3;
+  --color-primary-hover: #e4e4e7;
+  --color-primary-light: #27272a;
   --color-success: #34d399;
   --color-warning: #fbbf24;
   --color-danger: #f87171;
   --color-info: #60a5fa;
 
-  --bg-primary: #0f1219;
-  --bg-secondary: #1a1f2e;
-  --bg-tertiary: #242938;
-  --bg-sidebar: #020617;
-  --bg-card: #161b26;
-  --color-surface-alt: #1e2433;
+  --bg-primary: #09090b;
+  --bg-secondary: #121215;
+  --bg-tertiary: #1f1f23;
+  --bg-card: #121215;
+  --color-surface-alt: #18181b;
 
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --text-inverse: #0f172a;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --text-inverse: #09090b;
 
-  --border-color: #2d3548;
+  --border-color: #27272a;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.45), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 20px -4px rgba(0, 0, 0, 0.5), 0 4px 8px -4px rgba(0, 0, 0, 0.35);
+  --shadow-xl: 0 20px 30px -6px rgba(0, 0, 0, 0.55), 0 8px 12px -6px rgba(0, 0, 0, 0.4);
 
   color-scheme: dark;
 
   --accent: var(--color-primary);
   --accent-hover: var(--color-primary-hover);
   --accent-foreground: #ffffff;
-  --accent-soft: color-mix(in srgb, var(--color-primary) 18%, transparent);
-  --accent-soft-hover: color-mix(in srgb, var(--color-primary) 24%, transparent);
+  --accent-soft: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  --accent-soft-hover: color-mix(in srgb, var(--color-primary) 22%, transparent);
   --accent-soft-foreground: var(--color-primary);
   --focus: var(--color-primary);
 }
@@ -509,50 +525,59 @@ html.dark .tab-btn.active {
   color: var(--color-primary);
 }
 
-/* Filters & Chips */
+/* Filters & Chips — Crisp Segmented Pill Control */
 .filter-chip {
   display: inline-flex;
   align-items: center;
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 0.8125rem;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 6px;
+  font-size: 0.75rem;
   font-weight: 500;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-color);
+  letter-spacing: -0.005em;
+  background: var(--card);
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
   text-decoration: none;
-  transition: all 0.2s ease;
+  transition: color 0.15s ease-out, background-color 0.15s ease-out, border-color 0.15s ease-out, transform 0.12s ease-out;
   cursor: pointer;
+  user-select: none;
 }
 
 .filter-chip:hover {
-  background: var(--color-primary-light);
-  color: var(--color-primary);
-  border-color: var(--color-primary);
+  background: var(--muted);
+  color: var(--foreground);
+  border-color: color-mix(in srgb, var(--border), var(--foreground) 15%);
+}
+
+.filter-chip:active {
+  transform: scale(0.97);
 }
 
 .filter-chip.active {
-  background: var(--color-primary);
-  color: white;
-  border-color: var(--color-primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 html.dark .filter-chip {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border-color: var(--border-color);
+  background: var(--card);
+  color: var(--muted-foreground);
+  border-color: var(--border);
 }
 
 html.dark .filter-chip:hover {
-  background: var(--color-primary-light);
-  color: var(--color-primary);
-  border-color: var(--color-primary);
+  background: var(--muted);
+  color: var(--foreground);
+  border-color: color-mix(in srgb, var(--border), var(--foreground) 18%);
 }
 
 html.dark .filter-chip.active {
-  background: var(--primary-foreground);
-  color: var(--color-primary);
-  border-color: var(--color-primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
 }
 
 /* Dropdown & Popover (legacy custom classes only) */
@@ -697,6 +722,10 @@ html {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
 }
 
 body {
@@ -704,15 +733,34 @@ body {
   padding: 0;
   background: var(--bg-secondary);
   color: var(--text-primary);
-  line-height: 1.6;
+  line-height: 1.5;
+  letter-spacing: -0.006em;
+  overscroll-behavior-y: none;
+}
+
+h1, h2, h3, h4, [data-slot="card-title"] {
+  text-wrap: balance;
+  letter-spacing: -0.02em;
+  font-optical-sizing: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ==================== APP LAYOUT ==================== */
 
 .app-content {
   flex: 1;
-  padding: 16px;
-  max-width: 1400px;
+  padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(76px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  max-width: 1440px;
   width: 100%;
   min-width: 0;
   overflow-x: clip;
@@ -721,13 +769,19 @@ body {
 
 @media (min-width: 768px) {
   .app-content {
-    padding: 24px;
+    padding: 20px 24px 32px;
   }
 }
 
 .app-content:has(> [data-dashboard-page="true"]) {
-  padding: 0;
+  padding: 0 0 calc(72px + env(safe-area-inset-bottom, 0px)) 0;
   max-width: none;
+}
+
+@media (min-width: 768px) {
+  .app-content:has(> [data-dashboard-page="true"]) {
+    padding: 0;
+  }
 }
 
 /* Cegah wide child escape dari sidebar inset */
@@ -739,10 +793,10 @@ body {
 /* ==================== SIDEBAR ==================== */
 
 .nav-item.active {
-  background: linear-gradient(90deg, rgba(220, 38, 38, 0.15) 0%, rgba(220, 38, 38, 0.03) 100%);
-  color: var(--color-primary);
+  background: var(--sidebar-accent);
+  color: var(--sidebar-accent-foreground);
   font-weight: 500;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .nav-item.active .nav-icon {
@@ -896,8 +950,8 @@ html.dark [cmdk-group-heading] {
   width: 72px;
   height: 72px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-  color: white;
+  background: var(--primary);
+  color: var(--primary-foreground);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1582,14 +1636,11 @@ html.dark [cmdk-group-heading] {
 }
 
 /* ==================== REPORT DOCUMENT (lembar laporan + tabel pernyataan) ====================
- * Laporan keuangan dirender sebagai DOKUMEN: satu lembar berukuran A4 dengan kop
- * tengah, judul, periode, lalu tabel pernyataan bergaris horizontal saja — bukan
- * kartu-kartu dashboard.
+ * Laporan keuangan dirender sebagai Modern ERP Analytical Workspace di layar,
+ * dan bertransformasi menjadi lembar A4 formal hitam-putih saat dicetak (@media print).
  *
  * Palet dokumen memakai token tema (--card/--foreground/--muted-foreground/
- * --border) sehingga **ikut dark mode** — sebelumnya nilainya hardcoded putih +
- * tinta gelap, jadi saat tema gelap aktif teks terang jatuh di atas lembar putih
- * dan nyaris tak terbaca. Saat DICETAK tetap dipaksa hitam-putih (lihat @media print).
+ * --border) sehingga **ikut dark mode**. Saat DICETAK tetap dipaksa hitam-putih.
  */
 .report-sheet,
 .report-paper,
@@ -1597,43 +1648,76 @@ html.dark [cmdk-group-heading] {
   --doc-paper: var(--card, #ffffff);
   --doc-ink: var(--card-foreground, #111827);
   --doc-muted: var(--muted-foreground, #6b7280);
-  --doc-rule: var(--border, #111827);
+  --doc-rule: var(--border, #e4e4e7);
 }
 
-.report-sheet {
+.report-sheet,
+.report-paper {
   background: var(--doc-paper);
   color: var(--doc-ink);
   width: 100%;
-  max-width: 210mm;
-  margin-inline: auto;
-  padding: 14mm 12mm;
-  border: 1px solid var(--border, #e5e7eb);
-  border-radius: 10px;
-  box-shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 10px 30px -18px rgb(16 24 40 / 25%);
   font-variant-numeric: tabular-nums;
+}
+
+@media screen {
+  .report-sheet,
+  .report-paper {
+    max-width: none;
+    margin: 0;
+    padding: 24px;
+    border: 0;
+    border-radius: 12px;
+    box-shadow: none;
+  }
 }
 
 /* ---- kop dokumen ---- */
 .doc-head { text-align: center; }
 
-.report-sheet-wide,
-.report-paper-wide {
-  max-width: 297mm;
+@media screen {
+  /* Di layar: kop surat fisik (alamat jalan, telepon, garis rule) disembunyikan
+     agar menjadi Analytical ERP Workspace yang padat dan langsung fokus pada data. */
+  .doc-letterhead-block .doc-lines,
+  .doc-letterhead-block .doc-logo,
+  .doc-letterhead-block .doc-rule,
+  .doc-letterhead-block .doc-company {
+    display: none !important;
+  }
+
+  .doc-head.doc-header-bar {
+    text-align: left;
+    margin-bottom: 20px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--doc-rule);
+  }
+
+  .doc-company-screen {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--doc-muted);
+    margin-bottom: 4px;
+  }
+
+  .doc-foot,
+  .doc-foot-sig {
+    display: none !important;
+  }
 }
 
-/* Kertas untuk laporan yang menggambar kopnya sendiri (`sheet={false}`).
-   Sebelumnya isi 23 laporan itu mengambang langsung di latar aplikasi, jadi
-   tidak terbaca sebagai dokumen; kini punya lembar putih sendiri. */
-.report-paper {
-  background: var(--doc-paper);
-  color: var(--doc-ink);
-  width: 100%;
-  max-width: 210mm;
-  margin-inline: auto;
-  padding: 14mm 12mm;
-  border-radius: 2px;
-  box-shadow: 0 2px 6px rgb(0 0 0 / 28%), 0 24px 48px -28px rgb(0 0 0 / 55%);
-  font-variant-numeric: tabular-nums;
+.report-sheet-wide,
+.report-paper-wide {
+  max-width: none;
+}
+
+/* Bersihkan kartu bg-surface bawaan di dalam report-paper agar menyatu mulus dengan kertas dokumen */
+.report-paper section.bg-surface,
+.report-paper .bg-surface {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
 }
 
 /* Sebagian laporan menggambar lembarnya sendiri di dalam `sheet={false}`
@@ -1642,19 +1726,27 @@ html.dark [cmdk-group-heading] {
   background: none;
   box-shadow: none;
   border-radius: 0;
+  border: 0;
   padding: 0;
   max-width: none;
   margin: 0;
 }
 
-/* Kanvas dokumen: kertas putih di atas latar gelap, seperti penampil PDF.
+/* Kanvas dokumen: meja kerja laporan akuntansi.
    Hanya di layar — saat dicetak kanvasnya hilang dan yang keluar kertasnya. */
 @media screen {
   .report-canvas {
-    background: var(--report-canvas, #3f3f46);
+    background: var(--card, #ffffff);
+    border: 1px solid var(--border, #e2e8f0);
     border-radius: 12px;
-    padding: 20px 16px;
+    padding: 0;
+    box-shadow: 0 1px 3px 0 rgb(15 23 42 / 4%);
     overflow-x: auto;
+  }
+
+  html.dark .report-canvas {
+    background: var(--card, #09090b);
+    border-color: var(--border, #27272a);
   }
 }
 
@@ -1706,10 +1798,33 @@ html.dark [cmdk-group-heading] {
 .stmt .indent-2 { padding-left: 32px; }
 .stmt .indent-3 { padding-left: 48px; }
 .stmt .col-code { width: 68px; color: var(--doc-muted); }
-.stmt td a { color: var(--doc-ink); text-decoration: underline; text-underline-offset: 2px; }
-.stmt td a:hover { text-decoration-thickness: 2px; }
+.stmt td a { color: var(--color-info, #2563eb); text-decoration: none; }
+.stmt td a:hover { text-decoration: underline; text-underline-offset: 2px; }
 .stmt .muted { color: var(--doc-muted); }
 .stmt-empty { padding: 14px 0; text-align: center; color: var(--doc-muted); font-size: 9pt; }
+
+@media screen {
+  .report-canvas .stmt thead th {
+    position: sticky;
+    top: 0;
+    background: var(--doc-paper);
+    z-index: 10;
+  }
+
+  .stmt tbody tr:not(.group):not(.subtotal):not(.total):not(.grand):hover td {
+    background-color: rgb(15 23 42 / 3.5%);
+  }
+
+  html.dark .stmt tbody tr:not(.group):not(.subtotal):not(.total):not(.grand):hover td {
+    background-color: rgb(255 255 255 / 3.5%);
+  }
+
+  .stmt td a:focus-visible {
+    outline: 2px solid var(--ring, #18181b);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
 
 /* ---- bagian laporan & ringkasan angka (tanpa kartu/warna blok) ---- */
 .report-section { margin-bottom: 16px; }
@@ -1728,12 +1843,18 @@ html.dark [cmdk-group-heading] {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 6px 0 6px 10px;
-  border-left: 2px solid var(--border, #e5e7eb);
+  padding: 8px 12px;
+  border-left: 3px solid var(--color-primary, #18181b);
+  background-color: rgb(15 23 42 / 2%);
+  border-radius: 0 6px 6px 0;
+}
+html.dark .report-kpi-card {
+  border-left-color: var(--color-primary, #fafafa);
+  background-color: rgb(255 255 255 / 2%);
 }
 .report-kpi-content { display: flex; flex-direction: column; }
-.report-kpi-label { margin: 0; font-size: 8pt; letter-spacing: 0.04em; text-transform: uppercase; color: var(--doc-muted, #6b7280); }
-.report-kpi-value { margin: 0; font-size: 11pt; font-weight: 700; font-variant-numeric: tabular-nums; }
+.report-kpi-label { margin: 0; font-size: 8pt; letter-spacing: 0.05em; text-transform: uppercase; color: var(--doc-muted, #6b7280); font-weight: 600; }
+.report-kpi-value { margin: 2px 0 0; font-size: 11.5pt; font-weight: 700; font-variant-numeric: tabular-nums; }
 .report-kpi-icon { display: none; }
 
 /* ---- kaki dokumen ---- */
@@ -1744,18 +1865,19 @@ html.dark [cmdk-group-heading] {
 
 /* ---- kerangka lembar: setiap halaman laporan memakai kop (ReportLetterhead)
    otomatis dibingkai sebagai lembar dokumen, tanpa perlu mengubah tiap halaman.
-   Lebar 297mm karena laporan operasional punya banyak kolom (A4 landscape).
+   Di layar berukuran penuh mengikuti kontainer; saat dicetak menyesuaikan kertas A4 lanskap.
    Palet --doc-* diwarisi dari aturan di atas, jadi ikut tema terang/gelap. */
 @media screen {
   .app-content > div:has(.report-letterhead) {
     background: var(--doc-paper);
     color: var(--doc-ink);
-    max-width: 297mm;
-    margin-inline: auto;
-    padding: 12mm;
+    max-width: none;
+    width: 100%;
+    margin-inline: 0;
+    padding: 24px;
     border: 1px solid var(--border, #e5e7eb);
-    border-radius: 10px;
-    box-shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 10px 30px -18px rgb(16 24 40 / 22%);
+    border-radius: 12px;
+    box-shadow: 0 1px 3px 0 rgb(15 23 42 / 4%);
     font-variant-numeric: tabular-nums;
   }
 }

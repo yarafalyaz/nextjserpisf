@@ -1,6 +1,6 @@
 "use client"
 
-import { Pencil } from "lucide-react"
+import { Pencil } from "@/components/ui/fontawesome-icons"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { entityHref } from "@/lib/utils/entity-url"

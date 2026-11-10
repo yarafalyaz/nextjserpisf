@@ -22,7 +22,7 @@ import {
   DetailTableTd,
 } from "@/components/ui/detail-table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Pencil } from "lucide-react";
+import { Pencil } from "@/components/ui/fontawesome-icons";
 
 import type { Metadata } from "next";
 

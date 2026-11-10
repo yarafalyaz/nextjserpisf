@@ -27,7 +27,11 @@ export default async function IncomeStatementPage({
   const { period, options, showPercent } = await loadStatementOptionsContext(routeParams, searchParams)
 
   // Baris tabel disusun sekali di sini dan dipakai bersama layar + engine PDF.
-  const statement = await loadIncomeStatementStatement(period, options, showPercent)
+  // Sertakan lineLink ke Buku Besar untuk drill-down akun standar ERP internasional
+  const statement = await loadIncomeStatementStatement(period, options, showPercent, {
+    basePath: "/laporan/buku-besar",
+    periodSlug: period.slug,
+  })
 
   return (
     <ReportPageShell

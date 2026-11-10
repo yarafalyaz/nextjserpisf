@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Percent } from "lucide-react"
+import { Percent } from "@/components/ui/fontawesome-icons"
 import { createProgressInvoice } from "@/actions/sales.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"

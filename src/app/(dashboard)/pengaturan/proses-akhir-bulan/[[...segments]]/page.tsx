@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import type { Metadata } from "next"
-import { AlertTriangle, CheckCircle2, Info } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Info } from "@/components/ui/fontawesome-icons"
 
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/shadcn/card"

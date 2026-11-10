@@ -41,7 +41,11 @@ export default async function VendorPaymentDetailPage({
           where: { slug: s, ...where },
           include: {
             vendor: true,
-            allocations: true,
+            allocations: {
+              include: {
+                vendorBill: { select: { id: true, slug: true, documentNo: true } },
+              },
+            },
           },
         }),
       byId: (id, where) =>
@@ -49,7 +53,11 @@ export default async function VendorPaymentDetailPage({
           where: { id, ...where },
           include: {
             vendor: true,
-            allocations: true,
+            allocations: {
+              include: {
+                vendorBill: { select: { id: true, slug: true, documentNo: true } },
+              },
+            },
           },
         }),
     },
@@ -132,13 +140,24 @@ export default async function VendorPaymentDetailPage({
           <div className="p-4 px-5">
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>ID Tagihan</DetailTableTh>
-                <DetailTableTh align="right">Jumlah</DetailTableTh>
+                <DetailTableTh>No. Tagihan</DetailTableTh>
+                <DetailTableTh align="right">Jumlah Alokasi</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
                 {payment.allocations.map((alloc) => (
                   <DetailTableRow key={alloc.id}>
-                    <DetailTableTd><Link href={`/pembelian/tagihan/${alloc.vendorBillId}`}>Tagihan #{alloc.vendorBillId}</Link></DetailTableTd>
+                    <DetailTableTd>
+                      {alloc.vendorBill ? (
+                        <Link
+                          href={entityHref("/pembelian/tagihan", alloc.vendorBill)}
+                          className="font-medium text-primary hover:underline font-mono"
+                        >
+                          {alloc.vendorBill.documentNo}
+                        </Link>
+                      ) : (
+                        `Tagihan #${alloc.vendorBillId}`
+                      )}
+                    </DetailTableTd>
                     <DetailTableTd align="right">{formatCurrencyExact(Number(alloc.amount))}</DetailTableTd>
                   </DetailTableRow>
                 ))}

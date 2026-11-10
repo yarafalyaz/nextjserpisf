@@ -95,3 +95,13 @@ export async function sumNetForAccount(accountId: number, filter: ReportEntryFil
   })
   return Number(grouped._sum.debit ?? 0) - Number(grouped._sum.credit ?? 0)
 }
+
+/** Net (debit - credit) for multiple accounts combined, e.g. parent account with its descendants. */
+export async function sumNetForAccounts(accountIds: number[], filter: ReportEntryFilter = {}): Promise<number> {
+  if (!accountIds.length) return 0
+  const grouped = await prisma.journalEntry.aggregate({
+    where: buildWhere({ ...filter, accountIds }),
+    _sum: { debit: true, credit: true },
+  })
+  return Number(grouped._sum.debit ?? 0) - Number(grouped._sum.credit ?? 0)
+}

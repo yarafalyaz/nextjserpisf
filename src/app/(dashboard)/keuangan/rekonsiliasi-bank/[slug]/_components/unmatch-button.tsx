@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { XCircle } from "lucide-react"
+import { XCircle } from "@/components/ui/fontawesome-icons"
 import { Button } from "@/components/ui/shadcn/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showSuccess, showError } from "@/lib/utils/toast"

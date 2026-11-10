@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic"
 
-import { ChevronRight } from "lucide-react"
+import { ChevronRight } from "@/components/ui/fontawesome-icons"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { requireAnyPermission } from "@/lib/auth/permissions"

@@ -1,6 +1,6 @@
 'use client'
 
-import { Filter } from 'lucide-react'
+import { Filter } from "@/components/ui/fontawesome-icons"
 import {
   Sheet,
   SheetContent,

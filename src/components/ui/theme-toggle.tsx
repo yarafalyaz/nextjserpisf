@@ -1,6 +1,6 @@
 "use client"
 
-import { Sun, Moon, Monitor, Check } from "lucide-react"
+import { Sun, Moon, Monitor, Check } from "@/components/ui/fontawesome-icons"
 import { useSyncExternalStore } from "react"
 import { Button } from "@/components/ui/shadcn/button"
 import { useTheme } from "@/components/providers/theme-provider"
@@ -30,8 +30,8 @@ export function ThemeToggle() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" aria-label="Ganti tema" className="size-11 relative">
-          <Sun className="size-5 rotate-0 scale-100 transition-all duration-300 dark:-rotate-90 dark:scale-0" aria-hidden="true" />
-          <Moon className="absolute size-5 rotate-90 scale-0 transition-all duration-300 dark:rotate-0 dark:scale-100" aria-hidden="true" />
+          <Sun className="size-4 rotate-0 scale-100 transition-transform duration-200 dark:-rotate-90 dark:scale-0" aria-hidden="true" />
+          <Moon className="absolute size-4 rotate-90 scale-0 transition-transform duration-200 dark:rotate-0 dark:scale-100" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-40">

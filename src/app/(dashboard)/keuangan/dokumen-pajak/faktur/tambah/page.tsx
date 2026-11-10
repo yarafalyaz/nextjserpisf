@@ -4,11 +4,7 @@ import type { Metadata } from "next"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
-
-/**
- * Izin terbit faktur dari F-034 (PR #301, di main): `create_tax_invoices`.
- */
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader } from "@/components/ui/page-header"
 import { TaxInvoiceForm, TaxInvoiceLifecycleActions, type TaxOption } from "@/app/(dashboard)/keuangan/dokumen-pajak/_components/tax-invoice-form"
 import { CoretaxExportPanel } from "@/app/(dashboard)/keuangan/dokumen-pajak/_components/coretax-export-panel"
 import { TaxInvoiceDraftQueueCard } from "@/components/reports/tax-invoice-draft-queue-card"
@@ -19,7 +15,7 @@ export const metadata: Metadata = { title: "Terbitkan Faktur Pajak" }
 
 const moneyOption = (documentNo: string | null, amount: unknown, party: string): TaxOption => ({
   value: "",
-  label: `${documentNo ?? "Tanpa nomor"} — ${party} (${formatCurrencyExact(Number(amount))})`,
+  label: `${documentNo ?? "Tanpa nomor"} - ${party} (${formatCurrencyExact(Number(amount))})`,
 })
 
 /**
@@ -66,15 +62,16 @@ export default async function CreateTaxInvoicePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs
-        items={[
+      <PageHeader
+        title="Terbitkan Faktur Pajak"
+        subtitle="Penerbitan faktur pajak keluaran (penjualan) atau pencatatan faktur pajak masukan (pembelian) sesuai format PER-11/PJ/2025."
+        breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Keuangan", href: "/keuangan" },
-          { label: "Dokumen Pajak", href: "/keuangan/dokumen-pajak/faktur/tambah" },
-          { label: "Dokumen Pajak" },
+          { label: "Dokumen Pajak", href: "/keuangan/dokumen-pajak/faktur" },
+          { label: "Terbitkan Faktur" },
         ]}
       />
-      <h1 className="text-2xl font-bold text-foreground">Terbitkan Faktur Pajak</h1>
       <TaxInvoiceDraftQueueCard queue={draftQueue} />
       <TaxInvoiceForm
         salesInvoices={salesInvoices.map((inv) => ({ ...moneyOption(inv.documentNo, inv.grandTotal, inv.customer.name), value: String(inv.id) }))}
@@ -85,7 +82,7 @@ export default async function CreateTaxInvoicePage() {
         <TaxInvoiceLifecycleActions
           invoices={issued.map((inv) => ({
             value: String(inv.id),
-            label: `${inv.taxInvoiceNumber} — ${inv.direction === "out" ? "Keluaran" : "Masukan"}${inv.counterpartyName ? ` — ${inv.counterpartyName}` : ""} (${formatCurrencyExact(Number(inv.taxAmount))})`,
+            label: `${inv.taxInvoiceNumber} - ${inv.direction === "out" ? "Keluaran" : "Masukan"}${inv.counterpartyName ? ` - ${inv.counterpartyName}` : ""} (${formatCurrencyExact(Number(inv.taxAmount))})`,
           }))}
         />
       )}
@@ -95,7 +92,7 @@ export default async function CreateTaxInvoicePage() {
             .filter((inv) => inv.direction === "out")
             .map((inv) => ({
               value: String(inv.id),
-              label: `${inv.taxInvoiceNumber} — Keluaran${inv.counterpartyName ? ` — ${inv.counterpartyName}` : ""} (${formatCurrencyExact(Number(inv.taxAmount))})`,
+              label: `${inv.taxInvoiceNumber} - Keluaran${inv.counterpartyName ? ` - ${inv.counterpartyName}` : ""} (${formatCurrencyExact(Number(inv.taxAmount))})`,
             }))}
         />
       )}

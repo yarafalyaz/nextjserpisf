@@ -8,6 +8,8 @@ import { deletePettyCash } from "@/actions/finance.actions"
 import { formatDate, formatCurrencyExact } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { entityHref } from "@/lib/utils/entity-url"
+import { StatusChip } from "@/components/ui/status-chip"
+import { TrendingUp, TrendingDown } from "@/components/ui/fontawesome-icons"
 
 interface PettyCashData {
   id: number
@@ -29,42 +31,81 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={entityHref("/keuangan/kas-kecil", info.row.original)} className="text-foreground hover:underline font-mono">
+      <Link
+        href={entityHref("/keuangan/kas-kecil", info.row.original)}
+        className="font-medium text-primary hover:underline font-mono text-xs inline-flex min-h-11 sm:min-h-9 items-center"
+      >
         {info.getValue()}
       </Link>
     ),
   }),
   columnHelper.accessor("date", {
     header: "Tanggal",
-    cell: (info) => formatDate(info.getValue()),
+    cell: (info) => (
+      <span className="font-mono text-xs tabular-nums text-muted-foreground">
+        {formatDate(info.getValue())}
+      </span>
+    ),
   }),
   columnHelper.accessor("type", {
     header: "Tipe",
-    cell: (info) => statusLabel(info.getValue()),
+    cell: (info) => {
+      const type = info.getValue()
+      const isExpense = type === "OUT" || type === "expense"
+      return (
+        <div className="inline-flex items-center gap-1.5">
+          {isExpense ? (
+            <TrendingDown className="size-3 text-red-600 dark:text-red-400" aria-hidden="true" />
+          ) : (
+            <TrendingUp className="size-3 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+          )}
+          <StatusChip status={type} customLabel={statusLabel(type)} />
+        </div>
+      )
+    },
   }),
   columnHelper.accessor("description", {
-    header: "Deskripsi",
-    cell: (info) => info.getValue() || "-",
-  }),
-  columnHelper.accessor("projectName", {
-    header: "Nama Proyek",
-    cell: (info) => info.getValue() || "-",
-  }),
-  columnHelper.accessor("vendorName", {
-    header: "Pemasok",
-    cell: (info) => info.getValue() || "-",
+    header: "Keterangan",
+    cell: (info) => (
+      <span className="text-xs text-foreground line-clamp-1 max-w-[220px]" title={info.getValue() || undefined}>
+        {info.getValue() || "-"}
+      </span>
+    ),
   }),
   columnHelper.accessor("categoryName", {
     header: "Kategori",
-    cell: (info) => info.getValue() || "-",
+    cell: (info) => (
+      <span className="text-xs text-muted-foreground">
+        {info.getValue() || "-"}
+      </span>
+    ),
+  }),
+  columnHelper.accessor("projectName", {
+    header: "Proyek",
+    cell: (info) => (
+      <span className="text-xs text-muted-foreground truncate max-w-[160px] block" title={info.getValue() || undefined}>
+        {info.getValue() || "-"}
+      </span>
+    ),
   }),
   columnHelper.accessor("amount", {
     header: "Jumlah",
-    cell: (info) => <span className="text-right block">{formatCurrencyExact(info.getValue())}</span>,
+    cell: (info) => {
+      const isExpense = info.row.original.type === "OUT" || info.row.original.type === "expense"
+      return (
+        <span className={`text-right block font-mono text-xs font-semibold tabular-nums ${isExpense ? "text-foreground" : "text-emerald-600 dark:text-emerald-400"}`}>
+          {formatCurrencyExact(info.getValue())}
+        </span>
+      )
+    },
   }),
   columnHelper.accessor("balanceAfter", {
     header: "Saldo Setelah",
-    cell: (info) => <span className="text-right block">{formatCurrencyExact(info.getValue())}</span>,
+    cell: (info) => (
+      <span className="text-right block font-mono text-xs tabular-nums text-muted-foreground">
+        {formatCurrencyExact(info.getValue())}
+      </span>
+    ),
   }),
   columnHelper.display({
     id: "actions",
@@ -99,11 +140,13 @@ interface PettyCashTableProps {
 export function PettyCashTable({ data, total, page, pageSize, toolbar, filters }: PettyCashTableProps) {
   return (
     <DataTable
-      data={data}
       columns={columns}
-      ariaLabel="Daftar kas kecil"
-      serverPagination={{ total, page, pageSize }}
-      selectable={true}
+      data={data}
+      serverPagination={{
+        page,
+        pageSize,
+        total,
+      }}
       toolbar={toolbar}
       filters={filters}
     />

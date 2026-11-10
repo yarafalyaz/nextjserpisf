@@ -14,7 +14,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { TransactionAttachments } from "@/components/ui/transaction-attachments";
 import { ExpenseApprovalActions } from "../_components/expense-approval-actions";
 import { ReimbursementVerifyPanel } from "../_components/reimbursement-verify-panel";
-import { Pencil } from "lucide-react";
+import { Pencil } from "@/components/ui/fontawesome-icons";
 
 import type { Metadata } from "next";
 

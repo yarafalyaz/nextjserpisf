@@ -248,34 +248,34 @@ export function StockAdjustmentForm({
                 <thead>
                   <tr className="border-b border-default">
                     <th
-                      className="text-left py-2 px-2 font-medium text-secondary"
+                      className="text-left py-2 px-2 font-medium text-muted-foreground"
                       style={{ minWidth: "200px" }}
                     >
                       Item
                     </th>
                     <th
-                      className="text-left py-2 px-2 font-medium text-secondary"
+                      className="text-left py-2 px-2 font-medium text-muted-foreground"
                       style={{ width: "100px" }}
                     >
                       Stok Saat Ini
                     </th>
                     <th
-                      className="text-left py-2 px-2 font-medium text-secondary"
+                      className="text-left py-2 px-2 font-medium text-muted-foreground"
                       style={{ width: "100px" }}
                     >
                       Stok Baru
                     </th>
                     <th
-                      className="text-left py-2 px-2 font-medium text-secondary"
+                      className="text-left py-2 px-2 font-medium text-muted-foreground"
                       style={{ width: "80px" }}
                     >
                       Selisih
                     </th>
-                    <th className="text-left py-2 px-2 font-medium text-secondary">
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">
                       Alasan
                     </th>
-                    <th className="text-left py-2 px-2 font-medium text-secondary">Nomor Seri</th>
-                    <th className="text-left py-2 px-2 font-medium text-secondary">Nomor Batch</th>
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">Nomor Seri</th>
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">Nomor Batch</th>
                     <th style={{ width: "40px" }}></th>
                   </tr>
                 </thead>

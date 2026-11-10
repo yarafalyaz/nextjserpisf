@@ -10,7 +10,14 @@ import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { TransactionAttachments } from "@/components/ui/transaction-attachments";
-import { Pencil } from "lucide-react";
+import {
+  Pencil,
+  Wallet,
+  TrendingUp,
+  TrendingDown,
+  ShieldCheck,
+} from "@/components/ui/fontawesome-icons";
+import { StatusChip } from "@/components/ui/status-chip";
 
 import type { Metadata } from "next";
 
@@ -64,9 +71,9 @@ export default async function PettyCashDetailPage({
   // Sembunyikan tombolnya; koreksi jalurnya pembatalan beralasan + buat baru.
   const postedJournal = await prisma.journal.findFirst({
     where: { referenceType: "PettyCash", referenceId: pettyCash.id, status: "POSTED" },
-    select: { id: true },
-  })
-  const isEditable = !postedJournal && pettyCash.status !== "void"
+    select: { id: true, documentNo: true },
+  });
+  const isEditable = !postedJournal && pettyCash.status !== "void";
 
   const account = pettyCash.accountId
     ? await prisma.account.findUnique({
@@ -75,10 +82,24 @@ export default async function PettyCashDetailPage({
       })
     : null;
 
+  const isExpense = pettyCash.type === "out" || pettyCash.type === "expense";
+  const amountNumber = Number(pettyCash.amount);
+  const balanceBeforeNumber = Number(pettyCash.balanceBefore);
+  const balanceAfterNumber = Number(pettyCash.balanceAfter);
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title={`Kas Kecil ${pettyCash.documentNo}`}
+        subtitle="Rincian mutasi kas kecil operasional beserta saldo buku dan jurnal pembukuan."
+        badge={
+          <div className="flex items-center gap-2">
+            <StatusChip status={pettyCash.type} customLabel={statusLabel(pettyCash.type)} />
+            {pettyCash.status && (
+              <StatusChip status={pettyCash.status} customLabel={statusLabel(pettyCash.status)} />
+            )}
+          </div>
+        }
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Keuangan", href: "/keuangan" },
@@ -86,7 +107,7 @@ export default async function PettyCashDetailPage({
           { label: pettyCash.documentNo },
         ]}
         actions={
-          <>
+          <div className="flex items-center gap-2">
             {isEditable && (
               <CanCreate permission="edit_petty_cash">
                 <Button
@@ -97,11 +118,6 @@ export default async function PettyCashDetailPage({
                 </Button>
               </CanCreate>
             )}
-            {/* deletePettyCash bukan hapus fisik: ia VOID beralasan (status
-                "void" + jurnal asal dipertahankan) dan menolak alasan kosong.
-                DeleteButton memanggil action(id) tanpa argumen kedua, jadi
-                tombol Hapus di sini selalu gagal "Alasan pembatalan kas kecil
-                wajib diisi". VoidButton yang mengumpulkan alasannya. */}
             <VoidButton
               id={pettyCash.id}
               action={deletePettyCash}
@@ -112,58 +128,106 @@ export default async function PettyCashDetailPage({
               body="Transaksi ditandai dibatalkan (void) dan jurnal aslinya dibalik, tetapi barisnya tetap tersimpan untuk jejak audit."
             />
             <BackButton href="/keuangan/kas-kecil" />
-          </>
+          </div>
         }
       />
 
-      <DetailCard>
+      {/* Financial Metric Strip (Antislop & Better-UI Standard) */}
+      <div className="grid grid-cols-1 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs sm:grid-cols-3">
+        {/* Nominal Transaksi */}
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            {isExpense ? (
+              <TrendingDown className="size-3.5 text-danger" aria-hidden="true" />
+            ) : (
+              <TrendingUp className="size-3.5 text-success" aria-hidden="true" />
+            )}
+            <span>Nominal Transaksi ({isExpense ? "Keluar" : "Masuk"})</span>
+          </div>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+            {formatCurrencyExact(amountNumber)}
+          </p>
+        </div>
+
+        {/* Saldo Sebelum */}
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <Wallet className="size-3.5 text-muted-foreground" aria-hidden="true" />
+            <span>Saldo Sebelum</span>
+          </div>
+          <p className="mt-2 text-xl font-semibold tracking-tight text-foreground font-mono tabular-nums">
+            {formatCurrencyExact(balanceBeforeNumber)}
+          </p>
+        </div>
+
+        {/* Saldo Setelah */}
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <Wallet className="size-3.5 text-muted-foreground" aria-hidden="true" />
+            <span>Saldo Setelah</span>
+          </div>
+          <p className="mt-2 text-xl font-semibold tracking-tight text-foreground font-mono tabular-nums">
+            {formatCurrencyExact(balanceAfterNumber)}
+          </p>
+        </div>
+      </div>
+
+      {/* Main Details Section */}
+      <DetailCard title="Informasi Transaksi" columns={3}>
         <DetailField label="No. Dokumen" value={pettyCash.documentNo} mono />
-        <DetailField label="Tipe" value={statusLabel(pettyCash.type)} />
-        <DetailField
-          label="Jumlah"
-          value={formatCurrencyExact(Number(pettyCash.amount))}
-        />
-        <DetailField
-          label="Saldo Sebelum"
-          value={formatCurrencyExact(Number(pettyCash.balanceBefore))}
-        />
-        <DetailField
-          label="Saldo Setelah"
-          value={formatCurrencyExact(Number(pettyCash.balanceAfter))}
-        />
-        <DetailField label="Tanggal" value={formatDate(pettyCash.date)} />
-        {pettyCash.accountId && (
+        <DetailField label="Tipe Mutasi" value={statusLabel(pettyCash.type)} />
+        <DetailField label="Tanggal Transaksi" value={formatDate(pettyCash.date)} />
+
+        {account && (
           <DetailField
-            label="Akun"
+            label="Akun Pembukuan"
             value={
-              account
-                ? `${account.code} - ${account.name}`
-                : `#${pettyCash.accountId}`
+              <span className="font-mono text-sm">
+                {account.code} - {account.name}
+              </span>
             }
           />
         )}
-        {pettyCash.description && (
-          <DetailField
-            label="Deskripsi"
-            value={pettyCash.description}
-            colSpan="full"
-          />
+
+        {pettyCash.category && (
+          <DetailField label="Kategori Biaya" value={pettyCash.category.label} />
         )}
+
+        {pettyCash.vendor && (
+          <DetailField label="Penerima / Vendor" value={pettyCash.vendor.name} />
+        )}
+
         {pettyCash.project && (
           <DetailField
-            label="Nama Proyek"
+            label="Proyek Terkait"
             value={`${pettyCash.project.documentNo ? `${pettyCash.project.documentNo} - ` : ""}${pettyCash.project.name}`}
           />
         )}
-        {pettyCash.vendor && (
-          <DetailField label="Pemasok" value={pettyCash.vendor.name} />
+
+        {postedJournal && (
+          <DetailField
+            label="Status Jurnal Akuntansi"
+            value={
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                <ShieldCheck className="size-3.5" aria-hidden="true" />
+                <span>Terposting (Jurnal #{postedJournal.documentNo || postedJournal.id})</span>
+              </span>
+            }
+          />
         )}
-        {pettyCash.category && (
-          <DetailField label="Kategori" value={pettyCash.category.label} />
+
+        <DetailField label="Waktu Dicatat" value={formatDate(pettyCash.createdAt)} />
+
+        {pettyCash.description && (
+          <DetailField
+            label="Keterangan & Keperluan"
+            value={<p className="text-pretty">{pettyCash.description}</p>}
+            colSpan="full"
+          />
         )}
-        <DetailField label="Dibuat" value={formatDate(pettyCash.createdAt)} />
       </DetailCard>
 
+      {/* Attachments & Receipt Photos */}
       <TransactionAttachments
         referenceType="petty_cash"
         referenceId={pettyCash.id}

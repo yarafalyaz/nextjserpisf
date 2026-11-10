@@ -20,6 +20,7 @@ export interface TrialBalanceEntryInput {
   id: number
   code: string
   name: string
+  slug?: string | null
   type: string
   /** Sum of all debit postings for this account in the period. */
   totalDebit: number
@@ -31,6 +32,7 @@ export interface TrialBalanceLine {
   id: number
   code: string
   name: string
+  slug?: string | null
   type: string
   /** Net debit balance (0 if the account nets to a credit). */
   totalDebit: number
@@ -60,6 +62,7 @@ export function computeTrialBalance(
         id: acc.id,
         code: acc.code,
         name: acc.name,
+        slug: acc.slug,
         type: acc.type,
         totalDebit: Math.max(0, netBalance),
         totalCredit: Math.max(0, -netBalance),

@@ -24,7 +24,7 @@ describe("PostedLockNotice (GL-BR-003 K1/K2)", () => {
     )
     const note = container.querySelector('[role="note"]')
     expect(note?.getAttribute("aria-label")).toBe("Faktur F-1 terkunci")
-    expect(container.textContent).toContain("Faktur F-1 terkunci — sudah posted")
+    expect(container.textContent).toContain("Faktur F-1 terkunci: sudah posted")
     expect(container.textContent).toContain("tidak bisa diubah atau dihapus")
     const link = container.querySelector('a[href="/penjualan/retur/tambah/faktur/F-1"]')
     expect(link?.textContent).toBe("retur penjualan")

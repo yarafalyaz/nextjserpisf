@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { requirePermission } from "@/lib/auth/permissions"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader } from "@/components/ui/page-header"
 import { BankReconciliationForm } from "./form"
 
 import type { Metadata } from "next"
@@ -12,21 +12,20 @@ export const metadata: Metadata = { title: "Tambah Rekonsiliasi Bank" }
 export default async function CreateBankReconciliationPage() {
   await requirePermission("manage_bank_reconciliation")
 
-  const accounts = await loadPostableAccounts({ type: "ASSET" })
+  const accounts = await loadPostableAccounts({ type: "ASSET", reportGroup: "BANK" })
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs
-        items={[
+      <PageHeader
+        title="Buat Rekonsiliasi Bank"
+        subtitle="Inisiasi sesi rekonsiliasi untuk mencocokkan mutasi rekening koran fisik bank dengan buku besar kas/bank perusahaan."
+        breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Keuangan", href: "/keuangan" },
           { label: "Rekonsiliasi Bank", href: "/keuangan/rekonsiliasi-bank" },
-          { label: "Buat" },
+          { label: "Buat Rekonsiliasi" },
         ]}
       />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Buat Rekonsiliasi Bank</h1>
-      </div>
       <BankReconciliationForm accounts={accounts} />
     </div>
   )

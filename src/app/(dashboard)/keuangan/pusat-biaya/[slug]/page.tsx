@@ -9,7 +9,7 @@ import { deleteCostCenter } from "@/actions/finance.actions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { Pencil, ChevronRight } from "lucide-react"
+import { Pencil, ChevronRight } from "@/components/ui/fontawesome-icons"
 
 import type { Metadata } from "next"
 

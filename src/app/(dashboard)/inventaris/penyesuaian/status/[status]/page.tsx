@@ -12,7 +12,7 @@ export async function generateMetadata({
   const { status } = await params
   const dbStatus = indoToStatus[status] || status
   return {
-    title: `Penyesuaian Stok - ${dbStatus === "processed" ? "Diposting" : statusLabel(dbStatus)}`,
+    title: `Penyesuaian Stok - ${dbStatus === "processed" ? "Diterbitkan" : statusLabel(dbStatus)}`,
   }
 }
 

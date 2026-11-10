@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { CalendarIcon } from "lucide-react"
+import { CalendarIcon } from "@/components/ui/fontawesome-icons"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
 

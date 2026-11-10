@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth/auth"
 import { hasPermission } from "@/lib/auth/permissions"
 import { apiError } from "@/lib/api-response"
-import { parseReportPeriod } from "@/lib/reports/report-period"
+import { parseReportPeriod, splitReportSegments } from "@/lib/reports/report-period"
 import { reportPdfFilename } from "@/lib/reports/report-export"
 import { REPORTS, isReportPdfKey } from "@/lib/reports/report-registry"
 import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
@@ -11,22 +11,49 @@ import { renderStatementPdfBytes, renderTablePdfBytes } from "@/lib/pdf/engine/r
 /**
  * PDF laporan, dirender di server oleh engine deklaratif.
  *
- * Sebelumnya tombol "PDF" laporan membaca DOM halaman (`innerText` tabel) dan
- * tombol "Cetak" memanggil `window.print()` — cetakan karena itu bergantung pada
- * markup layar dan CSS cetak. Endpoint ini mengembalikan berkas PDF sungguhan yang
- * digambar dari DATA laporan (lihat `report-registry.ts`): dapat dipratinjau lalu
- * dicetak dari penampil PDF, atau diunduh (`?unduh=1`).
- *
- * Parameter:
- *   laporan=<kunci laporan>    (wajib; lihat REPORTS di report-registry.ts)
- *   periode=<slug>             (2026 | 2026-10 | 2026-10-12 | 2026-01-01_2026-10-12)
- *   + parameter tiap laporan (mis. induk/anak/nol/saldo/total, kolomPersen,
- *     termasukDilepas, pembanding)
- *   unduh=1                    (Content-Disposition: attachment)
+ * Mendukung URL path kanonik: `/api/pdf/<laporan>/<periode>[/<kunci>/<nilai>...]`
+ * serta query string legacy `?laporan=...&periode=...` untuk kompatibilitas.
+ * Unduh berkas: `/unduh/1` di path atau `?unduh=1` di query string.
  */
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+
+export function parsePdfRequestParams(url: URL): {
+  report: string
+  periodSlug: string | undefined
+  search: Record<string, string>
+  isDownload: boolean
+} {
+  const querySearch = Object.fromEntries(url.searchParams.entries())
+  const rawPath = url.pathname.replace(/^\/api\/pdf\/?/, "")
+  const pathParts = rawPath ? rawPath.split("/").filter(Boolean) : []
+
+  if (pathParts.length > 0) {
+    const report = pathParts[0]
+    const restSegments = pathParts.slice(1)
+    const { periodSlug, filters } = splitReportSegments(restSegments)
+    const merged = { ...filters, ...querySearch }
+    const isDownload =
+      merged.unduh === "1" ||
+      pathParts.includes("unduh") ||
+      (pathParts.length >= 2 && pathParts[pathParts.length - 2] === "unduh" && pathParts[pathParts.length - 1] === "1")
+
+    return {
+      report,
+      periodSlug: periodSlug ?? querySearch.periode,
+      search: merged,
+      isDownload: Boolean(isDownload),
+    }
+  }
+
+  return {
+    report: querySearch.laporan ?? "",
+    periodSlug: querySearch.periode,
+    search: querySearch,
+    isDownload: querySearch.unduh === "1",
+  }
+}
 
 export async function GET(request: Request) {
   const session = await auth()
@@ -34,8 +61,7 @@ export async function GET(request: Request) {
     return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
   const url = new URL(request.url)
-  const search = Object.fromEntries(url.searchParams.entries())
-  const report = search.laporan ?? ""
+  const { report, periodSlug, search, isDownload } = parsePdfRequestParams(url)
   if (!isReportPdfKey(report)) {
     return apiError("BAD_REQUEST", "Laporan tidak didukung")
   }
@@ -67,7 +93,7 @@ export async function GET(request: Request) {
     // Periode kanonik dipakai untuk nama berkas, sehingga unduhan berulang
     // memberi nama yang sama dan rapi.
     const period = parseReportPeriod(
-      search.periode,
+      periodSlug ?? search.periode,
       definition.defaultPeriod?.(now) ?? { start: now, end: now },
     )
 
@@ -128,7 +154,7 @@ export async function GET(request: Request) {
     return new Response(bytes, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `${search.unduh === "1" ? "attachment" : "inline"}; filename="${filename}"`,
+        "Content-Disposition": `${isDownload ? "attachment" : "inline"}; filename="${filename}"`,
         "Cache-Control": "no-store",
       },
     })

@@ -1,5 +1,5 @@
-import { AlertTriangle, ClipboardCheck, ListChecks } from "lucide-react"
-import type { LucideIcon } from "lucide-react"
+import { AlertTriangle, ClipboardCheck, ListChecks } from "@/components/ui/fontawesome-icons"
+import type { LucideIcon } from "@/components/ui/fontawesome-icons"
 
 /**
  * Daftar halaman di sub-hub Pengendalian Mutu (`/produksi/qc`).

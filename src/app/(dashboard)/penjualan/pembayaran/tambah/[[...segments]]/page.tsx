@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle } from "@/components/ui/fontawesome-icons"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { PaymentForm } from "@/components/forms/payment-form"
@@ -142,12 +142,12 @@ export default async function CreatePaymentPage({
             </p>
             <p className="text-muted-foreground">
               Status faktur saat ini: {statusLabel(requestedUnpayable.status)}. Pembayaran hanya
-              diterima untuk faktur yang sudah diposting.{" "}
+              diterima untuk faktur yang sudah diterbitkan.{" "}
               <Link
                 href={entityHref("/penjualan/faktur", requestedUnpayable)}
                 className="font-medium text-primary underline underline-offset-2"
               >
-                Buka faktur untuk mempostingnya
+                Buka faktur untuk menerbitkannya
               </Link>
             </p>
           </div>

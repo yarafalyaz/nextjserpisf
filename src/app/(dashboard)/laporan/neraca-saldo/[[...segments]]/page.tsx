@@ -55,7 +55,7 @@ export default async function TrialBalancePage({
   const compareDate = compareValue ? parseStrictDateOnly(compareValue, "23:59:59.999") : null
 
   // Baris tabel disusun sekali di sini dan dipakai bersama layar + engine PDF.
-  const report = await loadTrialBalanceReport(asOfDate, compareDate)
+  const report = await loadTrialBalanceReport(asOfDate, compareDate, period.slug)
 
   return (
     <ReportPageShell

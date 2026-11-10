@@ -64,6 +64,24 @@ export default async function PurchaseRequestDetailPage({
 
   if (!request) notFound()
 
+  const itemIds = request.items.map((i) => i.itemId)
+  const [items, users] = await Promise.all([
+    itemIds.length > 0
+      ? prisma.item.findMany({
+          where: { id: { in: itemIds } },
+          select: { id: true, slug: true, code: true, name: true, unitOfMeasure: true },
+        })
+      : [],
+    prisma.user.findMany({
+      where: {
+        id: { in: [request.requestedBy, request.approvedBy, request.createdBy].filter(Boolean) as number[] },
+      },
+      select: { id: true, name: true },
+    }),
+  ])
+  const itemMap = new Map(items.map((i) => [i.id, i]))
+  const userMap = new Map(users.map((u) => [u.id, u.name]))
+
   // updatePurchaseRequest hanya menerima draft; deletePurchaseRequest menolak
   // approved/partial_ordered/ordered (PR itu sudah melahirkan PO, jadi jejak
   // auditnya wajib tinggal). Dua gerbang berbeda: PR `rejected`/`cancelled`
@@ -110,13 +128,14 @@ export default async function PurchaseRequestDetailPage({
         <DetailField label="No. Dokumen" value={request.documentNo} mono />
         <DetailField label="Judul" value={request.title || "-"} />
         <DetailField label="Pemasok Disarankan" value={request.vendor?.name || "-"} />
+        <DetailField label="Pemohon" value={userMap.get(request.requestedBy) || `Pengguna #${request.requestedBy}`} />
         <DetailField label="Tanggal" value={formatDate(request.date)} />
         {request.requestDate && (
           <DetailField label="Tanggal Permintaan" value={formatDate(request.requestDate)} />
         )}
-        <DetailField label="Dibuat" value={formatDate(request.createdAt)} />
+        <DetailField label="Dibuat" value={`${formatDate(request.createdAt, { includeTime: true })}${request.createdBy ? ` • ${userMap.get(request.createdBy) || `Pengguna #${request.createdBy}`}` : ""}`} />
         {request.approvedAt && (
-          <DetailField label="Disetujui Pada" value={formatDate(request.approvedAt)} />
+          <DetailField label="Disetujui" value={`${formatDate(request.approvedAt, { includeTime: true })}${request.approvedBy ? ` • ${userMap.get(request.approvedBy) || `Pengguna #${request.approvedBy}`}` : ""}`} />
         )}
       </DetailCard>
 
@@ -131,18 +150,32 @@ export default async function PurchaseRequestDetailPage({
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>ID Barang</DetailTableTh>
+                <DetailTableTh>Barang</DetailTableTh>
                 <DetailTableTh align="right">Jml</DetailTableTh>
+                <DetailTableTh>Satuan</DetailTableTh>
                 <DetailTableTh>Catatan</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
-                {request.items.map((item) => (
-                  <DetailTableRow key={item.id}>
-                    <DetailTableTd>{item.itemId}</DetailTableTd>
-                    <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                    <DetailTableTd>{item.notes || "-"}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
+                {request.items.map((item) => {
+                  const dbItem = itemMap.get(item.itemId)
+                  return (
+                    <DetailTableRow key={item.id}>
+                      <DetailTableTd>
+                        {dbItem ? (
+                          <div className="flex flex-col">
+                            <span className="font-medium text-foreground">{dbItem.name}</span>
+                            <span className="text-xs text-muted-foreground font-mono">{dbItem.code}</span>
+                          </div>
+                        ) : (
+                          `Item #${item.itemId}`
+                        )}
+                      </DetailTableTd>
+                      <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
+                      <DetailTableTd>{dbItem?.unitOfMeasure || "-"}</DetailTableTd>
+                      <DetailTableTd>{item.notes || "-"}</DetailTableTd>
+                    </DetailTableRow>
+                  )
+                })}
               </DetailTableBody>
             </DetailTable>
           )}

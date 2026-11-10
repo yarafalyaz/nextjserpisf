@@ -5,6 +5,8 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
+import { ExportButtons } from "@/components/reports/export-buttons"
+import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { splitReportSegments } from "@/lib/reports/report-period"
 import { getServiceReminderQueue } from "@/lib/reports/service-reminder-queue-data"
 import {
@@ -48,6 +50,7 @@ export default async function ServiceReminderReportPage({
     <ReportPageShell
       title={SERVICE_REMINDER_QUEUE_TITLE}
       sheet={false}
+      actions={<ExportButtons title="Servis_Berkala" />}
       filter={
         <ReportPeriodFilter
           basePath="/laporan/servis-berkala"
@@ -68,6 +71,11 @@ export default async function ServiceReminderReportPage({
         />
       }
     >
+      <ReportLetterhead
+        title={SERVICE_REMINDER_QUEUE_TITLE}
+        subtitle={`Jendela Depan ${queue.windowAheadDays} hari`}
+        periodLabel="Status Terkini"
+      />
       <ServiceReminderQueueCard queue={queue} />
     </ReportPageShell>
   )

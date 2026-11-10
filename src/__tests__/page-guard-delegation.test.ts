@@ -93,6 +93,142 @@ const DELEGATED: Record<string, Delegation> = {
     target: "src/components/reports/income-statement-page.tsx",
   },
   "kendaraan/model/page.tsx": { kind: "redirect" },
+  "keuangan/dokumen-pajak/page.tsx": { kind: "redirect" },
+  "crm/leads/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderLeadsPage",
+    target: "src/app/(dashboard)/crm/leads/page.tsx",
+  },
+  "crm/tickets/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderTicketsPage",
+    target: "src/app/(dashboard)/crm/tickets/page.tsx",
+  },
+  "inventaris/pengeluaran-material/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderMaterialIssuesPage",
+    target: "src/app/(dashboard)/inventaris/pengeluaran-material/page.tsx",
+  },
+  "inventaris/penyesuaian/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderStockAdjustmentsPage",
+    target: "src/app/(dashboard)/inventaris/penyesuaian/page.tsx",
+  },
+  "inventaris/transfer/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderInventoryTransfersPage",
+    target: "src/app/(dashboard)/inventaris/transfer/page.tsx",
+  },
+  "keuangan/jurnal/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderJournalsPage",
+    target: "src/app/(dashboard)/keuangan/jurnal/page.tsx",
+  },
+  "keuangan/pengeluaran/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderExpensesPage",
+    target: "src/app/(dashboard)/keuangan/pengeluaran/page.tsx",
+  },
+  "pembelian/penerimaan/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderGoodsReceiptsPage",
+    target: "src/app/(dashboard)/pembelian/penerimaan/page.tsx",
+  },
+  "pembelian/permintaan/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderPurchaseRequestsPage",
+    target: "src/app/(dashboard)/pembelian/permintaan/page.tsx",
+  },
+  "pembelian/pesanan/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderPurchaseOrdersPage",
+    target: "src/app/(dashboard)/pembelian/pesanan/page.tsx",
+  },
+  "pembelian/retur/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderPurchaseReturnsPage",
+    target: "src/app/(dashboard)/pembelian/retur/page.tsx",
+  },
+  "pembelian/tagihan/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderVendorBillsPage",
+    target: "src/app/(dashboard)/pembelian/tagihan/page.tsx",
+  },
+  "pengaturan/persetujuan/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderApprovalsPage",
+    target: "src/app/(dashboard)/pengaturan/persetujuan/page.tsx",
+  },
+  "penjualan/penawaran/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderQuotationsPage",
+    target: "src/app/(dashboard)/penjualan/penawaran/page.tsx",
+  },
+  "penjualan/pesanan/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderSalesOrdersPage",
+    target: "src/app/(dashboard)/penjualan/pesanan/page.tsx",
+  },
+  "penjualan/retur/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderSalesReturnsPage",
+    target: "src/app/(dashboard)/penjualan/retur/page.tsx",
+  },
+  "penjualan/surat-jalan/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderDeliveryOrdersPage",
+    target: "src/app/(dashboard)/penjualan/surat-jalan/page.tsx",
+  },
+  "penjualan/uang-muka/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderDownPaymentsPage",
+    target: "src/app/(dashboard)/penjualan/uang-muka/page.tsx",
+  },
+  "produksi/perintah-kerja/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderWorkOrdersPage",
+    target: "src/app/(dashboard)/produksi/perintah-kerja/page.tsx",
+  },
+  "produksi/production-orders/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderProductionOrdersPage",
+    target: "src/app/(dashboard)/produksi/production-orders/page.tsx",
+  },
+  "proyek/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderProjectsPage",
+    target: "src/app/(dashboard)/proyek/page.tsx",
+  },
+  "proyek/tugas/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderTasksPage",
+    target: "src/app/(dashboard)/proyek/tugas/page.tsx",
+  },
+  "sdm/absensi/koreksi/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderAttendanceCorrectionsPage",
+    target: "src/app/(dashboard)/sdm/absensi/koreksi/page.tsx",
+  },
+  "sdm/cuti/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderLeaveRequestsPage",
+    target: "src/app/(dashboard)/sdm/cuti/page.tsx",
+  },
+  "sdm/lembur/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderOvertimePage",
+    target: "src/app/(dashboard)/sdm/lembur/page.tsx",
+  },
+  "sdm/pinjaman/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderEmployeeLoansPage",
+    target: "src/app/(dashboard)/sdm/pinjaman/page.tsx",
+  },
+  "sdm/rekrutmen/status/[status]/page.tsx": {
+    kind: "renderer",
+    call: "renderRecruitmentsPage",
+    target: "src/app/(dashboard)/sdm/rekrutmen/page.tsx",
+  },
   "inventaris/scan/page.tsx": {
     kind: "client-action",
     action: "lookupItemByScan",

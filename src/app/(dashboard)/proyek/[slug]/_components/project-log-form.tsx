@@ -62,7 +62,7 @@ export function ProjectLogForm({ projectId, canCreate = true }: { projectId: num
         </div>
         <div className="flex flex-1 flex-col gap-1.5">
           <Label htmlFor="logNotes">Catatan</Label>
-          <Textarea id="logNotes" name="notes" rows={2} placeholder="Keterangan singkat (opsional)..." />
+          <Textarea id="logNotes" name="notes" rows={2} required placeholder="Tuliskan keterangan detail logbook kejadian, kendala, atau keputusan..." />
         </div>
       </div>
       <div className="flex justify-end">

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState, useTransition } from "react"
-import { CheckCircle2, Loader2, XCircle } from "lucide-react"
+import { CheckCircle2, Loader2, XCircle } from "@/components/ui/fontawesome-icons"
 import {
   getSetupStatus,
   provisionSetupSchema,

@@ -501,6 +501,14 @@ describe("GET /api/pdf", () => {
     })
   })
 
+  it("mendukung URL berbasis path /api/pdf/<laporan>/<periode>/... dan unduh di path", async () => {
+    mocks.loadBalanceSheetStatement.mockResolvedValue(STATEMENT)
+    const res = await GET(new Request("http://localhost/api/pdf/neraca/2026-10/unduh/1") as never)
+    expect(res.status).toBe(200)
+    expect(res.headers.get("content-type")).toBe("application/pdf")
+    expect(res.headers.get("content-disposition")).toBe('attachment; filename="Neraca-2026-10.pdf"')
+  })
+
   it("menolak laporan yang tidak didukung sebelum menyentuh data", async () => {
     const res = await GET(request("laporan=kunci-tak-ada&periode=2026-10"))
     expect(res.status).toBe(400)

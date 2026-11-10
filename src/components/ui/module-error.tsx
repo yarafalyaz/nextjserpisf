@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import { Button } from "@/components/ui/shadcn/button"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle } from "@/components/ui/fontawesome-icons"
 
 export default function ModuleError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {

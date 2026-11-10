@@ -1,4 +1,4 @@
-import { Pencil, AlertTriangle } from "lucide-react"
+import { Pencil, AlertTriangle } from "@/components/ui/fontawesome-icons"
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"

@@ -18,7 +18,7 @@ import { FormSelect } from "@/components/ui/form-select"
 import { Combobox } from "@/components/ui/combobox"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
-import { Upload, X, AlertCircle } from "lucide-react"
+import { Upload, X, AlertCircle } from "@/components/ui/fontawesome-icons"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { QrCodeDisplay } from "@/components/ui/qr-code-display"
 import { formatCurrencyExact } from "@/lib/utils/format"
@@ -271,7 +271,7 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload className="size-8 text-muted-foreground" aria-hidden="true" />
-                  <span className="text-sm text-secondary">Klik untuk unggah gambar</span>
+                  <span className="text-sm text-muted-foreground">Klik untuk unggah gambar</span>
                   <span className="text-xs text-muted-foreground">JPG, PNG, WebP, GIF (maks 5MB)</span>
                 </button>
               )}
@@ -640,8 +640,8 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
                 <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-default">
-                      <th className="text-left py-2 px-2 font-medium text-secondary">Kode Satuan</th>
-                      <th className="text-left py-2 px-2 font-medium text-secondary" style={{ width: "220px" }}>Faktor ke Satuan Dasar</th>
+                      <th className="text-left py-2 px-2 font-medium text-muted-foreground">Kode Satuan</th>
+                      <th className="text-left py-2 px-2 font-medium text-muted-foreground" style={{ width: "220px" }}>Faktor ke Satuan Dasar</th>
                       <th style={{ width: "40px" }}></th>
                     </tr>
                   </thead>

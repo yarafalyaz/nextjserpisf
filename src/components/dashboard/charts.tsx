@@ -83,25 +83,24 @@ const revenueConfig = {
   lunas: { label: "Lunas", color: "var(--chart-2)" },
 } satisfies ChartConfig
 
-
 function RevenueAxes() {
   return (
     <>
-      <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.4} />
+      <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" opacity={0.6} />
       <XAxis
         dataKey="date"
         tickLine={false}
         axisLine={false}
         tickMargin={8}
         minTickGap={32}
-        fontSize={12}
+        fontSize={11}
         tickFormatter={formatDayLabel}
       />
       <YAxis
         tickLine={false}
         axisLine={false}
         width={42}
-        fontSize={12}
+        fontSize={11}
         tickFormatter={rupiahShort}
       />
     </>
@@ -207,9 +206,9 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
               dataKey="tagihan"
               type="monotone"
               stroke="var(--color-tagihan)"
-              strokeWidth={2.5}
+              strokeWidth={2}
               dot={false}
-              activeDot={{ r: 6, strokeWidth: 2 }}
+              activeDot={{ r: 5, strokeWidth: 1.5 }}
             />
           )}
           {showLunas && (
@@ -217,9 +216,9 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
               dataKey="lunas"
               type="monotone"
               stroke="var(--color-lunas)"
-              strokeWidth={2.5}
+              strokeWidth={2}
               dot={false}
-              activeDot={{ r: 6, strokeWidth: 2 }}
+              activeDot={{ r: 5, strokeWidth: 1.5 }}
             />
           )}
         </LineChart>
@@ -230,19 +229,19 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
       return (
         <BarChart data={filteredData}>
           <RevenueAxes />
-          <RevenueTooltip cursor={{ fill: "var(--muted)", opacity: 0.15 }} />
+          <RevenueTooltip cursor={{ fill: "var(--muted)", opacity: 0.25 }} />
           {showTagihan && (
             <Bar
               dataKey="tagihan"
               fill="var(--color-tagihan)"
-              radius={[4, 4, 0, 0]}
+              radius={[3, 3, 0, 0]}
             />
           )}
           {showLunas && (
             <Bar
               dataKey="lunas"
               fill="var(--color-lunas)"
-              radius={[4, 4, 0, 0]}
+              radius={[3, 3, 0, 0]}
             />
           )}
         </BarChart>
@@ -253,12 +252,12 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
       <AreaChart data={filteredData}>
         <defs>
           <linearGradient id="fillTagihan" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--color-tagihan)" stopOpacity={0.8} />
-            <stop offset="95%" stopColor="var(--color-tagihan)" stopOpacity={0.1} />
+            <stop offset="5%" stopColor="var(--color-tagihan)" stopOpacity={0.2} />
+            <stop offset="95%" stopColor="var(--color-tagihan)" stopOpacity={0.0} />
           </linearGradient>
           <linearGradient id="fillLunas" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--color-lunas)" stopOpacity={0.8} />
-            <stop offset="95%" stopColor="var(--color-lunas)" stopOpacity={0.1} />
+            <stop offset="5%" stopColor="var(--color-lunas)" stopOpacity={0.22} />
+            <stop offset="95%" stopColor="var(--color-lunas)" stopOpacity={0.0} />
           </linearGradient>
         </defs>
         <RevenueAxes />
@@ -269,7 +268,8 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
             type="monotone"
             fill="url(#fillTagihan)"
             stroke="var(--color-tagihan)"
-            activeDot={{ r: 6, strokeWidth: 2 }}
+            strokeWidth={2}
+            activeDot={{ r: 5, strokeWidth: 1.5 }}
           />
         )}
         {showLunas && (
@@ -278,7 +278,8 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
             type="monotone"
             fill="url(#fillLunas)"
             stroke="var(--color-lunas)"
-            activeDot={{ r: 6, strokeWidth: 2 }}
+            strokeWidth={2}
+            activeDot={{ r: 5, strokeWidth: 1.5 }}
           />
         )}
       </AreaChart>
@@ -287,86 +288,88 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
 
   return (
     <Card className="h-full @container/chart">
-      <CardHeader>
-        <div className="min-w-0">
-          <CardTitle id="revenue-chart-title">Tren Pendapatan</CardTitle>
-          <CardDescription className="mt-1">
-            <span className="hidden @[540px]/chart:block">
-              Tagihan diterbitkan vs pembayaran lunas
-            </span>
-            <span className="@[540px]/chart:hidden">Tagihan vs lunas</span>
-          </CardDescription>
-        </div>
+      <CardHeader className="gap-3 pb-3">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div className="min-w-0">
+            <CardTitle id="revenue-chart-title">Tren Pendapatan</CardTitle>
+            <CardDescription className="mt-0.5">
+              <span className="hidden @[540px]/chart:block">
+                Perbandingan tagihan diterbitkan dan pembayaran lunas harian
+              </span>
+              <span className="@[540px]/chart:hidden">Tagihan vs lunas</span>
+            </CardDescription>
+          </div>
 
-        <div className="flex w-full flex-wrap items-center justify-start gap-2">
-          {/* Chart type selector */}
-          <ToggleGroup
-            type="single"
-            value={chartType}
-            onValueChange={(v) => v && setChartType(v as "area" | "line" | "bar")}
-            variant="outline"
-            size="sm"
-            aria-label="Tipe Grafik"
-            className="*:data-[slot=toggle-group-item]:!px-2"
-          >
-            <ToggleGroupItem value="area" aria-label="Grafik Area">
-              Area
-            </ToggleGroupItem>
-            <ToggleGroupItem value="line" aria-label="Grafik Garis">
-              Garis
-            </ToggleGroupItem>
-            <ToggleGroupItem value="bar" aria-label="Grafik Batang">
-              Batang
-            </ToggleGroupItem>
-          </ToggleGroup>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Chart type selector */}
+            <ToggleGroup
+              type="single"
+              value={chartType}
+              onValueChange={(v) => v && setChartType(v as "area" | "line" | "bar")}
+              variant="outline"
+              size="sm"
+              aria-label="Tipe Grafik"
+              className="*:data-[slot=toggle-group-item]:!px-2.5 *:data-[slot=toggle-group-item]:text-xs"
+            >
+              <ToggleGroupItem value="area" aria-label="Grafik Area">
+                Area
+              </ToggleGroupItem>
+              <ToggleGroupItem value="line" aria-label="Grafik Garis">
+                Garis
+              </ToggleGroupItem>
+              <ToggleGroupItem value="bar" aria-label="Grafik Batang">
+                Batang
+              </ToggleGroupItem>
+            </ToggleGroup>
 
-          {/* Time range selector */}
-          <ToggleGroup
-            type="single"
-            value={timeRange}
-            onValueChange={(v) => v && setTimeRange(v)}
-            variant="outline"
-            size="sm"
-            aria-label="Pilih rentang waktu"
-            className="hidden *:data-[slot=toggle-group-item]:!px-3 @[767px]/chart:flex"
-          >
-            <ToggleGroupItem value="90d">3 bulan</ToggleGroupItem>
-            <ToggleGroupItem value="30d">30 hari</ToggleGroupItem>
-            <ToggleGroupItem value="7d">7 hari</ToggleGroupItem>
-          </ToggleGroup>
-          <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger
-              className="flex w-32 @[767px]/chart:hidden"
+            {/* Time range selector */}
+            <ToggleGroup
+              type="single"
+              value={timeRange}
+              onValueChange={(v) => v && setTimeRange(v)}
+              variant="outline"
               size="sm"
               aria-label="Pilih rentang waktu"
+              className="hidden *:data-[slot=toggle-group-item]:!px-2.5 *:data-[slot=toggle-group-item]:text-xs @[680px]/chart:flex"
             >
-              <SelectValue placeholder="3 bulan" />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl">
-              <SelectItem value="90d" className="rounded-lg">
-                3 bulan terakhir
-              </SelectItem>
-              <SelectItem value="30d" className="rounded-lg">
-                30 hari terakhir
-              </SelectItem>
-              <SelectItem value="7d" className="rounded-lg">
-                7 hari terakhir
-              </SelectItem>
-            </SelectContent>
-          </Select>
+              <ToggleGroupItem value="90d">90H</ToggleGroupItem>
+              <ToggleGroupItem value="30d">30H</ToggleGroupItem>
+              <ToggleGroupItem value="7d">7H</ToggleGroupItem>
+            </ToggleGroup>
+            <Select value={timeRange} onValueChange={setTimeRange}>
+              <SelectTrigger
+                className="flex w-32 @[680px]/chart:hidden"
+                size="sm"
+                aria-label="Pilih rentang waktu"
+              >
+                <SelectValue placeholder="3 bulan" />
+              </SelectTrigger>
+              <SelectContent className="rounded-lg">
+                <SelectItem value="90d" className="rounded-md">
+                  3 bulan terakhir
+                </SelectItem>
+                <SelectItem value="30d" className="rounded-md">
+                  30 hari terakhir
+                </SelectItem>
+                <SelectItem value="7d" className="rounded-md">
+                  7 hari terakhir
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        {/* Interactive Filter Pills / Cards */}
+        {/* Metric summary selector strip */}
         {filteredData.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-t pt-3 text-xs">
             <button
               type="button"
               onClick={() => setActiveSeries("all")}
               aria-pressed={activeSeries === "all"}
-              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors ${
+              className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-medium transition-colors duration-150 ${
                 activeSeries === "all"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
               Semua Data
@@ -377,16 +380,17 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
                 setActiveSeries((prev) => (prev === "lunas" ? "all" : "lunas"))
               }
               aria-pressed={showLunas && activeSeries !== "all"}
-              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors ${
+              className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-medium transition-colors duration-150 ${
                 showLunas && activeSeries !== "all"
-                  ? "bg-[var(--chart-2)] text-background shadow-sm"
+                  ? "border-[var(--chart-2)] bg-[var(--chart-2)] text-background"
                   : activeSeries === "all"
-                  ? "bg-[var(--chart-2)]/15 text-[var(--chart-2)] border border-[var(--chart-2)]/30"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  ? "border-border bg-background text-foreground hover:bg-muted/60"
+                  : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
               }`}
             >
-              <span className="h-2 w-2 rounded-full bg-[var(--chart-2)]" />
-              Lunas: <span className="font-semibold">Rp {rupiahShort(totals.lunas)}</span>
+              <span className="size-2 rounded-full bg-[var(--chart-2)]" />
+              <span className="text-muted-foreground">Lunas:</span>
+              <span className="font-semibold tabular-nums">Rp {rupiahShort(totals.lunas)}</span>
             </button>
             <button
               type="button"
@@ -394,32 +398,33 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
                 setActiveSeries((prev) => (prev === "tagihan" ? "all" : "tagihan"))
               }
               aria-pressed={showTagihan && activeSeries !== "all"}
-              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors ${
+              className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-medium transition-colors duration-150 ${
                 showTagihan && activeSeries !== "all"
-                  ? "bg-[var(--chart-1)] text-background shadow-sm"
+                  ? "border-[var(--chart-1)] bg-[var(--chart-1)] text-background"
                   : activeSeries === "all"
-                  ? "bg-[var(--chart-1)]/15 text-[var(--chart-1)] border border-[var(--chart-1)]/30"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  ? "border-border bg-background text-foreground hover:bg-muted/60"
+                  : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
               }`}
             >
-              <span className="h-2 w-2 rounded-full bg-[var(--chart-1)]" />
-              Tagihan: <span className="font-semibold">Rp {rupiahShort(totals.tagihan)}</span>
+              <span className="size-2 rounded-full bg-[var(--chart-1)]" />
+              <span className="text-muted-foreground">Tagihan:</span>
+              <span className="font-semibold tabular-nums">Rp {rupiahShort(totals.tagihan)}</span>
             </button>
           </div>
         )}
       </CardHeader>
-      <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+      <CardContent className="px-3 pt-2 sm:px-5 sm:pt-3">
         {filteredData.length === 0 ? (
           <p
             role="status"
-            className="flex h-[280px] items-center justify-center text-sm text-muted-foreground"
+            className="flex h-[260px] items-center justify-center text-sm text-muted-foreground"
           >
             Belum ada data pendapatan
           </p>
         ) : (
           <ChartContainer
             config={revenueConfig}
-            className="aspect-auto h-[280px] w-full"
+            className="aspect-auto h-[260px] w-full"
             role="img"
             aria-labelledby="revenue-chart-title"
             aria-describedby="revenue-chart-desc"
@@ -455,72 +460,210 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
   )
 }
 
+const INVOICE_STATUS_LABELS: Record<string, string> = {
+  draft: "Draft",
+  posted: "Menunggu Pembayaran",
+  partial: "Sebagian",
+  paid: "Lunas",
+  overdue: "Jatuh Tempo",
+  cancelled: "Dibatalkan",
+}
+
+const STATUS_COLOR_MAP: Record<string, string> = {
+  paid: "#10b981",       // Emerald — Lunas
+  posted: "#2563eb",     // Blue — Menunggu Pembayaran / Diterbitkan
+  partial: "#d97706",    // Amber — Sebagian
+  overdue: "#e11d48",    // Rose — Jatuh Tempo
+  cancelled: "#dc2626",  // Red — Dibatalkan
+  draft: "#71717a",      // Zinc — Draft
+}
+
+const STATUS_PRIORITY: Record<string, number> = {
+  paid: 1,
+  posted: 2,
+  partial: 3,
+  overdue: 4,
+  draft: 5,
+  cancelled: 6,
+}
+
 export function SalesStatusChart({ data }: { data: StatusData[] }) {
   const total = data.reduce((sum, d) => sum + d.value, 0)
-  const chartData = data.map((d, i) => ({
-    ...d,
-    label: statusLabel(d.name),
-    fill: PIE_COLORS[i % PIE_COLORS.length],
-  }))
-  const config: ChartConfig = Object.fromEntries(
-    chartData.map((d, i) => [d.name, { label: d.label, color: PIE_COLORS[i % PIE_COLORS.length] }])
+
+  const chartData = React.useMemo(() => {
+    return [...data]
+      .sort((a, b) => {
+        const pa = STATUS_PRIORITY[a.name] ?? 99
+        const pb = STATUS_PRIORITY[b.name] ?? 99
+        return pa !== pb ? pa - pb : b.value - a.value
+      })
+      .map((d, i) => ({
+        ...d,
+        label: INVOICE_STATUS_LABELS[d.name] ?? statusLabel(d.name),
+        fill: STATUS_COLOR_MAP[d.name] ?? PIE_COLORS[i % PIE_COLORS.length],
+        pct: total > 0 ? Math.round((d.value / total) * 100) : 0,
+        exactPct: total > 0 ? (d.value / total) * 100 : 0,
+      }))
+  }, [data, total])
+
+  const config: ChartConfig = React.useMemo(
+    () =>
+      Object.fromEntries(
+        chartData.map((d) => [d.name, { label: d.label, color: d.fill }])
+      ),
+    [chartData]
   )
 
   return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle id="sales-status-chart-title">Faktur per Status</CardTitle>
-        <CardDescription>Distribusi seluruh faktur</CardDescription>
+    <Card className="h-full gap-0 py-0">
+      <CardHeader className="border-b py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle id="sales-status-chart-title">Faktur per Status</CardTitle>
+            <CardDescription className="mt-0.5">
+              Komposisi status dokumen faktur penjualan
+            </CardDescription>
+          </div>
+          {total > 0 && (
+            <div className="text-right">
+              <div className="text-xl leading-none font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                {total}
+              </div>
+              <div className="mt-1 text-[11px] text-muted-foreground">Total faktur</div>
+            </div>
+          )}
+        </div>
       </CardHeader>
-      <CardContent>
+
+      <CardContent className="flex flex-1 flex-col justify-between gap-4 py-4">
         {total === 0 ? (
           <p
             role="status"
-            className="flex h-[280px] items-center justify-center text-sm text-muted-foreground"
+            className="flex h-[240px] items-center justify-center text-sm text-muted-foreground"
           >
             Belum ada data faktur
           </p>
         ) : (
           <>
-            <ChartContainer
-              config={config}
-              className="mx-auto h-[280px] w-full"
-              role="img"
-              aria-labelledby="sales-status-chart-title"
-              aria-describedby="sales-status-chart-desc"
-            >
-              <span id="sales-status-chart-desc" className="sr-only">
-                Pie chart distribusi {total} faktur berdasarkan status.
-                {chartData
-                  .map((d) => ` ${d.label}: ${d.value} (${Math.round((d.value / total) * 100)}%).`)
-                  .join("")}
-              </span>
-              <PieChart>
-                <ChartTooltip content={<ChartTooltipContent nameKey="label" hideLabel />} />
-                <Pie data={chartData} dataKey="value" nameKey="label" innerRadius={62} outerRadius={100} paddingAngle={2} strokeWidth={2}>
-                  {chartData.map((entry) => (
-                    <Cell key={entry.name} fill={entry.fill} />
-                  ))}
-                  <Label
-                    content={({ viewBox }) => {
-                      if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                        return (
-                          <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
-                            <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-2xl font-bold">
-                              {total}
-                            </tspan>
-                            <tspan x={viewBox.cx} y={(viewBox.cy || 0) + 20} className="fill-muted-foreground text-xs">
-                              Faktur
-                            </tspan>
-                          </text>
-                        )
-                      }
-                      return null
-                    }}
-                  />
-                </Pie>
-              </PieChart>
-            </ChartContainer>
+            {/* Proportional Multi-Segment Bar + Compact Donut */}
+            <div className="flex flex-col gap-4">
+              {/* Segmented distribution bar (Stripe / Linear style) */}
+              <div>
+                <div
+                  className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full bg-muted p-0.5"
+                  aria-hidden="true"
+                >
+                  {chartData.map((item) =>
+                    item.value > 0 ? (
+                      <div
+                        key={item.name}
+                        className="h-full first:rounded-l-full last:rounded-r-full transition-all duration-200"
+                        style={{
+                          width: `${Math.max(item.exactPct, 4)}%`,
+                          backgroundColor: item.fill,
+                        }}
+                        title={`${item.label}: ${item.value} (${item.pct}%)`}
+                      />
+                    ) : null
+                  )}
+                </div>
+              </div>
+
+              {/* Compact Donut Chart */}
+              <ChartContainer
+                config={config}
+                className="mx-auto aspect-square h-[148px] max-w-[148px]"
+                role="img"
+                aria-labelledby="sales-status-chart-title"
+                aria-describedby="sales-status-chart-desc"
+              >
+                <span id="sales-status-chart-desc" className="sr-only">
+                  Pie chart distribusi {total} faktur berdasarkan status.
+                  {chartData
+                    .map((d) => ` ${d.label}: ${d.value} (${d.pct}%).`)
+                    .join("")}
+                </span>
+                <PieChart>
+                  <ChartTooltip content={<ChartTooltipContent nameKey="label" hideLabel />} />
+                  <Pie
+                    data={chartData}
+                    dataKey="value"
+                    nameKey="label"
+                    innerRadius={44}
+                    outerRadius={66}
+                    paddingAngle={2}
+                    strokeWidth={2}
+                    stroke="var(--card)"
+                  >
+                    {chartData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.fill} />
+                    ))}
+                    <Label
+                      content={({ viewBox }) => {
+                        if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                          const paidItem = chartData.find((d) => d.name === "paid")
+                          const paidPct = paidItem ? paidItem.pct : 0
+                          return (
+                            <text
+                              x={viewBox.cx}
+                              y={viewBox.cy}
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                            >
+                              <tspan
+                                x={viewBox.cx}
+                                y={(viewBox.cy || 0) - 4}
+                                className="fill-foreground text-base font-semibold tabular-nums"
+                              >
+                                {paidPct}%
+                              </tspan>
+                              <tspan
+                                x={viewBox.cx}
+                                y={(viewBox.cy || 0) + 12}
+                                className="fill-muted-foreground text-[10px]"
+                              >
+                                Lunas
+                              </tspan>
+                            </text>
+                          )
+                        }
+                        return null
+                      }}
+                    />
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+            </div>
+
+            {/* Structured Breakdown List */}
+            <dl className="divide-y divide-border/60 border-t pt-2 text-xs">
+              {chartData.map((item) => (
+                <div
+                  key={item.name}
+                  className="flex items-center justify-between gap-3 py-2 first:pt-1 last:pb-0"
+                >
+                  <dt className="flex min-w-0 items-center gap-2">
+                    <span
+                      className="size-2 shrink-0 rounded-[2px]"
+                      style={{ backgroundColor: item.fill }}
+                      aria-hidden="true"
+                    />
+                    <span className="truncate font-medium text-foreground">
+                      {item.label}
+                    </span>
+                  </dt>
+                  <dd className="flex shrink-0 items-center gap-2.5 tabular-nums">
+                    <span className="font-mono text-xs font-semibold text-foreground">
+                      {item.value}
+                    </span>
+                    <span className="w-9 rounded bg-muted/70 px-1.5 py-0.5 text-right font-mono text-[11px] text-muted-foreground">
+                      {item.pct}%
+                    </span>
+                  </dd>
+                </div>
+              ))}
+            </dl>
+
             <table className="sr-only">
               <caption>Faktur per Status</caption>
               <thead>
@@ -535,7 +678,7 @@ export function SalesStatusChart({ data }: { data: StatusData[] }) {
                   <tr key={item.name}>
                     <th scope="row">{item.label}</th>
                     <td>{item.value}</td>
-                    <td>{Math.round((item.value / total) * 100)}%</td>
+                    <td>{item.pct}%</td>
                   </tr>
                 ))}
               </tbody>
@@ -557,8 +700,7 @@ export function TopCustomersChart({ data }: { data: CustomerData[] }) {
   const chartData = React.useMemo(() => {
     return data.map((d, index) => {
       const percentage = totalRevenue > 0 ? (d.revenue / totalRevenue) * 100 : 0
-      // Calculate opacity scale based on rank (1st rank = 1, 2nd = 0.85, 3rd = 0.7, etc)
-      const rankOpacity = Math.max(0.4, 1 - index * 0.15)
+      const rankOpacity = Math.max(0.45, 1 - index * 0.14)
       return {
         ...d,
         rank: index + 1,
@@ -578,14 +720,14 @@ export function TopCustomersChart({ data }: { data: CustomerData[] }) {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <CardTitle>Pelanggan Teratas</CardTitle>
-            <CardDescription className="mt-1">
-              5 pelanggan dengan pendapatan tertinggi
+            <CardDescription className="mt-0.5">
+              5 pelanggan dengan nilai faktur tertinggi tahun ini
             </CardDescription>
           </div>
           {totalRevenue > 0 && (
             <div className="text-right">
-              <span className="text-xs text-muted-foreground block">Total 5 Teratas</span>
-              <span className="text-sm font-semibold text-foreground">
+              <span className="block text-[11px] text-muted-foreground">Total 5 Teratas</span>
+              <span className="text-sm font-semibold tabular-nums text-foreground">
                 Rp {rupiahShort(totalRevenue)}
               </span>
             </div>
@@ -596,16 +738,16 @@ export function TopCustomersChart({ data }: { data: CustomerData[] }) {
         {data.length === 0 ? (
           <p
             role="status"
-            className="flex h-[280px] items-center justify-center text-sm text-muted-foreground"
+            className="flex h-[240px] items-center justify-center text-sm text-muted-foreground"
           >
             Belum ada data pelanggan
           </p>
         ) : (
-          <ChartContainer config={config} className="h-[280px] w-full">
+          <ChartContainer config={config} className="h-[240px] w-full">
             <BarChart
               data={chartData}
               layout="vertical"
-              margin={{ left: 8, right: 24, top: 8, bottom: 8 }}
+              margin={{ left: 4, right: 20, top: 8, bottom: 8 }}
               onMouseMove={(state) => {
                 if (typeof state?.activeTooltipIndex === "number") {
                   setActiveIndex(state.activeTooltipIndex)
@@ -613,12 +755,12 @@ export function TopCustomersChart({ data }: { data: CustomerData[] }) {
               }}
               onMouseLeave={() => setActiveIndex(null)}
             >
-              <CartesianGrid horizontal={false} strokeDasharray="3 3" opacity={0.4} />
+              <CartesianGrid horizontal={false} stroke="var(--border)" strokeDasharray="3 3" opacity={0.6} />
               <XAxis
                 type="number"
                 tickLine={false}
                 axisLine={false}
-                fontSize={12}
+                fontSize={11}
                 tickFormatter={rupiahShort}
               />
               <YAxis
@@ -627,27 +769,27 @@ export function TopCustomersChart({ data }: { data: CustomerData[] }) {
                 tickLine={false}
                 axisLine={false}
                 width={110}
-                fontSize={12}
+                fontSize={11}
               />
               <ChartTooltip
                 cursor={{ fill: "var(--muted)", opacity: 0.25 }}
                 content={
                   <ChartTooltipContent
                     formatter={(value, _name, item) => (
-                      <div className="flex flex-col gap-1 w-full">
+                      <div className="flex w-full flex-col gap-1">
                         <div className="flex items-center justify-between gap-4">
-                          <span className="text-muted-foreground text-xs">Peringkat:</span>
-                          <span className="font-semibold text-xs text-foreground">#{item.payload.rank}</span>
+                          <span className="text-xs text-muted-foreground">Peringkat:</span>
+                          <span className="text-xs font-semibold tabular-nums text-foreground">#{item.payload.rank}</span>
                         </div>
                         <div className="flex items-center justify-between gap-4">
-                          <span className="text-muted-foreground text-xs">Pendapatan:</span>
-                          <span className="font-mono font-medium text-foreground">
+                          <span className="text-xs text-muted-foreground">Pendapatan:</span>
+                          <span className="font-mono font-medium tabular-nums text-foreground">
                             Rp {Number(value).toLocaleString("id-ID")}
                           </span>
                         </div>
                         <div className="flex items-center justify-between gap-4">
-                          <span className="text-muted-foreground text-xs">Porsi (5 Teratas):</span>
-                          <span className="font-semibold text-xs text-primary">
+                          <span className="text-xs text-muted-foreground">Porsi (5 Teratas):</span>
+                          <span className="text-xs font-semibold tabular-nums text-primary">
                             {item.payload.percentage}%
                           </span>
                         </div>
@@ -656,7 +798,7 @@ export function TopCustomersChart({ data }: { data: CustomerData[] }) {
                   />
                 }
               />
-              <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[0, 6, 6, 0]} maxBarSize={28}>
+              <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[0, 4, 4, 0]} maxBarSize={24}>
                 {chartData.map((entry, index) => {
                   const isHovered = activeIndex === index
                   const isOtherHovered = activeIndex !== null && activeIndex !== index
@@ -667,7 +809,7 @@ export function TopCustomersChart({ data }: { data: CustomerData[] }) {
                       fillOpacity={isOtherHovered ? 0.3 : entry.rankOpacity}
                       stroke={isHovered ? "var(--primary)" : undefined}
                       strokeWidth={isHovered ? 1.5 : 0}
-                      className="transition-all duration-200 cursor-pointer"
+                      className="cursor-pointer transition-opacity duration-150"
                     />
                   )
                 })}
@@ -698,15 +840,15 @@ export function ProjectPipelineChart({ data }: { data: StageData[] }) {
 
   return (
     <Card className="h-full">
-      <CardHeader>
+      <CardHeader className="pb-2">
         <CardTitle id="pipeline-chart-title">Pipeline Pengerjaan</CardTitle>
-        <CardDescription>Jumlah proyek aktif per tahap saat ini</CardDescription>
+        <CardDescription>Distribusi proyek aktif berdasarkan tahap pengerjaan</CardDescription>
       </CardHeader>
       <CardContent>
         {!hasData ? (
           <p
             role="status"
-            className="flex h-[280px] items-center justify-center text-sm text-muted-foreground"
+            className="flex h-[240px] items-center justify-center text-sm text-muted-foreground"
           >
             Belum ada proyek aktif
           </p>
@@ -714,7 +856,7 @@ export function ProjectPipelineChart({ data }: { data: StageData[] }) {
           <>
             <ChartContainer
               config={config}
-              className="h-[280px] w-full"
+              className="h-[240px] w-full"
               role="img"
               aria-labelledby="pipeline-chart-title"
               aria-describedby="pipeline-chart-desc"
@@ -735,20 +877,20 @@ export function ProjectPipelineChart({ data }: { data: StageData[] }) {
                 }}
                 onMouseLeave={() => setActiveIndex(null)}
               >
-                <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.4} />
-                <XAxis dataKey="stage" tickLine={false} axisLine={false} tickMargin={8} fontSize={12} />
-                <YAxis tickLine={false} axisLine={false} width={28} allowDecimals={false} fontSize={12} />
+                <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" opacity={0.6} />
+                <XAxis dataKey="stage" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} />
+                <YAxis tickLine={false} axisLine={false} width={28} allowDecimals={false} fontSize={11} />
                 <ChartTooltip
                   cursor={{ fill: "var(--muted)", opacity: 0.2 }}
                   content={<ChartTooltipContent />}
                 />
-                <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={36}>
                   {chartData.map((entry, index) => (
                     <Cell
                       key={`pipeline-cell-${index}`}
                       fill={entry.fill}
                       opacity={activeIndex === null || activeIndex === index ? 1 : 0.45}
-                      className="transition-all duration-200 cursor-pointer"
+                      className="cursor-pointer transition-opacity duration-150"
                     />
                   ))}
                 </Bar>

@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
-import { ShieldCheck, ShieldAlert, ShieldQuestion, Loader2 } from "lucide-react"
+import { ShieldCheck, ShieldAlert, ShieldQuestion, Loader2 } from "@/components/ui/fontawesome-icons"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -158,9 +158,9 @@ export function FitmentChecker({ productId, itemNameMap, brands, models, variant
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-default">
-                    <th className="text-left py-2 px-2 font-medium text-secondary">Bahan</th>
-                    <th className="text-left py-2 px-2 font-medium text-secondary">Hasil</th>
-                    <th className="text-left py-2 px-2 font-medium text-secondary">Sumber / Alasan</th>
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">Bahan</th>
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">Hasil</th>
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">Sumber / Alasan</th>
                   </tr>
                 </thead>
                 <tbody>

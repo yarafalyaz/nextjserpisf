@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Clock } from "lucide-react"
+import { Clock } from "@/components/ui/fontawesome-icons"
 import { Combobox } from "@/components/ui/combobox"
 import { cn } from "@/lib/utils"
 

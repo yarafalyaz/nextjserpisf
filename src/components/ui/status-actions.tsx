@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { StatusChip } from "@/components/ui/status-chip"
-import { CheckCircle, XCircle } from "lucide-react"
+import { CheckCircle, XCircle } from "@/components/ui/fontawesome-icons"
 
 interface StatusActionsProps {
   status: string

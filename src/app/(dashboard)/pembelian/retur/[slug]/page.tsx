@@ -57,6 +57,15 @@ export default async function PurchaseReturnDetailPage({
 
   if (!purchaseReturn) notFound()
 
+  const itemIds = purchaseReturn.items.map((i) => i.itemId)
+  const items = itemIds.length > 0
+    ? await prisma.item.findMany({
+        where: { id: { in: itemIds } },
+        select: { id: true, slug: true, code: true, name: true, unitOfMeasure: true },
+      })
+    : []
+  const itemMap = new Map(items.map((i) => [i.id, i]))
+
   const canApprovePurchaseReturn = await hasPermission("approve_purchase_returns")
   const isDraft = (DRAFT_ONLY_EDIT_STATUSES as readonly string[]).includes(purchaseReturn.status)
 
@@ -132,18 +141,32 @@ export default async function PurchaseReturnDetailPage({
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>ID Barang</DetailTableTh>
+                <DetailTableTh>Barang</DetailTableTh>
                 <DetailTableTh align="right">Jml</DetailTableTh>
-                <DetailTableTh align="right">Biaya</DetailTableTh>
+                <DetailTableTh>Satuan</DetailTableTh>
+                <DetailTableTh align="right">Biaya Satuan</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
-                {purchaseReturn.items.map((item) => (
-                  <DetailTableRow key={item.id}>
-                    <DetailTableTd>{item.itemId}</DetailTableTd>
-                    <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrencyExact(Number(item.cost))}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
+                {purchaseReturn.items.map((item) => {
+                  const dbItem = itemMap.get(item.itemId)
+                  return (
+                    <DetailTableRow key={item.id}>
+                      <DetailTableTd>
+                        {dbItem ? (
+                          <div className="flex flex-col">
+                            <span className="font-medium text-foreground">{dbItem.name}</span>
+                            <span className="text-xs text-muted-foreground font-mono">{dbItem.code}</span>
+                          </div>
+                        ) : (
+                          `Item #${item.itemId}`
+                        )}
+                      </DetailTableTd>
+                      <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
+                      <DetailTableTd>{dbItem?.unitOfMeasure || "-"}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrencyExact(Number(item.cost))}</DetailTableTd>
+                    </DetailTableRow>
+                  )
+                })}
               </DetailTableBody>
             </DetailTable>
           )}

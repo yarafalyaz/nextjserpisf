@@ -16,7 +16,7 @@ import { leadActivitySchema } from "@/lib/validations/crm.schemas"
 
 describe("statusLabel", () => {
   it("returns Indonesian label for known status", () => {
-    expect(statusLabel("draft")).toBe("Konsep")
+    expect(statusLabel("draft")).toBe("Draft")
     expect(statusLabel("approved")).toBe("Disetujui")
     expect(statusLabel("paid")).toBe("Dibayar")
     expect(statusLabel("cancelled")).toBe("Dibatalkan")

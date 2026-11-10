@@ -67,15 +67,15 @@ export default async function TotalPayablesPage() {
       <ReportNarration text="Laporan Total Hutang menyajikan seluruh utang usaha perusahaan yang belum lunas, termasuk tagihan yang belum memiliki tanggal jatuh tempo. Laporan ini menampilkan total kewajiban beserta rinciannya per pemasok, sehingga arus kas keluar dan jadwal pembayaran kepada pemasok dapat dikelola dengan baik." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Total Hutang" value={formatCurrencyExact(summary.totalOutstanding)} valueClassName="text-danger" />
-        <ReportKpiCard label="Sudah Jatuh Tempo" value={formatCurrencyExact(summary.overdueOutstanding)} valueClassName="text-danger" />
-        <ReportKpiCard label="Belum Jatuh Tempo" value={formatCurrencyExact(summary.notYetDueOutstanding)} />
+        <ReportKpiCard label="Total Hutang" value={formatAccountingExact(summary.totalOutstanding)} valueClassName="text-danger" />
+        <ReportKpiCard label="Sudah Jatuh Tempo" value={formatAccountingExact(summary.overdueOutstanding)} valueClassName="text-danger" />
+        <ReportKpiCard label="Belum Jatuh Tempo" value={formatAccountingExact(summary.notYetDueOutstanding)} />
         {/* KPI ini mencakup SEMUA tagihan pada populasi (termasuk yang sudah
             lunas); seksi "Hutang per Pemasok" hanya memuat tagihan bersisa.
             Label dibedakan supaya dua angka berlabel sama tidak tampak
             bertentangan — lihat total-hutang-kpi-population.test.ts. */}
-        <ReportKpiCard label="Total Ditagihkan (semua tagihan)" value={formatCurrencyExact(summary.totalBilled)} />
-        <ReportKpiCard label="Sudah Dibayar (semua tagihan)" value={formatCurrencyExact(summary.totalPaid)} valueClassName="text-success" />
+        <ReportKpiCard label="Total Ditagihkan (semua tagihan)" value={formatAccountingExact(summary.totalBilled)} />
+        <ReportKpiCard label="Sudah Dibayar (semua tagihan)" value={formatAccountingExact(summary.totalPaid)} valueClassName="text-success" />
       </div>
 
       <ReportSection title="Ringkasan Umur Hutang">

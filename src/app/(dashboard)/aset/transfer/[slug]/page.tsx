@@ -9,7 +9,7 @@ import { deleteAssetTransfer } from "@/actions/asset.actions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { Pencil } from "lucide-react"
+import { Pencil } from "@/components/ui/fontawesome-icons"
 
 import type { Metadata } from "next"
 
@@ -17,7 +17,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
-export const metadata: Metadata = { title: "Transfer Stok" }
+export const metadata: Metadata = { title: "Transfer Aset" }
 
 export default async function AssetTransferDetailPage({
   params,

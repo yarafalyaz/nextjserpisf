@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import type { ReactNode, MouseEventHandler } from "react"
-import { Loader2 } from "lucide-react"
+import { Loader2 } from "@/components/ui/fontawesome-icons"
 import { Button as ShadButton } from "@/components/ui/shadcn/button"
 import { cn } from "@/lib/utils"
 

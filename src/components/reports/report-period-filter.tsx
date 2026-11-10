@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Combobox } from "@/components/ui/combobox"
-import { parseLocalDateOnly } from "@/lib/utils/date-only"
+import { parseLocalDateOnly, toLocalDateOnly } from "@/lib/utils/date-only"
 import { buildReportPeriodSlug } from "@/lib/reports/report-period"
 import { buildReportHref } from "@/lib/reports/report-href"
 
@@ -117,12 +117,94 @@ export function ReportPeriodFilter({
     router.refresh()
   }
 
+  function setPreset(start: Date, end: Date) {
+    setStartDate(toLocalDateOnly(start))
+    setEndDate(toLocalDateOnly(end))
+  }
+
+  function setAsOfPreset(date: Date) {
+    setStartDate(toLocalDateOnly(date))
+  }
+
   return (
     <div
       role="search"
       aria-label="Filter laporan"
-      className="rounded-xl border border-default bg-surface p-4 flex flex-wrap items-end gap-4 print:hidden"
+      className="rounded-xl border border-default bg-surface p-4 flex flex-col gap-3 print:hidden"
     >
+      {/* Tombol preset cepat (Bulan ini, Bulan lalu, Kuartal ini, Tahun ini / YTD) */}
+      {mode === "range" || mode === "as-of" ? (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="font-semibold text-foreground/80 mr-1">Preset:</span>
+          {mode === "range" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  const now = new Date()
+                  setPreset(new Date(now.getFullYear(), now.getMonth(), 1), new Date(now.getFullYear(), now.getMonth() + 1, 0))
+                }}
+                className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+              >
+                Bulan Ini
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const now = new Date()
+                  setPreset(new Date(now.getFullYear(), now.getMonth() - 1, 1), new Date(now.getFullYear(), now.getMonth(), 0))
+                }}
+                className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+              >
+                Bulan Lalu
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const now = new Date()
+                  const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3
+                  setPreset(new Date(now.getFullYear(), quarterStartMonth, 1), new Date(now.getFullYear(), quarterStartMonth + 3, 0))
+                }}
+                className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+              >
+                Kuartal Ini
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const now = new Date()
+                  setPreset(new Date(now.getFullYear(), 0, 1), new Date(now.getFullYear(), now.getMonth() + 1, 0))
+                }}
+                className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+              >
+                Tahun Ini (YTD)
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setAsOfPreset(new Date())}
+                className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+              >
+                Hari Ini
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const now = new Date()
+                  setAsOfPreset(new Date(now.getFullYear(), now.getMonth(), 0))
+                }}
+                className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+              >
+                Akhir Bulan Lalu
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap items-end gap-4">
       {selects?.map((select) => (
         <div key={select.param} className="flex flex-col gap-1.5 w-full sm:w-[260px]">
           <label
@@ -198,6 +280,7 @@ export function ReportPeriodFilter({
       <Button variant="primary" size="sm" onPress={handleGenerate} className="relative before:absolute before:-inset-y-1.5 before:content-['']">
         Tampilkan
       </Button>
+      </div>
     </div>
   )
 }

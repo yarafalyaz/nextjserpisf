@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Trash2 } from "lucide-react"
+import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 import { createVehicleVariant, deleteVehicleVariant } from "@/actions/vehicle.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"

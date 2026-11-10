@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Button } from "@/components/ui/button"
-import { X } from "lucide-react"
+import { X } from "@/components/ui/fontawesome-icons"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 

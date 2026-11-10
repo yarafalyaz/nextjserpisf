@@ -26,11 +26,12 @@ export interface TrialBalanceReportView extends TrialBalanceReportResult {
 export async function loadTrialBalanceReport(
   asOfDate: Date,
   compareDate: Date | null,
+  periodSlug?: string,
 ): Promise<TrialBalanceReportView> {
   const [accounts, asOfSums] = await Promise.all([
     prisma.account.findMany({
       where: { isActive: true },
-      select: { id: true, code: true, name: true, type: true },
+      select: { id: true, code: true, name: true, slug: true, type: true },
       orderBy: { code: "asc" },
     }),
     sumEntriesByAccount({ date: { lte: asOfDate } }),
@@ -41,6 +42,7 @@ export async function loadTrialBalanceReport(
       id: acc.id,
       code: acc.code,
       name: acc.name,
+      slug: acc.slug,
       type: acc.type,
       totalDebit: asOfSums.get(acc.id)?.debit ?? 0,
       totalCredit: asOfSums.get(acc.id)?.credit ?? 0,
@@ -60,6 +62,7 @@ export async function loadTrialBalanceReport(
           id: account.id,
           code: account.code,
           name: account.name,
+          slug: account.slug,
           net1: (sums?.debit ?? 0) - (sums?.credit ?? 0),
           net2: (compare?.debit ?? 0) - (compare?.credit ?? 0),
         }
@@ -76,6 +79,7 @@ export async function loadTrialBalanceReport(
     isBalanced,
     asOfLabel,
     comparison,
+    periodSlug,
   })
 
   return {

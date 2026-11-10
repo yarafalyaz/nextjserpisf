@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/shadcn/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/shadcn/card"
 import { Switch } from "@/components/ui/shadcn/switch"
-import { Cloud, HardDrive, Loader2 } from "lucide-react"
+import { Cloud, HardDrive, Loader2 } from "@/components/ui/fontawesome-icons"
 import { updateStorageSettings } from "@/actions/settings.actions"
 import { showError } from "@/lib/utils/toast"
 

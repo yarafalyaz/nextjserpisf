@@ -2,7 +2,7 @@
 'use client'
 
 import { useState } from 'react'
-import { FileDown, Printer, FileText } from 'lucide-react'
+import { FileDown, Printer, FileText } from "@/components/ui/fontawesome-icons"
 import { showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
@@ -56,11 +56,64 @@ const C = {
   altRow: [248, 249, 250] as [number, number, number],
 }
 
-/** Membuka PDF hasil engine di tab baru; `unduh` memaksa unduhan berkas. */
-function openPdf(href: string, download: boolean) {
-  const url = new URL(href, window.location.origin)
-  if (download) url.searchParams.set("unduh", "1")
-  window.open(url.toString(), "_blank", "noopener,noreferrer")
+/** Membangun URL aksi PDF (path /unduh/1 atau query fallback). */
+export function buildPdfActionUrl(href: string, download: boolean): string {
+  const url = new URL(href, typeof window !== "undefined" ? window.location.origin : "http://localhost")
+  if (!download) return url.toString()
+  if (url.pathname.startsWith("/api/pdf/") && !url.searchParams.has("laporan")) {
+    const cleanPath = url.pathname.replace(/\/+$/, "")
+    if (!cleanPath.endsWith("/unduh/1")) {
+      url.pathname = `${cleanPath}/unduh/1`
+    }
+    return url.toString()
+  }
+  url.searchParams.set("unduh", "1")
+  return url.toString()
+}
+
+/**
+ * Eksekusi unduhan berkas PDF langsung tanpa membuka tab baru ber-URL mentah.
+ * Melakukan fetch di background, mengambil Blob, dan memicu download browser.
+ */
+async function triggerDirectPdfDownload(href: string, fallbackTitle: string): Promise<void> {
+  const targetUrl = buildPdfActionUrl(href, true)
+  const res = await fetch(targetUrl, { credentials: "same-origin" })
+  if (!res.ok) {
+    throw new Error(`Gagal mengunduh PDF (HTTP ${res.status})`)
+  }
+  const blob = await res.blob()
+  let filename = `${fallbackTitle.replace(/\s+/g, "_")}_${toLocalDateOnly(new Date())}.pdf`
+  const disposition = res.headers.get("content-disposition")
+  if (disposition) {
+    const match = /filename=["']?([^"';]+)["']?/.exec(disposition)
+    if (match?.[1]) filename = match[1]
+  }
+  const blobUrl = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = blobUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60000)
+}
+
+/**
+ * Memicu dialog cetak untuk dokumen PDF resmi.
+ * Chromium dan WebKit mengisolasi blob PDF di dalam iframe sebagai opaque cross-origin context,
+ * sehingga mengakses `iframe.contentWindow.print()` memicu SecurityError.
+ * Menggunakan popup window dengan Blob URL atau URL endpoint PDF langsung memicu dialog cetak.
+ */
+async function triggerDirectPdfPrint(href: string): Promise<void> {
+  const targetUrl = buildPdfActionUrl(href, false)
+  // Buka popup window sementara untuk menampilkan PDF viewer native browser yang mendukung print
+  const printWindow = window.open(targetUrl, "_blank", "noopener=no")
+  if (printWindow) {
+    printWindow.focus()
+  } else {
+    // Jika popup diblokir browser, fallback ke navigasi normal
+    window.open(targetUrl, "_blank", "noopener,noreferrer")
+  }
 }
 
 /**
@@ -171,10 +224,21 @@ export function ExportButtons({
   const [isExporting, setIsExporting] = useState(false)
 
   const handlePrint = () => {
-    // Laporan yang sudah punya PDF server-side dicetak dari penampil PDF — yang
-    // tercetak adalah berkas PDF-nya, bukan halaman HTML aplikasi.
+    // Laporan yang sudah punya PDF server-side dicetak dari dokumen PDF resmi —
+    // dipicu langsung di halaman aktif tanpa membuka tab ber-URL mentah.
     if (pdfHref) {
-      openPdf(pdfHref, false)
+      if (isExporting) return
+      setIsExporting(true)
+      void (async () => {
+        try {
+          await triggerDirectPdfPrint(pdfHref)
+        } catch (err) {
+          console.error("[export-buttons] print error:", err)
+          showError("Gagal mencetak dokumen PDF")
+        } finally {
+          setIsExporting(false)
+        }
+      })()
       return
     }
     window.print()
@@ -260,7 +324,12 @@ export function ExportButtons({
 
   const exportPdf = async () => {
     if (pdfHref) {
-      openPdf(pdfHref, true)
+      try {
+        await triggerDirectPdfDownload(pdfHref, title)
+      } catch (err) {
+        console.error("[export-buttons] pdf download error:", err)
+        showError("Gagal mengunduh dokumen PDF")
+      }
       return
     }
 

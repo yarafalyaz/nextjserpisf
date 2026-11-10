@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Percent } from "lucide-react"
+import { Percent } from "@/components/ui/fontawesome-icons"
 import type { JobPaymentScheduleResult } from "@/lib/reports/job-payment-schedule-data"
 import {
   cancelJobPaymentSchedule,

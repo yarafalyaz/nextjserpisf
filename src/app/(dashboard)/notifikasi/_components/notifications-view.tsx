@@ -152,7 +152,7 @@ export function NotificationsView({
       header: "Waktu",
       cell: (info) => (
         <span className="text-muted-foreground whitespace-nowrap text-sm">
-          {formatDate(info.getValue())}
+          {formatDate(info.getValue(), { includeTime: true })}
         </span>
       ),
     }),

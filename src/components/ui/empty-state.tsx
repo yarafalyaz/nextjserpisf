@@ -45,23 +45,27 @@ export function StatCard({ label, value, icon, trend, trendValue, className = ""
 
   return (
     <Card
-      className={`${className}`}
+      className={cn("py-4 gap-2", className)}
       role="group"
       aria-label={`${label}: ${value}${trendValue ? `, tren ${trend === "up" ? "naik" : trend === "down" ? "turun" : "netral"} ${trendValue}` : ""}`}
     >
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide" aria-hidden="true">{label}</span>
-            <span className="text-2xl font-bold text-foreground tabular-nums" aria-hidden="true">{value}</span>
+      <CardContent className="px-4 py-0">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider" aria-hidden="true">{label}</span>
+            <span className="text-xl font-semibold tracking-tight text-foreground tabular-nums sm:text-2xl" aria-hidden="true">{value}</span>
             {trendValue && (
-              <span className={`text-xs font-medium ${trendColor}`} aria-hidden="true">
+              <span className={`text-xs font-medium tabular-nums ${trendColor}`} aria-hidden="true">
                 {trend === "up" ? "▲ " : trend === "down" ? "▼ " : ""}
                 {trendValue}
               </span>
             )}
           </div>
-          {icon && <div className="text-muted-foreground/60" aria-hidden="true">{icon}</div>}
+          {icon && (
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground" aria-hidden="true">
+              {icon}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

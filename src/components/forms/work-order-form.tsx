@@ -232,22 +232,22 @@ export function WorkOrderForm({
                 <thead>
                   <tr className="border-b border-default">
                     <th
-                      className="text-left py-2 px-2 font-medium text-secondary"
+                      className="text-left py-2 px-2 font-medium text-muted-foreground"
                       style={{ minWidth: "200px" }}
                     >
                       Item
                     </th>
                     <th
-                      className="text-left py-2 px-2 font-medium text-secondary"
+                      className="text-left py-2 px-2 font-medium text-muted-foreground"
                       style={{ width: "80px" }}
                     >
                       Jml
                     </th>
-                    <th className="text-left py-2 px-2 font-medium text-secondary">
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">
                       Deskripsi
                     </th>
                     <th
-                      className="text-left py-2 px-2 font-medium text-secondary"
+                      className="text-left py-2 px-2 font-medium text-muted-foreground"
                       style={{ width: "110px" }}
                     >
                       Status

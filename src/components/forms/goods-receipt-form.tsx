@@ -491,28 +491,28 @@ export function GoodsReceiptForm({
               >
                 <thead>
                   <tr className="bg-surface-secondary align-bottom">
-                    <th className="py-2.5 px-3 text-left font-medium text-secondary" style={{ minWidth: "220px" }}>Item</th>
-                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "80px" }}>
+                    <th className="py-2.5 px-3 text-left font-medium text-muted-foreground" style={{ minWidth: "220px" }}>Item</th>
+                    <th className="py-2.5 px-3 text-right font-medium text-muted-foreground" style={{ width: "80px" }}>
                       Dipesan<span className="block text-[0.625rem] font-normal text-muted-foreground">PO</span>
                     </th>
-                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "80px" }}>
+                    <th className="py-2.5 px-3 text-right font-medium text-muted-foreground" style={{ width: "80px" }}>
                       Sisa<span className="block text-[0.625rem] font-normal text-muted-foreground">belum diterima</span>
                     </th>
-                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "120px" }}>
+                    <th className="py-2.5 px-3 text-right font-medium text-muted-foreground" style={{ width: "120px" }}>
                       Jml Terima<span className="block text-[0.625rem] font-normal text-muted-foreground">kali ini</span>
                     </th>
-                    <th className="py-2.5 px-3 text-left font-medium text-secondary" style={{ width: "110px" }}>Satuan</th>
-                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "120px" }}>Harga Beli</th>
-                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "110px" }}>
+                    <th className="py-2.5 px-3 text-left font-medium text-muted-foreground" style={{ width: "110px" }}>Satuan</th>
+                    <th className="py-2.5 px-3 text-right font-medium text-muted-foreground" style={{ width: "120px" }}>Harga Beli</th>
+                    <th className="py-2.5 px-3 text-right font-medium text-muted-foreground" style={{ width: "110px" }}>
                       Ongkir<span className="block text-[0.625rem] font-normal text-muted-foreground">+ per unit</span>
                     </th>
-                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "110px" }}>
+                    <th className="py-2.5 px-3 text-right font-medium text-muted-foreground" style={{ width: "110px" }}>
                       Diskon<span className="block text-[0.625rem] font-normal text-muted-foreground">− per unit</span>
                     </th>
-                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "120px" }}>HPP/Unit</th>
-                    <th className="py-2.5 px-3 text-left font-medium text-secondary" style={{ minWidth: "150px" }}>Gudang</th>
-                    <th className="py-2.5 px-3 text-left font-medium text-secondary" style={{ minWidth: "140px" }}>Rak</th>
-                    <th className="py-2.5 px-3 text-left font-medium text-secondary" style={{ minWidth: "140px" }}>Baris</th>
+                    <th className="py-2.5 px-3 text-right font-medium text-muted-foreground" style={{ width: "120px" }}>HPP/Unit</th>
+                    <th className="py-2.5 px-3 text-left font-medium text-muted-foreground" style={{ minWidth: "150px" }}>Gudang</th>
+                    <th className="py-2.5 px-3 text-left font-medium text-muted-foreground" style={{ minWidth: "140px" }}>Rak</th>
+                    <th className="py-2.5 px-3 text-left font-medium text-muted-foreground" style={{ minWidth: "140px" }}>Baris</th>
                   </tr>
                 </thead>
                 <tbody>

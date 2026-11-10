@@ -11,8 +11,9 @@ import { PrintButton } from "@/components/ui/print-button"
 import { TaxInvoiceNumberButton } from "@/components/ui/tax-invoice-number-button"
 import { isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/shadcn/alert"
-import { ReceiptText } from "lucide-react"
+import { ReceiptText } from "@/components/ui/fontawesome-icons"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { StatusChip } from "@/components/ui/status-chip"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
@@ -86,7 +87,7 @@ export default async function VendorBillDetailPage({
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Tagihan {bill.documentNo}</h1>
         <div className="flex gap-2 items-center">
-          <span className={`status-badge status-${bill.status}`}>{statusLabel(bill.status)}</span>
+          <StatusChip status={bill.status} />
           <div className="flex gap-2">
             {bill.status === "draft" && (
               <ProcessButton
@@ -233,7 +234,7 @@ export default async function VendorBillDetailPage({
 
       {/* Summary */}
       <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Subtotal</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrencyExact(Number(bill.subtotal))}</span>
@@ -244,7 +245,13 @@ export default async function VendorBillDetailPage({
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Terbayar</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrencyExact(Number(bill.paidAmount))}</span>
+            <span className="text-[0.9375rem] text-emerald-600 dark:text-emerald-400 font-semibold">{formatCurrencyExact(Number(bill.paidAmount))}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sisa Tagihan</span>
+            <span className={`text-[0.9375rem] font-bold ${Number(bill.balanceDue) > 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
+              {formatCurrencyExact(Number(bill.balanceDue))}
+            </span>
           </div>
         </div>
       </div>

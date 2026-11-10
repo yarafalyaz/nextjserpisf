@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatDate } from "@/lib/utils/format"
+import { formatDate, formatCurrencyExact } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { requirePermission } from "@/lib/auth/permissions"
@@ -13,13 +13,16 @@ import { NonconformanceResolveForm } from "../_components/nonconformance-resolve
 import type { Metadata } from "next"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref } from "@/lib/utils/entity-url"
+import { SEVERITY_LABELS } from "@/lib/utils/status-labels"
 
 export const metadata: Metadata = { title: "Detail NCR" }
 
-const SEVERITY_LABELS: Record<string, string> = {
-  minor: "Ringan",
-  major: "Berat",
-  critical: "Kritis",
+const RESPONSIBILITY_LABELS: Record<string, string> = {
+  vendor: "Pemasok / Vendor",
+  internal: "Internal / Produksi",
+  customer: "Pelanggan",
+  warehouse: "Gudang",
+  transport: "Logistik / Ekspedisi",
 }
 
 export default async function NonconformanceDetailPage({
@@ -71,7 +74,7 @@ export default async function NonconformanceDetailPage({
       <DetailCard>
         <DetailField label="Status" value={<StatusChip status={ncr.status} />} />
         <DetailField label="Tingkat Keparahan" value={SEVERITY_LABELS[ncr.severity] ?? ncr.severity} />
-        <DetailField label="Penanggung" value={ncr.responsibility} />
+        <DetailField label="Penanggung" value={RESPONSIBILITY_LABELS[ncr.responsibility] ?? ncr.responsibility} />
         <DetailField label="Referensi" value={`${ncr.referenceType} #${ncr.referenceId}`} />
         <DetailField
           label="Inspeksi"
@@ -85,13 +88,13 @@ export default async function NonconformanceDetailPage({
             )
           }
         />
-        <DetailField label="Dibuat" value={formatDate(ncr.createdAt)} />
-        <DetailField label="Jam Pengerjaan Ulang" value={String(Number(ncr.reworkHours))} />
-        <DetailField label="Biaya Pengerjaan Ulang" value={String(Number(ncr.reworkCost))} />
+        <DetailField label="Dibuat" value={formatDate(ncr.createdAt, { includeTime: true })} />
+        <DetailField label="Jam Pengerjaan Ulang" value={`${Number(ncr.reworkHours)} jam`} />
+        <DetailField label="Biaya Pengerjaan Ulang" value={formatCurrencyExact(Number(ncr.reworkCost))} />
         <DetailField label="Deskripsi Cacat" value={ncr.defectDescription} colSpan="full" />
         {ncr.cause && <DetailField label="Penyebab" value={ncr.cause} colSpan="full" />}
         {ncr.resolution && <DetailField label="Resolusi" value={ncr.resolution} colSpan="full" />}
-        {ncr.closedAt && <DetailField label="Ditutup" value={formatDate(ncr.closedAt)} />}
+        {ncr.closedAt && <DetailField label="Ditutup" value={formatDate(ncr.closedAt, { includeTime: true })} />}
       </DetailCard>
 
       <DetailSection title="Tindakan">

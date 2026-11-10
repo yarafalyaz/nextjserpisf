@@ -17,7 +17,7 @@ import { generateBulkPayroll } from "@/actions/hrm.actions"
 import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { useRouter } from "next/navigation"
-import { Sparkles, Loader2 } from "lucide-react"
+import { Sparkles, Loader2 } from "@/components/ui/fontawesome-icons"
 import { cn } from "@/lib/utils"
 import {
   PAYROLL_FREQUENCIES,

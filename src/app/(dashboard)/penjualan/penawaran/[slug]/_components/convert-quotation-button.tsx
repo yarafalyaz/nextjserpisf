@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ShoppingCart } from "lucide-react"
+import { ShoppingCart } from "@/components/ui/fontawesome-icons"
 import { convertQuotationToOrder } from "@/actions/sales.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"

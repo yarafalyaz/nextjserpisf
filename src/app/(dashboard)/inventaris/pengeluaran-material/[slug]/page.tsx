@@ -17,7 +17,7 @@ import type { Metadata } from "next"
 import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope"
-import { entityEditHref } from "@/lib/utils/entity-url"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Pengeluaran Material" }
 
@@ -60,10 +60,30 @@ export default async function MaterialIssueDetailPage({
 
   // Fetch item names dynamically
   const itemIds = issue.items.map((i) => i.itemId)
-  const items = await prisma.item.findMany({
-    where: { id: { in: itemIds } },
-    select: { id: true, name: true },
-  })
+  const [items, project, workOrder, creator] = await Promise.all([
+    prisma.item.findMany({
+      where: { id: { in: itemIds } },
+      select: { id: true, name: true, code: true, uom: true },
+    }),
+    issue.projectId
+      ? prisma.project.findUnique({
+          where: { id: issue.projectId },
+          select: { id: true, slug: true, code: true, name: true },
+        })
+      : null,
+    issue.workOrderId
+      ? prisma.workOrder.findUnique({
+          where: { id: issue.workOrderId },
+          select: { id: true, slug: true, documentNo: true },
+        })
+      : null,
+    issue.createdBy
+      ? prisma.user.findUnique({
+          where: { id: issue.createdBy },
+          select: { id: true, name: true },
+        })
+      : null,
+  ])
   const itemNameMap = new Map(items.map((i) => [i.id, i.name]))
   const canEditMaterialIssue = await hasPermission("edit_material_issues")
 
@@ -115,16 +135,39 @@ export default async function MaterialIssueDetailPage({
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</span>
             <span className="text-[0.9375rem] text-foreground font-medium"><StatusChip status={issue.status} /></span>
           </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dibuat</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">
+              {formatDate(issue.date, { includeTime: true })}
+              {creator ? ` • ${creator.name}` : issue.createdBy ? ` • Pengguna #${issue.createdBy}` : ""}
+            </span>
+          </div>
           {issue.projectId && (
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">ID Proyek</span>
-              <span className="text-[0.9375rem] text-foreground font-medium">{issue.projectId}</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Proyek</span>
+              <span className="text-[0.9375rem] text-foreground font-medium">
+                {project ? (
+                  <Link href={entityHref("/proyek", project)} className="text-primary hover:underline font-medium">
+                    {project.name} ({project.code})
+                  </Link>
+                ) : (
+                  `Proyek #${issue.projectId}`
+                )}
+              </span>
             </div>
           )}
           {issue.workOrderId && (
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">ID Perintah Kerja</span>
-              <span className="text-[0.9375rem] text-foreground font-medium">{issue.workOrderId}</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Perintah Kerja</span>
+              <span className="text-[0.9375rem] text-foreground font-medium">
+                {workOrder ? (
+                  <Link href={entityHref("/produksi/perintah-kerja", workOrder)} className="text-primary hover:underline font-mono">
+                    {workOrder.documentNo}
+                  </Link>
+                ) : (
+                  `Perintah Kerja #${issue.workOrderId}`
+                )}
+              </span>
             </div>
           )}
           {issue.notes && (

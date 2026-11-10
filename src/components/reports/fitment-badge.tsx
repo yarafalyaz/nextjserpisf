@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { TriangleAlert } from "lucide-react"
+import { TriangleAlert } from "@/components/ui/fontawesome-icons"
 
 /**
  * F-2026-10-22-063-S (induk F-2026-10-21-023): lencana PERINGATAN fitment

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { Trash2 } from "lucide-react"
+import { Trash2 } from "@/components/ui/fontawesome-icons"
 import { clearActivityLog } from "@/actions/activity-log.actions"
 import { Button } from "@/components/ui/shadcn/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"

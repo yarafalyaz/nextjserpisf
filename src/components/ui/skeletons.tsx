@@ -160,47 +160,78 @@ export function DashboardSkeleton() {
   )
 }
 
-export function ReportSkeleton() {
+export function ReportSkeleton({ wide = false }: { wide?: boolean } = {}) {
   return (
     <div
-      className="flex flex-col gap-6"
+      className={`report-page-shell flex flex-col gap-4${wide ? " report-page-shell-wide" : ""}`}
       role="status"
       aria-label="Memuat laporan"
       aria-busy="true"
     >
-      {/* Breadcrumb skeleton */}
-      <Skeleton className="h-4 w-48" />
-
-      {/* Header skeleton */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <Skeleton className="h-8 w-56" />
-        <div className="flex gap-2">
-          <Skeleton className="h-10 w-32 rounded-lg" />
-          <Skeleton className="h-10 w-24 rounded-lg" />
+      {/* Top command bar: breadcrumb on left, actions on right */}
+      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
+        <Skeleton className="h-4 w-48" />
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-8 w-24 rounded-lg" />
+          <Skeleton className="h-8 w-20 rounded-lg" />
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3">
-        {[...Array(3)].map((_, i) => (
-          <Skeleton key={i} className="h-10 w-40 rounded-lg" />
-        ))}
+      {/* Filter panel */}
+      <div className="rounded-xl border border-default bg-surface p-4 flex flex-col gap-3 print:hidden">
+        <div className="flex flex-wrap items-center gap-2">
+          <Skeleton className="h-4 w-12" />
+          <Skeleton className="h-6 w-16 rounded-md" />
+          <Skeleton className="h-6 w-16 rounded-md" />
+          <Skeleton className="h-6 w-16 rounded-md" />
+          <Skeleton className="h-6 w-24 rounded-md" />
+        </div>
+        <div className="flex flex-wrap items-end gap-4">
+          <Skeleton className="h-10 w-full sm:w-[180px] rounded-lg" />
+          <Skeleton className="h-10 w-full sm:w-[180px] rounded-lg" />
+          <Skeleton className="h-8 w-20 rounded-lg" />
+        </div>
       </div>
 
-      {/* Report table */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex gap-4 p-4 border-b border-default">
-          {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} className="h-4 flex-1" />
-          ))}
-        </div>
-        {[...Array(10)].map((_, i) => (
-          <div key={i} className="flex gap-4 p-4 border-b border-default last:border-0">
-            {[...Array(6)].map((_, j) => (
-              <Skeleton key={j} className="h-4 flex-1" />
+      {/* Report Canvas & Paper Document */}
+      <div className="report-canvas">
+        <div className={`report-sheet${wide ? " report-sheet-wide" : ""} flex flex-col gap-5`}>
+          {/* Letterhead */}
+          <div className="flex flex-col items-center gap-2 py-2">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-6 w-64" />
+            <Skeleton className="h-3.5 w-48" />
+            <div className="w-full border-b border-default my-2" />
+          </div>
+
+          {/* Metric KPI strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="report-kpi-card flex flex-col gap-1">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-5 w-28" />
+              </div>
             ))}
           </div>
-        ))}
+
+          {/* Table rows */}
+          <div className="flex flex-col gap-2 pt-2">
+            <div className="flex justify-between border-b border-default pb-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-28" />
+            </div>
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="flex justify-between py-1.5 border-b border-default/40">
+                <Skeleton className="h-3.5 w-40" />
+                <Skeleton className="h-3.5 w-20" />
+                <Skeleton className="h-3.5 w-20" />
+                <Skeleton className="h-3.5 w-24" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )

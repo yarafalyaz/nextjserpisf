@@ -22,28 +22,22 @@ import {
 import { EmptyState } from "@/components/ui/empty-state"
 import { deleteBankStatementLine } from "@/actions/finance.actions"
 import { bankStatementLineTypeLabel } from "./_components/bank-statement-line-labels"
+import {
+  FileSpreadsheet,
+  Plus,
+  Upload,
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+  Landmark,
+} from "@/components/ui/fontawesome-icons"
+import { StatusChip } from "@/components/ui/status-chip"
+import { statusLabel } from "@/lib/utils/status-labels"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Laporan Bank" }
+export const metadata: Metadata = { title: "Detail Rekening Koran" }
 
-/**
- * Detail rekening koran: ringkasan saldo + baris mutasinya.
- *
- * Sampai halaman ini dilengkapi, `BankStatementLine` tidak punya jalur tulis
- * maupun tampilan: rekening koran bisa dibuat, tetapi barisnya tak pernah bisa
- * diisi (hanya skrip seed) dan halaman detailnya tak pernah merender baris apa
- * pun — sehingga `totalDebits`/`totalCredits` header selalu 0. Ringkasan di bawah
- * menampilkan kolom header APA ADANYA: nilainya dihitung ulang oleh aksi baris
- * (nilai absolut dari agregat barisnya) — jangan menghitung ulang di sini, karena
- * dua sumber angka untuk hal yang sama adalah cara keduanya menyimpang.
- *
- * Penambahan & pengubahan baris memakai halaman terpisah
- * (`/baris/tambah` dan `/baris/[lineId]/ubah` di bawah detail ini);
- * tautan lama `?editBaris=<id>` diarahkan ke halaman ubah. Izin tulisnya
- * mengikuti penulis header rekening koran (`create_journals`); halaman
- * cukup `view_bank_statements` untuk melihat.
- */
 export default async function BankStatementDetailPage({
   params,
   searchParams,
@@ -55,7 +49,6 @@ export default async function BankStatementDetailPage({
   const { slug } = await params
   const query = await searchParams
 
-  // Tautan lama `?editBaris=<id>` diarahkan ke halaman ubah baris.
   if (query.editBaris) {
     const legacyLineId = Number(query.editBaris)
     if (Number.isInteger(legacyLineId) && legacyLineId > 0) {
@@ -87,95 +80,212 @@ export default async function BankStatementDetailPage({
   const userRoles: string[] = user.roles ?? []
   const userPerms: string[] = user.permissions ?? []
   const isSuperAdmin = userRoles.includes("super_admin")
-  // Izin tulis = izin penulis header dan baris rekening koran (create_journals).
   const canWrite = isSuperAdmin || userPerms.includes("create_journals")
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={`Laporan Bank #${stmt.id}`}
+        title={`Rekening Koran #${stmt.id}`}
+        subtitle="Rincian informasi rekening koran, saldo awal-akhir, dan daftar baris mutasi debit/kredit."
+        badge={
+          <div className="flex items-center gap-2">
+            <StatusChip
+              status={stmt.status}
+              customLabel={statusLabel(stmt.status)}
+              customTone={stmt.status === "draft" ? "warning" : "success"}
+            />
+          </div>
+        }
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Keuangan", href: "/keuangan" },
-          { label: "Laporan Bank", href: "/keuangan/laporan-bank" },
-          { label: "Detail" },
+          { label: "Rekening Koran", href: "/keuangan/laporan-bank" },
+          { label: `#${stmt.id}` },
         ]}
-        actions={<BackButton href="/keuangan/laporan-bank" />}
+        actions={
+          <div className="flex items-center gap-2">
+            {canWrite && (
+              <>
+                <Link
+                  href={`${baseHref}/impor`}
+                  className="inline-flex min-h-11 sm:min-h-9 items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors"
+                >
+                  <Upload className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                  <span>Import CSV</span>
+                </Link>
+                <Link
+                  href={`${baseHref}/baris/tambah`}
+                  className="inline-flex min-h-11 sm:min-h-9 items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary-hover shadow-2xs transition-colors"
+                >
+                  <Plus className="size-3.5" aria-hidden="true" />
+                  <span>Tambah Baris</span>
+                </Link>
+              </>
+            )}
+            <BackButton href="/keuangan/laporan-bank" />
+          </div>
+        }
       />
 
-      <DetailCard>
-        <DetailField label="Akun Bank" value={account ? `${account.code} - ${account.name}` : `No. Rekening ${stmt.accountId}`} />
-        <DetailField label="Tanggal" value={formatDate(stmt.date)} />
-        <DetailField label="Referensi" value={stmt.reference || "-"} />
-        <DetailField label="Dibuat" value={formatDate(stmt.createdAt)} />
-        {stmt.accountNumber && <DetailField label="Nomor Rekening" value={stmt.accountNumber} mono />}
+      {/* Financial Metric Strip: Saldo Awal, Total Debit, Total Kredit, Saldo Akhir */}
+      <div className="grid grid-cols-1 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs sm:grid-cols-4">
+        {/* Saldo Awal */}
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center gap-2">
+            <Wallet className="size-4 text-muted-foreground" aria-hidden="true" />
+            <p className="text-xs font-medium text-muted-foreground">Saldo Awal Dokumen</p>
+          </div>
+          <p className="mt-2 text-xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+            {formatCurrencyExact(Number(stmt.openingBalance))}
+          </p>
+        </div>
+
+        {/* Total Debit (Dana Masuk ke Bank) */}
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            <p className="text-xs font-medium text-muted-foreground">Total Penerimaan (Debit)</p>
+          </div>
+          <p className="mt-2 text-xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 font-mono tabular-nums">
+            {formatCurrencyExact(Number(stmt.totalDebits))}
+          </p>
+        </div>
+
+        {/* Total Kredit (Dana Keluar dari Bank) */}
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center gap-2">
+            <TrendingDown className="size-4 text-red-600 dark:text-red-400" aria-hidden="true" />
+            <p className="text-xs font-medium text-muted-foreground">Total Pengeluaran (Kredit)</p>
+          </div>
+          <p className="mt-2 text-xl font-bold tracking-tight text-red-600 dark:text-red-400 font-mono tabular-nums">
+            {formatCurrencyExact(Number(stmt.totalCredits))}
+          </p>
+        </div>
+
+        {/* Saldo Akhir */}
+        <div className="p-4 sm:p-5">
+          <div className="flex items-center gap-2">
+            <Wallet className="size-4 text-primary" aria-hidden="true" />
+            <p className="text-xs font-medium text-muted-foreground">Saldo Akhir Dokumen</p>
+          </div>
+          <p className="mt-2 text-xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+            {formatCurrencyExact(Number(stmt.closingBalance))}
+          </p>
+        </div>
+      </div>
+
+      {/* Detail Informasi Dokumen Rekening Koran */}
+      <DetailCard title="Informasi Rekening Koran" columns={3}>
+        <DetailField
+          label="Akun Bank Terkait"
+          value={
+            account ? (
+              <span className="font-medium text-sm text-foreground flex items-center gap-1.5">
+                <Landmark className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                <span>{account.code} - {account.name}</span>
+              </span>
+            ) : (
+              `Akun #${stmt.accountId}`
+            )
+          }
+        />
+        <DetailField label="Tanggal Dokumen" value={formatDate(stmt.date)} />
+        <DetailField label="Nomor Referensi" value={stmt.reference || "-"} mono />
+        {stmt.accountNumber && (
+          <DetailField label="Nomor Rekening Bank" value={stmt.accountNumber} mono />
+        )}
+        <DetailField
+          label="Rentang Periode Mutasi"
+          value={
+            stmt.periodStart || stmt.periodEnd ? (
+              <span className="font-mono text-xs tabular-nums">
+                {stmt.periodStart ? formatDate(stmt.periodStart) : "-"} s/d{" "}
+                {stmt.periodEnd ? formatDate(stmt.periodEnd) : "-"}
+              </span>
+            ) : (
+              "-"
+            )
+          }
+        />
+        <DetailField label="Waktu Dicatat" value={formatDate(stmt.createdAt)} />
         {stmt.notes && <DetailField label="Catatan" value={stmt.notes} colSpan="full" />}
       </DetailCard>
 
-      {/* Ringkasan: saldo awal, total debit/kredit (dihitung aksi baris), saldo akhir. */}
-      <DetailCard title="Ringkasan Mutasi" columns={4}>
-        <DetailField label="Saldo Awal" value={formatCurrencyExact(Number(stmt.openingBalance))} />
-        <DetailField label="Total Debit" value={formatCurrencyExact(Number(stmt.totalDebits))} />
-        <DetailField label="Total Kredit" value={formatCurrencyExact(Number(stmt.totalCredits))} />
-        <DetailField label="Saldo Akhir" value={formatCurrencyExact(Number(stmt.closingBalance))} />
-      </DetailCard>
-
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
-          <div className="flex flex-col gap-0.5">
-            <h2 className="text-[0.9375rem] font-semibold text-foreground">Baris Rekening Koran</h2>
+      {/* Tabel Baris Mutasi Rekening Koran */}
+      <div className="rounded-lg border border-border bg-card shadow-2xs overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-border bg-muted/20">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Daftar Baris Mutasi Rekening Koran</h2>
             <p className="text-xs text-muted-foreground">
-              {stmt.lines.length} baris. Nominal selalu positif; arah mutasi (debit/kredit) yang
-              menentukan kolomnya.
+              {stmt.lines.length} baris mutasi tercatat. Nominal mutasi debit/kredit selalu bernilai positif.
             </p>
           </div>
-          {canWrite && (
-            <div className="flex gap-2">
-              <Link
-                href={`${baseHref}/impor`}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-input bg-background hover:bg-accent hover:-translate-y-px hover:shadow-md transition-all"
-              >
-                Import CSV
-              </Link>
-              <Link
-                href={`${baseHref}/baris/tambah`}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
-              >
-                + Tambah Baris
-              </Link>
-            </div>
-          )}
+          <span className="text-xs text-muted-foreground font-mono tabular-nums">
+            Total {stmt.lines.length} baris
+          </span>
         </div>
 
         {!canWrite && (
-          <p className="p-4 px-5 text-sm text-muted-foreground border-b border-default">
-            Anda tidak memiliki izin untuk menambah atau mengubah baris rekening koran.
+          <p className="p-3.5 px-5 text-xs text-muted-foreground bg-muted/30 border-b border-border">
+            Mode baca-saja: Anda tidak memiliki izin untuk menambah atau mengubah baris mutasi rekening koran.
           </p>
         )}
 
-        <div className="p-4 px-5">
+        <div className="overflow-x-auto">
           {stmt.lines.length === 0 ? (
-            <EmptyState title="Belum ada baris rekening koran" />
+            <div className="p-6">
+              <EmptyState
+                title="Belum ada baris transaksi rekening koran"
+                description="Gunakan tombol Tambah Baris atau Import CSV di atas untuk memasukkan data transaksi rekening koran."
+                className="py-10"
+              />
+            </div>
           ) : (
             <DetailTable>
               <DetailTableHead>
                 <DetailTableTh>Tanggal</DetailTableTh>
-                <DetailTableTh>Deskripsi</DetailTableTh>
-                <DetailTableTh>Referensi</DetailTableTh>
-                <DetailTableTh>Arah</DetailTableTh>
-                <DetailTableTh align="right">Debit</DetailTableTh>
-                <DetailTableTh align="right">Kredit</DetailTableTh>
+                <DetailTableTh>Keterangan / Uraian</DetailTableTh>
+                <DetailTableTh>No. Referensi</DetailTableTh>
+                <DetailTableTh align="center">Arah Mutasi</DetailTableTh>
+                <DetailTableTh align="right">Debit (Masuk)</DetailTableTh>
+                <DetailTableTh align="right">Kredit (Keluar)</DetailTableTh>
                 {canWrite && <DetailTableTh align="right">Aksi</DetailTableTh>}
               </DetailTableHead>
               <DetailTableBody>
                 {stmt.lines.map((line) => (
-                  <DetailTableRow key={line.id}>
-                    <DetailTableTd>{formatDate(line.date)}</DetailTableTd>
-                    <DetailTableTd>{line.description || "-"}</DetailTableTd>
-                    <DetailTableTd>{line.reference || "-"}</DetailTableTd>
-                    <DetailTableTd>{bankStatementLineTypeLabel(line.type)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrencyExact(Number(line.debit))}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrencyExact(Number(line.credit))}</DetailTableTd>
+                  <DetailTableRow key={line.id} className="hover:bg-muted/40 transition-colors">
+                    <DetailTableTd>
+                      <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                        {formatDate(line.date)}
+                      </span>
+                    </DetailTableTd>
+                    <DetailTableTd>
+                      <span className="text-xs font-medium text-foreground">{line.description || "-"}</span>
+                    </DetailTableTd>
+                    <DetailTableTd>
+                      <span className="font-mono text-xs text-muted-foreground">{line.reference || "-"}</span>
+                    </DetailTableTd>
+                    <DetailTableTd align="center">
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                          line.type === "DEBIT" || line.type === "debit"
+                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                            : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400"
+                        }`}
+                      >
+                        {bankStatementLineTypeLabel(line.type)}
+                      </span>
+                    </DetailTableTd>
+                    <DetailTableTd align="right">
+                      <span className="font-mono text-xs font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                        {Number(line.debit) > 0 ? formatCurrencyExact(Number(line.debit)) : "-"}
+                      </span>
+                    </DetailTableTd>
+                    <DetailTableTd align="right">
+                      <span className="font-mono text-xs font-semibold tabular-nums text-red-600 dark:text-red-400">
+                        {Number(line.credit) > 0 ? formatCurrencyExact(Number(line.credit)) : "-"}
+                      </span>
+                    </DetailTableTd>
                     {canWrite && (
                       <DetailTableTd align="right">
                         <div className="flex items-center justify-end">
@@ -185,6 +295,8 @@ export default async function BankStatementDetailPage({
                             deleteAction={deleteBankStatementLine}
                             deleteId={line.id}
                             deletePermission="create_journals"
+                            deleteConfirmTitle="Hapus baris mutasi rekening koran ini?"
+                            deleteConfirmBody="Baris mutasi akan dihapus dan total debit/kredit header akan dihitung ulang secara otomatis."
                           />
                         </div>
                       </DetailTableTd>
@@ -193,15 +305,21 @@ export default async function BankStatementDetailPage({
                 ))}
               </DetailTableBody>
               <DetailTableFoot>
-                <DetailTableFootRow>
+                <DetailTableFootRow className="bg-muted/30">
                   <DetailTableTd colSpan={4}>
-                    <strong>Total</strong>
+                    <span className="font-semibold text-xs text-foreground uppercase tracking-wider">
+                      Total Mutasi Tercatat
+                    </span>
                   </DetailTableTd>
                   <DetailTableTd align="right">
-                    <strong>{formatCurrencyExact(Number(stmt.totalDebits))}</strong>
+                    <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                      {formatCurrencyExact(Number(stmt.totalDebits))}
+                    </span>
                   </DetailTableTd>
                   <DetailTableTd align="right">
-                    <strong>{formatCurrencyExact(Number(stmt.totalCredits))}</strong>
+                    <span className="font-mono text-xs font-bold text-red-600 dark:text-red-400 tabular-nums">
+                      {formatCurrencyExact(Number(stmt.totalCredits))}
+                    </span>
                   </DetailTableTd>
                   {canWrite && <DetailTableTd>{null}</DetailTableTd>}
                 </DetailTableFootRow>

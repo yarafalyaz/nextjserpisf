@@ -245,14 +245,14 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
             <DetailTableHead>
               <DetailTableTh>Peristiwa</DetailTableTh>
               <DetailTableTh>Catatan</DetailTableTh>
-              <DetailTableTh>Tanggal</DetailTableTh>
+              <DetailTableTh>Waktu</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
               {budget.history.map((entry, i) => (
                 <DetailTableRow key={`${entry.action}-${entry.createdAt.getTime()}-${i}`}>
                   <DetailTableTd>{HISTORY_LABELS[entry.action] ?? entry.action}</DetailTableTd>
                   <DetailTableTd>{entry.notes || "-"}</DetailTableTd>
-                  <DetailTableTd>{formatDate(entry.createdAt)}</DetailTableTd>
+                  <DetailTableTd>{formatDate(entry.createdAt, { includeTime: true })}</DetailTableTd>
                 </DetailTableRow>
               ))}
             </DetailTableBody>

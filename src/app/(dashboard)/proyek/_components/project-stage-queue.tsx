@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Info } from "lucide-react"
+import { Info } from "@/components/ui/fontawesome-icons"
 
 import type { ProjectStageQueue } from "@/lib/reports/project-stage-queue"
 import {

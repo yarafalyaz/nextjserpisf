@@ -9,7 +9,7 @@ import {
   CheckCircle2,
   Clock,
   ArrowUpRight,
-} from "lucide-react"
+} from "@/components/ui/fontawesome-icons"
 import {
   Card,
   CardAction,
@@ -36,9 +36,6 @@ async function getWorkshopData() {
       prisma.workOrder.groupBy({
         by: ["status"],
         _count: true,
-        // Putaran 86: antrean aktif kanonis bengkel (ACTIVE_WORK_ORDER_
-        // STATUSES) — filter lama ikut menghitung WO closed sebagai
-        // perintah kerja aktif.
         where: { status: { in: ["draft", "pending", "in_progress"] } },
       }),
       prisma.project.findMany({
@@ -65,9 +62,6 @@ async function getWorkshopData() {
           createdAt: { gte: startOfMonth },
         },
       }),
-      // Putaran 86: kartu "Mobil di Bengkel" = count proyek aktif
-      // ber-kendaraan, bukan panjang daftar tampil (take: 8 di atas
-      // membuatnya mentok 8 dan kontradiksi kartu Proyek Aktif).
       prisma.project.count({
         where: { status: { notIn: DONE_STATES }, customerVehicleId: { not: null } },
       }),
@@ -122,47 +116,54 @@ export default async function WorkshopDashboard() {
   return (
     <div className="flex flex-1 flex-col">
       <div className="@container/main flex flex-1 flex-col gap-2">
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-          <div className="px-4 text-xs text-muted-foreground lg:px-6">
-            {today}
+        <div className="flex flex-col gap-4 py-4 md:gap-5 md:py-5">
+          <div className="flex flex-col justify-between gap-2 px-4 sm:flex-row sm:items-center lg:px-6">
+            <div>
+              <h1 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+                Dasbor Operasional Bengkel
+              </h1>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {today} · Pemantauan progres pengerjaan kendaraan dan perintah kerja
+              </p>
+            </div>
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-4 px-4 lg:grid-cols-4 lg:px-6">
+          <div className="grid grid-cols-2 gap-3 px-4 lg:grid-cols-4 lg:px-6">
             <StatCard
               label="Proyek Aktif"
               value={data.activeProjects}
-              icon={<FolderKanban className="size-5" />}
+              icon={<FolderKanban className="size-4" />}
             />
             <StatCard
               label="Perintah Kerja"
               value={data.totalWO}
-              icon={<Wrench className="size-5" />}
+              icon={<Wrench className="size-4" />}
             />
             <StatCard
               label="Proyek Baru (Bulan Ini)"
               value={data.wipProjects}
-              icon={<CheckCircle2 className="size-5" />}
+              icon={<CheckCircle2 className="size-4" />}
               trend="up"
             />
             <StatCard
               label="Mobil di Bengkel"
               value={data.carsInWorkshop}
-              icon={<Car className="size-5" />}
+              icon={<Car className="size-4" />}
             />
           </div>
 
           {/* Cars in workshop */}
           <div className="px-4 lg:px-6">
-            <Card>
-              <CardHeader>
+            <Card className="gap-0 py-0">
+              <CardHeader className="py-4">
                 <CardTitle className="flex items-center gap-2">
-                  <Car className="size-4 text-primary" />
+                  <Car className="size-4 text-muted-foreground" />
                   Mobil di Bengkel
                 </CardTitle>
                 <CardDescription>Proyek aktif dan tahap pengerjaannya</CardDescription>
                 <CardAction>
-                  <Button asChild variant="ghost" size="sm">
+                  <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                     <Link href="/proyek">
                       Semua <ArrowUpRight className="size-3.5" />
                     </Link>
@@ -191,9 +192,11 @@ export default async function WorkshopDashboard() {
                         data.cars.map((car) => (
                           <DetailTableRow key={car.id}>
                             <DetailTableTd className="font-mono text-xs font-medium">
-                              {car.plate}
+                              <span className="inline-flex items-center rounded border bg-muted/50 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-tight text-foreground">
+                                {car.plate}
+                              </span>
                             </DetailTableTd>
-                            <DetailTableTd className="max-w-[160px] truncate">
+                            <DetailTableTd className="max-w-[160px] truncate font-medium">
                               {car.customer}
                             </DetailTableTd>
                             <DetailTableTd className="max-w-[220px] truncate text-muted-foreground">
@@ -210,7 +213,7 @@ export default async function WorkshopDashboard() {
                                     style={{ width: `${car.progress}%` }}
                                   />
                                 </div>
-                                <span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                                <span className="w-9 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
                                   {car.progress}%
                                 </span>
                               </div>
@@ -218,11 +221,11 @@ export default async function WorkshopDashboard() {
                             <DetailTableTd>
                               {car.endDate ? (
                                 car.overdue ? (
-                                  <span className="text-xs font-medium text-red-600 dark:text-red-400">
+                                  <span className="text-xs font-medium tabular-nums text-red-600 dark:text-red-400">
                                     {formatDate(car.endDate, { format: "short" })}
                                   </span>
                                 ) : (
-                                  <span className="text-sm text-muted-foreground">
+                                  <span className="text-xs tabular-nums text-muted-foreground">
                                     {formatDate(car.endDate, { format: "short" })}
                                   </span>
                                 )
@@ -242,17 +245,26 @@ export default async function WorkshopDashboard() {
 
           {/* Quick Links */}
           <div className="px-4 lg:px-6">
-            <h2 className="mb-3 text-sm font-semibold">Menu Cepat</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+            <h2 className="mb-2.5 text-xs font-semibold tracking-wider uppercase text-muted-foreground">
+              Menu Cepat
+            </h2>
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
               {quickLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="flex flex-col items-center gap-1.5 rounded-lg border p-4 text-center transition-colors hover:bg-accent"
+                  className="group flex items-center justify-between gap-3 rounded-lg border bg-card p-3.5 shadow-2xs transition-colors duration-150 hover:border-foreground/20 hover:bg-muted/40"
                 >
-                  <link.icon className="size-5 text-primary" />
-                  <span className="text-xs font-medium">{link.label}</span>
-                  <span className="text-[10px] text-muted-foreground">{link.desc}</span>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-muted/50 text-muted-foreground transition-colors group-hover:text-foreground">
+                      <link.icon className="size-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-xs font-semibold text-foreground">{link.label}</div>
+                      <div className="truncate text-[11px] text-muted-foreground">{link.desc}</div>
+                    </div>
+                  </div>
+                  <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground/50 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground" />
                 </Link>
               ))}
             </div>

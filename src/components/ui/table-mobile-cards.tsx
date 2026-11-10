@@ -83,7 +83,7 @@ export function TableMobileCards<TData extends { id: number | string }>({
   }
 
   return (
-    <ul role="list" aria-label={ariaLabel} className="flex flex-col gap-3">
+    <ul role="list" aria-label={ariaLabel} className="flex flex-col gap-2.5">
       {rows.map((row) => {
         const cells = row.getVisibleCells()
         const meta = (cell: (typeof cells)[number]) => columnMeta(cell.column.columnDef)
@@ -106,12 +106,12 @@ export function TableMobileCards<TData extends { id: number | string }>({
           <li key={row.id} data-state={selected ? "selected" : undefined}>
             <Card
               className={
-                "gap-0 overflow-hidden py-0 " +
-                (selected ? "border-primary/50 ring-1 ring-primary/20" : "")
+                "gap-0 overflow-hidden py-0 transition-colors duration-150 " +
+                (selected ? "border-primary/60 bg-muted/20 ring-1 ring-primary/25" : "border-border/80")
               }
             >
               {/* Header: selection + primary content (name, SKU, thumbnail...) */}
-              <div className="flex items-start gap-3 p-3">
+              <div className="flex items-start gap-3 px-3.5 py-3">
                 {selectable && (
                   // ponytail: 44px touch target via -m-3.5 p-3.5 around the 16px
                   // box — visual size unchanged, hit area meets WCAG target size.
@@ -125,23 +125,23 @@ export function TableMobileCards<TData extends { id: number | string }>({
                     />
                   </span>
                 )}
-                <div className="min-w-0 flex-1 text-sm text-foreground">
+                <div className="min-w-0 flex-1 text-sm font-medium text-foreground">
                   {primary ? renderValue(primary) : null}
                 </div>
               </div>
 
               {/* Details: one label → value line per remaining visible column */}
               {details.length > 0 && (
-                <dl className="divide-y divide-default border-t border-default text-sm">
+                <dl className="divide-y divide-border/60 border-t border-border/80 text-[13px]">
                   {details.map((cell) => (
                     <div
                       key={cell.id}
-                      className="flex items-start justify-between gap-3 px-3 py-2"
+                      className="flex items-start justify-between gap-3 px-3.5 py-2"
                     >
                       <dt className="shrink-0 pt-0.5 text-xs font-medium text-muted-foreground">
                         {headerLabel(cell.column) || cell.column.id}
                       </dt>
-                      <dd className="min-w-0 break-words text-right text-foreground">
+                      <dd className="min-w-0 break-words text-right font-medium tabular-nums text-foreground">
                         {renderValue(cell)}
                       </dd>
                     </div>
@@ -151,7 +151,7 @@ export function TableMobileCards<TData extends { id: number | string }>({
 
               {/* Footer: actions only — the column moves here so it stays reachable */}
               {actions.length > 0 && (
-                <div className="flex items-center justify-end gap-1 border-t border-default bg-muted/40 px-2 py-1.5">
+                <div className="flex items-center justify-end gap-1.5 border-t border-border/80 bg-muted/30 px-3 py-1.5">
                   {actions.map((cell) => (
                     <div key={cell.id}>{renderValue(cell)}</div>
                   ))}

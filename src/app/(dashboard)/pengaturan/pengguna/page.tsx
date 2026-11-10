@@ -1,7 +1,7 @@
 import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
 import { parsePagination } from "@/lib/utils/pagination";
 import { listPageHref } from "@/lib/utils/list-href";
-import { Pencil } from "lucide-react"
+import { Pencil } from "@/components/ui/fontawesome-icons"
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"

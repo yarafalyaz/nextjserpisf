@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Gavel } from "lucide-react"
+import { Gavel } from "@/components/ui/fontawesome-icons"
 
 import type { TaxDisputeRegisterQueue } from "@/lib/reports/tax-dispute-register-queue"
 import {

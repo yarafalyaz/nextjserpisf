@@ -28,7 +28,7 @@ const ACCOUNT_PICKER_PAGES = [
   `${D}/keuangan/jurnal/[slug]/ubah/page.tsx`,
   `${D}/keuangan/pengeluaran/tambah/page.tsx`,
   `${D}/keuangan/pengeluaran/[slug]/ubah/page.tsx`,
-  `${D}/keuangan/kas-kecil/tambah/page.tsx`,
+  `${D}/keuangan/kas-kecil/tambah/[[...segments]]/page.tsx`,
   `${D}/keuangan/kas-kecil/[slug]/ubah/page.tsx`,
   `${D}/keuangan/transfer-bank/tambah/page.tsx`,
   `${D}/keuangan/penyetoran-pajak/tambah/page.tsx`,

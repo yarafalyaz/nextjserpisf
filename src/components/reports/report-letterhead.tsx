@@ -44,8 +44,8 @@ export async function ReportLetterhead({
 
   return (
     <div className="report-letterhead">
-      {/* Company identity block — centered, like a printed statement. */}
-      <div className="doc-head">
+      {/* Company identity block — centered on paper, hidden on screen */}
+      <div className="doc-head doc-letterhead-block">
         {settings.companyLogo ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -63,19 +63,18 @@ export async function ReportLetterhead({
         {contactParts.length > 0 ? (
           <div className="doc-lines">{contactParts.join("  •  ")}</div>
         ) : null}
+        <hr className="doc-rule" />
       </div>
-
-      <hr className="doc-rule" />
 
       {/* Statement title block */}
-      <div className="doc-head">
+      <div className="doc-head doc-header-bar">
+        <div className="doc-company doc-company-screen">{companyName}</div>
         <h1 className="doc-title">{title}</h1>
         {subtitle ? <div className="doc-subtitle">{subtitle}</div> : null}
-      </div>
-
-      <div className="doc-meta">
-        <span className="doc-period">{periodLabel}</span>
-        <span>Mata Uang: Indonesian Rupiah</span>
+        <div className="doc-meta">
+          <span className="doc-period">{periodLabel}</span>
+          <span>Mata Uang: Rupiah (IDR)</span>
+        </div>
       </div>
 
       {/* Hidden div for PDF export to pick up the period label */}

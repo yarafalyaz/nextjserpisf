@@ -1,5 +1,5 @@
 import Link from "next/link"
-import type { LucideIcon } from "lucide-react"
+import { ChevronRight, type LucideIcon } from "@/components/ui/fontawesome-icons"
 import type { ReactNode } from "react"
 
 import { cn } from "@/lib/utils"
@@ -36,7 +36,7 @@ export interface ModuleGridProps {
 }
 
 const cardClassName =
-  "group flex items-center gap-4 rounded-xl border border-default bg-surface p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+  "group flex min-h-14 items-center gap-3.5 rounded-lg border border-border/80 bg-card p-3.5 shadow-2xs transition-[background-color,border-color,box-shadow,transform] duration-150 ease-out hover:border-foreground/20 hover:bg-muted/30 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
 
 /**
  * ModuleGrid — a semantic, accessible grid of module landing cards.
@@ -101,16 +101,21 @@ function ModuleCard({ label, href, icon: Icon, desc }: ModuleItem) {
     >
       <div
         aria-hidden="true"
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10"
+        className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border/70 bg-muted/50 text-foreground transition-colors group-hover:border-primary group-hover:bg-primary group-hover:text-primary-foreground"
       >
-        <Icon size={20} className="text-primary" />
+        <Icon size={16} />
       </div>
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-foreground">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] font-medium text-foreground">
           {label}
         </p>
         <p className="truncate text-xs text-muted-foreground">{desc}</p>
       </div>
+      <ChevronRight
+        size={13}
+        aria-hidden="true"
+        className="shrink-0 text-muted-foreground/40 transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-foreground/70"
+      />
     </Link>
   )
 }

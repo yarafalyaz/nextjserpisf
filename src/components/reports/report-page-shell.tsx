@@ -61,22 +61,21 @@ export function ReportPageShell(props: ReportPageShellProps) {
   } = props
 
   return (
-    <div className={`report-page-shell flex flex-col gap-5${wide ? " report-page-shell-wide" : ""}`}>
-      <div className="print:hidden">
+    <div className={`report-page-shell flex flex-col gap-4${wide ? " report-page-shell-wide" : ""}`}>
+      <div className="print:hidden flex flex-wrap items-center justify-between gap-3">
         <AppBreadcrumbs
           items={[{ label: "Dasbor", href: "/" }, { label: "Laporan", href: "/laporan" }, { label: title }]}
         />
+        {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
       </div>
 
-      {filter || actions ? (
-        <div className="print:hidden flex flex-col gap-3">
+      {filter ? (
+        <div className="print:hidden flex flex-col gap-2">
           {filter}
-          {actions ? <div className="flex items-center justify-end">{actions}</div> : null}
         </div>
       ) : null}
 
-      {/* Kanvas dokumen: kertas putih di atas latar gelap (hanya di layar), supaya
-          laporan terbaca sebagai dokumen — bukan halaman aplikasi. */}
+      {/* Kanvas dokumen: kertas putih di atas meja kerja akuntansi */}
       <div className="report-canvas">
         {props.sheet === false ? (
           <div className={`report-paper${wide ? " report-paper-wide" : ""}`}>{children}</div>

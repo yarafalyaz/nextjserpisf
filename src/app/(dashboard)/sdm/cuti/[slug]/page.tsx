@@ -18,6 +18,7 @@ import { getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
 import { PENDING_ONLY_EDIT_STATUSES } from "@/lib/constants/status"
+import { LEAVE_TYPE_LABELS, labelFrom } from "@/lib/utils/status-labels"
 export const metadata: Metadata = { title: "Cuti" }
 
 export default async function LeaveRequestDetailPage({
@@ -46,6 +47,13 @@ export default async function LeaveRequestDetailPage({
   )
 
   if (!leave) notFound()
+
+  const approver = leave.approvedBy
+    ? await prisma.user.findUnique({
+        where: { id: leave.approvedBy },
+        select: { name: true },
+      })
+    : null
 
   // updateLeaveRequest menolak selain pending; deleteLeaveRequest menolak
   // `approved` (penggajian sudah bisa memakainya). Dua gerbang berbeda,
@@ -87,13 +95,7 @@ export default async function LeaveRequestDetailPage({
       <DetailCard>
         <DetailField label="Karyawan" value={leave.employee.name} />
         <DetailField label="No. Karyawan" value={leave.employee.employeeNo} mono />
-        <DetailField label="Tipe Cuti" value={{
-  annual: "Cuti Tahunan",
-  sick: "Cuti Sakit",
-  personal: "Cuti Pribadi",
-  maternity: "Cuti Melahirkan",
-  unpaid: "Cuti Tidak Dibayar",
-}[leave.type] || leave.type} />
+        <DetailField label="Tipe Cuti" value={labelFrom(LEAVE_TYPE_LABELS, leave.type)} />
         <DetailField label="Status" value={<StatusChip status={leave.status} />} />
         <DetailField label="Tanggal Mulai" value={formatDate(leave.startDate)} />
         <DetailField label="Tanggal Selesai" value={formatDate(leave.endDate)} />
@@ -103,7 +105,13 @@ export default async function LeaveRequestDetailPage({
         {leave.rejectionReason && (
           <DetailField label="Alasan Penolakan" value={leave.rejectionReason} colSpan="full" />
         )}
-        <DetailField label="Diajukan" value={formatDate(leave.createdAt)} />
+        <DetailField label="Diajukan" value={formatDate(leave.createdAt, { includeTime: true })} />
+        {leave.approvedBy && (
+          <DetailField
+            label={leave.status === "approved" ? "Disetujui Oleh" : "Diproses Oleh"}
+            value={approver ? approver.name : `Pengguna #${leave.approvedBy}`}
+          />
+        )}
       </DetailCard>
     </div>
   )

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { FilePenLine } from "lucide-react"
+import { FilePenLine } from "@/components/ui/fontawesome-icons"
 import { correctPaidPayroll } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { useRouter } from "next/navigation"

@@ -1,8 +1,14 @@
 import { describe, it, expect } from "vitest"
 
-import { buildCsvHeaderLines, csvQuote, formatPrintedAtWib } from "../export-buttons"
+import { buildCsvHeaderLines, buildPdfActionUrl, csvQuote, formatPrintedAtWib } from "../export-buttons"
 
 describe("AC-REP-003 kop ekspor klien", () => {
+  it("buildPdfActionUrl menambahkan /unduh/1 pada URL path atau ?unduh=1 pada URL query", () => {
+    expect(buildPdfActionUrl("/api/pdf/buku-besar/2026-10", true)).toBe("http://localhost/api/pdf/buku-besar/2026-10/unduh/1")
+    expect(buildPdfActionUrl("/api/pdf?laporan=buku-besar&periode=2026-10", true)).toBe("http://localhost/api/pdf?laporan=buku-besar&periode=2026-10&unduh=1")
+    expect(buildPdfActionUrl("/api/pdf/buku-besar/2026-10", false)).toBe("http://localhost/api/pdf/buku-besar/2026-10")
+  })
+
   it("waktu cetak selalu Asia/Jakarta berlabel WIB, bukan zona perangkat", () => {
     // 2026-10-28T00:30:00Z = 07:30 WIB hari yang sama.
     expect(formatPrintedAtWib(new Date("2026-10-28T00:30:00.000Z"))).toBe(

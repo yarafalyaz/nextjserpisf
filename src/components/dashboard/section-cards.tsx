@@ -1,20 +1,5 @@
-import {
-  TrendingUpIcon,
-  TrendingDownIcon,
-  DollarSign,
-  Receipt,
-  Users,
-  Car,
-  CheckCircle2,
-} from "lucide-react"
-import { Badge } from "@/components/ui/shadcn/badge"
-import {
-  Card,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/shadcn/card"
+import Link from "next/link"
+import { ArrowUpRight } from "@/components/ui/fontawesome-icons"
 
 interface SectionCardsProps {
   totalRevenue: string
@@ -34,101 +19,165 @@ export function SectionCards({
   totalCustomers,
 }: SectionCardsProps) {
   return (
-    <section
-      aria-label="Ringkasan kinerja"
-      className="*:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4 grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card lg:px-6"
-    >
-      <Card className="@container/card">
-        <CardHeader className="relative">
-          <CardDescription>Total Pendapatan</CardDescription>
-          <CardTitle className="@[250px]/card:text-3xl text-2xl font-semibold tabular-nums">
+    <section aria-label="Ringkasan kinerja" className="px-4 lg:px-6">
+      <dl className="grid grid-cols-1 divide-y divide-border overflow-hidden rounded-lg border border-border bg-card shadow-2xs sm:grid-cols-2 sm:divide-x sm:divide-y-0 @5xl/main:grid-cols-4">
+        {/* Metric 1: Total Pendapatan */}
+        <div className="flex min-w-0 flex-col justify-between gap-3 p-4 lg:p-5">
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-xs font-medium text-muted-foreground">
+              Total Pendapatan
+            </dt>
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[11px] leading-4 font-medium whitespace-nowrap text-emerald-800 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300">
+              <span
+                className="size-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400"
+                aria-hidden="true"
+              />
+              Kas Masuk
+            </span>
+          </div>
+
+          <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums @[250px]/main:text-[26px]">
             {totalRevenue}
-          </CardTitle>
-          <div className="absolute right-4 top-4">
-            <Badge variant="outline" className="flex gap-1 rounded-lg border-transparent bg-emerald-100 text-xs text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
-              <TrendingUpIcon className="size-3" aria-hidden="true" />
-              Masuk
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardFooter className="flex-col items-start gap-1 text-sm">
-          <div className="line-clamp-1 flex items-center gap-2 font-medium">
-            Pembayaran terkonfirmasi
-            <DollarSign className="size-4 text-emerald-600" aria-hidden="true" />
-          </div>
-          <div className="text-muted-foreground">Akumulasi semua transaksi</div>
-        </CardFooter>
-      </Card>
+          </dd>
 
-      <Card className="@container/card">
-        <CardHeader className="relative">
-          <CardDescription>Mobil Dikerjakan</CardDescription>
-          <CardTitle className="@[250px]/card:text-3xl text-2xl font-semibold tabular-nums">
-            {activeProjects}
-          </CardTitle>
-          <div className="absolute right-4 top-4">
-            <Badge variant="outline" className="flex gap-1 rounded-lg text-xs">
-              <Car className="size-3" aria-hidden="true" />
-              Aktif
-            </Badge>
+          <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-2.5 text-xs">
+            <span className="truncate text-muted-foreground">
+              Faktur lunas &amp; sebagian
+            </span>
+            <Link
+              href="/penjualan/pembayaran"
+              className="group inline-flex shrink-0 items-center gap-0.5 font-medium text-foreground underline-offset-4 transition-colors duration-150 hover:text-primary hover:underline"
+            >
+              Riwayat pembayaran
+              <ArrowUpRight
+                className="size-3 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-primary"
+                aria-hidden="true"
+              />
+            </Link>
           </div>
-        </CardHeader>
-        <CardFooter className="flex-col items-start gap-1 text-sm">
-          <div className="line-clamp-1 flex items-center gap-2 font-medium">
-            Selesai bulan ini: {completedThisMonth}
-            <CheckCircle2 className="size-4 text-blue-500" aria-hidden="true" />
-          </div>
-          <div className="text-muted-foreground">Proyek aktif berjalan saat ini</div>
-        </CardFooter>
-      </Card>
+        </div>
 
-      <Card className="@container/card">
-        <CardHeader className="relative">
-          <CardDescription>Piutang Berjalan</CardDescription>
-          <CardTitle className="@[250px]/card:text-3xl text-2xl font-semibold tabular-nums">
+        {/* Metric 2: Mobil Dikerjakan */}
+        <div className="flex min-w-0 flex-col justify-between gap-3 p-4 sm:border-t-0 lg:p-5">
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-xs font-medium text-muted-foreground">
+              Mobil Dikerjakan
+            </dt>
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-blue-200/80 bg-blue-50 px-2 py-0.5 text-[11px] leading-4 font-medium whitespace-nowrap text-blue-800 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-blue-300">
+              <span
+                className="size-1.5 rounded-full bg-blue-600 dark:bg-blue-400"
+                aria-hidden="true"
+              />
+              WIP Bengkel
+            </span>
+          </div>
+
+          <dd className="flex items-baseline gap-2">
+            <span className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums @[250px]/main:text-[26px]">
+              {activeProjects}
+            </span>
+            <span className="text-xs text-muted-foreground">unit di lantai</span>
+          </dd>
+
+          <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-2.5 text-xs">
+            <span className="truncate text-muted-foreground">
+              Selesai bulan ini:{" "}
+              <strong className="font-semibold text-foreground tabular-nums">
+                {completedThisMonth}
+              </strong>
+              {overdueProjects > 0 && (
+                <>
+                  {" · "}
+                  <span className="font-medium text-red-600 tabular-nums dark:text-red-400">
+                    {overdueProjects} lewat target
+                  </span>
+                </>
+              )}
+            </span>
+            <Link
+              href="/proyek"
+              className="group inline-flex shrink-0 items-center gap-0.5 font-medium text-foreground underline-offset-4 transition-colors duration-150 hover:text-primary hover:underline"
+            >
+              Daftar proyek
+              <ArrowUpRight
+                className="size-3 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-primary"
+                aria-hidden="true"
+              />
+            </Link>
+          </div>
+        </div>
+
+        {/* Metric 3: Piutang Berjalan */}
+        <div className="flex min-w-0 flex-col justify-between gap-3 p-4 sm:border-t @5xl/main:border-t-0 lg:p-5">
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-xs font-medium text-muted-foreground">
+              Piutang Berjalan
+            </dt>
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[11px] leading-4 font-medium whitespace-nowrap text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300">
+              <span
+                className="size-1.5 rounded-full bg-amber-600 dark:bg-amber-400"
+                aria-hidden="true"
+              />
+              Belum Tertagih
+            </span>
+          </div>
+
+          <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums @[250px]/main:text-[26px]">
             {receivables}
-          </CardTitle>
-          <div className="absolute right-4 top-4">
-            <Badge variant="outline" className="flex gap-1 rounded-lg border-transparent bg-amber-100 text-xs text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
-              <Receipt className="size-3" aria-hidden="true" />
-              Terbuka
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardFooter className="flex-col items-start gap-1 text-sm">
-          <div className="line-clamp-1 flex items-center gap-2 font-medium">
-            {overdueProjects} proyek melewati target
-            {overdueProjects > 0 ? (
-              <TrendingDownIcon className="size-4 text-red-500" aria-hidden="true" />
-            ) : (
-              <TrendingUpIcon className="size-4 text-emerald-500" aria-hidden="true" />
-            )}
-          </div>
-          <div className="text-muted-foreground">Sisa tagihan yang belum dibayar</div>
-        </CardFooter>
-      </Card>
+          </dd>
 
-      <Card className="@container/card">
-        <CardHeader className="relative">
-          <CardDescription>Pelanggan Aktif</CardDescription>
-          <CardTitle className="@[250px]/card:text-3xl text-2xl font-semibold tabular-nums">
-            {totalCustomers}
-          </CardTitle>
-          <div className="absolute right-4 top-4">
-            <Badge variant="outline" className="flex gap-1 rounded-lg text-xs">
-              <Users className="size-3" aria-hidden="true" />
-              Pelanggan
-            </Badge>
+          <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-2.5 text-xs">
+            <span className="truncate text-muted-foreground">
+              Tagihan dikurangi retur
+            </span>
+            <Link
+              href="/laporan/piutang-pelanggan"
+              className="group inline-flex shrink-0 items-center gap-0.5 font-medium text-foreground underline-offset-4 transition-colors duration-150 hover:text-primary hover:underline"
+            >
+              Umur piutang
+              <ArrowUpRight
+                className="size-3 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-primary"
+                aria-hidden="true"
+              />
+            </Link>
           </div>
-        </CardHeader>
-        <CardFooter className="flex-col items-start gap-1 text-sm">
-          <div className="line-clamp-1 flex items-center gap-2 font-medium">
-            Pelanggan terdaftar
-            <Users className="size-4 text-sky-500" aria-hidden="true" />
+        </div>
+
+        {/* Metric 4: Pelanggan Aktif */}
+        <div className="flex min-w-0 flex-col justify-between gap-3 p-4 sm:border-t @5xl/main:border-t-0 lg:p-5">
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-xs font-medium text-muted-foreground">
+              Pelanggan Aktif
+            </dt>
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-2 py-0.5 text-[11px] leading-4 font-medium whitespace-nowrap text-muted-foreground">
+              Master Data
+            </span>
           </div>
-          <div className="text-muted-foreground">Total pelanggan aktif di sistem</div>
-        </CardFooter>
-      </Card>
+
+          <dd className="flex items-baseline gap-2">
+            <span className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums @[250px]/main:text-[26px]">
+              {totalCustomers}
+            </span>
+            <span className="text-xs text-muted-foreground">entitas terdaftar</span>
+          </dd>
+
+          <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-2.5 text-xs">
+            <span className="truncate text-muted-foreground">
+              Basis akun &amp; kendaraan
+            </span>
+            <Link
+              href="/master/pelanggan"
+              className="group inline-flex shrink-0 items-center gap-0.5 font-medium text-foreground underline-offset-4 transition-colors duration-150 hover:text-primary hover:underline"
+            >
+              Data pelanggan
+              <ArrowUpRight
+                className="size-3 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-primary"
+                aria-hidden="true"
+              />
+            </Link>
+          </div>
+        </div>
+      </dl>
     </section>
   )
 }

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
-import { Car } from "lucide-react"
+import { Car } from "@/components/ui/fontawesome-icons"
 import { VehicleBrandTable } from "./_components/vehicle-brand-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 

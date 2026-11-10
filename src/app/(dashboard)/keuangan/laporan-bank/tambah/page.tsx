@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { loadPostableAccounts } from "@/lib/finance/postable-accounts"
 import { requirePermission } from "@/lib/auth/permissions"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader } from "@/components/ui/page-header"
 import { BankStatementForm } from "./form"
 
 import type { Metadata } from "next"
@@ -15,7 +15,7 @@ export default async function CreateBankStatementPage() {
   await requirePermission("create_journals")
 
   const [accounts, banks] = await Promise.all([
-    loadPostableAccounts({ type: "ASSET" }),
+    loadPostableAccounts({ type: "ASSET", reportGroup: "BANK" }),
     prisma.bank.findMany({
       where: { isActive: true },
       orderBy: { code: "asc" },
@@ -25,17 +25,16 @@ export default async function CreateBankStatementPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs
-        items={[
+      <PageHeader
+        title="Buat Rekening Koran"
+        subtitle="Registrasi header dokumen rekening koran bank sebelum mengimpor atau menambahkan baris transaksi mutasi."
+        breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Keuangan", href: "/keuangan" },
           { label: "Rekening Koran", href: "/keuangan/laporan-bank" },
-          { label: "Buat" },
+          { label: "Tambah Rekening Koran" },
         ]}
       />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Buat Rekening Koran</h1>
-      </div>
       <BankStatementForm accounts={accounts} banks={banks} />
     </div>
   )

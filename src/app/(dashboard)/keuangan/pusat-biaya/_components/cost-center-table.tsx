@@ -2,7 +2,7 @@
 
 import { createColumnHelper } from "@/lib/table"
 import Link from "next/link"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight } from "@/components/ui/fontawesome-icons"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteCostCenter } from "@/actions/finance.actions"

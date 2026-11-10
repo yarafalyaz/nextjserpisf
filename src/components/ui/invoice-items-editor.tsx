@@ -499,7 +499,7 @@ export function InvoiceItemsEditor({
                     <Combobox
                       options={availableItems.map((ai) => ({
                         value: String(ai.id),
-                        label: `${ai.name} (${ai.sku})${ai.isScrapSaleItem ? " — Besi Tua" : ""}`,
+                        label: `${ai.name} (${ai.sku})${ai.isScrapSaleItem ? " (Besi Tua)" : ""}`,
                       }))}
                       value={item.itemId ? String(item.itemId) : null}
                       onChange={(key) => updateItem(i, "itemId", key ?? "")}
@@ -600,7 +600,7 @@ export function InvoiceItemsEditor({
                     />
                     <p className="mt-1 text-xs text-muted-foreground">
                       {serialCount} seri{item.qty > 0 ? ` (saran ${item.qty})` : ""}
-                      {serialCount > 0 && serialCount !== item.qty ? " — belum sama qty" : ""}
+                      {serialCount > 0 && serialCount !== item.qty ? ", belum sama qty" : ""}
                     </p>
                   </div>
                 )}
@@ -668,7 +668,7 @@ export function InvoiceItemsEditor({
                       <Combobox
                         options={availableItems.map((ai) => ({
                           value: String(ai.id),
-                          label: `${ai.name} (${ai.sku})${ai.isScrapSaleItem ? " — Besi Tua" : ""}`,
+                          label: `${ai.name} (${ai.sku})${ai.isScrapSaleItem ? " (Besi Tua)" : ""}`,
                         }))}
                         value={item.itemId ? String(item.itemId) : null}
                         onChange={(key) => updateItem(i, "itemId", key ?? "")}
@@ -784,7 +784,7 @@ export function InvoiceItemsEditor({
                             ? ` (disarankan ${item.qty} sesuai qty)`
                             : ""}
                           {serialCount > 0 && serialCount !== item.qty
-                            ? " — jumlah belum sama dengan qty"
+                            ? ", jumlah belum sama dengan qty"
                             : ""}
                         </p>
                       </td>

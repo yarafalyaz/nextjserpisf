@@ -28,6 +28,9 @@ export const STATUS_LABELS: Record<string, string> = {
   verified: "Terverifikasi",
   paid: "Dibayar",
   partial: "Sebagian",
+  partial_received: "Diterima Sebagian",
+  partial_ordered: "Dipesan Sebagian",
+  unpaid: "Belum Dibayar",
 
   // Delivery
   shipped: "Dikirim",
@@ -52,7 +55,7 @@ export const STATUS_LABELS: Record<string, string> = {
 
   // Sales
   confirmed: "Terkonfirmasi",
-  posted: "Diposting",
+  posted: "Diterbitkan",
   reversed: "Dibalik",
   reversing: "Sedang Dibalik",
 
@@ -85,6 +88,10 @@ export const STATUS_LABELS: Record<string, string> = {
   contacted: "Dihubungi",
   qualified: "Terkualifikasi",
   proposal: "Proposal",
+  low: "Rendah",
+  medium: "Sedang",
+  high: "Tinggi",
+  urgent: "Mendesak",
 
   // Additional
   skipped: "Dilewati",
@@ -201,6 +208,7 @@ export const statusToIndo: Record<string, string> = {
   delivered: "diterima",
   ordered: "dipesan",
   cancelled: "batal",
+  replaced: "diganti",
   returned: "retur",
   in_transit: "perjalanan",
   received: "diterima-gudang",

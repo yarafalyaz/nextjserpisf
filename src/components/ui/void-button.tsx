@@ -1,6 +1,6 @@
 "use client"
 
-import { Ban } from "lucide-react"
+import { Ban } from "@/components/ui/fontawesome-icons"
 import { Button } from "@/components/ui/shadcn/button"
 import { ReasonField } from "@/components/ui/reason-field"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"

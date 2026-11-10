@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/shadcn/button"
-import { Home } from "lucide-react"
+import { Home } from "@/components/ui/fontawesome-icons"
 
 export default function AuthNotFound() {
   return (

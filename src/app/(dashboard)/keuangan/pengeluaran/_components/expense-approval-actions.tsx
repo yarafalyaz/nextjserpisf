@@ -2,7 +2,7 @@
 
 import { useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle, XCircle, Clock } from "lucide-react"
+import { CheckCircle, XCircle, Clock } from "@/components/ui/fontawesome-icons"
 import { Button } from "@/components/ui/button"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { statusLabel } from "@/lib/utils/status-labels"
