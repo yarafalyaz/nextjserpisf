@@ -95,7 +95,7 @@ async function canAccessAttachmentWithPermission(
   if (!permission || !modelKey || !Number.isSafeInteger(referenceId) || referenceId <= 0) return false
   if (!(await hasPermission(permission))) return false
 
-  const model = (prisma as any)[modelKey]
+  const model = (prisma as Record<string, any>)[modelKey]
   if (!model?.findUnique) return false
   // R6PA-02: dokumen induk soft-deleted tidak boleh lagi melayani lampiran
   // (unduh/daftar/tulis). Model tanpa kolom deletedAt tidak ikut dinilai —
@@ -145,7 +145,7 @@ async function canAccessAttachmentWithPermission(
   // R7API-01: induk (mis. ketetapan dari langkah sengketa) yang terhapus
   // menutup lampirannya — dicek langsung karena deletedAt langkah kosong.
   if (parent) {
-    const parentModel = (prisma as any)[parent.model]
+    const parentModel = (prisma as Record<string, any>)[parent.model]
     if (!parentModel?.findUnique) return false
     const parentDoc = await parentModel.findUnique({
       where: { id: document[parent.foreignKey] },
