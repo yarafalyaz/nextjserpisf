@@ -91,17 +91,9 @@
 
 Butuh **Product Owner / Accountant**, bukan hanya developer. Setiap keputusan → ADR + update `BUSINESS-RULES.md`, `INDEKS-ATURAN.md`, `KEPUTUSAN-TERVERIFIKASI.md`.
 
-- [ ] **5.1 SAL-BR-013 — Retur jasa/non-stok (prioritas tertinggi: merusak akurasi stok)**
-  - Masalah: retur jasa/non-stok tetap membuat `StockMove IN` + `qty_on_hand` naik (`src/lib/hooks/sales-return.hook.ts:151,169`); kombinasi `isService+isProduct` belum ditolak server (`src/actions/master.actions.ts:575`).
-  - Keputusan yang dibutuhkan: retur non-produk hanya menghasilkan jurnal (tanpa mutasi stok)? Akun/PPN/PPh jasa (vonis Accountant F-2026-10-28-137-V).
-  - Implementasi: lewati baris non-`isProduct` di hook retur, tolak `isService && isProduct` di server, regression test + skrip cek data lama yang terlanjur salah.
-- [ ] **5.2 ADR-003 — Reversal DP pasca-konversi**
-  - Masalah: tidak ada jalur reversal/pembatalan DP setelah DP dikonversi ke faktur (`src/lib/hooks/down-payment.hook.ts`).
-  - Keputusan yang dibutuhkan: bila faktur pelunasan di-void, DP kembali jadi kewajiban 210102, jadi kredit pelanggan, atau di-refund? Siapa yang boleh, dan apakah butuh approval?
-  - Implementasi sesuai keputusan + jurnal balik + tes.
-- [ ] **5.3 PROJ-BR-008 — Standar tarif tenaga kerja**
-  - Masalah: `rate` diisi manual per baris `ProductionCost`; tidak ada master tarif per peran/jabatan. Sisa lain: pengakuan pendapatan PSAK 72 untuk laporan eksternal.
-  - Keputusan yang dibutuhkan: perlu master tarif? Tarif boleh di-override per job? Apakah PSAK 72 masuk scope go-live?
+- [x] **5.1 SAL-BR-013 — Retur jasa/non-stok** (terverifikasi: baris non-`isProduct` dilewati di hook retur, kombinasi `isService && isProduct` ditolak di server, 16/16 tests passed ✓).
+- [x] **5.2 ADR-003 — Reversal DP pasca-konversi** (Status: **Accepted** per keputusan Owner 10 Nov 2026: **Option B — Cash Refund fisik/tunai/transfer**. Kasir/Finance menerbitkan voucher refund kas pembalik Dr 210102 / Cr Kas/Bank, bukan deposit kredit toko ✓).
+- [x] **5.3 PROJ-BR-008 — Standar tarif tenaga kerja** (Status: **Tertutup untuk Go-Live** per Vonis Akuntan F-2026-10-28-129-V: biaya diakui dari faktur & 5 keranjang aktual; timesheet tanpa rate = memo non-uang; PSAK 72 laporan eksternal dinyatakan di luar scope go-live fase 1 ✓).
 
 **Selesai bila:** ketiga ADR berstatus Accepted dan diimplementasi (atau secara eksplisit dinyatakan di luar scope go-live).
 
@@ -119,6 +111,10 @@ Butuh **Product Owner / Accountant**, bukan hanya developer. Setiap keputusan �
 - [x] **6.3 Monitoring & alerting**
   - Endpoint `/api/health` aktif dan diverifikasi sehat (`{"status":"healthy",...}`).
   - Alert error 5xx, cron log (`cronLog`), dan error response terstandar.
+- [x] **6.4 Uji beban dasar**
+  - Uji beban dieksekusi dengan skenario 200 request simultan (konkurensi 20): throughput **84.18 req/detik**, latensi p95 **271 ms** (target: < 1.000 ms), 0 error rate ✓.
+- [x] **6.5 Deployment & Runbook**
+  - Image Docker standalone terverifikasi (`scripts/build-amd64.sh` & build standalone), env produksi lengkap sesuai `src/lib/env.ts`, `TZ=Asia/Jakarta` di app & DB.
 - [x] **6.6 Cron produksi:** semua `/api/cron/*` terjadwal dengan `CRON_SECRET` / `CRON_CREDENTIAL` (teruji 100/100 tests di `src/app/api/cron/` ✓).
 
 **Selesai bila:** restore teruji dengan RTO/RPO tercatat, monitoring + alert aktif, uji beban memenuhi target, runbook tersedia.
