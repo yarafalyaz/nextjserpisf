@@ -55,6 +55,8 @@ export function MaterialRequestForm({ warehouses, items, workOrders, request }: 
       : [{ itemId: 0, qty: 1, notes: "", uid: nextItemUid() }],
   )
 
+  const itemMap = useMemo(() => new Map(items.map((it) => [it.id, it])), [items])
+
   const itemOptions = useMemo(
     () => items.map((it) => ({ value: String(it.id), label: `${it.sku} - ${it.name}` })),
     [items],
@@ -181,59 +183,72 @@ export function MaterialRequestForm({ warehouses, items, workOrders, request }: 
           <div className="overflow-x-auto rounded-lg border border-border">
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh className="w-full">Barang / SKU</DetailTableTh>
+                <DetailTableTh className="w-12 text-center">No</DetailTableTh>
+                <DetailTableTh className="min-w-[280px]">Barang / Material</DetailTableTh>
+                <DetailTableTh className="w-24 text-center">Satuan</DetailTableTh>
                 <DetailTableTh className="w-36 text-right">Kuantitas</DetailTableTh>
-                <DetailTableTh className="w-64">Catatan Baris</DetailTableTh>
+                <DetailTableTh className="min-w-[220px]">Catatan Baris</DetailTableTh>
                 <DetailTableTh className="w-16 text-center">Aksi</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
-                {requestItems.map((item, i) => (
-                  <DetailTableRow key={item.uid}>
-                    <DetailTableTd>
-                      <Combobox
-                        value={item.itemId ? String(item.itemId) : null}
-                        onChange={(key) => updateItem(i, "itemId", key ? Number(key) : 0)}
-                        placeholder="Cari nama atau SKU barang..."
-                        options={itemOptions}
-                      />
-                    </DetailTableTd>
-                    <DetailTableTd>
-                      <Input
-                        type="number"
-                        min="1"
-                        aria-label={`Jumlah baris ${i + 1}`}
-                        value={item.qty}
-                        onChange={(e) => updateItem(i, "qty", Number(e.target.value))}
-                        placeholder="Qty"
-                        className="w-full text-right font-mono tabular-nums h-9 text-xs"
-                      />
-                    </DetailTableTd>
-                    <DetailTableTd>
-                      <Input
-                        aria-label={`Catatan baris ${i + 1}`}
-                        value={item.notes}
-                        onChange={(e) => updateItem(i, "notes", e.target.value)}
-                        placeholder="Catatan (opsional)"
-                        className="w-full h-9 text-xs"
-                      />
-                    </DetailTableTd>
-                    <DetailTableTd>
-                      <div className="flex justify-center">
-                        <Button
-                          type="button"
-                          onPress={() => removeItem(i)}
-                          variant="danger-soft"
-                          size="sm"
-                          aria-label={`Hapus barang baris ${i + 1}`}
-                          isDisabled={requestItems.length === 1}
-                          className="h-8 w-8 p-0"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </div>
-                    </DetailTableTd>
-                  </DetailTableRow>
-                ))}
+                {requestItems.map((item, i) => {
+                  const selectedItem = item.itemId ? itemMap.get(item.itemId) : undefined
+                  return (
+                    <DetailTableRow key={item.uid}>
+                      <DetailTableTd className="text-center font-mono text-xs text-muted-foreground">
+                        {i + 1}
+                      </DetailTableTd>
+                      <DetailTableTd>
+                        <Combobox
+                          value={item.itemId ? String(item.itemId) : null}
+                          onChange={(key) => updateItem(i, "itemId", key ? Number(key) : 0)}
+                          placeholder="Pilih atau cari material..."
+                          options={itemOptions}
+                        />
+                      </DetailTableTd>
+                      <DetailTableTd className="text-center">
+                        <span className="inline-block px-2 py-1 rounded bg-muted/60 text-xs font-mono text-muted-foreground border border-border">
+                          {selectedItem?.unitOfMeasure ?? "-"}
+                        </span>
+                      </DetailTableTd>
+                      <DetailTableTd>
+                        <Input
+                          type="number"
+                          min="1"
+                          aria-label={`Jumlah baris ${i + 1}`}
+                          value={item.qty}
+                          onChange={(e) => updateItem(i, "qty", Number(e.target.value))}
+                          placeholder="0"
+                          className="w-full text-right font-mono tabular-nums h-9 text-xs"
+                        />
+                      </DetailTableTd>
+                      <DetailTableTd>
+                        <Input
+                          aria-label={`Catatan baris ${i + 1}`}
+                          value={item.notes}
+                          onChange={(e) => updateItem(i, "notes", e.target.value)}
+                          placeholder="Catatan spesifik item (opsional)"
+                          className="w-full h-9 text-xs"
+                        />
+                      </DetailTableTd>
+                      <DetailTableTd>
+                        <div className="flex justify-center">
+                          <Button
+                            type="button"
+                            onPress={() => removeItem(i)}
+                            variant="danger-soft"
+                            size="sm"
+                            aria-label={`Hapus barang baris ${i + 1}`}
+                            isDisabled={requestItems.length === 1}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      </DetailTableTd>
+                    </DetailTableRow>
+                  )
+                })}
               </DetailTableBody>
             </DetailTable>
           </div>
