@@ -11,7 +11,7 @@ import { reportPeriodFromRoute } from '@/lib/reports/report-period'
 import { parseReportFilters } from '@/lib/reports/report-href'
 import { EmptyState } from "@/components/ui/empty-state"
 import { OpnameForm } from '../_components/opname-form'
-import { FontAwesomeIcon } from "@/components/ui/fontawesome-icons"
+import { BoxArchive, ClipboardList, FileText } from "@/components/ui/fontawesome-icons"
 import Link from 'next/link'
 
 import type { Metadata } from 'next'
@@ -113,7 +113,7 @@ export default async function StockOpnamePage({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-border">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-            <FontAwesomeIcon icon="box-archive" className="size-3.5 text-primary" />
+            <BoxArchive className="size-3.5 text-primary" />
             <span>Manajemen Inventaris</span>
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">Lembar Stok Opname</h1>
@@ -126,14 +126,14 @@ export default async function StockOpnamePage({
             href="/inventaris/opname/sesi"
             className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-md border border-border bg-card hover:bg-muted text-foreground transition-colors cursor-pointer shadow-2xs"
           >
-            <FontAwesomeIcon icon="clipboard-list" className="size-3.5 text-muted-foreground" />
+            <ClipboardList className="size-3.5 text-muted-foreground" />
             <span>Alur Sesi Bertahap</span>
           </Link>
           <Link
             href="/inventaris/penyesuaian"
             className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-md border border-border bg-card hover:bg-muted text-foreground transition-colors cursor-pointer shadow-2xs"
           >
-            <FontAwesomeIcon icon="file-lines" className="size-3.5 text-muted-foreground" />
+            <FileText className="size-3.5 text-muted-foreground" />
             <span>Daftar Penyesuaian</span>
           </Link>
         </div>

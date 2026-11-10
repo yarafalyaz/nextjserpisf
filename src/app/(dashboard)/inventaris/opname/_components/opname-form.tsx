@@ -10,7 +10,15 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/button"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
-import { FontAwesomeIcon } from "@/components/ui/fontawesome-icons"
+import {
+  ArrowDown,
+  ArrowUp,
+  Boxes,
+  RotateCcw,
+  ScanBarcode,
+  Search,
+  TableList,
+} from "@/components/ui/fontawesome-icons"
 import { safeMultiply, safeSubtract } from "@/lib/utils/math"
 
 interface OpnameRow {
@@ -175,12 +183,12 @@ export function OpnameForm({ warehouseId, date, rows, canCreate }: OpnameFormPro
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Surplus / Defisit</span>
           <div className="flex items-center gap-3 text-xs font-medium font-mono pt-1">
             <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-              <FontAwesomeIcon icon="arrow-up" className="size-3" />
+              <ArrowUp className="size-3" />
               <span>+{diffSummary.surplusCount} Surplus</span>
             </span>
             <span className="text-border">|</span>
             <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400">
-              <FontAwesomeIcon icon="arrow-down" className="size-3" />
+              <ArrowDown className="size-3" />
               <span>-{diffSummary.deficitCount} Defisit</span>
             </span>
           </div>
@@ -200,7 +208,7 @@ export function OpnameForm({ warehouseId, date, rows, canCreate }: OpnameFormPro
       <div className="rounded-lg border border-border bg-card shadow-2xs overflow-hidden">
         <div className="p-4 border-b border-border bg-muted/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2">
-            <FontAwesomeIcon icon="table-list" className="size-4 text-muted-foreground" />
+            <TableList className="size-4 text-muted-foreground" />
             <h3 className="font-semibold text-sm text-foreground">Daftar Barang & Lembar Hitung</h3>
             <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-muted text-muted-foreground border border-border">
               {visibleRows.length} dari {rows.length}
@@ -217,7 +225,7 @@ export function OpnameForm({ warehouseId, date, rows, canCreate }: OpnameFormPro
                 onChange={(e) => setFilterSearch(e.target.value)}
                 className="w-48 sm:w-64 h-8 text-xs pl-8"
               />
-              <FontAwesomeIcon icon="magnifying-glass" className="size-3.5 text-muted-foreground absolute left-2.5 top-2.5 pointer-events-none" />
+              <Search className="size-3.5 text-muted-foreground absolute left-2.5 top-2.5 pointer-events-none" />
             </div>
 
             <div className="flex items-center rounded-md border border-border bg-card p-0.5 text-xs">
@@ -252,7 +260,7 @@ export function OpnameForm({ warehouseId, date, rows, canCreate }: OpnameFormPro
               isDisabled={!canCreate || diffSummary.diffCount === 0}
               className="h-8 text-xs gap-1.5"
             >
-              <FontAwesomeIcon icon="rotate-left" className="size-3" />
+              <RotateCcw className="size-3" />
               <span>Reset Hitungan</span>
             </Button>
           </div>
@@ -296,12 +304,12 @@ export function OpnameForm({ warehouseId, date, rows, canCreate }: OpnameFormPro
                           <div className="flex items-center gap-1.5 mt-0.5">
                             {row.trackBatch && (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800">
-                                <FontAwesomeIcon icon="boxes-stacked" className="size-2.5" /> Batch
+                                <Boxes className="size-2.5" /> Batch
                               </span>
                             )}
                             {row.trackSerial && (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800">
-                                <FontAwesomeIcon icon="barcode" className="size-2.5" /> Serial
+                                <ScanBarcode className="size-2.5" /> Serial
                               </span>
                             )}
                           </div>

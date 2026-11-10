@@ -200,10 +200,9 @@ export const Workflow = createFaComponent(solid.faDiagramProject)
 export const Wrench = createFaComponent(solid.faWrench)
 export const X = createFaComponent(solid.faXmark)
 export const XCircle = createFaComponent(solid.faCircleXmark)
+export const TableList = createFaComponent(solid.faTableList)
+export const BoxArchive = createFaComponent(solid.faBoxArchive)
 export const XIcon = createFaComponent(solid.faXmark)
-
-// Direct FontAwesome wrapper export for ease of use across pages
-export { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 
 // Default fallback for any unlisted Lucide icon
 export const createLucideIcon = (iconName: string, iconNode: any) => createFaComponent(solid.faIcons)
