@@ -156,8 +156,12 @@ export async function renderTasksPage({
         total={total}
         page={page}
         pageSize={pageSize}
-        toolbar={<AppSearchField placeholder="Cari tugas..." action={currentActionPath} />}
-        filters={statusChips}
+        toolbar={
+          <>
+            <AppSearchField placeholder="Cari tugas..." action={currentActionPath} />
+            <div className="flex gap-1.5 flex-wrap">{statusChips}</div>
+          </>
+        }
       />
     </div>
   )
