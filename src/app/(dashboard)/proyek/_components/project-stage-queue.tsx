@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { Info } from "lucide-react"
 
 import type { ProjectStageQueue } from "@/lib/reports/project-stage-queue"
 import {
@@ -48,11 +49,19 @@ export function ProjectStageQueueSection({
     >
       <div className="flex flex-col gap-2 p-4 px-5 border-b border-default">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div>
+          <div className="flex items-center gap-2">
             <h2 className="text-[0.9375rem] font-semibold text-foreground">
               {PROJECT_STAGE_QUEUE_TITLE}
             </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">{queue.noticeText}</p>
+            <div
+              className="group relative inline-flex items-center text-muted-foreground hover:text-foreground cursor-help"
+              title={queue.noticeText}
+            >
+              <Info size={15} />
+              <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover:block w-72 p-2 bg-popover text-popover-foreground text-xs rounded-lg shadow-md border border-default z-10 pointer-events-none">
+                {queue.noticeText}
+              </div>
+            </div>
           </div>
           {hasRows && (
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
