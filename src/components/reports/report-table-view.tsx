@@ -38,7 +38,7 @@ export function ReportTableView({
         {rows.map((row, index) => {
           if (row.kind === "group") {
             return (
-              <DetailTableRow key={`group-${index}`} className="group">
+              <DetailTableRow key={`group-${row.label}-${index}`} className="group">
                 <DetailTableTd colSpan={columns.length}>{row.label}</DetailTableTd>
               </DetailTableRow>
             )
@@ -46,7 +46,7 @@ export function ReportTableView({
 
           if (row.kind === "notice") {
             return (
-              <DetailTableRow key={`notice-${index}`}>
+              <DetailTableRow key={`notice-${row.text}-${index}`}>
                 <DetailTableTd colSpan={columns.length} className="muted">
                   {row.text}
                 </DetailTableTd>
@@ -55,11 +55,12 @@ export function ReportTableView({
           }
 
           if (row.kind === "data") {
+            const dataRowKey = `data-${row.cells[0] ?? ""}-${row.cells[1] ?? ""}-${index}`
             return (
-              <DetailTableRow key={`data-${index}`}>
+              <DetailTableRow key={dataRowKey}>
                 {row.cells.map((cell, cellIndex) => (
                   <DetailTableTd
-                    key={cellIndex}
+                    key={`cell-${cellIndex}-${columns[cellIndex]?.header ?? ""}`}
                     align={columns[cellIndex]?.align ?? "left"}
                     className={row.bold ? "font-semibold" : undefined}
                   >
@@ -72,10 +73,10 @@ export function ReportTableView({
 
           // total | grand — label membentang kolom kiri yang tersisa.
           return (
-            <DetailTableRow key={`total-${index}`} className={row.grand ? "grand" : "subtotal"}>
+            <DetailTableRow key={`total-${row.label}-${index}`} className={row.grand ? "grand" : "subtotal"}>
               <DetailTableTd colSpan={columns.length - row.cells.length}>{row.label}</DetailTableTd>
               {row.cells.map((cell, cellIndex) => (
-                <DetailTableTd key={cellIndex} align="right">
+                <DetailTableTd key={`tot-cell-${cellIndex}`} align="right">
                   {cell}
                 </DetailTableTd>
               ))}

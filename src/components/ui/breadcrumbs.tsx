@@ -19,8 +19,9 @@ export function AppBreadcrumbs({ items, ariaLabel = "Navigasi breadcrumb" }: { i
       <BreadcrumbList>
         {items.flatMap((item, index) => {
           const isLast = index === items.length - 1
+          const itemKey = item.href ? `${item.href}-${item.label}` : `crumb-${item.label}-${index}`
           const crumb = (
-            <BreadcrumbItem key={index}>
+            <BreadcrumbItem key={itemKey}>
               {isLast || !item.href ? (
                 <BreadcrumbPage>{item.label}</BreadcrumbPage>
               ) : (

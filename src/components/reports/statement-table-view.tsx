@@ -38,7 +38,7 @@ export function StatementTableView({
         {table.rows.map((row, index) => {
           if (row.kind === "group") {
             return (
-              <tr key={`group-${index}`} className="group">
+              <tr key={`group-${row.label}-${index}`} className="group">
                 <td colSpan={columnCount}>{row.label}</td>
               </tr>
             )
@@ -46,7 +46,7 @@ export function StatementTableView({
 
           if (row.kind === "notice") {
             return (
-              <tr key={`notice-${index}`}>
+              <tr key={`notice-${row.text}-${index}`}>
                 <td colSpan={columnCount} className="muted" style={{ paddingTop: 8 }}>
                   {row.text}
                 </td>
@@ -68,7 +68,7 @@ export function StatementTableView({
                   )}
                 </td>
                 {row.values.map((value, columnIndex) => (
-                  <td key={columnIndex} className="num">
+                  <td key={`val-${columnIndex}`} className="num">
                     {value}
                   </td>
                 ))}
@@ -78,7 +78,7 @@ export function StatementTableView({
 
           // subtotal | total | grand — label membentang kolom kiri yang tersisa.
           return (
-            <tr key={`${row.kind}-${index}`} className={row.kind}>
+            <tr key={`${row.kind}-${row.label}-${index}`} className={row.kind}>
               <td
                 colSpan={columnCount - row.values.length}
                 className={
