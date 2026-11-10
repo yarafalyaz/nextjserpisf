@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requireAuth } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { NotificationsView } from "./_components/notifications-view"
+import { resolveApprovalDocumentLinks } from "@/lib/services/approval-document-link.service"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Notifikasi" }
@@ -19,6 +20,9 @@ export default async function NotificationsPage() {
     }),
     prisma.notification.count({ where: { userId: Number(user.id), readAt: null } }),
   ])
+
+  const approvalDocLinks = await resolveApprovalDocumentLinks(notifications)
+  const approvalDocLinksRecord = Object.fromEntries(approvalDocLinks.entries())
 
   return (
     <div className="flex flex-col gap-6">
@@ -37,6 +41,7 @@ export default async function NotificationsPage() {
       <NotificationsView
         initialNotifications={notifications}
         initialUnreadCount={unreadCount}
+        approvalDocLinks={approvalDocLinksRecord}
       />
     </div>
   )

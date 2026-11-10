@@ -21,6 +21,7 @@ export interface NotificationItem {
 interface NotificationsViewProps {
   initialNotifications: NotificationItem[]
   initialUnreadCount: number
+  approvalDocLinks?: Record<number, string>
 }
 
 const columnHelper = createColumnHelper<NotificationItem>()
@@ -28,6 +29,7 @@ const columnHelper = createColumnHelper<NotificationItem>()
 export function NotificationsView({
   initialNotifications,
   initialUnreadCount,
+  approvalDocLinks = {},
 }: NotificationsViewProps) {
   const router = useRouter()
   const [items, setItems] = useState<NotificationItem[]>(initialNotifications)
@@ -221,9 +223,10 @@ export function NotificationsView({
       header: "Aksi",
       cell: (info) => {
         const item = info.row.original
-        const href = extractNotificationHref(item.body)
-        const isUnread = !item.readAt
         const isApproval = isApprovalNotification(item.title, item.body)
+        const docHref = approvalDocLinks[item.id] || null
+        const href = docHref || extractNotificationHref(item.body)
+        const isUnread = !item.readAt
         const isProcessing = processingId === item.id
 
         if (isApproval) {

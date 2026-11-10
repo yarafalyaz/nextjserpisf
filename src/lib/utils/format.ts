@@ -611,6 +611,16 @@ export function referenceHref(
     ProductionOrderMaterialIssue: "/produksi/production-orders",
     StockAdjustment: "/inventaris/penyesuaian",
     InventoryTransfer: "/inventaris/transfer",
+    Journal: "/keuangan/jurnal",
+    Expense: "/keuangan/pengeluaran",
+    VendorPayment: "/pembelian/pembayaran",
+    VendorBill: "/pembelian/tagihan",
+    LeaveRequest: "/sdm/cuti",
+    OvertimeRequest: "/sdm/lembur",
+    EmployeeLoan: "/sdm/pinjaman",
+    Payroll: "/sdm/penggajian",
+    Project: "/proyek",
+    Asset: "/aset",
   };
   const base = routes[refType];
   // Slug kanonis bila pemanggil menyediakannya (resolveReferenceSlugs);

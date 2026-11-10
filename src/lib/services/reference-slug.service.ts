@@ -31,6 +31,16 @@ const MODEL_BY_REFERENCE_TYPE: Record<string, string> = {
   ProductionOrderMaterialIssue: "productionOrder",
   StockAdjustment: "stockAdjustment",
   InventoryTransfer: "inventoryTransfer",
+  Journal: "journal",
+  Expense: "expense",
+  VendorPayment: "vendorPayment",
+  VendorBill: "vendorBill",
+  LeaveRequest: "leaveRequest",
+  OvertimeRequest: "overtimeRequest",
+  EmployeeLoan: "employeeLoan",
+  Payroll: "payroll",
+  Project: "project",
+  Asset: "asset",
 }
 
 export interface ReferenceKey {
