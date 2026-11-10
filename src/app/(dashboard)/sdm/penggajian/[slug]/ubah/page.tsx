@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getHrScope, hrEmployeeScopeWhere, hrScopeWhere } from "@/lib/auth/hr-scope";
 import { PayrollForm } from "@/components/forms/payroll-form";
-import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/ui/page-header";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityHref } from "@/lib/utils/entity-url";
 
@@ -44,7 +44,6 @@ export default async function EditPayrollPage({
             { label: "Penggajian", href: "/sdm/penggajian" },
             { label: "Ubah" },
           ]}
-          actions={<BackButton href={entityHref("/sdm/penggajian", payroll)} />}
         />
         <div className="p-6 bg-danger/10 border border-danger/20 rounded-xl text-danger">
           Hanya penggajian dengan status <strong>Draf</strong> yang dapat
