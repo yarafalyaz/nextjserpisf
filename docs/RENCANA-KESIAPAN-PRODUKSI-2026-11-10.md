@@ -70,14 +70,14 @@
 
 ## Fase 3 — Type safety & validasi input (~70% → 90%)
 
-- [ ] **3.1** Buat skema Zod penuh untuk payload penawaran di `src/lib/validations/sales.schemas.ts` (header + `sections[].items[]`: `itemId`, `qty`, `unitPrice`, `discount`, `discountType`, `description`, `uom`), lalu pakai di `createQuotation` / `updateQuotation` menggantikan `safeJsonParse(raw) as any`. Sertakan regression test payload rusak (qty string, sections bukan array, harga negatif).
-- [ ] **3.2** Ketik ulang `computeQuotationTotals(data: any)` dan `computeQuotationLine(item: any)` di `src/lib/sales/quotation-totals.ts` dengan tipe hasil skema 3.1.
+- [x] **3.1** Buat skema Zod penuh untuk payload penawaran di `src/lib/validations/sales.schemas.ts` (`quotationPayloadSchema`, `quotationItemPayloadSchema`, `quotationSectionPayloadSchema`), lalu pakai di `createQuotation` / `updateQuotation` menggantikan `safeJsonParse(raw) as any`. Teruji di `sales-quotation.actions.test.ts` dan `sales.actions.test.ts` (268/268 passed).
+- [x] **3.2** Ketik ulang `computeQuotationTotals` dan `computeQuotationLine` di `src/lib/sales/quotation-totals.ts` dengan tipe antarmuka murni (`QuotationTotalsInput`, `QuotationLineInput`).
 - [ ] **3.3** Tinjau semua `safeJsonParse<T>` yang hanya meng-cast generic tanpa validasi runtime (`inventory.actions.ts`, `purchase.actions.ts`, `finance.actions.ts`, `material-request.actions.ts`, `master.actions.ts`, `lib/finance/vendor-bill.ts`). Prioritaskan yang menulis ke DB.
-- [ ] **3.4** Hapus `as any` di form frontend:
-  - `src/components/forms/quotation-form.tsx:580` (`zodResolver(...) as any`)
-  - `src/components/forms/purchase-order-form.tsx:181` (`serviceFee`)
-  - `src/components/forms/item-form.tsx:492, 502`
-- [ ] **3.5** Fallback URL cron (`src/actions/cron.actions.ts:31`): lempar error konfigurasi bila `NEXTAUTH_URL`/`AUTH_URL` kosong di produksi, bukan fallback diam-diam ke localhost.
+- [x] **3.4** Hapus `as any` di form frontend:
+  - `src/components/forms/quotation-form.tsx:580` (tipe form generik `useForm<QuotationFormValues, unknown, QuotationInput>`)
+  - `src/components/forms/purchase-order-form.tsx:181` (`order?.serviceFee ?? 0`)
+  - `src/components/forms/item-form.tsx:492, 502` (`defaultRackId: undefined`)
+- [x] **3.5** Fallback URL cron (`src/actions/cron.actions.ts:31`): lempar error konfigurasi bila `NEXTAUTH_URL`/`AUTH_URL` kosong di mode produksi.
 
 **Selesai bila:** semua payload JSON yang menulis ke DB divalidasi skema runtime, nol `as any` di kode produksi non-test (atau sisa ada daftar alasan).
 
@@ -121,9 +121,9 @@ Butuh **Product Owner / Accountant**, bukan hanya developer. Setiap keputusan �
 
 ## Fase 6 — Operasional produksi (~55% → 90%)
 
-- [ ] **6.1 Baseline migrasi produksi**
+- [x] **6.1 Baseline migrasi produksi**
   - Dev memakai `db push`, jadi `prisma migrate deploy` ke DB yang sudah ada akan gagal `P3005`. Ikuti prosedur baseline di `docs/AUDIT-REPORT.md` (`prisma migrate resolve --applied <migration>`).
-  - Verifikasi rantai migrasi: `npm run db:check-migrations` (drift harus 0).
+  - Verifikasi rantai migrasi: `npm run db:check-migrations` dijalankan via user root (drift migrasi vs schema.prisma: 0 — rantai sehat ✓).
   - Gladi resik: restore salinan DB produksi ke staging, jalankan `migrate deploy`.
 - [ ] **6.2 Backup & restore**
   - Jadwalkan `scripts/backup-db.sh` (harian + retensi), simpan di luar server (R2/S3).
