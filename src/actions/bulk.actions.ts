@@ -137,10 +137,10 @@ export async function bulkDelete(model: ModelName, ids: number[]) {
 
   try {
      
-    // Intentional dynamic dispatch — model validated against ALLOWED_MODELS
+    // Intentional dynamic dispatch — model validated against BULK_DELETE_PERMISSIONS
     const modelName = prismaModelAlias[model] || model
-    const prismaModel = (prisma as any)[modelName]
-    if (!prismaModel) {
+    const prismaModel = (prisma as Record<string, any>)[modelName]
+    if (!prismaModel || typeof prismaModel.deleteMany !== "function") {
       return { success: false, message: `Model ${model} tidak ditemukan` }
     }
 

@@ -14,6 +14,7 @@ import { assertCSRF } from "@/lib/security/csrf"
 import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions"
 import { APPROVE_CLAIMS, REJECT_CLAIMS } from "@/lib/approval/claims"
 import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope"
+import { getApprovalDocDelegate } from "@/lib/approval/approval-models"
 
 
 /**
@@ -139,8 +140,8 @@ export async function POST(
         // dokumen HR lalu menerima 409 sesudah mutasi commit (BUGHUNT #8).
         // Cek di sini menolak sebelum requestApprovalIfConfigured/reset.
         if (HR_MODELS.has(config.model)) {
-          const delegateScope = prisma[config.model as keyof typeof prisma] as any
-          const hrDoc = await delegateScope.findUnique({
+          const delegateScope = getApprovalDocDelegate(prisma, config.model)
+          const hrDoc = await delegateScope?.findUnique({
             where: { id },
             select: { employeeId: true },
           })
@@ -165,8 +166,8 @@ export async function POST(
         // mengotori antrean persetujuan (putaran 52). Cek ini TIDAK
         // memakai fallback createdBy di bawah, yang memang menelan null.
         if (!HR_MODELS.has(config.model)) {
-          const delegateDoc = prisma[config.model as keyof typeof prisma] as any
-          const docExists = await delegateDoc.findUnique({
+          const delegateDoc = getApprovalDocDelegate(prisma, config.model)
+          const docExists = await delegateDoc?.findUnique({
             where: { id },
             select: { id: true },
           })
@@ -193,9 +194,9 @@ export async function POST(
           const claims = action === "approve" ? APPROVE_CLAIMS : REJECT_CLAIMS
           const claim = claims[modelType]
           if (claim) {
-            const delegateStatus = prisma[config.model as keyof typeof prisma] as any
+            const delegateStatus = getApprovalDocDelegate(prisma, config.model)
             const current = await delegateStatus
-              .findUnique({ where: { id }, select: { status: true } })
+              ?.findUnique({ where: { id }, select: { status: true } })
             const status = current?.status as string | undefined
             if (status != null && status !== "rejected" && !claim.from.includes(status)) {
               return apiError(
@@ -211,18 +212,17 @@ export async function POST(
         // approveStep/rejectStep akan menolak aktor menyetujui buatannya
         // sendiri, tapi mutasi reset+approval baru sudah terlanjur commit.
         let docCreator: number | null = null
+        const delegateCreator = getApprovalDocDelegate(prisma, config.model)
         if (config.hasCreatedBy === false) {
           // Model HR tak punya createdBy: pemilik dokumen = employee.userId.
           // Error DB TIDAK ditelan: fallback aktor di bawah akan mencatat
           // requestedBy yang salah lalu approval buntu di maker-checker.
-          const delegateCreator = prisma[config.model as keyof typeof prisma] as any
           const hrDoc = await delegateCreator
-            .findUnique({ where: { id }, select: { employee: { select: { userId: true } } } })
+            ?.findUnique({ where: { id }, select: { employee: { select: { userId: true } } } })
           docCreator = hrDoc?.employee?.userId != null ? Number(hrDoc.employee.userId) : null
         } else {
-          const delegateCreator = prisma[config.model as keyof typeof prisma] as any
           const doc = await delegateCreator
-            .findUnique({ where: { id }, select: { createdBy: true } })
+            ?.findUnique({ where: { id }, select: { createdBy: true } })
           docCreator = doc?.createdBy != null ? Number(doc.createdBy) : null
         }
 
@@ -245,7 +245,10 @@ export async function POST(
         // boleh gagal (model tak dikenal / kolom status beda) dan alur tetap
         // lanjut — yang menentukan adalah fresh berstatus pending di bawah.
         if (approval.status === "rejected") {
-          const delegateReopen = prisma[config.model as keyof typeof prisma] as any
+          const delegateReopen = getApprovalDocDelegate(prisma, config.model)
+          if (!delegateReopen) {
+            return apiError("INTERNAL_ERROR", "Delegasi model tidak didukung")
+          }
           // Kosakata reset per model: dokumen dagang kembali draft; model HR
           // lahir pending dan klaim finalnya hanya menerima pending — reset
           // HR ke draft mengunci dokumen selamanya (putaran 52).
@@ -380,7 +383,10 @@ export async function POST(
       newStatus = "active"
     }
     const allowedFrom = MANUAL_STATUS_ALLOWED_FROM[modelType] ?? STATUS_ALLOWED_FROM
-    const delegate = prisma[config.model as keyof typeof prisma] as any
+    const delegate = getApprovalDocDelegate(prisma, config.model)
+    if (!delegate) {
+      return apiError("INTERNAL_ERROR", "Delegasi model tidak didukung")
+    }
 
     // Maker-Checker untuk jalur manual (tanpa workflow aktif): pembuat dokumen
     // tidak boleh menyetujui/menolaknya sendiri. super_admin bypass (konsisten

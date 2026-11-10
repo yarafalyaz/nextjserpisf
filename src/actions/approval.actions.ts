@@ -28,6 +28,7 @@ import { notifyApprovalStepApprovers } from "@/lib/services/approval-workflow.se
 import { assertLeaveRequestGates, resolveDayKind } from "@/lib/services/leave-quota.service";
 import { assertOvertimeWithinWorkdayLimits } from "@/lib/services/overtime-pay.service";
 import { APPROVE_CLAIMS, REJECT_CLAIMS } from "@/lib/approval/claims";
+import { getApprovalDocDelegate } from "@/lib/approval/approval-models";
 
 type WorkflowStepInput = {
   name?: string;
@@ -362,7 +363,7 @@ export async function approveStep(approvalId: number, formData: FormData) {
         // gerbang statutori yang sama dengan approvePayroll — tanpa ini
         // jalur generik membypass pemeriksaan pending-final/legacy/fallback.
         if (approval.referenceType === "Payroll") {
-          const slip = await (tx as any).payroll?.findUnique({
+          const slip = await tx.payroll.findUnique({
             where: { id: approval.referenceId },
             select: { statutorySnapshot: true },
           });
@@ -377,8 +378,7 @@ export async function approveStep(approvalId: number, formData: FormData) {
             completedAt: new Date(),
           },
         });
-        const modelKey = approval.referenceType.charAt(0).toLowerCase() + approval.referenceType.slice(1);
-        const docModel = (tx as any)[modelKey];
+        const docModel = getApprovalDocDelegate(tx, approval.referenceType);
         if (docModel?.update && !GATE_ONLY_REFERENCE_TYPES.has(approval.referenceType)) {
           const docStatus = approval.referenceType === "EmployeeLoan" ? "active" : "approved";
           const approvedBy = session?.user?.id ? Number(session.user.id) : null;
@@ -597,8 +597,7 @@ export async function rejectStep(approvalId: number, formData: FormData) {
       });
 
       // Update source document status to rejected
-      const modelKey = approval.referenceType.charAt(0).toLowerCase() + approval.referenceType.slice(1);
-      const docModel = (tx as any)[modelKey];
+      const docModel = getApprovalDocDelegate(tx, approval.referenceType);
       if (docModel?.update && !GATE_ONLY_REFERENCE_TYPES.has(approval.referenceType)) {
         const data: Record<string, unknown> = { status: "rejected" };
         if (REJECTION_REASON_MODELS.has(approval.referenceType)) {
@@ -695,8 +694,9 @@ export async function reopenApproval(approvalId: number) {
       // seperti penulis SDM mengunci employees di dalam tx-nya).
       const HR_REOPEN_GATE_TYPES = new Set(["LeaveRequest", "OvertimeRequest", "EmployeeLoan"]);
       if (HR_REOPEN_GATE_TYPES.has(refType)) {
-        const gateModelKey = refType.charAt(0).toLowerCase() + refType.slice(1);
-        const gateDoc = await (tx as any)[gateModelKey].findUnique({
+        const gateDocModel = getApprovalDocDelegate(tx, refType);
+        if (!gateDocModel) throw new Error(`Dokumen ${refType} #${refId} tidak didukung.`);
+        const gateDoc = await gateDocModel.findUnique({
           where: { id: refId },
           select: {
             employeeId: true,
@@ -748,8 +748,7 @@ export async function reopenApproval(approvalId: number) {
       // mengunci dokumen HR selamanya.
       const HR_PENDING_RESET_TYPES = new Set(["LeaveRequest", "OvertimeRequest", "EmployeeLoan"]);
       const resetStatus = HR_PENDING_RESET_TYPES.has(refType) ? "pending" : "draft";
-      const modelKey = refType.charAt(0).toLowerCase() + refType.slice(1);
-      const docModel = (tx as any)[modelKey];
+      const docModel = getApprovalDocDelegate(tx, refType);
       if (docModel?.updateMany) {
         const reset = await docModel.updateMany({
           where: { id: refId, status: "rejected" },
