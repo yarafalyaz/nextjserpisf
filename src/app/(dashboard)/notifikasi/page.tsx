@@ -21,7 +21,7 @@ export default async function NotificationsPage() {
   ])
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl">
+    <div className="flex flex-col gap-6">
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
@@ -29,13 +29,8 @@ export default async function NotificationsPage() {
         ]}
       />
 
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between pb-2 border-b">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Notifikasi</h1>
-          <p className="text-sm text-muted-foreground">
-            Kelola seluruh pemberitahuan, aktivitas sistem, dan permohonan persetujuan Anda
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold text-foreground">Notifikasi</h1>
       </div>
 
       <NotificationsView
