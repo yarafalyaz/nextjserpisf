@@ -12,6 +12,7 @@ import { Combobox } from "@/components/ui/combobox"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { Button } from "@/components/ui/button"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
+import { AppDatePicker } from "@/components/ui/date-picker"
 import { nextItemUid } from "@/lib/utils/item-uid"
 
 interface MaterialRequestFormProps {
@@ -145,16 +146,13 @@ export function MaterialRequestForm({ warehouses, items, workOrders, request }: 
               options={workOrderOptions}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="neededBy">Tanggal Dibutuhkan</Label>
-            <Input
-              id="neededBy"
-              type="date"
-              value={neededBy}
-              onChange={(e) => setNeededBy(e.target.value)}
-              className="h-9 text-xs"
-            />
-          </div>
+          <AppDatePicker
+            label="Tanggal Dibutuhkan"
+            name="neededBy"
+            value={neededBy}
+            onChange={(val) => setNeededBy(val)}
+            placeholder="Pilih batas tanggal..."
+          />
         </FormSection>
 
         <div className="space-y-3">
