@@ -57,10 +57,47 @@ export async function notifyApprovalStepApprovers(
 
     const label = APPROVAL_MODEL_LABELS[approval.referenceType] ?? approval.referenceType
     const targetPath = approval.slug ?? approval.referenceId
+
+    // Coba ambil nomor dokumen manusiawi bila tersedia (mis. No. Jurnal / No. PO / No. Faktur)
+    let docIdentifier = `#${approval.referenceId}`
+    try {
+      const modelKey = approval.referenceType.charAt(0).toLowerCase() + approval.referenceType.slice(1)
+      const delegate = db[modelKey]
+      if (delegate?.findUnique) {
+        const doc = await delegate.findUnique({
+          where: { id: approval.referenceId },
+          select: {
+            journalNumber: true,
+            orderNumber: true,
+            invoiceNumber: true,
+            requestNumber: true,
+            quotationNumber: true,
+            adjustmentNumber: true,
+            transferNumber: true,
+            code: true,
+            name: true,
+          },
+        })
+        const customNumber =
+          doc?.journalNumber ||
+          doc?.orderNumber ||
+          doc?.invoiceNumber ||
+          doc?.requestNumber ||
+          doc?.quotationNumber ||
+          doc?.adjustmentNumber ||
+          doc?.transferNumber ||
+          doc?.code ||
+          doc?.name
+        if (customNumber) docIdentifier = customNumber
+      }
+    } catch {
+      // Abaikan jika tidak ada kolom khusus, fallback ke #${id}
+    }
+
     await notificationService.notifyUsers(
       recipientIds,
-      `Persetujuan Menunggu: ${label} #${approval.referenceId}`,
-      `${label} #${approval.referenceId} menunggu persetujuan langkah ${approval.currentStep}${step.name ? ` (${step.name})` : ""}. Buka /pengaturan/persetujuan/${targetPath}`,
+      `Persetujuan Menunggu: ${label} ${docIdentifier}`,
+      `${label} ${docIdentifier} menunggu persetujuan langkah ${approval.currentStep}${step.name ? ` (${step.name})` : ""}. Buka /pengaturan/persetujuan/${targetPath}`,
       "info",
       db,
     )
