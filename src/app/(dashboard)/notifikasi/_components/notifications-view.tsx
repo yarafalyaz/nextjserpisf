@@ -54,8 +54,17 @@ export function NotificationsView({
     if (/^\/[A-Za-z0-9][A-Za-z0-9/_-]*$/.test(body)) {
       return body
     }
-    const match = body.match(/\/([A-Za-z0-9_-]+\/[A-Za-z0-9_/-]+)/)
-    return match ? `/${match[1]}` : null
+    // Cari URL yang diawali kata kunci "Buka /..."
+    const bukaMatch = body.match(/Buka\s+(\/[A-Za-z0-9/_-]+)/i)
+    if (bukaMatch && bukaMatch[1]) {
+      return bukaMatch[1]
+    }
+    // Atau URL rute standar aplikasi (dimulai dari salah satu modul utama)
+    const routeMatch = body.match(/(\/(?:pengaturan|penjualan|pembelian|keuangan|inventaris|produksi|sdm|laporan|aset|crm|master)\/[A-Za-z0-9/_-]+)/)
+    if (routeMatch && routeMatch[1]) {
+      return routeMatch[1]
+    }
+    return null
   }
 
   // Cek apakah notifikasi ini merupakan persetujuan yang menunggu tindakan
