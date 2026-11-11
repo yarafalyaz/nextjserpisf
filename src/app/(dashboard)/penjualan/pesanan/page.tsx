@@ -14,6 +14,7 @@ import { OrderTable } from "./_components/order-table"
 import { CanCreate } from "@/components/auth/can-create"
 import { Plus, Clock } from "@/components/ui/fontawesome-icons"
 import { getSalesOrderDraftQueue } from "@/lib/reports/sales-order-draft-queue-data"
+import { formatCurrencyExact } from "@/lib/utils/format"
 
 import type { Metadata } from "next"
 
@@ -78,7 +79,7 @@ export async function renderSalesOrdersPage({
     ...(dbStatus && { status: dbStatus }),
   }
 
-  const [rawOrders, total, allTotal, confirmedTotal, completedTotal, draftQueue] = await Promise.all([
+  const [rawOrders, total, statusGroups, confirmedTotalAgg, draftQueue] = await Promise.all([
     prisma.salesOrder.findMany({
       where,
       include: { customer: true },
@@ -87,11 +88,32 @@ export async function renderSalesOrdersPage({
       orderBy: { createdAt: "desc" },
     }),
     prisma.salesOrder.count({ where }),
-    prisma.salesOrder.count({ where: { deletedAt: null } }),
-    prisma.salesOrder.count({ where: { status: "confirmed", deletedAt: null } }),
-    prisma.salesOrder.count({ where: { status: "completed", deletedAt: null } }),
+    prisma.salesOrder.groupBy({
+      by: ["status"],
+      where: { deletedAt: null },
+      _count: { _all: true },
+    }),
+    prisma.salesOrder.aggregate({
+      where: { status: "confirmed", deletedAt: null },
+      _sum: { grandTotal: true },
+    }),
     getSalesOrderDraftQueue(),
   ])
+
+  const counts: Record<string, number> = {
+    all: statusGroups.reduce((acc, curr) => acc + curr._count._all, 0),
+    draft: 0,
+    confirmed: 0,
+    completed: 0,
+    cancelled: 0,
+  }
+  for (const group of statusGroups) {
+    if (group.status in counts) {
+      counts[group.status] = group._count._all
+    }
+  }
+
+  const confirmedAmount = Number(confirmedTotalAgg._sum.grandTotal ?? 0)
 
   const orders = rawOrders.map((so) => ({
     id: so.id,
@@ -109,14 +131,28 @@ export async function renderSalesOrdersPage({
     const urlStatus = dbStatusKey ? statusToIndo[dbStatusKey] || dbStatusKey : ""
     const targetPath = urlStatus ? `/penjualan/pesanan/status/${urlStatus}` : "/penjualan/pesanan"
     const isActive = activeUrlStatus === urlStatus
+    const count = dbStatusKey ? (counts[dbStatusKey] ?? 0) : counts.all
 
     return (
       <Link
         key={dbStatusKey}
         href={withListParams(targetPath, params, { halaman: undefined })}
-        className={`filter-chip ${isActive ? "active" : ""}`}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+          isActive
+            ? "border-primary bg-primary/10 text-primary font-semibold"
+            : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+        }`}
       >
-        {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
+        <span>{dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}</span>
+        <span
+          className={`inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-2xs font-mono tabular-nums ${
+            isActive
+              ? "bg-primary text-primary-foreground font-bold"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {count}
+        </span>
       </Link>
     )
   })
@@ -185,7 +221,7 @@ export async function renderSalesOrdersPage({
           </span>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-foreground">
-              {allTotal}
+              {counts.all}
             </span>
             <span className="text-xs text-muted-foreground">dokumen</span>
           </div>
@@ -193,23 +229,28 @@ export async function renderSalesOrdersPage({
 
         <div className="p-4 flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Dikonfirmasi
+            Siap Kirim (Dikonfirmasi)
           </span>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-primary">
-              {confirmedTotal}
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-primary">
+                {counts.confirmed}
+              </span>
+              <span className="text-xs text-muted-foreground">dokumen</span>
+            </div>
+            <span className="text-xs font-mono tabular-nums text-muted-foreground">
+              Rp {formatCurrencyExact(confirmedAmount)}
             </span>
-            <span className="text-xs text-muted-foreground">siap kirim</span>
           </div>
         </div>
 
         <div className="p-4 flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Selesai
+            Pesanan Selesai
           </span>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-emerald-600 dark:text-emerald-400">
-              {completedTotal}
+              {counts.completed}
             </span>
             <span className="text-xs text-muted-foreground">terpenuhi</span>
           </div>
@@ -227,10 +268,10 @@ export async function renderSalesOrdersPage({
                   : "text-foreground"
               }`}
             >
-              {draftQueue.totalDocuments}
+              {counts.draft}
             </span>
             <span className="text-xs text-muted-foreground">
-              {staleDrafts > 0 ? `${staleDrafts} mengendap` : "menunggu persetujuan"}
+              {staleDrafts > 0 ? `${staleDrafts} mengendap` : "menunggu konfirmasi"}
             </span>
           </div>
         </div>

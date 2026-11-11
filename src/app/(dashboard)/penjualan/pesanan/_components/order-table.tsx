@@ -25,7 +25,10 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={entityHref("/penjualan/pesanan", info.row.original)} className="text-foreground hover:underline font-mono">
+      <Link
+        href={entityHref("/penjualan/pesanan", info.row.original)}
+        className="font-mono text-xs font-semibold text-foreground hover:underline"
+      >
         {info.getValue()}
       </Link>
     ),
@@ -37,11 +40,15 @@ const columns = [
   columnHelper.accessor((row) => row.customer.name, {
     id: "customerName",
     header: "Pelanggan",
-    cell: (info) => info.getValue(),
+    cell: (info) => <span className="font-medium text-foreground">{info.getValue()}</span>,
   }),
   columnHelper.accessor("grandTotal", {
-    header: "Total",
-    cell: (info) => <span className="text-right">{formatCurrencyExact(Number(info.getValue()))}</span>,
+    header: () => <div className="text-right">Total</div>,
+    cell: (info) => (
+      <div className="text-right font-mono tabular-nums font-medium text-foreground">
+        Rp {formatCurrencyExact(Number(info.getValue()))}
+      </div>
+    ),
   }),
   columnHelper.accessor("status", {
     header: "Status",
