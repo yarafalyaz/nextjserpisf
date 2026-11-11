@@ -46,7 +46,7 @@ export default async function EditPage({
   { label: "Ubah" },
 ]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah</h1>
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah Kas Kecil</h1>
       </div>
       <PettyCashForm pettyCash={{ id: data.id, date: data.date.toISOString().split('T')[0], type: data.type, description: data.description, amount: Number(data.amount), accountId: data.accountId ?? 0, projectId: data.projectId, vendorId: data.vendorId, categoryId: data.categoryId }} accounts={accounts} projects={projects} vendors={vendors} categories={categories} />
     </div>

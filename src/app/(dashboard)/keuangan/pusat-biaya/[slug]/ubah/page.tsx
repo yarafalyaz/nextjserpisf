@@ -45,7 +45,7 @@ export default async function EditPage({
   { label: "Ubah" },
 ]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah</h1>
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah Pusat Biaya</h1>
       </div>
       <CostCenterForm costCenter={{ id: data.id, code: data.code, name: data.name, description: data.description, isActive: data.isActive ?? undefined, parentId: data.parentId }} costCenters={costCenters} />
     </div>

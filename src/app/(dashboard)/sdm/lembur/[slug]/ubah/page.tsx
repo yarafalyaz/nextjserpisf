@@ -47,7 +47,7 @@ export default async function EditPage({
   { label: "Ubah" },
 ]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah</h1>
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah Lembur</h1>
       </div>
       <OvertimeForm overtime={{ id: data.id, employeeId: data.employeeId, projectId: data.projectId, date: data.date.toISOString().split('T')[0], hours: Number(data.hours), reason: data.reason }} employees={employees} projects={projects} />
     </div>
