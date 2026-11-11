@@ -1,4 +1,3 @@
-import { Plus } from "lucide-react";
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -13,10 +12,12 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { OrderTable } from "./_components/order-table"
 import { CanCreate } from "@/components/auth/can-create"
+import { Plus, Clock } from "@/components/ui/fontawesome-icons"
+import { getSalesOrderDraftQueue } from "@/lib/reports/sales-order-draft-queue-data"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Pesanan" }
+export const metadata: Metadata = { title: "Pesanan Penjualan" }
 
 export const SALES_ORDER_VALID_DB_STATUSES = [
   "draft",
@@ -77,13 +78,20 @@ export async function renderSalesOrdersPage({
     ...(dbStatus && { status: dbStatus }),
   }
 
-  const rawOrders = await prisma.salesOrder.findMany({
-    where,
-    include: { customer: true },
-    take,
-    skip: (page - 1) * pageSize,
-    orderBy: { createdAt: "desc" },
-  })
+  const [rawOrders, total, allTotal, confirmedTotal, completedTotal, draftQueue] = await Promise.all([
+    prisma.salesOrder.findMany({
+      where,
+      include: { customer: true },
+      take,
+      skip: (page - 1) * pageSize,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.salesOrder.count({ where }),
+    prisma.salesOrder.count({ where: { deletedAt: null } }),
+    prisma.salesOrder.count({ where: { status: "confirmed", deletedAt: null } }),
+    prisma.salesOrder.count({ where: { status: "completed", deletedAt: null } }),
+    getSalesOrderDraftQueue(),
+  ])
 
   const orders = rawOrders.map((so) => ({
     id: so.id,
@@ -94,8 +102,6 @@ export async function renderSalesOrdersPage({
     grandTotal: Number(so.grandTotal),
     status: so.status,
   }))
-
-  const total = await prisma.salesOrder.count({ where })
 
   const tableData = toPlain(orders)
 
@@ -119,6 +125,8 @@ export async function renderSalesOrdersPage({
     ? `/penjualan/pesanan/status/${activeUrlStatus}`
     : "/penjualan/pesanan"
 
+  const staleDrafts = draftQueue.levelCounts.mengendap
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs
@@ -137,18 +145,95 @@ export async function renderSalesOrdersPage({
               ]
         }
       />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Pesanan Penjualan</h1>
-        <CanCreate permission="create_sales_orders">
-          <Link
-            href="/penjualan/pesanan/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
-            id="create-so-btn"
-          >
-            <Plus className="size-3.5" />
-            <span>Buat Pesanan Penjualan</span>
-          </Link>
-        </CanCreate>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
+            Pesanan Penjualan (Sales Order)
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5 text-pretty">
+            Pencatatan konfirmasi pesanan pelanggan, pemenuhan pengiriman barang, dan penagihan komersial.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {staleDrafts > 0 && (
+            <Link
+              href="/penjualan/antrean-pesanan-draf"
+              className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 hover:bg-red-100 transition-colors cursor-pointer shadow-2xs"
+            >
+              <Clock className="size-3 text-red-600 dark:text-red-400" aria-hidden="true" />
+              <span>{staleDrafts} Draft Mengendap</span>
+            </Link>
+          )}
+          <CanCreate permission="create_sales_orders">
+            <Link
+              href="/penjualan/pesanan/tambah"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+              id="create-so-btn"
+            >
+              <Plus className="size-3.5" aria-hidden="true" />
+              <span>Buat Pesanan</span>
+            </Link>
+          </CanCreate>
+        </div>
+      </div>
+
+      {/* Executive KPI Metric Strip Standar ERP */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs overflow-hidden">
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Total Pesanan
+          </span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-foreground">
+              {allTotal}
+            </span>
+            <span className="text-xs text-muted-foreground">dokumen</span>
+          </div>
+        </div>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Dikonfirmasi
+          </span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-primary">
+              {confirmedTotal}
+            </span>
+            <span className="text-xs text-muted-foreground">siap kirim</span>
+          </div>
+        </div>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Selesai
+          </span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-emerald-600 dark:text-emerald-400">
+              {completedTotal}
+            </span>
+            <span className="text-xs text-muted-foreground">terpenuhi</span>
+          </div>
+        </div>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Draft Mengendap
+          </span>
+          <div className="flex items-baseline gap-2">
+            <span
+              className={`text-2xl font-bold font-mono tracking-tight tabular-nums ${
+                staleDrafts > 0
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-foreground"
+              }`}
+            >
+              {draftQueue.totalDocuments}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {staleDrafts > 0 ? `${staleDrafts} mengendap` : "menunggu persetujuan"}
+            </span>
+          </div>
+        </div>
       </div>
 
       <OrderTable

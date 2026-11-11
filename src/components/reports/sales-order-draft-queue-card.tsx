@@ -22,6 +22,7 @@ import {
   DetailTableRow,
   DetailTableTd,
 } from "@/components/ui/detail-table"
+import { BoxArchive } from "@/components/ui/fontawesome-icons"
 
 const LEVEL_TONES: Record<SalesOrderDraftLevel, "danger" | "default"> = {
   mengendap: "danger",
@@ -54,17 +55,19 @@ export function SalesOrderDraftQueueCard({
   return (
     <section
       aria-label={title}
-      className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
+      className="bg-card rounded-lg border border-border shadow-2xs overflow-hidden"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
-        <h2 className="text-[0.9375rem] font-semibold text-foreground">{title}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-border bg-muted/20">
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+        <div className="flex items-center gap-2">
+          <p className="text-xs font-mono tabular-nums text-muted-foreground">
+            {totalDocuments} dokumen — {formatCurrencyExact(totalGrandTotal)}{" "}
+            {SALES_ORDER_DRAFT_TOTAL_LABEL_TEXT}
+          </p>
+        </div>
       </div>
       <div className="p-4 px-5">
-        <p className="text-xs text-muted-foreground">
-          {totalDocuments} dokumen — {formatCurrencyExact(totalGrandTotal)}{" "}
-          {SALES_ORDER_DRAFT_TOTAL_LABEL_TEXT}
-        </p>
-        <ul aria-label="Rekap tingkat antrean pesanan draft" className="mt-2 flex flex-wrap gap-1.5">
+        <ul aria-label="Rekap tingkat antrean pesanan draft" className="flex flex-wrap gap-1.5">
           {SALES_ORDER_DRAFT_LEVELS.map((level) => (
             <li key={level}>
               <StatusChip
@@ -75,13 +78,22 @@ export function SalesOrderDraftQueueCard({
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-xs text-muted-foreground">{SALES_ORDER_DRAFT_NOTICE_TEXT}</p>
-        {rows.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-            Belum ada pesanan penjualan draft
+        <div className="mt-3 rounded-md border border-border/70 bg-muted/30 px-3 py-2">
+          <p className="text-xs text-muted-foreground leading-relaxed text-pretty">
+            {SALES_ORDER_DRAFT_NOTICE_TEXT}
           </p>
+        </div>
+        {rows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-muted-foreground">
+            <div className="flex size-9 items-center justify-center rounded-full bg-muted/60 text-muted-foreground">
+              <BoxArchive className="size-4" aria-hidden="true" />
+            </div>
+            <p className="text-xs font-medium text-muted-foreground">
+              Belum ada pesanan penjualan draft
+            </p>
+          </div>
         ) : (
-          <div className="mt-3 overflow-x-auto">
+          <div className="mt-4 overflow-x-auto">
             <DetailTable>
               <DetailTableHead>
                 <DetailTableTh>Pelanggan</DetailTableTh>
@@ -98,28 +110,34 @@ export function SalesOrderDraftQueueCard({
               <DetailTableBody>
                 {rows.map((row) => (
                   <DetailTableRow key={row.salesOrderId}>
-                    <DetailTableTd>{row.customerName}</DetailTableTd>
+                    <DetailTableTd className="font-medium text-foreground">{row.customerName}</DetailTableTd>
                     <DetailTableTd>
                       <Link
                         href={entityHref("/penjualan/pesanan", {
                           id: row.salesOrderId,
                           slug: row.slug,
                         })}
-                        className="font-medium text-primary hover:underline"
+                        className="font-mono text-xs font-medium text-primary hover:underline tabular-nums"
                       >
                         {row.documentNo}
                       </Link>
                     </DetailTableTd>
                     <DetailTableTd>{row.salesEmployeeName ?? "—"}</DetailTableTd>
-                    <DetailTableTd>{formatDate(row.date)}</DetailTableTd>
-                    <DetailTableTd>{`${row.umurDraftHari} hari`}</DetailTableTd>
-                    <DetailTableTd>
+                    <DetailTableTd className="font-mono text-xs tabular-nums text-muted-foreground">
+                      {formatDate(row.date)}
+                    </DetailTableTd>
+                    <DetailTableTd className="font-mono text-xs tabular-nums">
+                      {`${row.umurDraftHari} hari`}
+                    </DetailTableTd>
+                    <DetailTableTd className="text-xs">
                       {row.punyaJanji && row.deliveryDate
                         ? formatDate(row.deliveryDate)
                         : SALES_ORDER_DRAFT_NO_DELIVERY_DATE_TEXT}
                     </DetailTableTd>
                     <DetailTableTd>{row.asalLabel}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrencyExact(row.grandTotal)}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-mono font-semibold tabular-nums text-foreground">
+                      {formatCurrencyExact(row.grandTotal)}
+                    </DetailTableTd>
                     <DetailTableTd>
                       <StatusChip
                         status={row.tingkat}
@@ -133,7 +151,7 @@ export function SalesOrderDraftQueueCard({
                           id: row.salesOrderId,
                           slug: row.slug,
                         })}
-                        className="inline-flex min-h-11 items-center font-medium text-primary hover:underline"
+                        className="inline-flex min-h-11 items-center text-xs font-medium text-primary hover:underline"
                       >
                         Buka Pesanan
                       </Link>
