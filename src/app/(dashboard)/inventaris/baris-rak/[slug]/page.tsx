@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
+import Link from "next/link"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteRackRow } from "@/actions/inventory.actions"
 import { PageHeader } from "@/components/ui/page-header"
@@ -15,9 +16,9 @@ import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityEditHref } from "@/lib/utils/entity-url"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 import { CanCreate } from "@/components/auth/can-create"
-export const metadata: Metadata = { title: "Baris Rak" }
+export const metadata: Metadata = { title: "Detail Baris Rak" }
 
 export default async function RackRowDetailPage({
   params,
@@ -42,8 +43,11 @@ export default async function RackRowDetailPage({
             createdAt: true,
             rack: {
               select: {
+                id: true,
+                code: true,
                 name: true,
-                warehouse: { select: { name: true } },
+                slug: true,
+                warehouse: { select: { id: true, code: true, name: true, slug: true } },
               },
             },
           },
@@ -59,8 +63,11 @@ export default async function RackRowDetailPage({
             createdAt: true,
             rack: {
               select: {
+                id: true,
+                code: true,
                 name: true,
-                warehouse: { select: { name: true } },
+                slug: true,
+                warehouse: { select: { id: true, code: true, name: true, slug: true } },
               },
             },
           },
@@ -97,19 +104,20 @@ export default async function RackRowDetailPage({
     .map(([itemId, _]) => itemId)
 
   // 4. Fetch details of those active items
-  const activeItems = activeItemIds.length > 0
-    ? await prisma.item.findMany({
-        where: { id: { in: activeItemIds } },
-        select: {
-          id: true,
-          sku: true,
-          name: true,
-          slug: true,
-          unitOfMeasure: true,
-          qtyOnHand: true,
-        },
-      })
-    : []
+  const activeItems =
+    activeItemIds.length > 0
+      ? await prisma.item.findMany({
+          where: { id: { in: activeItemIds } },
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            slug: true,
+            unitOfMeasure: true,
+            qtyOnHand: true,
+          },
+        })
+      : []
 
   const mergedItems = activeItems.map((item) => ({
     ...item,
@@ -124,12 +132,14 @@ export default async function RackRowDetailPage({
           { label: "Dasbor", href: "/" },
           { label: "Inventaris", href: "/inventaris" },
           { label: "Baris Rak", href: "/inventaris/baris-rak" },
-          { label: "Detail" },
+          { label: rackRow.code || rackRow.name },
         ]}
         actions={
           <>
             <CanCreate permission="manage_inventory">
-              <Button href={entityEditHref("/inventaris/baris-rak", rackRow)} variant="primary">Ubah</Button>
+              <Button href={entityEditHref("/inventaris/baris-rak", rackRow)} variant="primary">
+                Ubah
+              </Button>
             </CanCreate>
             <CanCreate permission="manage_inventory">
               <DeleteButton id={rackRow.id} action={deleteRackRow} />
@@ -139,17 +149,43 @@ export default async function RackRowDetailPage({
       />
 
       <DetailCard>
-        <DetailField label="Kode" value={rackRow.code || "-"} mono />
-        <DetailField label="Nama" value={rackRow.name} />
-        <DetailField label="Gudang" value={rackRow.rack.warehouse.name} />
-        <DetailField label="Rak" value={rackRow.rack.name} />
-        <DetailField label="Dibuat" value={formatDate(rackRow.createdAt)} />
+        <DetailField label="Kode Baris" value={rackRow.code || "-"} mono />
+        <DetailField label="Nama Baris Rak" value={rackRow.name} />
+        <DetailField
+          label="Rak Induk"
+          value={
+            <Link
+              href={entityHref("/inventaris/rak", rackRow.rack)}
+              className="text-foreground hover:text-primary hover:underline font-medium"
+            >
+              {rackRow.rack.name}
+            </Link>
+          }
+        />
+        <DetailField
+          label="Gudang"
+          value={
+            <Link
+              href={entityHref("/master/gudang", rackRow.rack.warehouse)}
+              className="text-foreground hover:text-primary hover:underline font-medium"
+            >
+              {rackRow.rack.warehouse.name}
+            </Link>
+          }
+        />
+        <DetailField label="SKU Aktif" value={`${mergedItems.length} item`} mono />
+        <DetailField label="Dibuat" value={formatDate(rackRow.createdAt)} mono />
       </DetailCard>
 
       {/* Items */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Daftar Barang</h2>
+      <div className="bg-card rounded-lg border border-border shadow-2xs overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-border">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Daftar Barang di Baris Ini</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Rincian stok fisik barang yang tersimpan pada lokasi {rackRow.code || rackRow.name}.
+            </p>
+          </div>
         </div>
         <div className="p-4 px-5">
           <RackRowItemsTable data={toPlain(mergedItems)} />

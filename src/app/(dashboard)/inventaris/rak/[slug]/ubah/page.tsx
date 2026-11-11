@@ -37,10 +37,13 @@ export default async function EditRackPage({
         { label: "Dasbor", href: "/" },
         { label: "Inventaris", href: "/inventaris" },
         { label: "Rak", href: "/inventaris/rak" },
+        { label: rack.code || rack.name },
         { label: "Ubah" },
       ]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah Rak</h1>
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">
+          Ubah Rak ({rack.code || rack.name})
+        </h1>
       </div>
       <RackEditForm
         id={rack.id}
