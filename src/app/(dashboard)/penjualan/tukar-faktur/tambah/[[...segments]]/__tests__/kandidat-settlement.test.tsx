@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
   candidateFindMany: vi.fn(),
   exchangedFindMany: vi.fn(),
   customerFindMany: vi.fn(),
+  customerFindFirst: vi.fn(),
+  customerFindUnique: vi.fn(),
+  salesInvoiceFindFirst: vi.fn(),
+  salesInvoiceFindUnique: vi.fn(),
   returnCredit: vi.fn().mockResolvedValue(new Map()),
 }))
 
@@ -18,8 +22,16 @@ vi.mock("@/lib/auth/permissions", () => ({
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    customer: { findMany: mocks.customerFindMany },
-    salesInvoice: { findMany: mocks.candidateFindMany },
+    customer: {
+      findMany: mocks.customerFindMany,
+      findFirst: mocks.customerFindFirst,
+      findUnique: mocks.customerFindUnique,
+    },
+    salesInvoice: {
+      findMany: mocks.candidateFindMany,
+      findFirst: mocks.salesInvoiceFindFirst,
+      findUnique: mocks.salesInvoiceFindUnique,
+    },
     invoiceExchangeItem: { findMany: mocks.exchangedFindMany },
   },
 }))
@@ -36,6 +48,8 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
   usePathname: () => "/penjualan/tukar-faktur/tambah",
   useSearchParams: () => new URLSearchParams(),
+  redirect: vi.fn(),
+  notFound: vi.fn(),
 }))
 
 import CreateInvoiceExchangePage from "../page"
@@ -55,7 +69,8 @@ function invoice(id: number, paidAmount: number) {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermission.mockResolvedValue({ id: "u1", name: "Uji", email: "uji@x.id" })
-  mocks.customerFindMany.mockResolvedValue([{ id: 7, name: "Pelanggan Tujuh" }])
+  mocks.customerFindMany.mockResolvedValue([{ id: 7, name: "Pelanggan Tujuh", slug: "pelanggan-tujuh" }])
+  mocks.customerFindFirst.mockResolvedValue({ id: 7, slug: "pelanggan-tujuh" })
   mocks.exchangedFindMany.mockResolvedValue([])
   mocks.returnCredit.mockResolvedValue(new Map())
 })
@@ -63,7 +78,8 @@ beforeEach(() => {
 async function candidateIds(paidAmounts: number[]) {
   mocks.candidateFindMany.mockResolvedValue(paidAmounts.map((p, i) => invoice(i + 1, p)))
   const node = await CreateInvoiceExchangePage({
-    searchParams: Promise.resolve({ customer: "7" }),
+    params: Promise.resolve({ segments: ["pelanggan", "7"] }),
+    searchParams: Promise.resolve({}),
   })
   const { renderToString } = await import("react-dom/server")
   return renderToString(node)

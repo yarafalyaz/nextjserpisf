@@ -17,6 +17,8 @@ import { formatAccountingExact, formatCurrencyExact } from "@/lib/utils/format"
 export interface Option {
   value: string
   label: string
+  slug?: string | null
+  numericId?: number
   paymentTermDays?: number | null
 }
 
@@ -75,8 +77,13 @@ export function InvoiceExchangeForm({
   }, [invoices, selected])
 
   function handleCustomerChange(value: string) {
-    const query = value ? `?customer=${value}` : ""
-    router.push(`/penjualan/tukar-faktur/tambah${query}`)
+    if (!value) {
+      router.push("/penjualan/tukar-faktur/tambah")
+      return
+    }
+    const opt = customerOptions.find((c) => c.value === value)
+    const slugOrId = opt?.slug ?? value
+    router.push(`/penjualan/tukar-faktur/tambah/pelanggan/${slugOrId}`)
   }
 
   function toggle(id: number) {
@@ -91,9 +98,16 @@ export function InvoiceExchangeForm({
     }
     startTransition(async () => {
       try {
+        const selectedOpt = customerOptions.find((c) => c.value === customerId)
+        const numericCustomerId = selectedOpt?.numericId ?? (Number.isInteger(Number(customerId)) ? Number(customerId) : null)
+        if (!numericCustomerId) {
+          showError("Pelanggan tidak valid.")
+          return
+        }
+
         const formData = new FormData()
         formData.set("date", date)
-        formData.set("customerId", customerId)
+        formData.set("customerId", String(numericCustomerId))
         formData.set("receiptNumber", receiptNumber)
         formData.set("dueDate", dueDate)
         formData.set("notes", notes)
