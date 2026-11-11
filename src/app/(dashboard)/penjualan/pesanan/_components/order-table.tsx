@@ -6,8 +6,9 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
-import { deleteSalesOrder } from "@/actions/sales.actions"
+import { deleteSalesOrder, bulkDeleteDraftSalesOrders } from "@/actions/sales.actions"
 import { entityHref } from "@/lib/utils/entity-url"
+import { useBulkDeleteSessionUser } from "@/components/ui/data-table-bulk-select"
 
 interface SalesOrder {
   id: number
@@ -83,6 +84,8 @@ interface OrderTableProps {
 }
 
 export function OrderTable({ data, total, page, pageSize, toolbar, filters }: OrderTableProps) {
+  const bulkDeleteUser = useBulkDeleteSessionUser()
+
   return (
     <DataTable
       data={data}
@@ -92,6 +95,15 @@ export function OrderTable({ data, total, page, pageSize, toolbar, filters }: Or
       selectable={true}
       toolbar={toolbar}
       filters={filters}
+      onBulkDelete={async (ids) => {
+        const res = await bulkDeleteDraftSalesOrders(ids)
+        if (res.success) {
+          return { success: true }
+        }
+        return { success: false, message: res.error }
+      }}
+      bulkDeletePermission="delete_sales_orders"
+      bulkDeleteUser={bulkDeleteUser}
     />
   )
 }

@@ -5065,6 +5065,92 @@ export async function deleteSalesOrder(id: number) {
   }
 }
 
+/**
+ * Hapus massal pesanan penjualan berstatus draft (F-2026-11-11 / deslop SO bulk delete).
+ * Standar ERP Internasional (Odoo / NetSuite): dokumen draft yang belum di-post ke GL
+ * dan belum merilis mutasi stok dapat dihapus secara massal oleh pemilik izin `delete_sales_orders`.
+ * Jika ada ID yang bukan draft atau memiliki faktur turunan hidup, operasi ditolak
+ * untuk menjaga integritas data akuntansi.
+ */
+export async function bulkDeleteDraftSalesOrders(ids: number[]) {
+  "use server"
+
+  try {
+    await requirePermission("delete_sales_orders")
+
+    const validIds = ids.filter((id) => Number.isInteger(id) && id > 0)
+    if (validIds.length === 0) {
+      return { success: false, error: "Tidak ada pesanan yang dipilih untuk dihapus." }
+    }
+
+    if (validIds.length > 500) {
+      return { success: false, error: "Maksimal 500 dokumen per penghapusan massal." }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Kunci dan baca semua dokumen terpilih
+      const orders = await tx.salesOrder.findMany({
+        where: { id: { in: validIds } },
+        select: { id: true, documentNo: true, status: true },
+      })
+
+      if (orders.length !== validIds.length) {
+        throw new Error("Sebagian pesanan yang dipilih tidak ditemukan di database.")
+      }
+
+      // 2. Validasi ketat: HANYA DRAFT YANG BOLEH DIHAPUS
+      const nonDrafts = orders.filter((o) => o.status !== "draft")
+      if (nonDrafts.length > 0) {
+        const docNames = nonDrafts.map((o) => `${o.documentNo} (${o.status})`).join(", ")
+        throw new Error(
+          `Penghapusan massal ditolak: Hanya pesanan berstatus Konsep (Draft) yang boleh dihapus. Dokumen berikut bukan draf: ${docNames}.`
+        )
+      }
+
+      // 3. Validasi keterikatan faktur hidup
+      const liveInvoices = await tx.salesInvoice.findMany({
+        where: {
+          salesOrderId: { in: validIds },
+          status: { in: [...RECOGNISED_AR_STATUSES] },
+        },
+        select: { id: true, salesOrderId: true, documentNo: true },
+      })
+
+      if (liveInvoices.length > 0) {
+        throw new Error(
+          `Penghapusan massal ditolak: Sebagian pesanan masih memiliki faktur turunan yang aktif. Batalkan (void) faktur terlebih dahulu.`
+        )
+      }
+
+      // 4. Cascade cleanup untuk tiap draft dalam satu transaksi atomik
+      const invoices = await tx.salesInvoice.findMany({
+        where: { salesOrderId: { in: validIds } },
+        select: { id: true },
+      })
+      const invoiceIds = invoices.map((inv) => inv.id)
+
+      await Promise.all(invoiceIds.map((invId) => reverseSalesInvoicePostingTx(tx, invId)))
+      if (invoiceIds.length) await tx.salesPayment.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
+      if (invoiceIds.length) await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
+      if (invoiceIds.length) await tx.salesInvoice.deleteMany({ where: { id: { in: invoiceIds } } })
+      await tx.deliveryOrder.deleteMany({ where: { salesOrderId: { in: validIds } } })
+      await tx.salesOrderItem.deleteMany({ where: { salesOrderId: { in: validIds } } })
+      await tx.salesOrder.deleteMany({ where: { id: { in: validIds } } })
+    })
+
+    for (const id of validIds) {
+      await logActivity("delete", "SalesOrder", id, `Menghapus massal pesanan penjualan draf #${id}`)
+    }
+
+    revalidatePath("/penjualan/pesanan")
+    return { success: true, count: validIds.length }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[bulkDeleteDraftSalesOrders]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Gagal menghapus pesanan terpilih.") }
+  }
+}
+
 export async function deleteSalesInvoice(id: number) {
   "use server"
 
