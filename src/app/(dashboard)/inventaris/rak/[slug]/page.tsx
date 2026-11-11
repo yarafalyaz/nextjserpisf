@@ -114,11 +114,11 @@ export default async function RackDetailPage({
           </div>
           <CanCreate permission="manage_inventory">
             <Link
-              href={`/inventaris/baris-rak/tambah/gudang/${rack.warehouse.slug ?? rack.warehouse.id}`}
+              href={`/inventaris/baris-rak/tambah/gudang/${rack.warehouse.slug ?? rack.warehouse.id}/rak/${rack.slug ?? rack.id}`}
               className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
             >
               <Plus className="size-3.5" aria-hidden="true" />
-              <span>Tambah Baris Rak</span>
+              <span>Tambah Baris di Rak Ini</span>
             </Link>
           </CanCreate>
         </div>

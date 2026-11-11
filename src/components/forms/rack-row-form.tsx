@@ -25,6 +25,8 @@ interface RackRowFormProps {
   enableAutoCode: boolean
   /** Gudang terpilih awal dari segmen path `gudang/<slug>` (jalur "buat dari"). */
   defaultWarehouseId?: number
+  /** Rak terpilih awal dari segmen path `rak/<slug>` (jalur "buat dari"). */
+  defaultRackId?: number
   rackRow?: {
     id: number
     rackId: number
@@ -34,20 +36,30 @@ interface RackRowFormProps {
   }
 }
 
-export function RackRowForm({ warehouses, enableAutoCode, rackRow, defaultWarehouseId }: RackRowFormProps) {
+export function RackRowForm({ warehouses, enableAutoCode, rackRow, defaultWarehouseId, defaultRackId }: RackRowFormProps) {
   const router = useRouter()
   // Putaran 69: key stabil per intent buat baris rak (hanya mode buat);
   // retry memakai key sama dan ditahan server.
   const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [isPending, startTransition] = useTransition()
 
+  const inferredWarehouseFromRack = useMemo(() => {
+    if (!defaultRackId) return undefined
+    const foundWh = warehouses.find((w) => w.racks.some((r) => r.id === defaultRackId))
+    return foundWh?.id
+  }, [warehouses, defaultRackId])
+
   const initialWarehouseId = rackRow
     ? String(rackRow.rack.warehouseId)
     : defaultWarehouseId
       ? String(defaultWarehouseId)
-      : ""
+      : inferredWarehouseFromRack
+        ? String(inferredWarehouseFromRack)
+        : ""
   const [warehouseId, setWarehouseId] = useState(initialWarehouseId)
-  const [rackId, setRackId] = useState(rackRow ? String(rackRow.rackId) : "")
+  const [rackId, setRackId] = useState(
+    rackRow ? String(rackRow.rackId) : defaultRackId ? String(defaultRackId) : "",
+  )
   const [autoCode, setAutoCode] = useState("")
   const [warehouseOptions, setWarehouseOptions] = useState(warehouses)
 
@@ -119,6 +131,7 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow, defaultWareho
   const breadcrumbs = [
     { label: "Dasbor", href: "/" },
     { label: "Inventaris", href: "/inventaris" },
+    { label: "Rak", href: "/inventaris/rak" },
     { label: "Baris Rak", href: "/inventaris/baris-rak" },
     { label: rackRow ? "Ubah" : "Tambah" },
   ]

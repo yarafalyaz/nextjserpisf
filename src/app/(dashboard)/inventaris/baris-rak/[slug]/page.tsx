@@ -131,6 +131,7 @@ export default async function RackRowDetailPage({
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Inventaris", href: "/inventaris" },
+          { label: "Rak", href: "/inventaris/rak" },
           { label: "Baris Rak", href: "/inventaris/baris-rak" },
           { label: rackRow.code || rackRow.name },
         ]}

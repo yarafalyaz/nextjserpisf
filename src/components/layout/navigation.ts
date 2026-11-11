@@ -148,7 +148,6 @@ export const navigation: NavItem[] = [
       { label: "Permintaan Antar Gudang", href: "/inventaris/permintaan-gudang", icon: ClipboardList, permission: "view_material_requests" },
       { label: "Pengeluaran Material", href: "/inventaris/pengeluaran-material", icon: Wrench, permission: "view_material_issues" },
       { label: "Rak", href: "/inventaris/rak", icon: Grid3X3, permission: "view_racks" },
-      { label: "Baris Rak", href: "/inventaris/baris-rak", icon: Layers, permission: "view_racks" },
     ],
   },
   {

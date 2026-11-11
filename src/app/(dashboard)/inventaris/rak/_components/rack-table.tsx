@@ -7,6 +7,7 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteRack } from "@/actions/inventory.actions"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 import { formatDate } from "@/lib/utils/format"
+import { Plus } from "@/components/ui/fontawesome-icons"
 
 interface Warehouse {
   id: number
@@ -77,18 +78,35 @@ const columns = [
     },
   }),
   columnHelper.accessor("rows", {
-    header: "Kapasitas Baris",
+    header: "Kapasitas Baris (Bin)",
     meta: { align: "right" },
     cell: (info) => {
+      const rack = info.row.original
       const count = info.getValue().length
+      const whKey = rack.warehouse.slug ?? rack.warehouse.id
+      const rackKey = rack.slug ?? rack.id
       return (
-        <div className="flex items-center justify-end gap-1.5">
-          <span className="font-mono font-semibold tabular-nums text-foreground">
-            {count}
-          </span>
-          <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[11px] font-mono text-muted-foreground">
-            baris
-          </span>
+        <div className="flex items-center justify-end gap-2">
+          <Link
+            href={entityHref("/inventaris/rak", rack)}
+            className="inline-flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+          >
+            <span className="font-mono font-semibold tabular-nums text-foreground">
+              {count}
+            </span>
+            <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[11px] font-mono text-muted-foreground">
+              baris
+            </span>
+          </Link>
+          <Link
+            href={`/inventaris/baris-rak/tambah/gudang/${whKey}/rak/${rackKey}`}
+            title={`Tambah Baris di ${rack.name}`}
+            aria-label={`Tambah Baris di ${rack.name}`}
+            className="inline-flex items-center gap-1 rounded border border-border bg-card hover:bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground transition-colors cursor-pointer"
+          >
+            <Plus className="size-2.5 text-primary" aria-hidden="true" />
+            <span>Baris</span>
+          </Link>
         </div>
       )
     },

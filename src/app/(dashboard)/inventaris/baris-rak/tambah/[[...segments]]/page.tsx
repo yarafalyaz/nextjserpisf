@@ -26,14 +26,29 @@ export default async function CreateRackRowPage({
 
   const params = await searchParams
   const { segments } = await routeParams
-  const seg = parsePrefillSegments(segments, ["gudang"])
+  const seg = parsePrefillSegments(segments, ["gudang", "rak"])
 
   // Tautan lama `?warehouseId=` → bentuk path `gudang/<slug>`.
   if (!seg.gudang && params.warehouseId !== undefined) {
     await redirectLegacyPrefillQuery(prisma.warehouse, params.warehouseId, warehouseHref, "/inventaris/baris-rak/tambah")
   }
   const defaultWarehouseId = seg.gudang
-    ? await resolvePrefillId(prisma.warehouse, seg.gudang, warehouseHref)
+    ? await resolvePrefillId(
+        prisma.warehouse,
+        seg.gudang,
+        (wSlug) => (seg.rak ? `/inventaris/baris-rak/tambah/gudang/${wSlug}/rak/${seg.rak}` : warehouseHref(wSlug)),
+      )
+    : undefined
+
+  const defaultRackId = seg.rak
+    ? await resolvePrefillId(
+        prisma.rack,
+        seg.rak,
+        (rSlug) =>
+          seg.gudang
+            ? `/inventaris/baris-rak/tambah/gudang/${seg.gudang}/rak/${rSlug}`
+            : `/inventaris/baris-rak/tambah/rak/${rSlug}`,
+      )
     : undefined
 
   // Semua gudang aktif dimuat, termasuk yang belum punya rak: tautan
@@ -58,6 +73,7 @@ export default async function CreateRackRowPage({
         warehouses={warehouses}
         enableAutoCode={enableAutoCode}
         defaultWarehouseId={defaultWarehouseId}
+        defaultRackId={defaultRackId}
       />
     </Suspense>
   )
