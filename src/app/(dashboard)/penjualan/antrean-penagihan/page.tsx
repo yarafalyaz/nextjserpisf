@@ -10,6 +10,7 @@ import { getCollectionQueue } from "@/lib/reports/collection-queue-data"
 import { COLLECTION_QUEUE_TITLE } from "@/lib/reports/collection-queue"
 import { formatCurrencyExact } from "@/lib/utils/format"
 import { HandCoins } from "@/components/ui/fontawesome-icons"
+import { prisma } from "@/lib/db/prisma"
 
 export const metadata: Metadata = { title: COLLECTION_QUEUE_TITLE }
 
@@ -25,6 +26,31 @@ export default async function CollectionQueuePage() {
     hasPermission("create_invoice_exchanges"),
     hasPermission("create_invoice_collection_followups"),
   ])
+
+  const customerIds = [...new Set(queue.rows.map((r) => r.customerId))]
+  const invoiceIds = [...new Set(queue.rows.map((r) => r.invoiceId))]
+
+  const [customerRows, invoiceRows] = await Promise.all([
+    customerIds.length === 0
+      ? []
+      : prisma.customer.findMany({
+          where: { id: { in: customerIds } },
+          select: { id: true, slug: true },
+        }),
+    invoiceIds.length === 0
+      ? []
+      : prisma.salesInvoice.findMany({
+          where: { id: { in: invoiceIds } },
+          select: { id: true, slug: true },
+        }),
+  ])
+
+  const customerSlugMap = Object.fromEntries(
+    customerRows.map((c) => [c.id, c.slug ?? String(c.id)]),
+  )
+  const invoiceSlugMap = Object.fromEntries(
+    invoiceRows.map((i) => [i.id, i.slug ?? String(i.id)]),
+  )
 
   const criticalCount =
     queue.summary.reminderLevels.eskalasi.count +
@@ -132,6 +158,8 @@ export default async function CollectionQueuePage() {
         summary={queue.summary}
         canCreateExchange={canCreateExchange}
         canFollowUp={canFollowUp}
+        customerSlugMap={customerSlugMap}
+        invoiceSlugMap={invoiceSlugMap}
       />
     </div>
   )

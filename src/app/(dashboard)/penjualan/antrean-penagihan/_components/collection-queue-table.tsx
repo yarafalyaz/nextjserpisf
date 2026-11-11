@@ -30,6 +30,8 @@ interface CollectionQueueTableProps {
   summary: CollectionQueueSummary
   canCreateExchange: boolean
   canFollowUp: boolean
+  customerSlugMap?: Record<number, string>
+  invoiceSlugMap?: Record<number, string>
 }
 
 const STAGE_TONES: Record<
@@ -57,6 +59,8 @@ export function CollectionQueueTable({
   summary,
   canCreateExchange,
   canFollowUp,
+  customerSlugMap = {},
+  invoiceSlugMap = {},
 }: CollectionQueueTableProps) {
   const [selectedTab, setSelectedTab] = useState<"all" | CollectionReminderLevel>("all")
 
@@ -229,7 +233,7 @@ export function CollectionQueueTable({
 
             {canCreateExchange && row.tahap === "belum_diserahkan" ? (
               <Link
-                href={`/penjualan/tukar-faktur/tambah/pelanggan/${row.customerId}/faktur/${row.invoiceId}`}
+                href={`/penjualan/tukar-faktur/tambah/pelanggan/${customerSlugMap[row.customerId] ?? row.customerId}/faktur/${invoiceSlugMap[row.invoiceId] ?? row.invoiceId}`}
                 className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md border border-border bg-card hover:bg-muted text-foreground transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
                 title="Buat Dokumen Tukar Faktur"
               >
