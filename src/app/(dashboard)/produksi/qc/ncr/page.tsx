@@ -70,20 +70,20 @@ export default async function NonconformancesPage({
           { label: "NCR" },
         ]}
       />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
         <div>
-          <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ketidaksesuaian (NCR)</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Cacat dan pengerjaan ulang. NCR terbuka memblokir serah terima dokumen terkait sampai ditutup.
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">Ketidaksesuaian Mutu (NCR)</h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+            Pencatatan cacat produk, analisis akar masalah, dan disposisi pengerjaan ulang (rework).
           </p>
         </div>
         <CanCreate permission="manage_nonconformances">
           <Link
             href="/produksi/qc/ncr/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
             id="create-ncr-btn"
           >
-            <Plus className="size-3.5" />
+            <Plus className="size-3.5" aria-hidden="true" />
             <span>Buat NCR</span>
           </Link>
         </CanCreate>
