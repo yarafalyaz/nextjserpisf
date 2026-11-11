@@ -239,7 +239,7 @@ export async function renderSalesOrdersPage({
               <span className="text-xs text-muted-foreground">dokumen</span>
             </div>
             <span className="text-xs font-mono tabular-nums text-muted-foreground">
-              Rp {formatCurrencyExact(confirmedAmount)}
+              {formatCurrencyExact(confirmedAmount)}
             </span>
           </div>
         </div>

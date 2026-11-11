@@ -177,7 +177,7 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
                 <div className="text-right">
                   <span className="text-xs text-muted-foreground block">Total Nilai Penawaran:</span>
                   <p className="text-base font-bold text-foreground tabular-nums">
-                    Rp {formatCurrencyExact(quo.grandTotal || 0)}
+                    {formatCurrencyExact(quo.grandTotal || 0)}
                   </p>
                 </div>
               </div>
@@ -205,10 +205,10 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
                             <td className="p-2.5 text-right tabular-nums">{item.qty}</td>
                             <td className="p-2.5 text-muted-foreground">{item.uom || "-"}</td>
                             <td className="p-2.5 text-right tabular-nums">
-                              Rp {formatCurrencyExact(item.unitPrice)}
+                              {formatCurrencyExact(item.unitPrice)}
                             </td>
                             <td className="p-2.5 text-right font-medium pr-3 tabular-nums">
-                              Rp {formatCurrencyExact(item.total)}
+                              {formatCurrencyExact(item.total)}
                             </td>
                           </tr>
                         ))}
@@ -224,7 +224,7 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
                 <div className="bg-primary/5 rounded-lg border border-primary/20 px-3.5 py-2.5 text-xs text-primary flex flex-wrap items-center justify-between gap-2">
                   <span>Kategori Pelanggan menetapkan uang muka standar sebesar <strong>{dpPercent}%</strong></span>
                   <span className="font-semibold tabular-nums">
-                    Default DP: Rp {formatCurrencyExact(Math.round((quo.grandTotal || 0) * (dpPercent / 100)))}
+                    Default DP: {formatCurrencyExact(Math.round((quo.grandTotal || 0) * (dpPercent / 100)))}
                   </span>
                 </div>
               )}

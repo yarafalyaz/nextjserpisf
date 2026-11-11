@@ -72,7 +72,7 @@ export default async function CustomerCreditQueuePage() {
           </span>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-foreground">
-              Rp {formatCurrencyExact(summary.totalSaldo)}
+              {formatCurrencyExact(summary.totalSaldo)}
             </span>
           </div>
         </div>

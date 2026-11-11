@@ -66,7 +66,7 @@ export default async function DownPaymentVerificationQueuePage() {
           </span>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-foreground">
-              Rp {formatCurrencyExact(summary.totalAmountSen / 100)}
+              {formatCurrencyExact(summary.totalAmountSen / 100)}
             </span>
           </div>
         </div>
