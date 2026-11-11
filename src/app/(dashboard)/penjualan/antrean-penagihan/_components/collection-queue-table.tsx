@@ -16,9 +16,10 @@ import type {
 import {
   COLLECTION_REMINDER_LEVEL_LABELS,
 } from "@/lib/reports/collection-queue"
-import { WhatsappButton } from "@/components/reports/whatsapp-button"
+import { buildWhatsappUrl } from "@/lib/utils/whatsapp"
+import { recordWhatsappLinkOpened } from "@/actions/whatsapp-log.actions"
 import { CollectionFollowUpForm } from "@/components/reports/collection-followup-form"
-import { ArrowUpRight } from "@/components/ui/fontawesome-icons"
+import { ArrowUpRight, MessageCircle } from "@/components/ui/fontawesome-icons"
 
 export interface CollectionQueueTableRow extends CollectionQueueRow {
   id: number
@@ -113,7 +114,7 @@ export function CollectionQueueTable({
       cell: (info) => {
         const row = info.row.original
         return (
-          <div className="flex flex-col max-w-[200px] truncate">
+          <div className="flex flex-col max-w-[180px] truncate">
             <span className="font-medium text-foreground text-xs truncate" title={info.getValue()}>
               {info.getValue()}
             </span>
@@ -138,7 +139,7 @@ export function CollectionQueueTable({
               customTone={REMINDER_TONES[row.tingkatPengingat]}
             />
             <span className="text-[10px] text-muted-foreground">
-              Tahap: {row.tahapLabel}
+              {row.tahapLabel}
             </span>
           </div>
         )
@@ -189,7 +190,7 @@ export function CollectionQueueTable({
       cell: (info) => {
         const row = info.row.original
         return (
-          <div className="flex flex-col text-xs max-w-[130px]">
+          <div className="flex flex-col text-xs max-w-[120px]">
             {row.promiseDate ? (
               <span className="text-amber-600 dark:text-amber-400 font-medium text-[11px] whitespace-nowrap">
                 Janji: {formatDate(row.promiseDate)}
@@ -212,6 +213,9 @@ export function CollectionQueueTable({
       cell: (info) => {
         const row = info.row.original
         const detailHref = entityHref("/penjualan/faktur", { id: row.invoiceId })
+        const waMessage = `Halo ${row.customerName}, kami mengingatkan Faktur ${row.documentNo} dengan sisa ${formatCurrencyExact(row.sisa)}. Terima kasih.`
+        const waHref = buildWhatsappUrl(row.customerPhone, waMessage)
+
         return (
           <div className="flex items-center gap-1.5 flex-nowrap">
             {canFollowUp ? (
@@ -231,23 +235,32 @@ export function CollectionQueueTable({
               </Link>
             ) : null}
 
-            {row.customerPhone ? (
-              <WhatsappButton
-                phone={row.customerPhone}
-                modelType="SalesInvoice"
-                modelId={row.invoiceId}
-                surface="queue"
-                label="Hubungi via WhatsApp"
-                message={`Halo ${row.customerName}, kami mengingatkan Faktur ${row.documentNo} dengan sisa ${formatCurrencyExact(row.sisa)}. Terima kasih.`}
-              />
+            {waHref ? (
+              <a
+                href={waHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Hubungi via WhatsApp"
+                title="Kirim Pesan WhatsApp"
+                className="inline-flex items-center justify-center size-7 rounded-md border border-border bg-card hover:bg-muted text-emerald-600 dark:text-emerald-400 transition-colors cursor-pointer shadow-2xs"
+                onClick={() => {
+                  void recordWhatsappLinkOpened({
+                    modelType: "SalesInvoice",
+                    modelId: row.invoiceId,
+                    surface: "queue",
+                  })
+                }}
+              >
+                <MessageCircle className="size-3.5" aria-hidden="true" />
+              </a>
             ) : null}
 
             <Link
               href={detailHref}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
+              className="inline-flex items-center justify-center size-7 rounded-md border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer shadow-2xs"
               title="Lihat Detail Faktur"
             >
-              <ArrowUpRight className="size-3" aria-hidden="true" />
+              <ArrowUpRight className="size-3.5" aria-hidden="true" />
             </Link>
           </div>
         )
@@ -339,6 +352,7 @@ export function CollectionQueueTable({
           columns={columns}
           data={filteredData}
           searchColumn="documentNo"
+          selectable={false}
           searchPlaceholder="Cari nomor faktur..."
         />
       </div>
