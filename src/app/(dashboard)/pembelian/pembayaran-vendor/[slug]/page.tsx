@@ -157,7 +157,7 @@ export default async function VendorPaymentDetailPage({
                         `Tagihan #${alloc.vendorBillId}`
                       )}
                     </DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrencyExact(Number(alloc.amount))}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(alloc.amount))}</DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>

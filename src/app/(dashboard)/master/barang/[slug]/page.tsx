@@ -432,7 +432,7 @@ export default async function ItemDetailPage({
                           <DetailTableTd align="right">{Number(layer.qtyIn)}</DetailTableTd>
                           <DetailTableTd align="right">{Number(layer.qtyOut)}</DetailTableTd>
                           <DetailTableTd align="right"><strong>{Number(layer.remaining)}</strong></DetailTableTd>
-                          <DetailTableTd align="right">{formatCurrencyExact(Number(layer.unitCost))}</DetailTableTd>
+                          <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(layer.unitCost))}</DetailTableTd>
                         </DetailTableRow>
                       ))}
                     </DetailTableBody>
@@ -511,7 +511,7 @@ export default async function ItemDetailPage({
                               <StatusChip status={sm.impact === "IN" ? "received" : "returned"} />
                             </DetailTableTd>
                             <DetailTableTd align="right">{Number(sm.qty)}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrencyExact(Number(sm.cost))}</DetailTableTd>
+                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(sm.cost))}</DetailTableTd>
                             <DetailTableTd>
                               {sm.partyLabel && <span className="text-xs text-muted-foreground">{sm.partyLabel}: </span>}
                               <span className="text-sm">{sm.party}</span>

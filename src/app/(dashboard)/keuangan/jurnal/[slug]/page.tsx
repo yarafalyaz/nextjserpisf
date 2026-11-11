@@ -105,16 +105,16 @@ export default async function JournalDetailPage({
                   <DetailTableRow key={entry.id}>
                     <DetailTableTd>{entry.account.code} - {entry.account.name}</DetailTableTd>
                     <DetailTableTd>{entry.memo || "-"}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrencyExact(Number(entry.debit))}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrencyExact(Number(entry.credit))}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(entry.debit))}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(entry.credit))}</DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>
               <DetailTableFoot>
                 <DetailTableFootRow>
                   <DetailTableTd colSpan={2} align="right" className="font-bold">Total</DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold">{formatCurrencyExact(Number(journal.totalDebit))}</DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold">{formatCurrencyExact(Number(journal.totalCredit))}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-bold font-mono tabular-nums text-right">{formatCurrencyExact(Number(journal.totalDebit))}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-bold font-mono tabular-nums text-right">{formatCurrencyExact(Number(journal.totalCredit))}</DetailTableTd>
                 </DetailTableFootRow>
               </DetailTableFoot>
             </DetailTable>

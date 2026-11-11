@@ -355,7 +355,7 @@ export function ProductionCostSection({
                   <DetailTableTd>{c.description ?? "-"}</DetailTableTd>
                   <DetailTableTd align="right">{c.hours ?? "-"}</DetailTableTd>
                   <DetailTableTd align="right">{c.rate != null ? formatCurrencyExact(c.rate) : "-"}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrencyExact(c.amount)}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(c.amount)}</DetailTableTd>
                   <DetailTableTd>
                     <span className="inline-flex flex-wrap items-center gap-2">
                       {c.sourceTimesheetId ? (

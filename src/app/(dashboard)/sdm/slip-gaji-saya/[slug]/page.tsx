@@ -102,7 +102,7 @@ export default async function OwnPayslipDetailPage({
                       {line.componentNameSnapshot}
                     </td>
                     <td className="px-3 py-2">{kindLabel(line.kindSnapshot)}</td>
-                    <td className="px-3 py-2 text-right">{formatCurrencyExact(line.amount)}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums">{formatCurrencyExact(line.amount)}</td>
                   </tr>
                 ))}
               </tbody>

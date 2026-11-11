@@ -346,9 +346,9 @@ export default async function AssetDetailPage({
                     <DetailTableTd>{row.taxYear}</DetailTableTd>
                     <DetailTableTd>{fiscalMethodLabel(row.method)}</DetailTableTd>
                     <DetailTableTd>{row.source}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrencyExact(Number(row.openingBalance))}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrencyExact(Number(row.depreciation))}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrencyExact(Number(row.closingBalance))}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(row.openingBalance))}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(row.depreciation))}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(row.closingBalance))}</DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>

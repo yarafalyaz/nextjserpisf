@@ -71,14 +71,11 @@ export function TaxDisputeRegisterTable({ report }: { report: TaxDisputeRegister
                 )}
               </DetailTableTd>
               <DetailTableTd>{taxDisputeAssessmentKindLabel(row.kind)}</DetailTableTd>
-              <DetailTableTd align="right">
-                {formatCurrencyExact(row.assessedAmount)}
+              <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(row.assessedAmount)}
               </DetailTableTd>
-              <DetailTableTd align="right">
-                {formatCurrencyExact(row.disputedAmount)}
+              <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(row.disputedAmount)}
               </DetailTableTd>
-              <DetailTableTd align="right">
-                {formatCurrencyExact(row.paidUnderProtest)}
+              <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(row.paidUnderProtest)}
               </DetailTableTd>
               <DetailTableTd>{row.nearestDeadline ? formatDate(row.nearestDeadline) : "-"}</DetailTableTd>
               <DetailTableTd>

@@ -223,8 +223,8 @@ export default async function VendorBillDetailPage({
                 <DetailTableRow key={item.id}>
                   <DetailTableTd>{item.description || "-"}</DetailTableTd>
                   <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrencyExact(Number(item.unitPrice))}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrencyExact(Number(item.total))}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.unitPrice))}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.total))}</DetailTableTd>
                 </DetailTableRow>
               ))}
             </DetailTableBody>

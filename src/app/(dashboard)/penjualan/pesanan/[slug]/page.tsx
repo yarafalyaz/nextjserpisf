@@ -361,8 +361,7 @@ export default async function SalesOrderDetailPage({
                       </Link>
                     </DetailTableTd>
                     <DetailTableTd>{formatDate(inv.date)}</DetailTableTd>
-                    <DetailTableTd align="right">
-                      {formatCurrencyExact(Number(inv.grandTotal))}
+                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(inv.grandTotal))}
                     </DetailTableTd>
                     <DetailTableTd>
                       <StatusChip status={inv.status} />

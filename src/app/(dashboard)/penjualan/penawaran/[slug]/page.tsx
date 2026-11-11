@@ -467,8 +467,7 @@ export default async function QuotationDetailPage({
                         <DetailTableBody>
                           {quotation.downPayments.map((dp) => (
                             <DetailTableRow key={dp.id}>
-                              <DetailTableTd>
-                                {formatCurrencyExact(Number(dp.amount))}
+                              <DetailTableTd className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(dp.amount))}
                               </DetailTableTd>
                               <DetailTableTd>
                                 <StatusChip status={dp.status} />
@@ -560,14 +559,11 @@ export default async function QuotationDetailPage({
                                   {Number(item.qty)}
                                 </DetailTableTd>
                                 <DetailTableTd>{item.uom || "-"}</DetailTableTd>
-                                <DetailTableTd align="right">
-                                  {formatCurrencyExact(Number(item.unitPrice))}
+                                <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.unitPrice))}
                                 </DetailTableTd>
-                                <DetailTableTd align="right">
-                                  {formatCurrencyExact(Number(item.discount))}
+                                <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.discount))}
                                 </DetailTableTd>
-                                <DetailTableTd align="right">
-                                  {formatCurrencyExact(Number(item.total))}
+                                <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.total))}
                                 </DetailTableTd>
                               </DetailTableRow>
                             );

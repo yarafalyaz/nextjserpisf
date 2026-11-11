@@ -392,8 +392,8 @@ export default async function EmployeeDetailPage({
                               {salaryRows.map((r) => (
                                 <tr key={r.id} className="border-b border-default last:border-0">
                                   <td className="px-4 py-3">{formatDate(new Date(r.effectiveDate))}</td>
-                                  <td className="px-4 py-3">{formatCurrencyExact(r.previousBaseSalary)}</td>
-                                  <td className="px-4 py-3">{formatCurrencyExact(r.newBaseSalary)}</td>
+                                  <td className="px-4 py-3 font-mono tabular-nums text-right">{formatCurrencyExact(r.previousBaseSalary)}</td>
+                                  <td className="px-4 py-3 font-mono tabular-nums text-right">{formatCurrencyExact(r.newBaseSalary)}</td>
                                   <td className="px-4 py-3">{r.changePercent != null ? `${r.changePercent > 0 ? "+" : ""}${r.changePercent}%` : "-"}</td>
                                   <td className="px-4 py-3">{SALARY_REASON_LABELS[r.reason] ?? r.reason}</td>
                                   <td className="px-4 py-3">{SALARY_STATUS_LABELS[r.status] ?? r.status}</td>

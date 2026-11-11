@@ -113,7 +113,7 @@ function FragmentRow({
         <td className="py-2 pr-3">{row.documentNo ?? "—"}</td>
         <td className="py-2 pr-3">{row.customerName ?? "—"}</td>
         <td className="py-2 pr-3">{formatDate(row.paymentDate)}</td>
-        <td className="py-2 pr-3 text-right">{formatCurrencyExact(row.amount)}</td>
+        <td className="py-2 pr-3 text-right font-mono tabular-nums">{formatCurrencyExact(row.amount)}</td>
         <td className="py-2 pr-3 text-right">{row.vatDpp === null ? "—" : formatCurrencyExact(row.vatDpp)}</td>
         <td className="py-2 pr-3 text-right">{row.vatAmount === null ? "—" : formatCurrencyExact(row.vatAmount)}</td>
         <td className="py-2 pr-3">{row.vatTaxPeriod ?? "—"}</td>

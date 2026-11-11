@@ -390,8 +390,7 @@ export default async function GoodsReceiptDetailPage({
                           </span>
                         ) : null}
                       </DetailTableTd>
-                      <DetailTableTd align="right">
-                        {formatCurrencyExact(Number(item.unitCost))}
+                      <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.unitCost))}
                       </DetailTableTd>
                       <DetailTableTd>
                         {warehouseMap.get(item.warehouseId) ||
@@ -460,7 +459,7 @@ export default async function GoodsReceiptDetailPage({
                         {bill.documentNo}
                       </Link>
                     </DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrencyExact(Number(bill.grandTotal))}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(bill.grandTotal))}</DetailTableTd>
                     <DetailTableTd><StatusChip status={bill.status} /></DetailTableTd>
                   </DetailTableRow>
                 ))}

@@ -386,8 +386,8 @@ export default async function ProductionOrderDetailPage({
                     <DetailTableTd>{itemNameMap.get(mat.itemId) ?? `Barang #${mat.itemId}`}</DetailTableTd>
                     <DetailTableTd align="right">{Number(mat.qty)}</DetailTableTd>
                     <DetailTableTd align="right">{Number(mat.actualQty ?? 0)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrencyExact(Number(mat.standardCost))}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrencyExact(Number(mat.actualCost))}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(mat.standardCost))}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(mat.actualCost))}</DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>
@@ -518,8 +518,8 @@ export default async function ProductionOrderDetailPage({
                                 <span className="text-muted-foreground">—</span>
                               )}
                             </DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrencyExact(Number(m.unitCost))}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrencyExact(Number(m.totalCost))}</DetailTableTd>
+                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(m.unitCost))}</DetailTableTd>
+                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(m.totalCost))}</DetailTableTd>
                           </DetailTableRow>
                         )
                       })}

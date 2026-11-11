@@ -199,7 +199,7 @@ export default async function MaterialIssueDetailPage({
                   <DetailTableRow key={item.id}>
                     <DetailTableTd>{itemNameMap.get(item.itemId) || `Item #${item.itemId}`}</DetailTableTd>
                     <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrencyExact(Number(item.cost))}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.cost))}</DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>

@@ -214,7 +214,7 @@ export default async function CustomerDetailPage({
                           <DetailTableRow key={q.id}>
                             <DetailTableTd className="font-mono"><Link href={entityHref("/penjualan/penawaran", q)}>{q.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(q.date)}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrencyExact(Number(q.grandTotal))}</DetailTableTd>
+                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(q.grandTotal))}</DetailTableTd>
                             <DetailTableTd><StatusChip status={q.status} /></DetailTableTd>
                           </DetailTableRow>
                         ))}
@@ -251,8 +251,8 @@ export default async function CustomerDetailPage({
                           <DetailTableRow key={inv.id}>
                             <DetailTableTd className="font-mono"><Link href={entityHref("/penjualan/faktur", inv)}>{inv.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(inv.date)}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrencyExact(Number(inv.grandTotal))}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrencyExact(Number(inv.paidAmount))}</DetailTableTd>
+                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(inv.grandTotal))}</DetailTableTd>
+                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(inv.paidAmount))}</DetailTableTd>
                             <DetailTableTd><StatusChip status={inv.status} /></DetailTableTd>
                           </DetailTableRow>
                         ))}

@@ -116,8 +116,7 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
                 <tr key={it.itemId}>
                   <td className="py-0.5">{it.name}</td>
                   <td className="py-0.5 text-right">{it.qty}</td>
-                  <td className="py-0.5 text-right">
-                    {formatCurrencyExact(it.cost)}
+                  <td className="py-0.5 text-right font-mono tabular-nums">{formatCurrencyExact(it.cost)}
                   </td>
                 </tr>
               ))}

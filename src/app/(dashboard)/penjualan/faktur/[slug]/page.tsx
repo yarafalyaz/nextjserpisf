@@ -432,22 +432,22 @@ export default async function InvoiceDetailPage({
                               <DetailTableTd>{formatDate(dp.paymentDate)}</DetailTableTd>
                               <DetailTableTd>{resolvePaymentMethodName(dp.paymentMethod, pmMap)}</DetailTableTd>
                               <DetailTableTd><StatusChip status={dp.status} /></DetailTableTd>
-                              <DetailTableTd align="right">{formatCurrencyExact(Number(dp.amount))}</DetailTableTd>
+                              <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(dp.amount))}</DetailTableTd>
                             </DetailTableRow>
                           ))}
                         </DetailTableBody>
                         <DetailTableFoot>
                           <DetailTableFootRow>
                             <DetailTableTd colSpan={4} align="right" className="font-bold">Total Uang Muka</DetailTableTd>
-                            <DetailTableTd align="right" className="font-bold">{formatCurrencyExact(invoice.quotation.downPayments.reduce((sum: number, dp: any) => sum + Number(dp.amount), 0))}</DetailTableTd>
+                            <DetailTableTd align="right" className="font-bold font-mono tabular-nums text-right">{formatCurrencyExact(invoice.quotation.downPayments.reduce((sum: number, dp: any) => sum + Number(dp.amount), 0))}</DetailTableTd>
                           </DetailTableFootRow>
                           <DetailTableFootRow>
                             <DetailTableTd colSpan={4} align="right">Total Keseluruhan Faktur</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrencyExact(Number(invoice.grandTotal))}</DetailTableTd>
+                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(invoice.grandTotal))}</DetailTableTd>
                           </DetailTableFootRow>
                           <DetailTableFootRow>
                             <DetailTableTd colSpan={4} align="right" className="text-danger font-bold">Sisa Setelah Uang Muka</DetailTableTd>
-                            <DetailTableTd align="right" className="text-danger font-bold">{formatCurrencyExact(Number(invoice.grandTotal) - invoice.quotation.downPayments.reduce((sum: number, dp: any) => sum + Number(dp.amount), 0))}</DetailTableTd>
+                            <DetailTableTd align="right" className="text-danger font-bold font-mono tabular-nums text-right">{formatCurrencyExact(Number(invoice.grandTotal) - invoice.quotation.downPayments.reduce((sum: number, dp: any) => sum + Number(dp.amount), 0))}</DetailTableTd>
                           </DetailTableFootRow>
                         </DetailTableFoot>
                       </DetailTable>
@@ -487,7 +487,7 @@ export default async function InvoiceDetailPage({
                             <DetailTableTd className="font-mono">{pay.documentNo}</DetailTableTd>
                             <DetailTableTd>{formatDate(pay.paymentDate)}</DetailTableTd>
                             <DetailTableTd>{resolvePaymentMethodName(pay.paymentMethod, pmMap)}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrencyExact(Number(pay.amount))}</DetailTableTd>
+                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(pay.amount))}</DetailTableTd>
                           </DetailTableRow>
                         ))}
                       </DetailTableBody>

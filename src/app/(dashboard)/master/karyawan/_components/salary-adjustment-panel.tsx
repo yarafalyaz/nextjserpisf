@@ -200,8 +200,8 @@ export function SalaryAdjustmentPanel(props: SalaryAdjustmentPanelProps) {
                     return (
                       <tr key={row.id} className="border-b border-default align-top last:border-0">
                         <td className="py-2 pr-4">{formatDate(row.effectiveDate)}</td>
-                        <td className="py-2 pr-4">{formatCurrencyExact(row.previousBaseSalary)}</td>
-                        <td className="py-2 pr-4">{formatCurrencyExact(row.newBaseSalary)}</td>
+                        <td className="py-2 pr-4 font-mono tabular-nums text-right">{formatCurrencyExact(row.previousBaseSalary)}</td>
+                        <td className="py-2 pr-4 font-mono tabular-nums text-right">{formatCurrencyExact(row.newBaseSalary)}</td>
                         <td className="py-2 pr-4">
                           {row.changePercent != null ? `${row.changePercent > 0 ? "+" : ""}${row.changePercent}%` : "-"}
                         </td>

@@ -87,7 +87,7 @@ export function LoanInstallmentHistorySection({
                   {row.paymentDate ? formatDate(row.paymentDate, { format: "short" }) : "—"}
                 </DetailTableTd>
                 <DetailTableTd>{row.label}</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrencyExact(row.amount)}</DetailTableTd>
+                <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(row.amount)}</DetailTableTd>
               </DetailTableRow>
             ))}
             {history.aggregateSlipRows.map((row) => (
@@ -98,7 +98,7 @@ export function LoanInstallmentHistorySection({
                   {row.paymentDate ? formatDate(row.paymentDate, { format: "short" }) : "—"}
                 </DetailTableTd>
                 <DetailTableTd>{row.label}</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrencyExact(row.loanDeduction)}</DetailTableTd>
+                <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(row.loanDeduction)}</DetailTableTd>
               </DetailTableRow>
             ))}
           </DetailTableBody>

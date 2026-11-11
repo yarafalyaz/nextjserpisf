@@ -135,7 +135,7 @@ export function ProjectBudgetEditor({ projectId, items, stages, quotations, isLo
                   <td className="py-1.5 pr-2">{stages.find((s) => s.id === it.projectStageId)?.name ?? "Belum dialokasi"}</td>
                   <td className="py-1.5 pr-2">{CATEGORIES.find((c) => c.value === it.category)?.label ?? "Tanpa kategori"}</td>
                   <td className="py-1.5 pr-2 text-right">{it.qty}</td>
-                  <td className="py-1.5 pr-2 text-right">{formatCurrencyExact(it.cost)}</td>
+                  <td className="py-1.5 pr-2 text-right font-mono tabular-nums">{formatCurrencyExact(it.cost)}</td>
                   <td className="py-1.5 text-right whitespace-nowrap">
                     {canEdit && <Button type="button" variant="secondary" isDisabled={isPending} onClick={() => { setEditing(it); setStageId(it.projectStageId ? String(it.projectStageId) : ""); setCategory(it.category ?? "") }}>Ubah</Button>}
                     {canEdit && (isLocked ? (

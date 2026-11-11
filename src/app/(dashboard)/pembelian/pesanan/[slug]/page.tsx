@@ -216,8 +216,8 @@ export default async function PurchaseOrderDetailPage({
                           <DetailTableTd>{itemNameMap.get(item.itemId) || `Item #${item.itemId}`}</DetailTableTd>
                           <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
                           <DetailTableTd align="right">{Number(item.receivedQty)}</DetailTableTd>
-                          <DetailTableTd align="right">{formatCurrencyExact(Number(item.unitPrice))}</DetailTableTd>
-                          <DetailTableTd align="right">{formatCurrencyExact(Number(item.total))}</DetailTableTd>
+                          <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.unitPrice))}</DetailTableTd>
+                          <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.total))}</DetailTableTd>
                         </DetailTableRow>
                       ))}
                     </DetailTableBody>
@@ -344,7 +344,7 @@ export default async function PurchaseOrderDetailPage({
                         {po.vendorBills.map((b) => (
                           <DetailTableRow key={b.id}>
                             <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/tagihan", b)}>{b.documentNo}</Link></DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrencyExact(Number(b.grandTotal))}</DetailTableTd>
+                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(b.grandTotal))}</DetailTableTd>
                           </DetailTableRow>
                         ))}
                       </DetailTableBody>

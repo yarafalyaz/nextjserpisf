@@ -165,7 +165,7 @@ export default async function SalesReturnDetailPage({
                     <DetailTableTd>{itemById.get(item.itemId)?.name ?? `Barang #${item.itemId}`}</DetailTableTd>
                     <DetailTableTd className="font-mono">{itemById.get(item.itemId)?.sku ?? "-"}</DetailTableTd>
                     <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrencyExact(Number(item.cost))}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.cost))}</DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>

@@ -559,7 +559,7 @@ export default async function WorkOrderDetailPage({
                       <DetailTableRow key={p.id}>
                         <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/pesanan", p)}>{p.documentNo}</Link></DetailTableTd>
                         <DetailTableTd>{p.isService ? "Jasa" : "Barang"}</DetailTableTd>
-                        <DetailTableTd align="right">{formatCurrencyExact(Number(p.grandTotal))}</DetailTableTd>
+                        <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(p.grandTotal))}</DetailTableTd>
                         <DetailTableTd><StatusChip status={p.status} /></DetailTableTd>
                       </DetailTableRow>
                     ))}
@@ -799,11 +799,9 @@ export default async function WorkOrderDetailPage({
                     <DetailTableTd align="right">
                       {Number(item.qty)}
                     </DetailTableTd>
-                    <DetailTableTd align="right">
-                      {formatCurrencyExact(Number(item.cost))}
+                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.cost))}
                     </DetailTableTd>
-                    <DetailTableTd align="right">
-                      {formatCurrencyExact(Number(item.qty) * Number(item.cost))}
+                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.qty) * Number(item.cost))}
                     </DetailTableTd>
                   </DetailTableRow>
                 ))}
@@ -817,8 +815,7 @@ export default async function WorkOrderDetailPage({
                   >
                     Total
                   </DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold">
-                    {formatCurrencyExact(totalCost)}
+                  <DetailTableTd align="right" className="font-bold font-mono tabular-nums text-right">{formatCurrencyExact(totalCost)}
                   </DetailTableTd>
                 </DetailTableFootRow>
               </DetailTableFoot>

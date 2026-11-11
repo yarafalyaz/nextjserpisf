@@ -114,7 +114,7 @@ export function YearEndClosingPanel({ preview }: { preview: YearEndClosingPrevie
                     {line.accountCode} - {line.accountName}
                   </td>
                   <td className="px-3 py-2">{line.profitCenterCode ?? "—"}</td>
-                  <td className="px-3 py-2 text-right">{formatCurrencyExact(line.balance)}</td>
+                  <td className="px-3 py-2 text-right font-mono tabular-nums">{formatCurrencyExact(line.balance)}</td>
                   <td className="px-3 py-2 text-right">
                     {line.closingDirection === "debit" ? formatCurrencyExact(line.closingAmount) : "—"}
                   </td>
@@ -127,7 +127,7 @@ export function YearEndClosingPanel({ preview }: { preview: YearEndClosingPrevie
                 <tr key={`retained-${line.profitCenterId ?? "null"}`} className="border-b bg-muted/20 last:border-0">
                   <td className="px-3 py-2 font-medium">Laba ditahan (lawan penutup)</td>
                   <td className="px-3 py-2">{line.profitCenterCode ?? "—"}</td>
-                  <td className="px-3 py-2 text-right">{formatCurrencyExact(line.netProfit)}</td>
+                  <td className="px-3 py-2 text-right font-mono tabular-nums">{formatCurrencyExact(line.netProfit)}</td>
                   <td className="px-3 py-2 text-right">
                     {line.direction === "debit" ? formatCurrencyExact(Math.abs(line.netProfit)) : "—"}
                   </td>
@@ -142,8 +142,8 @@ export function YearEndClosingPanel({ preview }: { preview: YearEndClosingPrevie
                 <td className="px-3 py-2" colSpan={3}>
                   Total
                 </td>
-                <td className="px-3 py-2 text-right">{formatCurrencyExact(preview.totalDebit)}</td>
-                <td className="px-3 py-2 text-right">{formatCurrencyExact(preview.totalCredit)}</td>
+                <td className="px-3 py-2 text-right font-mono tabular-nums">{formatCurrencyExact(preview.totalDebit)}</td>
+                <td className="px-3 py-2 text-right font-mono tabular-nums">{formatCurrencyExact(preview.totalCredit)}</td>
               </tr>
             </tfoot>
           </table>

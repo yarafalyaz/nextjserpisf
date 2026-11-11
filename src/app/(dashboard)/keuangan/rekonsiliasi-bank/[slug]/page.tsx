@@ -204,8 +204,7 @@ export default async function BankReconciliationDetailPage({
                       <DetailTableTd>
                         {journal ? `${journal.journal.journalNumber}${journal.memo ? ` — ${journal.memo}` : ""}` : "-"}
                       </DetailTableTd>
-                      <DetailTableTd align="right">
-                        {formatCurrencyExact(Number(line?.amount ?? item.amount))}
+                      <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(line?.amount ?? item.amount))}
                       </DetailTableTd>
                       {canWrite && (
                         <DetailTableTd align="right">
@@ -290,7 +289,7 @@ export default async function BankReconciliationDetailPage({
                           : (item.type || "-")}
                     </DetailTableTd>
                     <DetailTableTd>{item.description || "-"}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrencyExact(Number(item.amount))}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.amount))}</DetailTableTd>
                     {canWrite && (
                       <DetailTableTd align="right">
                         <div className="flex items-center justify-end">
