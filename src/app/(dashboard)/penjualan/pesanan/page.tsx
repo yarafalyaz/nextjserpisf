@@ -258,7 +258,7 @@ export async function renderSalesOrdersPage({
 
         <div className="p-4 flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Draft Mengendap
+            Total Draft (Konsep)
           </span>
           <div className="flex items-baseline gap-2">
             <span
@@ -271,7 +271,7 @@ export async function renderSalesOrdersPage({
               {counts.draft}
             </span>
             <span className="text-xs text-muted-foreground">
-              {staleDrafts > 0 ? `${staleDrafts} mengendap` : "menunggu konfirmasi"}
+              {staleDrafts > 0 ? `${staleDrafts} mengendap ≥7 hari` : "belum dikonfirmasi"}
             </span>
           </div>
         </div>
