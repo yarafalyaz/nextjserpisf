@@ -52,17 +52,20 @@ export default async function RecurringTransactionsPage() {
         { label: "Transaksi Berulang" },
       ]} />
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
         <div>
-          <h1 className="text-xl font-bold text-foreground sm:text-2xl">Transaksi Berulang</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Dokumen dibuat sebagai <strong>draf</strong> (jurnal umum atau beban) agar ditinjau dulu sebelum diposting.
-            Penjadwalan otomatis berjalan harian lewat cron <code>/api/cron/recurring-transactions</code>.
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">Jadwal Transaksi Berulang (Recurring)</h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+            Otomatisasi pembuatan draf transaksi (jurnal umum atau beban berkala) yang dieksekusi harian melalui cron backend.
           </p>
         </div>
         <CanCreate permission="manage_recurring_transactions">
-          <Link href="/pengaturan/transaksi-berulang/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover transition-all" id="create-recurring-btn">
-            <Plus className="size-3.5" />
+          <Link
+            href="/pengaturan/transaksi-berulang/tambah"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+            id="create-recurring-btn"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
             <span>Tambah Jadwal</span>
           </Link>
         </CanCreate>
