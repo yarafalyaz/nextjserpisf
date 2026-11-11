@@ -48,19 +48,17 @@ const columns = [
             <span className="text-[11px] text-muted-foreground">
               {formatDate(row.date)}
             </span>
-            <span className="text-muted-foreground/40 text-[10px]">•</span>
             {row.dariPenawaran && row.quotationDocumentNo ? (
-              <span
-                className="inline-flex items-center text-[10px] font-mono px-1.5 py-0.2 rounded bg-muted/80 text-muted-foreground border border-border/60"
-                title={`Berdasarkan Penawaran ${row.quotationDocumentNo}`}
-              >
-                Ref: {row.quotationDocumentNo}
-              </span>
-            ) : (
-              <span className="text-[10px] text-muted-foreground/70">
-                Pesanan Langsung
-              </span>
-            )}
+              <>
+                <span className="text-muted-foreground/40 text-[10px]">•</span>
+                <span
+                  className="inline-flex items-center text-[10px] font-mono px-1.5 py-0.2 rounded bg-muted/80 text-muted-foreground border border-border/60"
+                  title={`Berdasarkan Penawaran ${row.quotationDocumentNo}`}
+                >
+                  Ref: {row.quotationDocumentNo}
+                </span>
+              </>
+            ) : null}
           </div>
         </div>
       )
@@ -71,7 +69,7 @@ const columns = [
     cell: (info) => {
       const row = info.row.original
       return (
-        <div className="flex flex-col max-w-[220px] truncate">
+        <div className="flex flex-col max-w-[240px] truncate">
           <span className="font-medium text-foreground text-xs truncate" title={info.getValue()}>
             {info.getValue()}
           </span>
@@ -79,11 +77,7 @@ const columns = [
             <span className="text-[11px] text-muted-foreground truncate" title={`Penjual: ${row.salesEmployeeName}`}>
               Sales: {row.salesEmployeeName}
             </span>
-          ) : (
-            <span className="text-[11px] text-muted-foreground italic">
-              Tanpa penjual
-            </span>
-          )}
+          ) : null}
         </div>
       )
     },
@@ -110,9 +104,13 @@ const columns = [
     header: "Janji Kirim",
     cell: (info) => {
       const val = info.getValue()
-      return (
-        <span className="text-xs text-muted-foreground whitespace-nowrap">
-          {val ? formatDate(val) : <span className="text-muted-foreground/60 italic">Belum diisi</span>}
+      return val ? (
+        <span className="text-xs text-foreground whitespace-nowrap">
+          {formatDate(val)}
+        </span>
+      ) : (
+        <span className="text-xs text-muted-foreground/50 select-none">
+          -
         </span>
       )
     },
