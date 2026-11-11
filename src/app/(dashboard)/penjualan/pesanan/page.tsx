@@ -258,7 +258,7 @@ export async function renderSalesOrdersPage({
 
         <div className="p-4 flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Total Draft (Konsep)
+            Draft (Konsep)
           </span>
           <div className="flex items-baseline gap-2">
             <span
@@ -270,10 +270,19 @@ export async function renderSalesOrdersPage({
             >
               {counts.draft}
             </span>
-            <span className="text-xs text-muted-foreground">
-              {staleDrafts > 0 ? `${staleDrafts} mengendap ≥7 hari` : "belum dikonfirmasi"}
-            </span>
+            <span className="text-xs text-muted-foreground">dokumen</span>
           </div>
+          <span className="text-xs text-muted-foreground font-mono tabular-nums">
+            {staleDrafts > 0 ? (
+              <span className="text-red-600 dark:text-red-400 font-medium">
+                {staleDrafts === counts.draft
+                  ? "Semua mengendap ≥7 hari"
+                  : `${staleDrafts} dari ${counts.draft} mengendap ≥7 hari`}
+              </span>
+            ) : (
+              "Semua draf baru (<7 hari)"
+            )}
+          </span>
         </div>
       </div>
 
