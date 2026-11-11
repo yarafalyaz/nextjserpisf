@@ -16,6 +16,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/aler
 import { GENDER_CHOICES, OptionGroup } from "@/components/ui/option-group"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
+import { AppDatePicker } from "@/components/ui/date-picker"
 import { Button } from "@/components/ui/button"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
@@ -302,7 +303,7 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="pkpStatus">Status PKP</Label>
-              <select id="pkpStatus" {...register("pkpStatus")} className="form-input" aria-label="Status PKP">
+              <select id="pkpStatus" {...register("pkpStatus")} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Status PKP">
                 <option value="unknown">Belum diketahui</option>
                 <option value="non_pkp">Bukan PKP</option>
                 <option value="pkp">PKP</option>
@@ -311,7 +312,18 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="pkpEffectiveFrom">Tanggal Pengukuhan PKP</Label>
-              <Input id="pkpEffectiveFrom" type="date" {...register("pkpEffectiveFrom")} />
+              <Controller
+                control={control}
+                name="pkpEffectiveFrom"
+                render={({ field }) => (
+                  <AppDatePicker
+                    name="pkpEffectiveFrom"
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    placeholder="Pilih tanggal PKP"
+                  />
+                )}
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="pkpSource">Sumber Status PKP</Label>
