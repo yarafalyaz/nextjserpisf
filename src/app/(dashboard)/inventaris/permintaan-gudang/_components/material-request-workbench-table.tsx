@@ -7,8 +7,10 @@ import { DataTable } from "@/components/ui/data-table"
 import { StatusChip } from "@/components/ui/status-chip"
 import { entityHref } from "@/lib/utils/entity-url"
 import { formatDate, formatNumber } from "@/lib/utils/format"
-import { ArrowDown, ArrowUp, Clock } from "@/components/ui/fontawesome-icons"
+import { ArrowDown, ArrowUp, Clock, FileText } from "@/components/ui/fontawesome-icons"
 import type { MaterialRequestQueueRow } from "@/lib/reports/material-request-data"
+import type { MaterialRequestDraftQueue } from "@/lib/reports/material-request-draft-queue"
+import { MaterialRequestDraftQueueCard } from "@/components/reports/material-request-draft-queue-card"
 
 export interface MaterialRequestWorkbenchItem extends MaterialRequestQueueRow {
   direction: "incoming" | "outgoing"
@@ -25,13 +27,13 @@ const columns = [
         <div className="flex items-center gap-2">
           <Link
             href={entityHref("/inventaris/permintaan-gudang", row)}
-            className="font-mono font-medium text-primary hover:underline"
+            className="font-mono font-medium text-primary hover:underline tabular-nums"
           >
             {row.documentNo}
           </Link>
           {row.isOverdue && (
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300 border border-red-200 dark:border-red-800">
-              <Clock className="size-2.5" /> Terlambat
+              <Clock className="size-2.5" aria-hidden="true" /> Terlambat
             </span>
           )}
         </div>
@@ -52,11 +54,11 @@ const columns = [
         >
           {isIncoming ? (
             <>
-              <ArrowDown className="size-2.5" /> Masuk
+              <ArrowDown className="size-2.5" aria-hidden="true" /> Masuk
             </>
           ) : (
             <>
-              <ArrowUp className="size-2.5" /> Keluar
+              <ArrowUp className="size-2.5" aria-hidden="true" /> Keluar
             </>
           )}
         </span>
@@ -75,7 +77,11 @@ const columns = [
     header: "Perintah Kerja",
     cell: (info) => {
       const val = info.getValue()
-      return val ? <span className="font-mono text-xs">{val}</span> : <span className="text-muted-foreground">-</span>
+      return val ? (
+        <span className="font-mono text-xs tabular-nums">{val}</span>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      )
     },
   }),
   columnHelper.accessor("neededBy", {
@@ -83,7 +89,7 @@ const columns = [
     cell: (info) => {
       const val = info.getValue()
       return val ? (
-        <span className="font-mono text-xs">{formatDate(val)}</span>
+        <span className="font-mono text-xs tabular-nums">{formatDate(val)}</span>
       ) : (
         <span className="text-muted-foreground">-</span>
       )
@@ -91,6 +97,7 @@ const columns = [
   }),
   columnHelper.accessor("lines", {
     header: "Baris",
+    meta: { align: "right" },
     cell: (info) => (
       <span className="font-mono tabular-nums">{formatNumber(info.getValue().length)}</span>
     ),
@@ -98,6 +105,7 @@ const columns = [
   columnHelper.display({
     id: "transfers",
     header: "Transfer Selesai",
+    meta: { align: "right" },
     cell: (info) => {
       const row = info.row.original
       return (
@@ -118,11 +126,13 @@ const columns = [
 export function MaterialRequestWorkbenchTable({
   incoming,
   outgoing,
+  draftQueue,
 }: {
   incoming: MaterialRequestQueueRow[]
   outgoing: MaterialRequestQueueRow[]
+  draftQueue: MaterialRequestDraftQueue
 }) {
-  const [activeTab, setActiveTab] = useState<"all" | "incoming" | "outgoing">("all")
+  const [activeTab, setActiveTab] = useState<"all" | "incoming" | "outgoing" | "drafts">("all")
 
   const combinedData = useMemo<MaterialRequestWorkbenchItem[]>(() => {
     const inc = incoming.map((r) => ({ ...r, direction: "incoming" as const }))
@@ -140,10 +150,18 @@ export function MaterialRequestWorkbenchTable({
     return combinedData
   }, [combinedData, activeTab])
 
+  const staleDrafts = draftQueue.levelCounts.mengendap
+
   const tabButtons = (
-    <div className="flex items-center rounded-lg border border-border bg-muted/40 p-1 text-xs">
+    <div
+      role="tablist"
+      aria-label="Filter antrean permintaan material"
+      className="flex flex-wrap items-center rounded-lg border border-border bg-muted/40 p-1 text-xs"
+    >
       <button
         type="button"
+        role="tab"
+        aria-selected={activeTab === "all"}
         onClick={() => setActiveTab("all")}
         className={`px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
           activeTab === "all"
@@ -151,10 +169,12 @@ export function MaterialRequestWorkbenchTable({
             : "text-muted-foreground hover:text-foreground"
         }`}
       >
-        Semua ({combinedData.length})
+        Semua Aktif ({combinedData.length})
       </button>
       <button
         type="button"
+        role="tab"
+        aria-selected={activeTab === "incoming"}
         onClick={() => setActiveTab("incoming")}
         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
           activeTab === "incoming"
@@ -162,11 +182,13 @@ export function MaterialRequestWorkbenchTable({
             : "text-muted-foreground hover:text-foreground"
         }`}
       >
-        <ArrowDown className="size-3 text-emerald-600 dark:text-emerald-400" />
+        <ArrowDown className="size-3 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
         <span>Permintaan Masuk ({incoming.length})</span>
       </button>
       <button
         type="button"
+        role="tab"
+        aria-selected={activeTab === "outgoing"}
         onClick={() => setActiveTab("outgoing")}
         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
           activeTab === "outgoing"
@@ -174,32 +196,61 @@ export function MaterialRequestWorkbenchTable({
             : "text-muted-foreground hover:text-foreground"
         }`}
       >
-        <ArrowUp className="size-3 text-blue-600 dark:text-blue-400" />
+        <ArrowUp className="size-3 text-blue-600 dark:text-blue-400" aria-hidden="true" />
         <span>Permintaan Keluar ({outgoing.length})</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === "drafts"}
+        onClick={() => setActiveTab("drafts")}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
+          activeTab === "drafts"
+            ? "bg-card text-foreground font-semibold shadow-2xs"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <FileText className="size-3 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+        <span>Konsep / Draft ({draftQueue.totalDocuments})</span>
+        {staleDrafts > 0 && (
+          <span className="ml-0.5 rounded bg-red-500/15 px-1.5 py-0.2 font-mono text-[10px] font-semibold text-red-600 dark:text-red-400 tabular-nums">
+            {staleDrafts} mengendap
+          </span>
+        )}
       </button>
     </div>
   )
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-2xs overflow-hidden p-4">
-      <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="mb-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">Daftar Permintaan Material</h2>
+          <h2 className="text-base font-semibold text-foreground">
+            {activeTab === "drafts"
+              ? "Antrean Permintaan Material Draft"
+              : "Daftar Permintaan Material"}
+          </h2>
           <p className="text-xs text-muted-foreground">
-            Cari, pilah, dan pantau seluruh permintaan transfer internal antar gudang.
+            {activeTab === "drafts"
+              ? "Daftar permintaan material berstatus konsep (draft) yang belum diajukan ke gudang penyedia."
+              : "Cari, pilah, dan pantau seluruh permintaan transfer internal antar gudang."}
           </p>
         </div>
         {tabButtons}
       </div>
 
-      <DataTable
-        data={filteredData}
-        columns={columns}
-        searchColumn="documentNo"
-        searchPlaceholder="Cari nomor dokumen..."
-        pageSize={15}
-        ariaLabel="Tabel Permintaan Antar Gudang"
-      />
+      {activeTab === "drafts" ? (
+        <MaterialRequestDraftQueueCard queue={draftQueue} />
+      ) : (
+        <DataTable
+          data={filteredData}
+          columns={columns}
+          searchColumn="documentNo"
+          searchPlaceholder="Cari nomor dokumen..."
+          pageSize={15}
+          ariaLabel="Tabel Permintaan Antar Gudang"
+        />
+      )}
     </div>
   )
 }

@@ -5,7 +5,6 @@ import Link from "next/link"
 import { requirePermission } from "@/lib/auth/permissions"
 import { getMaterialRequestQueue } from "@/lib/reports/material-request-data"
 import { getMaterialRequestDraftQueue } from "@/lib/reports/material-request-draft-queue-data"
-import { MaterialRequestDraftQueueCard } from "@/components/reports/material-request-draft-queue-card"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
 import { Plus } from "@/components/ui/fontawesome-icons"
@@ -24,34 +23,34 @@ export default async function MaterialRequestsPage() {
   const totalIncoming = queue.incoming.length
   const totalOutgoing = queue.outgoing.length
   const totalOverdue = [...queue.incoming, ...queue.outgoing].filter((r) => r.isOverdue).length
-  const totalTransfersCompleted = [...queue.incoming, ...queue.outgoing].reduce(
-    (acc, r) => acc + (r.receivedTransferCount || 0),
-    0
-  )
+  const totalDrafts = draftQueue.totalDocuments
+  const totalStaleDrafts = draftQueue.levelCounts.mengendap
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-        { label: "Dasbor", href: "/" },
-        { label: "Inventaris", href: "/inventaris" },
-        { label: "Permintaan Antar Gudang" },
-      ]} />
+      <AppBreadcrumbs
+        items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Inventaris", href: "/inventaris" },
+          { label: "Permintaan Antar Gudang" },
+        ]}
+      />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-2 border-b border-border">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
             Permintaan Antar Gudang
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5 text-pretty">
             Manajemen permintaan transfer material internal antar gudang dan pabrik.
           </p>
         </div>
         <CanCreate permission="create_material_requests">
           <Link
             href="/inventaris/permintaan-gudang/tambah"
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer shadow-2xs"
+            className="inline-flex items-center gap-2 px-3.5 py-2 min-h-11 sm:min-h-9 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer shadow-2xs"
           >
-            <Plus className="size-3.5" />
+            <Plus className="size-3.5" aria-hidden="true" />
             <span>Buat Permintaan</span>
           </Link>
         </CanCreate>
@@ -101,23 +100,30 @@ export default async function MaterialRequestsPage() {
 
         <div className="p-4 flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Transfer Diterima
+            Konsep (Draft)
           </span>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-foreground">
-              {totalTransfersCompleted}
+            <span
+              className={`text-2xl font-bold font-mono tracking-tight tabular-nums ${
+                totalStaleDrafts > 0
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-foreground"
+              }`}
+            >
+              {totalDrafts}
             </span>
-            <span className="text-xs text-muted-foreground">batch selesai</span>
+            <span className="text-xs text-muted-foreground">
+              {totalStaleDrafts > 0 ? `${totalStaleDrafts} mengendap` : "belum diajukan"}
+            </span>
           </div>
         </div>
       </div>
 
-      <MaterialRequestDraftQueueCard queue={draftQueue} />
-
-      {/* Unified Enterprise DataTable with Segmented Tabs */}
+      {/* Unified Enterprise DataTable with Segmented Tabs (termasuk Tab Konsep/Draft) */}
       <MaterialRequestWorkbenchTable
         incoming={queue.incoming}
         outgoing={queue.outgoing}
+        draftQueue={draftQueue}
       />
     </div>
   )

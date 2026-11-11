@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { BoxArchive } from "@/components/ui/fontawesome-icons"
 
 /** Rangka kartu laporan bersama: section berlabel + kepala + isi/kosong. */
 export function ReportCardShell({
@@ -23,18 +24,25 @@ export function ReportCardShell({
   return (
     <section
       aria-label={label}
-      className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
+      className="bg-card rounded-lg border border-border shadow-2xs overflow-hidden"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
-        <h2 className="text-[0.9375rem] font-semibold text-foreground">{title}</h2>
-        <p className="text-xs text-muted-foreground">{summary}</p>
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-border bg-muted/20">
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+        <p className="text-xs font-mono tabular-nums text-muted-foreground">{summary}</p>
       </div>
       <div className={contentClassName ? `p-4 px-5 ${contentClassName}` : "p-4 px-5"}>
-        {notice ? <p className="text-xs text-muted-foreground">{notice}</p> : null}
+        {notice ? (
+          <div className="mb-3 rounded-md border border-border/70 bg-muted/30 px-3 py-2">
+            <p className="text-xs text-muted-foreground leading-relaxed text-pretty">{notice}</p>
+          </div>
+        ) : null}
         {isEmpty ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-            {emptyText}
-          </p>
+          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center text-muted-foreground">
+            <div className="flex size-9 items-center justify-center rounded-full bg-muted/60 text-muted-foreground">
+              <BoxArchive className="size-4" aria-hidden="true" />
+            </div>
+            <p className="text-xs font-medium text-muted-foreground">{emptyText}</p>
+          </div>
         ) : (
           children
         )}
@@ -52,7 +60,7 @@ export function ReportSummaryStrip({
       {items.map(([label, count]) => (
         <div key={label} className="flex items-baseline gap-2">
           <dt className="text-xs text-muted-foreground">{label}</dt>
-          <dd className="text-sm font-semibold text-foreground">{count}</dd>
+          <dd className="text-sm font-semibold font-mono tabular-nums text-foreground">{count}</dd>
         </div>
       ))}
     </dl>
