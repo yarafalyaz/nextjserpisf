@@ -12,10 +12,7 @@ import type {
   SalesOrderDraftLevel,
 } from "@/lib/reports/sales-order-draft-queue"
 import {
-  SALES_ORDER_DRAFT_AGE_COLUMN_TEXT,
-  SALES_ORDER_DRAFT_DELIVERY_COLUMN_TEXT,
   SALES_ORDER_DRAFT_LEVEL_LABELS,
-  SALES_ORDER_DRAFT_NO_DELIVERY_DATE_TEXT,
 } from "@/lib/reports/sales-order-draft-queue"
 import { ArrowUpRight } from "@/components/ui/fontawesome-icons"
 
@@ -31,12 +28,6 @@ interface SalesOrderDraftTableProps {
 const columnHelper = createColumnHelper<SalesOrderDraftTableRow>()
 
 const columns = [
-  columnHelper.accessor("customerName", {
-    header: "Pelanggan",
-    cell: (info) => (
-      <span className="font-medium text-foreground">{info.getValue()}</span>
-    ),
-  }),
   columnHelper.accessor("documentNo", {
     header: "No. Pesanan",
     cell: (info) => {
@@ -46,35 +37,50 @@ const columns = [
         slug: row.slug,
       })
       return (
-        <Link
-          href={href}
-          className="font-mono text-xs font-semibold text-primary hover:underline hover:text-primary/80"
-        >
-          {info.getValue()}
-        </Link>
+        <div className="flex flex-col gap-0.5">
+          <Link
+            href={href}
+            className="font-mono text-xs font-semibold text-primary hover:underline hover:text-primary/80"
+          >
+            {info.getValue()}
+          </Link>
+          <span className="text-[11px] text-muted-foreground">
+            {formatDate(row.date)}
+          </span>
+        </div>
       )
     },
   }),
-  columnHelper.accessor("salesEmployeeName", {
-    header: "Penjual",
-    cell: (info) => info.getValue() ?? <span className="text-muted-foreground">—</span>,
-  }),
-  columnHelper.accessor("date", {
-    header: "Tanggal",
-    cell: (info) => (
-      <span className="text-xs text-muted-foreground whitespace-nowrap">
-        {formatDate(info.getValue())}
-      </span>
-    ),
+  columnHelper.accessor("customerName", {
+    header: "Pelanggan",
+    cell: (info) => {
+      const row = info.row.original
+      return (
+        <div className="flex flex-col max-w-[200px] truncate">
+          <span className="font-medium text-foreground text-xs truncate" title={info.getValue()}>
+            {info.getValue()}
+          </span>
+          {row.salesEmployeeName ? (
+            <span className="text-[11px] text-muted-foreground truncate" title={`Penjual: ${row.salesEmployeeName}`}>
+              Sales: {row.salesEmployeeName}
+            </span>
+          ) : (
+            <span className="text-[11px] text-muted-foreground italic">
+              Tanpa penjual
+            </span>
+          )}
+        </div>
+      )
+    },
   }),
   columnHelper.accessor("umurDraftHari", {
-    header: SALES_ORDER_DRAFT_AGE_COLUMN_TEXT,
+    header: "Umur Draft",
     cell: (info) => {
       const days = info.getValue()
       const isMengendap = info.row.original.tingkat === "mengendap"
       return (
         <span
-          className={`font-mono text-xs font-semibold tabular-nums px-2 py-0.5 rounded ${
+          className={`inline-flex items-center font-mono text-xs font-semibold tabular-nums px-2 py-0.5 rounded ${
             isMengendap
               ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200 dark:border-red-900/50"
               : "bg-muted text-muted-foreground"
@@ -86,12 +92,12 @@ const columns = [
     },
   }),
   columnHelper.accessor("deliveryDate", {
-    header: SALES_ORDER_DRAFT_DELIVERY_COLUMN_TEXT,
+    header: "Janji Kirim",
     cell: (info) => {
       const val = info.getValue()
       return (
         <span className="text-xs text-muted-foreground whitespace-nowrap">
-          {val ? formatDate(val) : SALES_ORDER_DRAFT_NO_DELIVERY_DATE_TEXT}
+          {val ? formatDate(val) : <span className="text-muted-foreground/60 italic">Belum diisi</span>}
         </span>
       )
     },
@@ -99,11 +105,13 @@ const columns = [
   columnHelper.accessor("asalLabel", {
     header: "Asal",
     cell: (info) => (
-      <span className="text-xs text-muted-foreground">{info.getValue()}</span>
+      <span className="text-xs text-muted-foreground whitespace-nowrap">
+        {info.getValue()}
+      </span>
     ),
   }),
   columnHelper.accessor("grandTotal", {
-    header: "Nilai",
+    header: "Nilai Total",
     cell: (info) => (
       <span className="font-mono text-xs font-medium tabular-nums text-foreground block text-right">
         {formatCurrencyExact(info.getValue())}
@@ -135,7 +143,7 @@ const columns = [
       return (
         <Link
           href={href}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border border-border bg-card hover:bg-muted text-foreground transition-colors cursor-pointer shadow-2xs"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border border-border bg-card hover:bg-muted text-foreground transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
         >
           <span>Buka Pesanan</span>
           <ArrowUpRight className="size-3 text-muted-foreground" aria-hidden="true" />
