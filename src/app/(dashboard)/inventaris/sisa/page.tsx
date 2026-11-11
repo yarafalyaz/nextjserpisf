@@ -12,6 +12,7 @@ import {
   DetailTableTd,
 } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
+import { StatusChip } from "@/components/ui/status-chip"
 import { RemnantForm, ConsumeRemnantForm, ScrapRemnantForm } from "./_components/remnant-forms"
 
 import type { Metadata } from "next"
@@ -84,7 +85,7 @@ export default async function RemnantPage() {
                         : "—"}
                     </DetailTableTd>
                     <DetailTableTd>{r.scrapWeightKg != null ? String(r.scrapWeightKg) : "—"}</DetailTableTd>
-                    <DetailTableTd>{r.status}</DetailTableTd>
+                    <DetailTableTd><StatusChip status={r.status} /></DetailTableTd>
                     {canCreate && (
                       <DetailTableTd align="right">
                         {r.status === "usable" && (
