@@ -22,6 +22,8 @@ export default async function CreateInvoiceExchangePage({
   const params = await searchParams
   const customerId = Number(params.customer)
   const validCustomerId = Number.isInteger(customerId) && customerId > 0 ? customerId : null
+  const initialInvoiceId = Number(params.invoiceId)
+  const validInitialInvoiceId = Number.isInteger(initialInvoiceId) && initialInvoiceId > 0 ? initialInvoiceId : null
 
   const customers = await prisma.customer.findMany({
     where: { isActive: true, deletedAt: null },
@@ -84,6 +86,7 @@ export default async function CreateInvoiceExchangePage({
         customerOptions={customers.map((customer) => ({ value: String(customer.id), label: customer.name }))}
         customerId={validCustomerId ? String(validCustomerId) : ""}
         invoices={invoices}
+        initialSelectedInvoiceIds={validInitialInvoiceId ? [validInitialInvoiceId] : []}
       />
     </div>
   )

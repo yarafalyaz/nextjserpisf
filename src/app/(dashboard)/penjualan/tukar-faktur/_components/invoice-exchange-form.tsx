@@ -31,10 +31,12 @@ export function InvoiceExchangeForm({
   customerOptions,
   customerId,
   invoices,
+  initialSelectedInvoiceIds = [],
 }: {
   customerOptions: Option[]
   customerId: string
   invoices: ExchangeableInvoice[]
+  initialSelectedInvoiceIds?: number[]
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -43,7 +45,13 @@ export function InvoiceExchangeForm({
   const [receiptNumber, setReceiptNumber] = useState("")
   const [dueDate, setDueDate] = useState("")
   const [notes, setNotes] = useState("")
-  const [selected, setSelected] = useState<number[]>([])
+  const [selected, setSelected] = useState<number[]>(() => {
+    if (initialSelectedInvoiceIds.length > 0) {
+      const availableIds = new Set(invoices.map((inv) => inv.id))
+      return initialSelectedInvoiceIds.filter((id) => availableIds.has(id))
+    }
+    return []
+  })
 
   const totals = useMemo(() => {
     const chosen = invoices.filter((invoice) => selected.includes(invoice.id))

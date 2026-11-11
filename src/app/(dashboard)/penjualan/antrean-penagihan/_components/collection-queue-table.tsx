@@ -229,7 +229,7 @@ export function CollectionQueueTable({
 
             {canCreateExchange && row.tahap === "belum_diserahkan" ? (
               <Link
-                href="/penjualan/tukar-faktur/tambah"
+                href={`/penjualan/tukar-faktur/tambah?customer=${row.customerId}&invoiceId=${row.invoiceId}`}
                 className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md border border-border bg-card hover:bg-muted text-foreground transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
                 title="Buat Dokumen Tukar Faktur"
               >
