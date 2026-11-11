@@ -240,9 +240,7 @@ export function WorkOrderForm({
                     <th
                       className="text-left py-2 px-2 font-medium text-muted-foreground"
                       style={{ width: "80px" }}
-                    >
-                      Jml
-                    </th>
+                    >Kuantitas</th>
                     <th className="text-left py-2 px-2 font-medium text-muted-foreground">
                       Deskripsi
                     </th>

@@ -291,7 +291,7 @@ export function SalesInvoiceForm({
               <thead>
                 <tr className="text-left text-muted-foreground border-b border-default">
                   <th className="py-2 pr-3 font-medium">Barang</th>
-                  <th className="py-2 pr-3 font-medium w-24">Jml</th>
+                  <th className="py-2 pr-3 font-medium w-24">Kuantitas</th>
                   <th className="py-2 pr-3 font-medium w-36">Harga</th>
                   <th className="py-2 pr-3 font-medium w-32">Diskon</th>
                   <th className="py-2 pr-3 font-medium w-32 text-right">Total</th>

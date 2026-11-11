@@ -545,7 +545,7 @@ export function PurchaseOrderForm({
               <thead>
                 <tr>
                   <th>Item</th>
-                  <th style={{ width: "80px" }}>Jml</th>
+                  <th style={{ width: "80px" }}>Kuantitas</th>
                   <th style={{ width: "120px" }}>Harga</th>
                   <th style={{ width: "100px" }}>Diskon</th>
                   <th style={{ width: "120px" }}>Total</th>

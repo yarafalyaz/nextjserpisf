@@ -242,7 +242,7 @@ export function TimesheetForm({
               readOnly
               value={hours}
               placeholder="Otomatis dari jam mulai & selesai"
-              className="bg-muted"
+              className="bg-muted text-right font-mono tabular-nums"
             />
           </FormGroup>
         </FormSection>

@@ -50,7 +50,7 @@ export function ReturnItemsSection<TItem extends { itemId: number; qty: number; 
         <thead>
           <tr>
             <th>Item</th>
-            <th style={{ width: "100px" }}>Jml</th>
+            <th style={{ width: "100px" }}>Kuantitas</th>
             {extraHeaders}
             <th style={{ width: "40px" }}></th>
           </tr>

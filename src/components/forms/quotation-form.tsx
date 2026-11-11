@@ -135,7 +135,7 @@ function SectionItems({
           <tr>
             <th style={{ minWidth: "200px" }}>Item</th>
             <th style={{ minWidth: "140px" }}>Deskripsi</th>
-            <th style={{ width: "70px" }}>Jml</th>
+            <th style={{ width: "70px" }}>Kuantitas</th>
             <th style={{ width: "70px" }}>Satuan</th>
             <th style={{ width: "120px" }}>Harga Satuan</th>
             <th style={{ width: "160px" }}>Diskon</th>

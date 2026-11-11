@@ -167,7 +167,7 @@ export function CurrencyInput({
         onBlur={handleBlur}
         onFocus={handleFocus}
         placeholder={placeholder}
-        className={cn(prefix ? "pl-10" : "", className)}
+        className={cn("text-right font-mono tabular-nums", prefix ? "pl-10" : "", className)}
         style={style}
         required={required}
         disabled={disabled}

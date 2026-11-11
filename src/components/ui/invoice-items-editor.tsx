@@ -294,9 +294,7 @@ export function InvoiceItemsEditor({
                   <th
                     scope="col"
                     className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase"
-                  >
-                    Jml
-                  </th>
+                  >Kuantitas</th>
                   <th
                     scope="col"
                     className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase"
@@ -622,9 +620,7 @@ export function InvoiceItemsEditor({
               <th
                 scope="col"
                 className="text-right py-2 px-1 text-xs font-medium text-muted-foreground uppercase w-[10%]"
-              >
-                Jml
-              </th>
+              >Kuantitas</th>
               <th
                 scope="col"
                 className="text-right py-2 px-1 text-xs font-medium text-muted-foreground uppercase w-[20%]"
