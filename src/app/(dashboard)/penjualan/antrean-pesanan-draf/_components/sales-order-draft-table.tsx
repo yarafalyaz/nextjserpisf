@@ -37,16 +37,31 @@ const columns = [
         slug: row.slug,
       })
       return (
-        <div className="flex flex-col gap-0.5">
+        <div className="flex flex-col gap-1">
           <Link
             href={href}
             className="font-mono text-xs font-semibold text-primary hover:underline hover:text-primary/80"
           >
             {info.getValue()}
           </Link>
-          <span className="text-[11px] text-muted-foreground">
-            {formatDate(row.date)}
-          </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] text-muted-foreground">
+              {formatDate(row.date)}
+            </span>
+            <span className="text-muted-foreground/40 text-[10px]">•</span>
+            {row.dariPenawaran && row.quotationDocumentNo ? (
+              <span
+                className="inline-flex items-center text-[10px] font-mono px-1.5 py-0.2 rounded bg-muted/80 text-muted-foreground border border-border/60"
+                title={`Berdasarkan Penawaran ${row.quotationDocumentNo}`}
+              >
+                Ref: {row.quotationDocumentNo}
+              </span>
+            ) : (
+              <span className="text-[10px] text-muted-foreground/70">
+                Pesanan Langsung
+              </span>
+            )}
+          </div>
         </div>
       )
     },
@@ -56,7 +71,7 @@ const columns = [
     cell: (info) => {
       const row = info.row.original
       return (
-        <div className="flex flex-col max-w-[200px] truncate">
+        <div className="flex flex-col max-w-[220px] truncate">
           <span className="font-medium text-foreground text-xs truncate" title={info.getValue()}>
             {info.getValue()}
           </span>
@@ -101,14 +116,6 @@ const columns = [
         </span>
       )
     },
-  }),
-  columnHelper.accessor("asalLabel", {
-    header: "Asal",
-    cell: (info) => (
-      <span className="text-xs text-muted-foreground whitespace-nowrap">
-        {info.getValue()}
-      </span>
-    ),
   }),
   columnHelper.accessor("grandTotal", {
     header: "Nilai Total",
