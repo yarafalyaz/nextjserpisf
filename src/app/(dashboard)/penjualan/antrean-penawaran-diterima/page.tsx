@@ -40,7 +40,7 @@ export default async function AcceptedQuotationQueuePage() {
         items={[
           { label: "Dasbor", href: "/" },
           { label: "Penjualan", href: "/penjualan" },
-          { label: "Penawaran Harga", href: "/penjualan/penawaran" },
+          { label: "Penawaran", href: "/penjualan/penawaran" },
           { label: "Antrean Penawaran Diterima" },
         ]}
       />

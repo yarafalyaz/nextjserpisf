@@ -31,7 +31,7 @@ export default async function SalesInvoiceDraftQueuePage() {
         items={[
           { label: "Dasbor", href: "/" },
           { label: "Penjualan", href: "/penjualan" },
-          { label: "Faktur Penjualan", href: "/penjualan/faktur" },
+          { label: "Faktur", href: "/penjualan/faktur" },
           { label: TITLE },
         ]}
       />

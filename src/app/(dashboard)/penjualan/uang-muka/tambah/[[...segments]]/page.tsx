@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/db/prisma";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/shadcn/alert";
+import { Button } from "@/components/ui/button";
 import { DownPaymentForm } from "@/components/forms/down-payment-form";
 import { getActivePaymentMethods } from "@/lib/services/method.service";
 import { loadDownPaymentFormOptions } from "../../_components/down-payment-options";
@@ -107,14 +108,24 @@ export default async function CreateDownPaymentPage({
         </Alert>
       )}
       {quotations.length === 0 && (
-        <Alert>
-          <AlertTitle>Belum ada penawaran yang memenuhi syarat</AlertTitle>
-          <AlertDescription>
-            Uang muka penjualan hanya bisa dibuat dari Penawaran berstatus{" "}
-            <strong>Diterima</strong>, <strong>Disetujui</strong>, atau yang sudah{" "}
-            <strong>terkonversi</strong> menjadi Pesanan Penjualan. Penawaran yang baru
-            dibuat selalu berstatus konsep — setujui dulu lewat tombol{" "}
-            <strong>Setujui</strong> di halaman detail penawaran.
+        <Alert className="border-amber-500/30 bg-amber-500/5 text-amber-950 dark:text-amber-200">
+          <AlertTitle className="font-semibold text-amber-900 dark:text-amber-100">
+            Memerlukan Penawaran yang Disetujui
+          </AlertTitle>
+          <AlertDescription className="mt-2 flex flex-col gap-3 text-xs leading-relaxed text-amber-900/90 dark:text-amber-200/90">
+            <p>
+              Uang muka penjualan hanya dapat dikaitkan dengan Penawaran berstatus{" "}
+              <strong>Diterima</strong>, <strong>Disetujui</strong>, atau yang sudah{" "}
+              <strong>terkonversi</strong> menjadi Pesanan Penjualan. Penawaran draf harus disetujui terlebih dahulu agar komitmen nilai komersial sah secara akuntansi.
+            </p>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Button href="/penjualan/penawaran" size="sm" variant="outline" className="border-amber-600/30 bg-background text-foreground hover:bg-amber-50 dark:hover:bg-amber-950/40">
+                Buka Daftar Penawaran
+              </Button>
+              <Button href="/penjualan/antrean-penawaran" size="sm" variant="ghost" className="text-amber-900 hover:text-amber-950 hover:bg-amber-100/50 dark:text-amber-200 dark:hover:bg-amber-950/60">
+                Lihat Antrean Persetujuan
+              </Button>
+            </div>
           </AlertDescription>
         </Alert>
       )}

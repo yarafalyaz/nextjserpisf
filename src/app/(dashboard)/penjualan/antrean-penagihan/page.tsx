@@ -62,7 +62,7 @@ export default async function CollectionQueuePage() {
         items={[
           { label: "Dasbor", href: "/" },
           { label: "Penjualan", href: "/penjualan" },
-          { label: "Faktur Penjualan", href: "/penjualan/faktur" },
+          { label: "Faktur", href: "/penjualan/faktur" },
           { label: COLLECTION_QUEUE_TITLE },
         ]}
       />
