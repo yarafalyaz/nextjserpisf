@@ -16,6 +16,7 @@ import { FormSelect } from "@/components/ui/form-select"
 import { AppMonthPicker } from "@/components/ui/month-picker"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
+import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { useTaxDocSubmit, useTaxDocAction, type TaxOption } from "./tax-doc-submit"
@@ -142,8 +143,8 @@ export function TaxInvoiceForm({
         </div>
         {direction === "out" ? (
           <div className="flex min-h-11 items-center gap-2 sm:col-span-2">
-            <input id="legacy15Confirmed" name="legacy15Confirmed" type="checkbox" value="true" className="size-4 shrink-0 rounded border-default" />
-            <Label htmlFor="legacy15Confirmed" className="font-normal">
+            <input id="legacy15Confirmed" name="legacy15Confirmed" type="checkbox" value="true" className="size-4 shrink-0 rounded border-default text-primary focus:ring-primary" />
+            <Label htmlFor="legacy15Confirmed" className="font-normal cursor-pointer">
               NPWP lawan 15 digit (legacy) — saya konfirmasi terbit tetap dilanjutkan dengan NPWP 15 digit
             </Label>
           </div>

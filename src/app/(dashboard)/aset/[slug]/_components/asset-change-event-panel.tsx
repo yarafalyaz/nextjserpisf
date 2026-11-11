@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
+import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import {
@@ -377,8 +378,8 @@ export function AssetChangeEventPanel({
                       <Input id="ace-carryingWithoutImpairment" name="carryingWithoutImpairment" type="number" step="0.01" min="0" required placeholder="0" />
                     </Field>
                     <div className="flex items-center gap-2 pt-6">
-                      <input id="ace-isGoodwill" name="isGoodwillOrNonAmortizing" type="checkbox" value="true" className="size-4 min-h-11 min-w-11 rounded border-default sm:min-h-4 sm:min-w-4" />
-                      <Label htmlFor="ace-isGoodwill">Goodwill / tak berwujud tanpa amortisasi</Label>
+                      <Checkbox id="ace-isGoodwill" name="isGoodwillOrNonAmortizing" value="true" />
+                      <Label htmlFor="ace-isGoodwill" className="cursor-pointer">Goodwill / tak berwujud tanpa amortisasi</Label>
                     </div>
                   </>
                 )}
@@ -433,8 +434,8 @@ export function AssetChangeEventPanel({
 
             {kind === "FISCAL_METHOD_CHANGE" && (
               <div className="flex items-center gap-2 pt-6">
-                <input id="ace-isBuildingFiscal" name="isBuildingFiscal" type="checkbox" value="true" className="size-4 min-h-11 min-w-11 rounded border-default sm:min-h-4 sm:min-w-4" />
-                <Label htmlFor="ace-isBuildingFiscal">Aset bangunan (fiskal)</Label>
+                <Checkbox id="ace-isBuildingFiscal" name="isBuildingFiscal" value="true" />
+                <Label htmlFor="ace-isBuildingFiscal" className="cursor-pointer">Aset bangunan (fiskal)</Label>
               </div>
             )}
 

@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as typeof ResizeObserver
+
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 import { createRoot, type Root } from "react-dom/client"
