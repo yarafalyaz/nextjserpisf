@@ -46,7 +46,7 @@ const columns = [
     header: () => <div className="text-right">Total</div>,
     cell: (info) => (
       <div className="text-right font-mono tabular-nums font-medium text-foreground">
-        Rp {formatCurrencyExact(Number(info.getValue()))}
+        {formatCurrencyExact(Number(info.getValue()))}
       </div>
     ),
   }),
