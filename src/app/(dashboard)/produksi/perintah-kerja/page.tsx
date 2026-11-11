@@ -182,7 +182,7 @@ export async function renderWorkOrdersPage({
           <CanCreate permission="create_work_orders">
             <Link
               href="/produksi/perintah-kerja/tambah"
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary-hover hover:-translate-y-px hover:shadow-md"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary-hover hover:shadow-md"
               id="create-wo-btn"
             >
               <Plus className="h-4 w-4" />

@@ -78,7 +78,7 @@ export default async function TaxReportPage({
           <CanCreate permission="create_tax_invoices">
             <Link
               href="/keuangan/dokumen-pajak/faktur/tambah"
-              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-default bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:-translate-y-px hover:shadow-md"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-default bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:shadow-md"
             >
               Terbitkan Faktur Pajak
             </Link>
@@ -86,7 +86,7 @@ export default async function TaxReportPage({
           <CanCreate permission="manage_withholding_certificates">
             <Link
               href="/keuangan/dokumen-pajak/bupot/tambah"
-              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-default bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:-translate-y-px hover:shadow-md"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-default bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:shadow-md"
             >
               Terbitkan Bukti Potong
             </Link>

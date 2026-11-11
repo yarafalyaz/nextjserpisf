@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -71,10 +72,11 @@ export default async function WorkflowPage({
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Alur Persetujuan</h1>
         <Link
           href="/pengaturan/workflow/tambah"
-          className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+          className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
         >
-          + Tambah Alur Persetujuan
-        </Link>
+            <Plus className="size-3.5" />
+            <span>Tambah Alur Persetujuan</span>
+          </Link>
       </div>
 
       <WorkflowTable data={data} total={total} page={page} pageSize={pageSize} />

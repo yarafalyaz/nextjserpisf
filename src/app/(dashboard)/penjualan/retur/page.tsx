@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -129,10 +130,11 @@ export async function renderSalesReturnsPage({
         <CanCreate permission="create_sales_returns">
           <Link
             href="/penjualan/retur/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
             id="create-return-btn"
           >
-            + Buat Retur
+            <Plus className="size-3.5" />
+            <span>Buat Retur</span>
           </Link>
         </CanCreate>
       </div>

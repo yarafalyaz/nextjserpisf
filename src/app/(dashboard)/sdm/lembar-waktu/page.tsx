@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { parsePagination } from "@/lib/utils/pagination"
 export const dynamic = "force-dynamic"
 
@@ -58,9 +59,10 @@ export default async function TimesheetsPage({
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Lembar Waktu</h1>
         <CanCreate permission="create_timesheets">
-          <Link href="/sdm/lembar-waktu/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-timesheet-btn">
-          + Tambah Timesheet
-        </Link>
+          <Link href="/sdm/lembar-waktu/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all" id="create-timesheet-btn">
+            <Plus className="size-3.5" />
+            <span>Tambah Timesheet</span>
+          </Link>
         </CanCreate>
       </div>
 

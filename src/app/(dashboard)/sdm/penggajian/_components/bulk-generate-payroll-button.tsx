@@ -17,7 +17,7 @@ import { generateBulkPayroll } from "@/actions/hrm.actions"
 import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { useRouter } from "next/navigation"
-import { Sparkles, Loader2 } from "@/components/ui/fontawesome-icons"
+import { Calculator, Loader2 } from "@/components/ui/fontawesome-icons"
 import { cn } from "@/lib/utils"
 import {
   PAYROLL_FREQUENCIES,
@@ -168,10 +168,10 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
       <Button
         onPress={handleOpen}
         variant="primary"
-        className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white hover:-translate-y-px hover:shadow-md transition-all h-auto"
+        className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-md shadow-2xs transition-colors"
       >
-        <Sparkles size={16} />
-        Buat Gaji Bulanan
+        <Calculator className="size-3.5" />
+        <span>Buat Gaji Bulanan</span>
       </Button>
 
       <Dialog open={isOpen} onOpenChange={handleOpenChange}>

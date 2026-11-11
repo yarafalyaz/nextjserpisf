@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -39,7 +40,8 @@ export default async function WithholdingTaxTypesPage() {
         </div>
         <CanCreate permission="manage_withholding_tax">
           <Link href="/pengaturan/pajak-potong/tambah" className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover transition-all" id="create-withholding-tax-btn">
-            + Tambah Jenis PPh
+            <Plus className="size-3.5" />
+            <span>Tambah Jenis PPh</span>
           </Link>
         </CanCreate>
       </div>

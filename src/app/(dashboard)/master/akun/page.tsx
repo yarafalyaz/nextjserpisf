@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
 import { Pencil } from "@/components/ui/fontawesome-icons"
 export const dynamic = "force-dynamic"
@@ -74,8 +75,9 @@ export default async function AccountsPage({
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Bagan Akun</h1>
         {canCreate && (
           <CanCreate permission="create_accounts">
-          <Link href="/master/akun/tambah" className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-account-btn">
-            + Tambah Akun
+          <Link href="/master/akun/tambah" className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all" id="create-account-btn">
+            <Plus className="size-3.5" />
+            <span>Tambah Akun</span>
           </Link>
         </CanCreate>
         )}

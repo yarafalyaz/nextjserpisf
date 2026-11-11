@@ -233,7 +233,7 @@ export default async function AttendancePage({
           <CanCreate permission="create_attendance">
             <Link
               href="/sdm/absensi/tambah"
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
             >
               + Catat Absensi
             </Link>

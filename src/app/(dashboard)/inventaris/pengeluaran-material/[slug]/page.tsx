@@ -105,7 +105,7 @@ export default async function MaterialIssueDetailPage({
                   label="Posting"
                 />
                 <CanCreate permission="edit_material_issues">
-                  <Link href={entityEditHref("/inventaris/pengeluaran-material", issue)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default text-foreground hover:bg-surface-secondary hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
+                  <Link href={entityEditHref("/inventaris/pengeluaran-material", issue)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default text-foreground hover:bg-surface-secondary hover:shadow-md transition-all">Ubah</Link>
                 </CanCreate>
                 <CanCreate permission="delete_material_issues">
                   <DeleteButton id={issue.id} action={deleteMaterialIssue} />

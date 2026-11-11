@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 export const dynamic = "force-dynamic"
 
 import Link from "next/link"
@@ -61,7 +62,8 @@ export default async function RecurringTransactionsPage() {
         </div>
         <CanCreate permission="manage_recurring_transactions">
           <Link href="/pengaturan/transaksi-berulang/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover transition-all" id="create-recurring-btn">
-            + Tambah Jadwal
+            <Plus className="size-3.5" />
+            <span>Tambah Jadwal</span>
           </Link>
         </CanCreate>
       </div>

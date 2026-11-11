@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -110,10 +111,11 @@ export default async function WorkCalendarPage({
           <CanCreate permission="create_holidays">
             <Link
               href="/sdm/kalender-kerja/libur/tambah"
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
             >
-              + Tambah
-            </Link>
+            <Plus className="size-3.5" />
+            <span>Tambah</span>
+          </Link>
           </CanCreate>
         </div>
         <div className="p-4 px-5">
@@ -170,10 +172,11 @@ export default async function WorkCalendarPage({
           <CanCreate permission="create_holidays">
             <Link
               href="/sdm/kalender-kerja/libur-departemen/tambah"
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
             >
-              + Tambah
-            </Link>
+            <Plus className="size-3.5" />
+            <span>Tambah</span>
+          </Link>
           </CanCreate>
         </div>
         <div className="p-4 px-5">
@@ -229,10 +232,11 @@ export default async function WorkCalendarPage({
           <CanCreate permission="create_work_schedules">
             <Link
               href="/sdm/kalender-kerja/jadwal/tambah"
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
             >
-              + Tambah
-            </Link>
+            <Plus className="size-3.5" />
+            <span>Tambah</span>
+          </Link>
           </CanCreate>
         </div>
         <div className="p-4 px-5">

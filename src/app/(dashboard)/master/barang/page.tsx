@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -159,8 +160,9 @@ export async function renderItemsPage(
           )}
           {canCreate && (
             <Link href="/master/barang/tambah" id="create-item-btn" className="inline-flex items-center gap-1 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
-              + Tambah Barang
-            </Link>
+            <Plus className="size-3.5" />
+            <span>Tambah Barang</span>
+          </Link>
           )}
         </div>
       </div>

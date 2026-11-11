@@ -195,7 +195,7 @@ export function NotificationsWidget() {
                   <alert.icon className="size-3.5 text-muted-foreground" aria-hidden="true" />
                 </div>
                 <ArrowUpRight
-                  className="size-3.5 text-muted-foreground/50 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground"
+                  className="size-3.5 text-muted-foreground/50 transition-colors duration-150 group-hover:translate-x-0.5 group- group-hover:text-foreground"
                   aria-hidden="true"
                 />
               </div>

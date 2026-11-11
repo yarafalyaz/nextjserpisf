@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -61,8 +62,9 @@ export default async function RackRowsPage({
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Baris Rak</h1>
         <CanCreate permission="manage_inventory">
-          <Link href="/inventaris/baris-rak/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-rack-row-btn">
-            + Tambah Baris Rak
+          <Link href="/inventaris/baris-rak/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all" id="create-rack-row-btn">
+            <Plus className="size-3.5" />
+            <span>Tambah Baris Rak</span>
           </Link>
         </CanCreate>
       </div>

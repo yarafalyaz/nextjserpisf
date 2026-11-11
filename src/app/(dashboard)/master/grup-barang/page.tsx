@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -53,10 +54,11 @@ export default async function ItemGroupsPage({
         <CanCreate permission="create_item_groups">
           <Link
             href="/master/grup-barang/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
             id="create-item-group-btn"
           >
-            + Tambah Grup
+            <Plus className="size-3.5" />
+            <span>Tambah Grup</span>
           </Link>
         </CanCreate>
       </div>

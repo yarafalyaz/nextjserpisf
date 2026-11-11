@@ -54,7 +54,7 @@ export default async function SettingsPage() {
                       <p className="text-sm font-medium text-foreground">{item.label}</p>
                       <p className="text-xs text-muted-foreground truncate">{item.desc}</p>
                     </div>
-                    <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:translate-x-0.5" />
                   </Link>
                 )
               })}

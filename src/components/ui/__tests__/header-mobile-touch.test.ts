@@ -24,10 +24,8 @@ describe("header target sentuh 44px (360-430px)", () => {
   })
 
   it.each([
-    ["Menu pengguna", "src/components/layout/header.tsx", 'className="size-11'],
-    ["Buka notifikasi", "src/components/layout/notification-dropdown.tsx", "size-11"],
-    ["Ganti tema", "src/components/ui/theme-toggle.tsx", 'className="size-11 relative'],
-  ])("tombol %s 44px", (label, file, cls) => {
+    ["Menu pengguna", "src/components/layout/header.tsx", 'className="size-11'], ["Buka notifikasi", "src/components/layout/notification-dropdown.tsx", "size-11"],
+    ["Ganti tema", "src/components/ui/theme-toggle.tsx", 'className="size-11 relative'], ])("tombol %s 44px", (label, file, cls) => {
     const line = lineWith(file, `aria-label="${label}"`)
     expect(line).toContain(cls)
     expect(line).toContain(`aria-label="${label}"`)

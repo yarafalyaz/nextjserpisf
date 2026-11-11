@@ -102,14 +102,14 @@ export default async function VendorBillDetailPage({
             )}
             {bill.status !== "draft" && bill.status !== "cancelled" && bill.status !== "paid" && Number(bill.balanceDue) > 0 && (
             <CanCreate permission="create_vendor_payments">
-              <Link href={`/pembelian/pembayaran-vendor/tambah/tagihan/${bill.slug ?? bill.id}`} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Bayar</Link>
+              <Link href={`/pembelian/pembayaran-vendor/tambah/tagihan/${bill.slug ?? bill.id}`} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all">Bayar</Link>
             </CanCreate>
           )}
           {/* updateVendorBill/deleteVendorBill menolak selain draft; tagihan
               posted dikoreksi lewat voidVendorBill, bukan edit. */}
           {isDraft && (
             <CanCreate permission="edit_vendor_bills">
-              <Link href={entityEditHref("/pembelian/tagihan", bill)} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
+              <Link href={entityEditHref("/pembelian/tagihan", bill)} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all">Ubah</Link>
             </CanCreate>
           )}
           {needsTaxInvoiceNumber && canSetTaxInvoiceNumber && (

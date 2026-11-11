@@ -86,7 +86,7 @@ export function MobileBottomNav() {
               )}
               <Icon
                 className={cn(
-                  "size-4 transition-transform duration-150",
+                  "size-4 transition-colors duration-150",
                   active ? "text-primary opacity-100" : "opacity-70"
                 )}
                 aria-hidden="true"
@@ -116,7 +116,7 @@ export function MobileBottomNav() {
           )}
           <PanelLeftIcon
             className={cn(
-              "size-4 transition-transform duration-150",
+              "size-4 transition-colors duration-150",
               openMobile ? "text-primary opacity-100" : "opacity-70"
             )}
             aria-hidden="true"

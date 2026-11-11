@@ -47,7 +47,7 @@ export function VehicleWarrantyCard({
         {canCreateClaim && coverages.length > 0 && (
           <Link
             href={`/produksi/garansi/tambah?kendaraan=${vehicleSlug ?? vehicleId}`}
-            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-default bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:-translate-y-px hover:shadow-md"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-default bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:shadow-md"
           >
             Buat Klaim Garansi
           </Link>

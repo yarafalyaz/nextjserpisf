@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
  
 export const dynamic = "force-dynamic"
 
@@ -505,7 +506,10 @@ export default async function InvoiceDetailPage({
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Retur Penjualan</h2>
                   {(invoice.status === "posted" || invoice.status === "partial" || invoice.status === "paid") && (
                     <CanCreate permission="create_sales_returns">
-                      <Link href={`/penjualan/retur/tambah/faktur/${invoice.slug ?? invoice.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Retur</Link>
+                      <Link href={`/penjualan/retur/tambah/faktur/${invoice.slug ?? invoice.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
+            <Plus className="size-3.5" />
+            <span>Buat Retur</span>
+          </Link>
                     </CanCreate>
                   )}
                 </div>

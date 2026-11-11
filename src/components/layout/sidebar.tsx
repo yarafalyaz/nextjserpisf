@@ -158,7 +158,7 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
               >
                 {item.label}
               </Link>
-              <ChevronRight className="ml-auto size-3.5 text-sidebar-foreground/60 transition-transform duration-150 ease-out group-data-[state=open]/collapsible:rotate-90" />
+              <ChevronRight className="ml-auto size-3.5 text-sidebar-foreground/60 transition-colors duration-150 ease-out group-data-[state=open]/collapsible:rotate-90" />
             </SidebarMenuButton>
           </CollapsibleTrigger>
           <CollapsibleContent>

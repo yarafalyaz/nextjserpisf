@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 export const dynamic = "force-dynamic"
 
 import Link from "next/link"
@@ -60,7 +61,8 @@ export default async function VendorPricesPage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary-hover"
             id="create-vendor-price-btn"
           >
-            + Tambah Harga
+            <Plus className="size-3.5" />
+            <span>Tambah Harga</span>
           </Link>
         </CanCreate>
       </div>

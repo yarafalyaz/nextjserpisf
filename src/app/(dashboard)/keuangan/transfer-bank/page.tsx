@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 export const dynamic = "force-dynamic"
 
 import Link from "next/link"
@@ -76,7 +77,8 @@ export default async function BankTransfersPage() {
             className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover transition-all"
             id="create-bank-transfer-btn"
           >
-            + Tambah Transfer
+            <Plus className="size-3.5" />
+            <span>Tambah Transfer</span>
           </Link>
         </CanCreate>
       </div>

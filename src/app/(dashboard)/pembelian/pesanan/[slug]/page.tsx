@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -240,7 +241,10 @@ export default async function PurchaseOrderDetailPage({
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Penerimaan Barang</h2>
                   {["approved", "ordered", "partial_received"].includes(po.status) && (
                     <CanCreate permission="create_goods_receipts">
-                      <Link href={`/pembelian/penerimaan/tambah/po/${po.slug ?? po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Penerimaan</Link>
+                      <Link href={`/pembelian/penerimaan/tambah/po/${po.slug ?? po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
+            <Plus className="size-3.5" />
+            <span>Buat Penerimaan</span>
+          </Link>
                     </CanCreate>
                   )}
                 </div>
@@ -285,7 +289,10 @@ export default async function PurchaseOrderDetailPage({
                       terima tidak punya apa pun untuk diretur. */}
                   {po.goodsReceipts.some((gr) => ["verified", "completed"].includes(gr.status)) && (
                     <CanCreate permission="create_purchase_returns">
-                      <Link href={`/pembelian/retur/tambah/po/${po.slug ?? po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Retur</Link>
+                      <Link href={`/pembelian/retur/tambah/po/${po.slug ?? po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
+            <Plus className="size-3.5" />
+            <span>Buat Retur</span>
+          </Link>
                     </CanCreate>
                   )}
                 </div>

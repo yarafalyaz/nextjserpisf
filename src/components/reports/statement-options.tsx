@@ -229,7 +229,7 @@ export function StatementOptions({
           set once, and leaving them open pushed the report itself below the fold. */}
       <Collapsible open={open} onOpenChange={setOpen} className="border-t border-default pt-2">
         <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-surface-secondary">
-          <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-colors group-data-[state=open]:rotate-90" />
           <span className="text-sm font-semibold text-foreground">Parameter Tambahan</span>
           {changedCount > 0 && <Badge variant="outline">{changedCount} disesuaikan</Badge>}
           <span className="ml-auto text-xs text-muted-foreground">{open ? "Sembunyikan" : "Buka"}</span>

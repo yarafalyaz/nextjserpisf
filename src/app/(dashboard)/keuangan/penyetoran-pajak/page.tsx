@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 export const dynamic = "force-dynamic"
 
 import Link from "next/link"
@@ -56,7 +57,8 @@ export default async function TaxPaymentsPage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary-hover"
             id="create-tax-payment-btn"
           >
-            + Tambah Setoran
+            <Plus className="size-3.5" />
+            <span>Tambah Setoran</span>
           </Link>
         </CanCreate>
       </div>

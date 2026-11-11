@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -77,10 +78,11 @@ export default async function QcChecklistsPage({
         <CanCreate permission="manage_qc_checklists">
           <Link
             href="/produksi/qc/checklist/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
             id="create-qc-checklist-btn"
           >
-            + Buat Checklist
+            <Plus className="size-3.5" />
+            <span>Buat Checklist</span>
           </Link>
         </CanCreate>
       </div>

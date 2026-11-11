@@ -50,7 +50,7 @@ export function SectionCards({
             >
               Riwayat pembayaran
               <ArrowUpRight
-                className="size-3 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-primary"
+                className="size-3 text-muted-foreground transition-colors duration-150 group-hover:translate-x-0.5 group- group-hover:text-primary"
                 aria-hidden="true"
               />
             </Link>
@@ -100,7 +100,7 @@ export function SectionCards({
             >
               Daftar proyek
               <ArrowUpRight
-                className="size-3 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-primary"
+                className="size-3 text-muted-foreground transition-colors duration-150 group-hover:translate-x-0.5 group- group-hover:text-primary"
                 aria-hidden="true"
               />
             </Link>
@@ -136,7 +136,7 @@ export function SectionCards({
             >
               Umur piutang
               <ArrowUpRight
-                className="size-3 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-primary"
+                className="size-3 text-muted-foreground transition-colors duration-150 group-hover:translate-x-0.5 group- group-hover:text-primary"
                 aria-hidden="true"
               />
             </Link>
@@ -171,7 +171,7 @@ export function SectionCards({
             >
               Data pelanggan
               <ArrowUpRight
-                className="size-3 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-primary"
+                className="size-3 text-muted-foreground transition-colors duration-150 group-hover:translate-x-0.5 group- group-hover:text-primary"
                 aria-hidden="true"
               />
             </Link>
