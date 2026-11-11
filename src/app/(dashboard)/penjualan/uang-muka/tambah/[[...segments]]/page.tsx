@@ -92,23 +92,28 @@ export default async function CreateDownPaymentPage({
           { label: "Tambah" },
         ]}
       />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Buat Uang Muka</h1>
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">Buat Uang Muka Penjualan</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Pencatatan pembayaran uang muka dari pelanggan atas penawaran penjualan yang disetujui.
+          </p>
+        </div>
       </div>
       {prefillNotice && (
-        <Alert>
-          <AlertTitle>Pilihan awal tidak dipakai</AlertTitle>
+        <Alert variant="destructive">
+          <AlertTitle>Pemberitahuan Dokumen Awal</AlertTitle>
           <AlertDescription>{prefillNotice}</AlertDescription>
         </Alert>
       )}
       {quotations.length === 0 && (
         <Alert>
-          <AlertTitle>Belum ada penawaran yang bisa dipakai</AlertTitle>
+          <AlertTitle>Belum ada penawaran yang memenuhi syarat</AlertTitle>
           <AlertDescription>
             Uang muka penjualan hanya bisa dibuat dari Penawaran berstatus{" "}
             <strong>Diterima</strong>, <strong>Disetujui</strong>, atau yang sudah{" "}
             <strong>terkonversi</strong> menjadi Pesanan Penjualan. Penawaran yang baru
-            dibuat selalu berstatus konsep — setujui dulu lewat tombol{}
+            dibuat selalu berstatus konsep — setujui dulu lewat tombol{" "}
             <strong>Setujui</strong> di halaman detail penawaran.
           </AlertDescription>
         </Alert>

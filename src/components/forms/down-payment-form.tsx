@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { formatCurrencyExact } from "@/lib/utils/format"
 
 const downPaymentSchema = z.object({
   customerId: z.number({ error: "Pelanggan wajib dipilih" }).min(1, "Pelanggan wajib dipilih"),
@@ -162,47 +163,52 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
           const dpPercent = Number(customer?.customerCategory?.downPaymentPercent ?? 0)
 
           return (
-            <div className="col-span-full bg-default/10 rounded-xl border border-default p-5 flex flex-col gap-4">
-              <div className="flex flex-wrap justify-between items-center gap-3 pb-3 border-b border-default">
-                <div>
-                  <h2 className="font-semibold text-foreground text-sm">Ringkasan Penawaran</h2>
-                  <p className="text-xs text-muted-foreground">{quo.documentNo}</p>
+            <div className="col-span-full rounded-xl border border-border bg-card/60 p-4 sm:p-5 flex flex-col gap-4 shadow-2xs">
+              <div className="flex flex-wrap justify-between items-center gap-3 pb-3 border-b border-border/70">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rujukan Dokumen</span>
+                    <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-muted text-foreground border border-border/80">
+                      {quo.documentNo}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Rincian nilai komersial penawaran penjualan</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-muted-foreground">Total Penawaran:</span>
-                  <p className="text-base font-bold text-primary">
-                    {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(quo.grandTotal || 0)}
+                  <span className="text-xs text-muted-foreground block">Total Nilai Penawaran:</span>
+                  <p className="text-base font-bold text-foreground tabular-nums">
+                    Rp {formatCurrencyExact(quo.grandTotal || 0)}
                   </p>
                 </div>
               </div>
 
               {/* Item List */}
               {quo.sections && quo.sections.length > 0 && (
-                <div className="flex flex-col gap-3">
-                  <h3 className="font-medium text-foreground text-xs">Daftar Item:</h3>
-                  <div className="max-h-60 overflow-y-auto border border-default rounded-lg bg-surface">
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs font-medium text-foreground">Daftar Item Penawaran:</span>
+                  <div className="max-h-56 overflow-y-auto border border-border rounded-lg bg-background">
                     <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
-                        <tr className="bg-default/20 border-b border-default text-muted-foreground font-medium">
-                          <th className="p-2 pl-3">Deskripsi</th>
-                          <th className="p-2 text-right">Jumlah</th>
-                          <th className="p-2">Satuan</th>
-                          <th className="p-2 text-right">Harga Satuan</th>
-                          <th className="p-2 text-right pr-3">Total</th>
+                        <tr className="bg-muted/40 border-b border-border text-muted-foreground font-medium">
+                          <th className="p-2.5 pl-3">Deskripsi</th>
+                          <th className="p-2.5 text-right">Jumlah</th>
+                          <th className="p-2.5">Satuan</th>
+                          <th className="p-2.5 text-right">Harga Satuan</th>
+                          <th className="p-2.5 text-right pr-3">Total</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-default">
+                      <tbody className="divide-y divide-border/60">
                         {quo.sections.flatMap((s) => s.items).map((item) => (
-                          <tr key={item.id} className="hover:bg-default/5">
-                            <td className="p-2 pl-3 font-medium text-foreground">{item.description || "-"}</td>
-                            <td className="p-2 text-right">{item.qty}</td>
-                            <td className="p-2">{item.uom || "-"}</td>
-                            <td className="p-2 text-right">
-                              {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(item.unitPrice)}
+                          <tr key={item.id} className="hover:bg-muted/20 transition-colors">
+                            <td className="p-2.5 pl-3 font-medium text-foreground">{item.description || "-"}</td>
+                            <td className="p-2.5 text-right tabular-nums">{item.qty}</td>
+                            <td className="p-2.5 text-muted-foreground">{item.uom || "-"}</td>
+                            <td className="p-2.5 text-right tabular-nums">
+                              Rp {formatCurrencyExact(item.unitPrice)}
                             </td>
-                            <td className="p-2 text-right font-medium pr-3">
-                              {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(item.total)}
+                            <td className="p-2.5 text-right font-medium pr-3 tabular-nums">
+                              Rp {formatCurrencyExact(item.total)}
                             </td>
                           </tr>
                         ))}
@@ -215,10 +221,10 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
 
               {/* DP Info */}
               {dpPercent > 0 && (
-                <div className="bg-primary/5 rounded-lg border border-primary/20 p-3 text-xs text-primary flex flex-wrap items-center justify-between gap-2">
-                  <span>Kategori Pelanggan menetapkan uang muka default sebesar <strong>{dpPercent}%</strong></span>
-                  <span className="font-semibold">
-                    Default DP: {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Math.round((quo.grandTotal || 0) * (dpPercent / 100)))}
+                <div className="bg-primary/5 rounded-lg border border-primary/20 px-3.5 py-2.5 text-xs text-primary flex flex-wrap items-center justify-between gap-2">
+                  <span>Kategori Pelanggan menetapkan uang muka standar sebesar <strong>{dpPercent}%</strong></span>
+                  <span className="font-semibold tabular-nums">
+                    Default DP: Rp {formatCurrencyExact(Math.round((quo.grandTotal || 0) * (dpPercent / 100)))}
                   </span>
                 </div>
               )}
