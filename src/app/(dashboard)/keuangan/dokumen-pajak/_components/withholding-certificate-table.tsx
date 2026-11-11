@@ -1,7 +1,6 @@
 "use client"
 
 import { createColumnHelper } from "@/lib/table"
-import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { formatDate, formatCurrencyExact } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"

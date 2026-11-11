@@ -1,18 +1,17 @@
 export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
-import { sumNetForAccount, sumNetForAccounts } from "@/lib/services/report-aggregation.service"
+import { sumNetForAccounts } from "@/lib/services/report-aggregation.service"
 import { collectDescendantAccountIds } from "@/lib/reports/account-hierarchy"
 import { resolveReferenceSlugs, referenceSlugKey } from "@/lib/services/reference-slug.service"
 import { requirePermission } from '@/lib/auth/permissions'
-import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
-import { formatAccountingExact, formatCurrencyExact, formatDate } from '@/lib/utils/format'
+import { ReportKpiCard } from "@/components/reports/report-section"
+import { formatAccountingExact, formatDate } from '@/lib/utils/format'
 import { safeAdd, safeSubtract } from '@/lib/utils/math'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { BookOpen } from "@/components/ui/fontawesome-icons"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
-import { ReportSheet } from "@/components/reports/report-sheet"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
 import Link from "next/link"

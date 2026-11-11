@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrencyExact, formatAccountingExact, formatDate } from '@/lib/utils/format'
+import { formatAccountingExact, formatDate } from '@/lib/utils/format'
 import { safeAdd } from '@/lib/utils/math'
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"

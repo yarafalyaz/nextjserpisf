@@ -1,10 +1,7 @@
 import Link from "next/link"
 import {
-  Clock,
-  AlertTriangle,
   Receipt,
   ExternalLink,
-  Info,
 } from "@/components/ui/fontawesome-icons"
 
 import type {

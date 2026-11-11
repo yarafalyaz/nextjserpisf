@@ -29,7 +29,6 @@ import {
   TrendingUp,
   Receipt,
   Building2,
-  Calendar,
 } from "@/components/ui/fontawesome-icons"
 
 /**

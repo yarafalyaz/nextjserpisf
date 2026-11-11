@@ -10,11 +10,7 @@ import { entityHref } from "@/lib/utils/entity-url"
 import type {
   CollectionQueueRow,
   CollectionReminderLevel,
-  CollectionStage,
   CollectionQueueSummary,
-} from "@/lib/reports/collection-queue"
-import {
-  COLLECTION_REMINDER_LEVEL_LABELS,
 } from "@/lib/reports/collection-queue"
 import { buildWhatsappUrl } from "@/lib/utils/whatsapp"
 import { recordWhatsappLinkOpened } from "@/actions/whatsapp-log.actions"
@@ -32,15 +28,6 @@ interface CollectionQueueTableProps {
   canFollowUp: boolean
   customerSlugMap?: Record<number, string>
   invoiceSlugMap?: Record<number, string>
-}
-
-const STAGE_TONES: Record<
-  CollectionStage,
-  "danger" | "warning" | "accent" | "default"
-> = {
-  lewat_janji: "danger",
-  belum_diserahkan: "warning",
-  sudah_diserahkan: "accent",
 }
 
 const REMINDER_TONES: Record<
@@ -272,7 +259,7 @@ export function CollectionQueueTable({
         )
       },
     }),
-  ], [canCreateExchange, canFollowUp, columnHelper])
+  ], [canCreateExchange, canFollowUp, columnHelper, customerSlugMap, invoiceSlugMap])
 
   return (
     <div className="flex flex-col gap-4">

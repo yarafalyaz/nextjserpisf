@@ -15,9 +15,7 @@ import {
 } from "@/components/ui/detail-table"
 import {
   CheckCircle2,
-  FileCheck,
   AlertTriangle,
-  Clock,
   TrendingUp,
   TrendingDown,
 } from "@/components/ui/fontawesome-icons"

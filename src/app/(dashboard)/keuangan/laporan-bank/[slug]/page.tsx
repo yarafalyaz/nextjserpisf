@@ -23,7 +23,6 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { deleteBankStatementLine } from "@/actions/finance.actions"
 import { bankStatementLineTypeLabel } from "./_components/bank-statement-line-labels"
 import {
-  FileSpreadsheet,
   Plus,
   Upload,
   TrendingUp,

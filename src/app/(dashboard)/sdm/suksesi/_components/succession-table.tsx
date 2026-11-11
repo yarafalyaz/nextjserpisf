@@ -4,7 +4,7 @@ import { createColumnHelper } from "@/lib/table"
 import { DataTable } from "@/components/ui/data-table"
 import { StatusChip } from "@/components/ui/status-chip"
 import { CriticalToggle, RemoveSuccessorButton } from "./succession-actions"
-import { Building2, User, Users } from "@/components/ui/fontawesome-icons"
+import { Building2, User } from "@/components/ui/fontawesome-icons"
 
 export interface SuccessionCandidate {
   id: number

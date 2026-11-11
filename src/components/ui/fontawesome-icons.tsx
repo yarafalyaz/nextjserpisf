@@ -218,4 +218,4 @@ export const Whatsapp = createFaComponent(faWhatsappDef)
 export const XIcon = createFaComponent(solid.faXmark)
 
 // Default fallback for any unlisted Lucide icon
-export const createLucideIcon = (iconName: string, iconNode: any) => createFaComponent(solid.faIcons)
+export const createLucideIcon = (_iconName: string, _iconNode: any) => createFaComponent(solid.faIcons)

@@ -39,7 +39,7 @@ export default async function RolesPage({
     }),
   }
 
-  const [rawRoles, totalPermissions, totalUsersWithRoles] = await Promise.all([
+  const [rawRoles, totalPermissions, _totalUsersWithRoles] = await Promise.all([
     prisma.role.findMany({
       where,
       include: {

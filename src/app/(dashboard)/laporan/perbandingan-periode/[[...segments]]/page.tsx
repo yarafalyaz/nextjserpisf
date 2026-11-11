@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/prisma'
 import Link from 'next/link'
 import { sumEntriesByAccount } from '@/lib/services/report-aggregation.service'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccountingExact, formatCurrencyExact, formatDate } from "@/lib/utils/format"
+import { formatAccountingExact, formatDate } from "@/lib/utils/format"
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
 import { buildReportHref } from '@/lib/reports/report-href'

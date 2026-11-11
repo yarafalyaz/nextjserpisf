@@ -6,7 +6,6 @@ import {
   BadgeCheck,
   Ban,
   Trash2,
-  Plus,
   Landmark,
   TrendingDown,
   TrendingUp,
@@ -26,7 +25,7 @@ import { Combobox } from "@/components/ui/combobox"
 import { FormSelect } from "@/components/ui/form-select"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
-import { formatAccountingExact, formatCurrencyExact } from "@/lib/utils/format"
+import { formatAccountingExact } from "@/lib/utils/format"
 import { DataTable } from "@/components/ui/data-table"
 import { createColumnHelper } from "@/lib/table"
 import { StatusChip } from "@/components/ui/status-chip"
@@ -198,7 +197,7 @@ export function ChequeManager({
   }
 
   // Ringkasan Finansial Metrik
-  const totalNominal = cheques.reduce((acc, c) => acc + c.amount, 0)
+  const _totalNominal = cheques.reduce((acc, c) => acc + c.amount, 0)
   const pendingCount = cheques.filter((c) => c.status === "pending").length
   const clearedCount = cheques.filter((c) => c.status === "cleared").length
   const inCount = cheques.filter((c) => c.direction === "in").length

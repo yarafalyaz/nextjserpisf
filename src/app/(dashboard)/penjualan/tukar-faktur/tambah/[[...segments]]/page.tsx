@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic"
 
-import { notFound, redirect } from "next/navigation"
+import { redirect } from "next/navigation"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
