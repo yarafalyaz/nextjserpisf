@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus } from "@/components/ui/fontawesome-icons";
 export const dynamic = "force-dynamic"
 
 import Link from "next/link"
@@ -63,21 +63,20 @@ export default async function BankTransfersPage() {
           { label: "Transfer Bank" },
         ]}
       />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
         <div>
-          <h1 className="text-xl font-bold text-foreground sm:text-2xl">Transfer Bank</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Pemindahan dana antar rekening kas/bank. Setiap transfer otomatis membuat satu jurnal
-            yang langsung diposting.
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">Transfer Kas & Bank</h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+            Pemindahan dana antar rekening kas/bank perusahaan. Transaksi otomatis membukukan jurnal debit-kredit.
           </p>
         </div>
         <CanCreate permission="create_bank_transfers">
           <Link
             href="/keuangan/transfer-bank/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover transition-all"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
             id="create-bank-transfer-btn"
           >
-            <Plus className="size-3.5" />
+            <Plus className="size-3.5" aria-hidden="true" />
             <span>Tambah Transfer</span>
           </Link>
         </CanCreate>

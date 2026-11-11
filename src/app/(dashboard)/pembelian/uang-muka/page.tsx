@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus } from "@/components/ui/fontawesome-icons";
 export const dynamic = "force-dynamic"
 
 import Link from "next/link"
@@ -42,21 +42,21 @@ export default async function PurchaseAdvancesPage() {
           { label: "Uang Muka Pembelian" },
         ]}
       />
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Uang Muka Pembelian</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">Uang Muka Pembelian</h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
             Pembayaran di muka ke pemasok. Setiap dokumen membuat satu jurnal: uang muka bertambah
-            (aset), kas/bank berkurang. Penerapan ke tagihan pemasok dilakukan manual.
+            (aset), kas/bank berkurang.
           </p>
         </div>
         <CanCreate permission="create_purchase_advances">
           <Link
             href="/pembelian/uang-muka/tambah"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary-hover"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
             id="create-purchase-advance-btn"
           >
-            <Plus className="size-3.5" />
+            <Plus className="size-3.5" aria-hidden="true" />
             <span>Tambah Uang Muka</span>
           </Link>
         </CanCreate>

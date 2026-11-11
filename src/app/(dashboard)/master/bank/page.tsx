@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus } from "@/components/ui/fontawesome-icons";
 import { parsePagination } from "@/lib/utils/pagination"
 export const dynamic = "force-dynamic"
 

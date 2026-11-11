@@ -1,4 +1,4 @@
-import { Plus, Percent, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, Percent, CheckCircle2, XCircle } from "@/components/ui/fontawesome-icons";
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";

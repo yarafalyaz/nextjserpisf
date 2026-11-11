@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus } from "@/components/ui/fontawesome-icons";
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -48,11 +48,20 @@ export default async function CostCentersPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Pusat Biaya</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">Pusat Biaya (Cost Center)</h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+            Struktur hierarki pembebanan anggaran operasional dan kontrol alokasi biaya per departemen.
+          </p>
+        </div>
         <CanCreate permission="create_cost_centers">
-          <Link href="/keuangan/pusat-biaya/tambah" className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all" id="create-cc-btn">
-            <Plus className="size-3.5" />
+          <Link
+            href="/keuangan/pusat-biaya/tambah"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+            id="create-cc-btn"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
             <span>Buat Cost Center</span>
           </Link>
         </CanCreate>

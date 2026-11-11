@@ -1,4 +1,4 @@
-import { Plus, Scale, Layers } from "lucide-react";
+import { Plus, Scale, Layers } from "@/components/ui/fontawesome-icons";
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";

@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus } from "@/components/ui/fontawesome-icons";
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -242,9 +242,9 @@ export default async function PurchaseOrderDetailPage({
                   {["approved", "ordered", "partial_received"].includes(po.status) && (
                     <CanCreate permission="create_goods_receipts">
                       <Link href={`/pembelian/penerimaan/tambah/po/${po.slug ?? po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
-            <Plus className="size-3.5" />
-            <span>Buat Penerimaan</span>
-          </Link>
+                        <Plus className="size-3.5" aria-hidden="true" />
+                        <span>Buat Penerimaan</span>
+                      </Link>
                     </CanCreate>
                   )}
                 </div>
@@ -290,9 +290,9 @@ export default async function PurchaseOrderDetailPage({
                   {po.goodsReceipts.some((gr) => ["verified", "completed"].includes(gr.status)) && (
                     <CanCreate permission="create_purchase_returns">
                       <Link href={`/pembelian/retur/tambah/po/${po.slug ?? po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
-            <Plus className="size-3.5" />
-            <span>Buat Retur</span>
-          </Link>
+                        <Plus className="size-3.5" aria-hidden="true" />
+                        <span>Buat Retur</span>
+                      </Link>
                     </CanCreate>
                   )}
                 </div>

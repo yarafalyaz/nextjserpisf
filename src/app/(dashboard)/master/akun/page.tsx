@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus } from "@/components/ui/fontawesome-icons";
 import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
 import { Pencil } from "@/components/ui/fontawesome-icons"
 export const dynamic = "force-dynamic"

@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus } from "@/components/ui/fontawesome-icons";
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -157,15 +157,20 @@ export async function renderExpensesPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Pengeluaran</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">Pengeluaran Operasional (Expense)</h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+            Pencatatan beban usaha langsung, klaim reimbursement staf, dan verifikasi bukti bayar.
+          </p>
+        </div>
         <CanCreate permission="create_expenses">
           <Link
             href="/keuangan/pengeluaran/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
             id="create-expense-btn"
           >
-            <Plus className="size-3.5" />
+            <Plus className="size-3.5" aria-hidden="true" />
             <span>Buat Pengeluaran</span>
           </Link>
         </CanCreate>
