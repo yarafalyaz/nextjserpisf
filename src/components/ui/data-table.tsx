@@ -20,7 +20,9 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Search,
+  Download,
 } from "@/components/ui/fontawesome-icons"
+import { exportTableToCsv } from "@/components/ui/data-table-export"
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 import {
   Table,
@@ -118,6 +120,10 @@ interface DataTableProps<TData extends RowData> {
   searchParam?: string
   /** Show the "Kolom" column-visibility dropdown in the toolbar (default true). */
   enableColumnToggle?: boolean
+  /** Enable CSV export button in the toolbar (default true). */
+  enableExport?: boolean
+  /** Filename for CSV export (default derived from ariaLabel or "data-export"). */
+  exportFilename?: string
   /** Extra controls rendered on the left of the toolbar row (e.g. server-side search). */
   toolbar?: React.ReactNode
   /** Filter controls (e.g. status chips) rendered on their own row below the search row. */
@@ -156,6 +162,8 @@ export function DataTable<TData extends { id: number | string }>({
   searchPlaceholder = "Cari...",
   searchParam = "cari",
   enableColumnToggle = true,
+  enableExport = true,
+  exportFilename,
   toolbar,
   filters,
   mobileColumns = 3,
@@ -310,7 +318,7 @@ export function DataTable<TData extends { id: number | string }>({
 
   const hideableColumns = table.getAllColumns().filter((c) => c.getCanHide())
   const showColumnToggle = enableColumnToggle && hideableColumns.length > 0
-  const showSearchRow = Boolean(toolbar) || Boolean(searchColumn) || showColumnToggle
+  const showSearchRow = Boolean(toolbar) || Boolean(searchColumn) || showColumnToggle || enableExport
   const showToolbar = showSearchRow || Boolean(filters)
 
   async function executeBulkDelete() {
@@ -427,6 +435,39 @@ export function DataTable<TData extends { id: number | string }>({
                       ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
+                )}
+                {enableExport && (
+                  <Button
+                    variant="outline"
+                    className="h-11 shrink-0 gap-1.5"
+                    onClick={() => {
+                      const exportCols = table
+                        .getVisibleFlatColumns()
+                        .filter((col) => !isActionsColumn(col.id))
+                        .map((col) => ({
+                          id: col.id,
+                          header: columnLabel(col),
+                          accessor: (row: TData) => {
+                            const val = (row as any)[col.id]
+                            return val !== undefined ? val : ""
+                          },
+                        }))
+                      const cleanTitle = (ariaLabel || "data-export")
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, "-")
+                        .replace(/(^-|-$)/g, "")
+                      const finalFilename = exportFilename || `${cleanTitle}-${new Date().toISOString().split("T")[0]}`
+                      exportTableToCsv({
+                        filename: finalFilename,
+                        columns: exportCols,
+                        data,
+                      })
+                    }}
+                    title="Ekspor ke CSV / Spreadsheet"
+                  >
+                    <Download className="size-3.5" aria-hidden="true" />
+                    <span>Ekspor CSV</span>
+                  </Button>
                 )}
               </div>
             )}
