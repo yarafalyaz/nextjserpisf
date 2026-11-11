@@ -1,5 +1,6 @@
 import { parsePagination } from "@/lib/utils/pagination"
 import { withListParams } from "@/lib/utils/list-href"
+import { Plus } from "@/components/ui/fontawesome-icons"
 
 export const dynamic = "force-dynamic"
 
@@ -120,12 +121,17 @@ export async function renderLeaveRequestsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Permintaan Cuti</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">Permintaan & Saldo Cuti (Leave)</h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+            Pengajuan cuti tahunan, izin sakit, pelacakan sisa hak cuti karyawan, dan persetujuan atasan.
+          </p>
+        </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Link
             href="/sdm/cuti/saldo"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default bg-surface text-foreground hover:border-primary hover:text-primary transition-all"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer"
             id="leave-balance-btn"
           >
             Saldo Cuti
@@ -133,10 +139,11 @@ export async function renderLeaveRequestsPage({
           <CanCreate permission="create_leave_requests">
             <Link
               href="/sdm/cuti/tambah"
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
               id="create-leave-btn"
             >
-              + Ajukan Cuti
+              <Plus className="size-3.5" aria-hidden="true" />
+              <span>Ajukan Cuti</span>
             </Link>
           </CanCreate>
         </div>

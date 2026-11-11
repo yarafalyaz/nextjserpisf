@@ -111,11 +111,11 @@ export default async function WorkCalendarPage({
           <CanCreate permission="create_holidays">
             <Link
               href="/sdm/kalender-kerja/libur/tambah"
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
             >
-            <Plus className="size-3.5" />
-            <span>Tambah</span>
-          </Link>
+              <Plus className="size-3.5" aria-hidden="true" />
+              <span>Tambah</span>
+            </Link>
           </CanCreate>
         </div>
         <div className="p-4 px-5">
@@ -172,11 +172,11 @@ export default async function WorkCalendarPage({
           <CanCreate permission="create_holidays">
             <Link
               href="/sdm/kalender-kerja/libur-departemen/tambah"
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
             >
-            <Plus className="size-3.5" />
-            <span>Tambah</span>
-          </Link>
+              <Plus className="size-3.5" aria-hidden="true" />
+              <span>Tambah</span>
+            </Link>
           </CanCreate>
         </div>
         <div className="p-4 px-5">
@@ -226,17 +226,17 @@ export default async function WorkCalendarPage({
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Jadwal Kerja</h2>
             <p className="text-xs text-muted-foreground">
               Hari kerja di sini yang dibaca perhitungan absensi dan sisa cuti. Bila
-              karyawan atau departemen tidak punya jadwal, sistem memakai Senin–Jumat.
+              karyawan atau departemen tidak punya jadwal, sistem memakai Senin - Jumat.
             </p>
           </div>
           <CanCreate permission="create_work_schedules">
             <Link
               href="/sdm/kalender-kerja/jadwal/tambah"
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
             >
-            <Plus className="size-3.5" />
-            <span>Tambah</span>
-          </Link>
+              <Plus className="size-3.5" aria-hidden="true" />
+              <span>Tambah</span>
+            </Link>
           </CanCreate>
         </div>
         <div className="p-4 px-5">
