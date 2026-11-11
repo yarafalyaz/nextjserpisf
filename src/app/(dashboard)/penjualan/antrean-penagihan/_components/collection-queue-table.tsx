@@ -19,7 +19,7 @@ import {
 import { buildWhatsappUrl } from "@/lib/utils/whatsapp"
 import { recordWhatsappLinkOpened } from "@/actions/whatsapp-log.actions"
 import { CollectionFollowUpForm } from "@/components/reports/collection-followup-form"
-import { ArrowUpRight, MessageCircle } from "@/components/ui/fontawesome-icons"
+import { ArrowUpRight, Whatsapp } from "@/components/ui/fontawesome-icons"
 
 export interface CollectionQueueTableRow extends CollectionQueueRow {
   id: number
@@ -251,7 +251,7 @@ export function CollectionQueueTable({
                   })
                 }}
               >
-                <MessageCircle className="size-3.5" aria-hidden="true" />
+                <Whatsapp className="size-3.5" aria-hidden="true" />
               </a>
             ) : null}
 

@@ -2,6 +2,7 @@ import React from "react"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core"
 import * as solid from "@fortawesome/free-solid-svg-icons"
+import { faWhatsapp } from "@fortawesome/free-brands-svg-icons"
 
 export interface LucideProps extends React.SVGProps<SVGSVGElement> {
   size?: number | string
@@ -202,6 +203,7 @@ export const X = createFaComponent(solid.faXmark)
 export const XCircle = createFaComponent(solid.faCircleXmark)
 export const TableList = createFaComponent(solid.faTableList)
 export const BoxArchive = createFaComponent(solid.faBoxArchive)
+export const Whatsapp = createFaComponent(faWhatsapp)
 export const XIcon = createFaComponent(solid.faXmark)
 
 // Default fallback for any unlisted Lucide icon
