@@ -17,6 +17,7 @@ import { formatAccountingExact, formatCurrencyExact } from "@/lib/utils/format"
 export interface Option {
   value: string
   label: string
+  paymentTermDays?: number | null
 }
 
 export interface ExchangeableInvoice {
@@ -32,18 +33,31 @@ export function InvoiceExchangeForm({
   customerId,
   invoices,
   initialSelectedInvoiceIds = [],
+  paymentTermDays,
 }: {
   customerOptions: Option[]
   customerId: string
   invoices: ExchangeableInvoice[]
   initialSelectedInvoiceIds?: number[]
+  paymentTermDays?: number | null
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
   const [date, setDate] = useState(toLocalDateOnly(new Date()))
   const [receiptNumber, setReceiptNumber] = useState("")
-  const [dueDate, setDueDate] = useState("")
+
+  // Hitung jatuh tempo default = Tanggal Penyerahan + Termin Hari
+  const defaultDueDate = useMemo(() => {
+    if (paymentTermDays == null || paymentTermDays < 0) return ""
+    const [year, month, day] = date.split("-").map(Number)
+    if (!year || !month || !day) return ""
+    const due = new Date(year, month - 1, day)
+    due.setDate(due.getDate() + paymentTermDays)
+    return toLocalDateOnly(due)
+  }, [date, paymentTermDays])
+
+  const [dueDate, setDueDate] = useState(defaultDueDate)
   const [notes, setNotes] = useState("")
   const [selected, setSelected] = useState<number[]>(() => {
     if (initialSelectedInvoiceIds.length > 0) {

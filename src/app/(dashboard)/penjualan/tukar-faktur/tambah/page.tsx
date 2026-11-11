@@ -28,8 +28,19 @@ export default async function CreateInvoiceExchangePage({
   const customers = await prisma.customer.findMany({
     where: { isActive: true, deletedAt: null },
     orderBy: { name: "asc" },
-    select: { id: true, name: true },
+    select: {
+      id: true,
+      name: true,
+      paymentTerm: { select: { days: true, isActive: true } },
+    },
   })
+
+  const currentCustomer = validCustomerId
+    ? customers.find((c) => c.id === validCustomerId)
+    : null
+  const paymentTermDays = currentCustomer?.paymentTerm?.isActive
+    ? currentCustomer.paymentTerm.days
+    : null
 
   let invoices: ExchangeableInvoice[] = []
   if (validCustomerId) {
@@ -83,10 +94,15 @@ export default async function CreateInvoiceExchangePage({
       />
       <h1 className="text-2xl font-bold text-foreground">Tambah Tukar Faktur</h1>
       <InvoiceExchangeForm
-        customerOptions={customers.map((customer) => ({ value: String(customer.id), label: customer.name }))}
+        customerOptions={customers.map((customer) => ({
+          value: String(customer.id),
+          label: customer.name,
+          paymentTermDays: customer.paymentTerm?.isActive ? customer.paymentTerm.days : null,
+        }))}
         customerId={validCustomerId ? String(validCustomerId) : ""}
         invoices={invoices}
         initialSelectedInvoiceIds={validInitialInvoiceId ? [validInitialInvoiceId] : []}
+        paymentTermDays={paymentTermDays}
       />
     </div>
   )
