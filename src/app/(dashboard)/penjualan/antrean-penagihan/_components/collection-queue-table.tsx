@@ -222,6 +222,8 @@ export function CollectionQueueTable({
               <CollectionFollowUpForm
                 salesInvoiceId={row.invoiceId}
                 documentNo={row.documentNo}
+                customerName={row.customerName}
+                defaultPromisedAmount={row.sisa}
               />
             ) : null}
 

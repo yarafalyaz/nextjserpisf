@@ -50,7 +50,14 @@ const OUTCOME_LABELS: Record<CollectionOutcome, string> = {
 export function CollectionFollowUpForm({
   salesInvoiceId,
   documentNo,
-}: Readonly<{ salesInvoiceId: number; documentNo: string }>) {
+  defaultPromisedAmount,
+  customerName,
+}: Readonly<{
+  salesInvoiceId: number
+  documentNo: string
+  defaultPromisedAmount?: number
+  customerName?: string
+}>) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -85,6 +92,11 @@ export function CollectionFollowUpForm({
         <DialogHeader>
           <DialogTitle>Catat Tindak Lanjut — {documentNo}</DialogTitle>
           <DialogDescription>
+            {customerName ? (
+              <span className="block font-medium text-foreground mb-1">
+                Pelanggan: {customerName}
+              </span>
+            ) : null}
             Mencatat tindak lanjut tidak mencatat pembayaran dan tidak membuat jurnal.
           </DialogDescription>
         </DialogHeader>
@@ -136,6 +148,7 @@ export function CollectionFollowUpForm({
                   min="1"
                   step="0.01"
                   inputMode="decimal"
+                  defaultValue={defaultPromisedAmount ?? undefined}
                   placeholder="0"
                 />
               </div>
