@@ -120,6 +120,7 @@ export default async function CustomerDetailPage({
                 <DetailField label="Telepon" value={customer.phone || "-"} />
                 <DetailField label="Kota" value={customer.city || "-"} />
                 <DetailField label="Narahubung" value={customer.contactPerson || "-"} />
+                <DetailField label="Batas Kredit (Plafon)" value={Number(customer.creditLimit) > 0 ? formatCurrencyExact(Number(customer.creditLimit)) : "Tanpa Batas"} mono={Number(customer.creditLimit) > 0} />
                 <DetailField label="Terdaftar" value={formatDate(customer.createdAt)} />
                 <DetailField label="Alamat" value={customer.address || "-"} colSpan="full" />
               </DetailCard>

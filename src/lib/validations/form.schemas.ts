@@ -59,6 +59,7 @@ export const customerSchema = z.object({
   customerCategoryId: z.number().optional().nullable(),
   // R8-JB-09: termin master pelanggan (sumber dueDate faktur), pola vendor.
   paymentTermId: z.number().optional().nullable(),
+  creditLimit: z.number().min(0).optional().nullable(),
 })
 
 export const vendorSchema = z.object({

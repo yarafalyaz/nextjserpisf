@@ -344,6 +344,7 @@ export async function createCustomer(formData: FormData) {
       ...taxIdentity.data,
       customerCategoryId: v.customerCategoryId ?? null,
       paymentTermId: v.paymentTermId ?? null,
+      creditLimit: v.creditLimit != null ? Number(v.creditLimit) : 0,
     };
     // Scan konflik NPWP di atas membaca snapshot global: dua request
     // konkuren ber-NPWP sama sama-sama lolos lalu sama-sama create.
@@ -455,10 +456,12 @@ export async function updateCustomer(customerId: number, formData: FormData) {
       ...taxIdentity.data,
       customerCategoryId: v.customerCategoryId ?? null,
       paymentTermId: v.paymentTermId ?? null,
+      creditLimit: v.creditLimit != null ? Number(v.creditLimit) : 0,
     };
     // Cermin createCustomer: kunci gerbang CustomerNpwpGate lalu scan
     // NPWP diulang dalam tx yang sama dengan update.
     let npwpConflictInTx: CustomerNpwpConflict | null = null;
+    let creditLimitDiff: { old: number; new: number } | null = null;
     await prisma.$transaction(async (tx) => {
       // Putaran 75: kunci baris pelanggan lalu nilai tombstone dari baris
       // segar — deleteCustomer mengambil kunci yang sama; edit yang lolos
@@ -469,10 +472,13 @@ export async function updateCustomer(customerId: number, formData: FormData) {
       }
       const fresh = await tx.customer.findUnique({
         where: { id: customerId },
-        select: { deletedAt: true },
+        select: { deletedAt: true, creditLimit: true },
       });
       if (fresh?.deletedAt) {
         throw new Error("Pelanggan sudah dihapus dan tidak dapat diubah");
+      }
+      if (fresh && v.creditLimit != null && Number(fresh.creditLimit) !== Number(v.creditLimit)) {
+        creditLimitDiff = { old: Number(fresh.creditLimit), new: Number(v.creditLimit) };
       }
       if (v.taxId) {
         // Putaran 75: baris gerbang absen = gerbang gagal-terbuka — kunci
@@ -494,11 +500,16 @@ export async function updateCustomer(customerId: number, formData: FormData) {
     if (npwpConflictInTx) return buildCustomerNpwpBlockedResult(npwpConflictInTx);
 
     revalidatePath("/master/pelanggan");
+    const diff = creditLimitDiff as { old: number; new: number } | null;
+    const customerDesc = diff
+      ? `Memperbarui pelanggan (batas kredit: ${diff.old} -> ${diff.new})`
+      : "Memperbarui pelanggan";
     await logActivity(
       "update",
       "Customer",
       customerId,
-      "Memperbarui pelanggan",
+      customerDesc,
+      diff ? { creditLimit: diff } : undefined
     );
     // F-2026-10-25-003-S AC-CD-B5: sinyal kandidat sesudah ubah,
     // excludeId diri (BR-CD-06). Advisory — update tetap berhasil.
@@ -684,9 +695,33 @@ export async function updateVendor(vendorId: number, formData: FormData) {
     // Putaran 61: rename dinilai ulang dalam tx bergap-lock (pola create).
     // Nama vendor tak punya @unique; rename telanjang melahirkan vendor
     // hidup bernama sama persis seperti celah create yang ditutup putaran 53.
+    let bankDiff: Record<string, { old: string | null; new: string | null }> | null = null;
     await prisma.$transaction(async (tx) => {
       if (typeof tx.$executeRaw === "function") {
         await tx.$executeRaw`SELECT id FROM vendors FOR UPDATE`;
+      }
+      const existingVendor = await tx.vendor.findUnique({
+        where: { id: vendorId },
+        select: {
+          bankName: true,
+          bankAccountNumber: true,
+          bankAccountHolder: true,
+        },
+      });
+      if (existingVendor) {
+        const changes: Record<string, { old: string | null; new: string | null }> = {};
+        if ((existingVendor.bankName ?? null) !== (v.bankName ?? null)) {
+          changes.bankName = { old: existingVendor.bankName, new: v.bankName ?? null };
+        }
+        if ((existingVendor.bankAccountNumber ?? null) !== (v.bankAccountNumber ?? null)) {
+          changes.bankAccountNumber = { old: existingVendor.bankAccountNumber, new: v.bankAccountNumber ?? null };
+        }
+        if ((existingVendor.bankAccountHolder ?? null) !== (v.bankAccountHolder ?? null)) {
+          changes.bankAccountHolder = { old: existingVendor.bankAccountHolder, new: v.bankAccountHolder ?? null };
+        }
+        if (Object.keys(changes).length > 0) {
+          bankDiff = changes;
+        }
       }
       const candidates = await tx.vendor.findMany({
         where: { deletedAt: null, id: { not: vendorId } },
@@ -724,7 +759,10 @@ export async function updateVendor(vendorId: number, formData: FormData) {
     });
 
     revalidatePath("/master/vendor");
-    await logActivity("update", "Vendor", vendorId, "Memperbarui vendor");
+    const desc = bankDiff
+      ? `Memperbarui vendor (perubahan rekening: ${Object.keys(bankDiff).join(", ")})`
+      : "Memperbarui vendor";
+    await logActivity("update", "Vendor", vendorId, desc, bankDiff ? { changes: bankDiff } : undefined);
     return { success: true };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;

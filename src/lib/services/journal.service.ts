@@ -3,6 +3,7 @@ import { PrismaClient, Prisma } from '@prisma/client'
 
 import { YEAR_END_CLOSING_REFERENCE_TYPE } from '@/lib/reports/year-end-closing'
 import { assertPeriodOpen } from '@/lib/services/period-lock.service'
+import { safeAdd, safeSubtract } from '@/lib/utils/math'
 
 interface JournalEntryInput {
   accountId: number
@@ -61,14 +62,14 @@ export class JournalService {
       throw new Error('Jurnal harus memiliki minimal 1 entri.')
     }
 
-    // Validate double-entry: total debit must equal total credit
-    const totalDebit = input.entries.reduce((sum, e) => sum + e.debit, 0)
-    const totalCredit = input.entries.reduce((sum, e) => sum + e.credit, 0)
+    // Validate double-entry: total debit must equal total credit exactly (decimal precision 2)
+    const totalDebit = input.entries.reduce((sum, e) => safeAdd(sum, e.debit, 2), 0)
+    const totalCredit = input.entries.reduce((sum, e) => safeAdd(sum, e.credit, 2), 0)
 
-    // Use epsilon comparison for floating point
-    if (Math.abs(totalDebit - totalCredit) > 0.001) {
+    const discrepancy = safeSubtract(totalDebit, totalCredit, 2)
+    if (discrepancy !== 0) {
       throw new Error(
-        `Jurnal tidak balance. Total Debit: ${totalDebit.toFixed(2)}, Total Kredit: ${totalCredit.toFixed(2)}. Selisih: ${Math.abs(totalDebit - totalCredit).toFixed(2)}`
+        `Jurnal tidak balance. Total Debit: ${totalDebit.toFixed(2)}, Total Kredit: ${totalCredit.toFixed(2)}. Selisih: ${Math.abs(discrepancy).toFixed(2)}`
       )
     }
 

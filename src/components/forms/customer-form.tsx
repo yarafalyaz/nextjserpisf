@@ -18,6 +18,7 @@ import { AddressPicker } from "@/components/ui/address-picker"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { Button } from "@/components/ui/button"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import {
@@ -51,6 +52,7 @@ interface CustomerFormProps {
     pkpSource?: string | null
     customerCategoryId?: number | null
     paymentTermId?: number | null
+    creditLimit?: number | string | null
   }
   generatedCode?: string
   enableAutoCode?: boolean
@@ -105,6 +107,7 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
       pkpSource: customer?.pkpSource || "",
       customerCategoryId: customer?.customerCategoryId ?? null,
       paymentTermId: customer?.paymentTermId ?? null,
+      creditLimit: customer?.creditLimit != null ? Number(customer.creditLimit) : 0,
     },
   })
 
@@ -274,6 +277,24 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
               <Label htmlFor="taxId">NPWP</Label>
               <Input id="taxId" {...register("taxId")} placeholder="Nomor Pokok Wajib Pajak" />
               {errors.taxId && <span className="text-xs text-danger mt-1">{errors.taxId.message}</span>}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="creditLimit">Batas Kredit (Plafon Piutang)</Label>
+              <Controller
+                name="creditLimit"
+                control={control}
+                render={({ field }) => (
+                  <CurrencyInput
+                    id="creditLimit"
+                    value={field.value ?? 0}
+                    onChange={(v) => field.onChange(v ?? 0)}
+                    placeholder="0"
+                    prefix="Rp"
+                  />
+                )}
+              />
+              <p className="text-xs text-muted-foreground">Isi 0 untuk tanpa batas kredit (unrestricted).</p>
+              {errors.creditLimit && <span className="text-xs text-danger mt-1">{errors.creditLimit.message}</span>}
             </div>
             <Controller
               name="gender"
