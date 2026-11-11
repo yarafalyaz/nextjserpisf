@@ -82,7 +82,7 @@ export function CollectionQueueTable({
           id: row.invoiceId,
         })
         return (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-0.5">
             <Link
               href={href}
               className="font-mono text-xs font-semibold text-primary hover:underline hover:text-primary/80"
@@ -92,7 +92,7 @@ export function CollectionQueueTable({
             <div className="flex items-center gap-1.5 flex-wrap">
               {row.exchangeDocumentNo ? (
                 <span
-                  className="inline-flex items-center text-[10px] font-mono px-1.5 py-0.2 rounded bg-muted/80 text-muted-foreground border border-border/60"
+                  className="inline-flex items-center text-[10px] font-mono px-1 rounded bg-muted/80 text-muted-foreground border border-border/60"
                   title={`Tukar Faktur ${row.exchangeDocumentNo}`}
                 >
                   TF: {row.exchangeDocumentNo}
@@ -113,7 +113,7 @@ export function CollectionQueueTable({
       cell: (info) => {
         const row = info.row.original
         return (
-          <div className="flex flex-col max-w-[220px] truncate">
+          <div className="flex flex-col max-w-[200px] truncate">
             <span className="font-medium text-foreground text-xs truncate" title={info.getValue()}>
               {info.getValue()}
             </span>
@@ -126,29 +126,21 @@ export function CollectionQueueTable({
         )
       },
     }),
-    columnHelper.accessor("tahap", {
-      header: "Tahap Penyerahan",
-      cell: (info) => {
-        const row = info.row.original
-        return (
-          <StatusChip
-            status={row.tahap}
-            customLabel={row.tahapLabel}
-            customTone={STAGE_TONES[row.tahap]}
-          />
-        )
-      },
-    }),
     columnHelper.accessor("tingkatPengingat", {
-      header: "Tingkat Pengingat",
+      header: "Status Penagihan",
       cell: (info) => {
         const row = info.row.original
         return (
-          <StatusChip
-            status={row.tingkatPengingat}
-            customLabel={row.tingkatPengingatLabel}
-            customTone={REMINDER_TONES[row.tingkatPengingat]}
-          />
+          <div className="flex flex-col gap-1 items-start">
+            <StatusChip
+              status={row.tingkatPengingat}
+              customLabel={row.tingkatPengingatLabel}
+              customTone={REMINDER_TONES[row.tingkatPengingat]}
+            />
+            <span className="text-[10px] text-muted-foreground">
+              Tahap: {row.tahapLabel}
+            </span>
+          </div>
         )
       },
     }),
@@ -193,11 +185,11 @@ export function CollectionQueueTable({
       },
     }),
     columnHelper.accessor("lastFollowUpAt", {
-      header: "Tindak Lanjut / Janji",
+      header: "Tindak Lanjut",
       cell: (info) => {
         const row = info.row.original
         return (
-          <div className="flex flex-col text-xs">
+          <div className="flex flex-col text-xs max-w-[130px]">
             {row.promiseDate ? (
               <span className="text-amber-600 dark:text-amber-400 font-medium text-[11px] whitespace-nowrap">
                 Janji: {formatDate(row.promiseDate)}
