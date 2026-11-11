@@ -5,7 +5,7 @@ import Link from "next/link"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { SalesOrderDraftQueueCard } from "@/components/reports/sales-order-draft-queue-card"
+import { SalesOrderDraftTable } from "./_components/sales-order-draft-table"
 import { getSalesOrderDraftQueue } from "@/lib/reports/sales-order-draft-queue-data"
 import { SALES_ORDER_DRAFT_QUEUE_TITLE_TEXT } from "@/lib/reports/sales-order-draft-queue"
 import { formatCurrencyExact } from "@/lib/utils/format"
@@ -111,11 +111,9 @@ export default async function SalesOrderDraftQueuePage() {
         </div>
       </div>
 
-      <SalesOrderDraftQueueCard
+      <SalesOrderDraftTable
         rows={queue.rows}
         levelCounts={queue.levelCounts}
-        totalDocuments={queue.totalDocuments}
-        totalGrandTotal={queue.totalGrandTotal}
       />
     </div>
   )
