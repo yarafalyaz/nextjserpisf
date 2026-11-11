@@ -47,7 +47,7 @@ describe("buildWhatsappMessage", () => {
       documentNo: "INV-002",
       status: "posted",
     });
-    expect(message).toContain("Faktur INV-002: Diposting.");
+    expect(message).toContain("Status Faktur INV-002: Diterbitkan.");
     expect(message).not.toContain("Kendaraan:");
     expect(message).not.toContain("Estimasi");
   });

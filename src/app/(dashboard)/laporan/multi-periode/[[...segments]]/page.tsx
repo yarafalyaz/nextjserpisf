@@ -218,18 +218,18 @@ export default async function MultiPeriodReportPage({
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         {statement === 'neraca' ? (
           <>
-            <ReportKpiCard label={`Total Aset (${columns[columns.length - 1].label})`} value={formatAccountingExact(totalAssets[totalAssets.length - 1])} />
-            <ReportKpiCard label="Total Liabilitas + Ekuitas" value={formatAccountingExact(totalLiabilitiesEquity[totalLiabilitiesEquity.length - 1])} />
+            <ReportKpiCard label={`Total Aset (${columns[columns.length - 1].label})`} value={formatCurrencyExact(totalAssets[totalAssets.length - 1])} />
+            <ReportKpiCard label="Total Liabilitas + Ekuitas" value={formatCurrencyExact(totalLiabilitiesEquity[totalLiabilitiesEquity.length - 1])} />
             <ReportKpiCard
               label="Selisih (harus 0)"
-              value={formatAccountingExact(safeAdd(totalAssets[totalAssets.length - 1], -totalLiabilitiesEquity[totalLiabilitiesEquity.length - 1], 2))}
+              value={formatCurrencyExact(safeAdd(totalAssets[totalAssets.length - 1], -totalLiabilitiesEquity[totalLiabilitiesEquity.length - 1], 2))}
               valueClassName={Math.abs(safeAdd(totalAssets[totalAssets.length - 1], -totalLiabilitiesEquity[totalLiabilitiesEquity.length - 1], 2)) < 0.005 ? 'text-success' : 'text-danger'}
             />
           </>
         ) : (
           <>
-            <ReportKpiCard label={`Laba Bersih (${columns[columns.length - 1].label})`} value={formatAccountingExact(netProfit[netProfit.length - 1])} />
-            <ReportKpiCard label="Total Laba Bersih Periode" value={formatAccountingExact(netProfit.reduce((a, b) => safeAdd(a, b, 2), 0))} />
+            <ReportKpiCard label={`Laba Bersih (${columns[columns.length - 1].label})`} value={formatCurrencyExact(netProfit[netProfit.length - 1])} />
+            <ReportKpiCard label="Total Laba Bersih Periode" value={formatCurrencyExact(netProfit.reduce((a, b) => safeAdd(a, b, 2), 0))} />
             <ReportKpiCard label="Jumlah Periode" value={`${columns.length} ${MULTI_PERIOD_MODE_LABELS[mode]}`} />
           </>
         )}

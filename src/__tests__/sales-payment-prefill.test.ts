@@ -163,7 +163,7 @@ describe("halaman pembayaran/tambah membaca segmen faktur/<slug>", () => {
 
     expect(form.props.defaultInvoiceId).toBeUndefined()
     expect(text.includes("belum bisa dibayar")).toBe(true)
-    expect(text.includes("Draft")).toBe(true)
+    expect(text.includes("Konsep")).toBe(true)
     expect(text.includes("/penjualan/faktur/009-inv-iro-10-2026")).toBe(true)
   })
 

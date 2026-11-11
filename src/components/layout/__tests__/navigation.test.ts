@@ -44,7 +44,7 @@ describe("navigation single source of truth", () => {
       "Metode Pembayaran",
       "Metode Pengiriman",
       "Pindai Barang",
-      "Baris Rak",
+      "Rak",
       "Revisi BOM",
       "Pengendalian Mutu",
       "Saldo Cuti",

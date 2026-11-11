@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils"
 
 interface AppDatePickerProps {
+  id?: string
   label?: string
   name: string
   value?: string | Date // ISO date string "YYYY-MM-DD" or Date
@@ -51,6 +52,7 @@ function parseISODateLocal(str: string): Date | undefined {
 }
 
 export function AppDatePicker({
+  id,
   label,
   name,
   value,
@@ -92,11 +94,11 @@ export function AppDatePicker({
       )}
       {/* Hidden input keeps server-action FormData(name) working unchanged.
           Ikut disabled: field tampil-saja tidak boleh mengirim nilai. */}
-      <input type="hidden" name={name} value={current} disabled={disabled} />
+      <input type="hidden" id={id ?? name} name={name} value={current} disabled={disabled} />
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
-            id={`${name}-trigger`}
+            id={id ? `${id}-trigger` : `${name}-trigger`}
             type="button"
             variant="outline"
             disabled={disabled}

@@ -338,6 +338,7 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
                 name="pkpEffectiveFrom"
                 render={({ field }) => (
                   <AppDatePicker
+                    id="pkpEffectiveFrom"
                     name="pkpEffectiveFrom"
                     value={field.value ?? ""}
                     onChange={field.onChange}

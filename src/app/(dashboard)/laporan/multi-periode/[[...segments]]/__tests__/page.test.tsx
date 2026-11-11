@@ -22,22 +22,26 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }))
 
-vi.mock("@/lib/reports/report-period", () => ({
-  reportPeriodFromRoute: vi.fn(async () => ({
-    start: new Date("2026-10-01T00:00:00.000Z"),
-    end: new Date("2026-10-31T23:59:59.999Z"),
-    slug: "2026-10",
-  })),
-  splitReportSegments: (segments: string[]) => ({
-    periodSegments: segments.slice(0, 1),
-    filters: Object.fromEntries(
-      Array.from({ length: Math.floor((segments.length - 1) / 2) }, (_, i) => [
-        segments[1 + i * 2],
-        segments[2 + i * 2],
-      ]),
-    ),
-  }),
-}))
+vi.mock("@/lib/reports/report-period", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/reports/report-period")>()
+  return {
+    ...actual,
+    reportPeriodFromRoute: vi.fn(async () => ({
+      start: new Date("2026-10-01T00:00:00.000Z"),
+      end: new Date("2026-10-31T23:59:59.999Z"),
+      slug: "2026-10",
+    })),
+    splitReportSegments: (segments: string[]) => ({
+      periodSegments: segments.slice(0, 1),
+      filters: Object.fromEntries(
+        Array.from({ length: Math.floor((segments.length - 1) / 2) }, (_, i) => [
+          segments[1 + i * 2],
+          segments[2 + i * 2],
+        ]),
+      ),
+    }),
+  }
+})
 
 vi.mock(
   "@/components/reports/report-page-shell",

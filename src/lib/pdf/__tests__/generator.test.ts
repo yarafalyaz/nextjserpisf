@@ -107,15 +107,15 @@ describe("PDF Generator Flows", () => {
     expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
   })
 
-  it("R6IE-05: status draft menggambar watermark DRAFT, final tidak", async () => {
+  it("R6IE-05: status draft menggambar watermark KONSEP, final tidak", async () => {
     await generateTransactionPDF(mockCompany, { ...mockDocInfo, status: "draft" }, mockItems, mockSummary)
     const texts = mockDoc.text.mock.calls.map((call) => String(call[0]))
-    expect(texts).toContain("DRAFT")
+    expect(texts).toContain("KONSEP")
 
     vi.clearAllMocks()
     await generateTransactionPDF(mockCompany, { ...mockDocInfo, status: "posted" }, mockItems, mockSummary)
     const finalTexts = mockDoc.text.mock.calls.map((call) => String(call[0]))
-    expect(finalTexts).not.toContain("DRAFT")
+    expect(finalTexts).not.toContain("KONSEP")
     expect(finalTexts).not.toContain("MENUNGGU")
   })
 
@@ -129,13 +129,13 @@ describe("PDF Generator Flows", () => {
     const pages = vi.fn(() => 3)
     mockDoc.getNumberOfPages = pages as any
     await generateTransactionPDF(mockCompany, { ...mockDocInfo, status: "draft" }, mockItems, mockSummary)
-    const watermarkCalls = mockDoc.text.mock.calls.filter((call) => String(call[0]) === "DRAFT")
+    const watermarkCalls = mockDoc.text.mock.calls.filter((call) => String(call[0]) === "KONSEP")
     // 1 di awal dokumen + 1 per halaman (3) dari loop footer.
     expect(watermarkCalls.length).toBe(4)
     mockDoc.getNumberOfPages = vi.fn(() => 1) as any
   })
 
-  it("R7PR-02: work order draft ikut watermark DRAFT, selesai tidak", () => {
+  it("R7PR-02: work order draft ikut watermark KONSEP, selesai tidak", () => {
     const woInfo = {
       title: "Perintah Kerja",
       documentNo: "WO/2026/0001",
@@ -145,12 +145,12 @@ describe("PDF Generator Flows", () => {
     }
     generateWorkOrderPDF(mockCompany, woInfo, [])
     const texts = mockDoc.text.mock.calls.map((call) => String(call[0]))
-    expect(texts).toContain("DRAFT")
+    expect(texts).toContain("KONSEP")
 
     vi.clearAllMocks()
     generateWorkOrderPDF(mockCompany, { ...woInfo, status: "completed" }, [])
     const finalTexts = mockDoc.text.mock.calls.map((call) => String(call[0]))
-    expect(finalTexts).not.toContain("DRAFT")
+    expect(finalTexts).not.toContain("KONSEP")
   })
 
   it("menulis baris Terbilang berisi kata-kata nominal total", async () => {

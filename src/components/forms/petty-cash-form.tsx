@@ -140,69 +140,75 @@ export function PettyCashForm({
       aria-label={pettyCash?.id ? "Formulir ubah kas kecil" : "Formulir tambah kas kecil"}
       className="flex flex-col gap-6 max-w-4xl"
     >
-      <input type="hidden" name="type" value={type} />
-
       {/* Mode Selector Segmented Tabs (ERP High-Affordance Switcher) */}
-      {!pettyCash?.id && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-1.5 rounded-xl border border-border bg-muted/40">
-          <button
-            type="button"
-            onClick={() => handleTypeChange("OUT")}
-            className={`flex items-start gap-3 p-3.5 rounded-lg border text-left transition-all min-h-11 ${
-              !isInflow
-                ? "bg-card border-border shadow-2xs text-foreground ring-1 ring-border"
-                : "border-transparent text-muted-foreground hover:bg-card/60 hover:text-foreground"
-            }`}
-          >
-            <div
-              className={`flex size-9 shrink-0 items-center justify-center rounded-md ${
+      {!pettyCash?.id ? (
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="type">
+            Tipe <span className="text-destructive" aria-hidden="true">*</span>
+          </Label>
+          <input type="hidden" id="type" name="type" value={type} aria-required="true" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-1.5 rounded-xl border border-border bg-muted/40">
+            <button
+              type="button"
+              onClick={() => handleTypeChange("OUT")}
+              className={`flex items-start gap-3 p-3.5 rounded-lg border text-left transition-all min-h-11 ${
                 !isInflow
-                  ? "bg-red-500/10 text-red-600 dark:text-red-400"
-                  : "bg-muted text-muted-foreground"
+                  ? "bg-card border-border shadow-2xs text-foreground ring-1 ring-border"
+                  : "border-transparent text-muted-foreground hover:bg-card/60 hover:text-foreground"
               }`}
             >
-              <Receipt className="size-4" aria-hidden="true" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center justify-between gap-1">
-                <span className="text-sm font-semibold">Voucher Kas Kecil (PCV)</span>
-                {!isInflow && <Check className="size-4 text-primary" aria-hidden="true" />}
+              <div
+                className={`flex size-9 shrink-0 items-center justify-center rounded-md ${
+                  !isInflow
+                    ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                <Receipt className="size-4" aria-hidden="true" />
               </div>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Pengeluaran operasional harian kasir kas kecil
-              </p>
-            </div>
-          </button>
+              <div className="flex-1">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-sm font-semibold">Voucher Kas Kecil (PCV)</span>
+                  {!isInflow && <Check className="size-4 text-primary" aria-hidden="true" />}
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Pengeluaran operasional harian kasir kas kecil
+                </p>
+              </div>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => handleTypeChange("IN")}
-            className={`flex items-start gap-3 p-3.5 rounded-lg border text-left transition-all min-h-11 ${
-              isInflow
-                ? "bg-card border-border shadow-2xs text-foreground ring-1 ring-border"
-                : "border-transparent text-muted-foreground hover:bg-card/60 hover:text-foreground"
-            }`}
-          >
-            <div
-              className={`flex size-9 shrink-0 items-center justify-center rounded-md ${
+            <button
+              type="button"
+              onClick={() => handleTypeChange("IN")}
+              className={`flex items-start gap-3 p-3.5 rounded-lg border text-left transition-all min-h-11 ${
                 isInflow
-                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  : "bg-muted text-muted-foreground"
+                  ? "bg-card border-border shadow-2xs text-foreground ring-1 ring-border"
+                  : "border-transparent text-muted-foreground hover:bg-card/60 hover:text-foreground"
               }`}
             >
-              <RotateCcw className="size-4" aria-hidden="true" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center justify-between gap-1">
-                <span className="text-sm font-semibold">Pengisian / Reimposisi</span>
-                {isInflow && <Check className="size-4 text-primary" aria-hidden="true" />}
+              <div
+                className={`flex size-9 shrink-0 items-center justify-center rounded-md ${
+                  isInflow
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                <RotateCcw className="size-4" aria-hidden="true" />
               </div>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Tarik dana dari Kas/Bank Utama untuk mengisi kembali saldo
-              </p>
-            </div>
-          </button>
+              <div className="flex-1">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-sm font-semibold">Pengisian Kas Kecil (PCF)</span>
+                  {isInflow && <Check className="size-4 text-primary" aria-hidden="true" />}
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Top-up saldo fisik dari rekening kas/bank besar
+                </p>
+              </div>
+            </button>
+          </div>
         </div>
+      ) : (
+        <input type="hidden" id="type" name="type" value={type} aria-required="true" />
       )}
 
       {/* Main Form Body */}
@@ -234,7 +240,7 @@ export function PettyCashForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="amount">
-                Jumlah Transaksi <span className="text-destructive" aria-hidden="true">*</span>
+                Jumlah (Rp) <span className="text-destructive" aria-hidden="true">*</span>
               </Label>
               <CurrencyInput
                 id="amount"
@@ -267,7 +273,6 @@ export function PettyCashForm({
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="accountId">
               {isInflow ? "Rekening Sumber Kas / Bank" : "Alokasi Akun Beban (GL Expense)"}
-              <span className="text-destructive ml-1" aria-hidden="true">*</span>
             </Label>
             <QuickAddSelect
               id="accountId"
