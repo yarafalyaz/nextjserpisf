@@ -1,48 +1,63 @@
-import { Plus } from "lucide-react";
+import { Plus, Scale, Layers } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
-import { entityHref } from "@/lib/utils/entity-url";
 import { parsePagination } from "@/lib/utils/pagination";
-import { listPageHref } from "@/lib/utils/list-href";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
-import { EmptyState } from "@/components/ui/empty-state";
-import {
-  DetailTable,
-  DetailTableHead,
-  DetailTableTh,
-  DetailTableBody,
-  DetailTableRow,
-  DetailTableTd,
-} from "@/components/ui/detail-table";
-import type { Metadata } from "next";
 import { requirePermission } from "@/lib/auth/permissions";
 import { CanCreate } from "@/components/auth/can-create";
+import { UomTable } from "./_components/uom-table";
+import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Satuan" };
 
 export default async function UomPage({
   searchParams,
 }: {
-  searchParams: Promise<{ halaman?: string; pageSize?: string }>;
+  searchParams: Promise<{ halaman?: string; pageSize?: string; cari?: string; q?: string }>;
 }) {
   await requirePermission("view_units");
 
   const params = await searchParams;
   const { page, pageSize, take } = parsePagination(params);
+  const searchQuery = (params.cari || params.q || "").trim();
 
-  const [units, total] = await Promise.all([
+  const whereClause = {
+    isActive: true,
+    ...(searchQuery
+      ? {
+          OR: [
+            { name: { contains: searchQuery } },
+            { symbol: { contains: searchQuery } },
+            { category: { contains: searchQuery } },
+          ],
+        }
+      : {}),
+  };
+
+  const [units, total, categoriesCount] = await Promise.all([
     prisma.unitOfMeasure.findMany({
-      where: { isActive: true },
+      where: whereClause,
       orderBy: { name: "asc" },
       take,
       skip: (page - 1) * pageSize,
     }),
-    prisma.unitOfMeasure.count({ where: { isActive: true } }),
+    prisma.unitOfMeasure.count({ where: whereClause }),
+    prisma.unitOfMeasure.groupBy({
+      by: ["category"],
+      where: { isActive: true },
+      _count: true,
+    }),
   ]);
 
-  const totalPages = Math.ceil(total / pageSize);
+  const serializedUnits = units.map((u) => ({
+    id: u.id,
+    name: u.name,
+    symbol: u.symbol,
+    category: u.category,
+    isActive: u.isActive,
+  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -53,8 +68,16 @@ export default async function UomPage({
           { label: "Satuan" },
         ]}
       />
+
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Satuan</h1>
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">
+            Satuan Ukuran (UOM)
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Katalog satuan ukuran standar untuk inventaris, transaksi pembelian, dan penjualan.
+          </p>
+        </div>
         <CanCreate permission="edit_units">
           <Link
             href="/master/satuan/tambah"
@@ -66,69 +89,43 @@ export default async function UomPage({
         </CanCreate>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>Nama</DetailTableTh>
-              <DetailTableTh>Simbol</DetailTableTh>
-              <DetailTableTh>Kategori</DetailTableTh>
-              <DetailTableTh>Aksi</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {units.length === 0 ? (
-                <DetailTableRow>
-                  <DetailTableTd colSpan={4} className="py-10 px-4">
-                    <EmptyState title="Belum ada satuan" className="py-0" />
-                  </DetailTableTd>
-                </DetailTableRow>
-              ) : (
-                units.map((u) => (
-                  <DetailTableRow key={u.id}>
-                    <DetailTableTd>{u.name}</DetailTableTd>
-                    <DetailTableTd className="font-mono">
-                      {u.symbol}
-                    </DetailTableTd>
-                    <DetailTableTd>{u.category ?? "-"}</DetailTableTd>
-                    <DetailTableTd>
-                      <Link
-                        href={entityHref("/master/satuan", u)}
-                        className="button button--ghost button--sm"
-                      >
-                        Detail
-                      </Link>
-                    </DetailTableTd>
-                  </DetailTableRow>
-                ))
-              )}
-            </DetailTableBody>
-          </DetailTable>
-
-        {totalPages > 1 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 p-3 px-5 border-t border-default">
-            <span className="text-[0.8125rem] text-muted-foreground">
-              Hal {page} dari {totalPages} ({total} data)
-            </span>
-            <div className="flex gap-1">
-              {page > 1 && (
-                <Link
-                  href={listPageHref("/master/satuan", params, page - 1)}
-                  className="button button--ghost button--sm"
-                >
-                  ← Sebelumnya
-                </Link>
-              )}
-              {page < totalPages && (
-                <Link
-                  href={listPageHref("/master/satuan", params, page + 1)}
-                  className="button button--ghost button--sm"
-                >
-                  Berikutnya →
-                </Link>
-              )}
+      {/* Executive Metric Strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="bg-surface rounded-xl border border-default p-4 shadow-sm flex items-center justify-between">
+          <div>
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Total Satuan Aktif
+            </div>
+            <div className="text-2xl font-bold font-mono tabular-nums text-foreground mt-0.5">
+              {total}
             </div>
           </div>
-        )}
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+            <Scale className="size-5" />
+          </div>
+        </div>
+
+        <div className="bg-surface rounded-xl border border-default p-4 shadow-sm flex items-center justify-between">
+          <div>
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Kelompok Kategori
+            </div>
+            <div className="text-2xl font-bold font-mono tabular-nums text-foreground mt-0.5">
+              {categoriesCount.length}
+            </div>
+          </div>
+          <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
+            <Layers className="size-5" />
+          </div>
+        </div>
       </div>
+
+      <UomTable
+        data={serializedUnits}
+        page={page}
+        pageSize={pageSize}
+        total={total}
+      />
     </div>
   );
 }
