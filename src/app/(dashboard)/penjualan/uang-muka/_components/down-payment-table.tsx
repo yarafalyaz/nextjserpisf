@@ -4,11 +4,11 @@ import { createColumnHelper } from "@/lib/table"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
+import { StatusChip } from "@/components/ui/status-chip"
 import { deleteDownPayment } from "@/actions/sales.actions"
 import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
 
-import { statusLabel } from "@/lib/utils/status-labels"
 import {
   DownPaymentTaxStatusBadge,
   type DownPaymentVatSnapshotView,
@@ -17,8 +17,11 @@ import {
 interface DownPayment {
   id: number
   slug: string | null
-  quotation: { documentNo: string; customer: { name: string } }
+  documentNo: string
+  quotation: { documentNo: string; slug?: string | null; customer: { name: string } }
   amount: number | string
+  paymentDate?: Date | string | null
+  paymentMethod?: string | null
   status: string
   createdAt: Date | string
   /** Snapshot PPN verbatim server (read-model PR #785); null = belum ada baris read-model. */
@@ -28,33 +31,59 @@ interface DownPayment {
 const columnHelper = createColumnHelper<DownPayment>()
 
 const columns = [
-  columnHelper.accessor((row) => row.quotation.documentNo, {
-    id: "quotationDocumentNo",
-    header: "Penawaran",
+  columnHelper.accessor("documentNo", {
+    header: "No. Dokumen",
     cell: (info) => (
-      <Link href={entityHref("/penjualan/uang-muka", info.row.original)} className="text-foreground hover:underline font-mono">
-        {info.getValue()}
-      </Link>
+      <div className="flex flex-col gap-0.5">
+        <Link href={entityHref("/penjualan/uang-muka", info.row.original)} className="text-foreground hover:underline font-mono font-medium">
+          {info.getValue()}
+        </Link>
+        <span className="text-2xs text-muted-foreground font-mono">
+          Ref: {info.row.original.quotation.documentNo}
+        </span>
+      </div>
     ),
   }),
   columnHelper.accessor((row) => row.quotation.customer.name, {
     id: "customerName",
     header: "Pelanggan",
-    cell: (info) => info.getValue(),
+    cell: (info) => (
+      <span className="font-medium text-foreground">{info.getValue()}</span>
+    ),
+  }),
+  columnHelper.accessor((row) => row.paymentDate ?? row.createdAt, {
+    id: "paymentDate",
+    header: "Tgl. Bayar",
+    cell: (info) => (
+      <div className="flex flex-col gap-0.5">
+        <span>{formatDate(info.getValue())}</span>
+        {info.row.original.paymentMethod ? (
+          <span className="text-2xs text-muted-foreground uppercase">
+            {info.row.original.paymentMethod}
+          </span>
+        ) : null}
+      </div>
+    ),
   }),
   columnHelper.accessor("amount", {
     header: "Jumlah Uang Muka",
-    cell: (info) => <span className="text-right">{formatCurrencyExact(Number(info.getValue()))}</span>,
+    cell: (info) => (
+      <span className="font-mono tabular-nums text-foreground font-medium">
+        {formatCurrencyExact(Number(info.getValue()))}
+      </span>
+    ),
   }),
   columnHelper.accessor((row) => row.vatSnapshot ?? null, {
     id: "vatSnapshot",
     header: "Snapshot PPN",
     cell: (info) => {
       const snap = info.getValue()
-      if (!snap) return <span className="text-muted-foreground">Belum ada snapshot PPN tercatat</span>
+      if (!snap) return <span className="text-xs text-muted-foreground">—</span>
       return (
         <span className="flex flex-col items-start gap-1">
-          <span>{snap.vatAmount === null ? "PPN —" : `PPN ${formatCurrencyExact(snap.vatAmount)}`} · {snap.pkpSnapshotLabel}</span>
+          <span className="text-xs font-mono tabular-nums">
+            {snap.vatAmount === null ? "PPN —" : `PPN ${formatCurrencyExact(snap.vatAmount)}`} · {snap.pkpSnapshotLabel}
+          </span>
           <DownPaymentTaxStatusBadge snapshot={snap} />
         </span>
       )
@@ -63,13 +92,8 @@ const columns = [
   columnHelper.accessor("status", {
     header: "Status",
     cell: (info) => {
-      const val = info.getValue()
-      return <span className={`status-badge status-${val}`}>{statusLabel(val)}</span>
+      return <StatusChip status={info.getValue()} />
     },
-  }),
-  columnHelper.accessor("createdAt", {
-    header: "Dibuat",
-    cell: (info) => formatDate(info.getValue()),
   }),
   columnHelper.display({
     id: "actions",
