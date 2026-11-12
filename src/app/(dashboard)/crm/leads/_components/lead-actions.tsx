@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
+import { AppDatePicker } from "@/components/ui/date-picker"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { convertLead, addLeadActivity, completeLeadActivity, reopenLeadActivity } from "@/actions/crm.actions"
@@ -65,6 +66,7 @@ export function AddLeadActivityForm({ leadId, canCreate = true }: { leadId: numb
   if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID()
   const [isPending, startTransition] = useTransition()
   const [type, setType] = useState("note")
+  const [scheduledAt, setScheduledAt] = useState("")
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -72,6 +74,7 @@ export function AddLeadActivityForm({ leadId, canCreate = true }: { leadId: numb
     startTransition(async () => {
       const fd = new FormData(form)
       fd.set("type", type)
+      if (scheduledAt) fd.set("scheduledAt", scheduledAt)
       fd.set("idempotencyKey", idempotencyKeyRef.current!)
       const res = await addLeadActivity(leadId, fd)
       if (!res.success) {
@@ -82,6 +85,7 @@ export function AddLeadActivityForm({ leadId, canCreate = true }: { leadId: numb
       showSuccess("Aktivitas ditambahkan")
       form.reset()
       setType("note")
+      setScheduledAt("")
       router.refresh()
     })
   }
@@ -110,12 +114,18 @@ export function AddLeadActivityForm({ leadId, canCreate = true }: { leadId: numb
         <Label htmlFor="activityDesc">Deskripsi</Label>
         <Textarea id="activityDesc" name="description" rows={1} placeholder="Detail (opsional)..." />
       </div>
-      <div className="flex flex-col gap-1.5 sm:w-40">
-        <Label htmlFor="activityScheduledAt">Jadwal Follow-up</Label>
-        <Input id="activityScheduledAt" name="scheduledAt" type="date" />
+      <div className="flex flex-col gap-1.5 sm:w-44">
+        <AppDatePicker
+          id="activityScheduledAt"
+          name="scheduledAt"
+          label="Jadwal Follow-up"
+          value={scheduledAt}
+          onChange={setScheduledAt}
+        />
       </div>
-      <Button type="submit" size="sm" disabled={isPending}>
-        <Plus size={14} aria-hidden="true" /> {isPending ? "Menyimpan..." : "Tambah"}
+      <Button type="submit" size="sm" disabled={isPending} className="min-h-11 sm:min-h-9">
+        <Plus className="size-3.5" aria-hidden="true" />
+        <span>{isPending ? "Menyimpan..." : "Tambah"}</span>
       </Button>
     </form>
   )

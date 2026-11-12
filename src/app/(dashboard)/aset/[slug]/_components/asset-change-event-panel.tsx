@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
+import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import {
@@ -125,6 +126,9 @@ export function AssetChangeEventPanel({
   const [reversalTarget, setReversalTarget] = useState<AssetChangeEventRow | null>(null)
   const [reversalDate, setReversalDate] = useState("")
   const [reversalKey, setReversalKey] = useState("")
+  const [eventEffectiveDate, setEventEffectiveDate] = useState("")
+  const [djpApprovalDate, setDjpApprovalDate] = useState("")
+  const [reclassEffectiveDate, setReclassEffectiveDate] = useState("")
 
   const isReval = kind === "REVALUATION_UP" || kind === "REVALUATION_DOWN" || kind === "FISCAL_REVALUATION_APPROVED"
   const isImpair = kind === "IMPAIRMENT" || kind === "IMPAIRMENT_REVERSAL"
@@ -137,6 +141,9 @@ export function AssetChangeEventPanel({
       showSuccess(res.journalNumber ? `${okText} — jurnal ${res.journalNumber}` : okText)
       setMode("none")
       setReversalTarget(null)
+      setEventEffectiveDate("")
+      setDjpApprovalDate("")
+      setReclassEffectiveDate("")
       router.refresh()
     } else {
       showError(res?.error || "Peristiwa aset gagal diproses")
@@ -146,6 +153,8 @@ export function AssetChangeEventPanel({
   function onEventSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    if (eventEffectiveDate) formData.set("effectiveDate", eventEffectiveDate)
+    if (djpApprovalDate) formData.set("djpApprovalDate", djpApprovalDate)
     startTransition(async () => {
       try {
         submitResult(await postAssetChangeEventAction(formData), "Peristiwa perubahan aset terposting")
@@ -158,6 +167,7 @@ export function AssetChangeEventPanel({
   function onReclassSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    if (reclassEffectiveDate) formData.set("effectiveDate", reclassEffectiveDate)
     startTransition(async () => {
       try {
         submitResult(await postAssetReclassificationAction(formData), "Reklasifikasi aset terposting")
@@ -319,9 +329,14 @@ export function AssetChangeEventPanel({
                 ))}
               </select>
             </Field>
-            <Field id="ace-effectiveDate" label="Tanggal Efektif *">
-              <Input id="ace-effectiveDate" name="effectiveDate" type="date" required />
-            </Field>
+            <AppDatePicker
+              id="ace-effectiveDate"
+              name="effectiveDate"
+              label="Tanggal Efektif *"
+              required
+              value={eventEffectiveDate}
+              onChange={setEventEffectiveDate}
+            />
             <Field id="ace-sourceDocumentKey" label="Kunci Dokumen Sumber *">
               <Input id="ace-sourceDocumentKey" name="sourceDocumentKey" required placeholder="cth. LAP-PENILAI-2026-001" />
             </Field>
@@ -391,9 +406,14 @@ export function AssetChangeEventPanel({
                 <Field id="ace-djpApprovalNumber" label="Nomor Persetujuan DJP *">
                   <Input id="ace-djpApprovalNumber" name="djpApprovalNumber" required placeholder="Nomor keputusan DJP" />
                 </Field>
-                <Field id="ace-djpApprovalDate" label="Tanggal Persetujuan DJP *">
-                  <Input id="ace-djpApprovalDate" name="djpApprovalDate" type="date" required />
-                </Field>
+                <AppDatePicker
+                  id="ace-djpApprovalDate"
+                  name="djpApprovalDate"
+                  label="Tanggal Persetujuan DJP *"
+                  required
+                  value={djpApprovalDate}
+                  onChange={setDjpApprovalDate}
+                />
               </>
             )}
 
@@ -487,9 +507,14 @@ export function AssetChangeEventPanel({
                   ))}
               </select>
             </Field>
-            <Field id="acr-effectiveDate" label="Tanggal Efektif *">
-              <Input id="acr-effectiveDate" name="effectiveDate" type="date" required />
-            </Field>
+            <AppDatePicker
+              id="acr-effectiveDate"
+              name="effectiveDate"
+              label="Tanggal Efektif *"
+              required
+              value={reclassEffectiveDate}
+              onChange={setReclassEffectiveDate}
+            />
             <Field id="acr-sourceDocumentKey" label="Kunci Dokumen Sumber *">
               <Input id="acr-sourceDocumentKey" name="sourceDocumentKey" required placeholder="cth. BA-REKLAS-2026-001" />
             </Field>
@@ -537,15 +562,14 @@ export function AssetChangeEventPanel({
             {reversalTarget ? formatDate(reversalTarget.effectiveDate) : ""} akan dibalik lewat jurnal pembalik pada periode terbuka.
             Baris peristiwa asal tidak diubah.
           </p>
-          <Field id="ace-reversalDate" label="Tanggal Pembalikan *">
-            <Input
-              id="ace-reversalDate"
-              type="date"
-              required
-              value={reversalDate}
-              onChange={(e) => setReversalDate(e.target.value)}
-            />
-          </Field>
+          <AppDatePicker
+            id="ace-reversalDate"
+            name="reversalDate"
+            label="Tanggal Pembalikan *"
+            required
+            value={reversalDate}
+            onChange={setReversalDate}
+          />
           <Field id="ace-reversalKey" label="Kunci Dokumen Sumber Pembalikan *">
             <Input
               id="ace-reversalKey"

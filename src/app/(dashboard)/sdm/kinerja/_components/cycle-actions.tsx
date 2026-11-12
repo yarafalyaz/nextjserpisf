@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useRef, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import {
   createPerformanceCycle,
   finalizeReview,
@@ -10,10 +10,18 @@ import {
   submitSelfReview,
 } from "@/actions/performance.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
+import { AppDatePicker } from "@/components/ui/date-picker"
+import { Input } from "@/components/ui/shadcn/input"
+import { Label } from "@/components/ui/shadcn/label"
+import { Button } from "@/components/ui/shadcn/button"
+import { Plus } from "@/components/ui/fontawesome-icons"
 
 export function CycleForm() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [periodStart, setPeriodStart] = useState("")
+  const [periodEnd, setPeriodEnd] = useState("")
+  const [isOpen, setIsOpen] = useState(false)
   // Kunci idempotency per intent: stabil selama form tayang (retry jaringan
   // memakai key sama), diganti hanya sesudah siklus benar-benar lahir.
   const idempotencyKeyRef = useRef<string | null>(null)
@@ -26,6 +34,9 @@ export function CycleForm() {
       idempotencyKeyRef.current = crypto.randomUUID()
     }
     formData.set("idempotencyKey", idempotencyKeyRef.current)
+    if (periodStart) formData.set("periodStart", periodStart)
+    if (periodEnd) formData.set("periodEnd", periodEnd)
+
     startTransition(async () => {
       try {
         const result = await createPerformanceCycle(formData)
@@ -33,6 +44,9 @@ export function CycleForm() {
         idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess("Siklus penilaian dibuat")
         form.reset()
+        setPeriodStart("")
+        setPeriodEnd("")
+        setIsOpen(false)
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal membuat siklus")
@@ -40,15 +54,88 @@ export function CycleForm() {
     })
   }
 
+  if (!isOpen) {
+    return (
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+        >
+          <Plus className="size-3.5" aria-hidden="true" />
+          <span>Tambah Siklus Penilaian</span>
+        </button>
+      </div>
+    )
+  }
+
   return (
-    <form onSubmit={onSubmit} aria-busy={isPending} className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-      <input name="name" required placeholder="Nama siklus (cth. Semester 1 2026)" className="form-input" />
-      <input name="periodStart" type="date" required className="form-input" />
-      <input name="periodEnd" type="date" required className="form-input" />
-      <button type="submit" disabled={isPending} className="btn-primary px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
-        {isPending ? "Menyimpan..." : "Buat Siklus"}
-      </button>
-    </form>
+    <div className="rounded-xl border border-border bg-card p-5 shadow-2xs">
+      <div className="flex items-center justify-between border-b border-border/60 pb-3 mb-4">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">Formulir Tambah Siklus Evaluasi Kinerja</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Buka periode penilaian kinerja baru untuk evaluasi karyawan</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsOpen(false)}
+          className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+        >
+          Tutup
+        </button>
+      </div>
+
+      <form onSubmit={onSubmit} aria-busy={isPending} className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cycle-name">Nama Siklus <span className="text-destructive">*</span></Label>
+            <Input id="cycle-name" name="name" required placeholder="mis. Semester 1 2026 / Tahunan 2026" />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <AppDatePicker
+              id="cycle-periodStart"
+              name="periodStart"
+              label="Periode Mulai *"
+              value={periodStart}
+              onChange={setPeriodStart}
+              required
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <AppDatePicker
+              id="cycle-periodEnd"
+              name="periodEnd"
+              label="Periode Akhir *"
+              value={periodEnd}
+              onChange={setPeriodEnd}
+              required
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setIsOpen(false)}
+            className="min-h-11 sm:min-h-9"
+          >
+            Batal
+          </Button>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={isPending}
+            className="min-h-11 sm:min-h-9"
+          >
+            {isPending ? "Menyimpan..." : "Simpan Siklus"}
+          </Button>
+        </div>
+      </form>
+    </div>
   )
 }
 

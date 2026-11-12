@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useRef, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import {
   addTrainingParticipant,
   createTraining,
@@ -9,10 +9,20 @@ import {
   setTrainingStatus,
 } from "@/actions/development.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
+import { AppDatePicker } from "@/components/ui/date-picker"
+import { CurrencyInput } from "@/components/ui/currency-input"
+import { Input } from "@/components/ui/shadcn/input"
+import { Label } from "@/components/ui/shadcn/label"
+import { Button } from "@/components/ui/shadcn/button"
+import { Plus } from "@/components/ui/fontawesome-icons"
 
 export function TrainingForm() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  const [cost, setCost] = useState<number>(0)
+  const [isOpen, setIsOpen] = useState(false)
   // Putaran 68: key stabil per intent; form tetap mounted sesudah sukses
   // (form.reset), jadi key dirotasi sesudah sukses.
   const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
@@ -22,6 +32,10 @@ export function TrainingForm() {
     const form = event.currentTarget
     const formData = new FormData(form)
     formData.set("idempotencyKey", idempotencyKeyRef.current)
+    if (startDate) formData.set("startDate", startDate)
+    if (endDate) formData.set("endDate", endDate)
+    formData.set("cost", String(cost))
+
     startTransition(async () => {
       try {
         const result = await createTraining(formData)
@@ -29,6 +43,10 @@ export function TrainingForm() {
         idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess("Pelatihan dibuat")
         form.reset()
+        setStartDate("")
+        setEndDate("")
+        setCost(0)
+        setIsOpen(false)
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal membuat pelatihan")
@@ -36,18 +54,110 @@ export function TrainingForm() {
     })
   }
 
+  if (!isOpen) {
+    return (
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+        >
+          <Plus className="size-3.5" aria-hidden="true" />
+          <span>Tambah Pelatihan</span>
+        </button>
+      </div>
+    )
+  }
+
   return (
-    <form onSubmit={onSubmit} aria-busy={isPending} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <input name="title" required placeholder="Judul pelatihan" className="form-input" />
-      <input name="provider" placeholder="Penyelenggara" className="form-input" />
-      <input name="location" placeholder="Lokasi" className="form-input" />
-      <input name="startDate" type="date" required className="form-input" />
-      <input name="endDate" type="date" className="form-input" />
-      <input name="cost" placeholder="Biaya (cth. 1500000)" className="form-input" />
-      <button type="submit" disabled={isPending} className="btn-primary px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 sm:col-span-3">
-        {isPending ? "Menyimpan..." : "Buat Pelatihan"}
-      </button>
-    </form>
+    <div className="rounded-xl border border-border bg-card p-5 shadow-2xs">
+      <div className="flex items-center justify-between border-b border-border/60 pb-3 mb-4">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">Formulir Tambah Program Pelatihan</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Daftarkan agenda training atau peningkatan kompetensi SDM baru</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsOpen(false)}
+          className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+        >
+          Tutup
+        </button>
+      </div>
+
+      <form onSubmit={onSubmit} aria-busy={isPending} className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="training-title">Judul Pelatihan <span className="text-destructive">*</span></Label>
+            <Input id="training-title" name="title" required placeholder="mis. Sertifikasi ISO 9001" />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="training-provider">Penyelenggara</Label>
+            <Input id="training-provider" name="provider" placeholder="mis. Lembaga Sertifikasi Nasional" />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="training-location">Lokasi</Label>
+            <Input id="training-location" name="location" placeholder="mis. Ruang Training A / Online Zoom" />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <AppDatePicker
+              id="training-startDate"
+              name="startDate"
+              label="Tanggal Mulai *"
+              value={startDate}
+              onChange={setStartDate}
+              required
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <AppDatePicker
+              id="training-endDate"
+              name="endDate"
+              label="Tanggal Selesai"
+              value={endDate}
+              onChange={setEndDate}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="training-cost">Biaya Pelatihan</Label>
+            <CurrencyInput
+              id="training-cost"
+              name="cost"
+              value={cost}
+              onChange={(val) => setCost(val)}
+              placeholder="0"
+              prefix="Rp"
+              className="font-mono text-sm tabular-nums"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setIsOpen(false)}
+            className="min-h-11 sm:min-h-9"
+          >
+            Batal
+          </Button>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={isPending}
+            className="min-h-11 sm:min-h-9"
+          >
+            {isPending ? "Menyimpan..." : "Simpan Pelatihan"}
+          </Button>
+        </div>
+      </form>
+    </div>
   )
 }
 
