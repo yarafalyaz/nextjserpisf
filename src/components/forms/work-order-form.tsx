@@ -5,7 +5,9 @@ import { useRef, useState, useTransition } from "react";
 import { AppDatePicker } from "@/components/ui/date-picker";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
+import { Input } from "@/components/ui/shadcn/input";
 import { Textarea } from "@/components/ui/shadcn/textarea";
+import { Plus, Trash2 } from "@/components/ui/fontawesome-icons";
 import { Combobox } from "@/components/ui/combobox";
 import { QuickAddSelect } from "@/components/ui/quick-add-select";
 import { QUICK_ADD } from "@/lib/quick-add/registry";
@@ -222,31 +224,32 @@ export function WorkOrderForm({
               <Button
                 type="button"
                 onPress={addItem}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors shadow-2xs cursor-pointer"
               >
-                + Tambah
+                <Plus className="size-3.5" aria-hidden="true" />
+                <span>Tambah Bahan</span>
               </Button>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg border border-border bg-card">
               <table className="w-full border-collapse text-sm">
                 <thead>
-                  <tr className="border-b border-default">
+                  <tr className="border-b border-border/80 text-muted-foreground">
                     <th
-                      className="text-left py-2 px-2 font-medium text-muted-foreground"
+                      className="text-left py-2 px-2 font-medium"
                       style={{ minWidth: "200px" }}
                     >
                       Item
                     </th>
                     <th
-                      className="text-left py-2 px-2 font-medium text-muted-foreground"
-                      style={{ width: "80px" }}
+                      className="text-right py-2 px-2 font-medium"
+                      style={{ width: "90px" }}
                     >Kuantitas</th>
-                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">
+                    <th className="text-left py-2 px-2 font-medium">
                       Deskripsi
                     </th>
                     <th
-                      className="text-left py-2 px-2 font-medium text-muted-foreground"
-                      style={{ width: "110px" }}
+                      className="text-left py-2 px-2 font-medium"
+                      style={{ width: "120px" }}
                     >
                       Status
                     </th>
@@ -255,7 +258,7 @@ export function WorkOrderForm({
                 </thead>
                 <tbody>
                   {woItems.map((item, i) => (
-                    <tr key={item.uid} className="border-b border-default/50">
+                    <tr key={item.uid} className="border-b border-border/50">
                       <td className="py-2 px-2">
                         <Combobox
                           value={item.itemId ? String(item.itemId) : "0"}
@@ -280,7 +283,7 @@ export function WorkOrderForm({
                         />
                       </td>
                       <td className="py-2 px-2">
-                        <input
+                        <Input
                           type="number"
                           min={1}
                           aria-label={`Jumlah baris ${i + 1}`}
@@ -288,25 +291,19 @@ export function WorkOrderForm({
                           onChange={(e) =>
                             updateItem(i, "qty", Number(e.target.value))
                           }
-                          className="form-input"
-                          style={{
-                            fontSize: "0.8125rem",
-                            padding: "6px",
-                            width: "80px",
-                          }}
+                          className="h-9 w-24 text-xs text-right font-mono tabular-nums"
                         />
                       </td>
                       <td className="py-2 px-2">
-                        <input
+                        <Input
                           type="text"
                           aria-label={`Deskripsi baris ${i + 1}`}
                           value={item.description}
                           onChange={(e) =>
                             updateItem(i, "description", e.target.value)
                           }
-                          className="form-input"
-                          style={{ fontSize: "0.8125rem", padding: "6px" }}
                           placeholder="Deskripsi..."
+                          className="h-9 text-xs"
                         />
                       </td>
                       <td className="py-2 px-2">
@@ -328,9 +325,11 @@ export function WorkOrderForm({
                               type="button"
                               onPress={() => removeItem(i)}
                               aria-label={`Hapus baris ${i + 1}`}
-                              className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all"
+                              variant="danger-soft"
+                              size="sm"
+                              className="min-h-9 px-2"
                           >
-                            ×
+                            <Trash2 className="size-3.5" aria-hidden="true" />
                           </Button>
                         )}
                       </td>

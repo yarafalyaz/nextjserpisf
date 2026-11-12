@@ -9,6 +9,9 @@ import {
 import { useState } from "react";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
+import { Input } from "@/components/ui/shadcn/input";
+import { Plus, Trash2 } from "@/components/ui/fontawesome-icons";
+import { formatCurrencyExact } from "@/lib/utils/format";
 import { Combobox } from "@/components/ui/combobox";
 import { QuickAddSelect } from "@/components/ui/quick-add-select";
 import { QUICK_ADD } from "@/lib/quick-add/registry";
@@ -345,32 +348,39 @@ export function MaterialIssueForm({
 
       <div style={{ marginTop: "24px" }}>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <h3 style={{ margin: 0, fontSize: "1rem" }}>Material</h3>
-          <Button type="button" onPress={addItem} variant="secondary" size="sm">
-            + Tambah
+          <h3 style={{ margin: 0, fontSize: "1rem" }} className="font-semibold text-foreground">Material</h3>
+          <Button
+            type="button"
+            onPress={addItem}
+            variant="secondary"
+            size="sm"
+            className="inline-flex items-center gap-1.5 min-h-9 px-3"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+            <span>Tambah Material</span>
           </Button>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-lg border border-border bg-card">
           <table
             className="w-full border-collapse min-w-[900px]"
             style={{ fontSize: "0.8125rem" }}
           >
             <thead>
-              <tr>
-                <th>Item</th>
-                <th>Jumlah</th>
-                <th>Qty Scrap</th>
-                <th>Alasan Scrap</th>
-                <th>Catatan Scrap</th>
-                <th>Harga Satuan</th>
-                <th>Total</th>
-                <th></th>
+              <tr className="border-b border-border/80 text-muted-foreground">
+                <th className="p-2 text-left">Item</th>
+                <th className="p-2 text-right">Jumlah</th>
+                <th className="p-2 text-right">Qty Scrap</th>
+                <th className="p-2 text-left">Alasan Scrap</th>
+                <th className="p-2 text-left">Catatan Scrap</th>
+                <th className="p-2 text-right">Harga Satuan</th>
+                <th className="p-2 text-right">Total</th>
+                <th className="p-2" style={{ width: "40px" }}></th>
               </tr>
             </thead>
             <tbody>
               {miItems.map((item, i) => (
-                <tr key={item.uid}>
-                  <td>
+                <tr key={item.uid} className="border-b border-border/50">
+                  <td className="p-2">
                     <Combobox
                       options={items.map((it) => ({
                         value: String(it.id),
@@ -384,8 +394,8 @@ export function MaterialIssueForm({
                       className="w-full"
                     />
                   </td>
-                  <td>
-                    <input
+                  <td className="p-2">
+                    <Input
                       type="number"
                       min={1}
                       value={item.qty}
@@ -393,16 +403,11 @@ export function MaterialIssueForm({
                         updateItem(i, "qty", Number(e.target.value))
                       }
                       aria-label={`Jumlah baris ${i + 1}`}
-                      className="form-input"
-                      style={{
-                        fontSize: "0.8125rem",
-                        padding: "6px",
-                        width: "80px",
-                      }}
+                      className="h-9 w-20 text-xs text-right font-mono tabular-nums"
                     />
                   </td>
-                  <td>
-                    <input
+                  <td className="p-2">
+                    <Input
                       type="number"
                       min={0}
                       step="0.01"
@@ -411,25 +416,19 @@ export function MaterialIssueForm({
                         updateItem(i, "scrapQty", Number(e.target.value))
                       }
                       aria-label={`Qty scrap baris ${i + 1}`}
-                      className="form-input"
-                      style={{
-                        fontSize: "0.8125rem",
-                        padding: "6px",
-                        width: "80px",
-                      }}
+                      className="h-9 w-20 text-xs text-right font-mono tabular-nums"
                     />
                   </td>
-                  <td>
+                  <td className="p-2">
                     <select
                       value={item.scrapReasonCode}
                       onChange={(e) =>
                         updateItem(i, "scrapReasonCode", e.target.value)
                       }
                       aria-label={`Alasan scrap baris ${i + 1}`}
-                      className="form-input"
-                      style={{ fontSize: "0.8125rem", padding: "6px", width: "150px" }}
+                      className="h-9 w-36 rounded-md border border-input bg-card px-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
                     >
-                      <option value="">— Tanpa scrap —</option>
+                      <option value="">-- Tanpa scrap --</option>
                       {SCRAP_REASON_CODES.map((code) => (
                         <option key={code} value={code}>
                           {SCRAP_REASON_LABELS[code]}
@@ -437,8 +436,8 @@ export function MaterialIssueForm({
                       ))}
                     </select>
                   </td>
-                  <td>
-                    <input
+                  <td className="p-2">
+                    <Input
                       type="text"
                       value={item.scrapNote}
                       onChange={(e) =>
@@ -446,17 +445,16 @@ export function MaterialIssueForm({
                       }
                       aria-label={`Catatan scrap baris ${i + 1}`}
                       placeholder={item.scrapReasonCode === "lainnya" ? "Wajib diisi" : "Opsional"}
-                      className="form-input"
-                      style={{ fontSize: "0.8125rem", padding: "6px", width: "140px" }}
+                      className="h-9 text-xs"
                     />
                   </td>
-                  <td className="text-right">
-                    Rp {item.unitCost.toLocaleString("id-ID")}
+                  <td className="p-2 text-right font-mono tabular-nums">
+                    {formatCurrencyExact(item.unitCost)}
                   </td>
-                  <td className="text-right">
-                    Rp {(item.qty * item.unitCost).toLocaleString("id-ID")}
+                  <td className="p-2 text-right font-mono tabular-nums font-semibold">
+                    {formatCurrencyExact(item.qty * item.unitCost)}
                   </td>
-                  <td>
+                  <td className="p-2 text-center">
                     {miItems.length > 1 && (
                       <Button
                         type="button"
@@ -464,8 +462,9 @@ export function MaterialIssueForm({
                         variant="danger-soft"
                         size="sm"
                         aria-label={`Hapus baris ${i + 1}`}
+                        className="min-h-9 px-2"
                       >
-                        ×
+                        <Trash2 className="size-3.5" aria-hidden="true" />
                       </Button>
                     )}
                   </td>
