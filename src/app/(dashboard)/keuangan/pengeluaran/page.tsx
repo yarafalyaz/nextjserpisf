@@ -1,4 +1,5 @@
-import { Plus } from "@/components/ui/fontawesome-icons";
+import { Plus, Receipt, Clock, CheckCircle2, Wallet } from "@/components/ui/fontawesome-icons"
+import { formatCurrency } from "@/lib/utils/format"
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -108,7 +109,7 @@ export async function renderExpensesPage({
       return { queue: null }
     })
 
-  const [expenses, total] = await Promise.all([
+  const [expenses, total, statusGroups, claimTotal, approvedAgg] = await Promise.all([
     prisma.expense.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -117,7 +118,32 @@ export async function renderExpensesPage({
       include: { category: { select: { label: true } }, vendor: { select: { name: true } } },
     }),
     prisma.expense.count({ where }),
+    prisma.expense.groupBy({
+      by: ["status"],
+      _count: { id: true },
+    }),
+    prisma.expense.count({ where: { isReimbursementClaim: true } }),
+    prisma.expense.aggregate({
+      where: { status: { in: ["approved", "paid"] } },
+      _sum: { amount: true },
+    }),
   ])
+
+  const counts: Record<string, number> = {
+    all: statusGroups.reduce((acc, curr) => acc + (curr._count?.id ?? 0), 0),
+    draft: 0,
+    pending: 0,
+    approved: 0,
+    paid: 0,
+    rejected: 0,
+  }
+  for (const group of statusGroups) {
+    if (group.status in counts) {
+      counts[group.status] = group._count?.id ?? 0
+    }
+  }
+
+  const approvedSum = Number(approvedAgg._sum.amount ?? 0)
 
   const draftResult = await draftQueuePromise
   if (draftResult.redirectError !== undefined) throw draftResult.redirectError
@@ -137,6 +163,7 @@ export async function renderExpensesPage({
     const urlStatus = dbStatusKey ? statusToIndo[dbStatusKey] || dbStatusKey : ""
     const targetPath = urlStatus ? `/keuangan/pengeluaran/status/${urlStatus}` : "/keuangan/pengeluaran"
     const isActive = activeUrlStatus === urlStatus
+    const count = dbStatusKey ? (counts[dbStatusKey] ?? 0) : counts.all
 
     return (
       <Link
@@ -144,9 +171,22 @@ export async function renderExpensesPage({
         href={withListParams(targetPath, params, {
           halaman: undefined,
         })}
-        className={`filter-chip ${isActive ? "active" : ""}`}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+          isActive
+            ? "border-primary bg-primary/10 text-primary font-semibold"
+            : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+        }`}
       >
-        {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
+        <span>{dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}</span>
+        <span
+          className={`inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-2xs font-mono tabular-nums ${
+            isActive
+              ? "bg-primary text-primary-foreground font-bold"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {count}
+        </span>
       </Link>
     )
   })
@@ -174,6 +214,61 @@ export async function renderExpensesPage({
             <span>Buat Pengeluaran</span>
           </Link>
         </CanCreate>
+      </div>
+
+      {/* Executive KPI Metric Strip Standar ERP */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs overflow-hidden">
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Total Pengeluaran
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+              {counts.all}
+            </span>
+            <Receipt className="size-4 text-muted-foreground/60" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Seluruh transaksi beban usaha</span>
+        </div>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Menunggu Persetujuan
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400 font-mono tabular-nums">
+              {counts.draft + counts.pending}
+            </span>
+            <Clock className="size-4 text-amber-500/70" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Konsep & antrean review atasan</span>
+        </div>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Disetujui / Selesai
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 font-mono tabular-nums">
+              {counts.approved + counts.paid}
+            </span>
+            <CheckCircle2 className="size-4 text-emerald-500/70" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Terotorisasi & dibayarkan kas</span>
+        </div>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Beban Terbayar
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold tracking-tight text-primary font-mono tabular-nums">
+              {formatCurrency(approvedSum)}
+            </span>
+            <Wallet className="size-4 text-primary/70" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Akumulasi pengeluaran sah</span>
+        </div>
       </div>
 
       {draftQueue ? (
@@ -208,9 +303,22 @@ export async function renderExpensesPage({
                 klaim: onlyClaims ? undefined : "1",
                 halaman: undefined,
               })}
-              className={`filter-chip ${onlyClaims ? "active" : ""}`}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                onlyClaims
+                  ? "border-primary bg-primary/10 text-primary font-semibold"
+                  : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
             >
-              Klaim Reimbursement
+              <span>Klaim Reimbursement</span>
+              <span
+                className={`inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-2xs font-mono tabular-nums ${
+                  onlyClaims
+                    ? "bg-primary text-primary-foreground font-bold"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {claimTotal}
+              </span>
             </Link>
           </div>
         }
