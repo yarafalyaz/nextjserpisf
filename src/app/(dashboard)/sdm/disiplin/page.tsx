@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import type { Metadata } from "next"
 import Link from "next/link"
+import { Plus } from "@/components/ui/fontawesome-icons"
 
 import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { getHrScope } from "@/lib/auth/hr-scope"
@@ -46,19 +47,27 @@ export default async function DisciplinaryPage() {
           { label: DISCIPLINARY_TITLE },
         ]}
       />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">{DISCIPLINARY_TITLE}</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
+            {DISCIPLINARY_TITLE}
+          </h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+            Pencatatan pelanggaran tata tertib kerja, surat peringatan (SP), masa berlaku sanksi, dan keputusan potongan denda.
+          </p>
+        </div>
         {canCreate ? (
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/sdm/disiplin/tambah"
-              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary-hover"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
             >
-              Pengajuan Baru
+              <Plus className="size-3.5" aria-hidden="true" />
+              <span>Pengajuan Baru</span>
             </Link>
             <Link
               href="/sdm/disiplin/keputusan"
-              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-default px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:bg-muted"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer"
             >
               Catat Keputusan Potongan
             </Link>

@@ -64,14 +64,22 @@ export default async function MyLoanRequestsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Pinjaman Saya</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
+            Pinjaman & Kasbon Saya
+          </h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+            Riwayat fasilitas pinjaman pribadi, saldo sisa pokok, dan jadwal angsuran potongan gaji.
+          </p>
+        </div>
         <Link
           href="/sdm/pinjaman-saya/tambah"
-          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
+          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
           id="create-my-loan-btn"
         >
-          <Banknote size={16} /> Ajukan Pinjaman
+          <Banknote size={16} aria-hidden="true" />
+          <span>Ajukan Pinjaman</span>
         </Link>
       </div>
 
