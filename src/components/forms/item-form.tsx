@@ -18,7 +18,7 @@ import { FormSelect } from "@/components/ui/form-select"
 import { Combobox } from "@/components/ui/combobox"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
-import { Upload, X, AlertCircle } from "@/components/ui/fontawesome-icons"
+import { Upload, X, AlertCircle, Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { QrCodeDisplay } from "@/components/ui/qr-code-display"
 import { formatCurrencyExact } from "@/lib/utils/format"
@@ -631,52 +631,55 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
           <div>
             <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
               <span className="text-xs text-muted-foreground">Satuan dasar: <strong>{watch("unitOfMeasure") || "PCS"}</strong>. Tentukan satuan alternatif beserta faktor konversi ke satuan dasar.</span>
-              <Button type="button" onPress={addUom} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">+ Tambah Satuan</Button>
+              <Button type="button" onPress={addUom} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors shadow-2xs cursor-pointer">
+                <Plus className="size-3.5" aria-hidden="true" />
+                <span>Tambah Satuan</span>
+              </Button>
             </div>
             {uomConversions.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">Belum ada satuan alternatif.</p>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto rounded-lg border border-border bg-card">
                 <table className="w-full border-collapse text-sm">
                   <thead>
-                    <tr className="border-b border-default">
-                      <th className="text-left py-2 px-2 font-medium text-muted-foreground">Kode Satuan</th>
-                      <th className="text-left py-2 px-2 font-medium text-muted-foreground" style={{ width: "220px" }}>Faktor ke Satuan Dasar</th>
+                    <tr className="border-b border-border/80 text-muted-foreground">
+                      <th className="text-left py-2 px-2 font-medium">Kode Satuan</th>
+                      <th className="text-left py-2 px-2 font-medium" style={{ width: "220px" }}>Faktor ke Satuan Dasar</th>
                       <th style={{ width: "40px" }}></th>
                     </tr>
                   </thead>
                   <tbody>
                     {uomConversions.map((u, i) => (
-                      <tr key={i} className="border-b border-default/50">
+                      <tr key={i} className="border-b border-border/50">
                         <td className="py-2 px-2">
-                          <input
+                          <Input
                             type="text"
                             value={u.code}
                             onChange={(e) => updateUom(i, "code", e.target.value)}
                             aria-label={`Kode satuan alternatif ${i + 1}`}
-                            className="form-input"
-                            style={{ fontSize: "0.8125rem", padding: "6px" }}
+                            className="h-9 text-xs font-mono uppercase"
                             placeholder="cth. BOX"
                           />
                         </td>
                         <td className="py-2 px-2">
                           <div className="flex items-center gap-2">
-                            <input
+                            <Input
                               type="number"
                               step="any"
                               min="0.001"
                               value={u.factorToBase}
                               onChange={(e) => updateUom(i, "factorToBase", e.target.value)}
                               aria-label={`Faktor konversi satuan alternatif ${i + 1}`}
-                              className="form-input"
-                              style={{ fontSize: "0.8125rem", padding: "6px", width: "120px" }}
+                              className="h-9 w-28 text-xs text-right font-mono tabular-nums"
                               placeholder="cth. 12"
                             />
                             <span className="text-xs text-muted-foreground whitespace-nowrap">{watch("unitOfMeasure") || "PCS"}</span>
                           </div>
                         </td>
                         <td className="py-2 px-2 text-center">
-                          <Button type="button" onPress={() => removeUom(i)} aria-label={`Hapus konversi satuan ${i + 1}`} className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all">×</Button>
+                          <Button type="button" onPress={() => removeUom(i)} aria-label={`Hapus konversi satuan ${i + 1}`} variant="danger-soft" size="sm" className="min-h-9 px-2">
+                            <Trash2 className="size-3.5" aria-hidden="true" />
+                          </Button>
                         </td>
                       </tr>
                     ))}

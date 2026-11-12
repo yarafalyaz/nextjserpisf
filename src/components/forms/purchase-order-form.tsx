@@ -14,7 +14,10 @@ import {
 import { AppDatePicker } from "@/components/ui/date-picker";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
+import { Input } from "@/components/ui/shadcn/input";
 import { Textarea } from "@/components/ui/shadcn/textarea";
+import { Plus, Trash2 } from "@/components/ui/fontawesome-icons";
+import { formatCurrencyExact } from "@/lib/utils/format";
 import { Combobox } from "@/components/ui/combobox";
 import { QuickAddSelect } from "@/components/ui/quick-add-select";
 import { QUICK_ADD } from "@/lib/quick-add/registry";
@@ -445,10 +448,10 @@ export function PurchaseOrderForm({
                 </button>
               )}
             </div>
-            <input
+            <Input
               id="paymentTerm"
               {...register("paymentTerm")}
-              className="form-input disabled:cursor-not-allowed disabled:bg-surface-secondary disabled:text-muted-foreground"
+              className="disabled:cursor-not-allowed disabled:bg-muted/50 disabled:text-muted-foreground"
               placeholder="Mis. Net 30, COD..."
               readOnly={Boolean(vendorTerm) && termLocked}
               disabled={Boolean(vendorTerm) && termLocked}
@@ -527,35 +530,36 @@ export function PurchaseOrderForm({
         <FormSection title="Item" columns={1}>
           <div>
             <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-              <h3 style={{ margin: 0, fontSize: "1rem" }}>Barang</h3>
+              <h3 style={{ margin: 0, fontSize: "1rem" }} className="font-semibold text-foreground">Barang</h3>
               <Button
                 type="button"
                 onPress={addItem}
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer"
               >
-                + Tambah Item
+                <Plus className="size-3.5" aria-hidden="true" />
+                <span>Tambah Item</span>
               </Button>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg border border-border bg-card">
             <table
               className="w-full border-collapse"
               style={{ fontSize: "0.8125rem" }}
             >
               <thead>
-                <tr>
-                  <th>Item</th>
-                  <th style={{ width: "80px" }}>Kuantitas</th>
-                  <th style={{ width: "120px" }}>Harga</th>
-                  <th style={{ width: "100px" }}>Diskon</th>
-                  <th style={{ width: "120px" }}>Total</th>
-                  <th style={{ width: "40px" }}></th>
+                <tr className="border-b border-border/80 text-muted-foreground">
+                  <th className="p-2 text-left">Item</th>
+                  <th className="p-2 text-right" style={{ width: "90px" }}>Kuantitas</th>
+                  <th className="p-2 text-right" style={{ width: "130px" }}>Harga</th>
+                  <th className="p-2 text-right" style={{ width: "110px" }}>Diskon</th>
+                  <th className="p-2 text-right" style={{ width: "130px" }}>Total</th>
+                  <th className="p-2" style={{ width: "40px" }}></th>
                 </tr>
               </thead>
               <tbody>
                 {poItems.map((poItem, index) => (
-                  <tr key={poItem.uid}>
-                    <td>
+                  <tr key={poItem.uid} className="border-b border-border/50">
+                    <td className="p-2">
                       <Combobox
                         value={poItem.itemId ? String(poItem.itemId) : null}
                         onChange={(key) =>
@@ -569,48 +573,44 @@ export function PurchaseOrderForm({
                         className="w-full"
                       />
                     </td>
-                    <td>
-                      <input
+                    <td className="p-2">
+                      <Input
                         type="number"
                         aria-label={`Jumlah baris ${index + 1}`}
                         value={poItem.qty}
                         onChange={(e) =>
                           updateItem(index, "qty", Number(e.target.value))
                         }
-                        className="form-input"
-                        style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
+                        className="h-9 w-20 text-xs text-right font-mono tabular-nums"
                         min={1}
                       />
                     </td>
-                    <td>
+                    <td className="p-2">
                       <CurrencyInput
                         aria-label={`Harga satuan baris ${index + 1}`}
                         value={poItem.unitPrice}
                         onChange={(v) => updateItem(index, "unitPrice", v)}
-                        className="form-input"
+                        className="font-mono text-sm tabular-nums text-right"
                       />
                     </td>
-                    <td>
-                      <input
+                    <td className="p-2">
+                      <Input
                         type="number"
                         aria-label={`Diskon baris ${index + 1}`}
                         value={poItem.discount}
                         onChange={(e) =>
                           updateItem(index, "discount", Number(e.target.value))
                         }
-                        className="form-input"
-                        style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
+                        className="h-9 w-24 text-xs text-right font-mono tabular-nums"
                         min={0}
                       />
                     </td>
-                    <td className="text-right">
-                      Rp{" "}
-                      {Math.max(
-                        0,
-                        poItem.qty * poItem.unitPrice - poItem.discount,
-                      ).toLocaleString("id-ID")}
+                    <td className="p-2 text-right font-mono tabular-nums font-semibold">
+                      {formatCurrencyExact(
+                        Math.max(0, poItem.qty * poItem.unitPrice - poItem.discount)
+                      )}
                     </td>
-                    <td>
+                    <td className="p-2 text-center">
                       {poItems.length > 1 && (
                         <Button
                           type="button"
@@ -618,8 +618,9 @@ export function PurchaseOrderForm({
                           aria-label={`Hapus baris ${index + 1}`}
                           variant="danger-soft"
                           size="sm"
+                          className="min-h-9 px-2"
                         >
-                          ×
+                          <Trash2 className="size-3.5" aria-hidden="true" />
                         </Button>
                       )}
                     </td>
@@ -627,14 +628,14 @@ export function PurchaseOrderForm({
                 ))}
               </tbody>
               <tfoot>
-                <tr>
-                  <td colSpan={4} className="text-right">
-                    <strong>Total Keseluruhan</strong>
+                <tr className="border-t border-border/80 font-bold bg-muted/30">
+                  <td colSpan={4} className="p-2 text-right">
+                    Total Keseluruhan
                   </td>
-                  <td className="text-right">
-                    <strong>Rp {grandTotal.toLocaleString("id-ID")}</strong>
+                  <td className="p-2 text-right font-mono tabular-nums">
+                    {formatCurrencyExact(grandTotal)}
                   </td>
-                  <td></td>
+                  <td className="p-2"></td>
                 </tr>
               </tfoot>
             </table>
