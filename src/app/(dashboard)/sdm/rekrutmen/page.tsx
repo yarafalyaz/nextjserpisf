@@ -161,19 +161,34 @@ export async function renderRecruitmentsPage({
       <RecruitmentTable
         data={toPlain(vacancies)}
         filters={
-          <div className="flex flex-wrap gap-2">
-            {chips.map((s) => (
-              <Link
-                key={s || "all"}
-                href={s ? `/sdm/rekrutmen/status/${s}` : "/sdm/rekrutmen"}
-                className={`filter-chip inline-flex items-center gap-1.5 ${activeStatus === s ? "active" : ""}`}
-              >
-                <span>{s ? STATUS_LABELS[s] : "Semua"}</span>
-                <span className="font-mono text-[11px] tabular-nums opacity-75">
-                  ({formatNumber(s ? (statusCountMap[s] ?? 0) : totalVacancies)})
-                </span>
-              </Link>
-            ))}
+          <div className="flex flex-wrap gap-1.5">
+            {chips.map((s) => {
+              const isActive = activeStatus === s
+              const count = s ? (statusCountMap[s] ?? 0) : totalVacancies
+
+              return (
+                <Link
+                  key={s || "all"}
+                  href={s ? `/sdm/rekrutmen/status/${s}` : "/sdm/rekrutmen"}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    isActive
+                      ? "border-primary bg-primary/10 text-primary font-semibold"
+                      : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <span>{s ? STATUS_LABELS[s] : "Semua"}</span>
+                  <span
+                    className={`inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-2xs font-mono tabular-nums ${
+                      isActive
+                        ? "bg-primary text-primary-foreground font-bold"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {formatNumber(count)}
+                  </span>
+                </Link>
+              )
+            })}
           </div>
         }
       />
