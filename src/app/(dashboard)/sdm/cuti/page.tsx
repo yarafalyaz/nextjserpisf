@@ -1,6 +1,6 @@
 import { parsePagination } from "@/lib/utils/pagination"
 import { withListParams } from "@/lib/utils/list-href"
-import { Plus } from "@/components/ui/fontawesome-icons"
+import { Plus, CalendarDays, Clock, CheckCircle2, XCircle } from "@/components/ui/fontawesome-icons"
 
 export const dynamic = "force-dynamic"
 
@@ -79,15 +79,33 @@ export async function renderLeaveRequestsPage({
     ...(dbStatus && { status: dbStatus }),
   }
 
-  const leaves = await prisma.leaveRequest.findMany({
-    where,
-    include: { employee: { select: { name: true } } },
-    take,
-    skip: (page - 1) * pageSize,
-    orderBy: { createdAt: "desc" },
-  })
+  const [leaves, total, statusGroups] = await Promise.all([
+    prisma.leaveRequest.findMany({
+      where,
+      include: { employee: { select: { name: true } } },
+      take,
+      skip: (page - 1) * pageSize,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.leaveRequest.count({ where }),
+    prisma.leaveRequest.groupBy({
+      by: ["status"],
+      where: hrScopeWhere(scope),
+      _count: { id: true },
+    }),
+  ])
 
-  const total = await prisma.leaveRequest.count({ where })
+  const counts: Record<string, number> = {
+    all: statusGroups.reduce((acc, curr) => acc + (curr._count?.id ?? 0), 0),
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  }
+  for (const group of statusGroups) {
+    if (group.status in counts) {
+      counts[group.status] = group._count?.id ?? 0
+    }
+  }
 
   const data = toPlain(leaves)
 
@@ -103,14 +121,28 @@ export async function renderLeaveRequestsPage({
     const urlStatus = dbStatusKey ? statusToIndo[dbStatusKey] || dbStatusKey : ""
     const targetPath = urlStatus ? `/sdm/cuti/status/${urlStatus}` : "/sdm/cuti"
     const isActive = activeUrlStatus === urlStatus
+    const count = dbStatusKey ? (counts[dbStatusKey] ?? 0) : counts.all
 
     return (
       <Link
         key={dbStatusKey}
         href={withListParams(targetPath, params, { halaman: undefined })}
-        className={`filter-chip ${isActive ? "active" : ""}`}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+          isActive
+            ? "border-primary bg-primary/10 text-primary font-semibold"
+            : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+        }`}
       >
-        {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
+        <span>{dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}</span>
+        <span
+          className={`inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-2xs font-mono tabular-nums ${
+            isActive
+              ? "bg-primary text-primary-foreground font-bold"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {count}
+        </span>
       </Link>
     )
   })
@@ -146,6 +178,61 @@ export async function renderLeaveRequestsPage({
               <span>Ajukan Cuti</span>
             </Link>
           </CanCreate>
+        </div>
+      </div>
+
+      {/* Executive KPI Metric Strip Standar ERP */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs overflow-hidden">
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Total Permintaan
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+              {counts.all}
+            </span>
+            <CalendarDays className="size-4 text-muted-foreground/60" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Seluruh pengajuan cuti</span>
+        </div>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Menunggu Persetujuan
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400 font-mono tabular-nums">
+              {counts.pending}
+            </span>
+            <Clock className="size-4 text-amber-500/70" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Menunggu review atasan</span>
+        </div>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Disetujui
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 font-mono tabular-nums">
+              {counts.approved}
+            </span>
+            <CheckCircle2 className="size-4 text-emerald-500/70" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Hak cuti telah dipotong</span>
+        </div>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Ditolak
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold tracking-tight text-destructive font-mono tabular-nums">
+              {counts.rejected}
+            </span>
+            <XCircle className="size-4 text-destructive/70" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Pengajuan tidak diizinkan</span>
         </div>
       </div>
 
