@@ -9,6 +9,7 @@ import Link from "next/link"
 import { redirect, notFound } from "next/navigation"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { FileCheck, Clock, CheckCircle2, XCircle } from "@/components/ui/fontawesome-icons"
 import { ApprovalTable } from "./_components/approval-table"
 
 import type { Metadata } from "next"
@@ -104,15 +105,33 @@ export async function renderApprovalsPage(
     }),
   }
 
-  const approvals = await prisma.approval.findMany({
-    where,
-    include: { workflow: true },
-    orderBy: { createdAt: "desc" },
-    take,
-    skip: (page - 1) * pageSize,
-  })
+  const [approvals, total, statusGroups] = await Promise.all([
+    prisma.approval.findMany({
+      where,
+      include: { workflow: true },
+      orderBy: { createdAt: "desc" },
+      take,
+      skip: (page - 1) * pageSize,
+    }),
+    prisma.approval.count({ where }),
+    prisma.approval.groupBy({
+      by: ["status"],
+      where: canSeeAll ? {} : { referenceType: { in: visibleReferenceTypes } },
+      _count: { id: true },
+    }),
+  ])
 
-  const total = await prisma.approval.count({ where })
+  const counts: Record<string, number> = {
+    all: statusGroups.reduce((acc, curr) => acc + (curr._count?.id ?? 0), 0),
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  }
+  for (const group of statusGroups) {
+    if (group.status in counts) {
+      counts[group.status] = group._count?.id ?? 0
+    }
+  }
 
   const data = approvals.map((a) => ({
     id: a.id,
@@ -129,14 +148,28 @@ export async function renderApprovalsPage(
     const urlStatus = dbStatusKey ? statusToIndo[dbStatusKey] || dbStatusKey : ""
     const targetPath = urlStatus ? `/pengaturan/persetujuan/status/${urlStatus}` : "/pengaturan/persetujuan"
     const isActive = activeUrlStatus === urlStatus
+    const count = dbStatusKey ? (counts[dbStatusKey] ?? 0) : counts.all
 
     return (
       <Link
         key={dbStatusKey}
         href={withListParams(targetPath, params, { halaman: undefined })}
-        className={`filter-chip ${isActive ? "active" : ""}`}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+          isActive
+            ? "border-primary bg-primary/10 text-primary font-semibold"
+            : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+        }`}
       >
-        {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
+        <span>{dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}</span>
+        <span
+          className={`inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-2xs font-mono tabular-nums ${
+            isActive
+              ? "bg-primary text-primary-foreground font-bold"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {count}
+        </span>
       </Link>
     )
   })
@@ -163,13 +196,75 @@ export async function renderApprovalsPage(
               { label: "Persetujuan" },
             ]}
       />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">{pendingOnly ? "Menunggu Persetujuan" : "Alur Persetujuan"}</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
+            {pendingOnly ? "Menunggu Persetujuan (Pending Approvals)" : "Alur Otorisasi & Persetujuan (Approval Center)"}
+          </h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+            Pusat tinjauan otorisasi transaksi operasional, validasi hierarki bertingkat, dan jejak audit keputusan manajemen.
+          </p>
+        </div>
         {pendingOnly && (
-          <span className="rounded-full bg-info/10 px-3 py-1 text-xs font-medium text-info">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400 font-mono tabular-nums">
             Menunggu ({total})
           </span>
         )}
+      </div>
+
+      {/* Executive KPI Metric Strip Standar ERP */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs overflow-hidden">
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Total Persetujuan
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+              {counts.all}
+            </span>
+            <FileCheck className="size-4 text-muted-foreground/60" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Seluruh pengajuan transaksi</span>
+        </div>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Menunggu Otorisasi
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400 font-mono tabular-nums">
+              {counts.pending}
+            </span>
+            <Clock className="size-4 text-amber-500/70" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Perlu tindakan peninjau</span>
+        </div>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Disetujui
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 font-mono tabular-nums">
+              {counts.approved}
+            </span>
+            <CheckCircle2 className="size-4 text-emerald-500/70" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Dokumen sah disetujui</span>
+        </div>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Ditolak
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold tracking-tight text-destructive font-mono tabular-nums">
+              {counts.rejected}
+            </span>
+            <XCircle className="size-4 text-destructive/70" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Pengajuan dikembalikan</span>
+        </div>
       </div>
 
       <ApprovalTable
