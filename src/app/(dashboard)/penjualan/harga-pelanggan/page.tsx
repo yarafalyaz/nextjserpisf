@@ -86,21 +86,22 @@ export default async function CustomerPricesPage() {
           { label: "Daftar Harga Pelanggan" },
         ]}
       />
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Daftar Harga Pelanggan</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Daftar harga jual per kategori pelanggan dan barang, bertingkat menurut jumlah minimal.
-            Harga terpilih otomatis dipakai faktur penjualan.
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
+            Daftar Harga Khusus Pelanggan
+          </h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+            Daftar harga jual per kategori pelanggan dan barang, bertingkat menurut jumlah kuantitas minimal (volume tiers).
           </p>
         </div>
         <CanCreate permission="create_customer_price_lists">
           <Link
             href="/penjualan/harga-pelanggan/tambah"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary-hover"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
             id="create-customer-price-btn"
           >
-            <Plus className="size-3.5" />
+            <Plus className="size-3.5" aria-hidden="true" />
             <span>Tambah Harga</span>
           </Link>
         </CanCreate>

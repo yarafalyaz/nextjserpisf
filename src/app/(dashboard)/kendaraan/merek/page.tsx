@@ -53,20 +53,23 @@ export default async function VehicleCatalogPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Kendaraan", href: "/kendaraan" }, { label: "Merek & Model" }]} />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
         <div>
-          <h1 className="text-xl font-bold text-foreground sm:text-2xl">Merek &amp; Model Kendaraan</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Katalog merek kendaraan. Buka satu merek untuk melihat dan mengelola model serta variannya.
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
+            Merek &amp; Model Kendaraan
+          </h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+            Katalog merek resmi kendaraan. Buka satu merek untuk melihat dan mengelola model serta variannya.
           </p>
         </div>
         <CanCreate permission="create_vehicle_brands">
           <Link
             href="/kendaraan/merek/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
             id="create-brand-btn"
           >
-            <Car size={16} /> Tambah Merek
+            <Car size={16} aria-hidden="true" />
+            <span>Tambah Merek</span>
           </Link>
         </CanCreate>
       </div>

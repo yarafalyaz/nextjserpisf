@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
+import { Plus } from "@/components/ui/fontawesome-icons"
 import { PaymentTable } from "./_components/payment-table"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -68,11 +69,23 @@ export default async function SalesPaymentsPage({
   { label: "Penjualan", href: "/penjualan" },
   { label: "Pembayaran" },
 ]} />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Pembayaran Penjualan</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
+            Penerimaan Pembayaran Penjualan
+          </h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+            Pencatatan setoran piutang pelanggan, pelunasan faktur, dan rekonsiliasi akun kas/bank penerima.
+          </p>
+        </div>
         <CanCreate permission="create_sales_payments">
-          <Link href="/penjualan/pembayaran/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all" id="create-payment-btn">
-            + Terima Pembayaran
+          <Link
+            href="/penjualan/pembayaran/tambah"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+            id="create-payment-btn"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+            <span>Terima Pembayaran</span>
           </Link>
         </CanCreate>
       </div>
