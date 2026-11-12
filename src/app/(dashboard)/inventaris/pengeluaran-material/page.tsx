@@ -13,7 +13,7 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { MaterialIssueTable } from "./_components/material-issue-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
-import { Plus } from "@/components/ui/fontawesome-icons"
+import { Plus, FileText, Clock, CheckCircle2 } from "@/components/ui/fontawesome-icons"
 
 import type { Metadata } from "next"
 
@@ -102,6 +102,12 @@ export async function renderMaterialIssuesPage({
   const issuedCount = countsByStatus.find((c) => c.status === "issued")?._count._all ?? 0
   const allScopeTotal = countsByStatus.reduce((acc, c) => acc + c._count._all, 0)
 
+  const counts: Record<string, number> = {
+    all: allScopeTotal,
+    draft: draftCount,
+    issued: issuedCount,
+  }
+
   const tableData = toPlain(issues)
 
   const statusChips = ["", ...MATERIAL_ISSUE_VALID_DB_STATUSES].map((dbStatusKey) => {
@@ -110,14 +116,28 @@ export async function renderMaterialIssuesPage({
       ? `/inventaris/pengeluaran-material/status/${urlStatus}`
       : "/inventaris/pengeluaran-material"
     const isActive = activeUrlStatus === urlStatus
+    const count = dbStatusKey ? (counts[dbStatusKey] ?? 0) : counts.all
 
     return (
       <Link
         key={dbStatusKey}
         href={withListParams(targetPath, params, { halaman: undefined })}
-        className={`filter-chip ${isActive ? "active" : ""}`}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+          isActive
+            ? "border-primary bg-primary/10 text-primary font-semibold"
+            : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+        }`}
       >
-        {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
+        <span>{dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}</span>
+        <span
+          className={`inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-2xs font-mono tabular-nums ${
+            isActive
+              ? "bg-primary text-primary-foreground font-bold"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {count}
+        </span>
       </Link>
     )
   })
@@ -147,19 +167,19 @@ export async function renderMaterialIssuesPage({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-2 border-b border-border">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
-            Pengeluaran Material
+            Pengeluaran Material (Material Issue)
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Pencatatan konsumsi material, pemakaian produksi internal, dan pengeluaran barang.
+          <p className="text-xs text-muted-foreground mt-0.5 text-pretty">
+            Pencatatan konsumsi material, pemakaian produksi internal, dan pengeluaran barang dari gudang.
           </p>
         </div>
         <CanCreate permission="create_material_issues">
           <Link
             href="/inventaris/pengeluaran-material/tambah"
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer shadow-2xs"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer shadow-2xs"
             id="create-mi-btn"
           >
-            <Plus className="size-3.5" />
+            <Plus className="size-3.5" aria-hidden="true" />
             <span>Buat Pengeluaran Material</span>
           </Link>
         </CanCreate>
@@ -171,19 +191,20 @@ export async function renderMaterialIssuesPage({
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
             Total Dokumen
           </span>
-          <div className="flex items-baseline gap-2">
+          <div className="flex items-baseline justify-between">
             <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-foreground">
               {allScopeTotal}
             </span>
-            <span className="text-xs text-muted-foreground">pengeluaran</span>
+            <FileText className="size-4 text-muted-foreground/60" aria-hidden="true" />
           </div>
+          <span className="text-2xs text-muted-foreground">Seluruh pengeluaran tercatat</span>
         </div>
 
         <div className="p-4 flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
             Konsep (Draft)
           </span>
-          <div className="flex items-baseline gap-2">
+          <div className="flex items-baseline justify-between">
             <span
               className={`text-2xl font-bold font-mono tracking-tight tabular-nums ${
                 draftCount > 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground"
@@ -191,20 +212,22 @@ export async function renderMaterialIssuesPage({
             >
               {draftCount}
             </span>
-            <span className="text-xs text-muted-foreground">belum dikeluarkan</span>
+            <Clock className="size-4 text-amber-500/70" aria-hidden="true" />
           </div>
+          <span className="text-2xs text-muted-foreground">Belum dikeluarkan / diverifikasi</span>
         </div>
 
         <div className="p-4 flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
             Dikeluarkan (Issued)
           </span>
-          <div className="flex items-baseline gap-2">
+          <div className="flex items-baseline justify-between">
             <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-emerald-600 dark:text-emerald-400">
               {issuedCount}
             </span>
-            <span className="text-xs text-muted-foreground">stok terpotong</span>
+            <CheckCircle2 className="size-4 text-emerald-500/70" aria-hidden="true" />
           </div>
+          <span className="text-2xs text-muted-foreground">Stok gudang telah terpotong</span>
         </div>
       </div>
 

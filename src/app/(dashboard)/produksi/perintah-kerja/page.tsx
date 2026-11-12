@@ -147,10 +147,22 @@ export async function renderWorkOrdersPage({
       <Link
         key={dbStatusKey}
         href={withListParams(targetPath, params, { halaman: undefined })}
-        className={`filter-chip inline-flex items-center gap-1.5 ${isActive ? "active" : ""}`}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+          isActive
+            ? "border-primary bg-primary/10 text-primary font-semibold"
+            : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+        }`}
       >
         <span>{dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}</span>
-        <span className="font-mono text-[11px] tabular-nums opacity-75">({formatNumber(count)})</span>
+        <span
+          className={`inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-2xs font-mono tabular-nums ${
+            isActive
+              ? "bg-primary text-primary-foreground font-bold"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {formatNumber(count)}
+        </span>
       </Link>
     )
   })
@@ -182,10 +194,10 @@ export async function renderWorkOrdersPage({
           <CanCreate permission="create_work_orders">
             <Link
               href="/produksi/perintah-kerja/tambah"
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary-hover hover:shadow-md"
+              className="inline-flex min-h-11 sm:min-h-9 items-center justify-center gap-1.5 px-3.5 py-2 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
               id="create-wo-btn"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="size-3.5" aria-hidden="true" />
               <span>Buat Perintah Kerja</span>
             </Link>
           </CanCreate>
