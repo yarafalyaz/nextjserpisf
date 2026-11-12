@@ -146,7 +146,7 @@ export default async function LeaveBalancePage({
               key={y}
               // Tahun hidup di path; `?cari=` aktif harus ikut terbawa.
               href={withListParams(yearHref(y), params)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              className={`filter-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                 year === y
                   ? "border-primary bg-primary/10 text-primary font-semibold"
                   : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"

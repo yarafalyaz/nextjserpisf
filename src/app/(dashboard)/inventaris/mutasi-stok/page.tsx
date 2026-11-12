@@ -103,7 +103,7 @@ export default async function StockMovesPage({
             <Link
               key={item.label}
               href={withListParams("/inventaris/mutasi-stok", params, { dampak: item.url || undefined, halaman: undefined })}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              className={`filter-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                 isActive
                   ? "border-primary bg-primary/10 text-primary font-semibold"
                   : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"

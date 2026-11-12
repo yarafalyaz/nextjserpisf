@@ -256,7 +256,7 @@ export default async function AttendancePage({
             <Link
               key={chip.label}
               href={chip.href}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              className={`filter-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                 chip.active
                   ? "border-primary bg-primary/10 text-primary font-semibold"
                   : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"

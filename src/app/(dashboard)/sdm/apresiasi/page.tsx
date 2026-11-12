@@ -90,7 +90,7 @@ export default async function AppreciationsPage({
       <Link
         key={s || "all"}
         href={withListParams("/sdm/apresiasi", params, { tipe: urlTipe || undefined, halaman: undefined })}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+        className={`filter-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
           isActive
             ? "border-primary bg-primary/10 text-primary font-semibold"
             : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
