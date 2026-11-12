@@ -8,7 +8,9 @@ import {
 } from "@/actions/inventory.actions";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
+import { Input } from "@/components/ui/shadcn/input";
 import { Textarea } from "@/components/ui/shadcn/textarea";
+import { Plus, Trash2 } from "@/components/ui/fontawesome-icons";
 import { Combobox } from "@/components/ui/combobox";
 import { QuickAddSelect } from "@/components/ui/quick-add-select";
 import { QUICK_ADD } from "@/lib/quick-add/registry";
@@ -238,50 +240,51 @@ export function StockAdjustmentForm({
               <Button
                 type="button"
                 onPress={addItem}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors shadow-2xs cursor-pointer"
               >
-                + Tambah Item
+                <Plus className="size-3.5" aria-hidden="true" />
+                <span>Tambah Item</span>
               </Button>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg border border-border bg-card">
               <table className="w-full border-collapse text-sm">
                 <thead>
-                  <tr className="border-b border-default">
+                  <tr className="border-b border-border/80 text-muted-foreground">
                     <th
-                      className="text-left py-2 px-2 font-medium text-muted-foreground"
+                      className="text-left py-2 px-2 font-medium"
                       style={{ minWidth: "200px" }}
                     >
                       Item
                     </th>
                     <th
-                      className="text-left py-2 px-2 font-medium text-muted-foreground"
+                      className="text-right py-2 px-2 font-medium"
                       style={{ width: "100px" }}
                     >
                       Stok Saat Ini
                     </th>
                     <th
-                      className="text-left py-2 px-2 font-medium text-muted-foreground"
+                      className="text-right py-2 px-2 font-medium"
                       style={{ width: "100px" }}
                     >
                       Stok Baru
                     </th>
                     <th
-                      className="text-left py-2 px-2 font-medium text-muted-foreground"
+                      className="text-right py-2 px-2 font-medium"
                       style={{ width: "80px" }}
                     >
                       Selisih
                     </th>
-                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">
+                    <th className="text-left py-2 px-2 font-medium">
                       Alasan
                     </th>
-                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">Nomor Seri</th>
-                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">Nomor Batch</th>
+                    <th className="text-left py-2 px-2 font-medium">Nomor Seri</th>
+                    <th className="text-left py-2 px-2 font-medium">Nomor Batch</th>
                     <th style={{ width: "40px" }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {adjItems.map((item, i) => (
-                    <tr key={i} className="border-b border-default/50">
+                    <tr key={i} className="border-b border-border/50">
                       <td className="py-2 px-2">
                         <Combobox
                           value={item.itemId ? String(item.itemId) : null}
@@ -295,39 +298,33 @@ export function StockAdjustmentForm({
                           }))}
                         />
                       </td>
-                      <td className="py-2 px-2 text-right">
+                      <td className="py-2 px-2 text-right font-mono tabular-nums">
                         {item.currentQty}
                       </td>
                       <td className="py-2 px-2">
-                        <input
+                        <Input
                           type="number"
                           value={item.newQty}
                           onChange={(e) =>
                             updateItem(i, "newQty", Number(e.target.value))
                           }
                           aria-label={`Stok baru baris ${i + 1}`}
-                          className="form-input"
-                          style={{
-                            fontSize: "0.8125rem",
-                            padding: "6px",
-                            width: "80px",
-                          }}
+                          className="h-9 w-24 text-xs text-right font-mono tabular-nums"
                         />
                       </td>
                       <td
-                        className={`py-2 px-2 text-right ${item.newQty - item.currentQty > 0 ? "text-success" : item.newQty - item.currentQty < 0 ? "text-danger" : ""}`}
+                        className={`py-2 px-2 text-right font-mono tabular-nums font-semibold ${item.newQty - item.currentQty > 0 ? "text-success" : item.newQty - item.currentQty < 0 ? "text-danger" : ""}`}
                       >
                         {item.newQty - item.currentQty > 0 ? "+" : ""}
                         {item.newQty - item.currentQty}
                       </td>
                       <td className="py-2 px-2">
-                        <input
+                        <Input
                           type="text"
                           value={item.reason}
                           onChange={(e) => updateItem(i, "reason", e.target.value)}
                           aria-label={`Alasan baris ${i + 1}`}
-                          className="form-input"
-                          style={{ fontSize: "0.8125rem", padding: "6px" }}
+                          className="h-9 text-xs"
                           placeholder="Alasan"
                         />
                       </td>
@@ -359,9 +356,11 @@ export function StockAdjustmentForm({
                             type="button"
                             onPress={() => removeItem(i)}
                             aria-label={`Hapus baris ${i + 1}`}
-                            className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all"
+                            variant="danger-soft"
+                            size="sm"
+                            className="min-h-9 px-2"
                           >
-                            ×
+                            <Trash2 className="size-3.5" aria-hidden="true" />
                           </Button>
                         )}
                       </td>

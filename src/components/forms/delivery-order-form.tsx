@@ -201,31 +201,30 @@ export function DeliveryOrderForm({ salesOrders, defaultSalesOrderId, deliveryOr
             Pesanan ini tidak punya sisa yang bisa dikirim (semua barisnya sudah masuk surat jalan atau barangnya bukan barang katalog).
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-lg border border-border bg-card">
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr>
-                  <th className="text-left">Barang</th>
-                  <th className="text-right">Dipesan</th>
-                  <th className="text-right">Sudah Dikirim</th>
-                  <th className="text-right">Sisa</th>
-                  <th className="text-right" style={{ width: "140px" }}>Kirim</th>
+                <tr className="border-b border-border/80 text-muted-foreground">
+                  <th className="p-2 text-left">Barang</th>
+                  <th className="p-2 text-right">Dipesan</th>
+                  <th className="p-2 text-right">Sudah Dikirim</th>
+                  <th className="p-2 text-right">Sisa</th>
+                  <th className="p-2 text-right" style={{ width: "140px" }}>Kirim</th>
                 </tr>
               </thead>
               <tbody>
                 {itemRows.map((row, index) => (
-                  <tr key={row.rowKey}>
-                    <td>{row.description}</td>
-                    <td className="text-right">{row.orderedQty}</td>
-                    <td className="text-right">{row.shippedQty}</td>
-                    <td className="text-right">{row.remainingQty}</td>
-                    <td className="text-right">
-                      <input
+                  <tr key={row.rowKey} className="border-b border-border/50">
+                    <td className="p-2">{row.description}</td>
+                    <td className="p-2 text-right font-mono tabular-nums">{row.orderedQty}</td>
+                    <td className="p-2 text-right font-mono tabular-nums">{row.shippedQty}</td>
+                    <td className="p-2 text-right font-mono tabular-nums">{row.remainingQty}</td>
+                    <td className="p-2 text-right">
+                      <Input
                         type="number"
                         min={0}
                         step="0.01"
-                        className="form-input text-right"
-                        style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
+                        className="h-9 text-xs text-right font-mono tabular-nums"
                         aria-label={`Jumlah kirim baris ${index + 1}`}
                         value={row.qty}
                         onChange={(e) => updateItemQty(index, e.target.value)}
