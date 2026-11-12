@@ -54,11 +54,22 @@ export default async function BarcodesPage({
         { label: "Data Master", href: "/master" },
         { label: "Barcode" },
       ]} />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Barcode</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
+            Manajemen Barcode Produk
+          </h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+            Registrasi kode batang EAN/UPC/QR-Code untuk pemindaian scanner di kasir dan gudang.
+          </p>
+        </div>
         <CanCreate permission="create_barcodes">
-          <Link href="/master/barcode/tambah" className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all" id="create-barcode-btn">
-            <Plus className="size-3.5" />
+          <Link
+            href="/master/barcode/tambah"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+            id="create-barcode-btn"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
             <span>Tambah Barcode</span>
           </Link>
         </CanCreate>
