@@ -23,6 +23,7 @@ import { buildUomOptions } from "@/lib/utils/uom-options"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
+import { Trash2 } from "@/components/ui/fontawesome-icons"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 // ==================== TYPES ====================
@@ -285,11 +286,10 @@ function SectionItemRow({
           </button>
 
           {isCustomMode ? (
-            <input
+            <Input
               {...register(`${prefix}.description`)}
               aria-label={`Nama item baris ${itemIndex + 1}`}
-              className="form-input w-full font-medium"
-              style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
+              className="w-full font-medium h-9 text-xs"
               placeholder="Ketik nama jasa bebas..."
               onChange={(e) => {
                 setValue(`${prefix}.description`, e.target.value)
@@ -321,24 +321,22 @@ function SectionItemRow({
         </div>
       </td>
       <td>
-        <input
+        <Input
           {...register(`${prefix}.description`)}
           aria-label={`Deskripsi baris ${itemIndex + 1}`}
-          className="form-input"
-          style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
+          className="h-9 text-xs"
           placeholder="Catatan / spek tambahan..."
           disabled={isCustomMode} // Di mode jasa, kolom deskripsi sudah menyatu di kolom utama
         />
       </td>
       <td>
-        <input
+        <Input
           type="number"
           step="0.01"
           min="0.01"
           aria-label={`Jumlah baris ${itemIndex + 1}`}
           {...register(`${prefix}.qty`, { valueAsNumber: true })}
-          className="form-input"
-          style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right" }}
+          className="h-9 w-20 text-xs text-right font-mono tabular-nums"
           onChange={(e) => {
             setValue(`${prefix}.qty`, (Number.isFinite((Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0)) ? (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0) : 0))
             onRecalc(itemIndex)
@@ -396,8 +394,7 @@ function SectionItemRow({
               setValue(`${prefix}.unitPrice`, val)
               onRecalc(itemIndex)
             }}
-            className="form-input"
-            style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right" }}
+            className="font-mono text-sm tabular-nums text-right"
             placeholder="0"
           />
         </div>
@@ -423,15 +420,14 @@ function SectionItemRow({
             )}
           />
           {(watchedItem?.discountType ?? "fixed") === "percent" ? (
-            <input
+            <Input
               type="number"
               step="0.01"
               min="0"
               max="100"
               aria-label={`Diskon persen baris ${itemIndex + 1}`}
               {...register(`${prefix}.discount`, { valueAsNumber: true })}
-              className="form-input"
-              style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right", flex: 1 }}
+              className="h-9 text-xs text-right font-mono tabular-nums flex-1"
               onChange={(e) => {
                 const raw = Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0
                 const clamped = Math.min(100, Math.max(0, raw))
@@ -448,20 +444,18 @@ function SectionItemRow({
                 onRecalc(itemIndex)
               }}
               min={0}
-              className="text-right"
-              style={{ flex: 1 }}
+              className="text-right flex-1"
             />
           )}
         </div>
       </td>
       <td>
-        <input
+        <div
           aria-label={`Total baris ${itemIndex + 1}`}
-          value={formatCurrencyExact(watchedItem?.total || 0)}
-          className="form-input"
-          style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right", background: "var(--color-surface-alt)", fontWeight: 600 }}
-          readOnly
-        />
+          className="flex h-9 w-full items-center justify-end rounded-md border border-input bg-muted/40 px-2.5 text-xs font-mono font-semibold tabular-nums text-foreground"
+        >
+          {formatCurrencyExact(watchedItem?.total || 0)}
+        </div>
       </td>
       <td>
         {canRemove && (
@@ -469,9 +463,11 @@ function SectionItemRow({
             type="button"
             onPress={onRemove}
             aria-label={`Hapus item baris ${itemIndex + 1}`}
-            variant="danger-soft" size="sm"
+            variant="danger-soft"
+            size="sm"
+            className="min-h-9 px-2"
           >
-            ×
+            <Trash2 className="size-3.5" aria-hidden="true" />
           </Button>
         )}
       </td>
@@ -894,11 +890,11 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
         {sectionFields.map((sectionField, sectionIndex) => (
           <div key={sectionField.id} className="quotation-section-card">
             <div className="flex flex-wrap items-center justify-between gap-2 p-4 px-5 border-b border-default">
-              <input
+              <Input
                 {...register(`sections.${sectionIndex}.name`)}
                 aria-label={`Nama bagian ${sectionIndex + 1}`}
-                className="form-input section-name-input"
-                placeholder={`Nama Section (opsional)`}
+                className="section-name-input max-w-sm h-9 text-sm font-semibold"
+                placeholder="Nama Section (opsional)"
               />
               {sectionFields.length > 1 && (
                 <Button

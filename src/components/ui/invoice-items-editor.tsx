@@ -1,6 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/shadcn/input";
+import { Textarea } from "@/components/ui/shadcn/textarea";
+import { Plus, Trash2 } from "@/components/ui/fontawesome-icons";
 
 import { useState, useTransition, Fragment } from "react";
 import { useRouter } from "next/navigation";
@@ -547,18 +550,18 @@ export function InvoiceItemsEditor({
                     <label className="block text-xs text-muted-foreground mb-1" htmlFor={`m-invoice-item-qty-${i}`}>
                       Jml
                     </label>
-                    <input
+                    <Input
                       id={`m-invoice-item-qty-${i}`}
                       type="number"
                       min={1}
                       value={item.qty}
                       onChange={(e) => updateItem(i, "qty", e.target.value)}
-                      className="form-input w-full text-right text-sm"
+                      className="w-full text-right text-xs font-mono tabular-nums h-9"
                     />
                   </div>
                   <div>
                     <span className="block text-xs text-muted-foreground mb-1">Total</span>
-                    <span className="block text-sm font-semibold text-foreground">{formatCurrencyExact(item.total)}</span>
+                    <span className="block text-sm font-semibold text-foreground font-mono tabular-nums">{formatCurrencyExact(item.total)}</span>
                   </div>
                   <div>
                     <label className="block text-xs text-muted-foreground mb-1" htmlFor={`m-invoice-item-price-${i}`}>
@@ -568,7 +571,7 @@ export function InvoiceItemsEditor({
                       id={`m-invoice-item-price-${i}`}
                       value={item.unitPrice}
                       onChange={(v) => updateItem(i, "unitPrice", v)}
-                      className="form-input w-full text-right text-sm"
+                      className="w-full text-right font-mono text-sm tabular-nums"
                     />
                   </div>
                   <div>
@@ -579,7 +582,7 @@ export function InvoiceItemsEditor({
                       id={`m-invoice-item-discount-${i}`}
                       value={item.discount}
                       onChange={(v) => updateItem(i, "discount", v)}
-                      className="form-input w-full text-right text-sm"
+                      className="w-full text-right font-mono text-sm tabular-nums"
                     />
                   </div>
                 </div>
@@ -588,13 +591,13 @@ export function InvoiceItemsEditor({
                     <label className="block text-xs font-medium text-muted-foreground mb-1" htmlFor={`m-invoice-item-serial-${i}`}>
                       Nomor Seri (satu per baris)
                     </label>
-                    <textarea
+                    <Textarea
                       id={`m-invoice-item-serial-${i}`}
                       value={serialText}
                       onChange={(e) => updateItemSerialNumbers(i, e.target.value)}
                       rows={Math.max(2, Math.min(serialCount + 1, 4))}
                       placeholder="Kosongkan untuk FIFO otomatis"
-                      className="form-input w-full text-sm font-mono"
+                      className="w-full text-xs font-mono"
                     />
                     <p className="mt-1 text-xs text-muted-foreground">
                       {serialCount} seri{item.qty > 0 ? ` (saran ${item.qty})` : ""}
@@ -715,13 +718,13 @@ export function InvoiceItemsEditor({
                       >
                         Jumlah item baris {i + 1}
                       </label>
-                      <input
+                      <Input
                         id={`invoice-item-qty-${i}`}
                         type="number"
                         min={1}
                         value={item.qty}
                         onChange={(e) => updateItem(i, "qty", e.target.value)}
-                        className="form-input w-full text-right text-sm"
+                        className="w-full text-right text-xs font-mono tabular-nums h-9"
                       />
                     </td>
                     <td className="py-2 px-1 align-top">
@@ -729,7 +732,7 @@ export function InvoiceItemsEditor({
                         aria-label={`Harga satuan baris ${i + 1}`}
                         value={item.unitPrice}
                         onChange={(v) => updateItem(i, "unitPrice", v)}
-                        className="form-input w-full text-right text-sm"
+                        className="w-full text-right font-mono text-sm tabular-nums"
                       />
                     </td>
                     <td className="py-2 px-1 align-top">
@@ -737,21 +740,23 @@ export function InvoiceItemsEditor({
                         aria-label={`Diskon baris ${i + 1}`}
                         value={item.discount}
                         onChange={(v) => updateItem(i, "discount", v)}
-                        className="form-input w-full text-right text-sm"
+                        className="w-full text-right font-mono text-sm tabular-nums"
                       />
                     </td>
-                    <td className="text-right py-2 px-1 font-medium align-top">
+                    <td className="text-right py-2 px-1 font-medium font-mono tabular-nums align-top">
                       {formatCurrencyExact(item.total)}
                     </td>
                     <td className="py-2 px-1 align-top">
                       <Button
                         type="button"
                         onPress={() => removeItem(i)}
-                        className="text-danger hover:text-danger/80 text-lg"
+                        variant="danger-soft"
+                        size="sm"
+                        className="min-h-9 px-2 text-danger hover:text-danger/80"
                         title="Hapus item"
                         aria-label={`Hapus item baris ${i + 1}`}
                       >
-                        ×
+                        <Trash2 className="size-3.5" aria-hidden="true" />
                       </Button>
                     </td>
                   </tr>
@@ -764,7 +769,7 @@ export function InvoiceItemsEditor({
                         >
                           Nomor Seri (satu per baris)
                         </label>
-                        <textarea
+                        <Textarea
                           id={`invoice-item-serial-${i}`}
                           value={serialText}
                           onChange={(e) =>
@@ -772,7 +777,7 @@ export function InvoiceItemsEditor({
                           }
                           rows={Math.max(2, Math.min(serialCount + 1, 6))}
                           placeholder="Kosongkan untuk pemilihan FIFO otomatis"
-                          className="form-input w-full text-sm font-mono"
+                          className="w-full text-xs font-mono"
                         />
                         <p className="mt-1 text-xs text-muted-foreground">
                           {serialCount} nomor seri terisi
@@ -796,9 +801,10 @@ export function InvoiceItemsEditor({
         <Button
           type="button"
           onPress={addItem}
-          className="mt-3 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-dashed border-default text-muted-foreground hover:border-primary hover:text-primary transition-all"
+          className="mt-3 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-dashed border-default text-muted-foreground hover:border-primary hover:text-primary transition-all cursor-pointer"
         >
-          + Tambah Item
+          <Plus className="size-3.5" aria-hidden="true" />
+          <span>Tambah Item</span>
         </Button>
 
         {/* Summary */}
@@ -809,7 +815,7 @@ export function InvoiceItemsEditor({
               aria-label="Diskon total"
               value={discount}
               onChange={setDiscount}
-              className="form-input w-32 text-right text-sm"
+              className="w-32 text-right font-mono text-sm tabular-nums"
             />
           </div>
           <div className="flex items-center gap-3 text-sm">
@@ -817,7 +823,7 @@ export function InvoiceItemsEditor({
             <label className="sr-only" htmlFor="invoice-tax-rate">
               Pajak persen
             </label>
-            <input
+            <Input
               id="invoice-tax-rate"
               type="number"
               min={0}
@@ -825,10 +831,10 @@ export function InvoiceItemsEditor({
               step={0.5}
               value={tax}
               onChange={(e) => setTax(Number(e.target.value))}
-              className="form-input w-20 text-right text-sm"
+              className="w-20 text-right text-xs font-mono tabular-nums h-9"
             />
           </div>
-          <div className="flex items-center gap-3 text-sm font-bold">
+          <div className="flex items-center gap-3 text-sm font-bold font-mono tabular-nums">
             <span>Total Keseluruhan:</span>
             <span>{formatCurrencyExact(grandTotal)}</span>
           </div>
