@@ -196,7 +196,7 @@ export function ParticipantForm({
 
   return (
     <form onSubmit={onSubmit} className="flex items-center gap-2">
-      <select name="employeeId" required className="form-input" defaultValue="">
+      <select name="employeeId" required className="h-9 rounded-md border border-input bg-card px-2.5 py-1 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 cursor-pointer" defaultValue="">
         <option value="" disabled>Pilih karyawan</option>
         {employees.map((e) => (
           <option key={e.id} value={e.id}>{e.name}</option>

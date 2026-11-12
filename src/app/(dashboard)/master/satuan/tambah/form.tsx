@@ -74,7 +74,7 @@ export function UomForm({
             name="category"
             required
             defaultValue={uom?.category || "barang"}
-            className="form-input"
+            className="h-11 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 cursor-pointer sm:h-9"
           >
             <option value="barang">Barang</option>
             <option value="jasa">Jasa</option>

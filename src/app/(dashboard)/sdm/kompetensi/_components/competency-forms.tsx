@@ -8,6 +8,10 @@ import {
   setPositionCompetency,
 } from "@/actions/development.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
+import { Input } from "@/components/ui/shadcn/input"
+
+const selectClass =
+  "h-11 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 cursor-pointer sm:h-9"
 
 function submit(
   router: ReturnType<typeof useRouter>,
@@ -44,9 +48,9 @@ export function CompetencyForm() {
         submit(router, startTransition, e.currentTarget, createCompetency, "Kompetensi dibuat")
       }}
     >
-      <input name="name" id="competency-name" required placeholder="Nama kompetensi" aria-label="Nama kompetensi" className="form-input" />
-      <input name="category" id="competency-category" placeholder="Kategori (Teknis/Perilaku/Kepemimpinan)" aria-label="Kategori kompetensi" className="form-input" />
-      <input name="description" id="competency-description" placeholder="Deskripsi" aria-label="Deskripsi kompetensi" className="form-input" />
+      <Input name="name" id="competency-name" required placeholder="Nama kompetensi" aria-label="Nama kompetensi" />
+      <Input name="category" id="competency-category" placeholder="Kategori (Teknis/Perilaku/Kepemimpinan)" aria-label="Kategori kompetensi" />
+      <Input name="description" id="competency-description" placeholder="Deskripsi" aria-label="Deskripsi kompetensi" />
       <button
         type="submit"
         disabled={isPending}
@@ -76,19 +80,19 @@ export function PositionCompetencyForm({
         submit(router, startTransition, e.currentTarget, setPositionCompetency, "Syarat jabatan disimpan")
       }}
     >
-      <select name="positionId" id="position-requirement-position" required aria-label="Jabatan" className="form-input" defaultValue="">
+      <select name="positionId" id="position-requirement-position" required aria-label="Jabatan" className={selectClass} defaultValue="">
         <option value="" disabled>Jabatan</option>
         {positions.map((p) => (
           <option key={p.id} value={p.id}>{p.name}</option>
         ))}
       </select>
-      <select name="competencyId" id="position-requirement-competency" required aria-label="Kompetensi" className="form-input" defaultValue="">
+      <select name="competencyId" id="position-requirement-competency" required aria-label="Kompetensi" className={selectClass} defaultValue="">
         <option value="" disabled>Kompetensi</option>
         {competencies.map((c) => (
           <option key={c.id} value={c.id}>{c.name}</option>
         ))}
       </select>
-      <input name="requiredLevel" id="position-requirement-level" type="number" min={1} max={5} required placeholder="Level syarat (1-5)" aria-label="Level syarat (1-5)" className="form-input" />
+      <Input name="requiredLevel" id="position-requirement-level" type="number" min={1} max={5} required placeholder="Level syarat (1-5)" aria-label="Level syarat (1-5)" />
       <button
         type="submit"
         disabled={isPending}
@@ -118,19 +122,19 @@ export function EmployeeCompetencyForm({
         submit(router, startTransition, e.currentTarget, assessEmployeeCompetency, "Penilaian kompetensi disimpan")
       }}
     >
-      <select name="employeeId" id="employee-assessment-employee" required aria-label="Karyawan" className="form-input" defaultValue="">
+      <select name="employeeId" id="employee-assessment-employee" required aria-label="Karyawan" className={selectClass} defaultValue="">
         <option value="" disabled>Karyawan</option>
         {employees.map((e) => (
           <option key={e.id} value={e.id}>{e.name}</option>
         ))}
       </select>
-      <select name="competencyId" id="employee-assessment-competency" required aria-label="Kompetensi" className="form-input" defaultValue="">
+      <select name="competencyId" id="employee-assessment-competency" required aria-label="Kompetensi" className={selectClass} defaultValue="">
         <option value="" disabled>Kompetensi</option>
         {competencies.map((c) => (
           <option key={c.id} value={c.id}>{c.name}</option>
         ))}
       </select>
-      <input name="level" id="employee-assessment-level" type="number" min={1} max={5} required placeholder="Level aktual (1-5)" aria-label="Level aktual (1-5)" className="form-input" />
+      <Input name="level" id="employee-assessment-level" type="number" min={1} max={5} required placeholder="Level aktual (1-5)" aria-label="Level aktual (1-5)" />
       <button
         type="submit"
         disabled={isPending}

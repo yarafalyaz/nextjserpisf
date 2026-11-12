@@ -8,6 +8,10 @@ import {
   upsertSuccessorCandidate,
 } from "@/actions/succession.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
+import { Input } from "@/components/ui/shadcn/input"
+
+const selectClass =
+  "h-11 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 cursor-pointer sm:h-9"
 
 export function CriticalToggle({
   positionId,
@@ -76,24 +80,24 @@ export function SuccessorForm({
 
   return (
     <form onSubmit={onSubmit} aria-busy={isPending} className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-      <select name="positionId" required className="form-input" defaultValue="">
+      <select name="positionId" required className={selectClass} defaultValue="">
         <option value="" disabled>Jabatan kritis</option>
         {positions.map((p) => (
           <option key={p.id} value={p.id}>{p.name}</option>
         ))}
       </select>
-      <select name="candidateEmployeeId" required className="form-input" defaultValue="">
+      <select name="candidateEmployeeId" required className={selectClass} defaultValue="">
         <option value="" disabled>Kandidat pengganti</option>
         {employees.map((e) => (
           <option key={e.id} value={e.id}>{e.name}</option>
         ))}
       </select>
-      <select name="readiness" className="form-input" defaultValue="ready_future">
+      <select name="readiness" className={selectClass} defaultValue="ready_future">
         <option value="ready_now">Siap Sekarang</option>
         <option value="ready_1_2_years">Siap 1-2 Tahun</option>
         <option value="ready_future">Siap Masa Depan</option>
       </select>
-      <input name="rank" type="number" min={1} max={99} defaultValue={1} className="form-input" />
+      <Input name="rank" type="number" min={1} max={99} defaultValue={1} />
       <button
         type="submit"
         disabled={isPending}

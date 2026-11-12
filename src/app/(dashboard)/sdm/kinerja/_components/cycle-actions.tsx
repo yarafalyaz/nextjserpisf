@@ -206,7 +206,7 @@ export function SelfReviewForm({ cycleId, employeeId }: { cycleId: number; emplo
 
   return (
     <form onSubmit={onSubmit} className="flex items-center gap-2">
-      <input name="selfScore" type="number" min={0} max={100} step="0.01" required placeholder="Skor diri" className="form-input w-28" />
+      <Input name="selfScore" type="number" min={0} max={100} step="0.01" required placeholder="Skor diri" className="w-28" />
       <button
         type="submit"
         disabled={isPending}
@@ -251,7 +251,7 @@ export function ManagerReviewForm({
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <input name="managerScore" type="number" min={0} max={100} step="0.01" required placeholder="Skor atasan" className="form-input w-28" />
+        <Input name="managerScore" type="number" min={0} max={100} step="0.01" required placeholder="Skor atasan" className="w-28" />
         <button
           type="submit"
           disabled={isPending}
@@ -272,8 +272,8 @@ export function ManagerReviewForm({
           Finalisasi
         </button>
       </div>
-      <input name="strengths" placeholder="Kekuatan" className="form-input" />
-      <input name="improvements" placeholder="Area perbaikan" className="form-input" />
+      <Input name="strengths" placeholder="Kekuatan" />
+      <Input name="improvements" placeholder="Area perbaikan" />
     </form>
   )
 }
