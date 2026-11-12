@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import Link from "next/link"
+import { Plus, Scale, AlertTriangle, FileText } from "@/components/ui/fontawesome-icons"
 
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -31,41 +32,68 @@ export default async function TaxDisputeRegisterPage() {
           { label: "Sengketa Pajak" },
         ]}
       />
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{TAX_DISPUTE_REGISTER_TITLE}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Ketetapan pajak beserta tenggat upaya sengketanya — register dokumen saja, tanpa jurnal
-            akuntansi di tahap ini.
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
+            {TAX_DISPUTE_REGISTER_TITLE}
+          </h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+            Ketetapan pajak beserta tenggat upaya hukum sengketanya — register dokumen perselisihan fiskal dan keberatan banding.
           </p>
         </div>
         {canCreate ? (
           <CanCreate permission="create_tax_disputes">
             <Link
               href="/keuangan/sengketa-pajak/tambah"
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary-hover"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
               id="create-tax-assessment-btn"
             >
-              + Daftarkan Ketetapan
+              <Plus className="size-3.5" aria-hidden="true" />
+              <span>Daftarkan Ketetapan</span>
             </Link>
           </CanCreate>
         ) : null}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3" aria-label="Ringkasan register">
-        <div className="rounded-xl border border-default bg-surface p-4 shadow-sm">
-          <p className="text-sm text-muted-foreground">Ketetapan terdaftar</p>
-          <p className="mt-1 text-2xl font-bold text-foreground">{report.totals.assessments}</p>
+      {/* Executive KPI Metric Strip Standar ERP */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs overflow-hidden" aria-label="Ringkasan register">
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Ketetapan Terdaftar
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-foreground">
+              {report.totals.assessments}
+            </span>
+            <FileText className="size-4 text-muted-foreground/60" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Seluruh berkas SKP/STP</span>
         </div>
-        <div className="rounded-xl border border-default bg-surface p-4 shadow-sm">
-          <p className="text-sm text-muted-foreground">Nominal disengketakan</p>
-          <p className="mt-1 text-2xl font-bold text-foreground">
-            {formatCurrencyExact(report.totals.disputedAmount)}
-          </p>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Nominal Disengketakan
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-primary">
+              {formatCurrencyExact(report.totals.disputedAmount)}
+            </span>
+            <Scale className="size-4 text-primary/70" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Total pokok & sanksi diperselisihkan</span>
         </div>
-        <div className="rounded-xl border border-default bg-surface p-4 shadow-sm">
-          <p className="text-sm text-muted-foreground">Upaya lewat tenggat</p>
-          <p className="mt-1 text-2xl font-bold text-foreground">{report.totals.lateSteps}</p>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Upaya Lewat Tenggat
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className={`text-2xl font-bold font-mono tracking-tight tabular-nums ${report.totals.lateSteps > 0 ? "text-destructive" : "text-foreground"}`}>
+              {report.totals.lateSteps}
+            </span>
+            <AlertTriangle className="size-4 text-destructive/70" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Kadaluwarsa batas pengajuan keberatan</span>
         </div>
       </div>
 
