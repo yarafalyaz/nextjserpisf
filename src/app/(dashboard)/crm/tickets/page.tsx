@@ -99,14 +99,33 @@ export async function renderTicketsPage({
     ...(dbStatus && { status: dbStatus }),
   }
 
-  const tickets = await prisma.crmTicket.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take,
-    skip: (page - 1) * pageSize,
-  })
+  const [tickets, total, statusGroups] = await Promise.all([
+    prisma.crmTicket.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take,
+      skip: (page - 1) * pageSize,
+    }),
+    prisma.crmTicket.count({ where }),
+    prisma.crmTicket.groupBy({
+      by: ["status"],
+      where: { deletedAt: null },
+      _count: { id: true },
+    }),
+  ])
 
-  const total = await prisma.crmTicket.count({ where })
+  const counts: Record<string, number> = {
+    all: statusGroups.reduce((acc, curr) => acc + (curr._count?.id ?? 0), 0),
+    open: 0,
+    in_progress: 0,
+    resolved: 0,
+    closed: 0,
+  }
+  for (const group of statusGroups) {
+    if (group.status in counts) {
+      counts[group.status] = group._count?.id ?? 0
+    }
+  }
 
   const data = toPlain(tickets)
 
@@ -114,14 +133,28 @@ export async function renderTicketsPage({
     const urlStatus = dbStatusKey ? statusToIndo[dbStatusKey] || dbStatusKey : ""
     const targetPath = urlStatus ? `/crm/tickets/status/${urlStatus}` : "/crm/tickets"
     const isActive = activeUrlStatus === urlStatus
+    const count = dbStatusKey ? (counts[dbStatusKey] ?? 0) : counts.all
 
     return (
       <Link
         key={dbStatusKey}
         href={withListParams(targetPath, params, { halaman: undefined })}
-        className={`filter-chip ${isActive ? "active" : ""}`}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+          isActive
+            ? "border-primary bg-primary/10 text-primary font-semibold"
+            : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+        }`}
       >
-        {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
+        <span>{dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}</span>
+        <span
+          className={`inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-2xs font-mono tabular-nums ${
+            isActive
+              ? "bg-primary text-primary-foreground font-bold"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {count}
+        </span>
       </Link>
     )
   })
