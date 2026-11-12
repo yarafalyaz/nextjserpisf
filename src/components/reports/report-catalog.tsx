@@ -111,7 +111,7 @@ export function ReportCatalog({ categories }: { categories: ReportCatalogCategor
                 href={report.href}
                 className="group flex flex-col items-center text-center p-3 rounded-lg border border-default bg-background/50 hover:bg-primary/5 hover:border-primary/40 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary mb-2 group-hover:scale-105 transition-colors">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary mb-2 transition-colors group-hover:bg-primary/15">
                   {report.icon}
                 </span>
                 <span className="text-xs font-semibold text-foreground line-clamp-1">{report.label}</span>

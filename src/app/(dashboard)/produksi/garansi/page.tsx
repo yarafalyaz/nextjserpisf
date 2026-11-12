@@ -127,9 +127,9 @@ export default async function WarrantyClaimsPage({
           <CanCreate permission="create_warranty_claims">
             <Link
               href="/produksi/garansi/tambah"
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary-hover hover:shadow-md"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="size-3.5" aria-hidden="true" />
               <span>Buat Klaim Garansi</span>
             </Link>
           </CanCreate>
@@ -190,7 +190,7 @@ export default async function WarrantyClaimsPage({
       <div className="flex flex-col gap-3 rounded-xl border border-default bg-surface p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 pb-3">
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Filter className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Filter Klaim & Pencarian
             </span>
@@ -261,7 +261,7 @@ export default async function WarrantyClaimsPage({
                 htmlFor="warranty-window-ahead"
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
               >
-                <Clock className="h-3 w-3" />
+                <Clock className="h-3 w-3" aria-hidden="true" />
                 <span>Depan (hari)</span>
               </label>
               <select
@@ -283,7 +283,7 @@ export default async function WarrantyClaimsPage({
                 htmlFor="warranty-window-past"
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
               >
-                <Calendar className="h-3 w-3" />
+                <Calendar className="h-3 w-3" aria-hidden="true" />
                 <span>Lampau (hari)</span>
               </label>
               <select
