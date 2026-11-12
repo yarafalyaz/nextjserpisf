@@ -1,4 +1,4 @@
-import { Plus } from "@/components/ui/fontawesome-icons";
+import { Plus, RotateCcw, Clock, CheckCircle2 } from "@/components/ui/fontawesome-icons";
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -73,15 +73,31 @@ export async function renderPurchaseReturnsPage({
     ...(dbStatus && { status: dbStatus }),
   }
 
-  const returns = await prisma.purchaseReturn.findMany({
-    where,
-    include: { purchaseOrder: { include: { vendor: true } }, items: true },
-    take,
-    skip: (page - 1) * pageSize,
-    orderBy: { createdAt: "desc" },
-  })
+  const [returns, total, statusGroups] = await Promise.all([
+    prisma.purchaseReturn.findMany({
+      where,
+      include: { purchaseOrder: { include: { vendor: true } }, items: true },
+      take,
+      skip: (page - 1) * pageSize,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.purchaseReturn.count({ where }),
+    prisma.purchaseReturn.groupBy({
+      by: ["status"],
+      _count: { id: true },
+    }),
+  ])
 
-  const total = await prisma.purchaseReturn.count({ where })
+  const counts: Record<string, number> = {
+    all: statusGroups.reduce((acc, curr) => acc + (curr._count?.id ?? 0), 0),
+    draft: 0,
+    returned: 0,
+  }
+  for (const group of statusGroups) {
+    if (group.status in counts) {
+      counts[group.status] = group._count?.id ?? 0
+    }
+  }
 
   const tableData = toPlain(returns)
 
@@ -91,14 +107,28 @@ export async function renderPurchaseReturnsPage({
       ? `/pembelian/retur/status/${urlStatus}`
       : "/pembelian/retur"
     const isActive = activeUrlStatus === urlStatus
+    const count = dbStatusKey ? (counts[dbStatusKey] ?? 0) : counts.all
 
     return (
       <Link
         key={dbStatusKey}
         href={withListParams(targetPath, params, { halaman: undefined })}
-        className={`filter-chip ${isActive ? "active" : ""}`}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+          isActive
+            ? "border-primary bg-primary/10 text-primary font-semibold"
+            : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+        }`}
       >
-        {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
+        <span>{dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}</span>
+        <span
+          className={`inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-2xs font-mono tabular-nums ${
+            isActive
+              ? "bg-primary text-primary-foreground font-bold"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {count}
+        </span>
       </Link>
     )
   })
@@ -142,6 +172,48 @@ export async function renderPurchaseReturnsPage({
             <span>Buat Retur</span>
           </Link>
         </CanCreate>
+      </div>
+
+      {/* Executive KPI Metric Strip Standar ERP */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs overflow-hidden">
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Total Retur
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+              {counts.all}
+            </span>
+            <RotateCcw className="size-4 text-muted-foreground/60" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Seluruh pengembalian pemasok</span>
+        </div>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Konsep (Draft)
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400 font-mono tabular-nums">
+              {counts.draft}
+            </span>
+            <Clock className="size-4 text-amber-500/70" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Menunggu konfirmasi retur</span>
+        </div>
+
+        <div className="p-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Dikembalikan ke Pemasok
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 font-mono tabular-nums">
+              {counts.returned}
+            </span>
+            <CheckCircle2 className="size-4 text-emerald-500/70" aria-hidden="true" />
+          </div>
+          <span className="text-2xs text-muted-foreground">Barang fisik telah terkirim</span>
+        </div>
       </div>
 
       <PurchaseReturnTable
