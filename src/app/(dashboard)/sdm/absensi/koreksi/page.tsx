@@ -9,6 +9,7 @@ import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { getHrScope } from "@/lib/auth/hr-scope"
 import { loadAttendanceCorrections } from "@/lib/reports/attendance-correction-data"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { Plus } from "@/components/ui/fontawesome-icons"
 import { ReportSummaryStrip } from "@/components/reports/report-card-shell"
 import {
   AttendanceCorrectionTable,
@@ -84,16 +85,22 @@ export async function renderAttendanceCorrectionsPage({
               ]
         }
       />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">
-          {ATTENDANCE_CORRECTION_TITLE}
-        </h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
+            {ATTENDANCE_CORRECTION_TITLE}
+          </h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+            Pengajuan perbaikan data jam masuk/keluar karyawan, dispensasi lupa absen, dan persetujuan atasan.
+          </p>
+        </div>
         {canCreate ? (
           <Link
             href="/sdm/absensi/koreksi/ajukan"
-            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary-hover"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
           >
-            Ajukan Koreksi
+            <Plus className="size-3.5" aria-hidden="true" />
+            <span>Ajukan Koreksi</span>
           </Link>
         ) : null}
       </div>
@@ -108,20 +115,43 @@ export async function renderAttendanceCorrectionsPage({
         ]}
       />
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {["", ...ATTENDANCE_CORRECTION_VALID_DB_STATUSES].map((dbStatusKey) => {
           const urlStatus = dbStatusKey ? statusToIndo[dbStatusKey] || dbStatusKey : ""
           const targetPath = urlStatus
             ? `/sdm/absensi/koreksi/status/${urlStatus}`
             : "/sdm/absensi/koreksi"
           const active = activeUrlStatus === urlStatus
+          const count = dbStatusKey === ""
+            ? totals.total
+            : dbStatusKey === "pending"
+            ? totals.pending
+            : dbStatusKey === "approved"
+            ? totals.approved
+            : dbStatusKey === "rejected"
+            ? totals.rejected
+            : totals.cancelled
+
           return (
             <Link
               key={dbStatusKey || "all"}
               href={targetPath}
-              className={`filter-chip ${active ? "active" : ""}`}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                active
+                  ? "border-primary bg-primary/10 text-primary font-semibold"
+                  : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
             >
-              {dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}
+              <span>{dbStatusKey ? statusLabel(dbStatusKey) : "Semua"}</span>
+              <span
+                className={`inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-2xs font-mono tabular-nums ${
+                  active
+                    ? "bg-primary text-primary-foreground font-bold"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {count}
+              </span>
             </Link>
           )
         })}

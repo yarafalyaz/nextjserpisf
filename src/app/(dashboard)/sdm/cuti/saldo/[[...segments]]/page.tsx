@@ -131,15 +131,26 @@ export default async function LeaveBalancePage({
         ]}
       />
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Saldo Cuti Karyawan</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
+            Saldo & Hak Cuti Karyawan
+          </h1>
+          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+            Rekapitulasi kuota hak cuti tahunan, cuti terpakai, dan sisa hari cuti aktif per periode kalender.
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {yearOptions.map((y) => (
             <Link
               key={y}
               // Tahun hidup di path; `?cari=` aktif harus ikut terbawa.
               href={withListParams(yearHref(y), params)}
-              className={`filter-chip ${year === y ? "active" : ""}`}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                year === y
+                  ? "border-primary bg-primary/10 text-primary font-semibold"
+                  : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
             >
               {y}
             </Link>
@@ -162,15 +173,15 @@ export default async function LeaveBalancePage({
       ) : null}
 
       {result.success ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs overflow-hidden">
           {stats.map((s) => (
             <div
               key={s.label}
-              className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-5 flex flex-col gap-1"
+              className="p-4 flex flex-col gap-1"
             >
-              <span className="text-sm text-muted-foreground">{s.label}</span>
-              <span className="text-2xl font-bold text-foreground">{s.value}</span>
-              <span className="text-xs text-muted-foreground">{s.hint}</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{s.label}</span>
+              <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-foreground">{s.value}</span>
+              <span className="text-2xs text-muted-foreground">{s.hint}</span>
             </div>
           ))}
         </div>
