@@ -11,6 +11,7 @@ import { createDownPayment, updateDownPayment } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
 import { SalesCustomerFormShell } from "@/components/forms/sales-customer-form-shell"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
@@ -273,12 +274,12 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="proofImage">Bukti Pembayaran</Label>
-          <input
+          <Input
             id="proofImage"
             type="file"
             accept="image/*"
             onChange={(e) => setProofFile(e.target.files?.[0] || null)}
-            className="form-input"
+            className="cursor-pointer file:text-xs file:font-medium"
           />
         </div>
 

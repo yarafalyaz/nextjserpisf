@@ -14,7 +14,9 @@ import { AppDatePicker } from "@/components/ui/date-picker";
 import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
+import { Input } from "@/components/ui/shadcn/input";
 import { Textarea } from "@/components/ui/shadcn/textarea";
+import { formatCurrencyExact } from "@/lib/utils/format";
 import { Combobox } from "@/components/ui/combobox";
 import { QuickAddSelect } from "@/components/ui/quick-add-select";
 import { QUICK_ADD } from "@/lib/quick-add/registry";
@@ -193,18 +195,14 @@ export function PaymentForm({
           <div className="flex flex-col gap-1.5">
             <Label>Sisa Tagihan</Label>
             <div
-              className="form-input"
-              style={{
-                background: "var(--bg-tertiary)",
-                fontWeight: 600,
-                color:
-                  remaining > 0
-                    ? "var(--color-danger)"
-                    : "var(--color-success)",
-              }}
+              className={`flex h-10 w-full items-center rounded-md border border-input bg-muted/40 px-3 py-2 text-sm font-mono font-semibold tabular-nums ${
+                remaining > 0
+                  ? "text-destructive"
+                  : "text-emerald-600 dark:text-emerald-400"
+              }`}
             >
               {selectedInvoice
-                ? `Rp ${remaining.toLocaleString("id-ID")}`
+                ? formatCurrencyExact(remaining)
                 : "-"}
             </div>
           </div>
@@ -360,10 +358,9 @@ export function PaymentForm({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="withholdingCertificateNo">No. Bukti Potong</Label>
-            <input
+            <Input
               id="withholdingCertificateNo"
               {...register("withholdingCertificateNo")}
-              className="form-input"
               placeholder="Nomor bukti potong dari pelanggan..."
             />
           </div>
@@ -377,9 +374,9 @@ export function PaymentForm({
           </div>
           {withholdingAmount > 0 && (
             <p className="text-xs text-muted-foreground sm:col-span-2">
-              Kas diterima Rp {cashAmount.toLocaleString("id-ID")} + potongan PPh Rp{" "}
-              {withholdingAmount.toLocaleString("id-ID")} = pelunasan piutang Rp{" "}
-              {settledAmount.toLocaleString("id-ID")}. Jurnalnya: kas + PPh dibayar dimuka
+              Kas diterima {formatCurrencyExact(cashAmount)} + potongan PPh{" "}
+              {formatCurrencyExact(withholdingAmount)} = pelunasan piutang{" "}
+              {formatCurrencyExact(settledAmount)}. Jurnalnya: kas + PPh dibayar dimuka
               / piutang usaha.
             </p>
           )}
@@ -387,10 +384,9 @@ export function PaymentForm({
         <FormSection title="Lainnya" columns={1}>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="referenceNo">No. Referensi</Label>
-            <input
+            <Input
               id="referenceNo"
               {...register("referenceNo")}
-              className="form-input"
               placeholder="No. referensi / bukti transfer..."
             />
           </div>

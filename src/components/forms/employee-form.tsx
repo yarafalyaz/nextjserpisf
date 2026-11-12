@@ -28,6 +28,9 @@ import {
   EMPLOYMENT_END_REASON_LABELS,
 } from "@/lib/reports/employee-lifecycle"
 
+const selectClass =
+  "h-11 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 cursor-pointer sm:h-9"
+
 /**
  * Nilai `maritalStatus` sengaja tetap "Single"/"Married"/"Divorced": payroll
  * (`ptkpFor` di services/payroll-statutory.service.ts) mencocokkan token bahasa
@@ -315,14 +318,13 @@ export function EmployeeForm({ employee, departments, positions, managers = [], 
             )}
           />
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="dependents">Tanggungan (PTKP)</label>
-            <input
+            <Label htmlFor="dependents">Tanggungan (PTKP)</Label>
+            <Input
               id="dependents"
               type="number"
               min={0}
               max={3}
               {...register("dependents", { valueAsNumber: true })}
-              className="form-input"
             />
           </div>
         </FormSection>
@@ -386,9 +388,9 @@ export function EmployeeForm({ employee, departments, positions, managers = [], 
                   <select
                     value={field.value ? String(field.value) : ""}
                     onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
-                    className="form-input"
+                    className={selectClass}
                   >
-                    <option value="">— Tidak ada (puncak rantai) —</option>
+                    <option value="">-- Tidak ada (puncak rantai) --</option>
                     {managers
                       .filter((m) => m.id !== employee?.id)
                       .map((m) => (
@@ -443,7 +445,7 @@ export function EmployeeForm({ employee, departments, positions, managers = [], 
               render={({ field }) => (
                 <select
                   id="employmentStatus"
-                  className="form-input"
+                  className={selectClass}
                   value={field.value || ""}
                   onChange={(e) => field.onChange(e.target.value)}
                   onBlur={field.onBlur}
@@ -497,7 +499,7 @@ export function EmployeeForm({ employee, departments, positions, managers = [], 
               render={({ field }) => (
                 <select
                   id="endReason"
-                  className="form-input"
+                  className={selectClass}
                   value={field.value || ""}
                   onChange={(e) => field.onChange(e.target.value)}
                   onBlur={field.onBlur}
