@@ -257,7 +257,7 @@ export function WorkshopCloseoutQueueCard({
                         <div>
                           <button
                             type="button"
-                            className="inline-flex min-h-11 items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover transition-all disabled:opacity-50"
+                            className="inline-flex min-h-11 items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 cursor-pointer"
                             disabled={!job.readyToClose || isPending}
                             aria-label={`Tutup Job ${job.code}`}
                             onClick={() => {

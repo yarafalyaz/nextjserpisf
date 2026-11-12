@@ -315,7 +315,7 @@ export function WithholdingCertificateForm({
         <Button
           type="submit"
           isDisabled={isPending}
-          className="bg-primary text-primary-foreground hover:bg-primary-hover shadow-2xs min-h-11 sm:min-h-9 px-6 font-medium"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs min-h-11 sm:min-h-9 px-6 font-medium cursor-pointer"
         >
           {isPending ? "Menerbitkan Bukti Potong..." : "Terbitkan Bukti Potong"}
         </Button>
@@ -510,7 +510,7 @@ export function WithholdingLifecycleActions({
             <Button
               type="submit"
               isDisabled={isPending}
-              className="bg-primary text-primary-foreground hover:bg-primary-hover shadow-2xs min-h-11 sm:min-h-9 px-6 font-medium"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs min-h-11 sm:min-h-9 px-6 font-medium cursor-pointer"
             >
               {isPending ? "Mencatat Setoran..." : "Catat Penyetoran Pajak"}
             </Button>

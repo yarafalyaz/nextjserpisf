@@ -106,7 +106,7 @@ export default async function WarehouseDetailPage({
                       <CanCreate permission="create_warehouses">
                         <Link
                           href={`/inventaris/rak/tambah/gudang/${warehouse.slug ?? warehouse.id}`}
-                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-2xs transition-colors cursor-pointer"
                           id="create-rack-btn"
                         >
                           + Rak
@@ -115,7 +115,7 @@ export default async function WarehouseDetailPage({
                       <CanCreate permission="manage_inventory">
                         <Link
                           href={`/inventaris/baris-rak/tambah/gudang/${warehouse.slug ?? warehouse.id}`}
-                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-2xs transition-colors cursor-pointer"
                           id="create-rack-row-btn"
                         >
                           + Baris Rak

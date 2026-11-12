@@ -237,7 +237,7 @@ export function InvoiceItemsEditor({
             <Button
               type="button"
               onPress={() => setEditing(true)}
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary-hover transition-all"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
             >
               Ubah Item
             </Button>
@@ -472,7 +472,7 @@ export function InvoiceItemsEditor({
             type="button"
             onPress={handleSave}
             isDisabled={isPending}
-            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary-hover transition-all"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
           >
             {isPending ? "Menyimpan..." : "Simpan"}
           </Button>

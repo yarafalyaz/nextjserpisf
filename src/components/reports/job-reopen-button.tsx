@@ -66,7 +66,7 @@ export function JobReopenButton({
     <>
       <button
         type="button"
-        className="inline-flex min-h-11 items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover transition-all disabled:opacity-50"
+        className="inline-flex min-h-11 items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 cursor-pointer"
         disabled={isPending}
         aria-label={`Buka Kembali Job ${code}`}
         onClick={() => {

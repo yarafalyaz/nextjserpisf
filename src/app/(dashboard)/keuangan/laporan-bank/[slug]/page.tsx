@@ -114,7 +114,7 @@ export default async function BankStatementDetailPage({
                 </Link>
                 <Link
                   href={`${baseHref}/baris/tambah`}
-                  className="inline-flex min-h-11 sm:min-h-9 items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary-hover shadow-2xs transition-colors"
+                  className="inline-flex min-h-11 sm:min-h-9 items-center justify-center gap-1.5 px-3.5 py-2 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs transition-colors cursor-pointer"
                 >
                   <Plus className="size-3.5" aria-hidden="true" />
                   <span>Tambah Baris</span>

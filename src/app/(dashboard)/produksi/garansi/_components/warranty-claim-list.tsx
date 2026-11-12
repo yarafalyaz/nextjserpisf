@@ -40,7 +40,7 @@ export function WarrantyClaimList({ claims }: { claims: WarrantyClaimListRow[] }
       className={
         isMobile
           ? "inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-default bg-surface px-4 py-2 text-xs font-semibold text-foreground transition-all hover:border-primary/50 hover:bg-muted/50 active:scale-[0.99]"
-          : "inline-flex min-h-11 items-center gap-1 font-medium text-xs text-primary transition-colors hover:text-primary-hover hover:underline"
+          : "inline-flex min-h-11 items-center gap-1 font-medium text-xs text-primary transition-colors hover:text-primary/80 hover:underline"
       }
       aria-label={`Lihat detail klaim garansi ${claim.id}`}
     >

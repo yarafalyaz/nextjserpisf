@@ -27,7 +27,7 @@ const columns = [
     cell: (info) => (
       <Link
         href={entityHref("/produksi/perintah-kerja", info.row.original)}
-        className="font-mono text-sm font-semibold tracking-tight text-primary transition-colors hover:text-primary-hover hover:underline"
+        className="font-mono text-sm font-semibold tracking-tight text-primary transition-colors hover:text-primary/80 hover:underline"
       >
         {info.getValue()}
       </Link>

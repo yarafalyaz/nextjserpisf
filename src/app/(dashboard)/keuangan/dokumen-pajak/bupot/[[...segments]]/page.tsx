@@ -257,7 +257,7 @@ export default async function WithholdingCertificatesPage({
             <CanCreate permission="manage_withholding_certificates">
               <Link
                 href="/keuangan/dokumen-pajak/bupot/tambah"
-                className="inline-flex min-h-11 sm:min-h-9 items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary-hover shadow-2xs transition-colors"
+                className="inline-flex min-h-11 sm:min-h-9 items-center justify-center gap-1.5 px-3.5 py-2 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs transition-colors cursor-pointer"
                 id="create-bupot-btn"
               >
                 <Plus className="size-3.5" aria-hidden="true" />

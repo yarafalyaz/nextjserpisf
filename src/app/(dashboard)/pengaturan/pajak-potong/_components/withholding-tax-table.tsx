@@ -52,7 +52,7 @@ const columns = [
       <div className="text-right">
         <Link
           href={entityEditHref("/pengaturan/pajak-potong", info.row.original)}
-          className="inline-flex items-center text-xs font-medium text-primary hover:text-primary-hover hover:underline transition-colors"
+          className="inline-flex items-center text-xs font-medium text-primary hover:text-primary/80 hover:underline transition-colors"
         >
           Ubah
         </Link>
