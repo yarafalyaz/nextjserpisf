@@ -11,6 +11,7 @@ import { getWibTodayUtcDate, wibDateToUtcMidnight } from "@/lib/utils/attendance
 import { endOfUtcDayExclusive } from "@/lib/utils/date-only"
 import { PageHeader } from "@/components/ui/page-header"
 import { AppSearchField } from "@/components/ui/search-field"
+import { Plus } from "@/components/ui/fontawesome-icons"
 import Link from "next/link"
 import { AttendanceFilterForm } from "../_components/attendance-filter-form"
 import { AttendanceTable } from "../_components/attendance-table"
@@ -233,9 +234,10 @@ export default async function AttendancePage({
           <CanCreate permission="create_attendance">
             <Link
               href="/sdm/absensi/tambah"
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
             >
-              + Catat Absensi
+              <Plus className="size-3.5" aria-hidden="true" />
+              <span>Catat Absensi</span>
             </Link>
           </CanCreate>
         }
@@ -254,9 +256,13 @@ export default async function AttendancePage({
             <Link
               key={chip.label}
               href={chip.href}
-              className={`filter-chip ${chip.active ? "active" : ""}`}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                chip.active
+                  ? "border-primary bg-primary/10 text-primary font-semibold"
+                  : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
             >
-              {chip.label}
+              <span>{chip.label}</span>
             </Link>
           ))}
         </div>
