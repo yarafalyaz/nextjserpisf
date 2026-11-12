@@ -67,18 +67,26 @@ export function QuotationFollowUpQueueCard({
           Antrean Penawaran Belum Dijawab
         </h2>
         <div className="flex flex-wrap items-center gap-2">
-          <nav aria-label="Filter tahap antrean" className="flex items-center gap-1">
+          <nav aria-label="Filter tahap antrean" className="flex items-center gap-1.5">
             <Link
               href="/penjualan/antrean-penawaran"
               aria-current={mode === "default" ? "page" : undefined}
-              className={`filter-chip ${mode === "default" ? "active" : ""}`}
+              className={`filter-chip inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                mode === "default"
+                  ? "border-primary bg-primary/10 text-primary font-semibold"
+                  : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
             >
               Perlu dikejar
             </Link>
             <Link
               href="/penjualan/antrean-penawaran?tampilan=semua"
               aria-current={mode === "semua" ? "page" : undefined}
-              className={`filter-chip ${mode === "semua" ? "active" : ""}`}
+              className={`filter-chip inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                mode === "semua"
+                  ? "border-primary bg-primary/10 text-primary font-semibold"
+                  : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
             >
               Semua
             </Link>

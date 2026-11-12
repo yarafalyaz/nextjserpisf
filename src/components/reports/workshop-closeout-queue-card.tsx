@@ -121,24 +121,52 @@ export function WorkshopCloseoutQueueCard({
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter ember umur">
               <button
                 type="button"
-                className={`filter-chip ${bucketFilter === "all" ? "active" : ""}`}
+                className={`filter-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  bucketFilter === "all"
+                    ? "border-primary bg-primary/10 text-primary font-semibold"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
                 aria-pressed={bucketFilter === "all"}
                 onClick={() => setBucketFilter("all")}
               >
-                Semua ({formatNumber(queue.totalJobs)})
-              </button>
-              {queue.buckets.map((bucket: CloseoutAgeBucket) => (
-                <button
-                  key={bucket.id}
-                  type="button"
-                  className={`filter-chip ${bucketFilter === bucket.id ? "active" : ""}`}
-                  aria-pressed={bucketFilter === bucket.id}
-                  onClick={() => setBucketFilter(bucket.id)}
+                <span>Semua</span>
+                <span
+                  className={`inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-2xs font-mono tabular-nums ${
+                    bucketFilter === "all"
+                      ? "bg-primary text-primary-foreground font-bold"
+                      : "bg-muted text-muted-foreground"
+                  }`}
                 >
-                  {bucket.label} ({formatNumber(bucket.jobCount)} · {formatNumber(bucket.readyCount)}{" "}
-                  siap)
-                </button>
-              ))}
+                  {formatNumber(queue.totalJobs)}
+                </span>
+              </button>
+              {queue.buckets.map((bucket: CloseoutAgeBucket) => {
+                const isActive = bucketFilter === bucket.id
+                return (
+                  <button
+                    key={bucket.id}
+                    type="button"
+                    className={`filter-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                      isActive
+                        ? "border-primary bg-primary/10 text-primary font-semibold"
+                        : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                    aria-pressed={isActive}
+                    onClick={() => setBucketFilter(bucket.id)}
+                  >
+                    <span>{bucket.label}</span>
+                    <span
+                      className={`inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-2xs font-mono tabular-nums ${
+                        isActive
+                          ? "bg-primary text-primary-foreground font-bold"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {formatNumber(bucket.jobCount)}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
 
             {visibleJobs.length === 0 ? (

@@ -125,24 +125,37 @@ export function CollectionQueueCard({
             >
               <button
                 type="button"
-                className={`filter-chip ${levelFilter === "semua" ? "active" : ""}`}
+                className={`filter-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  levelFilter === "semua"
+                    ? "border-primary bg-primary/10 text-primary font-semibold"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
                 aria-pressed={levelFilter === "semua"}
                 onClick={() => setLevelFilter("semua")}
               >
-                Semua ({summary.total})
+                <span>Semua ({summary.total})</span>
               </button>
-              {COLLECTION_REMINDER_LEVELS.map((level) => (
-                <button
-                  key={level}
-                  type="button"
-                  className={`filter-chip ${levelFilter === level ? "active" : ""}`}
-                  aria-pressed={levelFilter === level}
-                  onClick={() => setLevelFilter(level)}
-                >
-                  {COLLECTION_REMINDER_LEVEL_LABELS[level]} (
-                  {summary.reminderLevels[level].count})
-                </button>
-              ))}
+              {COLLECTION_REMINDER_LEVELS.map((level) => {
+                const isActive = levelFilter === level
+                const count = summary.reminderLevels[level].count
+                return (
+                  <button
+                    key={level}
+                    type="button"
+                    className={`filter-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                      isActive
+                        ? "border-primary bg-primary/10 text-primary font-semibold"
+                        : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                    aria-pressed={isActive}
+                    onClick={() => setLevelFilter(level)}
+                  >
+                    <span>
+                      {COLLECTION_REMINDER_LEVEL_LABELS[level]} ({count})
+                    </span>
+                  </button>
+                )
+              })}
             </div>
             {visibleRows.length === 0 ? (
               <p className="py-8 text-center text-muted-foreground">
