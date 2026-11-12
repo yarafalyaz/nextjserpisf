@@ -59,11 +59,14 @@ export default async function CustomerVehiclesPage({
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Kendaraan - {customer.name}</h1>
         <div className="flex gap-2">
           <CanCreate permission="create_customers">
-            <Link href={`/master/pelanggan/${customerKey}/kendaraan/tambah`} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all">
-              <Plus size={14} /> Tambah Kendaraan
+            <Link href={`/master/pelanggan/${customerKey}/kendaraan/tambah`} className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer">
+              <Plus size={14} aria-hidden="true" />
+              <span>Tambah Kendaraan</span>
             </Link>
           </CanCreate>
-          <Link href={`/master/pelanggan/${customerKey}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
+          <Link href={`/master/pelanggan/${customerKey}`} className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer">
+            ← Kembali
+          </Link>
         </div>
       </div>
 

@@ -167,7 +167,7 @@ export default async function GoodsReceiptDetailPage({
                 <CanCreate permission="edit_goods_receipts">
                   <Link
                     href={entityEditHref("/pembelian/penerimaan", receipt)}
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
                   >
                     Ubah
                   </Link>
@@ -187,7 +187,7 @@ export default async function GoodsReceiptDetailPage({
               <CanCreate permission="create_vendor_bills">
                 <Link
                   href={`/pembelian/tagihan/tambah/penerimaan/${receipt.slug ?? receipt.id}`}
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
                 >
                   Buat Tagihan
                 </Link>

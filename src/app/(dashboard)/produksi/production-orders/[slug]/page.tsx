@@ -263,12 +263,12 @@ export default async function ProductionOrderDetailPage({
           {/* updateProductionOrder/deleteProductionOrder hanya menerima draft
               atau pending (lihat penjaganya). */}
           {canEditProductionOrder && isEditableStatus && (
-            <Link href={entityEditHref("/produksi/production-orders", order)} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all">Ubah</Link>
+            <Link href={entityEditHref("/produksi/production-orders", order)} className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer">Ubah</Link>
           )}
           {canDeleteProductionOrder && isEditableStatus && (
             <DeleteButton id={order.id} action={deleteProductionOrder} />
           )}
-                  <Link href="/produksi/production-orders" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
+          <Link href="/produksi/production-orders" className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer">← Kembali</Link>
         </div>
         </div>
       </div>

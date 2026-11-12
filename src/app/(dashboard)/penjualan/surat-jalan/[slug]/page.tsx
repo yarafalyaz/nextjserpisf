@@ -81,7 +81,7 @@ export default async function DeliveryOrderDetailPage({
               <CanCreate permission="edit_delivery_orders">
                 <Link
                   href={entityEditHref("/penjualan/surat-jalan", deliveryOrder)}
-                  className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-md transition-all"
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
                 >
                   Ubah
                 </Link>
