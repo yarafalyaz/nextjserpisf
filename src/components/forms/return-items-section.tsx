@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
+import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 
 /**
  * Bagian bersama form retur penjualan/pembelian: blok item (tabel baris)
@@ -41,24 +42,27 @@ export function ReturnItemsSection<TItem extends { itemId: number; qty: number; 
   return (
     <div style={{ marginTop: "24px" }}>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-        <h3 style={{ margin: 0, fontSize: "1rem" }}>Item Retur</h3>
-        <Button type="button" onPress={addItem} variant="secondary" size="sm">+ Tambah Item</Button>
+        <h3 style={{ margin: 0, fontSize: "1rem" }} className="font-semibold text-foreground">Item Retur</h3>
+        <Button type="button" onPress={addItem} variant="secondary" size="sm" className="inline-flex items-center gap-1.5 min-h-9 px-3">
+          <Plus className="size-3.5" aria-hidden="true" />
+          <span>Tambah Item</span>
+        </Button>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-lg border border-border bg-card">
       <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
         <thead>
-          <tr>
-            <th>Item</th>
-            <th style={{ width: "100px" }}>Kuantitas</th>
+          <tr className="border-b border-border/80 text-muted-foreground">
+            <th className="p-2 text-left">Item</th>
+            <th className="p-2 text-right" style={{ width: "110px" }}>Kuantitas</th>
             {extraHeaders}
-            <th style={{ width: "40px" }}></th>
+            <th className="p-2" style={{ width: "48px" }}></th>
           </tr>
         </thead>
         <tbody>
           {returnItems.map((ri, index) => (
-            <tr key={ri.uid}>
-              <td>
+            <tr key={ri.uid} className="border-b border-border/50">
+              <td className="p-2">
                 <Combobox
                   options={items.map((item) => ({ value: String(item.id), label: `${item.sku} - ${item.name}` }))}
                   value={ri.itemId ? String(ri.itemId) : null}
@@ -67,21 +71,22 @@ export function ReturnItemsSection<TItem extends { itemId: number; qty: number; 
                   className="w-full"
                 />
               </td>
-              <td>
-                <input
+              <td className="p-2">
+                <Input
                   type="number"
                   min={1}
                   aria-label={`Jumlah baris ${index + 1}`}
                   value={ri.qty}
                   onChange={(e) => updateItem(index, "qty", Math.max(1, Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 1))}
-                  className="form-input"
-                  style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
+                  className="h-9 text-xs text-right font-mono tabular-nums"
                 />
               </td>
               {renderExtraCells?.(ri, index)}
-              <td>
+              <td className="p-2 text-center">
                 {returnItems.length > 1 && (
-                  <Button type="button" onPress={() => removeItem(index)} aria-label={`Hapus baris ${index + 1}`} variant="danger-soft" size="sm">×</Button>
+                  <Button type="button" onPress={() => removeItem(index)} aria-label={`Hapus baris ${index + 1}`} variant="danger-soft" size="sm" className="min-h-9 px-2">
+                    <Trash2 className="size-3.5" aria-hidden="true" />
+                  </Button>
                 )}
               </td>
             </tr>

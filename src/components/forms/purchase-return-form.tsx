@@ -134,17 +134,17 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData, receiptL
         updateItem={(index, field, value) => {
           if (field === "itemId" || field === "qty") updateItem(index, field, value as number)
         }}
-        extraHeaders={<th style={{ minWidth: "190px" }}>Penerimaan Asal</th>}
+        extraHeaders={<th className="p-2 text-left" style={{ minWidth: "190px" }}>Penerimaan Asal</th>}
         renderExtraCells={(row, index) => {
           const options = receiptOptionsFor(row)
           return (
-            <td>
+            <td className="p-2">
               <select
                 aria-label={`Penerimaan asal baris ${index + 1}`}
                 value={row.goodsReceiptItemId ? String(row.goodsReceiptItemId) : ""}
                 disabled={!row.itemId || options.length === 0}
                 onChange={(e) => setReceiptLine(index, e.target.value)}
-                className="form-input"
+                className="h-9 w-full rounded-md border border-input bg-card px-2.5 py-1 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 cursor-pointer"
               >
                 <option value="">Otomatis (terbaru)</option>
                 {options.map((o) => (

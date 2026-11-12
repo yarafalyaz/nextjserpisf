@@ -5,6 +5,7 @@ import { useRef, useState, useTransition } from "react"
 import { createSalesReturn, updateSalesReturn } from "@/actions/sales.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
 import { Combobox } from "@/components/ui/combobox"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
@@ -140,29 +141,27 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
         addItem={addItem}
         removeItem={removeItem}
         updateItem={updateItem}
-        extraHeaders={<><th>Serial (koma-pisah)</th><th>Batch (koma-pisah)</th></>}
+        extraHeaders={<><th className="p-2 text-left">Serial (koma-pisah)</th><th className="p-2 text-left">Batch (koma-pisah)</th></>}
         renderExtraCells={(ri, index) => (
           <>
-            <td>
-              <input
+            <td className="p-2">
+              <Input
                 type="text"
                 aria-label={`Serial baris ${index + 1}`}
                 value={ri.serialNumbers}
                 onChange={(e) => updateItem(index, "serialNumbers", e.target.value)}
                 placeholder="SN-001, SN-002"
-                className="form-input"
-                style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
+                className="h-9 text-xs font-mono"
               />
             </td>
-            <td>
-              <input
+            <td className="p-2">
+              <Input
                 type="text"
                 aria-label={`Batch baris ${index + 1}`}
                 value={ri.batchNumbers}
                 onChange={(e) => updateItem(index, "batchNumbers", e.target.value)}
                 placeholder="LOT-1"
-                className="form-input"
-                style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
+                className="h-9 text-xs font-mono"
               />
             </td>
           </>
