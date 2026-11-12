@@ -9,6 +9,8 @@ import {
 } from "@/actions/purchase.actions";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
+import { Input } from "@/components/ui/shadcn/input";
+import { Textarea } from "@/components/ui/shadcn/textarea";
 import { Combobox } from "@/components/ui/combobox";
 import { QuickAddSelect } from "@/components/ui/quick-add-select";
 import { QUICK_ADD } from "@/lib/quick-add/registry";
@@ -405,13 +407,12 @@ export function GoodsReceiptForm({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="referenceNumber">No. Referensi / DO</Label>
-            <input
+            <Input
               id="referenceNumber"
               type="text"
               value={referenceNumber}
               onChange={(e) => setReferenceNumber(e.target.value)}
               placeholder="Mis. DO-2024-001"
-              className="form-input"
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -427,13 +428,12 @@ export function GoodsReceiptForm({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="notes">Catatan</Label>
-            <textarea
+            <Textarea
               id="notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Catatan penerimaan (opsional)"
               rows={2}
-              className="form-input"
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -578,11 +578,7 @@ export function GoodsReceiptForm({
                                   qty: Number(e.target.value),
                                 })
                               }
-                              className="form-input w-full text-right tabular-nums"
-                              style={{
-                                fontSize: "0.8125rem",
-                                padding: "6px 8px",
-                              }}
+                              className="h-9 w-24 text-xs text-right font-mono tabular-nums"
                             />
                           </td>
                           <td className="py-2.5 px-3">
@@ -706,7 +702,7 @@ export function GoodsReceiptForm({
                                       <Label htmlFor={batchId}>
                                         No. Batch/Lot
                                       </Label>
-                                      <input
+                                      <Input
                                         id={batchId}
                                         type="text"
                                         value={row.batchNumber}
@@ -716,11 +712,7 @@ export function GoodsReceiptForm({
                                           })
                                         }
                                         placeholder="Mis. LOT-2024-001"
-                                        className="form-input"
-                                        style={{
-                                          fontSize: "0.8125rem",
-                                          padding: "6px",
-                                        }}
+                                        className="h-9 text-xs font-mono"
                                       />
                                     </div>
                                     <AppDatePicker
@@ -740,7 +732,7 @@ export function GoodsReceiptForm({
                                     <Label htmlFor={serialId}>
                                       Nomor Seri (satu per baris)
                                     </Label>
-                                    <textarea
+                                    <Textarea
                                       id={serialId}
                                       value={row.serialNumbers}
                                       onChange={(e) =>
@@ -750,11 +742,7 @@ export function GoodsReceiptForm({
                                       }
                                       rows={3}
                                       placeholder={"SN-0001\nSN-0002"}
-                                      className="form-input"
-                                      style={{
-                                        fontSize: "0.8125rem",
-                                        padding: "6px",
-                                      }}
+                                      className="text-xs font-mono"
                                     />
                                     <p className="text-xs text-muted-foreground">
                                       Jumlah nomor seri harus sama dengan qty (
