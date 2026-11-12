@@ -6,6 +6,8 @@ import { useTransition } from "react"
 import { updateCustomerVehicleServiceSchedule } from "@/actions/vehicle.actions"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
 import { formatDate, formatNumber } from "@/lib/utils/format"
 import { showError, showSuccess } from "@/lib/utils/toast"
 
@@ -117,13 +119,13 @@ export function VehicleServiceScheduleForm({
             <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={dateId}>Tanggal Servis Berikutnya</Label>
-                <input
+                <Input
                   id={dateId}
                   name="nextServiceDate"
                   type="date"
                   defaultValue={toInputDate(nextServiceDate)}
                   disabled={isPending}
-                  className="min-h-11 w-full rounded-lg border border-default bg-surface px-3 py-2.5 text-sm text-foreground"
+                  className="h-9 w-full text-xs"
                 />
                 <p className="text-xs text-muted-foreground">
                   Boleh kosong. Tanggal lampau akan langsung terlewat.
@@ -131,7 +133,7 @@ export function VehicleServiceScheduleForm({
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={kmId}>Km Servis Berikutnya</Label>
-                <input
+                <Input
                   id={kmId}
                   name="nextServiceKm"
                   type="number"
@@ -140,7 +142,7 @@ export function VehicleServiceScheduleForm({
                   step="1"
                   defaultValue={nextServiceKm ?? ""}
                   disabled={isPending}
-                  className="min-h-11 w-full rounded-lg border border-default bg-surface px-3 py-2.5 text-sm text-foreground"
+                  className="h-9 w-full text-xs font-mono tabular-nums"
                 />
                 <p className="text-xs text-muted-foreground">
                   {lastOdometerKm != null
@@ -151,18 +153,18 @@ export function VehicleServiceScheduleForm({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={noteId}>Catatan Jadwal</Label>
-              <textarea
+              <Textarea
                 id={noteId}
                 name="nextServiceNote"
                 rows={2}
                 maxLength={1000}
                 defaultValue={nextServiceNote ?? ""}
                 disabled={isPending}
-                className="w-full rounded-lg border border-default bg-surface px-3 py-2.5 text-sm text-foreground"
+                className="w-full text-xs"
               />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" isDisabled={isPending}>
+              <Button type="submit" isDisabled={isPending} className="min-h-9">
                 {isPending ? "Menyimpan…" : "Simpan Jadwal Servis"}
               </Button>
             </div>

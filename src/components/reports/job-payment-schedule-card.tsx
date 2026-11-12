@@ -66,7 +66,7 @@ function statusTone(status: string): string {
   }
 }
 
-const inputClass = "min-h-11 rounded-lg border border-default bg-background px-2 text-sm"
+const inputClass = "h-9 rounded-md border border-input bg-card px-2.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 
 export function JobPaymentScheduleCard({
   schedule,

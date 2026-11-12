@@ -105,6 +105,7 @@ export function LoanWriteOffButton({
             onChange={(e) => setWriteOffDate(e.target.value)}
             disabled={isPending}
             required
+            className="h-9 text-xs"
           />
         </div>
         <ReasonField

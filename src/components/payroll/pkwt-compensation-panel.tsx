@@ -14,6 +14,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { Button } from "@/components/ui/button"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
 
 /**
  * F-2026-10-24-132-V: konsumen UI kompensasi akhir kontrak PKWT.
@@ -216,24 +217,24 @@ export function PkwtCompensationPanel({
               <Label htmlFor="pkwt-segment-start">
                 Mulai Segmen <span aria-hidden="true" className="text-destructive">*</span>
               </Label>
-              <input
+              <Input
                 id="pkwt-segment-start"
                 name="segmentStart"
                 type="date"
                 required
-                className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm"
+                className="h-9 text-xs"
               />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="pkwt-segment-end">
                 Akhir Segmen <span aria-hidden="true" className="text-destructive">*</span>
               </Label>
-              <input
+              <Input
                 id="pkwt-segment-end"
                 name="segmentEnd"
                 type="date"
                 required
-                className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm"
+                className="h-9 text-xs"
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -248,20 +249,20 @@ export function PkwtCompensationPanel({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="pkwt-agreement-ref">Referensi Dokumen Kesepakatan</Label>
-              <input
+              <Input
                 id="pkwt-agreement-ref"
                 name="agreementDocumentRef"
                 type="text"
-                className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm"
+                className="h-9 text-xs"
                 placeholder="Wajib bila nominal kesepakatan diisi"
               />
             </div>
             <div className="flex flex-col justify-end gap-2">
-              <label htmlFor="pkwt-is-legacy" className="flex min-h-11 items-center gap-2 text-sm text-foreground">
+              <label htmlFor="pkwt-is-legacy" className="flex min-h-9 items-center gap-2 text-sm text-foreground">
                 <input id="pkwt-is-legacy" name="isLegacy" type="checkbox" value="1" className="size-4" />
                 Peristiwa lama (legacy, sekaligus)
               </label>
-              <Button type="submit" variant="primary" isDisabled={isPending || employees.length === 0}>
+              <Button type="submit" variant="primary" isDisabled={isPending || employees.length === 0} className="min-h-9">
                 {isPending ? "Menyimpan..." : "Buat Peristiwa"}
               </Button>
             </div>
@@ -283,15 +284,15 @@ export function PkwtCompensationPanel({
               <Label htmlFor="pkwt-accrual-period">
                 Periode Akrual <span aria-hidden="true" className="text-destructive">*</span>
               </Label>
-              <input
+              <Input
                 id="pkwt-accrual-period"
                 name="period"
                 type="month"
                 required
-                className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm"
+                className="h-9 text-xs"
               />
             </div>
-            <Button type="submit" variant="secondary" isDisabled={isPending}>
+            <Button type="submit" variant="secondary" isDisabled={isPending} className="min-h-9">
               {isPending ? "Menjalankan..." : "Jalankan Akrual Bulan Ini"}
             </Button>
           </form>
