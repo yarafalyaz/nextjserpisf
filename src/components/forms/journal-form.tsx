@@ -12,6 +12,8 @@ import { CurrencyInput } from "@/components/ui/currency-input"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
+import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface JournalFormProps {
@@ -149,7 +151,7 @@ export function JournalForm({ accounts, profitCenters = [], costCenters = [], jo
             <option value="">-- Tanpa pusat biaya --</option>
             {costCenters.map((center) => (
               <option key={center.id} value={center.id}>
-                {center.code} — {center.name}
+                {center.code} - {center.name}
               </option>
             ))}
           </select>
@@ -158,16 +160,19 @@ export function JournalForm({ accounts, profitCenters = [], costCenters = [], jo
 
       <div style={{ marginTop: "24px" }}>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <h3 style={{ margin: 0, fontSize: "1rem" }}>Entri</h3>
-          <Button type="button" onPress={addEntry} variant="secondary" size="sm">+ Tambah Baris</Button>
+          <h3 style={{ margin: 0, fontSize: "1rem" }} className="font-semibold text-foreground">Entri Jurnal</h3>
+          <Button type="button" onPress={addEntry} variant="secondary" size="sm" className="inline-flex items-center gap-1.5 min-h-9 px-3">
+            <Plus className="size-3.5" aria-hidden="true" />
+            <span>Tambah Baris</span>
+          </Button>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-lg border border-border bg-card">
         <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
-          <thead><tr><th>Akun</th><th>Debit</th><th>Kredit</th><th>Memo</th><th></th></tr></thead>
+          <thead><tr className="border-b border-border/80 text-muted-foreground"><th className="p-2 text-left">Akun</th><th className="p-2 text-right">Debit</th><th className="p-2 text-right">Kredit</th><th className="p-2 text-left">Memo</th><th className="p-2"></th></tr></thead>
           <tbody>
             {entries.map((entry, i) => (
-              <tr key={i}>
-                <td>
+              <tr key={i} className="border-b border-border/50">
+                <td className="p-2">
                   <QuickAddSelect
                     value={entry.accountId ? String(entry.accountId) : null}
                     onChange={(key) => updateEntry(i, "accountId", key ? Number(key) : 0)}
@@ -182,20 +187,20 @@ export function JournalForm({ accounts, profitCenters = [], costCenters = [], jo
                     }}
                   />
                 </td>
-                <td><CurrencyInput value={entry.debit} onChange={(v) => updateEntry(i, "debit", v)} className="form-input" /></td>
-                <td><CurrencyInput value={entry.credit} onChange={(v) => updateEntry(i, "credit", v)} className="form-input" /></td>
-                <td><input type="text" value={entry.memo} onChange={(e) => updateEntry(i, "memo", e.target.value)} aria-label={`Memo baris ${i + 1}`} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px" }} placeholder="Memo" /></td>
-                <td>{entries.length > 2 && <Button type="button" onPress={() => removeEntry(i)} aria-label={`Hapus baris ${i + 1}`} variant="danger-soft" size="sm">×</Button>}</td>
+                <td className="p-2"><CurrencyInput value={entry.debit} onChange={(v) => updateEntry(i, "debit", v)} className="font-mono text-sm tabular-nums text-right" /></td>
+                <td className="p-2"><CurrencyInput value={entry.credit} onChange={(v) => updateEntry(i, "credit", v)} className="font-mono text-sm tabular-nums text-right" /></td>
+                <td className="p-2"><Input type="text" value={entry.memo} onChange={(e) => updateEntry(i, "memo", e.target.value)} aria-label={`Memo baris ${i + 1}`} className="text-xs h-9" placeholder="Memo" /></td>
+                <td className="p-2 text-center">{entries.length > 2 && <Button type="button" onPress={() => removeEntry(i)} aria-label={`Hapus baris ${i + 1}`} variant="danger-soft" size="sm" className="min-h-9 px-2"><Trash2 className="size-3.5" aria-hidden="true" /></Button>}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr style={{ fontWeight: "bold" }}>
-              <td className="text-right">Total</td>
-              <td className="text-right">Rp {totalDebit.toLocaleString("id-ID")}</td>
-              <td className="text-right">Rp {totalCredit.toLocaleString("id-ID")}</td>
-              <td><span className={isBalanced ? "text-success" : "text-danger"}>{isBalanced ? "Seimbang" : "Tidak Seimbang"}</span></td>
-              <td></td>
+            <tr className="font-bold bg-muted/30">
+              <td className="p-2 text-right font-medium">Total</td>
+              <td className="p-2 text-right font-mono tabular-nums">{formatCurrencyExact(totalDebit)}</td>
+              <td className="p-2 text-right font-mono tabular-nums">{formatCurrencyExact(totalCredit)}</td>
+              <td className="p-2"><span className={isBalanced ? "text-success font-semibold" : "text-danger font-semibold"}>{isBalanced ? "Seimbang" : "Tidak Seimbang"}</span></td>
+              <td className="p-2"></td>
             </tr>
           </tfoot>
         </table>
