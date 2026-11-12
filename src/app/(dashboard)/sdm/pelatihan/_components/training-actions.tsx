@@ -202,7 +202,11 @@ export function ParticipantForm({
           <option key={e.id} value={e.id}>{e.name}</option>
         ))}
       </select>
-      <button type="submit" disabled={isPending} className="btn-secondary px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50">
+      <button
+        type="submit"
+        disabled={isPending}
+        className="inline-flex items-center justify-center min-h-11 sm:min-h-9 px-3.5 py-1.5 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+      >
         Tambah Peserta
       </button>
     </form>
@@ -237,10 +241,20 @@ export function ParticipantResultButtons({
 
   return (
     <div className="flex gap-2">
-      <button type="button" disabled={isPending} onClick={() => mark("attended")} className="btn-secondary px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50">
+      <button
+        type="button"
+        disabled={isPending}
+        onClick={() => mark("attended")}
+        className="inline-flex items-center justify-center min-h-11 sm:min-h-9 px-3.5 py-1.5 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+      >
         Hadir
       </button>
-      <button type="button" disabled={isPending} onClick={() => mark("absent")} className="btn-secondary px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50">
+      <button
+        type="button"
+        disabled={isPending}
+        onClick={() => mark("absent")}
+        className="inline-flex items-center justify-center min-h-11 sm:min-h-9 px-3.5 py-1.5 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+      >
         Absen
       </button>
     </div>
@@ -276,10 +290,20 @@ export function TrainingStatusButton({
 
   return (
     <div className="flex gap-2">
-      <button type="button" disabled={isPending} onClick={() => setStatus("done")} className="btn-primary px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50">
+      <button
+        type="button"
+        disabled={isPending}
+        onClick={() => setStatus("done")}
+        className="inline-flex items-center justify-center min-h-11 sm:min-h-9 px-3.5 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+      >
         Selesai
       </button>
-      <button type="button" disabled={isPending} onClick={() => setStatus("cancelled")} className="btn-secondary px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50">
+      <button
+        type="button"
+        disabled={isPending}
+        onClick={() => setStatus("cancelled")}
+        className="inline-flex items-center justify-center min-h-11 sm:min-h-9 px-3.5 py-1.5 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+      >
         Batalkan
       </button>
     </div>

@@ -47,7 +47,11 @@ export function CompetencyForm() {
       <input name="name" id="competency-name" required placeholder="Nama kompetensi" aria-label="Nama kompetensi" className="form-input" />
       <input name="category" id="competency-category" placeholder="Kategori (Teknis/Perilaku/Kepemimpinan)" aria-label="Kategori kompetensi" className="form-input" />
       <input name="description" id="competency-description" placeholder="Deskripsi" aria-label="Deskripsi kompetensi" className="form-input" />
-      <button type="submit" disabled={isPending} className="btn-primary px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+      <button
+        type="submit"
+        disabled={isPending}
+        className="inline-flex items-center justify-center min-h-11 sm:min-h-9 px-4 py-2 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+      >
         Tambah Kompetensi
       </button>
     </form>
@@ -85,7 +89,11 @@ export function PositionCompetencyForm({
         ))}
       </select>
       <input name="requiredLevel" id="position-requirement-level" type="number" min={1} max={5} required placeholder="Level syarat (1-5)" aria-label="Level syarat (1-5)" className="form-input" />
-      <button type="submit" disabled={isPending} className="btn-secondary px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+      <button
+        type="submit"
+        disabled={isPending}
+        className="inline-flex items-center justify-center min-h-11 sm:min-h-9 px-4 py-2 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+      >
         Tetapkan Syarat
       </button>
     </form>
@@ -123,7 +131,11 @@ export function EmployeeCompetencyForm({
         ))}
       </select>
       <input name="level" id="employee-assessment-level" type="number" min={1} max={5} required placeholder="Level aktual (1-5)" aria-label="Level aktual (1-5)" className="form-input" />
-      <button type="submit" disabled={isPending} className="btn-secondary px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+      <button
+        type="submit"
+        disabled={isPending}
+        className="inline-flex items-center justify-center min-h-11 sm:min-h-9 px-4 py-2 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+      >
         Nilai Karyawan
       </button>
     </form>

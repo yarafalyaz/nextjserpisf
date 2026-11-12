@@ -74,7 +74,7 @@ export function CancelSalaryAdjustmentButton({ id }: { id: number }) {
     <button
       type="button"
       disabled={isPending}
-      className="btn-secondary px-2 py-1 rounded-lg text-xs font-medium disabled:opacity-50"
+      className="inline-flex items-center justify-center min-h-11 sm:min-h-9 px-2.5 py-1 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       onClick={() => {
         startTransition(async () => {
           try {

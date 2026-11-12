@@ -28,7 +28,7 @@ export function CriticalToggle({
     <button
       type="button"
       disabled={isPending}
-      className="btn-secondary px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50"
+      className="inline-flex items-center justify-center min-h-11 sm:min-h-9 px-3.5 py-1.5 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       onClick={() => {
         startTransition(async () => {
           try {
@@ -94,7 +94,11 @@ export function SuccessorForm({
         <option value="ready_future">Siap Masa Depan</option>
       </select>
       <input name="rank" type="number" min={1} max={99} defaultValue={1} className="form-input" />
-      <button type="submit" disabled={isPending} className="btn-primary px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+      <button
+        type="submit"
+        disabled={isPending}
+        className="inline-flex items-center justify-center min-h-11 sm:min-h-9 px-4 py-2 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+      >
         Tetapkan Kandidat
       </button>
     </form>
@@ -118,7 +122,7 @@ export function RemoveSuccessorButton({
     <button
       type="button"
       disabled={isPending}
-      className="btn-secondary px-2 py-1 rounded-lg text-xs font-medium disabled:opacity-50"
+      className="inline-flex items-center justify-center min-h-11 sm:min-h-9 px-2.5 py-1 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       onClick={() => {
         startTransition(async () => {
           try {

@@ -4,6 +4,12 @@ import { useRouter } from "next/navigation"
 import { useRef, useTransition } from "react"
 import { createVacancy, updateVacancy } from "@/actions/recruitment.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
+import { Input } from "@/components/ui/shadcn/input"
+import { Label } from "@/components/ui/shadcn/label"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+
+const selectClass =
+  "h-11 w-full rounded-md border border-input bg-transparent px-3 text-base md:h-9 md:text-sm"
 
 interface VacancyFormProps {
   vacancy?: {
@@ -52,51 +58,55 @@ export function VacancyForm({ vacancy, departments, positions }: VacancyFormProp
   return (
     <form onSubmit={onSubmit} aria-busy={isPending} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="title" className="text-sm font-medium">Judul Lowongan *</label>
-        <input id="title" name="title" required defaultValue={vacancy?.title ?? ""} className="form-input" placeholder="cth. Welder Produksi" />
+        <Label htmlFor="title">Judul Lowongan *</Label>
+        <Input id="title" name="title" required defaultValue={vacancy?.title ?? ""} placeholder="cth. Welder Produksi" />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="departmentId" className="text-sm font-medium">Departemen</label>
-          <select id="departmentId" name="departmentId" defaultValue={vacancy?.departmentId ?? ""} className="form-input">
-            <option value="">— Pilih —</option>
+          <Label htmlFor="departmentId">Departemen</Label>
+          <select id="departmentId" name="departmentId" defaultValue={vacancy?.departmentId ?? ""} className={selectClass}>
+            <option value="">-- Pilih Departemen --</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="positionId" className="text-sm font-medium">Jabatan</label>
-          <select id="positionId" name="positionId" defaultValue={vacancy?.positionId ?? ""} className="form-input">
-            <option value="">— Pilih —</option>
+          <Label htmlFor="positionId">Jabatan</Label>
+          <select id="positionId" name="positionId" defaultValue={vacancy?.positionId ?? ""} className={selectClass}>
+            <option value="">-- Pilih Jabatan --</option>
             {positions.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="location" className="text-sm font-medium">Lokasi</label>
-          <input id="location" name="location" defaultValue={vacancy?.location ?? ""} className="form-input" />
+          <Label htmlFor="location">Lokasi</Label>
+          <Input id="location" name="location" defaultValue={vacancy?.location ?? ""} placeholder="cth. Pabrik Cikarang" />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="employmentType" className="text-sm font-medium">Jenis Kepegawaian</label>
-          <input id="employmentType" name="employmentType" defaultValue={vacancy?.employmentType ?? ""} className="form-input" placeholder="cth. PKWTT / PKWT" />
+          <Label htmlFor="employmentType">Jenis Kepegawaian</Label>
+          <Input id="employmentType" name="employmentType" defaultValue={vacancy?.employmentType ?? ""} placeholder="cth. PKWTT / PKWT" />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="quota" className="text-sm font-medium">Kuota</label>
-          <input id="quota" name="quota" type="number" min={1} max={999} defaultValue={vacancy?.quota ?? 1} className="form-input" />
+          <Label htmlFor="quota">Kuota</Label>
+          <Input id="quota" name="quota" type="number" min={1} max={999} defaultValue={vacancy?.quota ?? 1} />
         </div>
       </div>
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="description" className="text-sm font-medium">Deskripsi</label>
-        <textarea id="description" name="description" rows={4} defaultValue={vacancy?.description ?? ""} className="form-input" />
+        <Label htmlFor="description">Deskripsi</Label>
+        <Textarea id="description" name="description" rows={4} defaultValue={vacancy?.description ?? ""} />
       </div>
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="requirements" className="text-sm font-medium">Persyaratan</label>
-        <textarea id="requirements" name="requirements" rows={4} defaultValue={vacancy?.requirements ?? ""} className="form-input" />
+        <Label htmlFor="requirements">Persyaratan</Label>
+        <Textarea id="requirements" name="requirements" rows={4} defaultValue={vacancy?.requirements ?? ""} />
       </div>
       <div>
-        <button type="submit" disabled={isPending} className="btn-primary px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="inline-flex items-center justify-center min-h-11 sm:min-h-9 px-4 py-2 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+        >
           {isPending ? "Menyimpan..." : isEdit ? "Simpan Perubahan" : "Buat Lowongan"}
         </button>
       </div>
