@@ -12,7 +12,7 @@ import { redirect } from "next/navigation";
 import {
   safeId,
   safeNumber,
-  safeJsonParse,
+  safeJsonParseArray,
   requireString,
 } from "@/lib/utils/safe-parse";
 import { logActivity } from "@/lib/services/activity-log.service";
@@ -96,8 +96,7 @@ import { validateLeadLostTransition } from "@/lib/reports/lead-lost-reason";
 function parseUomConversions(
   convJson: string | null,
 ): { code: string; factorToBase: number }[] {
-  const rows =
-    safeJsonParse<{ code: string; factorToBase: unknown }[]>(convJson) ?? [];
+  const rows = safeJsonParseArray<{ code?: unknown; factorToBase?: unknown }>(convJson);
   const conversions: { code: string; factorToBase: number }[] = [];
   for (const c of rows) {
     const code = typeof c?.code === "string" ? c.code.trim() : "";

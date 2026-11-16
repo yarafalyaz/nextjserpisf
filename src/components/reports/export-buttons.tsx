@@ -42,7 +42,7 @@ async function fetchSettings(): Promise<Settings> {
   } catch (error) {
     console.error('[export-buttons] gagal memuat setelan perusahaan:', error)
   }
-  showError('Identitas perusahaan gagal dimuat — kop PDF memakai data default, bukan data tersimpan')
+  showError('Identitas perusahaan gagal dimuat: kop PDF memakai data default, bukan data tersimpan')
   return DEFAULT_SETTINGS
 }
 

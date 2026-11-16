@@ -36,7 +36,7 @@ export interface ModuleGridProps {
 }
 
 const cardClassName =
-  "group flex min-h-14 items-center gap-3.5 rounded-lg border border-border/80 bg-card p-3.5 shadow-2xs transition-[background-color,border-color,box-shadow,transform] duration-150 ease-out hover:border-foreground/20 hover:bg-muted/30 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+  "group flex min-h-13 items-center gap-3 bg-card px-3.5 py-2.5 transition-[background-color,border-color,box-shadow,transform] duration-150 ease-out active:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:min-h-14 sm:gap-3.5 sm:rounded-lg sm:border sm:border-border/80 sm:p-3.5 sm:shadow-2xs sm:active:scale-[0.99] [@media(hover:hover)]:hover:border-foreground/20 [@media(hover:hover)]:hover:bg-muted/30"
 
 /**
  * ModuleGrid — a semantic, accessible grid of module landing cards.
@@ -77,7 +77,7 @@ export function ModuleGrid({
       {header}
       <ul
         className={cn(
-          "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3",
+          "flex flex-col divide-y divide-border/70 overflow-hidden rounded-xl border border-border bg-card shadow-2xs sm:grid sm:grid-cols-2 sm:gap-4 sm:divide-y-0 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent sm:shadow-none lg:grid-cols-3",
           className
         )}
         {...(headingId ? { "aria-labelledby": headingId } : {})}
@@ -96,12 +96,12 @@ function ModuleCard({ label, href, icon: Icon, desc }: ModuleItem) {
   return (
     <Link
       href={href}
-      aria-label={`${label} — ${desc}`}
+      aria-label={`${label}: ${desc}`}
       className={cardClassName}
     >
       <div
         aria-hidden="true"
-        className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border/70 bg-muted/50 text-foreground transition-colors group-hover:border-primary group-hover:bg-primary group-hover:text-primary-foreground"
+        className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/60 text-foreground transition-colors sm:size-9 sm:rounded-md [@media(hover:hover)]:group-hover:border-primary [@media(hover:hover)]:group-hover:bg-primary [@media(hover:hover)]:group-hover:text-primary-foreground"
       >
         <Icon size={16} />
       </div>
@@ -114,7 +114,7 @@ function ModuleCard({ label, href, icon: Icon, desc }: ModuleItem) {
       <ChevronRight
         size={13}
         aria-hidden="true"
-        className="shrink-0 text-muted-foreground/40 transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-foreground/70"
+        className="shrink-0 text-muted-foreground/50 transition-all duration-150 [@media(hover:hover)]:group-hover:translate-x-0.5 [@media(hover:hover)]:group-hover:text-foreground/70"
       />
     </Link>
   )

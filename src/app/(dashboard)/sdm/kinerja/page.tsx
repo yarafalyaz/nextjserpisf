@@ -31,8 +31,8 @@ export default async function PerformancePage() {
       where: { deletedAt: null },
       _count: { _all: true },
     }),
-    prisma.performanceReview.count(),
-    prisma.performanceGoal.count(),
+    prisma.performanceReview.count({ where: { cycle: { deletedAt: null } } }),
+    prisma.performanceGoal.count({ where: { cycle: { deletedAt: null } } }),
     getPerformanceQueue(),
   ])
 

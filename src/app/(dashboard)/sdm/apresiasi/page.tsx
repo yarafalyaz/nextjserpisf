@@ -8,6 +8,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { Gift, Plus, Coins, Banknote } from "@/components/ui/fontawesome-icons"
 import { AppSearchField } from "@/components/ui/search-field"
+import { PageHeader } from "@/components/ui/page-header"
 import { AppreciationTable } from "./_components/appreciation-table"
 import { CanCreate } from "@/components/auth/can-create"
 import { statusToIndo, statusLabel, indoToStatus } from "@/lib/utils/status-labels"
@@ -82,7 +83,7 @@ export default async function AppreciationsPage({
   }))
 
   const statusChips = ["", "bonus", "reward", "incentive"].map((s) => {
-    const urlTipe = s ? statusToIndo[s] : ""
+    const urlTipe = s ? statusToIndo[s] || s : ""
     const isActive = params.tipe === urlTipe || (!params.tipe && !urlTipe)
     const count = s ? (counts[s] ?? 0) : counts.all
 
@@ -120,26 +121,27 @@ export default async function AppreciationsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
-            Apresiasi & Penghargaan Karyawan
-          </h1>
-          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
-            Pemberian bonus kinerja, insentif target, dan penghargaan pencapaian istimewa karyawan.
-          </p>
-        </div>
-        <CanCreate permission="create_appreciations">
-          <Link
-            href="/sdm/apresiasi/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
-            id="create-appreciation-btn"
-          >
-            <Plus className="size-3.5" aria-hidden="true" />
-            <span>Tambah Apresiasi</span>
-          </Link>
-        </CanCreate>
-      </div>
+      <PageHeader
+        title="Apresiasi & Penghargaan Karyawan"
+        subtitle="Pemberian bonus kinerja, insentif target, dan penghargaan pencapaian istimewa karyawan."
+        breadcrumbs={[
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
+          { label: "Apresiasi" },
+        ]}
+        actions={
+          <CanCreate permission="create_appreciations">
+            <Link
+              href="/sdm/apresiasi/tambah"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+              id="create-appreciation-btn"
+            >
+              <Plus className="size-3.5" aria-hidden="true" />
+              <span>Tambah Apresiasi</span>
+            </Link>
+          </CanCreate>
+        }
+      />
 
       {/* Executive KPI Metric Strip Standar ERP */}
       <div className="grid grid-cols-1 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs overflow-hidden">

@@ -156,5 +156,5 @@ function urgencyLabel(row: LeadExpectedCloseRow): ReactNode {
       <span>{formatNumber(row.remainingDays)} hari lagi</span>
     )
   }
-  return <span className="text-muted-foreground">—</span>
+  return <span className="text-muted-foreground">-</span>
 }

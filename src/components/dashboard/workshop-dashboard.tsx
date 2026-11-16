@@ -20,8 +20,14 @@ import {
 } from "@/components/ui/shadcn/card"
 import { Badge } from "@/components/ui/shadcn/badge"
 import { Button } from "@/components/ui/shadcn/button"
-import { StatCard } from "@/components/ui/empty-state"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/shadcn/table"
 
 const DONE_STATES = ["completed", "cancelled", "done", "closed"]
 const STAGE_DONE = ["completed", "skipped"]
@@ -129,29 +135,46 @@ export default async function WorkshopDashboard() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-3 px-4 lg:grid-cols-4 lg:px-6">
-            <StatCard
-              label="Proyek Aktif"
-              value={data.activeProjects}
-              icon={<FolderKanban className="size-4" />}
-            />
-            <StatCard
-              label="Perintah Kerja"
-              value={data.totalWO}
-              icon={<Wrench className="size-4" />}
-            />
-            <StatCard
-              label="Proyek Baru (Bulan Ini)"
-              value={data.wipProjects}
-              icon={<CheckCircle2 className="size-4" />}
-              trend="up"
-            />
-            <StatCard
-              label="Mobil di Bengkel"
-              value={data.carsInWorkshop}
-              icon={<Car className="size-4" />}
-            />
-          </div>
+          <section aria-label="Ringkasan bengkel" className="px-4 lg:px-6">
+            <dl className="grid grid-cols-1 divide-y divide-border overflow-hidden rounded-lg border border-border bg-card shadow-2xs sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
+              <div className="flex min-w-0 flex-col justify-between gap-2 p-4 lg:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-medium text-muted-foreground">Proyek Aktif</dt>
+                  <FolderKanban className="size-4 text-muted-foreground/60" aria-hidden="true" />
+                </div>
+                <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {data.activeProjects}
+                </dd>
+              </div>
+              <div className="flex min-w-0 flex-col justify-between gap-2 p-4 sm:border-t-0 lg:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-medium text-muted-foreground">Perintah Kerja</dt>
+                  <Wrench className="size-4 text-muted-foreground/60" aria-hidden="true" />
+                </div>
+                <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {data.totalWO}
+                </dd>
+              </div>
+              <div className="flex min-w-0 flex-col justify-between gap-2 p-4 sm:border-t lg:border-t-0 lg:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-medium text-muted-foreground">Proyek Baru (Bulan Ini)</dt>
+                  <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                </div>
+                <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {data.wipProjects}
+                </dd>
+              </div>
+              <div className="flex min-w-0 flex-col justify-between gap-2 p-4 sm:border-t lg:border-t-0 lg:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-medium text-muted-foreground">Mobil di Bengkel</dt>
+                  <Car className="size-4 text-muted-foreground/60" aria-hidden="true" />
+                </div>
+                <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {data.carsInWorkshop}
+                </dd>
+              </div>
+            </dl>
+          </section>
 
           {/* Cars in workshop */}
           <div className="px-4 lg:px-6">
@@ -171,41 +194,89 @@ export default async function WorkshopDashboard() {
                 </CardAction>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="border-t">
-                  <DetailTable>
-                    <DetailTableHead>
-                      <DetailTableTh>Plat</DetailTableTh>
-                      <DetailTableTh>Pelanggan</DetailTableTh>
-                      <DetailTableTh>Pekerjaan</DetailTableTh>
-                      <DetailTableTh>Tahap</DetailTableTh>
-                      <DetailTableTh className="w-[170px]">Progres</DetailTableTh>
-                      <DetailTableTh>Target</DetailTableTh>
-                    </DetailTableHead>
-                    <DetailTableBody>
+                <div className="divide-y border-t md:hidden">
+                  {data.cars.length === 0 ? (
+                    <p className="px-5 py-10 text-center text-sm text-muted-foreground">
+                      Belum ada mobil yang sedang dikerjakan
+                    </p>
+                  ) : (
+                    data.cars.map((car) => (
+                      <div key={car.id} className="space-y-2 px-4 py-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="inline-flex shrink-0 items-center rounded border bg-muted/50 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-tight text-foreground">
+                              {car.plate}
+                            </span>
+                            <span className="truncate text-xs font-medium text-foreground">{car.customer}</span>
+                          </div>
+                          <Badge variant="outline" className="shrink-0">{car.currentStage}</Badge>
+                        </div>
+                        <p className="truncate text-xs text-muted-foreground">{car.name}</p>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex flex-1 items-center gap-2">
+                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                              <div
+                                className="h-full rounded-full bg-primary"
+                                style={{ width: `${car.progress}%` }}
+                              />
+                            </div>
+                            <span className="w-9 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                              {car.progress}%
+                            </span>
+                          </div>
+                          {car.endDate ? (
+                            <span
+                              className={
+                                car.overdue
+                                  ? "shrink-0 text-xs font-medium tabular-nums text-red-600 dark:text-red-400"
+                                  : "shrink-0 text-xs tabular-nums text-muted-foreground"
+                              }
+                            >
+                              {formatDate(car.endDate, { format: "short" })}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="hidden border-t md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Plat</TableHead>
+                        <TableHead>Pelanggan</TableHead>
+                        <TableHead>Pekerjaan</TableHead>
+                        <TableHead>Tahap</TableHead>
+                        <TableHead className="w-[170px]">Progres</TableHead>
+                        <TableHead>Target</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {data.cars.length === 0 ? (
-                        <DetailTableRow>
-                          <DetailTableTd colSpan={6} align="center" className="py-10 text-muted-foreground">
+                        <TableRow>
+                          <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                             Belum ada mobil yang sedang dikerjakan
-                          </DetailTableTd>
-                        </DetailTableRow>
+                          </TableCell>
+                        </TableRow>
                       ) : (
                         data.cars.map((car) => (
-                          <DetailTableRow key={car.id}>
-                            <DetailTableTd className="font-mono text-xs font-medium">
+                          <TableRow key={car.id}>
+                            <TableCell className="font-mono text-xs font-medium">
                               <span className="inline-flex items-center rounded border bg-muted/50 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-tight text-foreground">
                                 {car.plate}
                               </span>
-                            </DetailTableTd>
-                            <DetailTableTd className="max-w-[160px] truncate font-medium">
+                            </TableCell>
+                            <TableCell className="max-w-[160px] truncate font-medium">
                               {car.customer}
-                            </DetailTableTd>
-                            <DetailTableTd className="max-w-[220px] truncate text-muted-foreground">
+                            </TableCell>
+                            <TableCell className="max-w-[220px] truncate text-muted-foreground">
                               {car.name}
-                            </DetailTableTd>
-                            <DetailTableTd>
+                            </TableCell>
+                            <TableCell>
                               <Badge variant="outline">{car.currentStage}</Badge>
-                            </DetailTableTd>
-                            <DetailTableTd>
+                            </TableCell>
+                            <TableCell>
                               <div className="flex items-center gap-2">
                                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                                   <div
@@ -217,8 +288,8 @@ export default async function WorkshopDashboard() {
                                   {car.progress}%
                                 </span>
                               </div>
-                            </DetailTableTd>
-                            <DetailTableTd>
+                            </TableCell>
+                            <TableCell>
                               {car.endDate ? (
                                 car.overdue ? (
                                   <span className="text-xs font-medium tabular-nums text-red-600 dark:text-red-400">
@@ -232,12 +303,12 @@ export default async function WorkshopDashboard() {
                               ) : (
                                 <span className="text-muted-foreground">-</span>
                               )}
-                            </DetailTableTd>
-                          </DetailTableRow>
+                            </TableCell>
+                          </TableRow>
                         ))
                       )}
-                    </DetailTableBody>
-                  </DetailTable>
+                    </TableBody>
+                  </Table>
                 </div>
               </CardContent>
             </Card>
@@ -248,12 +319,12 @@ export default async function WorkshopDashboard() {
             <h2 className="mb-2.5 text-xs font-semibold tracking-wider uppercase text-muted-foreground">
               Menu Cepat
             </h2>
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 lg:grid-cols-5">
               {quickLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="group flex items-center justify-between gap-3 rounded-lg border bg-card p-3.5 shadow-2xs transition-colors duration-150 hover:border-foreground/20 hover:bg-muted/40"
+                  className="group flex items-center justify-between gap-2 rounded-lg border bg-card p-2.5 shadow-2xs transition-all duration-150 active:scale-[0.98] sm:gap-3 sm:p-3.5 [@media(hover:hover)]:hover:border-foreground/20 [@media(hover:hover)]:hover:bg-muted/40"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-muted/50 text-muted-foreground transition-colors group-hover:text-foreground">

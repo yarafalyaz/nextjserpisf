@@ -17,6 +17,7 @@ import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { splitReportSegments } from "@/lib/reports/report-period"
 import { buildStockValuation, toValuationLayers } from "@/lib/reports/stock-valuation"
 import { getSystemSettings } from "@/lib/utils/settings"
+import { safeAdd } from "@/lib/utils/math"
 
 import type { Metadata } from "next"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -31,6 +32,7 @@ export default async function StockValuationPage({
   searchParams: Promise<{ warehouseId?: string }>
 }) {
   const user = await requirePermission('view_reports')
+  await requirePermission('view_cost_amounts')
   const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
   // undefined = all-access (tanpa penegakan); array (termasuk kosong) = ditegakkan.
   const scopeIds: number[] | undefined =
@@ -43,12 +45,12 @@ export default async function StockValuationPage({
   const warehouseKey = filters.gudang ?? search.warehouseId ?? null
 
   const allWarehouses = await prisma.warehouse.findMany({
-    where: { isActive: true, deletedAt: null },
+    where: { deletedAt: null },
     orderBy: { code: 'asc' },
   })
 
-  // Map nama gudang dari daftar penuh; opsi dropdown dibatasi ke scope.
-  const warehouses = scopeIds ? allWarehouses.filter((w) => scopeIds.includes(w.id)) : allWarehouses
+  // Map nama gudang dari daftar penuh (termasuk nonaktif); opsi dropdown dibatasi ke aktif & scope.
+  const warehouses = allWarehouses.filter((w) => w.isActive && (!scopeIds || scopeIds.includes(w.id)))
 
   const warehouseRow = warehouseKey
     ? allWarehouses.find((w) => w.slug === warehouseKey) ?? allWarehouses.find((w) => String(w.id) === warehouseKey) ?? null
@@ -92,7 +94,7 @@ export default async function StockValuationPage({
 
   const settings = await getSystemSettings()
 
-  const warehouseMap = new Map(warehouses.map((w) => [w.id, { name: w.name, code: w.code }]))
+  const warehouseMap = new Map(allWarehouses.map((w) => [w.id, { name: w.name, code: w.code }]))
 
   // Aturan penilaian (kategori menang atas barang; metode `average` memakai
   // harga pokok barang, bukan harga lapisan) tinggal di satu berkas bersama
@@ -109,7 +111,9 @@ export default async function StockValuationPage({
   const warehouseSummary = new Map<string, { name: string; items: number; qty: number; value: number }>()
   for (const row of rows) {
     const existing = warehouseSummary.get(row.warehouseCode) || { name: row.warehouse, items: 0, qty: 0, value: 0 }
-    existing.items++; existing.qty += row.qty; existing.value += row.value
+    existing.items++
+    existing.qty += row.qty
+    existing.value = safeAdd(existing.value, row.value, 2)
     warehouseSummary.set(row.warehouseCode, existing)
   }
 

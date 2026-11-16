@@ -28,7 +28,7 @@ export default async function EditTaxGroupPage({
   )
   if (!group) notFound()
 
-  const taxes = await prisma.tax.findMany({ where: { isActive: true }, orderBy: { name: "asc" } })
+  const taxes = await prisma.tax.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" } })
 
   return (
     <div className="flex flex-col gap-6">

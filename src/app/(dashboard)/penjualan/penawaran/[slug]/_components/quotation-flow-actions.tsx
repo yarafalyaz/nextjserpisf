@@ -6,6 +6,7 @@ import { Send, CheckCircle, XCircle, FilePenLine } from "@/components/ui/fontawe
 import { Button } from "@/components/ui/button"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { FormSelect } from "@/components/ui/form-select"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { sendQuotation, acceptQuotation, rejectQuotation, reviseQuotation } from "@/actions/sales.actions"
 import {
@@ -173,20 +174,19 @@ export function QuotationFlowActions({
           <label className="block mb-2 text-sm font-medium" htmlFor="lost-reason-category">
             Kategori alasan penolakan <span aria-hidden="true">*</span>
           </label>
-          <select
+          <FormSelect
             id="lost-reason-category"
-            className="mb-3 block w-full rounded-md border bg-background px-3 py-2 text-sm"
+            className="mb-3"
             value={lostCategory}
-            onChange={(e) => setLostCategory(e.target.value as LostReasonCategoryKey | "")}
-            aria-required="true"
-          >
-            <option value="">Pilih kategori alasan</option>
-            {LOST_REASON_CATEGORIES.map((category) => (
-              <option key={category.key} value={category.key}>
-                {category.label}
-              </option>
-            ))}
-          </select>
+            onValueChange={(v) => setLostCategory(v as LostReasonCategoryKey | "")}
+            placeholder="Pilih kategori alasan"
+            required
+            aria-label="Kategori alasan penolakan"
+            options={LOST_REASON_CATEGORIES.map((category) => ({
+              value: category.key,
+              label: category.label,
+            }))}
+          />
           <Textarea
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}

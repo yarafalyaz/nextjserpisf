@@ -44,6 +44,11 @@ export function vatDpp(subtotal: SafeMathInput, discount: SafeMathInput): number
 
 export interface VatInvoiceReport {
   report: VatInvoiceListResult
+  raw: {
+    output: VatInvoiceInput[]
+    input: VatInvoiceInput[]
+    returnDeductions: VatReturnDeductionInput[]
+  }
   periodLabel: string
   periodCaption: string
 }
@@ -335,6 +340,7 @@ export async function loadVatInvoices(period: {
 
   return {
     report: buildVatInvoiceList({ output, input, returnDeductions }),
+    raw: { output, input, returnDeductions },
     ...rangePeriodLabels(period),
   }
 }

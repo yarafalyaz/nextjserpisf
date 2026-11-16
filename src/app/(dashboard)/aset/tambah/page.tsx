@@ -14,12 +14,22 @@ export default async function CreateAssetPage() {
   await requirePermission("create_assets")
 
   const [categories, brands, groups, generatedCode] = await Promise.all([
-    prisma.assetCategory.findMany({ orderBy: { name: "asc" } }),
-    prisma.assetBrand.findMany({
+    prisma.assetCategory.findMany({
+      select: { id: true, name: true },
       orderBy: { name: "asc" },
-      include: { models: { select: { id: true, name: true }, orderBy: { name: "asc" } } },
     }),
-    prisma.assetGroup.findMany({ orderBy: { name: "asc" } }),
+    prisma.assetBrand.findMany({
+      select: {
+        id: true,
+        name: true,
+        models: { select: { id: true, name: true }, orderBy: { name: "asc" } },
+      },
+      orderBy: { name: "asc" },
+    }),
+    prisma.assetGroup.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
     peekNextDocumentNumber("AST", "simple"),
   ])
 

@@ -14,12 +14,7 @@ import { Pencil } from "@/components/ui/fontawesome-icons";
 import { ApprovePayrollButton } from "./_components/approve-button";
 import { MarkPaidPayrollButton } from "./_components/mark-paid-button";
 import { CorrectPaidPayrollButton } from "./_components/correct-paid-button";
-import {
-  DetailTable,
-  DetailTableBody,
-  DetailTableRow,
-  DetailTableTd,
-} from "@/components/ui/detail-table";
+import { PayrollBreakdownTable } from "./_components/payroll-breakdown-table";
 
 import type { Metadata } from "next";
 
@@ -84,7 +79,47 @@ export default async function PayrollDetailPage({
       : Promise.resolve([]),
   ]);
 
-  const fmt = (val: unknown) => Number(val ?? 0).toLocaleString("id-ID");
+  const breakdownRows = [
+    { id: "baseSalary", label: "Gaji Pokok", amount: Number(payroll.baseSalary ?? 0) },
+    { id: "allowances", label: "Tunjangan", amount: Number(payroll.allowances ?? 0) },
+    { id: "overtimeTotal", label: "Lembur", amount: Number(payroll.overtimeTotal ?? 0) },
+    { id: "appreciationTotal", label: "Apresiasi", amount: Number(payroll.appreciationTotal ?? 0) },
+    { id: "deductions", label: "Potongan", amount: Number(payroll.deductions ?? 0) },
+    { id: "loanDeduction", label: "Potongan Pinjaman", amount: Number(payroll.loanDeduction ?? 0) },
+    {
+      id: "lateDeduction",
+      label: `Potongan Terlambat (${payroll.lateMinutes} mnt)`,
+      amount: Number(payroll.lateDeduction ?? 0),
+    },
+    {
+      id: "bpjsHealthEmployee",
+      label: "BPJS Kesehatan (1%)",
+      amount: Number(payroll.bpjsHealthEmployee ?? 0),
+    },
+    {
+      id: "bpjsEmploymentEmployee",
+      label: "BPJS Ketenagakerjaan (JHT+JP)",
+      amount: Number(payroll.bpjsEmploymentEmployee ?? 0),
+    },
+    { id: "pph21", label: "PPh21", amount: Number(payroll.pph21 ?? 0) },
+    {
+      id: "absentDeduction",
+      label: `Potongan Tidak Hadir (${payroll.absentDays} hari alfa / ${payroll.workingDays} hari kerja)`,
+      amount: Number(payroll.absentDeduction ?? 0),
+    },
+    {
+      id: "netSalary",
+      label: "Gaji Bersih",
+      amount: Number(payroll.netSalary ?? 0),
+      isHighlight: true,
+    },
+    {
+      id: "totalAmount",
+      label: "Total",
+      amount: Number(payroll.totalAmount ?? 0),
+      isHighlight: true,
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -150,121 +185,7 @@ export default async function PayrollDetailPage({
         <h2 className="text-base font-semibold text-foreground mb-4 pb-3 border-b border-default">
           Rincian Gaji
         </h2>
-        <DetailTable>
-          <DetailTableBody>
-            <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted-foreground">
-                Gaji Pokok
-              </DetailTableTd>
-              <DetailTableTd align="right">
-                Rp {fmt(payroll.baseSalary)}
-              </DetailTableTd>
-            </DetailTableRow>
-            <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted-foreground">
-                Tunjangan
-              </DetailTableTd>
-              <DetailTableTd align="right">
-                Rp {fmt(payroll.allowances)}
-              </DetailTableTd>
-            </DetailTableRow>
-            <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted-foreground">
-                Lembur
-              </DetailTableTd>
-              <DetailTableTd align="right">
-                Rp {fmt(payroll.overtimeTotal)}
-              </DetailTableTd>
-            </DetailTableRow>
-            <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted-foreground">
-                Apresiasi
-              </DetailTableTd>
-              <DetailTableTd align="right">
-                Rp {fmt(payroll.appreciationTotal)}
-              </DetailTableTd>
-            </DetailTableRow>
-            <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted-foreground">
-                Potongan
-              </DetailTableTd>
-              <DetailTableTd align="right">
-                Rp {fmt(payroll.deductions)}
-              </DetailTableTd>
-            </DetailTableRow>
-            <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted-foreground">
-                Potongan Pinjaman
-              </DetailTableTd>
-              <DetailTableTd align="right">
-                Rp {fmt(payroll.loanDeduction)}
-              </DetailTableTd>
-            </DetailTableRow>
-            <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted-foreground">
-                Potongan Terlambat ({payroll.lateMinutes} mnt)
-              </DetailTableTd>
-              <DetailTableTd align="right">
-                Rp {fmt(payroll.lateDeduction)}
-              </DetailTableTd>
-            </DetailTableRow>
-            <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted-foreground">
-                BPJS Kesehatan (1%)
-              </DetailTableTd>
-              <DetailTableTd align="right">
-                Rp {fmt(payroll.bpjsHealthEmployee)}
-              </DetailTableTd>
-            </DetailTableRow>
-            <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted-foreground">
-                BPJS Ketenagakerjaan (JHT+JP)
-              </DetailTableTd>
-              <DetailTableTd align="right">
-                Rp {fmt(payroll.bpjsEmploymentEmployee)}
-              </DetailTableTd>
-            </DetailTableRow>
-            <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted-foreground">
-                PPh21
-              </DetailTableTd>
-              <DetailTableTd align="right">
-                Rp {fmt(payroll.pph21)}
-              </DetailTableTd>
-            </DetailTableRow>
-            <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted-foreground">
-                Potongan Tidak Hadir ({payroll.absentDays} hari alfa /{" "}
-                {payroll.workingDays} hari kerja)
-              </DetailTableTd>
-              <DetailTableTd align="right">
-                Rp {fmt(payroll.absentDeduction)}
-              </DetailTableTd>
-            </DetailTableRow>
-            <DetailTableRow className="border-t-2 border-default">
-              <DetailTableTd className="font-semibold text-foreground">
-                Gaji Bersih
-              </DetailTableTd>
-              <DetailTableTd
-                align="right"
-                className="font-semibold text-foreground"
-              >
-                Rp {fmt(payroll.netSalary)}
-              </DetailTableTd>
-            </DetailTableRow>
-            <DetailTableRow>
-              <DetailTableTd className="font-semibold text-foreground">
-                Total
-              </DetailTableTd>
-              <DetailTableTd
-                align="right"
-                className="font-semibold text-foreground"
-              >
-                Rp {fmt(payroll.totalAmount)}
-              </DetailTableTd>
-            </DetailTableRow>
-          </DetailTableBody>
-        </DetailTable>
+        <PayrollBreakdownTable data={breakdownRows} />
       </div>
 
       <PayrollBpjsAggregateSnapshot snapshot={payroll.statutorySnapshot} />

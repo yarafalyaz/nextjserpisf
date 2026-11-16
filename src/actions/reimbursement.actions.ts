@@ -108,7 +108,7 @@ export async function createReimbursementClaim(formData: FormData) {
       }
       if (scope.kind === "all") {
         const me = await prisma.employee.findFirst({
-          where: { userId: Number(user.id) },
+          where: { userId: Number(user.id), deletedAt: null },
           select: { id: true },
         })
         if (!me) {
@@ -138,7 +138,7 @@ export async function createReimbursementClaim(formData: FormData) {
     // (BR-RB-06) — jadi klaim lahir dengan penanda butuh penetapan akun,
     // bukan akun karangan.
     const placeholderAccount = await prisma.account.findFirst({
-      where: { type: "EXPENSE" },
+      where: { type: "EXPENSE", isActive: true, deletedAt: null },
       orderBy: { id: "asc" },
       select: { id: true },
     })

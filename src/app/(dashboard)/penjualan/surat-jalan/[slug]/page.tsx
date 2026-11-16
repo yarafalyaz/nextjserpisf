@@ -8,16 +8,16 @@ import { DeleteButton } from "@/components/ui/delete-button";
 import { deleteDeliveryOrder } from "@/actions/sales.actions";
 import { PrintButton } from "@/components/ui/print-button";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
+import { StatusChip } from "@/components/ui/status-chip";
 
 import type { Metadata } from "next";
 
 import { hasPermission, requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
-import { statusLabel } from "@/lib/utils/status-labels";
 import { ProcessButton } from "@/components/ui/process-button";
 import { shipDeliveryOrder, deliverDeliveryOrder } from "@/actions/sales.actions";
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table";
+import { DeliveryOrderItemsTable } from "./_components/delivery-order-items-table";
 import { CanCreate } from "@/components/auth/can-create";
 export const metadata: Metadata = { title: "Surat Jalan" };
 
@@ -71,9 +71,7 @@ export default async function DeliveryOrderDetailPage({
           Surat Jalan {deliveryOrder.documentNo}
         </h1>
         <div className="flex gap-2 items-center">
-          <span className={`status-badge status-${deliveryOrder.status}`}>
-            {statusLabel(deliveryOrder.status)}
-          </span>
+          <StatusChip status={deliveryOrder.status} />
           <div className="flex gap-2">
             {/* updateDeliveryOrder menolak shipped/delivered — surat jalan yang
                 sudah berjalan hanya bisa dilihat, bukan diedit. */}
@@ -264,24 +262,15 @@ export default async function DeliveryOrderDetailPage({
               Surat jalan ini belum punya baris barang, jadi belum ikut menghitung pemenuhan pesanan.
             </p>
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Barang</DetailTableTh>
-                <DetailTableTh>SKU</DetailTableTh>
-                <DetailTableTh align="right">Jumlah</DetailTableTh>
-                <DetailTableTh>Satuan</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {deliveryOrder.items.map((item) => (
-                  <DetailTableRow key={item.id}>
-                    <DetailTableTd>{item.item.name}</DetailTableTd>
-                    <DetailTableTd className="font-mono">{item.item.sku}</DetailTableTd>
-                    <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                    <DetailTableTd>{item.item.unitOfMeasure}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <DeliveryOrderItemsTable
+              data={deliveryOrder.items.map((item) => ({
+                id: item.id,
+                itemName: item.item.name,
+                sku: item.item.sku,
+                qty: Number(item.qty),
+                unitOfMeasure: item.item.unitOfMeasure,
+              }))}
+            />
           )}
         </div>
       </div>

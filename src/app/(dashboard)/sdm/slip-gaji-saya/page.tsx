@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { requireAuth } from "@/lib/auth/permissions"
 import { loadOwnPayslips } from "@/lib/reports/payslip-self-data"
 import { EmptyState } from "@/components/ui/empty-state"
+import { PageHeader } from "@/components/ui/page-header"
 import { OwnPayslipTable } from "./_components/own-payslip-table"
 
 import type { Metadata } from "next"
@@ -17,9 +18,14 @@ export default async function OwnPayslipsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Slip Gaji Saya</h1>
-      </div>
+      <PageHeader
+        title="Slip Gaji Saya"
+        breadcrumbs={[
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
+          { label: "Slip Gaji Saya" },
+        ]}
+      />
 
       {data.length === 0 ? (
         <EmptyState title="Belum ada slip gaji final." description="Slip tampil di sini sesudah penggajian disetujui atau dibayar oleh SDM." />

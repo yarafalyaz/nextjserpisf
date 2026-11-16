@@ -12,6 +12,7 @@ import {
 } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
+import { FormSelect } from "@/components/ui/form-select"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { AppDatePicker } from "@/components/ui/date-picker"
@@ -156,20 +157,17 @@ export function DepartmentHolidayForm({
     >
       <div className="flex flex-col gap-1.5 sm:w-56">
         <Label htmlFor="deptHolidayDepartment">Departemen *</Label>
-        <select
+        <FormSelect
           id="deptHolidayDepartment"
           name="departmentId"
           required
           defaultValue={item ? String(item.departmentId) : ""}
-          className="h-9 rounded-lg border border-default bg-surface px-3 text-sm text-foreground"
-        >
-          <option value="">Pilih departemen</option>
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
+          placeholder="Pilih departemen"
+          options={departments.map((d) => ({
+            value: String(d.id),
+            label: d.name,
+          }))}
+        />
       </div>
       <div className="flex flex-1 flex-col gap-1.5">
         <Label htmlFor="deptHolidayName">Nama *</Label>

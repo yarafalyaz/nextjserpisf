@@ -8,20 +8,13 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { QcInspectionResultsTable, QcInspectionNcrTable } from "./_components/qc-inspection-tables"
 
 import type { Metadata } from "next"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref } from "@/lib/utils/entity-url"
-import { SEVERITY_LABELS, labelFrom } from "@/lib/utils/status-labels"
 
 export const metadata: Metadata = { title: "Detail Inspeksi QC" }
-
-const RESULT_LABELS: Record<string, string> = {
-  pass: "Lulus",
-  fail: "Gagal",
-  na: "N/A",
-}
 
 export default async function QcInspectionDetailPage({
   params,
@@ -107,60 +100,29 @@ export default async function QcInspectionDetailPage({
       </DetailCard>
 
       <DetailSection title="Hasil Pemeriksaan">
-        <DetailTable>
-          <DetailTableHead>
-            <DetailTableTh>Butir</DetailTableTh>
-            <DetailTableTh>Spesifikasi</DetailTableTh>
-            <DetailTableTh>Hasil</DetailTableTh>
-            <DetailTableTh>Nilai Ukur</DetailTableTh>
-            <DetailTableTh>Catatan</DetailTableTh>
-          </DetailTableHead>
-          <DetailTableBody>
-            {inspection.results.map((r) => (
-              <DetailTableRow key={r.id}>
-                <DetailTableTd>{r.checklistItem.itemName}</DetailTableTd>
-                <DetailTableTd>{r.checklistItem.spec ?? "-"}</DetailTableTd>
-                <DetailTableTd>
-                  <span
-                    className={
-                      r.result === "fail"
-                        ? "text-danger-600 font-medium"
-                        : r.result === "pass"
-                          ? "text-success-600 font-medium"
-                          : "text-muted-foreground"
-                    }
-                  >
-                    {RESULT_LABELS[r.result] ?? r.result}
-                  </span>
-                </DetailTableTd>
-                <DetailTableTd>{r.measuredValue ?? "-"}</DetailTableTd>
-                <DetailTableTd>{r.notes ?? "-"}</DetailTableTd>
-              </DetailTableRow>
-            ))}
-          </DetailTableBody>
-        </DetailTable>
+        <QcInspectionResultsTable
+          data={inspection.results.map((r) => ({
+            id: r.id,
+            itemName: r.checklistItem.itemName,
+            spec: r.checklistItem.spec,
+            result: r.result,
+            measuredValue: r.measuredValue,
+            notes: r.notes,
+          }))}
+        />
       </DetailSection>
 
       {inspection.nonconformances.length > 0 && (
         <DetailSection title="Ketidaksesuaian Terkait">
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>No. NCR</DetailTableTh>
-              <DetailTableTh>Status</DetailTableTh>
-              <DetailTableTh>Tingkat Keparahan</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {inspection.nonconformances.map((n) => (
-                <DetailTableRow key={n.id}>
-                  <DetailTableTd className="font-mono">
-                    <Link href={entityHref("/produksi/qc/ncr", n)}>{n.documentNo}</Link>
-                  </DetailTableTd>
-                  <DetailTableTd><StatusChip status={n.status} /></DetailTableTd>
-                  <DetailTableTd>{labelFrom(SEVERITY_LABELS, n.severity)}</DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-          </DetailTable>
+          <QcInspectionNcrTable
+            data={inspection.nonconformances.map((n) => ({
+              id: n.id,
+              slug: n.slug,
+              documentNo: n.documentNo,
+              status: n.status,
+              severity: n.severity,
+            }))}
+          />
         </DetailSection>
       )}
     </div>

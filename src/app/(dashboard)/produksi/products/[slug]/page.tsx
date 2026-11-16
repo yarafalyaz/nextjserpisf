@@ -2,16 +2,18 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { formatDate } from "@/lib/utils/format"
-import Link from "next/link"
 import { notFound } from "next/navigation"
-import { StatusChip } from '@/components/ui/status-chip'
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteProduct } from "@/actions/manufacturing.actions"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
 import { EmptyState } from "@/components/ui/empty-state"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import {
+  ProductMaterialsTable,
+  ProductBomRevisionsTable,
+  ProductProductionOrdersTable,
+} from "./_components/product-tables"
 
 import type { Metadata } from "next"
 
@@ -19,7 +21,7 @@ import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { FitmentChecker } from "./_components/fitment-checker"
 import { RecalculateStandardCostButton } from "./_components/recalculate-standard-cost-button"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { entityEditHref } from "@/lib/utils/entity-url"
 
 export const metadata: Metadata = { title: "Detail Produk (BOM)" }
 
@@ -106,7 +108,7 @@ export default async function ProductDetailPage({
           <>
             {canRecalculate && <RecalculateStandardCostButton productId={product.id} />}
             {canEdit && (
-              <Button href={entityEditHref("/produksi/products", product)} variant="primary">Ubah</Button>
+              <Button href={entityEditHref("/produksi/products", product)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
             )}
             {canDelete && <DeleteButton id={product.id} action={deleteProduct} />}
           </>
@@ -133,31 +135,20 @@ export default async function ProductDetailPage({
         {product.materials.length === 0 ? (
           <EmptyState title="Tidak ada bahan" />
         ) : (
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>Barang</DetailTableTh>
-              <DetailTableTh align="right">Jml</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {product.materials.map((mat) => {
-                const it = itemMap.get(mat.itemId)
-                return (
-                  <DetailTableRow key={mat.id}>
-                    <DetailTableTd>
-                      {it ? (
-                        <Link href={entityHref("/master/barang", it)} className="hover:underline">
-                          <span className="font-mono text-muted-foreground">{it.sku}</span> — {it.name}
-                        </Link>
-                      ) : (
-                        `Barang #${mat.itemId}`
-                      )}
-                    </DetailTableTd>
-                    <DetailTableTd align="right">{Number(mat.qty)} {it?.unitOfMeasure ?? ""}</DetailTableTd>
-                  </DetailTableRow>
-                )
-              })}
-            </DetailTableBody>
-          </DetailTable>
+          <ProductMaterialsTable
+            data={product.materials.map((mat) => {
+              const it = itemMap.get(mat.itemId)
+              return {
+                id: mat.id,
+                itemId: mat.itemId,
+                itemSlug: it?.slug ?? null,
+                itemSku: it?.sku ?? null,
+                itemName: it?.name ?? null,
+                qty: Number(mat.qty),
+                unitOfMeasure: it?.unitOfMeasure ?? "",
+              }
+            })}
+          />
         )}
       </DetailSection>
 
@@ -177,47 +168,32 @@ export default async function ProductDetailPage({
         {product.bomRevisions.length === 0 ? (
           <EmptyState title="Belum ada revisi." description="Revisi membekukan BOM saat ini agar perintah produksi yang dirilis tidak berubah bila BOM master disunting." className="py-8" />
         ) : (
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>Revisi</DetailTableTh>
-              <DetailTableTh>Status</DetailTableTh>
-              <DetailTableTh>Berlaku</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {product.bomRevisions.map((rev) => (
-                <DetailTableRow key={rev.id}>
-                  <DetailTableTd className="font-mono">
-                    <Link href={entityHref("/produksi/bom-revisi", rev)}>Rev {rev.revisionNo}</Link>
-                  </DetailTableTd>
-                  <DetailTableTd><StatusChip status={rev.status} /></DetailTableTd>
-                  <DetailTableTd>{formatDate(rev.effectiveDate)}</DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-          </DetailTable>
+          <ProductBomRevisionsTable
+            data={product.bomRevisions.map((rev) => ({
+              id: rev.id,
+              slug: rev.slug,
+              revisionNo: rev.revisionNo,
+              status: rev.status,
+              effectiveDate: rev.effectiveDate.toISOString(),
+            }))}
+          />
         )}
       </DetailSection>
 
       {/* Recent Production Orders */}
-      <DetailSection title="Perintah Produksi Terbaru">        {product.productionOrders.length === 0 ? (
+      <DetailSection title="Perintah Produksi Terbaru">
+        {product.productionOrders.length === 0 ? (
           <EmptyState title="Belum ada perintah produksi" />
         ) : (
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>No. Dokumen</DetailTableTh>
-              <DetailTableTh align="right">Jml</DetailTableTh>
-              <DetailTableTh>Status</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {product.productionOrders.map((po) => (
-                <DetailTableRow key={po.id}>
-                  <DetailTableTd className="font-mono"><Link href={entityHref("/produksi/production-orders", po)}>{po.documentNo}</Link></DetailTableTd>
-                  <DetailTableTd align="right">{Number(po.qty)}</DetailTableTd>
-                  <DetailTableTd><StatusChip status={po.status} /></DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-          </DetailTable>
+          <ProductProductionOrdersTable
+            data={product.productionOrders.map((po) => ({
+              id: po.id,
+              slug: po.slug,
+              documentNo: po.documentNo,
+              qty: Number(po.qty),
+              status: po.status,
+            }))}
+          />
         )}
       </DetailSection>
     </div>

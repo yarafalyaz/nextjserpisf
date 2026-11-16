@@ -37,15 +37,15 @@ vi.mock("@/components/ui/form-select", () => ({
 }))
 
 import { mount, act } from "@/components/payroll/__tests__/mount"
-import CreateBarcodePage from "../barcode/tambah/page"
-import CreateBankPage from "../bank/tambah/page"
+import CreateBarcodePage from "../barcode/tambah/_components/create-barcode-client"
+import CreateBankPage from "../bank/tambah/_components/create-bank-client"
 import { EditBankForm } from "../bank/[slug]/ubah/form"
-import CreateTaxPage from "../pajak/tambah/page"
+import CreateTaxPage from "../pajak/tambah/_components/create-tax-client"
 import { TaxEditForm } from "../pajak/[slug]/ubah/form"
 import { DepartmentCreateForm } from "../departemen/tambah/form"
 import { EditDepartmentForm } from "../departemen/[slug]/ubah/form"
 import { PositionCreateForm } from "../jabatan/tambah/form"
-import CreatePaymentTermPage from "../syarat-pembayaran/tambah/page"
+import CreatePaymentTermPage from "../syarat-pembayaran/tambah/_components/create-payment-term-client"
 import { EditPaymentTermForm } from "../syarat-pembayaran/[slug]/ubah/form"
 
 async function submit(node: ReactElement) {

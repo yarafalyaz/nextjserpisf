@@ -361,14 +361,14 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
 
         {/* Metric summary selector strip */}
         {filteredData.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 border-t pt-3 text-xs">
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3 text-xs">
             <button
               type="button"
               onClick={() => setActiveSeries("all")}
               aria-pressed={activeSeries === "all"}
-              className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-medium transition-colors duration-150 ${
+              className={`inline-flex min-h-11 sm:min-h-9 cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 activeSeries === "all"
-                  ? "border-primary bg-primary text-primary-foreground"
+                  ? "border-primary bg-primary text-primary-foreground shadow-2xs"
                   : "border-border bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
@@ -379,36 +379,46 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
               onClick={() =>
                 setActiveSeries((prev) => (prev === "lunas" ? "all" : "lunas"))
               }
-              aria-pressed={showLunas && activeSeries !== "all"}
-              className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-medium transition-colors duration-150 ${
-                showLunas && activeSeries !== "all"
-                  ? "border-[var(--chart-2)] bg-[var(--chart-2)] text-background"
+              aria-pressed={activeSeries === "lunas"}
+              className={`inline-flex min-h-11 sm:min-h-9 cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                activeSeries === "lunas"
+                  ? "border-[var(--chart-2)]/60 bg-[var(--chart-2)]/10 text-foreground ring-1 ring-[var(--chart-2)]/25"
                   : activeSeries === "all"
-                  ? "border-border bg-background text-foreground hover:bg-muted/60"
-                  : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
+                  ? "border-border bg-card text-foreground hover:bg-muted/50"
+                  : "border-border/60 bg-muted/30 text-muted-foreground opacity-60 hover:bg-muted/50 hover:opacity-100"
               }`}
             >
-              <span className="size-2 rounded-full bg-[var(--chart-2)]" />
-              <span className="text-muted-foreground">Lunas:</span>
-              <span className="font-semibold tabular-nums">Rp {rupiahShort(totals.lunas)}</span>
+              <span
+                className="size-2 shrink-0 rounded-full bg-[var(--chart-2)]"
+                aria-hidden="true"
+              />
+              <span className="text-muted-foreground">Lunas</span>
+              <span className="font-mono font-semibold tabular-nums">
+                Rp {rupiahShort(totals.lunas)}
+              </span>
             </button>
             <button
               type="button"
               onClick={() =>
                 setActiveSeries((prev) => (prev === "tagihan" ? "all" : "tagihan"))
               }
-              aria-pressed={showTagihan && activeSeries !== "all"}
-              className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-medium transition-colors duration-150 ${
-                showTagihan && activeSeries !== "all"
-                  ? "border-[var(--chart-1)] bg-[var(--chart-1)] text-background"
+              aria-pressed={activeSeries === "tagihan"}
+              className={`inline-flex min-h-11 sm:min-h-9 cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                activeSeries === "tagihan"
+                  ? "border-[var(--chart-1)]/60 bg-[var(--chart-1)]/10 text-foreground ring-1 ring-[var(--chart-1)]/25"
                   : activeSeries === "all"
-                  ? "border-border bg-background text-foreground hover:bg-muted/60"
-                  : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
+                  ? "border-border bg-card text-foreground hover:bg-muted/50"
+                  : "border-border/60 bg-muted/30 text-muted-foreground opacity-60 hover:bg-muted/50 hover:opacity-100"
               }`}
             >
-              <span className="size-2 rounded-full bg-[var(--chart-1)]" />
-              <span className="text-muted-foreground">Tagihan:</span>
-              <span className="font-semibold tabular-nums">Rp {rupiahShort(totals.tagihan)}</span>
+              <span
+                className="size-2 shrink-0 rounded-full bg-[var(--chart-1)]"
+                aria-hidden="true"
+              />
+              <span className="text-muted-foreground">Tagihan</span>
+              <span className="font-mono font-semibold tabular-nums">
+                Rp {rupiahShort(totals.tagihan)}
+              </span>
             </button>
           </div>
         )}
@@ -435,7 +445,7 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
             </span>
             {renderChartElements()}
             <table className="sr-only">
-              <caption>Tren Pendapatan — Tagihan vs Lunas</caption>
+              <caption>Tren Pendapatan: Tagihan vs Lunas</caption>
               <thead>
                 <tr>
                   <th scope="col">Tanggal</th>

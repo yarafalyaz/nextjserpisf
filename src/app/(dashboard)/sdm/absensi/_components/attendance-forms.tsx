@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { AppTimePicker } from "@/components/ui/time-picker"
 import { FormActions, FormSection } from "@/components/ui/form-section"
+import { FormSelect } from "@/components/ui/form-select"
 import { ATTENDANCE_STATUS_LABELS } from "./attendance-labels"
 
 // Formulir absensi: satu-satunya UI yang memanggil createAttendance/updateAttendance.
@@ -116,20 +117,17 @@ export function AttendanceForm({
       >
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="attendanceEmployee">Karyawan *</Label>
-          <select
+          <FormSelect
             id="attendanceEmployee"
             name="employeeId"
             required
             defaultValue={item ? String(item.employeeId) : ""}
-            className="h-10 w-full rounded-lg border border-default bg-surface px-3 text-sm text-foreground"
-          >
-            <option value="">Pilih karyawan</option>
-            {employees.map((employee) => (
-              <option key={employee.id} value={employee.id}>
-                {employee.name} ({employee.employeeNo})
-              </option>
-            ))}
-          </select>
+            placeholder="Pilih karyawan"
+            options={employees.map((employee) => ({
+              value: String(employee.id),
+              label: `${employee.name} (${employee.employeeNo})`,
+            }))}
+          />
         </div>
         <AppDatePicker
           label="Tanggal *"
@@ -139,19 +137,16 @@ export function AttendanceForm({
         />
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="attendanceStatus">Status *</Label>
-          <select
+          <FormSelect
             id="attendanceStatus"
             name="status"
             required
             defaultValue={item ? item.status : "present"}
-            className="h-10 w-full rounded-lg border border-default bg-surface px-3 text-sm text-foreground"
-          >
-            {Object.entries(ATTENDANCE_STATUS_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+            options={Object.entries(ATTENDANCE_STATUS_LABELS).map(([value, label]) => ({
+              value,
+              label,
+            }))}
+          />
         </div>
       </FormSection>
 

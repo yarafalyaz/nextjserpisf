@@ -97,7 +97,7 @@ export async function renderInventoryTransfersPage({
     prisma.inventoryTransfer.count({ where }),
     prisma.inventoryTransfer.groupBy({
       by: ["status"],
-      where: { ...(scopeClause.length > 0 && { AND: scopeClause }), deletedAt: null },
+      where: { ...(scopeClause.length > 0 && { AND: scopeClause }) },
       _count: { _all: true },
     }),
     getInventoryTransferUnreceivedQueue(),

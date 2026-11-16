@@ -127,6 +127,9 @@ export function VehicleFitmentTable({ data, total, page, pageSize }: VehicleFitm
       data={data}
       columns={columns}
       ariaLabel="Daftar aturan kompatibilitas kendaraan"
+      searchColumn="itemName"
+      searchPlaceholder="Cari SKU, barang, merek, model, atau catatan..."
+      searchParam="cari"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       onBulkDelete={(ids) => bulkDelete(BULK_MODEL, ids)}

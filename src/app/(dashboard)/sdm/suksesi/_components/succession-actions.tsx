@@ -80,19 +80,19 @@ export function SuccessorForm({
 
   return (
     <form onSubmit={onSubmit} aria-busy={isPending} className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-      <select name="positionId" required className={selectClass} defaultValue="">
+      <select name="positionId" aria-label="Jabatan kritis" required className={selectClass} defaultValue="">
         <option value="" disabled>Jabatan kritis</option>
         {positions.map((p) => (
           <option key={p.id} value={p.id}>{p.name}</option>
         ))}
       </select>
-      <select name="candidateEmployeeId" required className={selectClass} defaultValue="">
+      <select name="candidateEmployeeId" aria-label="Kandidat pengganti" required className={selectClass} defaultValue="">
         <option value="" disabled>Kandidat pengganti</option>
         {employees.map((e) => (
           <option key={e.id} value={e.id}>{e.name}</option>
         ))}
       </select>
-      <select name="readiness" className={selectClass} defaultValue="ready_future">
+      <select name="readiness" aria-label="Kesiapan kandidat" className={selectClass} defaultValue="ready_future">
         <option value="ready_now">Siap Sekarang</option>
         <option value="ready_1_2_years">Siap 1-2 Tahun</option>
         <option value="ready_future">Siap Masa Depan</option>

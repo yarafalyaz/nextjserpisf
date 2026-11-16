@@ -38,7 +38,7 @@ export default async function VehicleMarginPage({
     <ReportPageShell
       title="Margin Job Kendaraan"
       sheetTitle="Margin Job Kendaraan"
-      subtitle="Ringkasan margin job per kendaraan — bukan laba akuntansi"
+      subtitle="Ringkasan margin job per kendaraan (bukan laba akuntansi)"
       periodLabel={report.periodLabel}
       periodCaption={report.periodCaption}
       wide

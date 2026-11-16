@@ -31,7 +31,7 @@ export default async function ItemGroupsPage({
 
   const groups = await prisma.itemGroup.findMany({
     where,
-    include: { _count: { select: { items: true } } },
+    include: { _count: { select: { items: { where: { deletedAt: null } } } } },
     orderBy: { createdAt: "desc" },
     take,
     skip: (page - 1) * pageSize,

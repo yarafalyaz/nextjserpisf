@@ -22,65 +22,69 @@ interface TaskData {
 
 const columnHelper = createColumnHelper<TaskData>()
 
-const columns = [
-  columnHelper.display({
-    id: "no",
-    header: "No.",
-    // A row counter is meaningless on a phone card; keep it desktop-only.
-    meta: { mobile: false },
-    cell: (info) => info.row.index + 1,
-  }),
-  columnHelper.accessor("name", {
-    header: "Nama Tugas",
-    // The task name is the card's headline (the "No" column is hidden on mobile).
-    meta: { mobilePrimary: true },
-    cell: (info) => (
-      <Link href={entityHref("/proyek/tugas", info.row.original)} className="text-foreground hover:underline font-medium">
-        {info.getValue()}
-      </Link>
-    ),
-  }),
-  columnHelper.accessor("project.name", {
-    header: "Proyek",
-    cell: (info) => info.getValue(),
-  }),
-  columnHelper.display({
-    id: "assignee",
-    header: "Ditugaskan Ke",
-    cell: (info) => info.row.original.assignee?.name || "-",
-  }),
-  columnHelper.accessor("status", {
-    header: "Status",
-    cell: (info) => <StatusChip status={info.getValue()} />,
-  }),
-  columnHelper.accessor("startDate", {
-    header: "Tanggal Mulai",
-    cell: (info) => {
-      const val = info.getValue()
-      return val ? formatDate(new Date(val)) : "-"
-    },
-  }),
-  columnHelper.accessor("dueDate", {
-    header: "Tenggat",
-    cell: (info) => {
-      const val = info.getValue()
-      return val ? formatDate(new Date(val)) : "-"
-    },
-  }),
-  columnHelper.display({
-    id: "actions",
-    header: "Aksi",
-    enableSorting: false,
-    cell: (info) => (
-      <ActionDropdown
-        viewHref={entityHref("/proyek/tugas", info.row.original)}
-        editHref={entityEditHref("/proyek/tugas", info.row.original)}
-        deleteAction={deleteTask}
-        deleteId={info.row.original.id}
-      />
-    ),
-  }),
-]
+function createTaskColumns(page: number, pageSize: number) {
+  return [
+    columnHelper.display({
+      id: "no",
+      header: "No.",
+      // A row counter is meaningless on a phone card; keep it desktop-only.
+      meta: { mobile: false },
+      cell: (info) => (page - 1) * pageSize + info.row.index + 1,
+    }),
+    columnHelper.accessor("name", {
+      header: "Nama Tugas",
+      // The task name is the card's headline (the "No" column is hidden on mobile).
+      meta: { mobilePrimary: true },
+      cell: (info) => (
+        <Link href={entityHref("/proyek/tugas", info.row.original)} className="text-foreground hover:underline font-medium">
+          {info.getValue()}
+        </Link>
+      ),
+    }),
+    columnHelper.accessor("project.name", {
+      header: "Proyek",
+      cell: (info) => info.getValue(),
+    }),
+    columnHelper.display({
+      id: "assignee",
+      header: "Ditugaskan Ke",
+      cell: (info) => info.row.original.assignee?.name || "-",
+    }),
+    columnHelper.accessor("status", {
+      header: "Status",
+      cell: (info) => <StatusChip status={info.getValue()} />,
+    }),
+    columnHelper.accessor("startDate", {
+      header: "Tanggal Mulai",
+      cell: (info) => {
+        const val = info.getValue()
+        return val ? formatDate(new Date(val)) : "-"
+      },
+    }),
+    columnHelper.accessor("dueDate", {
+      header: "Tenggat",
+      cell: (info) => {
+        const val = info.getValue()
+        return val ? formatDate(new Date(val)) : "-"
+      },
+    }),
+    columnHelper.display({
+      id: "actions",
+      header: "Aksi",
+      enableSorting: false,
+      cell: (info) => (
+        <ActionDropdown
+          viewHref={entityHref("/proyek/tugas", info.row.original)}
+          editHref={entityEditHref("/proyek/tugas", info.row.original)}
+          editPermission="edit_projects"
+          deleteAction={deleteTask}
+          deleteId={info.row.original.id}
+          deletePermission="delete_projects"
+        />
+      ),
+    }),
+  ]
+}
 
 interface TaskTableProps {
   data: TaskData[]
@@ -91,6 +95,7 @@ interface TaskTableProps {
 }
 
 export function TaskTable({ data, total, page, pageSize, toolbar }: TaskTableProps) {
+  const columns = createTaskColumns(page, pageSize)
   return (
     <DataTable
       data={data}

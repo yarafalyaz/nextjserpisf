@@ -60,7 +60,8 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
 
     // Filter dulu agar item baru pasti muncul
     await page.locator("input[placeholder*='Cari kode atau nama']").first().fill(name)
-    // Debounce search ditunggu assertion web-first di bawah, bukan sleep.
+    await page.waitForURL(/\?cari=/, { timeout: 10000 }).catch(() => {})
+    await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(name)
 
     const row = page.locator("tr").filter({ hasText: new RegExp(name) }).first()

@@ -16,6 +16,7 @@ import { AppTimePicker } from "@/components/ui/time-picker"
 import { updateSystemSettings } from "@/actions/settings.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { resolveAllAccountMappings } from "@/lib/utils/account-automap"
+import { ACCOUNT_MAPPING_CATALOG } from "@/lib/utils/account-mapping-catalog"
 import { Button } from "@/components/ui/button"
 import { SafeImage } from "@/components/ui/safe-image"
 import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
@@ -342,104 +343,63 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
     setStagesList(next)
   }
 
-  const mappingSections: AccountMappingSection[] = [
-    {
-      title: "Penjualan",
-      items: [
-        { name: "salesReceivableAccountId", label: "Piutang Usaha", value: salesReceivable, onChange: setSalesReceivable },
-        { name: "customerDownPaymentAccountId", label: "Uang Muka Penjualan / DP (210102)", value: customerDownPayment, onChange: setCustomerDownPayment },
-        { name: "salesRevenueAccountId", label: "Pendapatan Penjualan", value: salesRevenue, onChange: setSalesRevenue },
-        { name: "scrapSaleIncomeAccountId", label: "Pendapatan Besi Tua Scrap (kandidat 710003)", value: scrapSaleIncome, onChange: setScrapSaleIncome },
-        { name: "salesTaxAccountId", label: "PPN Keluaran", value: salesTax, onChange: setSalesTax },
-        { name: "salesReturnAccountId", label: "Retur Penjualan", value: salesReturn, onChange: setSalesReturn },
-        { name: "salesAccountId", label: "Akun Penjualan", value: salesAcc, onChange: setSalesAcc },
-      ],
-    },
-    {
-      title: "Pembelian",
-      items: [
-        { name: "purchasePayableAccountId", label: "Hutang Usaha", value: purchasePayable, onChange: setPurchasePayable },
-        { name: "purchaseInventoryAccountId", label: "Persediaan (Pembelian)", value: purchaseInventory, onChange: setPurchaseInventory },
-        { name: "purchaseTaxAccountId", label: "PPN Masukan", value: purchaseTax, onChange: setPurchaseTax },
-        { name: "purchaseExpenseAccountId", label: "Beban Pembelian", value: purchaseExpense, onChange: setPurchaseExpense },
-        { name: "purchaseDiscountAccountId", label: "Diskon Pembelian", value: purchaseDiscount, onChange: setPurchaseDiscount },
-        { name: "purchaseShippingAccountId", label: "Ongkos Kirim", value: purchaseShipping, onChange: setPurchaseShipping },
-        { name: "purchaseAdminFeeAccountId", label: "Beban Admin Bank", value: purchaseAdminFee, onChange: setPurchaseAdminFee },
-        { name: "purchaseReturnAccountId", label: "Retur Pembelian", value: purchaseReturn, onChange: setPurchaseReturn },
-      ],
-    },
-    {
-      title: "Persediaan & Manufaktur",
-      items: [
-        { name: "inventoryAccountId", label: "Persediaan", value: inventoryAcc, onChange: setInventoryAcc },
-        { name: "inventoryAdjustmentAccountId", label: "Penyesuaian Persediaan", value: inventoryAdjustment, onChange: setInventoryAdjustment },
-        { name: "stockAdjustmentAccountId", label: "Penyesuaian Stok", value: stockAdjustmentAcc, onChange: setStockAdjustmentAcc },
-        { name: "cogsAccountId", label: "HPP (COGS)", value: cogsAcc, onChange: setCogsAcc },
-        { name: "wipAccountId", label: "WIP", value: wipAcc, onChange: setWipAcc },
-        { name: "materialExpenseAccountId", label: "Beban Material", value: materialExpense, onChange: setMaterialExpense },
-        { name: "materialIssueExpenseAccountId", label: "Beban Pengeluaran Material", value: materialIssueExpense, onChange: setMaterialIssueExpense },
-      ],
-    },
-    {
-      // SAL-BR-004 (jurnal DP: kredit kewajiban Uang Muka Penjualan) + kompensasi
-      // garansi/klaim/reimbursement. Tanpa input di sini, hasil auto-map untuk
-      // kunci-kunci ini dibuang tanpa jejak (GL-BR-009: no silent assumptions).
-      title: "Garansi",
-      items: [
-        { name: "warrantyExpenseAccountId", label: "Beban Garansi (510104)", value: warrantyExpense, onChange: setWarrantyExpense },
-        { name: "warrantyProvisionAccountId", label: "Provisi Garansi (210205)", value: warrantyProvision, onChange: setWarrantyProvision },
-      ],
-    },
-    {
-      title: "Klaim Supplier & Reimbursement",
-      items: [
-        { name: "supplierClaimReceivableAccountId", label: "Piutang Klaim Supplier (110508)", value: supplierClaimReceivable, onChange: setSupplierClaimReceivable },
-        { name: "reimbursementLiabilityAccountId", label: "Utang Reimbursement (210209)", value: reimbursementLiability, onChange: setReimbursementLiability },
-        { name: "commissionExpenseAccountId", label: "Beban Komisi (600002)", value: commissionExpense, onChange: setCommissionExpense },
-        { name: "commissionPayableAccountId", label: "Utang Komisi Penjualan (210212)", value: commissionPayable, onChange: setCommissionPayable },
-      ],
-    },
-    {
-      title: "Umum",
-      items: [
-        { name: "pettyCashAccountId", label: "Kas Kecil", value: pettyCashAcc, onChange: setPettyCashAcc },
-        { name: "cashBankAccountId", label: "Kas & Bank", value: cashBankAcc, onChange: setCashBankAcc },
-        { name: "generalExpenseAccountId", label: "Beban Umum", value: generalExpense, onChange: setGeneralExpense },
-        { name: "defaultCashAccountId", label: "Kas Default", value: defaultCash, onChange: setDefaultCash },
-      ],
-    },
-    {
-      title: "Penggajian",
-      items: [
-        { name: "salaryExpenseAccountId", label: "Beban Gaji", value: salaryExpense, onChange: setSalaryExpense },
-        { name: "salariesPayableAccountId", label: "Hutang Gaji", value: salariesPayable, onChange: setSalariesPayable },
-        { name: "payrollBankAccountId", label: "Bank Penggajian", value: payrollBank, onChange: setPayrollBank },
-        { name: "employeeReceivableAccountId", label: "Piutang Karyawan", value: employeeReceivable, onChange: setEmployeeReceivable },
-        { name: "employeeLoanWriteOffExpenseAccountId", label: "Beban Write-off Pinjaman (720007)", value: loanWriteOffExpense, onChange: setLoanWriteOffExpense },
-        { name: "payrollJournalTypeId", label: "Tipe Jurnal Penggajian", value: payrollJournalType, onChange: setPayrollJournalType },
-        { name: "pkwtCompensationExpenseAccountId", label: "Beban Kompensasi PKWT (600028)", value: pkwtExpense, onChange: setPkwtExpense },
-        { name: "pkwtCompensationPayableAccountId", label: "Utang Kompensasi PKWT (210207)", value: pkwtPayable, onChange: setPkwtPayable },
-      ],
-    },
-    {
-      title: "Aset Tetap",
-      items: [
-        { name: "depreciationExpenseAccountId", label: "Beban Penyusutan", value: depreciationExpense, onChange: setDepreciationExpense },
-        { name: "accumulatedDepreciationAccountId", label: "Akumulasi Penyusutan", value: accumulatedDepreciation, onChange: setAccumulatedDepreciation },
-        { name: "assetFiscalRevaluationTaxPayableAccountId", label: "Utang PPh Final Revaluasi Fiskal", value: fiscalRevalTaxPayable, onChange: setFiscalRevalTaxPayable },
-      ],
-    },
-    {
-      // F-2026-10-23-121-V Putusan 1: opsi hanya akun EQUITY aktif bernama
-      // laba ditahan (isRetainedEarningsAccount backend); akun lain tidak
-      // ditawarkan supaya posting penutup tidak ditolak resolver.
-      title: "Penutup Tahun",
-      items: [
-        { name: "retainedEarningsAccountId", label: "Laba Ditahan (Tujuan Penutup Tahun)", value: retainedEarnings, onChange: setRetainedEarnings },
-        { name: "lateFeeIncomeAccountId", label: "Pendapatan Denda Keterlambatan Piutang", value: lateFeeIncome, onChange: setLateFeeIncome },
-      ],
-    },
-  ]
+  const mappingBindings: Record<string, { value: string; onChange: (value: string) => void }> = {
+    salesReceivableAccountId: { value: salesReceivable, onChange: setSalesReceivable },
+    customerDownPaymentAccountId: { value: customerDownPayment, onChange: setCustomerDownPayment },
+    salesRevenueAccountId: { value: salesRevenue, onChange: setSalesRevenue },
+    scrapSaleIncomeAccountId: { value: scrapSaleIncome, onChange: setScrapSaleIncome },
+    salesTaxAccountId: { value: salesTax, onChange: setSalesTax },
+    salesReturnAccountId: { value: salesReturn, onChange: setSalesReturn },
+    salesAccountId: { value: salesAcc, onChange: setSalesAcc },
+    purchasePayableAccountId: { value: purchasePayable, onChange: setPurchasePayable },
+    purchaseInventoryAccountId: { value: purchaseInventory, onChange: setPurchaseInventory },
+    purchaseTaxAccountId: { value: purchaseTax, onChange: setPurchaseTax },
+    purchaseExpenseAccountId: { value: purchaseExpense, onChange: setPurchaseExpense },
+    purchaseDiscountAccountId: { value: purchaseDiscount, onChange: setPurchaseDiscount },
+    purchaseShippingAccountId: { value: purchaseShipping, onChange: setPurchaseShipping },
+    purchaseAdminFeeAccountId: { value: purchaseAdminFee, onChange: setPurchaseAdminFee },
+    purchaseReturnAccountId: { value: purchaseReturn, onChange: setPurchaseReturn },
+    inventoryAccountId: { value: inventoryAcc, onChange: setInventoryAcc },
+    inventoryAdjustmentAccountId: { value: inventoryAdjustment, onChange: setInventoryAdjustment },
+    stockAdjustmentAccountId: { value: stockAdjustmentAcc, onChange: setStockAdjustmentAcc },
+    cogsAccountId: { value: cogsAcc, onChange: setCogsAcc },
+    wipAccountId: { value: wipAcc, onChange: setWipAcc },
+    materialExpenseAccountId: { value: materialExpense, onChange: setMaterialExpense },
+    materialIssueExpenseAccountId: { value: materialIssueExpense, onChange: setMaterialIssueExpense },
+    warrantyExpenseAccountId: { value: warrantyExpense, onChange: setWarrantyExpense },
+    warrantyProvisionAccountId: { value: warrantyProvision, onChange: setWarrantyProvision },
+    supplierClaimReceivableAccountId: { value: supplierClaimReceivable, onChange: setSupplierClaimReceivable },
+    reimbursementLiabilityAccountId: { value: reimbursementLiability, onChange: setReimbursementLiability },
+    commissionExpenseAccountId: { value: commissionExpense, onChange: setCommissionExpense },
+    commissionPayableAccountId: { value: commissionPayable, onChange: setCommissionPayable },
+    pettyCashAccountId: { value: pettyCashAcc, onChange: setPettyCashAcc },
+    cashBankAccountId: { value: cashBankAcc, onChange: setCashBankAcc },
+    generalExpenseAccountId: { value: generalExpense, onChange: setGeneralExpense },
+    defaultCashAccountId: { value: defaultCash, onChange: setDefaultCash },
+    salaryExpenseAccountId: { value: salaryExpense, onChange: setSalaryExpense },
+    salariesPayableAccountId: { value: salariesPayable, onChange: setSalariesPayable },
+    payrollBankAccountId: { value: payrollBank, onChange: setPayrollBank },
+    employeeReceivableAccountId: { value: employeeReceivable, onChange: setEmployeeReceivable },
+    employeeLoanWriteOffExpenseAccountId: { value: loanWriteOffExpense, onChange: setLoanWriteOffExpense },
+    payrollJournalTypeId: { value: payrollJournalType, onChange: setPayrollJournalType },
+    pkwtCompensationExpenseAccountId: { value: pkwtExpense, onChange: setPkwtExpense },
+    pkwtCompensationPayableAccountId: { value: pkwtPayable, onChange: setPkwtPayable },
+    depreciationExpenseAccountId: { value: depreciationExpense, onChange: setDepreciationExpense },
+    accumulatedDepreciationAccountId: { value: accumulatedDepreciation, onChange: setAccumulatedDepreciation },
+    assetFiscalRevaluationTaxPayableAccountId: { value: fiscalRevalTaxPayable, onChange: setFiscalRevalTaxPayable },
+    retainedEarningsAccountId: { value: retainedEarnings, onChange: setRetainedEarnings },
+    lateFeeIncomeAccountId: { value: lateFeeIncome, onChange: setLateFeeIncome },
+  }
+
+  const mappingSections: AccountMappingSection[] = ACCOUNT_MAPPING_CATALOG.map((group) => ({
+    title: group.title,
+    items: group.items.map((item) => ({
+      name: item.key,
+      label: item.label,
+      value: mappingBindings[item.key]?.value ?? "",
+      onChange: mappingBindings[item.key]?.onChange ?? (() => {}),
+    })),
+  }))
 
   // Opsi dropdown laba ditahan disaring terpisah dari daftar akun umum.
   const retainedEarningsOptions = accountOptions.filter(
@@ -499,6 +459,9 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
       pkwtCompensationPayableAccountId: setPkwtPayable,
       depreciationExpenseAccountId: setDepreciationExpense,
       accumulatedDepreciationAccountId: setAccumulatedDepreciation,
+      assetFiscalRevaluationTaxPayableAccountId: setFiscalRevalTaxPayable,
+      retainedEarningsAccountId: setRetainedEarnings,
+      lateFeeIncomeAccountId: setLateFeeIncome,
     }
     for (const [key, value] of Object.entries(mapping)) {
       setters[key]?.(value)
@@ -841,14 +804,33 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                       </Button>
                     </div>
                   ))}
-                  <div className="mt-2.5">
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       onClick={handleAddStage}
-                      className="border-primary/40 text-primary hover:bg-primary/5 text-xs font-semibold px-4"
+                      className="min-h-11 sm:min-h-9 border-primary/40 text-primary hover:bg-primary/5 text-xs font-semibold px-4"
                     >
-                      <Plus className="size-3.5 mr-1.5" /> Tambah Tahap
+                      <Plus className="size-3.5 mr-1.5" aria-hidden="true" /> Tambah Tahap
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setStagesList([
+                          "Inspeksi Unit & Desain Teknis",
+                          "Fabrikasi Rangka & Bodi",
+                          "Pengecatan & Anti-Karat",
+                          "Kelistrikan, Plumbing & Interior",
+                          "Uji Jalan & QC Akhir",
+                          "Serah Terima & BAST",
+                        ])
+                      }
+                      className="min-h-11 sm:min-h-9 text-xs font-medium px-4"
+                    >
+                      Template Fabrikasi Overland (6 Tahap)
                     </Button>
                   </div>
                 </div>
@@ -1171,14 +1153,14 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                   step="0.01"
                   min="0"
                   max="100"
-                  placeholder="Belum diatur"
+                  placeholder="10"
                   defaultValue={settings.assetFiscalRevaluationFinalTaxRatePercent ?? ""}
-                  className="max-w-xs"
+                  className="max-w-xs font-mono tabular-nums"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Tarif master revaluasi fiskal berpersetujuan DJP (F-111). Kosong = peristiwa revaluasi fiskal
-                  ditolak berisik oleh server. Tarif dibekukan sebagai snapshot pada tiap peristiwa; mengubah
-                  isian ini tidak mengubah peristiwa lama.
+                <p className="text-xs text-muted-foreground text-pretty">
+                  Tarif PPh Final atas selisih lebih revaluasi aset tetap yang disetujui DJP (PMK 79/PMK.03/2008,
+                  standar 10%). Jika dikosongkan, pencatatan revaluasi fiskal akan ditolak sistem. Perubahan tarif
+                  hanya berlaku untuk transaksi baru karena tarif dibekukan sebagai snapshot pada tiap peristiwa.
                 </p>
               </div>
             </div>

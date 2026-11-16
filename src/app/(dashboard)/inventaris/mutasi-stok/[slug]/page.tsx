@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
 import { requirePermission } from "@/lib/auth/permissions"
+import { canViewCostAmounts } from "@/lib/auth/field-visibility"
 import { formatCurrencyExact, formatDate, formatReferenceType, referenceHref } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader } from "@/components/ui/page-header"
@@ -22,6 +23,7 @@ export default async function StockMoveDetailPage({
   params: Promise<{ slug: string }>
 }) {
   await requirePermission("view_stock_moves")
+  const canViewCosts = await canViewCostAmounts()
   const { slug } = await params
 
   const move = await resolveEntity(
@@ -62,7 +64,7 @@ export default async function StockMoveDetailPage({
         <DetailField label="Gudang" value={move.warehouse?.name || "-"} />
         <DetailField label="Arah" value={<StatusChip status={move.impact === "IN" ? "IN" : "OUT"} />} />
         <DetailField label="Jumlah" value={`${Number(move.qty)} ${move.item?.unitOfMeasure ?? ""}`} />
-        <DetailField label="Harga Satuan" value={formatCurrencyExact(Number(move.cost))} />
+        {canViewCosts && <DetailField label="Harga Satuan" value={formatCurrencyExact(Number(move.cost))} />}
         <DetailField
           label="Tipe"
           value={

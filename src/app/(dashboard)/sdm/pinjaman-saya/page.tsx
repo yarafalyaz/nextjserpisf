@@ -9,6 +9,7 @@ import { loadEmployeeLoanChannels } from "@/lib/reports/employee-loan-channel-da
 import { EMPLOYEE_LOAN_CHANNEL_LABELS } from "@/lib/reports/employee-loan-channel"
 import { Banknote } from "@/components/ui/fontawesome-icons"
 import { EmptyState } from "@/components/ui/empty-state"
+import { PageHeader } from "@/components/ui/page-header"
 import { LoanTable } from "../pinjaman/_components/loan-table"
 
 import type { Metadata } from "next"
@@ -39,6 +40,7 @@ export default async function MyLoanRequestsPage() {
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
+      slug: true,
       loanDate: true,
       totalAmount: true,
       monthlyInstallment: true,
@@ -52,7 +54,7 @@ export default async function MyLoanRequestsPage() {
 
   const data = loans.map((l) => ({
     id: l.id,
-    slug: null,
+    slug: l.slug,
     employee: { name: "" },
     loanDate: l.loanDate.toISOString(),
     totalAmount: Number(l.totalAmount),
@@ -64,29 +66,30 @@ export default async function MyLoanRequestsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
-            Pinjaman & Kasbon Saya
-          </h1>
-          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
-            Riwayat fasilitas pinjaman pribadi, saldo sisa pokok, dan jadwal angsuran potongan gaji.
-          </p>
-        </div>
-        <Link
-          href="/sdm/pinjaman-saya/tambah"
-          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
-          id="create-my-loan-btn"
-        >
-          <Banknote size={16} aria-hidden="true" />
-          <span>Ajukan Pinjaman</span>
-        </Link>
-      </div>
+      <PageHeader
+        title="Pinjaman & Kasbon Saya"
+        subtitle="Riwayat fasilitas pinjaman pribadi, saldo sisa pokok, dan jadwal angsuran potongan gaji."
+        breadcrumbs={[
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
+          { label: "Pinjaman Saya" },
+        ]}
+        actions={
+          <Link
+            href="/sdm/pinjaman-saya/tambah"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+            id="create-my-loan-btn"
+          >
+            <Banknote size={16} aria-hidden="true" />
+            <span>Ajukan Pinjaman</span>
+          </Link>
+        }
+      />
 
       {data.length === 0 ? (
         <EmptyState title="Belum ada pengajuan pinjaman." description="Gunakan tombol Ajukan Pinjaman untuk membuat pengajuan pertama." />
       ) : (
-        <LoanTable data={data} total={data.length} page={1} pageSize={data.length || 10} showActions={false} showEmployeeColumn={false} readOnly />
+        <LoanTable data={data} showActions={false} showEmployeeColumn={false} readOnly />
       )}
     </div>
   )

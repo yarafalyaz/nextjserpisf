@@ -135,6 +135,7 @@ export function SuccessionTable({ data, canEdit, canDelete }: SuccessionTablePro
       data={data}
       columns={columns}
       ariaLabel="Daftar suksesi jabatan kritis"
+      selectable={false}
     />
   )
 }
@@ -190,6 +191,7 @@ export function PositionCriticalityTable({
       data={data}
       columns={columns}
       ariaLabel="Daftar seluruh jabatan dan status kritis"
+      selectable={false}
     />
   )
 }

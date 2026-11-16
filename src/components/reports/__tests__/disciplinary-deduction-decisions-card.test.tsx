@@ -77,7 +77,7 @@ describe("DisciplinaryDeductionDecisionsCard BR-DISC-09", () => {
     )
     roots.push(root)
     const text = container.textContent ?? ""
-    expect(text).toContain("Nominal tidak ditampilkan — tanpa izin lihat payroll")
+    expect(text).toContain("Nominal tidak ditampilkan (tanpa izin lihat payroll)")
     expect(text).not.toContain("Rp 250.000")
   })
 

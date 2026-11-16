@@ -197,7 +197,7 @@ export function PkwtCompensationPanel({
                 id="pkwt-employee"
                 name="employeeId"
                 required
-                className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm"
+                className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="">Pilih karyawan...</option>
                 {employees.map((emp) => (
@@ -391,7 +391,7 @@ export function PkwtCompensationPanel({
                 id="pkwt-attach-event"
                 name="eventId"
                 required
-                className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm"
+                className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="">Pilih peristiwa...</option>
                 {approvedRows.map((row) => (
@@ -414,7 +414,7 @@ export function PkwtCompensationPanel({
                 id="pkwt-attach-payroll"
                 name="payrollId"
                 required
-                className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm"
+                className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="">Pilih slip draf...</option>
                 {draftSlips.map((slip) => (

@@ -1460,7 +1460,7 @@ export async function disposeAsset(formData: FormData) {
       const bookValueTx = lockedPosted.hasAcquisitionJournal
         ? lockedPosted.bookValue.toNumber()
         : Number(lockedAsset.currentValue);
-      const gainLossTx = safeSubtract(proceeds, bookValueTx, 0);
+      const gainLossTx = safeSubtract(proceeds, bookValueTx, 2);
 
       // Atomically claim the disposal: only the request that flips status away
       // from "disposed" wins. The previous status check ran OUTSIDE the tx and the
@@ -1531,8 +1531,8 @@ export async function disposeAsset(formData: FormData) {
           accumulatedImpairment: lockedPosted.accumulatedImpairmentPosted.toNumber(),
         });
 
-        const totalDebit = built.reduce((s, e) => safeAdd(s, e.debit, 0), 0);
-        const totalCredit = built.reduce((s, e) => safeAdd(s, e.credit, 0), 0);
+        const totalDebit = built.reduce((s, e) => safeAdd(s, e.debit, 2), 0);
+        const totalCredit = built.reduce((s, e) => safeAdd(s, e.credit, 2), 0);
         // Akun pelepasan dinilai dari entri yang benar-benar terbit: akun
         // mati antara perolehan dan pelepasan harus menolak + rollback klaim
         // status, bukan menempel di jurnal POSTED.

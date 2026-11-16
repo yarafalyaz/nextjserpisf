@@ -28,7 +28,7 @@ export interface TransferInstructionRow {
   transferReference: string | null
 }
 
-export function VendorTransferPanel({ rows }: { rows: TransferInstructionRow[] }) {
+export function VendorTransferPanel({ rows, canEdit = true }: { rows: TransferInstructionRow[]; canEdit?: boolean }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -105,6 +105,7 @@ export function VendorTransferPanel({ rows }: { rows: TransferInstructionRow[] }
 
   return (
     <div className="flex flex-col gap-5">
+      {canEdit && (
       <div className="flex flex-wrap items-end gap-4 rounded-xl border border-default bg-surface p-4">
         <p className="flex-1 text-sm text-muted-foreground">
           {selected.length > 0
@@ -131,6 +132,7 @@ export function VendorTransferPanel({ rows }: { rows: TransferInstructionRow[] }
           </Button>
         </div>
       </div>
+      )}
 
       <div className="rounded-xl border border-default bg-surface">
         <div className="border-b border-default p-3 text-sm font-medium">Belum ditransfer ({pending.length})</div>

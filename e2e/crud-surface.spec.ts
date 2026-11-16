@@ -73,7 +73,7 @@ test.describe("CRUD surface smoke (all modules)", () => {
 
       // 3. READ/UPDATE surface from first ID link if available
       await page.goto(baseRoute, { waitUntil: "domcontentloaded" })
-      const detailLinks = page.locator(`a[href^="${baseRoute}/"]`).filter({
+      const detailLinks = page.locator(`main a[href^="${baseRoute}/"]`).filter({
         hasNotText: /tambah/i,
       })
 

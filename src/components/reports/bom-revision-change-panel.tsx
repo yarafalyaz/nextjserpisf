@@ -407,7 +407,7 @@ export function BomRevisionChangePanel({
           aria-modal="true"
           aria-label="Ganti revisi BOM"
         >
-          <div className="w-full max-w-2xl max-h-[90dvh] overflow-y-auto rounded-xl border border-default bg-surface p-5 shadow-lg flex flex-col gap-4">
+          <div className="w-full max-w-2xl max-h-[90dvh] overflow-y-auto rounded-xl border border-default bg-surface p-5 shadow-sm flex flex-col gap-4">
             <h3 className="text-base font-semibold text-foreground">Ganti Revisi BOM</h3>
             <p className="text-sm text-muted-foreground">
               Dari Rev. {currentRevision.revisionNo} (terpasang saat ini). Bila material sudah
@@ -442,7 +442,7 @@ export function BomRevisionChangePanel({
                 required
                 aria-required="true"
                 rows={2}
-                className="min-h-11 rounded-lg border border-default bg-background px-3 py-2 text-sm"
+                className="min-h-11 rounded-lg border border-default bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
 
@@ -529,7 +529,7 @@ export function BomRevisionChangePanel({
           aria-modal="true"
           aria-label="Tolak ganti revisi BOM"
         >
-          <div className="w-full max-w-lg rounded-xl border border-default bg-surface p-5 shadow-lg flex flex-col gap-4">
+          <div className="w-full max-w-lg rounded-xl border border-default bg-surface p-5 shadow-sm flex flex-col gap-4">
             <h3 className="text-base font-semibold text-foreground">Tolak Ganti Revisi BOM</h3>
             <p className="text-sm text-muted-foreground">
               {revLabel(rejectFor.fromRevisionId)} → {revLabel(rejectFor.toRevisionId)} ·{" "}
@@ -546,7 +546,7 @@ export function BomRevisionChangePanel({
                 required
                 aria-required="true"
                 rows={2}
-                className="min-h-11 rounded-lg border border-default bg-background px-3 py-2 text-sm"
+                className="min-h-11 rounded-lg border border-default bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
             <div className="flex justify-end gap-2">

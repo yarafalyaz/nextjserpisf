@@ -8,12 +8,18 @@ export function useIsMobile() {
 }
 
 function subscribe(callback: () => void) {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return () => {}
+  }
   const mql = window.matchMedia(QUERY)
   mql.addEventListener("change", callback)
   return () => mql.removeEventListener("change", callback)
 }
 
 function getSnapshot() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return false
+  }
   return window.matchMedia(QUERY).matches
 }
 

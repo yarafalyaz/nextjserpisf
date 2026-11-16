@@ -11,13 +11,12 @@ import { DetailTabs } from "@/components/ui/detail-tabs"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteLead } from "@/actions/crm.actions"
 import { CONVERTIBLE_STATUSES } from "@/lib/validations/crm.schemas"
-import { ConvertLeadButton, AddLeadActivityForm, LeadActivityCompletionButton } from "../_components/lead-actions"
+import { ConvertLeadButton, AddLeadActivityForm } from "../_components/lead-actions"
+import { LeadActivitiesTable } from "./_components/lead-activities-table"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
-import { LEAD_ACTIVITY_TYPE_LABELS, labelFrom, statusLabel } from "@/lib/utils/status-labels"
 
 import type { Metadata } from "next"
 
@@ -71,14 +70,14 @@ export default async function LeadDetailPage({
   // terkonversi (customerId kosong) tidak punya kendaraan; tampilkan kartu
   // hanya bila pelanggan tertaut ada.
   const linkedCustomer = lead.customerId
-    ? await prisma.customer.findUnique({
-        where: { id: lead.customerId },
+    ? await prisma.customer.findFirst({
+        where: { id: lead.customerId, deletedAt: null },
         select: { id: true, slug: true, name: true },
       })
     : null
   const linkedVehicles = linkedCustomer
     ? await prisma.customerVehicle.findMany({
-        where: { customerId: linkedCustomer.id },
+        where: { customerId: linkedCustomer.id, deletedAt: null },
         select: {
           id: true,
           slug: true,
@@ -169,52 +168,22 @@ export default async function LeadDetailPage({
                   {lead.activities.length === 0 ? (
                     <EmptyState title="Belum ada aktivitas" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>Tipe</DetailTableTh>
-                        <DetailTableTh>Subjek</DetailTableTh>
-                        <DetailTableTh>Detail</DetailTableTh>
-                        <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh>Jadwal</DetailTableTh>
-                        <DetailTableTh>Aksi</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {lead.activities.map((activity) => {
-                          // F-2026-10-25-008-S §6/BR-LC-07: label riwayat
-                          // verbatim dari completedAt/scheduledAt server —
-                          // UI tidak menentukan status selesai sendiri.
-                          const historyLabel = activity.completedAt
-                            ? `Selesai ${formatDate(activity.completedAt)}`
-                            : activity.scheduledAt
-                              ? `Terjadwal ${formatDate(activity.scheduledAt)}`
-                              : "-"
-                          return (
-                            <DetailTableRow key={activity.id}>
-                              <DetailTableTd>{labelFrom(LEAD_ACTIVITY_TYPE_LABELS, activity.type)}</DetailTableTd>
-                              <DetailTableTd>
-                                {activity.type === "status_change"
-                                  ? `${statusLabel(activity.oldStatus)} → ${statusLabel(activity.newStatus)}`
-                                  : (activity.subject || "-")}
-                              </DetailTableTd>
-                              <DetailTableTd>{activity.description || activity.notes || "-"}</DetailTableTd>
-                              <DetailTableTd>{formatDate(activity.createdAt)}</DetailTableTd>
-                              <DetailTableTd>{historyLabel}</DetailTableTd>
-                              <DetailTableTd>
-                                {activity.scheduledAt || activity.completedAt ? (
-                                  <LeadActivityCompletionButton
-                                    leadId={lead.id}
-                                    activityId={activity.id}
-                                    subject={activity.subject}
-                                    completedAt={Boolean(activity.completedAt)}
-                                    canAct={canActOnLeadActivities}
-                                  />
-                                ) : null}
-                              </DetailTableTd>
-                            </DetailTableRow>
-                          )
-                        })}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <LeadActivitiesTable
+                      leadId={lead.id}
+                      canAct={canActOnLeadActivities}
+                      data={lead.activities.map((activity) => ({
+                        id: activity.id,
+                        type: activity.type,
+                        oldStatus: activity.oldStatus,
+                        newStatus: activity.newStatus,
+                        subject: activity.subject,
+                        description: activity.description,
+                        notes: activity.notes,
+                        createdAt: activity.createdAt.toISOString(),
+                        scheduledAt: activity.scheduledAt ? activity.scheduledAt.toISOString() : null,
+                        completedAt: activity.completedAt ? activity.completedAt.toISOString() : null,
+                      }))}
+                    />
                   )}
                 </div>
               </div>

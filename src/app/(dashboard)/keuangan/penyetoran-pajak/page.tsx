@@ -19,7 +19,7 @@ export default async function TaxPaymentsPage() {
   const payments = await prisma.taxPayment.findMany({
     where: { deletedAt: null },
     orderBy: { date: "desc" },
-    take: 200,
+    take: 500,
     include: { taxType: { select: { name: true } } },
   })
 

@@ -70,8 +70,8 @@ export default async function PettyCashDetailPage({
   // sinkronisasi expense), jadi tombol Ubah praktis SELALU berakhir ditolak.
   // Sembunyikan tombolnya; koreksi jalurnya pembatalan beralasan + buat baru.
   const postedJournal = await prisma.journal.findFirst({
-    where: { referenceType: "PettyCash", referenceId: pettyCash.id, status: "POSTED" },
-    select: { id: true, documentNo: true },
+    where: { referenceType: "PettyCash", referenceId: pettyCash.id, status: "POSTED", deletedAt: null },
+    select: { id: true, journalNumber: true },
   });
   const isEditable = !postedJournal && pettyCash.status !== "void";
 
@@ -82,7 +82,10 @@ export default async function PettyCashDetailPage({
       })
     : null;
 
-  const isExpense = pettyCash.type === "out" || pettyCash.type === "expense";
+  const isExpense =
+    pettyCash.type.toUpperCase() === "OUT" ||
+    pettyCash.type.toLowerCase() === "out" ||
+    pettyCash.type.toLowerCase() === "expense";
   const amountNumber = Number(pettyCash.amount);
   const balanceBeforeNumber = Number(pettyCash.balanceBefore);
   const balanceAfterNumber = Number(pettyCash.balanceAfter);
@@ -209,7 +212,7 @@ export default async function PettyCashDetailPage({
             value={
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
                 <ShieldCheck className="size-3.5" aria-hidden="true" />
-                <span>Terposting (Jurnal #{postedJournal.documentNo || postedJournal.id})</span>
+                <span>Terposting (Jurnal #{postedJournal.journalNumber || postedJournal.id})</span>
               </span>
             }
           />

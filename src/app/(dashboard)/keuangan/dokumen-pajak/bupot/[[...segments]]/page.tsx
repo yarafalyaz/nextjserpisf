@@ -9,6 +9,7 @@ import Link from "next/link"
 import { redirect, notFound } from "next/navigation"
 import { PageHeader } from "@/components/ui/page-header"
 import { CanCreate } from "@/components/auth/can-create"
+import { AppSearchField } from "@/components/ui/search-field"
 import { WithholdingCertificateTable, type WithholdingCertificateRow } from "../../_components/withholding-certificate-table"
 import { statusToIndo, indoToStatus, statusLabel } from "@/lib/utils/status-labels"
 import {
@@ -119,7 +120,7 @@ export default async function WithholdingCertificatesPage({
     }),
   }
 
-  const [certificates, total, weWithholdCount, fromUsCount, draftCount] = await Promise.all([
+  const [certificates, total, overallCount, weWithholdCount, fromUsCount, draftCount] = await Promise.all([
     prisma.withholdingCertificate.findMany({
       where,
       orderBy: { withholdingDate: "desc" },
@@ -128,10 +129,16 @@ export default async function WithholdingCertificatesPage({
       include: { withholdingType: { select: { name: true } } },
     }),
     prisma.withholdingCertificate.count({ where }),
+    prisma.withholdingCertificate.count(),
     prisma.withholdingCertificate.count({ where: { direction: "we_withhold" } }),
     prisma.withholdingCertificate.count({ where: { direction: "withheld_from_us" } }),
     prisma.withholdingCertificate.count({ where: { status: "draft" } }),
   ])
+
+  const currentActionPath = buildPathFilterHref("/keuangan/dokumen-pajak/bupot", {
+    status: activeUrlStatus || undefined,
+    arah: activeUrlArah || undefined,
+  })
 
   const tableData: WithholdingCertificateRow[] = certificates.map((cert) => ({
     id: cert.id,
@@ -174,10 +181,10 @@ export default async function WithholdingCertificatesPage({
               href={withListParams(targetPath, params, {
                 halaman: undefined,
               })}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`inline-flex min-h-11 sm:min-h-9 items-center rounded-md border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 isActive
-                  ? "bg-foreground text-background font-semibold"
-                  : "bg-surface border border-default text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "border-foreground bg-foreground text-background font-semibold"
+                  : "border-default bg-surface text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
               {dir.label}
@@ -186,10 +193,10 @@ export default async function WithholdingCertificatesPage({
         })}
       </div>
 
-      <div className="h-4 w-px bg-border" />
+      <div className="hidden h-4 w-px bg-border sm:block" />
 
       {/* Status Filter (Path Segments: /status/diterbitkan, /status/konsep, /status/dicabut) */}
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1.5">
         {[
           { label: "Semua Status", dbKey: "" },
           ...WITHHOLDING_CERTIFICATE_VALID_DB_STATUSES.map((key) => ({
@@ -210,10 +217,10 @@ export default async function WithholdingCertificatesPage({
               href={withListParams(targetPath, params, {
                 halaman: undefined,
               })}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`inline-flex min-h-11 sm:min-h-9 items-center rounded-md border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 isActive
-                  ? "bg-foreground text-background font-semibold"
-                  : "bg-surface border border-default text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "border-foreground bg-foreground text-background font-semibold"
+                  : "border-default bg-surface text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
               {item.label}
@@ -276,7 +283,7 @@ export default async function WithholdingCertificatesPage({
             <p className="text-xs font-medium text-muted-foreground">Total Bukti Potong</p>
           </div>
           <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
-            {total} <span className="text-sm font-normal text-muted-foreground">dokumen</span>
+            {overallCount} <span className="text-sm font-normal text-muted-foreground">dokumen</span>
           </p>
         </div>
 
@@ -303,7 +310,7 @@ export default async function WithholdingCertificatesPage({
         <div className="p-4 sm:p-5">
           <div className="flex items-center gap-2">
             <FileCheck className="size-4 text-amber-500" aria-hidden="true" />
-            <p className="text-xs font-medium text-muted-foreground">Draft Menunggu Upload</p>
+            <p className="text-xs font-medium text-muted-foreground">Draf Menunggu Upload</p>
           </div>
           <p className="mt-2 text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400 font-mono tabular-nums">
             {draftCount} <span className="text-sm font-normal text-muted-foreground">dokumen</span>
@@ -317,6 +324,7 @@ export default async function WithholdingCertificatesPage({
         total={total}
         page={page}
         pageSize={pageSize}
+        toolbar={<AppSearchField action={currentActionPath} placeholder="Cari no. bupot, lawan transaksi, NPWP, atau kode objek..." />}
         filters={filterChips}
       />
     </div>

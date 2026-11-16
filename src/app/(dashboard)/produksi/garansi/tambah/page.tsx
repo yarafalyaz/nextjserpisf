@@ -6,10 +6,10 @@ import { listWarrantyCoveragesByVehicle } from "@/actions/warranty.actions"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { StatusChip } from "@/components/ui/status-chip"
 import { formatDate } from "@/lib/utils/format"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { WarrantyClaimForm, type WarrantyCoverageOption } from "../_components/warranty-claim-form"
+import { WarrantyVehicleTable } from "./_components/warranty-vehicle-table"
 
 export const metadata: Metadata = { title: "Buat Klaim Garansi" }
 
@@ -81,7 +81,7 @@ export default async function WarrantyClaimCreatePage({
             : "Belum ada nomor serial tercatat"
           return {
             value: String(c.id),
-            label: `${c.item.name} — ${serial} — berakhir ${formatDate(c.expiresAt)}`,
+            label: `${c.item.name} - ${serial} - berakhir ${formatDate(c.expiresAt)}`,
           }
         })
       }
@@ -89,7 +89,7 @@ export default async function WarrantyClaimCreatePage({
       const model = vehicle.vehicle?.variant?.model?.name
       const variant = vehicle.vehicle?.variant?.name
       const unit = [brand, model, variant ? `(${variant})` : null].filter(Boolean).join(" ")
-      vehicleLabel = [vehicle.plateNumber ?? "Tanpa pelat", unit || null, vehicle.customer?.name ? `— ${vehicle.customer.name}` : null]
+      vehicleLabel = [vehicle.plateNumber ?? "Tanpa pelat", unit || null, vehicle.customer?.name ? `- ${vehicle.customer.name}` : null]
         .filter(Boolean)
         .join(" ")
     }
@@ -139,52 +139,23 @@ export default async function WarrantyClaimCreatePage({
           {vehicles.length === 0 ? (
             <p className="mt-4 text-muted-foreground">Belum ada kendaraan aktif tercatat.</p>
           ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-sm" aria-label="Daftar kendaraan aktif">
-                <thead>
-                  <tr className="border-b border-default text-left">
-                    <th scope="col" className="px-4 py-2.5 font-medium text-muted-foreground">Plat Nomor</th>
-                    <th scope="col" className="px-4 py-2.5 font-medium text-muted-foreground">Unit</th>
-                    <th scope="col" className="px-4 py-2.5 font-medium text-muted-foreground">Pelanggan</th>
-                    <th scope="col" className="px-4 py-2.5 font-medium text-muted-foreground">Cakupan</th>
-                    <th scope="col" className="px-4 py-2.5 font-medium text-muted-foreground">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-default">
-                  {vehicles.map((v) => {
-                    const brand = v.vehicle?.variant?.model?.brand?.name
-                    const model = v.vehicle?.variant?.model?.name
-                    const variant = v.vehicle?.variant?.name
-                    const unit = [brand, model, variant ? `(${variant})` : null].filter(Boolean).join(" ") || "-"
-                    return (
-                      <tr key={v.id}>
-                        <td className="px-4 py-2.5 font-mono text-foreground">{v.plateNumber ?? "-"}</td>
-                        <td className="px-4 py-2.5 text-foreground">{unit}</td>
-                        <td className="px-4 py-2.5 text-foreground">{v.customer?.name ?? "-"}</td>
-                        <td className="px-4 py-2.5">
-                          <StatusChip
-                            status={v._count.warrantyCoverages > 0 ? "active" : "closed"}
-                            customLabel={
-                              v._count.warrantyCoverages > 0
-                                ? `${v._count.warrantyCoverages} cakupan`
-                                : "Tanpa cakupan"
-                            }
-                          />
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <a
-                            href={`/produksi/garansi/tambah?kendaraan=${v.slug ?? v.id}`}
-                            className="font-medium text-primary hover:underline"
-                            aria-label={`Pilih kendaraan ${v.plateNumber ?? unit} untuk klaim garansi`}
-                          >
-                            Pilih
-                          </a>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+            <div className="mt-4">
+              <WarrantyVehicleTable
+                data={vehicles.map((v) => {
+                  const brand = v.vehicle?.variant?.model?.brand?.name
+                  const model = v.vehicle?.variant?.model?.name
+                  const variant = v.vehicle?.variant?.name
+                  const unit = [brand, model, variant ? `(${variant})` : null].filter(Boolean).join(" ") || "-"
+                  return {
+                    id: v.id,
+                    slug: v.slug,
+                    plateNumber: v.plateNumber,
+                    unit,
+                    customerName: v.customer?.name ?? null,
+                    coverageCount: v._count.warrantyCoverages,
+                  }
+                })}
+              />
             </div>
           )}
         </section>

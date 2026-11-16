@@ -161,7 +161,7 @@ export default async function EmployeeDashboard() {
                       Sedang cuti aktif
                     </div>
                   )}
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
                     <div>
                       <span className="text-xs text-muted-foreground">
                         Terpakai Tahun Ini
@@ -194,12 +194,12 @@ export default async function EmployeeDashboard() {
             <h2 className="mb-2.5 text-xs font-semibold tracking-wider uppercase text-muted-foreground">
               Menu Cepat
             </h2>
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 lg:grid-cols-4">
               {quickLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="group flex items-center justify-between gap-3 rounded-lg border bg-card p-3.5 shadow-2xs transition-colors duration-150 hover:border-foreground/20 hover:bg-muted/40"
+                  className="group flex items-center justify-between gap-2 rounded-lg border bg-card p-2.5 shadow-2xs transition-all duration-150 active:scale-[0.98] sm:gap-3 sm:p-3.5 [@media(hover:hover)]:hover:border-foreground/20 [@media(hover:hover)]:hover:bg-muted/40"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-muted/50 text-muted-foreground transition-colors group-hover:text-foreground">

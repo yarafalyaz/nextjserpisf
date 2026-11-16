@@ -59,7 +59,7 @@ export function ItemCategoryTable({ data, total, page, pageSize }: ItemCategoryT
       columns={columns}
       ariaLabel="Daftar kategori barang"
       serverPagination={{ total, page, pageSize }}
-      selectable={true}
+      selectable={false}
       searchColumn="name"
       searchPlaceholder="Cari nama kategori..."
     />

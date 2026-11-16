@@ -27,15 +27,18 @@ export default async function CostCentersPage({
   // Kotak cari DataTable menulis ?cari= ke URL (mode server), jadi nilainya
   // harus diterjemahkan ke query — tanpa ini mengetik di kotak cari tidak
   // menyaring apa pun sehingga terlihat rusak.
-  const where = {
-    parentId: null,
-    ...(cari && {
-      OR: [{ code: { contains: cari } }, { name: { contains: cari } }],
-    }),
-  }
+  const where = cari
+    ? {
+        OR: [{ code: { contains: cari } }, { name: { contains: cari } }],
+      }
+    : {
+        parentId: null,
+      }
 
   const all = await prisma.costCenter.findMany({
-    include: { children: { include: { children: { include: { children: true } } } } },
+    ...(cari
+      ? {}
+      : { include: { children: { include: { children: { include: { children: true } } } } } }),
     where,
     orderBy: { code: "asc" },
     take,

@@ -2,6 +2,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as typeof ResizeObserver
 
 import { createRoot, type Root } from "react-dom/client"
 import { act } from "react"
@@ -145,9 +150,11 @@ describe("DownPaymentTaxPanel F-2026-10-25-004-V", () => {
   it("checkbox konfirmasi NPWP 15 digit terkirim sebagai legacy15Confirmed", async () => {
     const { container } = mount(<DownPaymentTaxPanel rows={[BASE]} canIssue />)
     openAndSubmit(container)
-    const cb = container.querySelector<HTMLInputElement>("#dp-tax-legacy15-42")
+    const cb = container.querySelector<HTMLButtonElement>("#dp-tax-legacy15-42")
     expect(cb).not.toBeNull()
-    cb!.checked = true
+    act(() => {
+      cb!.click()
+    })
     act(() => {
       container.querySelector("form")!.requestSubmit()
     })

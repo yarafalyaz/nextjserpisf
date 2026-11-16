@@ -12,39 +12,22 @@ import {
   parseMonthParam,
   previousMonth,
   toDayKey,
-  WEEKDAY_LABELS,
 } from "@/lib/reports/calendar-grid"
 import { notFound, redirect } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { parsePathFilterSegments } from "@/lib/utils/path-filters"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { RECOGNISED_AP_STATUSES, RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
+import {
+  CalendarBoard,
+  type CalendarEventKind,
+  type SerializedCalendarDay,
+  type SerializedCalendarEvent,
+} from "../_components/calendar-board"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Kalender" }
-
-type EventKind = "invoice" | "invoice-due" | "bill" | "bill-due" | "delivery" | "expected" | "recurring"
-
-interface CalendarEvent {
-  date: Date
-  kind: EventKind
-  label: string
-  amount: number | null
-  href: string
-}
-
-const KIND_STYLES: Record<EventKind, { chip: string; label: string }> = {
-  invoice: { chip: "bg-primary/12 text-primary border-primary/25", label: "Faktur" },
-  // Teks chip memakai shade 700 (4.58:1 / 5.55:1 / 4.91:1 di latar chip 12%)
-  // supaya lolos WCAG 1.4.3; di mode gelap dipakai shade 400 yang terang.
-  "invoice-due": { chip: "bg-warning/12 text-amber-700 border-warning/25 dark:text-amber-400", label: "Jth Tempo AR" },
-  bill: { chip: "bg-danger/12 text-red-700 border-danger/25 dark:text-red-400", label: "Tagihan" },
-  "bill-due": { chip: "bg-danger/12 text-red-700 border-danger/25 dark:text-red-400", label: "Jth Tempo AP" },
-  delivery: { chip: "bg-success/12 text-emerald-700 border-success/25 dark:text-emerald-400", label: "Kirim" },
-  expected: { chip: "bg-surface-muted text-muted-foreground border-default", label: "Terima" },
-  recurring: { chip: "bg-accent/12 text-accent-foreground border-accent/25", label: "Berulang" },
-}
 
 export default async function CalendarPage({
   params: routeParams,
@@ -54,13 +37,26 @@ export default async function CalendarPage({
   searchParams: Promise<{ bulan?: string }>
 }) {
   await requirePermission("view_calendar")
-  // Putaran 88: nominal dokumen keuangan hanya untuk pemegang izin modulnya —
-  // view_calendar saja tak membuka nomor/nominal faktur & tagihan lintas modul.
-  const [canViewSales, canViewPurchase, canViewFinance] = await Promise.all([
+
+  // Izin granular lintas modul: view_calendar saja tidak membuka dokumen/nominal modul lain.
+  const [
+    canViewSalesInvoices,
+    canViewVendorBills,
+    canViewReports,
+    canViewSalesOrders,
+    canViewPurchaseOrders,
+    canManageRecurring,
+  ] = await Promise.all([
     hasPermission("view_sales_invoices"),
     hasPermission("view_vendor_bills"),
     hasPermission("view_reports"),
+    hasPermission("view_sales_orders"),
+    hasPermission("view_purchase_orders"),
+    hasPermission("manage_recurring_transactions"),
   ])
+
+  const canSeeAr = canViewSalesInvoices || canViewReports
+  const canSeeAp = canViewVendorBills || canViewReports
 
   const params = await searchParams
   // Tautan lama `?bulan=YYYY-MM` diarahkan ke bentuk path.
@@ -78,137 +74,255 @@ export default async function CalendarPage({
   const gridEnd = new Date(weeks[5][6].date)
   gridEnd.setHours(23, 59, 59, 999)
 
-  const [invoices, bills, deliveries, expected, recurring] = await Promise.all([
-    // Putaran 88: hanya dokumen diakui (RECOGNISED_* kanonis) — draft belum
-    // terbit dan cancelled bukan kewajiban; konsisten dashboard/notifikasi.
-    canViewSales || canViewFinance
+  const [invoices, bills, deliveries, expected, recurring, holidays] = await Promise.all([
+    canSeeAr
       ? prisma.salesInvoice.findMany({
-          where: { deletedAt: null, status: { in: [...RECOGNISED_AR_STATUSES] }, OR: [{ date: { gte: gridStart, lte: gridEnd } }, { dueDate: { gte: gridStart, lte: gridEnd } }] },
-          select: { id: true, slug: true, documentNo: true, date: true, dueDate: true, grandTotal: true, status: true },
+          where: {
+            deletedAt: null,
+            status: { in: [...RECOGNISED_AR_STATUSES] },
+            OR: [
+              { date: { gte: gridStart, lte: gridEnd } },
+              { dueDate: { gte: gridStart, lte: gridEnd } },
+            ],
+          },
+          select: {
+            id: true,
+            slug: true,
+            documentNo: true,
+            date: true,
+            dueDate: true,
+            grandTotal: true,
+            status: true,
+          },
         })
-      : Promise.resolve([] as { id: number; slug: string | null; documentNo: string; date: Date; dueDate: Date | null; grandTotal: unknown; status: string }[]),
-    canViewPurchase || canViewFinance
+      : Promise.resolve([]),
+    canSeeAp
       ? prisma.vendorBill.findMany({
-          where: { deletedAt: null, status: { in: [...RECOGNISED_AP_STATUSES] }, OR: [{ date: { gte: gridStart, lte: gridEnd } }, { dueDate: { gte: gridStart, lte: gridEnd } }] },
-          select: { id: true, slug: true, documentNo: true, date: true, dueDate: true, grandTotal: true, status: true },
+          where: {
+            deletedAt: null,
+            status: { in: [...RECOGNISED_AP_STATUSES] },
+            OR: [
+              { date: { gte: gridStart, lte: gridEnd } },
+              { dueDate: { gte: gridStart, lte: gridEnd } },
+            ],
+          },
+          select: {
+            id: true,
+            slug: true,
+            documentNo: true,
+            date: true,
+            dueDate: true,
+            grandTotal: true,
+            status: true,
+          },
         })
-      : Promise.resolve([] as { id: number; slug: string | null; documentNo: string; date: Date; dueDate: Date | null; grandTotal: unknown; status: string }[]),
-    prisma.salesOrder.findMany({
-      where: { deletedAt: null, deliveryDate: { gte: gridStart, lte: gridEnd } },
-      select: { id: true, slug: true, documentNo: true, deliveryDate: true },
-    }),
-    prisma.purchaseOrder.findMany({
-      where: { deletedAt: null, expectedDate: { gte: gridStart, lte: gridEnd } },
-      select: { id: true, slug: true, documentNo: true, expectedDate: true },
-    }),
-    prisma.recurringTransaction.findMany({
-      where: { deletedAt: null, isActive: true, nextRunDate: { gte: gridStart, lte: gridEnd } },
-      select: { id: true, slug: true, name: true, nextRunDate: true },
+      : Promise.resolve([]),
+    canViewSalesOrders
+      ? prisma.salesOrder.findMany({
+          where: { deletedAt: null, deliveryDate: { gte: gridStart, lte: gridEnd } },
+          select: { id: true, slug: true, documentNo: true, deliveryDate: true },
+        })
+      : Promise.resolve([]),
+    canViewPurchaseOrders
+      ? prisma.purchaseOrder.findMany({
+          where: { deletedAt: null, expectedDate: { gte: gridStart, lte: gridEnd } },
+          select: { id: true, slug: true, documentNo: true, expectedDate: true },
+        })
+      : Promise.resolve([]),
+    canManageRecurring
+      ? prisma.recurringTransaction.findMany({
+          where: { deletedAt: null, isActive: true, nextRunDate: { gte: gridStart, lte: gridEnd } },
+          select: { id: true, slug: true, name: true, nextRunDate: true },
+        })
+      : Promise.resolve([]),
+    prisma.holiday.findMany({
+      where: { date: { gte: gridStart, lte: gridEnd } },
+      select: { id: true, name: true, date: true },
     }),
   ])
 
-  const events = new Map<string, CalendarEvent[]>()
-  const push = (event: CalendarEvent) => {
-    const key = toDayKey(event.date)
-    events.set(key, [...(events.get(key) ?? []), event])
-  }
+  const events: SerializedCalendarEvent[] = []
 
   for (const invoice of invoices) {
-    push({ date: invoice.date, kind: "invoice", label: salesInvoiceLabel(invoice), amount: Number(invoice.grandTotal), href: `/penjualan/faktur/${invoice.slug ?? invoice.id}` })
+    const label = salesInvoiceLabel(invoice)
+    const href = `/penjualan/faktur/${invoice.slug ?? invoice.id}`
+    const amount = Number(invoice.grandTotal)
+    const amountFormatted = formatCurrencyExact(amount)
+    events.push({
+      id: `inv-${invoice.id}`,
+      dayKey: toDayKey(invoice.date),
+      kind: "invoice",
+      label,
+      amount,
+      amountFormatted,
+      href,
+    })
     if (invoice.dueDate) {
-      push({ date: invoice.dueDate, kind: "invoice-due", label: `Tempo ${salesInvoiceLabel(invoice)}`, amount: Number(invoice.grandTotal), href: `/penjualan/faktur/${invoice.slug ?? invoice.id}` })
+      events.push({
+        id: `inv-due-${invoice.id}`,
+        dayKey: toDayKey(invoice.dueDate),
+        kind: "invoice-due",
+        label: `Tempo ${label}`,
+        amount,
+        amountFormatted,
+        href,
+      })
     }
   }
+
   for (const bill of bills) {
-    push({ date: bill.date, kind: "bill", label: bill.documentNo, amount: Number(bill.grandTotal), href: `/pembelian/tagihan/${bill.slug ?? bill.id}` })
+    const href = `/pembelian/tagihan/${bill.slug ?? bill.id}`
+    events.push({
+      id: `bill-${bill.id}`,
+      dayKey: toDayKey(bill.date),
+      kind: "bill",
+      label: bill.documentNo,
+      amount: Number(bill.grandTotal),
+      href,
+    })
     if (bill.dueDate) {
-      push({ date: bill.dueDate, kind: "bill-due", label: `Tempo ${bill.documentNo}`, amount: Number(bill.grandTotal), href: `/pembelian/tagihan/${bill.slug ?? bill.id}` })
+      events.push({
+        id: `bill-due-${bill.id}`,
+        dayKey: toDayKey(bill.dueDate),
+        kind: "bill-due",
+        label: `Tempo ${bill.documentNo}`,
+        amount: Number(bill.grandTotal),
+        href,
+      })
     }
   }
+
   for (const order of deliveries) {
     if (!order.deliveryDate) continue
-    push({ date: order.deliveryDate, kind: "delivery", label: order.documentNo, amount: null, href: `/penjualan/pesanan/${order.slug ?? order.id}` })
+    events.push({
+      id: `so-${order.id}`,
+      dayKey: toDayKey(order.deliveryDate),
+      kind: "delivery",
+      label: order.documentNo,
+      amount: null,
+      href: `/penjualan/pesanan/${order.slug ?? order.id}`,
+    })
   }
+
   for (const order of expected) {
     if (!order.expectedDate) continue
-    push({ date: order.expectedDate, kind: "expected", label: order.documentNo, amount: null, href: `/pembelian/pesanan/${order.slug ?? order.id}` })
+    events.push({
+      id: `po-${order.id}`,
+      dayKey: toDayKey(order.expectedDate),
+      kind: "expected",
+      label: order.documentNo,
+      amount: null,
+      href: `/pembelian/pesanan/${order.slug ?? order.id}`,
+    })
   }
+
   for (const schedule of recurring) {
-    push({ date: schedule.nextRunDate, kind: "recurring", label: schedule.name, amount: null, href: `/pengaturan/transaksi-berulang` })
+    events.push({
+      id: `rec-${schedule.id}`,
+      dayKey: toDayKey(schedule.nextRunDate),
+      kind: "recurring",
+      label: schedule.name,
+      amount: null,
+      href: `/pengaturan/transaksi-berulang`,
+    })
   }
+
+  for (const holiday of holidays) {
+    events.push({
+      id: `hol-${holiday.id}`,
+      dayKey: toDayKey(holiday.date),
+      kind: "holiday",
+      label: holiday.name,
+      amount: null,
+      href: `/sdm/kalender-kerja`,
+    })
+  }
+
+  const availableKinds: CalendarEventKind[] = [
+    ...(canSeeAr ? (["invoice", "invoice-due"] as CalendarEventKind[]) : []),
+    ...(canSeeAp ? (["bill", "bill-due"] as CalendarEventKind[]) : []),
+    ...(canViewSalesOrders ? (["delivery"] as CalendarEventKind[]) : []),
+    ...(canViewPurchaseOrders ? (["expected"] as CalendarEventKind[]) : []),
+    ...(canManageRecurring ? (["recurring"] as CalendarEventKind[]) : []),
+    "holiday",
+  ]
+
+  const serializedWeeks: SerializedCalendarDay[][] = weeks.map((week) =>
+    week.map((day) => ({
+      key: day.key,
+      dayNumber: day.date.getDate(),
+      inMonth: day.inMonth,
+      isToday: day.isToday,
+      fullDateLabel: day.date.toLocaleDateString("id-ID", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }),
+    })),
+  )
+
+  const todayDay = serializedWeeks.flat().find((d) => d.isToday)
+  const firstInMonthDay = serializedWeeks.flat().find((d) => d.inMonth)
+  const inMonthEventKeys = new Set(
+    events
+      .map((e) => e.dayKey)
+      .filter((k) => serializedWeeks.flat().some((d) => d.inMonth && d.key === k)),
+  )
+  const firstEventDay = serializedWeeks
+    .flat()
+    .find((d) => d.inMonth && inMonthEventKeys.has(d.key))
+  const defaultSelectedDayKey =
+    todayDay?.key ?? firstEventDay?.key ?? firstInMonthDay?.key ?? serializedWeeks[0][0].key
 
   const prev = previousMonth(year, month)
   const next = nextMonth(year, month)
-  const monthLink = (target: { year: number; month: number }) => `/kalender/bulan/${monthParam(target.year, target.month)}`
+  const monthLink = (target: { year: number; month: number }) =>
+    `/kalender/bulan/${monthParam(target.year, target.month)}`
 
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Kalender" }]} />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">{MONTH_LABELS[month]} {year}</h1>
-        <div className="flex items-center gap-2">
-          <Link href={monthLink(prev)} className="px-3 py-2 rounded-lg text-sm border border-default hover:bg-surface-muted">← Sebelumnya</Link>
-          <Link href="/kalender" className="px-3 py-2 rounded-lg text-sm border border-default hover:bg-surface-muted">Bulan ini</Link>
-          <Link href={monthLink(next)} className="px-3 py-2 rounded-lg text-sm border border-default hover:bg-surface-muted">Berikutnya →</Link>
+        <div>
+          <h1 className="text-xl font-bold text-foreground sm:text-2xl text-balance">
+            {MONTH_LABELS[month]} {year}
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5 text-pretty">
+            Jadwal transaksi keuangan, jatuh tempo, logistik, transaksi berulang, dan hari libur perusahaan
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center">
+          <Link
+            href={monthLink(prev)}
+            className="inline-flex items-center justify-center px-2.5 sm:px-3 py-2 min-h-11 sm:min-h-9 rounded-lg text-xs sm:text-sm font-medium border border-default bg-surface hover:bg-surface-muted transition-colors whitespace-nowrap"
+          >
+            ← Sebelumnya
+          </Link>
+          <Link
+            href="/kalender"
+            className="inline-flex items-center justify-center px-2.5 sm:px-3 py-2 min-h-11 sm:min-h-9 rounded-lg text-xs sm:text-sm font-medium border border-default bg-surface hover:bg-surface-muted transition-colors whitespace-nowrap"
+          >
+            Bulan ini
+          </Link>
+          <Link
+            href={monthLink(next)}
+            className="inline-flex items-center justify-center px-2.5 sm:px-3 py-2 min-h-11 sm:min-h-9 rounded-lg text-xs sm:text-sm font-medium border border-default bg-surface hover:bg-surface-muted transition-colors whitespace-nowrap"
+          >
+            Berikutnya →
+          </Link>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 text-xs">
-        {(Object.keys(KIND_STYLES) as EventKind[]).map((kind) => (
-          <span key={kind} className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 ${KIND_STYLES[kind].chip}`}>
-            {KIND_STYLES[kind].label}
-          </span>
-        ))}
-      </div>
-
-      <div className="overflow-x-auto -mx-1 px-1 sm:mx-0 sm:px-0 sm:overflow-visible">
-        <div className="min-w-[560px] sm:min-w-0 rounded-xl border border-default overflow-hidden">
-        <div className="grid grid-cols-7 bg-surface-muted border-b border-default">
-          {WEEKDAY_LABELS.map((day, index) => (
-            <div key={day} className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <span className="hidden sm:inline">{day}</span>
-              <span className="sm:hidden">{["M", "S", "S", "R", "K", "J", "S"][index]}</span>
-            </div>
-          ))}
-        </div>
-        {weeks.map((week, weekIndex) => (
-          <div key={weekIndex} className="grid grid-cols-7 border-b border-default last:border-b-0">
-            {week.map((day) => {
-              const dayEvents = events.get(day.key) ?? []
-              return (
-                <div
-                  key={day.key}
-                  className={`min-h-[72px] p-1 sm:min-h-[110px] sm:p-1.5 border-r border-default last:border-r-0 flex flex-col gap-1 ${day.inMonth ? "bg-surface" : "bg-surface-muted/40"}`}
-                >
-                  <span className={`text-xs font-semibold ${day.isToday ? "inline-flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground" : day.inMonth ? "text-foreground" : "text-muted-foreground"}`}>
-                    {day.date.getDate()}
-                  </span>
-                  {dayEvents.slice(0, 3).map((event, index) => (
-                    <Link
-                      key={`${event.kind}-${event.label}-${index}`}
-                      href={event.href}
-                      title={`${KIND_STYLES[event.kind].label}: ${event.label}${event.amount !== null ? ` — ${formatCurrencyExact(event.amount)}` : ""}`}
-                      className={`truncate rounded border px-1.5 py-0.5 text-[11px] leading-tight max-sm:hidden ${KIND_STYLES[event.kind].chip}`}
-                    >
-                      {event.label}
-                    </Link>
-                  ))}
-                  {dayEvents.length > 0 && (
-                    <span className="text-[10px] font-medium text-primary sm:hidden">
-                      {dayEvents.length} acr
-                    </span>
-                  )}
-                  {dayEvents.length > 3 && (
-                    <span className="text-[11px] text-muted-foreground max-sm:hidden">+{dayEvents.length - 3} lagi</span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        ))}
-        </div>
-      </div>
+      <CalendarBoard
+        weeks={serializedWeeks}
+        events={events}
+        availableKinds={availableKinds}
+        canViewArSummary={canSeeAr}
+        canViewApSummary={canSeeAp}
+        defaultSelectedDayKey={defaultSelectedDayKey}
+      />
     </div>
   )
 }

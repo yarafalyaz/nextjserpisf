@@ -9,14 +9,7 @@ import { deleteAssetBrand } from "@/actions/asset.actions";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
-import {
-  DetailTable,
-  DetailTableHead,
-  DetailTableTh,
-  DetailTableBody,
-  DetailTableRow,
-  DetailTableTd,
-} from "@/components/ui/detail-table";
+import { AssetBrandModelsTable } from "./_components/asset-brand-models-table";
 import { Pencil } from "@/components/ui/fontawesome-icons";
 
 import type { Metadata } from "next";
@@ -59,7 +52,7 @@ export default async function AssetBrandDetailPage({
         actions={
           <>
             <CanCreate permission="edit_asset_brands">
-              <Button href={entityEditHref("/aset/merek", brand)} variant="primary">
+              <Button href={entityEditHref("/aset/merek", brand)} variant="primary" className="min-h-11 sm:min-h-9">
                 <Pencil size={14} /> Ubah
               </Button>
             </CanCreate>
@@ -86,20 +79,13 @@ export default async function AssetBrandDetailPage({
           {brand.models.length === 0 ? (
             <EmptyState title="Belum ada model" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Nama Model</DetailTableTh>
-                <DetailTableTh>Dibuat</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {brand.models.map((model) => (
-                  <DetailTableRow key={model.id}>
-                    <DetailTableTd>{model.name}</DetailTableTd>
-                    <DetailTableTd>{formatDate(model.createdAt)}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <AssetBrandModelsTable
+              data={brand.models.map((model) => ({
+                id: model.id,
+                name: model.name,
+                createdAt: model.createdAt.toISOString(),
+              }))}
+            />
           )}
         </div>
       </div>

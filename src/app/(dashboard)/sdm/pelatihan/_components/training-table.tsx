@@ -72,6 +72,7 @@ export function TrainingTable({ data }: { data: TrainingRow[] }) {
       data={data}
       columns={columns}
       ariaLabel="Daftar pelatihan dan pengembangan SDM"
+      selectable={false}
     />
   )
 }

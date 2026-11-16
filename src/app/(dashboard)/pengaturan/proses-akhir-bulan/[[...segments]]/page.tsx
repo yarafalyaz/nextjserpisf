@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/shadcn/badge"
 import { requirePermission } from "@/lib/auth/permissions"
 import { notFound, redirect } from "next/navigation"
 import { loadPeriodClose } from "@/lib/settings/period-close-data"
-import { parsePathFilterSegments } from "@/lib/utils/path-filters"
+import { buildPathFilterHref, parsePathFilterSegments } from "@/lib/utils/path-filters"
 import { PeriodClosePanel } from "../_components/period-close-panel"
 import { getYearEndClosingPreview } from "@/lib/reports/year-end-closing-data"
 import { YearEndClosingPanel } from "../_components/year-end-closing-panel"
@@ -26,8 +26,6 @@ export default async function PeriodClosePage({
   await requirePermission("manage_settings")
 
   const params = await searchParams
-  // Tautan lama `?periode=YYYY-MM` diarahkan ke bentuk path.
-  if (params.periode) redirect(`/pengaturan/proses-akhir-bulan/periode/${params.periode}`)
 
   const { segments } = await routeParams
   const filters = parsePathFilterSegments(segments, {
@@ -36,11 +34,17 @@ export default async function PeriodClosePage({
   })
   if (!filters) notFound()
 
-  const { month, result } = await loadPeriodClose(filters.periode)
-  // Tautan lama `?tahun=YYYY` diarahkan ke bentuk path `tahun/<yyyy>`.
-  if (params.tahun !== undefined) {
-    redirect(`/pengaturan/proses-akhir-bulan/tahun/${params.tahun}`)
+  // Tautan lama `?periode=YYYY-MM` atau `?tahun=YYYY` diarahkan ke bentuk path.
+  if (params.periode || params.tahun !== undefined) {
+    redirect(
+      buildPathFilterHref("/pengaturan/proses-akhir-bulan", {
+        periode: params.periode ?? filters.periode,
+        tahun: params.tahun ?? filters.tahun,
+      })
+    )
   }
+
+  const { month, result } = await loadPeriodClose(filters.periode)
   const parsedYear = Number(filters.tahun)
   const fiscalYear =
     /^\d{4}$/.test(filters.tahun ?? "") && parsedYear >= 1900 && parsedYear <= 2200
@@ -66,7 +70,7 @@ export default async function PeriodClosePage({
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Proses Akhir Bulan</h1>
         <p className="text-sm text-muted-foreground">
-          Periksa kesiapan dan tutup periode akuntansi. Menutup periode memasang tanggal kunci —
+          Periksa kesiapan dan tutup periode akuntansi. Menutup periode memasang tanggal kunci:
           jurnal bertanggal pada atau sebelum tanggal itu tidak bisa lagi diposting atau diubah.
         </p>
       </div>
@@ -117,7 +121,7 @@ export default async function PeriodClosePage({
           <CardDescription>
             {result.alreadyClosed
               ? "Bulan ini sudah tercakup kunci periode yang berlaku."
-              : "Menutup periode tidak membatalkan dokumen apa pun — hanya mencegah posting bertanggal di dalamnya."}
+              : "Menutup periode tidak membatalkan dokumen apa pun, hanya mencegah posting bertanggal di dalamnya."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -127,6 +131,7 @@ export default async function PeriodClosePage({
             monthEnd={monthEnd}
             currentLockDate={result.currentLockDate}
             alreadyClosed={result.alreadyClosed}
+            fiscalYear={filters.tahun}
           />
           <p className="mt-3 flex items-start gap-1.5 text-xs text-muted-foreground">
             <Info className="mt-0.5 size-3.5 shrink-0" />
@@ -163,6 +168,7 @@ export default async function PeriodClosePage({
         <CardContent>
           <YearEndClosingPanel
             preview={{ ...yearEndPreview, closingDate: yearEndPreview.closingDate.toISOString() }}
+            periode={filters.periode}
           />
         </CardContent>
       </Card>

@@ -13,6 +13,7 @@ import { getSystemSettings } from "@/lib/utils/settings"
 import { loadReturnVatAmounts } from "@/lib/reports/tax-summary-data"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
+import { SptAmendmentSopDialog } from "@/components/reports/spt-amendment-sop-dialog"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
@@ -114,7 +115,7 @@ export default async function VatReconciliationPage({
         defaultEndDate={toLocalDateOnly(endDate)}
       />
 </>} actions={<>
-<div className="flex items-center justify-end print:hidden"><ExportButtons title="Rekonsiliasi_PPN" pdfHref={buildReportPdfHref("rekonsiliasi-ppn", period.slug)} /></div>
+<div className="flex flex-wrap items-center justify-end gap-2 print:hidden"><SptAmendmentSopDialog /><ExportButtons title="Rekonsiliasi_PPN" pdfHref={buildReportPdfHref("rekonsiliasi-ppn", period.slug)} /></div>
 </>}>
 
 

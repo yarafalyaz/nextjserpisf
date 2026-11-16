@@ -7,6 +7,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { CanCreate } from "@/components/auth/can-create"
 import { PageHeader } from "@/components/ui/page-header"
+import { FormSelect } from "@/components/ui/form-select"
 import { AppSearchField } from "@/components/ui/search-field"
 import { WarrantyClaimList } from "./_components/warranty-claim-list"
 import { getWarrantyExpiryQueue } from "@/lib/reports/warranty-expiry-queue-data"
@@ -211,19 +212,15 @@ export default async function WarrantyClaimsPage({
                 >
                   Status Klaim
                 </label>
-                <div className="relative">
-                  <select
+                <div className="min-w-44">
+                  <FormSelect
                     id="warranty-status-filter"
                     name="status"
                     defaultValue={status}
-                    className="min-h-11 rounded-lg border border-default bg-surface px-3 py-2 pr-8 text-sm text-foreground shadow-xs transition-colors hover:border-primary/50 focus:border-primary focus:outline-hidden"
-                  >
-                    {STATUS_FILTERS.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
+                    options={STATUS_FILTERS}
+                    placeholder="Semua status"
+                    aria-label="Status Klaim"
+                  />
                 </div>
               </div>
               <input type="hidden" name="cari" defaultValue={cari} />
@@ -264,18 +261,18 @@ export default async function WarrantyClaimsPage({
                 <Clock className="h-3 w-3" aria-hidden="true" />
                 <span>Depan (hari)</span>
               </label>
-              <select
-                id="warranty-window-ahead"
-                name="jendelaDepan"
-                defaultValue={String(expiryQueue.windowAheadDays)}
-                className="min-h-11 rounded-lg border border-default bg-surface px-3 py-2 text-sm font-mono tabular-nums text-foreground shadow-xs transition-colors hover:border-primary/50 focus:border-primary focus:outline-hidden"
-              >
-                {WARRANTY_EXPIRY_WINDOW_CHOICES.map((d) => (
-                  <option key={d} value={d}>
-                    {d} hari
-                  </option>
-                ))}
-              </select>
+              <div className="w-32">
+                <FormSelect
+                  id="warranty-window-ahead"
+                  name="jendelaDepan"
+                  defaultValue={String(expiryQueue.windowAheadDays)}
+                  options={WARRANTY_EXPIRY_WINDOW_CHOICES.map((d) => ({
+                    value: String(d),
+                    label: `${d} hari`,
+                  }))}
+                  aria-label="Depan (hari)"
+                />
+              </div>
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -286,18 +283,18 @@ export default async function WarrantyClaimsPage({
                 <Calendar className="h-3 w-3" aria-hidden="true" />
                 <span>Lampau (hari)</span>
               </label>
-              <select
-                id="warranty-window-past"
-                name="jendelaLampau"
-                defaultValue={String(expiryQueue.windowPastDays)}
-                className="min-h-11 rounded-lg border border-default bg-surface px-3 py-2 text-sm font-mono tabular-nums text-foreground shadow-xs transition-colors hover:border-primary/50 focus:border-primary focus:outline-hidden"
-              >
-                {WARRANTY_EXPIRY_WINDOW_CHOICES.map((d) => (
-                  <option key={d} value={d}>
-                    {d} hari
-                  </option>
-                ))}
-              </select>
+              <div className="w-32">
+                <FormSelect
+                  id="warranty-window-past"
+                  name="jendelaLampau"
+                  defaultValue={String(expiryQueue.windowPastDays)}
+                  options={WARRANTY_EXPIRY_WINDOW_CHOICES.map((d) => ({
+                    value: String(d),
+                    label: `${d} hari`,
+                  }))}
+                  aria-label="Lampau (hari)"
+                />
+              </div>
             </div>
 
             {status ? <input type="hidden" name="status" defaultValue={status} /> : null}

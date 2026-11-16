@@ -78,6 +78,10 @@ export function ApprovalTable({ data, total, page, pageSize, filters }: Approval
       data={data}
       columns={columns}
       ariaLabel="Daftar persetujuan"
+      selectable={false}
+      searchColumn="workflowName"
+      searchPlaceholder="Cari alur kerja atau tipe referensi..."
+      searchParam="cari"
       serverPagination={{ total, page, pageSize }}
       filters={filters}
     />

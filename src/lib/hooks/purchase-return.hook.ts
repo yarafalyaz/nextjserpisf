@@ -255,7 +255,7 @@ export async function onPurchaseReturnProcessed(
     // asal; jurnal GL tetap di accounting.hook tanpa kaki PPN.
     {
       const bill = await tx.vendorBill.findFirst({
-        where: { purchaseOrderId: purchaseReturn.purchaseOrderId, status: { not: "cancelled" } },
+        where: { purchaseOrderId: purchaseReturn.purchaseOrderId, status: { notIn: ["cancelled", "draft"] }, deletedAt: null },
         orderBy: { id: "desc" },
         select: { id: true, subtotal: true, discountAmount: true, tax: true },
       });

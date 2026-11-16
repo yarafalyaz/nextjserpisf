@@ -12,7 +12,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth()
-  if (!session?.user?.id) {
+  if (!session?.user?.id || session.user.isActive === false) {
     return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
   try {

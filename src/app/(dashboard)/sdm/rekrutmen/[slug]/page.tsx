@@ -3,18 +3,14 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { notFound } from "next/navigation"
-import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Button } from "@/components/ui/button"
 import { CanCreate } from "@/components/auth/can-create"
 import { EmptyState } from "@/components/ui/empty-state"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { ApplicantForm } from "../_components/applicant-form"
-import {
-  ApplicantStageSelect,
-  HireButton,
-  VacancyStatusButton,
-} from "../_components/applicant-actions"
+import { VacancyStatusButton } from "../_components/applicant-actions"
+import { VacancyApplicantsTable } from "./_components/vacancy-applicants-table"
 
 import type { Metadata } from "next"
 
@@ -24,15 +20,6 @@ const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
   open: "Terbuka",
   closed: "Ditutup",
-}
-
-const STAGE_LABELS: Record<string, string> = {
-  applied: "Melamar",
-  screening: "Seleksi Berkas",
-  interview: "Wawancara",
-  offering: "Penawaran",
-  hired: "Diterima",
-  rejected: "Ditolak",
 }
 
 export default async function VacancyDetailPage({
@@ -57,7 +44,7 @@ export default async function VacancyDetailPage({
               where: { deletedAt: null },
               orderBy: { createdAt: "desc" },
               include: {
-                hiredEmployee: { select: { employeeNo: true, slug: true } },
+                hiredEmployee: { select: { id: true, employeeNo: true, slug: true } },
               },
             },
           },
@@ -72,7 +59,7 @@ export default async function VacancyDetailPage({
               where: { deletedAt: null },
               orderBy: { createdAt: "desc" },
               include: {
-                hiredEmployee: { select: { employeeNo: true, slug: true } },
+                hiredEmployee: { select: { id: true, employeeNo: true, slug: true } },
               },
             },
           },
@@ -132,56 +119,22 @@ export default async function VacancyDetailPage({
           </CanCreate>
         )}
 
-        <div className="overflow-x-auto rounded-lg border border-default">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-default bg-surface-secondary text-left">
-                <th className="px-4 py-3 font-medium">Nama</th>
-                <th className="px-4 py-3 font-medium">Kontak</th>
-                <th className="px-4 py-3 font-medium">Sumber</th>
-                <th className="px-4 py-3 font-medium">Tahapan</th>
-                <th className="px-4 py-3 font-medium">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vacancy.applicants.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8">
-                    <EmptyState title="Belum ada pelamar." className="py-0" />
-                  </td>
-                </tr>
-              )}
-              {vacancy.applicants.map((a) => {
-                const terminal = a.stage === "hired" || a.stage === "rejected"
-                return (
-                  <tr key={a.id} className="border-b border-default last:border-0">
-                    <td className="px-4 py-3 font-medium">{a.name}</td>
-                    <td className="px-4 py-3">{[a.email, a.phone].filter(Boolean).join(" · ") || "-"}</td>
-                    <td className="px-4 py-3">{a.source ?? "-"}</td>
-                    <td className="px-4 py-3">
-                      {terminal ? (
-                        STAGE_LABELS[a.stage]
-                      ) : (
-                        <ApplicantStageSelect applicantId={a.id} stage={a.stage} disabled={false} canEdit={canEdit} />
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {a.stage === "hired" && a.hiredEmployee ? (
-                        <Link href={`/master/karyawan/${a.hiredEmployee.slug ?? ""}`} className="hover:underline font-mono text-xs">
-                          {a.hiredEmployee.employeeNo}
-                        </Link>
-                      ) : a.stage === "offering" || a.stage === "interview" || a.stage === "screening" || a.stage === "applied" ? (
-                        <HireButton applicantId={a.id} disabled={false} canEdit={canEdit} />
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        {vacancy.applicants.length === 0 ? (
+          <EmptyState title="Belum ada pelamar." className="py-10" />
+        ) : (
+          <VacancyApplicantsTable
+            data={vacancy.applicants.map((a) => ({
+              id: a.id,
+              name: a.name,
+              email: a.email,
+              phone: a.phone,
+              source: a.source,
+              stage: a.stage,
+              hiredEmployee: a.hiredEmployee,
+            }))}
+            canEdit={canEdit}
+          />
+        )}
       </section>
     </div>
   )

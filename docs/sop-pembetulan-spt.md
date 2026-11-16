@@ -125,14 +125,14 @@ Pembetulan SPT sering berarti angka yang dulu diposting memang keliru. Koreksiny
 
 ## 8. Yang dilarang (daftar periksa cepat)
 
-- [ ] Membuka period lock (`periodLockDate`) untuk alasan pembetulan apa pun.
-- [ ] Mengedit/menghapus jurnal `POSTED` atau dokumen masa terkunci agar “sesuai SPT baru”.
-- [ ] Menyampaikan hanya baris berubah (pola *delta*) untuk pembetulan *replace* masa ≥2025 yang disampaikan ≥ 1 Okt 2026.
-- [ ] Memakai paket *replace* untuk masa <2025 atau penyampaian sebelum 1 Okt 2026.
-- [ ] Membuat jurnal agar saldo buku tampil sama dengan saldo kompensasi Coretax.
-- [ ] Menimpa catatan versi/BPE sebelumnya.
-- [ ] Menyampaikan ke Coretax sebelum tie-out CSV vs PDF = Rp0,00.
-- [ ] Mengarang nomor BPE, saldo kompensasi, atau angka Coretax — semua angka Coretax di register adalah **salinan dari Coretax**, bukan hitungan/ingatan staf.
+- Membuka period lock (`periodLockDate`) untuk alasan pembetulan apa pun.
+- Mengedit/menghapus jurnal `POSTED` atau dokumen masa terkunci agar “sesuai SPT baru”.
+- Menyampaikan hanya baris berubah (pola *delta*) untuk pembetulan *replace* masa ≥2025 yang disampaikan ≥ 1 Okt 2026.
+- Memakai paket *replace* untuk masa <2025 atau penyampaian sebelum 1 Okt 2026.
+- Membuat jurnal agar saldo buku tampil sama dengan saldo kompensasi Coretax.
+- Menimpa catatan versi/BPE sebelumnya.
+- Menyampaikan ke Coretax sebelum tie-out CSV vs PDF = Rp0,00.
+- Mengarang nomor BPE, saldo kompensasi, atau angka Coretax — semua angka Coretax di register adalah **salinan dari Coretax**, bukan hitungan/ingatan staf.
 
 ## 9. Arsip per masa (satu map per jenis SPT + masa)
 
@@ -144,9 +144,10 @@ Pembetulan SPT sering berarti angka yang dulu diposting memang keliru. Koreksiny
 
 ## 10. Rujukan silang
 
-- Halaman laporan pajak (`/laporan/pajak`, `/laporan/faktur-ppn`, `/laporan/rekonsiliasi-ppn`) **perlu tautan teks ke SOP ini** (“SOP Pembetulan SPT” → berkas ini). Itu pekerjaan kartu frontend kecil tersendiri — **tidak dibuat dalam kartu SOP ini**; minta ke bot-frontend/bot-pr-git sebagai kartu lanjutan kecil (teks tautan saja, tanpa perubahan logika laporan).
-- Paket data yang dirujuk §4 adalah R2 (export CSV paket pembetulan *replace*) dan nomor faktur pajak R1 dari riset t_08e20833; sebelum keduanya tersedia, paket disusun manual dari laporan `faktur-ppn`/`pajak`/`bukti-potong-pph` masa yang sama dengan tie-out yang sama (§4 langkah 3 tetap wajib).
-- Register versi + saldo kompensasi yang dirujuk §5–§6 adalah R4 (`SptFiling`, P1). Sampai R4 tersedia, catatan manual §5 adalah prosedur resmi, bukan improvisasi.
+- [x] Halaman laporan pajak (`/laporan/pajak`, `/laporan/faktur-ppn`, `/laporan/rekonsiliasi-ppn`) menampilkan tombol dialog **SOP Pembetulan SPT** (`SptAmendmentSopDialog` di `src/components/reports/spt-amendment-sop-dialog.tsx`).
+- [x] **R2 — Paket CSV pembetulan *replace* (`PEMBETULAN-REPLACE`)**: tombol **Ekspor CSV Replace** (`SptReplaceExportButton` di `src/components/reports/spt-replace-export-button.tsx`, builder `buildSptReplaceCsv` di `src/lib/reports/spt-replace-export.ts`) terpasang di `/laporan/faktur-ppn`, menegakkan gerbang PER-12/PJ/2026 (masa ≥2025 dan lapor ≥ 1 Okt 2026) serta tie-out otomatis DPP & PPN terhadap data laporan.
+- [x] **R4 — Register versi & saldo kompensasi (`SptFiling`)**: tersedia di `/keuangan/register-spt` (model `SptFiling` di `prisma/schema.prisma`, server action append-only `createSptFiling` di `src/actions/spt-filing.actions.ts`), mencatat versi (`Normal`, `Pembetulan-1`, dst.), nomor BPE, kurang/lebih bayar, dan saldo kompensasi Coretax tanpa memposting jurnal GL maupun tunduk pada period lock.
+- [x] **Skill domain akuntan pajak lokal**: tersedia di `.agents/skills/indonesian-tax-accountant/SKILL.md` sebagai acuan agen untuk aturan PER-12/PJ/2026, tie-out, dan invarian pembukuan YaraERP.
 
 ## Sources
 

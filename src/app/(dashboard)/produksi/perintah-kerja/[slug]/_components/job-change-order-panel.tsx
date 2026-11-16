@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import {
   createJobChangeOrder,
@@ -20,6 +20,10 @@ import { formatCurrencyExact } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { FormSelect } from "@/components/ui/form-select"
+import { Input } from "@/components/ui/shadcn/input"
+import { DataTable } from "@/components/ui/data-table"
+import { createColumnHelper } from "@/lib/table"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import { cn } from "@/lib/utils"
 
@@ -127,6 +131,8 @@ function toLines(drafts: DraftLine[]): ChangeOrderLineInput[] {
  * Quotation.grandTotal (BR-CO-01) — selisihNilai hanya info persetujuan.
  * Disable tombol mengikuti matriks transisi builder job-change-order.ts.
  */
+const coItemColumnHelper = createColumnHelper<ChangeOrderItemRow>()
+
 export function JobChangeOrderPanel({
   workOrderId,
   workOrderStatus,
@@ -161,6 +167,57 @@ export function JobChangeOrderPanel({
     hasQuotation && ["pending", "in_progress", "completed"].includes(workOrderStatus)
   const hasActive = changeOrders.some((co) =>
     ["draft", "menunggu_pelanggan", "disetujui"].includes(co.status),
+  )
+
+  const coItemColumns = useMemo(
+    () => [
+      coItemColumnHelper.accessor("action", {
+        header: "Aksi",
+        cell: (info) => (
+          <span className="capitalize text-foreground">{info.getValue()}</span>
+        ),
+      }),
+      coItemColumnHelper.accessor("itemId", {
+        header: "Barang",
+        meta: { mobilePrimary: true },
+        cell: (info) => {
+          const it = info.row.original
+          return (
+            <span className="font-medium text-foreground">
+              {it.description || itemNameById[it.itemId] || `Barang #${it.itemId}`}
+            </span>
+          )
+        },
+      }),
+      coItemColumnHelper.accessor("qtyBefore", {
+        header: "Qty sebelum",
+        meta: { align: "right" },
+        cell: (info) => (
+          <span className="font-mono tabular-nums text-foreground">
+            {info.getValue() ?? "-"}
+          </span>
+        ),
+      }),
+      coItemColumnHelper.accessor("qtyAfter", {
+        header: "Qty sesudah",
+        meta: { align: "right" },
+        cell: (info) => (
+          <span className="font-mono tabular-nums text-foreground">
+            {info.getValue() ?? "-"}
+          </span>
+        ),
+      }),
+      coItemColumnHelper.accessor("unitPriceAfter", {
+        header: "Harga sesudah",
+        meta: { align: "right" },
+        cell: (info) => (
+          <span className="font-mono tabular-nums text-foreground">
+            {info.getValue() != null ? formatCurrencyExact(info.getValue()!) : "-"}
+          </span>
+        ),
+      }),
+    ],
+    [itemNameById],
   )
 
   function run(
@@ -279,7 +336,7 @@ export function JobChangeOrderPanel({
       <div className="p-4 px-5 flex flex-col gap-4">
         {!hasQuotation ? (
           <p role="note" className="text-sm text-muted-foreground">
-            Perintah kerja tanpa penawaran tertaut tidak dapat dibuatkan change order — tidak ada sumber nilai kontrak tunggal.
+            Perintah kerja tanpa penawaran tertaut tidak dapat dibuatkan change order - tidak ada sumber nilai kontrak tunggal.
           </p>
         ) : !["pending", "in_progress", "completed"].includes(workOrderStatus) ? (
           <p role="note" className="text-sm text-muted-foreground">
@@ -331,30 +388,15 @@ export function JobChangeOrderPanel({
                     <p role="note" className="text-xs text-muted-foreground">{co.appliedNote}</p>
                   ) : null}
                   {co.items.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-left text-xs text-muted-foreground">
-                            <th className="py-1 pr-2 font-medium">Aksi</th>
-                            <th className="py-1 pr-2 font-medium">Barang</th>
-                            <th className="py-1 pr-2 font-medium text-right">Qty sebelum</th>
-                            <th className="py-1 pr-2 font-medium text-right">Qty sesudah</th>
-                            <th className="py-1 font-medium text-right">Harga sesudah</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {co.items.map((it) => (
-                            <tr key={it.id} className="border-t border-default">
-                              <td className="py-1 pr-2 capitalize">{it.action}</td>
-                              <td className="py-1 pr-2">{it.description || itemNameById[it.itemId] || `Barang #${it.itemId}`}</td>
-                              <td className="py-1 pr-2 text-right">{it.qtyBefore ?? "—"}</td>
-                              <td className="py-1 pr-2 text-right">{it.qtyAfter ?? "—"}</td>
-                              <td className="py-1 text-right">{it.unitPriceAfter != null ? formatCurrencyExact(it.unitPriceAfter) : "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <DataTable
+                      data={co.items}
+                      columns={coItemColumns}
+                      ariaLabel={`Baris Change Order ${co.documentNo}`}
+                      selectable={false}
+                      enableColumnToggle={false}
+                      enableExport={false}
+                      pageSize={50}
+                    />
                   ) : null}
                   <div className="flex flex-wrap gap-2 pt-1">
                     {canEditLines ? (
@@ -396,7 +438,7 @@ export function JobChangeOrderPanel({
 
         {formOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label={editingId ? "Ubah baris change order" : "Buat change order"}>
-            <div className="w-full max-w-2xl max-h-[90dvh] overflow-y-auto rounded-xl border border-default bg-surface p-5 shadow-lg flex flex-col gap-4">
+            <div className="w-full max-w-2xl max-h-[90dvh] overflow-y-auto rounded-xl border border-default bg-surface p-5 shadow-sm flex flex-col gap-4">
               <h3 className="text-base font-semibold text-foreground">{editingId ? "Ubah Baris Change Order" : "Buat Change Order"}</h3>
               <div className="flex flex-col gap-1">
                 <label htmlFor="co-reason" className="text-sm font-medium text-foreground">
@@ -409,7 +451,7 @@ export function JobChangeOrderPanel({
                   required
                   aria-required="true"
                   rows={2}
-                  className="rounded-lg border border-default bg-background px-3 py-2 text-sm"
+                  className="rounded-lg border border-default bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
               <div className="flex flex-col gap-2">
@@ -417,69 +459,72 @@ export function JobChangeOrderPanel({
                   <div key={line.key} className="flex flex-wrap items-end gap-2 rounded-lg border border-default p-2">
                     <span className="text-xs font-medium capitalize text-muted-foreground">{line.action}</span>
                     {line.action === "tambah" ? (
-                      <label className="flex flex-col gap-1 text-xs">
-                        Barang
-                        <select
+                      <div className="flex flex-col gap-1 text-xs min-w-52">
+                        <span>Barang</span>
+                        <FormSelect
                           aria-label="Barang baris tambah"
-                          value={line.itemId}
-                          onChange={(e) => {
-                            const item = inventoryItems.find((i) => i.id === Number(e.target.value))
-                            patchLine(line.key, { itemId: Number(e.target.value), unitPriceAfter: item ? String(item.price) : line.unitPriceAfter })
-                          }}
-                          className="min-h-11 rounded-lg border border-default bg-background px-2 text-sm"
-                        >
-                          {inventoryItems.map((i) => (
-                            <option key={i.id} value={i.id}>{i.label}</option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : (
-                      <label className="flex flex-col gap-1 text-xs">
-                        Baris perintah kerja
-                        <select
-                          aria-label="Baris perintah kerja"
-                          value={line.workOrderItemId ?? ""}
-                          onChange={(e) => {
-                            const wo = workOrderItems.find((w) => w.workOrderItemId === Number(e.target.value))
+                          value={String(line.itemId)}
+                          onValueChange={(v) => {
+                            const id = Number(v)
+                            const item = inventoryItems.find((i) => i.id === id)
                             patchLine(line.key, {
-                              workOrderItemId: Number(e.target.value),
+                              itemId: id,
+                              unitPriceAfter: item ? String(item.price) : line.unitPriceAfter,
+                            })
+                          }}
+                          options={inventoryItems.map((i) => ({
+                            value: String(i.id),
+                            label: i.label,
+                          }))}
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-1 text-xs min-w-52">
+                        <span>Baris perintah kerja</span>
+                        <FormSelect
+                          aria-label="Baris perintah kerja"
+                          value={line.workOrderItemId != null ? String(line.workOrderItemId) : ""}
+                          onValueChange={(v) => {
+                            const woId = Number(v)
+                            const wo = workOrderItems.find((w) => w.workOrderItemId === woId)
+                            patchLine(line.key, {
+                              workOrderItemId: woId,
                               itemId: wo?.itemId ?? line.itemId,
                               qtyAfter: wo ? String(wo.qty) : line.qtyAfter,
                               unitPriceAfter: wo ? String(wo.cost) : line.unitPriceAfter,
                             })
                           }}
-                          className="min-h-11 rounded-lg border border-default bg-background px-2 text-sm"
-                        >
-                          {workOrderItems.map((w) => (
-                            <option key={w.workOrderItemId} value={w.workOrderItemId}>{w.label}</option>
-                          ))}
-                        </select>
-                      </label>
+                          options={workOrderItems.map((w) => ({
+                            value: String(w.workOrderItemId),
+                            label: w.label,
+                          }))}
+                        />
+                      </div>
                     )}
                     {line.action !== "hapus" ? (
                       <>
                         <label className="flex flex-col gap-1 text-xs">
                           Qty sesudah
-                          <input
+                          <Input
                             type="number"
                             min={0}
                             step="any"
                             aria-label="Qty sesudah"
                             value={line.qtyAfter}
                             onChange={(e) => patchLine(line.key, { qtyAfter: e.target.value })}
-                            className="min-h-11 w-24 rounded-lg border border-default bg-background px-2 text-sm"
+                            className="min-h-11 sm:min-h-9 w-24 font-mono tabular-nums text-sm"
                           />
                         </label>
                         <label className="flex flex-col gap-1 text-xs">
                           Harga sesudah (Rp)
-                          <input
+                          <Input
                             type="number"
                             min={0}
                             step="any"
                             aria-label="Harga sesudah"
                             value={line.unitPriceAfter}
                             onChange={(e) => patchLine(line.key, { unitPriceAfter: e.target.value })}
-                            className="min-h-11 w-32 rounded-lg border border-default bg-background px-2 text-sm"
+                            className="min-h-11 sm:min-h-9 w-32 font-mono tabular-nums text-sm"
                           />
                         </label>
                       </>
@@ -515,7 +560,7 @@ export function JobChangeOrderPanel({
 
         {approvalFor ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Catat persetujuan pelanggan">
-            <div className="w-full max-w-lg rounded-xl border border-default bg-surface p-5 shadow-lg flex flex-col gap-4">
+            <div className="w-full max-w-lg rounded-xl border border-default bg-surface p-5 shadow-sm flex flex-col gap-4">
               <h3 className="text-base font-semibold text-foreground">Catat Persetujuan Pelanggan</h3>
               <div className="flex flex-col gap-1">
                 <label htmlFor="co-approval-ref" className="text-sm font-medium text-foreground">
@@ -562,7 +607,7 @@ export function JobChangeOrderPanel({
 
         {rejectFor ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Catat penolakan pelanggan">
-            <div className="w-full max-w-lg rounded-xl border border-default bg-surface p-5 shadow-lg flex flex-col gap-4">
+            <div className="w-full max-w-lg rounded-xl border border-default bg-surface p-5 shadow-sm flex flex-col gap-4">
               <h3 className="text-base font-semibold text-foreground">Catat Penolakan Pelanggan</h3>
               <div className="flex flex-col gap-1">
                 <label htmlFor="co-reject-reason" className="text-sm font-medium text-foreground">
@@ -575,7 +620,7 @@ export function JobChangeOrderPanel({
                   required
                   aria-required="true"
                   rows={2}
-                  className="rounded-lg border border-default bg-background px-3 py-2 text-sm"
+                  className="rounded-lg border border-default bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
               <div className="flex justify-end gap-2">
@@ -600,7 +645,7 @@ export function JobChangeOrderPanel({
 
         {cancelFor ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Batalkan change order">
-            <div className="w-full max-w-lg rounded-xl border border-default bg-surface p-5 shadow-lg flex flex-col gap-4">
+            <div className="w-full max-w-lg rounded-xl border border-default bg-surface p-5 shadow-sm flex flex-col gap-4">
               <h3 className="text-base font-semibold text-foreground">Batalkan Change Order {cancelFor.documentNo}</h3>
               <div className="flex flex-col gap-1">
                 <label htmlFor="co-cancel-reason" className="text-sm font-medium text-foreground">
@@ -613,7 +658,7 @@ export function JobChangeOrderPanel({
                   required
                   aria-required="true"
                   rows={2}
-                  className="rounded-lg border border-default bg-background px-3 py-2 text-sm"
+                  className="rounded-lg border border-default bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
               <div className="flex justify-end gap-2">

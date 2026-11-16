@@ -39,7 +39,7 @@ export default async function RolesPage({
     }),
   }
 
-  const [rawRoles, totalPermissions, _totalUsersWithRoles] = await Promise.all([
+  const [rawRoles, allRoles, totalPermissions, _totalUsersWithRoles] = await Promise.all([
     prisma.role.findMany({
       where,
       include: {
@@ -48,6 +48,7 @@ export default async function RolesPage({
       },
       orderBy: { name: "asc" },
     }),
+    prisma.role.findMany({ select: { name: true } }),
     prisma.permission.count(),
     prisma.user.count({ where: { roles: { some: {} } } }),
   ])
@@ -63,8 +64,9 @@ export default async function RolesPage({
     createdAt: r.createdAt,
   }))
 
-  const systemRolesCount = roles.filter((r) => r.isSystem).length
-  const customRolesCount = roles.length - systemRolesCount
+  const totalRolesCount = allRoles.length
+  const systemRolesCount = allRoles.filter((r) => SYSTEM_ROLE_NAMES.has(r.name.toLowerCase())).length
+  const customRolesCount = totalRolesCount - systemRolesCount
   const tableData = toPlain(roles)
 
   return (
@@ -105,7 +107,7 @@ export default async function RolesPage({
           </span>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-foreground">
-              {roles.length}
+              {totalRolesCount}
             </span>
             <span className="text-xs text-muted-foreground">profil wewenang</span>
           </div>

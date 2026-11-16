@@ -6,6 +6,7 @@ import { showSuccess, showError } from "@/lib/utils/toast";
 import { createUom, updateUom } from "@/actions/master.actions";
 import { Label } from "@/components/ui/shadcn/label";
 import { Input } from "@/components/ui/shadcn/input";
+import { FormSelect } from "@/components/ui/form-select";
 import { Button } from "@/components/ui/button";
 
 export function UomForm({
@@ -69,16 +70,16 @@ export function UomForm({
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="category">Jenis *</Label>
-          <select
+          <FormSelect
             id="category"
             name="category"
             required
             defaultValue={uom?.category || "barang"}
-            className="h-11 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 cursor-pointer sm:h-9"
-          >
-            <option value="barang">Barang</option>
-            <option value="jasa">Jasa</option>
-          </select>
+            options={[
+              { value: "barang", label: "Barang" },
+              { value: "jasa", label: "Jasa" },
+            ]}
+          />
         </div>
       </div>
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">

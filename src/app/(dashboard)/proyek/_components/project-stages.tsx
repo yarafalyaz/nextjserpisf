@@ -10,14 +10,27 @@ import { Progress } from "@/components/ui/shadcn/progress"
 import { EmptyState } from "@/components/ui/empty-state"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { formatDate } from "@/lib/utils/format"
+import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { computeWeightedStagesProgress } from "@/lib/utils/project-stage-progress"
 import { cn } from "@/lib/utils"
-import { updateProjectStageProgress } from "@/actions/project.actions"
+import { initializeProjectStages, updateProjectStagePlan, updateProjectStageProgress } from "@/actions/project.actions"
+import { AppDatePicker } from "@/components/ui/date-picker"
+import { Input } from "@/components/ui/shadcn/input"
+import { Label } from "@/components/ui/shadcn/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/shadcn/dialog"
 
 interface StageProgress {
   id: number
   percentage: number
   notes: string | null
-  createdAt: Date
+  createdAt: Date | string
 }
 
 interface Stage {
@@ -26,6 +39,9 @@ interface Stage {
   name: string
   sortOrder: number
   status: string
+  weightPct?: number | string | null
+  plannedStartDate?: Date | string | null
+  plannedEndDate?: Date | string | null
   startedAt: Date | string | null
   completedAt: Date | string | null
   notes: string | null
@@ -61,6 +77,13 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
   const [percentage, setPercentage] = useState<number>(0)
   const [isUpdatingProgressOnly, setIsUpdatingProgressOnly] = useState(false)
 
+  const [planDialogOpen, setPlanDialogOpen] = useState(false)
+  const [nowMs] = useState(() => Date.now())
+  const [planStage, setPlanStage] = useState<Stage | null>(null)
+  const [planWeight, setPlanWeight] = useState<string>("")
+  const [planStart, setPlanStart] = useState<string>("")
+  const [planEnd, setPlanEnd] = useState<string>("")
+
   // Determine stage eligibility (all prior stages must be completed or skipped)
   const isStageEligible = (stageIndex: number) => {
     for (let i = 0; i < stageIndex; i++) {
@@ -72,19 +95,35 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
     return true
   }
 
-  // Calculate overall physical progress percentage
-  const overallProgress = stages.length > 0 
-    ? Math.round(
-        stages.reduce((sum, s) => {
-          const recordPercent = s.progress?.[0]?.percentage
-          if (recordPercent !== undefined) return sum + recordPercent
-          
-          if (s.status === "completed" || s.status === "skipped") return sum + 100
-          if (s.status === "in_progress") return sum + 50
-          return sum
-        }, 0) / stages.length
-      )
-    : 0
+  // Calculate overall weighted physical progress percentage
+  const overallProgress = computeWeightedStagesProgress(stages)
+
+  const openPlanDialog = (stage: Stage) => {
+    setPlanStage(stage)
+    setPlanWeight(stage.weightPct != null ? String(Number(stage.weightPct)) : "")
+    setPlanStart(stage.plannedStartDate ? toLocalDateOnly(new Date(stage.plannedStartDate)) : "")
+    setPlanEnd(stage.plannedEndDate ? toLocalDateOnly(new Date(stage.plannedEndDate)) : "")
+    setPlanDialogOpen(true)
+  }
+
+  const handleSavePlan = () => {
+    if (!planStage) return
+    const parsedWeight = planWeight.trim() === "" ? null : Number(planWeight)
+    startTransition(async () => {
+      const res = await updateProjectStagePlan(projectId, planStage.id, {
+        weightPct: parsedWeight,
+        plannedStartDate: planStart || null,
+        plannedEndDate: planEnd || null,
+      })
+      if (!res.success) {
+        showError(res.error ?? "Gagal menyimpan rencana tahap.")
+        return
+      }
+      showSuccess("Rencana jadwal & bobot tahap diperbarui.")
+      setPlanDialogOpen(false)
+      router.refresh()
+    })
+  }
 
   const handleActionClick = (stage: Stage, status: string, isProgressOnly = false) => {
     setSelectedStage(stage)
@@ -163,7 +202,7 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
         <div className="flex items-center gap-4 w-full sm:w-auto sm:min-w-[240px]">
           <div className="text-right shrink-0">
             <span className="text-xs text-muted-foreground font-semibold block">Total Progres</span>
-            <span className="text-2xl font-black text-primary">{overallProgress}%</span>
+            <span className="text-2xl font-black font-mono tabular-nums text-primary">{overallProgress}%</span>
           </div>
           <div className="w-full">
             <Progress value={overallProgress} className="h-2 bg-default/40" />
@@ -174,7 +213,34 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
       {/* Timeline List */}
       <div className="p-5 px-6 pt-2">
         {stages.length === 0 ? (
-          <EmptyState title="Belum ada tahapan diinisialisasi untuk proyek ini." icon={<AlertCircle className="size-8 text-muted-foreground/60 animate-bounce" />} />
+          <div className="flex flex-col items-center gap-3 py-4">
+            <EmptyState
+              title="Belum ada tahapan diinisialisasi untuk proyek ini."
+              icon={<AlertCircle className="size-8 text-muted-foreground/60" aria-hidden="true" />}
+            />
+            {canEdit ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-11 sm:min-h-9"
+                isDisabled={isPending}
+                onClick={() => {
+                  startTransition(async () => {
+                    const res = await initializeProjectStages(projectId)
+                    if (!res.success) {
+                      showError(("error" in res ? res.error : undefined) ?? "Gagal menginisialisasi tahapan.")
+                      return
+                    }
+                    showSuccess("Tahapan default proyek berhasil dibuat.")
+                    router.refresh()
+                  })
+                }}
+              >
+                Inisialisasi Tahapan Default
+              </Button>
+            ) : null}
+          </div>
         ) : (
           <div className="relative border-l-2 border-primary/20 ml-4 pl-6 my-2 flex flex-col gap-8">
             {stages.map((stage, index) => {
@@ -195,7 +261,7 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                       "absolute -left-[35px] top-1.5 size-6 rounded-full border-2 transition-all flex items-center justify-center shadow-sm z-10",
                       isCompleted ? "bg-success border-success text-success-foreground" :
                       isSkipped ? "bg-warning border-warning text-warning-foreground" :
-                      isActive ? "bg-primary border-primary animate-pulse text-primary-foreground" :
+                      isActive ? "bg-primary border-primary text-primary-foreground" :
                       "bg-surface border-default-hover text-muted-foreground"
                     )}
                   >
@@ -216,9 +282,14 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {stage.weightPct != null && Number(stage.weightPct) > 0 ? (
+                          <span className="text-xs font-mono tabular-nums text-muted-foreground px-2 py-0.5 rounded-md bg-muted border border-border">
+                            Bobot {Number(stage.weightPct)}%
+                          </span>
+                        ) : null}
                         <StatusChip status={stage.status} />
-                        <span className="text-xs font-bold text-foreground px-2 py-0.5 rounded-md bg-default border border-default">{currentPercent}%</span>
+                        <span className="text-xs font-bold font-mono tabular-nums text-foreground px-2 py-0.5 rounded-md bg-default border border-default">{currentPercent}%</span>
                       </div>
                     </div>
 
@@ -234,9 +305,27 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                       />
                     </div>
 
-                    {/* Date Details & Duration */}
-                    {(stage.startedAt || stage.completedAt) && (
+                    {/* Date Details, Baseline & Duration */}
+                    {(stage.plannedStartDate || stage.plannedEndDate || stage.startedAt || stage.completedAt) && (
                       <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3.5 text-[11px] text-muted-foreground border-t border-default/30 pt-2.5">
+                        {(stage.plannedStartDate || stage.plannedEndDate) && (
+                          <span className="flex items-center gap-1.5 font-mono tabular-nums">
+                            <Calendar className="size-3 text-muted-foreground" aria-hidden="true" />
+                            Rencana:{" "}
+                            <strong className="text-foreground">
+                              {stage.plannedStartDate ? formatDate(new Date(stage.plannedStartDate)) : "-"}
+                              {" s/d "}
+                              {stage.plannedEndDate ? formatDate(new Date(stage.plannedEndDate)) : "-"}
+                            </strong>
+                            {stage.plannedEndDate &&
+                            !isDone &&
+                            new Date(stage.plannedEndDate).getTime() < nowMs ? (
+                              <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-2xs font-sans font-medium text-destructive">
+                                Terlambat
+                              </span>
+                            ) : null}
+                          </span>
+                        )}
                         {stage.startedAt && (
                           <span className="flex items-center gap-1.5">
                             <Calendar className="size-3 text-primary/70" />
@@ -268,7 +357,16 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
 
                     {/* Interactive Action Buttons */}
                     {canEdit && (
-                      <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2 pt-3 border-t border-default/30">
+                      <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 pt-3 border-t border-default/30">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          isDisabled={isPending}
+                          onClick={() => openPlanDialog(stage)}
+                          className="w-full sm:w-auto text-muted-foreground hover:text-foreground"
+                        >
+                          <Calendar className="size-3 mr-1.5" aria-hidden="true" /> Atur Rencana
+                        </Button>
                         {/* If pending: can start or skip */}
                         {stage.status === "pending" && (
                           <>
@@ -451,6 +549,63 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
           </div>
         </div>
       </ConfirmDialog>
+
+      <Dialog open={planDialogOpen} onOpenChange={setPlanDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rencana Tahap: {planStage?.name}</DialogTitle>
+            <DialogDescription>
+              Atur bobot kontribusi progres (%) dan baseline jadwal untuk pemantauan milestone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="stage-weight-pct">Bobot Tahap (%)</Label>
+              <Input
+                id="stage-weight-pct"
+                type="number"
+                min={0}
+                max={100}
+                step="0.01"
+                value={planWeight}
+                onChange={(e) => setPlanWeight(e.target.value)}
+                placeholder="Kosong = bobot merata"
+                className="font-mono tabular-nums"
+              />
+            </div>
+            <AppDatePicker
+              label="Rencana Mulai"
+              name="plannedStartDate"
+              value={planStart}
+              onChange={setPlanStart}
+            />
+            <AppDatePicker
+              label="Rencana Selesai"
+              name="plannedEndDate"
+              value={planEnd}
+              onChange={setPlanEnd}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              isDisabled={isPending}
+              onClick={() => setPlanDialogOpen(false)}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              isDisabled={isPending}
+              onClick={handleSavePlan}
+            >
+              {isPending ? "Menyimpan..." : "Simpan Rencana"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -187,10 +187,10 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
           <QuickAddSelect
             id="costCenterId"
             name="costCenterId"
-            options={costCenterOptions.map((cc) => ({ value: String(cc.id), label: `${cc.code} — ${cc.name}` }))}
+            options={costCenterOptions.map((cc) => ({ value: String(cc.id), label: `${cc.code} - ${cc.name}` }))}
             value={costCenterId || null}
             onChange={(key) => setCostCenterId(key ?? "")}
-            placeholder="— Pilih pusat biaya —"
+            placeholder="- Pilih pusat biaya -"
             title={QUICK_ADD.costCenter.title}
             fields={QUICK_ADD.costCenter.fields}
             action={QUICK_ADD.costCenter.action}

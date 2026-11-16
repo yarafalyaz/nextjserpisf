@@ -23,15 +23,15 @@ export default async function EditAccountPage({
   const data = await resolveEntity(
     { segment: slug },
     {
-      bySlug: (s) => prisma.account.findFirst({ where: { slug: s } }),
-      byId: (id) => prisma.account.findUnique({ where: { id } }),
+      bySlug: (s) => prisma.account.findFirst({ where: { slug: s, deletedAt: null } }),
+      byId: (id) => prisma.account.findFirst({ where: { id, deletedAt: null } }),
     },
   );
 
   if (!data) notFound();
 
   const parentAccounts = await prisma.account.findMany({
-    where: { parentId: null },
+    where: { parentId: null, isActive: true, deletedAt: null, id: { not: data.id } },
     orderBy: { code: "asc" },
     select: { id: true, code: true, name: true },
   });

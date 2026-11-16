@@ -106,9 +106,9 @@ export function VehicleMarginCard({ report }: Readonly<{ report: VehicleMarginRe
           <DetailTableFootRow>
             <DetailTableTd colSpan={2} className="font-bold">TOTAL</DetailTableTd>
             <DetailTableTd align="right" className="font-bold">{currency(totals.revenue)}</DetailTableTd>
-            <DetailTableTd align="right" className="font-bold">—</DetailTableTd>
-            <DetailTableTd align="right" className="font-bold">—</DetailTableTd>
-            <DetailTableTd align="right" className="font-bold">—</DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">-</DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">-</DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">-</DetailTableTd>
             <DetailTableTd align="right" className="font-bold">{currency(totals.totalCost)}</DetailTableTd>
             <DetailTableTd align="right" className={totals.profit >= 0 ? "font-bold text-success" : "font-bold text-danger"}>
               {currency(totals.profit)}

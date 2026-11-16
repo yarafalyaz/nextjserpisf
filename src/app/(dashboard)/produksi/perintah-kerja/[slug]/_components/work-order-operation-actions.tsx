@@ -179,7 +179,7 @@ export function WorkOrderOperationActions({
             value={skipNotes}
             onChange={(e) => setSkipNotes(e.target.value)}
             rows={3}
-            className="w-full rounded-md border border-default bg-background px-3 py-2 text-sm"
+            className="w-full rounded-md border border-default bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           <p className="text-xs text-muted-foreground">
             Alasan wajib diisi. Tahap yang dilewati tidak masuk dasar hitung

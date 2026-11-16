@@ -132,7 +132,7 @@ describe("halaman meneruskan izin proses persis per permukaan", () => {
     expect(page).toContain('canEditDeliveryOrders = await hasPermission("edit_delivery_orders")')
     expect(page).toMatch(/action=\{shipDeliveryOrder\}[\s\S]{0,400}?canProcess=\{canEditDeliveryOrders\}/)
     expect(page).toMatch(/action=\{deliverDeliveryOrder\}[\s\S]{0,400}?canProcess=\{canEditDeliveryOrders\}/)
-    expect(page).toContain("{statusLabel(deliveryOrder.status)}")
+    expect(page).toContain("<StatusChip status={deliveryOrder.status} />")
   })
 
   it("penerimaan: ProcessButton canProcess verify_goods_receipts, chip tetap tampil", () => {

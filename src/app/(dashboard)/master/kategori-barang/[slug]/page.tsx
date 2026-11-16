@@ -11,7 +11,11 @@ import { deleteItemCategory } from "@/actions/master.actions"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import {
+  ItemCategoryBrandsTable,
+  ItemCategoryChildrenTable,
+  ItemCategoryItemsTable,
+} from "./_components/item-category-detail-tables"
 
 import type { Metadata } from "next"
 
@@ -94,20 +98,14 @@ export default async function ItemCategoryDetailPage({
       {/* Sub-categories */}
       {category.children.length > 0 && (
         <DetailSection title="Sub-Kategori">
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>Nama</DetailTableTh>
-              <DetailTableTh>Deskripsi</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {category.children.map((child) => (
-                <DetailTableRow key={child.id}>
-                  <DetailTableTd><Link href={entityHref("/master/kategori-barang", child)}>{child.name}</Link></DetailTableTd>
-                  <DetailTableTd>{child.description || "-"}</DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-          </DetailTable>
+          <ItemCategoryChildrenTable
+            data={category.children.map((child) => ({
+              id: child.id,
+              slug: child.slug,
+              name: child.name,
+              description: child.description,
+            }))}
+          />
         </DetailSection>
       )}
 
@@ -116,22 +114,15 @@ export default async function ItemCategoryDetailPage({
         {category.items.length === 0 ? (
           <EmptyState title="Belum ada barang" />
         ) : (
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>SKU</DetailTableTh>
-              <DetailTableTh>Nama</DetailTableTh>
-              <DetailTableTh>Satuan</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {category.items.map((item) => (
-                <DetailTableRow key={item.id}>
-                  <DetailTableTd className="font-mono"><Link href={entityHref("/master/barang", item)}>{item.sku}</Link></DetailTableTd>
-                  <DetailTableTd>{item.name}</DetailTableTd>
-                  <DetailTableTd>{item.unitOfMeasure}</DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-          </DetailTable>
+          <ItemCategoryItemsTable
+            data={category.items.map((item) => ({
+              id: item.id,
+              slug: item.slug,
+              sku: item.sku,
+              name: item.name,
+              unitOfMeasure: item.unitOfMeasure,
+            }))}
+          />
         )}
       </DetailSection>
       {/* Brands */}
@@ -139,24 +130,14 @@ export default async function ItemCategoryDetailPage({
         {category.brands.length === 0 ? (
           <EmptyState title="Belum ada merek untuk kategori ini" />
         ) : (
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>Nama Merek</DetailTableTh>
-              <DetailTableTh>Jumlah Barang</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {category.brands.map((brand) => (
-                <DetailTableRow key={brand.id}>
-                  <DetailTableTd>
-                    <Link href={entityHref("/master/merek", brand)} className="text-primary hover:underline font-medium">
-                      {brand.name}
-                    </Link>
-                  </DetailTableTd>
-                  <DetailTableTd>{brand._count.items}</DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-          </DetailTable>
+          <ItemCategoryBrandsTable
+            data={category.brands.map((brand) => ({
+              id: brand.id,
+              slug: brand.slug,
+              name: brand.name,
+              itemsCount: brand._count.items,
+            }))}
+          />
         )}
       </DetailSection>
     </div>

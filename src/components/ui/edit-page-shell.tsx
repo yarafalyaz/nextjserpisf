@@ -13,8 +13,8 @@ export function EditPageShell({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={breadcrumbs} />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">{title}</h1>
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
+        <h1 className="text-lg font-semibold tracking-tight text-foreground sm:text-2xl sm:font-bold">{title}</h1>
       </div>
       {children}
     </div>

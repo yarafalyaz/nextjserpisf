@@ -41,7 +41,7 @@ export default async function ExpenseCategoryDetailPage({
         ]}
         actions={
           <>
-            <Button href={entityEditHref("/master/kategori-pengeluaran", category)} variant="primary">Ubah</Button>
+            <Button href={entityEditHref("/master/kategori-pengeluaran", category)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
           </>
         }
       />

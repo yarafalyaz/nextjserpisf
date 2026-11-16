@@ -8,6 +8,7 @@ import { Pencil } from "@/components/ui/fontawesome-icons"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteTax } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { StatusChip } from "@/components/ui/status-chip"
 
 import type { Metadata } from "next"
 
@@ -70,9 +71,10 @@ export default async function TaxDetailPage({
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</span>
             <span className="text-[0.9375rem] text-foreground font-medium">
-              <span className={`status-badge status-${tax.isActive ? "active" : "inactive"}`}>
-                {tax.isActive ? "Aktif" : "Nonaktif"}
-              </span>
+              <StatusChip
+                status={tax.isActive ? "active" : "inactive"}
+                customLabel={tax.isActive ? "Aktif" : "Nonaktif"}
+              />
             </span>
           </div>
           <div className="flex flex-col gap-1">

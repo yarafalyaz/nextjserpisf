@@ -6,8 +6,9 @@ import { formatDate } from "@/lib/utils/format"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/shadcn/badge"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
-import { statusLabel } from "@/lib/utils/status-labels"
+import { DataTable } from "@/components/ui/data-table"
+import { StatusChip } from "@/components/ui/status-chip"
+import { createColumnHelper } from "@/lib/table"
 
 type TaskStatus = {
   key: string
@@ -17,7 +18,7 @@ type TaskStatus = {
   lastRun: {
     status: string
     message: string | null
-    ranAt: Date
+    ranAt: Date | string
     duration: number | null
   } | null
 }
@@ -28,8 +29,50 @@ type CronLog = {
   status: string
   message: string | null
   duration: number | null
-  ranAt: Date
+  ranAt: Date | string
 }
+
+const logColumnHelper = createColumnHelper<CronLog>()
+
+const logColumns = [
+  logColumnHelper.accessor("ranAt", {
+    header: "Waktu",
+    cell: (info) => (
+      <span className="whitespace-nowrap font-mono text-xs tabular-nums">
+        {formatDate(info.getValue())}
+      </span>
+    ),
+  }),
+  logColumnHelper.accessor("task", {
+    header: "Tugas",
+    meta: { mobilePrimary: true },
+    cell: (info) => <span className="font-mono text-xs">{info.getValue()}</span>,
+  }),
+  logColumnHelper.accessor("status", {
+    header: "Status",
+    cell: (info) => <StatusChip status={info.getValue()} />,
+  }),
+  logColumnHelper.accessor("duration", {
+    header: "Durasi",
+    meta: { align: "right" },
+    cell: (info) => {
+      const val = info.getValue()
+      return (
+        <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          {val !== null ? `${val}ms` : "-"}
+        </span>
+      )
+    },
+  }),
+  logColumnHelper.accessor("message", {
+    header: "Pesan",
+    cell: (info) => (
+      <span className="text-muted-foreground max-w-xs truncate block">
+        {info.getValue() || "-"}
+      </span>
+    ),
+  }),
+]
 
 export function CronTaskList({ tasks, logs }: { tasks: TaskStatus[]; logs: CronLog[] }) {
   const [running, setRunning] = useState<string | null>(null)
@@ -106,28 +149,17 @@ export function CronTaskList({ tasks, logs }: { tasks: TaskStatus[]; logs: CronL
         {logs.length === 0 ? (
           <EmptyState title="Belum ada riwayat" className="py-10" />
         ) : (
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>Waktu</DetailTableTh>
-              <DetailTableTh>Tugas</DetailTableTh>
-              <DetailTableTh>Status</DetailTableTh>
-              <DetailTableTh>Durasi</DetailTableTh>
-              <DetailTableTh>Pesan</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {logs.map((log) => (
-                <DetailTableRow key={log.id}>
-                  <DetailTableTd className="whitespace-nowrap">{formatDate(log.ranAt)}</DetailTableTd>
-                  <DetailTableTd className="font-mono text-xs">{log.task}</DetailTableTd>
-                  <DetailTableTd>
-                    <Badge variant={log.status === "success" ? "default" : "destructive"}>{statusLabel(log.status)}</Badge>
-                  </DetailTableTd>
-                  <DetailTableTd className="text-muted-foreground">{log.duration !== null ? `${log.duration}ms` : "-"}</DetailTableTd>
-                  <DetailTableTd className="text-muted-foreground max-w-xs truncate">{log.message || "-"}</DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-          </DetailTable>
+          <div className="p-4">
+            <DataTable
+              data={logs}
+              columns={logColumns}
+              ariaLabel="Riwayat 10 Eksekusi Terakhir"
+              selectable={false}
+              enableColumnToggle={false}
+              enableExport={false}
+              pageSize={50}
+            />
+          </div>
         )}
       </div>
     </div>

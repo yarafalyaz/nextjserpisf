@@ -540,7 +540,7 @@ export async function pullLaborCostFromTimesheets(
         const hours = Number(t.hours)
         const amount = Math.round(hours * ratePerHour * 100) / 100
         if (amount <= 0) continue
-        await tx.productionCost.create({
+        const created = await tx.productionCost.create({
           data: {
             productionOrderId,
             workOrderId,
@@ -554,11 +554,12 @@ export async function pullLaborCostFromTimesheets(
             createdBy: Number(user.id),
           },
         })
+        await applyProductionCostDelta(productionOrderId, amount, tx, {
+          userId: Number(user.id),
+          costLineId: created.id,
+        })
         createdCount += 1
         totalAdded = Math.round((totalAdded + amount) * 100) / 100
-      }
-      if (totalAdded > 0) {
-        await applyProductionCostDelta(productionOrderId, totalAdded, tx, { userId: Number(user.id) })
       }
     })
 

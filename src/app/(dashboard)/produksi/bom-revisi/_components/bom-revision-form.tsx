@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useRef, useState, useTransition, useMemo } from "react"
+import { useCallback, useRef, useState, useTransition, useMemo } from "react"
 import { createBomRevision, updateBomRevision } from "@/actions/manufacturing.actions"
 import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -10,8 +10,18 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { Combobox } from "@/components/ui/combobox"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { DataTable } from "@/components/ui/data-table"
+import { createColumnHelper } from "@/lib/table"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
+
+function sanitizeNonNegativeDecimal(raw: string): string {
+  const normalized = raw.replace(/,/g, ".").replace(/[^0-9.]/g, "")
+  const dotIndex = normalized.indexOf(".")
+  return dotIndex === -1
+    ? normalized
+    : normalized.slice(0, dotIndex + 1) + normalized.slice(dotIndex + 1).replace(/\./g, "")
+}
 
 interface RevisionRow {
   itemId: string
@@ -45,6 +55,12 @@ interface BomRevisionEdit {
  * edit a draft revision's lines. On creation the product's current BOM lines
  * are snapshotted automatically; the user may then adjust the draft lines.
  */
+interface RevisionTableRow extends RevisionRow {
+  id: number
+}
+
+const bomColumnHelper = createColumnHelper<RevisionTableRow>()
+
 export function BomRevisionForm({
   products,
   items,
@@ -76,16 +92,87 @@ export function BomRevisionForm({
   }, [items])
 
   function addLine() {
-    setLines([...lines, { itemId: "", qty: "", scrapPercent: "" }])
+    setLines((prev) => [...prev, { itemId: "", qty: "", scrapPercent: "" }])
   }
-  function removeLine(index: number) {
-    setLines(lines.filter((_, i) => i !== index))
-  }
-  function updateLine(index: number, field: keyof RevisionRow, value: string) {
-    const updated = [...lines]
-    updated[index][field] = value
-    setLines(updated)
-  }
+  const removeLine = useCallback((index: number) => {
+    setLines((prev) => prev.filter((_, i) => i !== index))
+  }, [])
+  const updateLine = useCallback((index: number, field: keyof RevisionRow, value: string) => {
+    setLines((prev) => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], [field]: value }
+      return updated
+    })
+  }, [])
+
+  const tableData = useMemo<RevisionTableRow[]>(
+    () => lines.map((l, index) => ({ ...l, id: index })),
+    [lines],
+  )
+
+  const columns = useMemo(
+    () => [
+      bomColumnHelper.accessor("itemId", {
+        header: "Barang",
+        enableSorting: false,
+        meta: { mobilePrimary: true },
+        cell: (info) => {
+          const index = info.row.original.id
+          return (
+            <Combobox
+              value={info.getValue() || null}
+              onChange={(key) => updateLine(index, "itemId", key ?? "")}
+              placeholder="Cari barang..."
+              options={itemOptions}
+            />
+          )
+        },
+      }),
+      bomColumnHelper.accessor("qty", {
+        header: "Jml",
+        enableSorting: false,
+        cell: (info) => {
+          const m = info.row.original
+          const index = m.id
+          return (
+            <div className="flex items-center gap-2">
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={m.qty}
+                onChange={(e) => updateLine(index, "qty", sanitizeNonNegativeDecimal(e.target.value))}
+                placeholder="0"
+                className="font-mono tabular-nums"
+              />
+              <span className="shrink-0 text-sm font-medium text-muted-foreground min-w-[2.5rem]">
+                {m.itemId ? (uomById.get(m.itemId) ?? "") : ""}
+              </span>
+            </div>
+          )
+        },
+      }),
+      bomColumnHelper.display({
+        id: "actions",
+        header: "Aksi",
+        enableSorting: false,
+        meta: { align: "right" },
+        cell: (info) => {
+          const index = info.row.original.id
+          return (
+            <Button
+              onPress={() => removeLine(index)}
+              aria-label={`Hapus bahan baris ${index + 1}`}
+              type="button"
+              isDisabled={lines.length === 1}
+            >
+              <Trash2 size={14} />
+            </Button>
+          )
+        },
+      }),
+    ],
+    [itemOptions, lines.length, removeLine, uomById, updateLine],
+  )
 
   function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -93,13 +180,25 @@ export function BomRevisionForm({
 
     if (!revision && productId) formData.set("productId", String(productId))
     if (!revision) formData.set("idempotencyKey", idempotencyKeyRef.current)
-    lines.forEach((l) => {
-      if (l.itemId && l.qty) {
+    for (const l of lines) {
+      if (l.itemId) {
+        const qtyNum = Number(l.qty)
+        if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+          showError("Jumlah bahan (BOM) harus lebih besar dari 0")
+          return
+        }
+        if (l.scrapPercent !== "") {
+          const scrapNum = Number(l.scrapPercent)
+          if (!Number.isFinite(scrapNum) || scrapNum < 0 || scrapNum > 100) {
+            showError("Scrap % (allowance) harus di antara 0 sampai 100")
+            return
+          }
+        }
         formData.append("revisionItemId", l.itemId)
         formData.append("revisionQty", l.qty)
         formData.append("revisionScrapPercent", l.scrapPercent)
       }
-    })
+    }
 
     startTransition(async () => {
       const result = revision
@@ -117,7 +216,7 @@ export function BomRevisionForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
+    <form onSubmit={handleSubmit} className="sm:bg-surface sm:rounded-xl sm:border sm:border-default sm:shadow-sm sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="product">Produk *</Label>
@@ -170,74 +269,24 @@ export function BomRevisionForm({
           </Button>
         </div>
 
-        <div className="overflow-x-auto">
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>Barang</DetailTableTh>
-              <DetailTableTh>Jml</DetailTableTh>
-              <DetailTableTh>Scrap % (allowance)</DetailTableTh>
-              <DetailTableTh>Aksi</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {lines.map((m, index) => (
-                <DetailTableRow key={index}>
-                  <DetailTableTd>
-                    <Combobox
-                      value={m.itemId || null}
-                      onChange={(key) => updateLine(index, "itemId", key ?? "")}
-                      placeholder="Cari barang..."
-                      options={itemOptions}
-                    />
-                  </DetailTableTd>
-                  <DetailTableTd>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={m.qty}
-                        onChange={(e) => updateLine(index, "qty", e.target.value)}
-                        placeholder="Jml"
-                      />
-                      <span className="shrink-0 text-sm font-medium text-muted-foreground min-w-[2.5rem]">
-                        {m.itemId ? (uomById.get(m.itemId) ?? "") : ""}
-                      </span>
-                    </div>
-                  </DetailTableTd>
-                  <DetailTableTd>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="100"
-                      value={m.scrapPercent}
-                      onChange={(e) => updateLine(index, "scrapPercent", e.target.value)}
-                      placeholder="Kosong = belum kalibrasi"
-                      aria-label="Persen allowance scrap baris BOM"
-                    />
-                  </DetailTableTd>
-                  <DetailTableTd>
-                    <Button
-                      onPress={() => removeLine(index)}
-                      aria-label={`Hapus bahan baris ${index + 1}`}
-                      type="button"
-                      isDisabled={lines.length === 1}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
-                  </DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-          </DetailTable>
-        </div>
+        <DataTable
+          data={tableData}
+          columns={columns}
+          ariaLabel="Bahan BOM Revisi"
+          selectable={false}
+          enableColumnToggle={false}
+          enableExport={false}
+          showPagination={false}
+          pageSize={50}
+        />
       </div>
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
+      <FormActions>
         <Button className="w-full sm:w-auto" onPress={() => router.back()} type="button">Batal</Button>
         <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending || (!revision && !productId)} id="submit-bom-revision">
           {isPending ? "Menyimpan..." : "Simpan"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

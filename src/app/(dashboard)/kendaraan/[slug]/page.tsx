@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { formatDate } from "@/lib/utils/format"
-import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteVehicle } from "@/actions/vehicle.actions"
@@ -10,14 +9,14 @@ import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { CanCreate } from "@/components/auth/can-create"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { VehicleOwnersTable } from "./_components/vehicle-owners-table"
 import { EmptyState } from "@/components/ui/empty-state"
 
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
+import { entityEditHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Kendaraan" }
 
 export default async function VehicleDetailPage({
@@ -77,7 +76,7 @@ export default async function VehicleDetailPage({
         actions={
           <>
             <CanCreate permission="edit_vehicles">
-              <Button href={entityEditHref("/kendaraan", vehicle)} variant="primary">Ubah</Button>
+              <Button href={entityEditHref("/kendaraan", vehicle)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
             </CanCreate>
             <CanCreate permission="delete_vehicles">
               <DeleteButton id={vehicle.id} action={deleteVehicle} />
@@ -104,20 +103,17 @@ export default async function VehicleDetailPage({
           {vehicle.customerVehicles.length === 0 ? (
             <EmptyState title="Belum ada pemilik terdaftar" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Pelanggan</DetailTableTh>
-                <DetailTableTh>Terdaftar</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {vehicle.customerVehicles.map((cv) => (
-                  <DetailTableRow key={cv.id}>
-                    <DetailTableTd><Link href={entityHref("/master/pelanggan", cv.customer)}>{cv.customer.name}</Link></DetailTableTd>
-                    <DetailTableTd>{formatDate(cv.createdAt)}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <VehicleOwnersTable
+              data={vehicle.customerVehicles.map((cv) => ({
+                id: cv.id,
+                customer: {
+                  id: cv.customer.id,
+                  slug: cv.customer.slug,
+                  name: cv.customer.name,
+                },
+                createdAt: cv.createdAt.toISOString(),
+              }))}
+            />
           )}
         </div>
       </div>

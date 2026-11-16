@@ -183,7 +183,7 @@ export function WarrantyJournalPanel({
 
       <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <RouteStatus route={facts.claimCost} label="Rute E2 — Biaya Klaim" />
-        <RouteStatus route={facts.supplierRecovery} label="Rute E3 — Recovery Supplier" />
+        <RouteStatus route={facts.supplierRecovery} label="Rute E3 - Pemulihan Klaim Pemasok" />
       </dl>
 
       {lastResult && (

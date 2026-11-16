@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   employeeFindFirst: vi.fn(),
   employeeFindUnique: vi.fn(),
   employeeFindMany: vi.fn(),
+  assertHrReopenGatesMock: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock("@/actions/approval.actions", () => ({
@@ -51,8 +52,12 @@ vi.mock("next/cache", () => ({
   revalidatePath: (...a: unknown[]) => mocks.revalidatePath(...a),
 }))
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/approval/hr-reopen-gates", () => ({
+  assertHrReopenGates: (...a: unknown[]) => mocks.assertHrReopenGatesMock(...a),
+}))
+
+vi.mock("@/lib/db/prisma", () => {
+  const prismaObj: Record<string, unknown> = {
     quotation: {
       updateMany: (...a: unknown[]) => mocks.updateMany(...a),
       findUnique: (...a: unknown[]) => mocks.findUnique(...a),
@@ -95,8 +100,12 @@ vi.mock("@/lib/db/prisma", () => ({
       findFirst: (...a: unknown[]) => mocks.findFirstApproval(...a),
       findUnique: (...a: unknown[]) => mocks.findUniqueApproval(...a),
     },
-  },
-}))
+    $queryRaw: vi.fn().mockResolvedValue([]),
+    $executeRaw: vi.fn().mockResolvedValue(1),
+  };
+  prismaObj.$transaction = async (fn: (tx: unknown) => unknown) => fn(prismaObj);
+  return { prisma: prismaObj };
+})
 
 function makeReq(): NextRequest {
   return new NextRequest("http://localhost/api/workflow/x", { method: "POST" })
@@ -638,10 +647,22 @@ describe("POST /api/workflow/[...path]", () => {
       const json = await res.json()
       expect(json).toEqual({ success: true, status: "pending", reopened: true })
       // Pengajuan baru memakai requestedBy approval lama (7), BUKAN aktor (2).
-      expect(mocks.requestApprovalMock).toHaveBeenCalledWith("SalesOrder", 5, 7)
+      expect(mocks.requestApprovalMock).toHaveBeenCalledWith("SalesOrder", 5, 7, expect.anything())
       // Langkah persetujuan TIDAK diproses dalam request reopen yang sama.
       expect(mocks.approveStepMock).not.toHaveBeenCalled()
       expect(mocks.rejectStepMock).not.toHaveBeenCalled()
+    })
+
+    it("menolak reopen dokumen HR dengan 409 bila assertHrReopenGates gagal", async () => {
+      mocks.authFn.mockResolvedValue(adminSession)
+      mocks.findUnique.mockResolvedValue({ employeeId: 7 })
+      mocks.findFirstApproval.mockResolvedValueOnce({ id: 10, status: "rejected", requestedBy: 7 })
+      mocks.assertHrReopenGatesMock.mockRejectedValueOnce(new Error("Karyawan tidak ditemukan atau tidak aktif"))
+
+      const res = await POST(makeReq(), makeParams(["sdm", "cuti", "5", "approve"]))
+      expect(res.status).toBe(409)
+      expect(mocks.updateMany).not.toHaveBeenCalled()
+      expect(mocks.requestApprovalMock).not.toHaveBeenCalled()
     })
 
     it("R7API-04: fault bercode dari langkah dibalas 500 generik tanpa pesan mentah", async () => {

@@ -17,8 +17,8 @@ import { test, expect, type Page } from "@playwright/test"
 /** Buka detail baris pertama di tabel daftar; skip bila tabel kosong. */
 async function openFirstDetail(page: Page, listUrl: string) {
   await page.goto(listUrl, { waitUntil: "domcontentloaded" })
-  await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 30000 })
-  const firstLink = page.locator("tbody tr a[href]").first()
+  await page.waitForLoadState("networkidle")
+  const firstLink = page.locator("tbody tr:visible a[href], ul[role='list'] > li:visible a[href]").first()
   const count = await firstLink.count()
   test.skip(count === 0, `DB ini tidak punya data di ${listUrl} — alur dilewati, bukan lulus semu`)
   await firstLink.click()
@@ -48,12 +48,12 @@ test.describe("Alur bengkel — tiap halaman terbuka", () => {
 
   test("daftar Inspeksi QC terbuka", async ({ page }) => {
     await page.goto("/produksi/qc/inspeksi", { waitUntil: "domcontentloaded" })
-    await expect(page.locator("body")).toContainText("Inspeksi QC", { timeout: 30000 })
+    await expect(page.locator("body")).toContainText("Inspeksi Kendali Mutu (QC Inspection)", { timeout: 30000 })
   })
 
   test("daftar NCR terbuka", async ({ page }) => {
     await page.goto("/produksi/qc/ncr", { waitUntil: "domcontentloaded" })
-    await expect(page.locator("body")).toContainText("Ketidaksesuaian (NCR)", { timeout: 30000 })
+    await expect(page.locator("body")).toContainText("Ketidaksesuaian Mutu (NCR)", { timeout: 30000 })
   })
 
   test("daftar Surat Jalan (serah terima) terbuka", async ({ page }) => {

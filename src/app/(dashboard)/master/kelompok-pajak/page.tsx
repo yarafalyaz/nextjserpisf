@@ -44,6 +44,7 @@ export default async function TaxGroupsPage({
 
   const tableData = taxGroups.map((group) => ({
     id: group.id,
+    slug: group.slug,
     name: group.name,
     taxNames:
       group.taxes

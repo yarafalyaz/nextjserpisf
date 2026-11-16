@@ -15,6 +15,7 @@ import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions"
 import { APPROVE_CLAIMS, REJECT_CLAIMS } from "@/lib/approval/claims"
 import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope"
 import { getApprovalDocDelegate } from "@/lib/approval/approval-models"
+import { assertHrReopenGates } from "@/lib/approval/hr-reopen-gates"
 
 
 /**
@@ -245,54 +246,60 @@ export async function POST(
         // boleh gagal (model tak dikenal / kolom status beda) dan alur tetap
         // lanjut — yang menentukan adalah fresh berstatus pending di bawah.
         if (approval.status === "rejected") {
-          const delegateReopen = getApprovalDocDelegate(prisma, config.model)
-          if (!delegateReopen) {
-            return apiError("INTERNAL_ERROR", "Delegasi model tidak didukung")
-          }
-          // Kosakata reset per model: dokumen dagang kembali draft; model HR
-          // lahir pending dan klaim finalnya hanya menerima pending — reset
-          // HR ke draft mengunci dokumen selamanya (putaran 52).
           const resetStatus = HR_MODELS.has(config.model) ? "pending" : "draft"
-          let resetCount: number | null = null
+          const initiatorId = approval.requestedBy ?? docCreator ?? Number(session.user.id)
           try {
-            const reset = await delegateReopen.updateMany({
-              where: { id, status: "rejected" },
-              data: { status: resetStatus },
+            const outcome = await prisma.$transaction(async (tx) => {
+              if (typeof tx.$queryRaw === "function") {
+                await tx.$queryRaw`SELECT id FROM approvals WHERE id = ${approval.id} FOR UPDATE`
+              }
+              await assertHrReopenGates(tx as never, modelType, id)
+
+              const delegateReopen = getApprovalDocDelegate(tx, config.model)
+              if (!delegateReopen) {
+                return { error: apiError("INTERNAL_ERROR", "Delegasi model tidak didukung") } as const
+              }
+              let resetCount: number | null = null
+              try {
+                const reset = await delegateReopen.updateMany({
+                  where: { id, status: "rejected" },
+                  data: { status: resetStatus },
+                })
+                resetCount = reset.count
+              } catch (err) {
+                console.error(`[workflow] reset status ${config.model} #${id} gagal:`, err)
+              }
+              if (resetCount === 0) {
+                return {
+                  error: apiError("CONFLICT", `Alur persetujuan ditolak — dokumen sudah berubah status`),
+                } as const
+              }
+              await requestApprovalIfConfigured(modelType, id, initiatorId, tx)
+              const fresh = await tx.approval.findFirst({
+                where: { referenceType: modelType, referenceId: id },
+                orderBy: { id: "desc" },
+              })
+              if (!fresh || fresh.status !== "pending") {
+                return {
+                  error: apiError("CONFLICT", `Alur persetujuan ditolak — gagal membuka ulang`),
+                } as const
+              }
+              return { ok: true } as const
             })
-            resetCount = reset.count
-          } catch (err) {
-            console.error(`[workflow] reset status ${config.model} #${id} gagal:`, err)
+            if ("error" in outcome && outcome.error) {
+              return outcome.error
+            }
+          } catch (reopenError) {
+            const hasErrorCode =
+              reopenError instanceof Error &&
+              "code" in reopenError &&
+              typeof (reopenError as { code?: unknown }).code === "string"
+            console.error("[api/workflow] gagal membuka ulang persetujuan:", reopenError)
+            if (hasErrorCode || !(reopenError instanceof Error)) {
+              return apiError("INTERNAL_ERROR", "Gagal membuka ulang persetujuan")
+            }
+            return apiError("CONFLICT", reopenError.message)
           }
-          // Putaran 82: reset mengenai 0 baris = dokumen sudah tidak
-          // `rejected` (jalur lain menang) — jangan lahirkan approval baru
-          // dan jangan balas sukses palsu (pola reopenApproval di
-          // approval.actions yang melempar bila count === 0). Kegagalan
-          // delegate (model tak dikenal) tetap perilaku lama di atas.
-          if (resetCount === 0) {
-            return apiError("CONFLICT", `Alur persetujuan ditolak — dokumen sudah berubah status`)
-          }
-          // R7API-03: pencetus approval baru = requestedBy approval yang
-          // ditolak (pengaju asal); fallback pembuat dokumen, lalu aktor.
-          // Menulis aktor di sini membuat klik Setujui/Tolak berikutnya
-          // selalu kena maker-checker (409) sesudah mutasi commit.
-          await requestApprovalIfConfigured(
-            modelType,
-            id,
-            approval.requestedBy ?? docCreator ?? Number(session.user.id),
-          )
-          const fresh = await prisma.approval.findFirst({
-            where: { referenceType: modelType, referenceId: id },
-            orderBy: { id: "desc" },
-          })
-          if (!fresh || fresh.status !== "pending") {
-            return apiError("CONFLICT", `Alur persetujuan ditolak — gagal membuka ulang`)
-          }
-          // Dokumen sudah dibuka ulang (draft + approval pending baru) —
-          // JANGAN lanjut approve/reject dalam request yang sama: aksi
-          // aktor atas pengajuan yang baru lahir bukan persetujuan atas
-          // dokumen yang ia klik, dan requestedBy yang tidak ter-resolve
-          // tetap bisa menyentuh aktor. Balas jujur; klik kedua memproses
-          // langkah pertama dari halaman yang sudah termuat ulang.
           revalidatePath(config.revalidate)
           return NextResponse.json({ success: true, status: "pending", reopened: true })
         }

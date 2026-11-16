@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic"
 import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { PageHeader } from "@/components/ui/page-header"
 import { getHrScope, hrScopeWhere, canSearchAcrossEmployees } from "@/lib/auth/hr-scope"
 import Link from "next/link"
 import { redirect, notFound } from "next/navigation"
@@ -47,7 +48,7 @@ export async function renderLeaveRequestsPage({
   const params = await searchParams
 
   if (!statusParam && params.status) {
-    const targetStatus = params.status
+    const targetStatus = statusToIndo[params.status] || params.status
     const query = new URLSearchParams()
     if (params.cari) query.set("cari", params.cari)
     if (params.halaman) query.set("halaman", params.halaman)
@@ -153,33 +154,36 @@ export async function renderLeaveRequestsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">Permintaan & Saldo Cuti (Leave)</h1>
-          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
-            Pengajuan cuti tahunan, izin sakit, pelacakan sisa hak cuti karyawan, dan persetujuan atasan.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Link
-            href="/sdm/cuti/saldo"
-            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer"
-            id="leave-balance-btn"
-          >
-            Saldo Cuti
-          </Link>
-          <CanCreate permission="create_leave_requests">
+      <PageHeader
+        title="Permintaan & Saldo Cuti (Leave)"
+        subtitle="Pengajuan cuti tahunan, izin sakit, pelacakan sisa hak cuti karyawan, dan persetujuan atasan."
+        breadcrumbs={[
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
+          { label: "Cuti" },
+        ]}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
             <Link
-              href="/sdm/cuti/tambah"
-              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
-              id="create-leave-btn"
+              href="/sdm/cuti/saldo"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer"
+              id="leave-balance-btn"
             >
-              <Plus className="size-3.5" aria-hidden="true" />
-              <span>Ajukan Cuti</span>
+              Saldo Cuti
             </Link>
-          </CanCreate>
-        </div>
-      </div>
+            <CanCreate permission="create_leave_requests">
+              <Link
+                href="/sdm/cuti/tambah"
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+                id="create-leave-btn"
+              >
+                <Plus className="size-3.5" aria-hidden="true" />
+                <span>Ajukan Cuti</span>
+              </Link>
+            </CanCreate>
+          </div>
+        }
+      />
 
       {/* Executive KPI Metric Strip Standar ERP */}
       <div className="grid grid-cols-1 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs overflow-hidden">

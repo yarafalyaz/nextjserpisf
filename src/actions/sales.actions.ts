@@ -3427,17 +3427,27 @@ export async function deleteQuotation(id: number) {
       throw new Error("Penawaran tidak bisa dihapus: masih ada faktur turunan yang hidup. Batalkan (void) faktur dulu.")
     }
     const invoices = await tx.salesInvoice.findMany({
-      where: { OR: [{ quotationId: id }, { salesOrderId: { in: salesOrderIds.length ? salesOrderIds : [-1] } }] },
+      where: {
+        OR: [{ quotationId: id }, { salesOrderId: { in: salesOrderIds.length ? salesOrderIds : [-1] } }],
+        status: "draft",
+      },
       select: { id: true },
     })
     const invoiceIds = invoices.map((inv) => inv.id)
 
-    // Reverse GL + stock for each linked invoice before cascading the delete.
+    // Reverse GL + stock for each linked draft invoice before cascading the delete.
     await Promise.all(invoiceIds.map((invId) => reverseSalesInvoicePostingTx(tx, invId)))
 
     if (invoiceIds.length) await tx.salesPayment.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
     if (invoiceIds.length) await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
     if (invoiceIds.length) await tx.salesInvoice.deleteMany({ where: { id: { in: invoiceIds } } })
+    // Lepas tautan faktur non-draf (mis. cancelled/void yang menyimpan jejak jurnal GL) agar tidak ikut terhapus fisik maupun memblokir FK.
+    if (typeof tx.salesInvoice.updateMany === "function") {
+      await tx.salesInvoice.updateMany({
+        where: { OR: [{ quotationId: id }, { salesOrderId: { in: salesOrderIds.length ? salesOrderIds : [-1] } }] },
+        data: { quotationId: null, salesOrderId: null },
+      })
+    }
 
     if (salesOrderIds.length) await tx.deliveryOrder.deleteMany({ where: { salesOrderId: { in: salesOrderIds } } })
     if (salesOrderIds.length) await tx.salesOrderItem.deleteMany({ where: { salesOrderId: { in: salesOrderIds } } })
@@ -5043,13 +5053,22 @@ export async function deleteSalesOrder(id: number) {
     if (liveInvoices.length > 0) {
       throw new Error("Pesanan tidak bisa dihapus: masih ada faktur turunan yang hidup. Batalkan (void) faktur dulu.")
     }
-    const invoices = await tx.salesInvoice.findMany({ where: { salesOrderId: id }, select: { id: true } })
+    const invoices = await tx.salesInvoice.findMany({
+      where: { salesOrderId: id, status: "draft" },
+      select: { id: true },
+    })
     const invoiceIds = invoices.map((inv) => inv.id)
-    // Reverse GL + stock for each linked invoice before cascading the delete.
+    // Reverse GL + stock for each linked draft invoice before cascading the delete.
     await Promise.all(invoiceIds.map((invId) => reverseSalesInvoicePostingTx(tx, invId)))
     if (invoiceIds.length) await tx.salesPayment.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
     if (invoiceIds.length) await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
     if (invoiceIds.length) await tx.salesInvoice.deleteMany({ where: { id: { in: invoiceIds } } })
+    if (typeof tx.salesInvoice.updateMany === "function") {
+      await tx.salesInvoice.updateMany({
+        where: { salesOrderId: id },
+        data: { salesOrderId: null },
+      })
+    }
     await tx.deliveryOrder.deleteMany({ where: { salesOrderId: id } })
     await tx.salesOrderItem.deleteMany({ where: { salesOrderId: id } })
     await tx.salesOrder.delete({ where: { id } })
@@ -5089,6 +5108,9 @@ export async function bulkDeleteDraftSalesOrders(ids: number[]) {
 
     await prisma.$transaction(async (tx) => {
       // 1. Kunci dan baca semua dokumen terpilih
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM sales_orders WHERE id IN (${Prisma.join(validIds)}) FOR UPDATE`
+      }
       const orders = await tx.salesOrder.findMany({
         where: { id: { in: validIds } },
         select: { id: true, documentNo: true, status: true },
@@ -5124,7 +5146,7 @@ export async function bulkDeleteDraftSalesOrders(ids: number[]) {
 
       // 4. Cascade cleanup untuk tiap draft dalam satu transaksi atomik
       const invoices = await tx.salesInvoice.findMany({
-        where: { salesOrderId: { in: validIds } },
+        where: { salesOrderId: { in: validIds }, status: "draft" },
         select: { id: true },
       })
       const invoiceIds = invoices.map((inv) => inv.id)
@@ -5133,6 +5155,12 @@ export async function bulkDeleteDraftSalesOrders(ids: number[]) {
       if (invoiceIds.length) await tx.salesPayment.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
       if (invoiceIds.length) await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
       if (invoiceIds.length) await tx.salesInvoice.deleteMany({ where: { id: { in: invoiceIds } } })
+      if (typeof tx.salesInvoice.updateMany === "function") {
+        await tx.salesInvoice.updateMany({
+          where: { salesOrderId: { in: validIds } },
+          data: { salesOrderId: null },
+        })
+      }
       await tx.deliveryOrder.deleteMany({ where: { salesOrderId: { in: validIds } } })
       await tx.salesOrderItem.deleteMany({ where: { salesOrderId: { in: validIds } } })
       await tx.salesOrder.deleteMany({ where: { id: { in: validIds } } })

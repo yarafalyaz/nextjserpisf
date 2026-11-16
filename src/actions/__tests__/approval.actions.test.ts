@@ -33,6 +33,8 @@ const mocks = vi.hoisted(() => {
     holiday: buildModelMock(),
     departmentHoliday: buildModelMock(),
     employee: buildModelMock(),
+    account: buildModelMock(),
+    transactionAttachment: buildModelMock(),
     role: buildModelMock(),
     user: buildModelMock(),
     notification: buildModelMock(),
@@ -52,6 +54,7 @@ const mocks = vi.hoisted(() => {
     logActivityMock: vi.fn(),
     authMock: vi.fn(),
     syncPettyCashMock: vi.fn().mockResolvedValue(undefined),
+    reimbursementAccrualMock: vi.fn().mockResolvedValue(undefined),
     recalcPrMock: vi.fn().mockResolvedValue(undefined),
   };
 });
@@ -63,6 +66,7 @@ vi.mock("@/lib/auth/permissions", () => ({
 vi.mock("@/lib/auth/auth", () => ({ auth: mocks.authMock }));
 vi.mock("@/lib/hooks/accounting.hook", () => ({
   onEmployeeLoanDisbursed: vi.fn().mockResolvedValue(undefined),
+  onReimbursementClaimApproved: (...a: unknown[]) => mocks.reimbursementAccrualMock(...a),
 }));
 vi.mock("@/lib/hooks/expense.hook", () => ({
   onExpenseApprovedSyncPettyCash: (...a: unknown[]) => mocks.syncPettyCashMock(...a),
@@ -172,14 +176,42 @@ beforeEach(() => {
 });
 
 describe("Approval Progression Actions", () => {
-  it("syncs petty cash when an Expense workflow completes", async () => {
+  it("syncs petty cash inside transaction when an Expense workflow completes", async () => {
     // Regression: the approval engine flipped Expense.status to "approved" but
     // ran no domain side effect, so no petty-cash record was created (petty cash
     // understated) with no retry path via approveExpense. approveStep must now
-    // trigger the sync once the workflow's final step is approved.
+    // trigger the sync inside the transaction with tx.
     seedApproval({ referenceType: "Expense", referenceId: 55 });
     await actions.approveStep(1, fdMap({ notes: "OK" }));
-    expect(mocks.syncPettyCashMock).toHaveBeenCalledWith(55, 1);
+    expect(mocks.syncPettyCashMock).toHaveBeenCalledWith(55, 1, expect.anything());
+  });
+
+  it("enforces reimbursement gates and posts J-RB1 accrual when Expense is a reimbursement claim", async () => {
+    seedApproval({ referenceType: "Expense", referenceId: 55 });
+    mocks.prismaMock.expense.findUnique.mockResolvedValueOnce({
+      id: 55,
+      accountId: 9,
+      amount: 150000,
+      referenceNo: "NOTA-01",
+      receiptImage: "/uploads/nota.jpg",
+      employeeId: 12,
+      isReimbursementClaim: true,
+    });
+    mocks.prismaMock.account.findUnique.mockResolvedValueOnce({
+      type: "EXPENSE",
+      isActive: true,
+      deletedAt: null,
+    });
+    mocks.prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 99 });
+    mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({
+      isActive: true,
+      deletedAt: null,
+      employmentEndedAt: null,
+    });
+
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expect(mocks.syncPettyCashMock).toHaveBeenCalledWith(55, 1, expect.anything());
+    expect(mocks.reimbursementAccrualMock).toHaveBeenCalledWith(55, 1, expect.anything());
   });
 
   it("does not sync petty cash for a non-Expense workflow completion", async () => {

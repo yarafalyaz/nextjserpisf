@@ -54,7 +54,7 @@ export function DetailTableTh({
       scope={scope}
       colSpan={colSpan}
       className={cn(
-        align === "right" && "num",
+        align === "right" && "num tabular-nums",
         align === "center" && "text-center",
         className,
       )}
@@ -93,7 +93,7 @@ export function DetailTableTd({
     <td
       colSpan={colSpan}
       className={cn(
-        align === "right" && "num",
+        align === "right" && "num tabular-nums",
         align === "center" && "text-center",
         className,
       )}

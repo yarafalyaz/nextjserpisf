@@ -40,7 +40,7 @@ export function AssetTable({
       accessorKey: "code",
       header: "Kode",
       cell: ({ row }) => (
-        <Link href={entityHref("/aset", row.original)} className="font-medium text-foreground hover:underline">
+        <Link href={entityHref("/aset", row.original)} className="font-mono font-medium text-foreground hover:underline">
           {row.original.code}
         </Link>
       ),
@@ -71,7 +71,7 @@ export function AssetTable({
       accessorKey: "purchaseCost",
       header: "Harga Beli",
       cell: ({ row }) => (
-        <span className="tabular-nums">{formatCurrencyExact(row.original.purchaseCost)}</span>
+        <span className="font-mono tabular-nums">{formatCurrencyExact(row.original.purchaseCost)}</span>
       ),
       size: 150,
     },
@@ -80,7 +80,7 @@ export function AssetTable({
       accessorKey: "currentValue",
       header: "Nilai Saat Ini (cache)",
       cell: ({ row }) => (
-        <span className="tabular-nums">{formatCurrencyExact(row.original.currentValue)}</span>
+        <span className="font-mono tabular-nums">{formatCurrencyExact(row.original.currentValue)}</span>
       ),
       size: 150,
     },

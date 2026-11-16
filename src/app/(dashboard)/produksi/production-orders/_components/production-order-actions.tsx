@@ -272,7 +272,7 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
               options={SCRAP_REASON_CODES.map((code) => ({ value: code, label: SCRAP_REASON_LABELS[code] }))}
               value={issueScrapReasonCode}
               onChange={setIssueScrapReasonCode}
-              placeholder="— Tanpa scrap —"
+              placeholder="- Tanpa scrap -"
             />
           </div>
           <div className="flex flex-col gap-1.5">

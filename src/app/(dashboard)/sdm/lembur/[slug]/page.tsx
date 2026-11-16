@@ -14,6 +14,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import type { Metadata } from "next"
 
 import { hasPermission, requirePermission } from "@/lib/auth/permissions"
+import { canViewSalaryAmounts } from "@/lib/auth/field-visibility"
 import { getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope"
 import { loadOvertimeBaseSnapshot } from "@/lib/reports/overtime-base-snapshot-data"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
@@ -28,9 +29,10 @@ export default async function OvertimeRequestDetailPage({
   params: Promise<{ slug: string }>
 }) {
   const user = await requirePermission("view_overtime")
-  const [canApprove, canViewPayroll, canEdit, canDelete] = await Promise.all([
+  const [canApprove, canViewPayroll, canSeeSalary, canEdit, canDelete] = await Promise.all([
     hasPermission("approve_overtime_requests"),
     hasPermission("view_payroll"),
+    canViewSalaryAmounts(),
     hasPermission("edit_overtime_requests"),
     hasPermission("delete_overtime_requests"),
   ])
@@ -78,7 +80,7 @@ export default async function OvertimeRequestDetailPage({
             {/* updateOvertimeRequest hanya menerima status pending; lembur yang
                 sudah disetujui memengaruhi penggajian. */}
             {canEdit && isPending && (
-              <Button href={entityEditHref("/sdm/lembur", overtime)} variant="primary">Ubah</Button>
+              <Button href={entityEditHref("/sdm/lembur", overtime)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
             )}
             {canDelete && !isApproved && <DeleteButton id={overtime.id} action={deleteOvertimeRequest} />}
           </>
@@ -107,7 +109,7 @@ export default async function OvertimeRequestDetailPage({
         {overtime.billableHours != null && (
           <DetailField label="Jam Dapat Ditagih" value={`${Number(overtime.billableHours)} jam`} />
         )}
-        {overtime.calculatedValue != null && (
+        {(canViewPayroll || canSeeSalary) && overtime.calculatedValue != null && (
           <DetailField label="Nilai Kalkulasi" value={formatCurrencyExact(Number(overtime.calculatedValue))} />
         )}
         <OvertimeBaseSnapshotFields canViewPayroll={canViewPayroll} snapshot={overtimeBaseSnapshot} />

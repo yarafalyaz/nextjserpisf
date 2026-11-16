@@ -180,9 +180,9 @@ export function InventoryTransferUnreceivedQueueCard({
                   </DetailTableTd>
                   <DetailTableTd>{formatDate(row.date)}</DetailTableTd>
                   <DetailTableTd>{row.statusLabel}</DetailTableTd>
-                  <DetailTableTd>—</DetailTableTd>
-                  <DetailTableTd>—</DetailTableTd>
-                  <DetailTableTd>—</DetailTableTd>
+                  <DetailTableTd>-</DetailTableTd>
+                  <DetailTableTd>-</DetailTableTd>
+                  <DetailTableTd>-</DetailTableTd>
                   <DetailTableTd>
                     <Link
                       href={entityHref("/inventaris/transfer", { id: row.transferId, slug: row.slug })}

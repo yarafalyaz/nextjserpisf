@@ -10,10 +10,10 @@ export function PayrollBpjsAggregateSnapshot({ snapshot }: { snapshot: unknown }
   if (!aggregate) return null
   const rows: Array<[string, number]> = [
     ["Basis Kumulatif Masa (Rp)", aggregate.basis],
-    ["Target Masa — BPJS Kesehatan Karyawan (Rp)", aggregate.targetHealth],
-    ["Target Masa — BPJS Ketenagakerjaan Karyawan (Rp)", aggregate.targetEmployment],
-    ["Sudah Terpotong Slip Lain Se-Masa — Kesehatan (Rp)", aggregate.withheldHealth],
-    ["Sudah Terpotong Slip Lain Se-Masa — Ketenagakerjaan (Rp)", aggregate.withheldEmployment],
+    ["Target Masa - BPJS Kesehatan Karyawan (Rp)", aggregate.targetHealth],
+    ["Target Masa - BPJS Ketenagakerjaan Karyawan (Rp)", aggregate.targetEmployment],
+    ["Sudah Terpotong Slip Lain Se-Masa - Kesehatan (Rp)", aggregate.withheldHealth],
+    ["Sudah Terpotong Slip Lain Se-Masa - Ketenagakerjaan (Rp)", aggregate.withheldEmployment],
   ]
   return (
     <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">

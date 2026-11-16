@@ -93,7 +93,7 @@ export async function renderGoodsReceiptsPage({
     prisma.goodsReceipt.count({ where }),
     prisma.goodsReceipt.groupBy({
       by: ["status"],
-      where: { ...scopeWhere, deletedAt: null },
+      where: { ...scopeWhere },
       _count: { _all: true },
     }),
   ])

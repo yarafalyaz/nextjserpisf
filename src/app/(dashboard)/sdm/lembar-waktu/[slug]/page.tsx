@@ -69,7 +69,7 @@ export default async function TimesheetDetailPage({
         actions={
           <>
             <CanCreate permission="create_timesheets">
-              <Button href={entityEditHref("/sdm/lembar-waktu", timesheet)} variant="primary">Ubah</Button>
+              <Button href={entityEditHref("/sdm/lembar-waktu", timesheet)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
             </CanCreate>
             <CanCreate permission="delete_timesheets">
               <DeleteButton id={timesheet.id} action={deleteTimesheet} />

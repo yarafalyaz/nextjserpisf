@@ -12,6 +12,7 @@ import {
 } from "@/lib/utils/status-labels";
 import { PageHeader } from "@/components/ui/page-header";
 import { CanCreate } from "@/components/auth/can-create";
+import { AppSearchField } from "@/components/ui/search-field";
 import { BankReconciliationDraftQueueCard } from "@/components/reports/bank-reconciliation-draft-queue-card";
 import { getBankReconciliationDraftQueue } from "@/lib/reports/bank-reconciliation-draft-queue-data";
 import { BankReconciliationTable, type BankReconciliationRow } from "./_components/bank-reconciliation-table";
@@ -49,7 +50,7 @@ export default async function BankReconciliationPage({
     }),
   };
 
-  const [reconciliations, total, draftCount, completedCount] = await Promise.all([
+  const [reconciliations, total, overallCount, draftCount, completedCount] = await Promise.all([
     prisma.bankReconciliation.findMany({
       where,
       include: { items: true },
@@ -58,6 +59,7 @@ export default async function BankReconciliationPage({
       take,
     }),
     prisma.bankReconciliation.count({ where }),
+    prisma.bankReconciliation.count({ where: { deletedAt: null } }),
     prisma.bankReconciliation.count({ where: { status: "draft", deletedAt: null } }),
     prisma.bankReconciliation.count({ where: { status: "completed", deletedAt: null } }),
   ]);
@@ -106,10 +108,10 @@ export default async function BankReconciliationPage({
               status: urlStatus || undefined,
               halaman: undefined,
             })}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+            className={`inline-flex min-h-11 sm:min-h-9 items-center rounded-md border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               isActive
-                ? "bg-foreground text-background font-semibold"
-                : "bg-surface border border-default text-muted-foreground hover:bg-muted hover:text-foreground"
+                ? "border-foreground bg-foreground text-background font-semibold"
+                : "border-default bg-surface text-muted-foreground hover:bg-muted hover:text-foreground"
             }`}
           >
             {dbStatus ? statusLabel(dbStatus) : "Semua Status"}
@@ -160,7 +162,7 @@ export default async function BankReconciliationPage({
             <p className="text-xs font-medium text-muted-foreground">Total Rekonsiliasi Tercatat</p>
           </div>
           <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
-            {total} <span className="text-sm font-normal text-muted-foreground">sesi</span>
+            {overallCount} <span className="text-sm font-normal text-muted-foreground">sesi</span>
           </p>
         </div>
 
@@ -194,6 +196,7 @@ export default async function BankReconciliationPage({
         total={total}
         page={page}
         pageSize={pageSize}
+        toolbar={<AppSearchField action="/keuangan/rekonsiliasi-bank" placeholder="Cari no. rekonsiliasi..." />}
         filters={statusChips}
       />
     </div>

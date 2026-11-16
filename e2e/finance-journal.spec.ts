@@ -39,9 +39,8 @@ test.describe("Finance — Journal & Reports", () => {
     if (await drawerTrigger.isVisible().catch(() => false)) {
       await drawerTrigger.click()
     }
-    // `exact: true`: nama chip adalah tepat "Semua", jadi jangan biarkan
-    // pencocokan substring menangkap teks lain yang memuat kata itu.
-    const semuaChip = page.getByRole("link", { name: "Semua", exact: true }).first()
+    // `Semua` atau `Semua <N>`: nama chip status memuat jumlah baris.
+    const semuaChip = page.getByRole("link", { name: /^Semua(\s+\d+)?$/ }).first()
     await expect(semuaChip).toBeAttached()
     await expect(semuaChip).toBeVisible()
   })
@@ -56,7 +55,7 @@ test.describe("Finance — Journal & Reports", () => {
     await expect(form).toBeVisible()
 
     // Description input
-    await expect(page.getByPlaceholder("Deskripsi jurnal")).toBeVisible()
+    await expect(page.getByRole("textbox", { name: "Deskripsi" })).toBeVisible()
 
     // Entry table headers
     await expect(page.getByRole("columnheader", { name: "Akun" })).toBeVisible()
@@ -68,7 +67,7 @@ test.describe("Finance — Journal & Reports", () => {
     expect(await accountCombos.count()).toBeGreaterThanOrEqual(2)
 
     // Balance indicator + add-row control
-    await expect(page.getByRole("button", { name: "+ Tambah Baris" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Tambah Baris" })).toBeVisible()
   })
 
   test("create a balanced journal entry end-to-end", async ({ page }, testInfo) => {
@@ -81,7 +80,7 @@ test.describe("Finance — Journal & Reports", () => {
     await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Buat Entri Jurnal" })).toBeVisible({ timeout: 30000 })
 
-    await page.getByPlaceholder("Deskripsi jurnal").fill(description)
+    await page.getByRole("textbox", { name: "Deskripsi" }).fill(description)
 
     const rows = page.locator("table tbody tr")
     await expect(rows.first()).toBeVisible()
@@ -131,7 +130,7 @@ test.describe("Finance — Journal & Reports", () => {
     await waitForHydration(page)
 
     // Empty state before an account is chosen
-    await expect(page.getByText("Pilih akun untuk melihat buku besar")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByText("Pilih akun di atas untuk melihat detail mutasi dan saldo berjalan.")).toBeVisible({ timeout: 30000 })
 
     // Pemilih akun kini milik `ReportPeriodFilter` (Combobox ber-id `filter-akun`);
     // filter tetap diterapkan lewat tombol "Tampilkan".
@@ -148,7 +147,7 @@ test.describe("Finance — Journal & Reports", () => {
     // Ledger table renders with its accounting columns + opening balance row
     await expect(page.getByText("Buku Besar").first()).toBeVisible({ timeout: 30000 })
     await expect(page.getByRole("columnheader", { name: /No\. Jurnal/ })).toBeVisible()
-    await expect(page.getByText("Saldo Awal")).toBeVisible()
+    await expect(page.getByRole("cell", { name: "Saldo Awal", exact: true })).toBeVisible()
   })
 
   test("trial balance (neraca saldo) — table columns and balance invariant", async ({ page }) => {

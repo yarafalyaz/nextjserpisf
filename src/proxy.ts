@@ -27,6 +27,8 @@ const PUBLIC_METADATA_PATHS = new Set([
   "/manifest.webmanifest",
   "/robots.txt",
   "/sitemap.xml",
+  "/offline",
+  "/sw.js",
 ]);
 
 // Rate limit configs per route category

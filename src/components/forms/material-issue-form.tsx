@@ -287,10 +287,10 @@ export function MaterialIssueForm({
           <QuickAddSelect
             id="costCenterId"
             name="costCenterId"
-            options={costCenterOptions.map((cc) => ({ value: String(cc.id), label: `${cc.code} — ${cc.name}` }))}
+            options={costCenterOptions.map((cc) => ({ value: String(cc.id), label: `${cc.code} - ${cc.name}` }))}
             value={costCenterId || null}
             onChange={(key) => setCostCenterId(key ?? "")}
-            placeholder="— Pilih pusat biaya —"
+            placeholder="- Pilih pusat biaya -"
             title={QUICK_ADD.costCenter.title}
             fields={QUICK_ADD.costCenter.fields}
             action={QUICK_ADD.costCenter.action}
@@ -311,7 +311,7 @@ export function MaterialIssueForm({
               options={workOrders.map((wo) => ({ value: String(wo.id), label: wo.documentNo }))}
               value={workOrderId || null}
               onChange={(key) => setWorkOrderId(key ?? "")}
-              placeholder="— Tanpa perintah kerja —"
+              placeholder="- Tanpa perintah kerja -"
             />
           ) : (
             <>
@@ -334,7 +334,7 @@ export function MaterialIssueForm({
               options={projects.map((p) => ({ value: String(p.id), label: p.name }))}
               value={projectId || null}
               onChange={(key) => setProjectId(key ?? "")}
-              placeholder="— Tanpa proyek —"
+              placeholder="- Tanpa proyek -"
             />
           ) : (
             <>

@@ -22,14 +22,20 @@ import {
   CardTitle,
 } from "@/components/ui/shadcn/card"
 import { Button } from "@/components/ui/shadcn/button"
-import { StatCard } from "@/components/ui/empty-state"
 import { StatusChip } from "@/components/ui/status-chip"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/shadcn/table"
 
 async function getPurchasingData() {
   const [pendingPR, pendingPO, poActiveAgg, recentPOs, recentVendorBills, vendorCount] =
     await Promise.all([
-      prisma.purchaseRequest.count({ where: { status: { in: ["draft", "approved"] }, deletedAt: null } }),
+      prisma.purchaseRequest.count({ where: { status: { in: ["draft", "approved"] } } }),
       prisma.purchaseOrder.count({
         where: { status: { in: [...OPEN_PURCHASE_ORDER_STATUSES] }, deletedAt: null },
       }),
@@ -92,16 +98,46 @@ export default async function PurchaseDashboard() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-3 px-4 lg:grid-cols-4 lg:px-6">
-            <StatCard label="PR Menunggu" value={data.pendingPR} icon={<ClipboardList className="size-4" />} />
-            <StatCard label="PO Aktif" value={data.pendingPO} icon={<FileCheck className="size-4" />} />
-            <StatCard
-              label="Nilai PO Aktif"
-              value={formatCurrencyExact(data.totalPendingValue)}
-              icon={<ShoppingBag className="size-4" />}
-            />
-            <StatCard label="Pemasok" value={data.vendorCount} icon={<Factory className="size-4" />} />
-          </div>
+          <section aria-label="Ringkasan pembelian" className="px-4 lg:px-6">
+            <dl className="grid grid-cols-1 divide-y divide-border overflow-hidden rounded-lg border border-border bg-card shadow-2xs sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
+              <div className="flex min-w-0 flex-col justify-between gap-2 p-4 lg:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-medium text-muted-foreground">PR Menunggu</dt>
+                  <ClipboardList className="size-4 text-muted-foreground/60" aria-hidden="true" />
+                </div>
+                <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {data.pendingPR}
+                </dd>
+              </div>
+              <div className="flex min-w-0 flex-col justify-between gap-2 p-4 sm:border-t-0 lg:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-medium text-muted-foreground">PO Aktif</dt>
+                  <FileCheck className="size-4 text-muted-foreground/60" aria-hidden="true" />
+                </div>
+                <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {data.pendingPO}
+                </dd>
+              </div>
+              <div className="flex min-w-0 flex-col justify-between gap-2 p-4 sm:border-t lg:border-t-0 lg:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-medium text-muted-foreground">Nilai PO Aktif</dt>
+                  <ShoppingBag className="size-4 text-muted-foreground/60" aria-hidden="true" />
+                </div>
+                <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {formatCurrencyExact(data.totalPendingValue)}
+                </dd>
+              </div>
+              <div className="flex min-w-0 flex-col justify-between gap-2 p-4 sm:border-t lg:border-t-0 lg:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-medium text-muted-foreground">Pemasok</dt>
+                  <Factory className="size-4 text-muted-foreground/60" aria-hidden="true" />
+                </div>
+                <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {data.vendorCount}
+                </dd>
+              </div>
+            </dl>
+          </section>
 
           {/* Recent POs + Vendor Bills */}
           <div className="grid grid-cols-1 gap-4 px-4 xl:grid-cols-3 lg:px-6">
@@ -121,41 +157,68 @@ export default async function PurchaseDashboard() {
                 </CardAction>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="border-t">
-                  <DetailTable>
-                    <DetailTableHead>
-                      <DetailTableTh>No. Dokumen</DetailTableTh>
-                      <DetailTableTh>Pemasok</DetailTableTh>
-                      <DetailTableTh align="right">Nilai</DetailTableTh>
-                      <DetailTableTh>Status</DetailTableTh>
-                      <DetailTableTh>Tgl</DetailTableTh>
-                    </DetailTableHead>
-                    <DetailTableBody>
+                <div className="divide-y border-t md:hidden">
+                  {data.recentPOs.length === 0 ? (
+                    <p className="px-5 py-10 text-center text-sm text-muted-foreground">
+                      Belum ada pesanan pembelian
+                    </p>
+                  ) : (
+                    data.recentPOs.map((po) => (
+                      <div key={po.id} className="flex items-start justify-between gap-3 px-4 py-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-mono text-xs font-medium text-foreground">{po.documentNo}</p>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">{po.vendor.name}</p>
+                          <p className="mt-1 text-[11px] tabular-nums text-muted-foreground">
+                            {formatDate(po.date, { format: "short" })}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+                          <p className="font-mono text-xs font-medium tabular-nums text-foreground">
+                            {formatCurrencyExact(Number(po.grandTotal))}
+                          </p>
+                          <StatusChip status={po.status} />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="hidden border-t md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>No. Dokumen</TableHead>
+                        <TableHead>Pemasok</TableHead>
+                        <TableHead className="text-right">Nilai</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Tgl</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {data.recentPOs.length === 0 ? (
-                        <DetailTableRow>
-                          <DetailTableTd colSpan={5} align="center" className="py-10 text-muted-foreground">
+                        <TableRow>
+                          <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
                             Belum ada pesanan pembelian
-                          </DetailTableTd>
-                        </DetailTableRow>
+                          </TableCell>
+                        </TableRow>
                       ) : (
                         data.recentPOs.map((po) => (
-                          <DetailTableRow key={po.id}>
-                            <DetailTableTd className="font-mono text-xs font-medium">{po.documentNo}</DetailTableTd>
-                            <DetailTableTd className="max-w-[180px] truncate font-medium">{po.vendor.name}</DetailTableTd>
-                            <DetailTableTd align="right" className="font-mono text-xs font-medium tabular-nums">
+                          <TableRow key={po.id}>
+                            <TableCell className="font-mono text-xs font-medium">{po.documentNo}</TableCell>
+                            <TableCell className="max-w-[180px] truncate font-medium">{po.vendor.name}</TableCell>
+                            <TableCell className="text-right font-mono text-xs font-medium tabular-nums">
                               {formatCurrencyExact(Number(po.grandTotal))}
-                            </DetailTableTd>
-                            <DetailTableTd>
+                            </TableCell>
+                            <TableCell>
                               <StatusChip status={po.status} />
-                            </DetailTableTd>
-                            <DetailTableTd className="text-xs tabular-nums text-muted-foreground">
+                            </TableCell>
+                            <TableCell className="text-xs tabular-nums text-muted-foreground">
                               {formatDate(po.date, { format: "short" })}
-                            </DetailTableTd>
-                          </DetailTableRow>
+                            </TableCell>
+                          </TableRow>
                         ))
                       )}
-                    </DetailTableBody>
-                  </DetailTable>
+                    </TableBody>
+                  </Table>
                 </div>
               </CardContent>
             </Card>
@@ -208,12 +271,12 @@ export default async function PurchaseDashboard() {
             <h2 className="mb-2.5 text-xs font-semibold tracking-wider uppercase text-muted-foreground">
               Menu Cepat
             </h2>
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 lg:grid-cols-3">
               {quickLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="group flex items-center justify-between gap-3 rounded-lg border bg-card p-3.5 shadow-2xs transition-colors duration-150 hover:border-foreground/20 hover:bg-muted/40"
+                  className="group flex items-center justify-between gap-2 rounded-lg border bg-card p-2.5 shadow-2xs transition-all duration-150 active:scale-[0.98] sm:gap-3 sm:p-3.5 [@media(hover:hover)]:hover:border-foreground/20 [@media(hover:hover)]:hover:bg-muted/40"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-muted/50 text-muted-foreground transition-colors group-hover:text-foreground">

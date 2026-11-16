@@ -109,7 +109,7 @@ export function PayrollCommissionLines({
               id="commission-debt"
               name="commissionPayableId"
               required
-              className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm"
+              className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="">Pilih utang...</option>
               {available.map((d) => (

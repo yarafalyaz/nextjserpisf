@@ -1,12 +1,13 @@
 "use client"
 
-import { useRef, useState, useTransition } from "react"
+import { useCallback, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { closeInventoryTransferShortage, receiveInventoryTransfer } from "@/actions/inventory.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { DataTable } from "@/components/ui/data-table"
+import { createColumnHelper } from "@/lib/table"
 import { formatNumber } from "@/lib/utils/format"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
@@ -44,6 +45,10 @@ function newIdempotencyKey(): string {
   return crypto.randomUUID()
 }
 
+type TransferReceiveRow = TransferReceiveLine & { id: number }
+
+const receiveColumnHelper = createColumnHelper<TransferReceiveRow>()
+
 export function TransferReceivePanel({ transferId, status, lines, canCloseShortage }: TransferReceivePanelProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -58,15 +63,151 @@ export function TransferReceivePanel({ transferId, status, lines, canCloseShorta
 
   const receiveLabel = status === "partially_received" ? "Terima Susulan" : "Terima Barang"
 
-  function toggleSerial(lineId: number, serial: string, checked: boolean) {
-    const nextSerials = checked
-      ? [...(serialsByLine[lineId] ?? []), serial]
-      : (serialsByLine[lineId] ?? []).filter((s) => s !== serial)
-    setSerialsByLine((prev) => ({ ...prev, [lineId]: nextSerials }))
-    // Item berserial: qty kali ini mengikuti jumlah serial terpilih (server
-    // menuntut tepat qty serial — BR-TP-08), supaya pengguna tak menebak.
-    setQtyByLine((prev) => ({ ...prev, [lineId]: String(nextSerials.length) }))
-  }
+  const toggleSerial = useCallback((lineId: number, serial: string, checked: boolean) => {
+    setSerialsByLine((prev) => {
+      const current = prev[lineId] ?? []
+      const nextSerials = checked
+        ? [...current, serial]
+        : current.filter((s) => s !== serial)
+      // Item berserial: qty kali ini mengikuti jumlah serial terpilih (server
+      // menuntut tepat qty serial — BR-TP-08), supaya pengguna tak menebak.
+      setQtyByLine((qPrev) => ({ ...qPrev, [lineId]: String(nextSerials.length) }))
+      return { ...prev, [lineId]: nextSerials }
+    })
+  }, [])
+
+  const tableData = useMemo<TransferReceiveRow[]>(
+    () => lines.map((line) => ({ ...line, id: line.transferItemId })),
+    [lines],
+  )
+
+  const columns = useMemo(
+    () => [
+      receiveColumnHelper.accessor("itemName", {
+        header: "Nama Barang",
+        meta: { mobilePrimary: true },
+        cell: (info) => {
+          const line = info.row.original
+          const selectedSerials = serialsByLine[line.transferItemId] ?? []
+          return (
+            <div className="flex flex-col gap-2">
+              <span className="font-medium text-foreground">{line.itemName}</span>
+              {line.remainingSerials.length > 0 && (
+                <fieldset>
+                  <legend className="text-xs text-muted-foreground">Pilih serial yang tiba</legend>
+                  <div className="mt-1 flex flex-col gap-1">
+                    {line.remainingSerials.map((serial) => {
+                      const serialId = `serial-${line.transferItemId}-${serial}`
+                      return (
+                        <div key={serial} className="flex min-h-11 items-center gap-2">
+                          <Checkbox
+                            id={serialId}
+                            checked={selectedSerials.includes(serial)}
+                            disabled={isPending}
+                            onCheckedChange={(checked) => toggleSerial(line.transferItemId, serial, checked === true)}
+                          />
+                          <Label htmlFor={serialId} className="font-mono text-xs">{serial}</Label>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </fieldset>
+              )}
+              {line.batchAllocations.length > 0 && (
+                <fieldset>
+                  <legend className="text-xs text-muted-foreground">Alokasi lot yang tiba (wajib untuk barang berlot)</legend>
+                  <div className="mt-1 flex flex-col gap-2">
+                    {line.batchAllocations.map((batch) => {
+                      const batchId = `batch-${line.transferItemId}-${batch.batchNumber}`
+                      return (
+                        <div key={batch.batchNumber} className="flex min-h-11 flex-wrap items-center gap-2">
+                          <Label htmlFor={batchId} className="font-mono text-xs">
+                            Lot {batch.batchNumber} (terkirim {formatNumber(batch.qty)})
+                          </Label>
+                          <Input
+                            id={batchId}
+                            inputMode="decimal"
+                            className="w-28"
+                            disabled={isPending}
+                            value={batchQtyByLine[line.transferItemId]?.[batch.batchNumber] ?? ""}
+                            onChange={(e) =>
+                              setBatchQtyByLine((prev) => ({
+                                ...prev,
+                                [line.transferItemId]: { ...(prev[line.transferItemId] ?? {}), [batch.batchNumber]: e.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </fieldset>
+              )}
+            </div>
+          )
+        },
+      }),
+      receiveColumnHelper.accessor("qty", {
+        header: "Terkirim",
+        meta: { align: "right" },
+        cell: (info) => {
+          const line = info.row.original
+          return (
+            <span className="font-mono tabular-nums text-foreground">
+              {formatNumber(line.qty)} {line.unit}
+            </span>
+          )
+        },
+      }),
+      receiveColumnHelper.accessor("receivedQty", {
+        header: "Sudah Diterima",
+        meta: { align: "right" },
+        cell: (info) => (
+          <span className="font-mono tabular-nums text-foreground">
+            {formatNumber(info.getValue())}
+          </span>
+        ),
+      }),
+      receiveColumnHelper.accessor("remainingQty", {
+        header: "Belum Diterima",
+        meta: { align: "right" },
+        cell: (info) => (
+          <span className="font-mono tabular-nums text-foreground">
+            {formatNumber(info.getValue())}
+          </span>
+        ),
+      }),
+      receiveColumnHelper.display({
+        id: "receivedNow",
+        header: "Diterima Kali Ini",
+        meta: { align: "right" },
+        cell: (info) => {
+          const line = info.row.original
+          const qtyId = `received-qty-${line.transferItemId}`
+          return (
+            <div className="flex flex-col items-end">
+              <Label htmlFor={qtyId} className="sr-only">Diterima kali ini untuk {line.itemName}</Label>
+              <Input
+                id={qtyId}
+                inputMode="decimal"
+                className="ml-auto w-28 text-right font-mono tabular-nums"
+                disabled={isPending}
+                aria-describedby={line.remainingSerials.length > 0 ? `${qtyId}-serial-hint` : undefined}
+                value={qtyByLine[line.transferItemId] ?? ""}
+                onChange={(e) => setQtyByLine((prev) => ({ ...prev, [line.transferItemId]: e.target.value }))}
+              />
+              {line.remainingSerials.length > 0 && (
+                <p id={`${qtyId}-serial-hint`} className="mt-1 text-xs text-muted-foreground">
+                  Jumlah mengikuti serial terpilih.
+                </p>
+              )}
+            </div>
+          )
+        },
+      }),
+    ],
+    [batchQtyByLine, isPending, qtyByLine, serialsByLine, toggleSerial],
+  )
 
   function handleReceive(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -151,103 +292,15 @@ export function TransferReceivePanel({ transferId, status, lines, canCloseShorta
             disabled={isPending}
           />
         </div>
-        <div className="overflow-x-auto">
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>Nama Barang</DetailTableTh>
-              <DetailTableTh align="right">Terkirim</DetailTableTh>
-              <DetailTableTh align="right">Sudah Diterima</DetailTableTh>
-              <DetailTableTh align="right">Belum Diterima</DetailTableTh>
-              <DetailTableTh align="right">Diterima Kali Ini</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {lines.map((line) => {
-                const qtyId = `received-qty-${line.transferItemId}`
-                const selectedSerials = serialsByLine[line.transferItemId] ?? []
-                return (
-                  <DetailTableRow key={line.transferItemId}>
-                    <DetailTableTd>
-                      <div className="flex flex-col gap-2">
-                        <span>{line.itemName}</span>
-                        {line.remainingSerials.length > 0 && (
-                          <fieldset>
-                            <legend className="text-xs text-muted-foreground">Pilih serial yang tiba</legend>
-                            <div className="mt-1 flex flex-col gap-1">
-                              {line.remainingSerials.map((serial) => {
-                                const serialId = `serial-${line.transferItemId}-${serial}`
-                                return (
-                                  <div key={serial} className="flex min-h-11 items-center gap-2">
-                                    <Checkbox
-                                      id={serialId}
-                                      checked={selectedSerials.includes(serial)}
-                                      disabled={isPending}
-                                      onCheckedChange={(checked) => toggleSerial(line.transferItemId, serial, checked === true)}
-                                    />
-                                    <Label htmlFor={serialId} className="font-mono text-xs">{serial}</Label>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </fieldset>
-                        )}
-                        {line.batchAllocations.length > 0 && (
-                          <fieldset>
-                            <legend className="text-xs text-muted-foreground">Alokasi lot yang tiba (wajib untuk barang berlot)</legend>
-                            <div className="mt-1 flex flex-col gap-2">
-                              {line.batchAllocations.map((batch) => {
-                                const batchId = `batch-${line.transferItemId}-${batch.batchNumber}`
-                                return (
-                                  <div key={batch.batchNumber} className="flex min-h-11 flex-wrap items-center gap-2">
-                                    <Label htmlFor={batchId} className="font-mono text-xs">
-                                      Lot {batch.batchNumber} (terkirim {formatNumber(batch.qty)})
-                                    </Label>
-                                    <Input
-                                      id={batchId}
-                                      inputMode="decimal"
-                                      className="w-28"
-                                      disabled={isPending}
-                                      value={batchQtyByLine[line.transferItemId]?.[batch.batchNumber] ?? ""}
-                                      onChange={(e) =>
-                                        setBatchQtyByLine((prev) => ({
-                                          ...prev,
-                                          [line.transferItemId]: { ...(prev[line.transferItemId] ?? {}), [batch.batchNumber]: e.target.value },
-                                        }))
-                                      }
-                                    />
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </fieldset>
-                        )}
-                      </div>
-                    </DetailTableTd>
-                    <DetailTableTd align="right">{formatNumber(line.qty)} {line.unit}</DetailTableTd>
-                    <DetailTableTd align="right">{formatNumber(line.receivedQty)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatNumber(line.remainingQty)}</DetailTableTd>
-                    <DetailTableTd align="right">
-                      <Label htmlFor={qtyId} className="sr-only">Diterima kali ini untuk {line.itemName}</Label>
-                      <Input
-                        id={qtyId}
-                        inputMode="decimal"
-                        className="ml-auto w-28 text-right"
-                        disabled={isPending}
-                        aria-describedby={line.remainingSerials.length > 0 ? `${qtyId}-serial-hint` : undefined}
-                        value={qtyByLine[line.transferItemId] ?? ""}
-                        onChange={(e) => setQtyByLine((prev) => ({ ...prev, [line.transferItemId]: e.target.value }))}
-                      />
-                      {line.remainingSerials.length > 0 && (
-                        <p id={`${qtyId}-serial-hint`} className="mt-1 text-xs text-muted-foreground">
-                          Jumlah mengikuti serial terpilih.
-                        </p>
-                      )}
-                    </DetailTableTd>
-                  </DetailTableRow>
-                )
-              })}
-            </DetailTableBody>
-          </DetailTable>
-        </div>
+        <DataTable
+          data={tableData}
+          columns={columns}
+          ariaLabel="Formulir Penerimaan Barang Transfer"
+          selectable={false}
+          enableColumnToggle={false}
+          enableExport={false}
+          pageSize={50}
+        />
         <div className="flex flex-wrap items-center gap-3">
           <Button type="submit" variant="primary" isDisabled={isPending} aria-busy={isPending || undefined}>
             {receiveLabel}

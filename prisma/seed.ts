@@ -539,6 +539,20 @@ async function main() {
         [key],
       );
     }
+    // Ensure sequence keys for seeded master records (`POS` and, when demo-seeded, `EMP`)
+    // are never missing or behind the seeded numbers (`sequence-state-integrity-db.test.ts`).
+    const seededSequenceFloors: Array<[string, number]> = [
+      ["POS", POSITIONS.length],
+    ];
+    if (process.env.ALLOW_DEMO_SEED === "true") {
+      seededSequenceFloors.push(["EMP", 9]);
+    }
+    for (const [key, floorValue] of seededSequenceFloors) {
+      await conn.query(
+        "INSERT INTO document_sequences (`key`, current_value, created_at, updated_at) VALUES (?, ?, NOW(), NOW()) ON DUPLICATE KEY UPDATE current_value = GREATEST(current_value, VALUES(current_value)), updated_at = NOW()",
+        [key, floorValue],
+      );
+    }
     console.log("✅ Document sequences created");
 
     // Create vehicle brands, models, and variants from vehicles.json

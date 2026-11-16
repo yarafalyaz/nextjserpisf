@@ -139,7 +139,7 @@ async function onDownPaymentConfirmedInner(
     // invoice cancelled tak punya payment; DP yang masuk harus memicu
     // invoice pengganti, bukan menempel ke yang batal).
     let existingInv = await tx.salesInvoice.findFirst({
-      where: { quotationId: quotation.id, status: { not: "cancelled" } },
+      where: { quotationId: quotation.id, status: { not: "cancelled" }, deletedAt: null },
     });
     // Putaran 80: faktur manual dari form SO lahir quotationId=null — tanpa
     // jembatan SO ini konversi DP membuat invoice KEDUA atas quotation sama.
@@ -153,6 +153,7 @@ async function onDownPaymentConfirmedInner(
           where: {
             salesOrderId: { in: bridgedOrders.map((s) => s.id) },
             status: { not: "cancelled" },
+            deletedAt: null,
           },
         });
       }

@@ -628,4 +628,23 @@ describe("POST /api/cron", () => {
       expect(json.results["cleanup"].status).toBe("success")
     })
   })
+
+  describe("lock-period WIB boundary", () => {
+    it("locks through end of previous WIB month even when UTC is still on the last day of that month", async () => {
+      // 2026-10-31T18:00:00Z == 2026-11-01 01:00 WIB -> previous WIB month is Oct 2026
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date("2026-10-31T18:00:00.000Z"))
+      try {
+        const res = await POST(makeCronRequest("http://localhost/api/cron?task=lock-period"))
+        const json = await res.json()
+        expect(json.results["lock-period"].status).toBe("success")
+        const updateArg = mocks.txSystemSettingUpdate.mock.calls[0][0] as {
+          data: { periodLockDate: Date }
+        }
+        expect(updateArg.data.periodLockDate.toISOString()).toBe("2026-10-31T23:59:59.000Z")
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
 })

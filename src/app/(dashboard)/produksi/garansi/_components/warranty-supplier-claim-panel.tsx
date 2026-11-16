@@ -51,20 +51,20 @@ const SUPPLIER_CLAIM_LABELS: Record<string, string> = {
 // perbarui peta ini di PR yang sama (tes panel mengunci label+tujuan).
 const SUPPLIER_CLAIM_TARGETS: Record<string, { value: string; label: string }[]> = {
   drafted: [
-    { value: "sent", label: "Kirim ke Supplier" },
+    { value: "sent", label: "Kirim ke Pemasok" },
     { value: "none", label: "Lepas Tautan" },
   ],
   sent: [
-    { value: "accepted", label: "Catat Diterima Supplier" },
-    { value: "rejected_supplier", label: "Catat Ditolak Supplier" },
+    { value: "accepted", label: "Catat Diterima Pemasok" },
+    { value: "rejected_supplier", label: "Catat Ditolak Pemasok" },
   ],
   accepted: [
     { value: "returned", label: "Catat Part Sudah Diretur" },
-    { value: "closed_recovered", label: "Tutup — Recovery Diterima" },
-    { value: "closed_no_recovery", label: "Tutup — Tanpa Recovery" },
+    { value: "closed_recovered", label: "Tutup - Pemulihan Klaim Diterima" },
+    { value: "closed_no_recovery", label: "Tutup - Tanpa Pemulihan Klaim" },
   ],
-  rejected_supplier: [{ value: "closed_no_recovery", label: "Tutup — Tanpa Recovery" }],
-  returned: [{ value: "closed_recovered", label: "Tutup — Recovery Diterima" }],
+  rejected_supplier: [{ value: "closed_no_recovery", label: "Tutup - Tanpa Pemulihan Klaim" }],
+  returned: [{ value: "closed_recovered", label: "Tutup - Pemulihan Klaim Diterima" }],
 }
 
 /**
@@ -251,7 +251,7 @@ export function WarrantySupplierClaimPanel({
               <Label htmlFor="supplierClaimVendorId">Vendor Supplier</Label>
               <FormSelect
                 id="supplierClaimVendorId"
-                aria-label="Vendor klaim supplier"
+                aria-label="Vendor klaim pemasok"
                 value={vendorId}
                 onValueChange={setVendorId}
                 options={vendorOptions}
@@ -266,10 +266,10 @@ export function WarrantySupplierClaimPanel({
                 value={purchaseReturnId}
                 onValueChange={setPurchaseReturnId}
                 options={[
-                  { value: "", label: "Tanpa retur — jalur vendor saja" },
+                  { value: "", label: "Tanpa retur - jalur vendor saja" },
                   ...purchaseReturnOptions,
                 ]}
-                placeholder="Tanpa retur — jalur vendor saja"
+                placeholder="Tanpa retur - jalur vendor saja"
               />
               <p className="text-xs text-muted-foreground">
                 Retur dibuat terpisah di modul pembelian; di sini retur draft yang sudah ada hanya

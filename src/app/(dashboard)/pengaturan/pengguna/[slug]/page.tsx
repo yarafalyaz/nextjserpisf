@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { formatDate } from "@/lib/utils/format"
 import { PageHeader } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { StatusChip } from "@/components/ui/status-chip"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { UserAccessPanel } from "./_components/user-access-panel"
 import { WAREHOUSE_ALL_ACCESS_ROLES } from "@/lib/auth/role-names"
@@ -47,7 +48,7 @@ export default async function UserDetailPage({
       select: { id: true, name: true },
     }),
     prisma.warehouse.findMany({
-      where: { isActive: true },
+      where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
@@ -75,9 +76,10 @@ export default async function UserDetailPage({
         <DetailField label="Nama" value={user.name} />
         <DetailField label="Email" value={user.email} />
         <DetailField label="Status" value={
-          <span className={`status-badge ${user.isActive ? "status-active" : "status-cancelled"}`}>
-            {user.isActive ? "Aktif" : "Nonaktif"}
-          </span>
+          <StatusChip
+            status={user.isActive ? "active" : "inactive"}
+            customLabel={user.isActive ? "Aktif" : "Nonaktif"}
+          />
         } />
         <DetailField label="Peran" value={user.roles.map((r) => r.name).join(", ") || "-"} />
         <DetailField label="Dibuat" value={formatDate(user.createdAt)} />

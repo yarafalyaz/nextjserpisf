@@ -4,6 +4,7 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { upsertAssetUsageRecord } from "@/actions/asset.actions"
 import { Button } from "@/components/ui/button"
+import { FormSelect } from "@/components/ui/form-select"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -15,6 +16,7 @@ export function AssetUsageRecordForm({ assetId, defaultYear, defaultMonth }: { a
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [periodMonth, setPeriodMonth] = useState(String(defaultMonth))
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -32,7 +34,7 @@ export function AssetUsageRecordForm({ assetId, defaultYear, defaultMonth }: { a
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3 rounded-lg border border-default bg-surface p-3">
-      <input type="hidden" name="assetId" value={assetId} />
+      <Input type="hidden" name="assetId" value={assetId} />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="usage-periodYear">Tahun Masa</Label>
@@ -40,9 +42,13 @@ export function AssetUsageRecordForm({ assetId, defaultYear, defaultMonth }: { a
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="usage-periodMonth">Bulan Masa</Label>
-          <select id="usage-periodMonth" name="periodMonth" defaultValue={defaultMonth} className="h-11 w-full rounded-md border border-input bg-transparent px-3 text-base md:h-9 md:text-sm">
-            {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-          </select>
+          <Input type="hidden" name="periodMonth" value={periodMonth} />
+          <FormSelect
+            id="usage-periodMonth"
+            value={periodMonth}
+            onValueChange={setPeriodMonth}
+            options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="usage-actualUnits">Unit Aktual *</Label>

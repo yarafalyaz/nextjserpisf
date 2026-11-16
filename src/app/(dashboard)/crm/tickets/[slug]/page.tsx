@@ -13,14 +13,7 @@ import { TicketCommentForm } from "./_components/ticket-comment-form";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
-import {
-  DetailTable,
-  DetailTableHead,
-  DetailTableTh,
-  DetailTableBody,
-  DetailTableRow,
-  DetailTableTd,
-} from "@/components/ui/detail-table";
+import { TicketCommentsTable } from "./_components/ticket-comments-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Pencil } from "@/components/ui/fontawesome-icons";
 
@@ -122,7 +115,7 @@ export default async function CrmTicketDetailPage({
         actions={
           <>
             <CanCreate permission="edit_tickets">
-              <Button href={entityEditHref("/crm/tickets", ticket)} variant="primary">
+              <Button href={entityEditHref("/crm/tickets", ticket)} variant="primary" className="min-h-11 sm:min-h-9">
                 <Pencil size={14} /> Ubah
               </Button>
             </CanCreate>
@@ -208,38 +201,17 @@ export default async function CrmTicketDetailPage({
           {ticket.comments.length === 0 ? (
             <EmptyState title="Belum ada komentar" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Pengguna</DetailTableTh>
-                <DetailTableTh>Komentar</DetailTableTh>
-                <DetailTableTh>Tanggal</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {ticket.comments.map((comment) => (
-                  <DetailTableRow key={comment.id}>
-                    <DetailTableTd>
-                      {comment.userId
-                        ? (commentUserMap.get(comment.userId) ??
-                          `Pengguna #${comment.userId}`)
-                        : "-"}
-                    </DetailTableTd>
-                    <DetailTableTd>
-                      {/* Tanda catatan internal: kolom `isInternal` kini benar-benar
-                          dipakai, bukan hanya tersimpan tanpa terlihat. */}
-                      {comment.isInternal && (
-                        <span className="mr-2 inline-block align-middle text-[0.6875rem] font-medium px-2 py-0.5 rounded-full border border-default text-muted-foreground">
-                          Internal
-                        </span>
-                      )}
-                      {comment.body}
-                    </DetailTableTd>
-                    <DetailTableTd>
-                      {formatDate(comment.createdAt)}
-                    </DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <TicketCommentsTable
+              data={ticket.comments.map((comment) => ({
+                id: comment.id,
+                authorName: comment.userId
+                  ? (commentUserMap.get(comment.userId) ?? `Pengguna #${comment.userId}`)
+                  : "-",
+                body: comment.body,
+                isInternal: comment.isInternal,
+                createdAt: comment.createdAt.toISOString(),
+              }))}
+            />
           )}
         </div>
       </div>

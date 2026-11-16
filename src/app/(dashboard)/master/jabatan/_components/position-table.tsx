@@ -60,7 +60,7 @@ export function PositionTable({ data, total, page, pageSize }: PositionTableProp
       columns={columns}
       ariaLabel="Daftar jabatan"
       serverPagination={{ total, page, pageSize }}
-      selectable={true}
+      selectable={false}
       searchColumn="name"
       searchPlaceholder="Cari nama jabatan..."
     />

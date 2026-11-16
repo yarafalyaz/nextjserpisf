@@ -52,7 +52,7 @@ export async function renderLeadsPage({
   const params = await searchParams
 
   if (!statusParam && params.status) {
-    const targetStatus = params.status
+    const targetStatus = statusToIndo[params.status] || params.status
     const query = new URLSearchParams()
     if (params.cari) query.set("cari", params.cari)
     if (params.halaman) query.set("halaman", params.halaman)

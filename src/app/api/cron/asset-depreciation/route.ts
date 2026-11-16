@@ -16,6 +16,7 @@ import {
 import { apiError } from "@/lib/api-response"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { DocumentSequenceService } from "@/lib/services/document-sequence.service"
+import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 
 /**
  * Cron: Run monthly asset depreciation for all active assets.
@@ -50,11 +51,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const now = new Date()
-    const month = now.getMonth() + 1 // 1-12
-    const year = now.getFullYear()
-    const periodEnd = new Date(year, month, 0) // Last day of current month
-    const periodStart = new Date(year, month - 1, 1)
+    const todayWib = getWibTodayUtcDate()
+    const month = todayWib.getUTCMonth() + 1 // 1-12
+    const year = todayWib.getUTCFullYear()
+    const periodEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)) // End of last calendar day in UTC
+    const periodStart = new Date(Date.UTC(year, month - 1, 1))
     const referenceType = `ASSET_DEPRECIATION_${year}${String(month).padStart(2, "0")}`
 
     // Aset analitis melewati gerbang kategori (rate/usefulLife fiskal tidak

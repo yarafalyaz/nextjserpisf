@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission, hasPermission } from "@/lib/auth/permissions";
+import { canViewCostAmounts } from "@/lib/auth/field-visibility";
 import { formatCurrencyExact, formatDate } from "@/lib/utils/format";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -35,7 +36,7 @@ import { getWorkOrderMaterialNeeds } from "@/lib/reports/work-order-material-nee
 import { WorkOrderPartStatusCard } from "@/components/reports/work-order-part-status-card";
 import { WorkOrderSubstituteSuggestionsPanel } from "@/components/reports/work-order-substitute-suggestions-panel";
 import { getWorkOrderSubstituteSuggestions } from "@/lib/reports/item-substitute-suggestions-data";
-import { FitmentBadge, FitmentIncompatibleSummary } from "@/components/reports/fitment-badge";
+import { FitmentIncompatibleSummary } from "@/components/reports/fitment-badge";
 import { getWorkOrderPartStatus } from "@/lib/reports/work-order-part-status-data";
 import { WorkOrderReservationsCard } from "@/components/reports/work-order-reservations-card";
 import { getWorkOrderReservations } from "@/lib/reports/work-order-reservations-data";
@@ -50,15 +51,11 @@ import { loadBomRevisionImpact } from "@/lib/reports/bom-revision-impact-data";
 import { auth } from "@/lib/auth/auth";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import {
-  DetailTable,
-  DetailTableHead,
-  DetailTableTh,
-  DetailTableBody,
-  DetailTableRow,
-  DetailTableTd,
-  DetailTableFoot,
-  DetailTableFootRow,
-} from "@/components/ui/detail-table";
+  WorkOrderPurchaseOrdersTable,
+  WorkOrderProductionOrdersTable,
+  WorkOrderMaterialIssuesTable,
+  WorkOrderItemsTable,
+} from "./_components/work-order-tables";
 
 import type { Metadata } from "next";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
@@ -240,6 +237,7 @@ export default async function WorkOrderDetailPage({
     getWhatsappTrail("WorkOrder", wo.id),
   ]);
 
+  const canViewCosts = await canViewCostAmounts();
   // F-057-S §2/§3: tabel reservasi stok — baris StockReservation passthrough
   // loader (status/sisa builder, jejak rilis apa adanya). Izin view_work_orders
   // sudah digerbang di atas. Q-RIL-1 saring per gudang belum diputus — loader
@@ -463,10 +461,12 @@ export default async function WorkOrderDetailPage({
           }
           mono
         />
-        <DetailField
-          label="Total Biaya Bahan"
-          value={formatCurrencyExact(totalCost)}
-        />
+        {canViewCosts && (
+          <DetailField
+            label="Total Biaya Bahan"
+            value={formatCurrencyExact(totalCost)}
+          />
+        )}
         {wo.customerVehicle && (
           <DetailField
             label="Kendaraan"
@@ -547,45 +547,30 @@ export default async function WorkOrderDetailPage({
             {wo.purchaseOrders.length > 0 && (
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Pesanan Pembelian</p>
-                <DetailTable>
-                  <DetailTableHead>
-                    <DetailTableTh>No. Dokumen</DetailTableTh>
-                    <DetailTableTh>Jenis</DetailTableTh>
-                    <DetailTableTh align="right">Total</DetailTableTh>
-                    <DetailTableTh>Status</DetailTableTh>
-                  </DetailTableHead>
-                  <DetailTableBody>
-                    {wo.purchaseOrders.map((p) => (
-                      <DetailTableRow key={p.id}>
-                        <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/pesanan", p)}>{p.documentNo}</Link></DetailTableTd>
-                        <DetailTableTd>{p.isService ? "Jasa" : "Barang"}</DetailTableTd>
-                        <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(p.grandTotal))}</DetailTableTd>
-                        <DetailTableTd><StatusChip status={p.status} /></DetailTableTd>
-                      </DetailTableRow>
-                    ))}
-                  </DetailTableBody>
-                </DetailTable>
+                <WorkOrderPurchaseOrdersTable
+                  data={wo.purchaseOrders.map((p) => ({
+                    id: p.id,
+                    slug: p.slug,
+                    documentNo: p.documentNo,
+                    isService: p.isService,
+                    grandTotal: Number(p.grandTotal),
+                    status: p.status,
+                  }))}
+                />
               </div>
             )}
             {wo.productionOrders.length > 0 && (
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Perintah Produksi</p>
-                <DetailTable>
-                  <DetailTableHead>
-                    <DetailTableTh>No. Dokumen</DetailTableTh>
-                    <DetailTableTh align="right">Kuantitas</DetailTableTh>
-                    <DetailTableTh>Status</DetailTableTh>
-                  </DetailTableHead>
-                  <DetailTableBody>
-                    {wo.productionOrders.map((p) => (
-                      <DetailTableRow key={p.id}>
-                        <DetailTableTd className="font-mono"><Link href={entityHref("/produksi/production-orders", p)}>{p.documentNo}</Link></DetailTableTd>
-                        <DetailTableTd align="right">{Number(p.qty)}</DetailTableTd>
-                        <DetailTableTd><StatusChip status={p.status} /></DetailTableTd>
-                      </DetailTableRow>
-                    ))}
-                  </DetailTableBody>
-                </DetailTable>
+                <WorkOrderProductionOrdersTable
+                  data={wo.productionOrders.map((p) => ({
+                    id: p.id,
+                    slug: p.slug,
+                    documentNo: p.documentNo,
+                    qty: Number(p.qty),
+                    status: p.status,
+                  }))}
+                />
               </div>
             )}
           </div>
@@ -731,26 +716,14 @@ export default async function WorkOrderDetailPage({
           {materialIssues.length === 0 ? (
             <EmptyState title="Belum ada pengeluaran material untuk perintah kerja ini" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>No. Dokumen</DetailTableTh>
-                <DetailTableTh>Status</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {materialIssues.map((mi) => (
-                  <DetailTableRow key={mi.id}>
-                    <DetailTableTd className="font-mono">
-                      <Link href={entityHref("/inventaris/pengeluaran-material", mi)}>
-                        {mi.documentNo}
-                      </Link>
-                    </DetailTableTd>
-                    <DetailTableTd>
-                      <StatusChip status={mi.status} />
-                    </DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <WorkOrderMaterialIssuesTable
+              data={materialIssues.map((mi) => ({
+                id: mi.id,
+                slug: mi.slug,
+                documentNo: mi.documentNo,
+                status: mi.status,
+              }))}
+            />
           )}
         </div>
       </div>
@@ -771,55 +744,20 @@ export default async function WorkOrderDetailPage({
           {wo.items.length === 0 ? (
             <EmptyState title="Belum ada bahan" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Nama Barang</DetailTableTh>
-                <DetailTableTh>Deskripsi</DetailTableTh>
-                <DetailTableTh>Status</DetailTableTh>
-                <DetailTableTh align="right">Jml</DetailTableTh>
-                <DetailTableTh align="right">Biaya/Unit</DetailTableTh>
-                <DetailTableTh align="right">Total</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {wo.items.map((item) => (
-                  <DetailTableRow key={item.id}>
-                    <DetailTableTd>
-                      <div className="flex flex-col">
-                        <span>{itemNameMap.get(item.itemId) || `Barang #${item.itemId}`}</span>
-                        <FitmentBadge
-                          fitmentResult={item.fitmentResult}
-                          fitmentRuleId={item.fitmentRuleId}
-                        />
-                      </div>
-                    </DetailTableTd>
-                    <DetailTableTd>{item.description || "-"}</DetailTableTd>
-                    <DetailTableTd>
-                      <StatusChip status={item.status || "pending"} />
-                    </DetailTableTd>
-                    <DetailTableTd align="right">
-                      {Number(item.qty)}
-                    </DetailTableTd>
-                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.cost))}
-                    </DetailTableTd>
-                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.qty) * Number(item.cost))}
-                    </DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-              <DetailTableFoot>
-                <DetailTableFootRow>
-                  <DetailTableTd
-                    colSpan={5}
-                    align="right"
-                    className="font-bold"
-                  >
-                    Total
-                  </DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold font-mono tabular-nums text-right">{formatCurrencyExact(totalCost)}
-                  </DetailTableTd>
-                </DetailTableFootRow>
-              </DetailTableFoot>
-            </DetailTable>
+            <WorkOrderItemsTable
+              data={wo.items.map((item) => ({
+                id: item.id,
+                itemName: itemNameMap.get(item.itemId) || `Barang #${item.itemId}`,
+                fitmentResult: item.fitmentResult,
+                fitmentRuleId: item.fitmentRuleId,
+                description: item.description,
+                status: item.status || "pending",
+                qty: Number(item.qty),
+                cost: Number(item.cost),
+              }))}
+              canViewCosts={canViewCosts}
+              totalCost={totalCost}
+            />
           )}
         </div>
       </div>

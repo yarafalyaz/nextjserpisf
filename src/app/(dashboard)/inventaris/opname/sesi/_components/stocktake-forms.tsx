@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useRef, useState, useTransition } from "react"
+import { useMemo, useRef, useState, useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { Combobox } from "@/components/ui/combobox"
+import { DataTable } from "@/components/ui/data-table"
+import { createColumnHelper } from "@/lib/table"
 import {
   createStocktakeSession,
   snapshotStocktakeSession,
@@ -195,6 +197,8 @@ function splitList(v: string): string[] {
   return v.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)
 }
 
+const countColumnHelper = createColumnHelper<CountRow>()
+
 /** Tabel hitung 1/2 per baris. */
 export function StocktakeLineForm({ sessionId, lines, canCreate }: { sessionId: number; lines: CountRow[]; canCreate: boolean }) {
   const router = useRouter()
@@ -210,16 +214,123 @@ export function StocktakeLineForm({ sessionId, lines, canCreate }: { sessionId: 
     setLots((prev) => ({ ...prev, [lineId]: { ...prev[lineId], [field]: value } }))
   }
 
+  const columns = useMemo(
+    () => [
+      countColumnHelper.accessor("name", {
+        header: "Item & SKU",
+        meta: { mobilePrimary: true },
+        cell: (info) => {
+          const l = info.row.original
+          return (
+            <div>
+              <div className="font-medium text-foreground">{l.name}</div>
+              <div className="font-mono text-[11px] text-muted-foreground mt-0.5 tabular-nums">{l.sku}</div>
+            </div>
+          )
+        },
+      }),
+      countColumnHelper.accessor("systemQty", {
+        header: "Kuantitas Sistem",
+        meta: { align: "right" },
+        cell: (info) => (
+          <span className="font-mono font-medium tabular-nums text-foreground">
+            {info.getValue()}
+          </span>
+        ),
+      }),
+      countColumnHelper.display({
+        id: "count1",
+        header: "Hitung 1",
+        meta: { align: "right" },
+        cell: (info) => {
+          const l = info.row.original
+          return (
+            <Input
+              type="number"
+              min={0}
+              step="any"
+              aria-label={`Hitung 1 baris ${l.id}`}
+              defaultValue={l.count1 ?? ""}
+              disabled={!canCreate}
+              onChange={(e) => set(l.id, "count1", e.target.value)}
+              className="ml-auto h-9 sm:h-8 w-32 text-xs text-right font-mono tabular-nums"
+            />
+          )
+        },
+      }),
+      countColumnHelper.display({
+        id: "count2",
+        header: "Hitung 2 (Recount)",
+        meta: { align: "right" },
+        cell: (info) => {
+          const l = info.row.original
+          return (
+            <Input
+              type="number"
+              min={0}
+              step="any"
+              aria-label={`Hitung 2 baris ${l.id}`}
+              defaultValue={l.count2 ?? ""}
+              disabled={!canCreate}
+              onChange={(e) => set(l.id, "count2", e.target.value)}
+              className="ml-auto h-9 sm:h-8 w-32 text-xs text-right font-mono tabular-nums"
+            />
+          )
+        },
+      }),
+      countColumnHelper.display({
+        id: "lotSerial",
+        header: "Lot / Serial (Surplus)",
+        cell: (info) => {
+          const l = info.row.original
+          return (
+            <div className="flex flex-col gap-1.5 min-w-48">
+              {l.trackBatch && (
+                <Input
+                  type="text"
+                  aria-label={`Nomor batch baris ${l.id}`}
+                  defaultValue={(l.batchNumbers ?? []).join(", ")}
+                  placeholder="Batch: LOT-A, LOT-B"
+                  disabled={!canCreate}
+                  onChange={(e) => setLot(l.id, "batch", e.target.value)}
+                  className="h-8 sm:h-7 w-full text-[11px] font-mono"
+                />
+              )}
+              {l.trackSerial && (
+                <Input
+                  type="text"
+                  aria-label={`Nomor serial baris ${l.id}`}
+                  defaultValue={(l.serialNumbers ?? []).join(", ")}
+                  placeholder="Serial: SN-1, SN-2"
+                  disabled={!canCreate}
+                  onChange={(e) => setLot(l.id, "serial", e.target.value)}
+                  className="h-8 sm:h-7 w-full text-[11px] font-mono"
+                />
+              )}
+            </div>
+          )
+        },
+      }),
+    ],
+    [canCreate],
+  )
+
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const payload = lines.map((l) => ({
       lineId: l.id,
-      count1: counts[l.id]?.count1 !== undefined && counts[l.id].count1 !== ""
-        ? Number(counts[l.id].count1)
-        : l.count1,
-      count2: counts[l.id]?.count2 !== undefined && counts[l.id].count2 !== ""
-        ? Number(counts[l.id].count2)
-        : l.count2,
+      count1:
+        counts[l.id]?.count1 !== undefined
+          ? counts[l.id].count1 === ""
+            ? null
+            : Number(counts[l.id].count1)
+          : l.count1,
+      count2:
+        counts[l.id]?.count2 !== undefined
+          ? counts[l.id].count2 === ""
+            ? null
+            : Number(counts[l.id].count2)
+          : l.count2,
       batchNumbers: lots[l.id]?.batch !== undefined ? splitList(lots[l.id].batch) : l.batchNumbers,
       serialNumbers: lots[l.id]?.serial !== undefined ? splitList(lots[l.id].serial) : l.serialNumbers,
     }))
@@ -238,92 +349,23 @@ export function StocktakeLineForm({ sessionId, lines, canCreate }: { sessionId: 
   }
 
   if (lines.length === 0) {
-    return <EmptyState title="Belum ada snapshot — tekan Snapshot." className="py-8" />
+    return <EmptyState title="Belum ada snapshot - tekan Snapshot." className="py-8" />
   }
 
   return (
     <form onSubmit={onSubmit} aria-label="Simpan hitungan opname" className="space-y-4">
-      <div className="rounded-lg border border-border bg-card shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left border-collapse">
-            <thead>
-              <tr className="border-b border-border bg-muted/40 text-muted-foreground font-medium uppercase tracking-wider text-[11px]">
-                <th className="py-2.5 px-4">Item & SKU</th>
-                <th className="py-2.5 px-4 text-right w-28">Kuantitas Sistem</th>
-                <th className="py-2.5 px-4 text-center w-36">Hitung 1</th>
-                <th className="py-2.5 px-4 text-center w-36">Hitung 2 (Recount)</th>
-                <th className="py-2.5 px-4 w-64">Lot / Serial (Surplus)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {lines.map((l) => (
-                <tr key={l.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="py-2.5 px-4">
-                    <div className="font-medium text-foreground">{l.name}</div>
-                    <div className="font-mono text-[11px] text-muted-foreground mt-0.5">{l.sku}</div>
-                  </td>
-                  <td className="py-2.5 px-4 text-right font-mono font-medium tabular-nums text-foreground">
-                    {l.systemQty}
-                  </td>
-                  <td className="py-2.5 px-4">
-                    <input
-                      type="number"
-                      min={0}
-                      step="any"
-                      aria-label={`Hitung 1 baris ${l.id}`}
-                      defaultValue={l.count1 ?? ""}
-                      disabled={!canCreate}
-                      onChange={(e) => set(l.id, "count1", e.target.value)}
-                      className="flex h-8 w-full rounded-md border border-input bg-card px-2.5 py-1 text-xs text-right font-mono tabular-nums text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    />
-                  </td>
-                  <td className="py-2.5 px-4">
-                    <input
-                      type="number"
-                      min={0}
-                      step="any"
-                      aria-label={`Hitung 2 baris ${l.id}`}
-                      defaultValue={l.count2 ?? ""}
-                      disabled={!canCreate}
-                      onChange={(e) => set(l.id, "count2", e.target.value)}
-                      className="flex h-8 w-full rounded-md border border-input bg-card px-2.5 py-1 text-xs text-right font-mono tabular-nums text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    />
-                  </td>
-                  <td className="py-2.5 px-4">
-                    <div className="flex flex-col gap-1.5">
-                      {l.trackBatch && (
-                        <input
-                          type="text"
-                          aria-label={`Nomor batch baris ${l.id}`}
-                          defaultValue={(l.batchNumbers ?? []).join(", ")}
-                          placeholder="Batch: LOT-A, LOT-B"
-                          disabled={!canCreate}
-                          onChange={(e) => setLot(l.id, "batch", e.target.value)}
-                          className="flex h-7 w-full rounded-md border border-input bg-card px-2 py-0.5 text-[11px] font-mono text-foreground placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                        />
-                      )}
-                      {l.trackSerial && (
-                        <input
-                          type="text"
-                          aria-label={`Nomor serial baris ${l.id}`}
-                          defaultValue={(l.serialNumbers ?? []).join(", ")}
-                          placeholder="Serial: SN-1, SN-2"
-                          disabled={!canCreate}
-                          onChange={(e) => setLot(l.id, "serial", e.target.value)}
-                          className="flex h-7 w-full rounded-md border border-input bg-card px-2 py-0.5 text-[11px] font-mono text-foreground placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                        />
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable
+        data={lines}
+        columns={columns}
+        ariaLabel="Tabel Hitungan Opname"
+        selectable={false}
+        enableColumnToggle={false}
+        enableExport={false}
+        pageSize={50}
+      />
       {canCreate && (
         <div className="flex justify-end gap-3">
-          <Button type="submit" isDisabled={isPending} className="h-9 text-xs px-4">
+          <Button type="submit" isDisabled={isPending} className="min-h-11 sm:min-h-9 text-xs px-4">
             {isPending ? "Menyimpan..." : "Simpan Hitungan"}
           </Button>
         </div>

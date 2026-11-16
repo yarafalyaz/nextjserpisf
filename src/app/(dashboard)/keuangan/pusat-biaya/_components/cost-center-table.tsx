@@ -19,6 +19,13 @@ interface CostCenterData {
   _depth?: number
 }
 
+const DEPTH_INDENT: Record<number, string> = {
+  0: "",
+  1: "ml-4",
+  2: "ml-8",
+  3: "ml-12",
+}
+
 const columnHelper = createColumnHelper<CostCenterData>()
 
 const columns = [
@@ -31,8 +38,9 @@ const columns = [
     cell: (info) => {
       const row = info.row.original
       const hasChildren = row.children && row.children.length > 0
+      const indentClass = row._depth ? (DEPTH_INDENT[row._depth] ?? "ml-12") : ""
       return (
-        <div className={cn("flex items-center gap-1.5", row._depth && `ml-${row._depth * 4}`)}>
+        <div className={cn("flex items-center gap-1.5", indentClass)}>
           {hasChildren && <ChevronRight className="size-3 text-muted-foreground shrink-0" />}
           <Link href={entityHref("/keuangan/pusat-biaya", row)} className="text-foreground hover:underline font-medium">
             {info.getValue()}
@@ -49,8 +57,10 @@ const columns = [
       <ActionDropdown
         viewHref={entityHref("/keuangan/pusat-biaya", info.row.original)}
         editHref={entityEditHref("/keuangan/pusat-biaya", info.row.original)}
+        editPermission="edit_cost_centers"
         deleteAction={deleteCostCenter}
         deleteId={info.row.original.id}
+        deletePermission="delete_cost_centers"
       />
     ),
   }),
@@ -76,12 +86,14 @@ interface CostCenterTableProps {
 
 export function CostCenterTable({ data, total, page, pageSize }: CostCenterTableProps) {
   const flatData = flattenTree(data)
+  const effectiveTotal =
+    page === 1 && total <= pageSize ? flatData.length : Math.max(total, flatData.length)
   return (
     <DataTable
       data={flatData}
       columns={columns}
       ariaLabel="Daftar cost center"
-      serverPagination={{ total, page, pageSize }}
+      serverPagination={{ total: effectiveTotal, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari kode atau nama..."

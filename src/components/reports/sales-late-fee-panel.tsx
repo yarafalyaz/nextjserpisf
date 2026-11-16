@@ -472,7 +472,7 @@ export function SalesLateFeePanel({
   return (
     <section
       aria-label={SALES_LATE_FEE_TITLE}
-      className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
+      className="bg-surface rounded-lg border border-default shadow-2xs overflow-hidden"
     >
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
         <h2 className="text-[0.9375rem] font-semibold text-foreground">
@@ -495,14 +495,14 @@ export function SalesLateFeePanel({
           <div className="flex flex-wrap gap-2">
             <DialogShell
               triggerLabel="Syarat Denda"
-              title={`Syarat Denda — ${panel.customerName}`}
+              title={`Syarat Denda: ${panel.customerName}`}
               description="Syarat kontraktual bertanggal efektif per pelanggan. Tepat satu basis tarif."
             >
               {(close) => <TermForm panel={panel} onDone={close} />}
             </DialogShell>
             <DialogShell
               triggerLabel="Terbitkan Dokumen Denda"
-              title={`Terbitkan Dokumen Denda — ${panel.invoiceDocumentNo}`}
+              title={`Terbitkan Dokumen Denda: ${panel.invoiceDocumentNo}`}
               description="Dokumen denda terpisah dari faktur asal; nominal dihitung server dari snapshot syarat."
             >
               {(close) => <IssueForm panel={panel} onDone={close} />}
@@ -657,7 +657,7 @@ export function SalesLateFeePanel({
                   <div className="mt-3 flex flex-wrap gap-2">
                     <DialogShell
                       triggerLabel="Catat Pembayaran Denda"
-                      title={`Pembayaran Denda — ${doc.documentNo}`}
+                      title={`Pembayaran Denda: ${doc.documentNo}`}
                       description="Pembayaran mengurangi saldo dokumen denda saja, bukan sisa faktur asal."
                     >
                       {(close) => (
@@ -675,7 +675,7 @@ export function SalesLateFeePanel({
                   <div className="mt-2 flex flex-wrap gap-2">
                     <DialogShell
                       triggerLabel="Balik Dokumen Denda"
-                      title={`Pembalikan Dokumen Denda — ${doc.documentNo}`}
+                      title={`Pembalikan Dokumen Denda: ${doc.documentNo}`}
                       description="Koreksi/waiver hanya lewat pembalikan dokumen."
                     >
                       {(close) => <ReverseForm doc={doc} onDone={close} />}

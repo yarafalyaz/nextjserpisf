@@ -19,7 +19,7 @@ export default async function BankTransfersPage() {
   const transfers = await prisma.bankTransfer.findMany({
     where: { deletedAt: null },
     orderBy: { date: "desc" },
-    take: 200,
+    take: 500,
   })
 
   const accountIds = [

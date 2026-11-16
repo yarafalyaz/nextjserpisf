@@ -11,6 +11,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
+import { FormSelect } from "@/components/ui/form-select"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { ROSTER_TYPES } from "@/lib/validations/hrm.schemas"
 
@@ -55,38 +56,31 @@ export function RosterForm({ employees }: { employees: EmployeeOption[] }) {
     >
       <div className="flex flex-col gap-1.5 sm:w-56">
         <Label htmlFor="rosterEmployee">Karyawan *</Label>
-        <select
+        <FormSelect
           id="rosterEmployee"
           name="employeeId"
           required
           defaultValue=""
-          className="h-9 rounded-lg border border-default bg-surface px-3 text-sm text-foreground"
-        >
-          <option value="">Pilih karyawan</option>
-          {employees.map((emp) => (
-            <option key={emp.id} value={emp.id}>
-              {emp.name}
-              {emp.employeeNo ? ` (${emp.employeeNo})` : ""}
-            </option>
-          ))}
-        </select>
+          placeholder="Pilih karyawan"
+          options={employees.map((emp) => ({
+            value: String(emp.id),
+            label: `${emp.name}${emp.employeeNo ? ` (${emp.employeeNo})` : ""}`,
+          }))}
+        />
       </div>
       <AppDatePicker label="Tanggal *" name="date" required className="sm:w-40" />
       <div className="flex flex-col gap-1.5 sm:w-44">
         <Label htmlFor="rosterType">Jenis *</Label>
-        <select
+        <FormSelect
           id="rosterType"
           name="type"
           required
           defaultValue="cuti"
-          className="h-9 rounded-lg border border-default bg-surface px-3 text-sm text-foreground"
-        >
-          {ROSTER_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {ROSTER_TYPE_LABELS[type]}
-            </option>
-          ))}
-        </select>
+          options={ROSTER_TYPES.map((type) => ({
+            value: type,
+            label: ROSTER_TYPE_LABELS[type],
+          }))}
+        />
       </div>
       <div className="flex flex-1 flex-col gap-1.5">
         <Label htmlFor="rosterNotes">Catatan</Label>

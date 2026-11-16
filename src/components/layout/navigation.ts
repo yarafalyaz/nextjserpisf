@@ -210,6 +210,7 @@ export const navigation: NavItem[] = [
       { label: "Rekonsiliasi Bank", href: "/keuangan/rekonsiliasi-bank", icon: Landmark, permission: "view_bank_reconciliation" },
       { label: "Transfer Bank", href: "/keuangan/transfer-bank", icon: ArrowLeftRight, permission: "view_bank_transfers" },
       { label: "Penyetoran Pajak", href: "/keuangan/penyetoran-pajak", icon: BadgeDollarSign, permission: "view_tax_payments" },
+      { label: "Register SPT", href: "/keuangan/register-spt", icon: FileCheck, permission: "view_spt_filings" },
       { label: "Sengketa Pajak", href: "/keuangan/sengketa-pajak", icon: Gavel, permission: "view_tax_disputes" },
       { label: "Faktur Pajak", href: "/keuangan/dokumen-pajak/faktur", icon: FileCheck, permission: "create_tax_invoices" },
       { label: "Bukti Potong", href: "/keuangan/dokumen-pajak/bupot", icon: Receipt, permission: "manage_withholding_certificates" },

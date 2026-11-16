@@ -37,15 +37,11 @@ import { loadQuotationApprovalGate } from "@/lib/reports/quotation-approval-gate
 import { QuotationApprovalGateCard } from "@/components/reports/quotation-approval-gate-card";
 import { getQuotationRevisionDelta } from "@/lib/reports/quotation-revision-delta-data";
 import { QuotationRevisionDeltaCard } from "@/components/reports/quotation-revision-delta-card";
-import { FitmentBadge, FitmentIncompatibleSummary } from "@/components/reports/fitment-badge";
+import { FitmentIncompatibleSummary } from "@/components/reports/fitment-badge";
 import {
-  DetailTable,
-  DetailTableHead,
-  DetailTableTh,
-  DetailTableBody,
-  DetailTableRow,
-  DetailTableTd,
-} from "@/components/ui/detail-table";
+  QuotationDownPaymentsTable,
+  QuotationSectionItemsTable,
+} from "./_components/quotation-detail-tables";
 import { PostedLockNotice } from "@/components/ui/posted-lock-notice";
 
 import type { Metadata } from "next";
@@ -458,27 +454,14 @@ export default async function QuotationDetailPage({
                       </h2>
                     </div>
                     <div className="p-4 px-5">
-                      <DetailTable>
-                        <DetailTableHead>
-                          <DetailTableTh>Jumlah</DetailTableTh>
-                          <DetailTableTh>Status</DetailTableTh>
-                          <DetailTableTh>Dibuat</DetailTableTh>
-                        </DetailTableHead>
-                        <DetailTableBody>
-                          {quotation.downPayments.map((dp) => (
-                            <DetailTableRow key={dp.id}>
-                              <DetailTableTd className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(dp.amount))}
-                              </DetailTableTd>
-                              <DetailTableTd>
-                                <StatusChip status={dp.status} />
-                              </DetailTableTd>
-                              <DetailTableTd>
-                                {formatDate(dp.createdAt)}
-                              </DetailTableTd>
-                            </DetailTableRow>
-                          ))}
-                        </DetailTableBody>
-                      </DetailTable>
+                      <QuotationDownPaymentsTable
+                        data={quotation.downPayments.map((dp) => ({
+                          id: dp.id,
+                          amount: Number(dp.amount),
+                          status: dp.status,
+                          createdAt: dp.createdAt.toISOString(),
+                        }))}
+                      />
                     </div>
                   </div>
                 )}
@@ -523,53 +506,25 @@ export default async function QuotationDetailPage({
                       </h2>
                     </div>
                     <div className="p-4 px-5">
-                      <DetailTable>
-                        <DetailTableHead>
-                          <DetailTableTh>Produk</DetailTableTh>
-                          <DetailTableTh>Deskripsi</DetailTableTh>
-                          <DetailTableTh align="right">Jml</DetailTableTh>
-                          <DetailTableTh>Satuan</DetailTableTh>
-                          <DetailTableTh align="right">Harga</DetailTableTh>
-                          <DetailTableTh align="right">Diskon</DetailTableTh>
-                          <DetailTableTh align="right">Total</DetailTableTh>
-                        </DetailTableHead>
-                        <DetailTableBody>
-                          {section.items.map((item) => {
-                            const matchedItem = item.itemId ? itemMap.get(item.itemId) : null;
-                            return (
-                              <DetailTableRow key={item.id}>
-                                <DetailTableTd>
-                                  {matchedItem ? (
-                                    <div className="flex flex-col">
-                                      <span className="font-medium text-foreground">{matchedItem.name}</span>
-                                      <span className="text-xs text-muted-foreground">{matchedItem.sku}</span>
-                                    </div>
-                                  ) : (
-                                    `Barang #${item.itemId}`
-                                  )}
-                                  <FitmentBadge
-                                    fitmentResult={item.fitmentResult}
-                                    fitmentRuleId={item.fitmentRuleId}
-                                  />
-                                </DetailTableTd>
-                                <DetailTableTd>
-                                  {item.description || "-"}
-                                </DetailTableTd>
-                                <DetailTableTd align="right">
-                                  {Number(item.qty)}
-                                </DetailTableTd>
-                                <DetailTableTd>{item.uom || "-"}</DetailTableTd>
-                                <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.unitPrice))}
-                                </DetailTableTd>
-                                <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.discount))}
-                                </DetailTableTd>
-                                <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.total))}
-                                </DetailTableTd>
-                              </DetailTableRow>
-                            );
-                          })}
-                        </DetailTableBody>
-                      </DetailTable>
+                      <QuotationSectionItemsTable
+                        data={section.items.map((item) => {
+                          const matchedItem = item.itemId ? itemMap.get(item.itemId) : null;
+                          return {
+                            id: item.id,
+                            itemId: item.itemId,
+                            itemName: matchedItem?.name ?? null,
+                            itemSku: matchedItem?.sku ?? null,
+                            fitmentResult: item.fitmentResult,
+                            fitmentRuleId: item.fitmentRuleId,
+                            description: item.description,
+                            qty: Number(item.qty),
+                            uom: item.uom,
+                            unitPrice: Number(item.unitPrice),
+                            discount: Number(item.discount),
+                            total: Number(item.total),
+                          };
+                        })}
+                      />
                     </div>
                   </div>
                 ))}

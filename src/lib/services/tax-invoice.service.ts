@@ -738,7 +738,13 @@ export async function creditInputInvoice(input: CreditInputInvoiceInput): Promis
     if (!isValidIdempotencyKey(input.idempotencyKey)) {
       return { success: false, error: "Kredit faktur masukan wajib idempotency key valid" }
     }
-    const fp = payloadFingerprint({ scope: SCOPE_CREDIT, id: input.id, creditPeriod: input.creditPeriod })
+    const fp = payloadFingerprint({
+      scope: SCOPE_CREDIT,
+      id: input.id,
+      creditPeriod: input.creditPeriod,
+      nonCreditableReason: input.nonCreditableReason ?? "",
+      creditablePercent: input.creditablePercent ?? 100,
+    })
     let isReplay = false
     // B4: status `expired` adalah FAKTA yang harus tersimpan, bukan bagian
     // dari transaksi yang gagal. Menulisnya lalu `throw` di dalam

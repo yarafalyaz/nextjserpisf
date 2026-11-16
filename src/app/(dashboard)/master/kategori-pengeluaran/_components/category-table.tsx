@@ -67,6 +67,10 @@ export function CategoryTable({ data, total, page, pageSize }: { data: CategoryR
       data={data}
       columns={columns}
       ariaLabel="Kategori pengeluaran"
+      selectable={false}
+      searchColumn="name"
+      searchPlaceholder="Cari nama atau label..."
+      searchParam="cari"
       serverPagination={{ total, page, pageSize }}
     />
   )

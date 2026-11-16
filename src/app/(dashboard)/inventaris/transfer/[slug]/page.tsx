@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatDate, formatNumber } from "@/lib/utils/format"
+import { formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
@@ -11,7 +11,10 @@ import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { EmptyState } from "@/components/ui/empty-state"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import {
+  TransferItemsTable,
+  TransferReceiptHistoryTable,
+} from "./_components/transfer-tables"
 import {
   groupReceivedSerialsByLine,
   parseStoredSerials,
@@ -195,24 +198,16 @@ export default async function InventoryTransferDetailPage({
           {transfer.items.length === 0 ? (
             <EmptyState title="Tidak ada barang" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Nama Barang</DetailTableTh>
-                <DetailTableTh align="right">Terkirim</DetailTableTh>
-                <DetailTableTh align="right">Sudah Diterima</DetailTableTh>
-                <DetailTableTh align="right">Belum Diterima</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {receiveLines.map((line) => (
-                  <DetailTableRow key={line.transferItemId}>
-                    <DetailTableTd>{line.itemName}</DetailTableTd>
-                    <DetailTableTd align="right">{formatNumber(line.qty)} {line.unit}</DetailTableTd>
-                    <DetailTableTd align="right">{formatNumber(line.receivedQty)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatNumber(line.remainingQty)}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <TransferItemsTable
+              data={receiveLines.map((line) => ({
+                id: line.transferItemId,
+                itemName: line.itemName,
+                unit: line.unit,
+                qty: line.qty,
+                receivedQty: line.receivedQty,
+                remainingQty: line.remainingQty,
+              }))}
+            />
           )}
         </div>
       </div>
@@ -257,27 +252,19 @@ export default async function InventoryTransferDetailPage({
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Penerimaan</h2>
           </div>
           <div className="p-4 px-5">
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Tanggal Terima</DetailTableTh>
-                <DetailTableTh>Barang</DetailTableTh>
-                <DetailTableTh align="right">Qty Diterima</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {receiptEvents.flatMap((receipt) =>
-                  receipt.items.map((entry) => {
-                    const line = receiveLines.find((l) => l.transferItemId === entry.inventoryTransferItemId)
-                    return (
-                      <DetailTableRow key={entry.id}>
-                        <DetailTableTd>{formatDate(receipt.receivedDate)}</DetailTableTd>
-                        <DetailTableTd>{line?.itemName ?? `Baris #${entry.inventoryTransferItemId}`}</DetailTableTd>
-                        <DetailTableTd align="right">{formatNumber(Number(entry.qty))}</DetailTableTd>
-                      </DetailTableRow>
-                    )
-                  }),
-                )}
-              </DetailTableBody>
-            </DetailTable>
+            <TransferReceiptHistoryTable
+              data={receiptEvents.flatMap((receipt) =>
+                receipt.items.map((entry) => {
+                  const line = receiveLines.find((l) => l.transferItemId === entry.inventoryTransferItemId)
+                  return {
+                    id: entry.id,
+                    receivedDate: receipt.receivedDate.toISOString(),
+                    itemName: line?.itemName ?? `Baris #${entry.inventoryTransferItemId}`,
+                    qty: Number(entry.qty),
+                  }
+                }),
+              )}
+            />
           </div>
         </div>
       )}

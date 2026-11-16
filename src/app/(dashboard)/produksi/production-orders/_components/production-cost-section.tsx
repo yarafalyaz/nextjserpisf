@@ -1,11 +1,11 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useRef, useState, useTransition } from "react"
+import { useCallback, useMemo, useRef, useState, useTransition } from "react"
 import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 import { Pencil } from "@/components/ui/fontawesome-icons"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { formatCurrencyExact } from "@/lib/utils/format"
+import { formatCurrencyExact, formatNumber } from "@/lib/utils/format"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { CurrencyInput } from "@/components/ui/currency-input"
@@ -17,7 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/shadcn/select"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { DataTable } from "@/components/ui/data-table"
+import { createColumnHelper } from "@/lib/table"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Button } from "@/components/ui/button"
 import {
@@ -62,6 +63,8 @@ export interface ProductionCostRow {
   nonconformanceId?: number | null
   nonconformanceNo?: string | null
 }
+
+const costColumnHelper = createColumnHelper<ProductionCostRow>()
 
 export function ProductionCostSection({
   productionOrderId,
@@ -142,7 +145,7 @@ export function ProductionCostSection({
     })
   }
 
-  function handleDelete(id: number) {
+  const handleDelete = useCallback((id: number) => {
     startTransition(async () => {
       const result = await deleteProductionCost(id)
       if (result && !result.success) {
@@ -152,16 +155,128 @@ export function ProductionCostSection({
       showSuccess("Biaya produksi dihapus")
       router.refresh()
     })
-  }
+  }, [router])
 
-  function startEdit(c: ProductionCostRow) {
+  const startEdit = useCallback((c: ProductionCostRow) => {
     setEditing(c)
     setOpen(true)
     setCategory(c.category)
     setHours(c.hours != null ? String(c.hours) : "")
     setRate(c.rate ?? null)
     setAmount(c.amount)
-  }
+  }, [])
+
+  const columns = useMemo(
+    () => [
+      costColumnHelper.accessor("category", {
+        header: "Kategori",
+        meta: { mobilePrimary: true },
+        cell: (info) => (
+          <span className="font-medium text-foreground">
+            {CATEGORY_LABELS[info.getValue()] ?? info.getValue()}
+          </span>
+        ),
+      }),
+      costColumnHelper.accessor("description", {
+        header: "Deskripsi",
+        cell: (info) => (
+          <span className="text-muted-foreground">{info.getValue() ?? "-"}</span>
+        ),
+      }),
+      costColumnHelper.accessor("hours", {
+        header: "Jam",
+        meta: { align: "right" },
+        cell: (info) => (
+          <span className="font-mono tabular-nums text-foreground">
+            {info.getValue() != null ? formatNumber(info.getValue()!) : "-"}
+          </span>
+        ),
+      }),
+      costColumnHelper.accessor("rate", {
+        header: "Tarif",
+        meta: { align: "right" },
+        cell: (info) => (
+          <span className="font-mono tabular-nums text-foreground">
+            {info.getValue() != null ? formatCurrencyExact(info.getValue()!) : "-"}
+          </span>
+        ),
+      }),
+      costColumnHelper.accessor("amount", {
+        header: "Jumlah",
+        meta: { align: "right" },
+        cell: (info) => (
+          <span className="font-mono tabular-nums text-foreground">
+            {formatCurrencyExact(info.getValue())}
+          </span>
+        ),
+      }),
+      costColumnHelper.display({
+        id: "source",
+        header: "Sumber",
+        cell: (info) => {
+          const c = info.row.original
+          const hasAny =
+            Boolean(c.sourceTimesheetId) ||
+            Boolean(c.vendorName) ||
+            c.purchaseOrderId != null ||
+            c.nonconformanceId != null
+          return (
+            <span className="inline-flex flex-wrap items-center gap-2 text-muted-foreground">
+              {c.sourceTimesheetId ? (
+                <span>Lembar Waktu</span>
+              ) : c.vendorName ? (
+                <span>{c.vendorName}</span>
+              ) : null}
+              {c.purchaseOrderId != null && (
+                <Link href={`/pembelian/pesanan/${c.purchaseOrderId}`} className="text-primary hover:underline">
+                  PO {c.purchaseOrderNo ?? `#${c.purchaseOrderId}`}
+                </Link>
+              )}
+              {c.nonconformanceId != null && (
+                <Link href={`/produksi/qc/ncr/${c.nonconformanceId}`} className="text-primary hover:underline">
+                  NCR {c.nonconformanceNo ?? `#${c.nonconformanceId}`}
+                </Link>
+              )}
+              {!hasAny && "-"}
+            </span>
+          )
+        },
+      }),
+      ...(canManage
+        ? [
+            costColumnHelper.display({
+              id: "actions",
+              header: "Aksi",
+              meta: { align: "right" },
+              cell: (info) => {
+                const c = info.row.original
+                return (
+                  <div className="flex justify-end gap-1.5">
+                    <Button
+                      onPress={() => startEdit(c)}
+                      aria-label="Ubah biaya"
+                      type="button"
+                      isDisabled={isPending}
+                    >
+                      <Pencil size={14} />
+                    </Button>
+                    <Button
+                      onPress={() => handleDelete(c.id)}
+                      aria-label={`Hapus biaya ${c.description || c.id}`}
+                      type="button"
+                      isDisabled={isPending}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                )
+              },
+            }),
+          ]
+        : []),
+    ],
+    [canManage, handleDelete, isPending, startEdit],
+  )
 
   function handleApplyOverhead(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -338,77 +453,25 @@ export function ProductionCostSection({
         {costs.length === 0 ? (
           <EmptyState title="Belum ada biaya non-bahan." description="HPP saat ini hanya dari bahan." className="py-10" />
         ) : (
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>Kategori</DetailTableTh>
-              <DetailTableTh>Deskripsi</DetailTableTh>
-              <DetailTableTh align="right">Jam</DetailTableTh>
-              <DetailTableTh align="right">Tarif</DetailTableTh>
-              <DetailTableTh align="right">Jumlah</DetailTableTh>
-              <DetailTableTh>Sumber</DetailTableTh>
-              {canManage && <DetailTableTh>Aksi</DetailTableTh>}
-            </DetailTableHead>
-            <DetailTableBody>
-              {costs.map((c) => (
-                <DetailTableRow key={c.id}>
-                  <DetailTableTd>{CATEGORY_LABELS[c.category] ?? c.category}</DetailTableTd>
-                  <DetailTableTd>{c.description ?? "-"}</DetailTableTd>
-                  <DetailTableTd align="right">{c.hours ?? "-"}</DetailTableTd>
-                  <DetailTableTd align="right">{c.rate != null ? formatCurrencyExact(c.rate) : "-"}</DetailTableTd>
-                  <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(c.amount)}</DetailTableTd>
-                  <DetailTableTd>
-                    <span className="inline-flex flex-wrap items-center gap-2">
-                      {c.sourceTimesheetId ? (
-                        <span>Lembar Waktu</span>
-                      ) : c.vendorName ? (
-                        <span>{c.vendorName}</span>
-                      ) : null}
-                      {c.purchaseOrderId != null && (
-                        <Link href={`/pembelian/pesanan/${c.purchaseOrderId}`} className="text-primary hover:underline">
-                          PO {c.purchaseOrderNo ?? `#${c.purchaseOrderId}`}
-                        </Link>
-                      )}
-                      {c.nonconformanceId != null && (
-                        <Link href={`/produksi/qc/ncr/${c.nonconformanceId}`} className="text-primary hover:underline">
-                          NCR {c.nonconformanceNo ?? `#${c.nonconformanceId}`}
-                        </Link>
-                      )}
-                      {!c.sourceTimesheetId && !c.vendorName && c.purchaseOrderId == null && c.nonconformanceId == null && "-"}
-                    </span>
-                  </DetailTableTd>
-                  {canManage && (
-                    <DetailTableTd>
-                      <Button
-                        onPress={() => startEdit(c)}
-                        aria-label="Ubah biaya"
-                        type="button"
-                        isDisabled={isPending}
-                      >
-                        <Pencil size={14} />
-                      </Button>
-                      <Button
-                        onPress={() => handleDelete(c.id)}
-                        aria-label={`Hapus biaya ${c.description || c.id}`}
-                        type="button"
-                        isDisabled={isPending}
-                      >
-                        <Trash2 size={14} />
-                      </Button>
-                    </DetailTableTd>
-                  )}
-                </DetailTableRow>
-              ))}
-              <DetailTableRow>
-                <DetailTableTd><span className="font-semibold">Total non-bahan</span></DetailTableTd>
-                <DetailTableTd>{" "}</DetailTableTd>
-                <DetailTableTd align="right">{" "}</DetailTableTd>
-                <DetailTableTd align="right">{" "}</DetailTableTd>
-                <DetailTableTd align="right"><span className="font-semibold">{formatCurrencyExact(total)}</span></DetailTableTd>
-                <DetailTableTd>{" "}</DetailTableTd>
-                {canManage && <DetailTableTd>{" "}</DetailTableTd>}
-              </DetailTableRow>
-            </DetailTableBody>
-          </DetailTable>
+          <div className="flex flex-col gap-3">
+            <DataTable
+              data={costs}
+              columns={columns}
+              ariaLabel="Biaya Non-Bahan"
+              selectable={false}
+              enableColumnToggle={false}
+              enableExport={false}
+              pageSize={50}
+            />
+            <div className="flex flex-wrap items-center justify-end gap-6 rounded-lg border border-default bg-surface-muted/40 px-4 py-2.5 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Total non-bahan:</span>
+                <span className="font-semibold font-mono tabular-nums text-foreground">
+                  {formatCurrencyExact(total)}
+                </span>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

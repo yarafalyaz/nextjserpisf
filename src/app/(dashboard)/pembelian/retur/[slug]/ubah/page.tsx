@@ -9,6 +9,7 @@ import type { Metadata } from "next";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
+import { wibDateOnly } from "@/lib/utils/date-only";
 export const metadata: Metadata = { title: "Ubah Retur" };
 
 export default async function EditPage({
@@ -39,10 +40,10 @@ export default async function EditPage({
   const returnData = {
     id: data.id,
     purchaseOrderId: data.purchaseOrderId,
-    date: data.date.toISOString().split("T")[0],
+    date: wibDateOnly(data.date),
     reason: data.reason,
     taxReturnNoteNumber: data.taxReturnNoteNumber,
-    taxReturnNoteDate: data.taxReturnNoteDate ? data.taxReturnNoteDate.toISOString().split("T")[0] : null,
+    taxReturnNoteDate: data.taxReturnNoteDate ? wibDateOnly(data.taxReturnNoteDate) : null,
     items: data.items.map((it) => ({
       itemId: it.itemId,
       qty: Number(it.qty),
@@ -100,7 +101,7 @@ export default async function EditPage({
     qty: Number(l.qty),
     uom: l.uom,
     batchNumber: l.batchNumber,
-    label: `${l.goodsReceipt.documentNo} — ${Number(l.qty)}${l.uom ? ` ${l.uom}` : ""}${l.batchNumber ? ` — batch ${l.batchNumber}` : ""} — ${l.goodsReceipt.createdAt.toISOString().slice(0, 10)}`,
+    label: `${l.goodsReceipt.documentNo} — ${Number(l.qty)}${l.uom ? ` ${l.uom}` : ""}${l.batchNumber ? ` — batch ${l.batchNumber}` : ""} — ${wibDateOnly(l.goodsReceipt.createdAt)}`,
   }));
 
   return (

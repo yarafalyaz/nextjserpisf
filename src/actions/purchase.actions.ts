@@ -39,7 +39,7 @@ import { notificationService } from "@/lib/services/notification.service";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { nextSlug } from "@/lib/utils/slug-db";
 import { revalidatePath } from "next/cache";
-import { safeJsonParse } from "@/lib/utils/safe-parse";
+import { safeJsonParseArray } from "@/lib/utils/safe-parse";
 import { findOverReturn } from "@/lib/sales/return-validation";
 import { computeBillLineAmounts, isValidTermsReference, manualBillHeader, resolveDueDate, summarizeBillItems, VENDOR_BILL_TERMS_REF_ERROR, withholdingGuard } from "@/lib/finance/vendor-bill";
 import { allocatePaymentToBills } from "@/lib/finance/payment-allocation";
@@ -195,10 +195,12 @@ function parsePoGrMoney(
 function parsePurchaseOrderItems(
   itemsJson: string | null | undefined,
 ): PurchaseOrderLine[] {
-  const rows =
-    safeJsonParse<
-      { itemId?: unknown; qty?: unknown; unitPrice?: unknown; discount?: unknown }[]
-    >(itemsJson ?? null) ?? [];
+  const rows = safeJsonParseArray<{
+    itemId?: unknown;
+    qty?: unknown;
+    unitPrice?: unknown;
+    discount?: unknown;
+  }>(itemsJson ?? null);
   const items: PurchaseOrderLine[] = [];
   for (const row of rows) {
     const itemId = parsePoGrItemId(row?.itemId);
@@ -292,14 +294,13 @@ function goodsReceiptItemData(i: GrItemInput, orderedQtyByItem: Map<number, numb
 }
 
 function parseGrItems(items: string | null | undefined): GrItemInput[] {
-  const rows =
-    safeJsonParse<
-      (Omit<GrItemInput, "itemId" | "qty" | "unitCost"> & {
-        itemId?: unknown;
-        qty?: unknown;
-        unitCost?: unknown;
-      })[]
-    >(items ?? null) ?? [];
+  const rows = safeJsonParseArray<
+    Omit<GrItemInput, "itemId" | "qty" | "unitCost"> & {
+      itemId?: unknown;
+      qty?: unknown;
+      unitCost?: unknown;
+    }
+  >(items ?? null);
   const parsed: GrItemInput[] = [];
   for (const row of rows) {
     const itemId = parsePoGrItemId(row?.itemId);
@@ -330,7 +331,7 @@ async function loadBillUnitPriceByItem(
   const out = new Map<number, number>();
   if (!purchaseOrderId || itemIds.length === 0) return out;
   const bills = await tx.vendorBill.findMany({
-    where: { purchaseOrderId, status: { not: "cancelled" } },
+    where: { purchaseOrderId, status: { notIn: ["cancelled", "draft"] }, deletedAt: null },
     orderBy: { id: "desc" },
     select: { items: { where: { itemId: { in: itemIds } }, select: { itemId: true, unitPrice: true } } },
   });
@@ -385,6 +386,7 @@ async function assertThreeWayMatch(
       where: {
         purchaseOrderId,
         status: { notIn: ["cancelled"] },
+        deletedAt: null,
         ...(excludeBillId ? { id: { not: excludeBillId } } : {}),
       },
       _sum: { subtotal: true },
@@ -440,6 +442,7 @@ async function assertThreeWayMatch(
     where: {
       purchaseOrderId,
       status: { notIn: ["cancelled"] },
+      deletedAt: null,
       ...(excludeBillId ? { id: { not: excludeBillId } } : {}),
     },
     _sum: { subtotal: true },
@@ -640,7 +643,7 @@ async function syncServicePoCostFromBills(
   // dokumen yang belum diposting. Status diakui = posted/partial/paid
   // (kanonis RECOGNISED_AP_STATUSES).
   const agg = await tx.vendorBill.aggregate({
-    where: { purchaseOrderId, status: { in: ["posted", "partial", "paid"] } },
+    where: { purchaseOrderId, status: { in: ["posted", "partial", "paid"] }, deletedAt: null },
     _sum: { grandTotal: true },
   });
   const billedTotal = Number(agg._sum.grandTotal ?? 0);
@@ -692,10 +695,12 @@ type PurchaseReturnItemInput = {
 function parsePurchaseReturnItems(
   itemsJson: string | null | undefined,
 ): PurchaseReturnItemInput[] {
-  const rows =
-    safeJsonParse<
-      { itemId?: unknown; qty?: unknown; price?: unknown; goodsReceiptItemId?: unknown }[]
-    >(itemsJson ?? null) ?? [];
+  const rows = safeJsonParseArray<{
+    itemId?: unknown;
+    qty?: unknown;
+    price?: unknown;
+    goodsReceiptItemId?: unknown;
+  }>(itemsJson ?? null);
   const items: PurchaseReturnItemInput[] = [];
   for (const row of rows) {
     const itemId = parseLocaleNumber(
@@ -968,10 +973,11 @@ type PurchaseRequestItemInput = {
 function parsePurchaseRequestItems(
   itemsJson: string | null | undefined,
 ): PurchaseRequestItemInput[] {
-  const rows =
-    safeJsonParse<
-      { itemId?: unknown; qty?: unknown; notes?: unknown }[]
-    >(itemsJson ?? null) ?? [];
+  const rows = safeJsonParseArray<{
+    itemId?: unknown;
+    qty?: unknown;
+    notes?: unknown;
+  }>(itemsJson ?? null);
   const items: PurchaseRequestItemInput[] = [];
   for (const row of rows) {
     const itemId = parseLocaleNumber(
@@ -1696,7 +1702,7 @@ async function assertBillLinePricesWithinReference(
   itemsJson: string | null | undefined,
   excludeBillId?: number,
 ): Promise<void> {
-  const rows = safeJsonParse<VendorBillLineInput[]>(itemsJson ?? null) ?? [];
+  const rows = safeJsonParseArray<VendorBillLineInput>(itemsJson ?? null);
   const lines = rows.filter(
     (r) => safeRound(parseLocaleNumber(r.qty) ?? 0, 2) > 0,
   );
@@ -1736,7 +1742,7 @@ async function assertBillLinePricesWithinReference(
   // over-bill padahal harganya persis harga penerimaan yang tersisa.
   const grRows = (await grModel.findMany({
     where: {
-      goodsReceipt: { purchaseOrderId },
+      goodsReceipt: { purchaseOrderId, status: { in: ["verified", "completed"] } },
       itemId: { in: itemIds },
     },
     select: { id: true, itemId: true, unitCost: true, qty: true },
@@ -1948,7 +1954,7 @@ async function persistVendorBillItems(
   itemsJson: string | null | undefined,
   grLineQueues?: GrLineQueues,
 ): Promise<void> {
-  const rows = safeJsonParse<VendorBillItemInput[]>(itemsJson ?? null) ?? [];
+  const rows = safeJsonParseArray<VendorBillItemInput>(itemsJson ?? null);
   if (rows.length === 0) return;
 
   const ids = Array.from(

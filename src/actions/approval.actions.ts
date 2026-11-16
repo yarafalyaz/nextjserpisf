@@ -3,8 +3,12 @@
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
 import { auth } from "@/lib/auth/auth";
-import { onEmployeeLoanDisbursed } from "@/lib/hooks/accounting.hook";
+import { onEmployeeLoanDisbursed, onReimbursementClaimApproved } from "@/lib/hooks/accounting.hook";
 import { onExpenseApprovedSyncPettyCash } from "@/lib/hooks/expense.hook";
+import {
+  assertClaimantPayable,
+  assertReimbursementApprovalGates,
+} from "@/lib/services/reimbursement-approval.service";
 import { recalcPurchaseRequestStatus } from "@/lib/hooks/purchase-order.hook";
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/services/activity-log.service"
@@ -25,8 +29,7 @@ import { nextSlugWithClient } from "@/lib/utils/slug-db";
 import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope";
 import { computeOvertimeApprovalValue } from "@/lib/services/overtime-approval.service";
 import { notifyApprovalStepApprovers } from "@/lib/services/approval-workflow.service";
-import { assertLeaveRequestGates, resolveDayKind } from "@/lib/services/leave-quota.service";
-import { assertOvertimeWithinWorkdayLimits } from "@/lib/services/overtime-pay.service";
+import { assertHrReopenGates } from "@/lib/approval/hr-reopen-gates";
 import { APPROVE_CLAIMS, REJECT_CLAIMS } from "@/lib/approval/claims";
 import { getApprovalDocDelegate } from "@/lib/approval/approval-models";
 
@@ -290,11 +293,6 @@ export async function approveStep(approvalId: number, formData: FormData) {
     if (!parsed.success) throw new Error(parsed.error);
     const { notes } = parsed.data;
 
-    // Set when this approveStep completes an Expense workflow. The petty-cash
-    // sync must run AFTER the transaction commits (the hook manages its own
-    // transaction and is idempotent on documentNo), so we capture the id here
-    // and run it below rather than nesting it inside this transaction.
-    let expenseToSync: number | null = null;
     let approvalSlug: string | null = null;
     // R6WN-03: info langkah berikutnya untuk notifikasi approver (pasca-commit).
     let nextStepNotify: {
@@ -461,8 +459,34 @@ export async function approveStep(approvalId: number, formData: FormData) {
             }
           }
           if (approval.referenceType === "Expense") {
-            // Deferred until after commit (see expenseToSync above).
-            expenseToSync = approval.referenceId;
+            const exp = await tx.expense.findUnique({
+              where: { id: approval.referenceId },
+              select: {
+                id: true,
+                accountId: true,
+                amount: true,
+                referenceNo: true,
+                receiptImage: true,
+                employeeId: true,
+                isReimbursementClaim: true,
+              },
+            });
+            if (exp?.isReimbursementClaim) {
+              await assertReimbursementApprovalGates(tx as never, exp, approvedBy ?? 0);
+              await assertClaimantPayable(tx as never, exp.employeeId);
+            }
+            await onExpenseApprovedSyncPettyCash(
+              approval.referenceId,
+              approvedBy ?? undefined,
+              tx,
+            );
+            if (exp?.isReimbursementClaim) {
+              await onReimbursementClaimApproved(
+                approval.referenceId,
+                approvedBy ?? undefined,
+                tx,
+              );
+            }
           }
         }
       } else {
@@ -483,18 +507,6 @@ export async function approveStep(approvalId: number, formData: FormData) {
         };
       }
     });
-
-    // Expense workflow just completed: sync the petty cash ledger now that the
-    // approval transaction has committed. Without this the expense is "approved"
-    // but no petty cash OUT is recorded (understating petty cash) with no retry
-    // path via approveExpense, which requires draft/approved. The hook is
-    // idempotent on documentNo, so this cannot double-post.
-    if (expenseToSync !== null) {
-      await onExpenseApprovedSyncPettyCash(
-        expenseToSync,
-        session?.user?.id ? Number(session.user.id) : undefined,
-      );
-    }
 
     // R6WN-03: beri tahu approver langkah berikutnya (sesudah commit;
     // helper menelan kegagalan ke log server).
@@ -685,57 +697,7 @@ export async function reopenApproval(approvalId: number) {
 
       await assertHrScopeForApproval(tx, approval.referenceType, approval.referenceId, user);
 
-      // Putaran 83: dokumen SDM yang ditolak bisa berubah konteks selama
-      // menunggu — pengajuan lain menghabiskan jatah/bentrok/cap, atau
-      // karyawan dinonaktifkan. Membuka ulang tanpa menilai ulang gerbang
-      // domain membangkitkan dokumen yang tidak akan lolos create/edit
-      // hari ini dan bisa disetujui menembus gerbang itu. Nilai ulang di
-      // bawah kunci baris karyawan (urutan: approvals -> employees, sama
-      // seperti penulis SDM mengunci employees di dalam tx-nya).
-      const HR_REOPEN_GATE_TYPES = new Set(["LeaveRequest", "OvertimeRequest", "EmployeeLoan"]);
-      if (HR_REOPEN_GATE_TYPES.has(refType)) {
-        const gateDocModel = getApprovalDocDelegate(tx, refType);
-        if (!gateDocModel) throw new Error(`Dokumen ${refType} #${refId} tidak didukung.`);
-        const gateDoc = await gateDocModel.findUnique({
-          where: { id: refId },
-          select: {
-            employeeId: true,
-            ...(refType === "LeaveRequest"
-              ? { type: true, startDate: true, endDate: true }
-              : refType === "OvertimeRequest"
-                ? { date: true, hours: true }
-                : {}),
-          },
-        });
-        if (!gateDoc) throw new Error(`Dokumen ${refType} #${refId} tidak ditemukan.`);
-        await tx.$executeRaw`SELECT id FROM employees WHERE id = ${gateDoc.employeeId} FOR UPDATE`;
-        const live = await tx.employee.findFirst({
-          where: { id: gateDoc.employeeId, isActive: true, deletedAt: null },
-          select: { id: true },
-        });
-        if (!live) throw new Error("Karyawan tidak ditemukan atau tidak aktif");
-        if (refType === "LeaveRequest") {
-          const gateError = await assertLeaveRequestGates(tx as never, {
-            employeeId: gateDoc.employeeId,
-            type: gateDoc.type,
-            startDate: gateDoc.startDate,
-            endDate: gateDoc.endDate,
-            excludeId: refId,
-          });
-          if (gateError) throw new Error(gateError);
-        } else if (refType === "OvertimeRequest") {
-          await assertOvertimeWithinWorkdayLimits(
-            tx as never,
-            (empId, d) => resolveDayKind(empId, d, tx as never),
-            {
-              employeeId: gateDoc.employeeId,
-              date: gateDoc.date,
-              hours: Number(gateDoc.hours),
-              excludeId: refId,
-            },
-          );
-        }
-      }
+      await assertHrReopenGates(tx as never, refType, refId);
 
       // Reset source document status — klaim kondisional:
       // count 0 berarti dokumen tidak lagi 'rejected' (pindah jalur oleh

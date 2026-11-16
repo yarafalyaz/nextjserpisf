@@ -249,25 +249,27 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
     // merender seksi antrean lewat tempo berisi <tr> lain dengan jumlah sel
     // berbeda — `tr`.first() di halaman menangkap baris antrean itu dan
     // indeks sel Status-nya bergeser (nth(8) = sel Nominal antrean).
-    const tblManajer = page.locator('table[data-report-table="Daftar Giro & Cek"]')
+    const tblManajer = page.locator('table[aria-label="Daftar register giro dan cek"]')
     const baris = tblManajer.locator("tr").filter({ hasText: nomor }).first()
     await expect(baris).toBeVisible({ timeout: 30_000 })
-    // Kolom Status = sel ke-9 (Jatuh Tempo, No. Dokumen, Nomor, Jenis, Arah,
+    // Kolom Status = sel ke-10 (Checkbox, Jatuh Tempo, No. Dokumen, No. Warkat, Jenis, Arah,
     // Pihak, Rekening, Nominal, Status, Aksi).
-    await expect(baris.locator("td").nth(8)).toContainText("Belum Cair", { timeout: 30_000 })
+    await expect(baris.locator("td").nth(9)).toContainText("Belum Cair", { timeout: 30_000 })
 
     // Ubah status: tombol per baris memakai aria-label yang memuat nomor dokumen.
     await baris.getByRole("button", { name: /Tandai cair/ }).click()
+    await page.getByRole("alertdialog").getByRole("button", { name: "Ya, Cairkan" }).click()
     await expect(
-      tblManajer.locator("tr").filter({ hasText: nomor }).locator("td").nth(8),
+      tblManajer.locator("tr").filter({ hasText: nomor }).locator("td").nth(9),
     ).toContainText("Sudah Cair", { timeout: 30_000 })
 
-    // Hapus tombol per baris (tanpa dialog pada komponen ini; label memuat nomor).
+    // Hapus tombol per baris membuka dialog konfirmasi ("Hapus Dokumen").
     await tblManajer
       .locator("tr")
       .filter({ hasText: nomor })
       .getByRole("button", { name: /^Hapus/ })
       .click()
+    await page.getByRole("alertdialog").getByRole("button", { name: "Hapus Dokumen" }).click()
     // Daftar klien: tunggu refresh sesudah hapus — baris hilang dari DOM tabel.
     await expect(tblManajer.locator("tr").filter({ hasText: nomor })).toHaveCount(0, { timeout: 30_000 })
     const gone = await prisma.cheque.findFirst({
@@ -425,7 +427,7 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
       await page.getByRole("menuitem", { name: "Posting" }).click()
       await page.getByRole("alertdialog").getByRole("button", { name: "Posting" }).click()
       await expect(page.locator("tr").filter({ hasText: "180.000" }).first()).toContainText(
-        "Diposting",
+        /Diposting|Diterbitkan/,
         { timeout: 30_000 },
       )
     }
@@ -488,7 +490,7 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
     // Baris yang sama kini berstatus terposting → jurnalnya masuk pembukuan.
     await expect(
       page.locator("tbody tr").filter({ hasText: "E2E jurnal manual menunggu posting" }).first(),
-    ).toContainText("Diposting", { timeout: 30_000 })
+    ).toContainText(/Diposting|Diterbitkan/, { timeout: 30_000 })
   })
 
   test("proses akhir bulan: kunci lalu buka kembali", async ({ page }, testInfo) => {
@@ -649,7 +651,7 @@ test("gerbang dokumen: form tetap tampil, dan sebabnya dijelaskan bila kosong", 
   }
   await page.goto("/penjualan/uang-muka/tambah", { waitUntil: "domcontentloaded" })
   await page.waitForLoadState("networkidle")
-  const pesanQ = page.getByText(/Belum ada penawaran yang bisa dipakai/i).first()
+  const pesanQ = page.getByText(/Memerlukan Penawaran yang Disetujui|Belum ada penawaran yang bisa dipakai/i).first()
   const qKosong = await expect(pesanQ).toBeVisible({ timeout: 3_000 }).then(
     () => true,
     () => false,

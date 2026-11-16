@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { PageHeader } from "@/components/ui/page-header"
 import { getHrScope, hrScopeWhere, canSearchAcrossEmployees } from "@/lib/auth/hr-scope"
 import Link from "next/link"
 import { redirect, notFound } from "next/navigation"
@@ -47,7 +48,7 @@ export async function renderEmployeeLoansPage({
   const params = await searchParams
 
   if (!statusParam && params.status) {
-    const targetStatus = params.status
+    const targetStatus = statusToIndo[params.status] || params.status
     const query = new URLSearchParams()
     if (params.cari) query.set("cari", params.cari)
     if (params.halaman) query.set("halaman", params.halaman)
@@ -178,26 +179,27 @@ export async function renderEmployeeLoansPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
-            Pinjaman Karyawan (Employee Loan)
-          </h1>
-          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
-            Fasilitas kasbon dan pinjaman karyawan, pelacakan saldo sisa pokok, dan pemotongan angsuran payroll.
-          </p>
-        </div>
-        <CanCreate permission="create_loans">
-          <Link
-            href="/sdm/pinjaman/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
-            id="create-loan-btn"
-          >
-            <Plus className="size-3.5" aria-hidden="true" />
-            <span>Ajukan Pinjaman</span>
-          </Link>
-        </CanCreate>
-      </div>
+      <PageHeader
+        title="Pinjaman Karyawan (Employee Loan)"
+        subtitle="Fasilitas kasbon dan pinjaman karyawan, pelacakan saldo sisa pokok, dan pemotongan angsuran payroll."
+        breadcrumbs={[
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
+          { label: "Pinjaman" },
+        ]}
+        actions={
+          <CanCreate permission="create_loans">
+            <Link
+              href="/sdm/pinjaman/tambah"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+              id="create-loan-btn"
+            >
+              <Plus className="size-3.5" aria-hidden="true" />
+              <span>Ajukan Pinjaman</span>
+            </Link>
+          </CanCreate>
+        }
+      />
 
       {/* Executive KPI Metric Strip Standar ERP */}
       <div className="grid grid-cols-1 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs overflow-hidden">

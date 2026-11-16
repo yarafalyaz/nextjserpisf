@@ -847,15 +847,39 @@ describe("settleWithholdingTax", () => {
     expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
 
-  it("tanggal setor masa 2026-11 = tengah malam UTC 1 Nov (bukan 31 Okt lokal)", async () => {
+  it("tanggal setor memakai paymentDate eksplisit jika dikirim, dan default hari ini WIB (bukan 1 awal masa)", async () => {
+    const explicit = await settleWithholdingTax({
+      withholdingTypeId: 3, period: "2026-10",
+      paymentDate: new Date("2026-11-10T00:00:00.000Z"),
+      paymentAccountId: 102, amount: 200_000, idempotencyKey: key(),
+    })
+    expect(explicit.success).toBe(true)
+    const p1 = mocks.taxPaymentCreate.mock.calls[0][0].data
+    expect((p1.date as Date).toISOString()).toBe("2026-11-10T00:00:00.000Z")
+    const j1 = mocks.journalCreate.mock.calls[0][0].data
+    expect((j1.transactionDate as Date).toISOString()).toBe("2026-11-10T00:00:00.000Z")
+
+    const def = await settleWithholdingTax({
+      withholdingTypeId: 3, period: "2026-11",
+      paymentAccountId: 102, amount: 200_000, idempotencyKey: key(),
+    })
+    expect(def.success).toBe(true)
+    const p2 = mocks.taxPaymentCreate.mock.calls[1][0].data
+    expect((p2.date as Date).toISOString()).not.toBe("2026-11-01T00:00:00.000Z")
+  })
+
+  it("settle menolak akun induk COA (_count.children > 0)", async () => {
+    mocks.accountFindMany.mockResolvedValueOnce([
+      { id: 501, isActive: true, deletedAt: null, type: "LIABILITY", reportGroup: "CLIA", _count: { children: 2 } },
+      { id: 102, isActive: true, deletedAt: null, type: "ASSET", reportGroup: "BANK", _count: { children: 0 } },
+    ])
     const r = await settleWithholdingTax({
       withholdingTypeId: 3, period: "2026-11", paymentAccountId: 102,
       amount: 200_000, idempotencyKey: key(),
     })
-    expect(r.success).toBe(true)
-    const payment = mocks.taxPaymentCreate.mock.calls[0][0].data
-    expect((payment.date as Date).toISOString()).toBe("2026-11-01T00:00:00.000Z")
-    const journal = mocks.journalCreate.mock.calls[0][0].data
-    expect((journal.transactionDate as Date).toISOString()).toBe("2026-11-01T00:00:00.000Z")
+    expect(r.success).toBe(false)
+    expect(r.error).toMatch(/akun induk/i)
+    expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
 })

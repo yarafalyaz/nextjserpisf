@@ -13,11 +13,12 @@ import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { EmptyState } from "@/components/ui/empty-state"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { SalesReturnItemsTable } from "./_components/sales-return-items-table"
 
 import type { Metadata } from "next"
 
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
+import { canViewCostAmounts } from "@/lib/auth/field-visibility"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
 import { DRAFT_ONLY_EDIT_STATUSES } from "@/lib/constants/status"
@@ -33,6 +34,7 @@ export default async function SalesReturnDetailPage({
   // Tombol "Selesaikan" hanya bagi pemegang izin menurut server; UI tidak
   // menilai status/SoD sendiri — gerbang server tetap penjaga akhir.
   const canApproveSalesReturn = await hasPermission("approve_sales_returns")
+  const canViewCosts = await canViewCostAmounts()
 
   const { slug } = await params
 
@@ -91,7 +93,7 @@ export default async function SalesReturnDetailPage({
                 retur yang sudah selesai dikoreksi lewat dokumen baru. */}
             {isDraft && (
               <CanCreate permission="edit_sales_returns">
-                <Button href={entityEditHref("/penjualan/retur", salesReturn)} variant="primary">Ubah</Button>
+                <Button href={entityEditHref("/penjualan/retur", salesReturn)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
               </CanCreate>
             )}
             <PrintButton documentType="sales-return" documentId={salesReturn.id} />
@@ -152,24 +154,17 @@ export default async function SalesReturnDetailPage({
           {salesReturn.items.length === 0 ? (
             <EmptyState title="Tidak ada barang" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Barang</DetailTableTh>
-                <DetailTableTh>SKU</DetailTableTh>
-                <DetailTableTh align="right">Jml</DetailTableTh>
-                <DetailTableTh align="right">Biaya</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {salesReturn.items.map((item) => (
-                  <DetailTableRow key={item.id}>
-                    <DetailTableTd>{itemById.get(item.itemId)?.name ?? `Barang #${item.itemId}`}</DetailTableTd>
-                    <DetailTableTd className="font-mono">{itemById.get(item.itemId)?.sku ?? "-"}</DetailTableTd>
-                    <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.cost))}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <SalesReturnItemsTable
+              data={salesReturn.items.map((item) => ({
+                id: item.id,
+                itemName: itemById.get(item.itemId)?.name ?? `Barang #${item.itemId}`,
+                sku: itemById.get(item.itemId)?.sku ?? "-",
+                qty: Number(item.qty),
+                cost: Number(item.cost),
+                costFormatted: formatCurrencyExact(Number(item.cost)),
+              }))}
+              canViewCosts={canViewCosts}
+            />
           )}
         </div>
       </div>

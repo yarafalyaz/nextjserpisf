@@ -138,7 +138,7 @@ export default async function RackRowDetailPage({
         actions={
           <>
             <CanCreate permission="manage_inventory">
-              <Button href={entityEditHref("/inventaris/baris-rak", rackRow)} variant="primary">
+              <Button href={entityEditHref("/inventaris/baris-rak", rackRow)} variant="primary" className="min-h-11 sm:min-h-9">
                 Ubah
               </Button>
             </CanCreate>

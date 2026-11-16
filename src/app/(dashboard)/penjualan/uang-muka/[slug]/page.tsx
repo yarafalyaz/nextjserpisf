@@ -27,6 +27,7 @@ import { requirePermission, hasPermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label";
+import { toPlain } from "@/lib/utils/serialization";
 import { CanCreate } from "@/components/auth/can-create";
 export const metadata: Metadata = { title: "Uang Muka" };
 
@@ -198,7 +199,14 @@ export default async function DownPaymentDetailPage({
       {/* AUD-R4-01: panel operasional kredit (alokasi/refund). */}
       {dpCredits.length > 0 && (
         <DetailCard title="Kredit Pelanggan dari DP ini">
-          <CustomerCreditPanel credits={dpCredits} invoices={openInvoices.map((inv) => ({ ...inv, documentNo: salesInvoiceLabel(inv) }))} canConfirm={canConfirm} />
+          <CustomerCreditPanel
+            credits={toPlain(dpCredits)}
+            invoices={toPlain(openInvoices).map((inv) => ({
+              ...inv,
+              documentNo: salesInvoiceLabel(inv),
+            }))}
+            canConfirm={canConfirm}
+          />
         </DetailCard>
       )}
 

@@ -53,7 +53,7 @@ export interface CatalogAction {
   label: string
 }
 
-/** 391 permission dikelompokkan per modul (15 modul). */
+/** 393 permission dikelompokkan per modul (15 modul). */
 export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
   dashboard: [
     { key: "view", resource: "dashboard", permissionKey: "view_dashboard", label: "Dasbor" },
@@ -382,6 +382,8 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "view", resource: "tax_payments", permissionKey: "view_tax_payments", label: "Penyetoran Pajak" },
     { key: "create", resource: "tax_payments", permissionKey: "create_tax_payments", label: "Penyetoran Pajak" },
     { key: "delete", resource: "tax_payments", permissionKey: "delete_tax_payments", label: "Penyetoran Pajak" },
+    { key: "view", resource: "spt_filings", permissionKey: "view_spt_filings", label: "Pelaporan SPT" },
+    { key: "create", resource: "spt_filings", permissionKey: "create_spt_filings", label: "Pelaporan SPT" },
     { key: "view", resource: "cost_centers", permissionKey: "view_cost_centers", label: "Pusat Biaya" },
     { key: "create", resource: "cost_centers", permissionKey: "create_cost_centers", label: "Pusat Biaya" },
     { key: "edit", resource: "cost_centers", permissionKey: "edit_cost_centers", label: "Pusat Biaya" },

@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { formatDate } from "@/lib/utils/format"
-import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deletePurchaseRequest } from "@/actions/purchase.actions"
@@ -13,14 +12,17 @@ import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { CanCreate } from "@/components/auth/can-create"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import {
+  PurchaseRequestItemsTable,
+  PurchaseRequestOrdersTable,
+} from "./_components/purchase-request-detail-tables"
 import { EmptyState } from "@/components/ui/empty-state"
 
 import type { Metadata } from "next"
 
 import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { entityEditHref } from "@/lib/utils/entity-url"
 import { DRAFT_ONLY_EDIT_STATUSES } from "@/lib/constants/status"
 export const metadata: Metadata = { title: "Permintaan Pembelian" }
 
@@ -104,12 +106,12 @@ export default async function PurchaseRequestDetailPage({
           <>
             {(request.status === "approved" || request.status === "partial_ordered") && (
               <CanCreate permission="create_purchase_orders">
-                <Button href={`/pembelian/pesanan/tambah/pr/${request.slug ?? request.id}`} variant="primary">
+                <Button href={`/pembelian/pesanan/tambah/pr/${request.slug ?? request.id}`} variant="primary" className="min-h-11 sm:min-h-9">
                   Buat Pesanan
                 </Button>
               </CanCreate>
             )}
-            {canEdit && isDraft && <Button href={entityEditHref("/pembelian/permintaan", request)} variant="primary">Ubah</Button>}
+            {canEdit && isDraft && <Button href={entityEditHref("/pembelian/permintaan", request)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>}
             <PrintButton documentType="purchase-request" documentId={request.id} />
             {canDelete && isDeletable && <DeleteButton id={request.id} action={deletePurchaseRequest} />}
           </>
@@ -147,36 +149,20 @@ export default async function PurchaseRequestDetailPage({
           {request.items.length === 0 ? (
             <EmptyState title="Tidak ada item" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Barang</DetailTableTh>
-                <DetailTableTh align="right">Jml</DetailTableTh>
-                <DetailTableTh>Satuan</DetailTableTh>
-                <DetailTableTh>Catatan</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {request.items.map((item) => {
-                  const dbItem = itemMap.get(item.itemId)
-                  return (
-                    <DetailTableRow key={item.id}>
-                      <DetailTableTd>
-                        {dbItem ? (
-                          <div className="flex flex-col">
-                            <span className="font-medium text-foreground">{dbItem.name}</span>
-                            <span className="text-xs text-muted-foreground font-mono">{dbItem.code}</span>
-                          </div>
-                        ) : (
-                          `Item #${item.itemId}`
-                        )}
-                      </DetailTableTd>
-                      <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                      <DetailTableTd>{dbItem?.unitOfMeasure || "-"}</DetailTableTd>
-                      <DetailTableTd>{item.notes || "-"}</DetailTableTd>
-                    </DetailTableRow>
-                  )
-                })}
-              </DetailTableBody>
-            </DetailTable>
+            <PurchaseRequestItemsTable
+              data={request.items.map((item) => {
+                const dbItem = itemMap.get(item.itemId)
+                return {
+                  id: item.id,
+                  itemId: item.itemId,
+                  itemName: dbItem?.name ?? null,
+                  itemCode: dbItem?.code ?? null,
+                  qty: Number(item.qty),
+                  unitOfMeasure: dbItem?.unitOfMeasure ?? null,
+                  notes: item.notes,
+                }
+              })}
+            />
           )}
         </div>
       </div>
@@ -188,22 +174,15 @@ export default async function PurchaseRequestDetailPage({
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Pesanan Pembelian Terkait</h2>
           </div>
           <div className="p-4 px-5">
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>No. Dokumen</DetailTableTh>
-                <DetailTableTh>Tanggal</DetailTableTh>
-                <DetailTableTh>Status</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {request.purchaseOrders.map((po) => (
-                  <DetailTableRow key={po.id}>
-                    <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/pesanan", po)}>{po.documentNo}</Link></DetailTableTd>
-                    <DetailTableTd>{formatDate(po.date)}</DetailTableTd>
-                    <DetailTableTd><StatusChip status={po.status} /></DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <PurchaseRequestOrdersTable
+              data={request.purchaseOrders.map((po) => ({
+                id: po.id,
+                slug: po.slug,
+                documentNo: po.documentNo,
+                date: po.date.toISOString(),
+                status: po.status,
+              }))}
+            />
           </div>
         </div>
       )}

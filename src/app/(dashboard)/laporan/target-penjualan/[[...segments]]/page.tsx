@@ -82,8 +82,8 @@ export default async function SalesTargetPage({
               id: t.id,
               salesEmployeeId: t.salesEmployeeId,
               salesEmployeeName: t.salesEmployee.name,
-              periodStart: t.periodStart,
-              periodEnd: t.periodEnd,
+              periodStart: t.periodStart.toISOString(),
+              periodEnd: t.periodEnd.toISOString(),
               targetAmount: Number(t.targetAmount),
               notes: t.notes,
             }))}

@@ -80,7 +80,7 @@ export default async function JobOrderJournalPage({
         {perReference ? ` — ${perReference}` : ""} · total debit{" "}
         {formatCurrencyExact(journal.totalDebit)} = kredit{" "}
         {formatCurrencyExact(journal.totalCredit)}
-        {journal.isBalanced ? "." : " — PERHATIAN: debit dan kredit tidak sama."}
+        {journal.isBalanced ? "." : " - PERHATIAN: debit dan kredit tidak sama."}
       </p>
     </ReportPageShell>
   )

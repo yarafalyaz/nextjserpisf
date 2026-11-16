@@ -6,6 +6,8 @@ import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { PageHeader } from "@/components/ui/page-header"
 import { CanCreate } from "@/components/auth/can-create"
+import { AppSearchField } from "@/components/ui/search-field"
+import { parsePagination } from "@/lib/utils/pagination"
 import { BankStatementDraftQueueSection } from "./_components/bank-statement-draft-queue"
 import { BankStatementTable, type BankStatementRow } from "./_components/bank-statement-table"
 import { getBankStatementDraftQueue } from "@/lib/reports/bank-statement-draft-queue-data"
@@ -37,11 +39,14 @@ export default async function BankStatementsPage({
 
   const params = await searchParams
   const perPage = 20
-  const page = Number(params.halaman) || 1
-  const pageSize = Number(params.pageSize) || perPage
+  const { page, pageSize, take } = parsePagination({
+    halaman: params.halaman,
+    pageSize: params.pageSize ?? String(perPage),
+  })
   const search = params.cari?.trim() || undefined
 
   const where = {
+    deletedAt: null,
     ...(search && {
       OR: [
         { reference: { contains: search } },
@@ -63,17 +68,18 @@ export default async function BankStatementsPage({
     })
 
   // Muat data rekening koran beserta akun bank dan jumlah barisnya
-  const [statements, total, draftCount, reconciledCount] = await Promise.all([
+  const [statements, total, overallCount, draftCount, reconciledCount] = await Promise.all([
     prisma.bankStatement.findMany({
       where,
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * pageSize,
-      take: pageSize,
+      take,
       include: {
         _count: { select: { lines: true } },
       },
     }),
     prisma.bankStatement.count({ where }),
+    prisma.bankStatement.count({ where: { deletedAt: null } }),
     prisma.bankStatement.count({ where: { status: "draft", deletedAt: null } }),
     prisma.bankStatement.count({ where: { status: { not: "draft" }, deletedAt: null } }),
   ])
@@ -151,7 +157,7 @@ export default async function BankStatementsPage({
             <p className="text-xs font-medium text-muted-foreground">Total Rekening Koran Terdata</p>
           </div>
           <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
-            {total} <span className="text-sm font-normal text-muted-foreground">dokumen</span>
+            {overallCount} <span className="text-sm font-normal text-muted-foreground">dokumen</span>
           </p>
         </div>
 
@@ -201,6 +207,7 @@ export default async function BankStatementsPage({
         total={total}
         page={page}
         pageSize={pageSize}
+        toolbar={<AppSearchField action="/keuangan/laporan-bank" placeholder="Cari no. rekening atau referensi..." />}
       />
     </div>
   )

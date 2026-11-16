@@ -2,21 +2,20 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { formatDate } from "@/lib/utils/format"
-import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteVehicleBrand } from "@/actions/vehicle.actions"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { VehicleBrandModelsTable } from "./_components/vehicle-brand-models-table"
 import { EmptyState } from "@/components/ui/empty-state"
 
 import type { Metadata } from "next"
 
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { entityEditHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Merek Kendaraan" }
 
 export default async function VehicleBrandDetailPage({
@@ -75,7 +74,7 @@ export default async function VehicleBrandDetailPage({
         actions={
           <>
             {canEdit && (
-              <Button href={`${entityEditHref("/kendaraan/merek", brand)}`} variant="primary">Ubah</Button>
+              <Button href={`${entityEditHref("/kendaraan/merek", brand)}`} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
             )}
             {canDelete && <DeleteButton id={brand.id} action={deleteVehicleBrand} />}
           </>
@@ -107,22 +106,15 @@ export default async function VehicleBrandDetailPage({
           {brand.models.length === 0 ? (
             <EmptyState title="Belum ada model untuk merek ini." />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Nama Model</DetailTableTh>
-                <DetailTableTh>Jumlah Varian</DetailTableTh>
-                <DetailTableTh>Dibuat</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {brand.models.map((model) => (
-                  <DetailTableRow key={model.id}>
-                    <DetailTableTd><Link href={entityHref("/kendaraan/model", model)}>{model.name}</Link></DetailTableTd>
-                    <DetailTableTd>{model._count.variants}</DetailTableTd>
-                    <DetailTableTd>{formatDate(model.createdAt)}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <VehicleBrandModelsTable
+              data={brand.models.map((model) => ({
+                id: model.id,
+                slug: model.slug,
+                name: model.name,
+                variantsCount: model._count.variants,
+                createdAt: model.createdAt.toISOString(),
+              }))}
+            />
           )}
         </div>
       </div>

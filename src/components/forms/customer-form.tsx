@@ -354,7 +354,7 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
             <div className="flex flex-col gap-1.5 sm:col-span-2">
               <Label htmlFor="taxAddress">Alamat Pajak</Label>
               <Textarea id="taxAddress" {...register("taxAddress")} rows={2} placeholder="Alamat sesuai NPWP (boleh beda alamat kirim)" />
-              <p className="text-xs text-muted-foreground">Alamat pajak master dipakai ekspor Coretax secara live — belum dibekukan ke dokumen.</p>
+              <p className="text-xs text-muted-foreground">Alamat pajak master dipakai ekspor Coretax secara live, belum dibekukan ke dokumen.</p>
             </div>
           </FormSection>
           <FormSection title="Alamat" columns={1}>

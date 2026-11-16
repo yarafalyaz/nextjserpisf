@@ -130,7 +130,7 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
       <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
         <div>
           <span className="text-muted-foreground block">Nilai Kontrak (snapshot):</span>
-          <span className="font-semibold text-foreground">
+          <span className="font-semibold tabular-nums text-foreground">
             {budget.contractAmount === null ? "Belum ditetapkan" : formatCurrencyExact(budget.contractAmount)}
           </span>
           {budget.contractSource && (
@@ -139,21 +139,21 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
         </div>
         <div>
           <span className="text-muted-foreground block">Margin Rencana (kontrak − estimasi RAB):</span>
-          <span className="font-semibold text-foreground">
+          <span className="font-semibold tabular-nums text-foreground">
             {budget.marginRencana === null ? "-" : formatCurrencyExact(budget.marginRencana)}
           </span>
         </div>
         <div>
           <span className="text-muted-foreground block">Total RAB:</span>
-          <span className="font-semibold text-foreground">{formatCurrencyExact(budget.totalBudget)}</span>
+          <span className="font-semibold tabular-nums text-foreground">{formatCurrencyExact(budget.totalBudget)}</span>
         </div>
         <div>
           <span className="text-muted-foreground block">Total Aktual (terealisasi L/R proyek):</span>
-          <span className="font-semibold text-danger">{formatCurrencyExact(budget.realizedTotal)}</span>
+          <span className="font-semibold tabular-nums text-danger">{formatCurrencyExact(budget.realizedTotal)}</span>
         </div>
         <div>
           <span className="text-muted-foreground block">Selisih Estimasi − Aktual:</span>
-          <span className={`font-semibold ${budget.varianceTotal < 0 ? "text-danger" : "text-foreground"}`}>
+          <span className={`font-semibold tabular-nums ${budget.varianceTotal < 0 ? "text-danger" : "text-foreground"}`}>
             {formatCurrencyExact(budget.varianceTotal)}
           </span>
         </div>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Loader2 } from "@/components/ui/fontawesome-icons";
+import { Loader2, XCircle } from "@/components/ui/fontawesome-icons";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/shadcn/button";
 import {
@@ -125,20 +125,7 @@ export function LoginForm({
                 >
                   {error && (
                     <>
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        className="shrink-0"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="15" y1="9" x2="9" y2="15" />
-                        <line x1="9" y1="9" x2="15" y2="15" />
-                      </svg>
+                      <XCircle className="size-4 shrink-0" aria-hidden="true" />
                       <span>{error}</span>
                     </>
                   )}

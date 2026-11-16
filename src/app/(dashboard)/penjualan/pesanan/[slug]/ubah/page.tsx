@@ -71,6 +71,7 @@ export default async function EditPage({
     prisma.customer.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
+      select: { id: true, name: true },
     }),
   ])
 
@@ -78,7 +79,10 @@ export default async function EditPage({
   // (updateSalesOrder hanya menilai liveness saat pelanggan BERPINDAH).
   const linkedCustomer =
     lockedOrder.customerId && !customersRaw.some((c) => c.id === lockedOrder.customerId)
-      ? await prisma.customer.findUnique({ where: { id: lockedOrder.customerId } })
+      ? await prisma.customer.findUnique({
+          where: { id: lockedOrder.customerId },
+          select: { id: true, name: true },
+        })
       : null
   const customers = linkedCustomer ? [linkedCustomer, ...customersRaw] : customersRaw;
 

@@ -25,6 +25,7 @@ export default async function WithholdingTaxTypesPage() {
 
   const serializedTypes = types.map((t) => ({
     id: t.id,
+    slug: t.slug,
     code: t.code,
     name: t.name,
     rate: Number(t.rate),
@@ -63,8 +64,8 @@ export default async function WithholdingTaxTypesPage() {
       </div>
 
       {/* Executive Metric Strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-surface rounded-xl border border-default p-4 shadow-sm flex items-center justify-between">
+      <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs overflow-hidden">
+        <div className="p-4 flex items-center justify-between">
           <div>
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Total Tarif PPh
@@ -74,11 +75,11 @@ export default async function WithholdingTaxTypesPage() {
             </div>
           </div>
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-            <Percent className="size-5" />
+            <Percent className="size-5" aria-hidden="true" />
           </div>
         </div>
 
-        <div className="bg-surface rounded-xl border border-default p-4 shadow-sm flex items-center justify-between">
+        <div className="p-4 flex items-center justify-between">
           <div>
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Status Aktif
@@ -88,11 +89,11 @@ export default async function WithholdingTaxTypesPage() {
             </div>
           </div>
           <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-            <CheckCircle2 className="size-5" />
+            <CheckCircle2 className="size-5" aria-hidden="true" />
           </div>
         </div>
 
-        <div className="bg-surface rounded-xl border border-default p-4 shadow-sm flex items-center justify-between">
+        <div className="p-4 flex items-center justify-between">
           <div>
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Nonaktif / Diarsip
@@ -102,7 +103,7 @@ export default async function WithholdingTaxTypesPage() {
             </div>
           </div>
           <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-muted-foreground">
-            <XCircle className="size-5" />
+            <XCircle className="size-5" aria-hidden="true" />
           </div>
         </div>
       </div>

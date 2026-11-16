@@ -17,30 +17,15 @@ import {
   taxDisputeAssessmentKindLabel,
   taxDisputeStatusLabel,
   TAX_DISPUTE_STEP_KIND_LABELS,
-  TAX_DISPUTE_PASAL36_SUBKIND_LABELS,
 } from "../_components/tax-dispute-labels"
 import { TaxDisputeStepForm } from "../_components/tax-dispute-step-form"
 import { TaxDisputeDecisionForm } from "../_components/tax-dispute-decision-form"
 import { CancelTaxAssessmentButton } from "../_components/cancel-tax-assessment-button"
-import {
-  DetailTable,
-  DetailTableHead,
-  DetailTableTh,
-  DetailTableBody,
-  DetailTableRow,
-  DetailTableTd,
-} from "@/components/ui/detail-table"
+import { TaxDisputeStepsTable } from "./_components/tax-dispute-steps-table"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Detail Ketetapan Pajak" }
-
-const RESULT_LABELS: Record<string, string> = {
-  DIKABULKAN: "Dikabulkan",
-  DIKABULKAN_SEBAGIAN: "Dikabulkan Sebagian",
-  DITOLAK: "Ditolak",
-  TIDAK_DAPAT_DITERIMA: "Tidak Dapat Diterima",
-}
 
 export default async function TaxAssessmentDetailPage({
   params,
@@ -89,7 +74,7 @@ export default async function TaxAssessmentDetailPage({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-foreground">
-            {TAX_DISPUTE_REGISTER_TITLE} — {assessment.assessmentNumber ?? `#${assessment.id}`}
+            {TAX_DISPUTE_REGISTER_TITLE} - {assessment.assessmentNumber ?? `#${assessment.id}`}
           </h1>
         </div>
         {canEdit && canAct ? (
@@ -98,14 +83,14 @@ export default async function TaxAssessmentDetailPage({
       </div>
 
       <DetailCard title="Ketetapan">
-        <DetailField label="Nomor Ketetapan" value={assessment.assessmentNumber ?? "-"} />
+        <DetailField label="Nomor Ketetapan" value={assessment.assessmentNumber ?? "-"} mono />
         <DetailField label="Jenis Ketetapan" value={taxDisputeAssessmentKindLabel(assessment.kind)} />
         <DetailField label="Jenis Pajak" value={assessment.taxKind ?? "-"} />
-        <DetailField label="Masa Pajak" value={assessment.taxPeriod ?? "-"} />
-        <DetailField label="Nominal Ketetapan" value={formatCurrencyExact(Number(assessment.assessedAmount))} />
-        <DetailField label="Nominal Disengketakan" value={formatCurrencyExact(Number(assessment.disputedAmount))} />
-        <DetailField label="Dibayar di Bawah Protes" value={formatCurrencyExact(Number(assessment.paidUnderProtest))} />
-        <DetailField label="Tanggal Kirim SKP" value={assessment.sentAt ? formatDate(assessment.sentAt) : "-"} />
+        <DetailField label="Masa Pajak" value={assessment.taxPeriod ?? "-"} mono />
+        <DetailField label="Nominal Ketetapan" value={formatCurrencyExact(Number(assessment.assessedAmount))} mono />
+        <DetailField label="Nominal Disengketakan" value={formatCurrencyExact(Number(assessment.disputedAmount))} mono />
+        <DetailField label="Dibayar di Bawah Protes" value={formatCurrencyExact(Number(assessment.paidUnderProtest))} mono />
+        <DetailField label="Tanggal Kirim SKP" value={assessment.sentAt ? formatDate(assessment.sentAt) : "-"} mono />
         <DetailField
           label="Status"
           value={<StatusChip status={assessment.status} customLabel={taxDisputeStatusLabel(assessment.status)} />}
@@ -118,41 +103,18 @@ export default async function TaxAssessmentDetailPage({
         {assessment.steps.length === 0 ? (
           <p className="text-sm text-muted-foreground">Belum ada upaya sengketa tercatat.</p>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-default bg-surface shadow-sm">
-            <DetailTable aria-label="Daftar upaya sengketa">
-              <DetailTableHead>
-                <DetailTableTh>Jenis Upaya</DetailTableTh>
-                <DetailTableTh>Sub-jenis Pasal 36</DetailTableTh>
-                <DetailTableTh>Tanggal Pengajuan</DetailTableTh>
-                <DetailTableTh>Tanggal Putusan</DetailTableTh>
-                <DetailTableTh>Hasil</DetailTableTh>
-                <DetailTableTh>Status</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {assessment.steps.map((s) => (
-                  <DetailTableRow key={s.id}>
-                    <DetailTableTd>{TAX_DISPUTE_STEP_KIND_LABELS[s.kind] ?? s.kind}</DetailTableTd>
-                    <DetailTableTd>
-                      {s.article36Subkind
-                        ? (TAX_DISPUTE_PASAL36_SUBKIND_LABELS[s.article36Subkind] ?? s.article36Subkind)
-                        : "-"}
-                    </DetailTableTd>
-                    <DetailTableTd>{s.filedAt ? formatDate(s.filedAt) : "-"}</DetailTableTd>
-                    <DetailTableTd>{s.decidedAt ? formatDate(s.decidedAt) : "-"}</DetailTableTd>
-                    <DetailTableTd>{s.result ? (RESULT_LABELS[s.result] ?? s.result) : "-"}</DetailTableTd>
-                    <DetailTableTd>
-                      <StatusChip status={s.status} customLabel={taxDisputeStatusLabel(s.status)} />
-                      {s.lateReason && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Lewat tenggat: {s.lateReason}
-                        </p>
-                      )}
-                    </DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
-          </div>
+          <TaxDisputeStepsTable
+            data={assessment.steps.map((s) => ({
+              id: s.id,
+              kind: s.kind,
+              article36Subkind: s.article36Subkind,
+              filedAt: s.filedAt ? s.filedAt.toISOString() : null,
+              decidedAt: s.decidedAt ? s.decidedAt.toISOString() : null,
+              result: s.result,
+              status: s.status,
+              lateReason: s.lateReason,
+            }))}
+          />
         )}
       </section>
 

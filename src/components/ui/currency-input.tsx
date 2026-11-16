@@ -22,6 +22,7 @@ interface CurrencyInputProps {
   emptyAsNull?: boolean
   min?: number
   max?: number
+  allowNegative?: boolean
   prefix?: string
   style?: React.CSSProperties
 }
@@ -47,6 +48,7 @@ export function CurrencyInput({
   emptyAsNull,
   min,
   max,
+  allowNegative = false,
   prefix,
   style,
 }: CurrencyInputProps) {
@@ -94,6 +96,7 @@ export function CurrencyInput({
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const raw = e.target.value
+      const isNegative = allowNegative && raw.trimStart().startsWith("-")
       // Keep only digits and a single comma (decimal separator, id-ID)
       let sanitized = raw.replace(/[^\d,]/g, "")
       const firstComma = sanitized.indexOf(",")
@@ -106,7 +109,8 @@ export function CurrencyInput({
       const [intPart, decPart] = sanitized.split(",")
       const intNum = intPart ? Number.parseInt(intPart, 10) : Number.NaN
       const formattedInt = Number.isNaN(intNum) ? "" : new Intl.NumberFormat("id-ID").format(intNum)
-      const display = decPart !== undefined ? `${formattedInt},${decPart}` : formattedInt
+      const body = decPart !== undefined ? `${formattedInt},${decPart}` : formattedInt
+      const display = isNegative ? `-${body}` : body
 
       setDisplayValue(display)
 
@@ -116,7 +120,7 @@ export function CurrencyInput({
       }
       onChange?.(numericValue)
     },
-    [onChange, emptyAsNull]
+    [onChange, emptyAsNull, allowNegative]
   )
 
   const handleBlur = useCallback(

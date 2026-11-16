@@ -90,7 +90,7 @@ export function CollectionFollowUpForm({
       </DialogTrigger>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Catat Tindak Lanjut — {documentNo}</DialogTitle>
+          <DialogTitle>Catat Tindak Lanjut: {documentNo}</DialogTitle>
           <DialogDescription>
             {customerName ? (
               <span className="block font-medium text-foreground mb-1">

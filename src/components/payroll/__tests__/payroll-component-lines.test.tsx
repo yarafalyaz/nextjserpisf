@@ -89,7 +89,7 @@ describe("PayrollComponentLines", () => {
         canEdit={true}
       />,
     )
-    expect(container.textContent).toContain("Slip sudah bukan draf — baris komponen terkunci")
+    expect(container.textContent).toContain("Slip sudah bukan draf, baris komponen terkunci")
     expect(container.querySelector('form[aria-label="Formulir tambah baris komponen gaji"]')).toBeNull()
     expect(container.querySelector("[data-delete-id]")).toBeNull()
     act(() => root.unmount())

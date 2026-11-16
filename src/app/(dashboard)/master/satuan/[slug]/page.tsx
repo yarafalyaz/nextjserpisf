@@ -48,7 +48,7 @@ export default async function UomDetailPage({
         actions={
           <>
             <CanCreate permission="edit_units">
-              <Button href={entityEditHref("/master/satuan", uom)} variant="primary">Ubah</Button>
+              <Button href={entityEditHref("/master/satuan", uom)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
             </CanCreate>
             <CanCreate permission="edit_units">
               <DeleteButton id={uom.id} action={deleteUom} />

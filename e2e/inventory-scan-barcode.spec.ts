@@ -8,6 +8,7 @@ test.describe("Pindai Barang + Barcode wiring", () => {
 
   test("halaman scan tampil + kode tak dikenal ditolak berisik", async ({ page }) => {
     await page.goto("/inventaris/scan", { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
 
     await expect(page.getByRole("heading", { name: "Pindai Barang" }).first()).toBeVisible({ timeout: 30000 })
     await expect(page.locator("#scan-code").first()).toBeVisible()

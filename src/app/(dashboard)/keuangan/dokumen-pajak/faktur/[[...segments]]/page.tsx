@@ -9,6 +9,7 @@ import Link from "next/link"
 import { redirect, notFound } from "next/navigation"
 import { PageHeader } from "@/components/ui/page-header"
 import { CanCreate } from "@/components/auth/can-create"
+import { AppSearchField } from "@/components/ui/search-field"
 import { TaxInvoiceDraftQueueCard } from "@/components/reports/tax-invoice-draft-queue-card"
 import { getTaxInvoiceDraftQueue } from "@/lib/reports/tax-invoice-draft-queue-data"
 import { TaxInvoiceTable, type TaxInvoiceRow } from "../../_components/tax-invoice-table"
@@ -121,7 +122,7 @@ export default async function TaxInvoicesPage({
     }),
   }
 
-  const [invoices, total, outCount, inCount, draftCount] = await Promise.all([
+  const [invoices, total, overallCount, outCount, inCount, draftCount] = await Promise.all([
     prisma.taxInvoice.findMany({
       where,
       orderBy: { taxInvoiceDate: "desc" },
@@ -129,10 +130,16 @@ export default async function TaxInvoicesPage({
       take,
     }),
     prisma.taxInvoice.count({ where }),
+    prisma.taxInvoice.count(),
     prisma.taxInvoice.count({ where: { direction: "out" } }),
     prisma.taxInvoice.count({ where: { direction: "in" } }),
     prisma.taxInvoice.count({ where: { djpStatus: "draft" } }),
   ])
+
+  const currentActionPath = buildPathFilterHref("/keuangan/dokumen-pajak/faktur", {
+    status: activeUrlStatus || undefined,
+    arah: activeUrlArah || undefined,
+  })
 
   const draftQueue = await getTaxInvoiceDraftQueue()
 
@@ -174,10 +181,10 @@ export default async function TaxInvoicesPage({
               href={withListParams(targetPath, params, {
                 halaman: undefined,
               })}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`inline-flex min-h-11 sm:min-h-9 items-center rounded-md border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 isActive
-                  ? "bg-foreground text-background font-semibold"
-                  : "bg-surface border border-default text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "border-foreground bg-foreground text-background font-semibold"
+                  : "border-default bg-surface text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
               {dir.label}
@@ -186,10 +193,10 @@ export default async function TaxInvoicesPage({
         })}
       </div>
 
-      <div className="h-4 w-px bg-border" />
+      <div className="hidden h-4 w-px bg-border sm:block" />
 
       {/* Status Filter (Path Segments: /status/konsep, /status/disetujui, dst) */}
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1.5">
         {[
           { label: "Semua Status", dbKey: "" },
           ...TAX_INVOICE_VALID_DB_STATUSES.map((key) => ({
@@ -210,10 +217,10 @@ export default async function TaxInvoicesPage({
               href={withListParams(targetPath, params, {
                 halaman: undefined,
               })}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`inline-flex min-h-11 sm:min-h-9 items-center rounded-md border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 isActive
-                  ? "bg-foreground text-background font-semibold"
-                  : "bg-surface border border-default text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "border-foreground bg-foreground text-background font-semibold"
+                  : "border-default bg-surface text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
               {item.label}
@@ -276,7 +283,7 @@ export default async function TaxInvoicesPage({
             <p className="text-xs font-medium text-muted-foreground">Total Dokumen Tercatat</p>
           </div>
           <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono tabular-nums">
-            {total} <span className="text-sm font-normal text-muted-foreground">faktur</span>
+            {overallCount} <span className="text-sm font-normal text-muted-foreground">faktur</span>
           </p>
         </div>
 
@@ -303,7 +310,7 @@ export default async function TaxInvoicesPage({
         <div className="p-4 sm:p-5">
           <div className="flex items-center gap-2">
             <FileCheck className="size-4 text-amber-500" aria-hidden="true" />
-            <p className="text-xs font-medium text-muted-foreground">Draft Menunggu Upload</p>
+            <p className="text-xs font-medium text-muted-foreground">Draf Menunggu Upload</p>
           </div>
           <p className="mt-2 text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400 font-mono tabular-nums">
             {draftCount} <span className="text-sm font-normal text-muted-foreground">dokumen</span>
@@ -320,6 +327,7 @@ export default async function TaxInvoicesPage({
         total={total}
         page={page}
         pageSize={pageSize}
+        toolbar={<AppSearchField action={currentActionPath} placeholder="Cari no. faktur, lawan transaksi, atau NPWP..." />}
         filters={filterChips}
       />
     </div>

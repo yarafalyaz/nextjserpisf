@@ -1,6 +1,6 @@
 "use client"
 
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useState } from "react"
 import Link from "next/link"
 import { FormSelect } from "@/components/ui/form-select"
@@ -10,8 +10,7 @@ import { buildPathFilterHref } from "@/lib/utils/path-filters"
 /**
  * Filter bulan/tahun daftar penggajian. Keduanya hidup di PATH sebagai
  * pasangan kunci/nilai (`/sdm/penggajian/tahun/2026/bulan/5`, pola yang
- * sama dengan filter absensi); filter hanya berlaku bila keduanya terisi,
- * sama seperti perilaku query lama. Status tetap query string.
+ * sama dengan filter absensi); mendukung filter tahun saja, bulan saja, atau keduanya.
  */
 export function PayrollFilterForm({
   bulan,
@@ -23,8 +22,18 @@ export function PayrollFilterForm({
   status?: string
 }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [bulanValue, setBulanValue] = useState(bulan ?? "")
   const [tahunValue, setTahunValue] = useState(tahun ?? "")
+
+  const preservedQuery = (() => {
+    const sp = new URLSearchParams()
+    const cari = searchParams.get("cari")
+    const pageSize = searchParams.get("pageSize")
+    if (cari) sp.set("cari", cari)
+    if (pageSize) sp.set("pageSize", pageSize)
+    return sp.toString()
+  })()
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -33,7 +42,7 @@ export function PayrollFilterForm({
       bulan: bulanValue || undefined,
       status: status || undefined,
     })
-    router.push(path)
+    router.push(preservedQuery ? `${path}?${preservedQuery}` : path)
   }
 
   return (
@@ -64,11 +73,17 @@ export function PayrollFilterForm({
             ...[2025, 2026, 2027].map((y) => ({ value: String(y), label: String(y) })),
           ]}
         />
-        <Button type="submit">Filter</Button>
+        <Button type="submit">Saring</Button>
       </form>
       {(bulan || tahun) && (
         <Link
-          href={status ? `/sdm/penggajian/status/${status}` : "/sdm/penggajian"}
+          href={
+            preservedQuery
+              ? `${status ? `/sdm/penggajian/status/${status}` : "/sdm/penggajian"}?${preservedQuery}`
+              : status
+                ? `/sdm/penggajian/status/${status}`
+                : "/sdm/penggajian"
+          }
           className="text-xs text-primary hover:underline"
         >
           Atur ulang bulan

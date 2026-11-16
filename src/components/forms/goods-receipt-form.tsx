@@ -607,12 +607,12 @@ export function GoodsReceiptForm({
                           <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
                             {chargePerUnit > 0
                               ? `+ ${formatCurrencyExact(chargePerUnit)}`
-                              : "—"}
+                              : "-"}
                           </td>
                           <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
                             {discountPerUnit > 0
                               ? `− ${formatCurrencyExact(discountPerUnit)}`
-                              : "—"}
+                              : "-"}
                           </td>
                           <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-foreground">
                             {formatCurrencyExact(hppPerUnit)}
@@ -634,7 +634,7 @@ export function GoodsReceiptForm({
                                 value: String(w.id),
                                 label: w.name,
                               }))}
-                              placeholder="— Bawaan —"
+                              placeholder="- Bawaan -"
                               title={QUICK_ADD.warehouse.title}
                               fields={QUICK_ADD.warehouse.fields}
                               action={QUICK_ADD.warehouse.action}
@@ -667,9 +667,9 @@ export function GoodsReceiptForm({
                                 )
                                 .map((r) => ({
                                   value: String(r.id),
-                                  label: r.code ? `${r.code} — ${r.name}` : r.name,
+                                  label: r.code ? `${r.code} - ${r.name}` : r.name,
                                 }))}
-                              placeholder="— Rak —"
+                              placeholder="- Rak -"
                               className="w-full"
                               disabled={!(row.warehouseId || warehouseId)}
                             />
@@ -684,9 +684,9 @@ export function GoodsReceiptForm({
                                 .filter((rr) => String(rr.rackId) === row.rackId)
                                 .map((rr) => ({
                                   value: String(rr.id),
-                                  label: rr.code ? `${rr.code} — ${rr.name}` : rr.name,
+                                  label: rr.code ? `${rr.code} - ${rr.name}` : rr.name,
                                 }))}
-                              placeholder="— Baris —"
+                              placeholder="- Baris -"
                               className="w-full"
                               disabled={!row.rackId}
                             />

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { toPlain } from "@/lib/utils/serialization"
 import { CategoryTable } from "./_components/category-table"
 
 import type { Metadata } from "next"
@@ -68,7 +69,7 @@ export default async function ExpenseCategoryPage({
         </Link>
       </div>
 
-      <CategoryTable data={categories} total={total} page={page} pageSize={pageSize} />
+      <CategoryTable data={toPlain(categories)} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

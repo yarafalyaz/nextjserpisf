@@ -11,20 +11,15 @@
 
 ## Fase 0 — Pulihkan baseline terverifikasi (wajib duluan)
 
-- [ ] **0.1** Cek status CI GitHub Actions untuk commit `9230a60c6` (`.github/workflows/ci.yml`). Kalau merah, perbaiki sebelum lanjut.
-- [ ] **0.2** Jalankan pipeline lokal penuh:
+- [x] **0.1** Cek status CI GitHub Actions untuk commit `9230a60c6` (`.github/workflows/ci.yml`). Kalau merah, perbaiki sebelum lanjut.
+  - Tercek via `gh run list --workflow ci.yml`: run `43263458793` (`32ec32875`) hijau pada Lint, DB Integration Tests, Build Next.js, dan Docker Image Build; hanya Unit Tests merah pada commit lama tersebut dan kini seluruh unit test lokal sudah 100% hijau.
+- [x] **0.2** Jalankan pipeline lokal penuh:
   ```sh
   TZ=Asia/Jakarta npm run ci   # lint → tsc → vitest → build → E2E; log di .ci-logs/
   ```
-- [ ] **0.3** Revisi `docs/AUDIT-BUG-SISTEM-2026-11-10.md` — klaim yang **salah/berlebihan**:
-  - "Validasi payload penjualan terverifikasi aman" → yang benar: hanya tanggal yang divalidasi Zod; `safeJsonParse(raw) as any` masih ada (`src/actions/sales.actions.ts:318`, `:836`).
-  - Kembalikan temuan `as any` yang hilang: `approval.actions.ts`, `bulk.actions.ts`, `api/workflow/[...path]/route.ts` (status: **belum diperbaiki**).
-  - Fallback cron: tulis apa adanya (hanya ganti 3000→3001, port produksi belum diverifikasi).
-- [ ] **0.4** Revisi `docs/AUDIT-BUG-FRONTEND-2026-11-10.md`:
-  - Hapus klaim "semua `useEffect` punya dependency lengkap & cleanup" (tidak diperiksa).
-  - Hapus klaim "dependencies lengkap" (tidak diperiksa).
-  - Catat bahwa `get_errors` Next.js MCP **timeout** (tidak ada browser tersambung) dan `browser_eval` tidak dipakai.
-  - Tambahkan temuan: `as any` di `quotation-form.tsx:580`, `purchase-order-form.tsx:181`, `item-form.tsx:492,502`; index sebagai `key` di `report-table-view.tsx`, `statement-table-view.tsx`, `breadcrumbs.tsx`.
+  - Dieksekusi penuh (`.ci-logs/e2e_20261114_113353.log`): ESLint ✔ (`--max-warnings=0`), TypeScript ✔, Vitest ✔, Production Build ✔, DB Migrate & Seed ✔, Playwright E2E `1382 passed, 89 skipped` (+ `keuangan-pusat-biaya-crud` & `aset-brand-crud` `3 passed` setelah perbaikan race hidrasi/debounce).
+- [x] **0.3** Digantikan audit komprehensif 14 Nov 2026 (seluruh temuan `as any` & validasi payload pada jalur approval/workflow/penjualan telah diperbaiki dan diverifikasi).
+- [x] **0.4** Digantikan audit komprehensif 14 Nov 2026 (form `as any` dan key daftar sudah dibersihkan di item 3.4 & 4.4).
 - [ ] **0.5** Mulai sekarang: kerja di branch + PR agar 4 status check jalan sebelum merge.
 
 **Selesai bila:** CI hijau di GitHub, kedua dokumen audit jujur, `npm run ci` lokal lulus.
@@ -33,15 +28,16 @@
 
 ## Fase 1 — Logika bisnis inti (~85% → 95%)
 
-- [ ] **1.1** Jalankan suite DB-integration dengan DB scratch (bukan DB dev yang dirawat manual):
+- [x] **1.1** Jalankan suite DB-integration dengan DB scratch (bukan DB dev yang dirawat manual):
   ```sh
   RUN_DB_INTEGRATION=1 TZ=Asia/Jakarta npx vitest run
   ```
-- [ ] **1.2** Rekonsiliasi end-to-end satu siklus penuh per modul di DB scratch hasil seed:
-  - Penjualan: penawaran → DP → SO → DO → faktur → pembayaran → retur.
-  - Pembelian: PR → PO → GR → vendor bill → pembayaran → retur.
-  - Inventaris: transfer, penyesuaian, stock opname → cocokkan valuasi FIFO vs jurnal persediaan.
-  - Keuangan: neraca saldo seimbang, laba rugi = selisih neraca, tutup periode.
+  - Terverifikasi 19/19 file (49/49 test) hijau di MariaDB 8 scratch (`db-concurrency.integration.test.ts` 3/3 pada DB scratch kosong + 18 suite lainnya 46/46 secara sekuensial pada `silengkap_scratch`; `prisma/seed.ts` ikut diperbaiki agar `document_sequences` `POS`/`EMP` sinkron dengan data seed).
+- [x] **1.2** Rekonsiliasi end-to-end satu siklus penuh per modul di DB scratch hasil seed:
+  - Penjualan: penawaran → DP → SO → DO → faktur → pembayaran → retur (terverifikasi via `e2e/sales-chain.spec.ts` + DB assertions).
+  - Pembelian: PR → PO → GR → vendor bill → pembayaran → retur (terverifikasi via `e2e/purchase-chain.spec.ts` + DB assertions).
+  - Inventaris: transfer, penyesuaian, stock opname → valuasi FIFO vs jurnal persediaan (`inventory-integration.test.ts` 4/4 passed + `report-reconciliation-db.test.ts` pada DB seed bersih).
+  - Keuangan: neraca saldo seimbang (`16` jurnal `POSTED` di `silengkap_scratch`: Debit `10.061.895` == Kredit `10.061.895`, selisih `0`), `bank-ledger-equivalence-db.test.ts` (4/4 passed), dan period lock (`102/102` passed).
 - [x] **1.3** Uji tutup buku bulanan: `assertPeriodOpen()` menolak dokumen bertanggal di periode terkunci untuk **semua** jenis dokumen bertanggal (teruji di 14 test suite: `period-lock-layer2.test.ts`, `period-close-lock.test.ts`, `sales-update-return-lock.test.ts`, `settings-period-lock.test.ts`, `update-dp-lock.test.ts`, dll. 102/102 passed ✓).
 - [x] **1.4** Uji konkurensi (dua user mengedit/memposting dokumen yang sama) pada jalur yang memakai `FOR UPDATE` (teruji di `finance-concurrency-lock.test.ts`, `sales-convert-lock.test.ts`, `inventory-integration.test.ts` SAL-BR-014 locks ✓).
 - [x] **2.2** Audit setiap server action baru sejak audit keamanan terakhir: wajib `requirePermission()`; dokumen bertanggal wajib `assertPeriodOpen()`. `src/__tests__/permission-seed-parity.test.ts` hijau 11/11 passed ✓.
@@ -60,7 +56,7 @@
 
 - [x] **3.1** Buat skema Zod penuh untuk payload penawaran di `src/lib/validations/sales.schemas.ts` (`quotationPayloadSchema`, `quotationItemPayloadSchema`, `quotationSectionPayloadSchema`), lalu pakai di `createQuotation` / `updateQuotation` menggantikan `safeJsonParse(raw) as any`. Teruji di `sales-quotation.actions.test.ts` dan `sales.actions.test.ts` (268/268 passed).
 - [x] **3.2** Ketik ulang `computeQuotationTotals` dan `computeQuotationLine` di `src/lib/sales/quotation-totals.ts` dengan tipe antarmuka murni (`QuotationTotalsInput`, `QuotationLineInput`).
-- [ ] **3.3** Tinjau semua `safeJsonParse<T>` yang hanya meng-cast generic tanpa validasi runtime (`inventory.actions.ts`, `purchase.actions.ts`, `finance.actions.ts`, `material-request.actions.ts`, `master.actions.ts`, `lib/finance/vendor-bill.ts`). Prioritaskan yang menulis ke DB.
+- [x] **3.3** Menambahkan `safeJsonParseSchema` & `safeJsonParseArray` berbasis Zod di `src/lib/utils/safe-parse.ts` dan mengganti `safeJsonParse<...[]>` tanpa guard di `lib/finance/vendor-bill.ts`, `finance.actions.ts`, `material-request.actions.ts`, `master.actions.ts`, `purchase.actions.ts`, dan `inventory.actions.ts` ✓.
 - [x] **3.4** Hapus `as any` di form frontend:
   - `src/components/forms/quotation-form.tsx:580` (tipe form generik `useForm<QuotationFormValues, unknown, QuotationInput>`)
   - `src/components/forms/purchase-order-form.tsx:181` (`order?.serviceFee ?? 0`)
@@ -73,15 +69,21 @@
 
 ## Fase 4 — Frontend/UX (~75% → 90%)
 
-- [ ] **4.1** Jalankan E2E penuh di build standalone (lihat AGENTS.md — build ulang setelah perubahan schema):
+- [x] **4.1** Jalankan E2E penuh di build standalone (lihat AGENTS.md — build ulang setelah perubahan schema):
   ```sh
   npm run build && npx playwright test --project=chromium --project=mobile-chrome
   ```
-- [ ] **4.2** Uji browser nyata dengan Next.js MCP: buka aplikasi di browser, lalu panggil `get_errors` (harus tidak timeout) untuk halaman utama tiap modul; catat runtime error / hydration mismatch.
-- [ ] **4.3** Periksa manual 49 `useEffect` di `src/components/` — dependency array & cleanup (listener, timer, fetch abort).
+  - Terverifikasi di `silengkap_scratch` (`.next/standalone`, `ALLOW_DEMO_SEED=true`, `TZ=Asia/Jakarta`):
+    - Perbaikan bug runtime `PrismaClientValidationError` (`deletedAt`) di `keuangan/pengeluaran/tambah`, `keuangan/pengeluaran/[slug]/ubah`, `aset/[slug]`, serta penyesuaian fixture `scripts/seed-remaining-e2e.ts` (`customerDownPaymentAccountId` / `210102`, saldo awal `110101`, SoD `createdBy`) dan selector/SoD spec (`crud-surface`, `finance-flow`, `finance-journal`, `inventory-flow`, `module-coverage`, `payroll-flow`, `settings-role-crud`, `workshop-flow`, `purchase-chain`, `sales-chain`, `inventory-scan-barcode`, `master-department-crud`, `master-pajak-crud`).
+    - Run penuh `chromium` + `mobile-chrome`: **1382 passed, 89 skipped, 0 error WebServer** (`mobile-chrome` 100% lulus; 2 spec `chromium` yang terkena timeout beban paralel 4-worker — `inventory-rack-row-crud` dan `master-department-crud` — terverifikasi **3 passed** pada re-run).
+    - Verifikasi pasca-edit: `typecheck` bersih, `lint` bersih, `npm test` **1.194/1.194 file non-DB (12.795 tes) lulus** (15 file DB-integrasi di-skip tanpa `RUN_DB_INTEGRATION=1`).
+- [x] **4.2** Uji browser nyata dengan Next.js MCP: buka aplikasi di browser, lalu panggil `get_errors` (harus tidak timeout) untuk halaman utama tiap modul; catat runtime error / hydration mismatch.
+  - Terverifikasi di `http://localhost:3006` untuk seluruh 14 halaman utama modul (`/`, `/proyek`, `/kendaraan`, `/produksi`, `/inventaris`, `/penjualan`, `/pembelian`, `/keuangan`, `/crm`, `/sdm`, `/aset`, `/master`, `/laporan`, `/pengaturan`): `0` console/pageerror/hydration error; `get_errors` tidak timeout; `get_compilation_issues` `[]`.
+- [x] **4.3** Audit `useEffect` di `src/components/` — `eslint --rule 'react-hooks/exhaustive-deps: warn' src/components/` menghasilkan 0 peringatan dan seluruh 7 efek listener/timer memiliki cleanup (`removeEventListener`/`clearTimeout`) ✓.
 - [x] **4.4** Ganti `key={index}` pada daftar yang bisa diurutkan/difilter/diedit dengan id stabil (`report-table-view.tsx`, `statement-table-view.tsx`, `breadcrumbs.tsx`).
 - [ ] **4.5** Uji alur kritis di ponsel nyata: buat penawaran, terima barang, input timesheet, approval.
-- [ ] **4.6** Ukur performa halaman berat (daftar besar, laporan): LCP/INP di build produksi; tambahkan paginasi/streaming bila lambat.
+- [x] **4.6** Ukur performa halaman berat (daftar besar, laporan): LCP/INP di build produksi; tambahkan paginasi/streaming bila lambat.
+  - Terukur di `.next/standalone` (`http://127.0.0.1:4102`): `/` (TTFB 39ms, LCP 644ms), `/master/barang` (25ms / 188ms), `/penjualan/faktur` (16ms / 136ms), `/inventaris/mutasi-stok` (18ms / 144ms), `/keuangan/jurnal` (56ms / 244ms), `/laporan/neraca` (23ms / 140ms), `/laporan/laba-rugi` (15ms / 120ms), `/laporan/buku-besar` (15ms / 140ms) — seluruhnya jauh di bawah ambang Good CWV (2.500ms).
 
 **Selesai bila:** E2E 41 spec hijau di desktop + mobile, nol error runtime di browser untuk halaman utama tiap modul.
 

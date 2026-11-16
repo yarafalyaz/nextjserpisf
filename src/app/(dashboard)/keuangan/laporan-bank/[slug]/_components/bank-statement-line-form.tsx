@@ -5,6 +5,7 @@ import { useRef, useState, useTransition } from "react"
 import { createBankStatementLine, updateBankStatementLine } from "@/actions/finance.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
+import { FormSelect } from "@/components/ui/form-select"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { CurrencyInput } from "@/components/ui/currency-input"
@@ -55,6 +56,7 @@ export function BankStatementLineForm({
   // ditambahkan; `CurrencyInput` menyimpan tampilannya di state internal, dan
   // `form.reset()` saja tidak mengosongkan angka yang terlihat.
   const [amount, setAmount] = useState<number>(line?.amount ?? 0)
+  const [lineType, setLineType] = useState<string>(line?.type ?? "debit")
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -125,19 +127,16 @@ export function BankStatementLineForm({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="flex flex-col gap-1.5 sm:w-40">
           <Label htmlFor="lineType">Arah Mutasi *</Label>
-          <select
+          <input type="hidden" name="type" value={lineType} />
+          <FormSelect
             id="lineType"
-            name="type"
-            required
-            defaultValue={line?.type ?? "debit"}
-            className="h-9 rounded-lg border border-default bg-surface px-3 text-sm text-foreground"
-          >
-            {Object.entries(BANK_STATEMENT_LINE_TYPE_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+            value={lineType}
+            onValueChange={setLineType}
+            options={Object.entries(BANK_STATEMENT_LINE_TYPE_LABELS).map(([value, label]) => ({
+              value,
+              label,
+            }))}
+          />
         </div>
         <div className="flex flex-1 flex-col gap-1.5">
           <Label htmlFor="lineReference">Referensi</Label>

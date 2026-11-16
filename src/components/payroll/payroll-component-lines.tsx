@@ -186,7 +186,7 @@ export function PayrollComponentLines({
               id="line-component"
               name="componentId"
               required
-              className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm"
+              className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="">Pilih komponen...</option>
               {available.map((c) => (
@@ -218,7 +218,7 @@ export function PayrollComponentLines({
           <p className="mt-4 border-t border-default pt-4 text-sm text-muted-foreground">
             {status === "draft"
               ? "Baris komponen hanya dapat diubah oleh pengguna berizin ubah penggajian."
-              : "Slip sudah bukan draf — baris komponen terkunci dan tidak dapat diubah."}
+              : "Slip sudah bukan draf, baris komponen terkunci dan tidak dapat diubah."}
           </p>
         )
       )}

@@ -17,15 +17,16 @@ import {
   assertJournalNotInCompletedReconciliation,
 } from "@/lib/hooks/accounting.hook";
 import {
-  evaluateReimbursementApprovalSod,
-  evaluateReimbursementApprovedAmount,
-  evaluateReimbursementEvidence,
   evaluateReimbursementPaymentAmount,
 } from "@/lib/reports/reimbursement";
+import {
+  assertClaimantPayable,
+  assertReimbursementApprovalGates,
+} from "@/lib/services/reimbursement-approval.service";
 import { onExpenseApprovedSyncPettyCash } from "@/lib/hooks/expense.hook";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { revalidatePath } from "next/cache";
-import { safeJsonParse } from "@/lib/utils/safe-parse";
+import { safeJsonParseArray } from "@/lib/utils/safe-parse";
 import { parseFormData } from "@/lib/validations/parse-form";
 import {
   bankStatementSchema,
@@ -608,7 +609,7 @@ type JournalEntryInput = {
 /** Parse + validasi entri jurnal dari form (dipakai createJournal dan updateJournal, aturan identik). */
 function parseAndValidateJournalEntries(formData: FormData) {
   const entriesJson = formData.get("entries") as string | null;
-  const entries = safeJsonParse<JournalEntryInput[]>(entriesJson) ?? [];
+  const entries = safeJsonParseArray<JournalEntryInput>(entriesJson);
 
   // Parser uang repo: Number("2.000.000,50") tak terbaca (NaN) dan Number("2.000.000")
   // bernilai 2 — nominal Indonesia dari klien non-form wajib lewat parseMoneyAmount.
@@ -961,25 +962,8 @@ export async function postJournal(journalId: number) {
 
 // ==================== EXPENSE ACTIONS ====================
 
-/**
- * Pengaju klaim reimbursement wajib masih berhak menerima uang perusahaan
- * (hidup + belum berhenti). Create menolak pengaju berhenti (EC-1), tetapi
- * karyawan bisa berhenti/nonaktif/terhapus sesudah klaim lahir — approve
- * dan bayar menilai ulang di sini, di dalam tx titik uang bergerak.
- */
-async function assertClaimantPayable(
-  client: Pick<typeof prisma, "employee">,
-  employeeId: number | null,
-): Promise<void> {
-  if (employeeId == null) throw new Error("Klaim tidak tertaut ke karyawan pengaju.");
-  const claimant = await client.employee.findUnique({
-    where: { id: employeeId },
-    select: { isActive: true, deletedAt: true, employmentEndedAt: true },
-  });
-  if (!claimant || claimant.deletedAt != null || !claimant.isActive || claimant.employmentEndedAt != null) {
-    throw new Error("Klaim tidak dapat diproses: karyawan pengaju sudah nonaktif/berhenti — tolak klaim dan selesaikan lewat jalur berhenti.");
-  }
-}
+// assertClaimantPayable dipindahkan ke @/lib/services/reimbursement-approval.service
+// agar dipakai bersama oleh approveExpense, markExpensePaid, dan approveStep.
 
 export async function createExpense(formData: FormData) {
   try {
@@ -1112,39 +1096,7 @@ export async function approveExpense(expenseId: number) {
     // nol perubahan). Bukti BR-RB-04 + SoD BR-RB-07 + nominal <= bukti.
     const isClaim = expense.isReimbursementClaim;
     if (isClaim) {
-      // FINHR-8: approve fail-closed bila akun beban klaim belum final —
-      // harus EXPENSE aktif tak terhapus (placeholder/lama bisa nonaktif
-      // atau berganti tipe sesudah klaim dibuat).
-      const claimAccount = await prisma.account.findUnique({
-        where: { id: expense.accountId },
-        select: { type: true, isActive: true, deletedAt: true },
-      });
-      if (!claimAccount || claimAccount.deletedAt || !claimAccount.isActive || claimAccount.type !== "EXPENSE") {
-        throw new Error("Akun beban klaim belum valid (wajib akun beban EXPENSE aktif) — tetapkan akun final sebelum menyetujui.");
-      }
-      const attachmentCount = await prisma.transactionAttachment.count({
-        where: { referenceType: "expense", referenceId: expenseId },
-      });
-      const evidence = evaluateReimbursementEvidence({
-        referenceNo: expense.referenceNo,
-        receiptImage: expense.receiptImage,
-        attachmentCount,
-      });
-      if (!evidence.ok) throw new Error(evidence.error);
-      const amountGuard = evaluateReimbursementApprovedAmount({
-        submittedAmount: Number(expense.amount),
-        evidencedAmount: Number(expense.amount),
-      });
-      if (!amountGuard.ok) throw new Error(amountGuard.error);
-      const approverEmployee = await prisma.employee.findFirst({
-        where: { userId: Number(user.id) },
-        select: { id: true },
-      });
-      const sod = evaluateReimbursementApprovalSod({
-        claimantEmployeeId: expense.employeeId,
-        approverEmployeeId: approverEmployee?.id ?? null,
-      });
-      if (!sod.ok) throw new Error(sod.error);
+      await assertReimbursementApprovalGates(prisma, expense, Number(user.id));
     }
 
     // R8-KEU-05: lock baris + cek status + sinkron kas kecil + flip status

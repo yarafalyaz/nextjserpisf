@@ -1,12 +1,15 @@
 "use client"
 
 import { createColumnHelper } from "@/lib/table"
+import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteTaxGroup } from "@/actions/master.actions"
+import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
 
 interface TaxGroup {
   id: number
+  slug: string | null
   name: string
   taxNames: string
 }
@@ -16,7 +19,11 @@ const columnHelper = createColumnHelper<TaxGroup>()
 const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
-    cell: (info) => <span className="font-medium">{info.getValue()}</span>,
+    cell: (info) => (
+      <Link href={entityHref("/master/kelompok-pajak", info.row.original)} className="font-medium text-foreground hover:underline">
+        {info.getValue()}
+      </Link>
+    ),
   }),
   columnHelper.accessor("taxNames", {
     header: "Pajak Termasuk",
@@ -29,8 +36,11 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
+        viewHref={entityHref("/master/kelompok-pajak", info.row.original)}
+        editHref={entityEditHref("/master/kelompok-pajak", info.row.original)}
         deleteAction={deleteTaxGroup}
         deleteId={info.row.original.id}
+        editPermission="edit_taxes"
         deletePermission="delete_taxes"
       />
     ),
@@ -51,7 +61,7 @@ export function TaxGroupTable({ data, total, page, pageSize }: TaxGroupTableProp
       columns={columns}
       ariaLabel="Daftar grup pajak"
       serverPagination={{ total, page, pageSize }}
-      selectable={true}
+      selectable={false}
       searchColumn="name"
       searchPlaceholder="Cari nama grup pajak..."
     />

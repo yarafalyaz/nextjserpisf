@@ -120,7 +120,7 @@ export default async function QuotationPriceHistoryPage({
           selects={priceHistorySelects(selection)}
           toggle={{
             param: "draft",
-            label: "Sertakan Draft",
+            label: "Sertakan Draf",
             checked: includeDraft,
           }}
         />
@@ -280,7 +280,7 @@ export default async function QuotationPriceHistoryPage({
 
           <ReportSection
             title="Baris Penawaran Tanpa Barang"
-            description="Hanya hitungan ringkas per pelanggan — tanpa daftar baris"
+            description="Hanya hitungan ringkas per pelanggan, tanpa daftar baris"
           >
             <DetailTable data-report-table="Baris Penawaran Tanpa Barang">
               <DetailTableHead>

@@ -7,9 +7,7 @@ import { showError, showSuccess } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
-
-const selectClass =
-  "h-11 w-full rounded-md border border-input bg-transparent px-3 text-base md:h-9 md:text-sm"
+import { FormSelect } from "@/components/ui/form-select"
 
 interface VacancyFormProps {
   vacancy?: {
@@ -64,21 +62,29 @@ export function VacancyForm({ vacancy, departments, positions }: VacancyFormProp
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="departmentId">Departemen</Label>
-          <select id="departmentId" name="departmentId" defaultValue={vacancy?.departmentId ?? ""} className={selectClass}>
-            <option value="">-- Pilih Departemen --</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
+          <FormSelect
+            id="departmentId"
+            name="departmentId"
+            defaultValue={vacancy?.departmentId ? String(vacancy.departmentId) : ""}
+            placeholder="-- Pilih Departemen --"
+            options={[
+              { value: "", label: "-- Pilih Departemen --" },
+              ...departments.map((d) => ({ value: String(d.id), label: d.name })),
+            ]}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="positionId">Jabatan</Label>
-          <select id="positionId" name="positionId" defaultValue={vacancy?.positionId ?? ""} className={selectClass}>
-            <option value="">-- Pilih Jabatan --</option>
-            {positions.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
+          <FormSelect
+            id="positionId"
+            name="positionId"
+            defaultValue={vacancy?.positionId ? String(vacancy.positionId) : ""}
+            placeholder="-- Pilih Jabatan --"
+            options={[
+              { value: "", label: "-- Pilih Jabatan --" },
+              ...positions.map((p) => ({ value: String(p.id), label: p.name })),
+            ]}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="location">Lokasi</Label>

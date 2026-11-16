@@ -1,15 +1,12 @@
 export const dynamic = "force-dynamic"
 
-import Link from "next/link"
 import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 import { loadForwardTrace } from "@/lib/reports/genealogy-forward-trace-data"
-import { entityHref } from "@/lib/utils/entity-url"
-import { formatDate } from "@/lib/utils/format"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { AppSearchField } from "@/components/ui/search-field"
 import { EmptyState } from "@/components/ui/empty-state"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { GenealogyTraceTable } from "./_components/genealogy-trace-table"
 
 export const metadata: Metadata = { title: "Telusur Genealogi Produksi" }
 
@@ -45,42 +42,21 @@ export default async function TelusurGenealogiPage({
       {hits.length > 0 ? (
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
           <div className="p-4 px-5">
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Perintah Produksi</DetailTableTh>
-                <DetailTableTh>Hasil Jadi</DetailTableTh>
-                <DetailTableTh>Bahan yang Cocok</DetailTableTh>
-                <DetailTableTh>Lot/Serial Cocok</DetailTableTh>
-                <DetailTableTh>Diselesaikan</DetailTableTh>
-                <DetailTableTh>Diselesaikan Oleh</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {hits.map((hit) => (
-                  <DetailTableRow key={hit.productionOrderId}>
-                    <DetailTableTd>
-                      <Link
-                        href={entityHref("/produksi/production-orders", { id: hit.productionOrderId, slug: hit.productionOrderSlug })}
-                        className="font-mono hover:underline"
-                      >
-                        {hit.productionOrderDocumentNo}
-                      </Link>
-                    </DetailTableTd>
-                    <DetailTableTd>
-                      {hit.outputItemLabel}
-                      {hit.outputSerials.length ? (
-                        <span className="block font-mono text-xs text-muted-foreground">{hit.outputSerials.join(", ")}</span>
-                      ) : hit.outputBatch ? (
-                        <span className="block font-mono text-xs text-muted-foreground">{hit.outputBatch}</span>
-                      ) : null}
-                    </DetailTableTd>
-                    <DetailTableTd>{hit.matchedItemLabels.join(", ")}</DetailTableTd>
-                    <DetailTableTd><span className="font-mono text-xs">{hit.matchedTokens.join(", ")}</span></DetailTableTd>
-                    <DetailTableTd>{formatDate(hit.completedAt)}</DetailTableTd>
-                    <DetailTableTd>{hit.completedByName ?? "-"}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <GenealogyTraceTable
+              data={hits.map((hit) => ({
+                id: hit.productionOrderId,
+                productionOrderId: hit.productionOrderId,
+                productionOrderSlug: hit.productionOrderSlug,
+                productionOrderDocumentNo: hit.productionOrderDocumentNo,
+                outputItemLabel: hit.outputItemLabel,
+                outputSerials: hit.outputSerials,
+                outputBatch: hit.outputBatch,
+                matchedItemLabels: hit.matchedItemLabels,
+                matchedTokens: hit.matchedTokens,
+                completedAt: hit.completedAt.toISOString(),
+                completedByName: hit.completedByName,
+              }))}
+            />
           </div>
         </div>
       ) : null}

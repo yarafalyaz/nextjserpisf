@@ -79,7 +79,7 @@ export default async function VehicleFitmentDetailPage({
         actions={
           <>
             {canEdit && (
-              <Button href={entityEditHref("/kendaraan/fitment", rule)} variant="primary">Ubah</Button>
+              <Button href={entityEditHref("/kendaraan/fitment", rule)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
             )}
             {canDelete && <DeleteButton id={rule.id} action={deleteVehicleFitment} />}
           </>

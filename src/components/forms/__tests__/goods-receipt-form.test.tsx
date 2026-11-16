@@ -172,8 +172,8 @@ describe("GoodsReceiptForm — item row layout", () => {
 
     const text = container.textContent ?? ""
     // The rack/row comboboxes should show the default labels, not just placeholders.
-    expect(text).toContain("R-A — Rak A")
-    expect(text).toContain("B-1 — Baris 1")
+    expect(text).toContain("R-A - Rak A")
+    expect(text).toContain("B-1 - Baris 1")
 
     unmount(root)
     container.remove()

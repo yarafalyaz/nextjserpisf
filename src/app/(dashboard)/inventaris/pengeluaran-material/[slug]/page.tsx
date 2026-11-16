@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatDate, formatCurrencyExact } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { StatusChip } from '@/components/ui/status-chip'
@@ -10,11 +10,12 @@ import { ProcessButton } from "@/components/ui/process-button"
 import { deleteMaterialIssue, completeMaterialIssue } from "@/actions/inventory.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { EmptyState } from "@/components/ui/empty-state"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { MaterialIssueItemsTable } from "./_components/material-issue-tables"
 
 import type { Metadata } from "next"
 
 import { hasPermission, requirePermission } from "@/lib/auth/permissions"
+import { canViewCostAmounts } from "@/lib/auth/field-visibility"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
@@ -27,6 +28,7 @@ export default async function MaterialIssueDetailPage({
   params: Promise<{ slug: string }>
 }) {
   await requirePermission("view_material_issues")
+  const canViewCosts = await canViewCostAmounts()
 
   const { slug } = await params
 
@@ -105,7 +107,7 @@ export default async function MaterialIssueDetailPage({
                   label="Posting"
                 />
                 <CanCreate permission="edit_material_issues">
-                  <Link href={entityEditHref("/inventaris/pengeluaran-material", issue)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default text-foreground hover:bg-surface-secondary hover:shadow-md transition-all">Ubah</Link>
+                  <Link href={entityEditHref("/inventaris/pengeluaran-material", issue)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default text-foreground hover:bg-surface-secondary hover:shadow-xs transition-all">Ubah</Link>
                 </CanCreate>
                 <CanCreate permission="delete_material_issues">
                   <DeleteButton id={issue.id} action={deleteMaterialIssue} />
@@ -188,22 +190,16 @@ export default async function MaterialIssueDetailPage({
           {issue.items.length === 0 ? (
             <EmptyState title="Tidak ada barang" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Nama Barang</DetailTableTh>
-                <DetailTableTh align="right">Jml</DetailTableTh>
-                <DetailTableTh align="right">Biaya</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {issue.items.map((item) => (
-                  <DetailTableRow key={item.id}>
-                    <DetailTableTd>{itemNameMap.get(item.itemId) || `Item #${item.itemId}`}</DetailTableTd>
-                    <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.cost))}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <MaterialIssueItemsTable
+              data={issue.items.map((item) => ({
+                id: item.id,
+                itemName: itemNameMap.get(item.itemId) || `Item #${item.itemId}`,
+                qty: Number(item.qty),
+                cost: Number(item.cost),
+                costFormatted: formatCurrencyExact(Number(item.cost)),
+              }))}
+              canViewCosts={canViewCosts}
+            />
           )}
         </div>
       </div>

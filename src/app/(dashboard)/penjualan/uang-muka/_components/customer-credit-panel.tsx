@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/shadcn/input"
 import {
   allocateCustomerCredit,
   refundCustomerCredit,
@@ -40,7 +41,15 @@ function newOperationKey(): string {
   return crypto.randomUUID()
 }
 
-export function CustomerCreditPanel({ credits, invoices, canConfirm }: CustomerCreditPanelProps) {
+function CreditRowCard({
+  credit,
+  invoices,
+  canConfirm,
+}: {
+  credit: CreditRow
+  invoices: CustomerCreditPanelProps["invoices"]
+  canConfirm: boolean
+}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [invoiceId, setInvoiceId] = useState<string>(invoices[0] ? String(invoices[0].id) : "")
@@ -56,9 +65,6 @@ export function CustomerCreditPanel({ credits, invoices, canConfirm }: CustomerC
   function intentKeyName(intent: string): string {
     return `cc-idem:${intent}`
   }
-  // sessionStorage = opsional progresif: bila tak tersedia, key sesi-komponen
-  // (useRef) tetap melindungi retry selama komponen hidup. Satu probe di
-  // awal menulis flag — tanpa try/catch berulang di tiap helper.
   const storageOK = useRef<boolean | null>(null)
   function storageAvailable(): boolean {
     if (storageOK.current !== null) return storageOK.current
@@ -69,22 +75,15 @@ export function CustomerCreditPanel({ credits, invoices, canConfirm }: CustomerC
       sessionStorage.removeItem(probe)
       ok = true
     } catch {
-      // Storage diblokir/penuh: beri tahu pengguna SEKALI (pola yang sama
-      // dengan export-buttons: console + showError = bukan senyap). Retry
-      // sesi-komponen tetap jalan tanpa lintas-refresh.
-      console.warn("[customer-credit] sessionStorage tak tersedia — retry lintas refresh nonaktif")
-      showError("Penyimpanan sesi browser diblokir — ulangi dari halaman ini bila timeout (jangan refresh)")
+      console.warn("[customer-credit] sessionStorage tak tersedia - retry lintas refresh nonaktif")
+      showError("Penyimpanan sesi browser diblokir - ulangi dari halaman ini bila timeout (jangan refresh)")
     }
     storageOK.current = ok
     return ok
   }
-  // AUD-R8-04: SETIAP operasi storage dilindungi sendiri (probe bisa basi:
-  // kuota berubah/penuh antar probe dan tulis nyata). Kegagalan storage =
-  // fallback key sesi-komponen + pesan konsisten — key finansial TAK PERNAH
-  // diganti diam-diam; submit tetap pakai key sesi yang sama.
   function storageFail(op: string): void {
-    console.warn(`[customer-credit] sessionStorage ${op} gagal — key intent hanya sesi-komponen`)
-    showError("Penyimpanan sesi browser gagal — jangan refresh; klik lagi untuk retry aman")
+    console.warn(`[customer-credit] sessionStorage ${op} gagal - key intent hanya sesi-komponen`)
+    showError("Penyimpanan sesi browser gagal - jangan refresh; klik lagi untuk retry aman")
   }
   function loadIntentKey(intent: string): string | null {
     if (keyRef.current !== null && intentRef.current === intent) return keyRef.current
@@ -103,8 +102,6 @@ export function CustomerCreditPanel({ credits, invoices, canConfirm }: CustomerC
     try {
       sessionStorage.setItem(intentKeyName(intent), key)
     } catch {
-      // Key sesi-komponen SUDAH tersimpan di atas — submit tetap pakai key
-      // yang sama (bukan key baru). Hanya ketahanan lintas-refresh hilang.
       storageFail("tulis")
     }
   }
@@ -118,13 +115,17 @@ export function CustomerCreditPanel({ credits, invoices, canConfirm }: CustomerC
     }
   }
 
-  function run(creditId: number) {
+  function run() {
+    if (mode === "allocate" && invoices.length === 0) {
+      showError("Tidak ada faktur terbuka untuk dialokasikan")
+      return
+    }
     const nominal = Number(amount)
     if (!(nominal > 0)) {
       showError("Nominal harus lebih dari 0")
       return
     }
-    const intent = `${mode}:${creditId}:${mode === "allocate" ? invoiceId : "-"}:${nominal}`
+    const intent = `${mode}:${credit.id}:${mode === "allocate" ? invoiceId : "-"}:${nominal}`
     let key = loadIntentKey(intent)
     if (key === null) {
       key = newOperationKey()
@@ -134,110 +135,116 @@ export function CustomerCreditPanel({ credits, invoices, canConfirm }: CustomerC
       try {
         const result =
           mode === "allocate"
-            ? await allocateCustomerCredit(creditId, Number(invoiceId), nominal, key)
-            : await refundCustomerCredit(creditId, nominal, key)
+            ? await allocateCustomerCredit(credit.id, Number(invoiceId), nominal, key)
+            : await refundCustomerCredit(credit.id, nominal, key)
         if (result && !result.success) {
-          // AUD-R8-01: key dibuang HANYA bila gagal DEFINITIF (validasi
-          // sebelum mutasi). Gagal AMBIGU (timeout/deadlock/commit tak pasti)
-          // = key DIPERTAHANKAN — klik ulang = retry aman key sama, bukan
-          // operasi baru. Rekonsiliasi: cek mutasi/saldo sebelum intent baru.
           if (!("ambiguous" in result && result.ambiguous === true)) {
             clearIntentKey(intent)
             showError(result.error || "Gagal memproses kredit")
           } else {
-            showError(`${result.error || "Hasil belum pasti"} — JANGAN buat intent baru; klik lagi untuk retry aman`)
+            showError(`${result.error || "Hasil belum pasti"} - JANGAN buat intent baru; klik lagi untuk retry aman`)
           }
           return
         }
-        // Sukses (termasuk replay retry): intent selesai, key dibuang.
         clearIntentKey(intent)
         if (result && "warning" in result && typeof result.warning === "string") {
           showError(result.warning)
         } else if (result && "replayed" in result && result.replayed === true) {
-          // AUD-R7-03: retry retry = hasil operasi PERTAMA (tanpa mutasi baru).
-          const ref = ("paymentId" in result && result.paymentId) || ("journalId" in result && result.journalId) || "?";
-          showSuccess(`Sudah diproses sebelumnya (ref #${ref}) — tidak ada mutasi baru`)
+          const ref = ("paymentId" in result && result.paymentId) || ("journalId" in result && result.journalId) || "?"
+          showSuccess(`Sudah diproses sebelumnya (ref #${ref}) - tidak ada mutasi baru`)
         } else {
           showSuccess(mode === "allocate" ? "Kredit berhasil dialokasikan" : "Kredit berhasil di-refund")
         }
         setAmount("")
         router.refresh()
       } catch (e) {
-        // Error jaringan/timeout: key DIPERTAHANKAN — klik ulang = retry aman
-        // dengan key sama, bukan operasi baru.
         showError(e instanceof Error ? e.message : "Gagal memproses kredit")
       }
     })
   }
 
+  const saldo = Number(credit.receivedAmount) - Number(credit.allocatedAmount) - Number(credit.refundedAmount)
+  const noOpenInvoices = mode === "allocate" && invoices.length === 0
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 shadow-2xs">
+      <div className="text-sm font-medium text-foreground">
+        <span className="font-mono tabular-nums">{credit.documentNo}</span> - sisa{" "}
+        <span className="font-mono tabular-nums font-semibold">{saldo.toLocaleString("id-ID")}</span>{" "}
+        <span className="text-muted-foreground">({statusLabel(credit.status)})</span>
+      </div>
+      {canConfirm && (
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-1 text-xs font-medium text-foreground">
+            Mode
+            <select
+              aria-label="Mode kredit"
+              value={mode}
+              onChange={(e) => setMode(e.target.value as "allocate" | "refund")}
+              className="min-h-11 sm:min-h-9 rounded-md border border-input bg-card px-2.5 py-1 text-xs text-foreground cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="allocate">Alokasi ke faktur</option>
+              <option value="refund">Refund ke kas</option>
+            </select>
+          </label>
+          {mode === "allocate" && (
+            <label className="flex flex-col gap-1 text-xs font-medium text-foreground">
+              Faktur tujuan
+              <select
+                aria-label="Faktur tujuan"
+                value={invoiceId}
+                onChange={(e) => setInvoiceId(e.target.value)}
+                disabled={invoices.length === 0}
+                className="min-h-11 sm:min-h-9 rounded-md border border-input bg-card px-2.5 py-1 text-xs text-foreground cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {invoices.length === 0 ? (
+                  <option value="">Tidak ada faktur terbuka</option>
+                ) : (
+                  invoices.map((inv) => (
+                    <option key={inv.id} value={inv.id}>
+                      {inv.documentNo} (sisa {(Number(inv.grandTotal) - Number(inv.paidAmount)).toLocaleString("id-ID")})
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+          )}
+          <label className="flex flex-col gap-1 text-xs font-medium text-foreground">
+            Nominal (Rp)
+            <Input
+              aria-label="Nominal kredit"
+              type="number"
+              min={1}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-40 min-h-11 sm:min-h-9 font-mono tabular-nums text-xs"
+            />
+          </label>
+          <Button
+            type="button"
+            variant="primary"
+            isDisabled={isPending || saldo <= 0 || noOpenInvoices}
+            isPending={isPending}
+            onPress={run}
+            aria-label={`Proses kredit ${credit.documentNo}`}
+            className="min-h-11 sm:min-h-9"
+          >
+            {isPending ? "Memproses..." : mode === "allocate" ? "Alokasikan" : "Refund"}
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function CustomerCreditPanel({ credits, invoices, canConfirm }: CustomerCreditPanelProps) {
   if (credits.length === 0) return null
 
   return (
     <div className="flex flex-col gap-4">
-      {credits.map((c) => {
-        const saldo = Number(c.receivedAmount) - Number(c.allocatedAmount) - Number(c.refundedAmount)
-        return (
-          <div key={c.id} className="flex flex-col gap-2 rounded-lg border p-3">
-            <div className="text-sm font-medium">
-              {c.documentNo} — sisa {saldo.toLocaleString("id-ID")} ({statusLabel(c.status)})
-            </div>
-            {canConfirm && (
-            <div className="flex flex-wrap items-end gap-2">
-              <label className="flex flex-col gap-1 text-xs">
-                Mode
-                <select
-                  aria-label="Mode kredit"
-                  value={mode}
-                  onChange={(e) => setMode(e.target.value as "allocate" | "refund")}
-                  className="rounded border px-2 py-1"
-                >
-                  <option value="allocate">Alokasi ke faktur</option>
-                  <option value="refund">Refund ke kas</option>
-                </select>
-              </label>
-              {mode === "allocate" && (
-                <label className="flex flex-col gap-1 text-xs">
-                  Faktur tujuan
-                  <select
-                    aria-label="Faktur tujuan"
-                    value={invoiceId}
-                    onChange={(e) => setInvoiceId(e.target.value)}
-                    className="rounded border px-2 py-1"
-                  >
-                    {invoices.map((inv) => (
-                      <option key={inv.id} value={inv.id}>
-                        {inv.documentNo} (sisa {(Number(inv.grandTotal) - Number(inv.paidAmount)).toLocaleString("id-ID")})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              <label className="flex flex-col gap-1 text-xs">
-                Nominal (Rp)
-                <input
-                  aria-label="Nominal kredit"
-                  type="number"
-                  min={1}
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="w-40 rounded border px-2 py-1"
-                />
-              </label>
-              <Button
-                type="button"
-                variant="primary"
-                isDisabled={isPending || saldo <= 0}
-                isPending={isPending}
-                onPress={() => run(c.id)}
-                aria-label={`Proses kredit ${c.documentNo}`}
-              >
-                {isPending ? "Memproses..." : mode === "allocate" ? "Alokasikan" : "Refund"}
-              </Button>
-            </div>
-            )}
-          </div>
-        )
-      })}
+      {credits.map((c) => (
+        <CreditRowCard key={c.id} credit={c} invoices={invoices} canConfirm={canConfirm} />
+      ))}
     </div>
   )
 }

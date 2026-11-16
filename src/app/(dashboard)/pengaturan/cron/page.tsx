@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { toPlain } from "@/lib/utils/serialization"
 import { CronTaskList } from "./_components/cron-task-list"
 
 import type { Metadata } from "next"
@@ -57,14 +58,24 @@ const CRON_TASKS = [
 export default async function CronPage() {
   await requirePermission("manage_settings")
 
-  const logs = await prisma.cronLog.findMany({
-    orderBy: { ranAt: "desc" },
-    take: 10,
-  })
+  const [logs, latestRuns] = await Promise.all([
+    prisma.cronLog.findMany({
+      orderBy: { ranAt: "desc" },
+      take: 10,
+    }),
+    Promise.all(
+      CRON_TASKS.map((t) =>
+        prisma.cronLog.findFirst({
+          where: { task: t.key },
+          orderBy: { ranAt: "desc" },
+        })
+      )
+    ),
+  ])
 
   // Get latest status per task
-  const latestPerTask = CRON_TASKS.map((task) => {
-    const latest = logs.find((l) => l.task === task.key)
+  const latestPerTask = CRON_TASKS.map((task, idx) => {
+    const latest = latestRuns[idx]
     return {
       ...task,
       lastRun: latest
@@ -89,7 +100,7 @@ export default async function CronPage() {
         </p>
       </div>
 
-      <CronTaskList tasks={latestPerTask} logs={logs} />
+      <CronTaskList tasks={toPlain(latestPerTask)} logs={toPlain(logs)} />
     </div>
   )
 }

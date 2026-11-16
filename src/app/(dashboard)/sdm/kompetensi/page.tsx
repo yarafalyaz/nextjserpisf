@@ -39,6 +39,7 @@ export default async function CompetenciesPage() {
     }),
   ])
 
+  const plainCompetencies = toPlain(competencies)
   const totalCompetencies = competencies.length
   const totalMappedPositions = competencies.reduce((acc, c) => acc + c._count.positionRequirements, 0)
   const totalAssessedEmployees = competencies.reduce((acc, c) => acc + c._count.employeeCompetencies, 0)
@@ -111,12 +112,12 @@ export default async function CompetenciesPage() {
       </CanCreate>
       <CanCreate permission="edit_competencies">
         <div className="flex flex-col gap-3">
-          <PositionCompetencyForm positions={positions} competencies={competencies} />
-          <EmployeeCompetencyForm employees={employees} competencies={competencies} />
+          <PositionCompetencyForm positions={positions} competencies={plainCompetencies} />
+          <EmployeeCompetencyForm employees={employees} competencies={plainCompetencies} />
         </div>
       </CanCreate>
 
-      <CompetencyTable data={toPlain(competencies)} />
+      <CompetencyTable data={plainCompetencies} />
 
       {gapQueue ? <CompetencyGapQueueCard queue={gapQueue} /> : null}
     </div>

@@ -75,7 +75,7 @@ export default async function AssetJournalPage({
         {journal.journalCount} jurnal terposting pada periode ini
         {perKind ? ` — ${perKind}` : ""} · total debit {formatCurrencyExact(journal.totalDebit)} = kredit{" "}
         {formatCurrencyExact(journal.totalCredit)}
-        {journal.isBalanced ? "." : " — PERHATIAN: debit dan kredit tidak sama."}
+        {journal.isBalanced ? "." : " - PERHATIAN: debit dan kredit tidak sama."}
       </p>
     </ReportPageShell>
   )

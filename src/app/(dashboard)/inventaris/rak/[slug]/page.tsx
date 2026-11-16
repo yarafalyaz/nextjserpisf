@@ -10,15 +10,8 @@ import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { EmptyState } from "@/components/ui/empty-state"
-import {
-  DetailTable,
-  DetailTableHead,
-  DetailTableTh,
-  DetailTableBody,
-  DetailTableRow,
-  DetailTableTd,
-} from "@/components/ui/detail-table"
 import { Plus } from "@/components/ui/fontawesome-icons"
+import { RackRowsTable } from "./_components/rack-tables"
 
 import type { Metadata } from "next"
 
@@ -74,7 +67,7 @@ export default async function RackDetailPage({
         actions={
           <>
             <CanCreate permission="create_warehouses">
-              <Button href={entityEditHref("/inventaris/rak", rack)} variant="primary">
+              <Button href={entityEditHref("/inventaris/rak", rack)} variant="primary" className="min-h-11 sm:min-h-9">
                 Ubah
               </Button>
             </CanCreate>
@@ -115,7 +108,7 @@ export default async function RackDetailPage({
           <CanCreate permission="manage_inventory">
             <Link
               href={`/inventaris/baris-rak/tambah/gudang/${rack.warehouse.slug ?? rack.warehouse.id}/rak/${rack.slug ?? rack.id}`}
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
             >
               <Plus className="size-3.5" aria-hidden="true" />
               <span>Tambah Baris di Rak Ini</span>
@@ -126,42 +119,15 @@ export default async function RackDetailPage({
           {rack.rows.length === 0 ? (
             <EmptyState title="Belum ada baris rak terdaftar pada rak ini" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh className="w-12 text-center">No</DetailTableTh>
-                <DetailTableTh className="w-40">Kode Baris</DetailTableTh>
-                <DetailTableTh>Nama Baris Rak</DetailTableTh>
-                <DetailTableTh className="w-44 text-right">Tanggal Dibuat</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {rack.rows.map((row, idx) => (
-                  <DetailTableRow key={row.id}>
-                    <DetailTableTd className="text-center font-mono text-xs text-muted-foreground tabular-nums">
-                      {idx + 1}
-                    </DetailTableTd>
-                    <DetailTableTd className="font-mono text-xs font-medium tabular-nums">
-                      <Link
-                        href={entityHref("/inventaris/baris-rak", row)}
-                        className="text-foreground hover:text-primary hover:underline"
-                      >
-                        {row.code || "-"}
-                      </Link>
-                    </DetailTableTd>
-                    <DetailTableTd>
-                      <Link
-                        href={entityHref("/inventaris/baris-rak", row)}
-                        className="text-foreground hover:text-primary hover:underline font-medium"
-                      >
-                        {row.name}
-                      </Link>
-                    </DetailTableTd>
-                    <DetailTableTd className="text-right font-mono text-xs text-muted-foreground tabular-nums">
-                      {formatDate(row.createdAt)}
-                    </DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <RackRowsTable
+              data={rack.rows.map((row) => ({
+                id: row.id,
+                slug: row.slug,
+                code: row.code,
+                name: row.name,
+                createdAt: row.createdAt.toISOString(),
+              }))}
+            />
           )}
         </div>
       </div>

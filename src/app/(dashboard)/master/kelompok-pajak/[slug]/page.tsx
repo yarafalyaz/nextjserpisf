@@ -25,12 +25,24 @@ export default async function DetailPage({
   const data = await resolveEntity(
     { segment: slug },
     {
-      bySlug: (s) => prisma.taxGroup.findFirst({ where: { slug: s } }),
-      byId: (id) => prisma.taxGroup.findUnique({ where: { id } }),
+      bySlug: (s) =>
+        prisma.taxGroup.findFirst({
+          where: { slug: s },
+          include: { taxes: { include: { tax: true } } },
+        }),
+      byId: (id) =>
+        prisma.taxGroup.findUnique({
+          where: { id },
+          include: { taxes: { include: { tax: true } } },
+        }),
     },
   );
 
   if (!data) notFound();
+
+  const memberTaxes = data.taxes
+    .map((item) => item.tax)
+    .filter((tax) => tax && tax.deletedAt === null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -67,11 +79,27 @@ export default async function DetailPage({
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Deskripsi
+              Pajak Termasuk
             </span>
-            <span className="text-[0.9375rem] text-foreground font-medium">
-              {"-"}
-            </span>
+            {memberTaxes.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5 mt-0.5">
+                {memberTaxes.map((tax) => (
+                  <span
+                    key={tax.id}
+                    className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-0.5 text-xs font-medium text-foreground"
+                  >
+                    <span>{tax.name}</span>
+                    <span className="font-mono tabular-nums text-muted-foreground">
+                      ({Number(tax.rate).toLocaleString("id-ID")}%)
+                    </span>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span className="text-[0.9375rem] text-muted-foreground font-medium">
+                Belum ada pajak terdaftar
+              </span>
+            )}
           </div>
         </div>
       </div>

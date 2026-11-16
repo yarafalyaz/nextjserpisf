@@ -37,6 +37,9 @@ describe("statusToIndo", () => {
     expect(statusToIndo["draft"]).toBe("konsep")
     expect(statusToIndo["in_progress"]).toBe("dalam-proses")
     expect(statusToIndo["cancelled"]).toBe("batal")
+    expect(statusToIndo["bonus"]).toBe("bonus")
+    expect(statusToIndo["reward"]).toBe("penghargaan")
+    expect(statusToIndo["incentive"]).toBe("insentif")
   })
 })
 

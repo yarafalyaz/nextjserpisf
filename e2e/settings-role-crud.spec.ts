@@ -61,7 +61,7 @@ test.describe("Pengaturan Peran CRUD", () => {
     let gone = false
     for (let i = 0; i < 3; i++) {
       await page.goto("/pengaturan/peran", { waitUntil: "domcontentloaded" })
-      await expect(page.getByRole("heading", { name: "Peran & Izin" })).toBeVisible({ timeout: 30000 })
+      await expect(page.getByRole("heading", { name: "Peran & Hak Akses (RBAC)" })).toBeVisible({ timeout: 30000 })
       gone = !(await page.locator("body").innerText()).includes(updated)
       if (gone) break
       // Role still exists — retry the delete

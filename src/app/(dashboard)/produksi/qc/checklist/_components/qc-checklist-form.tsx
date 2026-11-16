@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useRef, useState, useTransition } from "react"
+import { useCallback, useMemo, useRef, useState, useTransition } from "react"
 import { createQcChecklist, updateQcChecklist } from "@/actions/qc.actions"
 import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -15,7 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/shadcn/select"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { DataTable } from "@/components/ui/data-table"
+import { createColumnHelper } from "@/lib/table"
 import { Button } from "@/components/ui/button"
 
 interface ItemRow {
@@ -54,6 +55,12 @@ const METHOD_OPTIONS = [
   { value: "functional", label: "Fungsional" },
 ]
 
+interface ItemTableRow extends ItemRow {
+  id: number
+}
+
+const checklistColumnHelper = createColumnHelper<ItemTableRow>()
+
 export function QcChecklistForm({
   products,
   checklist,
@@ -81,16 +88,107 @@ export function QcChecklistForm({
   )
 
   function addRow() {
-    setRows([...rows, { itemName: "", method: "visual", spec: "", isRequired: true }])
+    setRows((prev) => [...prev, { itemName: "", method: "visual", spec: "", isRequired: true }])
   }
-  function removeRow(index: number) {
-    setRows(rows.filter((_, i) => i !== index))
-  }
-  function updateRow(index: number, field: keyof ItemRow, value: string | boolean) {
-    const updated = [...rows]
-    updated[index] = { ...updated[index], [field]: value }
-    setRows(updated)
-  }
+  const removeRow = useCallback((index: number) => {
+    setRows((prev) => prev.filter((_, i) => i !== index))
+  }, [])
+  const updateRow = useCallback((index: number, field: keyof ItemRow, value: string | boolean) => {
+    setRows((prev) => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], [field]: value }
+      return updated
+    })
+  }, [])
+
+  const tableData = useMemo<ItemTableRow[]>(
+    () => rows.map((r, index) => ({ ...r, id: index })),
+    [rows],
+  )
+
+  const columns = useMemo(
+    () => [
+      checklistColumnHelper.accessor("itemName", {
+        header: "Butir",
+        meta: { mobilePrimary: true },
+        cell: (info) => {
+          const index = info.row.original.id
+          return (
+            <Input
+              value={info.getValue()}
+              onChange={(e) => updateRow(index, "itemName", e.target.value)}
+              placeholder="Nama butir"
+            />
+          )
+        },
+      }),
+      checklistColumnHelper.accessor("method", {
+        header: "Metode",
+        cell: (info) => {
+          const index = info.row.original.id
+          return (
+            <Select value={info.getValue()} onValueChange={(v) => updateRow(index, "method", v)}>
+              <SelectTrigger aria-label="Metode">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {METHOD_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )
+        },
+      }),
+      checklistColumnHelper.accessor("spec", {
+        header: "Spesifikasi",
+        cell: (info) => {
+          const index = info.row.original.id
+          return (
+            <Input
+              value={info.getValue()}
+              onChange={(e) => updateRow(index, "spec", e.target.value)}
+              placeholder="Target/toleransi"
+            />
+          )
+        },
+      }),
+      checklistColumnHelper.accessor("isRequired", {
+        header: "Wajib",
+        cell: (info) => {
+          const index = info.row.original.id
+          return (
+            <input
+              type="checkbox"
+              checked={info.getValue()}
+              onChange={(e) => updateRow(index, "isRequired", e.target.checked)}
+              aria-label="Butir wajib"
+              className="size-4"
+            />
+          )
+        },
+      }),
+      checklistColumnHelper.display({
+        id: "actions",
+        header: "Aksi",
+        meta: { align: "right" },
+        cell: (info) => {
+          const index = info.row.original.id
+          return (
+            <Button
+              onPress={() => removeRow(index)}
+              aria-label={`Hapus butir baris ${index + 1}`}
+              type="button"
+              isDisabled={rows.length === 1}
+            >
+              <Trash2 size={14} />
+            </Button>
+          )
+        },
+      }),
+    ],
+    [removeRow, rows.length, updateRow],
+  )
 
   function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -173,68 +271,15 @@ export function QcChecklistForm({
           </Button>
         </div>
 
-        <div className="overflow-x-auto">
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>Butir</DetailTableTh>
-              <DetailTableTh>Metode</DetailTableTh>
-              <DetailTableTh>Spesifikasi</DetailTableTh>
-              <DetailTableTh>Wajib</DetailTableTh>
-              <DetailTableTh>Aksi</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {rows.map((r, index) => (
-                <DetailTableRow key={index}>
-                  <DetailTableTd>
-                    <Input
-                      value={r.itemName}
-                      onChange={(e) => updateRow(index, "itemName", e.target.value)}
-                      placeholder="Nama butir"
-                    />
-                  </DetailTableTd>
-                  <DetailTableTd>
-                    <Select value={r.method} onValueChange={(v) => updateRow(index, "method", v)}>
-                      <SelectTrigger aria-label="Metode">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {METHOD_OPTIONS.map((o) => (
-                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </DetailTableTd>
-                  <DetailTableTd>
-                    <Input
-                      value={r.spec}
-                      onChange={(e) => updateRow(index, "spec", e.target.value)}
-                      placeholder="Target/toleransi"
-                    />
-                  </DetailTableTd>
-                  <DetailTableTd>
-                    <input
-                      type="checkbox"
-                      checked={r.isRequired}
-                      onChange={(e) => updateRow(index, "isRequired", e.target.checked)}
-                      aria-label="Butir wajib"
-                      className="size-4"
-                    />
-                  </DetailTableTd>
-                  <DetailTableTd>
-                    <Button
-                      onPress={() => removeRow(index)}
-                      aria-label={`Hapus butir baris ${index + 1}`}
-                      type="button"
-                      isDisabled={rows.length === 1}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
-                  </DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-          </DetailTable>
-        </div>
+        <DataTable
+          data={tableData}
+          columns={columns}
+          ariaLabel="Butir Checklist"
+          selectable={false}
+          enableColumnToggle={false}
+          enableExport={false}
+          pageSize={50}
+        />
       </div>
 
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">

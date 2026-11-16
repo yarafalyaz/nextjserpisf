@@ -14,13 +14,13 @@ import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { FormGrid, FormGroup } from "@/components/ui/form-layout"
 import { Button } from "@/components/ui/button"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { toLocalDateOnly, wibDateOnly } from "@/lib/utils/date-only"
 
 export function OvertimeForm({ employees, projects, overtime }: { employees: { id: number; name: string }[]; projects?: { id: number; name: string }[]; overtime?: { id: number; employeeId: number; projectId?: number | null; date: string; hours: number; totalHours?: number | null; mealHours?: number | null; billableHours?: number | null; reason?: string | null } }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
-  const [date, setDate] = useState(overtime?.date ? new Date(overtime.date).toISOString().split("T")[0] : toLocalDateOnly(new Date()))
+  const [date, setDate] = useState(overtime?.date ? wibDateOnly(new Date(overtime.date)) : toLocalDateOnly(new Date()))
   const [employeeId, setEmployeeId] = useState<string | null>(
     overtime?.employeeId ? String(overtime.employeeId) : employees.length === 1 ? String(employees[0].id) : null
   )

@@ -73,7 +73,7 @@ describe("WarrantySupplierClaimPanel — recovery terpisah dari klaim pelanggan"
     expect(container.textContent).toContain("Belum ditautkan")
     expect(container.textContent).toContain("terpisah dari status klaim pelanggan")
     expect(container.querySelector("[aria-label='Formulir tautan klaim supplier']")).not.toBeNull()
-    expect(container.textContent).toContain("Tanpa retur — jalur vendor saja")
+    expect(container.textContent).toContain("Tanpa retur - jalur vendor saja")
     act(() => root.unmount())
   })
 
@@ -174,7 +174,7 @@ describe("WarrantySupplierClaimPanel — recovery terpisah dari klaim pelanggan"
       combobox.click()
     })
     const option = Array.from(document.body.querySelectorAll<HTMLElement>("[cmdk-item]"))
-      .find((el) => el.textContent?.includes("Tanpa Recovery"))
+      .find((el) => el.textContent?.includes("Tanpa Pemulihan Klaim"))
     expect(option).toBeDefined()
     act(() => option!.click())
     const refInput = container.querySelector<HTMLInputElement>("#supplierClaimRefNoTransition")!
@@ -187,7 +187,7 @@ describe("WarrantySupplierClaimPanel — recovery terpisah dari klaim pelanggan"
     act(() => { setVal(refInput, "REF-9"); setVal(notesInput, "supplier menolak, tanpa pengganti") })
     const danger = Array.from(container.querySelectorAll("button")).find((b) => b.textContent?.includes("Tutup Tanpa Recovery"))!
     act(() => danger.click())
-    const confirmBtn = Array.from(document.body.querySelectorAll<HTMLElement>("[role='alertdialog'] button")).find((b) => b.textContent?.trim() === "Tutup — Tanpa Recovery")
+    const confirmBtn = Array.from(document.body.querySelectorAll<HTMLElement>("[role='alertdialog'] button")).find((b) => b.textContent?.trim() === "Tutup - Tanpa Pemulihan Klaim")
     expect(confirmBtn).toBeDefined()
     await act(async () => { confirmBtn!.click() })
     expect(transitionMock).toHaveBeenCalledTimes(1)
@@ -233,7 +233,7 @@ describe("WarrantySupplierClaimPanel — recovery terpisah dari klaim pelanggan"
       combobox.click()
     })
     const option = Array.from(document.body.querySelectorAll<HTMLElement>("[cmdk-item]")).find((el) =>
-      el.textContent?.includes("Diterima Supplier"),
+      el.textContent?.includes("Diterima Pemasok"),
     )
     expect(option).toBeDefined()
     act(() => option!.click())

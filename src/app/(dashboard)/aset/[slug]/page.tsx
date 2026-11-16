@@ -12,11 +12,14 @@ import { deleteAsset } from "@/actions/asset.actions"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import {
+  AssetFiscalYearTable,
+  AssetHistoryTable,
+  AssetTransferTable,
+} from "./_components/asset-detail-tables"
 import { Pencil } from "@/components/ui/fontawesome-icons"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
-import { ASSET_HISTORY_TYPE_LABELS, labelFrom } from "@/lib/utils/status-labels"
 import { AssetFiscalStatus, DEPRECIATION_METHOD_LABELS } from "../_components/asset-fiscal-status"
 import { AssetAcquisitionSummary } from "../_components/asset-acquisition"
 import { resolveAssetAcquisition } from "@/lib/finance/asset-acquisition"
@@ -29,7 +32,6 @@ import { loadAssetAnalyticalStatuses } from "@/lib/reports/asset-analytical-stat
 import { AssetAnalyticalStatus } from "../_components/asset-analytical-status"
 import { AssetUsageRecordForm } from "./_components/asset-usage-record-form"
 import { AssetFiscalYearFreezeForm } from "./_components/asset-fiscal-year-freeze-form"
-import { fiscalMethodLabel } from "../_components/asset-fiscal-status"
 import { AssetChangeEventPanel, type AssetChangeEventRow } from "./_components/asset-change-event-panel"
 import { AssetEventMappingStatus } from "../_components/asset-change-event"
 import { hasPermission } from "@/lib/auth/permissions"
@@ -55,10 +57,10 @@ export default async function AssetDetailPage({
   }
 
   const asset = await resolveEntity(
-    { segment: slug, fallbackWhere: {} },
+    { segment: slug },
     {
       bySlug: (s) => prisma.asset.findFirst({ where: { slug: s }, include: assetInclude }),
-      byId: (id) => prisma.asset.findUnique({ where: { id }, include: assetInclude }),
+      byId: (id) => prisma.asset.findFirst({ where: { id }, include: assetInclude }),
     },
   )
 
@@ -98,6 +100,7 @@ export default async function AssetDetailPage({
     prisma.journal.aggregate({
       where: {
         status: "POSTED",
+        deletedAt: null,
         referenceType: { startsWith: ASSET_DEPRECIATION_PREFIX },
         referenceId: asset.id,
       },
@@ -261,7 +264,7 @@ export default async function AssetDetailPage({
         badge={<AssetUseStatus status={asset.status} />}
         actions={<>
           <CanCreate permission="edit_assets">
-            <Button href={entityEditHref("/aset", asset)} variant="primary"><Pencil size={14} /> Ubah</Button>
+            <Button href={entityEditHref("/aset", asset)} variant="primary" className="min-h-11 sm:min-h-9"><Pencil size={14} /> Ubah</Button>
           </CanCreate>
           {asset.status !== "disposed" && (
             <CanCreate permission="manage_assets">
@@ -286,7 +289,7 @@ export default async function AssetDetailPage({
         <DetailField label="Nilai Saat Ini (cache)" value={formatCurrencyExact(Number(asset.currentValue))} />
         <DetailField label="Akumulasi Penyusutan" value={<span className="text-danger">{formatCurrencyExact(depreciation)}</span>} />
         <DetailField label="Metode Penyusutan (komersial)" value={asset.depreciationMethod ? (DEPRECIATION_METHOD_LABELS[asset.depreciationMethod] ?? asset.depreciationMethod) : "-"} />
-        <DetailField label="Status Penyusutan Fiskal" value={asset.category ? <AssetFiscalStatus taxGroupCode={asset.category.taxGroupCode} taxTypeListed={asset.category.taxTypeListed} taxDjpDetermination={asset.category.taxDjpDetermination} fiscalMethod={asset.category.fiscalMethod} /> : "Tanpa kategori — fiskal belum dihitung"} />
+        <DetailField label="Status Penyusutan Fiskal" value={asset.category ? <AssetFiscalStatus taxGroupCode={asset.category.taxGroupCode} taxTypeListed={asset.category.taxTypeListed} taxDjpDetermination={asset.category.taxDjpDetermination} fiscalMethod={asset.category.fiscalMethod} /> : "Tanpa kategori - fiskal belum dihitung"} />
         <DetailField label="Status Guna" value={<AssetUseStatus status={asset.status} />} />
         <DetailField label="Nilai Buku (jurnal POSTED)" value={formatCurrencyExact(postedBookValue)} />
         <DetailField label="Disposisi Penyusutan" value={<AssetCronDisposition disposition={cronDisposition} />} />
@@ -331,28 +334,17 @@ export default async function AssetDetailPage({
           {asset.fiscalYearRows.length === 0 ? (
             <EmptyState title="Belum ada baris tahun fiskal terbekukan" description="Angka fiskal tahun berjalan di laporan berlabel estimasi-tahun-berjalan sampai baris tahun dibuat." />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Tahun Pajak</DetailTableTh>
-                <DetailTableTh>Metode</DetailTableTh>
-                <DetailTableTh>Sumber</DetailTableTh>
-                <DetailTableTh align="right">Saldo Awal</DetailTableTh>
-                <DetailTableTh align="right">Penyusutan</DetailTableTh>
-                <DetailTableTh align="right">Saldo Akhir</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {asset.fiscalYearRows.map((row) => (
-                  <DetailTableRow key={row.id}>
-                    <DetailTableTd>{row.taxYear}</DetailTableTd>
-                    <DetailTableTd>{fiscalMethodLabel(row.method)}</DetailTableTd>
-                    <DetailTableTd>{row.source}</DetailTableTd>
-                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(row.openingBalance))}</DetailTableTd>
-                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(row.depreciation))}</DetailTableTd>
-                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(row.closingBalance))}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <AssetFiscalYearTable
+              data={asset.fiscalYearRows.map((row) => ({
+                id: row.id,
+                taxYear: row.taxYear,
+                method: row.method,
+                source: row.source,
+                openingBalance: Number(row.openingBalance),
+                depreciation: Number(row.depreciation),
+                closingBalance: Number(row.closingBalance),
+              }))}
+            />
           )}
         </div>
       </div>
@@ -372,7 +364,7 @@ export default async function AssetDetailPage({
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Aset tanpa kategori — pemetaan akun peristiwa belum tersedia; peristiwa berharga ditolak server.
+              Aset tanpa kategori - pemetaan akun peristiwa belum tersedia; peristiwa berharga ditolak server.
             </p>
           )}
           <AssetChangeEventPanel
@@ -394,24 +386,15 @@ export default async function AssetDetailPage({
           {asset.histories.length === 0 ? (
             <EmptyState title="Belum ada riwayat" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Tanggal</DetailTableTh>
-                <DetailTableTh>Tipe</DetailTableTh>
-                <DetailTableTh>Deskripsi</DetailTableTh>
-                <DetailTableTh align="right">Nilai</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {asset.histories.map((h) => (
-                  <DetailTableRow key={h.id}>
-                    <DetailTableTd>{formatDate(h.date)}</DetailTableTd>
-                    <DetailTableTd><span className="inline-flex px-3 py-1 rounded-full text-xs font-medium border border-default bg-background text-muted-foreground">{labelFrom(ASSET_HISTORY_TYPE_LABELS, h.type)}</span></DetailTableTd>
-                    <DetailTableTd>{h.description || "-"}</DetailTableTd>
-                    <DetailTableTd align="right">{h.amount ? formatCurrencyExact(Number(h.amount)) : "-"}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <AssetHistoryTable
+              data={asset.histories.map((h) => ({
+                id: h.id,
+                date: h.date.toISOString(),
+                type: h.type,
+                description: h.description,
+                amount: h.amount != null ? Number(h.amount) : null,
+              }))}
+            />
           )}
         </div>
       </div>
@@ -423,24 +406,15 @@ export default async function AssetDetailPage({
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Transfer</h2>
           </div>
           <div className="p-4 px-5">
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Tanggal</DetailTableTh>
-                <DetailTableTh>Dari</DetailTableTh>
-                <DetailTableTh>Ke</DetailTableTh>
-                <DetailTableTh>Catatan</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {asset.transfers.map((t) => (
-                  <DetailTableRow key={t.id}>
-                    <DetailTableTd>{formatDate(t.transferDate)}</DetailTableTd>
-                    <DetailTableTd>{t.fromLocation || "-"}</DetailTableTd>
-                    <DetailTableTd>{t.toLocation}</DetailTableTd>
-                    <DetailTableTd>{t.notes || "-"}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <AssetTransferTable
+              data={asset.transfers.map((t) => ({
+                id: t.id,
+                transferDate: t.transferDate.toISOString(),
+                fromLocation: t.fromLocation,
+                toLocation: t.toLocation,
+                notes: t.notes,
+              }))}
+            />
           </div>
         </div>
       )}

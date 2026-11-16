@@ -21,7 +21,6 @@ import {
   CardTitle,
 } from "@/components/ui/shadcn/card"
 import { Button } from "@/components/ui/shadcn/button"
-import { StatCard } from "@/components/ui/empty-state"
 import { loadOpenReceivablesTotal } from "@/lib/reports/return-credit"
 import { isReversedPayment } from "@/lib/finance/payment-status"
 import { StatusChip } from "@/components/ui/status-chip"
@@ -116,31 +115,60 @@ export default async function FinanceDashboard() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-3 px-4 lg:grid-cols-4 lg:px-6">
-            <StatCard
-              label="Pendapatan Dibayar"
-              value={formatCurrencyExact(data.totalRevenue)}
-              icon={<TrendingUp className="size-4" />}
-              trend="up"
-            />
-            <StatCard
-              label="Piutang"
-              value={formatCurrencyExact(data.receivables)}
-              icon={<AlertTriangle className="size-4" />}
-              trend={data.receivables > 0 ? "down" : "neutral"}
-            />
-            <StatCard
-              label="Biaya Bulan Ini"
-              value={formatCurrencyExact(data.monthlyExpense)}
-              icon={<TrendingDown className="size-4" />}
-              trend={data.monthlyExpense > 0 ? "down" : "neutral"}
-            />
-            <StatCard
-              label="Faktur Menunggu"
-              value={data.pendingApprovals}
-              icon={<Receipt className="size-4" />}
-            />
-          </div>
+          <section aria-label="Ringkasan keuangan" className="px-4 lg:px-6">
+            <dl className="grid grid-cols-1 divide-y divide-border overflow-hidden rounded-lg border border-border bg-card shadow-2xs sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
+              <div className="flex min-w-0 flex-col justify-between gap-2 p-4 lg:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-medium text-muted-foreground">Pendapatan Dibayar</dt>
+                  <TrendingUp className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                </div>
+                <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {formatCurrencyExact(data.totalRevenue)}
+                </dd>
+              </div>
+              <div className="flex min-w-0 flex-col justify-between gap-2 p-4 sm:border-t-0 lg:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-medium text-muted-foreground">Piutang</dt>
+                  <AlertTriangle
+                    className={
+                      data.receivables > 0
+                        ? "size-4 text-amber-600 dark:text-amber-400"
+                        : "size-4 text-muted-foreground/60"
+                    }
+                    aria-hidden="true"
+                  />
+                </div>
+                <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {formatCurrencyExact(data.receivables)}
+                </dd>
+              </div>
+              <div className="flex min-w-0 flex-col justify-between gap-2 p-4 sm:border-t lg:border-t-0 lg:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-medium text-muted-foreground">Biaya Bulan Ini</dt>
+                  <TrendingDown
+                    className={
+                      data.monthlyExpense > 0
+                        ? "size-4 text-red-600 dark:text-red-400"
+                        : "size-4 text-muted-foreground/60"
+                    }
+                    aria-hidden="true"
+                  />
+                </div>
+                <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {formatCurrencyExact(data.monthlyExpense)}
+                </dd>
+              </div>
+              <div className="flex min-w-0 flex-col justify-between gap-2 p-4 sm:border-t lg:border-t-0 lg:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-medium text-muted-foreground">Faktur Menunggu</dt>
+                  <Receipt className="size-4 text-muted-foreground/60" aria-hidden="true" />
+                </div>
+                <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {data.pendingApprovals}
+                </dd>
+              </div>
+            </dl>
+          </section>
 
           {/* Recent payments + Invoices */}
           <div className="grid grid-cols-1 gap-4 px-4 lg:grid-cols-2 lg:px-6">
@@ -148,14 +176,14 @@ export default async function FinanceDashboard() {
             <Card className="gap-0 py-0">
               <CardHeader className="py-4">
                 <CardTitle className="flex items-center gap-2 text-sm">
-                  <CreditCard className="size-4 text-muted-foreground" />
+                  <CreditCard className="size-4 text-muted-foreground" aria-hidden="true" />
                   Pembayaran Terbaru
                 </CardTitle>
                 <CardDescription>6 pembayaran terakhir diterima</CardDescription>
                 <CardAction>
-                  <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                  <Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-8 text-xs">
                     <Link href="/penjualan/pembayaran">
-                      Semua <ArrowUpRight className="size-3.5" />
+                      Semua <ArrowUpRight className="size-3.5" aria-hidden="true" />
                     </Link>
                   </Button>
                 </CardAction>
@@ -247,12 +275,12 @@ export default async function FinanceDashboard() {
             <h2 className="mb-2.5 text-xs font-semibold tracking-wider uppercase text-muted-foreground">
               Menu Cepat
             </h2>
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 lg:grid-cols-5">
               {quickLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="group flex items-center justify-between gap-3 rounded-lg border bg-card p-3.5 shadow-2xs transition-colors duration-150 hover:border-foreground/20 hover:bg-muted/40"
+                  className="group flex items-center justify-between gap-2 rounded-lg border bg-card p-2.5 shadow-2xs transition-all duration-150 active:scale-[0.98] sm:gap-3 sm:p-3.5 [@media(hover:hover)]:hover:border-foreground/20 [@media(hover:hover)]:hover:bg-muted/40"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-muted/50 text-muted-foreground transition-colors group-hover:text-foreground">

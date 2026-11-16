@@ -73,7 +73,7 @@ export function WithholdingTaxTypeForm({ accounts, taxType }: WithholdingTaxType
     })
   }
 
-  const accountOptions = accounts.map((a) => ({ value: String(a.id), label: `${a.code} — ${a.name}` }))
+  const accountOptions = accounts.map((a) => ({ value: String(a.id), label: `${a.code} - ${a.name}` }))
 
   return (
     <form onSubmit={onSubmit} aria-busy={isPending} aria-label={taxType?.id ? "Formulir ubah jenis pemotongan PPh" : "Formulir tambah jenis pemotongan PPh"}>
@@ -85,7 +85,7 @@ export function WithholdingTaxTypeForm({ accounts, taxType }: WithholdingTaxType
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="name">Nama <span className="text-destructive" aria-hidden="true">*</span></Label>
-            <Input id="name" name="name" required defaultValue={taxType?.name ?? ""} placeholder="mis. PPh 23 — Jasa" />
+            <Input id="name" name="name" required defaultValue={taxType?.name ?? ""} placeholder="mis. PPh 23 - Jasa" />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="rate">Tarif (%)</Label>
@@ -118,7 +118,7 @@ export function WithholdingTaxTypeForm({ accounts, taxType }: WithholdingTaxType
               options={accountOptions}
             />
             <span className="text-xs text-muted-foreground">
-              Wajib diisi bila PPh ini dipotong dari tagihan pemasok — jurnal pemotongan mengkredit akun ini.
+              Wajib diisi bila PPh ini dipotong dari tagihan pemasok - jurnal pemotongan mengkredit akun ini.
             </span>
           </div>
           <div className="flex flex-col gap-1.5">

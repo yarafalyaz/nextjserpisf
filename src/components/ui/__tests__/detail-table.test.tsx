@@ -66,7 +66,7 @@ describe("DetailTable", () => {
         </DetailTableBody>
       </>,
     )
-    expect(html.match(/class="num"/g)?.length).toBe(2)
+    expect(html.match(/class="num\b[^"]*"/g)?.length).toBe(2)
   })
 
   it("meneruskan colSpan (dipakai baris total & sel kosong)", () => {

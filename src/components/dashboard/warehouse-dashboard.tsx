@@ -25,7 +25,6 @@ import {
 } from "@/components/ui/shadcn/card"
 import { Button } from "@/components/ui/shadcn/button"
 import { Badge } from "@/components/ui/shadcn/badge"
-import { StatCard } from "@/components/ui/empty-state"
 
 type LowStockItem = { id: number; name: string; sku: string; qtyOnHand: number; minStock: number }
 
@@ -193,12 +192,53 @@ export default async function WarehouseDashboard({
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-3 px-4 lg:grid-cols-4 lg:px-6">
-            <StatCard label="Total Item" value={data.totalItems} icon={<Package className="size-4" />} />
-            <StatCard label="Stok Menipis" value={data.lowStockCount} icon={<AlertTriangle className="size-4" />} trend="down" />
-            <StatCard label="Gudang" value={data.warehouseCount} icon={<Building2 className="size-4" />} />
-            <StatCard label="Penerimaan Menunggu" value={data.pendingReceipts} icon={<PackageCheck className="size-4" />} />
-          </div>
+          <section aria-label="Ringkasan gudang" className="px-4 lg:px-6">
+            <dl className="grid grid-cols-1 divide-y divide-border overflow-hidden rounded-lg border border-border bg-card shadow-2xs sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
+              <div className="flex min-w-0 flex-col justify-between gap-2 p-4 lg:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-medium text-muted-foreground">Total Item</dt>
+                  <Package className="size-4 text-muted-foreground/60" aria-hidden="true" />
+                </div>
+                <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {data.totalItems}
+                </dd>
+              </div>
+              <div className="flex min-w-0 flex-col justify-between gap-2 p-4 sm:border-t-0 lg:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-medium text-muted-foreground">Stok Menipis</dt>
+                  <AlertTriangle
+                    className={
+                      data.lowStockCount > 0
+                        ? "size-4 text-amber-600 dark:text-amber-400"
+                        : "size-4 text-muted-foreground/60"
+                    }
+                    aria-hidden="true"
+                  />
+                </div>
+                <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {data.lowStockCount}
+                </dd>
+              </div>
+              <div className="flex min-w-0 flex-col justify-between gap-2 p-4 sm:border-t lg:border-t-0 lg:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-medium text-muted-foreground">Gudang</dt>
+                  <Building2 className="size-4 text-muted-foreground/60" aria-hidden="true" />
+                </div>
+                <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {data.warehouseCount}
+                </dd>
+              </div>
+              <div className="flex min-w-0 flex-col justify-between gap-2 p-4 sm:border-t lg:border-t-0 lg:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-medium text-muted-foreground">Penerimaan Menunggu</dt>
+                  <PackageCheck className="size-4 text-muted-foreground/60" aria-hidden="true" />
+                </div>
+                <dd className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+                  {data.pendingReceipts}
+                </dd>
+              </div>
+            </dl>
+          </section>
 
           {/* Low stock + Recent moves */}
           <div className="grid grid-cols-1 gap-4 px-4 lg:grid-cols-2 lg:px-6">
@@ -272,7 +312,7 @@ export default async function WarehouseDashboard({
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-[13px] font-medium text-foreground">{move.item.name}</p>
                           <p className="mt-0.5 text-xs text-muted-foreground">
-                            {move.warehouse?.name || "-"} — {move.moveType || "-"}
+                            {move.warehouse?.name || "-"} - {move.moveType || "-"}
                           </p>
                         </div>
                         <div className="text-right">
@@ -296,12 +336,12 @@ export default async function WarehouseDashboard({
             <h2 className="mb-2.5 text-xs font-semibold tracking-wider uppercase text-muted-foreground">
               Menu Cepat
             </h2>
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 lg:grid-cols-3">
               {quickLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="group flex items-center justify-between gap-3 rounded-lg border bg-card p-3.5 shadow-2xs transition-colors duration-150 hover:border-foreground/20 hover:bg-muted/40"
+                  className="group flex items-center justify-between gap-2 rounded-lg border bg-card p-2.5 shadow-2xs transition-all duration-150 active:scale-[0.98] sm:gap-3 sm:p-3.5 [@media(hover:hover)]:hover:border-foreground/20 [@media(hover:hover)]:hover:bg-muted/40"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-muted/50 text-muted-foreground transition-colors group-hover:text-foreground">

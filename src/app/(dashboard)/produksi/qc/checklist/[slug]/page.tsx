@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
 import { EmptyState } from "@/components/ui/empty-state"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { QcChecklistItemsTable } from "./_components/qc-checklist-tables"
 
 import type { Metadata } from "next"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
@@ -83,7 +83,7 @@ export default async function QcChecklistDetailPage({
           <>
             {checklist.status === "draft" && (
               <CanCreate permission="manage_qc_checklists">
-                <Button href={entityEditHref("/produksi/qc/checklist", checklist)} variant="primary">Ubah</Button>
+                <Button href={entityEditHref("/produksi/qc/checklist", checklist)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
               </CanCreate>
             )}
           </>
@@ -116,26 +116,15 @@ export default async function QcChecklistDetailPage({
         {checklist.items.length === 0 ? (
           <EmptyState title="Tidak ada butir" />
         ) : (
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>#</DetailTableTh>
-              <DetailTableTh>Butir</DetailTableTh>
-              <DetailTableTh>Metode</DetailTableTh>
-              <DetailTableTh>Spesifikasi</DetailTableTh>
-              <DetailTableTh>Wajib</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {checklist.items.map((it, idx) => (
-                <DetailTableRow key={it.id}>
-                  <DetailTableTd>{idx + 1}</DetailTableTd>
-                  <DetailTableTd>{it.itemName}</DetailTableTd>
-                  <DetailTableTd>{METHOD_LABELS[it.method] ?? it.method}</DetailTableTd>
-                  <DetailTableTd>{it.spec ?? "-"}</DetailTableTd>
-                  <DetailTableTd>{it.isRequired ? "Ya" : "Tidak"}</DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-          </DetailTable>
+          <QcChecklistItemsTable
+            data={checklist.items.map((it) => ({
+              id: it.id,
+              itemName: it.itemName,
+              methodLabel: METHOD_LABELS[it.method] ?? it.method,
+              spec: it.spec,
+              isRequired: it.isRequired,
+            }))}
+          />
         )}
       </DetailSection>
     </div>

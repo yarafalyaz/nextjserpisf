@@ -32,7 +32,11 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { PostedLockNotice } from "@/components/ui/posted-lock-notice"
 import { InvoiceItemsEditor } from "@/components/ui/invoice-items-editor"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
+import {
+  InvoiceDownPaymentsTable,
+  InvoicePaymentsTable,
+  InvoiceReturnsTable,
+} from "./_components/sales-invoice-detail-tables"
 import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
@@ -168,12 +172,12 @@ export default async function InvoiceDetailPage({
                 (cancelled/setelah-pelunasan-nyata pasti ditolak). */}
             {itemsEditable && (
               <CanCreate permission="edit_sales_invoices">
-                <Button href={entityEditHref("/penjualan/faktur", invoice)} variant="primary">Ubah</Button>
+                <Button href={entityEditHref("/penjualan/faktur", invoice)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
               </CanCreate>
             )}
             {(invoice.status === "posted" || invoice.status === "partial") && (
               <CanCreate permission="create_sales_payments">
-                <Button href={`/penjualan/pembayaran/tambah/faktur/${invoice.slug ?? invoice.id}`} variant="primary" className="bg-success text-success-foreground">
+                <Button href={`/penjualan/pembayaran/tambah/faktur/${invoice.slug ?? invoice.id}`} variant="primary" className="bg-success text-success-foreground min-h-11 sm:min-h-9">
                   Terima Pembayaran
                 </Button>
               </CanCreate>
@@ -182,7 +186,7 @@ export default async function InvoiceDetailPage({
               invoice.salesOrder &&
               (DELIVERABLE_ORDER_STATUSES as readonly string[]).includes(invoice.salesOrder.status) && (
               <CanCreate permission="create_delivery_orders">
-                <Button href={`/penjualan/surat-jalan/tambah/faktur/${invoice.slug ?? invoice.id}`} variant="primary">+ Surat Jalan</Button>
+                <Button href={`/penjualan/surat-jalan/tambah/faktur/${invoice.slug ?? invoice.id}`} variant="primary" className="min-h-11 sm:min-h-9">+ Surat Jalan</Button>
               </CanCreate>
             )}
             <WhatsappButton
@@ -416,42 +420,17 @@ export default async function InvoiceDetailPage({
                   {(!invoice.quotation?.downPayments || invoice.quotation.downPayments.length === 0) ? (
                     <EmptyState title="Tidak ada uang muka" />
                   ) : (
-                    <>
-                      <DetailTable>
-                        <DetailTableHead>
-                          <DetailTableTh>No. Dokumen</DetailTableTh>
-                          <DetailTableTh>Tanggal</DetailTableTh>
-                          <DetailTableTh>Metode</DetailTableTh>
-                          <DetailTableTh>Status</DetailTableTh>
-                          <DetailTableTh align="right">Nominal</DetailTableTh>
-                        </DetailTableHead>
-                        <DetailTableBody>
-                          {invoice.quotation.downPayments.map((dp: any) => (
-                            <DetailTableRow key={dp.id}>
-                              <DetailTableTd className="font-mono">{dp.documentNo}</DetailTableTd>
-                              <DetailTableTd>{formatDate(dp.paymentDate)}</DetailTableTd>
-                              <DetailTableTd>{resolvePaymentMethodName(dp.paymentMethod, pmMap)}</DetailTableTd>
-                              <DetailTableTd><StatusChip status={dp.status} /></DetailTableTd>
-                              <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(dp.amount))}</DetailTableTd>
-                            </DetailTableRow>
-                          ))}
-                        </DetailTableBody>
-                        <DetailTableFoot>
-                          <DetailTableFootRow>
-                            <DetailTableTd colSpan={4} align="right" className="font-bold">Total Uang Muka</DetailTableTd>
-                            <DetailTableTd align="right" className="font-bold font-mono tabular-nums text-right">{formatCurrencyExact(invoice.quotation.downPayments.reduce((sum: number, dp: any) => sum + Number(dp.amount), 0))}</DetailTableTd>
-                          </DetailTableFootRow>
-                          <DetailTableFootRow>
-                            <DetailTableTd colSpan={4} align="right">Total Keseluruhan Faktur</DetailTableTd>
-                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(invoice.grandTotal))}</DetailTableTd>
-                          </DetailTableFootRow>
-                          <DetailTableFootRow>
-                            <DetailTableTd colSpan={4} align="right" className="text-danger font-bold">Sisa Setelah Uang Muka</DetailTableTd>
-                            <DetailTableTd align="right" className="text-danger font-bold font-mono tabular-nums text-right">{formatCurrencyExact(Number(invoice.grandTotal) - invoice.quotation.downPayments.reduce((sum: number, dp: any) => sum + Number(dp.amount), 0))}</DetailTableTd>
-                          </DetailTableFootRow>
-                        </DetailTableFoot>
-                      </DetailTable>
-                    </>
+                    <InvoiceDownPaymentsTable
+                      data={invoice.quotation.downPayments.map((dp: any) => ({
+                        id: dp.id,
+                        documentNo: dp.documentNo,
+                        paymentDate: dp.paymentDate instanceof Date ? dp.paymentDate.toISOString() : String(dp.paymentDate),
+                        paymentMethodName: resolvePaymentMethodName(dp.paymentMethod, pmMap),
+                        status: dp.status,
+                        amount: Number(dp.amount),
+                      }))}
+                      grandTotal={Number(invoice.grandTotal)}
+                    />
                   )}
                 </div>
               </div>
@@ -474,24 +453,15 @@ export default async function InvoiceDetailPage({
                   {invoice.payments.length === 0 ? (
                     <EmptyState title="Belum ada pembayaran" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>No. Dokumen</DetailTableTh>
-                        <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh>Metode</DetailTableTh>
-                        <DetailTableTh align="right">Jumlah</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {invoice.payments.map((pay) => (
-                          <DetailTableRow key={pay.id}>
-                            <DetailTableTd className="font-mono">{pay.documentNo}</DetailTableTd>
-                            <DetailTableTd>{formatDate(pay.paymentDate)}</DetailTableTd>
-                            <DetailTableTd>{resolvePaymentMethodName(pay.paymentMethod, pmMap)}</DetailTableTd>
-                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(pay.amount))}</DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <InvoicePaymentsTable
+                      data={invoice.payments.map((pay) => ({
+                        id: pay.id,
+                        documentNo: pay.documentNo,
+                        paymentDate: pay.paymentDate.toISOString(),
+                        paymentMethodName: resolvePaymentMethodName(pay.paymentMethod, pmMap),
+                        amount: Number(pay.amount),
+                      }))}
+                    />
                   )}
                 </div>
               </div>
@@ -517,26 +487,14 @@ export default async function InvoiceDetailPage({
                   {invoice.salesReturns.length === 0 ? (
                     <EmptyState title="Belum ada retur untuk faktur ini" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>No. Dokumen</DetailTableTh>
-                        <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh>Status</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {invoice.salesReturns.map((r) => (
-                          <DetailTableRow key={r.id}>
-                            <DetailTableTd className="font-mono">
-                              <Link href={entityHref("/penjualan/retur", r)}>{r.documentNo}</Link>
-                            </DetailTableTd>
-                            <DetailTableTd>{formatDate(r.date)}</DetailTableTd>
-                            <DetailTableTd>
-                              <StatusChip status={r.status} />
-                            </DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <InvoiceReturnsTable
+                      data={invoice.salesReturns.map((r) => ({
+                        id: r.id,
+                        documentNo: r.documentNo,
+                        date: r.date.toISOString(),
+                        status: r.status,
+                      }))}
+                    />
                   )}
                 </div>
               </div>

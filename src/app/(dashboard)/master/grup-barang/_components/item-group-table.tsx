@@ -79,7 +79,7 @@ export function ItemGroupTable({ data, total, page, pageSize }: ItemGroupTablePr
       columns={columns}
       ariaLabel="Daftar grup barang"
       serverPagination={{ total, page, pageSize }}
-      selectable={true}
+      selectable={false}
       searchColumn="name"
       searchPlaceholder="Cari nama grup..."
     />

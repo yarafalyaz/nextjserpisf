@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { formatDate } from "@/lib/utils/format"
-import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Pencil } from "@/components/ui/fontawesome-icons"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -11,14 +10,17 @@ import { deleteDepartment } from "@/actions/master.actions"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import {
+  DepartmentEmployeesTable,
+  DepartmentPositionsTable,
+} from "./_components/department-detail-tables"
 
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
+import { entityEditHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Departemen" }
 
 export default async function DepartmentDetailPage({
@@ -88,18 +90,13 @@ export default async function DepartmentDetailPage({
         {department.positions.length === 0 ? (
           <EmptyState title="Belum ada posisi" />
         ) : (
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>Nama Posisi</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {department.positions.map((pos) => (
-                <DetailTableRow key={pos.id}>
-                  <DetailTableTd><Link href={entityHref("/master/jabatan", pos)}>{pos.name}</Link></DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-          </DetailTable>
+          <DepartmentPositionsTable
+            data={department.positions.map((pos) => ({
+              id: pos.id,
+              slug: pos.slug,
+              name: pos.name,
+            }))}
+          />
         )}
       </DetailSection>
 
@@ -108,22 +105,15 @@ export default async function DepartmentDetailPage({
         {department.employees.length === 0 ? (
           <EmptyState title="Belum ada karyawan" />
         ) : (
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>No. Karyawan</DetailTableTh>
-              <DetailTableTh>Nama</DetailTableTh>
-              <DetailTableTh>Email</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {department.employees.map((emp) => (
-                <DetailTableRow key={emp.id}>
-                  <DetailTableTd className="font-mono"><Link href={entityHref("/master/karyawan", emp)}>{emp.employeeNo}</Link></DetailTableTd>
-                  <DetailTableTd>{emp.name}</DetailTableTd>
-                  <DetailTableTd>{emp.email || "-"}</DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-          </DetailTable>
+          <DepartmentEmployeesTable
+            data={department.employees.map((emp) => ({
+              id: emp.id,
+              slug: emp.slug,
+              employeeNo: emp.employeeNo,
+              name: emp.name,
+              email: emp.email,
+            }))}
+          />
         )}
       </DetailSection>
     </div>

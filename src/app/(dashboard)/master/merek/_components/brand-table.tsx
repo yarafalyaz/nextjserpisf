@@ -32,7 +32,7 @@ const columns = [
     cell: (info) => {
       const cats = info.getValue()
       if (!cats || cats.length === 0) {
-        return <span className="text-muted-foreground text-xs">—</span>
+        return <span className="text-muted-foreground text-xs">-</span>
       }
       return (
         <div className="flex flex-wrap gap-1">
@@ -82,7 +82,7 @@ export function BrandTable({ data, total, page, pageSize }: BrandTableProps) {
       columns={columns}
       ariaLabel="Daftar merek"
       serverPagination={{ total, page, pageSize }}
-      selectable={true}
+      selectable={false}
       searchColumn="name"
       searchPlaceholder="Cari nama merek..."
     />

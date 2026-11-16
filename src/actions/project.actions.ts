@@ -419,6 +419,85 @@ async function doInitializeProjectStages(projectId: number, txClient?: TxClient)
   return { success: true }
 }
 
+export async function updateProjectStagePlan(
+  projectId: number,
+  stageId: number,
+  input: {
+    weightPct: number | null
+    plannedStartDate: string | null
+    plannedEndDate: string | null
+  },
+) {
+  try {
+    await requirePermission("edit_projects")
+
+    if (!Number.isSafeInteger(projectId) || projectId <= 0) {
+      return { success: false, error: "Proyek tidak valid." }
+    }
+    if (!Number.isSafeInteger(stageId) || stageId <= 0) {
+      return { success: false, error: "Tahap proyek tidak valid." }
+    }
+    if (input.weightPct !== null) {
+      if (
+        typeof input.weightPct !== "number" ||
+        !Number.isFinite(input.weightPct) ||
+        input.weightPct < 0 ||
+        input.weightPct > 100
+      ) {
+        return { success: false, error: "Bobot tahap harus antara 0% sampai 100%." }
+      }
+    }
+
+    const plannedStart = input.plannedStartDate
+      ? wibDateToUtcMidnight(input.plannedStartDate)
+      : null
+    const plannedEnd = input.plannedEndDate
+      ? wibDateToUtcMidnight(input.plannedEndDate)
+      : null
+    if (plannedStart && plannedEnd && plannedEnd.getTime() < plannedStart.getTime()) {
+      return {
+        success: false,
+        error: "Tanggal rencana selesai tidak boleh lebih awal dari tanggal rencana mulai.",
+      }
+    }
+
+    const updatedStage = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE`
+      }
+      const existing = await tx.projectStage.findFirst({
+        where: { id: stageId, projectId },
+        select: { id: true, name: true },
+      })
+      if (!existing) {
+        throw new Error("Tahap proyek tidak ditemukan.")
+      }
+      return tx.projectStage.update({
+        where: { id: existing.id },
+        data: {
+          weightPct: input.weightPct,
+          plannedStartDate: plannedStart,
+          plannedEndDate: plannedEnd,
+        },
+        select: { id: true, name: true },
+      })
+    })
+
+    await logActivity(
+      "update",
+      "ProjectStage",
+      updatedStage.id,
+      `Memperbarui rencana tahap ${updatedStage.name}`,
+    )
+    revalidatePath("/proyek")
+    return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateProjectStagePlan]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
 /**
  * Initialize default project stages for a project.
  * Parity with Laravel: Project->initializeStages()

@@ -16,7 +16,7 @@ import { ReportCardShell } from "./report-card-shell"
 export const DISCIPLINARY_TITLE = "Surat Peringatan Karyawan"
 
 export const DISCIPLINARY_NOTICE_TEXT =
-  "Status aktif/kedaluwarsa dan daftar perhatian diturunkan server dari tanggal terbit dan masa berlaku 6 bulan — ditampilkan apa adanya."
+  "Status aktif/kedaluwarsa dan daftar perhatian diturunkan server dari tanggal terbit dan masa berlaku 6 bulan, ditampilkan apa adanya."
 
 /**
  * DISC-F1 (konsumen UI F-2026-10-25-005-S): daftar perhatian disiplin dari
@@ -90,7 +90,7 @@ function AttentionBadges({
   // ulang tanggal di UI).
   const expiring = lists.expiringWithin30Days.some((r) => r.id === row.id)
   const risk = lists.highestRisk.some((r) => r.id === row.id)
-  if (!expiring && !risk) return <span className="text-muted-foreground">—</span>
+  if (!expiring && !risk) return <span className="text-muted-foreground">-</span>
   return (
     <span className="flex flex-wrap gap-1.5">
       {risk ? <StatusChip status="highest-risk" customLabel="Risiko tertinggi" customTone="danger" /> : null}

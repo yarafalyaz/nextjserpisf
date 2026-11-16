@@ -12,7 +12,10 @@ import { JobReopenButton } from "@/components/reports/job-reopen-button"
 import { ProductionCostSection } from "../_components/production-cost-section"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { EmptyState } from "@/components/ui/empty-state"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import {
+  ProductionOrderMaterialsTable,
+  ProductionOrderGenealogyTable,
+} from "./_components/production-order-tables"
 
 import type { Metadata } from "next"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
@@ -20,6 +23,7 @@ import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 import { DRAFT_OR_PENDING_EDIT_STATUSES } from "@/lib/constants/status"
 
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
+import { canViewCostAmounts } from "@/lib/auth/field-visibility"
 import { auth } from "@/lib/auth/auth"
 import { buildProductionVariance } from "@/lib/reports/production-variance"
 import { listBomRevisionChangeRequests } from "@/actions/bom-revision-change.actions"
@@ -37,6 +41,7 @@ export default async function ProductionOrderDetailPage({
   const user = await requirePermission("view_production_orders")
   const canManageCosts =
     user.roles.includes("super_admin") || user.permissions.includes("manage_production_costs")
+  const canViewCosts = canManageCosts || (await canViewCostAmounts())
 
   const { slug } = await params
 
@@ -372,26 +377,16 @@ export default async function ProductionOrderDetailPage({
           {order.materials.length === 0 ? (
             <EmptyState title="Tidak ada bahan" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Barang</DetailTableTh>
-                <DetailTableTh align="right">Kuantitas Rencana</DetailTableTh>
-                <DetailTableTh align="right">Kuantitas Aktual</DetailTableTh>
-                <DetailTableTh align="right">Biaya Standar</DetailTableTh>
-                <DetailTableTh align="right">Biaya Aktual</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {order.materials.map((mat) => (
-                  <DetailTableRow key={mat.id}>
-                    <DetailTableTd>{itemNameMap.get(mat.itemId) ?? `Barang #${mat.itemId}`}</DetailTableTd>
-                    <DetailTableTd align="right">{Number(mat.qty)}</DetailTableTd>
-                    <DetailTableTd align="right">{Number(mat.actualQty ?? 0)}</DetailTableTd>
-                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(mat.standardCost))}</DetailTableTd>
-                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(mat.actualCost))}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <ProductionOrderMaterialsTable
+              data={order.materials.map((mat) => ({
+                id: mat.id,
+                itemName: itemNameMap.get(mat.itemId) ?? `Barang #${mat.itemId}`,
+                qty: Number(mat.qty),
+                actualQty: Number(mat.actualQty ?? 0),
+                standardCost: Number(mat.standardCost),
+                actualCost: Number(mat.actualCost),
+              }))}
+            />
           )}
         </div>
       </div>
@@ -422,13 +417,15 @@ export default async function ProductionOrderDetailPage({
       />
 
       {/* Non-material costs (labor / overhead / subcontract / service) */}
-      <ProductionCostSection
-        productionOrderId={order.id}
-        workOrderId={linkedWorkOrder?.id ?? null}
-        costs={costRows}
-        canManage={canManageCosts}
-        hasProject={!!linkedWorkOrder?.projectId}
-      />
+      {canViewCosts && (
+        <ProductionCostSection
+          productionOrderId={order.id}
+          workOrderId={linkedWorkOrder?.id ?? null}
+          costs={costRows}
+          canManage={canManageCosts}
+          hasProject={!!linkedWorkOrder?.projectId}
+        />
+      )}
 
       {/* Production genealogy (PRD line 369 / REP-13) */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
@@ -437,7 +434,7 @@ export default async function ProductionOrderDetailPage({
         </div>
         <div className="p-4 px-5">
           {!order.genealogy ? (
-            <EmptyState title="Genealogi tercatat saat perintah produksi diselesaikan — unit hasil beserta bahan yang dipakai." className="py-10" />
+            <EmptyState title="Genealogi tercatat saat perintah produksi diselesaikan: unit hasil beserta bahan yang dipakai." className="py-10" />
           ) : (
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
@@ -463,10 +460,12 @@ export default async function ProductionOrderDetailPage({
                     <span className="text-[0.9375rem] text-foreground font-medium">{completedByName}</span>
                   </div>
                 ) : null}
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">HPP / Unit</span>
-                  <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrencyExact(Number(order.genealogy.unitCost))}</span>
-                </div>
+                {canViewCosts && (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">HPP / Unit</span>
+                    <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrencyExact(Number(order.genealogy.unitCost))}</span>
+                  </div>
+                )}
               </div>
 
               {(order.genealogy.outputSerials as string[] | null)?.length ? (
@@ -483,48 +482,21 @@ export default async function ProductionOrderDetailPage({
                 {order.genealogy.materials.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Tidak ada bahan tercatat.</p>
                 ) : (
-                  <DetailTable>
-                    <DetailTableHead>
-                      <DetailTableTh>Barang</DetailTableTh>
-                      <DetailTableTh align="right">Kuantitas</DetailTableTh>
-                      <DetailTableTh>Lot/Nomor Seri</DetailTableTh>
-                      <DetailTableTh align="right">Biaya Satuan</DetailTableTh>
-                      <DetailTableTh align="right">Total</DetailTableTh>
-                    </DetailTableHead>
-                    <DetailTableBody>
-                      {order.genealogy.materials.map((m) => {
-                        const tokens = genealogyMaterialTokens(m)
-                        return (
-                          <DetailTableRow key={m.id}>
-                            <DetailTableTd>
-                              {geneItemMap.get(m.itemId)
-                                ? `${geneItemMap.get(m.itemId)!.sku} — ${geneItemMap.get(m.itemId)!.name}`
-                                : `Barang #${m.itemId}`}
-                            </DetailTableTd>
-                            <DetailTableTd align="right">{Number(m.qty)}</DetailTableTd>
-                            <DetailTableTd>
-                              {tokens.length ? (
-                                <span className="font-mono text-xs">
-                                  {tokens.map((token, i) => (
-                                    <span key={token}>
-                                      {i > 0 ? ", " : null}
-                                      <Link href={`/produksi/telusur-genealogi?cari=${encodeURIComponent(token)}`} className="hover:underline" title="Telusur hasil jadi yang memakai lot/serial ini">
-                                        {token}
-                                      </Link>
-                                    </span>
-                                  ))}
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </DetailTableTd>
-                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(m.unitCost))}</DetailTableTd>
-                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(m.totalCost))}</DetailTableTd>
-                          </DetailTableRow>
-                        )
-                      })}
-                    </DetailTableBody>
-                  </DetailTable>
+                  <ProductionOrderGenealogyTable
+                    data={order.genealogy.materials.map((m) => {
+                      const geneItem = geneItemMap.get(m.itemId)
+                      return {
+                        id: m.id,
+                        itemSku: geneItem?.sku ?? null,
+                        itemName: geneItem?.name ?? `Barang #${m.itemId}`,
+                        qty: Number(m.qty),
+                        tokens: genealogyMaterialTokens(m),
+                        unitCost: Number(m.unitCost),
+                        totalCost: Number(m.totalCost),
+                      }
+                    })}
+                    canViewCosts={canViewCosts}
+                  />
                 )}
               </div>
             </div>

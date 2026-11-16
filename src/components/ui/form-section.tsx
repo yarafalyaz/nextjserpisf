@@ -20,11 +20,16 @@ export function FormSection({ title, description, children, columns = 2, classNa
 
   return (
     <section className={`${className}`} aria-labelledby={`section-${title.replace(/\s+/g, '-').toLowerCase()}`}>
-      <header className="mb-4">
-        <h3 id={`section-${title.replace(/\s+/g, '-').toLowerCase()}`} className="text-sm font-semibold text-foreground uppercase tracking-wide">{title}</h3>
-        {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
+      <header className="mb-2.5 sm:mb-4">
+        <h3
+          id={`section-${title.replace(/\s+/g, '-').toLowerCase()}`}
+          className="text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:text-sm sm:text-foreground"
+        >
+          {title}
+        </h3>
+        {description && <p className="mt-1 text-xs text-muted-foreground">{description}</p>}
       </header>
-      <div className={`grid ${colClass[columns]} gap-5`}>
+      <div className={`grid ${colClass[columns]} gap-3.5 sm:gap-5`}>
         {children}
       </div>
     </section>
@@ -41,7 +46,7 @@ interface FormCardProps {
  */
 export function FormCard({ children, className = "" }: FormCardProps) {
   return (
-    <div className={`bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6 space-y-8 ${className}`}>
+    <div className={`space-y-6 sm:rounded-xl sm:border sm:border-default sm:bg-surface sm:p-6 sm:shadow-sm sm:space-y-8 ${className}`}>
       {children}
     </div>
   )
@@ -56,7 +61,7 @@ interface FormActionsProps {
  */
 export function FormActions({ children }: FormActionsProps) {
   return (
-    <div className="flex flex-col-reverse sm:flex-row sm:justify-end flex-wrap gap-3 pt-5 border-t border-default">
+    <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] z-30 -mx-4 flex flex-col-reverse flex-wrap gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur-md sm:static sm:z-auto sm:mx-0 sm:flex-row sm:justify-end sm:gap-3 sm:border-default sm:bg-transparent sm:px-0 sm:py-0 sm:pt-5 sm:backdrop-blur-none">
       {children}
     </div>
   )

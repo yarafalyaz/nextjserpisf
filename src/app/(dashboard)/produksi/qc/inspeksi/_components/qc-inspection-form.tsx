@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useRef, useState, useTransition, useMemo } from "react"
+import { useCallback, useRef, useState, useTransition, useMemo } from "react"
 import { createQcInspection } from "@/actions/qc.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
@@ -15,7 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/shadcn/select"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { DataTable } from "@/components/ui/data-table"
+import { createColumnHelper } from "@/lib/table"
 import { Button } from "@/components/ui/button"
 
 type ResultValue = "pass" | "fail" | "na"
@@ -58,6 +59,8 @@ interface QcInspectionFormProps {
   initialReferenceId?: number
 }
 
+const inspectionColumnHelper = createColumnHelper<ChecklistItem>()
+
 export function QcInspectionForm({ checklists, initialInspectionType, initialReferenceType, initialReferenceId }: QcInspectionFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -88,12 +91,90 @@ export function QcInspectionForm({ checklists, initialInspectionType, initialRef
     [checklists, inspectionType],
   )
 
-  function setResult(itemId: number, patch: Partial<{ result: ResultValue; measured: string; note: string }>) {
+  const setResult = useCallback((itemId: number, patch: Partial<{ result: ResultValue; measured: string; note: string }>) => {
     setResults((prev) => ({
       ...prev,
       [itemId]: { ...{ result: "na" as ResultValue, measured: "", note: "" }, ...prev[itemId], ...patch },
     }))
-  }
+  }, [])
+
+  const inspectionColumns = useMemo(
+    () => [
+      inspectionColumnHelper.accessor("itemName", {
+        header: "Butir",
+        meta: { mobilePrimary: true },
+        cell: (info) => {
+          const it = info.row.original
+          return (
+            <span className="font-medium text-foreground">
+              {it.itemName}
+              {it.isRequired && <span className="text-danger-600 ml-1">*</span>}
+            </span>
+          )
+        },
+      }),
+      inspectionColumnHelper.accessor("spec", {
+        header: "Spesifikasi",
+        cell: (info) => (
+          <span className="text-muted-foreground">{info.getValue() ?? "-"}</span>
+        ),
+      }),
+      inspectionColumnHelper.display({
+        id: "result",
+        header: "Hasil",
+        cell: (info) => {
+          const it = info.row.original
+          const r = results[it.id]
+          return (
+            <Select
+              value={r?.result ?? "na"}
+              onValueChange={(v) => setResult(it.id, { result: v as ResultValue })}
+            >
+              <SelectTrigger aria-label={`Hasil ${it.itemName}`}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pass">Lulus</SelectItem>
+                <SelectItem value="fail">Gagal</SelectItem>
+                <SelectItem value="na">N/A</SelectItem>
+              </SelectContent>
+            </Select>
+          )
+        },
+      }),
+      inspectionColumnHelper.display({
+        id: "measured",
+        header: "Nilai Ukur",
+        cell: (info) => {
+          const it = info.row.original
+          const r = results[it.id]
+          return (
+            <Input
+              value={r?.measured ?? ""}
+              aria-label={`Nilai ukur ${it.itemName}`}
+              onChange={(e) => setResult(it.id, { measured: e.target.value })}
+              placeholder="Nilai"
+            />
+          )
+        },
+      }),
+      inspectionColumnHelper.display({
+        id: "note",
+        header: "Catatan",
+        cell: (info) => {
+          const it = info.row.original
+          const r = results[it.id]
+          return (
+            <Input
+              value={r?.note ?? ""}
+              aria-label={`Catatan ${it.itemName}`}
+              onChange={(e) => setResult(it.id, { note: e.target.value })}
+              placeholder="Catatan"
+            />
+          )
+        },
+      }),
+    ],
+    [results, setResult],
+  )
 
   const allRequiredAnswered = useMemo(() => {
     if (!selectedChecklist) return false
@@ -228,60 +309,15 @@ export function QcInspectionForm({ checklists, initialInspectionType, initialRef
           <div className="form-section-header">
             <h3 className="form-section-title">Hasil Pemeriksaan</h3>
           </div>
-          <div className="overflow-x-auto">
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Butir</DetailTableTh>
-                <DetailTableTh>Spesifikasi</DetailTableTh>
-                <DetailTableTh>Hasil</DetailTableTh>
-                <DetailTableTh>Nilai Ukur</DetailTableTh>
-                <DetailTableTh>Catatan</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {selectedChecklist.items.map((it) => {
-                  const r = results[it.id]
-                  return (
-                    <DetailTableRow key={it.id}>
-                      <DetailTableTd>
-                        {it.itemName}
-                        {it.isRequired && <span className="text-danger-600 ml-1">*</span>}
-                      </DetailTableTd>
-                      <DetailTableTd>{it.spec ?? "-"}</DetailTableTd>
-                      <DetailTableTd>
-                        <Select
-                          value={r?.result ?? "na"}
-                          onValueChange={(v) => setResult(it.id, { result: v as ResultValue })}
-                        >
-                          <SelectTrigger aria-label={`Hasil ${it.itemName}`}><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="pass">Lulus</SelectItem>
-                            <SelectItem value="fail">Gagal</SelectItem>
-                            <SelectItem value="na">N/A</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </DetailTableTd>
-                      <DetailTableTd>
-                        <Input
-                          value={r?.measured ?? ""}
-                          aria-label={`Nilai ukur ${it.itemName}`}
-                          onChange={(e) => setResult(it.id, { measured: e.target.value })}
-                          placeholder="Nilai"
-                        />
-                      </DetailTableTd>
-                      <DetailTableTd>
-                        <Input
-                          value={r?.note ?? ""}
-                          aria-label={`Catatan ${it.itemName}`}
-                          onChange={(e) => setResult(it.id, { note: e.target.value })}
-                          placeholder="Catatan"
-                        />
-                      </DetailTableTd>
-                    </DetailTableRow>
-                  )
-                })}
-              </DetailTableBody>
-            </DetailTable>
-          </div>
+          <DataTable
+            data={selectedChecklist.items}
+            columns={inspectionColumns}
+            ariaLabel="Hasil Pemeriksaan QC"
+            selectable={false}
+            enableColumnToggle={false}
+            enableExport={false}
+            pageSize={50}
+          />
           {!allRequiredAnswered && (
             <p className="text-xs text-warning-600 mt-2">
               Semua butir wajib (*) harus dinilai sebelum menyimpan.

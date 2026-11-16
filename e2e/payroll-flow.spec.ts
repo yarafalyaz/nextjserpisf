@@ -9,7 +9,7 @@ test.describe("Payroll module flows", () => {
     await page.goto("/sdm/penggajian")
     await page.waitForLoadState("networkidle")
     await expect(page.getByRole("heading", { name: "Penggajian" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByRole("link", { name: "+ Proses Manual" })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("link", { name: "Proses Manual" })).toBeVisible({ timeout: 30000 })
   })
 
   test("Payroll create form loads", async ({ page }) => {
@@ -26,13 +26,13 @@ test.describe("Payroll module flows", () => {
     await page.goto("/sdm/pinjaman")
     await page.waitForLoadState("networkidle")
     await expect(page.getByRole("heading", { name: "Pinjaman Karyawan" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByRole("link", { name: "Tambah Pinjaman" })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("link", { name: "Ajukan Pinjaman" })).toBeVisible({ timeout: 30000 })
   })
 
   test("Leave request list loads", async ({ page }) => {
     await page.goto("/sdm/cuti")
     await page.waitForLoadState("networkidle")
-    await expect(page.getByRole("heading", { name: "Permintaan Cuti" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByRole("link", { name: "+ Ajukan Cuti" })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("heading", { name: "Permintaan & Saldo Cuti (Leave)" })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("link", { name: "Ajukan Cuti" })).toBeVisible({ timeout: 30000 })
   })
 })

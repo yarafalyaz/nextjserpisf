@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test"
 import { awaitReady } from "./utils/await-ready"
+import { skipOnMobile } from "./utils/desktop-only"
 import { prisma } from "@/lib/db/prisma"
 import { Prisma } from "@prisma/client"
 
@@ -15,7 +16,8 @@ import { Prisma } from "@prisma/client"
 // fullyParallel membuat tes se-file paralel; tanpa serial, reset vs posting
 // balapan dalam file yang sama. Paralel antar-file tetap jalan.
 test.describe.serial("Pembelian — rantai penuh", () => {
-  test("PO → terima → tagih → bayar, stok & jurnal & sisa terbukti di DB", async ({ page }) => {
+  test("PO → terima → tagih → bayar, stok & jurnal & sisa terbukti di DB", async ({ page }, testInfo) => {
+    skipOnMobile(testInfo.project.name, "Rantai beli lengkap khusus desktop")
     // 0. PO fixture: reset ke approved + bersihkan sisa run sebelumnya supaya
     // run idempoten (qty absolut, bukan akumulasi antar run).
     // AUD-R13-01: SEMUA cleanup scoping fixture — orphan-yatim global pun
@@ -191,9 +193,20 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     await expect(page.getByText("E2E-PO-CHAIN").first()).toBeVisible({ timeout: 15_000 })
     const confirmedBill = bill
     expect(confirmedBill.goodsReceiptId).toBe(gr.id)
+    // Pemisahan tugas (SoD): pembuat tagihan != penyetuju tagihan.
+    const otherApprover = await prisma.user.findFirst({
+      where: { email: { not: "admin@erp.yarasoft.net" } },
+      select: { id: true },
+    })
+    if (otherApprover) {
+      await prisma.vendorBill.update({
+        where: { id: confirmedBill.id },
+        data: { createdBy: otherApprover.id },
+      })
+    }
     await page.getByRole("button", { name: "Konfirmasi" }).first().click()
-    await page.getByRole("button", { name: "Konfirmasi" }).last().click()
-    await expect(page.getByText("Diposting").first()).toBeVisible({ timeout: 30_000 })
+    await page.getByRole("alertdialog").getByRole("button", { name: "Konfirmasi" }).click()
+    await expect(page.getByText(/Diposting|Diterbitkan/).first()).toBeVisible({ timeout: 30_000 })
     // Konfirmasi = server action async; jurnal lahir sesudah revalidasi.
     // Poll DB (bukan sleep buta) sampai jurnal POSTED muncul.
     let journals: { id: number }[] = []
@@ -245,6 +258,15 @@ test.describe.serial("Pembelian — rantai penuh", () => {
       orderBy: { id: "desc" },
     })
     expect(Number(payment.amount)).toBe(500000)
+
+    // Pemisahan tugas (SoD): pembuat pembayaran != pengonfirmasi pembayaran.
+    // Set sebelum approval agar `updatedAt` tidak berubah sesudah approval final.
+    if (otherApprover) {
+      await prisma.vendorPayment.update({
+        where: { id: payment.id },
+        data: { createdBy: otherApprover.id },
+      })
+    }
 
     // Seed memasang workflow vendor payment satu langkah (finance). Sesi
     // super_admin boleh menyetujui lewat halaman persetujuan; tanpa approval

@@ -94,6 +94,7 @@ export function PerformanceTable({ data, canEdit }: PerformanceTableProps) {
       data={data}
       columns={columns}
       ariaLabel="Daftar siklus penilaian kinerja"
+      selectable={false}
     />
   )
 }

@@ -13,7 +13,7 @@ import { ReportCardShell } from "./report-card-shell"
 export const DISC09_DECISIONS_TITLE = "Keputusan Potongan Disiplin"
 
 export const DISC09_DECISIONS_NOTICE_TEXT =
-  "Nominal, jenis potongan, perlakuan upah skorsing, dan dasar peraturan adalah snapshot dokumen keputusan — ditampilkan apa adanya tanpa hitung ulang. Surat peringatan tidak memicu potongan."
+  "Nominal, jenis potongan, perlakuan upah skorsing, dan dasar peraturan adalah snapshot dokumen keputusan, ditampilkan apa adanya tanpa hitung ulang. Surat peringatan tidak memicu potongan."
 
 /**
  * Konsumen snapshot BR-DISC-09: permukaan daftar keputusan potongan
@@ -58,7 +58,7 @@ export function DisciplinaryDeductionDecisionsCard({
                 {row.amount != null ? (
                   formatCurrency(row.amount, { decimals: 2 })
                 ) : (
-                  <span className="text-muted-foreground">Nominal tidak ditampilkan — tanpa izin lihat payroll</span>
+                  <span className="text-muted-foreground">Nominal tidak ditampilkan (tanpa izin lihat payroll)</span>
                 )}
               </DetailTableTd>
               <DetailTableTd>{row.suspensionKind ?? "—"}</DetailTableTd>

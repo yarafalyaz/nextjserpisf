@@ -59,6 +59,8 @@ export const PERMISSIONS = [
       "view_tax_disputes",
       "create_tax_disputes",
       "edit_tax_disputes",
+      "view_spt_filings",
+      "create_spt_filings",
       "create_tax_invoices",
       "manage_withholding_certificates",
       "view_invoice_exchanges",

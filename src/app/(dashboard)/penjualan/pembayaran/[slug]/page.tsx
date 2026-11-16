@@ -95,7 +95,7 @@ export default async function SalesPaymentDetailPage({
                   id={payment.id}
                   action={reverseSalesPayment}
                   title={`Balikkan pembayaran ${payment.documentNo}?`}
-                  body="Pembayaran ditandai dibalik dan jurnal kasnya dibalik. Bila faktur ikut lunas karenanya, status faktur dihitung ulang. Baris asal tetap tersimpan — bukan dihapus."
+                  body="Pembayaran ditandai dibalik dan jurnal kasnya dibalik. Bila faktur ikut lunas karenanya, status faktur dihitung ulang. Baris asal tetap tersimpan, bukan dihapus."
                 />
                 <DeleteButton id={payment.id} action={deleteSalesPayment} />
               </CanCreate>

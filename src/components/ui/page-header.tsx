@@ -28,11 +28,11 @@ export function PageHeader({ title, subtitle, breadcrumbs, actions, badge }: Pag
             {badge}
           </div>
           {subtitle && (
-            <p className="text-xs leading-relaxed text-muted-foreground sm:text-[13px]">{subtitle}</p>
+            <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground sm:line-clamp-none sm:text-[13px]">{subtitle}</p>
           )}
         </div>
         {actions && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
             {actions}
           </div>
         )}

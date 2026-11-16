@@ -246,7 +246,7 @@ export default async function SalesPriceHistoryPage({
 
           <ReportSection
             title="Baris Faktur Tanpa Barang"
-            description="Hanya hitungan ringkas per pelanggan — tanpa daftar baris"
+            description="Hanya hitungan ringkas per pelanggan, tanpa daftar baris"
           >
             <DetailTable data-report-table="Baris Faktur Tanpa Barang">
               <DetailTableHead>

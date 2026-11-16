@@ -2,22 +2,26 @@ import { Pencil, AlertTriangle } from "@/components/ui/fontawesome-icons"
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission, hasPermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission, hasAnyPermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { entityEditHref } from "@/lib/utils/entity-url"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { formatCurrencyExact, formatDate, formatReferenceType } from "@/lib/utils/format"
-import Link from "next/link"
+import { formatCurrencyExact } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { EmptyState } from "@/components/ui/empty-state"
 import { DetailTabs } from "@/components/ui/detail-tabs"
-import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteItem } from "@/actions/master.actions"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import {
+  ItemBatchesTable,
+  ItemInventoryLayersTable,
+  ItemSerialsTable,
+  ItemTransactionsTable,
+  ItemUomConversionsTable,
+} from "./_components/item-detail-tables"
 import { QrCodeDisplay } from "@/components/ui/qr-code-display"
 import { ItemImageLightbox } from "@/components/ui/item-image-lightbox"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
@@ -113,8 +117,9 @@ export default async function ItemDetailPage({
   // master existing, kelola digerbang edit_items di page + server.
   // Izin kelola nyata sesi (edit_items): gerbang kontrol substitusi +
   // panel stok minimum per gudang (F-070-E); server tetap otoritas.
-  const [canEditItems, substituteItemOptions] = await Promise.all([
+  const [canEditItems, canViewCosts, substituteItemOptions] = await Promise.all([
     hasPermission("edit_items"),
+    hasAnyPermission(["view_reports", "view_purchase_orders", "edit_items"]),
     prisma.item.findMany({
       where: { isActive: true, deletedAt: null, isService: false },
       select: { id: true, name: true, sku: true },
@@ -330,9 +335,9 @@ export default async function ItemDetailPage({
                     </span>
                   } />
                   <DetailField label="Stok Minimum" value={String(Number(item.minStock))} />
-                  <DetailField label="Harga Beli" value={formatCurrencyExact(Number(item.cost))} />
+                  {canViewCosts && <DetailField label="Harga Beli" value={formatCurrencyExact(Number(item.cost))} />}
                   <DetailField label="Harga Jual" value={formatCurrencyExact(Number(item.price))} />
-                  <DetailField label="Nilai Stok" value={formatCurrencyExact(Number(item.qtyOnHand) * Number(item.cost))} />
+                  {canViewCosts && <DetailField label="Nilai Stok" value={formatCurrencyExact(Number(item.qtyOnHand) * Number(item.cost))} />}
                 </DetailCard>
 
                 <DetailCard>
@@ -352,58 +357,38 @@ export default async function ItemDetailPage({
                 )}
                 {item.uomConversions.length > 0 && (
                   <DetailSection title="Satuan Alternatif">
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>Kode Satuan</DetailTableTh>
-                        <DetailTableTh align="right">Faktor ke Satuan Dasar ({item.unitOfMeasure})</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {item.uomConversions.map((u) => (
-                          <DetailTableRow key={u.id}>
-                            <DetailTableTd>{u.code}</DetailTableTd>
-                            <DetailTableTd align="right">{Number(u.factorToBase)}</DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <ItemUomConversionsTable
+                      unitOfMeasure={item.unitOfMeasure}
+                      data={item.uomConversions.map((u) => ({
+                        id: u.id,
+                        code: u.code,
+                        factorToBase: Number(u.factorToBase),
+                      }))}
+                    />
                   </DetailSection>
                 )}
                 {item.itemBatches.length > 0 && (
                   <DetailSection title="Batch/Lot">
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>No. Batch/Lot</DetailTableTh>
-                        <DetailTableTh align="right">Jml</DetailTableTh>
-                        <DetailTableTh>Kedaluwarsa</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {item.itemBatches.map((b) => (
-                          <DetailTableRow key={b.id}>
-                            <DetailTableTd>{b.batchNumber}</DetailTableTd>
-                            <DetailTableTd align="right">{Number(b.qty)} {item.unitOfMeasure}</DetailTableTd>
-                            <DetailTableTd>{b.expiryDate ? formatDate(b.expiryDate) : "-"}</DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <ItemBatchesTable
+                      unitOfMeasure={item.unitOfMeasure}
+                      data={item.itemBatches.map((b) => ({
+                        id: b.id,
+                        batchNumber: b.batchNumber,
+                        qty: Number(b.qty),
+                        expiryDate: b.expiryDate ? b.expiryDate.toISOString() : null,
+                      }))}
+                    />
                   </DetailSection>
                 )}
                 {item.itemSerials.length > 0 && (
                   <DetailSection title="Nomor Seri">
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>Nomor Seri</DetailTableTh>
-                        <DetailTableTh>Status</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {item.itemSerials.map((s) => (
-                          <DetailTableRow key={s.id}>
-                            <DetailTableTd>{s.serialNumber}</DetailTableTd>
-                            <DetailTableTd><StatusChip status={s.status} /></DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <ItemSerialsTable
+                      data={item.itemSerials.map((s) => ({
+                        id: s.id,
+                        serialNumber: s.serialNumber,
+                        status: s.status,
+                      }))}
+                    />
                   </DetailSection>
                 )}
               </>
@@ -417,26 +402,17 @@ export default async function ItemDetailPage({
                 {item.inventoryLayers.length === 0 ? (
                   <EmptyState title="Tidak ada lapisan aktif" />
                 ) : (
-                  <DetailTable>
-                    <DetailTableHead>
-                      <DetailTableTh>Masuk</DetailTableTh>
-                      <DetailTableTh align="right">Kuantitas Masuk</DetailTableTh>
-                      <DetailTableTh align="right">Kuantitas Keluar</DetailTableTh>
-                      <DetailTableTh align="right">Sisa</DetailTableTh>
-                      <DetailTableTh align="right">Biaya Satuan</DetailTableTh>
-                    </DetailTableHead>
-                    <DetailTableBody>
-                      {item.inventoryLayers.map((layer) => (
-                        <DetailTableRow key={layer.id}>
-                          <DetailTableTd>{formatDate(layer.createdAt)}</DetailTableTd>
-                          <DetailTableTd align="right">{Number(layer.qtyIn)}</DetailTableTd>
-                          <DetailTableTd align="right">{Number(layer.qtyOut)}</DetailTableTd>
-                          <DetailTableTd align="right"><strong>{Number(layer.remaining)}</strong></DetailTableTd>
-                          <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(layer.unitCost))}</DetailTableTd>
-                        </DetailTableRow>
-                      ))}
-                    </DetailTableBody>
-                  </DetailTable>
+                  <ItemInventoryLayersTable
+                    canViewCosts={canViewCosts}
+                    data={item.inventoryLayers.map((layer) => ({
+                      id: layer.id,
+                      createdAt: layer.createdAt.toISOString(),
+                      qtyIn: Number(layer.qtyIn),
+                      qtyOut: Number(layer.qtyOut),
+                      remaining: Number(layer.remaining),
+                      unitCost: Number(layer.unitCost),
+                    }))}
+                  />
                 )}
               </DetailSection>
             ),
@@ -484,43 +460,23 @@ export default async function ItemDetailPage({
                   {stockMovesWithRef.length === 0 ? (
                     <EmptyState title="Belum ada transaksi" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh>No. Dokumen</DetailTableTh>
-                        <DetailTableTh>Tipe</DetailTableTh>
-                        <DetailTableTh>Masuk/Keluar</DetailTableTh>
-                        <DetailTableTh align="right">Jml</DetailTableTh>
-                        <DetailTableTh align="right">Harga Satuan</DetailTableTh>
-                        <DetailTableTh>Pihak</DetailTableTh>
-                        <DetailTableTh>Gudang</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {stockMovesWithRef.map((sm) => (
-                          <DetailTableRow key={sm.id}>
-                            <DetailTableTd>{formatDate(sm.createdAt)}</DetailTableTd>
-                            <DetailTableTd className="font-mono">
-                              {sm.docLink ? (
-                                <Link href={sm.docLink} className="text-primary hover:underline">{sm.documentNo}</Link>
-                              ) : sm.documentNo}
-                            </DetailTableTd>
-                            <DetailTableTd>
-                              <span className="text-xs text-muted-foreground">{formatReferenceType(sm.referenceType || sm.moveType)}</span>
-                            </DetailTableTd>
-                            <DetailTableTd>
-                              <StatusChip status={sm.impact === "IN" ? "received" : "returned"} />
-                            </DetailTableTd>
-                            <DetailTableTd align="right">{Number(sm.qty)}</DetailTableTd>
-                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(sm.cost))}</DetailTableTd>
-                            <DetailTableTd>
-                              {sm.partyLabel && <span className="text-xs text-muted-foreground">{sm.partyLabel}: </span>}
-                              <span className="text-sm">{sm.party}</span>
-                            </DetailTableTd>
-                            <DetailTableTd>{sm.warehouse?.name || "-"}</DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <ItemTransactionsTable
+                      canViewCosts={canViewCosts}
+                      data={stockMovesWithRef.map((sm) => ({
+                        id: sm.id,
+                        createdAt: sm.createdAt.toISOString(),
+                        documentNo: sm.documentNo,
+                        docLink: sm.docLink ?? null,
+                        referenceType: sm.referenceType ?? null,
+                        moveType: sm.moveType,
+                        impact: sm.impact,
+                        qty: Number(sm.qty),
+                        cost: Number(sm.cost),
+                        partyLabel: sm.partyLabel ?? null,
+                        party: sm.party,
+                        warehouseName: sm.warehouse?.name ?? null,
+                      }))}
+                    />
                   )}
                 </div>
               </div>

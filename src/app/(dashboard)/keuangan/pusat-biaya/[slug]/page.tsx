@@ -55,7 +55,7 @@ export default async function CostCenterDetailPage({
         ]}
         actions={<>
           <CanCreate permission="edit_cost_centers">
-            <Button href={entityEditHref("/keuangan/pusat-biaya", costCenter)} variant="primary"><Pencil size={14} /> Ubah</Button>
+            <Button href={entityEditHref("/keuangan/pusat-biaya", costCenter)} variant="primary" className="min-h-11 sm:min-h-9"><Pencil size={14} /> Ubah</Button>
           </CanCreate>
           <CanCreate permission="delete_cost_centers">
             <DeleteButton id={costCenter.id} action={deleteCostCenter} />

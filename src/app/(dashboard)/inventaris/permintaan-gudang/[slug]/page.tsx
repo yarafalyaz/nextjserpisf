@@ -7,18 +7,21 @@ import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { assertMaterialRequestVisible } from "@/lib/services/material-request.service"
 import { deriveMaterialRequestFulfillment, MATERIAL_REQUEST_STATUS_LABELS, type MaterialRequestStatus } from "@/lib/reports/material-request"
 import { deleteMaterialRequest } from "@/actions/material-request.actions"
-import { formatDate, formatNumber } from "@/lib/utils/format"
+import { formatDate } from "@/lib/utils/format"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
+import { entityEditHref } from "@/lib/utils/entity-url"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
 import { CanCreate } from "@/components/auth/can-create"
 import { MaterialRequestActions } from "../_components/material-request-actions"
+import {
+  MaterialRequestItemsTable,
+  MaterialRequestTransfersTable,
+} from "./_components/material-request-tables"
 
 export const metadata: Metadata = { title: "Permintaan Antar Gudang" }
 
@@ -136,48 +139,21 @@ export default async function MaterialRequestDetailPage({
           {request.items.length === 0 ? (
             <EmptyState title="Tidak ada barang" />
           ) : (
-            <div className="overflow-x-auto">
-              <DetailTable>
-                <DetailTableHead>
-                  <DetailTableTh>Nama Barang</DetailTableTh>
-                  <DetailTableTh>Satuan</DetailTableTh>
-                  <DetailTableTh align="right">Diminta</DetailTableTh>
-                  <DetailTableTh align="right">Diterima</DetailTableTh>
-                  <DetailTableTh align="right">Sisa</DetailTableTh>
-                  <DetailTableTh>Catatan</DetailTableTh>
-                </DetailTableHead>
-                <DetailTableBody>
-                  {request.items.map((item) => {
-                    const f = fulfillmentByItem.get(item.itemId)
-                    return (
-                      <DetailTableRow key={item.id}>
-                        <DetailTableTd>
-                          <div className="font-medium text-foreground">{item.item.name}</div>
-                          {item.item.sku && (
-                            <div className="font-mono text-xs text-muted-foreground mt-0.5">{item.item.sku}</div>
-                          )}
-                        </DetailTableTd>
-                        <DetailTableTd>{item.item.unitOfMeasure}</DetailTableTd>
-                        <DetailTableTd align="right">
-                          <span className="font-mono tabular-nums font-medium">{formatNumber(Number(item.qty))}</span>
-                        </DetailTableTd>
-                        <DetailTableTd align="right">
-                          <span className="font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
-                            {formatNumber(f?.receivedQty ?? 0)}
-                          </span>
-                        </DetailTableTd>
-                        <DetailTableTd align="right">
-                          <span className="font-mono tabular-nums text-amber-600 dark:text-amber-400">
-                            {formatNumber(f?.remainingQty ?? Number(item.qty))}
-                          </span>
-                        </DetailTableTd>
-                        <DetailTableTd>{item.notes ?? "-"}</DetailTableTd>
-                      </DetailTableRow>
-                    )
-                  })}
-                </DetailTableBody>
-              </DetailTable>
-            </div>
+            <MaterialRequestItemsTable
+              data={request.items.map((item) => {
+                const f = fulfillmentByItem.get(item.itemId)
+                return {
+                  id: item.id,
+                  itemName: item.item.name,
+                  sku: item.item.sku,
+                  unitOfMeasure: item.item.unitOfMeasure,
+                  requestedQty: Number(item.qty),
+                  receivedQty: f?.receivedQty ?? 0,
+                  remainingQty: f?.remainingQty ?? Number(item.qty),
+                  notes: item.notes,
+                }
+              })}
+            />
           )}
         </div>
       </div>
@@ -190,24 +166,14 @@ export default async function MaterialRequestDetailPage({
           {request.transfers.length === 0 ? (
             <EmptyState title="Belum ada transfer" />
           ) : (
-            <div className="overflow-x-auto">
-              <DetailTable>
-                <DetailTableHead>
-                  <DetailTableTh>No. Dokumen</DetailTableTh>
-                  <DetailTableTh>Status</DetailTableTh>
-                </DetailTableHead>
-                <DetailTableBody>
-                  {request.transfers.map((transfer) => (
-                    <DetailTableRow key={transfer.id}>
-                      <DetailTableTd>
-                        <a href={entityHref("/inventaris/transfer", transfer)} className="font-medium text-primary hover:underline">{transfer.documentNo}</a>
-                      </DetailTableTd>
-                      <DetailTableTd><StatusChip status={transfer.status} /></DetailTableTd>
-                    </DetailTableRow>
-                  ))}
-                </DetailTableBody>
-              </DetailTable>
-            </div>
+            <MaterialRequestTransfersTable
+              data={request.transfers.map((transfer) => ({
+                id: transfer.id,
+                slug: transfer.slug,
+                documentNo: transfer.documentNo,
+                status: transfer.status,
+              }))}
+            />
           )}
         </div>
       </div>

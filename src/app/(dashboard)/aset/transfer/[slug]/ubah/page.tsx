@@ -36,6 +36,7 @@ export default async function EditPage({
   // ditawarkan padahal action menolak selain 'active'.
   const assets = await prisma.asset.findMany({
     where: { status: { in: [...TRANSFERABLE_ASSET_STATUSES] } },
+    select: { id: true, code: true, name: true, location: true },
     orderBy: { name: "asc" },
   })
 
@@ -44,7 +45,10 @@ export default async function EditPage({
   // fallback, Combobox kosong dan menyimpan ulang memindah aset yang salah.
   const linkedAsset =
     data.assetId && !assets.some((a) => a.id === data.assetId)
-      ? await prisma.asset.findUnique({ where: { id: data.assetId } })
+      ? await prisma.asset.findUnique({
+          where: { id: data.assetId },
+          select: { id: true, code: true, name: true, location: true },
+        })
       : null
   const assetOptions = linkedAsset ? [linkedAsset, ...assets] : assets
 

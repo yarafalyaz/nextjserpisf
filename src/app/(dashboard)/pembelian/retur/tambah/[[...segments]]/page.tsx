@@ -10,6 +10,7 @@ import {
   redirectLegacyPrefillQuery,
   resolvePrefillId,
 } from "@/lib/utils/prefill-path"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 import type { Metadata } from "next"
 
@@ -130,7 +131,7 @@ export default async function CreatePurchaseReturnPage({
     qty: Number(l.qty),
     uom: l.uom,
     batchNumber: l.batchNumber,
-    label: `${l.goodsReceipt.documentNo} — ${Number(l.qty)}${l.uom ? ` ${l.uom}` : ""}${l.batchNumber ? ` — batch ${l.batchNumber}` : ""} — ${l.goodsReceipt.createdAt.toISOString().slice(0, 10)}`,
+    label: `${l.goodsReceipt.documentNo} — ${Number(l.qty)}${l.uom ? ` ${l.uom}` : ""}${l.batchNumber ? ` — batch ${l.batchNumber}` : ""} — ${wibDateOnly(l.goodsReceipt.createdAt)}`,
   }))
 
   return (

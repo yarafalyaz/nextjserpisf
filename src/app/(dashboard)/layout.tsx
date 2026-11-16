@@ -63,9 +63,16 @@ export default async function DashboardLayout({
           roles={(session.user as { roles?: string[] }).roles ?? []}
         />
         <SidebarInset id="konten-utama" tabIndex={-1}>
-          <Header companyLogo={settings.companyLogo ?? undefined} companyLogoDark={settings.companyLogoDark ?? undefined} />
+          <Header
+            companyName={settings.companyName ?? undefined}
+            companyLogo={settings.companyLogo ?? undefined}
+            companyLogoDark={settings.companyLogoDark ?? undefined}
+          />
           <div className="app-content">{children}</div>
-          <MobileBottomNav />
+          <MobileBottomNav
+            permissions={(session.user as { permissions?: string[] }).permissions ?? []}
+            roles={(session.user as { roles?: string[] }).roles ?? []}
+          />
         </SidebarInset>
       </SidebarProvider>
       <CommandPalette />

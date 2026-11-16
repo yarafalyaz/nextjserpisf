@@ -28,7 +28,7 @@ import {
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import { parseLocaleNumber } from "@/lib/utils/parse-money"
-import { safeJsonParse } from "@/lib/utils/safe-parse"
+import { safeJsonParseArray } from "@/lib/utils/safe-parse"
 import { nextSlug } from "@/lib/utils/slug-db"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
@@ -56,9 +56,7 @@ const REVALIDATE = "/inventaris/permintaan-gudang"
 type ActionUser = { id: string; roles: string[] }
 
 function parseRequestItems(raw: string | null | undefined): MaterialRequestItemWrite[] {
-  const rows = safeJsonParse<
-    { itemId: number | string; qty?: number | string; notes?: string | null }[]
-  >(raw ?? null) ?? []
+  const rows = safeJsonParseArray<{ itemId?: number | string; qty?: number | string; notes?: string | null }>(raw ?? null)
   const items: MaterialRequestItemWrite[] = []
   for (const row of rows) {
     const itemId = parseLocaleNumber(row?.itemId as string | number)

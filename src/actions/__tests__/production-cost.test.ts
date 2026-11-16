@@ -656,7 +656,7 @@ describe("pullLaborCostFromTimesheets", () => {
       { id: 12, hours: 6, date: new Date(), description: "welding" },
     ])
     costFindManyMock.mockResolvedValue([])
-    costCreateMock.mockResolvedValue({ id: 1 })
+    costCreateMock.mockResolvedValueOnce({ id: 101 }).mockResolvedValueOnce({ id: 102 })
 
     const res = await pullLaborCostFromTimesheets(7, 1, 25000)
 
@@ -665,7 +665,9 @@ describe("pullLaborCostFromTimesheets", () => {
     // 4*25000 + 6*25000 = 250000
     expect(res.added).toBe(250000)
     expect(costCreateMock).toHaveBeenCalledTimes(2)
-    expect(applyDeltaMock).toHaveBeenCalledWith(1, 250000, expect.anything(), expect.anything())
+    expect(applyDeltaMock).toHaveBeenCalledTimes(2)
+    expect(applyDeltaMock).toHaveBeenNthCalledWith(1, 1, 100000, expect.anything(), { userId: 5, costLineId: 101 })
+    expect(applyDeltaMock).toHaveBeenNthCalledWith(2, 1, 150000, expect.anything(), { userId: 5, costLineId: 102 })
     const first = costCreateMock.mock.calls[0][0]
     expect(first.data.sourceTimesheetId).toBe(11)
     expect(Number(first.data.rate)).toBe(25000)

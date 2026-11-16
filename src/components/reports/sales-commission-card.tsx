@@ -76,9 +76,9 @@ export function SalesCommissionCard({
               <DetailTableTd align="right">{report.unattributed.invoiceCount}</DetailTableTd>
               <DetailTableTd align="right">{formatCurrencyExact(report.unattributed.paidBase)}</DetailTableTd>
               <DetailTableTd align="right">{formatCurrencyExact(report.unattributed.dppBase)}</DetailTableTd>
-              <DetailTableTd align="right">—</DetailTableTd>
-              <DetailTableTd align="right">—</DetailTableTd>
-              <DetailTableTd align="right">—</DetailTableTd>
+              <DetailTableTd align="right">-</DetailTableTd>
+              <DetailTableTd align="right">-</DetailTableTd>
+              <DetailTableTd align="right">-</DetailTableTd>
             </DetailTableRow>
           ) : null}
         </DetailTableBody>

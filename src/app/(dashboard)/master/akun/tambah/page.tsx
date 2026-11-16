@@ -15,7 +15,7 @@ export default async function CreateAccountPage() {
 
   const [accounts, generatedCode] = await Promise.all([
     prisma.account.findMany({
-      where: { isActive: true },
+      where: { isActive: true, deletedAt: null },
       orderBy: { code: "asc" },
       select: { id: true, code: true, name: true },
     }),

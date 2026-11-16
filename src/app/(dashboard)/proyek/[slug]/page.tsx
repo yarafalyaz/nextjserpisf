@@ -10,7 +10,12 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import {
+  ProjectInvoicesTable,
+  ProjectLogsTable,
+  ProjectPlanItemsTable,
+  ProjectQuotationsTable,
+} from "./_components/project-detail-tables"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Progress } from "@/components/ui/shadcn/progress"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
@@ -26,10 +31,10 @@ import type { Metadata } from "next"
 
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
-import { initializeProjectStages } from "@/actions/project.actions"
 import { ProjectStages } from "../_components/project-stages"
 import { ProjectLogForm } from "./_components/project-log-form"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
+import { toPlain } from "@/lib/utils/serialization"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 export const metadata: Metadata = { title: "Proyek" }
@@ -69,27 +74,14 @@ export default async function ProjectDetailPage({
 
   if (!project) notFound()
 
-  // Auto-initialize stages on detail view if empty and user has edit permission
-  let stages = project.stages
-  let stagesInitError: string | null = null
+  const stages = project.stages
+  const stagesInitError: string | null = null
   const canEdit = await hasPermission("edit_projects")
   const canManageBudget = await hasPermission("manage_projects")
-  if (stages.length === 0 && canEdit) {
-    try {
-      const init = await initializeProjectStages(project.id)
-      // Hasilnya dulu dibuang; kegagalan pun tampil sebagai "belum ada tahapan"
-      // tanpa cara mengulang. Simpan pesannya supaya terlihat di UI.
-      if (!init.success) stagesInitError = "error" in init ? init.error : "Tahapan default gagal dibuat."
-      stages = await prisma.projectStage.findMany({
-        where: { projectId: project.id },
-        orderBy: { sortOrder: "asc" },
-        include: { progress: { orderBy: { createdAt: "desc" }, take: 1 } },
-      })
-    } catch (e) {
-      console.error("[ProjectDetailPage] Failed to auto-initialize stages:", e)
-      stagesInitError ??= "Gagal memuat tahapan proyek."
-    }
-  }
+  const [canViewQuotations, canViewInvoices] = await Promise.all([
+    hasPermission("view_quotations"),
+    hasPermission("view_sales_invoices"),
+  ])
 
   // Fetch linked work order if exists
   const workOrder = project.workOrderId
@@ -137,9 +129,9 @@ export default async function ProjectDetailPage({
       })
       return found
     })(),
-    loadProjectPlForProject(project.id),
-    loadProjectBudgetForProject(project.id),
-    loadProjectEarnedValueForProject(project.id),
+    canManageBudget ? loadProjectPlForProject(project.id) : Promise.resolve(null),
+    canManageBudget ? loadProjectBudgetForProject(project.id) : Promise.resolve(null),
+    canManageBudget ? loadProjectEarnedValueForProject(project.id) : Promise.resolve(null),
     (async () => {
       const userIds = [...new Set(project.logs.map((l) => l.userId).filter((id): id is number => typeof id === "number"))]
       if (userIds.length === 0) return new Map<number, string>()
@@ -154,7 +146,7 @@ export default async function ProjectDetailPage({
   // Usulan revisi terbuka: log rab_revision_proposed terbaru yang belum
   // diputuskan (details.proposalLogId di log rab_revision/rab_revision_rejected).
   // Id log tidak diekspos builder riwayat — dibaca langsung di boundary RSC.
-  const pendingProposal = projectBudget?.isLocked
+  const pendingProposal = canManageBudget && projectBudget?.isLocked
     ? await (async () => {
         const [proposals, settledLogs] = await Promise.all([
           prisma.projectLog.findMany({
@@ -227,9 +219,9 @@ export default async function ProjectDetailPage({
       )}
 
       {/* Modern Premium Dashboard Widgets (WOW Visual) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className={canManageBudget ? "grid grid-cols-1 md:grid-cols-3 gap-5" : "grid grid-cols-1 md:grid-cols-2 gap-5"}>
         {/* Widget 1: Progress Lingkaran / Progres Fisik Mobil */}
-        <div className="bg-surface rounded-2xl border border-default shadow-sm p-5 flex flex-col justify-between relative overflow-hidden">
+        <div className="bg-surface rounded-lg border border-default shadow-2xs p-5 flex flex-col justify-between relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-5">
             <Activity className="size-28 text-foreground" />
           </div>
@@ -243,14 +235,14 @@ export default async function ProjectDetailPage({
             </div>
             <div>
               <p className="text-lg font-bold text-foreground">{activeStage?.name || "Tahap Awal"}</p>
-              <p className="text-xs text-muted-foreground">Tahapan aktif saat ini dari {project.stages.length} fase</p>
+              <p className="text-xs text-muted-foreground">Tahapan aktif saat ini dari {stages.length} fase</p>
             </div>
           </div>
           <Progress value={overallProgress} className="h-1.5" />
         </div>
 
         {/* Widget 2: Kartu Mobil Premium */}
-        <div className="bg-surface rounded-2xl border border-default shadow-sm p-5 flex flex-col justify-between relative overflow-hidden">
+        <div className="bg-surface rounded-lg border border-default shadow-2xs p-5 flex flex-col justify-between relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-5">
             <Wrench className="size-28 text-foreground" />
           </div>
@@ -288,14 +280,16 @@ export default async function ProjectDetailPage({
           </div>
         </div>
 
-        {/* Widget 3: Ringkasan L/R Proyek (builder tunggal F-029) */}
-        {projectPl ? (
-          <ProjectPlDetailCard pl={projectPl} />
-        ) : (
-          <div className="bg-surface rounded-2xl border border-default shadow-sm p-5">
-            <span className="text-sm font-semibold text-muted-foreground">Laba Rugi Proyek</span>
-            <p className="mt-3 text-sm text-muted-foreground">Belum ada data laba rugi untuk proyek ini</p>
-          </div>
+        {/* Widget 3: Ringkasan L/R Proyek (builder tunggal F-029) — hanya pemegang izin kelola proyek */}
+        {canManageBudget && (
+          projectPl ? (
+            <ProjectPlDetailCard pl={projectPl} />
+          ) : (
+            <div className="bg-surface rounded-lg border border-default shadow-2xs p-5">
+              <span className="text-sm font-semibold text-muted-foreground">Laba Rugi Proyek</span>
+              <p className="mt-3 text-sm text-muted-foreground">Belum ada data laba rugi untuk proyek ini</p>
+            </div>
+          )
         )}
       </div>
 
@@ -323,7 +317,7 @@ export default async function ProjectDetailPage({
                 {project.customerVehicle && (
                   <DetailField
                     label="Kendaraan"
-                    value={`${project.customerVehicle.plateNumber || "-"} — ${[project.customerVehicle.vehicle.variant?.model?.brand?.name, project.customerVehicle.vehicle.variant?.model?.name, project.customerVehicle.vehicle.variant?.name].filter(Boolean).join(" ") || "-"}`}
+                    value={`${project.customerVehicle.plateNumber || "-"} - ${[project.customerVehicle.vehicle.variant?.model?.brand?.name, project.customerVehicle.vehicle.variant?.model?.name, project.customerVehicle.vehicle.variant?.name].filter(Boolean).join(" ") || "-"}`}
                   />
                 )}
                 {workOrder && (
@@ -357,7 +351,7 @@ export default async function ProjectDetailPage({
                 )}
                 <ProjectStages
                   projectId={project.id}
-                  stages={stages}
+                  stages={toPlain(stages)}
                   canEdit={canEdit}
                 />
               </>
@@ -383,128 +377,120 @@ export default async function ProjectDetailPage({
                   {project.items.length === 0 ? (
                     <EmptyState title="Tidak ada item" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>Deskripsi / Material</DetailTableTh>
-                        <DetailTableTh align="right">Jml Rencana</DetailTableTh>
-                        <DetailTableTh align="right">Biaya Satuan Rencana</DetailTableTh>
-                        <DetailTableTh align="right">Total Rencana</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {project.items.map((item) => (
-                          <DetailTableRow key={item.id}>
-                            <DetailTableTd>{item.description || `Item #${item.itemId}`}</DetailTableTd>
-                            <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.cost))}</DetailTableTd>
-                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.qty) * Number(item.cost))}</DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <ProjectPlanItemsTable
+                      data={project.items.map((item) => ({
+                        id: item.id,
+                        itemId: item.itemId,
+                        description: item.description,
+                        qty: Number(item.qty),
+                        cost: Number(item.cost),
+                      }))}
+                      canManageBudget={canManageBudget}
+                      labels={{
+                        qty: "Jml Rencana",
+                        cost: "Biaya Satuan Rencana",
+                        total: "Total Rencana",
+                      }}
+                    />
                   )}
                 </div>
               </div>
             ),
           },
-          {
-            id: "budget",
-            label: "RAB",
-            content: projectBudget ? (
-              <>
-                <ProjectBudgetCard budget={projectBudget} />
-                <ProjectEarnedValueCard earnedValue={projectEarnedValue} />
-                <ProjectBudgetEditor
-                  projectId={project.id}
-                  items={project.items.map((it) => ({ id: it.id, projectStageId: it.projectStageId, category: it.category, description: it.description, qty: Number(it.qty), cost: Number(it.cost), sortOrder: it.sortOrder }))}
-                  stages={stages.map((s) => ({ id: s.id, name: s.name }))}
-                  quotations={quotations.filter((q) => ["accepted", "approved", "converted"].includes(q.status)).map((q) => ({ id: q.id, documentNo: q.documentNo, grandTotal: Number(q.grandTotal) }))}
-                  isLocked={projectBudget.isLocked}
-                  canEdit={canEdit}
-                  canManage={canManageBudget}
-                  pendingProposal={pendingProposal}
-                />
-              </>
-            ) : (
-              <div className="bg-surface rounded-xl border border-default shadow-sm p-5">
-                <span className="text-sm font-semibold text-muted-foreground">RAB vs Realisasi</span>
-                <p className="mt-3 text-sm text-muted-foreground">Belum ada data RAB untuk proyek ini</p>
-              </div>
-            ),
-          },
-          {
-            id: "quotations",
-            label: `Penawaran (${quotations.length})`,
-            content: (
-              <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
-                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Penawaran</h2>
-                  <Link href={`/penjualan/penawaran?cari=${project.customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
-                </div>
-                <div className="p-4 px-5">
-                  {quotations.length === 0 ? (
-                    <EmptyState title="Belum ada penawaran" />
+          ...(canManageBudget
+            ? [
+                {
+                  id: "budget",
+                  label: "RAB",
+                  content: projectBudget ? (
+                    <>
+                      <ProjectBudgetCard budget={projectBudget} />
+                      <ProjectEarnedValueCard earnedValue={projectEarnedValue} />
+                      <ProjectBudgetEditor
+                        projectId={project.id}
+                        items={project.items.map((it) => ({ id: it.id, projectStageId: it.projectStageId, category: it.category, description: it.description, qty: Number(it.qty), cost: Number(it.cost), sortOrder: it.sortOrder }))}
+                        stages={stages.map((s) => ({ id: s.id, name: s.name }))}
+                        quotations={quotations.filter((q) => ["accepted", "approved", "converted"].includes(q.status)).map((q) => ({ id: q.id, documentNo: q.documentNo, grandTotal: Number(q.grandTotal) }))}
+                        isLocked={projectBudget.isLocked}
+                        canEdit={canEdit}
+                        canManage={canManageBudget}
+                        pendingProposal={pendingProposal}
+                      />
+                    </>
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>No. Dokumen</DetailTableTh>
-                        <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh align="right">Total</DetailTableTh>
-                        <DetailTableTh>Status</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {quotations.map((q) => (
-                          <DetailTableRow key={q.id}>
-                            <DetailTableTd className="font-mono"><Link href={entityHref("/penjualan/penawaran", q)}>{q.documentNo}</Link></DetailTableTd>
-                            <DetailTableTd>{formatDate(q.date)}</DetailTableTd>
-                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(q.grandTotal))}</DetailTableTd>
-                            <DetailTableTd><StatusChip status={q.status} /></DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
-                  )}
-                </div>
-              </div>
-            ),
-          },
-          {
-            id: "invoices",
-            label: `Faktur (${invoices.length})`,
-            content: (
-              <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
-                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Tagihan & Pembayaran</h2>
-                  <Link href={`/penjualan/faktur?cari=${project.customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
-                </div>
-                <div className="p-4 px-5">
-                  {invoices.length === 0 ? (
-                    <EmptyState title="Belum ada faktur" />
-                  ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>No. Dokumen</DetailTableTh>
-                        <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh align="right">Total</DetailTableTh>
-                        <DetailTableTh align="right">Terbayar</DetailTableTh>
-                        <DetailTableTh>Status</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {invoices.map((inv) => (
-                          <DetailTableRow key={inv.id}>
-                            <DetailTableTd className="font-mono"><Link href={entityHref("/penjualan/faktur", inv)}>{inv.documentNo}</Link></DetailTableTd>
-                            <DetailTableTd>{formatDate(inv.date)}</DetailTableTd>
-                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(inv.grandTotal))}</DetailTableTd>
-                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(inv.paidAmount))}</DetailTableTd>
-                            <DetailTableTd><StatusChip status={inv.status} /></DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
-                  )}
-                </div>
-              </div>
-            ),
-          },
+                    <div className="bg-surface rounded-xl border border-default shadow-sm p-5">
+                      <span className="text-sm font-semibold text-muted-foreground">RAB vs Realisasi</span>
+                      <p className="mt-3 text-sm text-muted-foreground">Belum ada data RAB untuk proyek ini</p>
+                    </div>
+                  ),
+                },
+              ]
+            : []),
+          ...(canManageBudget || canViewQuotations
+            ? [
+                {
+                  id: "quotations",
+                  label: `Penawaran (${quotations.length})`,
+                  content: (
+                    <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+                      <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
+                        <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Penawaran</h2>
+                        <Link href={`/penjualan/penawaran?cari=${encodeURIComponent(project.customer.name)}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                      </div>
+                      <div className="p-4 px-5">
+                        {quotations.length === 0 ? (
+                          <EmptyState title="Belum ada penawaran" />
+                        ) : (
+                          <ProjectQuotationsTable
+                            data={quotations.map((q) => ({
+                              id: q.id,
+                              slug: q.slug,
+                              documentNo: q.documentNo,
+                              date: q.date.toISOString(),
+                              grandTotal: Number(q.grandTotal),
+                              status: q.status,
+                            }))}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  ),
+                },
+              ]
+            : []),
+          ...(canManageBudget || canViewInvoices
+            ? [
+                {
+                  id: "invoices",
+                  label: `Faktur (${invoices.length})`,
+                  content: (
+                    <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+                      <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
+                        <h2 className="text-[0.9375rem] font-semibold text-foreground">Tagihan & Pembayaran</h2>
+                        <Link href={`/penjualan/faktur?cari=${encodeURIComponent(project.customer.name)}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                      </div>
+                      <div className="p-4 px-5">
+                        {invoices.length === 0 ? (
+                          <EmptyState title="Belum ada faktur" />
+                        ) : (
+                          <ProjectInvoicesTable
+                            data={invoices.map((inv) => ({
+                              id: inv.id,
+                              slug: inv.slug,
+                              documentNo: inv.documentNo,
+                              date: inv.date.toISOString(),
+                              grandTotal: Number(inv.grandTotal),
+                              paidAmount: Number(inv.paidAmount),
+                              status: inv.status,
+                            }))}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  ),
+                },
+              ]
+            : []),
           {
             id: "logs",
             label: `Log (${project.logs.length})`,
@@ -519,66 +505,17 @@ export default async function ProjectDetailPage({
                   {project.logs.length === 0 ? (
                     <EmptyState title="Belum ada log" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh className="w-36">Aksi</DetailTableTh>
-                        <DetailTableTh>Catatan / Keterangan</DetailTableTh>
-                        <DetailTableTh className="w-36">Dicatat Oleh</DetailTableTh>
-                        <DetailTableTh className="w-44">Waktu (WIB)</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {project.logs.map((log) => {
-                          const actionBadgeClass =
-                            log.action === "Kendala"
-                              ? "border-red-200/80 bg-red-50 text-red-800 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300"
-                              : log.action === "Keputusan"
-                              ? "border-blue-200/80 bg-blue-50 text-blue-800 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-blue-300"
-                              : log.action === "Progres"
-                              ? "border-emerald-200/80 bg-emerald-50 text-emerald-800 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300"
-                              : log.action === "Kunjungan"
-                              ? "border-amber-200/80 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300"
-                              : log.action.startsWith("rab_")
-                              ? "border-purple-200/80 bg-purple-50 text-purple-800 dark:border-purple-500/25 dark:bg-purple-500/10 dark:text-purple-300 font-mono text-[10px]"
-                              : "border-border bg-muted/50 text-muted-foreground"
-
-                          const actionLabel =
-                            log.action === "rab_locked"
-                              ? "RAB Dikunci"
-                              : log.action === "rab_revision_proposed"
-                              ? "Usulan Revisi RAB"
-                              : log.action === "rab_revision"
-                              ? "Revisi RAB Disetujui"
-                              : log.action === "rab_revision_rejected"
-                              ? "Revisi RAB Ditolak"
-                              : log.action === "rab_contract_snapshot"
-                              ? "Snapshot Kontrak RAB"
-                              : log.action === "rab_contract_manual"
-                              ? "Kontrak Manual RAB"
-                              : log.action
-
-                          const authorName = log.userId ? userMap.get(log.userId) ?? `Pengguna #${log.userId}` : "Sistem"
-
-                          return (
-                            <DetailTableRow key={log.id}>
-                              <DetailTableTd>
-                                <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${actionBadgeClass}`}>
-                                  {actionLabel}
-                                </span>
-                              </DetailTableTd>
-                              <DetailTableTd className="whitespace-pre-wrap leading-relaxed text-sm">
-                                {log.notes || "-"}
-                              </DetailTableTd>
-                              <DetailTableTd className="text-xs text-muted-foreground font-medium">
-                                {authorName}
-                              </DetailTableTd>
-                              <DetailTableTd className="text-xs tabular-nums text-muted-foreground">
-                                {formatDate(log.createdAt, { format: "short", includeTime: true })}
-                              </DetailTableTd>
-                            </DetailTableRow>
-                          )
-                        })}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <ProjectLogsTable
+                      data={project.logs.map((log) => ({
+                        id: log.id,
+                        action: log.action,
+                        notes: log.notes,
+                        authorName: log.userId
+                          ? userMap.get(log.userId) ?? `Pengguna #${log.userId}`
+                          : "Sistem",
+                        createdAt: log.createdAt.toISOString(),
+                      }))}
+                    />
                   )}
                 </div>
               </div>

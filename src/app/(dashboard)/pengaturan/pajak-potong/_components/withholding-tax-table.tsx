@@ -8,6 +8,7 @@ import { entityEditHref } from "@/lib/utils/entity-url";
 
 export interface WithholdingTaxTypeItem {
   id: number;
+  slug?: string | null;
   code: string;
   name: string;
   rate: number;
@@ -27,6 +28,14 @@ const columns = [
   }),
   columnHelper.accessor("name", {
     header: "Nama Pajak",
+    filterFn: (row, _columnId, filterValue) => {
+      const q = String(filterValue ?? "").trim().toLowerCase();
+      if (!q) return true;
+      return (
+        row.original.code.toLowerCase().includes(q) ||
+        row.original.name.toLowerCase().includes(q)
+      );
+    },
     cell: (info) => (
       <span className="font-medium text-foreground">{info.getValue()}</span>
     ),

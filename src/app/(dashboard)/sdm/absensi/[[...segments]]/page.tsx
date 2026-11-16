@@ -273,7 +273,11 @@ export default async function AttendancePage({
           page={page}
           pageSize={pageSize}
           showActions={showActions}
-          toolbar={<AppSearchField placeholder="Cari nama karyawan..." action={filterPath} />}
+          toolbar={
+            canSearchAcrossEmployees(scope) ? (
+              <AppSearchField placeholder="Cari nama karyawan..." action={filterPath} />
+            ) : undefined
+          }
         />
       </div>
     </div>

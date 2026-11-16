@@ -87,13 +87,13 @@ export function CollectionQueueCard({
   return (
     <section
       aria-label={COLLECTION_QUEUE_TITLE}
-      className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
+      className="bg-surface rounded-lg border border-default shadow-2xs overflow-hidden"
     >
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
         <h2 className="text-[0.9375rem] font-semibold text-foreground">
           {COLLECTION_QUEUE_TITLE}
         </h2>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs tabular-nums text-muted-foreground">
           {summary.total} faktur · Sisa {formatCurrencyExact(summary.totalSisa)} ·
           Belum Diserahkan {summary.belumDiserahkan} · Sudah Diserahkan{" "}
           {summary.sudahDiserahkan} · Lewat Janji {summary.lewatJanji}
@@ -106,7 +106,7 @@ export function CollectionQueueCard({
         <p className="mt-1 text-xs text-muted-foreground">
           {COLLECTION_REMINDER_NOTICE_TEXT}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-xs tabular-nums text-muted-foreground">
           {COLLECTION_REMINDER_LEVELS.map(
             (level) =>
               `${COLLECTION_REMINDER_LEVEL_LABELS[level]} ${summary.reminderLevels[level].count} · ${formatCurrencyExact(summary.reminderLevels[level].totalSisa)}`,
@@ -194,17 +194,17 @@ export function CollectionQueueCard({
                             href={entityHref("/penjualan/faktur", {
                               id: row.invoiceId,
                             })}
-                            className="font-medium text-primary hover:underline"
+                            className="font-medium tabular-nums text-primary hover:underline"
                           >
                             {row.documentNo}
                           </Link>
                           {row.exchangeDocumentNo ? (
-                            <span className="block text-xs text-muted-foreground">
+                            <span className="block text-xs tabular-nums text-muted-foreground">
                               Tukar Faktur {row.exchangeDocumentNo}
                             </span>
                           ) : null}
                           {row.hasOutstandingLateFee ? (
-                            <span className="block text-xs font-medium text-destructive">
+                            <span className="block text-xs font-medium tabular-nums text-destructive">
                               Ada denda terutang {formatCurrencyExact(row.lateFeeOutstanding)}
                             </span>
                           ) : null}

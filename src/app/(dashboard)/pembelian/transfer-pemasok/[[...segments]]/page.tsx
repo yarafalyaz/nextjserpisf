@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { VendorTransferPanel, type TransferInstructionRow } from "../_components/vendor-transfer-panel"
 
@@ -70,6 +70,7 @@ export default async function VendorTransferPage({
   searchParams: Promise<Record<string, string | undefined>>
 }) {
   await requirePermission("view_vendor_payments")
+  const canEdit = await hasPermission("edit_vendor_payments")
 
   const params = await searchParams
   const { segments } = await routeParams
@@ -158,7 +159,7 @@ export default async function VendorTransferPage({
         </div>
       </div>
 
-      <VendorTransferPanel rows={rows} />
+      <VendorTransferPanel rows={rows} canEdit={canEdit} />
     </div>
   )
 }

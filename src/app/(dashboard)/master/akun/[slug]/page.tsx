@@ -46,7 +46,7 @@ export default async function DetailPage({
         actions={
           <>
             <CanCreate permission="edit_accounts">
-              <Button href={entityEditHref("/master/akun", data)} variant="primary">
+              <Button href={entityEditHref("/master/akun", data)} variant="primary" className="min-h-11 sm:min-h-9">
                 Ubah
               </Button>
             </CanCreate>

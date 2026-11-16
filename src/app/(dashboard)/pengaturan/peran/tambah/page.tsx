@@ -9,6 +9,8 @@ import { ActionForm } from "@/components/ui/action-form"
 import { SubmitButton } from "@/components/ui/submit-button"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
+import { Input } from "@/components/ui/shadcn/input"
+import { Label } from "@/components/ui/shadcn/label"
 
 import type { Metadata } from "next"
 
@@ -45,14 +47,13 @@ export default async function CreateRolePage() {
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden p-6">
           <div className="flex flex-col gap-4 max-w-md">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="name" className="text-sm font-medium text-foreground">Nama Peran</label>
-              <input
+              <Label htmlFor="name">Nama Peran</Label>
+              <Input
                 type="text"
                 id="name"
                 name="name"
                 required
                 placeholder="Contoh: admin, manager, staff"
-                className="w-full px-3 py-2.5 rounded-lg border border-default bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
               />
             </div>
           </div>

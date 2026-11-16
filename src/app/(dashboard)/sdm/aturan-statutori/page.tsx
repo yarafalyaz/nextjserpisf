@@ -4,18 +4,8 @@ import { prisma } from "@/lib/db/prisma"
 import { hasPermission, requireAnyPermission } from "@/lib/auth/permissions"
 import { EmptyState } from "@/components/ui/empty-state"
 import { PageHeader } from "@/components/ui/page-header"
-import {
-  DetailTable,
-  DetailTableHead,
-  DetailTableTh,
-  DetailTableBody,
-  DetailTableRow,
-  DetailTableTd,
-} from "@/components/ui/detail-table"
-import { DeleteButton } from "@/components/ui/delete-button"
-import { CanCreate } from "@/components/auth/can-create"
-import { StatutoryRuleForm, CloseRuleForm } from "./_components/statutory-rule-forms"
-import { deleteStatutoryRule } from "@/actions/hrm.actions"
+import { StatutoryRuleForm } from "./_components/statutory-rule-forms"
+import { StatutoryRulesTable } from "./_components/statutory-rules-table"
 
 import type { Metadata } from "next"
 
@@ -71,39 +61,21 @@ export default async function StatutoryRulesPage() {
         )}
         <div className="p-4 px-5">
           {rules.length === 0 ? (
-            <EmptyState title="Belum ada aturan — hitungan memakai bawaan 2024 dari kode" className="py-10" />
+            <EmptyState title="Belum ada aturan, hitungan memakai bawaan 2024 dari kode" className="py-10" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Kunci</DetailTableTh>
-                <DetailTableTh>Nilai</DetailTableTh>
-                <DetailTableTh>Berlaku Sejak</DetailTableTh>
-                <DetailTableTh>Berlaku Sampai</DetailTableTh>
-                <DetailTableTh>Sumber</DetailTableTh>
-                <DetailTableTh align="right">Aksi</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {rules.map((rule) => (
-                  <DetailTableRow key={rule.id}>
-                    <DetailTableTd>{rule.key}</DetailTableTd>
-                    <DetailTableTd>{String(rule.value)}</DetailTableTd>
-                    <DetailTableTd>{rule.effectiveFrom.toISOString().split("T")[0]}</DetailTableTd>
-                    <DetailTableTd>
-                      {rule.effectiveTo ? rule.effectiveTo.toISOString().split("T")[0] : "—"}
-                    </DetailTableTd>
-                    <DetailTableTd>{rule.source ?? "—"}</DetailTableTd>
-                    <DetailTableTd align="right">
-                      <div className="flex justify-end gap-2">
-                        {!rule.effectiveTo && <CloseRuleForm id={rule.id} canEdit={canEdit} />}
-                        <CanCreate permission="edit_payroll">
-                          <DeleteButton id={rule.id} action={deleteStatutoryRule} />
-                        </CanCreate>
-                      </div>
-                    </DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <StatutoryRulesTable
+              data={rules.map((rule) => ({
+                id: rule.id,
+                key: rule.key,
+                value: String(rule.value),
+                effectiveFrom: rule.effectiveFrom.toISOString().split("T")[0],
+                effectiveTo: rule.effectiveTo
+                  ? rule.effectiveTo.toISOString().split("T")[0]
+                  : null,
+                source: rule.source,
+              }))}
+              canEdit={canEdit}
+            />
           )}
         </div>
       </div>

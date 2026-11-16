@@ -55,7 +55,7 @@ export default async function AppreciationDetailPage({
         actions={
           <>
             <CanCreate permission="create_appreciations">
-              <Button href={entityEditHref("/sdm/apresiasi", appreciation)} variant="primary">Ubah</Button>
+              <Button href={entityEditHref("/sdm/apresiasi", appreciation)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
             </CanCreate>
             <CanCreate permission="delete_appreciations">
               <DeleteButton id={appreciation.id} action={deleteAppreciation} />

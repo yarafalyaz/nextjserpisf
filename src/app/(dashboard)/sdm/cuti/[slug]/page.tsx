@@ -77,7 +77,7 @@ export default async function LeaveRequestDetailPage({
             {/* updateLeaveRequest hanya menerima status pending; cuti yang
                 sudah disetujui/ditolak tidak boleh dibuka ulang. */}
             {canEdit && isPending && (
-              <Button href={entityEditHref("/sdm/cuti", leave)} variant="primary">Ubah</Button>
+              <Button href={entityEditHref("/sdm/cuti", leave)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
             )}
             {canDelete && !isApproved && <DeleteButton id={leave.id} action={deleteLeaveRequest} />}
           </>

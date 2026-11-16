@@ -64,7 +64,8 @@ export function DepartmentTable({ data, total, page, pageSize }: DepartmentTable
       data={data}
       columns={columns}
       ariaLabel="Daftar departemen"
-      selectable={true}
+      selectable={false}
+      searchColumn="name"
       searchPlaceholder="Cari nama atau kode..."
       serverPagination={{ total, page, pageSize }}
       searchParam="cari"

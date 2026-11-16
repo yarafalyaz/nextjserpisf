@@ -2,8 +2,8 @@ export const dynamic = "force-dynamic"
 
 import { auth } from "@/lib/auth/auth"
 import Link from "next/link"
-import { AlertTriangle, ArrowUpRight, Car, FilePlus, Plus, TrendingUp } from "@/components/ui/fontawesome-icons"
-import { requirePermission } from "@/lib/auth/permissions"
+import { AlertTriangle, ArrowUpRight, Car, ChevronRight, FilePlus, Plus, TrendingUp } from "@/components/ui/fontawesome-icons"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { prisma } from "@/lib/db/prisma"
 import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
@@ -15,6 +15,8 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { NotificationsWidget } from "@/components/dashboard/notifications-widget"
 import { RecentInvoicesTable } from "@/components/dashboard/recent-invoices-table"
 import { SectionCards } from "@/components/dashboard/section-cards"
+import { MobileAppHero } from "@/components/dashboard/mobile-app-hero"
+import { DashboardWorkspaceTabs } from "@/components/dashboard/dashboard-workspace-tabs"
 import {
   ProjectPipelineChart,
   RevenueChart,
@@ -281,49 +283,91 @@ export default async function DashboardPage() {
 
   await requirePermission("view_dashboard")
 
-  const [data, charts] = await Promise.all([getDashboardData(), getCharts()])
+  const [
+    data,
+    charts,
+    canViewReports,
+    canViewSalesInvoices,
+    canViewCustomers,
+    canCreateInvoices,
+    canCreateProjects,
+  ] = await Promise.all([
+    getDashboardData(),
+    getCharts(),
+    hasPermission("view_reports"),
+    hasPermission("view_sales_invoices"),
+    hasPermission("view_customers"),
+    hasPermission("create_sales_invoices"),
+    hasPermission("create_projects"),
+  ])
+  const canViewFinancials = canViewReports || canViewSalesInvoices
 
-  const today = new Date().toLocaleDateString("id-ID", {
+  const now = new Date()
+  const today = now.toLocaleDateString("id-ID", {
     timeZone: "Asia/Jakarta",
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
   })
+  const shortToday = now.toLocaleDateString("id-ID", {
+    timeZone: "Asia/Jakarta",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  })
 
   return (
     <div data-dashboard-page="true" className="flex flex-1 flex-col">
       <div className="@container/main flex flex-1 flex-col gap-2">
-        <div className="flex flex-col gap-4 py-4 md:gap-5 md:py-5">
-          {/* Executive Header & Quick Actions */}
-          <div className="flex flex-col justify-between gap-3 px-4 sm:flex-row sm:items-center lg:px-6">
-            <div>
-              <h1 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+        <div className="flex flex-col gap-4 py-3.5 md:gap-5 md:py-5">
+          {/* Mobile App Hero + 4-Tile Quick Launcher */}
+          <MobileAppHero
+            shortDate={shortToday}
+            totalRevenue={canViewFinancials ? formatCurrencyExact(data.totalRevenue) : ""}
+            receivables={canViewFinancials ? formatCurrencyExact(data.receivables) : ""}
+            activeProjects={data.activeProjects}
+            completedThisMonth={data.completedThisMonth}
+            overdueProjects={data.overdueProjects}
+            totalCustomers={data.totalCustomers}
+            showFinancials={canViewFinancials}
+            showCustomers={canViewFinancials || canViewCustomers}
+            canViewReports={canViewReports}
+            canCreateInvoices={canCreateInvoices}
+            canCreateProjects={canCreateProjects}
+          />
+
+          {/* Desktop Executive Header & Quick Actions */}
+          <div className="hidden flex-col justify-between gap-3 px-4 md:flex sm:flex-row sm:items-center lg:px-6">
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold tracking-tight text-foreground text-balance sm:text-xl">
                 Dasbor Operasional
               </h1>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
                 {today} · Ringkasan finansial, pengerjaan bengkel, dan inventaris real-time
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button asChild variant="outline" size="sm" className="min-h-11 gap-1.5 text-xs sm:min-h-8 sm:h-8">
-                <Link href="/laporan/laba-rugi">
-                  <TrendingUp className="size-3.5" aria-hidden="true" />
-                  Laporan
-                </Link>
-              </Button>
+              {canViewReports && (
+                <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                  <Link href="/laporan/laba-rugi">
+                    <TrendingUp className="size-3.5 shrink-0" aria-hidden="true" />
+                    Laporan
+                  </Link>
+                </Button>
+              )}
               <CanCreate permission="create_sales_invoices">
-                <Button asChild variant="outline" size="sm" className="min-h-11 gap-1.5 text-xs sm:min-h-8 sm:h-8">
+                <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
                   <Link href="/penjualan/faktur/tambah">
-                    <FilePlus className="size-3.5" aria-hidden="true" />
+                    <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />
                     Buat Faktur
                   </Link>
                 </Button>
               </CanCreate>
               <CanCreate permission="create_projects">
-                <Button asChild size="sm" className="min-h-11 gap-1.5 text-xs sm:min-h-8 sm:h-8">
+                <Button asChild size="sm" className="h-8 gap-1.5 text-xs">
                   <Link href="/proyek/tambah">
-                    <Plus className="size-3.5" aria-hidden="true" />
+                    <Plus className="size-3.5 shrink-0" aria-hidden="true" />
                     Proyek Baru
                   </Link>
                 </Button>
@@ -331,135 +375,126 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {/* Row 1: Unified KPI Strip */}
-          <SectionCards
-            totalRevenue={formatCurrencyExact(data.totalRevenue)}
-            activeProjects={data.activeProjects}
-            completedThisMonth={data.completedThisMonth}
-            overdueProjects={data.overdueProjects}
-            receivables={formatCurrencyExact(data.receivables)}
-            totalCustomers={data.totalCustomers}
-          />
-
-          {/* Row 2: Revenue Trend (2/3) + Invoice Status Distribution (1/3) */}
-          <div className="grid grid-cols-1 items-stretch gap-4 px-4 xl:grid-cols-3 lg:px-6">
-            <div className="h-full xl:col-span-2">
-              <RevenueChart data={charts.revenueData} />
-            </div>
-            <SalesStatusChart data={charts.salesByStatus} />
+          {/* Desktop Row 1: Unified KPI Strip */}
+          <div className="hidden md:block">
+            <SectionCards
+              totalRevenue={canViewFinancials ? formatCurrencyExact(data.totalRevenue) : ""}
+              activeProjects={data.activeProjects}
+              completedThisMonth={data.completedThisMonth}
+              overdueProjects={data.overdueProjects}
+              receivables={canViewFinancials ? formatCurrencyExact(data.receivables) : ""}
+              totalCustomers={data.totalCustomers}
+              showFinancials={canViewFinancials}
+              showCustomers={canViewFinancials || canViewCustomers}
+            />
           </div>
 
-          {/* Row 3: Active Workshop Pipeline (1/2) + Top Customers (1/2) */}
-          <div className="grid grid-cols-1 items-stretch gap-4 px-4 lg:grid-cols-2 lg:px-6">
-            <ProjectPipelineChart data={charts.pipeline} />
-            <TopCustomersChart data={charts.topCustomers} />
-          </div>
+          <DashboardWorkspaceTabs
+            operasionalCount={data.cars.length + data.lowStockItems.length}
+            transaksiCount={data.invoiceRows.length}
+            analitikSection={
+              <>
+                {/* Row 2: Revenue Trend (2/3) + Invoice Status Distribution (1/3) */}
+                {canViewFinancials && (
+                  <div className="grid grid-cols-1 items-stretch gap-4 px-4 xl:grid-cols-3 lg:px-6">
+                    <div className="h-full xl:col-span-2">
+                      <RevenueChart data={charts.revenueData} />
+                    </div>
+                    <SalesStatusChart data={charts.salesByStatus} />
+                  </div>
+                )}
 
-          {/* Row 4: Workshop Floor Tracker (2/3) + Low Stock Watchlist (1/3) */}
-          <div className="grid grid-cols-1 items-stretch gap-4 px-4 xl:grid-cols-3 lg:px-6">
+                {/* Row 3: Active Workshop Pipeline (1/2) + Top Customers (1/2) */}
+                <div className={`grid grid-cols-1 items-stretch gap-4 px-4 lg:px-6 ${canViewFinancials || canViewCustomers ? "lg:grid-cols-2" : ""}`}>
+                  <ProjectPipelineChart data={charts.pipeline} />
+                  {(canViewFinancials || canViewCustomers) && <TopCustomersChart data={charts.topCustomers} />}
+                </div>
+              </>
+            }
+            operasionalSection={
+              <>
+                {/* Row 4: Workshop Floor Tracker (2/3) + Low Stock Watchlist (1/3) */}
+                <div className="grid grid-cols-1 items-stretch gap-4 px-4 xl:grid-cols-3 lg:px-6">
             <Card className="min-w-0 gap-0 overflow-x-clip py-0 xl:col-span-2">
-              <CardHeader className="py-4">
-                <CardTitle className="flex items-center gap-2">
+              <CardHeader className="py-3.5 md:py-4">
+                <CardTitle className="flex items-center gap-2 text-sm md:text-base">
                   <Car className="size-4 text-muted-foreground" />
                   Mobil di Bengkel
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="hidden md:block">
                   Proyek kendaraan aktif dan progres tahap pengerjaan saat ini
                 </CardDescription>
                 <CardAction>
                   <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                     <Link href="/proyek">
-                      Semua Proyek <ArrowUpRight className="size-3.5" />
+                      Semua <span className="hidden md:inline">Proyek</span> <ArrowUpRight className="size-3.5" />
                     </Link>
                   </Button>
                 </CardAction>
               </CardHeader>
               <CardContent className="min-w-0 p-0">
-                {/* Mobile cards — fallback at 390px */}
+                {/* Mobile tappable native rows */}
                 <div className="border-t md:hidden">
                   {data.cars.length === 0 ? (
-                    <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+                    <p className="px-4 py-8 text-center text-sm text-muted-foreground">
                       Belum ada mobil yang sedang dikerjakan
                     </p>
                   ) : (
                     <ul className="divide-y">
                       {data.cars.map((car) => (
-                        <li
-                          key={car.id}
-                          className="flex min-w-0 flex-col gap-2.5 px-4 py-3"
-                        >
-                          <div className="flex min-w-0 items-start justify-between gap-2">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex min-w-0 items-center gap-1.5">
-                                <span className="inline-flex items-center rounded border bg-muted/60 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-tight text-foreground">
-                                  {car.plate}
-                                </span>
-                                {car.overdue ? (
-                                  <Badge
-                                    variant="outline"
-                                    className="shrink-0 border-red-200/80 bg-red-50 text-[10px] text-red-800 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300"
-                                  >
-                                    Lewat Target
-                                  </Badge>
-                                ) : null}
-                              </div>
-                              <p className="mt-1 min-w-0 truncate break-words text-sm font-medium text-foreground">
-                                {car.customer}
-                              </p>
-                              <p className="min-w-0 truncate break-words text-xs text-muted-foreground">
-                                {car.name}
-                              </p>
-                            </div>
-                            <Badge
-                              variant="outline"
-                              className="max-w-[120px] shrink-0 truncate"
-                              title={car.currentStage}
-                            >
-                              {car.currentStage}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="h-1.5 w-full min-w-0 overflow-hidden rounded-full bg-muted">
-                              <div
-                                className="h-full rounded-full bg-primary"
-                                style={{ width: `${car.progress}%` }}
-                              />
-                            </div>
-                            <span className="w-9 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                              {car.progress}%
-                            </span>
-                          </div>
-                          <div className="flex min-w-0 items-center justify-between gap-2">
-                            <div className="min-w-0 text-xs">
-                              {car.endDate ? (
-                                car.overdue ? (
-                                  <Badge
-                                    variant="outline"
-                                    className="border-red-200/80 bg-red-50 text-red-800 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300"
-                                  >
-                                    {formatDate(car.endDate, {
-                                      format: "short",
-                                    })}
-                                  </Badge>
-                                ) : (
-                                  <span className="tabular-nums text-muted-foreground">
-                                    Target{" "}
-                                    {formatDate(car.endDate, {
-                                      format: "short",
-                                    })}
+                        <li key={car.id}>
+                          <Link
+                            href={entityHref("/proyek", car)}
+                            className="flex min-w-0 items-center gap-3 px-4 py-3 active:bg-muted/60 transition-colors"
+                          >
+                            <div className="flex min-w-0 flex-1 flex-col gap-2">
+                              <div className="flex min-w-0 items-center justify-between gap-2">
+                                <div className="flex min-w-0 items-center gap-1.5">
+                                  <span className="inline-flex items-center rounded border bg-muted/60 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-tight text-foreground">
+                                    {car.plate}
                                   </span>
-                                )
-                              ) : (
-                                <span className="text-muted-foreground">-</span>
-                              )}
+                                  {car.overdue ? (
+                                    <Badge
+                                      variant="outline"
+                                      className="shrink-0 border-red-200/80 bg-red-50 text-[10px] text-red-800 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300"
+                                    >
+                                      Lewat Target
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                                <Badge
+                                  variant="outline"
+                                  className="max-w-[115px] shrink-0 truncate text-[11px]"
+                                  title={car.currentStage}
+                                >
+                                  {car.currentStage}
+                                </Badge>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-foreground">
+                                  {car.customer}
+                                </p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {car.name}
+                                  {car.endDate
+                                    ? ` · Target ${formatDate(car.endDate, { format: "short" })}`
+                                    : ""}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="h-1.5 w-full min-w-0 overflow-hidden rounded-full bg-muted">
+                                  <div
+                                    className="h-full rounded-full bg-primary"
+                                    style={{ width: `${car.progress}%` }}
+                                  />
+                                </div>
+                                <span className="w-8 shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+                                  {car.progress}%
+                                </span>
+                              </div>
                             </div>
-                            <Link
-                              href={entityHref("/proyek", car)}
-                              className="shrink-0 text-xs font-medium text-foreground underline-offset-4 hover:text-primary hover:underline"
-                            >
-                              Detail →
-                            </Link>
-                          </div>
+                            <ChevronRight className="size-4 shrink-0 text-muted-foreground/70" aria-hidden="true" />
+                          </Link>
                         </li>
                       ))}
                     </ul>
@@ -563,12 +598,12 @@ export default async function DashboardPage() {
             </Card>
 
             <Card className="gap-0 py-0">
-              <CardHeader className="py-4">
-                <CardTitle className="flex items-center gap-2">
+              <CardHeader className="py-3.5 md:py-4">
+                <CardTitle className="flex items-center gap-2 text-sm md:text-base">
                   <AlertTriangle className="size-4 text-amber-500" />
                   Stok Menipis
                 </CardTitle>
-                <CardDescription>Barang di bawah batas minimum stok</CardDescription>
+                <CardDescription className="hidden md:block">Barang di bawah batas minimum stok</CardDescription>
                 <CardAction>
                   <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                     <Link href="/master/barang/stokmenipis">
@@ -579,7 +614,7 @@ export default async function DashboardPage() {
               </CardHeader>
               <CardContent className="border-t p-0">
                 {data.lowStockItems.length === 0 ? (
-                  <p className="px-5 py-10 text-center text-sm text-muted-foreground">
+                  <p className="px-5 py-8 text-center text-sm text-muted-foreground md:py-10">
                     Semua stok aman
                   </p>
                 ) : (
@@ -589,28 +624,30 @@ export default async function DashboardPage() {
                       const min = Number(item.minStock)
                       const isEmpty = onHand <= 0
                       return (
-                        <li
-                          key={item.id}
-                          className="flex items-center justify-between gap-3 px-5 py-3"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-[13px] font-medium text-foreground">
-                              {item.name}
-                            </p>
-                            <p className="text-[11px] text-muted-foreground">
-                              Minimum: <span className="tabular-nums">{min}</span> unit
-                            </p>
-                          </div>
-                          <Badge
-                            variant="outline"
-                            className={
-                              isEmpty
-                                ? "shrink-0 border-red-200/80 bg-red-50 font-mono tabular-nums text-red-800 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300"
-                                : "shrink-0 border-amber-200/80 bg-amber-50 font-mono tabular-nums text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300"
-                            }
+                        <li key={item.id}>
+                          <Link
+                            href="/master/barang/stokmenipis"
+                            className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/40 active:bg-muted/60 transition-colors md:px-5"
                           >
-                            {onHand} / {min}
-                          </Badge>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[13px] font-medium text-foreground">
+                                {item.name}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">
+                                Minimum: <span className="tabular-nums">{min}</span> unit
+                              </p>
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className={
+                                isEmpty
+                                  ? "shrink-0 border-red-200/80 bg-red-50 font-mono tabular-nums text-red-800 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300"
+                                  : "shrink-0 border-amber-200/80 bg-amber-50 font-mono tabular-nums text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300"
+                              }
+                            >
+                              {onHand} / {min}
+                            </Badge>
+                          </Link>
                         </li>
                       )
                     })}
@@ -619,18 +656,21 @@ export default async function DashboardPage() {
               </CardContent>
             </Card>
           </div>
+              </>
+            }
+            transaksiSection={
+              <>
+                {/* Row 5: Recent Invoices Table */}
+                <div className="px-4 lg:px-6">
+                  <RecentInvoicesTable data={data.invoiceRows} />
+                </div>
 
-          {/* Row 5: Recent Invoices Table */}
-          <div className="px-4 lg:px-6">
-            <RecentInvoicesTable data={data.invoiceRows} />
-          </div>
-
-          {/* Row 6: Recent Payments (1/2) + Operational Signals & Activity (1/2) */}
-          <div className="grid grid-cols-1 items-stretch gap-4 px-4 lg:grid-cols-2 lg:px-6">
+                {/* Row 6: Recent Payments (1/2) + Operational Signals & Activity (1/2) */}
+                <div className="grid grid-cols-1 items-stretch gap-4 px-4 lg:grid-cols-2 lg:px-6">
             <Card className="min-w-0 gap-0 overflow-x-clip py-0">
-              <CardHeader className="py-4">
-                <CardTitle>Pembayaran Terbaru</CardTitle>
-                <CardDescription>
+              <CardHeader className="py-3.5 md:py-4">
+                <CardTitle className="text-sm md:text-base">Pembayaran Terbaru</CardTitle>
+                <CardDescription className="hidden md:block">
                   6 penerimaan pembayaran faktur terakhir
                 </CardDescription>
                 <CardAction>
@@ -741,6 +781,9 @@ export default async function DashboardPage() {
 
             <NotificationsWidget />
           </div>
+              </>
+            }
+          />
         </div>
       </div>
     </div>

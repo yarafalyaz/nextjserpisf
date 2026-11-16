@@ -104,7 +104,7 @@ export default async function PeriodComparisonPage({
                 <Link
                   key={tab.value}
                   href={href}
-                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-default text-muted-foreground hover:bg-muted'}`}
+                  className={`inline-flex items-center min-h-11 sm:min-h-9 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-default text-muted-foreground hover:bg-muted'}`}
                 >
                   {tab.label}
                 </Link>

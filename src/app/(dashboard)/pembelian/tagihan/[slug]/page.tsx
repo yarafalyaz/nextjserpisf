@@ -15,7 +15,7 @@ import { ReceiptText } from "@/components/ui/fontawesome-icons"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { StatusChip } from "@/components/ui/status-chip"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { VendorBillItemsTable } from "./_components/vendor-bill-items-table"
 
 import type { Metadata } from "next"
 
@@ -210,24 +210,15 @@ export default async function VendorBillDetailPage({
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Item</h2>
         </div>
         <div className="p-4 px-5">
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>Deskripsi</DetailTableTh>
-              <DetailTableTh align="right">Jml</DetailTableTh>
-              <DetailTableTh align="right">Harga</DetailTableTh>
-              <DetailTableTh align="right">Total</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {bill.items.map((item) => (
-                <DetailTableRow key={item.id}>
-                  <DetailTableTd>{item.description || "-"}</DetailTableTd>
-                  <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                  <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.unitPrice))}</DetailTableTd>
-                  <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.total))}</DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-          </DetailTable>
+          <VendorBillItemsTable
+            data={bill.items.map((item) => ({
+              id: item.id,
+              description: item.description,
+              qty: Number(item.qty),
+              unitPrice: Number(item.unitPrice),
+              total: Number(item.total),
+            }))}
+          />
         </div>
       </div>
 

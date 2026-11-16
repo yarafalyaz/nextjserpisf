@@ -20,7 +20,12 @@ import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { CanCreate } from "@/components/auth/can-create"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
+import {
+  PurchaseOrderBillsTable,
+  PurchaseOrderItemsTable,
+  PurchaseOrderReceiptsTable,
+  PurchaseOrderReturnsTable,
+} from "./_components/purchase-order-detail-tables"
 import { EmptyState } from "@/components/ui/empty-state"
 
 import type { Metadata } from "next"
@@ -102,7 +107,7 @@ export default async function PurchaseOrderDetailPage({
             {/* updatePurchaseOrder/deletePurchaseOrder menolak selain draft.
                 Menampilkan Ubah/Hapus pada PO posted membuat operator mengira
                 PO bisa dikoreksi langsung; jalurnya cancelPurchaseOrder. */}
-            {canEdit && isDraft && <Button href={entityEditHref("/pembelian/pesanan", po)} variant="primary">Ubah</Button>}
+            {canEdit && isDraft && <Button href={entityEditHref("/pembelian/pesanan", po)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>}
             {po.vendorBills.length === 0 &&
               (po.isService
                 ? !["draft", "cancelled", "rejected"].includes(po.status)
@@ -202,32 +207,17 @@ export default async function PurchaseOrderDetailPage({
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Barang</h2>
                 </div>
                 <div className="p-4 px-5">
-                  <DetailTable>
-                    <DetailTableHead>
-                      <DetailTableTh>Nama Barang</DetailTableTh>
-                      <DetailTableTh align="right">Jml</DetailTableTh>
-                      <DetailTableTh align="right">Diterima</DetailTableTh>
-                      <DetailTableTh align="right">Harga</DetailTableTh>
-                      <DetailTableTh align="right">Total</DetailTableTh>
-                    </DetailTableHead>
-                    <DetailTableBody>
-                      {po.items.map((item) => (
-                        <DetailTableRow key={item.id}>
-                          <DetailTableTd>{itemNameMap.get(item.itemId) || `Item #${item.itemId}`}</DetailTableTd>
-                          <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                          <DetailTableTd align="right">{Number(item.receivedQty)}</DetailTableTd>
-                          <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.unitPrice))}</DetailTableTd>
-                          <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.total))}</DetailTableTd>
-                        </DetailTableRow>
-                      ))}
-                    </DetailTableBody>
-                    <DetailTableFoot>
-                      <DetailTableFootRow>
-                        <DetailTableTd colSpan={4} align="right"><strong>Total Keseluruhan</strong></DetailTableTd>
-                        <DetailTableTd align="right"><strong>{formatCurrencyExact(Number(po.grandTotal))}</strong></DetailTableTd>
-                      </DetailTableFootRow>
-                    </DetailTableFoot>
-                  </DetailTable>
+                  <PurchaseOrderItemsTable
+                    data={po.items.map((item) => ({
+                      id: item.id,
+                      itemName: itemNameMap.get(item.itemId) || `Item #${item.itemId}`,
+                      qty: Number(item.qty),
+                      receivedQty: Number(item.receivedQty),
+                      unitPrice: Number(item.unitPrice),
+                      total: Number(item.total),
+                    }))}
+                    grandTotal={Number(po.grandTotal)}
+                  />
                 </div>
               </div>
             ),
@@ -252,24 +242,16 @@ export default async function PurchaseOrderDetailPage({
                   {po.goodsReceipts.length === 0 ? (
                     <EmptyState title="Belum ada penerimaan barang" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>No. Dokumen</DetailTableTh>
-                        <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh>Barang</DetailTableTh>
-                        <DetailTableTh>Status</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {po.goodsReceipts.map((gr) => (
-                          <DetailTableRow key={gr.id}>
-                            <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/penerimaan", gr)}>{gr.documentNo}</Link></DetailTableTd>
-                            <DetailTableTd>{formatDate(gr.date)}</DetailTableTd>
-                            <DetailTableTd>{gr.items.length} item</DetailTableTd>
-                            <DetailTableTd><StatusChip status={gr.status} /></DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <PurchaseOrderReceiptsTable
+                      data={po.goodsReceipts.map((gr) => ({
+                        id: gr.id,
+                        slug: gr.slug,
+                        documentNo: gr.documentNo,
+                        date: gr.date.toISOString(),
+                        itemCount: gr.items.length,
+                        status: gr.status,
+                      }))}
+                    />
                   )}
                 </div>
               </div>
@@ -300,24 +282,16 @@ export default async function PurchaseOrderDetailPage({
                   {po.purchaseReturns.length === 0 ? (
                     <EmptyState title="Belum ada retur" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>No. Dokumen</DetailTableTh>
-                        <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh>Barang</DetailTableTh>
-                        <DetailTableTh>Status</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {po.purchaseReturns.map((retur) => (
-                          <DetailTableRow key={retur.id}>
-                            <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/retur", retur)}>{retur.documentNo}</Link></DetailTableTd>
-                            <DetailTableTd>{formatDate(retur.date)}</DetailTableTd>
-                            <DetailTableTd>{retur.items.length} item</DetailTableTd>
-                            <DetailTableTd><StatusChip status={retur.status} /></DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <PurchaseOrderReturnsTable
+                      data={po.purchaseReturns.map((retur) => ({
+                        id: retur.id,
+                        slug: retur.slug,
+                        documentNo: retur.documentNo,
+                        date: retur.date.toISOString(),
+                        itemCount: retur.items.length,
+                        status: retur.status,
+                      }))}
+                    />
                   )}
                 </div>
               </div>
@@ -335,20 +309,14 @@ export default async function PurchaseOrderDetailPage({
                   {po.vendorBills.length === 0 ? (
                     <EmptyState title="Belum ada tagihan" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>No. Dokumen</DetailTableTh>
-                        <DetailTableTh align="right">Total</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {po.vendorBills.map((b) => (
-                          <DetailTableRow key={b.id}>
-                            <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/tagihan", b)}>{b.documentNo}</Link></DetailTableTd>
-                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(b.grandTotal))}</DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <PurchaseOrderBillsTable
+                      data={po.vendorBills.map((b) => ({
+                        id: b.id,
+                        slug: b.slug,
+                        documentNo: b.documentNo,
+                        grandTotal: Number(b.grandTotal),
+                      }))}
+                    />
                   )}
                 </div>
               </div>

@@ -31,6 +31,11 @@ export default async function VehicleFitmentsPage({
       OR: [
         { source: { contains: params.cari } },
         { notes: { contains: params.cari } },
+        { item: { sku: { contains: params.cari } } },
+        { item: { name: { contains: params.cari } } },
+        { vehicleBrand: { name: { contains: params.cari } } },
+        { vehicleModel: { name: { contains: params.cari } } },
+        { vehicleVariant: { name: { contains: params.cari } } },
       ],
     }),
     ...(params.hasil && { result: params.hasil }),

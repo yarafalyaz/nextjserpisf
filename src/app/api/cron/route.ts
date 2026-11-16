@@ -7,6 +7,7 @@ import { loadWarehouseLowStock } from "@/lib/reports/min-stock-warehouse-alert"
 import { apiError } from "@/lib/api-response"
 import { pruneIdempotencyKeys } from "@/lib/utils/idempotency"
 import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
+import { getWibTodayUtcDate, WIB_OFFSET_HOURS } from "@/lib/utils/attendance-time"
 import { unlink } from "node:fs/promises"
 import path from "node:path"
 
@@ -108,12 +109,14 @@ async function runTask(task: Task): Promise<string> {
 
 // 1. Auto Lock Period
 async function taskLockPeriod(): Promise<string> {
-  const now = new Date()
+  const todayWib = getWibTodayUtcDate()
 
-  // Lock through the end of the PREVIOUS month relative to now (the just-closed
-  // period). Running on the 1st of June → locks through 31 May. `new Date(year,
-  // monthIndex, 0)` gives the last day of the month BEFORE monthIndex.
-  const periodEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
+  // Lock through the end of the PREVIOUS WIB calendar month relative to now (the
+  // just-closed period). Running on the 1st of June WIB -> locks through 31 May.
+  // Date.UTC(year, monthIndex, 0) gives the last day of the month BEFORE monthIndex.
+  const periodEnd = new Date(
+    Date.UTC(todayWib.getUTCFullYear(), todayWib.getUTCMonth(), 0, 23, 59, 59),
+  )
 
   // R-09: protokol sama dengan tutup/buka-periode (period-close.actions.ts):
   // SATU transaksi yang mengunci baris tunggal `system_settings`
@@ -158,8 +161,8 @@ async function taskLockPeriod(): Promise<string> {
 // ponytail: race dua run paralel tetap ada (service menulis per (user,judul));
 // naikkan ke unique dedupe-key bila cron diparalelkan.
 async function startOfToday(): Promise<{ adminIds: number[]; dayStart: Date }> {
-  const dayStart = new Date()
-  dayStart.setHours(0, 0, 0, 0)
+  const todayWib = getWibTodayUtcDate()
+  const dayStart = new Date(todayWib.getTime() - WIB_OFFSET_HOURS * 3_600_000)
   const admins = await prisma.user.findMany({
     where: {
       isActive: true,
@@ -229,10 +232,10 @@ async function taskLowStockAlert(): Promise<string> {
 
 // 3. Overdue Invoice Alert
 async function taskOverdueInvoiceAlert(): Promise<string> {
-  const now = new Date()
+  const todayWib = getWibTodayUtcDate()
 
   const where: Prisma.SalesInvoiceWhereInput = {
-    dueDate: { lt: now },
+    dueDate: { lt: todayWib },
     paymentStatus: { not: "paid" },
     // Cancelling an invoice sets paymentStatus "cancelled" (not "paid"), so it
     // would otherwise still match and inflate the count/total + fire false

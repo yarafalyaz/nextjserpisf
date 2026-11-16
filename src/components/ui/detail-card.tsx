@@ -57,7 +57,7 @@ export function DetailField({ label, value, mono, colSpan }: DetailFieldProps) {
   return (
     <div className={`flex flex-col gap-1 ${spanClass}`}>
       <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</dt>
-      <dd className={`text-[0.9375rem] text-foreground font-medium m-0 ${mono ? "font-mono" : ""}`}>
+      <dd className={`text-[0.9375rem] text-foreground font-medium tabular-nums m-0 ${mono ? "font-mono" : ""}`}>
         {value ?? "-"}
       </dd>
     </div>

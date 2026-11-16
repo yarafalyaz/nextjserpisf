@@ -63,7 +63,7 @@ export async function renderApprovalsPage(
   if (!statusParam && params.status === "menunggu") redirect("/pengaturan/persetujuan/menunggu")
 
   if (!statusParam && params.status) {
-    const targetStatus = params.status
+    const targetStatus = statusToIndo[params.status] || params.status
     const query = new URLSearchParams()
     if (params.cari) query.set("cari", params.cari)
     if (params.halaman) query.set("halaman", params.halaman)

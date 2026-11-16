@@ -78,7 +78,7 @@ const columns = [
     header: "Snapshot PPN",
     cell: (info) => {
       const snap = info.getValue()
-      if (!snap) return <span className="text-xs text-muted-foreground">—</span>
+      if (!snap) return <span className="text-xs text-muted-foreground">-</span>
       return (
         <span className="flex flex-col items-start gap-1">
           <span className="text-xs font-mono tabular-nums">

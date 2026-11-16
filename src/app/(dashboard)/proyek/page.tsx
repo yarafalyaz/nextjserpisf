@@ -4,12 +4,13 @@ import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { withListParams } from "@/lib/utils/list-href"
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { redirect, notFound } from "next/navigation"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { FolderKanban, Plus, Clock, CheckCircle2 } from "@/components/ui/fontawesome-icons"
 import { AppSearchField } from "@/components/ui/search-field"
+import { computeWeightedStagesProgress } from "@/lib/utils/project-stage-progress"
 import { ProjectTable } from "./_components/project-table"
 import { ProjectStageQueueSection } from "./_components/project-stage-queue"
 import { getProjectStageQueue } from "@/lib/reports/project-stage-queue-data"
@@ -52,6 +53,7 @@ export async function renderProjectsPage({
   searchParams,
 }: ProjectListPageProps) {
   await requirePermission("view_projects")
+  const canViewContractAmount = await hasPermission("manage_projects")
 
   const params = await searchParams
 
@@ -104,6 +106,7 @@ export async function renderProjectsPage({
       where,
       include: {
         customer: true,
+        stages: { select: { status: true, weightPct: true } },
         _count: { select: { items: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -133,7 +136,14 @@ export async function renderProjectsPage({
   if (stageResult.redirectError !== undefined) throw stageResult.redirectError
   const projectStageQueue = stageResult.queue
 
-  const tableData = toPlain(projects)
+  const tableData = toPlain(
+    projects.map((p) => ({
+      ...p,
+      contractAmount: canViewContractAmount ? p.contractAmount : null,
+      stageProgressPct:
+        p.stages.length > 0 ? computeWeightedStagesProgress(p.stages) : null,
+    })),
+  )
 
   // Putaran 88: himpunan status proyek nyata (project-status.ts) — chip
   // "cancelled" selalu kosong (tak ada penulis) dan in_progress tak terpilih.
@@ -188,7 +198,7 @@ export async function renderProjectsPage({
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
-            Manajemen Proyek (Project)
+            Manajemen Proyek
           </h1>
           <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
             Pelacakan progres pekerjaan proyek pelanggan, milestone tahapan, RAB anggaran, dan penjadwalan tim.
@@ -266,7 +276,7 @@ export async function renderProjectsPage({
       ) : (
         <section
           aria-label={PROJECT_STAGE_QUEUE_TITLE}
-          className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
+          className="bg-surface rounded-lg border border-default shadow-2xs overflow-hidden"
         >
           <div className="flex flex-col gap-1 p-4 px-5">
             <h2 className="text-[0.9375rem] font-semibold text-foreground">
@@ -284,6 +294,7 @@ export async function renderProjectsPage({
         total={total}
         page={page}
         pageSize={pageSize}
+        showContractAmount={canViewContractAmount}
         toolbar={<AppSearchField placeholder="Cari proyek..." action={currentActionPath} />}
         filters={statusChips}
       />

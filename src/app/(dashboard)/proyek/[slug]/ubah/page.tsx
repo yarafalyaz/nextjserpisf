@@ -6,6 +6,7 @@ import { notFound } from "next/navigation"
 import { ProjectForm } from "@/components/forms/project-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
+import { toPlain } from "@/lib/utils/serialization"
 
 import type { Metadata } from "next"
 
@@ -85,7 +86,7 @@ export default async function EditProjectPage({
         customerVehicles={customerVehicles}
         costCenters={costCenters}
         project={{
-          ...project,
+          ...toPlain(project),
           costCenterId: project.costCenterId,
           startDate: project.startDate?.toISOString().split("T")[0] ?? null,
           endDate: project.endDate?.toISOString().split("T")[0] ?? null,

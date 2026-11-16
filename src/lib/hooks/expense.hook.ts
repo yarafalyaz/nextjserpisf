@@ -90,7 +90,7 @@ export async function onExpenseApprovedSyncPettyCash(
 
     // Idempotency: check if PettyCash record already exists for this expense
     const existing = await tx.pettyCash.findFirst({
-      where: { referenceNo: expense.documentNo },
+      where: { referenceNo: expense.documentNo, deletedAt: null, status: "posted" },
     });
     if (existing) {
       console.info(

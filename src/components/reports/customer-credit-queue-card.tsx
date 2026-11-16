@@ -97,12 +97,12 @@ export function CustomerCreditQueueCard({
                 {row.sourceType === "DownPayment" ? (
                   <Link
                     href={`/penjualan/uang-muka/${row.sourceId}`}
-                    className="inline-flex min-h-11 items-center font-medium text-primary hover:underline sm:min-h-9"
+                    className="inline-flex min-h-11 items-center font-medium tabular-nums text-primary hover:underline sm:min-h-9"
                   >
                     {row.documentNo}
                   </Link>
                 ) : (
-                  <span className="font-medium">{row.documentNo}</span>
+                  <span className="font-medium tabular-nums">{row.documentNo}</span>
                 )}
                 <span className="block text-xs text-muted-foreground">
                   {formatDate(row.createdAt)}
@@ -110,7 +110,7 @@ export function CustomerCreditQueueCard({
               </DetailTableTd>
               <DetailTableTd>{row.customerName}</DetailTableTd>
               <DetailTableTd>{row.sourceType}</DetailTableTd>
-              <DetailTableTd>{formatNumber(row.umurMenungguHari)} hari</DetailTableTd>
+              <DetailTableTd className="tabular-nums">{formatNumber(row.umurMenungguHari)} hari</DetailTableTd>
               <DetailTableTd align="right">{formatCurrencyExact(row.receivedAmount)}</DetailTableTd>
               <DetailTableTd align="right">{formatCurrencyExact(row.allocatedAmount)}</DetailTableTd>
               <DetailTableTd align="right">{formatCurrencyExact(row.refundedAmount)}</DetailTableTd>

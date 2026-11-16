@@ -229,18 +229,6 @@ const DELEGATED: Record<string, Delegation> = {
     call: "renderRecruitmentsPage",
     target: "src/app/(dashboard)/sdm/rekrutmen/page.tsx",
   },
-  "inventaris/scan/page.tsx": {
-    kind: "client-action",
-    action: "lookupItemByScan",
-    file: "src/actions/master.actions.ts",
-  },
-  "master/pajak/tambah/page.tsx": { kind: "form-action" },
-  "master/bank/tambah/page.tsx": { kind: "form-action" },
-  "master/grup-barang/tambah/page.tsx": { kind: "form-action" },
-  "master/syarat-pembayaran/tambah/page.tsx": { kind: "form-action" },
-  "master/barcode/tambah/page.tsx": { kind: "form-action" },
-  "master/kategori-pengeluaran/tambah/page.tsx": { kind: "form-action" },
-  "master/kategori-barang/tambah/page.tsx": { kind: "form-action" },
 }
 
 describe("halaman dashboard: guard langsung atau delegasi terdaftar", () => {

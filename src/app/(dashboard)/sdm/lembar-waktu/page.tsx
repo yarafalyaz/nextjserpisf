@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { canSearchAcrossEmployees, getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope"
 import Link from "next/link"
+import { PageHeader } from "@/components/ui/page-header"
 import { TimesheetTable } from "./_components/timesheet-table"
 
 import type { Metadata } from "next"
@@ -56,26 +57,29 @@ export default async function TimesheetsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">Lembar Waktu (Timesheet)</h1>
-          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
-            Pencatatan jam kerja harian, alokasi aktivitas proyek, dan verifikasi kehadiran tim.
-          </p>
-        </div>
-        <CanCreate permission="create_timesheets">
-          <Link
-            href="/sdm/lembar-waktu/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
-            id="create-timesheet-btn"
-          >
-            <Plus className="size-3.5" aria-hidden="true" />
-            <span>Tambah Timesheet</span>
-          </Link>
-        </CanCreate>
-      </div>
+      <PageHeader
+        title="Lembar Waktu (Timesheet)"
+        subtitle="Pencatatan jam kerja harian, alokasi aktivitas proyek, dan verifikasi kehadiran tim."
+        breadcrumbs={[
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
+          { label: "Lembar Waktu" },
+        ]}
+        actions={
+          <CanCreate permission="create_timesheets">
+            <Link
+              href="/sdm/lembar-waktu/tambah"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+              id="create-timesheet-btn"
+            >
+              <Plus className="size-3.5" aria-hidden="true" />
+              <span>Tambah Timesheet</span>
+            </Link>
+          </CanCreate>
+        }
+      />
 
-      <TimesheetTable data={data} total={total} page={page} pageSize={pageSize} showActions={showActions} />
+      <TimesheetTable data={data} total={total} page={page} pageSize={pageSize} showActions={showActions} canSearch={canSearchAcrossEmployees(scope)} />
     </div>
   )
 }

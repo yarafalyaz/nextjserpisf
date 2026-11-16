@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { EmptyState } from "@/components/ui/empty-state"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { StockAdjustmentItemsTable } from "./_components/adjustment-tables"
 
 import type { Metadata } from "next"
 
@@ -162,24 +162,15 @@ export default async function StockAdjustmentDetailPage({
           {adjustment.items.length === 0 ? (
             <EmptyState title="Tidak ada barang" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Nama Barang</DetailTableTh>
-                <DetailTableTh align="right">Kuantitas Sistem</DetailTableTh>
-                <DetailTableTh align="right">Kuantitas Aktual</DetailTableTh>
-                <DetailTableTh align="right">Selisih</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {adjustment.items.map((item) => (
-                  <DetailTableRow key={item.id}>
-                    <DetailTableTd>{itemNameMap.get(item.itemId) || `Item #${item.itemId}`}</DetailTableTd>
-                    <DetailTableTd align="right">{Number(item.systemQty)}</DetailTableTd>
-                    <DetailTableTd align="right">{Number(item.actualQty)}</DetailTableTd>
-                    <DetailTableTd align="right">{Number(item.difference)}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <StockAdjustmentItemsTable
+              data={adjustment.items.map((item) => ({
+                id: item.id,
+                itemName: itemNameMap.get(item.itemId) || `Item #${item.itemId}`,
+                systemQty: Number(item.systemQty),
+                actualQty: Number(item.actualQty),
+                difference: Number(item.difference),
+              }))}
+            />
           )}
         </div>
       </div>

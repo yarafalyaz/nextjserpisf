@@ -1,6 +1,17 @@
+import { z } from "zod"
 import { safeAdd, safeMultiply, safeRound, safeSubtract } from "@/lib/utils/math"
 import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money"
-import { safeJsonParse } from "@/lib/utils/safe-parse"
+import { safeJsonParseArray } from "@/lib/utils/safe-parse"
+
+const vendorBillLineSchema = z
+  .object({
+    itemId: z.union([z.number(), z.string()]).nullable().optional(),
+    qty: z.union([z.number(), z.string()]).optional(),
+    unitPrice: z.union([z.number(), z.string()]).optional(),
+    discountPercent: z.union([z.number(), z.string()]).optional(),
+    taxPercent: z.union([z.number(), z.string()]).optional(),
+  })
+  .passthrough()
 
 /**
  * Matematika baris tagihan vendor (diskon & pajak) — SATU sumber untuk perhitungan
@@ -91,7 +102,7 @@ export type VendorBillHeaderTotals = {
 export function summarizeBillItems(
   itemsJson: string | null | undefined,
 ): VendorBillHeaderTotals | null {
-  const rows = safeJsonParse<VendorBillLineInput[]>(itemsJson ?? null) ?? []
+  const rows = safeJsonParseArray<VendorBillLineInput>(itemsJson ?? null, vendorBillLineSchema)
   const lines = rows
     .filter((row) => safeRound(parseLocaleNumber(row.qty) ?? 0, 2) > 0)
     .map((row) => computeBillLineAmounts(row))
@@ -149,7 +160,7 @@ export function withholdingGuard(
  * sehingga diskon level dokumen tidak bisa berselisih dengan jumlah barisnya.
  */
 export function sumBillItemDiscount(itemsJson: string | null | undefined): number {
-  const rows = safeJsonParse<VendorBillLineInput[]>(itemsJson ?? null) ?? []
+  const rows = safeJsonParseArray<VendorBillLineInput>(itemsJson ?? null, vendorBillLineSchema)
   return rows.reduce((sum, row) => {
     if (safeRound(parseLocaleNumber(row.qty) ?? 0, 2) <= 0) return sum
     return safeAdd(sum, computeBillLineAmounts(row).discountAmount, 2)

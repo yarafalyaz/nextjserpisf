@@ -321,7 +321,7 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
               id="purchaseOrderId"
               options={vendorPurchaseOrders.map((po) => ({
                 value: String(po.id),
-                label: `${po.documentNo}${po.isService ? " · Jasa" : ""} — ${po.grandTotal.toLocaleString("id-ID")}`,
+                label: `${po.documentNo}${po.isService ? " · Jasa" : ""} - ${po.grandTotal.toLocaleString("id-ID")}`,
               }))}
               value={purchaseOrderId}
               onChange={setPurchaseOrderId}
@@ -334,7 +334,7 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
             </p>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="projectId">Project (opsional — isi bila untuk proyek)</Label>
+            <Label htmlFor="projectId">Proyek (opsional, isi bila untuk proyek)</Label>
             <Combobox
               id="projectId"
               options={projects.map((p) => ({ value: String(p.id), label: `${p.documentNo ? `${p.documentNo} - ` : ""}${p.name}` }))}

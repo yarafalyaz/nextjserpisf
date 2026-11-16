@@ -13,18 +13,15 @@ import { ProcessButton } from "@/components/ui/process-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import {
-  DetailTable,
-  DetailTableHead,
-  DetailTableTh,
-  DetailTableBody,
-  DetailTableRow,
-  DetailTableTd,
-} from "@/components/ui/detail-table";
+  GoodsReceiptItemsTable,
+  GoodsReceiptVendorBillsTable,
+} from "./_components/goods-receipt-items-table";
 import { EmptyState } from "@/components/ui/empty-state";
 
 import type { Metadata } from "next";
 
 import { hasPermission, requirePermission } from "@/lib/auth/permissions";
+import { canViewCostAmounts } from "@/lib/auth/field-visibility";
 import {
   GOODS_RECEIPT_JOURNAL_REF_TYPE,
   GOODS_RECEIPT_SERVICE_JOURNAL_REF_TYPE,
@@ -41,6 +38,7 @@ export default async function GoodsReceiptDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   await requirePermission("view_goods_receipts");
+  const canViewCosts = await canViewCostAmounts();
 
   const { slug } = await params;
 
@@ -297,10 +295,11 @@ export default async function GoodsReceiptDetailPage({
       </div>
 
       {/* Landed-cost breakdown — the freight the PO estimated and the discount
-          that reduce HPP. Only shown when the PO carries any. */}
-      {(Number(receipt.purchaseOrder.shippingCost) > 0 ||
-        Number(receipt.purchaseOrder.serviceFee) > 0 ||
-        Number(receipt.purchaseOrder.discount) > 0) && (
+          that reduce HPP. Only shown when the PO carries any and user can view cost amounts. */}
+      {canViewCosts &&
+        (Number(receipt.purchaseOrder.shippingCost) > 0 ||
+          Number(receipt.purchaseOrder.serviceFee) > 0 ||
+          Number(receipt.purchaseOrder.discount) > 0) && (
         <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
           <h2 className="mb-4 text-[0.9375rem] font-semibold text-foreground">
             Komponen Biaya Perolehan (estimasi PO)
@@ -345,91 +344,45 @@ export default async function GoodsReceiptDetailPage({
           {receipt.items.length === 0 ? (
             <EmptyState title="Tidak ada item" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Barang</DetailTableTh>
-                <DetailTableTh align="right">Kuantitas Dipesan</DetailTableTh>
-                <DetailTableTh align="right">Kuantitas Diterima</DetailTableTh>
-                <DetailTableTh align="right">Biaya Satuan</DetailTableTh>
-                <DetailTableTh>Gudang</DetailTableTh>
-                <DetailTableTh>Rak / Baris</DetailTableTh>
-                <DetailTableTh>Mutasi Stok</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {receipt.items.map((item: any) => {
-                  const poItem = receipt.purchaseOrder.items?.find(
-                    (pi: any) => pi.itemId === item.itemId,
-                  );
-                  const master = itemMap.get(item.itemId);
-                  return (
-                    <DetailTableRow key={item.id}>
-                      <DetailTableTd>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-medium text-foreground">
-                            {master?.name ?? `Barang #${item.itemId}`}
-                          </span>
-                          {master?.sku && (
-                            <span className="font-mono text-xs text-muted-foreground">
-                              {master.sku}
-                            </span>
-                          )}
-                        </div>
-                      </DetailTableTd>
-                      <DetailTableTd align="right">
-                        {Number(item.qtyOrdered) > 0
-                          ? Number(item.qtyOrdered)
-                          : poItem
-                            ? Number(poItem.qty)
-                            : "-"}
-                      </DetailTableTd>
-                      <DetailTableTd align="right">
-                        {Number(item.qty)}
-                        {item.uom ? (
-                          <span className="ml-1 text-xs text-muted-foreground">
-                            {item.uom}
-                          </span>
-                        ) : null}
-                      </DetailTableTd>
-                      <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.unitCost))}
-                      </DetailTableTd>
-                      <DetailTableTd>
-                        {warehouseMap.get(item.warehouseId) ||
-                          receipt.warehouse.name}
-                      </DetailTableTd>
-                      <DetailTableTd>
-                        {(() => {
-                          const rack = item.rackId ? rackMap.get(item.rackId) : null;
-                          const row = item.rackRowId ? rackRowMap.get(item.rackRowId) : null;
-                          const rackLabel = rack ? (rack.code ? `${rack.code} — ${rack.name}` : rack.name) : null;
-                          const rowLabel = row ? (row.code ? `${row.code} — ${row.name}` : row.name) : null;
-                          if (!rackLabel && !rowLabel) return "-";
-                          return [rackLabel, rowLabel].filter(Boolean).join(" / ");
-                        })()}
-                      </DetailTableTd>
-                      <DetailTableTd>
-                        {item.stockMoveId ? (
-                          <Link
-                            href={entityHref("/inventaris/mutasi-stok", {
-                              id: item.stockMoveId,
-                              slug: stockMoveSlugById.get(item.stockMoveId) ?? null,
-                            })}
-                            className="text-primary hover:underline"
-                          >
-                            SM-{item.stockMoveId}
-                          </Link>
-                        ) : receipt.status === "draft" ? (
-                          <span className="text-xs text-muted-foreground">
-                            Menunggu verifikasi
-                          </span>
-                        ) : (
-                          "-"
-                        )}
-                      </DetailTableTd>
-                    </DetailTableRow>
-                  );
-                })}
-              </DetailTableBody>
-            </DetailTable>
+            <GoodsReceiptItemsTable
+              data={receipt.items.map((item: any) => {
+                const poItem = receipt.purchaseOrder.items?.find(
+                  (pi: any) => pi.itemId === item.itemId,
+                );
+                const master = itemMap.get(item.itemId);
+                const rack = item.rackId ? rackMap.get(item.rackId) : null;
+                const row = item.rackRowId ? rackRowMap.get(item.rackRowId) : null;
+                const rackLabel = rack ? (rack.code ? `${rack.code} - ${rack.name}` : rack.name) : null;
+                const rowLabel = row ? (row.code ? `${row.code} - ${row.name}` : row.name) : null;
+                return {
+                  id: item.id,
+                  itemId: item.itemId,
+                  itemName: master?.name ?? `Barang #${item.itemId}`,
+                  itemSku: master?.sku ?? null,
+                  qtyOrdered:
+                    Number(item.qtyOrdered) > 0
+                      ? Number(item.qtyOrdered)
+                      : poItem
+                        ? Number(poItem.qty)
+                        : null,
+                  qtyReceived: Number(item.qty),
+                  uom: item.uom ?? null,
+                  unitCost: Number(item.unitCost),
+                  warehouseName:
+                    warehouseMap.get(item.warehouseId) || receipt.warehouse.name,
+                  rackRowLabel:
+                    !rackLabel && !rowLabel
+                      ? "-"
+                      : [rackLabel, rowLabel].filter(Boolean).join(" / "),
+                  stockMoveId: item.stockMoveId ?? null,
+                  stockMoveSlug: item.stockMoveId
+                    ? (stockMoveSlugById.get(item.stockMoveId) ?? null)
+                    : null,
+                  receiptStatus: receipt.status,
+                };
+              })}
+              canViewCosts={canViewCosts}
+            />
           )}
         </div>
       </div>
@@ -445,26 +398,15 @@ export default async function GoodsReceiptDetailPage({
             </h2>
           </div>
           <div className="p-4 px-5">
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>No. Dokumen</DetailTableTh>
-                <DetailTableTh align="right">Total</DetailTableTh>
-                <DetailTableTh>Status</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {receipt.vendorBills.map((bill) => (
-                  <DetailTableRow key={bill.id}>
-                    <DetailTableTd className="font-mono">
-                      <Link href={entityHref("/pembelian/tagihan", bill)} className="text-primary hover:underline">
-                        {bill.documentNo}
-                      </Link>
-                    </DetailTableTd>
-                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(bill.grandTotal))}</DetailTableTd>
-                    <DetailTableTd><StatusChip status={bill.status} /></DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <GoodsReceiptVendorBillsTable
+              data={receipt.vendorBills.map((bill) => ({
+                id: bill.id,
+                slug: bill.slug,
+                documentNo: bill.documentNo,
+                grandTotal: Number(bill.grandTotal),
+                status: bill.status,
+              }))}
+            />
           </div>
         </div>
       )}

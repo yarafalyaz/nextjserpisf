@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { Button } from "@/components/ui/button"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 interface ProductionOrderFormProps {
   products: { id: number; name: string; sku: string | null }[]
@@ -80,7 +81,7 @@ export function ProductionOrderForm({ products, workOrders = [], defaultWorkOrde
             name="workOrderId"
             value={workOrderId || null}
             onChange={(key) => setWorkOrderId(key ?? "")}
-            placeholder="— Tanpa perintah kerja —"
+            placeholder="- Tanpa perintah kerja -"
             options={workOrders.map((wo) => ({ value: String(wo.id), label: wo.documentNo }))}
           />
         </div>
@@ -88,14 +89,14 @@ export function ProductionOrderForm({ products, workOrders = [], defaultWorkOrde
           <AppDatePicker
             label="Tanggal Mulai"
             name="startDate"
-            defaultValue={order?.startDate ? new Date(order.startDate).toISOString().split("T")[0] : undefined}
+            defaultValue={order?.startDate ? wibDateOnly(new Date(order.startDate)) : undefined}
           />
         </div>
         <div className="flex flex-col gap-1.5">
           <AppDatePicker
             label="Tanggal Selesai"
             name="endDate"
-            defaultValue={order?.endDate ? new Date(order.endDate).toISOString().split("T")[0] : undefined}
+            defaultValue={order?.endDate ? wibDateOnly(new Date(order.endDate)) : undefined}
           />
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">

@@ -1,16 +1,14 @@
 import { Plus } from "@/components/ui/fontawesome-icons";
 import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
-import { Pencil } from "@/components/ui/fontawesome-icons"
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import Link from "next/link"
-import { entityEditHref } from "@/lib/utils/entity-url"
 import { EmptyState } from "@/components/ui/empty-state"
 import { AppSearchField } from "@/components/ui/search-field"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { AccountsGroupTable } from "./_components/accounts-group-table"
 import { buildStatementRows, DEFAULT_STATEMENT_OPTIONS } from "@/lib/reports/statement-display"
 import { accountGroupLabel } from "@/lib/utils/account-groups"
 
@@ -31,6 +29,7 @@ export default async function AccountsPage({
 
   const where = {
     isActive: true,
+    deletedAt: null,
     ...(params.cari && {
       OR: [
         { code: { contains: params.cari } },
@@ -126,42 +125,25 @@ export default async function AccountsPage({
             {group.length === 0 ? (
               <EmptyState title={`Belum ada akun ${label.toLowerCase()}`} />
             ) : (
-              <DetailTable>
-                <DetailTableHead>
-                  <DetailTableTh>Kode</DetailTableTh>
-                  <DetailTableTh>Nama Akun</DetailTableTh>
-                  <DetailTableTh>Aksi</DetailTableTh>
-                </DetailTableHead>
-                <DetailTableBody>
-                  {rows.map((row) => {
-                    const acc = byId.get(row.id)
-                    if (!acc) return null
-                    return (
-                      <DetailTableRow key={row.id} className={row.hasChildren ? "font-semibold" : undefined}>
-                        <DetailTableTd className="font-mono">{acc.code}</DetailTableTd>
-                        <DetailTableTd>
-                          <span style={{ paddingLeft: `${row.level * 1.25}rem` }}>{acc.name}</span>
-                          {accountGroupLabel(acc.reportGroup) &&
-                          accountGroupLabel(acc.reportGroup) !== acc.name ? (
-                            // Label Indonesia (mis. "Kas & Bank"); kode Accurate-nya
-                            // tetap tersedia lewat tooltip. Dilewati bila sama dengan
-                            // nama akunnya sendiri (akun induk grup) supaya tidak mubazir.
-                            <span
-                              className="ml-2 rounded border border-default px-1.5 py-0.5 text-[0.6875rem] font-normal text-muted-foreground"
-                              title={acc.reportGroup ?? undefined}
-                            >
-                              {accountGroupLabel(acc.reportGroup)}
-                            </span>
-                          ) : null}
-                        </DetailTableTd>
-                        <DetailTableTd>
-                          <Link href={entityEditHref("/master/akun", acc)} className="button button--ghost button--sm"><Pencil size={14} /></Link>
-                        </DetailTableTd>
-                      </DetailTableRow>
-                    )
-                  })}
-                </DetailTableBody>
-              </DetailTable>
+              <AccountsGroupTable
+                ariaLabel={`Daftar akun ${label}`}
+                data={rows.flatMap((row) => {
+                  const acc = byId.get(row.id)
+                  if (!acc) return []
+                  return [
+                    {
+                      id: acc.id,
+                      slug: acc.slug,
+                      code: acc.code,
+                      name: acc.name,
+                      reportGroup: acc.reportGroup,
+                      reportGroupLabel: accountGroupLabel(acc.reportGroup),
+                      level: row.level,
+                      hasChildren: row.hasChildren,
+                    },
+                  ]
+                })}
+              />
             )}
           </div>
         </div>
@@ -174,7 +156,7 @@ export default async function AccountsPage({
           className="rounded-lg border border-default bg-warning-subtle px-4 py-2 text-xs text-warning-subtle-foreground"
         >
           Menampilkan maksimal {MAX_LIST_ROWS} baris pertama. Masih ada akun lain yang tidak
-          ditampilkan — persempit pencarian atau filter untuk melihatnya.
+          ditampilkan: persempit pencarian atau filter untuk melihatnya.
         </p>
       )}
     </div>

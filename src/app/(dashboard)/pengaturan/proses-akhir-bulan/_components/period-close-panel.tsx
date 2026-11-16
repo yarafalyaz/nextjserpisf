@@ -8,6 +8,7 @@ import { closeAccountingPeriod, reopenAccountingPeriod } from "@/actions/period-
 import { Button } from "@/components/ui/shadcn/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { AppMonthPicker } from "@/components/ui/month-picker"
+import { buildPathFilterHref } from "@/lib/utils/path-filters"
 import { showError, showSuccess } from "@/lib/utils/toast"
 
 export interface PeriodClosePanelProps {
@@ -18,6 +19,7 @@ export interface PeriodClosePanelProps {
   currentLockDate: string | null
   /** Kunci yang berlaku sudah mencakup/melebihi bulan ini. */
   alreadyClosed: boolean
+  fiscalYear?: string
 }
 
 export function PeriodClosePanel({
@@ -26,6 +28,7 @@ export function PeriodClosePanel({
   monthEnd,
   currentLockDate,
   alreadyClosed,
+  fiscalYear,
 }: PeriodClosePanelProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -34,7 +37,12 @@ export function PeriodClosePanel({
 
   function changeMonth(value: string) {
     if (!/^\d{4}-\d{2}$/.test(value)) return
-    router.push(`/pengaturan/proses-akhir-bulan/periode/${value}`)
+    router.push(
+      buildPathFilterHref("/pengaturan/proses-akhir-bulan", {
+        periode: value,
+        tahun: fiscalYear,
+      })
+    )
   }
 
   function handleClose() {

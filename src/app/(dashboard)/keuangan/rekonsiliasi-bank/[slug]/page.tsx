@@ -8,19 +8,11 @@ import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import {
-  DetailTable,
-  DetailTableHead,
-  DetailTableTh,
-  DetailTableBody,
-  DetailTableRow,
-  DetailTableTd,
-} from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
 import { CompleteReconciliationButton } from "../_components/complete-reconciliation-button"
 import { MatchLineForm } from "./_components/match-line-form"
 import { AdjustmentForm } from "./_components/adjustment-form"
-import { UnmatchButton } from "./_components/unmatch-button"
+import { AdjustmentsTable, MatchedItemsTable } from "./_components/reconciliation-tables"
 
 import type { Metadata } from "next"
 
@@ -67,14 +59,18 @@ export default async function BankReconciliationDetailPage({
 
   // Baris rekening koran milik akun ini dalam periode rekonsiliasi, dikurangi
   // yang sudah punya item kecocokan di rekonsiliasi ini.
-  const periodFilter = {
-    ...(recon.periodStart ? { date: { gte: recon.periodStart } } : {}),
-    ...(recon.periodEnd ? { date: { lte: recon.periodEnd } } : {}),
+  const dateRange = {
+    ...(recon.periodStart ? { gte: recon.periodStart } : {}),
+    ...(recon.periodEnd ? { lte: recon.periodEnd } : {}),
   }
+  const periodFilter = Object.keys(dateRange).length > 0 ? { date: dateRange } : {}
+  const journalDateFilter =
+    Object.keys(dateRange).length > 0 ? { transactionDate: dateRange } : {}
+
   const [statementLines, journalEntries] = await Promise.all([
     prisma.bankStatementLine.findMany({
       where: {
-        bankStatement: { accountId: recon.accountId },
+        bankStatement: { accountId: recon.accountId, deletedAt: null },
         ...periodFilter,
       },
       orderBy: [{ date: "asc" }, { id: "asc" }],
@@ -87,8 +83,7 @@ export default async function BankReconciliationDetailPage({
         journal: {
           status: "POSTED",
           deletedAt: null,
-          ...(recon.periodStart ? { transactionDate: { gte: recon.periodStart } } : {}),
-          ...(recon.periodEnd ? { transactionDate: { lte: recon.periodEnd } } : {}),
+          ...journalDateFilter,
         },
       },
       orderBy: { id: "asc" },
@@ -155,19 +150,19 @@ export default async function BankReconciliationDetailPage({
       />
 
       <DetailCard>
-        <DetailField label="Tanggal Laporan" value={formatDate(recon.statementDate)} />
-        <DetailField label="Saldo Buku" value={formatCurrencyExact(Number(recon.bookBalance))} />
-        <DetailField label="Saldo Laporan" value={formatCurrencyExact(Number(recon.statementBalance))} />
-        <DetailField label="Setoran Beredar" value={formatCurrencyExact(Number(recon.outstandingDeposits))} />
-        <DetailField label="Cek Beredar" value={formatCurrencyExact(Number(recon.outstandingPayments))} />
-        <DetailField label="Saldo Buku Disesuaikan" value={formatCurrencyExact(Number(recon.adjustedBookBalance))} />
+        <DetailField label="Tanggal Laporan" value={formatDate(recon.statementDate)} mono />
+        <DetailField label="Saldo Buku" value={formatCurrencyExact(Number(recon.bookBalance))} mono />
+        <DetailField label="Saldo Laporan" value={formatCurrencyExact(Number(recon.statementBalance))} mono />
+        <DetailField label="Setoran Beredar" value={formatCurrencyExact(Number(recon.outstandingDeposits))} mono />
+        <DetailField label="Cek Beredar" value={formatCurrencyExact(Number(recon.outstandingPayments))} mono />
+        <DetailField label="Saldo Buku Disesuaikan" value={formatCurrencyExact(Number(recon.adjustedBookBalance))} mono />
         <DetailField label="Selisih" value={
-          <span className={Math.abs(Number(recon.difference)) < 0.01 ? "text-success font-semibold" : "text-danger font-semibold"}>
+          <span className={`font-mono tabular-nums font-semibold ${Math.abs(Number(recon.difference)) < 0.01 ? "text-success" : "text-danger"}`}>
             {formatCurrencyExact(Number(recon.difference))}
           </span>
         } />
-        <DetailField label="Item Tercocok" value={`${matched} / ${recon.items.length}`} />
-        <DetailField label="Dibuat" value={formatDate(recon.createdAt)} />
+        <DetailField label="Item Tercocok" value={`${matched} / ${statementLines.length}`} mono />
+        <DetailField label="Dibuat" value={formatDate(recon.createdAt)} mono />
       </DetailCard>
 
       {/* Baris belum cocok: baris mutasi + tombol Batalkan per item matched. */}
@@ -185,39 +180,21 @@ export default async function BankReconciliationDetailPage({
           <EmptyState title="Belum ada baris yang dicocokkan" />
         ) : (
           <div className="p-4 px-5">
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Tanggal</DetailTableTh>
-                <DetailTableTh>Baris Rekening Koran</DetailTableTh>
-                <DetailTableTh>Entri Jurnal</DetailTableTh>
-                <DetailTableTh align="right">Nominal</DetailTableTh>
-                {canWrite && <DetailTableTh align="right">Aksi</DetailTableTh>}
-              </DetailTableHead>
-              <DetailTableBody>
-                {matchedItems.map((item) => {
-                  const line = item.bankStatementLineId != null ? lineById.get(item.bankStatementLineId) : undefined
-                  const journal = item.journalEntryId != null ? journalById.get(item.journalEntryId) : undefined
-                  return (
-                    <DetailTableRow key={item.id}>
-                      <DetailTableTd>{line ? formatDate(line.date) : "-"}</DetailTableTd>
-                      <DetailTableTd>{line ? (line.description || `#${line.id}`) : "-"}</DetailTableTd>
-                      <DetailTableTd>
-                        {journal ? `${journal.journal.journalNumber}${journal.memo ? ` — ${journal.memo}` : ""}` : "-"}
-                      </DetailTableTd>
-                      <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(line?.amount ?? item.amount))}
-                      </DetailTableTd>
-                      {canWrite && (
-                        <DetailTableTd align="right">
-                          <div className="flex items-center justify-end">
-                            <UnmatchButton reconciliationId={recon.id} itemId={item.id} />
-                          </div>
-                        </DetailTableTd>
-                      )}
-                    </DetailTableRow>
-                  )
-                })}
-              </DetailTableBody>
-            </DetailTable>
+            <MatchedItemsTable
+              data={matchedItems.map((item) => {
+                const line = item.bankStatementLineId != null ? lineById.get(item.bankStatementLineId) : undefined
+                const journal = item.journalEntryId != null ? journalById.get(item.journalEntryId) : undefined
+                return {
+                  id: item.id,
+                  date: line ? line.date.toISOString() : null,
+                  statementDescription: line ? (line.description || `#${line.id}`) : "-",
+                  journalDescription: journal ? `${journal.journal.journalNumber}${journal.memo ? ` - ${journal.memo}` : ""}` : "-",
+                  amount: Number(line?.amount ?? item.amount),
+                }
+              })}
+              reconciliationId={recon.id}
+              canWrite={canWrite}
+            />
           </div>
         )}
       </div>
@@ -238,11 +215,11 @@ export default async function BankReconciliationDetailPage({
             reconciliationId={recon.id}
             statementLines={unmatchedLines.map((l) => ({
               id: l.id,
-              label: `${formatDate(l.date)} — ${l.description || `#${l.id}`} — ${formatCurrencyExact(Number(l.amount))}`,
+              label: `${formatDate(l.date)} - ${l.description || `#${l.id}`} - ${formatCurrencyExact(Number(l.amount))}`,
             }))}
             journalEntries={journalEntries.map((j) => ({
               id: j.id,
-              label: `${j.journal.journalNumber} — ${formatDate(j.journal.transactionDate)} — ${formatCurrencyExact(Number(j.debit) || Number(j.credit))}${j.memo ? ` — ${j.memo}` : ""}`,
+              label: `${j.journal.journalNumber} - ${formatDate(j.journal.transactionDate)} - ${formatCurrencyExact(Number(j.debit) || Number(j.credit))}${j.memo ? ` - ${j.memo}` : ""}`,
             }))}
           />
         ) : (
@@ -269,38 +246,17 @@ export default async function BankReconciliationDetailPage({
           {adjustments.length === 0 ? (
             <EmptyState title="Belum ada item penyesuaian" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Tanggal</DetailTableTh>
-                <DetailTableTh>Jenis</DetailTableTh>
-                <DetailTableTh>Deskripsi</DetailTableTh>
-                <DetailTableTh align="right">Nominal</DetailTableTh>
-                {canWrite && <DetailTableTh align="right">Aksi</DetailTableTh>}
-              </DetailTableHead>
-              <DetailTableBody>
-                {adjustments.map((item) => (
-                  <DetailTableRow key={item.id}>
-                    <DetailTableTd>{item.date ? formatDate(item.date) : "-"}</DetailTableTd>
-                    <DetailTableTd>
-                      {item.type === "outstanding_deposit"
-                        ? "Setoran beredar"
-                        : item.type === "outstanding_check"
-                          ? "Cek beredar"
-                          : (item.type || "-")}
-                    </DetailTableTd>
-                    <DetailTableTd>{item.description || "-"}</DetailTableTd>
-                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.amount))}</DetailTableTd>
-                    {canWrite && (
-                      <DetailTableTd align="right">
-                        <div className="flex items-center justify-end">
-                          <UnmatchButton reconciliationId={recon.id} itemId={item.id} />
-                        </div>
-                      </DetailTableTd>
-                    )}
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <AdjustmentsTable
+              data={adjustments.map((item) => ({
+                id: item.id,
+                date: item.date ? item.date.toISOString() : null,
+                type: item.type ?? "",
+                description: item.description,
+                amount: Number(item.amount),
+              }))}
+              reconciliationId={recon.id}
+              canWrite={canWrite}
+            />
           )}
         </div>
       </div>

@@ -14,6 +14,7 @@ test.describe("Aset Brand (Merek) CRUD", () => {
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/aset/merek/tambah", { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
     await expect(page.getByRole("heading", { name: "Tambah Merek Aset" })).toBeVisible({ timeout: 30000 })
     await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
 

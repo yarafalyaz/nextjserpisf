@@ -135,20 +135,20 @@ export default async function PettyCashPage({
     <div className="flex flex-wrap items-center gap-1.5">
       <Link
         href={withListParams("/keuangan/kas-kecil", params, { tipe: undefined, halaman: undefined })}
-        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+        className={`inline-flex min-h-11 sm:min-h-9 items-center rounded-md border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
           !params.tipe
-            ? "bg-foreground text-background font-semibold"
-            : "bg-surface border border-default text-muted-foreground hover:bg-muted hover:text-foreground"
+            ? "border-foreground bg-foreground text-background font-semibold"
+            : "border-default bg-surface text-muted-foreground hover:bg-muted hover:text-foreground"
         }`}
       >
         Semua Mutasi
       </Link>
       <Link
         href={withListParams("/keuangan/kas-kecil", params, { tipe: "keluar", halaman: undefined })}
-        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+        className={`inline-flex min-h-11 sm:min-h-9 items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
           params.tipe === "keluar"
-            ? "bg-red-600 text-white dark:bg-red-500 dark:text-zinc-950 font-semibold"
-            : "bg-surface border border-default text-muted-foreground hover:bg-muted hover:text-foreground"
+            ? "border-red-600 bg-red-600 text-white dark:border-red-500 dark:bg-red-500 dark:text-zinc-950 font-semibold"
+            : "border-default bg-surface text-muted-foreground hover:bg-muted hover:text-foreground"
         }`}
       >
         <Receipt className="size-3" aria-hidden="true" />
@@ -156,10 +156,10 @@ export default async function PettyCashPage({
       </Link>
       <Link
         href={withListParams("/keuangan/kas-kecil", params, { tipe: "masuk", halaman: undefined })}
-        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+        className={`inline-flex min-h-11 sm:min-h-9 items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
           params.tipe === "masuk"
-            ? "bg-emerald-600 text-white dark:bg-emerald-500 dark:text-zinc-950 font-semibold"
-            : "bg-surface border border-default text-muted-foreground hover:bg-muted hover:text-foreground"
+            ? "border-emerald-600 bg-emerald-600 text-white dark:border-emerald-500 dark:bg-emerald-500 dark:text-zinc-950 font-semibold"
+            : "border-default bg-surface text-muted-foreground hover:bg-muted hover:text-foreground"
         }`}
       >
         <RotateCcw className="size-3" aria-hidden="true" />
@@ -172,7 +172,7 @@ export default async function PettyCashPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Kas Kecil (Petty Cash)"
-        subtitle="Sistem dana kas kecil operasional (Imprest Fund System) — pencatatan voucher pengeluaran harian, reimposisi kas, dan kontrol plafon kas."
+        subtitle="Sistem dana kas kecil operasional (Imprest Fund System): pencatatan voucher pengeluaran harian, reimposisi kas, dan kontrol plafon kas."
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Keuangan", href: "/keuangan" },

@@ -1564,6 +1564,7 @@ model TaxPayment {
   deletedAt        DateTime?           @map("deleted_at")
   taxType          WithholdingTaxType? @relation(fields: [taxTypeId], references: [id], onDelete: SetNull)
   disputeAssessments TaxAssessment[]
+  sptFilings       SptFiling[]
 
   @@index([taxTypeId])
   @@index([taxAccountId])
@@ -1652,6 +1653,38 @@ model TaxDisputeStep {
   @@index([status])
   @@index([filedAt])
   @@map("tax_dispute_steps")
+}
+
+/// Register pelaporan SPT Masa/Tahunan (R4 — SOP Pembetulan SPT PER-12/PJ/2026).
+/// Append-only dan non-GL: mencatat versi (Normal / Pembetulan-1..n), BPE,
+/// kurang/lebih bayar, dan saldo kompensasi Coretax tanpa memposting jurnal
+/// atau tunduk pada period lock.
+model SptFiling {
+  id                  Int         @id @default(autoincrement())
+  /// ppn | pph21 | unifikasi | tahunan
+  sptType             String      @map("spt_type")
+  /// Masa pajak YYYY-MM (atau YYYY untuk SPT Tahunan)
+  period              String
+  /// 0 = normal, 1 = pembetulan-1, 2 = pembetulan-2, ...
+  amendmentNo         Int         @default(0) @map("amendment_no")
+  filedAt             DateTime    @map("filed_at")
+  bpeNumber           String      @map("bpe_number")
+  /// Kurang (+) / lebih (-) bayar menurut SPT versi ini (input dari Coretax)
+  underOverPayment    Decimal     @default(0.00) @map("under_over_payment") @db.Decimal(15, 2)
+  /// Saldo kompensasi menurut Coretax sesudah lapor (input dari Coretax)
+  compensationBalance Decimal     @default(0.00) @map("compensation_balance") @db.Decimal(15, 2)
+  taxPaymentId        Int?        @map("tax_payment_id")
+  /// Penjelasan selisih buku vs Coretax atau catatan versi
+  varianceNote        String?     @map("variance_note") @db.Text
+  createdBy           Int?        @map("created_by")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  taxPayment          TaxPayment? @relation(fields: [taxPaymentId], references: [id], onDelete: SetNull)
+
+  @@unique([sptType, period, amendmentNo])
+  @@index([period])
+  @@index([bpeNumber])
+  @@index([taxPaymentId])
+  @@map("spt_filings")
 }
 
 /// Template dokumen berulang (faktur/tagihan/beban/jurnal) yang dijalankan berkala.
@@ -5657,13 +5690,16 @@ model ProjectItem {
 }
 
 model ProjectStage {
-  id          Int                    @id @default(autoincrement())
-  projectId   Int                    @map("project_id")
-  name        String
-  sortOrder   Int                    @default(0) @map("sort_order")
-  status      String                 @default("pending")
-  startedAt   DateTime?              @map("started_at")
-  completedAt DateTime?              @map("completed_at")
+  id               Int                    @id @default(autoincrement())
+  projectId        Int                    @map("project_id")
+  name             String
+  sortOrder        Int                    @default(0) @map("sort_order")
+  status           String                 @default("pending")
+  weightPct        Decimal?               @map("weight_pct") @db.Decimal(5, 2)
+  plannedStartDate DateTime?              @map("planned_start_date")
+  plannedEndDate   DateTime?              @map("planned_end_date")
+  startedAt        DateTime?              @map("started_at")
+  completedAt      DateTime?              @map("completed_at")
   notes       String?                @db.Text
   createdAt   DateTime               @default(now()) @map("created_at")
   updatedAt   DateTime               @updatedAt @map("updated_at")

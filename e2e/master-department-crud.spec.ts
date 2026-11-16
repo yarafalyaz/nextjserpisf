@@ -70,9 +70,9 @@ test.describe("Master Departemen CRUD", () => {
     await updatedRow.locator("button[aria-label='Buka menu aksi']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
 
-    const confirmBtn = page.locator("button").filter({ hasText: "Hapus" }).last()
+    const confirmBtn = page.getByRole("alertdialog").getByRole("button", { name: "Hapus" })
     await expect(confirmBtn).toBeVisible({ timeout: 30000 })
-    await confirmBtn.click({ force: true })
+    await confirmBtn.click()
 
     await page.waitForLoadState("networkidle")
     await expect(page.locator("tr").filter({ hasText: updated })).toHaveCount(0, { timeout: 30000 })

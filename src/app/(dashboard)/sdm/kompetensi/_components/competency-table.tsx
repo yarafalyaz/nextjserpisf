@@ -64,6 +64,7 @@ export function CompetencyTable({ data }: { data: CompetencyRow[] }) {
       data={data}
       columns={columns}
       ariaLabel="Daftar standar kompetensi kerja"
+      selectable={false}
     />
   )
 }

@@ -116,7 +116,7 @@ export function NotificationDropdown() {
       </Button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-lg">
+        <div className="absolute right-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-sm">
           <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
             <h3 className="text-xs font-semibold tracking-tight text-foreground">Notifikasi</h3>
             {unreadCount > 0 && (

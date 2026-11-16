@@ -30,7 +30,7 @@ import {
   type IdemScope,
 } from "@/lib/services/financial-idempotency.service"
 import { getErrorMessage } from "@/lib/utils/error"
-import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
+import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 import {
   computeWithheld,
   resolvePph42RentRateEntry,
@@ -130,7 +130,7 @@ async function assertJournalAccountsLive(
   }
   const accounts = await tx.account.findMany({
     where: { id: { in: ids } },
-    select: { id: true, isActive: true, deletedAt: true, type: true, reportGroup: true },
+    select: { id: true, isActive: true, deletedAt: true, type: true, reportGroup: true, _count: { select: { children: true } } },
   })
   if (accounts.length !== ids.length) throw definitive("Akun yang dipilih tidak ditemukan.")
   for (const req of requirements) {
@@ -138,6 +138,9 @@ async function assertJournalAccountsLive(
     if (!account) throw definitive("Akun yang dipilih tidak ditemukan.")
     if (account.deletedAt != null) throw definitive("Akun yang dipilih sudah dihapus.")
     if (!account.isActive) throw definitive("Akun yang dipilih tidak aktif.")
+    if ((account._count?.children ?? 0) > 0) {
+      throw definitive(`${req.label} adalah akun induk dan tidak bisa diposting. Pilih akun anak yang terposting.`)
+    }
     if (req.type && account.type !== req.type) {
       throw definitive(`${req.label} bukan akun ${req.type} (tipe akun: ${account.type}).`)
     }
@@ -556,6 +559,8 @@ export async function revokeWithholdingCertificate(input: RevokeWithholdingInput
 export interface SettleWithholdingInput {
   withholdingTypeId: number
   period: string
+  /** Tanggal bayar aktual ke kas negara (default: hari ini WIB). */
+  paymentDate?: Date | null
   taxAccountId?: number | null
   paymentAccountId: number
   amount: number
@@ -598,10 +603,10 @@ export async function settleWithholdingTax(input: SettleWithholdingInput): Promi
       period: input.period,
       amount: Number(input.amount).toFixed(2),
     })
-    // Tanggal dokumen repo = tengah malam UTC hari kalender. Konstruktor
-    // string lokal membuat setor tanggal 1 jatuh di bulan sebelumnya dalam
-    // komponen UTC, jadi jurnal muncul di laporan GL bulan yang salah.
-    const date = wibDateToUtcMidnight(`${input.period}-01`)
+    // Tanggal jurnal = tanggal setor aktual (default hari ini WIB), bukan
+    // dipaksa tanggal 1 masa pajak agar setor masa lalu yang sudah ditutup
+    // tetap dapat dicatat pada tanggal bayar aktual.
+    const date = input.paymentDate ?? getWibTodayUtcDate()
     let createdId: number | undefined
     let isReplay = false
     // R8-PAJAK-02: nomor dari generateDocumentNumber atomic (tak ikut

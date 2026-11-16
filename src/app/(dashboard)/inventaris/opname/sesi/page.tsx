@@ -5,18 +5,9 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { PageHeader } from "@/components/ui/page-header"
-import { entityHref } from "@/lib/utils/entity-url"
-import {
-  DetailTable,
-  DetailTableHead,
-  DetailTableTh,
-  DetailTableBody,
-  DetailTableRow,
-  DetailTableTd,
-} from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
-import { StatusChip } from "@/components/ui/status-chip"
-import { StocktakeSessionForm, StocktakeActions } from "./_components/stocktake-forms"
+import { StocktakeSessionForm } from "./_components/stocktake-forms"
+import { StocktakeSessionTable } from "./_components/stocktake-session-table"
 import { getStocktakeUnfinishedQueue } from "@/lib/reports/stocktake-unfinished-queue-data"
 import { StocktakeUnfinishedQueueCard } from "@/components/reports/stocktake-unfinished-queue-card"
 
@@ -118,45 +109,19 @@ export default async function StocktakePage({
           {sessions.length === 0 ? (
             <EmptyState title="Belum ada sesi opname" className="py-10" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Dokumen</DetailTableTh>
-                <DetailTableTh>Gudang</DetailTableTh>
-                <DetailTableTh>Status</DetailTableTh>
-                <DetailTableTh align="right">Baris Item</DetailTableTh>
-                <DetailTableTh align="right">Aksi</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {sessions.map((s) => (
-                  <DetailTableRow key={s.id}>
-                    <DetailTableTd>
-                      <span className="font-mono font-medium text-foreground">{s.documentNo}</span>
-                    </DetailTableTd>
-                    <DetailTableTd>
-                      <span className="font-medium text-foreground">{s.warehouse.name}</span>
-                      <span className="text-muted-foreground ml-1.5 font-mono text-xs">({s.warehouse.code})</span>
-                    </DetailTableTd>
-                    <DetailTableTd>
-                      <StatusChip status={s.status} />
-                    </DetailTableTd>
-                    <DetailTableTd align="right">
-                      <span className="font-mono tabular-nums">{s._count.lines} baris</span>
-                    </DetailTableTd>
-                    <DetailTableTd align="right">
-                      <div className="flex justify-end items-center gap-2">
-                        <a
-                          href={entityHref("/inventaris/opname/sesi", s)}
-                          className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-border bg-card hover:bg-muted text-foreground transition-colors cursor-pointer shadow-2xs"
-                        >
-                          Buka
-                        </a>
-                        <StocktakeActions id={s.id} status={s.status} canCreate={canCreate} canEdit={canEdit} />
-                      </div>
-                    </DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <StocktakeSessionTable
+              data={sessions.map((s) => ({
+                id: s.id,
+                slug: s.slug,
+                documentNo: s.documentNo,
+                warehouseName: s.warehouse.name,
+                warehouseCode: s.warehouse.code,
+                status: s.status,
+                lineCount: s._count.lines,
+              }))}
+              canCreate={canCreate}
+              canEdit={canEdit}
+            />
           )}
         </div>
       </div>

@@ -102,8 +102,8 @@ export function SalesCommissionSubledgerCard({
               <DetailTableTd className="font-medium">
                 {sellerName(row.salesEmployeeName)}
               </DetailTableTd>
-              <DetailTableTd>—</DetailTableTd>
-              <DetailTableTd>—</DetailTableTd>
+              <DetailTableTd>-</DetailTableTd>
+              <DetailTableTd>-</DetailTableTd>
               <DetailTableTd align="right">{formatCurrencyExact(row.accruedAmount)}</DetailTableTd>
               <DetailTableTd align="right">{formatCurrencyExact(row.reversalAmount)}</DetailTableTd>
               <DetailTableTd align="right">{formatCurrencyExact(row.paidAmount)}</DetailTableTd>
@@ -114,7 +114,7 @@ export function SalesCommissionSubledgerCard({
             ...row.lines.map((line) => (
               <DetailTableRow key={`baris-${row.salesEmployeeId}-${line.salesInvoiceId}`}>
                 <DetailTableTd>{sellerName(row.salesEmployeeName)}</DetailTableTd>
-                <DetailTableTd>{line.salesInvoiceId}</DetailTableTd>
+                <DetailTableTd className="tabular-nums">{line.salesInvoiceId}</DetailTableTd>
                 <DetailTableTd>
                   {statusByLine.get(`${line.salesInvoiceId}:${line.salesEmployeeId}`) ? (
                     <StatusChip
@@ -135,8 +135,8 @@ export function SalesCommissionSubledgerCard({
         <DetailTableFoot>
           <DetailTableFootRow>
             <DetailTableTd className="font-bold">Total Saldo Subledger Komisi</DetailTableTd>
-            <DetailTableTd className="font-bold">—</DetailTableTd>
-            <DetailTableTd className="font-bold">—</DetailTableTd>
+            <DetailTableTd className="font-bold">-</DetailTableTd>
+            <DetailTableTd className="font-bold">-</DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
               —
             </DetailTableTd>
@@ -176,7 +176,7 @@ export function SalesCommissionSubledgerCard({
                 .filter((item) => selected === null || item.salesEmployeeId === selected)
                 .map((item: SalesCommissionPayableReconciliation) => (
                 <DetailTableRow key={`${item.salesInvoiceId}-${item.salesEmployeeId}`}>
-                  <DetailTableTd>{item.salesInvoiceId}</DetailTableTd>
+                  <DetailTableTd className="tabular-nums">{item.salesInvoiceId}</DetailTableTd>
                   <DetailTableTd>
                     {nameByEmployee.get(item.salesEmployeeId) ?? "Nama penjual tidak tercatat"}
                   </DetailTableTd>

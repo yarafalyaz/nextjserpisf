@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { VendorPaymentAllocationsTable } from "./_components/vendor-payment-allocations-table"
 import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
 import { DRAFT_ONLY_EDIT_STATUSES } from "@/lib/constants/status"
 
@@ -87,7 +87,7 @@ export default async function VendorPaymentDetailPage({
                 pembayaran posted dikoreksi lewat pembayaran pengganti. */}
             {isDraft && (
               <CanCreate permission="edit_vendor_payments">
-                <Button href={entityEditHref("/pembelian/pembayaran-vendor", payment)} variant="primary">Ubah</Button>
+                <Button href={entityEditHref("/pembelian/pembayaran-vendor", payment)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
               </CanCreate>
             )}
             <PrintButton documentType="vendor-payment" documentId={payment.id} />
@@ -108,7 +108,7 @@ export default async function VendorPaymentDetailPage({
                   id={payment.id}
                   action={reverseVendorPayment}
                   title={`Balikkan pembayaran ${payment.documentNo}?`}
-                  body="Pembayaran ditandai dibalik, jurnal kasnya dibalik, dan saldo tagihan yang dilunasi kembali seperti semula. Baris asal tetap tersimpan sebagai histori — bukan dihapus."
+                  body="Pembayaran ditandai dibalik, jurnal kasnya dibalik, dan saldo tagihan yang dilunasi kembali seperti semula. Baris asal tetap tersimpan sebagai histori, bukan dihapus."
                 />
               </CanCreate>
             )}
@@ -137,31 +137,20 @@ export default async function VendorPaymentDetailPage({
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Alokasi Pembayaran</h2>
           </div>
           <div className="p-4 px-5">
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>No. Tagihan</DetailTableTh>
-                <DetailTableTh align="right">Jumlah Alokasi</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {payment.allocations.map((alloc) => (
-                  <DetailTableRow key={alloc.id}>
-                    <DetailTableTd>
-                      {alloc.vendorBill ? (
-                        <Link
-                          href={entityHref("/pembelian/tagihan", alloc.vendorBill)}
-                          className="font-medium text-primary hover:underline font-mono"
-                        >
-                          {alloc.vendorBill.documentNo}
-                        </Link>
-                      ) : (
-                        `Tagihan #${alloc.vendorBillId}`
-                      )}
-                    </DetailTableTd>
-                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(alloc.amount))}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <VendorPaymentAllocationsTable
+              data={payment.allocations.map((alloc) => ({
+                id: alloc.id,
+                vendorBillId: alloc.vendorBillId,
+                vendorBill: alloc.vendorBill
+                  ? {
+                      id: alloc.vendorBill.id,
+                      slug: alloc.vendorBill.slug,
+                      documentNo: alloc.vendorBill.documentNo,
+                    }
+                  : null,
+                amount: Number(alloc.amount),
+              }))}
+            />
           </div>
         </div>
       )}

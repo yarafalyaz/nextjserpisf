@@ -3170,6 +3170,7 @@ export async function onVendorBillPosted(
       },
     });
     if (!b) throw new Error("Bill tidak ditemukan");
+    await assertPeriodOpen(b.date, tx);
 
     const latestGrandTotal = Number(b.grandTotal);
     // R2 + 157-V: tanpa baris TaxInvoice → fallback nomor valid.
@@ -3215,7 +3216,7 @@ export async function onVendorBillPosted(
           `Pajak tagihan (${latestTaxAmount}) melebihi total keseluruhan (${latestGrandTotal}) — periksa data tagihan vendor`,
         );
       }
-      const clearingAmount = latestGrandTotal - latestTaxAmount;
+      const clearingAmount = safeSubtract(latestGrandTotal, latestTaxAmount, 2);
       latestDebitEntries.push({
         accountId: settings.purchaseInventoryAccountId!,
         debit: clearingAmount,
@@ -3247,7 +3248,7 @@ export async function onVendorBillPosted(
       const l3BillTag = parseL3Tag(b.notes);
       latestDebitEntries.push({
         accountId: settings.purchaseExpenseAccountId,
-        debit: latestGrandTotal - latestTaxAmount,
+        debit: safeSubtract(latestGrandTotal, latestTaxAmount, 2),
         credit: 0,
         memo: l3BillTag
           ? `Purchase expense — biaya telat non-job L3 ${l3BillTag.workOrderNo}`
@@ -3277,7 +3278,7 @@ export async function onVendorBillPosted(
       {
         accountId: settings.purchasePayableAccountId!,
         debit: 0,
-        credit: latestGrandTotal - latestWithholding,
+        credit: safeSubtract(latestGrandTotal, latestWithholding, 2),
         memo: "Accounts Payable",
       },
     ];
@@ -3350,7 +3351,7 @@ export async function onVendorPaymentCreated(
       "Akun kas/bank belum dikonfigurasi untuk pembayaran vendor",
     );
   }
-  const bankOut = Number(payment.amount) + fee;
+  const bankOut = safeAdd(Number(payment.amount), fee, 2);
 
   const existing = await db.journal.findFirst({
     where: { referenceType: "VendorPayment", referenceId: paymentId },
@@ -3365,6 +3366,7 @@ export async function onVendorPaymentCreated(
   await assertPeriodOpen(payment.paymentDate || new Date(), txClient);
 
   await executeInTx(txClient, async (tx) => {
+    await assertPeriodOpen(payment.paymentDate || new Date(), tx);
     // double check
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "VendorPayment", referenceId: paymentId },

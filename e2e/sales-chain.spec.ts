@@ -113,12 +113,12 @@ test.describe.serial("Penjualan — rantai penuh", () => {
       waitUntil: "domcontentloaded",
     })
     await page.waitForLoadState("networkidle")
-    const postingBtn = page.getByRole("button", { name: "Posting" })
+    const postingBtn = page.getByRole("button", { name: /Terbitkan|Posting/ })
     if ((await postingBtn.count()) > 0 && (await postingBtn.first().isEnabled())) {
       await postingBtn.first().click()
-      await page.getByRole("button", { name: "Posting" }).last().click()
+      await page.getByRole("alertdialog").getByRole("button", { name: /Terbitkan|Posting/ }).click()
     }
-    await expect(page.getByText("Diposting").first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText(/Diposting|Diterbitkan/).first()).toBeVisible({ timeout: 30_000 })
 
     // Jurnal lahir async — poll sampai keduanya muncul.
     let arJournals: { id: number }[] = []
@@ -173,12 +173,12 @@ test.describe.serial("Penjualan — rantai penuh", () => {
     }
     await page.reload({ waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    const postingBtn2 = page.getByRole("button", { name: "Posting" })
+    const postingBtn2 = page.getByRole("button", { name: /Terbitkan|Posting/ })
     if ((await postingBtn2.count()) > 0 && (await postingBtn2.first().isEnabled())) {
       await postingBtn2.first().click()
-      await page.getByRole("button", { name: "Posting" }).last().click()
+      await page.getByRole("alertdialog").getByRole("button", { name: /Terbitkan|Posting/ }).click()
     }
-    await expect(page.getByText("Diposting").first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText(/Diposting|Diterbitkan/).first()).toBeVisible({ timeout: 30_000 })
     // Movement milik faktur ini (reference SalesInvoice + id faktur).
     // Poll: movement lahir async sesudah posting.
     let outMoves: { id: number; status: string; impact: string }[] = []
@@ -200,6 +200,13 @@ test.describe.serial("Penjualan — rantai penuh", () => {
     expect(Number(afterPost.qtyOnHand)).toBe(8)
 
     // 2. Terima pembayaran lunas (200000) → paymentStatus paid.
+    // Pastikan transaksi posting selesai penuh di DB sebelum reload.
+    for (let i = 0; i < 20; i++) {
+      const cur = await prisma.salesInvoice.findUnique({ where: { id: fixture.id }, select: { status: true } })
+      if (cur?.status === "posted") break
+      await page.waitForTimeout(500)
+    }
+    await page.reload({ waitUntil: "networkidle" })
     await page.locator("main").getByRole("link", { name: "Terima Pembayaran" }).click()
     await page.waitForURL(/\/penjualan\/pembayaran\/tambah/, { timeout: 30_000 })
     await page.waitForLoadState("networkidle")

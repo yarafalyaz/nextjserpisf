@@ -8,19 +8,13 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import {
   ParticipantForm,
-  ParticipantResultButtons,
   TrainingStatusButton,
 } from "../_components/training-actions"
+import { TrainingParticipantsTable } from "./_components/training-participants-table"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Detail Pelatihan" }
-
-const PARTICIPANT_STATUS_LABELS: Record<string, string> = {
-  registered: "Terdaftar",
-  attended: "Hadir",
-  absent: "Absen",
-}
 
 export default async function TrainingDetailPage({
   params,
@@ -88,39 +82,21 @@ export default async function TrainingDetailPage({
         {training.status === "scheduled" && (
           <ParticipantForm trainingId={training.id} employees={employees} canEdit={canEdit} />
         )}
-        <div className="overflow-x-auto rounded-lg border border-default">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-default bg-surface-secondary text-left">
-                <th className="px-4 py-3 font-medium">Karyawan</th>
-                <th className="px-4 py-3 font-medium">NIP</th>
-                <th className="px-4 py-3 font-medium">Kehadiran</th>
-                <th className="px-4 py-3 font-medium">Skor</th>
-                <th className="px-4 py-3 font-medium">Sertifikat</th>
-                <th className="px-4 py-3 font-medium">Hasil</th>
-              </tr>
-            </thead>
-            <tbody>
-              {training.participants.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8"><EmptyState title="Belum ada peserta." className="py-0" /></td>
-                </tr>
-              )}
-              {training.participants.map((p) => (
-                <tr key={p.id} className="border-b border-default last:border-0">
-                  <td className="px-4 py-3 font-medium">{p.employee.name}</td>
-                  <td className="px-4 py-3 font-mono text-xs">{p.employee.employeeNo}</td>
-                  <td className="px-4 py-3">{PARTICIPANT_STATUS_LABELS[p.status] ?? p.status}</td>
-                  <td className="px-4 py-3">{p.score != null ? Number(p.score) : "-"}</td>
-                  <td className="px-4 py-3">{p.certificateRef ?? "-"}</td>
-                  <td className="px-4 py-3">
-                    <ParticipantResultButtons participantId={p.id} canEdit={canEdit} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {training.participants.length === 0 ? (
+          <EmptyState title="Belum ada peserta." className="py-10" />
+        ) : (
+          <TrainingParticipantsTable
+            data={training.participants.map((p) => ({
+              id: p.id,
+              employeeName: p.employee.name,
+              employeeNo: p.employee.employeeNo,
+              status: p.status,
+              score: p.score != null ? Number(p.score) : null,
+              certificateRef: p.certificateRef,
+            }))}
+            canEdit={canEdit}
+          />
+        )}
       </section>
     </div>
   )

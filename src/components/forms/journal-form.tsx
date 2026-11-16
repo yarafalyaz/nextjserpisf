@@ -130,7 +130,7 @@ export function JournalForm({ accounts, profitCenters = [], costCenters = [], jo
             id="profitCenterId"
             value={profitCenterId}
             onChange={(e) => setProfitCenterId(e.target.value)}
-            className="h-9 w-full rounded-lg border border-default bg-surface px-3 text-sm text-foreground"
+            className="h-9 w-full rounded-lg border border-default bg-surface px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="">-- Tanpa pusat laba --</option>
             {profitCenters.map((center) => (
@@ -146,7 +146,7 @@ export function JournalForm({ accounts, profitCenters = [], costCenters = [], jo
             id="costCenterId"
             value={costCenterId}
             onChange={(e) => setCostCenterId(e.target.value)}
-            className="h-9 w-full rounded-lg border border-default bg-surface px-3 text-sm text-foreground"
+            className="h-9 w-full rounded-lg border border-default bg-surface px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="">-- Tanpa pusat biaya --</option>
             {costCenters.map((center) => (

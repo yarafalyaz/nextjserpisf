@@ -286,7 +286,7 @@ export function JobPaymentScheduleCard({
           aria-modal="true"
           aria-label={editing ? "Ubah jadwal termin" : "Buat jadwal termin"}
         >
-          <div className="flex max-h-[90dvh] w-full max-w-2xl flex-col gap-4 overflow-y-auto rounded-xl border border-default bg-surface p-5 shadow-lg">
+          <div className="flex max-h-[90dvh] w-full max-w-2xl flex-col gap-4 overflow-y-auto rounded-xl border border-default bg-surface p-5 shadow-sm">
             <h3 className="text-base font-semibold text-foreground">{editing ? "Ubah Jadwal Termin" : "Buat Jadwal Termin"}</h3>
             <p className="text-xs text-muted-foreground">
               Persen kumulatif naik ketat dan termin terakhir persis 100. Target nominal dihitung server dari nilai kontrak berjalan.
@@ -385,7 +385,7 @@ export function JobPaymentScheduleCard({
                   required={hasFulfilled}
                   aria-required={hasFulfilled ? "true" : undefined}
                   rows={2}
-                  className="rounded-lg border border-default bg-background px-3 py-2 text-sm"
+                  className="rounded-lg border border-default bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
                 {hasFulfilled ? (
                   <p className="text-xs text-muted-foreground">Wajib sesudah ada termin terpenuhi.</p>
@@ -412,7 +412,7 @@ export function JobPaymentScheduleCard({
           aria-modal="true"
           aria-label="Batalkan jadwal termin"
         >
-          <div className="flex w-full max-w-lg flex-col gap-4 rounded-xl border border-default bg-surface p-5 shadow-lg">
+          <div className="flex w-full max-w-lg flex-col gap-4 rounded-xl border border-default bg-surface p-5 shadow-sm">
             <h3 className="text-base font-semibold text-foreground">Batalkan Jadwal Termin</h3>
             <div className="flex flex-col gap-1">
               <label htmlFor="jadwal-termin-cancel-reason" className="text-sm font-medium text-foreground">
@@ -425,7 +425,7 @@ export function JobPaymentScheduleCard({
                 required
                 aria-required="true"
                 rows={2}
-                className="rounded-lg border border-default bg-background px-3 py-2 text-sm"
+                className="rounded-lg border border-default bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
             <div className="flex justify-end gap-2">

@@ -1,78 +1,9 @@
-"use client"
+export const dynamic = "force-dynamic"
 
-import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
-import { createItemGroup } from "@/actions/master.actions"
-import { showSuccess, showError } from "@/lib/utils/toast"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { Input } from "@/components/ui/shadcn/input"
-import { Label } from "@/components/ui/shadcn/label"
-import { Button } from "@/components/ui/button"
+import { requirePermission } from "@/lib/auth/permissions"
+import CreateItemGroupClient from "./_components/create-item-group-client"
 
-export default function CreateItemGroupPage() {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  // Idempotency: key stabil per intent; retry memakai key sama (ditolak server).
-  const [idempotencyKey] = useState(() => crypto.randomUUID())
-
-  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const formData = new FormData(e.currentTarget)
-    formData.set("idempotencyKey", idempotencyKey)
-    startTransition(async () => {
-      try {
-        const result = await createItemGroup(formData)
-        if (result && !result.success) {
-          showError(result.error || "Gagal menyimpan data")
-          return
-        }
-        showSuccess("Grup barang berhasil ditambahkan")
-        router.push("/master/grup-barang")
-        router.refresh()
-      } catch (error) {
-        showError(error instanceof Error ? error.message : "Gagal menyimpan data")
-      }
-    })
-  }
-
-  return (
-    <div className="flex flex-col gap-6">
-      <AppBreadcrumbs
-        items={[
-          { label: "Dasbor", href: "/" },
-          { label: "Data Master", href: "/master" },
-          { label: "Grup Barang", href: "/master/grup-barang" },
-          { label: "Buat" },
-        ]}
-      />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Tambah Grup Barang</h1>
-      </div>
-      <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="code">Kode Grup</Label>
-            <Input id="code" name="code" placeholder="Kosongkan untuk memakai nama" />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Nama Grup *</Label>
-            <Input id="name" name="name" placeholder="Nama grup" required />
-          </div>
-          <div className="flex flex-col gap-1.5 sm:col-span-2">
-            <Label htmlFor="description">Deskripsi</Label>
-            <Input id="description" name="description" placeholder="Deskripsi grup" />
-          </div>
-        </div>
-
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-          <Button className="w-full sm:w-auto" type="button" onPress={() => router.back()}>
-            Batal
-          </Button>
-          <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending} id="submit-item-group">
-            {isPending ? "Menyimpan..." : "Simpan"}
-          </Button>
-        </div>
-      </form>
-    </div>
-  )
+export default async function CreateItemGroupPage() {
+  await requirePermission("create_item_groups")
+  return <CreateItemGroupClient />
 }

@@ -11,7 +11,7 @@ import { deletePosition } from "@/actions/master.actions"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { PositionEmployeesTable } from "./_components/position-employees-table"
 
 import type { Metadata } from "next"
 
@@ -91,22 +91,15 @@ export default async function PositionDetailPage({
         {position.employees.length === 0 ? (
           <EmptyState title="Belum ada karyawan" />
         ) : (
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>No. Karyawan</DetailTableTh>
-              <DetailTableTh>Nama</DetailTableTh>
-              <DetailTableTh>Email</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {position.employees.map((emp) => (
-                <DetailTableRow key={emp.id}>
-                  <DetailTableTd className="font-mono"><Link href={entityHref("/master/karyawan", emp)}>{emp.employeeNo}</Link></DetailTableTd>
-                  <DetailTableTd>{emp.name}</DetailTableTd>
-                  <DetailTableTd>{emp.email || "-"}</DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-          </DetailTable>
+          <PositionEmployeesTable
+            data={position.employees.map((emp) => ({
+              id: emp.id,
+              slug: emp.slug,
+              employeeNo: emp.employeeNo,
+              name: emp.name,
+              email: emp.email,
+            }))}
+          />
         )}
       </DetailSection>
     </div>

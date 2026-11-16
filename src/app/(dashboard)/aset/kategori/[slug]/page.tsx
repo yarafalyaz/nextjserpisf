@@ -2,16 +2,14 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { formatDate } from "@/lib/utils/format"
-import Link from "next/link"
 import { notFound } from "next/navigation"
 import { EmptyState } from "@/components/ui/empty-state"
-import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteAssetCategory } from "@/actions/asset.actions"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { AssetCategoryAssetsTable } from "./_components/asset-category-assets-table"
 import { Pencil } from "@/components/ui/fontawesome-icons"
 
 import type { Metadata } from "next"
@@ -19,7 +17,7 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { entityEditHref } from "@/lib/utils/entity-url"
 import { AssetFiscalStatus } from "../../_components/asset-fiscal-status"
 import { AssetEventMappingStatus } from "../../_components/asset-change-event"
 export const metadata: Metadata = { title: "Kategori" }
@@ -80,7 +78,7 @@ export default async function AssetCategoryDetailPage({
         ]}
         actions={<>
           <CanCreate permission="edit_asset_categories">
-            <Button href={entityEditHref("/aset/kategori", category)} variant="primary"><Pencil size={14} /> Ubah</Button>
+            <Button href={entityEditHref("/aset/kategori", category)} variant="primary" className="min-h-11 sm:min-h-9"><Pencil size={14} /> Ubah</Button>
           </CanCreate>
           <CanCreate permission="delete_asset_categories">
             <DeleteButton id={category.id} action={deleteAssetCategory} />
@@ -106,22 +104,7 @@ export default async function AssetCategoryDetailPage({
           {category.assets.length === 0 ? (
             <EmptyState title="Belum ada aset" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Kode</DetailTableTh>
-                <DetailTableTh>Nama</DetailTableTh>
-                <DetailTableTh>Status</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {category.assets.map((asset) => (
-                  <DetailTableRow key={asset.id}>
-                    <DetailTableTd className="font-mono"><Link href={entityHref("/aset", asset)}>{asset.code}</Link></DetailTableTd>
-                    <DetailTableTd>{asset.name}</DetailTableTd>
-                    <DetailTableTd><StatusChip status={asset.status} /></DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <AssetCategoryAssetsTable data={category.assets} />
           )}
         </div>
       </div>

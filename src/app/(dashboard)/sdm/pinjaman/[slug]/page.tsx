@@ -84,7 +84,7 @@ export default async function EmployeeLoanDetailPage({
                 pelunasan, bukan edit. */}
             {isPending && (
               <CanCreate permission="create_loans">
-                <Button href={entityEditHref("/sdm/pinjaman", loan)} variant="primary">Ubah</Button>
+                <Button href={entityEditHref("/sdm/pinjaman", loan)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
               </CanCreate>
             )}
             {isDeletable && (

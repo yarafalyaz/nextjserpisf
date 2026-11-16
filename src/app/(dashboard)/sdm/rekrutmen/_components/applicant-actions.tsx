@@ -45,6 +45,7 @@ export function ApplicantStageSelect({
 
   return (
     <select
+      aria-label="Tahapan pelamar"
       value={stage}
       disabled={disabled || isPending}
       className="h-9 rounded-md border border-input bg-card px-2.5 py-1 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 cursor-pointer"

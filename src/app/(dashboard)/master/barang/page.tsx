@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
 import { safeJsonParse } from "@/lib/utils/safe-parse"
+import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
@@ -36,20 +37,33 @@ export async function renderItemsPage(
   const params = await searchParams
 
   // Rute lama ?stok=menipis pindah ke /master/barang/stokmenipis.
-  if (params.stok === "menipis") redirect("/master/barang/stokmenipis")
+  if (params.stok === "menipis") {
+    const qs = new URLSearchParams()
+    if (params.cari) qs.set("cari", params.cari)
+    if (params.category) qs.set("category", params.category)
+    if (params.halaman) qs.set("halaman", params.halaman)
+    if (params.pageSize) qs.set("pageSize", params.pageSize)
+    const q = qs.toString()
+    redirect(q ? `/master/barang/stokmenipis?${q}` : "/master/barang/stokmenipis")
+  }
 
   const { page, pageSize, take } = parsePagination(params)
 
   // Prisma tak bisa banding kolom-vs-kolom (qty_on_hand <= min_stock);
-  // mode stok menipis pakai raw query dengan kondisi sama persis seperti
-  // cron notifikasi (is_active, min_stock>0, qty<=min, tak terhapus).
-  const lowStockCond = lowStockOnly ? "AND i.min_stock > 0 AND i.qty_on_hand <= i.min_stock" : ""
-  const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/'/g, "''").replace(/%/g, "\\%").replace(/_/g, "\\_")
-  const searchCond = params.cari
-    ? `AND (i.sku LIKE '%${esc(params.cari)}%' ESCAPE '\\' OR i.name LIKE '%${esc(params.cari)}%' ESCAPE '\\')`
-    : ""
-  const catId = Number(params.category)
-  const catCond = params.category && !Number.isNaN(catId) ? `AND i.category_id = ${catId}` : ""
+  // mode stok menipis pakai parameterized raw query dengan kondisi sama persis
+  // seperti cron notifikasi (is_active, min_stock>0, qty<=min, tak terhapus).
+  const rawCatId = params.category ? Number(params.category) : null
+  const catId = rawCatId !== null && Number.isInteger(rawCatId) && rawCatId > 0 ? rawCatId : null
+  const lowStockSql = lowStockOnly
+    ? Prisma.sql`AND i.min_stock > 0 AND i.qty_on_hand <= i.min_stock`
+    : Prisma.empty
+  const escLike = (s: string) => s.replace(/\|/g, "||").replace(/%/g, "|%").replace(/_/g, "|_")
+  const searchLike = params.cari ? `%${escLike(params.cari)}%` : null
+  const searchSql = searchLike
+    ? Prisma.sql`AND (i.sku LIKE ${searchLike} ESCAPE '|' OR i.name LIKE ${searchLike} ESCAPE '|')`
+    : Prisma.empty
+  const catSql = catId !== null ? Prisma.sql`AND i.category_id = ${catId}` : Prisma.empty
+  const offset = (page - 1) * pageSize
 
   const where = {
     isActive: true,
@@ -60,12 +74,12 @@ export async function renderItemsPage(
         { name: { contains: params.cari } },
       ],
     }),
-    ...(params.category && { categoryId: Number(params.category) }),
+    ...(catId !== null && { categoryId: catId }),
   }
 
   const [rawItems, categories, lowStockRows] = await Promise.all([
     lowStockOnly
-      ? prisma.$queryRawUnsafe<
+      ? prisma.$queryRaw<
           Array<{
             id: number; slug: string; sku: string; name: string; image: string | null
             category: { id: number; name: string } | null | string
@@ -74,7 +88,7 @@ export async function renderItemsPage(
             qtyOnHand: number; minStock: number; price: number
           }>
         >(
-          `SELECT i.id, i.slug, i.sku, i.name, i.image,
+          Prisma.sql`SELECT i.id, i.slug, i.sku, i.name, i.image,
             JSON_OBJECT('id', c.id, 'name', c.name) AS category,
             JSON_OBJECT('name', w.name) AS warehouse,
             JSON_OBJECT('name', r.name) AS rack,
@@ -86,22 +100,22 @@ export async function renderItemsPage(
            LEFT JOIN racks r ON r.id = i.default_rack_id
            LEFT JOIN rack_rows rr ON rr.id = i.default_rack_row_id
            WHERE i.is_active = true AND i.deleted_at IS NULL
-           ${lowStockCond} ${searchCond} ${catCond}
-           ORDER BY i.created_at DESC LIMIT ${take} OFFSET ${(page - 1) * pageSize}`,
+           ${lowStockSql} ${searchSql} ${catSql}
+           ORDER BY i.created_at DESC LIMIT ${take} OFFSET ${offset}`,
         )
       : prisma.item.findMany({
           where,
           include: { category: true, warehouse: true, rack: true, rackRow: true },
           orderBy: { createdAt: "desc" },
           take,
-          skip: (page - 1) * pageSize,
+          skip: offset,
         }),
     prisma.itemCategory.findMany({ orderBy: { name: "asc" } }),
     lowStockOnly
-      ? prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
-          `SELECT COUNT(*) AS count FROM items i
+      ? prisma.$queryRaw<Array<{ count: bigint }>>(
+          Prisma.sql`SELECT COUNT(*) AS count FROM items i
            WHERE i.is_active = true AND i.deleted_at IS NULL
-           ${lowStockCond} ${searchCond} ${catCond}`,
+           ${lowStockSql} ${searchSql} ${catSql}`,
         )
       : Promise.resolve(null),
   ])
@@ -188,6 +202,8 @@ export async function renderItemsPage(
         toolbar={<AppSearchField placeholder="Cari SKU atau nama barang..." action={action} />}
         filters={
           <form className="flex gap-2 flex-wrap" action={action}>
+            {params.cari ? <input type="hidden" name="cari" value={params.cari} /> : null}
+            {params.pageSize ? <input type="hidden" name="pageSize" value={params.pageSize} /> : null}
             <FormSelect
               name="category"
               defaultValue={params.category || ""}
@@ -198,7 +214,7 @@ export async function renderItemsPage(
                 ...categories.map((cat) => ({ value: String(cat.id), label: cat.name })),
               ]}
             />
-            <Button type="submit">Filter</Button>
+            <Button type="submit">Saring</Button>
           </form>
         }
       />

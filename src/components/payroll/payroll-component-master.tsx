@@ -192,7 +192,7 @@ export function PayrollComponentMaster({
             <select
               id="pc-kind"
               name="kind"
-              className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm"
+              className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               value={kind}
               onChange={(e) => setKind(e.target.value)}
             >
@@ -205,7 +205,7 @@ export function PayrollComponentMaster({
             <select
               id="pc-recurrence"
               name="recurrence"
-              className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm"
+              className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               defaultValue={editing?.recurrence ?? "fixed"}
               key={`rec-${editing?.id ?? "new"}`}
             >
@@ -219,11 +219,11 @@ export function PayrollComponentMaster({
               <select
                 id="pc-account"
                 name="accountId"
-                className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm"
+                className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 defaultValue={editing?.accountId ?? ""}
                 key={`acc-${editing?.id ?? "new"}`}
               >
-                <option value="">— Tanpa akun —</option>
+                <option value="">- Tanpa akun -</option>
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.code} — {a.name}

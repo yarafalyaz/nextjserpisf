@@ -6,14 +6,14 @@ import { notFound } from "next/navigation"
 import { formatDate } from "@/lib/utils/format"
 import { Pencil } from "@/components/ui/fontawesome-icons"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { BrandItemsTable } from "./_components/brand-items-table"
 
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { entityEditHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Merek Kendaraan" }
 
 export default async function BrandDetailPage({
@@ -105,20 +105,7 @@ export default async function BrandDetailPage({
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Barang dengan Merek Ini</h2>
           </div>
           <div className="p-4 px-5">
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>SKU</DetailTableTh>
-                <DetailTableTh>Nama Barang</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {brand.items.map((item) => (
-                  <DetailTableRow key={item.id}>
-                    <DetailTableTd className="font-mono">{item.sku}</DetailTableTd>
-                    <DetailTableTd><Link href={entityHref("/master/barang", item)} className="text-primary hover:underline">{item.name}</Link></DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <BrandItemsTable data={brand.items} />
           </div>
         </div>
       )}

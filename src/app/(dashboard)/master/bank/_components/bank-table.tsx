@@ -59,7 +59,7 @@ export function BankTable({ data, total, page, pageSize }: BankTableProps) {
       columns={columns}
       ariaLabel="Daftar bank"
       serverPagination={{ total, page, pageSize }}
-      selectable={true}
+      selectable={false}
       searchColumn="name"
       searchPlaceholder="Cari nama atau kode bank..."
     />

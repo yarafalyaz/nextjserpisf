@@ -32,7 +32,7 @@ export function CostCenterForm({
   )
 
   const parentOptions = parentOptionsState
-    .map((cc) => ({ value: String(cc.id), label: `${cc.code} — ${cc.name}` }))
+    .map((cc) => ({ value: String(cc.id), label: `${cc.code} - ${cc.name}` }))
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -70,7 +70,7 @@ export function CostCenterForm({
             options={parentOptions}
             value={parentId || null}
             onChange={(v) => setParentId(v ?? "")}
-            placeholder="— Pilih induk —"
+            placeholder="- Pilih induk -"
             title={QUICK_ADD.costCenter.title}
             fields={QUICK_ADD.costCenter.fields}
             action={QUICK_ADD.costCenter.action}

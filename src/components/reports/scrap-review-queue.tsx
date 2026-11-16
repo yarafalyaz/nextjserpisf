@@ -82,13 +82,14 @@ function ReviewForm({
         </label>
         <textarea
           id={noteId}
+          aria-label="Catatan tinjau"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           required={disposition === "kelalaian"}
           aria-required={disposition === "kelalaian" ? "true" : undefined}
           rows={2}
           maxLength={500}
-          className="min-h-11 rounded-lg border border-default bg-background px-3 py-2 text-sm"
+          className="min-h-11 rounded-lg border border-default bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           placeholder={disposition === "kelalaian" ? "Catatan dan tindak lanjut wajib…" : "Catatan (opsional)…"}
         />
         {disposition === "kelalaian" ? (

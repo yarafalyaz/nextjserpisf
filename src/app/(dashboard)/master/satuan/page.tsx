@@ -36,7 +36,7 @@ export default async function UomPage({
       : {}),
   };
 
-  const [units, total, categoriesCount] = await Promise.all([
+  const [units, total, unfilteredTotal, categoriesCount] = await Promise.all([
     prisma.unitOfMeasure.findMany({
       where: whereClause,
       orderBy: { name: "asc" },
@@ -44,6 +44,7 @@ export default async function UomPage({
       skip: (page - 1) * pageSize,
     }),
     prisma.unitOfMeasure.count({ where: whereClause }),
+    prisma.unitOfMeasure.count({ where: { isActive: true } }),
     prisma.unitOfMeasure.groupBy({
       by: ["category"],
       where: { isActive: true },
@@ -53,6 +54,7 @@ export default async function UomPage({
 
   const serializedUnits = units.map((u) => ({
     id: u.id,
+    slug: u.slug,
     name: u.name,
     symbol: u.symbol,
     category: u.category,
@@ -90,22 +92,22 @@ export default async function UomPage({
       </div>
 
       {/* Executive Metric Strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="bg-surface rounded-xl border border-default p-4 shadow-sm flex items-center justify-between">
+      <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs overflow-hidden">
+        <div className="p-4 flex items-center justify-between">
           <div>
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Total Satuan Aktif
             </div>
             <div className="text-2xl font-bold font-mono tabular-nums text-foreground mt-0.5">
-              {total}
+              {unfilteredTotal}
             </div>
           </div>
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-            <Scale className="size-5" />
+            <Scale className="size-5" aria-hidden="true" />
           </div>
         </div>
 
-        <div className="bg-surface rounded-xl border border-default p-4 shadow-sm flex items-center justify-between">
+        <div className="p-4 flex items-center justify-between">
           <div>
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Kelompok Kategori
@@ -115,7 +117,7 @@ export default async function UomPage({
             </div>
           </div>
           <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
-            <Layers className="size-5" />
+            <Layers className="size-5" aria-hidden="true" />
           </div>
         </div>
       </div>

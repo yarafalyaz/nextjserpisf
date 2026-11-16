@@ -56,7 +56,7 @@ export default async function ScrapMaterialPage({
     <ReportPageShell
       title="Scrap Material"
       sheetTitle="Scrap Material"
-      subtitle="Scrap per Baris Issue — Normal vs Abnormal"
+      subtitle="Scrap per Baris Issue (Normal vs Abnormal)"
       periodLabel={formatPeriodLabel(period)}
       periodCaption={formatPeriodLabel(period)}
       printedBy={user.name ?? user.email}

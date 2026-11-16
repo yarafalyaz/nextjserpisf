@@ -84,6 +84,8 @@ export default async function EditQuotationPage({
     deletedAt: data.deletedAt?.toISOString() ?? null,
     createdAt: data.createdAt.toISOString(),
     updatedAt: data.updatedAt.toISOString(),
+    invoiceThresholdPercent:
+      data.invoiceThresholdPercent !== null ? Number(data.invoiceThresholdPercent) : null,
     subtotal: Number(data.subtotal),
     discount: Number(data.discount),
     tax: Number(data.tax),
@@ -113,7 +115,7 @@ export default async function EditQuotationPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
-  { label: "Penawaran", href: "/penjualan/penawaran" },
+  { label: "Penjualan", href: "/penjualan" },
   { label: "Penawaran", href: "/penjualan/penawaran" },
   { label: "Ubah" },
 ]} />

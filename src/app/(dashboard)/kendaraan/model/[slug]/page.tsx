@@ -9,7 +9,7 @@ import { deleteVehicleModel } from "@/actions/vehicle.actions"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { VehicleModelVariantsTable } from "./_components/vehicle-model-variants-table"
 import { EmptyState } from "@/components/ui/empty-state"
 
 import type { Metadata } from "next"
@@ -62,7 +62,7 @@ export default async function VehicleModelDetailPage({
         actions={
           <>
             {canEdit && (
-              <Button href={entityEditHref("/kendaraan/model", model)} variant="primary">Ubah</Button>
+              <Button href={entityEditHref("/kendaraan/model", model)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
             )}
             {canDelete && (
               <DeleteButton id={model.id} action={deleteVehicleModel} />
@@ -100,24 +100,15 @@ export default async function VehicleModelDetailPage({
           {model.variants.length === 0 ? (
             <EmptyState title="Belum ada varian. Tambahkan lewat tombol “Kelola Varian”." />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Nama Varian</DetailTableTh>
-                <DetailTableTh>Penggerak</DetailTableTh>
-                <DetailTableTh>Transmisi</DetailTableTh>
-                <DetailTableTh>Dibuat</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {model.variants.map((variant) => (
-                  <DetailTableRow key={variant.id}>
-                    <DetailTableTd>{variant.name}</DetailTableTd>
-                    <DetailTableTd>{variant.drivetrain || "-"}</DetailTableTd>
-                    <DetailTableTd>{variant.transmission || "-"}</DetailTableTd>
-                    <DetailTableTd>{formatDate(variant.createdAt)}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <VehicleModelVariantsTable
+              data={model.variants.map((variant) => ({
+                id: variant.id,
+                name: variant.name,
+                drivetrain: variant.drivetrain,
+                transmission: variant.transmission,
+                createdAt: variant.createdAt.toISOString(),
+              }))}
+            />
           )}
         </div>
       </div>

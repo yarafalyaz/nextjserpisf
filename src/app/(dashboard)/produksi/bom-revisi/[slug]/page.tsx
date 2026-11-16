@@ -10,7 +10,10 @@ import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
 import { EmptyState } from "@/components/ui/empty-state"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import {
+  BomRevisionMaterialsTable,
+  BomRevisionProductionOrdersTable,
+} from "./_components/bom-revision-tables"
 
 import type { Metadata } from "next"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
@@ -73,12 +76,12 @@ export default async function BomRevisionDetailPage({
           <>
             {revision.status === "draft" && (
               <CanCreate permission="manage_bom_revisions">
-                <Button href={entityEditHref("/produksi/bom-revisi", revision)} variant="primary">Ubah</Button>
+                <Button href={entityEditHref("/produksi/bom-revisi", revision)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
               </CanCreate>
             )}
             {revision.status === "rejected" && (
               <CanCreate permission="manage_bom_revisions">
-                <Button href={entityEditHref("/produksi/bom-revisi", revision)} variant="primary">Ubah & Ajukan Ulang</Button>
+                <Button href={entityEditHref("/produksi/bom-revisi", revision)} variant="primary" className="min-h-11 sm:min-h-9">Ubah & Ajukan Ulang</Button>
               </CanCreate>
             )}
           </>
@@ -108,31 +111,20 @@ export default async function BomRevisionDetailPage({
         {revision.materials.length === 0 ? (
           <EmptyState title="Tidak ada bahan" />
         ) : (
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>Barang</DetailTableTh>
-              <DetailTableTh align="right">Jml</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {revision.materials.map((mat) => {
-                const it = itemMap.get(mat.itemId)
-                return (
-                  <DetailTableRow key={mat.id}>
-                    <DetailTableTd>
-                      {it ? (
-                        <Link href={entityHref("/master/barang", it)} className="hover:underline">
-                          <span className="font-mono text-muted-foreground">{it.sku}</span> — {it.name}
-                        </Link>
-                      ) : (
-                        `Barang #${mat.itemId}`
-                      )}
-                    </DetailTableTd>
-                    <DetailTableTd align="right">{Number(mat.qty)} {it?.unitOfMeasure ?? ""}</DetailTableTd>
-                  </DetailTableRow>
-                )
-              })}
-            </DetailTableBody>
-          </DetailTable>
+          <BomRevisionMaterialsTable
+            data={revision.materials.map((mat) => {
+              const it = itemMap.get(mat.itemId)
+              return {
+                id: mat.id,
+                itemId: mat.itemId,
+                itemSlug: it?.slug ?? null,
+                itemSku: it?.sku ?? null,
+                itemName: it?.name ?? null,
+                qty: Number(mat.qty),
+                unitOfMeasure: it?.unitOfMeasure ?? "",
+              }
+            })}
+          />
         )}
       </DetailSection>
 
@@ -140,22 +132,14 @@ export default async function BomRevisionDetailPage({
         {revision.productionOrders.length === 0 ? (
           <EmptyState title="Belum ada" />
         ) : (
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>No. Dokumen</DetailTableTh>
-              <DetailTableTh>Status</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {revision.productionOrders.map((po) => (
-                <DetailTableRow key={po.id}>
-                  <DetailTableTd className="font-mono">
-                    <Link href={entityHref("/produksi/production-orders", po)}>{po.documentNo}</Link>
-                  </DetailTableTd>
-                  <DetailTableTd><StatusChip status={po.status} /></DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-          </DetailTable>
+          <BomRevisionProductionOrdersTable
+            data={revision.productionOrders.map((po) => ({
+              id: po.id,
+              slug: po.slug,
+              documentNo: po.documentNo,
+              status: po.status,
+            }))}
+          />
         )}
       </DetailSection>
     </div>

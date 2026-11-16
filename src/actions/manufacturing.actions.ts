@@ -161,8 +161,8 @@ export async function createProduct(formData: FormData) {
           // baris tak-tercommit transaksi lain (P2002 slug konkuren).
           slug: await nextSlugWithClient(tx as never, "product", v.name),
           description: v.description ?? null,
-          vehicleBrandId: v.vehicleBrandId,
-          vehicleModelId: v.vehicleModelId,
+          vehicleBrandId: v.vehicleBrandId ?? null,
+          vehicleModelId: v.vehicleModelId ?? null,
           inventoryItemId: v.inventoryItemId ?? null,
           materials: {
             create: materialsParsed.data.map((m) => ({
@@ -244,8 +244,8 @@ export async function updateProduct(id: number, formData: FormData) {
           slug: await nextSlugWithClient(tx as never, "product", v.name, { excludeId: id }),
           code: v.code ?? null,
           description: v.description ?? null,
-          vehicleBrandId: v.vehicleBrandId,
-          vehicleModelId: v.vehicleModelId,
+          vehicleBrandId: v.vehicleBrandId ?? null,
+          vehicleModelId: v.vehicleModelId ?? null,
           inventoryItemId: v.inventoryItemId ?? null,
           materials: {
             deleteMany: {},

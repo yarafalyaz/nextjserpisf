@@ -125,7 +125,7 @@ export default async function MaterialPlanningPage({
     >
       <ReportLetterhead
         title="Perencanaan Material (MRP-Lite)"
-        subtitle="Agregat Kebutuhan Pesan per Barang — Baca Saja"
+        subtitle="Agregat Kebutuhan Pesan per Barang (Baca Saja)"
         periodLabel={`Per ${formatDate(asOf)}`}
       />
       <MaterialPlanningCard

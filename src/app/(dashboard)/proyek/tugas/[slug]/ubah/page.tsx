@@ -6,6 +6,7 @@ import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TaskForm } from "../../_components/task-form"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
+import { toPlain } from "@/lib/utils/serialization"
 
 import type { Metadata } from "next"
 
@@ -50,7 +51,7 @@ export default async function EditTaskPage({
         projects={projects}
         employees={employees}
         task={{
-          ...task,
+          ...toPlain(task),
           startDate: task.startDate?.toISOString().split("T")[0] ?? null,
           dueDate: task.dueDate?.toISOString().split("T")[0] ?? null,
         }}

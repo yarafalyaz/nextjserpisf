@@ -168,7 +168,7 @@ export function EmployeePayrollComponents({
             id="assign-component"
             name="componentId"
             required
-            className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm"
+            className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="">Pilih komponen...</option>
             {components.map((c) => (

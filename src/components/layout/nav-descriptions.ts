@@ -83,6 +83,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/pembelian/harga-pemasok": "Daftar harga kesepakatan per pemasok dan barang",
   "/pembelian/transfer-pemasok": "Daftar instruksi transfer bank ke pemasok dan penandanya",
   "/keuangan/penyetoran-pajak": "Setoran pajak yang sudah dipotong ke kas negara",
+  "/keuangan/register-spt": "Register append-only pelaporan SPT Masa/Tahunan, nomor BPE, dan saldo kompensasi Coretax",
   "/keuangan/sengketa-pajak": "Register ketetapan pajak beserta antrean tenggat upaya sengketanya",
   "/keuangan/dokumen-pajak/faktur": "Kelola dan administrasi faktur pajak keluaran dan masukan PPN",
   "/keuangan/dokumen-pajak/bupot": "Kelola dan administrasi bukti potong/pungut PPh unifikasi",

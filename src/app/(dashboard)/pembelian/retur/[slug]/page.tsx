@@ -12,12 +12,13 @@ import { PrintButton } from "@/components/ui/print-button"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { PurchaseReturnItemsTable } from "./_components/purchase-return-items-table"
 import { EmptyState } from "@/components/ui/empty-state"
 
 import type { Metadata } from "next"
 
 import { hasPermission, requirePermission } from "@/lib/auth/permissions"
+import { canViewCostAmounts } from "@/lib/auth/field-visibility"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 import { DRAFT_ONLY_EDIT_STATUSES } from "@/lib/constants/status"
@@ -30,6 +31,7 @@ export default async function PurchaseReturnDetailPage({
   params: Promise<{ slug: string }>
 }) {
   await requirePermission("view_purchase_returns")
+  const canViewCosts = await canViewCostAmounts()
 
   const { slug } = await params
 
@@ -87,7 +89,7 @@ export default async function PurchaseReturnDetailPage({
                 stok dan memposting jurnal, jadi tak boleh diubah lagi. */}
             {isDraft && (
               <CanCreate permission="edit_purchase_returns">
-                <Button href={entityEditHref("/pembelian/retur", purchaseReturn)} variant="primary">Ubah</Button>
+                <Button href={entityEditHref("/pembelian/retur", purchaseReturn)} variant="primary" className="min-h-11 sm:min-h-9">Ubah</Button>
               </CanCreate>
             )}
             <PrintButton documentType="purchase-return" documentId={purchaseReturn.id} />
@@ -138,36 +140,22 @@ export default async function PurchaseReturnDetailPage({
           {purchaseReturn.items.length === 0 ? (
             <EmptyState title="Tidak ada item" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Barang</DetailTableTh>
-                <DetailTableTh align="right">Jml</DetailTableTh>
-                <DetailTableTh>Satuan</DetailTableTh>
-                <DetailTableTh align="right">Biaya Satuan</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {purchaseReturn.items.map((item) => {
-                  const dbItem = itemMap.get(item.itemId)
-                  return (
-                    <DetailTableRow key={item.id}>
-                      <DetailTableTd>
-                        {dbItem ? (
-                          <div className="flex flex-col">
-                            <span className="font-medium text-foreground">{dbItem.name}</span>
-                            <span className="text-xs text-muted-foreground font-mono">{dbItem.code}</span>
-                          </div>
-                        ) : (
-                          `Item #${item.itemId}`
-                        )}
-                      </DetailTableTd>
-                      <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                      <DetailTableTd>{dbItem?.unitOfMeasure || "-"}</DetailTableTd>
-                      <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.cost))}</DetailTableTd>
-                    </DetailTableRow>
-                  )
-                })}
-              </DetailTableBody>
-            </DetailTable>
+            <PurchaseReturnItemsTable
+              data={purchaseReturn.items.map((item) => {
+                const dbItem = itemMap.get(item.itemId)
+                return {
+                  id: item.id,
+                  itemId: item.itemId,
+                  itemName: dbItem?.name ?? null,
+                  itemCode: dbItem?.code ?? null,
+                  qty: Number(item.qty),
+                  unitOfMeasure: dbItem?.unitOfMeasure ?? null,
+                  cost: Number(item.cost),
+                  costFormatted: formatCurrencyExact(Number(item.cost)),
+                }
+              })}
+              canViewCosts={canViewCosts}
+            />
           )}
         </div>
       </div>

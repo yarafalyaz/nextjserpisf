@@ -1,3 +1,5 @@
+"use client"
+
 import {
   OVERTIME_RECAP_NO_DEPARTMENT_LABEL,
   OVERTIME_RECAP_VALUE_NOT_CALCULATED_LABEL,
@@ -5,16 +7,8 @@ import {
 } from "@/lib/reports/overtime-recap"
 import { EmptyState } from "@/components/ui/empty-state"
 import { formatDate, formatNumber } from "@/lib/utils/format"
-import {
-  DetailTable,
-  DetailTableBody,
-  DetailTableFoot,
-  DetailTableFootRow,
-  DetailTableHead,
-  DetailTableRow,
-  DetailTableTd,
-  DetailTableTh,
-} from "@/components/ui/detail-table"
+import { DataTable } from "@/components/ui/data-table"
+import { createColumnHelper } from "@/lib/table"
 
 /** Nilai jam verbatim payload server — hanya diberi format tampil, tidak dihitung ulang. */
 function hours(value: number): string {
@@ -24,6 +18,122 @@ function hours(value: number): string {
 function nameOrId(employeeId: number, name: string | null): string {
   return name ?? `Karyawan #${employeeId}`
 }
+
+type OvertimeEmployeeTableRow = OvertimeRecap["employees"][number] & { id: number }
+type OvertimeProjectTableRow = OvertimeRecap["projects"][number] & { id: string }
+
+const empColumnHelper = createColumnHelper<OvertimeEmployeeTableRow>()
+const projColumnHelper = createColumnHelper<OvertimeProjectTableRow>()
+
+const employeeColumns = [
+  empColumnHelper.accessor("employeeName", {
+    header: "Karyawan",
+    meta: { mobilePrimary: true },
+    cell: (info) => nameOrId(info.row.original.employeeId, info.getValue()),
+  }),
+  empColumnHelper.accessor("departmentName", {
+    header: "Departemen",
+    cell: (info) => info.getValue() ?? OVERTIME_RECAP_NO_DEPARTMENT_LABEL,
+  }),
+  empColumnHelper.accessor("requestCount", {
+    header: "Pengajuan",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{info.getValue()}</span>,
+  }),
+  empColumnHelper.accessor("submittedHours", {
+    header: "Jam diajukan",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{hours(info.getValue())}</span>,
+  }),
+  empColumnHelper.accessor("approvedHours", {
+    header: "Jam disetujui",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{hours(info.getValue())}</span>,
+  }),
+  empColumnHelper.accessor("pendingHours", {
+    header: "Jam pending",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{hours(info.getValue())}</span>,
+  }),
+  empColumnHelper.accessor("rejectedHours", {
+    header: "Jam ditolak",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{hours(info.getValue())}</span>,
+  }),
+  empColumnHelper.accessor("billableHours", {
+    header: "Jam billable",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{hours(info.getValue())}</span>,
+  }),
+  empColumnHelper.accessor("totalHours", {
+    header: "Total jam tercatat",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{hours(info.getValue())}</span>,
+  }),
+  empColumnHelper.accessor("mealHours", {
+    header: "Jam makan",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{hours(info.getValue())}</span>,
+  }),
+  empColumnHelper.accessor("oldestPendingDate", {
+    header: "Menunggu tertua",
+    cell: (info) => {
+      const val = info.getValue()
+      return (
+        <span className="font-mono tabular-nums">
+          {val ? formatDate(val, { format: "short" }) : "-"}
+        </span>
+      )
+    },
+  }),
+  empColumnHelper.accessor("approvedValueMissingCount", {
+    header: "Nilai disetujui",
+    cell: (info) => {
+      const count = info.getValue()
+      return count > 0
+        ? `${OVERTIME_RECAP_VALUE_NOT_CALCULATED_LABEL} (${count} pengajuan)`
+        : "-"
+    },
+  }),
+]
+
+const projectColumns = [
+  projColumnHelper.accessor("label", {
+    header: "Proyek",
+    meta: { mobilePrimary: true },
+    cell: (info) => info.getValue(),
+  }),
+  projColumnHelper.accessor("requestCount", {
+    header: "Pengajuan",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{info.getValue()}</span>,
+  }),
+  projColumnHelper.accessor("submittedHours", {
+    header: "Jam diajukan",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{hours(info.getValue())}</span>,
+  }),
+  projColumnHelper.accessor("approvedHours", {
+    header: "Jam disetujui",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{hours(info.getValue())}</span>,
+  }),
+  projColumnHelper.accessor("pendingHours", {
+    header: "Jam pending",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{hours(info.getValue())}</span>,
+  }),
+  projColumnHelper.accessor("rejectedHours", {
+    header: "Jam ditolak",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{hours(info.getValue())}</span>,
+  }),
+  projColumnHelper.accessor("billableHours", {
+    header: "Jam billable",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{hours(info.getValue())}</span>,
+  }),
+]
 
 /**
  * Rekap lembur per karyawan per periode (F-2026-10-25-016-S, AC-OVR-F1/F3).
@@ -69,117 +179,54 @@ export function OvertimeRecapTable({ recap }: Readonly<{ recap: OvertimeRecap }>
         <EmptyState title="Tidak ada pengajuan lembur pada periode dan filter ini." className="py-10" />
       ) : (
         <>
-          <div>
-            <h2 className="mb-2 text-base font-semibold text-foreground">Per karyawan</h2>
-            <DetailTable data-report-table="Rekap lembur per karyawan">
-              <DetailTableHead>
-                <DetailTableTh>Karyawan</DetailTableTh>
-                <DetailTableTh>Departemen</DetailTableTh>
-                <DetailTableTh align="right">Pengajuan</DetailTableTh>
-                <DetailTableTh align="right">Jam diajukan</DetailTableTh>
-                <DetailTableTh align="right">Jam disetujui</DetailTableTh>
-                <DetailTableTh align="right">Jam pending</DetailTableTh>
-                <DetailTableTh align="right">Jam ditolak</DetailTableTh>
-                <DetailTableTh align="right">Jam billable</DetailTableTh>
-                <DetailTableTh align="right">Total jam tercatat</DetailTableTh>
-                <DetailTableTh align="right">Jam makan</DetailTableTh>
-                <DetailTableTh>Pending tertua</DetailTableTh>
-                <DetailTableTh>Nilai disetujui</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {recap.employees.map((employee) => (
-                  <DetailTableRow key={employee.employeeId}>
-                    <DetailTableTd>{nameOrId(employee.employeeId, employee.employeeName)}</DetailTableTd>
-                    <DetailTableTd>
-                      {employee.departmentName ?? OVERTIME_RECAP_NO_DEPARTMENT_LABEL}
-                    </DetailTableTd>
-                    <DetailTableTd align="right">{employee.requestCount}</DetailTableTd>
-                    <DetailTableTd align="right">{hours(employee.submittedHours)}</DetailTableTd>
-                    <DetailTableTd align="right">{hours(employee.approvedHours)}</DetailTableTd>
-                    <DetailTableTd align="right">{hours(employee.pendingHours)}</DetailTableTd>
-                    <DetailTableTd align="right">{hours(employee.rejectedHours)}</DetailTableTd>
-                    <DetailTableTd align="right">{hours(employee.billableHours)}</DetailTableTd>
-                    <DetailTableTd align="right">{hours(employee.totalHours)}</DetailTableTd>
-                    <DetailTableTd align="right">{hours(employee.mealHours)}</DetailTableTd>
-                    <DetailTableTd>
-                      {employee.oldestPendingDate
-                        ? formatDate(employee.oldestPendingDate, { format: "short" })
-                        : "—"}
-                    </DetailTableTd>
-                    <DetailTableTd>
-                      {employee.approvedValueMissingCount > 0
-                        ? `${OVERTIME_RECAP_VALUE_NOT_CALCULATED_LABEL} (${employee.approvedValueMissingCount} pengajuan)`
-                        : "—"}
-                    </DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-              <DetailTableFoot>
-                <DetailTableFootRow>
-                  <DetailTableTd colSpan={2} className="font-bold">
-                    Total
-                  </DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold">
-                    {totals.requestCount}
-                  </DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold">
-                    {hours(totals.submittedHours)}
-                  </DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold">
-                    {hours(totals.approvedHours)}
-                  </DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold">
-                    {hours(totals.pendingHours)}
-                  </DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold">
-                    {hours(totals.rejectedHours)}
-                  </DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold">
-                    {hours(totals.billableHours)}
-                  </DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold">
-                    {hours(totals.totalHours)}
-                  </DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold">
-                    {hours(totals.mealHours)}
-                  </DetailTableTd>
-                  <DetailTableTd className="font-bold">—</DetailTableTd>
-                  <DetailTableTd className="font-bold">
-                    {totals.approvedValueMissingCount > 0
-                      ? `${OVERTIME_RECAP_VALUE_NOT_CALCULATED_LABEL} (${totals.approvedValueMissingCount} pengajuan)`
-                      : "—"}
-                  </DetailTableTd>
-                </DetailTableFootRow>
-              </DetailTableFoot>
-            </DetailTable>
+          <div className="flex flex-col gap-3">
+            <h2 className="text-base font-semibold text-foreground">Per karyawan</h2>
+            <DataTable
+              data={recap.employees.map((employee) => ({
+                ...employee,
+                id: employee.employeeId,
+              }))}
+              columns={employeeColumns}
+              ariaLabel="Rekap lembur per karyawan"
+              selectable={false}
+              enableColumnToggle={false}
+              enableExport={false}
+              pageSize={50}
+            />
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-default bg-muted/30 px-4 py-3 text-xs">
+              <span className="font-bold text-foreground uppercase tracking-wider">Total</span>
+              <div className="flex flex-wrap items-center gap-4">
+                <span>Pengajuan: <strong className="font-mono tabular-nums">{totals.requestCount}</strong></span>
+                <span>Diajukan: <strong className="font-mono tabular-nums">{hours(totals.submittedHours)}</strong></span>
+                <span>Disetujui: <strong className="font-mono tabular-nums">{hours(totals.approvedHours)}</strong></span>
+                <span>Menunggu: <strong className="font-mono tabular-nums">{hours(totals.pendingHours)}</strong></span>
+                <span>Ditolak: <strong className="font-mono tabular-nums">{hours(totals.rejectedHours)}</strong></span>
+                <span>Billable: <strong className="font-mono tabular-nums">{hours(totals.billableHours)}</strong></span>
+                <span>Total: <strong className="font-mono tabular-nums">{hours(totals.totalHours)}</strong></span>
+                <span>Makan: <strong className="font-mono tabular-nums">{hours(totals.mealHours)}</strong></span>
+                {totals.approvedValueMissingCount > 0 ? (
+                  <span className="text-muted-foreground">
+                    {`${OVERTIME_RECAP_VALUE_NOT_CALCULATED_LABEL} (${totals.approvedValueMissingCount} pengajuan)`}
+                  </span>
+                ) : null}
+              </div>
+            </div>
           </div>
 
           <div>
             <h2 className="mb-2 text-base font-semibold text-foreground">Per proyek</h2>
-            <DetailTable data-report-table="Rekap lembur per proyek">
-              <DetailTableHead>
-                <DetailTableTh>Proyek</DetailTableTh>
-                <DetailTableTh align="right">Pengajuan</DetailTableTh>
-                <DetailTableTh align="right">Jam diajukan</DetailTableTh>
-                <DetailTableTh align="right">Jam disetujui</DetailTableTh>
-                <DetailTableTh align="right">Jam pending</DetailTableTh>
-                <DetailTableTh align="right">Jam ditolak</DetailTableTh>
-                <DetailTableTh align="right">Jam billable</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {recap.projects.map((project) => (
-                  <DetailTableRow key={project.projectId ?? "tanpa-proyek"}>
-                    <DetailTableTd>{project.label}</DetailTableTd>
-                    <DetailTableTd align="right">{project.requestCount}</DetailTableTd>
-                    <DetailTableTd align="right">{hours(project.submittedHours)}</DetailTableTd>
-                    <DetailTableTd align="right">{hours(project.approvedHours)}</DetailTableTd>
-                    <DetailTableTd align="right">{hours(project.pendingHours)}</DetailTableTd>
-                    <DetailTableTd align="right">{hours(project.rejectedHours)}</DetailTableTd>
-                    <DetailTableTd align="right">{hours(project.billableHours)}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <DataTable
+              data={recap.projects.map((project) => ({
+                ...project,
+                id: String(project.projectId ?? "tanpa-proyek"),
+              }))}
+              columns={projectColumns}
+              ariaLabel="Rekap lembur per proyek"
+              selectable={false}
+              enableColumnToggle={false}
+              enableExport={false}
+              pageSize={50}
+            />
           </div>
         </>
       )}

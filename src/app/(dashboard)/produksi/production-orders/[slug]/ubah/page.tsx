@@ -46,7 +46,10 @@ export default async function EditPage({
   }
 
   const [products, workOrders] = await Promise.all([
-    prisma.product.findMany({ orderBy: { name: "asc" } }),
+    prisma.product.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, sku: true },
+    }),
     // Picker dan updateProductionOrder membaca himpunan yang SAMA: relink ke
     // WO closed/completed/cancelled selalu ditolak, jadi WO final tidak
     // ditawarkan (dulu tanpa filter status).
@@ -80,7 +83,7 @@ export default async function EditPage({
   { label: "Ubah" },
 ]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah Production Orders</h1>
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah Perintah Produksi</h1>
       </div>
       <ProductionOrderForm order={order} products={products} workOrders={workOrderOptions}/>
     </div>

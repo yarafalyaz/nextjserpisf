@@ -50,7 +50,7 @@ export function SalaryAdjustmentForm({ employeeId }: { employeeId: number }) {
     <form onSubmit={onSubmit} aria-busy={isPending} className="grid grid-cols-1 sm:grid-cols-5 gap-3">
       <Input name="newBaseSalary" required placeholder="Gaji pokok baru (cth. 5500000)" className="font-mono tabular-nums text-right" />
       <AppDatePicker name="effectiveDate" value={effectiveDate} onChange={setEffectiveDate} placeholder="Tgl Efektif" />
-      <select name="reason" className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" defaultValue="berkala">
+      <select name="reason" aria-label="Alasan kenaikan gaji" className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" defaultValue="berkala">
         <option value="berkala">Kenaikan Berkala</option>
         <option value="promosi">Promosi</option>
         <option value="umk">Penyesuaian UMK/UMP</option>

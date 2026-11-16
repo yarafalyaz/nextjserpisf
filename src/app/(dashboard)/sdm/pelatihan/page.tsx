@@ -28,7 +28,7 @@ export default async function TrainingsPage() {
       where: { deletedAt: null },
       _count: { _all: true },
     }),
-    prisma.trainingParticipant.count(),
+    prisma.trainingParticipant.count({ where: { training: { deletedAt: null } } }),
   ])
 
   const statusCountMap = countsByStatus.reduce<Record<string, number>>((acc, curr) => {

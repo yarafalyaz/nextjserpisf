@@ -7,6 +7,7 @@ import { Inter, JetBrains_Mono } from "next/font/google"
 import { AuthProvider } from "@/components/providers/auth-provider"
 import { ThemeProvider } from "@/components/providers/theme-provider"
 import { UIProvider } from "@/components/providers/ui-provider"
+import { PwaRegistrar } from "@/components/providers/pwa-registrar"
 import "./globals.css"
 import "./print.css"
 
@@ -28,6 +29,15 @@ export const metadata: Metadata = {
     template: "%s | YaraERP",
   },
   description: "Sistem ERP terintegrasi untuk manajemen bisnis - Penjualan, Pembelian, Inventaris, SDM, Keuangan",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "YaraERP",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 }
 
 /**
@@ -62,6 +72,7 @@ export default async function RootLayout({
     <html lang="id" className={`${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
         <link rel="icon" href={logoUrl} />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <Script id="theme-init" strategy="beforeInteractive" nonce={nonce}>{`
           (function() {
             try {
@@ -88,7 +99,10 @@ export default async function RootLayout({
         </a>
         <AuthProvider>
           <ThemeProvider>
-            <UIProvider>{children}</UIProvider>
+            <UIProvider>
+              {children}
+              <PwaRegistrar />
+            </UIProvider>
           </ThemeProvider>
         </AuthProvider>
       </body>

@@ -54,7 +54,7 @@ export function detectMimeFromSignature(header: Buffer): string | null {
 export async function POST(req: NextRequest) {
   try {
   const session = await auth()
-  if (!session?.user?.id) {
+  if (!session?.user?.id || session.user.isActive === false) {
     return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
   await assertCSRF()
@@ -198,7 +198,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
   const session = await auth()
-  if (!session?.user?.id) {
+  if (!session?.user?.id || session.user.isActive === false) {
     return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
 

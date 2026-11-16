@@ -62,7 +62,7 @@ export function VehicleBrandTable({ data, total, page, pageSize }: VehicleBrandT
       columns={columns}
       ariaLabel="Daftar merek kendaraan"
       serverPagination={{ total, page, pageSize }}
-      selectable={true}
+      selectable={false}
       searchColumn="name"
       searchPlaceholder="Cari merek..."
     />

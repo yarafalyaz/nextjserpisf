@@ -1,18 +1,61 @@
+"use client"
+
 import {
   LOAN_INSTALLMENT_UNKNOWN_STATUS_LABEL,
   type LoanInstallmentHistory,
 } from "@/lib/reports/loan-installment-history"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { EmptyState } from "@/components/ui/empty-state"
-import {
-  DetailTable,
-  DetailTableBody,
-  DetailTableHead,
-  DetailTableRow,
-  DetailTableTd,
-  DetailTableTh,
-} from "@/components/ui/detail-table"
+import { DataTable } from "@/components/ui/data-table"
+import { createColumnHelper } from "@/lib/table"
 import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
+
+type LoanInstallmentTableRow = {
+  id: string
+  documentNo: string
+  period: string
+  paymentDate: Date | string | null
+  label: string
+  amount: number
+}
+
+const columnHelper = createColumnHelper<LoanInstallmentTableRow>()
+
+const columns = [
+  columnHelper.accessor("documentNo", {
+    header: "No. Slip",
+    meta: { mobilePrimary: true },
+    cell: (info) => <span className="font-mono">{info.getValue()}</span>,
+  }),
+  columnHelper.accessor("period", {
+    header: "Periode",
+    cell: (info) => info.getValue(),
+  }),
+  columnHelper.accessor("paymentDate", {
+    header: "Tanggal Bayar",
+    cell: (info) => {
+      const val = info.getValue()
+      return (
+        <span className="font-mono tabular-nums">
+          {val ? formatDate(val, { format: "short" }) : "-"}
+        </span>
+      )
+    },
+  }),
+  columnHelper.accessor("label", {
+    header: "Keterangan",
+    cell: (info) => info.getValue(),
+  }),
+  columnHelper.accessor("amount", {
+    header: "Nominal",
+    meta: { align: "right" },
+    cell: (info) => (
+      <span className="font-mono tabular-nums">
+        {formatCurrencyExact(info.getValue())}
+      </span>
+    ),
+  }),
+]
 
 /**
  * Histori cicilan per pinjaman (F-2026-10-25-019-S, AC-LH-F1/F2).
@@ -28,7 +71,25 @@ export function LoanInstallmentHistorySection({
   history,
 }: Readonly<{ history: LoanInstallmentHistory }>) {
   const { loan } = history
-  const hasRows = history.ledgerRows.length > 0 || history.aggregateSlipRows.length > 0
+  const tableData: LoanInstallmentTableRow[] = [
+    ...history.ledgerRows.map((row) => ({
+      id: `ledger-${row.payrollId}`,
+      documentNo: row.documentNo,
+      period: "-",
+      paymentDate: row.paymentDate,
+      label: row.label,
+      amount: row.amount,
+    })),
+    ...history.aggregateSlipRows.map((row) => ({
+      id: `agregat-${row.payrollId}`,
+      documentNo: row.documentNo,
+      period: row.period,
+      paymentDate: row.paymentDate,
+      label: row.label,
+      amount: row.loanDeduction,
+    })),
+  ]
+  const hasRows = tableData.length > 0
 
   return (
     <section aria-label="Histori cicilan pinjaman" className="flex flex-col gap-6">
@@ -70,39 +131,15 @@ export function LoanInstallmentHistorySection({
       ) : null}
 
       {hasRows ? (
-        <DetailTable data-report-table="Histori cicilan pinjaman">
-          <DetailTableHead>
-            <DetailTableTh>No. Slip</DetailTableTh>
-            <DetailTableTh>Periode</DetailTableTh>
-            <DetailTableTh>Tanggal Bayar</DetailTableTh>
-            <DetailTableTh>Keterangan</DetailTableTh>
-            <DetailTableTh align="right">Nominal</DetailTableTh>
-          </DetailTableHead>
-          <DetailTableBody>
-            {history.ledgerRows.map((row) => (
-              <DetailTableRow key={`ledger-${row.payrollId}`}>
-                <DetailTableTd>{row.documentNo}</DetailTableTd>
-                <DetailTableTd>—</DetailTableTd>
-                <DetailTableTd>
-                  {row.paymentDate ? formatDate(row.paymentDate, { format: "short" }) : "—"}
-                </DetailTableTd>
-                <DetailTableTd>{row.label}</DetailTableTd>
-                <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(row.amount)}</DetailTableTd>
-              </DetailTableRow>
-            ))}
-            {history.aggregateSlipRows.map((row) => (
-              <DetailTableRow key={`agregat-${row.payrollId}`}>
-                <DetailTableTd>{row.documentNo}</DetailTableTd>
-                <DetailTableTd>{row.period}</DetailTableTd>
-                <DetailTableTd>
-                  {row.paymentDate ? formatDate(row.paymentDate, { format: "short" }) : "—"}
-                </DetailTableTd>
-                <DetailTableTd>{row.label}</DetailTableTd>
-                <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(row.loanDeduction)}</DetailTableTd>
-              </DetailTableRow>
-            ))}
-          </DetailTableBody>
-        </DetailTable>
+        <DataTable
+          data={tableData}
+          columns={columns}
+          ariaLabel="Histori cicilan pinjaman"
+          selectable={false}
+          enableColumnToggle={false}
+          enableExport={false}
+          pageSize={50}
+        />
       ) : (
         <EmptyState title={history.emptyLabel} className="py-10" />
       )}

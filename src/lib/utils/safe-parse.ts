@@ -2,6 +2,7 @@
  * Safe parsing utilities for form data and JSON.
  * Prevents NaN from entering the database and handles malformed JSON gracefully.
  */
+import type { ZodType } from "zod"
 
 /**
  * Safely parse a number from form data. Returns null if invalid.
@@ -80,6 +81,43 @@ export function safeJsonParse<T = unknown>(value: string | null | undefined): T 
   } catch {
     return null
   }
+}
+
+/**
+ * Safely parse JSON and validate its runtime shape with a Zod schema.
+ * Returns null when JSON is malformed or fails schema validation.
+ */
+export function safeJsonParseSchema<T>(
+  value: string | null | undefined,
+  schema: ZodType<T>,
+): T | null {
+  const parsed = safeJsonParse<unknown>(value)
+  if (parsed === null) return null
+  const result = schema.safeParse(parsed)
+  return result.success ? result.data : null
+}
+
+/**
+ * Safely parse JSON expected to be an array of objects/records.
+ * Filters out non-object elements and returns [] if JSON is not an array.
+ */
+export function safeJsonParseArray<T extends Record<string, unknown>>(
+  value: string | null | undefined,
+  itemSchema?: ZodType<T>,
+): T[] {
+  const parsed = safeJsonParse<unknown>(value)
+  if (!Array.isArray(parsed)) return []
+  const out: T[] = []
+  for (const el of parsed) {
+    if (typeof el !== "object" || el === null || Array.isArray(el)) continue
+    if (itemSchema) {
+      const res = itemSchema.safeParse(el)
+      if (res.success) out.push(res.data)
+    } else {
+      out.push(el as T)
+    }
+  }
+  return out
 }
 
 /**

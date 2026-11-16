@@ -128,6 +128,8 @@ export function CustomerVehicleTable({
       data={data}
       columns={columns}
       ariaLabel="Daftar kendaraan pelanggan"
+      selectable={false}
+      searchColumn="plateNumber"
       searchPlaceholder="Cari plat, rangka, mesin, model, atau pelanggan..."
       serverPagination={{ total, page, pageSize }}
       searchParam="cari"

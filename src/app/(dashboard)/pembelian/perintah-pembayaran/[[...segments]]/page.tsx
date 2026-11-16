@@ -1,15 +1,14 @@
 export const dynamic = 'force-dynamic'
 
-import { Fragment } from 'react'
 import { prisma } from '@/lib/db/prisma'
 import { requireAnyPermission } from '@/lib/auth/permissions'
-import { formatAccountingExact, formatCurrencyExact, formatDate } from '@/lib/utils/format'
+import { formatCurrencyExact } from '@/lib/utils/format'
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { safeAdd, safeSubtract } from '@/lib/utils/math'
 import { agingBucket, daysOverdue } from '@/lib/reports/aging'
 import { RECOGNISED_AP_STATUSES } from '@/lib/reports/document-status'
 import { AppBreadcrumbs } from '@/components/ui/breadcrumbs'
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
+import { PaymentOrderTable } from './_components/payment-order-table'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ExportButtons } from '@/components/reports/export-buttons'
 import { ReportLetterhead } from '@/components/reports/report-letterhead'
@@ -166,47 +165,33 @@ export default async function PaymentOrderPage({
       </div>
 
       <ReportSection title="Daftar Tagihan per Pemasok">
-        <DetailTable data-report-table="Perintah Pembayaran">
-          <DetailTableHead>
-            <DetailTableTh>Pemasok</DetailTableTh>
-            <DetailTableTh>No. Tagihan</DetailTableTh>
-            <DetailTableTh>Tanggal</DetailTableTh>
-            <DetailTableTh>Jatuh Tempo</DetailTableTh>
-            <DetailTableTh>Umur</DetailTableTh>
-            <DetailTableTh align="right">Sisa (Rp)</DetailTableTh>
-          </DetailTableHead>
-          <DetailTableBody>
-            {grouped.map((group) => (
-              <Fragment key={group.vendorId}>
-                {group.rows.map((row) => (
-                  <DetailTableRow key={row.key}>
-                    <DetailTableTd className="font-medium">{row.vendorName}</DetailTableTd>
-                    <DetailTableTd className="font-mono text-xs">{row.documentNo}</DetailTableTd>
-                    <DetailTableTd>{formatDate(row.date)}</DetailTableTd>
-                    <DetailTableTd>{row.dueDate ? formatDate(row.dueDate) : "Tanpa jatuh tempo"}</DetailTableTd>
-                    <DetailTableTd>{row.ageBucket}</DetailTableTd>
-                    <DetailTableTd align="right">{formatAccountingExact(row.remaining, { zeroDash: false })}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-                <DetailTableRow className="bg-muted/40">
-                  <DetailTableTd colSpan={5} className="font-semibold">Subtotal {group.vendorName}</DetailTableTd>
-                  <DetailTableTd align="right" className="font-semibold">{formatAccountingExact(group.total, { zeroDash: false })}</DetailTableTd>
-                </DetailTableRow>
-              </Fragment>
-            ))}
-            {grouped.length === 0 && (
-              <DetailTableRow>
-                <DetailTableTd colSpan={6}><EmptyState title="Tidak ada tagihan yang jatuh tempo" className="py-6" /></DetailTableTd>
-              </DetailTableRow>
+        {grouped.length === 0 ? (
+          <EmptyState title="Tidak ada tagihan yang jatuh tempo" className="py-6" />
+        ) : (
+          <PaymentOrderTable
+            rows={grouped.flatMap((group) =>
+              group.rows.map((row) => ({
+                id: row.key,
+                vendorName: row.vendorName,
+                documentNo: row.documentNo,
+                date: row.date instanceof Date ? row.date.toISOString() : String(row.date),
+                dueDate: row.dueDate
+                  ? row.dueDate instanceof Date
+                    ? row.dueDate.toISOString()
+                    : String(row.dueDate)
+                  : null,
+                ageBucket: row.ageBucket,
+                remaining: Number(row.remaining),
+              })),
             )}
-            {grouped.length > 0 && (
-              <DetailTableRow className="border-t-2 border-default font-bold">
-                <DetailTableTd colSpan={5}>TOTAL AKAN DIBAYAR</DetailTableTd>
-                <DetailTableTd align="right">{formatAccountingExact(total, { zeroDash: false })}</DetailTableTd>
-              </DetailTableRow>
-            )}
-          </DetailTableBody>
-        </DetailTable>
+            subtotals={grouped.map((group) => ({
+              vendorId: group.vendorId,
+              vendorName: group.vendorName,
+              total: Number(group.total),
+            }))}
+            total={Number(total)}
+          />
+        )}
       </ReportSection>
     </div>
   )

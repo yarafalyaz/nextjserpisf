@@ -4,10 +4,11 @@ import { prisma } from "@/lib/db/prisma";
 import { parsePagination } from "@/lib/utils/pagination";
 import { withListParams } from "@/lib/utils/list-href";
 import { requirePermission } from "@/lib/auth/permissions";
-import { getHrScope, hrScopeWhere, canSearchAcrossEmployees } from "@/lib/auth/hr-scope";
+import { getHrScope, hrScopeWhere, hrEmployeeScopeWhere, canSearchAcrossEmployees } from "@/lib/auth/hr-scope";
 import Link from "next/link";
 import { statusLabel } from "@/lib/utils/status-labels";
 import { AppSearchField } from "@/components/ui/search-field";
+import { PageHeader } from "@/components/ui/page-header";
 import { notFound, redirect } from "next/navigation";
 import { PayrollTable } from "../_components/payroll-table";
 import { PayrollFilterForm } from "../_components/payroll-filter-form";
@@ -70,12 +71,17 @@ export default async function PayrollPage({
   });
   if (!filters) notFound();
 
+  const validUrlStatuses = Object.values(statusToIndo);
+  if (filters.status && !validUrlStatuses.includes(filters.status)) {
+    notFound();
+  }
+
   // Redirect legacy ?status= or ?bulan=/?tahun=
   if (params.bulan || params.tahun || params.status) {
     const legacyPath = buildPathFilterHref("/sdm/penggajian", {
       tahun: params.tahun ?? filters.tahun,
       bulan: params.bulan ?? filters.bulan,
-      status: params.status ?? filters.status,
+      status: (params.status ? statusToIndo[params.status] || params.status : undefined) ?? filters.status,
     });
     const legacy = new URLSearchParams();
     if (params.cari) legacy.set("cari", params.cari);
@@ -101,13 +107,25 @@ export default async function PayrollPage({
       ],
     }),
     ...(dbStatus && { status: dbStatus }),
-    ...(month &&
-      year && {
-        endDate: {
-          gte: new Date(Date.UTC(year, month - 1, 1)),
-          lt: new Date(Date.UTC(year, month, 1)),
-        },
-      }),
+    ...(month && year
+      ? {
+          endDate: {
+            gte: new Date(Date.UTC(year, month - 1, 1)),
+            lt: new Date(Date.UTC(year, month, 1)),
+          },
+        }
+      : year
+        ? {
+            endDate: {
+              gte: new Date(Date.UTC(year, 0, 1)),
+              lt: new Date(Date.UTC(year + 1, 0, 1)),
+            },
+          }
+        : month
+          ? {
+              period: { endsWith: `-${String(month).padStart(2, "0")}` },
+            }
+          : {}),
   };
 
   const [payrolls, total, statusGroups, netSalaryAgg, settings, canProcessPayroll] = await Promise.all([
@@ -182,7 +200,7 @@ export default async function PayrollPage({
     await Promise.all([
       getPkwtCompensationReport(scope),
       prisma.employee.findMany({
-        where: { employmentStatus: "PKWT", isActive: true },
+        where: { employmentStatus: "PKWT", isActive: true, ...hrEmployeeScopeWhere(scope) },
         orderBy: { name: "asc" },
         select: { id: true, name: true, employeeNo: true },
       }),
@@ -207,6 +225,7 @@ export default async function PayrollPage({
   const filterPath = buildPathFilterHref("/sdm/penggajian", {
     tahun: filters.tahun,
     bulan: filters.bulan,
+    status: filters.status,
   });
 
   const statusChips = ["", "draft", "approved", "paid"].map((dbStatusKey) => {
@@ -247,40 +266,41 @@ export default async function PayrollPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
-            Penggajian & Remunerasi (Payroll)
-          </h1>
-          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
-            Proses kalkulasi gaji bruto/netto karyawan, komponen tunjangan, potongan statutori PPh 21 / BPJS, dan cetak slip gaji.
-          </p>
-        </div>
-        <div className="flex gap-2 items-center flex-wrap">
-          <CanCreate permission="create_payroll">
-            <BulkGeneratePayrollButton cutoffDay={cutoffDay} />
-          </CanCreate>
-          <CanCreate permission="create_employees">
-            <Link
-              href="/sdm/penggajian/komponen"
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer"
-            >
-              <Settings className="size-3.5" aria-hidden="true" />
-              <span>Komponen Gaji</span>
-            </Link>
-          </CanCreate>
-          <CanCreate permission="create_payroll">
-            <Link
-              href="/sdm/penggajian/tambah"
-              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
-              id="create-payroll-btn"
-            >
-              <Plus className="size-3.5" aria-hidden="true" />
-              <span>Proses Manual</span>
-            </Link>
-          </CanCreate>
-        </div>
-      </div>
+      <PageHeader
+        title="Penggajian & Remunerasi (Payroll)"
+        subtitle="Proses kalkulasi gaji bruto/netto karyawan, komponen tunjangan, potongan statutori PPh 21 / BPJS, dan cetak slip gaji."
+        breadcrumbs={[
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
+          { label: "Penggajian" },
+        ]}
+        actions={
+          <div className="flex gap-2 items-center flex-wrap">
+            <CanCreate permission="create_payroll">
+              <BulkGeneratePayrollButton cutoffDay={cutoffDay} />
+            </CanCreate>
+            <CanCreate permission="create_employees">
+              <Link
+                href="/sdm/penggajian/komponen"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-2xs cursor-pointer"
+              >
+                <Settings className="size-3.5" aria-hidden="true" />
+                <span>Komponen Gaji</span>
+              </Link>
+            </CanCreate>
+            <CanCreate permission="create_payroll">
+              <Link
+                href="/sdm/penggajian/tambah"
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+                id="create-payroll-btn"
+              >
+                <Plus className="size-3.5" aria-hidden="true" />
+                <span>Proses Manual</span>
+              </Link>
+            </CanCreate>
+          </div>
+        }
+      />
 
       {/* Executive KPI Metric Strip Standar ERP */}
       <div className="grid grid-cols-1 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs overflow-hidden">
@@ -363,14 +383,16 @@ export default async function PayrollPage({
         showActions={showActions}
         showEmployeeColumn={showEmployeeColumn}
         toolbar={
-          <AppSearchField
-            placeholder="Cari nama karyawan..."
-            action={filterPath}
-          />
+          canSearchAcrossEmployees(scope) ? (
+            <AppSearchField
+              placeholder="Cari nama karyawan..."
+              action={filterPath}
+            />
+          ) : undefined
         }
         filters={
           <>
-            <PayrollFilterForm bulan={filters.bulan} tahun={filters.tahun} status={params.status} />
+            <PayrollFilterForm bulan={filters.bulan} tahun={filters.tahun} status={filters.status} />
             <div className="flex flex-wrap gap-1.5">{statusChips}</div>
           </>
         }

@@ -218,6 +218,29 @@ export const ACCOUNT_MAPPING_RULES: { key: string; groups: string[][] }[] = [
   { key: "commissionExpenseAccountId", groups: [["600002"], ["beban", "komisi"], ["commission", "expense"]] },
   { key: "commissionPayableAccountId", groups: [["210212"], ["utang", "komisi"], ["commission", "payable"]] },
   { key: "payrollJournalTypeId", groups: [["beban", "gaji"], ["hutang", "gaji"], ["jurnal", "payroll"], ["payroll", "journal"]] },
+  {
+    key: "assetFiscalRevaluationTaxPayableAccountId",
+    groups: [
+      ["utang", "pph", "final", "revaluasi"],
+      ["pph", "final", "revaluasi"],
+      ["utang", "pph", "final"],
+      ["210206"],
+    ],
+  },
+  {
+    key: "retainedEarningsAccountId",
+    groups: [["300002"], ["laba", "ditahan"], ["retained", "earnings"]],
+  },
+  {
+    key: "lateFeeIncomeAccountId",
+    groups: [
+      ["pendapatan", "denda", "keterlambatan"],
+      ["denda", "piutang"],
+      ["late", "fee", "income"],
+      ["710005"],
+      ["pendapatan", "diluar", "usaha", "lainnya"],
+    ],
+  },
 ];
 
 /**

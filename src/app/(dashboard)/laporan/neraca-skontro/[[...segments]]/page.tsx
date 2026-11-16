@@ -58,7 +58,7 @@ export default async function SkontroBalanceSheetPage({
     <ReportPageShell
       title="Neraca Skontro"
       sheetTitle="Neraca (Induk Skontro)"
-      subtitle="Laporan Posisi Keuangan — Dua Sisi"
+      subtitle="Laporan Posisi Keuangan (Dua Sisi)"
       periodLabel={statement.periodLabel}
       periodCaption={statement.periodCaption}
       printedBy={user.name ?? user.email}

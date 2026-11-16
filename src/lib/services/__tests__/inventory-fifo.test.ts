@@ -727,6 +727,20 @@ describe("inventory-fifo", () => {
         consumeFifoLayers(tx, { itemId: 1, qty: 2, serialNumbers: ["SN-1", "SN-2"] })
       ).rejects.toThrow("tidak tersedia/sudah terpakai");
     });
+
+    it("konkuren: updateMany mengklaim 0 baris meski count('used') penuh -> tetap throw (TOCTOU serial)", async () => {
+      const tx = mockTx({
+        layers: [{ id: 1, remaining: 10, unitCost: 5, batchNumber: null }],
+        trackSerial: true,
+        availableSerials: [{ id: 21, serialNumber: "SN-1" }, { id: 22, serialNumber: "SN-2" }],
+      });
+      (tx._spies.serialUpdateMany as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0 });
+      (tx.itemSerial.count as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(2);
+
+      await expect(
+        consumeFifoLayers(tx, { itemId: 1, qty: 2 })
+      ).rejects.toThrow("tidak tersedia/sudah terpakai");
+    });
   });
 
   describe("createInLayer", () => {

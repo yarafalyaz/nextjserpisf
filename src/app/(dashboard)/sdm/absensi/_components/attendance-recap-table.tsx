@@ -1,24 +1,104 @@
+"use client"
+
 import {
   ATTENDANCE_RECAP_NO_DEPARTMENT_LABEL,
   ATTENDANCE_RECAP_NO_SCHEDULE_LABEL,
   type AttendanceRecap,
 } from "@/lib/reports/attendance-recap"
 import { EmptyState } from "@/components/ui/empty-state"
-import {
-  DetailTable,
-  DetailTableBody,
-  DetailTableFoot,
-  DetailTableFootRow,
-  DetailTableHead,
-  DetailTableRow,
-  DetailTableTd,
-  DetailTableTh,
-} from "@/components/ui/detail-table"
+import { DataTable } from "@/components/ui/data-table"
+import { createColumnHelper } from "@/lib/table"
 
 /** Hari null dari payload = tidak diturunkan server (tanpa jadwal), bukan 0. */
 function days(value: number | null): string {
-  return value === null ? "—" : String(value)
+  return value === null ? "-" : String(value)
 }
+
+type AttendanceRecapTableRow = AttendanceRecap["employees"][number] & { id: number }
+
+const columnHelper = createColumnHelper<AttendanceRecapTableRow>()
+
+const columns = [
+  columnHelper.accessor("employeeName", {
+    header: "Karyawan",
+    meta: { mobilePrimary: true },
+    cell: (info) => {
+      const employee = info.row.original
+      return (
+        <span>
+          {employee.employeeName ?? `Karyawan #${employee.employeeId}`}
+          {employee.hasSchedule ? null : (
+            <span className="text-muted-foreground"> ({ATTENDANCE_RECAP_NO_SCHEDULE_LABEL})</span>
+          )}
+        </span>
+      )
+    },
+  }),
+  columnHelper.accessor("departmentName", {
+    header: "Departemen",
+    cell: (info) => info.getValue() ?? ATTENDANCE_RECAP_NO_DEPARTMENT_LABEL,
+  }),
+  columnHelper.accessor("scheduledWorkDays", {
+    header: "Hari kerja terjadwal",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{days(info.getValue())}</span>,
+  }),
+  columnHelper.accessor("scheduledEvaluatedDays", {
+    header: "Hari terevaluasi",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{days(info.getValue())}</span>,
+  }),
+  columnHelper.accessor("presentDays", {
+    header: "Hadir",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{info.getValue()}</span>,
+  }),
+  columnHelper.accessor("sickDays", {
+    header: "Sakit",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{info.getValue()}</span>,
+  }),
+  columnHelper.accessor("leaveDays", {
+    header: "Cuti/Izin",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{info.getValue()}</span>,
+  }),
+  columnHelper.accessor("absentDays", {
+    header: "Alpa tercatat",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{info.getValue()}</span>,
+  }),
+  columnHelper.accessor("halfDayDays", {
+    header: "Setengah hari",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{info.getValue()}</span>,
+  }),
+  columnHelper.accessor("otherStatusDays", {
+    header: "Status lain",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{info.getValue()}</span>,
+  }),
+  columnHelper.accessor("noRecordDays", {
+    header: "Tanpa rekod",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{days(info.getValue())}</span>,
+  }),
+  columnHelper.accessor("lateEventCount", {
+    header: "Kali telat",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{info.getValue()}</span>,
+  }),
+  columnHelper.accessor("totalLateMinutes", {
+    header: "Menit telat",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{info.getValue()}</span>,
+  }),
+  columnHelper.accessor("totalOvertimeMinutes", {
+    header: "Menit lembur tercatat",
+    meta: { align: "right" },
+    cell: (info) => <span className="font-mono tabular-nums">{info.getValue()}</span>,
+  }),
+]
 
 /**
  * Rekap kehadiran per karyawan per periode (F-2026-10-25-044-S).
@@ -60,96 +140,37 @@ export function AttendanceRecapTable({ recap }: Readonly<{ recap: AttendanceReca
       {isEmpty ? (
         <EmptyState title="Tidak ada karyawan dalam cakupan pada periode dan filter ini." className="py-10" />
       ) : (
-        <div>
-          <h2 className="mb-2 text-base font-semibold text-foreground">Per karyawan</h2>
-          <DetailTable data-report-table="Rekap kehadiran per karyawan">
-            <DetailTableHead>
-              <DetailTableTh>Karyawan</DetailTableTh>
-              <DetailTableTh>Departemen</DetailTableTh>
-              <DetailTableTh align="right">Hari kerja terjadwal</DetailTableTh>
-              <DetailTableTh align="right">Hari terevaluasi</DetailTableTh>
-              <DetailTableTh align="right">Hadir</DetailTableTh>
-              <DetailTableTh align="right">Sakit</DetailTableTh>
-              <DetailTableTh align="right">Cuti/Izin</DetailTableTh>
-              <DetailTableTh align="right">Alpa tercatat</DetailTableTh>
-              <DetailTableTh align="right">Setengah hari</DetailTableTh>
-              <DetailTableTh align="right">Status lain</DetailTableTh>
-              <DetailTableTh align="right">Tanpa rekod</DetailTableTh>
-              <DetailTableTh align="right">Kali telat</DetailTableTh>
-              <DetailTableTh align="right">Menit telat</DetailTableTh>
-              <DetailTableTh align="right">Menit lembur tercatat</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {recap.employees.map((employee) => (
-                <DetailTableRow key={employee.employeeId}>
-                  <DetailTableTd>
-                    {employee.employeeName ?? `Karyawan #${employee.employeeId}`}
-                    {employee.hasSchedule ? null : (
-                      <span className="text-muted-foreground"> ({ATTENDANCE_RECAP_NO_SCHEDULE_LABEL})</span>
-                    )}
-                  </DetailTableTd>
-                  <DetailTableTd>
-                    {employee.departmentName ?? ATTENDANCE_RECAP_NO_DEPARTMENT_LABEL}
-                  </DetailTableTd>
-                  <DetailTableTd align="right">{days(employee.scheduledWorkDays)}</DetailTableTd>
-                  <DetailTableTd align="right">{days(employee.scheduledEvaluatedDays)}</DetailTableTd>
-                  <DetailTableTd align="right">{employee.presentDays}</DetailTableTd>
-                  <DetailTableTd align="right">{employee.sickDays}</DetailTableTd>
-                  <DetailTableTd align="right">{employee.leaveDays}</DetailTableTd>
-                  <DetailTableTd align="right">{employee.absentDays}</DetailTableTd>
-                  <DetailTableTd align="right">{employee.halfDayDays}</DetailTableTd>
-                  <DetailTableTd align="right">{employee.otherStatusDays}</DetailTableTd>
-                  <DetailTableTd align="right">{days(employee.noRecordDays)}</DetailTableTd>
-                  <DetailTableTd align="right">{employee.lateEventCount}</DetailTableTd>
-                  <DetailTableTd align="right">{employee.totalLateMinutes}</DetailTableTd>
-                  <DetailTableTd align="right">{employee.totalOvertimeMinutes}</DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-            <DetailTableFoot>
-              <DetailTableFootRow>
-                <DetailTableTd colSpan={2} className="font-bold">
-                  Total
-                </DetailTableTd>
-                <DetailTableTd align="right" className="font-bold">
-                  {totals.scheduledWorkDays}
-                </DetailTableTd>
-                <DetailTableTd align="right" className="font-bold">
-                  {totals.scheduledEvaluatedDays}
-                </DetailTableTd>
-                <DetailTableTd align="right" className="font-bold">
-                  {totals.presentDays}
-                </DetailTableTd>
-                <DetailTableTd align="right" className="font-bold">
-                  {totals.sickDays}
-                </DetailTableTd>
-                <DetailTableTd align="right" className="font-bold">
-                  {totals.leaveDays}
-                </DetailTableTd>
-                <DetailTableTd align="right" className="font-bold">
-                  {totals.absentDays}
-                </DetailTableTd>
-                <DetailTableTd align="right" className="font-bold">
-                  {totals.halfDayDays}
-                </DetailTableTd>
-                <DetailTableTd align="right" className="font-bold">
-                  {totals.otherStatusDays}
-                </DetailTableTd>
-                <DetailTableTd align="right" className="font-bold">
-                  {totals.noRecordDays}
-                </DetailTableTd>
-                <DetailTableTd align="right" className="font-bold">
-                  {totals.lateEventCount}
-                </DetailTableTd>
-                <DetailTableTd align="right" className="font-bold">
-                  {totals.totalLateMinutes}
-                </DetailTableTd>
-                <DetailTableTd align="right" className="font-bold">
-                  {totals.totalOvertimeMinutes}
-                </DetailTableTd>
-              </DetailTableFootRow>
-            </DetailTableFoot>
-          </DetailTable>
+        <div className="flex flex-col gap-3">
+          <h2 className="text-base font-semibold text-foreground">Per karyawan</h2>
+          <DataTable
+            data={recap.employees.map((employee) => ({
+              ...employee,
+              id: employee.employeeId,
+            }))}
+            columns={columns}
+            ariaLabel="Rekap kehadiran per karyawan"
+            selectable={false}
+            enableColumnToggle={false}
+            enableExport={false}
+            pageSize={50}
+          />
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-default bg-muted/30 px-4 py-3 text-xs">
+            <span className="font-bold text-foreground uppercase tracking-wider">Total</span>
+            <div className="flex flex-wrap items-center gap-4">
+              <span>Terjadwal: <strong className="font-mono tabular-nums">{totals.scheduledWorkDays}</strong></span>
+              <span>Terevaluasi: <strong className="font-mono tabular-nums">{totals.scheduledEvaluatedDays}</strong></span>
+              <span>Hadir: <strong className="font-mono tabular-nums">{totals.presentDays}</strong></span>
+              <span>Sakit: <strong className="font-mono tabular-nums">{totals.sickDays}</strong></span>
+              <span>Cuti/Izin: <strong className="font-mono tabular-nums">{totals.leaveDays}</strong></span>
+              <span>Alpa: <strong className="font-mono tabular-nums">{totals.absentDays}</strong></span>
+              <span>Setengah hari: <strong className="font-mono tabular-nums">{totals.halfDayDays}</strong></span>
+              <span>Lain: <strong className="font-mono tabular-nums">{totals.otherStatusDays}</strong></span>
+              <span>Tanpa rekod: <strong className="font-mono tabular-nums">{totals.noRecordDays}</strong></span>
+              <span>Kali telat: <strong className="font-mono tabular-nums">{totals.lateEventCount}</strong></span>
+              <span>Menit telat: <strong className="font-mono tabular-nums">{totals.totalLateMinutes}</strong></span>
+              <span>Menit lembur: <strong className="font-mono tabular-nums">{totals.totalOvertimeMinutes}</strong></span>
+            </div>
+          </div>
         </div>
       )}
     </section>

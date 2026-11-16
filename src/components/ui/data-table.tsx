@@ -23,6 +23,7 @@ import {
   Download,
 } from "@/components/ui/fontawesome-icons"
 import { exportTableToCsv } from "@/components/ui/data-table-export"
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 import {
   Table,
@@ -136,6 +137,8 @@ interface DataTableProps<TData extends RowData> {
   serverPagination?: ServerPagination
   /** Initial column visibility state. */
   initialColumnVisibility?: ColumnVisibilityState
+  /** Render the bottom pagination bar. Defaults to true. */
+  showPagination?: boolean
 }
 
 /** Resolve a human-friendly label for a column (used in the visibility menu). */
@@ -147,7 +150,27 @@ function columnLabel(column: { id: string; columnDef: { header?: unknown } }): s
 /** Allowed page-size options (always shown in the page-size selector). */
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 50, 100]
 
-export function DataTable<TData extends { id: number | string }>({
+interface DataTableNav {
+  router: ReturnType<typeof useRouter>
+  pathname: string
+  searchParams: ReturnType<typeof useSearchParams>
+}
+
+export function DataTable<TData extends { id: number | string }>(props: DataTableProps<TData>) {
+  if (props.serverPagination) {
+    return <ServerDataTable {...props} />
+  }
+  return <DataTableInner {...props} />
+}
+
+function ServerDataTable<TData extends { id: number | string }>(props: DataTableProps<TData>) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  return <DataTableInner {...props} nav={{ router, pathname, searchParams }} />
+}
+
+function DataTableInner<TData extends { id: number | string }>({
   data,
   columns,
   ariaLabel = "Tabel data",
@@ -169,7 +192,9 @@ export function DataTable<TData extends { id: number | string }>({
   mobileColumns = 3,
   serverPagination,
   initialColumnVisibility,
-}: DataTableProps<TData>) {
+  showPagination = true,
+  nav,
+}: DataTableProps<TData> & { nav?: DataTableNav }) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -185,10 +210,10 @@ export function DataTable<TData extends { id: number | string }>({
   const showBulkDelete = canBulkDelete(bulkDeleteUser, bulkDeletePermission)
 
   // Server-side pagination helpers
-  const isServer = Boolean(serverPagination)
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
+  const isServer = Boolean(serverPagination && nav)
+  const router = nav?.router
+  const pathname = nav?.pathname ?? ""
+  const searchParams = nav?.searchParams
 
   // The URL search param is the source of truth for the server-side search box.
   // The input keeps one local copy so typing stays responsive while the
@@ -196,7 +221,7 @@ export function DataTable<TData extends { id: number | string }>({
   // (React's "adjust state when a prop changes" pattern) whenever the URL itself
   // moves, which is what keeps forward/backward navigation in sync — no effect
   // and therefore no extra commit per navigation.
-  const urlSearch = isServer ? searchParams.get(searchParam) ?? "" : ""
+  const urlSearch = isServer && searchParams ? searchParams.get(searchParam) ?? "" : ""
   const [serverSearch, setServerSearch] = useState(urlSearch)
   const [prevUrlSearch, setPrevUrlSearch] = useState(urlSearch)
   if (urlSearch !== prevUrlSearch) {
@@ -223,6 +248,7 @@ export function DataTable<TData extends { id: number | string }>({
   }, [])
 
   function navigateWithParams(params: Record<string, string | number | undefined>) {
+    if (!router || !searchParams) return
     const qs = buildSearchParamsString(searchParams, params)
     router.push(`${pathname}${qs ? `?${qs}` : ""}`)
   }
@@ -328,7 +354,7 @@ export function DataTable<TData extends { id: number | string }>({
       const result = await onBulkDelete(pendingDeleteIds)
       if (result.success) {
         setRowSelection({})
-        router.refresh()
+        router?.refresh()
       } else {
         showError(result.message || "Gagal menghapus data")
       }
@@ -367,7 +393,7 @@ export function DataTable<TData extends { id: number | string }>({
       <div>
         {/* Toolbar: row 1 = search + column visibility; row 2 = filters */}
         {showToolbar && (
-          <div className="flex flex-col gap-3 py-4">
+          <div className="flex flex-col gap-2.5 py-2.5 sm:gap-3 sm:py-4">
             {showSearchRow && (
               <div className="flex flex-wrap items-center gap-2">
                 {toolbar}
@@ -381,7 +407,7 @@ export function DataTable<TData extends { id: number | string }>({
                       value={isServer ? serverSearch : ((table.getColumn(searchColumn)?.getFilterValue() as string) ?? "")}
                       onChange={(e) => {
                         const val = e.target.value
-                        if (isServer) {
+                        if (isServer && router && searchParams) {
                           setServerSearch(val)
                           if (debounceRef.current) clearTimeout(debounceRef.current)
                           debounceRef.current = setTimeout(() => {
@@ -397,7 +423,7 @@ export function DataTable<TData extends { id: number | string }>({
                         // should push immediately and cancel the pending timer so
                         // a late timer can't hijack a subsequent navigation (e.g.
                         // the user clicks a row action right after searching).
-                        if (isServer && e.key === "Enter") {
+                        if (isServer && router && searchParams && e.key === "Enter") {
                           e.preventDefault()
                           if (debounceRef.current) {
                             clearTimeout(debounceRef.current)
@@ -456,7 +482,7 @@ export function DataTable<TData extends { id: number | string }>({
                         .toLowerCase()
                         .replace(/[^a-z0-9]+/g, "-")
                         .replace(/(^-|-$)/g, "")
-                      const finalFilename = exportFilename || `${cleanTitle}-${new Date().toISOString().split("T")[0]}`
+                      const finalFilename = exportFilename || `${cleanTitle}-${toLocalDateOnly(new Date())}`
                       exportTableToCsv({
                         filename: finalFilename,
                         columns: exportCols,
@@ -585,7 +611,7 @@ export function DataTable<TData extends { id: number | string }>({
               className="border-t border-default bg-warning-subtle px-4 py-2 text-xs text-warning-subtle-foreground"
             >
               Menampilkan maksimal {MAX_LIST_ROWS} baris pertama. Masih ada data lain yang tidak
-              ditampilkan — persempit pencarian atau filter untuk melihatnya.
+              ditampilkan, persempit pencarian atau filter untuk melihatnya.
             </p>
           )}
         </div>
@@ -604,12 +630,13 @@ export function DataTable<TData extends { id: number | string }>({
               className="mt-2 rounded-md border border-default bg-warning-subtle px-4 py-2 text-xs text-warning-subtle-foreground"
             >
               Menampilkan maksimal {MAX_LIST_ROWS} baris pertama. Masih ada data lain yang tidak
-              ditampilkan — persempit pencarian atau filter untuk melihatnya.
+              ditampilkan, persempit pencarian atau filter untuk melihatnya.
             </p>
           )}
         </div>
 
         {/* Pagination (shadcn DataTablePagination layout) */}
+        {showPagination && (
         <nav
           aria-label="Navigasi halaman tabel"
           className="flex flex-col items-start gap-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
@@ -692,6 +719,7 @@ export function DataTable<TData extends { id: number | string }>({
             </div>
           </div>
         </nav>
+        )}
       </div>
 
       <ConfirmDialog

@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/shadcn/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { FormSelect } from "@/components/ui/form-select"
+import { buildPathFilterHref } from "@/lib/utils/path-filters"
 import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import type { YearEndClosingPreview } from "@/lib/reports/year-end-closing"
@@ -24,7 +25,13 @@ export type YearEndClosingPreviewView = Omit<YearEndClosingPreview, "closingDate
 
 type ActionKind = "approval" | "post" | "reverse"
 
-export function YearEndClosingPanel({ preview }: { preview: YearEndClosingPreviewView }) {
+export function YearEndClosingPanel({
+  preview,
+  periode,
+}: {
+  preview: YearEndClosingPreviewView
+  periode?: string
+}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [busy, setBusy] = useState<ActionKind | null>(null)
@@ -38,7 +45,12 @@ export function YearEndClosingPanel({ preview }: { preview: YearEndClosingPrevie
 
   function changeYear(value: string) {
     if (!/^\d{4}$/.test(value)) return
-    router.push(`/pengaturan/proses-akhir-bulan/tahun/${value}`)
+    router.push(
+      buildPathFilterHref("/pengaturan/proses-akhir-bulan", {
+        periode,
+        tahun: value,
+      })
+    )
   }
 
   const postDisabledReason = preview.alreadyClosed

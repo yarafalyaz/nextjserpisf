@@ -12,6 +12,10 @@ import { classifyScrapLine, validateScrapInput } from "@/lib/services/scrap-clas
 import { scrapReviewStatusAfterComplete } from "@/lib/services/scrap-physical";
 import { safeAdd } from "@/lib/utils/math";
 import { Status } from "@/lib/constants";
+import {
+  assertItemsExistAndActive,
+  assertWarehousesExistAndActive,
+} from "@/lib/services/material-request.service";
 
 
 const executeInTx = async (
@@ -100,6 +104,12 @@ export async function onMaterialIssueCompleted(
     // accounting.hook, so enforce the closed-period guard here too — otherwise
     // material issues can back-date GL into a closed period.
     await assertPeriodOpen(issue.date, tx);
+
+    await assertWarehousesExistAndActive(tx as never, [issue.warehouseId]);
+    await assertItemsExistAndActive(
+      tx as never,
+      [...new Set(issue.items.map((item) => item.itemId))],
+    );
 
     // SAL-BR-014: guard tepat-satu-kali lintas jalur. Item issue ini
     // tidak boleh sudah dikeluarkan sebagai penjualan pada pohon

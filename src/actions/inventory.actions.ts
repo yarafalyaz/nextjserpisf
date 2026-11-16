@@ -52,7 +52,7 @@ import {
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { checkIdempotency } from "@/lib/utils/idempotency";
 import { statusLabel } from "@/lib/utils/status-labels";
-import { safeJsonParse } from "@/lib/utils/safe-parse";
+import { safeJsonParse, safeJsonParseArray } from "@/lib/utils/safe-parse";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { parseFormData } from "@/lib/validations/parse-form";
 import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money";
@@ -102,7 +102,7 @@ function normalizeQtyItem(it: QtyItemInput): { itemId: number; qty: number } {
 function normalizeQtyItems(
   raw: string | null | undefined,
 ): { itemId: number; qty: number }[] {
-  return (safeJsonParse<QtyItemInput[]>(raw) ?? [])
+  return safeJsonParseArray<QtyItemInput>(raw)
     .map(normalizeQtyItem)
     .filter((it) => it.itemId > 0);
 }
@@ -128,7 +128,7 @@ function normalizeWorkOrderItems(
   description?: string;
   status?: string;
 }[] {
-  return (safeJsonParse<WorkOrderItemInput[]>(raw) ?? []).flatMap((it) => {
+  return safeJsonParseArray<WorkOrderItemInput>(raw).flatMap((it) => {
     const base = normalizeQtyItem(it);
     if (base.itemId === 0) return [];
     const cost =
@@ -286,9 +286,9 @@ export async function createStockAdjustment(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("ADJ");
 
-    const adjItems = (
-      safeJsonParse<AdjustmentItemInput[]>(v.items ?? null) ?? []
-    ).filter((it) => Number(it.itemId) > 0);
+    const adjItems = safeJsonParseArray<AdjustmentItemInput>(v.items ?? null).filter(
+      (it) => Number(it.itemId) > 0,
+    );
     assertUniqueAdjustmentItems(adjItems);
     // Dokumen baru hanya untuk master hidup (pola material-request).
     await assertWarehousesExistAndActive(prisma, [v.warehouseId]);
@@ -1091,11 +1091,11 @@ type MaterialIssuePayloadItem = {
 };
 
 function parseMaterialIssuePayloadItems(raw: string | null | undefined): MaterialIssuePayloadItem[] {
-  const rawItems = safeJsonParse<{
+  const rawItems = safeJsonParseArray<{
     itemId: number | string; qty?: number | string;
     unitCost?: number | string; cost?: number | string;
     scrapQty?: number | string; scrapReasonCode?: string | null; scrapNote?: string | null;
-  }[]>(raw ?? null) ?? [];
+  }>(raw ?? null);
   const items: MaterialIssuePayloadItem[] = [];
   for (const it of rawItems) {
     const base = normalizeQtyItem(it);
@@ -2472,9 +2472,9 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
     }
 
     // Fix #2: Jangan generate documentNo baru saat update
-    const adjItems = (
-      safeJsonParse<AdjustmentItemInput[]>(v.items ?? null) ?? []
-    ).filter((it) => Number(it.itemId) > 0);
+    const adjItems = safeJsonParseArray<AdjustmentItemInput>(v.items ?? null).filter(
+      (it) => Number(it.itemId) > 0,
+    );
     assertUniqueAdjustmentItems(adjItems);
     const adjRows = adjItems.map(normalizeAdjustmentItem);
 
@@ -3142,12 +3142,10 @@ export async function saveStocktakeCounts(id: number, formData: FormData) {
     if (session.status !== "counting" && session.status !== "recount") {
       throw new Error("Sesi tidak dalam tahap penghitungan");
     }
-    const counts = safeJsonParse<{
+    const counts = safeJsonParseArray<{
       lineId: number; count1?: number; count2?: number; note?: string;
       batchNumbers?: unknown; serialNumbers?: unknown;
-    }[]>(
-      (formData.get("counts") as string | null) ?? null,
-    ) ?? [];
+    }>((formData.get("counts") as string | null) ?? null);
     await prisma.$transaction(async (tx) => {
       // Kunci baris sesi + baca ulang status di dalam tx: simpan yang mulai
       // saat sesi masih counting bisa commit sesudah sesi approved/posted,
@@ -3529,7 +3527,7 @@ export async function createRemnant(formData: FormData) {
       await assertItemsExistAndActive(tx, [itemId]);
       await assertWarehousesExistAndActive(tx, [warehouseId]);
       const claimed = await tx.remnant.aggregate({
-        where: { sourceType, sourceId, status: { not: "scrapped" } },
+        where: { sourceType, sourceId, status: { notIn: ["scrap", "scrapped"] } },
         _sum: { qty: true },
       });
       const claimedQty = Number(claimed._sum.qty ?? 0)

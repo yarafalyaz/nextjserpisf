@@ -111,10 +111,10 @@ export function CustomerDuplicateGroups({
               <button
                 type="button"
                 onClick={() => setActiveTab("all")}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${
+                className={`inline-flex min-h-11 sm:min-h-9 cursor-pointer items-center rounded-md border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   activeTab === "all"
-                    ? "bg-foreground text-background font-semibold"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "border-foreground bg-foreground text-background font-semibold"
+                    : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
                 Semua ({visible.length})
@@ -128,10 +128,10 @@ export function CustomerDuplicateGroups({
                     key={kind}
                     type="button"
                     onClick={() => setActiveTab(kind)}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${
+                    className={`inline-flex min-h-11 sm:min-h-9 cursor-pointer items-center rounded-md border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                       activeTab === kind
-                        ? "bg-foreground text-background font-semibold"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        ? "border-foreground bg-foreground text-background font-semibold"
+                        : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
                     }`}
                   >
                     {meta.label} ({count})

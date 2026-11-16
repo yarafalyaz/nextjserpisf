@@ -6,11 +6,8 @@ import { CanCreate } from "@/components/auth/can-create"
 import Link from "next/link"
 import { EmptyState } from "@/components/ui/empty-state"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { StatusChip } from "@/components/ui/status-chip"
-import { DeleteButton } from "@/components/ui/delete-button"
-import { deleteCustomerVehicle } from "@/actions/vehicle.actions"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
-import { Eye, Pencil, Plus } from "@/components/ui/fontawesome-icons"
+import { CustomerVehiclesTable } from "./_components/customer-vehicles-table"
+import { Plus } from "@/components/ui/fontawesome-icons"
 import { loadCustomerBySlug } from "./_components/load-customer-vehicle"
 
 import type { Metadata } from "next"
@@ -28,7 +25,7 @@ export default async function CustomerVehiclesPage({
   const { customer, customerId, customerKey } = await loadCustomerBySlug(slug)
 
   const vehicles = await prisma.customerVehicle.findMany({
-    where: { customerId },
+    where: { customerId, deletedAt: null },
     include: {
       vehicle: {
         include: {
@@ -75,44 +72,20 @@ export default async function CustomerVehiclesPage({
           {vehicles.length === 0 ? (
             <EmptyState title="Belum ada kendaraan terdaftar" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Plat Nomor</DetailTableTh>
-                <DetailTableTh>Merek</DetailTableTh>
-                <DetailTableTh>Model</DetailTableTh>
-                <DetailTableTh>Tahun</DetailTableTh>
-                <DetailTableTh>Warna</DetailTableTh>
-                <DetailTableTh>Status</DetailTableTh>
-                <DetailTableTh>Aksi</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {vehicles.map((cv) => (
-                  <DetailTableRow key={cv.id}>
-                    <DetailTableTd className="font-mono">{cv.plateNumber || "-"}</DetailTableTd>
-                    <DetailTableTd>{cv.vehicle?.variant?.model?.brand?.name || "-"}</DetailTableTd>
-                    <DetailTableTd>{cv.vehicle?.variant?.model?.name || "-"} {cv.vehicle?.variant?.name ? `(${cv.vehicle.variant.name})` : ""}</DetailTableTd>
-                    <DetailTableTd>{cv.vehicle?.year || "-"}</DetailTableTd>
-                    <DetailTableTd>{cv.color || "-"}</DetailTableTd>
-                    <DetailTableTd><StatusChip status={cv.isActive ? "active" : "inactive"} /></DetailTableTd>
-                    <DetailTableTd>
-                      <div className="flex items-center gap-1">
-                        <Link href={`/master/pelanggan/${customerKey}/kendaraan/${cv.slug ?? cv.id}`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Detail">
-                          <Eye size={14} />
-                        </Link>
-                        <CanCreate permission="edit_customers">
-                          <Link href={`/master/pelanggan/${customerKey}/kendaraan/${cv.slug ?? cv.id}/ubah`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Ubah">
-                            <Pencil size={14} />
-                          </Link>
-                        </CanCreate>
-                        <CanCreate permission="delete_customers">
-                          <DeleteButton id={cv.id} action={deleteCustomerVehicle} />
-                        </CanCreate>
-                      </div>
-                    </DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <CustomerVehiclesTable
+              customerKey={customerKey}
+              data={vehicles.map((cv) => ({
+                id: cv.id,
+                slug: cv.slug,
+                plateNumber: cv.plateNumber,
+                brandName: cv.vehicle?.variant?.model?.brand?.name ?? null,
+                modelName: cv.vehicle?.variant?.model?.name ?? null,
+                variantName: cv.vehicle?.variant?.name ?? null,
+                year: cv.vehicle?.year ?? null,
+                color: cv.color,
+                isActive: cv.isActive,
+              }))}
+            />
           )}
         </div>
       </div>

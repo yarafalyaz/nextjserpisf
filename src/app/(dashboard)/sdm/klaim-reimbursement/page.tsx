@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { getMyReimbursementClaims } from "@/actions/reimbursement.actions"
 import { CanCreate } from "@/components/auth/can-create"
 import { EmptyState } from "@/components/ui/empty-state"
+import { PageHeader } from "@/components/ui/page-header"
 import { MyReimbursementClaimsTable } from "./_components/my-reimbursement-claims-table"
 
 import type { Metadata } from "next"
@@ -26,26 +27,27 @@ export default async function MyReimbursementClaimsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between pb-2 border-b border-border">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
-            Klaim Reimbursement Saya
-          </h1>
-          <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
-            Pengajuan penggantian biaya operasional staf, unggah nota/bukti bayar, dan status persetujuan keuangan.
-          </p>
-        </div>
-        <CanCreate permission="create_employee_reimbursements">
-          <Link
-            href="/sdm/klaim-reimbursement/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
-            id="create-reimbursement-claim-btn"
-          >
-            <Plus className="size-3.5" aria-hidden="true" />
-            <span>Ajukan Klaim</span>
-          </Link>
-        </CanCreate>
-      </div>
+      <PageHeader
+        title="Klaim Reimbursement Saya"
+        subtitle="Pengajuan penggantian biaya operasional staf, unggah nota/bukti bayar, dan status persetujuan keuangan."
+        breadcrumbs={[
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
+          { label: "Klaim Reimbursement" },
+        ]}
+        actions={
+          <CanCreate permission="create_employee_reimbursements">
+            <Link
+              href="/sdm/klaim-reimbursement/tambah"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+              id="create-reimbursement-claim-btn"
+            >
+              <Plus className="size-3.5" aria-hidden="true" />
+              <span>Ajukan Klaim</span>
+            </Link>
+          </CanCreate>
+        }
+      />
 
       {data.length === 0 ? (
         <EmptyState title="Belum ada klaim reimbursement." description="Gunakan tombol Ajukan Klaim untuk membuat klaim pertama." />

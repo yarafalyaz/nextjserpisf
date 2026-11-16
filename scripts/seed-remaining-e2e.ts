@@ -4,11 +4,17 @@ import { onSalesPaymentCreated as recalculateSalesPayment } from "../src/lib/hoo
 import { prisma } from "../src/lib/db/prisma";
 import { generateDocumentNumber } from "../src/lib/utils/document-number";
 
-async function ensureAccount(code: string, name: string, type: AccountType) {
+async function ensureAccount(code: string, name: string, type: AccountType, reportGroup?: string) {
   return prisma.account.upsert({
     where: { code },
-    update: { name, type, isActive: true },
-    create: { code, name, type, normalBalance: type === AccountType.LIABILITY || type === AccountType.REVENUE ? "credit" : "debit" },
+    update: { name, type, isActive: true, ...(reportGroup ? { reportGroup } : {}) },
+    create: {
+      code,
+      name,
+      type,
+      normalBalance: type === AccountType.LIABILITY || type === AccountType.REVENUE ? "credit" : "debit",
+      ...(reportGroup ? { reportGroup } : {}),
+    },
   });
 }
 
@@ -19,7 +25,7 @@ function assert(condition: unknown, message: string): asserts condition {
 async function main() {
   console.log("=== E2E: REMAINING CORE FLOWS ===\n");
 
-  const cash = await ensureAccount("E2E-1000", "E2E Cash/Bank", AccountType.ASSET);
+  const cash = await ensureAccount("E2E-1000", "E2E Cash/Bank", AccountType.ASSET, "BANK");
   const receivable = await ensureAccount("E2E-1100", "E2E Accounts Receivable", AccountType.ASSET);
   const payable = await ensureAccount("E2E-2100", "E2E Accounts Payable", AccountType.LIABILITY);
   const expenseAccount = await ensureAccount("E2E-5100", "E2E General Expense", AccountType.EXPENSE);
@@ -32,6 +38,9 @@ async function main() {
   const salesReturnAccount = await ensureAccount("E2E-4100", "E2E Sales Return", AccountType.REVENUE);
   const cogsAccount = await ensureAccount("E2E-5103", "E2E Cost of Goods Sold", AccountType.EXPENSE);
   const inventoryAccount = await ensureAccount("E2E-1104", "E2E Inventory", AccountType.ASSET);
+  const customerDownPaymentAccount =
+    (await prisma.account.findFirst({ where: { code: "210102" } })) ??
+    (await ensureAccount("210102", "Uang Muka Penjualan IDR", AccountType.LIABILITY));
 
   const settings = await prisma.systemSetting.findFirst();
   if (settings) {
@@ -48,6 +57,7 @@ async function main() {
         purchaseInventoryAccountId: inventoryAccount.id,
         purchaseExpenseAccountId: expenseAccount.id,
         generalExpenseAccountId: expenseAccount.id,
+        customerDownPaymentAccountId: customerDownPaymentAccount.id,
       },
     });
   } else {
@@ -64,6 +74,7 @@ async function main() {
         purchaseInventoryAccountId: inventoryAccount.id,
         purchaseExpenseAccountId: expenseAccount.id,
         generalExpenseAccountId: expenseAccount.id,
+        customerDownPaymentAccountId: customerDownPaymentAccount.id,
       },
     });
   }
@@ -273,8 +284,42 @@ async function main() {
   console.log(`4. Manual Journal: ${manualJournal.journalNumber} ✓ (balanced + draft)`);
 
   // ─── 4b. Jurnal manual DRAFT (menunggu posting) ──────────────────────
-  // Dipakai spec posting jurnal. Di atas, seed mem-POSTED jurnal secara manual — meniru
-  // efek `postJournal` alih-alih memanggilnya, karena aksi itu lama tak tersambung ke UI.
+  // Pastikan Kas Kecil punya saldo awal cukup untuk E2E transfer antar rekening.
+  const kasKecil = await prisma.account.findFirst({ where: { code: "110101" }, select: { id: true } });
+  const modalAccount = await prisma.account.findFirst({ where: { type: AccountType.EQUITY }, select: { id: true } });
+  if (kasKecil && modalAccount) {
+    const existingOpening = await prisma.journal.findFirst({
+      where: { referenceType: "OpeningBalanceE2E", description: "Saldo awal E2E Kas Kecil" },
+      select: { id: true },
+    });
+    if (!existingOpening) {
+      await prisma.journal.create({
+        data: {
+          journalNumber: await generateDocumentNumber("JRN"),
+          transactionDate: new Date(),
+          referenceType: "OpeningBalanceE2E",
+          referenceId: kasKecil.id,
+          description: "Saldo awal E2E Kas Kecil",
+          type: "MANUAL",
+          status: "POSTED",
+          totalDebit: 5000000,
+          totalCredit: 5000000,
+          entries: {
+            create: [
+              { accountId: kasKecil.id, debit: 5000000, credit: 0, memo: "Saldo awal Kas Kecil E2E" },
+              { accountId: modalAccount.id, debit: 0, credit: 5000000, memo: "Saldo awal Modal E2E" },
+            ],
+          },
+        },
+      });
+    }
+  }
+
+  // Dipakai spec posting jurnal (createdBy harus berbeda dari admin agar lolos pemisahan tugas / SoD).
+  const otherMaker = await prisma.user.findFirst({
+    where: { email: { not: "admin@erp.yarasoft.net" } },
+    select: { id: true },
+  });
   const draftJournal = await prisma.journal.create({
     data: {
       journalNumber: await generateDocumentNumber("JRN"),
@@ -286,7 +331,7 @@ async function main() {
       status: "DRAFT",
       totalDebit: 250000,
       totalCredit: 250000,
-      createdBy: userId,
+      createdBy: otherMaker?.id ?? userId,
       entries: {
         create: [
           { accountId: expenseAccount.id, debit: 250000, credit: 0, memo: "E2E draft" },

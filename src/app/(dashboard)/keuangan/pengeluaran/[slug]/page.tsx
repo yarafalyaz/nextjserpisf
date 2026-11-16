@@ -175,10 +175,11 @@ export default async function ExpenseDetailPage({
 
       <DetailCard>
         <DetailField label="No. Dokumen" value={expense.documentNo} mono />
-        <DetailField label="Tanggal" value={formatDate(expense.date)} />
+        <DetailField label="Tanggal" value={formatDate(expense.date)} mono />
         <DetailField
           label="Jumlah"
           value={formatCurrencyExact(Number(expense.amount))}
+          mono
         />
         <DetailField label="Kategori" value={expense.category?.label || "-"} />
         <DetailField label="Vendor" value={expense.vendor?.name || "-"} />

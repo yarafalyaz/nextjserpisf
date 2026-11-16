@@ -43,11 +43,11 @@ export default async function QcPage() {
         Checklist inspeksi ber-versi, hasil inspeksi per dokumen, dan ketidaksesuaian (NCR) yang memblokir serah terima sampai diselesaikan.
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 divide-y sm:divide-y-0 sm:divide-x divide-border rounded-lg border border-border bg-card shadow-2xs sm:grid-cols-3">
         {stats.map((s) => (
-          <div key={s.label} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-5">
-            <p className="text-sm text-muted-foreground">{s.label}</p>
-            <p className="text-2xl font-bold text-foreground mt-1">{s.value}</p>
+          <div key={s.label} className="p-4 flex flex-col gap-1">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{s.label}</p>
+            <p className="text-2xl font-bold font-mono tabular-nums tracking-tight text-foreground mt-1">{s.value}</p>
           </div>
         ))}
       </div>

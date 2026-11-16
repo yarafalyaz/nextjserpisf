@@ -34,7 +34,7 @@ const columns = [
   }),
   columnHelper.accessor("date", {
     header: "Tanggal",
-    cell: (info) => formatDate(info.getValue()),
+    cell: (info) => <span className="font-mono tabular-nums">{formatDate(info.getValue())}</span>,
   }),
   columnHelper.accessor("description", {
     header: "Deskripsi",
@@ -50,7 +50,7 @@ const columns = [
   }),
   columnHelper.accessor("amount", {
     header: "Jumlah",
-    cell: (info) => <span className="text-right block">{formatCurrencyExact(info.getValue())}</span>,
+    cell: (info) => <span className="text-right block font-mono tabular-nums">{formatCurrencyExact(info.getValue())}</span>,
   }),
   columnHelper.accessor("status", {
     header: "Status",

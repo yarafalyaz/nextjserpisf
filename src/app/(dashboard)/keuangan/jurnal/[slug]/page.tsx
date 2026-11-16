@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatDate, formatCurrencyExact, formatReferenceType, referenceHref } from "@/lib/utils/format"
+import { formatCurrencyExact, formatDate, formatReferenceType, referenceHref } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { resolveReferenceSlugs, referenceSlugKey } from "@/lib/services/reference-slug.service"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
+import { JournalEntriesTable } from "./_components/journal-entries-table"
 import { EmptyState } from "@/components/ui/empty-state"
 
 import type { Metadata } from "next"
@@ -93,31 +93,20 @@ export default async function JournalDetailPage({
           {journal.entries.length === 0 ? (
             <EmptyState title="Tidak ada entri" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>Akun</DetailTableTh>
-                <DetailTableTh>Memo</DetailTableTh>
-                <DetailTableTh align="right">Debit</DetailTableTh>
-                <DetailTableTh align="right">Kredit</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {journal.entries.map((entry) => (
-                  <DetailTableRow key={entry.id}>
-                    <DetailTableTd>{entry.account.code} - {entry.account.name}</DetailTableTd>
-                    <DetailTableTd>{entry.memo || "-"}</DetailTableTd>
-                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(entry.debit))}</DetailTableTd>
-                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(entry.credit))}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-              <DetailTableFoot>
-                <DetailTableFootRow>
-                  <DetailTableTd colSpan={2} align="right" className="font-bold">Total</DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold font-mono tabular-nums text-right">{formatCurrencyExact(Number(journal.totalDebit))}</DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold font-mono tabular-nums text-right">{formatCurrencyExact(Number(journal.totalCredit))}</DetailTableTd>
-                </DetailTableFootRow>
-              </DetailTableFoot>
-            </DetailTable>
+            <JournalEntriesTable
+              data={journal.entries.map((entry) => ({
+                id: entry.id,
+                accountCode: entry.account.code,
+                accountName: entry.account.name,
+                memo: entry.memo,
+                debit: Number(entry.debit),
+                credit: Number(entry.credit),
+                debitFormatted: formatCurrencyExact(Number(entry.debit)),
+                creditFormatted: formatCurrencyExact(Number(entry.credit)),
+              }))}
+              totalDebit={Number(journal.totalDebit)}
+              totalCredit={Number(journal.totalCredit)}
+            />
           )}
         </div>
       </div>

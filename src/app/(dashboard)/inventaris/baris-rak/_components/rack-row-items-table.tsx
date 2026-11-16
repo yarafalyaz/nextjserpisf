@@ -33,6 +33,14 @@ const columns = [
     header: "Nama Barang",
     // The item name (linked) is the card's headline; the SKU becomes a detail line.
     meta: { mobilePrimary: true },
+    filterFn: (row, _columnId, filterValue: string) => {
+      const q = String(filterValue ?? "").toLowerCase().trim()
+      if (!q) return true
+      return (
+        row.original.name.toLowerCase().includes(q) ||
+        row.original.sku.toLowerCase().includes(q)
+      )
+    },
     cell: (info) => (
       <Link
         href={entityHref("/master/barang", info.row.original)}

@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Combobox } from "@/components/ui/combobox"
+import { DataTable } from "@/components/ui/data-table"
+import { createColumnHelper } from "@/lib/table"
 import { showError } from "@/lib/utils/toast"
 import { DRIVETRAIN_OPTIONS, TRANSMISSION_OPTIONS } from "@/lib/constants/vehicle"
 import { checkVehicleFitment } from "@/actions/vehicle-fitment.actions"
@@ -41,6 +43,10 @@ const RESULT_META: Record<string, { label: string; className: string; Icon: type
   unknown: { label: "Belum Diketahui", className: "text-muted-foreground", Icon: ShieldQuestion },
 }
 
+type FitmentTableRow = FitmentLine & { id: number }
+
+const fitmentColumnHelper = createColumnHelper<FitmentTableRow>()
+
 export function FitmentChecker({ productId, itemNameMap, brands, models, variants }: FitmentCheckerProps) {
   const [isPending, startTransition] = useTransition()
   const [brandId, setBrandId] = useState<string | null>(null)
@@ -58,6 +64,47 @@ export function FitmentChecker({ productId, itemNameMap, brands, models, variant
   const variantOptions = useMemo(
     () => (modelId ? variants.filter((v) => String(v.vehicleModelId) === modelId) : variants),
     [modelId, variants],
+  )
+
+  const tableData = useMemo<FitmentTableRow[]>(
+    () => (lines ?? []).map((line) => ({ ...line, id: line.itemId })),
+    [lines],
+  )
+
+  const columns = useMemo(
+    () => [
+      fitmentColumnHelper.accessor("itemId", {
+        header: "Bahan",
+        meta: { mobilePrimary: true },
+        cell: (info) => (
+          <span className="font-medium text-foreground">
+            {itemNameMap[info.getValue()] ?? `Barang #${info.getValue()}`}
+          </span>
+        ),
+      }),
+      fitmentColumnHelper.accessor("result", {
+        header: "Hasil",
+        cell: (info) => {
+          const meta = RESULT_META[info.getValue()] ?? RESULT_META.unknown
+          const Icon = meta.Icon
+          return (
+            <span className={`inline-flex items-center gap-1.5 font-medium ${meta.className}`}>
+              <Icon size={14} aria-hidden="true" /> {meta.label}
+            </span>
+          )
+        },
+      }),
+      fitmentColumnHelper.accessor("evaluation", {
+        header: "Sumber / Alasan",
+        cell: (info) => {
+          const ev = info.getValue()
+          return (
+            <span className="text-muted-foreground">{ev.source || ev.reason}</span>
+          )
+        },
+      }),
+    ],
+    [itemNameMap],
   )
 
   function check() {
@@ -151,38 +198,19 @@ export function FitmentChecker({ productId, itemNameMap, brands, models, variant
         </div>
 
         {lines && (
-          <div className="overflow-x-auto">
+          <div>
             {lines.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">BOM produk belum memiliki bahan.</p>
             ) : (
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-default">
-                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">Bahan</th>
-                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">Hasil</th>
-                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">Sumber / Alasan</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((line) => {
-                    const meta = RESULT_META[line.result] ?? RESULT_META.unknown
-                    const Icon = meta.Icon
-                    return (
-                      <tr key={line.itemId} className="border-b border-default/50">
-                        <td className="py-2 px-2">{itemNameMap[line.itemId] ?? `Barang #${line.itemId}`}</td>
-                        <td className="py-2 px-2">
-                          <span className={`inline-flex items-center gap-1.5 font-medium ${meta.className}`}>
-                            <Icon size={14} aria-hidden="true" /> {meta.label}
-                          </span>
-                        </td>
-                        <td className="py-2 px-2 text-muted-foreground">
-                          {line.evaluation.source || line.evaluation.reason}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+              <DataTable
+                data={tableData}
+                columns={columns}
+                ariaLabel="Hasil Cek Kompatibilitas Kendaraan"
+                selectable={false}
+                enableColumnToggle={false}
+                enableExport={false}
+                pageSize={50}
+              />
             )}
           </div>
         )}

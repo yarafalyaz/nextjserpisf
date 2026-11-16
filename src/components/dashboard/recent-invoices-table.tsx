@@ -303,7 +303,7 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
               <TabsTrigger value="all">Semua ({counts.all})</TabsTrigger>
               <TabsTrigger value="unpaid">Menunggu Pembayaran ({counts.unpaid})</TabsTrigger>
               <TabsTrigger value="paid">Lunas ({counts.paid})</TabsTrigger>
-              <TabsTrigger value="draft">Draft ({counts.draft})</TabsTrigger>
+              <TabsTrigger value="draft">Draf ({counts.draft})</TabsTrigger>
             </TabsList>
 
             <div className="flex items-center gap-2">

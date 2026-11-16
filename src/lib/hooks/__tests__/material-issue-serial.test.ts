@@ -61,7 +61,13 @@ function wireTx(items: IssueItem[]) {
     materialIssue: { findUniqueOrThrow: spies.issueFindUniqueOrThrow, update: spies.issueUpdate },
     materialIssueItem: { update: spies.issueItemUpdate },
     stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
-    item: { update: vi.fn().mockResolvedValue({}) },
+    warehouse: { findMany: vi.fn().mockResolvedValue([{ id: 5, name: "Gudang Utama", isActive: true }]) },
+    item: {
+      update: vi.fn().mockResolvedValue({}),
+      findMany: vi.fn().mockResolvedValue(
+        [...new Set(items.map((i) => i.itemId))].map((id) => ({ id, name: `Item #${id}`, isActive: true })),
+      ),
+    },
   }
   mocks.transaction.mockImplementation((fn: (t: typeof tx) => Promise<unknown>) => fn(tx))
   return spies

@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useRef, useState, useTransition, useEffect, useMemo } from "react"
+import { useCallback, useRef, useState, useTransition, useEffect, useMemo } from "react"
 import { createProduct, updateProduct } from "@/actions/manufacturing.actions"
 import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -9,8 +9,10 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { DataTable } from "@/components/ui/data-table"
+import { createColumnHelper } from "@/lib/table"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 interface MaterialRow {
   itemId: string
@@ -46,6 +48,12 @@ interface ProductEdit {
   inventoryItemId: number | null
   materials: { itemId: number; qty: number }[]
 }
+
+interface MaterialTableRow extends MaterialRow {
+  id: number
+}
+
+const materialColumnHelper = createColumnHelper<MaterialTableRow>()
 
 export function ProductForm({
   generatedCode,
@@ -87,7 +95,7 @@ export function ProductForm({
     }
     async function loadModels() {
       try {
-        const r = await fetch("/api/vehicle-models")
+        const r = await fetch("/api/vehicle-models?pageSize=500")
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         const d = await r.json()
         setVehicleModels(d.data ?? [])
@@ -121,36 +129,117 @@ export function ProductForm({
   }, [items])
 
   function addMaterialRow() {
-    setMaterials([...materials, { itemId: "", qty: "" }])
+    setMaterials((prev) => [...prev, { itemId: "", qty: "" }])
   }
 
-  function removeMaterialRow(index: number) {
-    setMaterials(materials.filter((_, i) => i !== index))
-  }
+  const removeMaterialRow = useCallback((index: number) => {
+    setMaterials((prev) => prev.filter((_, i) => i !== index))
+  }, [])
 
-  function updateMaterial(index: number, field: keyof MaterialRow, value: string) {
-    const updated = [...materials]
-    updated[index][field] = value
-    setMaterials(updated)
-  }
+  const updateMaterial = useCallback((index: number, field: keyof MaterialRow, value: string) => {
+    setMaterials((prev) => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], [field]: value }
+      return updated
+    })
+  }, [])
+
+  const tableData = useMemo<MaterialTableRow[]>(
+    () => materials.map((m, index) => ({ ...m, id: index })),
+    [materials],
+  )
+
+  const columns = useMemo(
+    () => [
+      materialColumnHelper.accessor("itemId", {
+        header: "Barang",
+        meta: { mobilePrimary: true },
+        cell: (info) => {
+          const index = info.row.original.id
+          return (
+            <Combobox
+              value={info.getValue() || null}
+              onChange={(key) => updateMaterial(index, "itemId", key ?? "")}
+              placeholder="Cari barang..."
+              options={itemOptions}
+            />
+          )
+        },
+      }),
+      materialColumnHelper.accessor("qty", {
+        header: "Jml",
+        cell: (info) => {
+          const m = info.row.original
+          const index = m.id
+          return (
+            <div className="flex items-center gap-2">
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={m.qty}
+                onChange={(e) => {
+                  const normalized = e.target.value.replace(/,/g, ".").replace(/[^0-9.]/g, "")
+                  const dotIndex = normalized.indexOf(".")
+                  const sanitized =
+                    dotIndex === -1
+                      ? normalized
+                      : normalized.slice(0, dotIndex + 1) + normalized.slice(dotIndex + 1).replace(/\./g, "")
+                  updateMaterial(index, "qty", sanitized)
+                }}
+                placeholder="0"
+                className="font-mono tabular-nums"
+              />
+              <span className="shrink-0 text-sm font-medium text-muted-foreground min-w-[2.5rem]">
+                {m.itemId ? (uomById.get(m.itemId) ?? "") : ""}
+              </span>
+            </div>
+          )
+        },
+      }),
+      materialColumnHelper.display({
+        id: "actions",
+        header: "Aksi",
+        meta: { align: "right" },
+        cell: (info) => {
+          const index = info.row.original.id
+          return (
+            <Button
+              onPress={() => removeMaterialRow(index)}
+              aria-label={`Hapus bahan baris ${index + 1}`}
+              type="button"
+              isDisabled={materials.length === 1}
+            >
+              <Trash2 size={14} />
+            </Button>
+          )
+        },
+      }),
+    ],
+    [itemOptions, materials.length, removeMaterialRow, uomById, updateMaterial],
+  )
 
   function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
 
-    // Append vehicle brand/model
-    if (selectedBrandId) formData.set("vehicleBrandId", String(selectedBrandId))
-    if (selectedModelId) formData.set("vehicleModelId", String(selectedModelId))
+    // Append vehicle brand/model (send "" when cleared so edit can unset them)
+    formData.set("vehicleBrandId", selectedBrandId ? String(selectedBrandId) : "")
+    formData.set("vehicleModelId", selectedModelId ? String(selectedModelId) : "")
     formData.set("inventoryItemId", inventoryItemId ? String(inventoryItemId) : "")
     if (!product?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
 
-    // Append material rows
-    materials.forEach((m) => {
-      if (m.itemId && m.qty) {
+    // Validate and append material rows
+    for (const m of materials) {
+      if (m.itemId) {
+        const qtyNum = Number(m.qty)
+        if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+          showError("Jumlah bahan (BOM) harus lebih besar dari 0")
+          return
+        }
         formData.append("materialItemId", m.itemId)
         formData.append("materialQty", m.qty)
       }
-    })
+    }
 
     startTransition(async () => {
       const result = product?.id ? await updateProduct(product.id, formData) : await createProduct(formData)
@@ -163,7 +252,7 @@ export function ProductForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
+    <form onSubmit={handleSubmit} className="sm:bg-surface sm:rounded-xl sm:border sm:border-default sm:shadow-sm sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">Nama Produk *</Label>
@@ -228,56 +317,24 @@ export function ProductForm({
           </Button>
         </div>
 
-        <div className="overflow-x-auto">
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>Barang</DetailTableTh>
-              <DetailTableTh>Jml</DetailTableTh>
-              <DetailTableTh>Aksi</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {materials.map((m, index) => (
-                <DetailTableRow key={index}>
-                  <DetailTableTd>
-                    <Combobox
-                      value={m.itemId || null}
-                      onChange={(key) => updateMaterial(index, "itemId", key ?? "")}
-                      placeholder="Cari barang..."
-                      options={itemOptions}
-                    />
-                  </DetailTableTd>
-                  <DetailTableTd>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={m.qty}
-                        onChange={(e) => updateMaterial(index, "qty", e.target.value)}
-                        placeholder="Jml"
-                      />
-                      <span className="shrink-0 text-sm font-medium text-muted-foreground min-w-[2.5rem]">
-                        {m.itemId ? (uomById.get(m.itemId) ?? "") : ""}
-                      </span>
-                    </div>
-                  </DetailTableTd>
-                  <DetailTableTd>
-                    <Button onPress={() => removeMaterialRow(index)} aria-label={`Hapus bahan baris ${index + 1}`} type="button" isDisabled={materials.length === 1}>
-                      <Trash2 size={14} />
-                    </Button>
-                  </DetailTableTd>
-                </DetailTableRow>
-              ))}
-            </DetailTableBody>
-          </DetailTable>
-        </div>
+        <DataTable
+          data={tableData}
+          columns={columns}
+          ariaLabel="Bahan BOM"
+          selectable={false}
+          enableColumnToggle={false}
+          enableExport={false}
+          showPagination={false}
+          pageSize={50}
+        />
       </div>
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
+      <FormActions>
         <Button className="w-full sm:w-auto" onPress={() => router.back()} type="button">Batal</Button>
         <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending} id="submit-product">
           {isPending ? "Menyimpan..." : "Simpan"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

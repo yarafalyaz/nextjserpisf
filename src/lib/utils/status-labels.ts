@@ -238,6 +238,9 @@ export const statusToIndo: Record<string, string> = {
   contacted: "dihubungi",
   qualified: "kualifikasi",
   proposal: "proposal",
+  bonus: "bonus",
+  reward: "penghargaan",
+  incentive: "insentif",
 }
 
 export const indoToStatus: Record<string, string> = Object.entries(statusToIndo).reduce(

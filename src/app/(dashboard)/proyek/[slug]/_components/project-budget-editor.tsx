@@ -21,6 +21,8 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
+import { createColumnHelper } from "@/lib/table"
+import { DataTable } from "@/components/ui/data-table"
 
 export interface BudgetItemRow {
   id: number
@@ -82,6 +84,59 @@ export function ProjectBudgetEditor({ projectId, items, stages, quotations, isLo
   const stageOptions = useMemo(() => [{ value: "", label: "Belum dialokasi (tanpa tahap)" }, ...stages.map((s) => ({ value: String(s.id), label: s.name }))], [stages])
   const catOptions = useMemo(() => [{ value: "", label: "Tanpa kategori" }, ...CATEGORIES], [])
 
+  const budgetColumns = useMemo(() => {
+    const columnHelper = createColumnHelper<BudgetItemRow>()
+    return [
+      columnHelper.accessor("description", {
+        header: "Deskripsi",
+        meta: { mobilePrimary: true },
+        cell: (info) => info.getValue() || `Baris #${info.row.original.id}`,
+      }),
+      columnHelper.accessor("projectStageId", {
+        header: "Tahap",
+        cell: (info) => stages.find((s) => s.id === info.getValue())?.name ?? "Belum dialokasi",
+      }),
+      columnHelper.accessor("category", {
+        header: "Kategori",
+        cell: (info) => CATEGORIES.find((c) => c.value === info.getValue())?.label ?? "Tanpa kategori",
+      }),
+      columnHelper.accessor("qty", {
+        header: "Qty",
+        meta: { align: "right" },
+        cell: (info) => <span className="font-mono tabular-nums">{info.getValue()}</span>,
+      }),
+      columnHelper.accessor("cost", {
+        header: "Biaya Satuan",
+        meta: { align: "right" },
+        cell: (info) => <span className="font-mono tabular-nums">{formatCurrencyExact(info.getValue())}</span>,
+      }),
+      columnHelper.display({
+        id: "actions",
+        header: "Aksi",
+        enableSorting: false,
+        meta: { align: "right" },
+        cell: (info) => {
+          const it = info.row.original
+          if (!canEdit) return null
+          return (
+            <div className="flex justify-end gap-2 whitespace-nowrap">
+              <Button type="button" variant="secondary" isDisabled={isPending} onClick={() => { setEditing(it); setStageId(it.projectStageId ? String(it.projectStageId) : ""); setCategory(it.category ?? "") }}>Ubah</Button>
+              {isLocked ? (
+                <Button type="button" variant="secondary" isDisabled={isPending} onClick={() => {
+                  if (!revReason.trim()) { showError("Isi alasan revisi di formulir baris dulu, lalu klik Hapus (usulan)"); setEditing(it); return }
+                  const rfd = new FormData(); rfd.set("reason", revReason); rfd.set("changes", JSON.stringify({ changes: [{ type: "delete", projectItemId: it.id }] }))
+                  setConfirm({ title: "Usulkan hapus baris RAB?", body: `Baris "${it.description || it.id}" diusulkan dihapus lewat revisi.`, label: "Kirim Usulan", run: () => proposeProjectBudgetRevision(projectId, rfd) })
+                }}>Hapus (usulan)</Button>
+              ) : (
+                <Button type="button" variant="secondary" isDisabled={isPending} onClick={() => setConfirm({ title: "Hapus baris RAB?", body: `Baris "${it.description || it.id}" akan dihapus permanen.`, label: "Hapus", run: () => deleteProjectBudgetItem(it.id) })}>Hapus</Button>
+              )}
+            </div>
+          )
+        },
+      }),
+    ]
+  }, [stages, canEdit, isPending, isLocked, revReason, projectId])
+
   function run(promise: Promise<{ success: boolean; error?: string }>, okMsg: string, after?: () => void) {
     startTransition(async () => {
       const res = await promise
@@ -121,37 +176,16 @@ export function ProjectBudgetEditor({ projectId, items, stages, quotations, isLo
       </p>
 
       {items.length > 0 && (
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-muted-foreground">
-              <th className="py-1 pr-2 font-medium">Deskripsi</th><th className="py-1 pr-2 font-medium">Tahap</th>
-              <th className="py-1 pr-2 font-medium">Kategori</th><th className="py-1 pr-2 text-right font-medium">Qty</th>
-              <th className="py-1 pr-2 text-right font-medium">Biaya Satuan</th><th className="py-1 text-right font-medium">Aksi</th>
-            </tr></thead>
-            <tbody>
-              {items.map((it) => (
-                <tr key={it.id} className="border-t border-default/50">
-                  <td className="py-1.5 pr-2">{it.description || `Baris #${it.id}`}</td>
-                  <td className="py-1.5 pr-2">{stages.find((s) => s.id === it.projectStageId)?.name ?? "Belum dialokasi"}</td>
-                  <td className="py-1.5 pr-2">{CATEGORIES.find((c) => c.value === it.category)?.label ?? "Tanpa kategori"}</td>
-                  <td className="py-1.5 pr-2 text-right">{it.qty}</td>
-                  <td className="py-1.5 pr-2 text-right font-mono tabular-nums">{formatCurrencyExact(it.cost)}</td>
-                  <td className="py-1.5 text-right whitespace-nowrap">
-                    {canEdit && <Button type="button" variant="secondary" isDisabled={isPending} onClick={() => { setEditing(it); setStageId(it.projectStageId ? String(it.projectStageId) : ""); setCategory(it.category ?? "") }}>Ubah</Button>}
-                    {canEdit && (isLocked ? (
-                      <Button type="button" variant="secondary" isDisabled={isPending} onClick={() => {
-                        if (!revReason.trim()) { showError("Isi alasan revisi di formulir baris dulu, lalu klik Hapus (usulan)"); setEditing(it); return }
-                        const rfd = new FormData(); rfd.set("reason", revReason); rfd.set("changes", JSON.stringify({ changes: [{ type: "delete", projectItemId: it.id }] }))
-                        setConfirm({ title: "Usulkan hapus baris RAB?", body: `Baris "${it.description || it.id}" diusulkan dihapus lewat revisi.`, label: "Kirim Usulan", run: () => proposeProjectBudgetRevision(projectId, rfd) })
-                      }}>Hapus (usulan)</Button>
-                    ) : (
-                      <Button type="button" variant="secondary" isDisabled={isPending} onClick={() => setConfirm({ title: "Hapus baris RAB?", body: `Baris "${it.description || it.id}" akan dihapus permanen.`, label: "Hapus", run: () => deleteProjectBudgetItem(it.id) })}>Hapus</Button>
-                    ))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-3">
+          <DataTable
+            data={items}
+            columns={budgetColumns}
+            ariaLabel="Daftar item RAB proyek"
+            selectable={false}
+            enableColumnToggle={false}
+            enableExport={false}
+            pageSize={50}
+          />
         </div>
       )}
 
@@ -181,7 +215,7 @@ export function ProjectBudgetEditor({ projectId, items, stages, quotations, isLo
           {quotations.length > 0 && (
             <form onSubmit={(e) => { e.preventDefault(); if (!quotationId) { showError("Pilih penawaran sumber kontrak"); return } run(setProjectContractFromQuotation(projectId, Number(quotationId), contractKeyRef.current), "Kontrak dari penawaran tersimpan", () => { contractKeyRef.current = crypto.randomUUID() }) }} aria-label="Kontrak dari penawaran" className="flex flex-col gap-2">
               <span className="text-xs font-semibold text-foreground">Kontrak dari Penawaran</span>
-              <div className="flex flex-col gap-1.5"><Label htmlFor="rabQuotation">Penawaran (disetujui)</Label><FormSelect id="rabQuotation" value={quotationId} onValueChange={setQuotationId} options={quotations.map((q) => ({ value: String(q.id), label: `${q.documentNo} — ${formatCurrencyExact(q.grandTotal)}` }))} /></div>
+              <div className="flex flex-col gap-1.5"><Label htmlFor="rabQuotation">Penawaran (disetujui)</Label><FormSelect id="rabQuotation" value={quotationId} onValueChange={setQuotationId} options={quotations.map((q) => ({ value: String(q.id), label: `${q.documentNo} - ${formatCurrencyExact(q.grandTotal)}` }))} /></div>
               <Button type="submit" variant="secondary" isDisabled={isPending}>Pakai Penawaran Ini</Button>
             </form>
           )}

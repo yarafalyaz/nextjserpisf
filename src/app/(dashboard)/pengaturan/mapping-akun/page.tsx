@@ -14,6 +14,7 @@ import {
   mappingAccountLabel,
 } from "./_lib/mapping-account-label"
 import { loadMappingAccounts } from "./_lib/load-mapping-accounts"
+import { ACCOUNT_MAPPING_CATALOG } from "@/lib/utils/account-mapping-catalog"
 
 import type { Metadata } from "next"
 
@@ -59,94 +60,15 @@ export default async function AccountMappingPage() {
     return mappingAccountLabel(id, accounts)
   }
 
-  const mappingGroups = [
-    {
-      title: "Penjualan",
-      items: [
-        { label: "Piutang Usaha", value: accountName(settings?.salesReceivableAccountId) },
-        { label: "Uang Muka Penjualan / DP (210102)", value: accountName(settings?.customerDownPaymentAccountId) },
-        { label: "Pendapatan Penjualan", value: accountName(settings?.salesRevenueAccountId) },
-        { label: "PPN Keluaran", value: accountName(settings?.salesTaxAccountId) },
-        { label: "Retur Penjualan", value: accountName(settings?.salesReturnAccountId) },
-        { label: "Akun Penjualan", value: accountName(settings?.salesAccountId) },
-        { label: "Pendapatan Besi Tua Scrap (kandidat 710003)", value: accountName(settings?.scrapSaleIncomeAccountId) },
-      ],
-    },
-    {
-      title: "Pembelian",
-      items: [
-        { label: "Hutang Usaha", value: accountName(settings?.purchasePayableAccountId) },
-        { label: "Persediaan", value: accountName(settings?.purchaseInventoryAccountId) },
-        { label: "PPN Masukan", value: accountName(settings?.purchaseTaxAccountId) },
-        { label: "Beban Pembelian", value: accountName(settings?.purchaseExpenseAccountId) },
-        { label: "Diskon Pembelian", value: accountName(settings?.purchaseDiscountAccountId) },
-        { label: "Ongkos Kirim", value: accountName(settings?.purchaseShippingAccountId) },
-        { label: "Beban Admin Bank", value: accountName(settings?.purchaseAdminFeeAccountId) },
-        { label: "Retur Pembelian", value: accountName(settings?.purchaseReturnAccountId) },
-      ],
-    },
-    {
-      title: "Persediaan & Manufaktur",
-      items: [
-        { label: "Persediaan", value: accountName(settings?.inventoryAccountId) },
-        { label: "Penyesuaian Persediaan", value: accountName(settings?.inventoryAdjustmentAccountId) },
-        { label: "Penyesuaian Stok", value: accountName(settings?.stockAdjustmentAccountId) },
-        { label: "HPP (COGS)", value: accountName(settings?.cogsAccountId) },
-        { label: "WIP", value: accountName(settings?.wipAccountId) },
-        { label: "Beban Material", value: accountName(settings?.materialExpenseAccountId) },
-        { label: "Beban Pengeluaran Material", value: accountName(settings?.materialIssueExpenseAccountId) },
-      ],
-    },
-    {
-      title: "Garansi",
-      items: [
-        { label: "Beban Garansi (510104)", value: accountName(settings?.warrantyExpenseAccountId) },
-        { label: "Provisi Garansi (210205)", value: accountName(settings?.warrantyProvisionAccountId) },
-      ],
-    },
-    {
-      title: "Klaim Supplier & Reimbursement",
-      items: [
-        { label: "Piutang Klaim Supplier (110508)", value: accountName(settings?.supplierClaimReceivableAccountId) },
-        { label: "Utang Reimbursement (210209)", value: accountName(settings?.reimbursementLiabilityAccountId) },
-      ],
-    },
-    {
-      title: "Umum & Kas",
-      items: [
-        { label: "Kas Kecil", value: accountName(settings?.pettyCashAccountId) },
-        { label: "Kas & Bank", value: accountName(settings?.cashBankAccountId) },
-        { label: "Beban Umum", value: accountName(settings?.generalExpenseAccountId) },
-        { label: "Kas Default", value: accountName(settings?.defaultCashAccountId) },
-      ],
-    },
-    {
-      title: "Penggajian",
-      items: [
-        { label: "Beban Gaji", value: accountName(settings?.salaryExpenseAccountId) },
-        { label: "Hutang Gaji", value: accountName(settings?.salariesPayableAccountId) },
-        { label: "Bank Penggajian", value: accountName(settings?.payrollBankAccountId) },
-        { label: "Piutang Karyawan", value: accountName(settings?.employeeReceivableAccountId) },
-        { label: "Tipe Jurnal Penggajian", value: accountName(settings?.payrollJournalTypeId) },
-        { label: "Beban Kompensasi PKWT (600028)", value: accountName(settings?.pkwtCompensationExpenseAccountId) },
-        { label: "Utang Kompensasi PKWT (210207)", value: accountName(settings?.pkwtCompensationPayableAccountId) },
-      ],
-    },
-    {
-      title: "Aset Tetap",
-      items: [
-        { label: "Beban Penyusutan", value: accountName(settings?.depreciationExpenseAccountId) },
-        { label: "Akumulasi Penyusutan", value: accountName(settings?.accumulatedDepreciationAccountId) },
-      ],
-    },
-    {
-      title: "Penutup Tahun",
-      items: [
-        { label: "Laba Ditahan (Tujuan Penutup Tahun)", value: accountName(settings?.retainedEarningsAccountId) },
-        { label: "Pendapatan Denda Keterlambatan Piutang", value: accountName(settings?.lateFeeIncomeAccountId) },
-      ],
-    },
-  ]
+  const settingsRecord = (settings ?? {}) as Record<string, unknown>
+
+  const mappingGroups = ACCOUNT_MAPPING_CATALOG.map((group) => ({
+    title: group.title,
+    items: group.items.map((item) => ({
+      label: item.label,
+      value: accountName(settingsRecord[item.key] as number | null | undefined),
+    })),
+  }))
 
   const allMappings = mappingGroups.flatMap((g) => g.items)
   const mappedCount = allMappings.filter((i) => isMappingFilled(i.value)).length
@@ -163,8 +85,8 @@ export default async function AccountMappingPage() {
           <CardTitle>Mapping Akun</CardTitle>
           <CardDescription>Pemetaan akun buku besar untuk posting jurnal otomatis.</CardDescription>
           <CardAction>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/pengaturan/mapping-akun/ubah"><Pencil className="size-3.5" /> Ubah Mapping</Link>
+            <Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-9">
+              <Link href="/pengaturan/mapping-akun/ubah"><Pencil className="size-3.5" aria-hidden="true" /> Ubah Mapping</Link>
             </Button>
           </CardAction>
         </CardHeader>

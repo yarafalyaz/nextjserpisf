@@ -5,6 +5,7 @@ import {
   resolveAssetAccounts,
   resolveInventoryAccounts,
 } from "../account-automap"
+import { ACCOUNT_MAPPING_CATALOG_KEYS } from "../account-mapping-catalog"
 
 // Real-ish COA fragment (mirrors the seed's codes/names).
 const COA = [
@@ -206,5 +207,24 @@ describe("employeeLoanWriteOffExpenseAccountId automap F-162-V", () => {
     ]
     expect(resolveAllAccountMappings(coa).employeeLoanWriteOffExpenseAccountId).toBe("901")
     expect(resolveAllAccountMappings([{ id: 902, code: "600020", name: "Beban Operasional Lainnya" }]).employeeLoanWriteOffExpenseAccountId).toBe("")
+  })
+})
+
+describe("retainedEarningsAccountId, lateFeeIncomeAccountId, assetFiscalRevaluationTaxPayableAccountId automap", () => {
+  it("memetakan Laba Ditahan (300002), Utang PPh Final Revaluasi (210206), dan Denda Keterlambatan (710005, bukan 710006 Denda Karyawan)", () => {
+    const coa = [
+      { id: 302, code: "300002", name: "Laba Ditahan" },
+      { id: 206, code: "210206", name: "Utang PPh 4(2) Sewa Tanah/Bangunan" },
+      { id: 706, code: "710006", name: "Pendapatan Denda Karyawan" },
+      { id: 705, code: "710005", name: "Pendapatan Diluar Usaha Lainnya" },
+    ]
+    const mapping = resolveAllAccountMappings(coa)
+    expect(mapping.retainedEarningsAccountId).toBe("302")
+    expect(mapping.assetFiscalRevaluationTaxPayableAccountId).toBe("206")
+    expect(mapping.lateFeeIncomeAccountId).toBe("705")
+  })
+
+  it("katalog UI (ACCOUNT_MAPPING_CATALOG) dan aturan auto-map (ACCOUNT_MAPPING_FIELDS) identik 1-ke-1", () => {
+    expect([...ACCOUNT_MAPPING_CATALOG_KEYS].sort()).toEqual([...ACCOUNT_MAPPING_FIELDS].sort())
   })
 })

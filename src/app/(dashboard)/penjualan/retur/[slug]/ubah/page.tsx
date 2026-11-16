@@ -75,7 +75,11 @@ export default async function EditPage({
       orderBy: { createdAt: "desc" },
       select: { id: true, documentNo: true },
     }),
-    prisma.customer.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }),
+    prisma.customer.findMany({
+      where: { deletedAt: null },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
     prisma.item.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },

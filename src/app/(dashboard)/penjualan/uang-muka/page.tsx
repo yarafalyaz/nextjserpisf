@@ -74,6 +74,8 @@ export async function renderDownPaymentsPage({
   const where = {
     ...(params.cari && {
       OR: [
+        { documentNo: { contains: params.cari } },
+        { customer: { name: { contains: params.cari } } },
         { quotation: { customer: { name: { contains: params.cari } } } },
         { quotation: { documentNo: { contains: params.cari } } },
       ],

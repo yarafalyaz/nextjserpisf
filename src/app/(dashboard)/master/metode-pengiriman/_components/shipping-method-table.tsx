@@ -3,6 +3,7 @@
 import { createColumnHelper } from "@/lib/table"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
+import { StatusChip } from "@/components/ui/status-chip"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteShippingMethod } from "@/actions/method.actions"
 import { entityEditHref } from "@/lib/utils/entity-url"
@@ -33,9 +34,10 @@ const columns = [
   columnHelper.accessor("isActive", {
     header: "Status",
     cell: (info) => (
-      <span className={`status-badge status-${info.getValue() ? "active" : "inactive"}`}>
-        {info.getValue() ? "Aktif" : "Nonaktif"}
-      </span>
+      <StatusChip
+        status={info.getValue() ? "active" : "inactive"}
+        customLabel={info.getValue() ? "Aktif" : "Nonaktif"}
+      />
     ),
   }),
   columnHelper.display({

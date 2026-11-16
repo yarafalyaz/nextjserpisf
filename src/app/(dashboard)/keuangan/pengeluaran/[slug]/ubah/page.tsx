@@ -31,7 +31,7 @@ export default async function EditPage({
 
   if (!data) notFound();
 
-  const [accounts, projects, categories, vendors] = await Promise.all([
+  const [accounts, projects, categories, vendors, costCenters] = await Promise.all([
     // Halaman ubah: akun tersimpan tetap tampil walau kini induk, supaya nilai
     // lama tidak diam-diam berganti ke opsi pertama.
     loadPostableAccounts({ includeIds: [data.accountId, data.paidFromAccountId] }),
@@ -49,6 +49,11 @@ export default async function EditPage({
       where: { deletedAt: null },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
+    }),
+    prisma.costCenter.findMany({
+      where: { isActive: true },
+      orderBy: { code: "asc" },
+      select: { id: true, code: true, name: true },
     }),
   ])
 
@@ -84,6 +89,7 @@ export default async function EditPage({
         }}
         accounts={accounts}
         categories={categories}
+        costCenters={costCenters}
         projects={projects}
         vendors={vendors}
       />

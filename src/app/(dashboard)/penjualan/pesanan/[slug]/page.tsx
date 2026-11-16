@@ -16,13 +16,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { InvoiceItemsEditor } from "@/components/ui/invoice-items-editor";
 import { PostedLockNotice } from "@/components/ui/posted-lock-notice";
 import {
-  DetailTable,
-  DetailTableHead,
-  DetailTableTh,
-  DetailTableBody,
-  DetailTableRow,
-  DetailTableTd,
-} from "@/components/ui/detail-table";
+  SalesOrderDeliveriesTable,
+  SalesOrderInvoicesTable,
+} from "./_components/sales-order-detail-tables";
 
 import type { Metadata } from "next";
 
@@ -293,28 +289,15 @@ export default async function SalesOrderDetailPage({
           {order.deliveryOrders.length === 0 ? (
             <EmptyState title="Belum ada surat jalan untuk pesanan ini" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>No. Dokumen</DetailTableTh>
-                <DetailTableTh>Tanggal</DetailTableTh>
-                <DetailTableTh>Status</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {order.deliveryOrders.map((d) => (
-                  <DetailTableRow key={d.id}>
-                    <DetailTableTd className="font-mono">
-                      <Link href={entityHref("/penjualan/surat-jalan", d)}>
-                        {d.documentNo}
-                      </Link>
-                    </DetailTableTd>
-                    <DetailTableTd>{formatDate(d.date)}</DetailTableTd>
-                    <DetailTableTd>
-                      <StatusChip status={d.status} />
-                    </DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <SalesOrderDeliveriesTable
+              data={order.deliveryOrders.map((d) => ({
+                id: d.id,
+                slug: d.slug,
+                documentNo: d.documentNo,
+                date: d.date.toISOString(),
+                status: d.status,
+              }))}
+            />
           )}
         </div>
       </div>
@@ -345,31 +328,16 @@ export default async function SalesOrderDetailPage({
           {order.salesInvoices.length === 0 ? (
             <EmptyState title="Belum ada faktur untuk pesanan ini" />
           ) : (
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>No. Dokumen</DetailTableTh>
-                <DetailTableTh>Tanggal</DetailTableTh>
-                <DetailTableTh align="right">Total</DetailTableTh>
-                <DetailTableTh>Status</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {order.salesInvoices.map((inv) => (
-                  <DetailTableRow key={inv.id}>
-                    <DetailTableTd className="font-mono">
-                      <Link href={entityHref("/penjualan/faktur", inv)}>
-                        {inv.documentNo}
-                      </Link>
-                    </DetailTableTd>
-                    <DetailTableTd>{formatDate(inv.date)}</DetailTableTd>
-                    <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(inv.grandTotal))}
-                    </DetailTableTd>
-                    <DetailTableTd>
-                      <StatusChip status={inv.status} />
-                    </DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
+            <SalesOrderInvoicesTable
+              data={order.salesInvoices.map((inv) => ({
+                id: inv.id,
+                slug: inv.slug,
+                documentNo: inv.documentNo,
+                date: inv.date.toISOString(),
+                grandTotal: Number(inv.grandTotal),
+                status: inv.status,
+              }))}
+            />
           )}
         </div>
       </div>

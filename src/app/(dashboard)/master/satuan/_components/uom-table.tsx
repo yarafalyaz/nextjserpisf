@@ -7,6 +7,7 @@ import { entityHref } from "@/lib/utils/entity-url";
 
 export interface UnitOfMeasureItem {
   id: number;
+  slug?: string | null;
   name: string;
   symbol: string;
   category: string | null;
@@ -66,6 +67,7 @@ export function UomTable({ data, page, pageSize, total }: UomTableProps) {
     <DataTable
       columns={columns}
       data={data}
+      searchColumn="name"
       searchPlaceholder="Cari nama, simbol, atau kategori..."
       searchParam="cari"
       serverPagination={{

@@ -83,7 +83,7 @@ const columns = [
     },
   }),
   columnHelper.accessor("umurDraftHari", {
-    header: "Umur Draft",
+    header: "Umur Draf",
     cell: (info) => {
       const days = info.getValue()
       const isMengendap = info.row.original.tingkat === "mengendap"

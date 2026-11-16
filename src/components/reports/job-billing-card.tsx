@@ -56,7 +56,7 @@ export function JobBillingCard({
     summary.nilaiBerjalan <= 0 ? null : Math.min(100, Math.max(0, (nilai / summary.nilaiBerjalan) * 100))
   return (
     <section aria-label={`Ringkasan tagihan ${summary.quotationDocumentNo}`} className="rounded-xl border border-default bg-surface p-5 shadow-sm">
-      <h2 className="text-base font-semibold">Tagihan Berjalan — {summary.quotationDocumentNo}</h2>
+      <h2 className="text-base font-semibold">Tagihan Berjalan: {summary.quotationDocumentNo}</h2>
       {summary.overbilled ? (
         <p role="alert" className="mt-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           Overbilled: sudah ditagih melebihi nilai berjalan sebesar {formatCurrencyExact(-summary.sisaBelumDitagih)}.

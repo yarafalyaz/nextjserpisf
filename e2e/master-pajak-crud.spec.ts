@@ -20,8 +20,8 @@ test.describe("Master Pajak CRUD", () => {
 
     await page.locator("#tax-name").first().fill(name)
     await page.locator("#tax-rate").first().fill(rate)
-    await expect(page.locator("#submit-tax")).toBeEnabled({ timeout: 15_000 })
-    await page.locator("#submit-tax").click()
+    await expect(page.locator("#submit-tax").first()).toBeEnabled({ timeout: 15_000 })
+    await page.locator("#submit-tax").first().click()
     await awaitListContains(page, "**/master/pajak", name)
 
     // ─── DETAIL ───────────────────────────────────────────────

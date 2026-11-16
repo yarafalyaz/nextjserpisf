@@ -4,6 +4,7 @@ import { signOut, useSession } from "next-auth/react"
 import { getInitials } from "@/lib/utils/format"
 import {
   Bell,
+  Building2,
   LogOut,
   Search,
   Settings,
@@ -28,23 +29,58 @@ import {
 } from "@/components/ui/shadcn/dropdown-menu"
 
 interface HeaderProps {
+  companyName?: string
   companyLogo?: string
   companyLogoDark?: string
 }
 
-export function Header({ companyLogo, companyLogoDark }: HeaderProps = {}) {
+export function Header({ companyName, companyLogo, companyLogoDark }: HeaderProps = {}) {
   const { data: session } = useSession()
 
   return (
-    <header className="group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 sticky top-0 z-40 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background/95 backdrop-blur-xs transition-[width,height] ease-linear">
+    <header
+      className="group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 sticky top-0 z-40 flex min-h-12 shrink-0 items-center gap-2 border-b border-border bg-background/95 backdrop-blur-xs transition-[width,height] ease-linear"
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+    >
       <div className="flex w-full items-center gap-2 px-4 lg:px-6">
         <SidebarTrigger className="-ml-1 hidden md:flex" id="sidebar-toggle" />
         <Separator orientation="vertical" className="mx-1 hidden md:block data-[orientation=vertical]:h-4" />
+        <Link href="/" className="flex items-center gap-2 min-w-0 md:hidden">
+          {companyLogo ? (
+            <>
+              <SafeImage
+                src={companyLogo}
+                alt={companyName || "YaraERP"}
+                width={26}
+                height={26}
+                style={{ width: "auto", height: "26px" }}
+                className="object-contain dark:hidden shrink-0"
+              />
+              {companyLogoDark && (
+                <SafeImage
+                  src={companyLogoDark}
+                  alt={companyName || "YaraERP"}
+                  width={26}
+                  height={26}
+                  style={{ width: "auto", height: "26px" }}
+                  className="object-contain hidden dark:block shrink-0"
+                />
+              )}
+            </>
+          ) : (
+            <div className="flex aspect-square size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+              <Building2 className="size-3.5" aria-hidden="true" />
+            </div>
+          )}
+          <span className="truncate text-sm font-semibold tracking-tight text-foreground">
+            {companyName || "YaraERP"}
+          </span>
+        </Link>
         {companyLogo && (
-          <div className="flex items-center mr-2">
+          <div className="hidden md:flex items-center mr-2">
             <SafeImage
               src={companyLogo}
-              alt="Logo"
+              alt={companyName || "Logo"}
               width={26}
               height={26}
               style={{ width: "auto", height: "26px" }}
@@ -53,7 +89,7 @@ export function Header({ companyLogo, companyLogoDark }: HeaderProps = {}) {
             {companyLogoDark && (
               <SafeImage
                 src={companyLogoDark}
-                alt="Logo"
+                alt={companyName || "Logo"}
                 width={26}
                 height={26}
                 style={{ width: "auto", height: "26px" }}

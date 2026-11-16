@@ -144,7 +144,8 @@ export async function onSalesReturnCompleted(
       // 1. Batch-generate one document number per line (was N serial round-trips).
       const smDocNos = await generateDocumentNumberBatch("SM", activeItems.length);
       // 2. Lock all item rows in a single query (was N serial FOR UPDATE).
-      const activeItemIds = activeItems.map((it) => it.itemId);
+      // Urutkan menaik & deduplikasi agar sejalan dengan hook lain (anti-deadlock).
+      const activeItemIds = [...new Set(activeItems.map((it) => it.itemId))].sort((a, b) => a - b);
       await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(activeItemIds)}) FOR UPDATE`;
 
       // Putaran 51: gudang tujuan tiap baris (default item → fallback aktif)

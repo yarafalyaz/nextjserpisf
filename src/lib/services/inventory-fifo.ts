@@ -495,9 +495,8 @@ export async function consumeFifoLayers(
         if (found.length !== picked.length) {
           throw new Error(`Sebagian nomor seri tidak tersedia/sudah terpakai untuk item #${itemId}.`)
         }
-        await tx.itemSerial.updateMany({ where: { id: { in: found.map((s) => s.id) }, status: "available" }, data: { status: "used" } })
-        const claimed = await tx.itemSerial.count({ where: { id: { in: found.map((s) => s.id) }, status: "used" } })
-        if (claimed !== found.length) {
+        const updateRes = await tx.itemSerial.updateMany({ where: { id: { in: found.map((s) => s.id) }, status: "available" }, data: { status: "used" } })
+        if (updateRes.count !== found.length) {
           throw new Error(`Sebagian nomor seri tidak tersedia/sudah terpakai untuk item #${itemId}.`)
         }
         consumedSerials.push(...found.map((s) => s.serialNumber))
@@ -516,12 +515,11 @@ export async function consumeFifoLayers(
               `Nomor seri tidak mencukupi untuk item #${itemId}. Tersedia: ${serials.length}, dibutuhkan: ${need}.`,
             )
           }
-          await tx.itemSerial.updateMany({
+          const updateRes = await tx.itemSerial.updateMany({
             where: { id: { in: serials.map((s) => s.id) }, status: "available" },
             data: { status: "used" },
           })
-          const claimed = await tx.itemSerial.count({ where: { id: { in: serials.map((s) => s.id) }, status: "used" } })
-          if (claimed !== serials.length) {
+          if (updateRes.count !== serials.length) {
             throw new Error(`Sebagian nomor seri tidak tersedia/sudah terpakai untuk item #${itemId}.`)
           }
           consumedSerials.push(...serials.map((s) => s.serialNumber))

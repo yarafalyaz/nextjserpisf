@@ -159,13 +159,13 @@ export function BomRevisionActions({ revision }: { revision: BomRevisionRow }) {
 
       {dialog === "reject" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Tolak revisi BOM">
-          <div className="w-full max-w-md rounded-lg bg-background p-6 shadow-lg">
+          <div className="w-full max-w-md rounded-lg bg-background p-6 shadow-sm">
             <h2 className="text-lg font-semibold">Tolak revisi BOM ini?</h2>
             <p className="mt-2 text-sm text-muted-foreground">Pembuat dapat mengubah lalu mengajukan ulang. Alasan wajib diisi.</p>
             <label className="mt-4 block text-sm font-medium" htmlFor="bom-reject-reason">Alasan penolakan</label>
             <textarea
               id="bom-reject-reason"
-              className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               rows={3}
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}

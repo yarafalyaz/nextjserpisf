@@ -11,14 +11,17 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import {
+  WarehouseRacksTable,
+  WarehouseStockMovesTable,
+} from "./_components/warehouse-detail-tables"
 
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
+import { entityEditHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Gudang" }
 
 export default async function WarehouseDetailPage({
@@ -90,9 +93,10 @@ export default async function WarehouseDetailPage({
                   <DetailField label="Nama Gudang" value={warehouse.name} />
                   <DetailField label="Kode" value={warehouse.code} mono />
                   <DetailField label="Status" value={
-                    <span className={`status-badge status-${warehouse.isActive ? "active" : "inactive"}`}>
-                      {warehouse.isActive ? "Aktif" : "Nonaktif"}
-                    </span>
+                    <StatusChip
+                      status={warehouse.isActive ? "active" : "inactive"}
+                      customLabel={warehouse.isActive ? "Aktif" : "Nonaktif"}
+                    />
                   } />
                   <DetailField label="Dibuat" value={formatDate(warehouse.createdAt)} />
                   <DetailField label="Alamat" value={warehouse.address || "-"} colSpan="full" />
@@ -106,7 +110,7 @@ export default async function WarehouseDetailPage({
                       <CanCreate permission="create_warehouses">
                         <Link
                           href={`/inventaris/rak/tambah/gudang/${warehouse.slug ?? warehouse.id}`}
-                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-2xs transition-colors cursor-pointer"
+                          className="inline-flex items-center justify-center gap-1.5 min-h-11 sm:min-h-9 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-2xs transition-colors cursor-pointer"
                           id="create-rack-btn"
                         >
                           + Rak
@@ -115,7 +119,7 @@ export default async function WarehouseDetailPage({
                       <CanCreate permission="manage_inventory">
                         <Link
                           href={`/inventaris/baris-rak/tambah/gudang/${warehouse.slug ?? warehouse.id}`}
-                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-2xs transition-colors cursor-pointer"
+                          className="inline-flex items-center justify-center gap-1.5 min-h-11 sm:min-h-9 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-2xs transition-colors cursor-pointer"
                           id="create-rack-row-btn"
                         >
                           + Baris Rak
@@ -126,22 +130,14 @@ export default async function WarehouseDetailPage({
                   {warehouse.racks.length === 0 ? (
                     <EmptyState title="Belum ada rak" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>Kode</DetailTableTh>
-                        <DetailTableTh>Nama</DetailTableTh>
-                        <DetailTableTh>Jumlah Baris</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {warehouse.racks.map((rack) => (
-                          <DetailTableRow key={rack.id}>
-                            <DetailTableTd className="font-mono">{rack.code}</DetailTableTd>
-                            <DetailTableTd>{rack.name}</DetailTableTd>
-                            <DetailTableTd>{rack.rows.length}</DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <WarehouseRacksTable
+                      data={warehouse.racks.map((rack) => ({
+                        id: rack.id,
+                        code: rack.code,
+                        name: rack.name,
+                        rowsCount: rack.rows.length,
+                      }))}
+                    />
                   )}
                 </DetailSection>
               </>
@@ -160,26 +156,20 @@ export default async function WarehouseDetailPage({
                   {stockMoves.length === 0 ? (
                     <EmptyState title="Belum ada pergerakan stok" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>No. Dokumen</DetailTableTh>
-                        <DetailTableTh>Barang</DetailTableTh>
-                        <DetailTableTh>Dampak</DetailTableTh>
-                        <DetailTableTh align="right">Jml</DetailTableTh>
-                        <DetailTableTh>Tanggal</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {stockMoves.map((sm) => (
-                          <DetailTableRow key={sm.id}>
-                            <DetailTableTd className="font-mono">{sm.documentNo}</DetailTableTd>
-                            <DetailTableTd><Link href={entityHref("/master/barang", sm.item)}>{sm.item.name}</Link></DetailTableTd>
-                            <DetailTableTd><StatusChip status={sm.impact === "IN" ? "received" : "returned"} /></DetailTableTd>
-                            <DetailTableTd align="right">{Number(sm.qty)}</DetailTableTd>
-                            <DetailTableTd>{formatDate(sm.createdAt)}</DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <WarehouseStockMovesTable
+                      data={stockMoves.map((sm) => ({
+                        id: sm.id,
+                        documentNo: sm.documentNo,
+                        item: {
+                          id: sm.item.id,
+                          slug: sm.item.slug,
+                          name: sm.item.name,
+                        },
+                        impact: sm.impact,
+                        qty: Number(sm.qty),
+                        createdAt: sm.createdAt.toISOString(),
+                      }))}
+                    />
                   )}
                 </div>
               </div>

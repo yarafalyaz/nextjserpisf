@@ -161,7 +161,7 @@ describe("sapuan keempat: buku pembantu piutang/utang", () => {
 describe("sapuan kelima: rekonsiliasi bank", () => {
   it("halaman rekonsiliasi memakai formatter exact untuk saldo dan selisih", () => {
     for (const rel of [
-      "src/app/(dashboard)/keuangan/rekonsiliasi-bank/page.tsx",
+      "src/app/(dashboard)/keuangan/rekonsiliasi-bank/_components/bank-reconciliation-table.tsx",
       "src/app/(dashboard)/keuangan/rekonsiliasi-bank/[slug]/page.tsx",
     ]) {
       const source = readFileSync(path.resolve(process.cwd(), rel), "utf8")

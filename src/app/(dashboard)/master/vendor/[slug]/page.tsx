@@ -7,18 +7,24 @@ import { notFound } from "next/navigation"
 import { Pencil } from "@/components/ui/fontawesome-icons"
 import { EmptyState } from "@/components/ui/empty-state"
 import { DetailTabs } from "@/components/ui/detail-tabs"
-import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import {
+  VendorBillsTable,
+  VendorGoodsReceiptsTable,
+  VendorItemsTable,
+  VendorPurchaseOrdersTable,
+  VendorPurchaseReturnsTable,
+} from "./_components/vendor-detail-tables"
 
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { canViewCostAmounts } from "@/lib/auth/field-visibility"
 import { CanCreate } from "@/components/auth/can-create"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { entityEditHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Pemasok" }
 
 export default async function VendorDetailPage({
@@ -27,6 +33,7 @@ export default async function VendorDetailPage({
   params: Promise<{ slug: string }>
 }) {
   await requirePermission("view_vendors")
+  const canViewCosts = await canViewCostAmounts()
 
   const { slug } = await params
 
@@ -120,24 +127,17 @@ export default async function VendorDetailPage({
                   {vendor.purchaseOrders.length === 0 ? (
                     <EmptyState title="Belum ada pesanan pembelian" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>No. Dokumen</DetailTableTh>
-                        <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh align="right">Total</DetailTableTh>
-                        <DetailTableTh>Status</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {vendor.purchaseOrders.map((po) => (
-                          <DetailTableRow key={po.id}>
-                            <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/pesanan", po)}>{po.documentNo}</Link></DetailTableTd>
-                            <DetailTableTd>{formatDate(po.date)}</DetailTableTd>
-                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(po.grandTotal))}</DetailTableTd>
-                            <DetailTableTd><StatusChip status={po.status} /></DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <VendorPurchaseOrdersTable
+                      data={vendor.purchaseOrders.map((po) => ({
+                        id: po.id,
+                        slug: po.slug,
+                        documentNo: po.documentNo,
+                        date: po.date.toISOString(),
+                        grandTotal: Number(po.grandTotal),
+                        grandTotalFormatted: formatCurrencyExact(Number(po.grandTotal)),
+                        status: po.status,
+                      }))}
+                    />
                   )}
                 </div>
               </div>
@@ -156,26 +156,20 @@ export default async function VendorDetailPage({
                   {goodsReceipts.length === 0 ? (
                     <EmptyState title="Belum ada penerimaan barang" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>No. Dokumen</DetailTableTh>
-                        <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh>No. Pesanan</DetailTableTh>
-                        <DetailTableTh>Gudang</DetailTableTh>
-                        <DetailTableTh>Status</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {goodsReceipts.map((gr) => (
-                          <DetailTableRow key={gr.id}>
-                            <DetailTableTd className="font-mono">{gr.documentNo}</DetailTableTd>
-                            <DetailTableTd>{formatDate(gr.date)}</DetailTableTd>
-                            <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/pesanan", gr.purchaseOrder)}>{gr.purchaseOrder.documentNo}</Link></DetailTableTd>
-                            <DetailTableTd>{gr.warehouse?.name || "-"}</DetailTableTd>
-                            <DetailTableTd><StatusChip status={gr.status} /></DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <VendorGoodsReceiptsTable
+                      data={goodsReceipts.map((gr) => ({
+                        id: gr.id,
+                        documentNo: gr.documentNo,
+                        date: gr.date.toISOString(),
+                        purchaseOrder: {
+                          id: gr.purchaseOrder.id,
+                          slug: gr.purchaseOrder.slug,
+                          documentNo: gr.purchaseOrder.documentNo,
+                        },
+                        warehouseName: gr.warehouse?.name ?? null,
+                        status: gr.status,
+                      }))}
+                    />
                   )}
                 </div>
               </div>
@@ -194,24 +188,19 @@ export default async function VendorDetailPage({
                   {purchaseReturns.length === 0 ? (
                     <EmptyState title="Belum ada retur" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>No. Dokumen</DetailTableTh>
-                        <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh>No. Pesanan</DetailTableTh>
-                        <DetailTableTh>Status</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {purchaseReturns.map((pr) => (
-                          <DetailTableRow key={pr.id}>
-                            <DetailTableTd className="font-mono">{pr.documentNo}</DetailTableTd>
-                            <DetailTableTd>{formatDate(pr.date)}</DetailTableTd>
-                            <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/pesanan", pr.purchaseOrder)}>{pr.purchaseOrder.documentNo}</Link></DetailTableTd>
-                            <DetailTableTd><StatusChip status={pr.status} /></DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <VendorPurchaseReturnsTable
+                      data={purchaseReturns.map((pr) => ({
+                        id: pr.id,
+                        documentNo: pr.documentNo,
+                        date: pr.date.toISOString(),
+                        purchaseOrder: {
+                          id: pr.purchaseOrder.id,
+                          slug: pr.purchaseOrder.slug,
+                          documentNo: pr.purchaseOrder.documentNo,
+                        },
+                        status: pr.status,
+                      }))}
+                    />
                   )}
                 </div>
               </div>
@@ -230,26 +219,17 @@ export default async function VendorDetailPage({
                   {vendor.vendorBills.length === 0 ? (
                     <EmptyState title="Belum ada tagihan" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>No. Dokumen</DetailTableTh>
-                        <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh align="right">Total</DetailTableTh>
-                        <DetailTableTh align="right">Terbayar</DetailTableTh>
-                        <DetailTableTh>Status</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {vendor.vendorBills.map((bill) => (
-                          <DetailTableRow key={bill.id}>
-                            <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/tagihan", bill)}>{bill.documentNo}</Link></DetailTableTd>
-                            <DetailTableTd>{formatDate(bill.date)}</DetailTableTd>
-                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(bill.grandTotal))}</DetailTableTd>
-                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(bill.paidAmount))}</DetailTableTd>
-                            <DetailTableTd><StatusChip status={bill.status} /></DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <VendorBillsTable
+                      data={vendor.vendorBills.map((bill) => ({
+                        id: bill.id,
+                        slug: bill.slug,
+                        documentNo: bill.documentNo,
+                        date: bill.date.toISOString(),
+                        grandTotal: Number(bill.grandTotal),
+                        paidAmount: Number(bill.paidAmount),
+                        status: bill.status,
+                      }))}
+                    />
                   )}
                 </div>
               </div>
@@ -268,24 +248,17 @@ export default async function VendorDetailPage({
                   {vendor.items.length === 0 ? (
                     <EmptyState title="Belum ada barang dari pemasok ini" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>SKU</DetailTableTh>
-                        <DetailTableTh>Nama</DetailTableTh>
-                        <DetailTableTh align="right">Harga Beli</DetailTableTh>
-                        <DetailTableTh align="right">Stok</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {vendor.items.map((item) => (
-                          <DetailTableRow key={item.id}>
-                            <DetailTableTd className="font-mono"><Link href={entityHref("/master/barang", item)}>{item.sku}</Link></DetailTableTd>
-                            <DetailTableTd>{item.name}</DetailTableTd>
-                            <DetailTableTd align="right" className="font-mono tabular-nums text-right">{formatCurrencyExact(Number(item.cost))}</DetailTableTd>
-                            <DetailTableTd align="right">{Number(item.qtyOnHand)}</DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <VendorItemsTable
+                      canViewCosts={canViewCosts}
+                      data={vendor.items.map((item) => ({
+                        id: item.id,
+                        slug: item.slug,
+                        sku: item.sku,
+                        name: item.name,
+                        cost: Number(item.cost),
+                        qtyOnHand: Number(item.qtyOnHand),
+                      }))}
+                    />
                   )}
                 </div>
               </div>

@@ -202,7 +202,7 @@ export function WorkOrderSubstituteSuggestionsPanel({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={3}
-              className="w-full rounded-md border border-default bg-surface px-3 py-2 text-sm"
+              className="w-full rounded-md border border-default bg-surface px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               placeholder="Alasan memakai pengganti ini"
             />
           </div>

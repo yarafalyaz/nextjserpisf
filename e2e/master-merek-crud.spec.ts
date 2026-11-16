@@ -20,7 +20,7 @@ test.describe("Master Merek CRUD", () => {
 
     await page.locator("#name").first().fill(name)
     await expect(page.locator("#name").first()).toHaveValue(name)
-    await page.locator("#submit-brand").click()
+    await page.locator("#submit-brand").first().click()
     await awaitListContains(page, "**/master/merek", name)
 
     // ─── DETAIL ───────────────────────────────────────────────

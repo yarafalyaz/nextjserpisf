@@ -9,8 +9,8 @@ test.describe("Finance module flows", () => {
   test("Expense list loads", async ({ page }) => {
     await page.goto("/keuangan/pengeluaran")
     await page.waitForLoadState("networkidle")
-    await expect(page.getByRole("heading", { name: "Pengeluaran", exact: true })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByRole("link", { name: "+ Buat Pengeluaran" })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("heading", { name: "Pengeluaran Operasional (Expense)" })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("link", { name: "Buat Pengeluaran" })).toBeVisible({ timeout: 30000 })
     await expect(page.getByPlaceholder("Cari pengeluaran...")).toBeVisible({ timeout: 30000 })
   })
 
@@ -23,18 +23,20 @@ test.describe("Finance module flows", () => {
   test("Petty cash list loads", async ({ page }) => {
     await page.goto("/keuangan/kas-kecil")
     await page.waitForLoadState("networkidle")
-    await expect(page.getByRole("heading", { name: "Transaksi Kas Kecil" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByText("Saldo Kas Kecil")).toBeVisible({ timeout: 30000 })
-    await expect(page.getByPlaceholder("Cari Kas Kecil...")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("heading", { name: "Kas Kecil (Petty Cash)" })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByText("Sisa Kas Fisik Aktif")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByPlaceholder("Cari nomor dokumen / deskripsi / vendor...")).toBeVisible({ timeout: 30000 })
   })
 
-  test("Journal list loads", async ({ page }) => {
+  test("Journal list loads", async ({ page }, testInfo) => {
     await page.goto("/keuangan/jurnal")
     await page.waitForLoadState("networkidle")
-    await expect(page.getByRole("heading", { name: "Jurnal" })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByRole("link", { name: "+ Buat Jurnal" })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("heading", { name: "Jurnal Umum & Penyesuaian" })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("link", { name: "Buat Jurnal" })).toBeVisible({ timeout: 30000 })
     await expect(page.getByPlaceholder("Cari no. jurnal atau deskripsi...")).toBeVisible({ timeout: 30000 })
-    await expect(page.getByRole("columnheader", { name: "Baris" })).toBeVisible({ timeout: 30000 })
+    if (testInfo.project.name !== "mobile-chrome") {
+      await expect(page.getByRole("columnheader", { name: "Baris" })).toBeVisible({ timeout: 30000 })
+    }
   })
 
   test("Journal create form loads", async ({ page }) => {

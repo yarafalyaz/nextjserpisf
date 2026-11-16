@@ -16,10 +16,14 @@ import { getLeaveQuota } from "@/lib/services/leave-quota.service"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import {
+  EmployeeLeavesTable,
+  EmployeeLoansTable,
+  EmployeeOvertimesTable,
+  EmployeePayrollsTable,
+} from "./_components/employee-detail-tables"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
-import { LEAVE_TYPE_LABELS, labelFrom } from "@/lib/utils/status-labels"
 import {
   employmentStatusLabel,
   employmentEndReasonLabel,
@@ -153,9 +157,9 @@ export default async function EmployeeDetailPage({
   // Annual-leave balance for the current calendar year (surface in Info tab).
   const leaveQuota = await getLeaveQuota(employee.id)
 
-  // Penugasan komponen gaji tetap: hanya untuk pemegang create_employees
+  // Penugasan komponen gaji tetap: hanya untuk pemegang create_employees + view_salary_amounts
   // (aksi server juga menuntut cakupan semua karyawan; gagal = pesan apa adanya).
-  const canManageComponents = await hasPermission("create_employees")
+  const canManageComponents = (await hasPermission("create_employees")) && (await canViewSalaryAmounts())
   const [assignmentsResult, componentsResult] = canManageComponents
     ? await Promise.all([
         getEmployeePayrollComponents(employee.id),
@@ -355,9 +359,10 @@ export default async function EmployeeDetailPage({
                       : "-"
                   } />
                   <DetailField label="Status" value={
-                    <span className={`status-badge ${employee.isActive ? "status-active" : "status-cancelled"}`}>
-                      {employee.isActive ? "Aktif" : "Nonaktif"}
-                    </span>
+                    <StatusChip
+                      status={employee.isActive ? "active" : "inactive"}
+                      customLabel={employee.isActive ? "Aktif" : "Nonaktif"}
+                    />
                   } />
                   <DetailField label="Status Kepegawaian" value={employmentStatusLabel(employee.employmentStatus)} />
                   <DetailField label="Tanggal Mulai Kontrak" value={employee.contractStartDate ? formatDate(employee.contractStartDate) : "-"} />
@@ -441,24 +446,16 @@ export default async function EmployeeDetailPage({
                 {/* Active Loans */}
                 {employee.employeeLoans.length > 0 && (
                   <DetailSection title="Pinjaman Aktif">
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>Jumlah</DetailTableTh>
-                        <DetailTableTh>Cicilan</DetailTableTh>
-                        <DetailTableTh>Sisa</DetailTableTh>
-                        <DetailTableTh>Mulai</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {employee.employeeLoans.map((loan) => (
-                          <DetailTableRow key={loan.id}>
-                            <DetailTableTd>{canSeeSalary ? formatCurrencyExact(Number(loan.totalAmount)) : "••••••"}</DetailTableTd>
-                            <DetailTableTd>{canSeeSalary ? formatCurrencyExact(Number(loan.monthlyInstallment)) : "••••••"}</DetailTableTd>
-                            <DetailTableTd className="text-danger">{canSeeSalary ? formatCurrencyExact(Number(loan.remainingAmount)) : "••••••"}</DetailTableTd>
-                            <DetailTableTd>{formatDate(loan.loanDate)}</DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <EmployeeLoansTable
+                      canSeeSalary={canSeeSalary}
+                      data={employee.employeeLoans.map((loan) => ({
+                        id: loan.id,
+                        totalAmount: Number(loan.totalAmount),
+                        monthlyInstallment: Number(loan.monthlyInstallment),
+                        remainingAmount: Number(loan.remainingAmount),
+                        loanDate: loan.loanDate.toISOString(),
+                      }))}
+                    />
                   </DetailSection>
                 )}
               </>
@@ -477,26 +474,16 @@ export default async function EmployeeDetailPage({
                   {employee.leaveRequests.length === 0 ? (
                     <EmptyState title="Belum ada data cuti" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>Jenis</DetailTableTh>
-                        <DetailTableTh>Tanggal Mulai</DetailTableTh>
-                        <DetailTableTh>Tanggal Selesai</DetailTableTh>
-                        <DetailTableTh>Status</DetailTableTh>
-                        <DetailTableTh>Alasan</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {employee.leaveRequests.map((lr) => (
-                          <DetailTableRow key={lr.id}>
-                            <DetailTableTd>{labelFrom(LEAVE_TYPE_LABELS, lr.type)}</DetailTableTd>
-                            <DetailTableTd>{formatDate(lr.startDate)}</DetailTableTd>
-                            <DetailTableTd>{formatDate(lr.endDate)}</DetailTableTd>
-                            <DetailTableTd><StatusChip status={lr.status} /></DetailTableTd>
-                            <DetailTableTd>{lr.reason ? (lr.reason.length > 30 ? lr.reason.substring(0, 30) + "..." : lr.reason) : "-"}</DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <EmployeeLeavesTable
+                      data={employee.leaveRequests.map((lr) => ({
+                        id: lr.id,
+                        type: lr.type,
+                        startDate: lr.startDate.toISOString(),
+                        endDate: lr.endDate.toISOString(),
+                        status: lr.status,
+                        reason: lr.reason,
+                      }))}
+                    />
                   )}
                 </div>
               </div>
@@ -515,24 +502,15 @@ export default async function EmployeeDetailPage({
                   {employee.overtimeRequests.length === 0 ? (
                     <EmptyState title="Belum ada data lembur" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh>Jam</DetailTableTh>
-                        <DetailTableTh>Status</DetailTableTh>
-                        <DetailTableTh>Alasan</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {employee.overtimeRequests.map((ot) => (
-                          <DetailTableRow key={ot.id}>
-                            <DetailTableTd>{formatDate(ot.date)}</DetailTableTd>
-                            <DetailTableTd>{Number(ot.hours)} jam</DetailTableTd>
-                            <DetailTableTd><StatusChip status={ot.status} /></DetailTableTd>
-                            <DetailTableTd>{ot.reason ? (ot.reason.length > 30 ? ot.reason.substring(0, 30) + "..." : ot.reason) : "-"}</DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <EmployeeOvertimesTable
+                      data={employee.overtimeRequests.map((ot) => ({
+                        id: ot.id,
+                        date: ot.date.toISOString(),
+                        hours: Number(ot.hours),
+                        status: ot.status,
+                        reason: ot.reason,
+                      }))}
+                    />
                   )}
                 </div>
               </div>
@@ -571,26 +549,17 @@ export default async function EmployeeDetailPage({
                   {employee.payrolls.length === 0 ? (
                     <EmptyState title="Belum ada data penggajian" />
                   ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>No. Dokumen</DetailTableTh>
-                        <DetailTableTh>Periode</DetailTableTh>
-                        <DetailTableTh>Gaji Pokok</DetailTableTh>
-                        <DetailTableTh>Gaji Bersih</DetailTableTh>
-                        <DetailTableTh>Status</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {employee.payrolls.map((p) => (
-                          <DetailTableRow key={p.id}>
-                            <DetailTableTd className="font-mono">{p.documentNo}</DetailTableTd>
-                            <DetailTableTd>{p.period}</DetailTableTd>
-                            <DetailTableTd>{canSeeSalary ? formatCurrencyExact(Number(p.baseSalary)) : "••••••"}</DetailTableTd>
-                            <DetailTableTd className="font-semibold">{canSeeSalary ? formatCurrencyExact(Number(p.netSalary)) : "••••••"}</DetailTableTd>
-                            <DetailTableTd><StatusChip status={p.status} /></DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
+                    <EmployeePayrollsTable
+                      canSeeSalary={canSeeSalary}
+                      data={employee.payrolls.map((p) => ({
+                        id: p.id,
+                        documentNo: p.documentNo,
+                        period: p.period,
+                        baseSalary: Number(p.baseSalary),
+                        netSalary: Number(p.netSalary),
+                        status: p.status,
+                      }))}
+                    />
                   )}
                 </div>
                 {canManageComponents && (
