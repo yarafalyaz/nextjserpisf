@@ -68,8 +68,8 @@ describe("WorkOrderPhotoPanel F-2026-10-24-096-S AC-PHOTO-3/5/7", () => {
     const rows = [row({ photoCategory: "intake", originalName: "awal.jpg" })]
     const { container, root } = renderCard(<WorkOrderPhotoPanel photos={woPhotos(rows)} />)
     const text = container.textContent ?? ""
-    expect(text).toContain("Kondisi awal (intake) — sebelum (1)")
-    expect(text).toContain("Belum serah terima — belum ada foto serah terima")
+    expect(text).toContain("Kondisi awal (intake): sebelum (1)")
+    expect(text).toContain("Belum serah terima, belum ada foto serah terima")
     unmountCard(root)
   })
 
@@ -80,7 +80,7 @@ describe("WorkOrderPhotoPanel F-2026-10-24-096-S AC-PHOTO-3/5/7", () => {
     ]
     const { container, root } = renderCard(<WorkOrderPhotoPanel photos={woPhotos(rows)} />)
     const text = container.textContent ?? ""
-    expect(text).toContain("Serah terima — sesudah (1)")
+    expect(text).toContain("Serah terima: sesudah (1)")
     expect(text).toContain("Terverifikasi")
     expect(text).toContain("Terbit")
     unmountCard(root)

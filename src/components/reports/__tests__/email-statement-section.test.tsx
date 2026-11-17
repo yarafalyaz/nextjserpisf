@@ -77,8 +77,8 @@ describe("EmailStatementSection F-2026-10-25-043-F1", () => {
     expectTrailList(section({ emailTrail: [...STATEMENT_TRAIL] }), {
       listLabel: "Riwayat tautan Email dibuka",
       absentLabel: "Riwayat tautan WhatsApp dibuka",
-      first: "Tautan Email dibuka — 21 Oktober 2026 pukul 10.00 WIB oleh Sari",
-      second: "Tautan Email dibuka — 20 Oktober 2026 pukul 10.00 WIB oleh Pengguna",
+      first: "Tautan Email dibuka: 21 Oktober 2026 pukul 10.00 WIB oleh Sari",
+      second: "Tautan Email dibuka: 20 Oktober 2026 pukul 10.00 WIB oleh Pengguna",
       forbidden: FORBIDDEN,
     })
   })

@@ -50,7 +50,7 @@ export function SupplierClaimAgingCard({
           {summary.byStatus
             .map((s) => `${s.label}: ${formatNumber(s.claimCount)}`)
             .join(" · ")}
-          {" — "}
+          {" - "}
           {summary.buckets
             .map((b) => `${b.label}: ${formatNumber(b.claimCount)}`)
             .join(" · ")}

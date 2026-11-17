@@ -121,7 +121,7 @@ function coverageTone(coverage: BomRevisionDeltaLine["coverage"]): string {
 /**
  * Tabel pratinjau delta revisi BOM. Murni presentasi: baris hasil builder
  * ditampilkan apa adanya. Baris dengan issuedQty > 0 (kontrak BOT 3 PR #606)
- * ditandai "Terkunci — sudah keluar {issuedQty}" — qty sudah keluar tidak
+ * ditandai "Terkunci, sudah keluar {issuedQty}" — qty sudah keluar tidak
  * dihitung ulang dari newNeededQty.
  */
 export function BomRevisionDeltaPreviewTable({
@@ -147,7 +147,7 @@ export function BomRevisionDeltaPreviewTable({
                   <span>{line.itemName}</span>
                   {line.issuedQty > 0 ? (
                     <span className="inline-flex w-fit rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
-                      Terkunci — sudah keluar {line.issuedQty}
+                      Terkunci, sudah keluar {line.issuedQty}
                     </span>
                   ) : null}
                 </span>

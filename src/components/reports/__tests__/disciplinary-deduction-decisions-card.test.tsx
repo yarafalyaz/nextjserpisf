@@ -96,7 +96,7 @@ describe("DisciplinaryDeductionDecisionsCard BR-DISC-09", () => {
     )
     roots.push(root)
     const text = container.textContent ?? ""
-    expect(text).toContain("konteks saja — surat peringatan tidak memicu")
+    expect(text).toContain("konteks saja, surat peringatan tidak memicu")
     expect(text).toContain("Rp 250.000,00")
 
     const empty = renderCard(<DisciplinaryDeductionRecordContext decisions={[]} />)

@@ -65,7 +65,7 @@ export function DownPaymentVerificationQueueCard({
       title={DP_QUEUE_TITLE}
       summary={
         <>
-          {summary.total} uang muka menunggu verifikasi —{" "}
+          {summary.total} uang muka menunggu verifikasi,{" "}
           {formatCurrencyExact(summary.totalAmountSen / 100)} belum menjadi kas
         </>
       }

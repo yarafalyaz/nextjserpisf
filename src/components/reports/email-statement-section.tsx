@@ -62,7 +62,7 @@ export function EmailStatementSection({
         <ul aria-label="Riwayat tautan Email dibuka" className="flex flex-col gap-1 text-sm text-muted-foreground">
           {emailTrail.map((entry, index) => (
             <li key={`${entry.createdAt.toISOString()}-${index}`}>
-              Tautan Email dibuka — {formatDate(entry.createdAt, { includeTime: true })} WIB oleh{" "}
+              Tautan Email dibuka: {formatDate(entry.createdAt, { includeTime: true })} WIB oleh{" "}
               {entry.userName ?? "Pengguna"}
             </li>
           ))}

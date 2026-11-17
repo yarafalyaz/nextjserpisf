@@ -58,7 +58,7 @@ function RouteStatus({ route, label }: { route: WarrantyJournalRoute; label: str
       </dd>
       {route.reversed && (
         <dd className="text-sm text-muted-foreground">
-          Jurnal {route.reversed.journalNumber ?? "-"} ({route.reversed.transactionDate}) dibalik — lihat
+          Jurnal {route.reversed.journalNumber ?? "-"} ({route.reversed.transactionDate}) dibalik, lihat
           jurnal lawan
           {route.reversal
             ? ` ${route.reversal.journalNumber ?? "-"} (${route.reversal.transactionDate})`
@@ -178,7 +178,7 @@ export function WarrantyJournalPanel({
         Jurnal Garansi, Biaya Klaim &amp; Recovery Supplier
       </h2>
       <p className="mt-2 rounded-lg bg-surface-secondary px-3 py-2 text-sm text-foreground">
-        Mode provisi: MATI — biaya klaim dibebankan saat terjadi (510104), tanpa akrual provisi.
+        Mode provisi: MATI, biaya klaim dibebankan saat terjadi (510104), tanpa akrual provisi.
       </p>
 
       <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -194,7 +194,7 @@ export function WarrantyJournalPanel({
 
       {showContingencyNote && (
         <p className="mt-4 text-sm text-muted-foreground">
-          Recovery belum hampir pasti — tanpa jurnal (aset kontinjensi, PSAK 57).
+          Recovery belum hampir pasti, tanpa jurnal (aset kontinjensi, PSAK 57).
         </p>
       )}
 

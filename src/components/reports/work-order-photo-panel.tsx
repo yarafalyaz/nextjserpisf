@@ -142,7 +142,7 @@ export function WorkOrderPhotoPanel({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <h3 className="text-sm font-semibold text-foreground">
-                {PHOTO_CATEGORY_LABEL.intake} — sebelum ({photos.before.length})
+                {PHOTO_CATEGORY_LABEL.intake}: sebelum ({photos.before.length})
               </h3>
               {photos.before.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Belum ada foto kondisi awal</p>
@@ -152,11 +152,11 @@ export function WorkOrderPhotoPanel({
             </div>
             <div className="flex flex-col gap-2">
               <h3 className="text-sm font-semibold text-foreground">
-                {PHOTO_CATEGORY_LABEL.handover} — sesudah ({photos.after.length})
+                {PHOTO_CATEGORY_LABEL.handover}: sesudah ({photos.after.length})
               </h3>
               {!photos.hasHandover || photos.after.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Belum serah terima — belum ada foto serah terima
+                  Belum serah terima, belum ada foto serah terima
                 </p>
               ) : (
                 <PhotoList photos={photos.after} actions={actions} />

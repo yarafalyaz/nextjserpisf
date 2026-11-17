@@ -62,7 +62,7 @@ export function SalesInvoiceDraftQueueCard({
       </div>
       <div className="p-4 px-5">
         <p className="text-xs text-muted-foreground">
-          {summary.totalDocuments} dokumen — {formatCurrencyExact(summary.totalGrandTotal)}{" "}
+          {summary.totalDocuments} dokumen, {formatCurrencyExact(summary.totalGrandTotal)}{" "}
           {summary.totalLabel}
         </p>
         <ul aria-label="Rekap tingkat antrean faktur draft" className="mt-2 flex flex-wrap gap-1.5">

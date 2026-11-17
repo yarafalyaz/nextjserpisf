@@ -82,7 +82,7 @@ describe("VendorPaymentDraftQueueCard 072-F AC-VPQ-F1..F3", () => {
       VENDOR_PAYMENT_DRAFT_NOTICE_TEXT,
       ["Menunggu", "No. Dokumen", "Pemasok", "Nilai Draft", "Tanggal Bayar", "Tagihan Tujuan", "Dibuat Oleh"],
       [
-        "1 mengendap · 1 menunggu konfirmasi · 2 pembayaran draft — Rp 2.000.000 nilai draft belum dibayar",
+        "1 mengendap · 1 menunggu konfirmasi · 2 pembayaran draft, Rp 2.000.000 nilai draft belum dibayar",
         "Mengendap: 1",
         "Menunggu Konfirmasi: 1",
         "Vendor Uji: 2 pembayaran draft (1 mengendap, 1 menunggu konfirmasi) — Rp 2.000.000 nilai draft belum dibayar",

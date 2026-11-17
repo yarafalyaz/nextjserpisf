@@ -208,10 +208,10 @@ describe("BomRevisionChangePanel F-2026-10-22-068-S", () => {
     )
     expect(html).toContain("Kampas Rem")
     // label persis kontrak BOT 3 PR #606; angka issuedQty verbatim (7), bukan turunan newNeededQty (30)
-    expect(html).toContain("Terkunci — sudah keluar 7")
-    expect(html).not.toContain("Terkunci — sudah keluar 30")
+    expect(html).toContain("Terkunci, sudah keluar 7")
+    expect(html).not.toContain("Terkunci, sudah keluar 30")
     // baris issuedQty 0 tidak berlabel terkunci
-    expect(html.match(/Terkunci — sudah keluar/g)).toHaveLength(1)
+    expect(html.match(/Terkunci, sudah keluar/g)).toHaveLength(1)
     expect(html).toContain("Baut Roda")
     expect(html).toContain("Kurang")
     expect(html).toContain("Tercakup")
