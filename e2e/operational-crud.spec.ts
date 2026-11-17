@@ -13,6 +13,27 @@ function fmtAmount(n: number): string {
   return n.toLocaleString("id-ID")
 }
 
+/**
+ * Saldo berjalan satu akun dari jurnal POSTED/REVERSED, dihitung sen-aman
+ * seperti laporan. Dipakai test transfer untuk BERHENTI JUJUR bila rekening
+ * sumber kosong: `createBankTransfer` memang menolak saldo tidak cukup
+ * ("Saldo rekening asal tidak mencukupi"), jadi tanpa cek ini test gagal
+ * karena data dev, bukan karena bug produk (ditemukan 2026-11-17).
+ */
+async function saldoAkun(accountId: number): Promise<number> {
+  const rows = await prisma.journalEntry.findMany({
+    where: {
+      accountId,
+      journal: { status: { in: ["POSTED", "REVERSED"] }, deletedAt: null },
+    },
+    select: { debit: true, credit: true },
+  })
+  return rows.reduce(
+    (sum, r) => sum + Number(r.debit) - Number(r.credit),
+    0,
+  )
+}
+
 function uniqueAmount(base: number): number {
   return base + (Date.now() % 900)
 }
@@ -353,6 +374,12 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
     await page.locator("#amount").fill(String(amount))
 
     // Rekening asal dan tujuan wajib berbeda (aksi menolak bila sama).
+    const kasKecil = await prisma.account.findFirst({ where: { name: "Kas Kecil" }, select: { id: true } })
+    const saldoKasKecil = kasKecil ? await saldoAkun(kasKecil.id) : 0
+    test.skip(
+      saldoKasKecil < amount,
+      `Saldo Kas Kecil ${fmtAmount(saldoKasKecil)} < ${label} — aksi memang menolak transfer, alur dilewati (bukan bug).`,
+    )
     const dari = await pilihOpsiDenganPencarian(page, "Pilih rekening asal...", "Kas Kecil", /Kas Kecil/i)
     test.skip(!dari, "DB ini tidak punya akun kas kecil — alur dilewati")
     const ke = await pilihOpsiDenganPencarian(page, "Pilih rekening tujuan...", "Deposito", /Deposito/i)

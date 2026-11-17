@@ -317,6 +317,19 @@ describe("E132-2 akrual bulanan agregat", () => {
     expect(Number(accrualCreate[0].data.amount)).toBe(416_666.67)
   })
 
+  it("audit 2026-11-17: employeeWhere cakupan HR diteruskan ke query karyawan", async () => {
+    // Regresi: runPkwtAccrual hanya butuh `process_payroll`, yang juga dipegang
+    // peran ber-scope department. Tanpa filter ini akrual menulis jurnal untuk
+    // SELURUH karyawan PKWT organisasi.
+    const scoped = baseClient()
+    await runPkwtMonthlyAccrual(scoped, "2026-06", 1, { departmentId: 3 })
+    expect(scoped.employee.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ departmentId: 3, employmentStatus: "PKWT" }),
+      }),
+    )
+  })
+
   it("FINHR-7: closing negatif (akrual lalu > nominal peristiwa) -> throw, tanpa jurnal", async () => {
     const client = baseClient()
     client.employee.findMany.mockResolvedValue([

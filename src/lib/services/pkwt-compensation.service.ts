@@ -251,6 +251,12 @@ export async function runPkwtMonthlyAccrual(
   client: Client,
   period: string,
   userId?: number | null,
+  /**
+   * Filter karyawan tambahan dari cakupan HR pemanggil. `process_payroll`
+   * dipegang juga oleh peran ber-scope department; tanpa filter ini akrual
+   * menulis jurnal untuk SELURUH karyawan PKWT organisasi (audit 2026-11-17).
+   */
+  employeeWhere?: Record<string, unknown>,
 ): Promise<{ journalId: number | null; accruedCount: number; totalAmount: number }> {
   const m = /^(\d{4})-(\d{2})$/.exec(period)
   if (!m) throw new Error(`Periode akrual PKWT tidak valid: '${period}' (wajib YYYY-MM).`)
@@ -278,6 +284,7 @@ export async function runPkwtMonthlyAccrual(
         deletedAt: null,
         contractStartDate: { not: null, lte: monthEndUtc },
         OR: [{ contractEndDate: null }, { contractEndDate: { gte: monthStartUtc } }],
+        ...(employeeWhere ?? {}),
       },
       select: { id: true, contractStartDate: true, contractEndDate: true },
       orderBy: { id: "asc" },

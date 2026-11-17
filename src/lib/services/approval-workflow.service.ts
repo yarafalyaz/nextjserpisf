@@ -127,6 +127,10 @@ async function notifyNewApprovalStep(db: any, workflowId: number, approval: Appr
  */
 const STALE_ON_EDIT_TYPES = new Set([
   "Journal",
+  // Payroll: baris slip (komponen, komisi, PKWT) masih bisa ditambah selama
+  // draft. Tanpa entri ini, approval yang sudah `approved` tetap dianggap sah
+  // padahal isi slip berubah sesudahnya (audit 2026-11-17).
+  "Payroll",
   "VendorPayment",
   "StockAdjustment",
   "SalesInvoice",

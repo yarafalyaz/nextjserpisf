@@ -1078,6 +1078,27 @@ describe("Employee Loan Actions", () => {
     expect(prismaMock.employeeLoan.create).toHaveBeenCalledTimes(1)
   })
 
+  it("audit 2026-11-17: pemegang create_loans + create_employee_loan_requests tetap pintu mandiri", async () => {
+    // Regresi: dulu flag = "tidak punya create_loans", sehingga HR ber-scope
+    // `all` (memegang keduanya) jatuh ke jalur staf dan guard diri-sendiri mati
+    // untuk employeeId milik orang lain lewat key pengajuan.
+    mocks.requirePermissionMock.mockResolvedValue({
+      id: 1,
+      roles: ["hr"],
+      permissions: ["create_loans", "create_employee_loan_requests"],
+    })
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 99 })
+    const res = await actions.createEmployeeLoan(fd({
+      employeeId: "7",
+      loanDate: "2026-06-12",
+      totalAmount: "1000000",
+      monthlyInstallment: "100000",
+    }))
+    expect(res?.success).toBe(false)
+    expect(String((res as { error?: string } | undefined)?.error ?? "")).toMatch(/akses|sendiri/i)
+    expect(prismaMock.employeeLoan.create).not.toHaveBeenCalled()
+  })
+
   it("createEmployeeLoan succeeds with valid data", async () => {
     const res = await actions.createEmployeeLoan(fd({
       employeeId: "1",

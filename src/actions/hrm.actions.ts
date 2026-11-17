@@ -4204,9 +4204,15 @@ export async function createEmployeeLoan(formData: FormData) {
       : [];
     // super_admin melewati requireAnyPermission tanpa perlu memegang key
     // mana pun — ia jalur staf, bukan mandiri.
+    // Pintu mandiri ditentukan HANYA oleh key pengajuan, bukan oleh ada/tidaknya
+    // `create_loans`. Sebelumnya pemegang KEDUA key (mis. HR ber-scope `all`)
+    // dianggap jalur staf sehingga guard "hanya untuk diri sendiri" mati, dan
+    // ia bisa mengajukan pinjaman atas nama karyawan mana pun lewat key
+    // self-service (audit 2026-11-17). Jalur staf tetap hidup karena
+    // `create_loans` menggerbangi createEmployeeLoan lewat requireAnyPermission:
+    // super_admin melewati guard ini, staf murni (tanpa key pengajuan) juga.
     const isSelfServiceOnly =
       !userRoles.includes("super_admin") &&
-      !userPerms.includes("create_loans") &&
       userPerms.includes("create_employee_loan_requests");
 
     const parsed = parseFormData(employeeLoanSchema, formData);
@@ -6710,7 +6716,16 @@ export async function approvePkwtEvent(eventId: number) {
 export async function runPkwtAccrual(period: string) {
   try {
     const user = await requirePermission("process_payroll");
-    const result = await runPkwtMonthlyAccrual(prisma, period, Number((user as { id: unknown }).id) || null);
+    // Akrual menulis jurnal untuk SEMUA karyawan PKWT yang cocok, jadi ia
+    // wajib tunduk pada cakupan HR pemanggil — `process_payroll` juga
+    // dipegang peran ber-scope department (audit 2026-11-17).
+    const scope = await getHrScope(user);
+    const result = await runPkwtMonthlyAccrual(
+      prisma,
+      period,
+      Number((user as { id: unknown }).id) || null,
+      hrEmployeeScopeWhere(scope) as Record<string, unknown>,
+    );
     await logActivity("create", "Journal", result.journalId ?? 0, `Akrual kompensasi PKWT ${period}: ${result.accruedCount} karyawan Rp${result.totalAmount}`);
     revalidatePath("/sdm/penggajian");
     return { success: true, data: result };
