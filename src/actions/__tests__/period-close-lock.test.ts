@@ -150,6 +150,29 @@ describe("R-09 period-close: satu transaksi + kunci baris setting", () => {
     expect(mocks.update).not.toHaveBeenCalled()
   })
 
+  it("audit 2026-11-17: kunci periode tidak boleh melewati akhir bulan berjalan", async () => {
+    // assertPeriodOpen menolak SEMUA dokumen bertanggal <= period_lock_date,
+    // jadi kunci tahun depan menghentikan posting seluruh sistem sekaligus.
+    const now = new Date()
+    const tahunDepan = now.getFullYear() + 1
+    const res = await closeAccountingPeriod(fdDate(`${tahunDepan}-12-31`))
+
+    expect(res).toEqual({
+      success: false,
+      error: "Tanggal kunci periode tidak boleh melewati akhir bulan berjalan.",
+    })
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+    expect(mocks.update).not.toHaveBeenCalled()
+  })
+
+  it("close: akhir bulan berjalan masih diterima", async () => {
+    const now = new Date()
+    const akhirBulanIni = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0))
+    const iso = akhirBulanIni.toISOString().slice(0, 10)
+    const res = await closeAccountingPeriod(fdDate(iso))
+    expect(res.success).toBe(true)
+  })
+
   it("close: format bukan YYYY-MM-DD dan tanggal kosong ditolak", async () => {
     for (const bad of ["2026/05/31", "2026-2-3", "2026-13-01"]) {
       const res = await closeAccountingPeriod(fdDate(bad))

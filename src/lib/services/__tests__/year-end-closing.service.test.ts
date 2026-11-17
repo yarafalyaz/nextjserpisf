@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   approvalFindFirst: vi.fn(),
+  approvalWorkflowFindFirst: vi.fn(),
   settingsFindFirst: vi.fn(),
   accountFindFirst: vi.fn(),
   accountFindMany: vi.fn(),
@@ -45,6 +46,8 @@ vi.mock("@/lib/db/prisma", () => {
   return {
     prisma: {
       approval: { findFirst: (...a: unknown[]) => mocks.approvalFindFirst(...a) },
+      // Default: workflow penutup tahun tidak aktif -> gerbang lama (no-op).
+      approvalWorkflow: { findFirst: (...a: unknown[]) => mocks.approvalWorkflowFindFirst(...a) },
       $transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => cb(tx)),
     },
   }
@@ -69,6 +72,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.generateDocumentNumber.mockResolvedValue("JRN-2026-0001")
   mocks.approvalFindFirst.mockResolvedValue(null) // tanpa workflow = no-op
+  mocks.approvalWorkflowFindFirst.mockResolvedValue(null)
   mocks.queryRaw.mockResolvedValue([{ id: 1, period_lock_date: null }])
   mocks.executeRaw.mockResolvedValue(1)
   mocks.journalUpdateMany.mockResolvedValue({ count: 1 })
@@ -89,6 +93,31 @@ beforeEach(() => {
 })
 
 describe("postYearEndClosing", () => {
+  it("audit 2026-11-17: workflow aktif tapi belum diajukan -> posting ditolak, nol jurnal", async () => {
+    // `assertApproved` lolos diam-diam bila belum ada baris Approval, dan
+    // YearEndClosing adalah tipe gate-only: tanpa gerbang ini pemegang
+    // `manage_settings` bisa memposting penutup tahun tanpa persetujuan.
+    mocks.approvalWorkflowFindFirst.mockResolvedValue({ id: 1 })
+    mocks.approvalFindFirst.mockResolvedValue(null)
+
+    await expect(postYearEndClosing(2025, 3)).rejects.toThrow(/belum diajukan untuk persetujuan/i)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("workflow aktif DAN sudah diajukan -> posting berjalan", async () => {
+    mocks.approvalWorkflowFindFirst.mockResolvedValue({ id: 1 })
+    mocks.approvalFindFirst.mockResolvedValue({ id: 7, status: "approved", completedAt: null })
+
+    await expect(postYearEndClosing(2025, 3)).resolves.toMatchObject({ journalId: 99 })
+  })
+
+  it("workflow tidak aktif -> mundur-kompatibel, posting berjalan tanpa pengajuan", async () => {
+    mocks.approvalWorkflowFindFirst.mockResolvedValue(null)
+    mocks.approvalFindFirst.mockResolvedValue(null)
+
+    await expect(postYearEndClosing(2025, 3)).resolves.toMatchObject({ journalId: 99 })
+  })
+
   it("kunci system_settings (FOR UPDATE) diambil SEBELUM bacaan pertama tx (snapshot anti-dobel segar)", async () => {
     await postYearEndClosing(2025, 3)
     const lockIdx = mocks.queryRaw.mock.calls.findIndex((c: unknown[]) => {

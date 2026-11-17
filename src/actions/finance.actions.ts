@@ -3040,7 +3040,7 @@ export async function updateExpense(id: number, formData: FormData) {
       await tx.$executeRaw`SELECT id FROM expenses WHERE id = ${id} FOR UPDATE`;
       const lockedExpense = await tx.expense.findUniqueOrThrow({
         where: { id },
-        select: { status: true },
+        select: { status: true, isReimbursementClaim: true, accountId: true, paidFromAccountId: true },
       });
       if (lockedExpense.status !== "draft") {
         throw new Error(
@@ -3064,8 +3064,20 @@ export async function updateExpense(id: number, formData: FormData) {
       const updated = await tx.expense.update({
         where: { id },
         data: {
-          accountId: v.accountId,
-          paidFromAccountId: v.paidFromAccountId ?? null,
+          // Klaim reimbursement: akun beban dan sumber dana adalah penetapan
+          // KEUANGAN lewat `setReimbursementClaimAccounts`, dan menjadi dasar
+          // jurnal J-RB1 saat approve. Edit generik (`edit_expenses`) dulu
+          // menimpanya dari payload, sehingga pengaju bisa memindahkan akun
+          // bebannya sendiri sebelum disetujui (audit 2026-11-17).
+          ...(lockedExpense.isReimbursementClaim
+            ? {
+                accountId: lockedExpense.accountId,
+                paidFromAccountId: lockedExpense.paidFromAccountId,
+              }
+            : {
+                accountId: v.accountId,
+                paidFromAccountId: v.paidFromAccountId ?? null,
+              }),
           projectId: v.projectId ?? null,
           costCenterId: v.costCenterId ?? null,
           amount: v.amount,

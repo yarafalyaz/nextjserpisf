@@ -83,6 +83,19 @@ export async function closeAccountingPeriod(formData: FormData): Promise<PeriodC
     if (!date) {
       return { success: false, error: "Tanggal kunci periode tidak valid." }
     }
+    // Batas atas: kunci tidak boleh melewati akhir BULAN BERJALAN (audit
+    // 2026-11-17). `assertPeriodOpen` menolak setiap dokumen bertanggal
+    // <= period_lock_date, jadi kunci 2099-12-31 menghentikan posting SELURUH
+    // sistem sekaligus — dan UI tidak menawarkan tanggal itu, tetapi server
+    // action adalah batas kepercayaan publik. Batas ini juga menahan salah
+    // ketik tahun yang menggeser kunci setahun penuh.
+    const batasKunci = new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth() + 1, 1)) // awal bulan depan
+    if (date.getTime() >= batasKunci.getTime()) {
+      return {
+        success: false,
+        error: "Tanggal kunci periode tidak boleh melewati akhir bulan berjalan.",
+      }
+    }
 
     // Satu transaksi: kunci baris setting -> baca ulang -> validasi ->
     // update. Tanpa ini, cek "jangan turunkan kunci" dan update bisa

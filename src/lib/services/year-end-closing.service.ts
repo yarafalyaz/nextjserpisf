@@ -60,6 +60,30 @@ export async function requestYearEndClosingApproval(fiscalYear: number, requeste
   return requestApprovalIfConfigured(YEAR_END_CLOSING_REFERENCE_TYPE, fiscalYear, requestedBy)
 }
 
+/**
+ * Gate-only: tipe ini tidak punya dokumen yang di-approve, jadi satu-satunya
+ * gerbang adalah jalur posting. Tanpa baris Approval, `assertApproved` lolos
+ * diam-diam — karena itu pengajuan ditegakkan di sini lebih dulu bila
+ * workflow-nya aktif. Workflow tidak aktif = tetap mundur-kompatibel.
+ */
+async function assertYearEndClosingApprovalRequested(fiscalYear: number): Promise<void> {
+  const workflow = await prisma.approvalWorkflow.findFirst({
+    where: { modelType: YEAR_END_CLOSING_REFERENCE_TYPE, isActive: true, deletedAt: null },
+    select: { id: true },
+  })
+  if (!workflow) return
+  const approval = await prisma.approval.findFirst({
+    where: { referenceType: YEAR_END_CLOSING_REFERENCE_TYPE, referenceId: fiscalYear },
+    select: { id: true },
+  })
+  if (!approval) {
+    throw new Error(
+      `Penutup tahun fiskal ${fiscalYear} belum diajukan untuk persetujuan. ` +
+        "Ajukan persetujuan lebih dulu, lalu posting setelah disetujui.",
+    )
+  }
+}
+
 function assertValidFiscalYear(fiscalYear: number): void {
   if (!Number.isInteger(fiscalYear) || fiscalYear < 1900 || fiscalYear > 2200) {
     throw new Error("Tahun fiskal tidak valid.")
@@ -107,6 +131,14 @@ export async function resolveRetainedEarningsAccountId(tx: TxClient): Promise<nu
 export async function postYearEndClosing(fiscalYear: number, userId?: number): Promise<YearEndClosingPostResult> {
   assertValidFiscalYear(fiscalYear)
   // Putusan 4: gerbang approval SEBELUM transaksi posting.
+  //
+  // `assertApproved` SENGAJA lolos bila belum ada baris Approval (varian
+  // "dokumen lama tanpa pengajuan"). Untuk penutup tahun itu lubang: pemegang
+  // `manage_settings` bisa menekan Posting TANPA pernah mengajukan persetujuan,
+  // padahal `YearEndClosing` adalah tipe gate-only — approval-nya tidak pernah
+  // menggerbang apa pun selain di sini (audit 2026-11-17). Jadi: bila workflow
+  // penutup tahun AKTIF, pengajuan wajib ada lebih dulu.
+  await assertYearEndClosingApprovalRequested(fiscalYear)
   await assertApproved(YEAR_END_CLOSING_REFERENCE_TYPE, fiscalYear)
 
   const journalNumber = await generateDocumentNumber("JRN")

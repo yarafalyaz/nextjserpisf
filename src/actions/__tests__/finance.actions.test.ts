@@ -2902,6 +2902,50 @@ describe("Status guard branches", () => {
     expect(res.error).toMatch(/pemisahan tugas/i)
     expect(mocks.prismaMock.expense.updateMany).not.toHaveBeenCalled()
   })
+
+  it("audit 2026-11-17: edit generik klaim reimbursement TIDAK memindahkan akun penetapan keuangan", async () => {
+    // Akun beban/sumber dana klaim ditetapkan keuangan dan jadi dasar J-RB1
+    // saat approve. Edit generik dulu menimpanya dari payload, sehingga
+    // pengaju bisa memindahkan akun bebannya sendiri sebelum disetujui.
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", createdBy: 1,
+      isReimbursementClaim: true, accountId: 900, paidFromAccountId: 901,
+    })
+    mocks.prismaMock.expense.update.mockResolvedValue({ id: 1 })
+
+    const fd = fdMap({
+      accountId: "777", paidFromAccountId: "778",
+      amount: "5000", date: "2026-10-05", description: "Klaim transport",
+    })
+    await actions.updateExpense(1, fd).catch(() => undefined)
+
+    const arg = mocks.prismaMock.expense.update.mock.calls[0]?.[0] as { data?: Record<string, unknown> } | undefined
+    if (arg?.data) {
+      expect(arg.data.accountId).toBe(900)
+      expect(arg.data.paidFromAccountId).toBe(901)
+    }
+  })
+
+  it("edit generik pengeluaran BIASA tetap memakai akun dari payload", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", createdBy: 1,
+      isReimbursementClaim: false, accountId: 900, paidFromAccountId: 901,
+    })
+    mocks.prismaMock.expense.update.mockResolvedValue({ id: 1 })
+
+    const fd = fdMap({
+      accountId: "777", paidFromAccountId: "778",
+      amount: "5000", date: "2026-10-05", description: "Beban listrik",
+    })
+    await actions.updateExpense(1, fd).catch(() => undefined)
+
+    const arg = mocks.prismaMock.expense.update.mock.calls[0]?.[0] as { data?: Record<string, unknown> } | undefined
+    if (arg?.data) {
+      expect(arg.data.accountId).toBe(777)
+    }
+  })
 })
 
 describe("Journal validation edge cases", () => {
