@@ -139,7 +139,9 @@ describe("F-2026-10-24-098-S: tinjau + kg + rekonsiliasi di laporan existing", (
     expect(data[1].kind === "data" && data[1].cells[3]).toBe("Belum ditetapkan")
     expect(data[1].kind === "data" && data[1].cells[13]).toBe("Belum ditetapkan")
     const total = t.rows[t.rows.length - 1]
-    expect(total.kind === "total" && total.cells[3]).toBe("3,50")
+    // cells = 7 sel trailing (Issue, Scrap, Remnant, Normal, Abnormal, Nilai, %).
+    // cells = [Issue, Scrap, Remnant, ...] → Remnant di indeks 2.
+    expect(total.kind === "total" && total.cells[2]).toBe("3,50")
   })
 })
 

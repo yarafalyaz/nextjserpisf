@@ -90,11 +90,8 @@ export function buildProjectPlTable(result: ProjectPlLoadResult): TableDocument[
       grand: true,
       label: "TOTAL",
       cells: [
-        "",
-        "",
-        "",
-        "",
-        "",
+        // Konvensi trailing: label membentang 5 kolom teks, angka mengisi
+        // 7 kolom sisanya (audit 2026-11-17).
         amount(totalRevenue),
         amount(total((r) => r.materialCost)),
         amount(total((r) => r.productionCost)),

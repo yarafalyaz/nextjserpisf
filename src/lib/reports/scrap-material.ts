@@ -207,14 +207,14 @@ export function buildScrapMaterialTable(report: ScrapReportResult): TableDocumen
             : "Sesuai",
       ],
     })),
+    // Konvensi trailing: label membentang, lalu 7 kolom angka berurutan.
+    // Sebelumnya ada placeholder di depan DAN dua di tengah, sehingga seluruh
+    // nominal bergeser ke kolom yang salah (audit 2026-11-17).
     { kind: "total", label: `Total (${t.lineCount} baris)`, grand: true, cells: [
-      "", formatNumber(t.issueQty, 2), formatNumber(t.scrapQty, 2), formatNumber(t.remnantQtyTotal, 2),
+      formatNumber(t.issueQty, 2), formatNumber(t.scrapQty, 2), formatNumber(t.remnantQtyTotal, 2),
       formatNumber(t.normalQty, 2), formatNumber(t.abnormalQty, 2),
       formatAccountingExact(t.abnormalValue, { zeroDash: false }),
-      t.aggregateRatePct == null ? "-" : `${formatNumber(t.aggregateRatePct, 2)}%`, "", "",
-      `${t.pendingReviewLines} belum ditinjau`,
-      formatNumber(t.scrapWeightKgTotal, 2),
-      t.reconciliationFindingLines > 0 ? `${t.reconciliationFindingLines} temuan selisih` : "Sesuai",
+      t.aggregateRatePct == null ? "-" : `${formatNumber(t.aggregateRatePct, 2)}%`,
     ]},
   ]
   return { columns, rows }

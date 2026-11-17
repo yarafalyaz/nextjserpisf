@@ -359,6 +359,8 @@ describe("varians produksi: presisi sen", () => {
     const notices = result.table.rows.filter((row) => row.kind === "notice").map((row) => (row.kind === "notice" ? row.text : ""))
     expect(notices.join(" ")).toContain("49.999,10")
     const total = result.table.rows.find((row) => row.kind === "total")
-    expect(total?.kind === "total" ? total.cells[4] : "").toBe("(99.999,50)")
+    // cells[3] = kolom "Varians Order": indeks bergeser satu setelah
+    // placeholder di depan dibuang (audit 2026-11-17).
+    expect(total?.kind === "total" ? total.cells[3] : "").toBe("(99.999,50)")
   })
 })

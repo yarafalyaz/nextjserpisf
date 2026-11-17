@@ -206,7 +206,8 @@ describe("buildDepreciationDifference", () => {
 
     expect(result.totals.difference).toBe(-600000.01)
     const total = result.table.rows.find((row) => row.kind === "total")
-    expect(total?.kind === "total" ? total.cells[3] : "").toBe("(600.000,01)")
+    // cells = 3 sel trailing (Akuntansi, Fiskal, Selisih) — audit 2026-11-17.
+    expect(total?.kind === "total" ? total.cells[2] : "").toBe("(600.000,01)")
     expect(result.verdict).toContain("600.000,01")
     expect(result.verdict).not.toContain("Rp -600.000")
     expect(depreciationDifferenceSummary(result)).toContain("600.000,01")

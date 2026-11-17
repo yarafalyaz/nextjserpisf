@@ -406,8 +406,11 @@ export function buildProductionVariance(
       kind: "total",
       grand: true,
       label: "Jumlah",
+      // Konvensi baris total: `cells` HANYA sel trailing. Placeholder di depan
+      // membuat leadingCount = max(kolom − sel, 1) = 1 sehingga label "Jumlah"
+      // menyempit 1 kolom dan semua nominal geser ke header yang salah
+      // (audit 2026-11-17). Lima sel terakhir sejajar kolom 2..6.
       cells: [
-        "",
         amount(totals.materialPriceVariance),
         amount(totals.materialUsageVariance),
         amount(totals.laborAndOtherCost),

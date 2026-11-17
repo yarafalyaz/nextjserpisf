@@ -342,13 +342,13 @@ export function buildDepreciationDifference(
       kind: "total",
       grand: true,
       label: "Jumlah",
+      // Konvensi trailing: label membentang kolom 1..5, angka menempati
+      // Akuntansi/thn, Fiskal/thn, Selisih. Placeholder di depan membuat
+      // seluruh nominal bergeser ke "Nilai Perolehan" (audit 2026-11-17).
       cells: [
-        "",
         preciseAmount(totals.accountingAnnual),
         preciseAmount(totals.fiscalAnnual),
         preciseAmount(totals.difference),
-        "",
-        "",
       ],
     })
     if (totals.withoutFiscal > 0) {
