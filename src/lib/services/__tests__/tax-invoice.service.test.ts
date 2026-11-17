@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => {
   const dpFindUnique = vi.fn()
   const tiFindMany = vi.fn()
 
+  const journalFindFirst = vi.fn().mockResolvedValue(null)
   const tx: Record<string, unknown> = {
     taxInvoice: {
       findFirst: taxInvoiceFindFirst,
@@ -37,6 +38,8 @@ const mocks = vi.hoisted(() => {
     downPayment: { findUnique: dpFindUnique },
     vendorBill: { update: vendorBillUpdate, findUnique: vendorBillFindUnique },
     vendor: { findFirst: vendorFindFirst },
+    // Jurnal tagihan: dipakai guard "faktur masukan berjurnal tak boleh batal".
+    journal: { findFirst: journalFindFirst },
     $queryRaw: queryRaw,
     $executeRaw: vi.fn().mockResolvedValue(1),
   }
@@ -48,6 +51,7 @@ const mocks = vi.hoisted(() => {
     salesInvoiceUpdate, salesInvoiceFindUnique, vendorBillUpdate, vendorBillFindUnique,
     vendorFindFirst, claimIdempotencyKey, bindIdempotencyKey,
     assertPeriodOpen, queryRaw, dpFindUnique, tiFindMany, prisma, tx,
+    journal: { findFirst: journalFindFirst },
   }
 })
 
@@ -530,6 +534,39 @@ describe("cancelTaxInvoice guards", () => {
     expect(mocks.salesInvoiceUpdate).toHaveBeenCalledWith(
       { where: { id: 1 }, data: { taxInvoiceNumber: null } },
     )
+  })
+
+  it("audit 2026-11-17: batal faktur masukan yang tagihannya sudah dijurnal ditolak", async () => {
+    // Membatalkan FP hanya mengubah status baris pajak; Dr PPN Masukan yang
+    // sudah POSTED tetap ada di GL. Membiarkannya membuat rekonsiliasi
+    // PPN "Per Buku vs Per Dokumen" menyisakan selisih permanen.
+    mocks.taxInvoiceFindUniqueOrThrow.mockResolvedValue({
+      id: 8, direction: "in", taxPeriod: "2026-01", taxInvoiceNumber: "010.001-26.00000010",
+      taxInvoiceDate: new Date(2026, 0, 10), taxAmount: 1_320_000,
+      djpStatus: "approved", creditStatus: "uncredited", creditPeriod: null,
+      transactionCode: "04", taxRate: 12,
+      salesInvoiceId: null, vendorBillId: 3, vendorId: 1,
+      counterpartyTaxId: null, counterpartyName: null, counterpartyNitku: null,
+    })
+    mocks.journal.findFirst.mockResolvedValue({ id: 77, journalNumber: "JRN-77" })
+    const r = await cancelTaxInvoice({ id: 8, cancelReason: "salah input", idempotencyKey: key() })
+    expect(r.success).toBe(false)
+    expect(String(r.error ?? "")).toMatch(/sudah dijurnal|Batalkan atau retur tagihannya/i)
+    expect(mocks.taxInvoiceUpdate).not.toHaveBeenCalled()
+  })
+
+  it("batal faktur masukan yang tagihannya belum dijurnal tetap boleh", async () => {
+    mocks.taxInvoiceFindUniqueOrThrow.mockResolvedValue({
+      id: 9, direction: "in", taxPeriod: "2026-01", taxInvoiceNumber: "010.001-26.00000011",
+      taxInvoiceDate: new Date(2026, 0, 10), taxAmount: 1_320_000,
+      djpStatus: "approved", creditStatus: "uncredited", creditPeriod: null,
+      transactionCode: "04", taxRate: 12,
+      salesInvoiceId: null, vendorBillId: 3, vendorId: 1,
+      counterpartyTaxId: null, counterpartyName: null, counterpartyNitku: null,
+    })
+    mocks.journal.findFirst.mockResolvedValue(null)
+    const r = await cancelTaxInvoice({ id: 9, cancelReason: "salah input", idempotencyKey: key() })
+    expect(r.success).toBe(true)
   })
 
   it("batal faktur masukan credited: status kredit dilepas agar jalur koreksi terbuka", async () => {

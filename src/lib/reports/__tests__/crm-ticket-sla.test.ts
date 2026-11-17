@@ -87,6 +87,24 @@ describe("konstanta tersahkan Q-SLA135-1/2", () => {
   })
 })
 
+describe("audit 2026-11-17: tengah malam UTC (00:00Z) tidak memutus perhitungan", () => {
+  it("tiket 10:00 WIB berumur 0 menit TIDAK lewat SLA", () => {
+    // Regresi: `getWibTodayUtcDate()` mengembalikan 00:00Z. Rekonstruksi
+    // tengah malam WIB bisa meleset untuk dinding-jam < 07:00, dan `break`
+    // dulu menghentikan seluruh loop sehingga hari itu dan SESUDAHNYA hilang.
+    const from = new Date("2026-11-16T00:00:00.000Z") // Senin 07:00 WIB
+    const to = wib(2026, 11, 16, 10) // Senin 10:00 WIB
+    expect(workingMinutesBetween(from, to, NO_HOLIDAYS)).toBe(120)
+  })
+
+  it("rentang dari 00:00Z melintasi beberapa hari tetap menghitung semua hari kerja", () => {
+    const from = new Date("2026-11-16T00:00:00.000Z") // Senin
+    const to = wib(2026, 11, 18, 10) // Rabu 10:00 WIB
+    // Senin 08–18 (540) + Selasa 08–18 (540) + Rabu 08–10 (120)
+    expect(workingMinutesBetween(from, to, NO_HOLIDAYS)).toBe(1200)
+  })
+})
+
 describe("jam kerja murni", () => {
   it("hari sama dalam jam kerja dihitung menit persis", () => {
     expect(workingMinutesBetween(wib(2026, 10, 26, 8), wib(2026, 10, 26, 12), NO_HOLIDAYS)).toBe(240)

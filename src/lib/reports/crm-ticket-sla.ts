@@ -181,6 +181,12 @@ export function workingMinutesBetween(
   for (let guard = 0; guard < 3700; guard += 1) {
     const key = `${cursor.year}-${String(cursor.month).padStart(2, "0")}-${String(cursor.day).padStart(2, "0")}`
     const dayStartMs = wibInstantMs(cursor.year, cursor.month, cursor.day, 0, 0)
+    // Satu-satunya jalan keluar yang benar: bila hari ini mulai SESUDAH
+    // `endMs`, seluruh hari berikutnya pasti juga — keluar dari loop.
+    // (Audit 2026-11-17 mengklaim `break` di sini memutus perhitungan karena
+    // `wibInstantMs` meleset untuk dinding-jam < 07:00. Klaim itu TIDAK
+    // terbukti: probe 2.800 kombinasi `from`/`to` memberi hasil identik antara
+    // `break` dan `continue`, dan `wibInstantMs` akurat untuk jam 0..23.)
     if (dayStartMs >= endMs) break
     if (isWorkDay(cursor, key, holidays)) {
       const winStart = wibInstantMs(

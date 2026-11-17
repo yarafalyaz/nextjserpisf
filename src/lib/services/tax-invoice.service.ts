@@ -667,6 +667,27 @@ export async function cancelTaxInvoice(input: CancelTaxInvoiceInput): Promise<Ta
       if (inv.djpStatus === "cancelled") throw definitive("Faktur ini sudah batal")
       if (inv.djpStatus === "replaced") throw definitive("Faktur ini sudah diganti, batal faktur pengganti, bukan asal")
       await assertPeriodOpen(inv.taxInvoiceDate, tx as never)
+      // Faktur MASUKAN yang tagihannya sudah dijurnal tidak boleh dibatalkan
+      // diam-diam (audit 2026-11-17). Posting tagihan menulis Dr PPN Masukan ke
+      // GL; membatalkan FP hanya mengubah status baris pajak, sehingga PPN di
+      // buku tetap ada sementara dokumennya hilang — `rekonsiliasi-ppn`
+      // "Per Buku vs Per Dokumen" menyisakan selisih permanen yang oleh SOP
+      // wajib diselidiki. Membalik seluruh jurnal tagihan juga salah: itu
+      // jurnal AP penuh (persediaan/beban), bukan kaki PPN saja.
+      // Jalan yang benar: batalkan/retur TAGIHANNYA lebih dulu (jalur reversal
+      // jurnal), baru batalkan faktur pajaknya.
+      if (inv.direction === "in" && inv.vendorBillId != null) {
+        const postedBillJournal = await tx.journal.findFirst({
+          where: { referenceType: "VendorBill", referenceId: inv.vendorBillId, status: "POSTED" },
+          select: { id: true, journalNumber: true },
+        })
+        if (postedBillJournal) {
+          throw definitive(
+            `Faktur masukan tidak dapat dibatalkan: tagihan terkait sudah dijurnal (${postedBillJournal.journalNumber ?? `#${postedBillJournal.id}`}) ` +
+              "dan PPN Masukannya sudah masuk pembukuan. Batalkan atau retur tagihannya lebih dulu, lalu batalkan faktur pajak ini.",
+          )
+        }
+      }
       // Faktur masukan yang sudah dikreditkan lalu dibatalkan wajib lepas
       // status kreditnya: baris batal ter-skip di SPT, tapi creditStatus
       // `credited` permanen mengunci jalur koreksi (re-kredit ditolak,
