@@ -6,7 +6,6 @@ import { createColumnHelper } from "@/lib/table"
 import { DataTable } from "@/components/ui/data-table"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
-import { CanCreate } from "@/components/auth/can-create"
 import { Eye, Pencil } from "@/components/ui/fontawesome-icons"
 import { deleteCustomerVehicle } from "@/actions/vehicle.actions"
 
@@ -27,9 +26,22 @@ const columnHelper = createColumnHelper<CustomerVehicleRow>()
 export function CustomerVehiclesTable({
   data,
   customerKey,
+  canEdit,
+  canDelete,
 }: {
   data: CustomerVehicleRow[]
   customerKey: string | number
+  /**
+   * Izin dihitung di Server Component dan diteruskan sebagai prop.
+   * Komponen ini `"use client"`: mengimpor `CanCreate`/`hasPermission`
+   * dari sini menyeret `lib/auth/permissions` -> `auth` -> Prisma/crypto
+   * -> `node:fs` ke bundel browser, dan Turbopack menolak build
+   * ("does not support external modules (request: node:fs)"). Terjadi
+   * 2026-11-17: build produksi gagal total di halaman ini. `CanCreate`
+   * tetap sah untuk rantai Server Component.
+   */
+  canEdit: boolean
+  canDelete: boolean
 }) {
   const columns = useMemo(
     () => [
@@ -78,7 +90,7 @@ export function CustomerVehiclesTable({
               >
                 <Eye size={14} aria-hidden="true" />
               </Link>
-              <CanCreate permission="edit_customers">
+              {canEdit && (
                 <Link
                   href={`/master/pelanggan/${customerKey}/kendaraan/${cv.slug ?? cv.id}/ubah`}
                   className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 rounded-md hover:bg-surface-secondary transition-colors cursor-pointer"
@@ -87,16 +99,14 @@ export function CustomerVehiclesTable({
                 >
                   <Pencil size={14} aria-hidden="true" />
                 </Link>
-              </CanCreate>
-              <CanCreate permission="delete_customers">
-                <DeleteButton id={cv.id} action={deleteCustomerVehicle} />
-              </CanCreate>
+              )}
+              {canDelete && <DeleteButton id={cv.id} action={deleteCustomerVehicle} />}
             </div>
           )
         },
       }),
     ],
-    [customerKey],
+    [customerKey, canEdit, canDelete],
   )
 
   return (

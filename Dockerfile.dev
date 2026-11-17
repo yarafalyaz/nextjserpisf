@@ -16,8 +16,11 @@ RUN apk add --no-cache \
     mkdir -p /app/.next /app/.next-dev /app/node_modules && \
     chown -R nextjs:nodejs /app/.next /app/.next-dev /app/node_modules
 
-COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# corepack DIHAPUS dari distribusi Node >=24 (image node:26-alpine tidak
+# menyediakannya), jadi pnpm dipasang lewat npm global, bukan corepack.
+RUN npm install -g --ignore-scripts pnpm@12.21.0 \
+  && pnpm install --frozen-lockfile --ignore-scripts
 
 # Copy application configuration and Prisma schema
 COPY --chown=root:root --chmod=755 src/ ./src/

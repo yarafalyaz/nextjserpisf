@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import Link from "next/link"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -23,6 +23,14 @@ export default async function CustomerVehiclesPage({
   const { slug } = await params
 
   const { customer, customerId, customerKey } = await loadCustomerBySlug(slug)
+
+  // Izin dihitung di sini (Server Component) lalu diteruskan sebagai prop:
+  // CustomerVehiclesTable adalah Client Component dan tidak boleh mengimpor
+  // hasPermission (lihat komentar di komponen itu — pernah mematahkan build).
+  const [canEdit, canDelete] = await Promise.all([
+    hasPermission("edit_customers"),
+    hasPermission("delete_customers"),
+  ])
 
   const vehicles = await prisma.customerVehicle.findMany({
     where: { customerId, deletedAt: null },
@@ -74,6 +82,8 @@ export default async function CustomerVehiclesPage({
           ) : (
             <CustomerVehiclesTable
               customerKey={customerKey}
+              canEdit={canEdit}
+              canDelete={canDelete}
               data={vehicles.map((cv) => ({
                 id: cv.id,
                 slug: cv.slug,

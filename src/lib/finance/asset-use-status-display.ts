@@ -8,7 +8,7 @@
 import {
   isRegisteredAssetUseStatus,
   type CronSkipReason,
-} from "./asset-use-status"
+} from "./asset-use-status-rules"
 
 export type AssetUseStatusTone = "success" | "warning" | "danger" | "default"
 
