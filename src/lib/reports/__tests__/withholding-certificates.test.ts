@@ -140,6 +140,24 @@ describe("loadWithholdingCertificatesCsv (F-35a)", () => {
     }))
   })
 
+  it("audit 2026-11-17: tarif baris fallback diturunkan dari withheld/DPP, bukan master hidup", async () => {
+    // Master tarif disunting sesudah potong: laporan TIDAK boleh ikut berubah,
+    // karena `withheld` adalah uang yang benar-benar dipotong.
+    vb.mockResolvedValue([{
+      date: new Date(2026, 0, 10), documentNo: "VB-002", subtotal: 1000, discountAmount: 100,
+      withholdingAmount: 18, // 2% dari DPP 900, terpotong saat master masih 2%
+      vendor: { name: "PT Maklon", npwp: "02.111" },
+      withholdingType: { code: "PPh 23", name: "Jasa", rate: 5 }, // master sudah diubah
+    }] as never)
+    sp.mockResolvedValue([] as never)
+
+    const out = await loadWithholdingCertificatesCsv({ start: new Date(2026, 0, 1), end: new Date(2026, 0, 31) })
+    // Baris: "VB-002","VB-002","PT Maklon","02.111","PPh 23 - Jasa","2","900.00","18.00"
+    expect(out.csv).toContain('"PPh 23 - Jasa","2","900.00"') // tarif turunan withheld/DPP
+    expect(out.csv).not.toContain('"PPh 23 - Jasa","5"') // bukan master hidup
+    expect(out.purchaseWithheld).toBe(18)
+  })
+
   // B8: satu loader bersama — input yang sama membentuk tabel layar/PDF
   // dan CSV, jadi total kedua sisi ketiga permukaan selalu sama. Versi
   // lama: layar dua sisi, PDF hanya vendor, CSV semesta ketiga.

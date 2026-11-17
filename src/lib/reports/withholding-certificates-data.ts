@@ -137,7 +137,14 @@ export async function loadWithholdingCertificateInputs(
       npwp: bill.vendor.npwp,
       typeCode: bill.withholdingType?.code ?? null,
       typeName: bill.withholdingType?.name ?? null,
-      rate: bill.withholdingType ? Number(bill.withholdingType.rate) : null,
+      // Tarif DITURUNKAN dari angka tersimpan (withheld / DPP), bukan dari
+      // `withholdingType.rate` master. Master bisa diedit sesudah potong,
+      // sehingga laporan akan menampilkan tarif yang tak pernah dipakai dan
+      // DPP×tarif tidak lagi sama dengan `withheld` (audit 2026-11-17).
+      rate: derivedRate(
+        Number(bill.withholdingAmount),
+        purchaseDpp(Number(bill.subtotal), Number(bill.discountAmount ?? 0)),
+      ),
       dpp: purchaseDpp(Number(bill.subtotal), Number(bill.discountAmount ?? 0)),
       withheld: Number(bill.withholdingAmount),
     })),
@@ -160,6 +167,17 @@ export async function loadWithholdingCertificateInputs(
   ]
 
   return inputs
+}
+
+/**
+ * Tarif implisit dari fakta tersimpan. Dipakai baris fallback (dokumen yang
+ * belum punya bupot) supaya angka laporan tidak berubah saat master tarif
+ * disunting: `withheld` adalah uang yang benar-benar dipotong.
+ * Null bila DPP nol/tak diketahui — lebih jujur daripada menebak dari master.
+ */
+function derivedRate(withheld: number, dpp: number): number | null {
+  if (!Number.isFinite(withheld) || !Number.isFinite(dpp) || dpp <= 0) return null
+  return Math.round((withheld / dpp) * 100 * 100) / 100
 }
 
 export async function loadWithholdingCertificatesCsv(period: Period): Promise<WithholdingCertificateCsv> {
