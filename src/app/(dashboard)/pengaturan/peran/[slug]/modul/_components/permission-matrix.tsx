@@ -89,7 +89,7 @@ export function PermissionMatrix({
         </div>
       )}
 
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-default bg-surface/95 px-4 py-3 backdrop-blur">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-default bg-surface px-4 py-3">
         <input
           type="search"
           value={query}

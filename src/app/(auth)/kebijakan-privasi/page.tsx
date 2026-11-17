@@ -19,7 +19,7 @@ export default function KebijakanPrivasiPage() {
         >
           <ArrowLeft size={16} /> Kembali ke Halaman Masuk
         </Link>
-        <Card className="border border-default/40 shadow-xl bg-card/90 backdrop-blur-sm">
+        <Card className="border border-default/40 shadow-xl bg-card">
           <CardHeader className="border-b border-default pb-6">
             <CardTitle className="text-3xl font-bold tracking-tight text-foreground">Kebijakan Privasi</CardTitle>
             <CardDescription className="text-sm text-muted-foreground">
