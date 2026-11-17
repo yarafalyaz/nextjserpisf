@@ -752,7 +752,7 @@ export function InvoiceItemsEditor({
                         onPress={() => removeItem(i)}
                         variant="danger-soft"
                         size="sm"
-                        className="min-h-9 px-2 text-danger hover:text-danger/80"
+                        className="relative min-h-11 px-2 text-danger hover:text-danger/80 sm:min-h-9"
                         title="Hapus item"
                         aria-label={`Hapus item baris ${i + 1}`}
                       >

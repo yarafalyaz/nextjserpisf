@@ -149,6 +149,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
         {canModify && <Button
           type="button"
           variant="secondary" size="sm"
+          className="min-h-11"
           onPress={() => fileInputRef.current?.click()}
           isDisabled={uploading}
           aria-controls={fileInputId}
@@ -228,7 +229,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
                   href={att.fileUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="button button--secondary button--sm attachment-action-link"
+                  className="button button--secondary button--sm attachment-action-link min-h-11"
                   aria-label={`Unduh ${att.originalName}`}
                   title="Unduh"
                 >
@@ -238,7 +239,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
                   onPress={() => handleDeleteClick(att.id)}
                   variant="danger-soft"
                   size="sm"
-                  className="attachment-action-button"
+                  className="attachment-action-button min-h-11"
                   aria-label={`Hapus lampiran ${att.originalName}`}
                 >
                   <Trash2 className="size-3.5" aria-hidden="true" />

@@ -57,7 +57,7 @@ export function StatusActions({ status, id, module, canAct = true }: StatusActio
             <Button
               variant="success"
               size="sm"
-              className="min-h-11"
+              className="min-h-11 sm:min-h-9"
               onPress={() => handleAction("approve")}
               isDisabled={isPending}
             >
@@ -69,7 +69,7 @@ export function StatusActions({ status, id, module, canAct = true }: StatusActio
             <Button
               variant="danger"
               size="sm"
-              className="min-h-11"
+              className="min-h-11 sm:min-h-9"
               onPress={() => handleAction("reject")}
               isDisabled={isPending}
             >
