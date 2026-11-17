@@ -82,15 +82,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # pnpm (migrasi 2026-11): repo memakai pnpm-lock.yaml, bukan package-lock.json.
+      # `cache: npm` di setup-node mencari package-lock.json yang tidak ada lalu
+      # menggagalkan job SEBELUM lint/tsc jalan (insiden 2026-11-12..17: CI merah
+      # berhari-hari padahal kode hijau). Versi pnpm dipaku di sini, bukan lewat
+      # `packageManager` di package.json: menambah field itu mengubah resolusi
+      # lockfile sehingga `--frozen-lockfile` menolak (ERR_PNPM_FROZEN_LOCKFILE_
+      # WITH_OUTDATED_LOCKFILE) — diuji, bukan diasumsikan.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-          cache: npm
-      - run: npm ci --ignore-scripts
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       # Preflight install: tolak node_modules/node_modules sampah + pastikan
       # next-auth/@auth/core/jwt ter-resolve sebelum kerja mahal jalan
       # (insiden 2026-10-22: symlink sampah lolos, build gagal di tengah).
-      - run: npm run preflight:deps
+      - run: pnpm run preflight:deps
       # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
       # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
       - run: ./node_modules/.bin/prisma generate
@@ -106,15 +116,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # pnpm (migrasi 2026-11): repo memakai pnpm-lock.yaml, bukan package-lock.json.
+      # `cache: npm` di setup-node mencari package-lock.json yang tidak ada lalu
+      # menggagalkan job SEBELUM lint/tsc jalan (insiden 2026-11-12..17: CI merah
+      # berhari-hari padahal kode hijau). Versi pnpm dipaku di sini, bukan lewat
+      # `packageManager` di package.json: menambah field itu mengubah resolusi
+      # lockfile sehingga `--frozen-lockfile` menolak (ERR_PNPM_FROZEN_LOCKFILE_
+      # WITH_OUTDATED_LOCKFILE) — diuji, bukan diasumsikan.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-          cache: npm
-      - run: npm ci --ignore-scripts
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       # Preflight install: tolak node_modules/node_modules sampah + pastikan
       # next-auth/@auth/core/jwt ter-resolve sebelum kerja mahal jalan
       # (insiden 2026-10-22: symlink sampah lolos, build gagal di tengah).
-      - run: npm run preflight:deps
+      - run: pnpm run preflight:deps
       # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
       # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
       - run: ./node_modules/.bin/prisma generate
@@ -151,15 +171,25 @@ jobs:
           --tmpfs /var/lib/mysql:rw
     steps:
       - uses: actions/checkout@v7
+      # pnpm (migrasi 2026-11): repo memakai pnpm-lock.yaml, bukan package-lock.json.
+      # `cache: npm` di setup-node mencari package-lock.json yang tidak ada lalu
+      # menggagalkan job SEBELUM lint/tsc jalan (insiden 2026-11-12..17: CI merah
+      # berhari-hari padahal kode hijau). Versi pnpm dipaku di sini, bukan lewat
+      # `packageManager` di package.json: menambah field itu mengubah resolusi
+      # lockfile sehingga `--frozen-lockfile` menolak (ERR_PNPM_FROZEN_LOCKFILE_
+      # WITH_OUTDATED_LOCKFILE) — diuji, bukan diasumsikan.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-          cache: npm
-      - run: npm ci --ignore-scripts
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       # Preflight install: tolak node_modules/node_modules sampah + pastikan
       # next-auth/@auth/core/jwt ter-resolve sebelum kerja mahal jalan
       # (insiden 2026-10-22: symlink sampah lolos, build gagal di tengah).
-      - run: npm run preflight:deps
+      - run: pnpm run preflight:deps
       # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
       # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
       - run: ./node_modules/.bin/prisma generate
@@ -169,9 +199,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**', 'prisma/**', 'next.config.ts', 'tsconfig*.json') }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('src/**', 'prisma/**', 'next.config.ts', 'tsconfig*.json') }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-
+            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
             ${{ runner.os }}-nextjs-
       - run: ./node_modules/.bin/prisma generate
         env:
@@ -187,7 +217,7 @@ jobs:
         run: node scripts/verify-migrations.mjs
         env:
           MIGRATION_CHECK_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
-      - run: npm run build
+      - run: pnpm run build
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
 
@@ -219,15 +249,25 @@ jobs:
           --tmpfs /var/lib/mysql:rw
     steps:
       - uses: actions/checkout@v7
+      # pnpm (migrasi 2026-11): repo memakai pnpm-lock.yaml, bukan package-lock.json.
+      # `cache: npm` di setup-node mencari package-lock.json yang tidak ada lalu
+      # menggagalkan job SEBELUM lint/tsc jalan (insiden 2026-11-12..17: CI merah
+      # berhari-hari padahal kode hijau). Versi pnpm dipaku di sini, bukan lewat
+      # `packageManager` di package.json: menambah field itu mengubah resolusi
+      # lockfile sehingga `--frozen-lockfile` menolak (ERR_PNPM_FROZEN_LOCKFILE_
+      # WITH_OUTDATED_LOCKFILE) — diuji, bukan diasumsikan.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-          cache: npm
-      - run: npm ci --ignore-scripts
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       # Preflight install: tolak node_modules/node_modules sampah + pastikan
       # next-auth/@auth/core/jwt ter-resolve sebelum kerja mahal jalan
       # (insiden 2026-10-22: symlink sampah lolos, build gagal di tengah).
-      - run: npm run preflight:deps
+      - run: pnpm run preflight:deps
       # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
       # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
       - run: ./node_modules/.bin/prisma generate

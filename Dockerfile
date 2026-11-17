@@ -4,9 +4,11 @@ FROM node:26-alpine AS builder
 # Set working directory
 WORKDIR /app
 
-# Install dependencies
-COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
+# Install dependencies (pnpm: repo memakai pnpm-lock.yaml. Sebelumnya Dockerfile
+# menyalin package-lock.json yang TIDAK ada di repo -> build image selalu gagal.)
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && corepack prepare pnpm@12.18.0 --activate \
+  && pnpm install --frozen-lockfile --ignore-scripts
 
 # Copy the rest of the application code
 # `next-env.d.ts` is gitignored (Next regenerates it during build/dev), so a
@@ -22,15 +24,15 @@ ENV DATABASE_URL="mysql://build:***@localhost:3306/build"
 RUN ./node_modules/.bin/prisma generate
 
 # Fail fast with a clear error when the Tailwind stylesheet entry cannot be
-# read by the build (npm ci is run with --ignore-scripts, so a file-mode or
+# read by the build (pnpm install runs with --ignore-scripts, so a file-mode or
 # umask problem in the layer would surface later as a cryptic EACCES from
 # Turbopack instead of this).
 RUN test -r /app/node_modules/tailwindcss/index.css
 
 # Build the Next.js application
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN NODE_ENV=production npm run build \
-  && npm prune --omit=dev
+RUN NODE_ENV=production pnpm run build \
+  && pnpm prune --prod
 
 # Use a smaller Node.js image for production
 FROM node:26-alpine AS runner
