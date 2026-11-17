@@ -1055,7 +1055,7 @@ export async function issueMaterial(
           sr.scrapNote === rowScrap.scrapNote;
         if (!same) {
           throw new Error(
-            `Baris duplikat item #${itemId} dengan scrap berbeda — satukan menjadi satu baris per item.`,
+            `Baris duplikat item #${itemId} dengan scrap berbeda – satukan menjadi satu baris per item.`,
           );
         }
       } else {
@@ -1139,7 +1139,7 @@ export async function issueMaterial(
         });
         if (consumedViaMI > 0) {
           throw new Error(
-            `WO ${order.documentNo} sudah dikonsumsi via Pengeluaran Material — gunakan jalur itu, bukan pengeluaran PO langsung.`,
+            `WO ${order.documentNo} sudah dikonsumsi via Pengeluaran Material – gunakan jalur itu, bukan pengeluaran PO langsung.`,
           );
         }
       }
@@ -1187,7 +1187,7 @@ export async function issueMaterial(
         // diterbitkan (gudang sudah dinilai hidup di bawah; complete menilai
         // item hasil hidup pula). Tanpa ini stok item mati terkonsumsi FIFO.
         if (!itm.isActive || itm.deletedAt) {
-          throw new Error(`Item #${itemId} tidak aktif — tidak dapat diterbitkan ke produksi`);
+          throw new Error(`Item #${itemId} tidak aktif – tidak dapat diterbitkan ke produksi`);
         }
         const warehouseId = itm.defaultWarehouseId && validWarehouseIds.has(itm.defaultWarehouseId)
           ? itm.defaultWarehouseId
@@ -2398,7 +2398,7 @@ export async function deleteWorkOrder(id: number) {
       // mengurangi totalActualCost PO maupun membalik jurnal WIP-nya.
       if ((await tx.productionCost.count({ where: { workOrderId: id } })) > 0) {
         throw new Error(
-          "Dokumen tidak dapat dihapus karena masih menanggung baris biaya produksi. Hapus baris biaya itu lebih dulu — menghapus perintah kerja akan menghapus barisnya diam-diam dan meninggalkan jurnal WIP yang tak bisa dibalik.",
+          "Dokumen tidak dapat dihapus karena masih menanggung baris biaya produksi. Hapus baris biaya itu lebih dulu – menghapus perintah kerja akan menghapus barisnya diam-diam dan meninggalkan jurnal WIP yang tak bisa dibalik.",
         );
       }
       return tx.workOrder.deleteMany({
@@ -2449,7 +2449,7 @@ export async function deleteProductionOrder(id: number) {
       // Dr WIP menggantung selamanya, GL tak pernah bisa cocok lagi.
       if ((await tx.productionCost.count({ where: { productionOrderId: id } })) > 0) {
         throw new Error(
-          "Dokumen tidak dapat dihapus karena masih memiliki baris biaya produksi. Hapus baris biaya tersebut lebih dulu — menghapus order akan menghapus barisnya diam-diam dan meninggalkan jurnal WIP yang tak bisa dibalik.",
+          "Dokumen tidak dapat dihapus karena masih memiliki baris biaya produksi. Hapus baris biaya tersebut lebih dulu – menghapus order akan menghapus barisnya diam-diam dan meninggalkan jurnal WIP yang tak bisa dibalik.",
         );
       }
       return tx.productionOrder.deleteMany({
@@ -3124,7 +3124,7 @@ export async function cancelWorkOrder(workOrderId: number, reason?: string) {
       });
       if (openIssue?.status === "completed") {
         throw new Error(
-          "Perintah kerja memiliki pengeluaran material yang sudah selesai — batalkan/retur pengeluaran material terlebih dahulu sebelum membatalkan perintah kerja.",
+          "Perintah kerja memiliki pengeluaran material yang sudah selesai – batalkan/retur pengeluaran material terlebih dahulu sebelum membatalkan perintah kerja.",
         );
       }
       if (openIssue) {
@@ -3134,7 +3134,7 @@ export async function cancelWorkOrder(workOrderId: number, reason?: string) {
       }
       if (activeChildOrders > 0) {
         throw new Error(
-          "Perintah kerja memiliki order produksi anak yang masih aktif — selesaikan atau batalkan order produksi anak terlebih dahulu.",
+          "Perintah kerja memiliki order produksi anak yang masih aktif – selesaikan atau batalkan order produksi anak terlebih dahulu.",
         );
       }
       const claim = await tx.workOrder.updateMany({

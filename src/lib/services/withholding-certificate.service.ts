@@ -100,8 +100,8 @@ function toRate(value: number): Prisma.Decimal {
 
 /** R8-PAJAK-08: fail-closed untuk jenis PPh nonaktif/soft-deleted. */
 function assertWithholdingTypeActive(type: { code: string; isActive?: boolean | null; deletedAt?: Date | null }) {
-  if (type.deletedAt != null) throw definitive(`Jenis PPh "${type.code}" sudah dihapus — tidak bisa dipakai`)
-  if (type.isActive === false) throw definitive(`Jenis PPh "${type.code}" nonaktif — tidak bisa dipakai`)
+  if (type.deletedAt != null) throw definitive(`Jenis PPh "${type.code}" sudah dihapus, tidak bisa dipakai`)
+  if (type.isActive === false) throw definitive(`Jenis PPh "${type.code}" nonaktif, tidak bisa dipakai`)
 }
 
 function assertArticle(article: string): WithholdingArticle {
@@ -243,7 +243,7 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         })
         if (!bill) throw definitive("Tagihan vendor tertaut tidak ditemukan")
         if (bill.deletedAt != null || bill.status === "cancelled") {
-          throw definitive("Tagihan vendor tertaut sudah batal/terhapus — bupot tidak bisa diterbitkan")
+          throw definitive("Tagihan vendor tertaut sudah batal/terhapus, bupot tidak bisa diterbitkan")
         }
         // Hanya bill diakui (posted/partial/paid — RECOGNISED_AP_STATUSES)
         // yang boleh melahirkan bupot: draft/approved belum punya jurnal AP
@@ -252,14 +252,14 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         // dikirim langsung ke action dan masuk laporan Bukti Potong
         // sebelum kewajiban diakui.
         if (!(RECOGNISED_AP_STATUSES as readonly string[]).includes(bill.status)) {
-          throw definitive("Tagihan vendor tertaut belum terposting — bupot hanya untuk tagihan posted/partial/paid")
+          throw definitive("Tagihan vendor tertaut belum terposting, bupot hanya untuk tagihan posted/partial/paid")
         }
         const activeDupe = await tx.withholdingCertificate.findFirst({
           where: { vendorBillId: input.vendorBillId, status: { not: "revoked" } },
           select: { id: true, certificateNumber: true },
         })
         if (activeDupe) {
-          throw definitive(`Tagihan ini sudah punya bupot aktif "${activeDupe.certificateNumber}" — cabut dulu sebelum terbit baru`)
+          throw definitive(`Tagihan ini sudah punya bupot aktif "${activeDupe.certificateNumber}", cabut dulu sebelum terbit baru`)
         }
         recordedWithholding = { amount: Number(bill.withholdingAmount ?? 0), typeId: bill.withholdingTypeId ?? null }
       }
@@ -274,14 +274,14 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         })
         if (!payment) throw definitive("Pembayaran pelanggan tertaut tidak ditemukan")
         if (payment.status === "reversed") {
-          throw definitive("Pembayaran tertaut sudah dibalik — bupot tidak bisa diterbitkan")
+          throw definitive("Pembayaran tertaut sudah dibalik, bupot tidak bisa diterbitkan")
         }
         const activeDupe = await tx.withholdingCertificate.findFirst({
           where: { salesPaymentId: input.salesPaymentId, status: { not: "revoked" } },
           select: { id: true, certificateNumber: true },
         })
         if (activeDupe) {
-          throw definitive(`Pembayaran ini sudah punya bupot aktif "${activeDupe.certificateNumber}" — cabut dulu sebelum terbit baru`)
+          throw definitive(`Pembayaran ini sudah punya bupot aktif "${activeDupe.certificateNumber}", cabut dulu sebelum terbit baru`)
         }
         recordedWithholding = { amount: Number(payment.withholdingAmount ?? 0), typeId: payment.withholdingTypeId ?? null }
       }
@@ -329,10 +329,10 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
       const tariff = rentResolution ? rentResolution.rate : Number(type.rate)
       if (!(tariff >= 0)) throw definitive(`Jenis PPh "${type.code}" bertarif tak valid`)
       if (input.direction === "we_withhold" && type.liabilityAccountId == null) {
-        throw definitive(`Jenis PPh "${type.code}" belum punya akun Hutang PPh — lengkapi di Pengaturan → Pajak Potong`)
+        throw definitive(`Jenis PPh "${type.code}" belum punya akun Hutang PPh, lengkapi di Pengaturan → Pajak Potong`)
       }
       if (input.direction === "withheld_from_us" && type.receivableAccountId == null) {
-        throw definitive(`Jenis PPh "${type.code}" belum punya akun PPh dibayar dimuka — lengkapi di Pengaturan → Pajak Potong`)
+        throw definitive(`Jenis PPh "${type.code}" belum punya akun PPh dibayar dimuka, lengkapi di Pengaturan → Pajak Potong`)
       }
       // R8-PAJAK-03: fasilitas menurunkan potongan di sisi service (kontrak
       // `computeWithheld` di tax/withholding-certificate.ts). SKB = dibebaskan,
@@ -354,7 +354,7 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         const amountMatches = Math.abs(certAmount - recordedWithholding.amount) < 0.005
         if (!amountMatches || recordedWithholding.typeId !== type.id) {
           throw definitive(
-            "Nominal/jenis potongan bupot tidak cocok dengan potongan tercatat pada dokumen sumber — bupot membuktikan potongan yang tercatat, bukan angka baru.",
+            "Nominal/jenis potongan bupot tidak cocok dengan potongan tercatat pada dokumen sumber, bupot membuktikan potongan yang tercatat, bukan angka baru.",
           )
         }
       }
@@ -488,8 +488,8 @@ export async function revokeWithholdingCertificate(input: RevokeWithholdingInput
       if (withholdingAccountId == null) {
         throw definitive(
           isWeWithhold
-            ? `Jenis PPh "${type.code}" belum punya akun Hutang PPh — lengkapi di Pengaturan → Pajak Potong`
-            : `Jenis PPh "${type.code}" belum punya akun PPh dibayar dimuka — lengkapi di Pengaturan → Pajak Potong`,
+            ? `Jenis PPh "${type.code}" belum punya akun Hutang PPh, lengkapi di Pengaturan → Pajak Potong`
+            : `Jenis PPh "${type.code}" belum punya akun PPh dibayar dimuka, lengkapi di Pengaturan → Pajak Potong`,
         )
       }
       const settings = await tx.systemSetting.findFirst()
@@ -636,7 +636,7 @@ export async function settleWithholdingTax(input: SettleWithholdingInput): Promi
       // Akun utang fail-closed: input eksplisit else liabilityAccountId jenis.
       const taxAccountId = input.taxAccountId ?? type.liabilityAccountId
       if (taxAccountId == null) {
-        throw definitive(`Jenis PPh "${type.code}" belum punya akun Hutang PPh — lengkapi di Pengaturan → Pajak Potong`)
+        throw definitive(`Jenis PPh "${type.code}" belum punya akun Hutang PPh, lengkapi di Pengaturan → Pajak Potong`)
       }
       if (taxAccountId === input.paymentAccountId) {
         throw definitive("Akun utang pajak dan kas/bank tidak boleh sama")

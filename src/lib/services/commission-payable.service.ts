@@ -50,7 +50,7 @@ async function resolveCommissionAccounts(tx: TxClient): Promise<{ expenseId: num
   if (!expenseId || !payableId) {
     throw new Error(
       "Akrual komisi ditolak: mapping akun komisi belum lengkap di Pengaturan (Pengaturan → Akun). " +
-        "Isi akun Beban Komisi dan Utang Komisi Penjualan — tidak ada fallback.",
+        "Isi akun Beban Komisi dan Utang Komisi Penjualan, tidak ada fallback.",
     )
   }
   if (expenseId === payableId) {
@@ -158,7 +158,7 @@ export async function accrueTx(
   })
   if (priorJournal) {
     throw new Error(
-      `Akrual komisi ditolak: jurnal akrual faktur #${salesInvoiceId} sudah ada (#${priorJournal.id}) tanpa baris subledger — perlu resolusi manual, bukan jurnal kedua.`,
+      `Akrual komisi ditolak: jurnal akrual faktur #${salesInvoiceId} sudah ada (#${priorJournal.id}) tanpa baris subledger, perlu resolusi manual, bukan jurnal kedua.`,
     )
   }
   // Tanggal jurnal = tanggal transisi paid (vonis §5), bukan updatedAt faktur
@@ -235,7 +235,7 @@ export async function cancelAccrualTx(
   if (paid > 0) {
     throw new Error(
       `Un-accrue komisi ditolak: faktur #${salesInvoiceId} sudah dibayar ${paid} via slip (payable #${row.id}); ` +
-        "saldo historis dipertahankan — selesaikan manual lewat potongan payroll berikutnya, bukan pembatalan diam.",
+        "saldo historis dipertahankan, selesaikan manual lewat potongan payroll berikutnya, bukan pembatalan diam.",
     )
   }
   const outstanding = safeRound(safeSubtract(accrued, reversal, 2), 2)

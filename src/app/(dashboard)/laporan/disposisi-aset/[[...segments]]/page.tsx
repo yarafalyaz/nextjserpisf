@@ -63,7 +63,7 @@ export default async function AssetDisposalPage({
         tableLabel="Daftar Disposisi Aset"
       />
       <p className="doc-lines" style={{ marginTop: 8 }}>
-        {disposal.count} aset dilepas — harga perolehan {formatAccountingExact(disposal.totals.cost)}, nilai buku{" "}
+        {disposal.count} aset dilepas, harga perolehan {formatAccountingExact(disposal.totals.cost)}, nilai buku{" "}
         {formatAccountingExact(disposal.totals.bookValue)}, hasil penjualan{" "}
         {formatAccountingExact(disposal.totals.proceeds)}, laba/(rugi){" "}
         {formatAccountingExact(disposal.totals.gainLoss)}.

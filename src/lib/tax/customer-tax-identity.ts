@@ -92,7 +92,7 @@ export function nitkuLink(identity: Pick<CustomerTaxIdentity, "taxId" | "nitku">
 
 /** Label peringatan operator untuk NPWP 15 digit (verbatim vonis §2, jangan dipersingkat diam-diam). */
 export const NPWP_LEGACY15_WARNING =
-  "NPWP 15 digit — minta NPWP 16 digit/NIK lawan; sejak 1 Jul 2024 layanan memakai format 16 digit"
+  "NPWP 15 digit – minta NPWP 16 digit/NIK lawan; sejak 1 Jul 2024 layanan memakai format 16 digit"
 
 export interface MasterTaxValidation {
   ok: boolean
@@ -114,16 +114,16 @@ export function validateMasterTaxIdentity(identity: CustomerTaxIdentity): Master
   const warnings: string[] = []
   const npwpFormat = classifyNpwp(identity.taxId)
   if (npwpFormat === "invalid") {
-    errors.push("NPWP harus 16 digit (atau 15 digit format lama) — periksa kembali nomor lawan")
+    errors.push("NPWP harus 16 digit (atau 15 digit format lama) – periksa kembali nomor lawan")
   }
   if (npwpFormat === "legacy15") warnings.push(NPWP_LEGACY15_WARNING)
   const link = nitkuLink(identity)
   if (!blank(identity.nitku) && !isValidNitkuShape(identity.nitku)) {
     errors.push("NITKU harus tepat 22 digit")
   } else if (link === "mismatch") {
-    warnings.push("NITKU tidak diawali NPWP pelanggan — periksa apakah NITKU milik entitas lain")
+    warnings.push("NITKU tidak diawali NPWP pelanggan – periksa apakah NITKU milik entitas lain")
   } else if (link === "unlinked" && !blank(identity.nitku)) {
-    warnings.push("NITKU belum dapat ditautkan ke NPWP (NPWP kosong/15 digit) — tersimpan apa adanya")
+    warnings.push("NITKU belum dapat ditautkan ke NPWP (NPWP kosong/15 digit) – tersimpan apa adanya")
   }
   return { ok: errors.length === 0, errors, npwpFormat, nitkuLink: link, warnings }
 }
@@ -214,11 +214,11 @@ export function evaluateTaxInvoiceIssueGate(
   opts: { legacy15Confirmed?: boolean } = {},
 ): IssueGateDecision {
   if (blank(snapshot.counterpartyName)) {
-    return { allowed: false, error: "Nama lawan transaksi wajib terisi untuk menerbitkan faktur pajak (identitas pembeli wajib — PER-11/PJ/2025 Pasal 33)" }
+    return { allowed: false, error: "Nama lawan transaksi wajib terisi untuk menerbitkan faktur pajak (identitas pembeli wajib – PER-11/PJ/2025 Pasal 33)" }
   }
   const npwpFormat = classifyNpwp(snapshot.counterpartyTaxId)
   if (npwpFormat === "absent") {
-    return { allowed: false, error: "NPWP/NIK lawan transaksi wajib terisi untuk menerbitkan faktur pajak (identitas pembeli wajib — PER-11/PJ/2025 Pasal 33)" }
+    return { allowed: false, error: "NPWP/NIK lawan transaksi wajib terisi untuk menerbitkan faktur pajak (identitas pembeli wajib – PER-11/PJ/2025 Pasal 33)" }
   }
   if (npwpFormat === "invalid") {
     return { allowed: false, error: "NPWP lawan transaksi bentuknya tidak sah (harus 16 digit, atau 15 digit format lama)" }
@@ -227,15 +227,15 @@ export function evaluateTaxInvoiceIssueGate(
     return { allowed: false, error: "NITKU lawan transaksi harus tepat 22 digit" }
   }
   if (nitkuLink({ taxId: snapshot.counterpartyTaxId, nitku: snapshot.counterpartyNitku }) === "mismatch") {
-    return { allowed: false, error: "NITKU lawan transaksi tidak diawali NPWP lawan transaksi — periksa apakah NITKU milik entitas lain" }
+    return { allowed: false, error: "NITKU lawan transaksi tidak diawali NPWP lawan transaksi – periksa apakah NITKU milik entitas lain" }
   }
   const warnings: string[] = []
   if (npwpFormat === "legacy15") {
     if (!opts.legacy15Confirmed) {
-      return { allowed: false, error: `${NPWP_LEGACY15_WARNING} — konfirmasi eksplisit diperlukan sebelum terbit dengan NPWP 15 digit` }
+      return { allowed: false, error: `${NPWP_LEGACY15_WARNING} (konfirmasi eksplisit diperlukan sebelum terbit dengan NPWP 15 digit)` }
     }
     warnings.push(NPWP_LEGACY15_WARNING)
   }
-  if (blank(snapshot.counterpartyNitku)) warnings.push("NITKU lawan transaksi kosong (nitkuAbsent) — terbit bertanda, lengkapi bila penyerahan ke TKU lain")
+  if (blank(snapshot.counterpartyNitku)) warnings.push("NITKU lawan transaksi kosong (nitkuAbsent) – terbit bertanda, lengkapi bila penyerahan ke TKU lain")
   return { allowed: true, warnings }
 }

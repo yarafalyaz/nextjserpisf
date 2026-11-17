@@ -61,7 +61,7 @@ export function buildWipAgingTable(result: WipAgingLoadResult): TableDocument["t
       rows: [
         {
           kind: "notice",
-          text: "Belum ada order produksi berjalan — tidak ada sisa WIP yang menahan biaya pada tanggal acuan ini.",
+          text: "Belum ada order produksi berjalan – tidak ada sisa WIP yang menahan biaya pada tanggal acuan ini.",
         },
       ],
     }
@@ -108,7 +108,7 @@ export function buildWipAgingTable(result: WipAgingLoadResult): TableDocument["t
         "Sisa WIP per order = total biaya aktual tersimpan (sisa pool sesudah rilis parsial; " +
         "dijepit minimal 0). Umur dihitung dari tanggal mulai order (jatuh ke tanggal buat bila kosong) " +
         "sampai tanggal acuan. Total laporan adalah jumlah sisa WIP order berjalan; selisih terhadap saldo " +
-        "GL akun WIP bukan galat — saldo GL juga memuat jurnal WIP dari jalur lain.",
+        "GL akun WIP bukan galat – saldo GL juga memuat jurnal WIP dari jalur lain.",
     },
   ]
 

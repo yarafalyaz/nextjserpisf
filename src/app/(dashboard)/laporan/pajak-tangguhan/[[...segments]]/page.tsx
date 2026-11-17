@@ -83,7 +83,7 @@ export default async function DeferredTaxPage({
           defaultStartDate=""
           numberField={{
             param: "tarif",
-            label: "Tarif Pajak Badan (%) — pasokan operator",
+            label: "Tarif Pajak Badan (%) – pasokan operator",
             value: taxRatePercent === null ? "" : String(taxRatePercent),
             min: 0,
             max: 100,

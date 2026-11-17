@@ -46,7 +46,7 @@ export const COLLECTION_REMINDER_LEVEL_TITLE = "Tingkat Pengingat"
 
 /** Notice tingkat — verbatim Q-COLR-3, menempel DI BAWAH notice antrean. */
 export const COLLECTION_REMINDER_NOTICE_TEXT =
-  "Tingkat pengingat dihitung dari umur, janji bayar terakhir, dan tindak lanjut terakhir. Tingkat hanya penanda prioritas internal — tidak mengirim pesan ke pelanggan, tidak mencatat pembayaran, dan tidak membuat jurnal atau denda."
+  "Tingkat pengingat dihitung dari umur, janji bayar terakhir, dan tindak lanjut terakhir. Tingkat hanya penanda prioritas internal – tidak mengirim pesan ke pelanggan, tidak mencatat pembayaran, dan tidak membuat jurnal atau denda."
 
 export const COLLECTION_REMINDER_LEVELS = [
   "tanpa_acuan",

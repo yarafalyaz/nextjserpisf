@@ -126,7 +126,7 @@ export function buildJournalListing(input: {
     rows.push({
       kind: "notice",
       text:
-        `Perhatian: total debit ${preciseAmount(totalDebit)} tidak sama dengan total kredit ${preciseAmount(totalCredit)} — ` +
+        `Perhatian: total debit ${preciseAmount(totalDebit)} tidak sama dengan total kredit ${preciseAmount(totalCredit)} ` +
         `selisih ${preciseAmount(safeSubtract(totalDebit, totalCredit, 2))}. Periksa jurnal yang barisnya tidak lengkap.`,
     })
   }

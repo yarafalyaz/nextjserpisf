@@ -193,7 +193,7 @@ export function SalesCommissionCard({
 
       {selectedSalesEmployeeId !== null ? (
         <p className="mt-1 text-xs text-muted-foreground">
-          Total masa di atas tetap angka masa penuh — sudah termasuk faktur tanpa penjual.
+          Total masa di atas tetap angka masa penuh, sudah termasuk faktur tanpa penjual.
         </p>
       ) : null}
     </ReportCardShell>

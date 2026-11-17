@@ -106,7 +106,7 @@ export async function createPkwtCompensationEvent(
   // peristiwa berharga baru. employmentEndedAt TIDAK digerbang — kompensasi
   // memang hak atas segmen yang sudah berakhir.
   if (!employee.isActive) {
-    throw new Error("Karyawan tidak aktif — peristiwa kompensasi PKWT tidak dapat dibuat.")
+    throw new Error("Karyawan tidak aktif, peristiwa kompensasi PKWT tidak dapat dibuat.")
   }
   // Di dalam transaksi pemanggil: kunci baris karyawan SEBELUM cek irisan.
   // Tanpa kunci, dua submit konkuren membaca snapshot yang sama-sama kosong
@@ -124,7 +124,7 @@ export async function createPkwtCompensationEvent(
       throw new Error("Karyawan tidak ditemukan untuk peristiwa kompensasi PKWT.")
     }
     if (!employee.isActive) {
-      throw new Error("Karyawan tidak aktif — peristiwa kompensasi PKWT tidak dapat dibuat.")
+      throw new Error("Karyawan tidak aktif, peristiwa kompensasi PKWT tidak dapat dibuat.")
     }
   }
   if (employee.employmentStatus !== "PKWT") {
@@ -208,7 +208,7 @@ export async function approvePkwtCompensationEvent(
   if (!event) throw new Error("Peristiwa kompensasi PKWT tidak ditemukan.")
   if (event.status !== "draft") {
     throw new Error(
-      `Peristiwa kompensasi PKWT berstatus '${event.status}' — hanya draft yang dapat disetujui.`,
+      `Peristiwa kompensasi PKWT berstatus '${event.status}', hanya draft yang dapat disetujui.`,
     )
   }
   // Pemisahan tugas fail-closed (pola salary adjustment): nominal dibekukan
@@ -236,7 +236,7 @@ export async function approvePkwtCompensationEvent(
     data: { status: "approved", approvedBy: userId, approvedAt: new Date() },
   })
   if (claim.count === 0) {
-    throw new Error("Status peristiwa kompensasi PKWT sudah berubah — hanya draft yang dapat disetujui.")
+    throw new Error("Status peristiwa kompensasi PKWT sudah berubah, hanya draft yang dapat disetujui.")
   }
   return client.pkwtCompensationEvent.findUnique({ where: { id: eventId } })
 }
@@ -475,7 +475,7 @@ export async function buildPkwtPayrollLineData(
   if (!event) throw new Error("Peristiwa kompensasi PKWT tidak ditemukan.")
   if (event.status !== "approved") throw new Error(PKWT_MSG.notApproved())
   if (input.payrollEmployeeId != null && event.employeeId !== input.payrollEmployeeId) {
-    throw new Error("Peristiwa kompensasi PKWT milik karyawan lain — tidak boleh ditarik ke slip ini.")
+    throw new Error("Peristiwa kompensasi PKWT milik karyawan lain, tidak boleh ditarik ke slip ini.")
   }
   const amount = input.amount == null ? Number(event.amount) : input.amount
   if (safeRound(amount, 2) !== safeRound(Number(event.amount), 2)) {
@@ -524,7 +524,7 @@ export async function markPkwtEventPaid(
   })
   if (claim.count === 0) {
     throw new Error(
-      `Peristiwa kompensasi PKWT #${eventId} bukan 'approved' — penandaan paid ditolak.`,
+      `Peristiwa kompensasi PKWT #${eventId} bukan 'approved', penandaan paid ditolak.`,
     )
   }
   return client.pkwtCompensationEvent.findUnique({ where: { id: eventId } })

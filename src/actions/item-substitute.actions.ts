@@ -103,7 +103,7 @@ function assertStockActiveItem(item: ItemGuardRow | null, label: string): ItemGu
     throw new Error(`${label} tidak ditemukan atau sudah nonaktif`)
   }
   if (item.isService) {
-    throw new Error(`${label} adalah jasa — substitusi hanya antar item stok`)
+    throw new Error(`${label} adalah jasa – substitusi hanya antar item stok`)
   }
   return item
 }
@@ -204,7 +204,7 @@ export async function createItemSubstitute(input: {
     if (originItem.unitOfMeasure !== substituteItem.unitOfMeasure) {
       return {
         success: false,
-        error: `Satuan dasar pengganti (${substituteItem.unitOfMeasure}) berbeda dari barang asal (${originItem.unitOfMeasure}) — substitusi lintas satuan dasar belum didukung`,
+        error: `Satuan dasar pengganti (${substituteItem.unitOfMeasure}) berbeda dari barang asal (${originItem.unitOfMeasure}) – substitusi lintas satuan dasar belum didukung`,
       }
     }
 
@@ -234,8 +234,8 @@ export async function createItemSubstitute(input: {
       if (existing) {
         throw new Error(
           existing.isActive
-            ? "Pasangan substitusi ini sudah aktif — pasangan aktif ganda ditolak"
-            : "Pasangan substitusi ini sudah tercatat nonaktif — aktifkan kembali baris yang ada, jangan buat baris baru",
+            ? "Pasangan substitusi ini sudah aktif – pasangan aktif ganda ditolak"
+            : "Pasangan substitusi ini sudah tercatat nonaktif – aktifkan kembali baris yang ada, jangan buat baris baru",
         )
       }
       return tx.itemSubstitute.create({
@@ -257,7 +257,7 @@ export async function createItemSubstitute(input: {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     if (isUniqueViolation(e)) {
-      return { success: false, error: "Pasangan substitusi ini sudah tercatat — pasangan ganda ditolak" }
+      return { success: false, error: "Pasangan substitusi ini sudah tercatat – pasangan ganda ditolak" }
     }
     console.error("[createItemSubstitute]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
@@ -301,7 +301,7 @@ export async function setItemSubstituteActive(input: {
       assertStockActiveItem(origin, "Barang asal")
       assertStockActiveItem(substitute, "Barang pengganti")
       if (activeTwin) {
-        return { success: false, error: "Pasangan substitusi ini sudah aktif — pasangan aktif ganda ditolak" }
+        return { success: false, error: "Pasangan substitusi ini sudah aktif – pasangan aktif ganda ditolak" }
       }
     }
     await prisma.itemSubstitute.update({ where: { id }, data: { isActive: input.isActive } })
@@ -376,10 +376,10 @@ export async function applyWorkOrderItemSubstitute(input: {
       return { success: false, error: "Baris Perintah Kerja tidak ditemukan pada Perintah Kerja ini" }
     }
     if (line.status === "replaced") {
-      return { success: false, error: "Baris ini sudah pernah diganti — substitusi ulang ditolak" }
+      return { success: false, error: "Baris ini sudah pernah diganti – substitusi ulang ditolak" }
     }
     if (line.itemId <= 0) {
-      return { success: false, error: "Baris jasa tidak punya substitusi — hanya baris item stok" }
+      return { success: false, error: "Baris jasa tidak punya substitusi – hanya baris item stok" }
     }
     if (line.itemId === substituteItemId) {
       return { success: false, error: "Barang pengganti tidak boleh sama dengan barang asal baris ini" }
@@ -405,7 +405,7 @@ export async function applyWorkOrderItemSubstitute(input: {
     if (!relation) {
       return {
         success: false,
-        error: "Relasi substitusi aktif untuk pasangan ini tidak ditemukan — muat ulang saran (relasi mungkin baru dinonaktifkan)",
+        error: "Relasi substitusi aktif untuk pasangan ini tidak ditemukan – muat ulang saran (relasi mungkin baru dinonaktifkan)",
       }
     }
     assertStockActiveItem(origin, "Barang asal")
@@ -413,7 +413,7 @@ export async function applyWorkOrderItemSubstitute(input: {
     if (origin!.unitOfMeasure !== substituteItem.unitOfMeasure) {
       return {
         success: false,
-        error: `Satuan dasar pengganti (${substituteItem.unitOfMeasure}) berbeda dari barang asal (${origin!.unitOfMeasure}) — substitusi lintas satuan dasar belum didukung`,
+        error: `Satuan dasar pengganti (${substituteItem.unitOfMeasure}) berbeda dari barang asal (${origin!.unitOfMeasure}) – substitusi lintas satuan dasar belum didukung`,
       }
     }
 
@@ -508,7 +508,7 @@ export async function applyWorkOrderItemSubstitute(input: {
       success: true,
       releaseNotice: revised.releaseNotice ?? null,
       ...(!logged.success
-        ? { auditWarning: "Substitusi tersimpan, tetapi jejak audit gagal ditulis — hubungi admin" }
+        ? { auditWarning: "Substitusi tersimpan, tetapi jejak audit gagal ditulis – hubungi admin" }
         : {}),
     }
   } catch (e: unknown) {

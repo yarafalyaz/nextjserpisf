@@ -35,8 +35,8 @@ const CHANNEL_LABELS: Record<CollectionChannel, string> = {
 }
 
 const OUTCOME_LABELS: Record<CollectionOutcome, string> = {
-  terhubung_janji_bayar: "Terhubung — Janji Bayar",
-  terhubung_tanpa_janji: "Terhubung — Tanpa Janji",
+  terhubung_janji_bayar: "Terhubung – Janji Bayar",
+  terhubung_tanpa_janji: "Terhubung – Tanpa Janji",
   tidak_terhubung: "Tidak Terhubung",
   sengketa: "Sengketa",
   lainnya: "Lainnya",

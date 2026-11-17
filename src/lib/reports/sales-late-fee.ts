@@ -17,7 +17,7 @@ import { safeAdd } from "@/lib/utils/math"
 export const SALES_LATE_FEE_TITLE = "Dokumen Denda Piutang"
 
 export const SALES_LATE_FEE_NOTICE_TEXT =
-  "Dokumen denda adalah dokumen tagih terpisah dari faktur asal. Nominal snapshot tidak bisa diubah — koreksi hanya lewat pembalikan dokumen. Saldo denda terpisah dari sisa faktur asal."
+  "Dokumen denda adalah dokumen tagih terpisah dari faktur asal. Nominal snapshot tidak bisa diubah – koreksi hanya lewat pembalikan dokumen. Saldo denda terpisah dari sisa faktur asal."
 
 export const SALES_LATE_FEE_ACCOUNT_UNSET_TEXT =
   "Akun Pendapatan Denda Keterlambatan Piutang belum diset di Pengaturan. Penerbitan dokumen denda akan ditolak server sampai akun dipetakan."

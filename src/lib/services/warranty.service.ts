@@ -280,9 +280,9 @@ export function assessWarrantyEligibility(input: {
 
   const notes: string[] = []
   if (coverage.status !== "active") notes.push(`Status cakupan: ${coverage.status}.`)
-  if (!withinPeriod) notes.push("Klaim dilaporkan sesudah masa garansi berakhir — tetap wajib diputus manual, tidak otomatis ditolak.")
+  if (!withinPeriod) notes.push("Klaim dilaporkan sesudah masa garansi berakhir, tetap wajib diputus manual, tidak otomatis ditolak.")
   if (withinMileage === false) notes.push("Odometer lapor melebihi batas cakupan.")
-  if (input.odometerKm == null) notes.push("Odometer tidak tercatat/terbaca — putuskan manual berdasarkan bukti lain.")
+  if (input.odometerKm == null) notes.push("Odometer tidak tercatat/terbaca, putuskan manual berdasarkan bukti lain.")
   if (serialMatches === false) notes.push("Nomor seri terlapor tidak sama dengan seri terpasang.")
   return { coverageStatus: coverage.status, withinPeriod, withinMileage, serialMatches, notes }
 }
@@ -406,7 +406,7 @@ export async function decideWarrantyClaim(
   // (keputusan membuka biaya perbaikan/penggantian). createdBy null
   // (legacy) tetap boleh diputuskan pejabat berizin.
   if (claim.createdBy != null && Number(claim.createdBy) === Number(input.decisionBy)) {
-    throw new Error("Klaim garansi tidak boleh diputuskan oleh pembuatnya sendiri (pemisahan tugas) — minta pejabat lain yang berizin approve_warranty_claims.")
+    throw new Error("Klaim garansi tidak boleh diputuskan oleh pembuatnya sendiri (pemisahan tugas), minta pejabat lain yang berizin approve_warranty_claims.")
   }
   assertWarrantyClaimTransition(claim.status, input.decision)
   await claimWarrantyClaimUpdate(client, claim.id, { status: claim.status }, {
@@ -452,16 +452,16 @@ export async function transitionWarrantyClaim(
       where: { id: input.repairWorkOrderId },
       select: { id: true, status: true, customerVehicleId: true },
     })
-    if (!wo) throw new Error("WO repair tidak ditemukan — tautkan WO yang benar-benar ada.")
+    if (!wo) throw new Error("WO repair tidak ditemukan, tautkan WO yang benar-benar ada.")
     if (wo.status === "cancelled") {
-      throw new Error("WO repair sudah dibatalkan — tautkan WO repair yang masih berjalan.")
+      throw new Error("WO repair sudah dibatalkan, tautkan WO repair yang masih berjalan.")
     }
     if (
       wo.customerVehicleId != null &&
       claim.customerVehicleId != null &&
       wo.customerVehicleId !== claim.customerVehicleId
     ) {
-      throw new Error("WO repair terdaftar untuk kendaraan lain — tautkan WO milik kendaraan klaim ini.")
+      throw new Error("WO repair terdaftar untuk kendaraan lain, tautkan WO milik kendaraan klaim ini.")
     }
     const linkedElsewhere = await client.warrantyClaim.findMany({
       where: {
@@ -473,7 +473,7 @@ export async function transitionWarrantyClaim(
     })
     if (linkedElsewhere.length > 0) {
       throw new Error(
-        `WO repair #${input.repairWorkOrderId} sudah tertaut ke klaim #${linkedElsewhere[0].id} yang masih aktif — satu WO repair hanya melayani satu klaim aktif.`,
+        `WO repair #${input.repairWorkOrderId} sudah tertaut ke klaim #${linkedElsewhere[0].id} yang masih aktif, satu WO repair hanya melayani satu klaim aktif.`,
       )
     }
   }
@@ -607,7 +607,7 @@ async function assertActiveVendor(
   })
   if (!vendor || vendor.deletedAt) throw new Error("Vendor klaim supplier tidak ditemukan.")
   if (!vendor.isActive) {
-    throw new Error("Vendor klaim supplier tidak aktif — pilih vendor lain secara manual.")
+    throw new Error("Vendor klaim supplier tidak aktif, pilih vendor lain secara manual.")
   }
 }
 

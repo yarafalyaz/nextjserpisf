@@ -20,7 +20,7 @@ describe("PriceSourceChip (BR-TIER-09)", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
     const root = render(container, <PriceSourceChip priceSource="price_list_tier" priceListMinQty={10} />)
-    expect(container.textContent).toContain("Harga tingkat >= 10 — Daftar Harga")
+    expect(container.textContent).toContain("Harga tingkat >= 10 , Daftar Harga")
     act(() => root.unmount())
     container.remove()
   })

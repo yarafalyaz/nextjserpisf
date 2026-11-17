@@ -20,7 +20,7 @@ export function moduleItemsForGroup(groupHref: string): ModuleItem[] {
   const group = navigation.find((item) => item.href === groupHref)
   if (!group?.children) {
     // Fail-closed: hub tanpa grup berarti nama halaman dan navigasi tidak sinkron.
-    throw new Error(`Navigasi tidak punya grup "${groupHref}" — hub tidak bisa dibuat`)
+    throw new Error(`Navigasi tidak punya grup "${groupHref}" – hub tidak bisa dibuat`)
   }
 
   return group.children.map((child) => ({

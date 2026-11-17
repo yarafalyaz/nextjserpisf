@@ -302,7 +302,7 @@ export async function onStockAdjustmentProcessed(
             });
             if (existingSerials.length > 0) {
               throw new Error(
-                `Nomor seri ${existingSerials.map((row) => row.serialNumber).join(", ")} sudah terdaftar pada item lain — penyesuaian dibatalkan.`,
+                `Nomor seri ${existingSerials.map((row) => row.serialNumber).join(", ")} sudah terdaftar pada item lain, penyesuaian dibatalkan.`,
               );
             }
             await tx.itemSerial.createMany({

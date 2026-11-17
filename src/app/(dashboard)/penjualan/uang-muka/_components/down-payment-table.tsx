@@ -82,7 +82,7 @@ const columns = [
       return (
         <span className="flex flex-col items-start gap-1">
           <span className="text-xs font-mono tabular-nums">
-            {snap.vatAmount === null ? "PPN —" : `PPN ${formatCurrencyExact(snap.vatAmount)}`} · {snap.pkpSnapshotLabel}
+            {snap.vatAmount === null ? "PPN –" : `PPN ${formatCurrencyExact(snap.vatAmount)}`} · {snap.pkpSnapshotLabel}
           </span>
           <DownPaymentTaxStatusBadge snapshot={snap} />
         </span>

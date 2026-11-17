@@ -236,7 +236,7 @@ export function buildJobEstimateVsActual(input: {
         kind: "notice",
         text:
           `${withoutEstimate} pekerjaan belum punya penawaran yang disetujui, jadi selisih ` +
-          `tagih−estimasi tidak dihitung untuk pekerjaan itu — hanya biaya dan margin aktualnya yang tampil.`,
+          `tagih−estimasi tidak dihitung untuk pekerjaan itu – hanya biaya dan margin aktualnya yang tampil.`,
       })
     }
     if (unbilledCount > 0 || costOverBillingCount > 0) {

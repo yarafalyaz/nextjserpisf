@@ -150,7 +150,7 @@ describe("helper run mingguan (murni, tanpa hitung payroll)", () => {
     })
     expect(lines).toEqual([
       { reason: "frekuensiLain", label: "Frekuensi bayar berbeda", count: 2 },
-      { reason: "pinjaman", label: "Pinjaman aktif — cicilan mingguan belum diatur tertulis", count: 1 },
+      { reason: "pinjaman", label: "Pinjaman aktif – cicilan mingguan belum diatur tertulis", count: 1 },
       {
         reason: "bpjsBelumDidukung",
         label: "BPJS mingguan belum didukung (agregator se-masa belum tersedia)",
@@ -161,7 +161,7 @@ describe("helper run mingguan (murni, tanpa hitung payroll)", () => {
         label: "Potongan melebihi plafon 50% upah (PP 36/2021 Pasal 65)",
         count: 6,
       },
-      { reason: "berhenti", label: "Karyawan berhenti — di luar populasi massal", count: 3 },
+      { reason: "berhenti", label: "Karyawan berhenti – di luar populasi massal", count: 3 },
     ])
     expect(
       payrollRunSkipLines({ frekuensiLain: 0, pinjaman: 0, bpjsBelumDidukung: 0, plafonPotongan: 0, irisan: 0, berhenti: 0, cakupan: 0, statutoriBerubah: 0 }),
@@ -250,7 +250,7 @@ describe("BulkGeneratePayrollButton — pemilih run mingguan/bulanan F-076-S", (
     expect(status?.textContent).toContain("0 draf slip dibuat, 6 karyawan terlewati")
     expect(status?.textContent).toContain("Potongan melebihi plafon 50% upah (PP 36/2021 Pasal 65)")
     expect(status?.textContent).toContain("BPJS mingguan belum didukung (agregator se-masa belum tersedia)")
-    expect(status?.textContent).toContain("Pinjaman aktif — cicilan mingguan belum diatur tertulis")
+    expect(status?.textContent).toContain("Pinjaman aktif – cicilan mingguan belum diatur tertulis")
     expect(status?.textContent).toContain("Frekuensi bayar berbeda")
     expect(status?.textContent).not.toContain("Rentang beririsan")
   })

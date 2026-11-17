@@ -77,7 +77,7 @@ export default async function JobOrderJournalPage({
       />
       <p className="doc-lines" style={{ marginTop: 8 }}>
         {journal.journalCount} jurnal terposting
-        {perReference ? ` — ${perReference}` : ""} · total debit{" "}
+        {perReference ? ` (${perReference}` : ""} · total debit{" "}
         {formatCurrencyExact(journal.totalDebit)} = kredit{" "}
         {formatCurrencyExact(journal.totalCredit)}
         {journal.isBalanced ? "." : " - PERHATIAN: debit dan kredit tidak sama."}

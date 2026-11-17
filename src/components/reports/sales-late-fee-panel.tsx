@@ -321,7 +321,7 @@ function PayForm({
           value={accountId}
           onValueChange={setAccountId}
           options={[
-            { value: "", label: "— Tidak dipilih —" },
+            { value: "", label: "(Tidak dipilih –" },
             ...accounts.map((account) => ({
               value: String(account.id),
               label: `${account.code} - ${account.name}`,

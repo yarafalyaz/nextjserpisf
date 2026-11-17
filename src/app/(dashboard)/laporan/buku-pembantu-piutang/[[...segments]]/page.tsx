@@ -74,7 +74,7 @@ export default async function ReceivableSubledgerPage({
               value: selected ? (selected.slug ?? String(selected.id)) : "",
               options: customers.map((p) => ({
                 value: p.slug ?? String(p.id),
-                label: `${p.code ? `${p.code} — ` : ""}${p.name}`,
+                label: `${p.code ? `${p.code}, ` : ""}${p.name}`,
               })),
             },
           ]}

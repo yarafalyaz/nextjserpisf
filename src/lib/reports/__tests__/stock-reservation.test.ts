@@ -73,7 +73,7 @@ describe("planReservationsAtStart", () => {
     expect(plan.reservations).toEqual([])
     expect(plan.unreserved).toHaveLength(1)
     expect(plan.unreserved[0]).toMatchObject({ itemId: 11, label: RESERVATION_LABEL_NO_WAREHOUSE })
-    expect(RESERVATION_LABEL_NO_WAREHOUSE).toBe("Belum direservasi — gudang belum ditentukan")
+    expect(RESERVATION_LABEL_NO_WAREHOUSE).toBe("Belum direservasi – gudang belum ditentukan")
   })
 
   it("gudang MI menang atas default item; sisa kebutuhan = qty - issued", () => {
@@ -126,7 +126,7 @@ describe("reservationExpiresAt (AC-RES-5 dasar + edge tanpa endDate)", () => {
 
   it("label kedaluwarsa persis spec §2(g)", () => {
     expect(reservationStatusLabel("expired")).toBe(RESERVATION_LABEL_EXPIRED)
-    expect(RESERVATION_LABEL_EXPIRED).toBe("Kedaluwarsa — reservasi ulang bila masih dibutuhkan")
+    expect(RESERVATION_LABEL_EXPIRED).toBe("Kedaluwarsa – reservasi ulang bila masih dibutuhkan")
     expect(reservationStatusLabel("active")).toBe("Terreservasi")
     expect(reservationStatusLabel("consumed")).toBe("Terpakai Habis")
     expect(reservationStatusLabel("released")).toBe("Dilepas")

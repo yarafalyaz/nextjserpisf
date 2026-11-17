@@ -94,7 +94,7 @@ describe("F-076-S builder payroll-frequency", () => {
   })
 
   it("BR-HRS-04: label + urutan tampil alasan cakupan di ujung (tanpa nominal)", () => {
-    expect(PAYROLL_RUN_SKIP_LABELS.cakupan).toBe("Di luar cakupan akses HR — tidak dibuatkan slip")
+    expect(PAYROLL_RUN_SKIP_LABELS.cakupan).toBe("Di luar cakupan akses HR – tidak dibuatkan slip")
     expect(countPayrollRunSkips([])).toEqual({ frekuensiLain: 0, pinjaman: 0, bpjsBelumDidukung: 0, plafonPotongan: 0, irisan: 0, berhenti: 0, cakupan: 0, statutoriBerubah: 0 })
   })
 

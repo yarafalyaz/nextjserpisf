@@ -52,7 +52,7 @@ import type { ProjectBudgetResult } from "@/lib/reports/project-budget"
 
 /** Notice RAB belum terkunci — kontrak data, tampilkan apa adanya. */
 export const PROJECT_EARNED_VALUE_NOT_LOCKED_NOTICE =
-  "RAB belum terkunci — progres tertimbang belum tersedia."
+  "RAB belum terkunci – progres tertimbang belum tersedia."
 
 /** Notice proyek tanpa anggaran — kontrak data, tampilkan apa adanya. */
 export const PROJECT_EARNED_VALUE_NO_BUDGET_NOTICE =
@@ -63,11 +63,11 @@ export const PROJECT_EARNED_VALUE_NO_STAGES_NOTICE =
   "Proyek ini belum memiliki tahap proyek, sehingga progres tertimbang dan earned value tidak dapat dihitung."
 
 /** Label tahap tanpa baris RAB (BR-031-03) — kontrak data. */
-export const PROJECT_EARNED_VALUE_STAGE_NO_BUDGET_LABEL = "tanpa anggaran — bobot 0"
+export const PROJECT_EARNED_VALUE_STAGE_NO_BUDGET_LABEL = "tanpa anggaran – bobot 0"
 
 /** Penanda realisasi belum-dialokasi per tahap (BR-031-11) — kontrak data. */
 export const PROJECT_EARNED_VALUE_UNALLOCATED_REALIZED_NOTICE =
-  "Realisasi belum dialokasi per tahap (F-030 fase a+b) — biaya aktual hanya tersedia sebagai total proyek."
+  "Realisasi belum dialokasi per tahap (F-030 fase a+b) – biaya aktual hanya tersedia sebagai total proyek."
 
 /** Label indeks jadwal basis waktu (BR-031-07) — kontrak data. */
 export const PROJECT_EARNED_VALUE_SCHEDULE_LABEL = "SPI (basis waktu proyek)"

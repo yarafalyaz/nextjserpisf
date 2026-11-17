@@ -172,12 +172,12 @@ export function decideAbnormalScrapPosting(
   if (!gate.abnormalScrapPostingEnabled) return { mode: "off", journalAmount: 0 }
   if (gate.abnormalScrapExpenseAccountId == null || !(gate.abnormalScrapExpenseAccountId > 0)) {
     throw new Error(
-      "Akun Beban Kerugian Produksi (abnormalScrapExpenseAccountId) belum dikonfigurasi — penyelesaian ditolak karena ada scrap abnormal dan mode jurnal scrap aktif (tanpa fallback ke beban lain).",
+      "Akun Beban Kerugian Produksi (abnormalScrapExpenseAccountId) belum dikonfigurasi, penyelesaian ditolak karena ada scrap abnormal dan mode jurnal scrap aktif (tanpa fallback ke beban lain).",
     )
   }
   if (gate.wipAccountId == null || !(gate.wipAccountId > 0)) {
     throw new Error(
-      "Akun Barang Dalam Proses (WIP) belum dikonfigurasi — jurnal scrap abnormal tidak dapat dikredit dari WIP.",
+      "Akun Barang Dalam Proses (WIP) belum dikonfigurasi, jurnal scrap abnormal tidak dapat dikredit dari WIP.",
     )
   }
   return {

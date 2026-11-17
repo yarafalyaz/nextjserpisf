@@ -302,7 +302,7 @@ export function buildPph21(input: { rows: PayrollRowInput[]; draftSlips: number 
   if (totals.pph21 === 0 && groups.length > 0) {
     rows.push({
       kind: "notice",
-      text: "Tidak ada PPh 21 yang dipotong pada periode ini — bisa berarti penghasilan karyawan di bawah PTKP.",
+      text: "Tidak ada PPh 21 yang dipotong pada periode ini – bisa berarti penghasilan karyawan di bawah PTKP.",
     })
   }
   if (input.draftSlips > 0) {

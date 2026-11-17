@@ -533,7 +533,7 @@ export async function GET(request: Request) {
           customerPhone: customer.phone || "",
           notes: [doc.referenceNo ? `Referensi: ${doc.referenceNo}` : null, doc.notes]
             .filter(Boolean)
-            .join(" — "),
+            .join(" - "),
         },
         items: [
           {
@@ -659,7 +659,7 @@ export async function GET(request: Request) {
             doc.reason,
           ]
             .filter(Boolean)
-            .join(" — "),
+            .join(" - "),
         },
         items,
         summary: { subtotal, discount: 0, tax, total: subtotal + tax },
@@ -762,7 +762,7 @@ export async function GET(request: Request) {
             doc.notes,
           ]
             .filter(Boolean)
-            .join(" — "),
+            .join(" - "),
         },
         items,
         summary: { subtotal: total, discount: 0, tax: 0, total },
@@ -852,7 +852,7 @@ export async function GET(request: Request) {
             doc.notes,
           ]
             .filter(Boolean)
-            .join(" — "),
+            .join(" - "),
         },
         items,
         summary: {
@@ -892,7 +892,7 @@ export async function GET(request: Request) {
             doc.description,
           ]
             .filter(Boolean)
-            .join(" — "),
+            .join(" - "),
         },
         // Bukti pengeluaran = satu nominal; rinciannya di kolom keterangan.
         items: [

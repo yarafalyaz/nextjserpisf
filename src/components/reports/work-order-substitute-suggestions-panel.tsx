@@ -93,7 +93,7 @@ export function WorkOrderSubstituteSuggestionsPanel({
             <p className="text-sm font-medium text-foreground">
               {row.description ?? `Barang #${row.itemId}`}{" "}
               <span className="font-normal text-muted-foreground">
-                — Butuh {row.qty}, Status: {PART_STATUS_LABEL[row.partStatus]}
+                  Butuh {row.qty}, Status: {PART_STATUS_LABEL[row.partStatus]}
                 {row.shortageQty > 0 ? `, Kekurangan ${row.shortageQty}` : ""}
               </span>
             </p>

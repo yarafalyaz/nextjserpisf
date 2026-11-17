@@ -70,7 +70,7 @@ export function PhotoUploadField({
     <div className="flex flex-wrap items-end gap-2">
       <div className="flex flex-col gap-1">
         <label htmlFor={categoryId} className="text-xs font-medium text-muted-foreground">
-          Kategori foto — {parentLabel}
+          Kategori foto: {parentLabel}
         </label>
         <FormSelect
           id={categoryId}

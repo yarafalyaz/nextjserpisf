@@ -32,7 +32,7 @@ export default async function VendorPricesPage() {
   const rows = prices.map((price) => ({
     id: price.id,
     vendorName: price.vendor.name,
-    itemLabel: `${price.item.sku} — ${price.item.name}`,
+    itemLabel: `${price.item.sku} - ${price.item.name}`,
     minQty: Number(price.minQty),
     price: Number(price.price),
     effectiveDate: price.effectiveDate ? price.effectiveDate.toLocaleDateString("id-ID") : null,
@@ -51,7 +51,7 @@ export default async function VendorPricesPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Harga Pemasok</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Daftar harga kesepakatan per pemasok dan barang. Bersifat rujukan — dokumen pembelian
+            Daftar harga kesepakatan per pemasok dan barang. Bersifat rujukan, dokumen pembelian
             belum otomatis memakai harga ini.
           </p>
         </div>

@@ -23,6 +23,6 @@ export async function loadVendorPriceOptions() {
 
   return {
     vendorOptions: vendors.map((vendor) => ({ value: String(vendor.id), label: vendor.name })),
-    itemOptions: items.map((item) => ({ value: String(item.id), label: `${item.sku} — ${item.name}` })),
+    itemOptions: items.map((item) => ({ value: String(item.id), label: `${item.sku} - ${item.name}` })),
   }
 }

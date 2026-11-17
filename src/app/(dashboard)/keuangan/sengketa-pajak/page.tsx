@@ -38,7 +38,7 @@ export default async function TaxDisputeRegisterPage() {
             {TAX_DISPUTE_REGISTER_TITLE}
           </h1>
           <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
-            Ketetapan pajak beserta tenggat upaya hukum sengketanya — register dokumen perselisihan fiskal dan keberatan banding.
+            Ketetapan pajak beserta tenggat upaya hukum sengketanya, register dokumen perselisihan fiskal dan keberatan banding.
           </p>
         </div>
         {canCreate ? (

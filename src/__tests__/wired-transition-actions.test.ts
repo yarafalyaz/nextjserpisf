@@ -732,7 +732,7 @@ describe("aksi transisi tanpa pemanggil UI terdaftar & tetap tak tersambung", ()
   const invokers = discoverInvokers(files)
 
   for (const { action, definedIn, reason } of ALLOWED_UNWIRED) {
-    it(`${action} masih belum tersambung — ${reason}`, () => {
+    it(`${action} masih belum tersambung (${reason}`, () => {
       const refs = files.filter((file) => {
         const rel = path.relative(REPO_ROOT, file).split(path.sep).join("/")
         if (rel === definedIn) return false

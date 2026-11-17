@@ -20,7 +20,7 @@ import {
   type Pph21Recap,
 } from "@/lib/reports/pph21-recap"
 
-export const PPH21_EXPORT_LABEL = "Rekap internal PPh21 — bukan berkas ekspor DJP/e-Bupot."
+export const PPH21_EXPORT_LABEL = "Rekap internal PPh21 – bukan berkas ekspor DJP/e-Bupot."
 export const PPH21_EXPORT_HEADER =
   "masa_bulan;masa_tahun;employee_id;nama;npwp;nik;kode_ptkp;kategori_ter;kode_objek_pajak;penghasilan_bruto;tarif_ter_persen;pph21_terpotong;lebih_potong;tanggal_pemotongan;metode;jenis_masa;jumlah_slip"
 
@@ -172,7 +172,7 @@ export function buildPph21Export(
     if (!prow || prow.slips === 0) {
       add({
         class: "A", kind: "empty-period", period, employeeId: null, employeeName: "",
-        message: `Masa ${period}: tidak ada data slip approved/paid — ekspor ditolak, bukan berkas kosong.`,
+        message: `Masa ${period}: tidak ada data slip approved/paid – ekspor ditolak, bukan berkas kosong.`,
       })
     }
   }
@@ -200,26 +200,26 @@ export function buildPph21Export(
   for (const r of rows) {
     const who = { period: r.period, employeeId: r.employeeId, employeeName: r.employeeName }
     if (r.employeeName.trim() === "") {
-      add({ class: "A", kind: "empty-name", ...who, message: `Masa ${r.period}: nama karyawan kosong — baris diblokir.` })
+      add({ class: "A", kind: "empty-name", ...who, message: `Masa ${r.period}: nama karyawan kosong – baris diblokir.` })
     }
     if (r.gross < 0 || r.pph21 < 0) {
-      add({ class: "A", kind: "negative-amount", ...who, message: `Masa ${r.period} ${r.employeeName}: bruto/PPh21 negatif (${money(r.gross)}/${money(r.pph21)}) — angka negatif dilarang di berkas.` })
+      add({ class: "A", kind: "negative-amount", ...who, message: `Masa ${r.period} ${r.employeeName}: bruto/PPh21 negatif (${money(r.gross)}/${money(r.pph21)}) – angka negatif dilarang di berkas.` })
     }
     if (r.periodKind === "bulk-december-pending-final") {
-      add({ class: "A", kind: "bulk-december-pending-final", ...who, message: `Masa ${r.period} ${r.employeeName}: Desember masih estimasi massal (bulk-december-pending-final) — hitung ulang masa terakhir per karyawan dulu.` })
+      add({ class: "A", kind: "bulk-december-pending-final", ...who, message: `Masa ${r.period} ${r.employeeName}: Desember masih estimasi massal (bulk-december-pending-final) – hitung ulang masa terakhir per karyawan dulu.` })
     }
     if (r.withholdingDate == null) {
       add({ class: "A", kind: "unreadable-withholding-date", ...who, message: `Masa ${r.period} ${r.employeeName}: tanggal pemotongan tidak terbaca (paymentDate/endDate kosong).` })
     }
     if (r.employeeId == null) {
-      add({ class: "C", kind: "missing-employee-id", ...who, message: `Masa ${r.period} ${r.employeeName}: employee_id kosong — identitas DJP tidak bisa diturunkan; baris warisan tergabung per nama.` })
+      add({ class: "C", kind: "missing-employee-id", ...who, message: `Masa ${r.period} ${r.employeeName}: employee_id kosong – identitas DJP tidak bisa diturunkan; baris warisan tergabung per nama.` })
     }
     const npwp = digitsOnly(r.npwp)
     const nik = digitsOnly(r.nik)
     if (npwp === "INVALID") add({ class: "B", kind: "invalid-npwp", ...who, message: `Masa ${r.period} ${r.employeeName}: NPWP berisi selain digit sesudah strip format.` })
     if (nik === "INVALID") add({ class: "B", kind: "invalid-nik", ...who, message: `Masa ${r.period} ${r.employeeName}: NIK berisi selain digit sesudah strip format.` })
     if (npwp == null && nik == null) {
-      add({ class: "B", kind: "missing-npwp-nik", ...who, message: `Masa ${r.period} ${r.employeeName}: NPWP dan NIK dua-duanya kosong — baris tak teridentifikasi DJP.` })
+      add({ class: "B", kind: "missing-npwp-nik", ...who, message: `Masa ${r.period} ${r.employeeName}: NPWP dan NIK dua-duanya kosong – baris tak teridentifikasi DJP.` })
     } else {
       if (npwp == null) add({ class: "B", kind: "missing-npwp", ...who, message: `Masa ${r.period} ${r.employeeName}: NPWP kosong.` })
       if (nik == null) add({ class: "B", kind: "missing-nik", ...who, message: `Masa ${r.period} ${r.employeeName}: NIK kosong.` })
@@ -236,7 +236,7 @@ export function buildPph21Export(
       if (r.terRatePct == null) add({ class: "B", kind: "missing-ter-rate", ...who, message: `Masa ${r.period} ${r.employeeName}: slip TER bulanan tanpa tarif TER.` })
     }
     if (r.method !== "TER") {
-      add({ class: "B", kind: "legacy-or-unknown-method", ...who, message: `Masa ${r.period} ${r.employeeName}: metode ${r.method} — slip pra-TER/snapshot rusak, tarif & kategori kosong.` })
+      add({ class: "B", kind: "legacy-or-unknown-method", ...who, message: `Masa ${r.period} ${r.employeeName}: metode ${r.method} (slip pra-TER/snapshot rusak, tarif & kategori kosong.)` })
     }
     if (r.mixedMethods) {
       add({ class: "B", kind: "mixed-methods", ...who, message: `Masa ${r.period} ${r.employeeName}: metode campuran se-(karyawan,masa); metode ditulis dari slip terakhir.` })
@@ -260,7 +260,7 @@ export function buildPph21Export(
       for (const r of finals) {
         add({
           class: "A", kind: "double-final-period", period: r.period, employeeId: r.employeeId, employeeName: r.employeeName,
-          message: `Karyawan ${r.employeeName} punya ${finals.length} baris masa final dalam tahun ${k.slice(0, 4)} — data warisan/korupsi, ekspor diblokir.`,
+          message: `Karyawan ${r.employeeName} punya ${finals.length} baris masa final dalam tahun ${k.slice(0, 4)} (data warisan/korupsi, ekspor diblokir.)`,
         })
       }
     }
@@ -269,7 +269,7 @@ export function buildPph21Export(
   if (grossDiff !== 0 || pph21Diff !== 0) {
     add({
       class: "A", kind: "reconciliation-diff", period: periods.join(","), employeeId: null, employeeName: "",
-      message: `Selisih rekonsiliasi masa ${periods.join(",")}: bruto ${money(grossDiff)}, PPh21 ${money(pph21Diff)} — wajib 0.00, ekspor diblokir.`,
+      message: `Selisih rekonsiliasi masa ${periods.join(",")}: bruto ${money(grossDiff)}, PPh21 ${money(pph21Diff)} (wajib 0.00, ekspor diblokir.)`,
     })
   }
 

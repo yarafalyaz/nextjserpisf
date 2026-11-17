@@ -160,7 +160,7 @@ export function PayrollComponentMaster({
       <p className="text-xs text-muted-foreground">
         Klasifikasi kena pajak adalah label tersimpan di master. Tahap ini semua
         pendapatan tetap diperlakukan kena pajak oleh server dan jurnal gaji
-        masih agregat — klasifikasi belum mengubah hitungan pajak maupun jurnal.
+        masih agregat, klasifikasi belum mengubah hitungan pajak maupun jurnal.
       </p>
 
       {(canCreate || editing) && (
@@ -226,7 +226,7 @@ export function PayrollComponentMaster({
                 <option value="">- Tanpa akun -</option>
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.code} — {a.name}
+                    {a.code}, {a.name}
                   </option>
                 ))}
               </select>

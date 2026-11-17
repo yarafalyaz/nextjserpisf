@@ -165,7 +165,7 @@ export function EmployeeLoanRecapTable({ recap }: Readonly<{ recap: EmployeeLoan
                 </DetailTableTd>
                 <DetailTableTd align="right" className="font-bold font-mono tabular-nums text-right">{formatCurrencyExact(totals.weeklyInstallmentTotal)}
                 </DetailTableTd>
-                <DetailTableTd className="font-bold">—</DetailTableTd>
+                <DetailTableTd className="font-bold">-</DetailTableTd>
                 <DetailTableTd className="font-bold">
                   <span className="flex flex-col gap-1">
                     {totals.inactiveWithActiveLoansCount > 0 ? (
@@ -194,7 +194,7 @@ export function EmployeeLoanRecapTable({ recap }: Readonly<{ recap: EmployeeLoan
                       : null}
                   </span>
                 </DetailTableTd>
-                <DetailTableTd className="font-bold">—</DetailTableTd>
+                <DetailTableTd className="font-bold">-</DetailTableTd>
               </DetailTableFootRow>
             </DetailTableFoot>
           </DetailTable>

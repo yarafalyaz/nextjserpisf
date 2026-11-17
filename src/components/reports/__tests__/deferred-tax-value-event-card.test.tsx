@@ -62,7 +62,7 @@ describe("DeferredTaxValueEventCard F-2026-10-23-125-V", () => {
     expect(text).toContain("indikasi liabilitas Rp 11.000.000")
     expect(text).toContain("PPh final (pajak kini) Rp 5.000.000")
     expect(text).toContain("bukan komponen pajak tangguhan dan tidak di-netting")
-    expect(text).toContain("tarif pasokan operator — bukan master")
+    expect(text).toContain("tarif pasokan operator – bukan master")
     expect(container.querySelector("button")).toBeNull()
     unmountCard(root)
   })

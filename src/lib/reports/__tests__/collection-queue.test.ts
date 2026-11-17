@@ -468,7 +468,7 @@ describe("collection-reminder-level (F-2026-10-26-050-S, Q-COLR-1..7)", () => {
       eskalasi: "Perlu Eskalasi",
     })
     expect(COLLECTION_REMINDER_NOTICE_TEXT).toBe(
-      "Tingkat pengingat dihitung dari umur, janji bayar terakhir, dan tindak lanjut terakhir. Tingkat hanya penanda prioritas internal — tidak mengirim pesan ke pelanggan, tidak mencatat pembayaran, dan tidak membuat jurnal atau denda.",
+      "Tingkat pengingat dihitung dari umur, janji bayar terakhir, dan tindak lanjut terakhir. Tingkat hanya penanda prioritas internal – tidak mengirim pesan ke pelanggan, tidak mencatat pembayaran, dan tidak membuat jurnal atau denda.",
     )
     expect(COLLECTION_QUEUE_NOTICE_TEXT).toBe(
       "Tahap dan umur dihitung dari faktur, tukar faktur, dan janji bayar terakhir. Mencatat tindak lanjut tidak mencatat pembayaran dan tidak membuat jurnal.",

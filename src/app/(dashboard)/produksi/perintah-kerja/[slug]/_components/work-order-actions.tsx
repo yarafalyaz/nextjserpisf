@@ -84,7 +84,7 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
             </Button>
           )}
           <span id="wo-intake-hint" role="note" className="text-xs text-muted-foreground">
-            inspeksi masuk kendaraan belum tercatat — catat inspeksi masuk (vehicle intake) untuk WO ini sebelum memulai.
+            inspeksi masuk kendaraan belum tercatat, catat inspeksi masuk (vehicle intake) untuk WO ini sebelum memulai.
           </span>
         </span>
       )
@@ -109,7 +109,7 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
           <Button
             variant="secondary"
             isDisabled={isPending || !defaultWarehouseId}
-            onPress={() => run(() => createMaterialIssueFromWorkOrder(workOrderId, defaultWarehouseId as number), "Pengeluaran material dibuat (draf) — selesaikan di menu Inventaris")}
+            onPress={() => run(() => createMaterialIssueFromWorkOrder(workOrderId, defaultWarehouseId as number), "Pengeluaran material dibuat (draf) – selesaikan di menu Inventaris")}
           >
             Buat Pengeluaran Material
           </Button>
@@ -154,7 +154,7 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
         )}
         {typeof pendingStageCount === "number" && pendingStageCount > 0 ? (
           <p role="note" id="wo-stage-pending-note" className="text-sm text-amber-700">
-            {pendingStageCount} tahap belum selesai — perintah kerja tetap
+            {pendingStageCount} tahap belum selesai, perintah kerja tetap
             dapat diselesaikan.
           </p>
         ) : null}

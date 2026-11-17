@@ -51,7 +51,7 @@ export const DEFERRED_TAX_NOTICE =
   "pada peristiwa itu."
 
 /** Label tarif pasokan operator selama master bertanggal efektif belum ada (F-124-V Putusan 2). */
-export const OPERATOR_RATE_LABEL = "tarif pasokan operator — bukan master"
+export const OPERATOR_RATE_LABEL = "tarif pasokan operator – bukan master"
 
 /** Sumber tarif badan: `master` = master bertanggal efektif; `operator` = pasokan operator transisi. */
 export type DeferredTaxRateSource = "master" | "operator"

@@ -130,7 +130,7 @@ export function buildProjectPlTable(result: ProjectPlLoadResult): TableDocument[
     }
     tableRows.push({
       kind: "notice",
-      text: "Jam berikut belum ditarik ke biaya produksi — memo jam saja, bukan biaya dan tidak mengurangi laba.",
+      text: "Jam berikut belum ditarik ke biaya produksi – memo jam saja, bukan biaya dan tidak mengurangi laba.",
     })
   }
 

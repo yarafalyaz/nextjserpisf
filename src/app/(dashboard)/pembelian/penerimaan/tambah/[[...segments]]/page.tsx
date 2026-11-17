@@ -164,7 +164,7 @@ export default async function CreateGoodsReceiptPage({
           <AlertTitle>Belum ada PO yang bisa diterima</AlertTitle>
           <AlertDescription>
             Penerimaan hanya bisa dibuat dari Pesanan Pembelian berstatus{" "}
-            <strong>Disetujui</strong> atau <strong>Dipesan</strong> — PO baru selalu lahir
+            <strong>Disetujui</strong> atau <strong>Dipesan</strong>, PO baru selalu lahir
             berstatus konsep. Setujui PO lebih dulu di halaman Pesanan Pembelian, atau
             konfigurasi alur persetujuan <code>PurchaseOrder</code> di Pengaturan → Alur
             Persetujuan agar PO otomatis disetujui.

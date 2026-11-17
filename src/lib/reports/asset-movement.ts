@@ -364,7 +364,7 @@ export function buildAssetMovement(input: AssetMovementInput): AssetMovementResu
       kind: "notice",
       text:
         `Perhatian: saldo akhir menurut pergerakan (nilai buku ${preciseAmount(closing.bookValue)}) tidak sama ` +
-        `dengan saldo akhir menurut data aset (${preciseAmount(closingByData.bookValue)}) — selisih ` +
+        `dengan saldo akhir menurut data aset (${preciseAmount(closingByData.bookValue)}) – selisih ` +
         `${preciseAmount(safeSubtract(closing.bookValue, closingByData.bookValue, 2))}. Periksa riwayat penyusutan/pelepasan ` +
         `yang tanggalnya di luar periode atau aset tanpa kategori.`,
     })

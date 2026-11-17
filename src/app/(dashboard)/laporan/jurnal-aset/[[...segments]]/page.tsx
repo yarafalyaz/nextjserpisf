@@ -73,7 +73,7 @@ export default async function AssetJournalPage({
       />
       <p className="doc-lines" style={{ marginTop: 8 }}>
         {journal.journalCount} jurnal terposting pada periode ini
-        {perKind ? ` — ${perKind}` : ""} · total debit {formatCurrencyExact(journal.totalDebit)} = kredit{" "}
+        {perKind ? ` (${perKind}` : ""} · total debit {formatCurrencyExact(journal.totalDebit)} = kredit{" "}
         {formatCurrencyExact(journal.totalCredit)}
         {journal.isBalanced ? "." : " - PERHATIAN: debit dan kredit tidak sama."}
       </p>

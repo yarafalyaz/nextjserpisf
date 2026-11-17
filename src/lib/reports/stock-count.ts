@@ -188,7 +188,7 @@ export function buildStockCount(input: {
       kind: "notice",
       text:
         "Periode ini memuat lebih dari satu satuan pengukuran, jadi kolom kuantitas (Menurut Sistem, Hasil " +
-        "Hitung, Selisih) sengaja TIDAK dijumlahkan — hanya kolom nilai yang bertotal.",
+        "Hitung, Selisih) sengaja TIDAK dijumlahkan – hanya kolom nilai yang bertotal.",
     })
   }
 

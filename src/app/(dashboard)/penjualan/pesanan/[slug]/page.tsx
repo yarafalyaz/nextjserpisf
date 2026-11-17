@@ -153,7 +153,7 @@ export default async function SalesOrderDetailPage({
       />
 
       {/* GL-BR-003 K2: pesanan terkunci (cancelled/completed/pelunasan
-          nyata) — koreksi via retur/void faktur turunan, bukan edit
+          nyata), koreksi via retur/void faktur turunan, bukan edit
           pesanan. */}
       {!orderItemsEditable && (
         <PostedLockNotice

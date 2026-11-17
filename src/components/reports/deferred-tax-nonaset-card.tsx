@@ -55,7 +55,7 @@ export function DeferredTaxNonAssetCard({
               <span className="font-medium text-foreground">{line.label}</span>
               {": "}
               {line.detail}
-              {line.expiryRiskLabel ? <> — {line.expiryRiskLabel}</> : null}
+              {line.expiryRiskLabel ? <>, {line.expiryRiskLabel}</> : null}
               {" · "}
               {line.recognitionLabel}
             </li>

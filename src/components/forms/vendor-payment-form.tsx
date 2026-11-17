@@ -313,7 +313,7 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
                   </div>
                 </div>
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  Pembayaran akan dialokasikan ke tagihan ini. Boleh dibayar sebagian —
+                  Pembayaran akan dialokasikan ke tagihan ini. Boleh dibayar sebagian;
                   sisanya tetap tercatat sebagai utang.
                 </p>
               </div>
@@ -329,7 +329,7 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
                 id="targetBill"
                 options={vendorBills.map((b) => ({
                   value: String(b.id),
-                  label: `${b.documentNo} — sisa ${Number(b.balanceDue ?? b.grandTotal).toLocaleString("id-ID")}`,
+                  label: `${b.documentNo} (sisa ${Number(b.balanceDue ?? b.grandTotal).toLocaleString("id-ID")})`,
                 }))}
                 value={targetBillId}
                 onChange={setTargetBillId}

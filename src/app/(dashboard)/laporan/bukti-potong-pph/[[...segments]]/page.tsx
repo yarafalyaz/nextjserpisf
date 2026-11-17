@@ -79,7 +79,7 @@ export default async function WithholdingTaxReportPage({
   for (const row of rows) {
     const key = row.typeCode ?? "__tanpa_jenis__"
     const bucket = byType.get(key) ?? {
-      label: row.typeCode ? `${row.typeCode} — ${row.typeName}` : "Jenis PPh tidak ditemukan",
+      label: row.typeCode ? `${row.typeCode} - ${row.typeName}` : "Jenis PPh tidak ditemukan",
       rate: row.rate,
       count: 0,
       amount: 0,
@@ -123,7 +123,7 @@ export default async function WithholdingTaxReportPage({
 
 
       <ReportLetterhead title="Daftar Bukti Potong PPh" subtitle="Pemotongan PPh atas Tagihan Pemasok" periodLabel={periodLabel} />
-      <ReportNarration text="Daftar Bukti Potong PPh memuat dua sisi. Sisi pembelian: pemotongan PPh yang dilakukan perusahaan atas tagihan pemasok, dikelompokkan per jenis potongan — nilainya diambil dari tagihan yang sudah diposting, sehingga sama dengan jurnal Hutang PPh. Sisi penjualan: PPh yang dipotong pelanggan atas pembayaran kita, tercatat saat pembayaran diterima dan berpasangan dengan jurnal PPh dibayar dimuka; nilainya bukan kas yang diterima, melainkan bagian pelunasan piutang yang ditahan pelanggan." />
+      <ReportNarration text="Daftar Bukti Potong PPh memuat dua sisi. Sisi pembelian: pemotongan PPh yang dilakukan perusahaan atas tagihan pemasok, dikelompokkan per jenis potongan – nilainya diambil dari tagihan yang sudah diposting, sehingga sama dengan jurnal Hutang PPh. Sisi penjualan: PPh yang dipotong pelanggan atas pembayaran kita, tercatat saat pembayaran diterima dan berpasangan dengan jurnal PPh dibayar dimuka; nilainya bukan kas yang diterima, melainkan bagian pelunasan piutang yang ditahan pelanggan." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Jumlah Bukti Potong" value={formatNumber(rows.length)} />
@@ -181,7 +181,7 @@ export default async function WithholdingTaxReportPage({
                 <DetailTableTd className="font-mono text-xs">{row.documentNo}</DetailTableTd>
                 <DetailTableTd>{row.vendorName}</DetailTableTd>
                 <DetailTableTd className={row.typeCode ? undefined : "text-danger"}>
-                  {row.typeCode ? `${row.typeCode} — ${row.typeName}` : "Jenis PPh tidak ditemukan"}
+                  {row.typeCode ? `${row.typeCode} - ${row.typeName}` : "Jenis PPh tidak ditemukan"}
                 </DetailTableTd>
                 <DetailTableTd align="right">{row.rate === null ? "–" : `${formatNumber(row.rate)}%`}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccountingExact(row.dpp)}</DetailTableTd>
@@ -223,7 +223,7 @@ export default async function WithholdingTaxReportPage({
                 <DetailTableTd className="font-mono text-xs">{row.invoiceNo ?? "–"}</DetailTableTd>
                 <DetailTableTd>{row.customerName ?? "–"}</DetailTableTd>
                 <DetailTableTd className={row.typeCode ? undefined : "text-danger"}>
-                  {row.typeCode ? `${row.typeCode} — ${row.typeName}` : "Jenis PPh tidak ditemukan"}
+                  {row.typeCode ? `${row.typeCode} - ${row.typeName}` : "Jenis PPh tidak ditemukan"}
                 </DetailTableTd>
                 <DetailTableTd align="right">{row.rate === null ? "–" : `${formatNumber(row.rate)}%`}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccountingExact(row.withheld)}</DetailTableTd>

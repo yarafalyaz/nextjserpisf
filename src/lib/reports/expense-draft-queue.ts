@@ -53,7 +53,7 @@ export const EXPENSE_DRAFT_QUEUE_TITLE = "Pengeluaran Menunggu Persetujuan"
 
 /** Label total verbatim Q-EXQ-4 / vonis 111-V — satu konstanta server. */
 export const EXPENSE_DRAFT_QUEUE_TOTAL_LABEL =
-  "total nominal tersimpan baris tampil — bukan saldo buku"
+  "total nominal tersimpan baris tampil – bukan saldo buku"
 
 /** Label kolom verbatim Q-EXQ-2 — UI menempel apa adanya. */
 export const EXPENSE_DRAFT_QUEUE_COLUMN_LABELS = {
@@ -107,7 +107,7 @@ export const EXPENSE_DRAFT_APPROVAL_BUCKET_LABELS: Record<
 > = {
   tanpa_workflow: "tanpa workflow",
   menunggu_langkah: "menunggu langkah",
-  workflow_selesai_menunggu_sinkron: "workflow selesai — menunggu sinkron",
+  workflow_selesai_menunggu_sinkron: "workflow selesai – menunggu sinkron",
   workflow_ditolak: "workflow ditolak",
   keadaan_tidak_dikenal: "keadaan tidak dikenal",
 }

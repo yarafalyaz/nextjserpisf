@@ -230,7 +230,7 @@ async function onDownPaymentConfirmedInner(
           const dpArId = (dpSettings as { salesReceivableAccountId?: number | null } | null)?.salesReceivableAccountId ?? null;
           if (!dpLiabilityId || !dpArId) {
             throw new Error(
-              "Akun kewajiban UMP (210102) dan Piutang Usaha belum dikonfigurasi — alokasi DP lanjutan ditolak",
+              "Akun kewajiban UMP (210102) dan Piutang Usaha belum dikonfigurasi, alokasi DP lanjutan ditolak",
             );
           }
           const allocDate = dp.paymentDate ?? new Date();
@@ -259,7 +259,7 @@ async function onDownPaymentConfirmedInner(
             const dpTaxId = (dpSettings as { salesTaxAccountId?: number | null } | null)?.salesTaxAccountId ?? null;
             if (netAlloc.ppnPortion > 0 && !dpTaxId) {
               throw new Error(
-                "Akun PPN Keluaran (210201) belum dikonfigurasi — alokasi DP terutang ditolak",
+                "Akun PPN Keluaran (210201) belum dikonfigurasi, alokasi DP terutang ditolak",
               );
             }
             const allocEntries: { accountId: number; debit: number; credit: number; memo: string }[] = [
@@ -551,7 +551,7 @@ async function onDownPaymentConfirmedInner(
       // Paritas #8: catatan kekurangan stok adalah bagian deliverable hook ini.
       // Senyap di sini membuat WO terbit dengan info stok/BOM bolong tanpa ada
       // yang tahu — tandai di catatan WO supaya terlihat saat diperiksa.
-      bomNotes += "\n[PERINGATAN] Catatan stok/BOM gagal dibuat otomatis — periksa ketersediaan material secara manual.\n";
+      bomNotes += "\n[PERINGATAN] Catatan stok/BOM gagal dibuat otomatis, periksa ketersediaan material secara manual.\n";
     }
 
     // ─── 1-3. Project + Work Order + Sales Order (SEKALI per quotation) ──
@@ -708,7 +708,7 @@ async function onDownPaymentConfirmedInner(
     // (AC-DP65-5); snapshot kosong diam (quotation lama, BR-DP65-02).
     const thresholdPercent = resolveInvoiceThresholdPercent(
       quotation.invoiceThresholdPercent == null ? null : Number(quotation.invoiceThresholdPercent),
-      (raw) => console.error(`[down-payment] persen ambang invoice korup quotation ${quotation.id}: ${String(raw)} — fail-closed 50%`),
+      (raw) => console.error(`[down-payment] persen ambang invoice korup quotation ${quotation.id}: ${String(raw)}, fail-closed 50%`),
     )
     const thresholdSen = computeInvoiceThresholdSen(grandTotalSen, thresholdPercent)
 
@@ -832,7 +832,7 @@ async function onDownPaymentConfirmedInner(
           const arId = (dpSettings as { salesReceivableAccountId?: number | null } | null)?.salesReceivableAccountId ?? null;
           if (!liabilityId || !arId) {
             throw new Error(
-              "Akun kewajiban UMP (210102) dan Piutang Usaha belum dikonfigurasi — alokasi DP awal ditolak",
+              "Akun kewajiban UMP (210102) dan Piutang Usaha belum dikonfigurasi, alokasi DP awal ditolak",
             );
           }
           allocAccounts = { liabilityId, arId }
@@ -895,7 +895,7 @@ async function onDownPaymentConfirmedInner(
       await tx.salesInvoice.update({
         where: { id: created.id },
         data: {
-          notes: `Otomatis dibuat dari DP ${dp.documentNo}. KELEBIHAN DP ${overAmount} dicatat sebagai kredit pelanggan ${creditDocNo} — bukan pelunasan.`,
+          notes: `Otomatis dibuat dari DP ${dp.documentNo}. KELEBIHAN DP ${overAmount} dicatat sebagai kredit pelanggan ${creditDocNo}, bukan pelunasan.`,
         },
       })
     }

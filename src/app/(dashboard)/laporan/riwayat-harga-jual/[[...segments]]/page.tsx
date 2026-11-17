@@ -132,7 +132,7 @@ export default async function SalesPriceHistoryPage({
       {!selectedCustomer && (
         <p className="doc-lines">
           Pilih pelanggan untuk melihat riwayat harga jual pelanggan tersebut. Riwayat ini
-          menampilkan harga satuan yang benar-benar tertagih pada faktur — bukan harga penawaran.
+          menampilkan harga satuan yang benar-benar tertagih pada faktur, bukan harga penawaran.
         </p>
       )}
 
@@ -198,7 +198,7 @@ export default async function SalesPriceHistoryPage({
           {history.pasangan.map((pair) => (
             <ReportSection
               key={`detail-${pair.customerId}-${pair.itemId}`}
-              title={`Kejadian Harga — ${pair.itemName ?? "Barang"} (${pair.itemSku ?? "—"})`}
+              title={`Kejadian Harga: ${pair.itemName ?? "Barang"} (${pair.itemSku ?? ", "})`}
               description={`Qty kumulatif ${formatNumber(pair.qtyKumulatif, 2)} dari server`}
             >
               <DetailTable data-report-table={`Kejadian Harga ${pair.itemSku ?? pair.itemName ?? ""}`}>

@@ -147,7 +147,7 @@ export function ScrapReviewQueue({
         <div className="flex flex-col gap-0.5">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Antrean Tinjau Scrap Abnormal</h2>
           <p className="text-xs text-muted-foreground">
-            Baris scrap abnormal menunggu disposisi foreman. Tinjau operasional saja — tidak mengubah
+            Baris scrap abnormal menunggu disposisi foreman. Tinjau operasional saja, tidak mengubah
             klasifikasi, nilai, atau jurnal.
           </p>
         </div>
@@ -188,7 +188,7 @@ export function ScrapReviewQueue({
                 <div className="flex flex-wrap items-center justify-between gap-2 bg-muted/30 px-3 py-2">
                   <span className="text-sm font-medium text-foreground">
                     {row.source} {row.documentNo}
-                    {row.itemName ? <> — {row.itemName}</> : null}
+                    {row.itemName ? <> - {row.itemName}</> : null}
                   </span>
                   <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
                     Abnormal belum ditinjau

@@ -839,7 +839,7 @@ export async function updatePayrollComponentLineAmount(lineId: number, formData:
     const line = await prisma.payrollComponentLine.findUnique({ where: { id: lineId } });
     if (!line) throw new Error("Baris komponen gaji tidak ditemukan");
     if (line.commissionPayableId != null) {
-      throw new Error("Nominal baris komisi dikunci dari pilihan utang — hapus baris lalu tambah ulang");
+      throw new Error("Nominal baris komisi dikunci dari pilihan utang – hapus baris lalu tambah ulang");
     }
     await assertDraftPayrollLineAccess(line.payrollId, user);
     const amount = parseMoneyAmount(formData.get("amount")) ?? Number.NaN;
@@ -910,7 +910,7 @@ export async function addPayrollCommissionLine(payrollId: number, formData: Form
       where: { normalizedName: "komisi penjualan", isActive: true },
     });
     if (!component || component.kind !== "earning" || !component.isTaxable) {
-      throw new Error('Komponen master "Komisi Penjualan" (earning, kena pajak, aktif) belum ada — buat dulu di master Komponen');
+      throw new Error('Komponen master "Komisi Penjualan" (earning, kena pajak, aktif) belum ada – buat dulu di master Komponen');
     }
     const created = await prisma.$transaction(async (tx) => {
       // Kunci baris slip + utang: cek pemilik, saldo, dan duplikat WAJIB dalam
@@ -987,7 +987,7 @@ function assertDeductionCeilingOrThrow(o: {
   });
   if (breach) {
     throw new Error(
-      `Total potongan Pasal 63 (cicilan pinjaman + denda + potongan absen + komponen potongan) Rp${breach.totalDeductions.toLocaleString("id-ID")} melebihi plafon 50% upah slip ini Rp${breach.ceiling.toLocaleString("id-ID")} (PP 36/2021 Pasal 65) — ${o.fallbackLabel} ditolak. Sesuaikan perjanjian/potongan, jangan dipangkas diam-diam.`,
+      `Total potongan Pasal 63 (cicilan pinjaman + denda + potongan absen + komponen potongan) Rp${breach.totalDeductions.toLocaleString("id-ID")} melebihi plafon 50% upah slip ini Rp${breach.ceiling.toLocaleString("id-ID")} ((PP 36/2021 Pasal 65) (${o.fallbackLabel} ditolak. Sesuaikan perjanjian/potongan, jangan dipangkas diam-diam.`,
     );
   }
 }
@@ -1047,7 +1047,7 @@ async function buildPayrollWrite(o: {
   const ruleset = await getStatutoryParams(db as never, o.endDate);
   if (ruleset.fromFallback) {
     throw new Error(
-      `Ruleset statutori periode ini belum lengkap/valid — ${o.fallbackLabel} ditolak. Minta accountant melengkapi ruleset, lalu hitung ulang.`,
+      `Ruleset statutori periode ini belum lengkap/valid (${o.fallbackLabel} ditolak. Minta accountant melengkapi ruleset, lalu hitung ulang.`,
     );
   }
   if (o.composeGuards !== false) {
@@ -1759,7 +1759,7 @@ function buildTerSnapshot(o: {
 const FINAL_PAYROLL_STATUSES = ["approved", "paid"]
 
 const APPRECIATION_FINAL_PAYROLL_MESSAGE =
-  "Bonus bertanggal ini sudah masuk slip gaji final — koreksi lewat slip koreksi, bukan dengan mengubah/menghapus apresiasinya"
+  "Bonus bertanggal ini sudah masuk slip gaji final, koreksi lewat slip koreksi, bukan dengan mengubah/menghapus apresiasinya"
 
 /**
  * Putaran 120: apresiasi adalah bonus yang masuk bruto slip lewat estimasi
@@ -1856,7 +1856,7 @@ async function computeBpjsForPeriod(o: {
       }));
     if (others.some((s) => readBpjsAggregateSnapshot(s.statutorySnapshot) == null)) {
       throw new Error(
-        "Masa ini masih memuat slip BPJS per-slip (legacy tanpa penanda agregat) — klaim final BPJS masa ditolak sampai slip legacy dihitung ulang/diganti (vonis BOT 4 F-103-V B6/B8).",
+        "Masa ini masih memuat slip BPJS per-slip (legacy tanpa penanda agregat), klaim final BPJS masa ditolak sampai slip legacy dihitung ulang/diganti (vonis BOT 4 F-103-V B6/B8).",
       );
     }
   }
@@ -1923,7 +1923,7 @@ async function computePph21ForPeriod(o: {
       (r) => r.status !== "draft" && (r.statutorySnapshot as { pph21Ter?: { periodKind?: string } } | null)?.pph21Ter?.periodKind?.startsWith("final"),
     )
     if (priorFinals.length > 0) {
-      throw new Error("Masa pajak terakhir tahun ini sudah terbit — hitung ulang kedua ditolak (F-026).")
+      throw new Error("Masa pajak terakhir tahun ini sudah terbit, hitung ulang kedua ditolak (F-026).")
     }
     const finalRows = yearSlips.filter((r) => FINAL_PAYROLL_STATUSES.includes(r.status))
     const grossYear = finalRows.reduce((sum, r) => sum + Number(r.grossSalary), 0) + o.gross
@@ -1955,7 +1955,7 @@ async function computePph21ForPeriod(o: {
   const brackets = await getTerBrackets(db as never, category, o.endDate)
   if (!brackets) {
     throw new Error(
-      "Tabel TER PP 58/2023 belum terisi lengkap untuk periode ini — hitung final ditolak. Minta accountant melengkapi tabel TER, lalu hitung ulang.",
+      "Tabel TER PP 58/2023 belum terisi lengkap untuk periode ini, hitung final ditolak. Minta accountant melengkapi tabel TER, lalu hitung ulang.",
     )
   }
   const combinedGross = samePeriod.reduce((sum, r) => sum + Number(r.grossSalary), 0) + o.gross
@@ -2219,7 +2219,7 @@ async function computeBulkPayrollEstimations(
   // AUD-R3-02: bulk sama — tolak fallback di sumber.
   if (bulkStatutoryParams.fromFallback) {
     throw new Error(
-      "Ruleset statutori periode ini belum lengkap/valid — hitung massal ditolak. " +
+      "Ruleset statutori periode ini belum lengkap/valid, hitung massal ditolak. " +
         "Minta accountant melengkapi ruleset, lalu hitung ulang.",
     );
   }
@@ -2425,7 +2425,7 @@ async function computeBulkPayrollEstimations(
     const bulkOthers = bulkSlipsByEmployee.get(employee.id) ?? [];
     if (bulkOthers.some((slip) => readBpjsAggregateSnapshot(slip.statutorySnapshot) == null)) {
       throw new Error(
-        "Masa ini masih memuat slip BPJS per-slip (legacy tanpa penanda agregat) — klaim final BPJS masa ditolak sampai slip legacy dihitung ulang/diganti (vonis BOT 4 F-103-V B6/B8).",
+        "Masa ini masih memuat slip BPJS per-slip (legacy tanpa penanda agregat), klaim final BPJS masa ditolak sampai slip legacy dihitung ulang/diganti (vonis BOT 4 F-103-V B6/B8).",
       );
     }
     const bpjsAllocated = allocateBpjsForPeriod({
@@ -2446,7 +2446,7 @@ async function computeBulkPayrollEstimations(
     const bulkBrackets = bulkTerByCategory.get(bulkCategory);
     if (!bulkBrackets) {
       throw new Error(
-        "Tabel TER PP 58/2023 belum terisi lengkap untuk periode ini — hitung massal ditolak. " +
+        "Tabel TER PP 58/2023 belum terisi lengkap untuk periode ini, hitung massal ditolak. " +
           "Minta accountant melengkapi tabel TER, lalu hitung ulang.",
       );
     }
@@ -2605,7 +2605,7 @@ export async function generateBulkPayroll(
     // "YYYY-MM" bulan endDate (V-PF2-1/V-PF2-5 BOT 4 — karangan "YYYY-MM-Wn"
     // ditolak tulis, AC-PF2-5).
     if (!isPayrollFrequency(paymentFrequency)) {
-      throw new Error("Frekuensi run penggajian tidak valid — gunakan MONTHLY atau WEEKLY.");
+      throw new Error("Frekuensi run penggajian tidak valid, gunakan MONTHLY atau WEEKLY.");
     }
     assertPayrollPeriodMatchesEndDate(period, new Date(endDateStr));
 
@@ -3164,7 +3164,7 @@ export async function processPayroll(formData: FormData) {
     if (wantsFinal && !employeeLifecycle?.employmentEndedAt) {
       throw new Error(
         "Penanda berhenti bekerja belum bisa dibuktikan dari data berhenti terverifikasi di server. " +
-          "Final berhenti ditolak — gunakan workflow berhenti terverifikasi bila sudah tersedia, atau hitung slip ini tanpa penanda final.",
+          "Final berhenti ditolak, gunakan workflow berhenti terverifikasi bila sudah tersedia, atau hitung slip ini tanpa penanda final.",
       );
     }
     const employmentGate = evaluatePayrollEmploymentGate({
@@ -3426,7 +3426,7 @@ export async function updatePayroll(id: number, formData: FormData) {
     if (wantsFinalUpdate && !updateLifecycle?.employmentEndedAt) {
       throw new Error(
         "Penanda berhenti bekerja belum bisa dibuktikan dari data berhenti terverifikasi di server. " +
-          "Final berhenti ditolak — gunakan workflow berhenti terverifikasi bila sudah tersedia, atau hitung slip ini tanpa penanda final.",
+          "Final berhenti ditolak, gunakan workflow berhenti terverifikasi bila sudah tersedia, atau hitung slip ini tanpa penanda final.",
       );
     }
     // TASK-018 (3): kelas final dibaca dari snapshot slip existing — edit
@@ -3637,7 +3637,7 @@ export async function approvePayroll(payrollId: number) {
     // assertApproved lolos tanpa baris Approval. createdBy null (baris
     // legacy) tetap boleh diputus penyetuju berizin.
     if (payroll.createdBy != null && Number(payroll.createdBy) === Number(user.id)) {
-      throw new Error("Penggajian tidak boleh disetujui oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin process_payroll.");
+      throw new Error("Penggajian tidak boleh disetujui oleh pembuatnya sendiri (pemisahan tugas), minta penyetuju lain yang berizin process_payroll.");
     }
 
     if (payroll.status !== "draft") {
@@ -3723,7 +3723,7 @@ export async function markPayrollPaid(payrollId: number) {
     });
     if (paidCeilingBreach) {
       throw new Error(
-        `Total potongan Pasal 63 (cicilan pinjaman + denda + komponen potongan) Rp${paidCeilingBreach.totalDeductions.toLocaleString("id-ID")} melebihi plafon 50% upah slip ini Rp${paidCeilingBreach.ceiling.toLocaleString("id-ID")} (PP 36/2021 Pasal 65) — pembayaran ditolak. Hitung ulang slip, jangan dibayar menembus plafon.`,
+        `Total potongan Pasal 63 (cicilan pinjaman + denda + komponen potongan) Rp${paidCeilingBreach.totalDeductions.toLocaleString("id-ID")} melebihi plafon 50% upah slip ini Rp${paidCeilingBreach.ceiling.toLocaleString("id-ID")} (PP 36/2021 Pasal 65), pembayaran ditolak. Hitung ulang slip, jangan dibayar menembus plafon.`,
       );
     }
     // F-2026-10-29-162-V PUT-LOAN-1 (E162-1): penjaga anggaran BR-LOAN-03 saat
@@ -3803,7 +3803,7 @@ export async function markPayrollPaid(payrollId: number) {
         const appliedTotal = totalAllocated(allocations);
         if (appliedTotal < Number(payroll.loanDeduction) - 0.005) {
           throw new Error(
-            `Sisa pinjaman aktif karyawan (Rp${appliedTotal.toLocaleString("id-ID")} dapat dialokasikan) di bawah potongan pinjaman slip (Rp${Number(payroll.loanDeduction).toLocaleString("id-ID")}) — pembayaran ditolak agar jurnal Piutang dan subledger pinjaman tidak menyimpang. Selesaikan setoran/tulis-off pinjaman atau buat slip koreksi lebih dulu.`,
+            `Sisa pinjaman aktif karyawan (Rp${appliedTotal.toLocaleString("id-ID")} dapat dialokasikan) di bawah potongan pinjaman slip (Rp${Number(payroll.loanDeduction).toLocaleString("id-ID")}), pembayaran ditolak agar jurnal Piutang dan subledger pinjaman tidak menyimpang. Selesaikan setoran/tulis-off pinjaman atau buat slip koreksi lebih dulu.`,
           );
         }
         const updates: Promise<unknown>[] = [];
@@ -3890,7 +3890,7 @@ export async function correctPaidPayroll(
     if (source.status !== "paid") {
       return {
         success: false,
-        error: `Slip ${source.documentNo} berstatus '${source.status}' — hanya slip paid yang dapat dikoreksi lewat dokumen koreksi.`,
+        error: `Slip ${source.documentNo} berstatus '${source.status}', hanya slip paid yang dapat dikoreksi lewat dokumen koreksi.`,
       };
     }
 
@@ -3908,7 +3908,7 @@ export async function correctPaidPayroll(
     if (blockingEvent) {
       return {
         success: false,
-        error: `Slip ${source.documentNo} menahan peristiwa kompensasi PKWT #${blockingEvent.id} berstatus '${blockingEvent.status}' — batalkan/ubah peristiwa itu dulu sebelum mengoreksi slip.`,
+        error: `Slip ${source.documentNo} menahan peristiwa kompensasi PKWT #${blockingEvent.id} berstatus '${blockingEvent.status}', batalkan/ubah peristiwa itu dulu sebelum mengoreksi slip.`,
       };
     }
 
@@ -3934,7 +3934,7 @@ export async function correctPaidPayroll(
       const fresh = await tx.payroll.findUniqueOrThrow({ where: { id: payrollId } });
       if (fresh.status !== "paid") {
         throw new Error(
-          `Slip ${fresh.documentNo} berstatus '${fresh.status}' — hanya slip paid yang dapat dikoreksi lewat dokumen koreksi.`,
+          `Slip ${fresh.documentNo} berstatus '${fresh.status}', hanya slip paid yang dapat dikoreksi lewat dokumen koreksi.`,
         );
       }
       const dup = await tx.payroll.findFirst({
@@ -3943,7 +3943,7 @@ export async function correctPaidPayroll(
       });
       if (dup) {
         throw new Error(
-          `Slip ${fresh.documentNo} sudah memiliki dokumen koreksi ${dup.documentNo} — koreksi kedua ditolak.`,
+          `Slip ${fresh.documentNo} sudah memiliki dokumen koreksi ${dup.documentNo}, koreksi kedua ditolak.`,
         );
       }
 
@@ -4355,7 +4355,7 @@ async function assertTimesheetDailyHoursTx(
   const total = Number(agg._sum.hours ?? 0) + addHours;
   if (total > 24 + 0.0001) {
     throw new Error(
-      `Total jam karyawan pada tanggal ini akan menjadi ${total} jam — melebihi 24 jam per hari.`,
+      `Total jam karyawan pada tanggal ini akan menjadi ${total} jam, melebihi 24 jam per hari.`,
     );
   }
 }
@@ -4967,7 +4967,7 @@ async function buildAttendanceData(
   const schedule = await resolveEffectiveSchedule(input.employeeId, db)
   if (!schedule && input.checkIn) {
     throw new Error(
-      "Karyawan ini belum punya jadwal kerja aktif — buat jadwal kerja lebih dulu " +
+      "Karyawan ini belum punya jadwal kerja aktif, buat jadwal kerja lebih dulu " +
         "supaya keterlambatan bisa dihitung dari jam masuk.",
     )
   }
@@ -5044,7 +5044,7 @@ export async function createAttendance(formData: FormData) {
     if ((e as { code?: string })?.code === "P2002") {
       return {
         success: false as const,
-        error: "Absensi karyawan untuk tanggal itu sudah ada — ubah yang sudah tercatat.",
+        error: "Absensi karyawan untuk tanggal itu sudah ada, ubah yang sudah tercatat.",
       };
     }
     console.error("[createAttendance]", getErrorMessage(e) || e);
@@ -5223,7 +5223,7 @@ export async function createAttendanceCorrection(formData: FormData) {
       });
       if (pending) {
         throw new Error(
-          "Masih ada pengajuan koreksi yang menunggu untuk tanggal ini — tunggu diputus atau batalkan dulu.",
+          "Masih ada pengajuan koreksi yang menunggu untuk tanggal ini, tunggu diputus atau batalkan dulu.",
         );
       }
 
@@ -5722,7 +5722,7 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
         throw new Error("Hanya pengajuan cuti berstatus menunggu yang dapat diedit");
       }
       if (current.employeeId !== existing.employeeId) {
-        throw new Error("Pengajuan cuti sudah berubah — muat ulang sebelum mengedit");
+        throw new Error("Pengajuan cuti sudah berubah, muat ulang sebelum mengedit");
       }
       // Putaran 75: nilai ulang hidup source/target dari baris terkunci —
       // gerbang hidup hanya terhadap karyawan yang benar-benar dinilai.
@@ -5842,7 +5842,7 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
         throw new Error("Hanya pengajuan lembur berstatus menunggu yang dapat diedit");
       }
       if (current.employeeId !== existing.employeeId) {
-        throw new Error("Pengajuan lembur sudah berubah — muat ulang sebelum mengedit");
+        throw new Error("Pengajuan lembur sudah berubah, muat ulang sebelum mengedit");
       }
       // Putaran 75: nilai ulang hidup target pindahan dari baris terkunci —
       // assert pra-tx tak melihat penonaktifan yang commit di jendela.
@@ -6063,7 +6063,7 @@ export async function recordEmployeeLoanCashRepayment(formData: FormData) {
       await tx.$queryRaw`SELECT id FROM employee_loans WHERE id = ${loanId} FOR UPDATE`;
       const loan = await tx.employeeLoan.findUniqueOrThrow({ where: { id: loanId } });
       if (loan.status === "written_off") {
-        throw new Error(`Pinjaman #${loanId} sudah dihapus (written_off) — setoran ditolak.`);
+        throw new Error(`Pinjaman #${loanId} sudah dihapus (written_off), setoran ditolak.`);
       }
       if (loan.status !== "active") {
         throw new Error(`Setoran hanya untuk pinjaman berstatus active (status kini '${loan.status}').`);
@@ -6071,7 +6071,7 @@ export async function recordEmployeeLoanCashRepayment(formData: FormData) {
       const remaining = Number(loan.remainingAmount);
       if (roundedAmount - remaining > SETTLEMENT_TOLERANCE_IDR) {
         throw new Error(
-          `Setoran Rp${roundedAmount.toLocaleString("id-ID")} melebihi sisa Rp${remaining.toLocaleString("id-ID")} — kelebihan dikembalikan ke karyawan, bukan menambah sisa (BR-LOAN-07). Sesuaikan nominal.`,
+          `Setoran Rp${roundedAmount.toLocaleString("id-ID")} melebihi sisa Rp${remaining.toLocaleString("id-ID")}, kelebihan dikembalikan ke karyawan, bukan menambah sisa (BR-LOAN-07). Sesuaikan nominal.`,
         );
       }
       // Idempoten dokumen: kunci unik logis per (pinjaman, tanggal, nominal, kas).
@@ -6152,19 +6152,19 @@ export async function writeOffEmployeeLoan(formData: FormData) {
       await tx.$queryRaw`SELECT id FROM employee_loans WHERE id = ${loanId} FOR UPDATE`;
       const loan = await tx.employeeLoan.findUniqueOrThrow({ where: { id: loanId } });
       if (loan.status === "written_off") {
-        throw new Error(`Pinjaman #${loanId} sudah dihapus — dokumen ganda ditolak.`);
+        throw new Error(`Pinjaman #${loanId} sudah dihapus, dokumen ganda ditolak.`);
       }
       if (loan.status === "paid_off") {
-        throw new Error(`Pinjaman #${loanId} sudah lunas — write-off ditolak.`);
+        throw new Error(`Pinjaman #${loanId} sudah lunas, write-off ditolak.`);
       }
       if (loan.status !== "active") {
         throw new Error(`Write-off hanya untuk pinjaman berstatus active (status kini '${loan.status}').`);
       }
       const remaining = Number(loan.remainingAmount);
-      if (!(remaining > 0)) throw new Error("Sisa pinjaman nol — write-off ditolak.");
+      if (!(remaining > 0)) throw new Error("Sisa pinjaman nol, write-off ditolak.");
       // Idempoten dokumen: satu pinjaman aktif = satu dokumen write-off final.
       const dup = await tx.employeeLoanWriteOff.findFirst({ where: { loanId }, select: { id: true } });
-      if (dup) throw new Error(`Pinjaman #${loanId} sudah punya dokumen write-off #${dup.id} — ganda ditolak.`);
+      if (dup) throw new Error(`Pinjaman #${loanId} sudah punya dokumen write-off #${dup.id}, ganda ditolak.`);
       const created = await tx.employeeLoanWriteOff.create({
         data: {
           slug: await nextSlugWithClient(tx as never, "employeeLoanWriteOff", `writeoff-pinjaman-${writeOffDateRaw}`, { fallback: `writeoff-pinjaman-${writeOffDateRaw}-${loanId}` }),
@@ -6578,7 +6578,7 @@ export async function deleteStatutoryRule(id: number) {
     const ruleId = requirePositiveId(id, "aturan statutori");
     const rule = await prisma.payrollStatutoryRule.findUniqueOrThrow({ where: { id: ruleId } });
     if (new Date(rule.effectiveFrom) <= new Date()) {
-      return { success: false as const, error: "Baris historis/aktif tidak boleh dihapus — tutup dengan tanggal akhir" };
+      return { success: false as const, error: "Baris historis/aktif tidak boleh dihapus, tutup dengan tanggal akhir" };
     }
     await prisma.payrollStatutoryRule.delete({ where: { id: ruleId } });
     await logActivity("delete", "PayrollStatutoryRule", id, `Menghapus aturan statutori #${id}`);

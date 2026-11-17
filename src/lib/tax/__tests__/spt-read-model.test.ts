@@ -9,7 +9,7 @@ import {
 } from "@/lib/tax/spt-read-model"
 
 describe("SPT keluaran: hanya kepala rantai bernilai, masa asal", () => {
-  it("pengganti mengubah PPN — SPT masa asal berubah, masa terbit tidak dobel", () => {
+  it("pengganti mengubah PPN – SPT masa asal berubah, masa terbit tidak dobel", () => {
     const rows = buildOutputSptRows([
       {
         originPeriod: "2026-01",

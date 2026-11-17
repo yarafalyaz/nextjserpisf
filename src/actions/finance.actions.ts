@@ -840,7 +840,7 @@ export async function postJournal(journalId: number) {
       // manualnya sendiri (pola approvePayroll). createdBy null (legacy/
       // sistem) tetap boleh — jurnal sistem lahir POSTED, tak lewat sini.
       if (journal.createdBy != null && Number(journal.createdBy) === Number(user.id)) {
-        throw new Error("Jurnal tidak boleh diposting oleh pembuatnya sendiri (pemisahan tugas) — minta pengguna lain yang berizin post_journals.");
+        throw new Error("Jurnal tidak boleh diposting oleh pembuatnya sendiri (pemisahan tugas) – minta pengguna lain yang berizin post_journals.");
       }
 
       // Gerbang workflow dinilai ULANG di dalam tx terkunci: updateJournal
@@ -1118,7 +1118,7 @@ export async function approveExpense(expenseId: number) {
       // gerbang ini — pembuat tak boleh menyetujui pengeluarannya sendiri
       // (pola approvePayroll). createdBy null legacy tetap boleh.
       if (!isClaim && locked.createdBy != null && Number(locked.createdBy) === Number(user.id)) {
-        throw new Error("Pengeluaran tidak boleh disetujui oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin approve_expenses.");
+        throw new Error("Pengeluaran tidak boleh disetujui oleh pembuatnya sendiri (pemisahan tugas) – minta penyetuju lain yang berizin approve_expenses.");
       }
 
       await onExpenseApprovedSyncPettyCash(expenseId, Number(user.id), tx);
@@ -1223,7 +1223,7 @@ export async function markExpensePaid(expenseId: number) {
       // filled in) instead of banking on that hook never staying silent again.
       if (!locked.paidFromAccountId) {
         throw new Error(
-          "Pengeluaran belum punya akun sumber dana (kas/bank). Isi akun sumber dana sebelum menandai lunas — tanpa itu tidak ada jurnal yang bisa diposting.",
+          "Pengeluaran belum punya akun sumber dana (kas/bank). Isi akun sumber dana sebelum menandai lunas – tanpa itu tidak ada jurnal yang bisa diposting.",
         );
       }
 
@@ -1262,7 +1262,7 @@ export async function markExpensePaid(expenseId: number) {
         });
         if (!accruedJournal) {
           throw new Error(
-            "Klaim belum punya jurnal akrual J-RB1 — bayar ditolak. Setujui klaim lebih dulu.",
+            "Klaim belum punya jurnal akrual J-RB1 – bayar ditolak. Setujui klaim lebih dulu.",
           );
         }
         const payGuard = evaluateReimbursementPaymentAmount({
@@ -2925,7 +2925,7 @@ export async function reverseJournal(journalId: number) {
         data: { status: "REVERSING" },
       });
       if (claim.count === 0) {
-        throw new Error("Jurnal tidak bisa dibalik (konflik konkurensi — coba lagi)");
+        throw new Error("Jurnal tidak bisa dibalik (konflik konkurensi – coba lagi)");
       }
 
       // Putaran 86: entri jurnal pada rekonsiliasi bank completed membeku
@@ -3123,7 +3123,7 @@ async function assertPettyCashNotExpenseSync(
   });
   if (expense) {
     throw new Error(
-      "Transaksi kas kecil ini tercatat otomatis dari expense terposting — ubah atau batalkan dari expense asal, bukan dari kas kecil.",
+      "Transaksi kas kecil ini tercatat otomatis dari expense terposting – ubah atau batalkan dari expense asal, bukan dari kas kecil.",
     );
   }
 }

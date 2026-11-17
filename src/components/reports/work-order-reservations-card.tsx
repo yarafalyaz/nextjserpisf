@@ -62,7 +62,7 @@ export function WorkOrderReservationsCard({
                 <DetailTableTd>{row.statusLabel}</DetailTableTd>
                 <DetailTableTd>
                   {row.releasedAt
-                    ? `${formatDate(row.releasedAt, { format: "numeric" })}${row.releasedByName ? ` oleh ${row.releasedByName}` : ""}${row.releaseReason ? ` — ${row.releaseReason}` : ""}`
+                    ? `${formatDate(row.releasedAt, { format: "numeric" })}${row.releasedByName ? ` oleh ${row.releasedByName}` : ""}${row.releaseReason ? `, ${row.releaseReason}` : ""}`
                     : "-"}
                 </DetailTableTd>
                 {/* BR-RES-09: hanya baris yang masih aktif yang bisa dilepas;

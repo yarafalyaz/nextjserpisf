@@ -295,7 +295,7 @@ export default async function AssetDetailPage({
         <DetailField label="Disposisi Penyusutan" value={<AssetCronDisposition disposition={cronDisposition} />} />
         {/* The asset form labels this field "Deskripsi" and createAsset/
             updateAsset persist it to `notes` (the `description` column is
-            unused), so read it back from `notes` — otherwise the text a user
+            unused), so read it back from `notes` otherwise the text a user
             typed was stored but never shown anywhere. */}
         <DetailField label="Deskripsi" value={asset.notes || "-"} colSpan="full" />
       </DetailCard>
@@ -358,7 +358,7 @@ export default async function AssetDetailPage({
           {asset.category ? (
             <div className="flex flex-col gap-1.5">
               <p className="text-sm font-medium text-foreground">
-                Pemetaan Akun Peristiwa — Kategori {asset.category.name}
+                Pemetaan Akun Peristiwa, Kategori {asset.category.name}
               </p>
               <AssetEventMappingStatus mapping={eventMapping} />
             </div>

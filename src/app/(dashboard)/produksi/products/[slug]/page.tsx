@@ -92,7 +92,7 @@ export default async function ProductDetailPage({
     : [[], [], []]
 
   const itemNameMap: Record<number, string> = {}
-  for (const [id, it] of itemMap) itemNameMap[id] = `${it.sku} — ${it.name}`
+  for (const [id, it] of itemMap) itemNameMap[id] = `${it.sku} - ${it.name}`
 
   return (
     <div className="flex flex-col gap-6">
@@ -122,7 +122,7 @@ export default async function ProductDetailPage({
         <DetailField label="Model Kendaraan" value={product.vehicleModel?.name || "-"} />
         <DetailField
           label="Barang Persediaan Hasil Produksi"
-          value={product.inventoryItem ? `${product.inventoryItem.sku} — ${product.inventoryItem.name}` : "Belum dihubungkan"}
+          value={product.inventoryItem ? `${product.inventoryItem.sku} - ${product.inventoryItem.name}` : "Belum dihubungkan"}
         />
         <DetailField label="Dibuat" value={formatDate(product.createdAt)} />
         {product.description && (

@@ -49,7 +49,7 @@ export function DownPaymentTaxPanel({ rows, canIssue = false }: { rows: DownPaym
     <section aria-label="Status pajak uang muka" className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <h2 className="text-base font-semibold text-foreground">Status Pajak Uang Muka (DP)</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Snapshot PPN per uang muka tampil apa adanya dari server. Terbitkan faktur pajak uang muka untuk baris yang terutang — nomor seri DJP diisi operator.
+        Snapshot PPN per uang muka tampil apa adanya dari server. Terbitkan faktur pajak uang muka untuk baris yang terutang, nomor seri DJP diisi operator.
       </p>
 
       {rows.length === 0 ? (

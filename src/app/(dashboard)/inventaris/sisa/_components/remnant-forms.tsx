@@ -97,7 +97,7 @@ export function RemnantForm({ canCreate }: { canCreate: boolean }) {
       </div>
       <p role="note" className="text-xs text-muted-foreground">
         Sisa usable wajib dimensi, ukuran terukur, dan tautan baris issue asal; kategori item harus
-        sudah punya ambang minimum usable dari kepala bengkel — server menolak bila belum ditetapkan.
+        sudah punya ambang minimum usable dari kepala bengkel, server menolak bila belum ditetapkan.
       </p>
     </form>
   )

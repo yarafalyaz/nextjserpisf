@@ -103,7 +103,7 @@ export async function createReimbursementClaim(formData: FormData) {
       // karyawan lain ditimpa, tidak pernah dipercaya (AC-RB-B1).
       if (scope.kind === "self" && scope.employeeId <= 0) {
         throw new Error(
-          "Akun Anda belum tertaut ke data karyawan — klaim mandiri tidak dapat diajukan. Hubungi HR untuk menautkan akun.",
+          "Akun Anda belum tertaut ke data karyawan – klaim mandiri tidak dapat diajukan. Hubungi HR untuk menautkan akun.",
         )
       }
       if (scope.kind === "all") {
@@ -113,7 +113,7 @@ export async function createReimbursementClaim(formData: FormData) {
         })
         if (!me) {
           throw new Error(
-            "Akun Anda belum tertaut ke data karyawan — klaim mandiri tidak dapat diajukan.",
+            "Akun Anda belum tertaut ke data karyawan – klaim mandiri tidak dapat diajukan.",
           )
         }
         claimantEmployeeId = me.id
@@ -128,7 +128,7 @@ export async function createReimbursementClaim(formData: FormData) {
     })
     if (!claimant) throw new Error("Data karyawan pengaju tidak ditemukan.")
     if (claimant.employmentEndedAt) {
-      throw new Error("Karyawan pengaju sudah nonaktif — klaim baru ditolak (EC-1).")
+      throw new Error("Karyawan pengaju sudah nonaktif – klaim baru ditolak (EC-1).")
     }
 
     // Akun beban klaim: placeholder akun beban pertama aktif; keuangan
@@ -143,7 +143,7 @@ export async function createReimbursementClaim(formData: FormData) {
       select: { id: true },
     })
     if (!placeholderAccount) {
-      throw new Error("Belum ada akun beban di COA — klaim tidak dapat dibuat.")
+      throw new Error("Belum ada akun beban di COA – klaim tidak dapat dibuat.")
     }
 
     const expenseDate = wibDateToUtcMidnight(v.date)
@@ -181,7 +181,7 @@ export async function createReimbursementClaim(formData: FormData) {
       return {
         success: false as const,
         error:
-          "Ditemukan klaim serupa yang belum selesai (pengaju + tanggal + nominal + nomor nota sama). Periksa kandidat — ajukan ulang dengan acknowledgeDuplicates=1 bila memang pengeluaran berbeda (BR-RB-10).",
+          "Ditemukan klaim serupa yang belum selesai (pengaju + tanggal + nominal + nomor nota sama). Periksa kandidat – ajukan ulang dengan acknowledgeDuplicates=1 bila memang pengeluaran berbeda (BR-RB-10).",
         duplicateCandidates: duplicateCandidates.map((c) => ({
           id: c.id,
           documentNo: c.documentNo,
@@ -209,7 +209,7 @@ export async function createReimbursementClaim(formData: FormData) {
         select: { id: true, isActive: true, deletedAt: true, employmentEndedAt: true },
       })
       if (!claimantInTx || claimantInTx.deletedAt != null || !claimantInTx.isActive || claimantInTx.employmentEndedAt != null) {
-        throw new Error("Karyawan pengaju sudah nonaktif — klaim baru ditolak (EC-1).")
+        throw new Error("Karyawan pengaju sudah nonaktif – klaim baru ditolak (EC-1).")
       }
       const created = await tx.expense.create({
         data: {
@@ -305,7 +305,7 @@ export async function setReimbursementClaimAccounts(
       if (!account)
         throw new Error(`Akun tidak ditemukan (id: ${check.id}). Pilih ulang akun.`)
       if (account.deletedAt || !account.isActive)
-        throw new Error(`${check.label} nonaktif/terhapus — pilih akun aktif.`)
+        throw new Error(`${check.label} nonaktif/terhapus – pilih akun aktif.`)
       if (account.type !== check.type)
         throw new Error(`${check.label} harus bertipe ${check.type}.`)
     }

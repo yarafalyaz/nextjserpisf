@@ -79,7 +79,7 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
           <h2 className="text-base font-semibold text-foreground">Buat PO Jasa/Subkontrak</h2>
           <p className="text-xs text-muted-foreground">
             Barang jasa pada perintah kerja ini akan digabung menjadi satu PO jasa (draf) tertaut
-            ke perintah kerja. Penerimaannya tidak menggerakkan stok — biaya langsung dibebankan.
+            ke perintah kerja. Penerimaannya tidak menggerakkan stok, biaya langsung dibebankan.
           </p>
         </div>
 

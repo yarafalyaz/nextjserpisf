@@ -213,7 +213,7 @@ export function ProbationContractPanel(props: ProbationContractPanelProps) {
                         {m.isFinal ? `${m.label} (Final)` : m.label}
                       </legend>
                       <p className="text-xs text-muted-foreground">
-                        Jatuh tempo: {formatDate(m.dueDate)} — Status: {m.reviewStatus ? (REVIEW_STATUS_LABELS[m.reviewStatus] ?? m.reviewStatus) : "belum diisi"}
+                        Jatuh tempo: {formatDate(m.dueDate)}, Status: {m.reviewStatus ? (REVIEW_STATUS_LABELS[m.reviewStatus] ?? m.reviewStatus) : "belum diisi"}
                       </p>
                       {m.reviewStatus && m.reviewStatus !== "draft" ? (
                         <dl className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">

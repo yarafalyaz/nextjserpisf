@@ -31,7 +31,7 @@ function decision(over: Partial<DisciplinaryDeductionDecisionRow> = {}): Discipl
     contextDocumentNo: "001/SP/YRA/10/2026",
     kind: "ganti_rugi",
     amount: 250000,
-    compensationAccountLabel: "510099 — Kompensasi Lain",
+    compensationAccountLabel: "510099 (Kompensasi Lain)",
     suspensionKind: "disiplin",
     suspensionPayTreatment: "tidak_dibayar",
     regulationReference: "PP Bab V Pasal 12",
@@ -52,7 +52,7 @@ describe("DisciplinaryDeductionDecisionsCard BR-DISC-09", () => {
     expect(text).toContain("ganti_rugi")
     expect(text).toContain("tidak_dibayar")
     expect(text).toContain("PP Bab V Pasal 12")
-    expect(text).toContain("510099 — Kompensasi Lain")
+    expect(text).toContain("510099 (Kompensasi Lain)")
     expect(text).toContain("001/SP/YRA/10/2026")
     expect(text).toContain("Surat peringatan tidak memicu potongan")
     const headers = [...container.querySelectorAll("th")].map((th) => th.textContent)

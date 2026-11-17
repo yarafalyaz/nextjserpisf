@@ -69,7 +69,7 @@ export function reportCustomerSelect({
     value: selected ? (selected.slug ?? String(selected.id)) : "",
     options: customers.map((c) => ({
       value: c.slug ?? String(c.id),
-      label: `${c.code ? `${c.code} — ` : ""}${c.name}`,
+      label: `${c.code ? `${c.code}, ` : ""}${c.name}`,
     })),
   }
 }

@@ -200,7 +200,7 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
 
   "neraca-skontro": {
     title: "Neraca (Induk Skontro)",
-    subtitle: "Laporan Posisi Keuangan — Dua Sisi",
+    subtitle: "Laporan Posisi Keuangan – Dua Sisi",
     async load({ period, search }) {
       const report = await loadSkontroBalanceSheet(
         new Date(period.end),
@@ -430,7 +430,7 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
 
   "scrap-material": {
     title: "Scrap Material",
-    subtitle: "Scrap per Baris Issue — Normal vs Abnormal",
+    subtitle: "Scrap per Baris Issue – Normal vs Abnormal",
     defaultPeriod: startOfYear,
     async load({ period }) {
       const { report } = await loadScrapMaterialReport(period.start, period.end)
@@ -672,7 +672,7 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
 
   "rekap-borongan": {
     title: "Rekap Borongan",
-    subtitle: "Upah Borongan per Teknisi (Informatif — Bukan Dasar Bayar/Jurnal)",
+    subtitle: "Upah Borongan per Teknisi (Informatif – Bukan Dasar Bayar/Jurnal)",
     defaultPeriod: startOfYear,
     async load({ period }) {
       const result = await loadLaborRecapReport({ start: period.start, end: period.end })
@@ -986,7 +986,7 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
   },
   "bukti-potong-pph": {
     title: "Daftar Bukti Potong PPh",
-    subtitle: "Pemotongan PPh Dua Sisi — Pembelian & Penjualan",
+    subtitle: "Pemotongan PPh Dua Sisi – Pembelian & Penjualan",
     defaultPeriod: startOfYear,
     async load({ period }) {
       const report = await loadWithholdingSummary(period)

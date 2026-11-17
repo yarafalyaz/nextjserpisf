@@ -17,7 +17,7 @@ import {
 // lead-duplicate.service.ts) — didefinisikan lokal: modul service
 // menarik Prisma ke bundle klien (node:fs) dan mematahkan build.
 // Kata tampil verbatim §7 spec F-2026-10-24-141-S.
-const DUPLICATE_LOST_LABEL = "Lead lama berstatus lost — bukan duplikat aktif"
+const DUPLICATE_LOST_LABEL = "Lead lama berstatus lost – bukan duplikat aktif"
 
 interface LeadDuplicateCandidate {
   id: number

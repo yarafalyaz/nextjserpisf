@@ -26,9 +26,9 @@ export const RESERVATION_LABEL_ACTIVE = "Terreservasi"
 export const RESERVATION_LABEL_CONSUMED = "Terpakai Habis"
 export const RESERVATION_LABEL_RELEASED = "Dilepas"
 export const RESERVATION_LABEL_EXPIRED =
-  "Kedaluwarsa — reservasi ulang bila masih dibutuhkan"
+  "Kedaluwarsa – reservasi ulang bila masih dibutuhkan"
 export const RESERVATION_LABEL_NO_WAREHOUSE =
-  "Belum direservasi — gudang belum ditentukan"
+  "Belum direservasi – gudang belum ditentukan"
 export const RESERVATION_LABEL_SHORTAGE_OTHER_WO =
   "Stok gudang ini sudah terreservasi untuk perintah kerja lain"
 export const RESERVATION_LABEL_UNRESERVED_OUTFLOW = "Keluar tanpa cadangan reservasi"

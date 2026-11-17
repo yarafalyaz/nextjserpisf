@@ -205,16 +205,16 @@ function requireRoleAccount(
   expectedLabel: string,
 ): string | null {
   if (!account) {
-    return `Akun ${roleLabel} belum dipetakan pada kategori ${categoryName} — isi di pengaturan kategori aset`
+    return `Akun ${roleLabel} belum dipetakan pada kategori ${categoryName} (isi di pengaturan kategori aset)`
   }
   if (!account.isActive) {
-    return `Akun ${roleLabel} (${account.code}) pada kategori ${categoryName} tidak aktif — aktifkan atau petakan akun lain di pengaturan kategori aset`
+    return `Akun ${roleLabel} (${account.code}) pada kategori ${categoryName} tidak aktif – aktifkan atau petakan akun lain di pengaturan kategori aset`
   }
   if ((account.childCount ?? 0) > 0) {
-    return `Akun ${roleLabel} (${account.code}) pada kategori ${categoryName} adalah akun induk — akun induk tidak bisa diposting, pilih akun anak yang terposting`
+    return `Akun ${roleLabel} (${account.code}) pada kategori ${categoryName} adalah akun induk – akun induk tidak bisa diposting, pilih akun anak yang terposting`
   }
   if (!expected(account)) {
-    return `Akun ${roleLabel} (${account.code}) pada kategori ${categoryName} bertipe salah — wajib akun ${expectedLabel}`
+    return `Akun ${roleLabel} (${account.code}) pada kategori ${categoryName} bertipe salah – wajib akun ${expectedLabel}`
   }
   return null
 }
@@ -381,7 +381,7 @@ export function buildAssetChangeEvent(input: {
     if (accumulatedImpairment.gt(0)) {
       if (!to.accumulatedImpairmentAccount) {
         return reject(
-          `Akun Akumulasi Penurunan Nilai tujuan belum dipetakan pada kategori ${to.categoryName} — isi di pengaturan kategori aset`,
+          `Akun Akumulasi Penurunan Nilai tujuan belum dipetakan pada kategori ${to.categoryName} (isi di pengaturan kategori aset)`,
         )
       }
       if (mapping.accumulatedImpairmentAccount && mapping.accumulatedImpairmentAccount.id !== to.accumulatedImpairmentAccount.id) {
@@ -417,7 +417,7 @@ export function buildAssetChangeEvent(input: {
         return reject("Nilai sisa buku fiskal semula wajib dibekukan dari baris saldo fiskal terbekukan.")
       }
       if (request.finalTaxRatePercent == null) {
-        return reject("Tarif PPh final revaluasi fiskal belum dipetakan di Pengaturan (data master) — peristiwa fiskal ditolak berisik.")
+        return reject("Tarif PPh final revaluasi fiskal belum dipetakan di Pengaturan (data master) – peristiwa fiskal ditolak berisik.")
       }
       const taxErr = requireRoleAccount(request.taxPayableAccount ?? null, "Utang PPh Final Revaluasi", "Pengaturan", (a) => a.type === "LIABILITY", "LIABILITY")
       if (taxErr) return reject(taxErr)
@@ -434,8 +434,8 @@ export function buildAssetChangeEvent(input: {
         if (surplusErr) return reject(surplusErr)
         const assetErr = requireRoleAccount(mapping.assetAccount, "Aset Tetap", mapping.categoryName, (a) => a.type === "ASSET", "ASSET")
         if (assetErr) return reject(assetErr)
-        pushLine(lines, line(mapping.assetAccount!, delta, ZERO, "Revaluasi fiskal berpersetujuan — kenaikan bruto"))
-        pushLine(lines, line(mapping.revaluationSurplusAccount!, ZERO, delta, "Revaluasi fiskal berpersetujuan — surplus ekuitas"))
+        pushLine(lines, line(mapping.assetAccount!, delta, ZERO, "Revaluasi fiskal berpersetujuan – kenaikan bruto"))
+        pushLine(lines, line(mapping.revaluationSurplusAccount!, ZERO, delta, "Revaluasi fiskal berpersetujuan – surplus ekuitas"))
       } else if (delta.lt(0)) {
         return reject("Revaluasi fiskal berpersetujuan dengan nilai di bawah tercatat wajib jalur revaluasi turun komersial terpisah.")
       }
@@ -445,7 +445,7 @@ export function buildAssetChangeEvent(input: {
           : "Akun Aset Tetap belum dipetakan"
         if (assetErr2) return reject(assetErr2)
         // PPh final dibebankan mengurangi surplus ekuitas peristiwa ini.
-        pushLine(lines, line(mapping.revaluationSurplusAccount!, finalTax, ZERO, "PPh final 10% revaluasi fiskal — beban surplus"))
+        pushLine(lines, line(mapping.revaluationSurplusAccount!, finalTax, ZERO, "PPh final 10% revaluasi fiskal – beban surplus"))
         pushLine(lines, line(request.taxPayableAccount!, ZERO, finalTax, "Utang PPh final revaluasi fiskal"))
       }
       const bal = assertBalanced(lines, kind)
@@ -481,18 +481,18 @@ export function buildAssetChangeEvent(input: {
       const reversalToPl = Prisma.Decimal.min(delta, Prisma.Decimal.max(ZERO, dec(facts.priorLossChargedToProfitOrLoss)))
       const toSurplus = sen(delta.sub(reversalToPl))
       const lines: AssetChangeJournalLine[] = []
-      if (accumulated.gt(0)) pushLine(lines, line(mapping.accumulatedDepreciationAccount!, accumulated, ZERO, "Revaluasi — tutup akumulasi penyusutan"))
+      if (accumulated.gt(0)) pushLine(lines, line(mapping.accumulatedDepreciationAccount!, accumulated, ZERO, "Revaluasi – tutup akumulasi penyusutan"))
       // Sajikan ulang bruto pada nilai wajar: Dr aset = nilai wajar − bruto
       // berjalan (akumulasi ditutup terpisah di atas), supaya nilai tercatat
       // sesudah = nilai wajar persis dan akumulasi mulai lagi dari nol
       // (PSAK 16: akumulasi diperlakukan sebagai bagian penyesuaian bruto).
-      pushLine(lines, line(mapping.assetAccount!, sen(fairValue.sub(gross.sub(disposalGross))), ZERO, "Revaluasi — selisih bruto ke nilai wajar"))
+      pushLine(lines, line(mapping.assetAccount!, sen(fairValue.sub(gross.sub(disposalGross))), ZERO, "Revaluasi – selisih bruto ke nilai wajar"))
       if (reversalToPl.gt(0)) {
         const lossErr = requireRoleAccount(mapping.impairmentLossAccount, "Beban Penurunan Nilai", mapping.categoryName, isExpenseAccount, "EXPS (beban)")
         if (lossErr) return reject(lossErr)
-        pushLine(lines, line(mapping.impairmentLossAccount!, ZERO, reversalToPl, "Revaluasi — balik beban penurunan lampau aset sama"))
+        pushLine(lines, line(mapping.impairmentLossAccount!, ZERO, reversalToPl, "Revaluasi – balik beban penurunan lampau aset sama"))
       }
-      if (toSurplus.gt(0)) pushLine(lines, line(mapping.revaluationSurplusAccount!, ZERO, toSurplus, "Revaluasi — surplus ke ekuitas"))
+      if (toSurplus.gt(0)) pushLine(lines, line(mapping.revaluationSurplusAccount!, ZERO, toSurplus, "Revaluasi – surplus ke ekuitas"))
       const bal = assertBalanced(lines, kind)
       if (bal) return reject(bal)
       return { ok: true, event: { ...base, lines, carryingAfter: fairValue, revaluationSurplusAfter: sen(surplusBefore.add(toSurplus)) } }
@@ -511,16 +511,16 @@ export function buildAssetChangeEvent(input: {
     if (chargeSurplus.gt(0)) {
       const surplusErr = requireRoleAccount(mapping.revaluationSurplusAccount, "Surplus Revaluasi", mapping.categoryName, isEquityAccount, "EQTY (ekuitas)")
       if (surplusErr) return reject(surplusErr)
-      pushLine(lines, line(mapping.revaluationSurplusAccount!, chargeSurplus, ZERO, "Revaluasi turun — tolakan surplus per aset"))
+      pushLine(lines, line(mapping.revaluationSurplusAccount!, chargeSurplus, ZERO, "Revaluasi turun – tolakan surplus per aset"))
     }
     if (chargePl.gt(0)) {
       const lossErr = requireRoleAccount(mapping.impairmentLossAccount, "Beban Penurunan Nilai", mapping.categoryName, isExpenseAccount, "EXPS (beban)")
       if (lossErr) return reject(lossErr)
-      pushLine(lines, line(mapping.impairmentLossAccount!, chargePl, ZERO, "Revaluasi turun — beban penurunan nilai"))
+      pushLine(lines, line(mapping.impairmentLossAccount!, chargePl, ZERO, "Revaluasi turun – beban penurunan nilai"))
     }
     // Jurnal penurunan model revaluasi: Dr surplus/beban, Cr aset sebesar
     // penurunan atas nilai tercatat (akumulasi tidak ditutup pada penurunan).
-    pushLine(lines, line(mapping.assetAccount!, ZERO, decrease, "Revaluasi turun — penurunan nilai tercatat"))
+    pushLine(lines, line(mapping.assetAccount!, ZERO, decrease, "Revaluasi turun – penurunan nilai tercatat"))
     const bal = assertBalanced(lines, kind)
     if (bal) return reject(bal)
     return { ok: true, event: { ...base, lines, carryingAfter: fairValue, revaluationSurplusAfter: sen(surplusBefore.sub(chargeSurplus)) } }
@@ -550,10 +550,10 @@ export function buildAssetChangeEvent(input: {
       if (chargeSurplus.gt(0)) {
         const surplusErr = requireRoleAccount(mapping.revaluationSurplusAccount, "Surplus Revaluasi", mapping.categoryName, isEquityAccount, "EQTY (ekuitas)")
         if (surplusErr) return reject(surplusErr)
-        pushLine(lines, line(mapping.revaluationSurplusAccount!, chargeSurplus, ZERO, "Penurunan nilai — tolakan surplus per aset"))
+        pushLine(lines, line(mapping.revaluationSurplusAccount!, chargeSurplus, ZERO, "Penurunan nilai – tolakan surplus per aset"))
       }
-      if (chargePl.gt(0)) pushLine(lines, line(mapping.impairmentLossAccount!, chargePl, ZERO, "Penurunan nilai — beban penurunan nilai"))
-      pushLine(lines, line(mapping.accumulatedImpairmentAccount!, ZERO, impairment, "Penurunan nilai — akumulasi penurunan nilai"))
+      if (chargePl.gt(0)) pushLine(lines, line(mapping.impairmentLossAccount!, chargePl, ZERO, "Penurunan nilai – beban penurunan nilai"))
+      pushLine(lines, line(mapping.accumulatedImpairmentAccount!, ZERO, impairment, "Penurunan nilai – akumulasi penurunan nilai"))
       const bal = assertBalanced(lines, kind)
       if (bal) return reject(bal)
       return {
@@ -584,8 +584,8 @@ export function buildAssetChangeEvent(input: {
     }
     const lines: AssetChangeJournalLine[] = [
     ]
-    pushLine(lines, line(mapping.accumulatedImpairmentAccount!, reversal, ZERO, "Pembalikan penurunan nilai — kurangi kontra"))
-    pushLine(lines, line(mapping.impairmentLossAccount!, ZERO, reversal, "Pembalikan penurunan nilai — balik beban"))
+    pushLine(lines, line(mapping.accumulatedImpairmentAccount!, reversal, ZERO, "Pembalikan penurunan nilai – kurangi kontra"))
+    pushLine(lines, line(mapping.impairmentLossAccount!, ZERO, reversal, "Pembalikan penurunan nilai – balik beban"))
     const bal = assertBalanced(lines, kind)
     if (bal) return reject(bal)
     return { ok: true, event: { ...base, lines, carryingAfter: sen(carryingBefore.add(reversal)) } }

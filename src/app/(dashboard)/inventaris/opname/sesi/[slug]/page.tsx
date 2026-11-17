@@ -88,7 +88,7 @@ export default async function StocktakeSessionDetailPage({
         <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
           <div className="flex flex-col gap-0.5">
             <h2 className="text-[0.9375rem] font-semibold text-foreground">
-              {session.warehouse.code} — {session.warehouse.name}
+              {session.warehouse.code} – {session.warehouse.name}
             </h2>
             <p className="text-xs text-muted-foreground">
               Snapshot sistem vs hitung fisik. Selisih tanpa recount masuk tahap recount.

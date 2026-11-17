@@ -269,7 +269,7 @@ export async function SubledgerReport({
               value: selected ? (selected.slug ?? String(selected.id)) : "",
               options: parties.map((p) => ({
                 value: p.slug ?? String(p.id),
-                label: `${p.code ? `${p.code} — ` : ""}${p.name}`,
+                label: `${p.code ? `${p.code}, ` : ""}${p.name}`,
               })),
             },
           ]}
@@ -306,11 +306,11 @@ export async function SubledgerReport({
 
           <ReportLetterhead
             title={title}
-            subtitle={`${selected.code ? `${selected.code} — ` : ""}${selected.name}`}
+            subtitle={`${selected.code ? `${selected.code}, ` : ""}${selected.name}`}
             periodLabel={periodLabel}
           />
           <ReportNarration
-            text={`${title} menampilkan seluruh transaksi yang memengaruhi ${balanceLabel.toLowerCase()} satu ${partyLabel.toLowerCase()} secara kronologis beserta saldo berjalan — faktur/tagihan menambah, pembayaran dan retur mengurangi. Bagian ${outstandingTitle} merangkum dokumen yang belum lunas beserta umurnya, sehingga laporan ini sekaligus berfungsi sebagai pernyataan (statement) yang bisa dikirim ke ${partyLabel.toLowerCase()}.`}
+            text={`${title} menampilkan seluruh transaksi yang memengaruhi ${balanceLabel.toLowerCase} satu ${partyLabel.toLowerCase} secara kronologis beserta saldo berjalan – faktur/tagihan menambah, pembayaran dan retur mengurangi. Bagian ${outstandingTitle} merangkum dokumen yang belum lunas beserta umurnya, sehingga laporan ini sekaligus berfungsi sebagai pernyataan (statement) yang bisa dikirim ke ${partyLabel.toLowerCase}.`}
           />
 
           <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">

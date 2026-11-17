@@ -252,7 +252,7 @@ export function buildReceivedNotBilled(input: ReceivedNotBilledInput): ReceivedN
       kind: "notice",
       text:
         `Saldo akun ${ledger.accountLabel} (${preciseAmount(ledger.balance)}) sama dengan sisa belum ditagih menurut ` +
-        `dokumen — tidak ada selisih.`,
+        `dokumen – tidak ada selisih.`,
     })
   } else {
     const arah = (difference ?? 0) > 0 ? "buku besar lebih besar" : "sisa dokumen lebih besar"

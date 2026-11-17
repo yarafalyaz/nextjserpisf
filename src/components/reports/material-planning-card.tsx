@@ -48,7 +48,7 @@ export function MaterialPlanningCard({
       <p className="mb-4 text-sm text-muted-foreground">
         Saran per barang = maksimum 0 dari titik pesan-ulang total dikurangi stok total dan PO
         masuk. PO masuk hanya ada per barang (PurchaseOrder tanpa gudang), jadi dikurangkan sekali di
-        agregat ini — bukan sekali per gudang. Laju pakai memakai MaterialIssue selesai selama{" "}
+        agregat ini, bukan sekali per gudang. Laju pakai memakai MaterialIssue selesai selama{" "}
         {usageWindowDays} hari terakhir sejak {usageWindowStartLabel}.
       </p>
       <div className="overflow-x-auto">

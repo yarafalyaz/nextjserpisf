@@ -80,11 +80,11 @@ export const L3_MSG = {
   duplicate: (woNo: string) =>
     `Sudah ada dokumen L3 aktif untuk vendor + nominal + tanggal yang sama tertaut ${woNo}. Satu biaya telat hanya boleh dicatat satu kali; batalkan/reversal dokumen pertama sebelum mencatat dokumen pengganti.`,
   forbiddenAccountType: (code: string, group: string) =>
-    `Akun ${code} bertipe ${group} adalah akun biaya job/persediaan/WIP — dilarang untuk biaya telat non-job L3 (Putusan 1 F-133-V). Pilih akun beban operasional bertipe EXPS/OEXP.`,
+    `Akun ${code} bertipe ${group} adalah akun biaya job/persediaan/WIP, dilarang untuk biaya telat non-job L3 (Putusan 1 F-133-V). Pilih akun beban operasional bertipe EXPS/OEXP.`,
   forbiddenAccountSetting: (code: string) =>
-    `Akun ${code} adalah akun WIP/serapan biaya job pada pengaturan sistem — dilarang untuk biaya telat non-job L3 (Putusan 1 F-133-V). Pilih akun beban operasional bertipe EXPS/OEXP.`,
+    `Akun ${code} adalah akun WIP/serapan biaya job pada pengaturan sistem, dilarang untuk biaya telat non-job L3 (Putusan 1 F-133-V). Pilih akun beban operasional bertipe EXPS/OEXP.`,
   accountInactive: (code: string) =>
-    `Akun ${code} tidak aktif — dokumen L3 wajib akun beban aktif bertipe EXPS/OEXP.`,
+    `Akun ${code} tidak aktif, dokumen L3 wajib akun beban aktif bertipe EXPS/OEXP.`,
 } as const
 
 type WorkOrderRow = { id: number; documentNo: string; status: string }

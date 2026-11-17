@@ -81,7 +81,7 @@ export async function onTransferProcessed(
     });
     if (existingOutMoves) {
       console.info(
-        `[inventory-transfer.hook] transfer #${transferId} sudah punya movement OUT — pemrosesan dilewati`,
+        `[inventory-transfer.hook] transfer #${transferId} sudah punya movement OUT, pemrosesan dilewati`,
       );
       return;
     }
@@ -555,7 +555,7 @@ export async function onTransferReceived(
     });
     if (existingInMoves) {
       console.info(
-        `[inventory-transfer.hook] transfer #${transferId} sudah punya movement IN — pemrosesan dilewati`,
+        `[inventory-transfer.hook] transfer #${transferId} sudah punya movement IN, pemrosesan dilewati`,
       );
       return;
     }

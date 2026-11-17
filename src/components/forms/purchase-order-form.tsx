@@ -351,7 +351,7 @@ export function PurchaseOrderForm({
                   placeholder="Cari permintaan (No. dokumen)..."
                   options={purchaseRequests.map((p) => ({
                     value: String(p.id),
-                    label: p.title ? `${p.documentNo} — ${p.title}` : p.documentNo,
+                    label: p.title ? `${p.documentNo} - ${p.title}` : p.documentNo,
                   }))}
                 />
                 <p className="text-xs text-muted-foreground">
@@ -521,7 +521,7 @@ export function PurchaseOrderForm({
               <Label htmlFor="isService">PO Jasa / Subkontrak</Label>
               <p className="text-xs text-muted-foreground">
                 Barang pada PO ini adalah jasa/subkontrak (mis. coating, bubut, laser cutting).
-                Penerimaan tidak menggerakkan stok — biayanya langsung dibebankan (PRD FAB-08).
+                Penerimaan tidak menggerakkan stok, biayanya langsung dibebankan (PRD FAB-08).
               </p>
             </div>
           </div>

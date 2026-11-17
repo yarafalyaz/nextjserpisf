@@ -44,7 +44,7 @@ import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 
 /** Notice wajib verbatim BR-QPH-10 — UI menempel apa adanya. */
 export const QUOTATION_PRICE_HISTORY_NOTICE_TEXT =
-  "Harga penawaran lampau — bukan harga transaksi dan bukan harga jual saat ini. Harga draft belum pernah terkirim; harga ditolak/kedaluwarsa tidak disepakati pelanggan. Harga berlaku mengikuti daftar harga/master saat penawaran dibuat."
+  "Harga penawaran lampau – bukan harga transaksi dan bukan harga jual saat ini. Harga draft belum pernah terkirim; harga ditolak/kedaluwarsa tidak disepakati pelanggan. Harga berlaku mengikuti daftar harga/master saat penawaran dibuat."
 
 /** Penanda jujur BR-QPH-11: yang tampil revisi berjalan, bukan riwayat revisi. */
 export const QUOTATION_PRICE_HISTORY_CURRENT_REVISION_LABEL = "Revisi berjalan"
@@ -70,7 +70,7 @@ export type QuotationPriceHistoryBucket = (typeof QUOTATION_PRICE_HISTORY_BUCKET
 
 /** Label ember verbatim §4 spec — UI menempel apa adanya (BR-QPH-02). */
 export const QUOTATION_PRICE_HISTORY_BUCKET_LABELS: Record<QuotationPriceHistoryBucket, string> = {
-  DRAFT: "DRAFT — BELUM TERKIRIM",
+  DRAFT: "DRAFT – BELUM TERKIRIM",
   TERKIRIM: "TERKIRIM",
   KEDALUWARSA: "KEDALUWARSA",
   DITERIMA: "DITERIMA",

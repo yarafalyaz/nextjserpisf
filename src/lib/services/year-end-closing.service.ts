@@ -264,7 +264,7 @@ export async function reverseYearEndClosing(
       data: { status: "REVERSING" },
     })
     if (claim.count === 0) {
-      throw new Error("Jurnal penutup tidak bisa di-reversal (konflik konkurensi — coba lagi)")
+      throw new Error("Jurnal penutup tidak bisa di-reversal (konflik konkurensi, coba lagi)")
     }
 
     await assertPeriodOpen(original.transactionDate, tx)

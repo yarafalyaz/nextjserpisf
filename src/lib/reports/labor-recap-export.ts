@@ -36,7 +36,7 @@ export function buildLaborRecapTable(result: LaborRecapLoadResult): TableDocumen
       rows: [
         {
           kind: "notice",
-          text: "Belum ada baris biaya labor — tidak ada rekap borongan yang bisa ditampilkan.",
+          text: "Belum ada baris biaya labor – tidak ada rekap borongan yang bisa ditampilkan.",
         },
       ],
     }

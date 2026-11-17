@@ -34,10 +34,10 @@ export const MIN_DUPLICATE_OVERRIDE_REASON_LENGTH = 10;
 /** Kata tampil §7 — verbatim, Frontend menempel apa adanya. */
 export const DUPLICATE_WARNING_TITLE = "Kemungkinan lead duplikat";
 export const DUPLICATE_WARNING_BODY =
-  "Kontak ini cocok dengan lead yang sudah ada. Periksa dulu — membuat ganda membagi tindak lanjut antar sales.";
+  "Kontak ini cocok dengan lead yang sudah ada. Periksa dulu, membuat ganda membagi tindak lanjut antar sales.";
 export const DUPLICATE_CONVERTED_LABEL = "Sudah dikonversi menjadi pelanggan";
 export const DUPLICATE_LOST_LABEL =
-  "Lead lama berstatus lost — bukan duplikat aktif";
+  "Lead lama berstatus lost, bukan duplikat aktif";
 
 /** Status pemicu utama (§3 BR-DUP-05): aktif + won berlabel; lost terpisah. */
 export const DUPLICATE_PRIMARY_STATUSES = [

@@ -29,7 +29,7 @@ export async function loadVendorPrices(): Promise<VendorPricesReport> {
     vendorId: price.vendorId,
     vendorName: price.vendor.name,
     itemKey: String(price.itemId),
-    itemLabel: `${price.item.sku} — ${price.item.name}`,
+    itemLabel: `${price.item.sku} - ${price.item.name}`,
     minQty: Number(price.minQty),
     price: Number(price.price),
     effectiveDate: price.effectiveDate,

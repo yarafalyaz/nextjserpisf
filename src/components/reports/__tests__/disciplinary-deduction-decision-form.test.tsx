@@ -107,7 +107,7 @@ describe("DisciplinaryDeductionDecisionForm BR-DISC-09", () => {
     pickComboboxOption("Ganti Rugi")
     setFieldValue(container, "#amount", "250000")
     openComboboxOptions(combo(container, "compensationAccountId"))
-    pickComboboxOption("510099 — Kompensasi Lain")
+    pickComboboxOption("510099 (Kompensasi Lain)")
     openComboboxOptions(combo(container, "signedBy"))
     pickComboboxOption("Sari Wulandari")
     await submit(container)

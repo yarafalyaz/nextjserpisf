@@ -58,7 +58,7 @@ export default async function CustomerPricesPage() {
     return {
       id: price.id!,
       categoryName: price.customerCategory?.name ?? "Umum",
-      itemLabel: `${price.item.sku} — ${price.item.name}`,
+      itemLabel: `${price.item.sku} - ${price.item.name}`,
       unit: price.item.unitOfMeasure,
       minQty: Number(price.minQty),
       price: Number(price.price),

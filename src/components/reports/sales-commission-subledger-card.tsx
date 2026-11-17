@@ -155,7 +155,7 @@ export function SalesCommissionSubledgerCard({
 
       {selected !== null ? (
         <p className="mt-1 text-xs text-muted-foreground">
-          Total saldo di atas tetap total subledger penuh dari server — filter hanya menyaring
+          Total saldo di atas tetap total subledger penuh dari server, filter hanya menyaring
           penerima yang tampil.
         </p>
       ) : null}

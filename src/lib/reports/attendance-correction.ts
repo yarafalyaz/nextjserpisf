@@ -117,10 +117,10 @@ export const ATTENDANCE_CORRECTION_WINDOW_MESSAGE =
   "Tanggal koreksi di luar jendela pengajuan (paling awal tanggal 1 bulan lalu, paling akhir hari ini)"
 
 export const ATTENDANCE_CORRECTION_CONFLICT_MESSAGE =
-  "Rekod absensi berubah sesudah pengajuan dibuat — persetujuan ditolak agar tidak menimpa perubahan terbaru. Pengajuan tetap menunggu; pengaju dapat membatalkan lalu mengajukan ulang."
+  "Rekod absensi berubah sesudah pengajuan dibuat – persetujuan ditolak agar tidak menimpa perubahan terbaru. Pengajuan tetap menunggu; pengaju dapat membatalkan lalu mengajukan ulang."
 
 export const ATTENDANCE_CORRECTION_FINAL_PAYROLL_MESSAGE =
-  "Persetujuan ditahan: tanggal ini sudah masuk slip gaji final — menunggu jalur slip koreksi"
+  "Persetujuan ditahan: tanggal ini sudah masuk slip gaji final – menunggu jalur slip koreksi"
 
 export function buildAttendanceCorrectionQueue(
   inputs: AttendanceCorrectionRowInput[],

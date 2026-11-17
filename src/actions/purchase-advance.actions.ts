@@ -155,7 +155,7 @@ export async function createPurchaseAdvance(formData: FormData): Promise<Purchas
           journalNumber,
           slug: await nextSlugWithClient(tx as never, "journal", journalNumber),
           transactionDate: date,
-          description: description ?? `Uang muka pembelian ${documentNo} — ${vendor.name}`,
+          description: description ?? `Uang muka pembelian ${documentNo} – ${vendor.name}`,
           type: "PURCHASE_ADVANCE",
           status: "POSTED",
           totalDebit: toMoney(amount),

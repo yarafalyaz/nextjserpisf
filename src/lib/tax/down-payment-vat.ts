@@ -143,7 +143,7 @@ export function resolveCompanyPkpGate(input: {
   }
   if (pkpStatus === "pkp" && pkpEffectiveFrom == null) {
     throw new Error(
-      "Penerimaan uang muka ditolak: perusahaan berstatus PKP tetapi tanggal mulai kewajiban PKP belum diisi. Isi tanggal mulai kewajiban PKP di Pengaturan Perusahaan — tanggal SPPKP tidak ditebak.",
+      "Penerimaan uang muka ditolak: perusahaan berstatus PKP tetapi tanggal mulai kewajiban PKP belum diisi. Isi tanggal mulai kewajiban PKP di Pengaturan Perusahaan – tanggal SPPKP tidak ditebak.",
     )
   }
   const payTime = toCalendarTime(input.paymentDate)
@@ -177,12 +177,12 @@ export function resolveEffectiveVatRate(rows: EffectiveVatTaxRow[], paymentDate:
   }
   if (rates.size === 0) {
     throw new Error(
-      "Tarif PPN uang muka ditolak: tidak ada baris master Tax (PPN Keluaran) yang efektif pada tanggal penerimaan DP. Atur master pajak bertanggal efektif dulu — tarif tidak ditebak dari konstanta.",
+      "Tarif PPN uang muka ditolak: tidak ada baris master Tax (PPN Keluaran) yang efektif pada tanggal penerimaan DP. Atur master pajak bertanggal efektif dulu – tarif tidak ditebak dari konstanta.",
     )
   }
   if (rates.size > 1) {
     throw new Error(
-      `Tarif PPN uang muka ditolak: master Tax efektif pada tanggal penerimaan DP ambigu (${[...rates].join(", ")}%). Rapikan jendela efektif master pajak — satu tarif wajib berlaku per tanggal.`,
+      `Tarif PPN uang muka ditolak: master Tax efektif pada tanggal penerimaan DP ambigu (${[...rates].join(", ")}%). Rapikan jendela efektif master pajak – satu tarif wajib berlaku per tanggal.`,
     )
   }
   return [...rates][0]
@@ -409,7 +409,7 @@ export type DownPaymentTaxStatus =
 
 export const DOWN_PAYMENT_TAX_STATUS_LABELS: Record<DownPaymentTaxStatus, string> = {
   "bukan-subjek": "Bukan subjek FP uang muka",
-  "terutang-belum-terbit": "PPN uang muka terutang — FP UM belum terbit",
+  "terutang-belum-terbit": "PPN uang muka terutang – FP UM belum terbit",
   "fp-um-terbit": "FP uang muka terbit",
   "fp-um-batal": "FP uang muka batal",
 }

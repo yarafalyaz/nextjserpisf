@@ -100,7 +100,7 @@ export function DisciplinaryDeductionRecordContext({
               {row.kind}
               {row.amount != null
                 ? ` · ${formatCurrency(row.amount, { decimals: 2 })}`
-                : " · Nominal tidak ditampilkan — tanpa izin lihat payroll"}
+                : " · Nominal tidak ditampilkan (tanpa izin lihat payroll)"}
               {row.suspensionKind ? ` · Skorsing ${row.suspensionKind}` : ""}
               {row.suspensionPayTreatment ? ` · Upah ${row.suspensionPayTreatment}` : ""}
             </dd>

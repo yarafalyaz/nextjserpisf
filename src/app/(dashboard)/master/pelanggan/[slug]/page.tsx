@@ -140,14 +140,14 @@ export default async function CustomerDetailPage({
                   <DetailField label="Sumber Status PKP" value={customer.pkpSource || "-"} />
                   <DetailField label="Alamat Pajak" value={customer.taxAddress || "-"} colSpan="full" />
                 </DetailCard>
-                <p className="text-xs text-muted-foreground">Alamat pajak master dipakai ekspor Coretax secara live — belum dibekukan ke dokumen.</p>
+                <p className="text-xs text-muted-foreground">Alamat pajak master dipakai ekspor Coretax secara live, belum dibekukan ke dokumen.</p>
                 {taxCompleteness?.npwpFormat === "legacy15" ? (
                   <p role="alert" className="rounded-lg border border-warning bg-warning/10 px-3 py-2 text-sm">{NPWP_LEGACY15_WARNING}</p>
                 ) : null}
                 {taxCompleteness && !taxCompleteness.ready ? (
                   <p className="text-sm text-muted-foreground">
                     Belum siap terbit faktur pajak: kurang {taxCompleteness.missing.join(", ")}.
-                    {taxCompleteness.usesTradeNameFallback ? " Nama wajib pajak kosong — nama dagang tampil sebagai penanda, bukan pengganti gerbang faktur." : ""}
+                    {taxCompleteness.usesTradeNameFallback ? " Nama wajib pajak kosong – nama dagang tampil sebagai penanda, bukan pengganti gerbang faktur." : ""}
                   </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">Identitas pajak master terisi untuk gerbang terbit faktur pajak.</p>
@@ -155,7 +155,7 @@ export default async function CustomerDetailPage({
                 <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                   <div className="p-4 px-5 border-b border-default">
                     <h2 className="text-[0.9375rem] font-semibold text-foreground">Snapshot Faktur Pajak Terbit</h2>
-                    <p className="mt-1 text-xs text-muted-foreground">Identitas di bawah dibekukan saat faktur terbit — perubahan master sesudahnya tidak mengubah snapshot ini.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Identitas di bawah dibekukan saat faktur terbit, perubahan master sesudahnya tidak mengubah snapshot ini.</p>
                   </div>
                   <div className="p-4 px-5">
                     {taxInvoices.length === 0 ? (

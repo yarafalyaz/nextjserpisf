@@ -261,7 +261,7 @@ export function buildSptTableRows(rows: SptPeriodRow[]): TableRow[] {
   if (hasLegacy) {
     out.push({
       kind: "notice",
-      text: "Sebagian masa tanpa dokumen TaxInvoice — angka berasal dari dokumen komersial berjalan (legacy) dan belum tentu merupakan faktur pajak.",
+      text: "Sebagian masa tanpa dokumen TaxInvoice – angka berasal dari dokumen komersial berjalan (legacy) dan belum tentu merupakan faktur pajak.",
     })
   }
   if (hasUnavailableJournalLiability) {
@@ -273,7 +273,7 @@ export function buildSptTableRows(rows: SptPeriodRow[]): TableRow[] {
   if (hasJournalDiff) {
     out.push({
       kind: "notice",
-      text: "Ada selisih kewajiban per jurnal POSTED vs posisi SPT dokumen (kolom Selisih Jurnal–SPT). Selisih adalah temuan rekonsiliasi — periksa sebelum lapor; tidak dipilih diam-diam salah satu.",
+      text: "Ada selisih kewajiban per jurnal POSTED vs posisi SPT dokumen (kolom Selisih Jurnal–SPT). Selisih adalah temuan rekonsiliasi – periksa sebelum lapor; tidak dipilih diam-diam salah satu.",
     })
   }
   if (overpaidPeriods.length > 0) {

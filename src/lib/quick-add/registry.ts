@@ -327,7 +327,7 @@ export const QUICK_ADD = {
         placeholder: "Cari merek / model / varian…",
         span: "full",
         emptyHint:
-          "Katalog tipe kendaraan masih kosong — tambahkan Merek, Model, dan Varian di Data Master → Kendaraan dulu.",
+          "Katalog tipe kendaraan masih kosong – tambahkan Merek, Model, dan Varian di Data Master → Kendaraan dulu.",
       },
       { name: "plateNumber", label: "Plat Nomor", placeholder: "mis. B 1234 XYZ" },
       {

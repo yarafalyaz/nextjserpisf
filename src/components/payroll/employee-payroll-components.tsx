@@ -99,7 +99,7 @@ export function EmployeePayrollComponents({
                   <td className="px-3 py-2">{kindLabel(a.component.kind)}</td>
                   <td className="px-3 py-2">{formatCurrencyExact(a.defaultAmount)}</td>
                   <td className="px-3 py-2">
-                    {formatDate(a.effectiveFrom)} — {a.effectiveTo ? formatDate(a.effectiveTo) : "seterusnya"}
+                    {formatDate(a.effectiveFrom)} – {a.effectiveTo ? formatDate(a.effectiveTo) : "seterusnya"}
                   </td>
                   <td className="px-3 py-2">{a.isActive ? "Aktif" : "Nonaktif"}</td>
                   <td className="px-3 py-2">

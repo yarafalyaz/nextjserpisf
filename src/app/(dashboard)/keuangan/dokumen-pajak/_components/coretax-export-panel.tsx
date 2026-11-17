@@ -61,7 +61,7 @@ export function CoretaxExportPanel({ invoices }: { invoices: TaxOption[] }) {
     <section aria-label="Ekspor XML Coretax faktur keluaran" className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <h2 className="text-base font-semibold text-foreground">Ekspor XML Coretax Faktur Keluaran</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Pilih faktur keluaran terbit, lalu bentuk berkas XML untuk impor Coretax. Berkas yang terbentuk bukan bukti terkirim atau disetujui DJP — status DJP hanya dari bukti Coretax.
+        Pilih faktur keluaran terbit, lalu bentuk berkas XML untuk impor Coretax. Berkas yang terbentuk bukan bukti terkirim atau disetujui DJP, status DJP hanya dari bukti Coretax.
       </p>
       <fieldset className="mt-4 flex flex-col gap-2" disabled={isPending}>
         <legend className="text-sm font-medium text-foreground">Faktur Pajak Keluaran</legend>

@@ -106,7 +106,7 @@ function parseUomConversions(
     );
     if (factor === null || factor <= 0) {
       throw new Error(
-        `Faktor konversi satuan "${code}" tidak valid — isi angka lebih dari 0 (mis. 12 atau 1.000).`,
+        `Faktor konversi satuan "${code}" tidak valid – isi angka lebih dari 0 (mis. 12 atau 1.000).`,
       );
     }
     conversions.push({ code, factorToBase: factor });
@@ -367,7 +367,7 @@ export async function createCustomer(formData: FormData) {
         // wajib hadir; ketidakhadirannya adalah kesalahan konfigurasi,
         // bukan jalur bebas duplikat NPWP (keputusan repo Q-CD-1).
         const gate = await tx.customerNpwpGate.findUnique({ where: { id: 1 }, select: { id: true } });
-        if (!gate) throw new Error("Gerbang NPWP pelanggan belum terpasang (baris customer_npwp_gate id=1 tidak ada) — jalankan migrasi database sebelum menyimpan pelanggan ber-NPWP.");
+        if (!gate) throw new Error("Gerbang NPWP pelanggan belum terpasang (baris customer_npwp_gate id=1 tidak ada) – jalankan migrasi database sebelum menyimpan pelanggan ber-NPWP.");
         await lockCustomerNpwpGate(tx as never);
         npwpConflictInTx = await findCustomerNpwpConflict({ taxId: v.taxId }, tx as never);
         if (npwpConflictInTx) return null;
@@ -483,7 +483,7 @@ export async function updateCustomer(customerId: number, formData: FormData) {
         // Putaran 75: baris gerbang absen = gerbang gagal-terbuka — kunci
         // yang hilang meloloskan dua penulis NPWP sama (lihat createCustomer).
         const gate = await tx.customerNpwpGate.findUnique({ where: { id: 1 }, select: { id: true } });
-        if (!gate) throw new Error("Gerbang NPWP pelanggan belum terpasang (baris customer_npwp_gate id=1 tidak ada) — jalankan migrasi database sebelum menyimpan pelanggan ber-NPWP.");
+        if (!gate) throw new Error("Gerbang NPWP pelanggan belum terpasang (baris customer_npwp_gate id=1 tidak ada) – jalankan migrasi database sebelum menyimpan pelanggan ber-NPWP.");
         await lockCustomerNpwpGate(tx as never);
         npwpConflictInTx = await findCustomerNpwpConflict(
           { taxId: v.taxId, excludeCustomerId: customerId },
@@ -1001,10 +1001,10 @@ export async function createItem(formData: FormData) {
 // (isProduct) dilarang bersamaan; besi tua tanpa jalur stok/COGS.
 function checkItemStockRole(flags: { isService?: boolean | null; isProduct?: boolean | null; isScrapSaleItem?: boolean | null }): string | null {
   if ((flags.isService ?? false) && (flags.isProduct ?? false)) {
-    return "Item tidak boleh isService=true sekaligus isProduct=true — pilih satu: barang (produk, masuk stok) atau jasa (non-stok).";
+    return "Item tidak boleh isService=true sekaligus isProduct=true – pilih satu: barang (produk, masuk stok) atau jasa (non-stok).";
   }
   if ((flags.isScrapSaleItem ?? false) && (flags.isProduct ?? false)) {
-    return "Item besi tua tidak boleh isProduct=true — scrap tanpa jalur stok/COGS.";
+    return "Item besi tua tidak boleh isProduct=true – scrap tanpa jalur stok/COGS.";
   }
   return null;
 }
@@ -1268,7 +1268,7 @@ export async function updateItem(itemId: number, formData: FormData) {
             }
             if (costChanged) {
               throw new Error(
-                "Harga pokok item rata-rata (average) tidak dapat diubah selama masih ada stok — perubahan menilai ulang persediaan tanpa jurnal. Kosongkan stok terlebih dahulu.",
+                "Harga pokok item rata-rata (average) tidak dapat diubah selama masih ada stok – perubahan menilai ulang persediaan tanpa jurnal. Kosongkan stok terlebih dahulu.",
               );
             }
           }
@@ -1382,7 +1382,7 @@ function autoCodeOrManualError(auto: boolean, code: string) {
   return {
     kind: "error" as const,
     error: auto
-      ? "Kode gudang hasil generate bertabrakan dengan data yang sudah ada — silakan coba simpan lagi."
+      ? "Kode gudang hasil generate bertabrakan dengan data yang sudah ada – silakan coba simpan lagi."
       : `Kode gudang "${code}" sudah dipakai gudang lain.`,
   };
 }
@@ -3401,7 +3401,7 @@ export async function createBarcode(formData: FormData) {
       select: { id: true, isActive: true, deletedAt: true },
     });
     if (!item) return { success: false, error: "Barang tidak ditemukan" };
-    if (!item.isActive || item.deletedAt !== null) return { success: false, error: "Barang nonaktif atau terhapus — barcode hanya dapat dibuat untuk barang aktif." };
+    if (!item.isActive || item.deletedAt !== null) return { success: false, error: "Barang nonaktif atau terhapus – barcode hanya dapat dibuat untuk barang aktif." };
 
     const barcodeEntry = await prisma.barcode.create({
       data: {
@@ -3436,7 +3436,7 @@ export async function updateBarcode(id: number, formData: FormData) {
       select: { id: true, isActive: true, deletedAt: true },
     });
     if (!item) return { success: false, error: "Barang tidak ditemukan" };
-    if (!item.isActive || item.deletedAt !== null) return { success: false, error: "Barang nonaktif atau terhapus — barcode hanya dapat dibuat untuk barang aktif." };
+    if (!item.isActive || item.deletedAt !== null) return { success: false, error: "Barang nonaktif atau terhapus – barcode hanya dapat dibuat untuk barang aktif." };
 
     await prisma.barcode.update({
       where: { id },
@@ -4712,7 +4712,7 @@ export async function updateUom(id: number, formData: FormData) {
       if (usedByItems > 0) {
         return {
           success: false,
-          error: `Satuan dipakai oleh ${usedByItems} barang — nama/simbol tidak dapat diganti. Ubah satuan barangnya dulu.`,
+          error: `Satuan dipakai oleh ${usedByItems} barang – nama/simbol tidak dapat diganti. Ubah satuan barangnya dulu.`,
         };
       }
     }
@@ -4781,13 +4781,13 @@ export async function deleteUom(id: number) {
     if (usedByItems > 0) {
       return {
         success: false,
-        error: `Satuan dipakai oleh ${usedByItems} barang — tidak dapat dihapus`,
+        error: `Satuan dipakai oleh ${usedByItems} barang – tidak dapat dihapus`,
       };
     }
     if (derivedUnits > 0) {
       return {
         success: false,
-        error: `Satuan menjadi basis ${derivedUnits} satuan lain — tidak dapat dihapus`,
+        error: `Satuan menjadi basis ${derivedUnits} satuan lain – tidak dapat dihapus`,
       };
     }
 

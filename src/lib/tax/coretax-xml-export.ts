@@ -213,25 +213,25 @@ function passesGate(
   const id = inv.taxInvoiceId
   const before = rejections.length
   if (inv.direction !== "out") {
-    reject(rejections, id, "NOT_OUTPUT", `Faktur #${id} arah "${inv.direction}" — ekspor XML hanya faktur keluaran (out)`)
+    reject(rejections, id, "NOT_OUTPUT", `Faktur #${id} arah "${inv.direction}" – ekspor XML hanya faktur keluaran (out)`)
   }
   if (inv.djpStatus === "cancelled" || inv.djpStatus === "replaced") {
     reject(
       rejections,
       id,
       "CANCELLED_OR_REPLACED",
-      `Faktur #${id} berstatus DJP "${inv.djpStatus}" — faktur batal/yang diganti nol-efek, dilarang diekspor`,
+      `Faktur #${id} berstatus DJP "${inv.djpStatus}" – faktur batal/yang diganti nol-efek, dilarang diekspor`,
     )
   }
   if (!inv.taxInvoiceNumber?.trim()) {
-    reject(rejections, id, "MISSING_TAX_INVOICE_NUMBER", `Faktur #${id} tanpa nomor faktur pajak — nomor lahir di Coretax, ekspor tidak mengarang nomor`)
+    reject(rejections, id, "MISSING_TAX_INVOICE_NUMBER", `Faktur #${id} tanpa nomor faktur pajak – nomor lahir di Coretax, ekspor tidak mengarang nomor`)
   }
   if (inv.sourceStatus == null || !RECOGNISED_SOURCE_STATUSES.has(inv.sourceStatus)) {
     reject(
       rejections,
       id,
       "SOURCE_NOT_POSTED",
-      `Faktur #${id}: dokumen sumber belum terposting jurnalnya (status "${inv.sourceStatus ?? "tidak ada"}") — hanya faktur terbekukan yang boleh diekspor`,
+      `Faktur #${id}: dokumen sumber belum terposting jurnalnya (status "${inv.sourceStatus ?? "tidak ada"}") – hanya faktur terbekukan yang boleh diekspor`,
     )
   }
   if (!seller.tin?.trim()) {
@@ -242,7 +242,7 @@ function passesGate(
       rejections,
       id,
       "MISSING_SELLER_IDTKU",
-      `Faktur #${id}: elemen wajib SellerIDTKU (NITKU penjual 22 digit) belum terpetakan dari data tersimpan — ekspor ditolak, dilarang mengarang nilai`,
+      `Faktur #${id}: elemen wajib SellerIDTKU (NITKU penjual 22 digit) belum terpetakan dari data tersimpan – ekspor ditolak, dilarang mengarang nilai`,
     )
   }
   if (!inv.counterpartyTaxId?.trim()) {
@@ -256,7 +256,7 @@ function passesGate(
       rejections,
       id,
       "MISSING_BUYER_ADDRESS",
-      `Faktur #${id}: elemen wajib BuyerAdress belum terpetakan — alamat pembeli kosong pada data tersimpan, ekspor ditolak bernama`,
+      `Faktur #${id}: elemen wajib BuyerAdress belum terpetakan – alamat pembeli kosong pada data tersimpan, ekspor ditolak bernama`,
     )
   }
   // BuyerIDTKU wajib 22 digit untuk Jenis ID TIN (Keterangan converter v1.6.1).
@@ -265,7 +265,7 @@ function passesGate(
       rejections,
       id,
       "MISSING_BUYER_IDTKU",
-      `Faktur #${id}: elemen wajib BuyerIDTKU (NITKU pembeli 22 digit) belum terpetakan dari snapshot — ekspor ditolak, dilarang mengarang nilai`,
+      `Faktur #${id}: elemen wajib BuyerIDTKU (NITKU pembeli 22 digit) belum terpetakan dari snapshot – ekspor ditolak, dilarang mengarang nilai`,
     )
   }
   if ((inv.transactionCode === "07" || inv.transactionCode === "08") && !inv.additionalInfo?.trim()) {
@@ -273,7 +273,7 @@ function passesGate(
       rejections,
       id,
       "UNMAPPED_REQUIRED_ELEMENT",
-      `Faktur #${id}: elemen wajib AddInfo (Keterangan Tambahan kode ${inv.transactionCode}) belum terpetakan — tidak ada kolom sumber, ekspor ditolak bernama`,
+      `Faktur #${id}: elemen wajib AddInfo (Keterangan Tambahan kode ${inv.transactionCode}) belum terpetakan – tidak ada kolom sumber, ekspor ditolak bernama`,
     )
   }
   if ((inv.transactionCode === "07" || inv.transactionCode === "08") && !inv.facilityStamp?.trim()) {
@@ -281,7 +281,7 @@ function passesGate(
       rejections,
       id,
       "UNMAPPED_REQUIRED_ELEMENT",
-      `Faktur #${id}: elemen wajib FacilityStamp (Cap Fasilitas kode ${inv.transactionCode}) belum terpetakan — tidak ada kolom sumber, ekspor ditolak bernama`,
+      `Faktur #${id}: elemen wajib FacilityStamp (Cap Fasilitas kode ${inv.transactionCode}) belum terpetakan – tidak ada kolom sumber, ekspor ditolak bernama`,
     )
   }
   if (inv.replacesId != null && !inv.replacedTaxInvoiceNumber?.trim()) {
@@ -303,11 +303,11 @@ function passesGate(
       rejections,
       id,
       "LINE_SUM_MISMATCH",
-      `Faktur #${id}: Σ baris snapshot (${money(lineSum)}) tidak sama dengan DPP header terbekukan (${money(inv.dpp)}) — ditolak sebagai temuan rekonsiliasi, tanpa penyesuaian diam-diam`,
+      `Faktur #${id}: Σ baris snapshot (${money(lineSum)}) tidak sama dengan DPP header terbekukan (${money(inv.dpp)}) – ditolak sebagai temuan rekonsiliasi, tanpa penyesuaian diam-diam`,
     )
   }
   if (inv.lines.length === 0) {
-    reject(rejections, id, "UNMAPPED_REQUIRED_ELEMENT", `Faktur #${id}: elemen wajib ListOfGoodService kosong — faktur tanpa baris tidak dapat diekspor`)
+    reject(rejections, id, "UNMAPPED_REQUIRED_ELEMENT", `Faktur #${id}: elemen wajib ListOfGoodService kosong – faktur tanpa baris tidak dapat diekspor`)
   }
   for (const [i, line] of inv.lines.entries()) {
     if (!line.description?.trim()) {
@@ -318,7 +318,7 @@ function passesGate(
         rejections,
         id,
         "UNMAPPED_REQUIRED_ELEMENT",
-        `Faktur #${id} baris ${i + 1}: elemen wajib Opt (jenis barang/jasa) belum terpetakan — snapshot baris lama tidak mencatat isService, ekspor ditolak bernama`,
+        `Faktur #${id} baris ${i + 1}: elemen wajib Opt (jenis barang/jasa) belum terpetakan – snapshot baris lama tidak mencatat isService, ekspor ditolak bernama`,
       )
     }
     const unit = line.uom?.trim().toUpperCase()
@@ -327,7 +327,7 @@ function passesGate(
         rejections,
         id,
         "UNMAPPED_REQUIRED_ELEMENT",
-        `Faktur #${id} baris ${i + 1}: elemen wajib Unit (satuan "${line.uom ?? ""}") belum terpetakan ke kode UM.* template resmi — ekspor ditolak bernama`,
+        `Faktur #${id} baris ${i + 1}: elemen wajib Unit (satuan "${line.uom ?? ""}") belum terpetakan ke kode UM.* template resmi – ekspor ditolak bernama`,
       )
     }
   }
@@ -351,7 +351,7 @@ export function buildCoretaxOutputXml(
         rejections,
         inv.taxInvoiceId,
         "BATCH_TOO_LARGE",
-        `Batch ${invoices.length} faktur melebihi batas batching operasional Coretax ${CORETAX_BATCH_MAX} — pecah batch, bukan validasi regulasi`,
+        `Batch ${invoices.length} faktur melebihi batas batching operasional Coretax ${CORETAX_BATCH_MAX} (pecah batch, bukan validasi regulasi)`,
       )
     }
     return emptyResult(rejections)
@@ -374,7 +374,7 @@ export function buildCoretaxOutputXml(
         rejections,
         inv.taxInvoiceId,
         "CHAIN_HEAD_AND_ORIGIN_SAME_BATCH",
-        `Faktur #${inv.taxInvoiceId}: faktur asal dan penggantinya berada dalam satu batch — ditolak untuk mencegah dobel nilai di Coretax`,
+        `Faktur #${inv.taxInvoiceId}: faktur asal dan penggantinya berada dalam satu batch – ditolak untuk mencegah dobel nilai di Coretax`,
       )
       continue
     }

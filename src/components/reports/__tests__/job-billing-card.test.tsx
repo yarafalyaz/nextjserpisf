@@ -83,7 +83,7 @@ describe("JobBillingCard F-2026-10-21-107 delta nilai termin", () => {
     expect(block).not.toBeNull()
     const text = block?.textContent ?? ""
     expect(text).toContain("Delta turunan dari snapshot, bukan amendemen jadwal")
-    expect(text).toContain("Nilai naik — sisa tagih bertambah")
+    expect(text).toContain("Nilai naik – sisa tagih bertambah")
     expect(text).toContain("+Rp 100.000 (11,1%)")
     expect(text).toContain("Sisa belum ditagih kini")
     act(() => root.unmount()); container.remove()
@@ -116,7 +116,7 @@ describe("JobBillingCard F-2026-10-21-107 delta nilai termin (turun)", () => {
     const { container, root } = render(<JobBillingCard summary={base} deltaNilaiCents={-10_000_000} />)
     const block = container.querySelector('[aria-label="Delta nilai termin"]')
     const text = block?.textContent ?? ""
-    expect(text).toContain("Nilai turun — kelebihan menjadi kredit pelanggan")
+    expect(text).toContain("Nilai turun – kelebihan menjadi kredit pelanggan")
     expect(text).toContain("−Rp 100.000")
     expect(text).not.toContain("+Rp 100.000")
     expect(text).toContain("Rp 100.000")

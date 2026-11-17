@@ -117,10 +117,10 @@ async function assertPostableAccount(tx: TxClient, accountId: number, label: str
     where: { id: accountId, deletedAt: null },
     select: { id: true, isActive: true, _count: { select: { children: true } } },
   })
-  if (!account) throw new Error(`Akun ${label} yang dimapping tidak ditemukan — perbaiki mapping di Pengaturan Akuntansi.`)
-  if (!account.isActive) throw new Error(`Akun ${label} yang dimapping tidak aktif — posting garansi ditolak.`)
+  if (!account) throw new Error(`Akun ${label} yang dimapping tidak ditemukan, perbaiki mapping di Pengaturan Akuntansi.`)
+  if (!account.isActive) throw new Error(`Akun ${label} yang dimapping tidak aktif, posting garansi ditolak.`)
   if (account._count.children > 0) {
-    throw new Error(`Akun ${label} yang dimapping adalah akun induk — pilih akun anak yang terposting.`)
+    throw new Error(`Akun ${label} yang dimapping adalah akun induk, pilih akun anak yang terposting.`)
   }
 }
 
@@ -136,7 +136,7 @@ async function assertNoExistingJournal(
   })
   if (existing) {
     throw new Error(
-      `${label} untuk dokumen ini sudah diposting (jurnal ${existing.journalNumber ?? `#${existing.id}`}) — posting dobel ditolak.`,
+      `${label} untuk dokumen ini sudah diposting (jurnal ${existing.journalNumber ?? `#${existing.id}`}), posting dobel ditolak.`,
     )
   }
 }
@@ -176,7 +176,7 @@ async function assertNoSiblingClaimJournal(
   })
   if (prior) {
     throw new Error(
-      `${label} untuk WO repair #${repairWorkOrderId} sudah dijurnal untuk klaim #${prior.referenceId} (jurnal ${prior.journalNumber ?? `#${prior.id}`}) — klaim #${claimId} mereferensikan jurnal yang sama, biaya repair yang sama tidak dijurnal ulang.`,
+      `${label} untuk WO repair #${repairWorkOrderId} sudah dijurnal untuk klaim #${prior.referenceId} (jurnal ${prior.journalNumber ?? `#${prior.id}`}), klaim #${claimId} mereferensikan jurnal yang sama, biaya repair yang sama tidak dijurnal ulang.`,
     )
   }
 }
@@ -245,13 +245,13 @@ async function assertSupplierRecoveryEvidence(
   const approvalRefNo = claim.supplierClaimRefNo?.trim() ?? ""
   if (!approvalRefNo) {
     throw new Error(
-      "Nomor referensi persetujuan vendor wajib diisi sebelum recovery dijurnal — nomor resi pengiriman tidak dapat dipakai sebagai referensi persetujuan.",
+      "Nomor referensi persetujuan vendor wajib diisi sebelum recovery dijurnal, nomor resi pengiriman tidak dapat dipakai sebagai referensi persetujuan.",
     )
   }
   const sentResi = parseSentResiFromNotes(claim.supplierClaimNotes)
   if (sentResi && normalizeRefNo(sentResi) === normalizeRefNo(approvalRefNo)) {
     throw new Error(
-      "Nomor referensi persetujuan vendor masih sama dengan nomor resi pengiriman — isi nomor referensi persetujuan vendor yang berbeda dari nomor resi sebelum recovery dijurnal.",
+      "Nomor referensi persetujuan vendor masih sama dengan nomor resi pengiriman, isi nomor referensi persetujuan vendor yang berbeda dari nomor resi sebelum recovery dijurnal.",
     )
   }
 
@@ -278,7 +278,7 @@ async function assertSupplierRecoveryEvidence(
     })
     if (postSentCount === 0) {
       throw new Error(
-        "Recovery ditolak: lampiran persetujuan vendor sesudah pengiriman belum ada — unggah surat/email persetujuan, nota kredit vendor, atau janji penggantian part tertulis sesudah klaim dikirim; foto part cacat sebelum pengiriman tidak cukup.",
+        "Recovery ditolak: lampiran persetujuan vendor sesudah pengiriman belum ada, unggah surat/email persetujuan, nota kredit vendor, atau janji penggantian part tertulis sesudah klaim dikirim; foto part cacat sebelum pengiriman tidak cukup.",
       )
     }
     return
@@ -287,7 +287,7 @@ async function assertSupplierRecoveryEvidence(
   // Fallback vonis: waktu sent tidak terbukti dari jejak tersimpan.
   if (!sentResi) {
     throw new Error(
-      "Recovery ditolak: lampiran persetujuan vendor sesudah pengiriman belum ada yang dapat diverifikasi — waktu pengiriman klaim supplier tidak terbukti dari jejak tersimpan dan nomor resi pengiriman tidak tercatat pada klaim, sehingga nomor referensi persetujuan vendor belum dapat dibuktikan berbeda dari nomor resi.",
+      "Recovery ditolak: lampiran persetujuan vendor sesudah pengiriman belum ada yang dapat diverifikasi, waktu pengiriman klaim supplier tidak terbukti dari jejak tersimpan dan nomor resi pengiriman tidak tercatat pada klaim, sehingga nomor referensi persetujuan vendor belum dapat dibuktikan berbeda dari nomor resi.",
     )
   }
   const evidenceCount = await tx.transactionAttachment.count({
@@ -295,7 +295,7 @@ async function assertSupplierRecoveryEvidence(
   })
   if (evidenceCount === 0) {
     throw new Error(
-      "Recovery ditolak: lampiran persetujuan vendor sesudah pengiriman belum ada — unggah surat/email persetujuan, nota kredit vendor, atau janji penggantian part tertulis; foto part cacat tidak cukup.",
+      "Recovery ditolak: lampiran persetujuan vendor sesudah pengiriman belum ada, unggah surat/email persetujuan, nota kredit vendor, atau janji penggantian part tertulis; foto part cacat tidak cukup.",
     )
   }
 }
@@ -316,7 +316,7 @@ export async function postWarrantyClaimCostJournal(
       throw new Error("Jurnal biaya garansi hanya untuk klaim yang sudah disetujui dengan keputusan tercatat.")
     }
     if (claim.repairWorkOrderId == null) {
-      throw new Error("Klaim belum tertaut ke WO repair — jurnal biaya garansi tidak dapat diposting.")
+      throw new Error("Klaim belum tertaut ke WO repair, jurnal biaya garansi tidak dapat diposting.")
     }
     // TASK-019: kunci WO repair supaya klaim lain atas WO yang sama tidak
     // menjurnal biaya bersamaan (cek lintas klaim di bawah terserialisasi).
@@ -324,7 +324,7 @@ export async function postWarrantyClaimCostJournal(
 
     const cost = await computeWarrantyRepairCost(claim.repairWorkOrderId, tx)
     if (cost.total <= 0) {
-      throw new Error("Biaya WO repair terverifikasi nol — tidak ada jurnal biaya garansi yang diposting.")
+      throw new Error("Biaya WO repair terverifikasi nol, tidak ada jurnal biaya garansi yang diposting.")
     }
 
     // Mesin F-49 (jangan diubah tanpa BOT 4): rute MATI memanggilnya dengan
@@ -340,19 +340,19 @@ export async function postWarrantyClaimCostJournal(
       supplierRecoveryAmount: 0,
     })
     if (decision.path !== "covered_warranty" || !decision.invoiceForbidden) {
-      throw new Error("Klaim ini tidak berada di jalur garansi covered — jurnal biaya garansi ditolak.")
+      throw new Error("Klaim ini tidak berada di jalur garansi covered, jurnal biaya garansi ditolak.")
     }
 
     const settings = await loadSettingsInTx(tx)
     if (!settings.warrantyExpenseAccountId) {
       throw new Error(
-        "Akun Beban Garansi (510104) belum dimapping di Pengaturan Akuntansi (warrantyExpenseAccountId) — posting biaya garansi ditolak.",
+        "Akun Beban Garansi (510104) belum dimapping di Pengaturan Akuntansi (warrantyExpenseAccountId), posting biaya garansi ditolak.",
       )
     }
     const sourceAccountId =
       settings.materialIssueExpenseAccountId ?? settings.materialExpenseAccountId ?? settings.cogsAccountId
     if (!sourceAccountId) {
-      throw new Error("Akun beban material/HPP belum dimapping — posting biaya garansi ditolak.")
+      throw new Error("Akun beban material/HPP belum dimapping, posting biaya garansi ditolak.")
     }
     await assertPostableAccount(tx, settings.warrantyExpenseAccountId, "Beban Garansi")
     await assertPostableAccount(tx, sourceAccountId, "beban material/HPP")
@@ -375,13 +375,13 @@ export async function postWarrantyClaimCostJournal(
           accountId: settings.warrantyExpenseAccountId,
           debit: cost.total,
           credit: 0,
-          memo: "Beban garansi — biaya klaim saat terjadi (provisi MATI)",
+          memo: "Beban garansi, biaya klaim saat terjadi (provisi MATI)",
         },
         {
           accountId: sourceAccountId,
           debit: 0,
           credit: cost.total,
-          memo: "Reklasifikasi beban sumber WO repair — biaya klaim garansi",
+          memo: "Reklasifikasi beban sumber WO repair, biaya klaim garansi",
         },
       ],
     })
@@ -406,24 +406,24 @@ export async function postWarrantySupplierRecoveryJournal(
     const claim = await loadClaimInTx(tx, input.claimId)
     if (!["accepted", "closed_recovered"].includes(claim.supplierClaimStatus)) {
       throw new Error(
-        "Recovery supplier hanya dijurnal bila klaim supplier sudah diterima (accepted/closed_recovered) — status lain belum hampir pasti, tanpa jurnal.",
+        "Recovery supplier hanya dijurnal bila klaim supplier sudah diterima (accepted/closed_recovered), status lain belum hampir pasti, tanpa jurnal.",
       )
     }
     await assertSupplierRecoveryEvidence(tx, claim)
     if (claim.repairWorkOrderId == null) {
-      throw new Error("Klaim belum tertaut ke WO repair — biaya klaim tidak dapat diverifikasi untuk recovery.")
+      throw new Error("Klaim belum tertaut ke WO repair, biaya klaim tidak dapat diverifikasi untuk recovery.")
     }
     const cost = await computeWarrantyRepairCost(claim.repairWorkOrderId, tx)
     if (amount > cost.total) {
       throw new Error(
-        `Nominal recovery (${amount}) melebihi biaya klaim terverifikasi (${cost.total}) — recovery dibatasi sebesar biaya.`,
+        `Nominal recovery (${amount}) melebihi biaya klaim terverifikasi (${cost.total}), recovery dibatasi sebesar biaya.`,
       )
     }
 
     const settings = await loadSettingsInTx(tx)
     if (!settings.supplierClaimReceivableAccountId || !settings.warrantyExpenseAccountId) {
       throw new Error(
-        "Akun Piutang Klaim Supplier (110508) dan Beban Garansi (510104) belum dimapping di Pengaturan Akuntansi — posting recovery garansi ditolak.",
+        "Akun Piutang Klaim Supplier (110508) dan Beban Garansi (510104) belum dimapping di Pengaturan Akuntansi, posting recovery garansi ditolak.",
       )
     }
     await assertPostableAccount(tx, settings.supplierClaimReceivableAccountId, "Piutang Klaim Supplier")
@@ -441,7 +441,7 @@ export async function postWarrantySupplierRecoveryJournal(
     })
     if (!costJournal) {
       throw new Error(
-        "Recovery ditolak: jurnal biaya garansi (E2) untuk klaim ini belum diposting — posting jurnal biaya dulu, recovery memulihkan beban yang sudah diakui.",
+        "Recovery ditolak: jurnal biaya garansi (E2) untuk klaim ini belum diposting, posting jurnal biaya dulu, recovery memulihkan beban yang sudah diakui.",
       )
     }
     // TASK-019: recovery atas WO repair yang sama juga satu kali lintas
@@ -464,7 +464,7 @@ export async function postWarrantySupplierRecoveryJournal(
           accountId: settings.supplierClaimReceivableAccountId,
           debit: amount,
           credit: 0,
-          memo: "Piutang klaim supplier — garansi (hampir pasti, PSAK 57)",
+          memo: "Piutang klaim supplier, garansi (hampir pasti, PSAK 57)",
         },
         {
           accountId: settings.warrantyExpenseAccountId,
@@ -519,7 +519,7 @@ export async function findWarrantyRepairInvoiceBlock(
   })
   if (!claim) return null
   return (
-    `WO repair #${claim.repairWorkOrderId} adalah pekerjaan garansi covered (klaim #${claim.id}) — ` +
+    `WO repair #${claim.repairWorkOrderId} adalah pekerjaan garansi covered (klaim #${claim.id}), ` +
     "SalesInvoice dilarang untuk pekerjaan ini (risiko tertagih dobel). Pekerjaan tertagih wajib lewat WO + invoice baru terpisah."
   )
 }

@@ -177,7 +177,7 @@ export function buildRetainedEarningsTable(result: RetainedEarningsResult): {
           kind: "notice",
           text:
             "Tidak ada akun ekuitas bernama \"Laba Ditahan\" di bagan akun, jadi laporan ini belum " +
-            "bisa menilai apa-apa. Tambahkan akun laba ditahan (atau sebutkan namanya) lebih dulu — " +
+            "bisa menilai apa-apa. Tambahkan akun laba ditahan (atau sebutkan namanya) lebih dulu – " +
             "nilai kosong di sini berarti belum dipetakan, bukan berarti laba ditahan nol.",
         },
       ],

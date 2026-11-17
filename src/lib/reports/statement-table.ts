@@ -133,7 +133,7 @@ export function buildBalanceSheetTable(input: BalanceSheetTableInput): Statement
       kind: "notice",
       text:
         `Perhatian: Jumlah Aset (${preciseStatementAmount(input.totalAssets)}) tidak sama dengan ` +
-        `Total Kewajiban dan Ekuitas (${preciseStatementAmount(totalLiabilitiesAndEquity)}) — ` +
+        `Total Kewajiban dan Ekuitas (${preciseStatementAmount(totalLiabilitiesAndEquity)}) – ` +
         `selisih ${preciseStatementAmount(balanceDifference)}.`,
     })
   }

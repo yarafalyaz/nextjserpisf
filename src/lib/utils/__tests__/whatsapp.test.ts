@@ -83,7 +83,7 @@ describe("buildStatementWhatsappMessage (F-2026-10-25-038-B1, Q-SW-3 verbatim)",
     const msg = buildStatementWhatsappMessage({ ...base, closingBalance: 0 });
     expect(msg).toBe(
       "Halo CV Uji,\n\nBerikut statement piutang Anda untuk Periode 1 Jan 2026 – 15 Okt 2026. " +
-        "Saldo akhir periode: Rp 0 — tidak ada sisa piutang pada akhir periode ini. " +
+        "Saldo akhir periode: Rp 0 – tidak ada sisa piutang pada akhir periode ini. " +
         "Statement lengkap dapat kami sediakan/dicetak bila diperlukan.\n\nTerima kasih.",
     );
     expect(msg).not.toMatch(/tagihan|menunggak|denda|terkirim|dibaca/i);

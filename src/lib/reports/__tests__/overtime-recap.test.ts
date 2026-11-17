@@ -125,7 +125,7 @@ describe("buildOvertimeRecap (F-2026-10-25-016-S)", () => {
     ])
     // Literal verbatim penuh — bukan konstanta produksi (tautologis, audit t_071a8727).
     expect(recap.notice).toBe(
-      "Rekap jam lembur operasional — bukan dasar pembayaran; nilai lembur tetap dihitung payroll dari nilai tersimpan saat persetujuan.",
+      "Rekap jam lembur operasional – bukan dasar pembayaran; nilai lembur tetap dihitung payroll dari nilai tersimpan saat persetujuan.",
     )
     expect(recap.totals.employeeCount).toBe(2)
     expect(recap.totals.submittedHours).toBe(5)

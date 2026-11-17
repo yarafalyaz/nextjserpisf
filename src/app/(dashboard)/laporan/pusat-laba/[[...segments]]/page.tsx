@@ -205,7 +205,7 @@ export default async function ProfitCenterIncomePage({
 
       {/* Per-profit-center detail (accounts behind each number). */}
       {rows.map((r) => (
-        <ReportSection key={r.key} title={`${r.code} — ${r.name}`}>
+        <ReportSection key={r.key} title={`${r.code} - ${r.name}`}>
           <DetailTable data-report-table={`Pusat Laba ${r.code}`}>
             <DetailTableHead>
               <DetailTableTh>Kode Akun</DetailTableTh>

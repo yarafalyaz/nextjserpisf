@@ -189,7 +189,7 @@ export async function createProductionCost(formData: FormData) {
       })
       if (!vendor) return { success: false, error: "Vendor tidak ditemukan" }
       if (vendor.deletedAt != null || !vendor.isActive) {
-        return { success: false, error: "Vendor biaya tidak aktif atau sudah dihapus — pilih ulang vendor." }
+        return { success: false, error: "Vendor biaya tidak aktif atau sudah dihapus – pilih ulang vendor." }
       }
     }
 
@@ -274,7 +274,7 @@ export async function updateProductionCost(id: number, formData: FormData) {
     // Putaran 88: baris bersumber sistem (rework NCR / PO / timesheet) adalah
     // cermin dokumen sumbernya — edit langsung memutus sinkronisasi delta.
     if (existing.nonconformanceId != null || existing.purchaseOrderId != null || existing.sourceTimesheetId != null) {
-      return { success: false, error: "Biaya ini dibuat otomatis dari dokumen sumber (NCR/PO/timesheet) — ubah dari dokumen sumbernya." }
+      return { success: false, error: "Biaya ini dibuat otomatis dari dokumen sumber (NCR/PO/timesheet) – ubah dari dokumen sumbernya." }
     }
 
     // Hanya relink vendor yang dinilai hidup; vendor lama tak berubah
@@ -286,7 +286,7 @@ export async function updateProductionCost(id: number, formData: FormData) {
       })
       if (!vendor) return { success: false, error: "Vendor tidak ditemukan" }
       if (vendor.deletedAt != null || !vendor.isActive) {
-        return { success: false, error: "Vendor biaya tidak aktif atau sudah dihapus — pilih ulang vendor." }
+        return { success: false, error: "Vendor biaya tidak aktif atau sudah dihapus – pilih ulang vendor." }
       }
     }
 
@@ -376,7 +376,7 @@ export async function deleteProductionCost(id: number) {
     // Putaran 88: baris bersumber sistem tak boleh dihapus langsung —
     // sinkronisasi berikutnya akan melahirkannya kembali dengan delta penuh.
     if (existing.nonconformanceId != null || existing.purchaseOrderId != null || existing.sourceTimesheetId != null) {
-      return { success: false, error: "Biaya ini dibuat otomatis dari dokumen sumber (NCR/PO/timesheet) — ubah dari dokumen sumbernya." }
+      return { success: false, error: "Biaya ini dibuat otomatis dari dokumen sumber (NCR/PO/timesheet) – ubah dari dokumen sumbernya." }
     }
 
     if (existing.productionOrderId) {
@@ -745,7 +745,7 @@ export async function applyOverheadToProductionOrder(formData: FormData) {
         data: {
           productionOrderId: v.productionOrderId,
           category: "overhead",
-          description: v.description ?? `Overhead applied — ${driverLabel} (${v.driverQty} × ${v.rate})`,
+          description: v.description ?? `Overhead applied (${driverLabel} (${v.driverQty} × ${v.rate})`,
           hours: v.driverQty,
           rate: v.rate,
           amount,

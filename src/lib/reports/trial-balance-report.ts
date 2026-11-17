@@ -130,7 +130,7 @@ export function buildTrialBalanceReport(input: TrialBalanceReportInput): TrialBa
         kind: "notice",
         text:
           `Perhatian: total debit (${preciseAmount(input.grandTotalDebit)}) tidak sama dengan total kredit ` +
-          `(${preciseAmount(input.grandTotalCredit)}) — selisih ${preciseAmount(safeSubtract(input.grandTotalDebit, input.grandTotalCredit, 2))}.`,
+          `(${preciseAmount(input.grandTotalCredit)}) – selisih ${preciseAmount(safeSubtract(input.grandTotalDebit, input.grandTotalCredit, 2))}.`,
       })
     }
   }

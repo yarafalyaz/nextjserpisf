@@ -151,7 +151,7 @@ export function DisciplinaryDeductionDecisionForm({
             options={visibleRecords.map((r) => ({ value: String(r.id), label: r.label }))}
           />
           <p className="text-xs text-muted-foreground">
-            Konteks saja — surat peringatan tidak memicu potongan; keputusan ini yang menjadi dasar
+            Konteks saja, surat peringatan tidak memicu potongan; keputusan ini yang menjadi dasar
             potongan.
           </p>
         </div>
@@ -195,7 +195,7 @@ export function DisciplinaryDeductionDecisionForm({
             placeholder="Pilih akun kompensasi"
             options={accounts.map((a) => ({
               value: String(a.id),
-              label: `${a.code} — ${a.name}`,
+              label: `${a.code} (${a.name})`,
             }))}
           />
           <p className="text-xs text-muted-foreground">

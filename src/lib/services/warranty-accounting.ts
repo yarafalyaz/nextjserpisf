@@ -145,8 +145,8 @@ export function decideWarrantyClaimAccounting(f: WarrantyClaimFacts): WarrantyAc
       path: "billable_rework",
       invoiceForbidden: false,
       journal: [
-        { account: "customer_receivable", side: "debit", amount: cost, memo: "Piutang — rework tertagih di luar garansi (nilai pekerjaan; pajak mengikuti invoice)" },
-        { account: "revenue", side: "credit", amount: cost, memo: "Pendapatan — rework tertagih di luar garansi" },
+        { account: "customer_receivable", side: "debit", amount: cost, memo: "Piutang, rework tertagih di luar garansi (nilai pekerjaan; pajak mengikuti invoice)" },
+        { account: "revenue", side: "credit", amount: cost, memo: "Pendapatan, rework tertagih di luar garansi" },
       ],
       notes: [
         "Rework tertagih diperlakukan sebagai penjualan baru: terbit invoice normal, PPN keluaran bila PKP, HPP dari lapisan FIFO saat part keluar.",
@@ -160,13 +160,13 @@ export function decideWarrantyClaimAccounting(f: WarrantyClaimFacts): WarrantyAc
   const fromProvision = Math.min(cost, provision)
   const excess = round2(cost - fromProvision)
   if (fromProvision > 0) {
-    journal.push({ account: "warranty_provision", side: "debit", amount: fromProvision, memo: "Realisasi provisi garansi — biaya klaim" })
+    journal.push({ account: "warranty_provision", side: "debit", amount: fromProvision, memo: "Realisasi provisi garansi, biaya klaim" })
   }
   if (excess > 0) {
-    journal.push({ account: "warranty_expense", side: "debit", amount: excess, memo: "Beban garansi — biaya klaim melebihi provisi (periode berjalan)" })
+    journal.push({ account: "warranty_expense", side: "debit", amount: excess, memo: "Beban garansi, biaya klaim melebihi provisi (periode berjalan)" })
   }
   if (cost > 0) {
-    journal.push({ account: "inventory_or_wip_or_payable", side: "credit", amount: cost, memo: "Persediaan/WIP/utang — part & jasa rework garansi pada nilai biaya (FIFO)" })
+    journal.push({ account: "inventory_or_wip_or_payable", side: "credit", amount: cost, memo: "Persediaan/WIP/utang, part & jasa rework garansi pada nilai biaya (FIFO)" })
   }
 
   const notes: string[] = [
@@ -177,7 +177,7 @@ export function decideWarrantyClaimAccounting(f: WarrantyClaimFacts): WarrantyAc
   if (f.supplierRecovery === "virtually_certain") {
     const recovery = round2(Math.min(Math.max(0, f.supplierRecoveryAmount), cost))
     if (recovery > 0) {
-      journal.push({ account: "supplier_claim_receivable", side: "debit", amount: recovery, memo: "Piutang klaim supplier — garansi part (hampir pasti, PSAK 57)" })
+      journal.push({ account: "supplier_claim_receivable", side: "debit", amount: recovery, memo: "Piutang klaim supplier, garansi part (hampir pasti, PSAK 57)" })
       journal.push({ account: "warranty_expense", side: "credit", amount: recovery, memo: "Pemulihan biaya garansi dari supplier (bukan pendapatan)" })
       notes.push("Recovery supplier hampir pasti diakui sebagai aset terpisah; tidak di-net-off dari provisi di neraca (PSAK 57).")
     }
@@ -186,7 +186,7 @@ export function decideWarrantyClaimAccounting(f: WarrantyClaimFacts): WarrantyAc
   }
 
   if (f.kind === "service") {
-    notes.push("Garansi jenis service (PSAK 72): pendapatan bagian garansi diakui sepanjang masa jasa dari liabilitas kontrak — bukan dari jurnal klaim ini.")
+    notes.push("Garansi jenis service (PSAK 72): pendapatan bagian garansi diakui sepanjang masa jasa dari liabilitas kontrak, bukan dari jurnal klaim ini.")
   }
 
   return { path: "covered_warranty", invoiceForbidden: true, journal, notes }
@@ -202,8 +202,8 @@ export function warrantyProvisionAccrual(estimatedCost: number): JournalLineDeci
   const est = round2(Math.max(0, estimatedCost))
   if (est <= 0) return []
   return [
-    { account: "warranty_expense", side: "debit", amount: est, memo: "Beban garansi — akrual provisi saat serah-terima (estimasi terbaik PSAK 57 par 36)" },
-    { account: "warranty_provision", side: "credit", amount: est, memo: "Provisi garansi — kewajiban kini dari penjualan/serah-terima" },
+    { account: "warranty_expense", side: "debit", amount: est, memo: "Beban garansi, akrual provisi saat serah-terima (estimasi terbaik PSAK 57 par 36)" },
+    { account: "warranty_provision", side: "credit", amount: est, memo: "Provisi garansi, kewajiban kini dari penjualan/serah-terima" },
   ]
 }
 
@@ -212,7 +212,7 @@ export function warrantyProvisionRelease(remainingBalance: number): JournalLineD
   const bal = round2(Math.max(0, remainingBalance))
   if (bal <= 0) return []
   return [
-    { account: "warranty_provision", side: "debit", amount: bal, memo: "Pembalikan provisi garansi — masa garansi berakhir" },
-    { account: "warranty_expense", side: "credit", amount: bal, memo: "Pembalikan beban garansi (bukan pendapatan) — PSAK 57" },
+    { account: "warranty_provision", side: "debit", amount: bal, memo: "Pembalikan provisi garansi, masa garansi berakhir" },
+    { account: "warranty_expense", side: "credit", amount: bal, memo: "Pembalikan beban garansi (bukan pendapatan), PSAK 57" },
   ]
 }

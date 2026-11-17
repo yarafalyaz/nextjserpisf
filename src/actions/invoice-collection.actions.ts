@@ -97,7 +97,7 @@ export async function createInvoiceCollectionFollowUp(
       "invoice_collection_followup_created",
       "InvoiceCollectionFollowUp",
       created.id,
-      `Tindak lanjut penagihan ${invoice.documentNo} — ${validated.channel}/${validated.outcome}`,
+      `Tindak lanjut penagihan ${invoice.documentNo} – ${validated.channel}/${validated.outcome}`,
     )
     revalidatePath(REVALIDATE)
 

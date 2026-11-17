@@ -61,10 +61,10 @@ export function validateUsableRemnant(input: {
   }
   const min = input.minMeasureSnapshot
   if (min == null || !Number.isFinite(Number(min)) || Number(min) <= 0) {
-    return "Ambang minimum usable kategori belum ditetapkan kepala bengkel — remnant tidak boleh berstatus usable."
+    return "Ambang minimum usable kategori belum ditetapkan kepala bengkel, remnant tidak boleh berstatus usable."
   }
   if (measured + EPS < Number(min)) {
-    return "Ukuran sisa di bawah ambang minimum usable kategori — catat sebagai scrap, bukan remnant usable."
+    return "Ukuran sisa di bawah ambang minimum usable kategori, catat sebagai scrap, bukan remnant usable."
   }
   return null
 }

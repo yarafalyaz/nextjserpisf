@@ -234,10 +234,10 @@ export default async function InventoryTransferDetailPage({
           </div>
           <div className="flex flex-col gap-2 p-4 px-5 text-sm">
             <p>
-              Draf Penyesuaian Stok <span className="font-mono">{activeShortage.documentNo}</span> — alasan: {activeShortage.reason}
+              Draf Penyesuaian Stok <span className="font-mono">{activeShortage.documentNo}</span>, alasan: {activeShortage.reason}
             </p>
             <p className="flex flex-wrap items-center gap-2 text-muted-foreground">
-              Status draf: <StatusChip status={activeShortage.status} /> — transfer tertutup sesudah draf ini disetujui dan diproses.
+              Status draf: <StatusChip status={activeShortage.status} />, transfer tertutup sesudah draf ini disetujui dan diproses.
             </p>
             <Button href={entityHref("/inventaris/penyesuaian", activeShortage)} variant="secondary" className="w-fit">
               Buka Penyesuaian Stok

@@ -119,7 +119,7 @@ export function parseBankStatementCsv(text: string): {
   const rows = text.replace(/^﻿/, "").split(/\r\n|\r|\n/)
   const headerIndex = rows.findIndex((row) => row.trim() !== "")
   if (headerIndex === -1) {
-    return { lines: [], errors: [{ row: 1, message: "Berkas kosong — tidak ada header CSV." }] }
+    return { lines: [], errors: [{ row: 1, message: "Berkas kosong – tidak ada header CSV." }] }
   }
   const headerRowNumber = headerIndex + 1
   const delimiter = rows[headerIndex].includes(";") ? ";" : ","
@@ -171,7 +171,7 @@ export function parseBankStatementCsv(text: string): {
       const debit = parseMoneyAmount(cell(debitCol)) ?? 0
       const credit = parseMoneyAmount(cell(creditCol)) ?? 0
       if (debit > 0 && credit > 0) {
-        errors.push({ row: rowNumber, message: "Debit dan kredit terisi dua-duanya — isi salah satu arah saja." })
+        errors.push({ row: rowNumber, message: "Debit dan kredit terisi dua-duanya – isi salah satu arah saja." })
         continue
       }
       if (debit <= 0 && credit <= 0) {

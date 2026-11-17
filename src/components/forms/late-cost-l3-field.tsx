@@ -178,7 +178,7 @@ export function LateCostL3Field({
           onChange={(e) => onEnabledChange(e.target.checked)}
           className="size-4 rounded border-default"
         />
-        Biaya telat non-job (L3) — WO sudah ditutup
+        Biaya telat non-job (L3), WO sudah ditutup
       </label>
       {enabled ? (
         <div className="flex flex-col gap-3">
@@ -228,7 +228,7 @@ export function LateCostL3Field({
             ) : null}
           </div>
           <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
-            Biaya ini dicatat sebagai beban periode berjalan, bukan biaya job —
+            Biaya ini dicatat sebagai beban periode berjalan, bukan biaya job;
             tidak mengubah margin atau total biaya WO. Tagihan L3 tidak boleh
             tertaut PO/penerimaan; pengeluaran L3 wajib akun beban operasional.
           </p>

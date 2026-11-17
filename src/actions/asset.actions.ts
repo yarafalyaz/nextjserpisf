@@ -344,7 +344,7 @@ async function assertLiveTransferEmployees(
       select: { id: true },
     })
     if (!live) {
-      throw new Error(`Karyawan #${employeeId} tidak ditemukan atau tidak aktif — pilih ulang karyawan.`)
+      throw new Error(`Karyawan #${employeeId} tidak ditemukan atau tidak aktif – pilih ulang karyawan.`)
     }
   }
 }
@@ -1481,7 +1481,7 @@ export async function disposeAsset(formData: FormData) {
             `Pelepasan aset ${lockedAsset.code}. Nilai buku: ${bookValueTx.toLocaleString("id-ID")}, ` +
             `hasil: ${proceeds.toLocaleString("id-ID")}, ` +
             `${gainLossTx >= 0 ? "laba" : "rugi"}: ${Math.abs(gainLossTx).toLocaleString("id-ID")}` +
-            (reason ? ` — ${reason}` : ""),
+            (reason ? ` (${reason}` : ""),
           amount: proceeds,
           date: disposalDate,
         },

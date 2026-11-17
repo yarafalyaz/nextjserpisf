@@ -43,13 +43,13 @@ export type PayrollRunSkipReason =
 
 export const PAYROLL_RUN_SKIP_LABELS: Record<PayrollRunSkipReason, string> = {
   frekuensiLain: "Frekuensi bayar berbeda",
-  pinjaman: "Pinjaman aktif — cicilan mingguan belum diatur tertulis",
+  pinjaman: "Pinjaman aktif – cicilan mingguan belum diatur tertulis",
   bpjsBelumDidukung: "BPJS mingguan belum didukung (agregator se-masa belum tersedia)",
   plafonPotongan: "Potongan melebihi plafon 50% upah (PP 36/2021 Pasal 65)",
   irisan: "Rentang beririsan slip existing",
-  berhenti: "Karyawan berhenti — di luar populasi massal",
-  cakupan: "Di luar cakupan akses HR — tidak dibuatkan slip",
-  statutoriBerubah: "Agregat statutori berubah di dalam transaksi — hitung ulang run massal",
+  berhenti: "Karyawan berhenti – di luar populasi massal",
+  cakupan: "Di luar cakupan akses HR – tidak dibuatkan slip",
+  statutoriBerubah: "Agregat statutori berubah di dalam transaksi – hitung ulang run massal",
 }
 
 export interface PayrollRunSkip {
@@ -178,13 +178,13 @@ const PERIOD_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/
 export function assertPayrollPeriodMatchesEndDate(period: string, endDate: Date): void {
   if (!PERIOD_PATTERN.test(period)) {
     throw new Error(
-      `Periode penggajian "${period}" tidak valid — wajib format "YYYY-MM" (bulan masa dari tanggal selesai).`,
+      `Periode penggajian "${period}" tidak valid – wajib format "YYYY-MM" (bulan masa dari tanggal selesai).`,
     )
   }
   const expected = `${endDate.getUTCFullYear()}-${String(endDate.getUTCMonth() + 1).padStart(2, "0")}`
   if (period !== expected) {
     throw new Error(
-      `Periode penggajian ${period} tidak sama dengan bulan tanggal selesai (${expected}) — masa pajak dibaca dari tanggal selesai.`,
+      `Periode penggajian ${period} tidak sama dengan bulan tanggal selesai (${expected}) – masa pajak dibaca dari tanggal selesai.`,
     )
   }
 }

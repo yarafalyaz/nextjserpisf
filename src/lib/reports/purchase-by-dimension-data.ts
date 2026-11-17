@@ -96,11 +96,11 @@ export async function loadPurchasesByDimension(
       } else if (dimension === "barang") {
         const item = line.itemId !== null ? itemById.get(line.itemId) : undefined
         key = line.itemId !== null ? `item-${line.itemId}` : "item-none"
-        label = item ? `${item.sku} — ${item.name}` : (line.description ?? "Tanpa barang")
+        label = item ? `${item.sku} - ${item.name}` : (line.description ?? "Tanpa barang")
       } else {
         const account = line.accountId !== null ? accountById.get(line.accountId) : undefined
         key = line.accountId !== null ? `account-${line.accountId}` : "account-none"
-        label = account ? `${account.code} — ${account.name}` : "Tanpa akun biaya"
+        label = account ? `${account.code} - ${account.name}` : "Tanpa akun biaya"
       }
 
       const bucket = bucketFor(key, label)

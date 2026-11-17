@@ -8,5 +8,5 @@ export const PART_STATUS_LABEL: Record<WorkOrderPartStatus, string> = {
   "terpasang-sebagian": "Terpasang sebagian",
   terpasang: "Terpasang",
   diganti: "Diganti",
-  "tak-tertaut": "Jasa — tak-tertaut",
+  "tak-tertaut": "Jasa – tak-tertaut",
 }

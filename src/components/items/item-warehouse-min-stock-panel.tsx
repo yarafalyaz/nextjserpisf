@@ -196,9 +196,7 @@ export function ItemWarehouseMinStockPanel({
                     </td>
                     <td className="py-2 pr-2">
                       {row.qtyAtWarehouse === null ? (
-                        <>
-                          — <span className="text-xs text-muted-foreground">tidak ada stok di gudang ini</span>
-                        </>
+                        <span className="text-xs text-muted-foreground">tidak ada stok di gudang ini</span>
                       ) : (
                         formatNumber(row.qtyAtWarehouse)
                       )}
@@ -209,9 +207,7 @@ export function ItemWarehouseMinStockPanel({
                     </td>
                     <td className="py-2 pr-2">
                       {row.leadTimeDays == null ? (
-                        <>
-                          — <span className="text-xs text-muted-foreground">belum diisi</span>
-                        </>
+                        <span className="text-xs text-muted-foreground">belum diisi</span>
                       ) : (
                         formatNumber(row.leadTimeDays)
                       )}

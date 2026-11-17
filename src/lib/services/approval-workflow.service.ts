@@ -255,7 +255,7 @@ export async function assertApproved(
         select: { updatedAt: true },
       })
       if (doc?.updatedAt && doc.updatedAt.getTime() > approval.completedAt.getTime()) {
-        throw new Error("Dokumen berubah sesudah persetujuan final — ajukan ulang persetujuan sebelum dilanjutkan.")
+        throw new Error("Dokumen berubah sesudah persetujuan final, ajukan ulang persetujuan sebelum dilanjutkan.")
       }
     }
     return

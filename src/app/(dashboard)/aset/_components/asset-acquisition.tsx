@@ -64,7 +64,7 @@ export function AssetAcquisitionSummary({
   if (result.status === "no-journal") {
     return (
       <p className="text-sm text-muted-foreground">
-        Aset warisan tanpa harga perolehan — belum ada jurnal perolehan.
+        Aset warisan tanpa harga perolehan, belum ada jurnal perolehan.
       </p>
     )
   }

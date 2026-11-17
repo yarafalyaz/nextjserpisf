@@ -54,7 +54,7 @@ export async function onSalesLateFeePosted(
     }
     if (!settings.lateFeeIncomeAccountId) {
       throw new Error(
-        "Dokumen denda ditolak: akun Pendapatan Denda belum dikonfigurasi di Pengaturan (Pengaturan → Akun). Isi akun pendapatan denda dulu — tidak ada fallback ke pendapatan penjualan.",
+        "Dokumen denda ditolak: akun Pendapatan Denda belum dikonfigurasi di Pengaturan (Pengaturan → Akun). Isi akun pendapatan denda dulu, tidak ada fallback ke pendapatan penjualan.",
       )
     }
 

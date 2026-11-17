@@ -130,7 +130,7 @@ describe("resolveAllAccountMappings", () => {
     { id: 13, code: "5500", name: "Kas Kecil" },
     { id: 15, code: "510104", name: "Beban Garansi" },
     { id: 16, code: "210205", name: "Provisi Garansi" },
-    { id: 17, code: "110508", name: "Piutang Klaim Supplier — Garansi" },
+    { id: 17, code: "110508", name: "Piutang Klaim Supplier – Garansi" },
   ]
 
   it("resolves the core accounting fields from the COA", () => {

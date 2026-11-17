@@ -16,7 +16,7 @@ export function priceSourceLabel(
     case "price_list_tier": {
       if (priceListMinQty == null || !Number.isFinite(priceListMinQty)) return null
       const decimals = Number.isInteger(priceListMinQty) ? 0 : 2
-      return `Harga tingkat >= ${formatNumber(priceListMinQty, decimals)} — Daftar Harga`
+      return `Harga tingkat >= ${formatNumber(priceListMinQty, decimals)} , Daftar Harga`
     }
     case "price_list_base":
       return "Harga daftar"

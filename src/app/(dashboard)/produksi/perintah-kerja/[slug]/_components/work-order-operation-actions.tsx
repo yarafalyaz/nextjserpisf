@@ -146,7 +146,7 @@ export function WorkOrderOperationActions({
         onConfirm={() => {
           if (skipInvalid) {
             showError(
-              "Tahap yang dilewati wajib diisi alasan — melewati tahap mengubah dasar hitung progres.",
+              "Tahap yang dilewati wajib diisi alasan – melewati tahap mengubah dasar hitung progres.",
             )
             return
           }

@@ -27,7 +27,7 @@ export async function loadCustomerPriceOptions() {
     })),
     itemOptions: items.map((item) => ({
       value: String(item.id),
-      label: `${item.sku} — ${item.name}`,
+      label: `${item.sku} - ${item.name}`,
       unit: item.unitOfMeasure,
     })),
   }

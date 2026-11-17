@@ -111,7 +111,7 @@ export function ProjectPlCard({ rows }: Readonly<{ rows: ProjectPlRow[] }>) {
         <section aria-label="Memo jam timesheet belum ditarik" className="mt-5">
           <h3 className="text-sm font-semibold text-foreground">Memo Jam Timesheet Belum Ditarik</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            Jam berikut belum ditarik ke biaya produksi — memo jam saja, bukan biaya dan tidak mengurangi laba.
+            Jam berikut belum ditarik ke biaya produksi, memo jam saja, bukan biaya dan tidak mengurangi laba.
           </p>
           <DetailTable>
             <DetailTableHead>

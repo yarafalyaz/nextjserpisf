@@ -52,7 +52,7 @@ export default async function SettingsCompletionPage() {
     {
       title: "Mapping Akun",
       description:
-        "Akun buku besar untuk posting jurnal otomatis. Sudah diisi otomatis saat instalasi — periksa dan sesuaikan bila perlu.",
+        "Akun buku besar untuk posting jurnal otomatis. Sudah diisi otomatis saat instalasi – periksa dan sesuaikan bila perlu.",
       href: "/pengaturan/mapping-akun/ubah",
       done: mappedAccounts === totalAccounts,
       status: `${mappedAccounts}/${totalAccounts} akun terisi`,

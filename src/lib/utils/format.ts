@@ -159,7 +159,7 @@ export function loanBudgetGuardMessage(
   return (
     `${verb} ditolak: Σ potongan termasuk statutori (cicilan pinjaman + BPJS/PPh21 + potongan lain) ` +
     `${formatCurrency(breach.totalDeductions)} melebihi bruto ` +
-    `${formatCurrency(breach.gross)} (BR-LOAN-03) — sesuaikan cicilan/potongan, jangan dipangkas diam-diam.`
+    `${formatCurrency(breach.gross)} (BR-LOAN-03) – sesuaikan cicilan/potongan, jangan dipangkas diam-diam.`
   )
 }
 

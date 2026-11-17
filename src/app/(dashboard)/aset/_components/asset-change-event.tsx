@@ -90,7 +90,7 @@ export function AssetEventMappingStatus({ mapping }: { mapping: AssetEventAccoun
               <span className="font-mono text-xs">{account.code}</span>
             ) : (
               <span className="inline-flex rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning-foreground">
-                Belum terpetakan — peristiwa {row.usedBy} ditolak server
+                Belum terpetakan, peristiwa {row.usedBy} ditolak server
               </span>
             )}
           </li>

@@ -215,7 +215,7 @@ export async function createInvoiceExchange(formData: FormData): Promise<Invoice
       "create",
       "InvoiceExchange",
       created.id,
-      `Tukar faktur ${documentNo} — ${invoices.length} faktur (${customer.name})`,
+      `Tukar faktur ${documentNo} – ${invoices.length} faktur (${customer.name})`,
     )
     revalidatePath(REVALIDATE)
 

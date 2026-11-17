@@ -11,7 +11,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Hutang Jatuh Tempo" }
 
 const NARASI_JATUH_TEMPO =
-  "Laporan Hutang Jatuh Tempo mengelompokkan hutang usaha yang sudah memiliki tanggal jatuh tempo berdasarkan umurnya. Tagihan tanpa tanggal jatuh tempo tidak termasuk di sini — lihat Total Hutang untuk seluruh kewajiban."
+  "Laporan Hutang Jatuh Tempo mengelompokkan hutang usaha yang sudah memiliki tanggal jatuh tempo berdasarkan umurnya. Tagihan tanpa tanggal jatuh tempo tidak termasuk di sini – lihat Total Hutang untuk seluruh kewajiban."
 
 export default async function AgingPayablesPage() {
   await requirePermission('view_reports')

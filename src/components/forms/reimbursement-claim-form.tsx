@@ -170,7 +170,7 @@ export function ReimbursementClaimForm({ categories, projects }: ReimbursementCl
           <ul className="mt-2 list-disc pl-5">
             {duplicates.map((candidate) => (
               <li key={candidate.id}>
-                <span className="font-mono">{candidate.documentNo}</span> — status {candidate.status}
+                <span className="font-mono">{candidate.documentNo}</span>, status {candidate.status}
               </li>
             ))}
           </ul>

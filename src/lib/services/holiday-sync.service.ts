@@ -73,7 +73,7 @@ async function syncYears(years: number[], db: Db): Promise<HolidaySyncReport> {
           name: h.name,
           date: wibDateToUtcMidnight(h.date),
           description: h.estimated
-            ? "Sinkron otomatis (estimasi kalender) — verifikasi SKB 3 Menteri"
+            ? "Sinkron otomatis (estimasi kalender), verifikasi SKB 3 Menteri"
             : "Sinkron otomatis kalender nasional",
         },
       })

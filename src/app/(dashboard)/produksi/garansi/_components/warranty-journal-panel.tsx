@@ -48,7 +48,7 @@ function RouteStatus({ route, label }: { route: WarrantyJournalRoute; label: str
       <dd className="text-[0.9375rem] text-foreground font-medium">
         {route.posted ? (
           <span>
-            SUDAH DIPOSTING — Jurnal {route.journalNumber ?? "-"}
+            SUDAH DIPOSTING, Jurnal {route.journalNumber ?? "-"}
             {route.transactionDate ? ` · ${route.transactionDate}` : ""}
             {route.amountLabel ? ` · ${route.amountLabel}` : ""}
           </span>
@@ -117,7 +117,7 @@ export function WarrantyJournalPanel({
       try {
         const res = await action(formData)
         if (res?.success) {
-          const text = `Jurnal ${res.journalNumber} — ${formatJournalAmount(res.amount)}`
+          const text = `Jurnal ${res.journalNumber} – ${formatJournalAmount(res.amount)}`
           setLastResult(text)
           showSuccess(text)
           router.refresh()
@@ -175,14 +175,14 @@ export function WarrantyJournalPanel({
       className="bg-surface rounded-xl border border-default shadow-sm p-6"
     >
       <h2 className="text-[0.9375rem] font-semibold text-foreground">
-        Jurnal Garansi — Biaya Klaim &amp; Recovery Supplier
+        Jurnal Garansi, Biaya Klaim &amp; Recovery Supplier
       </h2>
       <p className="mt-2 rounded-lg bg-surface-secondary px-3 py-2 text-sm text-foreground">
         Mode provisi: MATI — biaya klaim dibebankan saat terjadi (510104), tanpa akrual provisi.
       </p>
 
       <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <RouteStatus route={facts.claimCost} label="Rute E2 — Biaya Klaim" />
+        <RouteStatus route={facts.claimCost} label="Rute E2 – Biaya Klaim" />
         <RouteStatus route={facts.supplierRecovery} label="Rute E3 - Pemulihan Klaim Pemasok" />
       </dl>
 
@@ -207,7 +207,7 @@ export function WarrantyJournalPanel({
         >
           <h3 className="text-sm font-semibold text-foreground">Posting Jurnal Biaya Klaim (E2)</h3>
           <p className="text-sm text-muted-foreground">
-            Nominal dihitung server dari WO repair tertaut — tidak ada isian nominal di sini. Bila
+            Nominal dihitung server dari WO repair tertaut, tidak ada isian nominal di sini. Bila
             biaya belum dapat ditampilkan, posting untuk memverifikasi.
           </p>
           <div className="flex flex-wrap items-end gap-3">

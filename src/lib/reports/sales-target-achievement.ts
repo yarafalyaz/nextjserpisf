@@ -51,12 +51,12 @@ import { isLegacyReturnLine, snapshotReturnLine } from "@/lib/tax/return-snapsho
 
 /** Label informatif §6 verbatim F-131-V Putusan 5 — UI wajib menempel apa adanya. */
 export const SALES_TARGET_NOTICE =
-  "Laporan informatif dari snapshot penjual di faktur lunas — bukan dasar bonus, jurnal, atau pembayaran. Retur penjualan selesai (completed) mengurangi pencapaian pada periode tanggal retur."
+  "Laporan informatif dari snapshot penjual di faktur lunas – bukan dasar bonus, jurnal, atau pembayaran. Retur penjualan selesai (completed) mengurangi pencapaian pada periode tanggal retur."
 
 export const SALES_TARGET_UNATTRIBUTED_LABEL = "Tanpa penjual (dokumen lama)"
 export const SALES_TARGET_NO_TARGET_LABEL = "Tanpa target"
 export const SALES_TARGET_PARTIAL_PERIOD_LABEL =
-  "Periode target tidak utuh — persen tidak dihitung"
+  "Periode target tidak utuh – persen tidak dihitung"
 /** Awalan lencana target diubah; tanggal dd/mm/yyyy ditambah pemanggil. */
 export const SALES_TARGET_MODIFIED_BADGE_PREFIX = "Target diubah"
 /** Label wajib baris legacy tanpa snapshot (Putusan 2 butir 4 F-131-V). */

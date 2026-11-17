@@ -83,7 +83,7 @@ export function productionOrderCloseBlocker(order: {
   if (sisa !== 0) {
     return {
       ok: false,
-      error: `Perintah produksi tidak dapat ditutup: sisa WIP totalActualCost Rp${sisa.toFixed(2)} belum nol. Selesaikan lewat complete final atau koreksi dokumen sumbernya — tutup tidak membuat jurnal buang WIP.`,
+      error: `Perintah produksi tidak dapat ditutup: sisa WIP totalActualCost Rp${sisa.toFixed(2)} belum nol. Selesaikan lewat complete final atau koreksi dokumen sumbernya, tutup tidak membuat jurnal buang WIP.`,
     }
   }
   return { ok: true }

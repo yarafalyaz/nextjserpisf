@@ -51,7 +51,7 @@ export const ACCEPTED_QUOTATION_STAGE_LABELS: Record<AcceptedQuotationStage, str
   MASA_BERLAKU_LEWAT: "Masa Berlaku Lewat",
   MENGENDAP: "Mengendap",
   MENUNGGU_TINDAK_LANJUT: "Menunggu Tindak Lanjut",
-  PERNAH_DIKONVERSI_SO_BATAL: "Pernah Dikonversi — SO Dibatalkan",
+  PERNAH_DIKONVERSI_SO_BATAL: "Pernah Dikonversi – SO Dibatalkan",
 }
 
 /** Label jujur umur terima tidak tercatat (EC-5) — UI menempel apa adanya. */

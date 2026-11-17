@@ -74,10 +74,10 @@ describe("expense-draft-queue (F-2026-10-27-107-S)", () => {
     )
     expect(
       EXPENSE_DRAFT_APPROVAL_BUCKET_LABELS.workflow_selesai_menunggu_sinkron,
-    ).toBe("workflow selesai — menunggu sinkron")
+    ).toBe("workflow selesai – menunggu sinkron")
     expect(EXPENSE_DRAFT_MENGENDAP_MIN_DAYS).toBe(3)
     expect(EXPENSE_DRAFT_QUEUE_TOTAL_LABEL).toBe(
-      "total nominal tersimpan baris tampil — bukan saldo buku",
+      "total nominal tersimpan baris tampil – bukan saldo buku",
     )
     expect(EXPENSE_DRAFT_CLAIM_LABEL).toBe("Klaim Karyawan")
     expect(EXPENSE_DRAFT_QUEUE_LIMIT).toBeGreaterThan(0)
@@ -237,7 +237,7 @@ describe("expense-draft-queue (F-2026-10-27-107-S)", () => {
   it("AC-EXQ-B4: total berlabel persis; payload tanpa field/label terlarang dan tanpa bukti/kontak", () => {
     const queue = buildExpenseDraftQueue([input()], NOW)
     expect(queue.totalLabel).toBe(
-      "total nominal tersimpan baris tampil — bukan saldo buku",
+      "total nominal tersimpan baris tampil – bukan saldo buku",
     )
     expect(queue.totalNominalBarisTampil).toBe(1_000_000)
     const rowKeys = Object.keys(queue.rows[0])
@@ -402,7 +402,7 @@ describe("wiring permukaan antrean pengeluaran (AC-EXQ-F1..F3, BR-EXQ-07)", () =
     const surfaces = builderSource + loaderSource + uiSource
     expect(surfaces).not.toMatch(/utang|aging|payable/i)
     expect(builderSource).toContain(
-      '"total nominal tersimpan baris tampil — bukan saldo buku"',
+      '"total nominal tersimpan baris tampil – bukan saldo buku"',
     )
   })
 
@@ -429,7 +429,7 @@ describe("wiring permukaan antrean pengeluaran (AC-EXQ-F1..F3, BR-EXQ-07)", () =
   it("AC-EXQ-F3: ember workflow selesai tampil terpisah terhitung; daftar existing tidak berubah", () => {
     expect(uiSource).toContain("EXPENSE_DRAFT_APPROVAL_BUCKETS")
     expect(uiSource).toContain("EXPENSE_DRAFT_APPROVAL_BUCKET_LABELS")
-    expect(builderSource).toContain("workflow selesai — menunggu sinkron")
+    expect(builderSource).toContain("workflow selesai – menunggu sinkron")
     expect(uiSource).toContain("EXPENSE_DRAFT_QUEUE_TRUNCATED_LABEL")
     expect(pageSource).toContain("getExpenseDraftQueue")
     expect(pageSource).toContain("ExpenseDraftQueueSection")

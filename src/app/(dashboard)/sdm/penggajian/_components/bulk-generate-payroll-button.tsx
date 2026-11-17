@@ -297,7 +297,7 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
 
                 {weeklyStart && !isMondayYmd(weeklyStart) ? (
                   <p className="text-xs text-muted-foreground">
-                    Tanggal mulai bukan hari Senin — rentang tetap dikirim apa adanya untuk diputuskan server.
+                    Tanggal mulai bukan hari Senin, rentang tetap dikirim apa adanya untuk diputuskan server.
                   </p>
                 ) : null}
 

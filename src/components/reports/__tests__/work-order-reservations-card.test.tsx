@@ -77,7 +77,7 @@ describe("WorkOrderReservationsCard F-057-S AC-RIL-5", () => {
     )
     const text = container.textContent ?? ""
     expect(text).toContain("Busi Iridium")
-    expect(text).toContain("Belum direservasi — gudang belum ditentukan")
+    expect(text).toContain("Belum direservasi – gudang belum ditentukan")
     expect(text).not.toContain("Dilepas")
     expect(text).toContain("Kebutuhan tanpa reservasi")
     unmountCard(root)

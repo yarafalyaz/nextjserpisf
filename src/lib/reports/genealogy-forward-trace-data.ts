@@ -76,7 +76,7 @@ export async function loadForwardTrace(queryRaw: string): Promise<{
   const userNameById = new Map(users.map((u) => [u.id, u.name]))
   const itemLabel = (id: number) => {
     const item = itemById.get(id)
-    return item ? `${item.sku} — ${item.name}` : `Barang #${id}`
+    return item ? `${item.sku} - ${item.name}` : `Barang #${id}`
   }
 
   return {

@@ -185,7 +185,7 @@ describe("WarrantyJournalPanel — rute provisi MATI E2+E3", () => {
 
   it("E130-1: penolakan recovery server tampil verbatim lewat toast error", async () => {
     const verbatim =
-      "Recovery ditolak: lampiran persetujuan vendor sesudah pengiriman belum ada — unggah surat/email persetujuan, nota kredit vendor, atau janji penggantian part tertulis sesudah klaim dikirim; foto part cacat sebelum pengiriman tidak cukup."
+      "Recovery ditolak: lampiran persetujuan vendor sesudah pengiriman belum ada, unggah surat/email persetujuan, nota kredit vendor, atau janji penggantian part tertulis sesudah klaim dikirim; foto part cacat sebelum pengiriman tidak cukup."
     recoveryMock.mockClear()
     errorMock.mockClear()
     successMock.mockClear()

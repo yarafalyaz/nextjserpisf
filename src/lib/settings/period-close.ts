@@ -83,7 +83,7 @@ export function buildPeriodCloseChecks(input: PeriodCloseInput): PeriodCloseResu
       counts.draftJournals,
       "Jurnal masih draft",
       "Jurnal bertanggal di bulan ini yang belum diposting.",
-      "Setelah periode ditutup, jurnal bertanggal pada atau sebelum tanggal kunci tidak bisa lagi diposting — posting dulu, atau pindahkan tanggalnya ke bulan berikutnya.",
+      "Setelah periode ditutup, jurnal bertanggal pada atau sebelum tanggal kunci tidak bisa lagi diposting – posting dulu, atau pindahkan tanggalnya ke bulan berikutnya.",
     ),
     check(
       "draftSalesInvoices",
@@ -155,7 +155,7 @@ export function buildPeriodCloseChecks(input: PeriodCloseInput): PeriodCloseResu
 
   const verdict =
     warningCount === 0
-      ? `${input.monthLabel}: tidak ada temuan yang perlu diperiksa — periode siap ditutup.`
+      ? `${input.monthLabel}: tidak ada temuan yang perlu diperiksa – periode siap ditutup.`
       : `${input.monthLabel}: ${warningCount} hal perlu diperiksa sebelum menutup periode.`
 
   return {

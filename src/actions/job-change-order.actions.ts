@@ -147,7 +147,7 @@ function validateLines(lines: ChangeOrderLineInput[]): void {
     } else {
       if (line.workOrderItemId == null) throw new Error(`Baris ${line.action} wajib menunjuk baris perintah kerja`)
       if (line.action === "ubah" && (line.qtyAfter ?? 0) <= 0) {
-        throw new Error("Qty baris ubah wajib lebih dari 0 — gunakan aksi hapus untuk menghilangkan baris")
+        throw new Error("Qty baris ubah wajib lebih dari 0 – gunakan aksi hapus untuk menghilangkan baris")
       }
     }
     // Nilai after terisi (bukan null) tidak boleh negatif: 0 sah (baris
@@ -196,7 +196,7 @@ function snapshotLinesFromWorkOrder(
     })
     if (resolved.ambiguous || !resolved.item) {
       throw new Error(
-        `Baris penawaran untuk item #${woItem.itemId} pada baris perintah kerja #${woItem.id} tidak dapat dicocokkan secara unik — penawaran berubah atau memuat baris ganda; periksa penawaran sebelum membuat change order.`,
+        `Baris penawaran untuk item #${woItem.itemId} pada baris perintah kerja #${woItem.id} tidak dapat dicocokkan secara unik – penawaran berubah atau memuat baris ganda; periksa penawaran sebelum membuat change order.`,
       )
     }
     return {
@@ -257,7 +257,7 @@ export async function createJobChangeOrder(input: {
       })
       if (active) {
         throw new Error(
-          `Masih ada change order aktif ${active.documentNo} (status ${active.status}) untuk Perintah Kerja ini — selesaikan atau batalkan dulu (BR-CO-06).`,
+          `Masih ada change order aktif ${active.documentNo} (status ${active.status}) untuk Perintah Kerja ini – selesaikan atau batalkan dulu (BR-CO-06).`,
         )
       }
 
@@ -681,7 +681,7 @@ export async function applyJobChangeOrder(changeOrderId: number) {
           })
           if (resolved.ambiguous || !resolved.item) {
             throw new Error(
-              `Baris penawaran untuk item #${line.itemId} tidak dapat dicocokkan secara unik untuk diterapkan — penawaran berubah sejak change order dibuat; batalkan dan buat change order baru.`,
+              `Baris penawaran untuk item #${line.itemId} tidak dapat dicocokkan secara unik untuk diterapkan – penawaran berubah sejak change order dibuat; batalkan dan buat change order baru.`,
             )
           }
           const target = qItems.find((q) => q.id === resolved.item!.id)
@@ -738,7 +738,7 @@ export async function applyJobChangeOrder(changeOrderId: number) {
           } as never,
           changeReason: `Change order ${co.documentNo}: ${co.reason}`,
           action: "change_order_applied",
-          description: `Change order ${co.documentNo} diterapkan pada perintah kerja — nilai kontrak direvisi`,
+          description: `Change order ${co.documentNo} diterapkan pada perintah kerja – nilai kontrak direvisi`,
           userId: Number(user.id),
         },
       })
@@ -853,7 +853,7 @@ export async function applyJobChangeOrder(changeOrderId: number) {
     // Uang keluar HANYA lewat aksi existing (BR-CO-02/vonis BOT 4):
     // naik -> faktur selisih draft; turun -> kredit RevisionDown pasif.
     // Selisih 0 -> tanpa dokumen uang + catatan (spec §6, bukan error).
-    let moneyNote = "Nilai kontrak tidak berubah — tanpa faktur selisih/kredit."
+    let moneyNote = "Nilai kontrak tidak berubah – tanpa faktur selisih/kredit."
     let invoiceId: number | null = null
     let creditId: number | null = null
     const diffResult = await createDifferenceInvoice(applied.quotationId)
@@ -870,7 +870,7 @@ export async function applyJobChangeOrder(changeOrderId: number) {
           `${diffResult.error ?? ""} ${creditResult.error ?? ""}`,
         )
       ) {
-        moneyNote = `Nilai kontrak sudah direvisi; dokumen uang belum lahir: ${diffResult.error ?? creditResult.error ?? "—"} Panggil ulang faktur selisih/kredit revisi-turun dari penawaran.`
+        moneyNote = `Nilai kontrak sudah direvisi; dokumen uang belum lahir: ${diffResult.error ?? creditResult.error ?? "-"} Panggil ulang faktur selisih/kredit revisi-turun dari penawaran.`
       }
     }
 

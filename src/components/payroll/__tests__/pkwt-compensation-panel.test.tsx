@@ -186,7 +186,7 @@ describe("PkwtCompensationPanel F-2026-10-24-132-V", () => {
       report({ glIsCompanyWide: true, glComparableToScope: false, anomalies: [] }),
     )
     const scopedText = scoped.container.textContent ?? ""
-    expect(scopedText).toContain("Saldo GL Utang Kompensasi (210207) — saldo perusahaan")
+    expect(scopedText).toContain("Saldo GL Utang Kompensasi (210207)(saldo perusahaan")
     expect(scopedText).toContain(
       "Saldo GL mencakup seluruh perusahaan; baris dan total lain di panel ini hanya karyawan dalam cakupan Anda, jadi saldo GL tidak diperbandingkan dengan total panel.",
     )
@@ -304,7 +304,7 @@ describe("PkwtCompensationPanel F-2026-10-24-132-V", () => {
   it("error tarik verbatim: parsial/dobel ditolak server tampil apa adanya", async () => {
     attachMock.mockResolvedValue({
       success: false,
-      error: "Peristiwa kompensasi PKWT ini sudah punya baris slip — satu peristiwa paling banyak satu baris slip terbayar.",
+      error: "Peristiwa kompensasi PKWT ini sudah punya baris slip – satu peristiwa paling banyak satu baris slip terbayar.",
     })
     const { container, root } = renderPanel()
     const attachForm = container.querySelector<HTMLFormElement>(
@@ -316,7 +316,7 @@ describe("PkwtCompensationPanel F-2026-10-24-132-V", () => {
       attachForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
     })
     expect(showErrorMock).toHaveBeenCalledWith(
-      "Peristiwa kompensasi PKWT ini sudah punya baris slip — satu peristiwa paling banyak satu baris slip terbayar.",
+      "Peristiwa kompensasi PKWT ini sudah punya baris slip – satu peristiwa paling banyak satu baris slip terbayar.",
     )
     root.unmount()
   })

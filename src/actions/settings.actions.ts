@@ -239,7 +239,7 @@ export async function updateSystemSettings(formData: FormData) {
         if (v === undefined) return undefined
         if (v === null) return "unknown"
         if (v !== "non_pkp" && v !== "pkp" && v !== "unknown") {
-          throw new Error("Status PKP perusahaan tidak valid — pilih PKP, non-PKP, atau belum ditetapkan.")
+          throw new Error("Status PKP perusahaan tidak valid – pilih PKP, non-PKP, atau belum ditetapkan.")
         }
         return v
       })(),

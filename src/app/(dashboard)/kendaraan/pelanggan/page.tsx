@@ -87,7 +87,7 @@ export default async function CustomerVehiclesPage({
             Kendaraan Pelanggan (Fleet Registry)
           </h1>
           <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
-            Daftar unit kendaraan pelanggan — cari berdasarkan plat nomor, nomor rangka (VIN), nomor mesin, model, atau nama pemilik.
+            Daftar unit kendaraan pelanggan, cari berdasarkan plat nomor, nomor rangka (VIN), nomor mesin, model, atau nama pemilik.
           </p>
         </div>
         <CanCreate permission="create_customers">

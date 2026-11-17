@@ -42,7 +42,7 @@ describe("F-001 (a) kode 04 harga 12jt → DPP 11jt PPN 1,32jt, pendapatan tetap
   })
 })
 
-describe("F-001 (b) pengganti mengubah PPN — SPT masa asal, tanpa dobel masa terbit", () => {
+describe("F-001 (b) pengganti mengubah PPN – SPT masa asal, tanpa dobel masa terbit", () => {
   it("hanya kepala rantai bernilai; yang diganti nol-efek", () => {
     const chain = [
       { id: 1, djpStatus: "replaced", dpp: 11_000_000, taxAmount: 1_320_000 },

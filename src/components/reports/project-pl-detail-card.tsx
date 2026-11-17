@@ -104,7 +104,7 @@ export function ProjectPlDetailCard({ pl }: Readonly<{ pl: ProjectPlResult }>) {
           <h3 className="text-sm font-semibold text-foreground">Memo Jam Timesheet Belum Ditarik</h3>
           <p className="mt-1 text-xs text-muted-foreground">
             {formatNumber(pl.unpulledTimesheetHours, 2)} jam dari {formatNumber(pl.unpulledTimesheetCount)}{" "}
-            baris timesheet belum ditarik ke biaya produksi — memo jam saja, bukan biaya dan tidak mengurangi laba.
+            baris timesheet belum ditarik ke biaya produksi, memo jam saja, bukan biaya dan tidak mengurangi laba.
           </p>
         </section>
       )}

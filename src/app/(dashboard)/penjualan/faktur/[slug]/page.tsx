@@ -238,7 +238,7 @@ export default async function InvoiceDetailPage({
       <WhatsappTrailNote trail={whatsappTrail} />
 
       {/* GL-BR-003 K2: faktur terkunci (cancelled/setelah-pelunasan-nyata)
-          — arahkan ke jalur koreksi sah (Retur, Batalkan di header). */}
+, arahkan ke jalur koreksi sah (Retur, Batalkan di header). */}
       {!itemsEditable && (
         <PostedLockNotice
           documentLabel={`Faktur ${invoice.documentNo}`}
@@ -258,7 +258,7 @@ export default async function InvoiceDetailPage({
                 {/* Sengaja tanpa <StatusActions> generik (Setujui/Tolak): pada
                     faktur, tombol itu hanya membalik status ke approved tanpa
                     efek domain apa pun, sementara Posting di header sudah
-                    menerima draft langsung — dua aksi maju yang tumpang tindih
+                    menerima draft langsung, dua aksi maju yang tumpang tindih
                     membingungkan operator. Status cukup tampil sebagai chip
                     di header. */}
                 <DetailCard>
@@ -332,7 +332,7 @@ export default async function InvoiceDetailPage({
                 )}
 
                 {/* F-2026-10-25-036-S: snapshot tarif komisi beku di faktur.
-                    Nilai verbatim dari kolom snapshot server — UI tidak
+                    Nilai verbatim dari kolom snapshot server, UI tidak
                     menghitung tarif/komisi/DPP dan tidak membaca tarif
                     kategori berjalan, jadi ubahan kategori sesudah faktur
                     lunas tidak mengubah tampilan faktur lama (AC-KT-F3). */}
@@ -350,7 +350,7 @@ export default async function InvoiceDetailPage({
                       />
                       <DetailField
                         label="Status Snapshot"
-                        value="Snapshot tarif beku saat faktur lunas — perubahan tarif kategori sesudahnya tidak mengubah faktur ini."
+                        value="Snapshot tarif beku saat faktur lunas – perubahan tarif kategori sesudahnya tidak mengubah faktur ini."
                         colSpan="full"
                       />
                     </>

@@ -291,7 +291,7 @@ export function BomRevisionChangePanel({
             <p key={`${pin.label}-${pin.documentNo}`} role="note" className="text-xs text-muted-foreground">
               Pin {pin.label} {pin.documentNo}:{" "}
               <span className="font-medium text-foreground">Rev. {pin.revisionNo}</span>{" "}
-              — ganti revisi dokumen ini tidak mengubah pin {pin.label}.
+, ganti revisi dokumen ini tidak mengubah pin {pin.label}.
             </p>
           ))}
           {canRequest ? (

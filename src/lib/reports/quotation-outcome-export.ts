@@ -17,7 +17,7 @@ export interface QuotationOutcomeLoadResult {
 
 function periodCaption(period: { start: Date; end: Date }): string {
   const format = (date: Date) => formatDate(date)
-  return `${format(period.start)} – ${format(period.end)}`
+  return `${format(period.start)} - ${format(period.end)}`
 }
 
 export async function loadQuotationOutcomeReport(period: {
@@ -49,7 +49,7 @@ export function buildQuotationOutcomeTable(
       rows: [
         {
           kind: "notice",
-          text: "Belum ada penawaran pada periode ini — tidak ada hasil menang/kalah yang bisa diringkas.",
+          text: "Belum ada penawaran pada periode ini – tidak ada hasil menang/kalah yang bisa diringkas.",
         },
       ],
     }

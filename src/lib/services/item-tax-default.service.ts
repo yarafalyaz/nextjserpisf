@@ -96,7 +96,7 @@ export function validateItemTaxDefaults(input: ItemTaxDefaultInput): void {
     (defaultSalesTaxId !== null || defaultPurchaseTaxId !== null || defaultDppPercent !== null)
   ) {
     throw new Error(
-      "Item besi tua tidak boleh membawa default pajak — penanda scrap menang atas default pajak per item (vonis Q-ITX-1 Putusan 5). Kosongkan default pajak penjualan, pembelian, dan persen DPP.",
+      "Item besi tua tidak boleh membawa default pajak, penanda scrap menang atas default pajak per item (vonis Q-ITX-1 Putusan 5). Kosongkan default pajak penjualan, pembelian, dan persen DPP.",
     )
   }
 }
@@ -142,17 +142,17 @@ export function resolveItemTaxLineSnapshot(args: {
 
   if (tax === null || tax.id !== taxId) {
     throw new Error(
-      `Kode pajak default ${DIRECTION_LABEL[direction]} (Tax id ${taxId}) tidak ditemukan di master pajak. Perbaiki rujukan di master barang atau master pajak — tanpa fallback tarif lain (vonis Q-ITX-1 Putusan 3).`,
+      `Kode pajak default ${DIRECTION_LABEL[direction]} (Tax id ${taxId}) tidak ditemukan di master pajak. Perbaiki rujukan di master barang atau master pajak, tanpa fallback tarif lain (vonis Q-ITX-1 Putusan 3).`,
     )
   }
   if (!tax.isActive || tax.deletedAt !== null) {
     throw new Error(
-      `Kode pajak default ${DIRECTION_LABEL[direction]} "${tax.id}" nonaktif atau terhapus. Aktifkan kembali di master pajak atau kosongkan default di master barang — tanpa fallback tarif lain (vonis Q-ITX-1 Putusan 3).`,
+      `Kode pajak default ${DIRECTION_LABEL[direction]} "${tax.id}" nonaktif atau terhapus. Aktifkan kembali di master pajak atau kosongkan default di master barang, tanpa fallback tarif lain (vonis Q-ITX-1 Putusan 3).`,
     )
   }
   if (!taxEffectiveOn(tax, documentDate)) {
     throw new Error(
-      `Kode pajak default ${DIRECTION_LABEL[direction]} "${tax.id}" di luar masa efektif pada tanggal dokumen. Periksa masa berlaku di master pajak — tanpa fallback tarif lain (vonis Q-ITX-1 Putusan 3).`,
+      `Kode pajak default ${DIRECTION_LABEL[direction]} "${tax.id}" di luar masa efektif pada tanggal dokumen. Periksa masa berlaku di master pajak, tanpa fallback tarif lain (vonis Q-ITX-1 Putusan 3).`,
     )
   }
 

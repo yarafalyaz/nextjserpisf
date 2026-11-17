@@ -54,7 +54,7 @@ export function DownPaymentVatSnapshotCard({ snapshot }: { snapshot: DownPayment
     <section aria-label="Snapshot PPN uang muka" className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <h2 className="text-base font-semibold text-foreground">Snapshot PPN Uang Muka</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Nilai dibekukan server saat uang muka dikonfirmasi dan tampil apa adanya — halaman ini tidak menghitung ulang PPN.
+        Nilai dibekukan server saat uang muka dikonfirmasi dan tampil apa adanya, halaman ini tidak menghitung ulang PPN.
       </p>
       <dl className="mt-4 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="DPP Uang Muka">{hasSnapshot ? formatCurrencyExact(snapshot.vatDpp ?? 0) : "Belum ada snapshot PPN tercatat"}</Field>

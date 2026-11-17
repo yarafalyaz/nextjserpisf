@@ -88,19 +88,19 @@ export function WorkOrderMaterialNeedsCard({
                   <DetailTableTd align="right">{line.shortageQty}</DetailTableTd>
                   <DetailTableTd>
                     {line.isService
-                      ? "Jasa — terpenuhi"
+                      ? "Jasa – terpenuhi"
                       : line.fulfilled
                         ? "Terpenuhi"
                         : line.shortageQty > 0
                           ? line.incomingCover === "tepat-waktu"
-                            ? `Kekurangan stok — tertutup incoming tepat waktu (${fmtDate(line.incomingEarliestDate)})`
+                            ? `Kekurangan stok – tertutup incoming tepat waktu (${fmtDate(line.incomingEarliestDate)})`
                             : line.incomingCover === "terlambat"
-                              ? `Kekurangan stok — incoming terlambat (${fmtDate(line.incomingEarliestDate)})`
+                              ? `Kekurangan stok – incoming terlambat (${fmtDate(line.incomingEarliestDate)})`
                               : line.incomingCover === "belum-jadwal"
-                                ? "Kekurangan stok — incoming belum dijadwalkan"
+                                ? "Kekurangan stok – incoming belum dijadwalkan"
                                 : "Kekurangan stok"
                           : line.warehouseShortageQty > 0
-                            ? "Belum keluar — kurang di gudang relevan"
+                            ? "Belum keluar – kurang di gudang relevan"
                             : "Belum keluar"}
                   </DetailTableTd>
                 </DetailTableRow>

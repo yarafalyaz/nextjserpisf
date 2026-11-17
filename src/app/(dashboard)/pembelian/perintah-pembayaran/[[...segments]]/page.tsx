@@ -146,7 +146,7 @@ export default async function PaymentOrderPage({
       </div>
 
       <PaymentOrderFilterForm
-        vendors={vendors.map((v) => ({ value: v.slug ?? String(v.id), label: `${v.code ? `${v.code} — ` : ""}${v.name}` }))}
+        vendors={vendors.map((v) => ({ value: v.slug ?? String(v.id), label: `${v.code ? `${v.code}, ` : ""}${v.name}` }))}
         vendorSegment={selectedVendor ? (selectedVendor.slug ?? String(selectedVendor.id)) : undefined}
         sampaiTanggal={toLocalDateOnly(dueThrough)}
       />
@@ -156,7 +156,7 @@ export default async function PaymentOrderPage({
       </div>
 
       <ReportLetterhead title="Perintah Pembayaran" subtitle="Perintah Pembayaran" periodLabel={periodLabel} />
-      <ReportNarration text="Perintah Pembayaran merangkum tagihan vendor yang sudah jatuh tempo (serta tagihan tanpa jatuh tempo) untuk dieksekusi pembayarannya, dikelompokkan per pemasok dengan subtotal dan total keseluruhan. Dokumen ini adalah instruksi pembayaran — pencatatan pelunasan tetap dilakukan pada menu Pembayaran Vendor agar jurnal terbentuk." />
+      <ReportNarration text="Perintah Pembayaran merangkum tagihan vendor yang sudah jatuh tempo (serta tagihan tanpa jatuh tempo) untuk dieksekusi pembayarannya, dikelompokkan per pemasok dengan subtotal dan total keseluruhan. Dokumen ini adalah instruksi pembayaran – pencatatan pelunasan tetap dilakukan pada menu Pembayaran Vendor agar jurnal terbentuk." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Jumlah Pemasok" value={String(grouped.length)} />

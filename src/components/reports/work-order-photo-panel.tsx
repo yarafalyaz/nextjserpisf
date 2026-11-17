@@ -110,7 +110,7 @@ function CategorySections({
         return (
           <div key={category} className="flex flex-col gap-2">
             <h4 className="text-sm font-medium text-foreground">
-              {headingPrefix} — {label} ({inCategory.length})
+              {headingPrefix}, {label} ({inCategory.length})
             </h4>
             <PhotoList photos={inCategory} actions={actions} />
           </div>

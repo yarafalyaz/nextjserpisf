@@ -135,7 +135,7 @@ export function AssetCategoryForm({
             ]} defaultValue={category?.fiscalMethod ?? ""} />
             <p className="text-xs text-muted-foreground">
               Belum dipilih = penyusutan fiskal belum dihitung (tidak diganti garis lurus).
-              Bangunan hanya boleh garis lurus — saldo menurun untuk kelompok bangunan ditolak server.
+              Bangunan hanya boleh garis lurus, saldo menurun untuk kelompok bangunan ditolak server.
             </p>
           </div>
           <div className="flex flex-col gap-1.5">
@@ -175,7 +175,7 @@ export function AssetCategoryForm({
           <p className="text-xs text-muted-foreground">
             Akun peristiwa revaluasi / penurunan nilai kategori ini (F-111/F-128). Berbeda dari mapping
             global di atas: kosong = belum terpetakan, dan peristiwa terkait ditolak berisik oleh server
-            (gagal tertutup) — bukan dialihkan ke akun lain. Surplus revaluasi wajib akun ekuitas, beban
+            (gagal tertutup), bukan dialihkan ke akun lain. Surplus revaluasi wajib akun ekuitas, beban
             penurunan nilai wajib akun beban, akumulasi penurunan nilai wajib akun kontra-aset.
           </p>
           <div className="flex flex-col gap-1.5">

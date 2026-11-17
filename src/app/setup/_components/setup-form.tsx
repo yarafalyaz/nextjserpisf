@@ -228,7 +228,7 @@ export function SetupForm() {
             >
               <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:col-span-2">
                 <p>
-                  Database akan diperiksa dan — bila masih kosong — skemanya dibuat otomatis
+                  Database akan diperiksa dan, bila masih kosong, skemanya dibuat otomatis
                   dari migrasi aplikasi. Setelah itu Anda mengisi identitas perusahaan dan
                   membuat akun administrator pertama; data master bawaan (peran &amp; hak
                   akses RBAC, bagan akun, satuan, metode pembayaran, gudang utama) langsung

@@ -110,7 +110,7 @@ export function StocktakeUnfinishedQueueCard({
                     </DetailTableTd>
                     <DetailTableTd>
                       {row.warehouseCode && row.warehouseName
-                        ? `${row.warehouseCode} — ${row.warehouseName}`
+                        ? `${row.warehouseCode} - ${row.warehouseName}`
                         : (row.warehouseName ?? row.warehouseCode ?? "—")}
                     </DetailTableTd>
                     <DetailTableTd>
@@ -142,7 +142,7 @@ export function StocktakeUnfinishedQueueCard({
                       {row.progresLabel}
                       {row.barisPerluHitungUlang > 0 ? (
                         <span className="text-muted-foreground">
-                          {` — ${row.barisPerluHitungUlang} perlu hitung ulang`}
+                          {` (${row.barisPerluHitungUlang} perlu hitung ulang`}
                         </span>
                       ) : null}
                       {row.tanpaBaris ? (
