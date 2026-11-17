@@ -17,7 +17,9 @@ RUN apk add --no-cache \
     chown -R nextjs:nodejs /app/.next /app/.next-dev /app/node_modules
 
 COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && corepack prepare pnpm@12.18.0 --activate \
+# corepack DIHAPUS dari distribusi Node >=24 (image node:26-alpine tidak
+# menyediakannya), jadi pnpm dipasang lewat npm global, bukan corepack.
+RUN npm install -g pnpm@12.18.0 \
   && pnpm install --frozen-lockfile --ignore-scripts
 
 # Copy application configuration and Prisma schema

@@ -7,7 +7,9 @@ WORKDIR /app
 # Install dependencies (pnpm: repo memakai pnpm-lock.yaml. Sebelumnya Dockerfile
 # menyalin package-lock.json yang TIDAK ada di repo -> build image selalu gagal.)
 COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && corepack prepare pnpm@12.18.0 --activate \
+# corepack DIHAPUS dari distribusi Node >=24 (image node:26-alpine tidak
+# menyediakannya), jadi pnpm dipasang lewat npm global, bukan corepack.
+RUN npm install -g pnpm@12.18.0 \
   && pnpm install --frozen-lockfile --ignore-scripts
 
 # Copy the rest of the application code
