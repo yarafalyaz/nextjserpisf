@@ -2370,14 +2370,21 @@ export async function onSalesReturnCompleted(
           memo: "Kelebihan Retur Penjualan ke Kredit Pelanggan",
         });
       }
-      if (returnVatTotal > 0) {
-        entrySpecs.push({
-          accountId: settings.salesTaxAccountId!,
-          debit: returnVatTotal,
-          credit: 0,
-          memo: "PPN Keluaran (Retur)",
-        });
-      }
+    }
+    // PPN retur DI LUAR blok `priceTotal > 0` (audit 2026-11-17): retur tanpa
+    // harga (barang diganti pengiriman ulang, priceTotal 0) tetap membawa
+    // `returnVatTotal` dari snapshot baris. Dulu kaki ini terkunci di dalam
+    // blok harga, sehingga PPN Keluaran tidak pernah dikreditkan walau guard
+    // pemetaan di atas menuntutnya — PPN atas penyerahan yang sama terutang
+    // dua kali begitu retur diganti faktur baru. Guard `salesTaxAccountId`
+    // di atas memang tanpa syarat harga, jadi foot ini yang harus mengikutinya.
+    if (returnVatTotal > 0) {
+      entrySpecs.push({
+        accountId: settings.salesTaxAccountId!,
+        debit: returnVatTotal,
+        credit: 0,
+        memo: "PPN Keluaran (Retur)",
+      });
     }
     if (costTotal > 0) {
       entrySpecs.push(

@@ -1895,14 +1895,20 @@ export async function completeWorkOrder(workOrderId: number) {
         throw new Error("Perintah Kerja tidak bisa diselesaikan tanpa item.");
       }
 
-      // Guard: check if MaterialIssue exists and is completed for this WO
-      const mi = await tx.materialIssue.findFirst({
-        where: { workOrderId: workOrderId, status: "completed" },
-      });
-      if (!mi) {
-        throw new Error(
-          "Material Issue belum diselesaikan untuk Work Order ini. Selesaikan Material Issue terlebih dahulu.",
-        );
+      // Guard: check if MaterialIssue exists and is completed for this WO.
+      // Hanya berlaku bila WO punya baris STOK: baris jasa (itemId NULL)
+      // tak mengeluarkan material, jadi menuntut MI akan mengunci WO
+      // jasa permanen (audit 2026-11-17).
+      const adaBarisStok = wo.items.some((i) => i.itemId != null && Number(i.qty) > 0);
+      if (adaBarisStok) {
+        const mi = await tx.materialIssue.findFirst({
+          where: { workOrderId: workOrderId, status: "completed" },
+        });
+        if (!mi) {
+          throw new Error(
+            "Material Issue belum diselesaikan untuk Work Order ini. Selesaikan Material Issue terlebih dahulu.",
+          );
+        }
       }
 
       // Guard QC (PRD FAB-11/FAB-13): a final inspection that failed, or any open
@@ -2189,6 +2195,20 @@ export async function createMaterialIssueFromWorkOrder(
       if (issueableItems.length === 0) {
         throw new Error(
           "Work Order tidak memiliki item. Tambahkan item terlebih dahulu.",
+        );
+      }
+      // Baris JASA (itemId NULL, dulu sentinel 0) tidak punya stok untuk
+      // dikeluarkan. MI tanpa satu pun baris stok tidak akan pernah bisa
+      // `completed` (tidak ada StockMove yang dibuat), sehingga WO-nya
+      // terkunci permanen: tak bisa complete, close, maupun cancel
+      // (audit 2026-11-17). Tolak lebih awal dengan arahan jelas.
+      const stockLines = issueableItems.filter(
+        (i) => i.itemId != null && Number(i.qty) > 0,
+      );
+      if (stockLines.length === 0) {
+        throw new Error(
+          "Work Order ini hanya berisi baris jasa (tanpa item stok), jadi tidak ada material untuk dikeluarkan. " +
+            "Selesaikan Perintah Kerja langsung tanpa pengeluaran material.",
         );
       }
 

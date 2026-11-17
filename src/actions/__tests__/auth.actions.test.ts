@@ -863,6 +863,31 @@ describe("updateUserWarehouses", () => {
     expect(arg.data.userWarehouses.create).toEqual([{ warehouseId: 5 }, { warehouseId: 2 }])
   })
 
+  it("audit 2026-11-17: menolak mengubah penugasan gudang akun super admin", async () => {
+    // Regresi: dulu hasil `requirePermission` dibuang dan `assertCanModifyTarget`
+    // tidak pernah dipanggil, sehingga pemegang `manage_users` (peran admin
+    // delegasi) bisa mengganti penugasan gudang akun super admin — sesuatu yang
+    // ditolak `updateUserRoles` dan `toggleUserActive`.
+    userFindUniqueMock.mockResolvedValue({ id: 9, roles: [{ name: "super_admin" }] })
+    warehouseCountMock.mockResolvedValue(1)
+
+    const res = await updateUserWarehouses(9, [5])
+
+    expect(res.error).toMatch(/super admin/i)
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("super admin tetap boleh mengubah penugasan gudang akun super admin", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    userFindUniqueMock.mockResolvedValue({ id: 9, roles: [{ name: "super_admin" }] })
+    warehouseCountMock.mockResolvedValue(1)
+    userUpdateMock.mockResolvedValue({ id: 9 })
+
+    const res = await updateUserWarehouses(9, [5])
+
+    expect(res).toEqual({ success: true })
+  })
+
   it("menolak id yang tidak valid tanpa menyentuh basis data", async () => {
     for (const bad of [[NaN], [-1], [0], ["abc"]]) {
       const res = await updateUserWarehouses(3, bad as number[])

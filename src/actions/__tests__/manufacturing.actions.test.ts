@@ -1890,10 +1890,25 @@ describe("Work Order Actions", () => {
   })
 
   it("completeWorkOrder fails when no completed Material Issue", async () => {
-    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "in_progress", items: [{ id: 1 }] })
+    // Baris item STOK (itemId terisi) → MI wajib selesai lebih dulu.
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "in_progress", items: [{ id: 1, itemId: 7, qty: 2 }],
+    })
     mocks.prismaMock.materialIssue.findFirst.mockResolvedValue(null)
     const res = await actions.completeWorkOrder(1)
     expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Material Issue/i)
+  })
+
+  it("audit 2026-11-17: WO hanya baris jasa tidak dituntut Material Issue", async () => {
+    // Baris jasa = itemId NULL (dulu sentinel 0). Tanpa item stok tak ada
+    // material untuk dikeluarkan, jadi gerbang MI tidak boleh mengunci WO.
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "in_progress", items: [{ id: 1, itemId: null, qty: 1 }],
+    })
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue(null)
+    const res = await actions.completeWorkOrder(1)
+    expect(String(res?.error ?? "")).not.toMatch(/Material Issue/i)
   })
 
   it("completeWorkOrder tetap menolak QC belum bersih dengan pesan guard verbatim (manual)", async () => {

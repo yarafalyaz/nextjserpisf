@@ -372,7 +372,16 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
  */
 export async function updateUserWarehouses(userId: number, warehouseIds: number[]) {
   try {
-    await requirePermission("manage_users")
+    // Hasil `requirePermission` WAJIB dipakai: dulu ia dibuang, sehingga aksi
+    // ini satu-satunya jalur tulis user yang tidak memanggil
+    // `assertCanModifyTarget` — pemegang `manage_users` (mis. peran admin
+    // delegasi) bisa mengganti penugasan gudang akun super admin, sesuatu yang
+    // ditolak `updateUserRoles` dan `toggleUserActive` (audit 2026-11-17).
+    const actor = await requirePermission("manage_users")
+    const targetErr = await assertCanModifyTarget(actor.roles, userId)
+    if (targetErr) {
+      return { error: targetErr }
+    }
 
     const parsed = updateUserWarehousesSchema.safeParse(warehouseIds)
     if (!parsed.success) {

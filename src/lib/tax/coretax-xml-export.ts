@@ -21,6 +21,7 @@
 import { createHash } from "node:crypto"
 
 import { safeRound, safeSum } from "@/lib/utils/math"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { usesOtherValueBasis, type TransactionCode } from "@/lib/tax/tax-invoice"
 
 /** Versi template resmi DJP yang dipakai builder ini. Bagian kunci idempotensi. */
@@ -187,10 +188,12 @@ function money(value: number): string {
 }
 
 function formatDate(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, "0")
-  const day = String(d.getDate()).padStart(2, "0")
-  return `${y}-${m}-${day}`
+  // WIB TETAP, bukan zona lokal proses (audit 2026-11-17). Tanggal faktur
+  // disimpan sebagai tengah malam UTC hari WIB; memakai getFullYear/getDate
+  // lokal membuat container ber-TZ barat UTC menulis tanggal SEHARI LEBIH
+  // AWAL ke XML sementara masa pajak (yang memakai komponen UTC) tetap benar.
+  // Faktur masa 2026-11 akan masuk Coretax sebagai 2026-10-31.
+  return wibDateOnly(d)
 }
 
 const RECOGNISED_SOURCE_STATUSES = new Set(["posted", "partial", "paid"])
