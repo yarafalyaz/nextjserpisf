@@ -27,70 +27,28 @@
 
 import { Prisma } from "@prisma/client"
 
-export const ASSET_USE_STATUSES = ["active", "held_for_sale", "disposed"] as const
+// Aturan murni dipindah ke `asset-use-status-rules.ts` (tanpa Prisma) supaya
+// Client Component tidak menyeret `@prisma/client`; di-re-export di sini agar
+// seluruh pemanggil server-side tetap punya satu pintu.
+export {
+  ASSET_USE_STATUSES,
+  IDLE_REASONS,
+  isRegisteredAssetUseStatus,
+  validateHeldForSaleFacts,
+} from "./asset-use-status-rules"
+export type {
+  AssetUseStatus,
+  IdleReason,
+  HeldForSaleFacts,
+  HeldForSaleGate,
+  CronSkipReason,
+} from "./asset-use-status-rules"
 
-export type AssetUseStatus = (typeof ASSET_USE_STATUSES)[number]
-
-export function isRegisteredAssetUseStatus(
-  value: string | null | undefined,
-): value is AssetUseStatus {
-  return (
-    typeof value === "string" &&
-    (ASSET_USE_STATUSES as readonly string[]).includes(value)
-  )
-}
-
-export const IDLE_REASONS = [
-  "no_demand",
-  "repair",
-  "awaiting_parts",
-  "seasonal",
-  "other",
-] as const
-
-export type IdleReason = (typeof IDLE_REASONS)[number]
-
-export interface HeldForSaleFacts {
-  /** (a) Keputusan/persetujuan manajemen bernama bertanggal. */
-  managementApproval: string | null | undefined
-  /** (b) Tersedia dijual segera dalam kondisi sekarang. */
-  availableForImmediateSale: boolean | null | undefined
-  /** (c) Program aktif mencari pembeli; referensi dokumen penawaran. */
-  activeBuyerSearchRef: string | null | undefined
-  /** (d) Penjualan sangat mungkin selesai <= 12 bulan sejak klasifikasi. */
-  saleExpectedWithin12Months: boolean | null | undefined
-  /** (e) Harga penawaran wajar terhadap nilai wajar saat itu. */
-  askingPriceReasonable: boolean | null | undefined
-}
-
-export type HeldForSaleGate =
-  | { decision: "classify" }
-  | {
-      decision: "reject"
-      /** Fakta Putusan 3 yang kosong, urut (a)-(e). */
-      missingFacts: ("a" | "b" | "c" | "d" | "e")[]
-    }
-
-/** Gerbang Putusan 3. Satu fakta kosong = tolak, aset tetap `active` (E117-3). */
-export function validateHeldForSaleFacts(
-  facts: HeldForSaleFacts,
-): HeldForSaleGate {
-  const missing: ("a" | "b" | "c" | "d" | "e")[] = []
-  if (!facts.managementApproval?.trim()) missing.push("a")
-  if (facts.availableForImmediateSale !== true) missing.push("b")
-  if (!facts.activeBuyerSearchRef?.trim()) missing.push("c")
-  if (facts.saleExpectedWithin12Months !== true) missing.push("d")
-  if (facts.askingPriceReasonable !== true) missing.push("e")
-  return missing.length === 0
-    ? { decision: "classify" }
-    : { decision: "reject", missingFacts: missing }
-}
-
-export type CronSkipReason =
-  | "disposed"
-  | "held-for-sale"
-  | "at-residual"
-  | "unregistered-status"
+// Dipakai fungsi server-side di berkas ini (bukan sekadar re-export).
+import {
+  isRegisteredAssetUseStatus,
+  type CronSkipReason,
+} from "./asset-use-status-rules"
 
 export interface CronDispositionInput {
   /** `Asset.status` mentah (boleh string karangan lama). */
