@@ -492,6 +492,25 @@ jobs:
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
           RUN_DB_INTEGRATION: "1"
+      - name: Invariant data lintas-tabel (read-only, MySQL nyata)
+        # Kelas bug yang lolos unit test (mock tanpa data) dan lolos pembacaan
+        # kode (tiap jalur benar, kombinasinya meninggalkan data tak konsisten):
+        # jurnal timpang, entri yatim, saldo FIFO negatif, line-item menunjuk
+        # item hilang, faktur paid bersisa, komisi overpay. READ-ONLY.
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/vitest run src/lib/__tests__/data-invariants.integration.test.ts 2>&1 | tee data-invariants.log
+          if grep -qi 'skipped' data-invariants.log; then
+            echo "::error::data-invariants.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
+            exit 1
+          fi
+          if ! grep -Eq 'Tests.*6 passed' data-invariants.log; then
+            echo "::error::data-invariants.integration.test.ts tidak melaporkan 6 tes lulus — jumlah invariant berubah? sesuaikan angka ini."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          RUN_DB_INTEGRATION: "1"
       - name: Run DB integration tests (db concurrency, MySQL nyata)
         # Anti-skip adaptasi RUN_DB_INTEGRATION: suite ini lulus hampa
         # (warn + return, tetap "passed") bila flag/DB tak siap, jadi 'passed'
