@@ -92,4 +92,59 @@ describe.skipIf(!RUN)("invariant data lintas-tabel", () => {
     `
     expect(rows.map((r) => r.id)).toEqual([])
   })
+  it("faktur pajak tidak punya nomor ganda pada arah yang sama", async () => {
+    const rows = await prisma.$queryRaw<Array<{ direction: string; nomor: string }>>`
+      SELECT direction, tax_invoice_number AS nomor
+      FROM tax_invoices
+      WHERE tax_invoice_number IS NOT NULL
+      GROUP BY direction, tax_invoice_number
+      HAVING COUNT(*) > 1
+      LIMIT 20
+    `
+    expect(rows.map((r) => `${r.direction}:${r.nomor}`)).toEqual([])
+  })
+
+  it("kewajiban pajak tidak pernah dibayar melebihi kuantitas kas yang diatribusikan", async () => {
+    // Pajak mustahil dipotong lebih besar dari DPP-nya.
+    const rows = await prisma.$queryRaw<Array<{ id: number }>>`
+      SELECT id FROM withholding_certificates
+      WHERE dpp > 0 AND withheld_amount > dpp + 0.01
+      LIMIT 20
+    `
+    expect(rows.map((r) => r.id)).toEqual([])
+  })
+
+  it("slip gaji tidak pernah bernilai negatif atau melebihi bruto", async () => {
+    const negatif = await prisma.$queryRaw<Array<{ id: number }>>`
+      SELECT id FROM payrolls WHERE net_salary < 0 LIMIT 20
+    `
+    expect(negatif.map((r) => r.id)).toEqual([])
+    const lebih = await prisma.$queryRaw<Array<{ id: number }>>`
+      SELECT id FROM payrolls WHERE net_salary > gross_salary + 0.01 LIMIT 20
+    `
+    expect(lebih.map((r) => r.id)).toEqual([])
+  })
+
+  it("potongan statutori payroll tidak negatif", async () => {
+    const rows = await prisma.$queryRaw<Array<{ id: number }>>`
+      SELECT id FROM payrolls
+      WHERE pph21 < 0 OR bpjs_health_employee < 0 OR bpjs_employment_employee < 0
+      LIMIT 20
+    `
+    expect(rows.map((r) => r.id)).toEqual([])
+  })
+
+  it("penerimaan barang tidak melebihi qty pesanan", async () => {
+    const rows = await prisma.$queryRaw<Array<{ id: number }>>`
+      SELECT id FROM purchase_order_items WHERE received_qty > qty + 0.001 LIMIT 20
+    `
+    expect(rows.map((r) => r.id)).toEqual([])
+  })
+
+  it("tagihan vendor tidak dibayar melebihi nilai tagihan", async () => {
+    const rows = await prisma.$queryRaw<Array<{ id: number }>>`
+      SELECT id FROM vendor_bills WHERE paid_amount > grand_total + 0.01 LIMIT 20
+    `
+    expect(rows.map((r) => r.id)).toEqual([])
+  })
 })

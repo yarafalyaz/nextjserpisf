@@ -504,8 +504,8 @@ jobs:
             echo "::error::data-invariants.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
             exit 1
           fi
-          if ! grep -Eq 'Tests.*6 passed' data-invariants.log; then
-            echo "::error::data-invariants.integration.test.ts tidak melaporkan 6 tes lulus — jumlah invariant berubah? sesuaikan angka ini."
+          if ! grep -Eq 'Tests.*12 passed' data-invariants.log; then
+            echo "::error::data-invariants.integration.test.ts tidak melaporkan 12 tes lulus — jumlah invariant berubah? sesuaikan angka ini."
             exit 1
           fi
         env:
