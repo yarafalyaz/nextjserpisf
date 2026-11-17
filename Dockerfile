@@ -6,10 +6,10 @@ WORKDIR /app
 
 # Install dependencies (pnpm: repo memakai pnpm-lock.yaml. Sebelumnya Dockerfile
 # menyalin package-lock.json yang TIDAK ada di repo -> build image selalu gagal.)
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 # corepack DIHAPUS dari distribusi Node >=24 (image node:26-alpine tidak
 # menyediakannya), jadi pnpm dipasang lewat npm global, bukan corepack.
-RUN npm install -g pnpm@12.18.0 \
+RUN npm install -g pnpm@12.21.0 \
   && pnpm install --frozen-lockfile --ignore-scripts
 
 # Copy the rest of the application code
@@ -33,8 +33,15 @@ RUN test -r /app/node_modules/tailwindcss/index.css
 
 # Build the Next.js application
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN NODE_ENV=production pnpm run build \
-  && pnpm prune --prod
+RUN NODE_ENV=production pnpm run build
+
+# Prune lewat install ulang --prod, BUKAN `pnpm prune --prod`.
+# pnpm >=12 menolak `prune` selama ada paket yang build script-nya belum
+# diizinkan (ERR_PNPM_IGNORED_BUILDS: core-js@3.50.0 lewat jspdf), dan
+# onlyBuiltDependencies/ignoredBuiltDependencies di pnpm-workspace.yaml tidak
+# meloloskannya (diuji 7 varian). `install --prod --ignore-scripts` menghasilkan
+# pohon dependensi produksi yang sama tanpa gerbang itu.
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 # Use a smaller Node.js image for production
 FROM node:26-alpine AS runner

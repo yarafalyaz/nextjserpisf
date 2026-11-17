@@ -1,0 +1,16 @@
+# pnpm >= 11 tidak lagi membaca field "pnpm" di package.json; settingnya
+# tinggal di sini. Hanya paket ini (bukan monorepo) — packages kosong sah.
+packages: []
+
+# Paket yang BOLEH menjalankan build/lifecycle script saat install.
+# Sebelumnya daftar ini ada di package.json sebagai "allowScripts" (field npm),
+# yang diabaikan pnpm -> install di image Docker berhenti dengan
+# ERR_PNPM_IGNORED_BUILDS sebelum `next build` sempat jalan (CI Docker gagal
+# sejak 2026-11-12). Isinya dicocokkan dengan "allowScripts" yang lama.
+onlyBuiltDependencies:
+  - "@prisma/engines"
+  - core-js
+  - esbuild
+  - fsevents
+  - prisma
+  - unrs-resolver
