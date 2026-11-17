@@ -94,7 +94,10 @@ export async function POST(
     if (err instanceof Error && err.message.startsWith("CSRF validation failed:")) {
       return apiError("FORBIDDEN", "Permintaan lintas situs ditolak")
     }
-    const message = err instanceof Error ? err.message : "Gagal memproses persetujuan"
-    return apiError("INTERNAL_ERROR", message)
+    // Jangan kirim `err.message` ke klien: pesan Prisma memuat dump skema
+    // (nama model + seluruh daftar kolomnya). Sama seperti route workflow
+    // [...path]; catat di server, balas generik.
+    console.error("[api/notifications/decision] gagal memproses persetujuan:", err)
+    return apiError("INTERNAL_ERROR", "Gagal memproses persetujuan")
   }
 }
