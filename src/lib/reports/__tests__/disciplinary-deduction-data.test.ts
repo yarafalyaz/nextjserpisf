@@ -6,13 +6,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  * snapshot tampil verbatim tanpa turunan.
  */
 
-const mocks = vi.hoisted(() => ({ findMany: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  findMany: vi.fn(),
+  count: vi.fn(),
+  applicationFindMany: vi.fn(),
+}))
 
 vi.mock("@/lib/db/prisma", () => ({
-  prisma: { disciplinaryDeductionDecision: { findMany: mocks.findMany } },
+  prisma: {
+    disciplinaryDeductionDecision: { findMany: mocks.findMany, count: mocks.count },
+    disciplinaryDeductionApplication: { findMany: mocks.applicationFindMany },
+  },
 }))
 
 import {
+  loadDisciplinaryDeductionApplicationStatus,
   loadDisciplinaryDeductionDecisions,
   loadDisciplinaryDeductionDecisionsForRecord,
 } from "../disciplinary-deduction-data"
@@ -87,5 +95,23 @@ describe("loadDisciplinaryDeductionDecisions", () => {
         where: { deletedAt: null, employeeId: 42, disciplinaryRecordId: 5 },
       }),
     )
+  })
+
+  it("regresi KM2: status penerapan menghitung keputusan vs yang sudah dibukukan", async () => {
+    mocks.count.mockResolvedValue(4)
+    mocks.applicationFindMany.mockResolvedValue([{ decisionId: 1 }, { decisionId: 1 }, { decisionId: 2 }])
+    const status = await loadDisciplinaryDeductionApplicationStatus({ kind: "all" })
+    expect(status).toEqual({ decisions: 4, applied: 2, pending: 2 })
+    // Scope HR yang sama dipakai di kedua query (fail-closed).
+    expect(mocks.count.mock.calls[0][0].where).toEqual({ deletedAt: null })
+    expect(mocks.applicationFindMany.mock.calls[0][0].where.decision.deletedAt).toBeNull()
+  })
+
+  it("regresi KM2: status tetap jujur saat nol keputusan terbukukan", async () => {
+    mocks.count.mockResolvedValue(3)
+    mocks.applicationFindMany.mockResolvedValue([])
+    const status = await loadDisciplinaryDeductionApplicationStatus({ kind: "self", employeeId: 42 })
+    expect(status).toEqual({ decisions: 3, applied: 0, pending: 3 })
+    expect(mocks.count.mock.calls[0][0].where).toEqual({ deletedAt: null, employeeId: 42 })
   })
 })

@@ -71,9 +71,10 @@ vi.mock("@/lib/auth/permissions", () => ({
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: vi.fn() }))
+const requestApprovalMock = vi.hoisted(() => vi.fn().mockResolvedValue(true))
 vi.mock("@/lib/services/approval-workflow.service", () => ({
   assertApproved: vi.fn(),
-  requestApprovalIfConfigured: vi.fn().mockResolvedValue(true),
+  requestApprovalIfConfigured: (...a: unknown[]) => requestApprovalMock(...a),
 }))
 vi.mock("@/lib/services/notification.service", () => ({ notifyAdmins: vi.fn(), createNotification: vi.fn() }))
 vi.mock("@/lib/services/email", () => ({ sendEmail: vi.fn() }))
@@ -563,7 +564,30 @@ describe("F-027 tarikan generate", () => {
     expect(row.grossSalary).toBe(5000000)
     expect(prismaMock.payrollComponentLine.createMany).not.toHaveBeenCalled()
   })
+  it("regresi KM2: slip bulk TANPA component lines tetap diajukan ke workflow Payroll", async () => {
+    // Cacat: generateBulkPayroll hanya membaca ulang slip yang punya
+    // component lines, sehingga slip massal tanpa baris tidak pernah
+    // membuat baris Approval — workflow Payroll dilewati total untuk
+    // jalur bulk (generate -> approve -> paid oleh pembuat sendiri).
+    prismaMock.employee.findMany
+      .mockResolvedValueOnce([{ id: 7 }])
+      .mockResolvedValue([{ id: 7, baseSalary: 5000000, maritalStatus: "single", dependents: 0, departmentId: null, employeeLoans: [] }])
+    prismaMock.payroll.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([{ id: 55, employeeId: 7, componentLines: [] }])
+    prismaMock.payroll.findUnique.mockResolvedValue({ status: "draft", componentLines: [] })
+    const res = await actions.generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
+    expect(res.success).toBe(true)
+    expect(prismaMock.payrollComponentLine.createMany).not.toHaveBeenCalled()
+    expect(requestApprovalMock).toHaveBeenCalledTimes(1)
+    expect(requestApprovalMock).toHaveBeenCalledWith("Payroll", 55, 1, expect.anything())
+  })
 })
+
 
 describe("F-027 baris draft", () => {
   it("AC-3: baris manual draft mengubah agregat persis", async () => {

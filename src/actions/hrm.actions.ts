@@ -3038,26 +3038,37 @@ export async function generateBulkPayroll(
           }
           if (keptRows.length === 0) return { count: 0, created: [] as { id: number; employeeId: number | null }[] };
           await tx.payroll.createMany({ data: keptRows, skipDuplicates: true });
-          const withLines = keptRows.filter(
-            (r) => (estimations.get(r.employeeId)?.componentLines.length ?? 0) > 0,
-          );
-          if (withLines.length === 0) return { count: keptRows.length, created: [] as { id: number; employeeId: number | null }[] };
-          const created = await tx.payroll.findMany({
+          // Baca ulang SEMUA slip yang benar-benar terbit (bukan hanya yang
+          // punya component lines): tiap slip massal wajib melewati workflow
+          // persetujuan Payroll seperti jalur single processPayroll.
+          // Sebelumnya jalur bulk tidak membuat baris Approval sama sekali,
+          // sehingga satu user bisa generate -> approve -> paid.
+          const createdRows = await tx.payroll.findMany({
             where: {
-              employeeId: { in: withLines.map((r) => r.employeeId) },
+              employeeId: { in: keptRows.map((r) => r.employeeId) },
               startDate: rangeStart,
               endDate: rangeEnd,
               status: "draft",
             },
             select: { id: true, employeeId: true, componentLines: { select: { id: true } } },
           });
+          const created = createdRows;
           for (const slip of created) {
-            if (slip.componentLines.length > 0 || slip.employeeId == null) continue;
+            // `?? []`: plugin/mock bisa mengembalikan slip tanpa seleksi
+            // componentLines; itu hanya berarti belum ada baris komponen.
+            if ((slip.componentLines?.length ?? 0) > 0 || slip.employeeId == null) continue;
             const lines = estimations.get(slip.employeeId)?.componentLines ?? [];
             if (lines.length === 0) continue;
             await tx.payrollComponentLine.createMany({
               data: lines.map((l) => ({ ...l, payrollId: slip.id })),
             });
+          }
+          // Gerbang persetujuan untuk SETIAP slip massal, di transaksi yang
+          // sama (pola processPayroll). Helper mengembalikan false bila tidak
+          // ada workflow Payroll aktif, jadi perilaku lama tanpa workflow
+          // tidak berubah.
+          for (const slip of created) {
+            await requestApprovalIfConfigured("Payroll", slip.id, Number(user.id), tx);
           }
           return { count: keptRows.length, created };
         });

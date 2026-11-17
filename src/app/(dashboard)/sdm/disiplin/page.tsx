@@ -15,7 +15,10 @@ import { DisciplinaryRecordsTable } from "@/components/reports/disciplinary-reco
 import { loadDisciplinaryAttention, loadDisciplinaryRecords } from "@/lib/reports/disciplinary-data"
 import { loadDisciplinaryQueue } from "@/lib/reports/disciplinary-queue-data"
 import { DisciplinaryQueueCard } from "@/components/reports/disciplinary-queue-card"
-import { loadDisciplinaryDeductionDecisions } from "@/lib/reports/disciplinary-deduction-data"
+import {
+  loadDisciplinaryDeductionApplicationStatus,
+  loadDisciplinaryDeductionDecisions,
+} from "@/lib/reports/disciplinary-deduction-data"
 import { DisciplinaryDeductionDecisionsCard } from "@/components/reports/disciplinary-deduction-decisions-card"
 
 export const metadata: Metadata = { title: DISCIPLINARY_TITLE }
@@ -30,11 +33,12 @@ export default async function DisciplinaryPage() {
   const user = await requirePermission("view_disciplinary_records")
   const scope = await getHrScope(user)
   const canViewAmount = await hasPermission("view_payroll")
-  const [attention, records, decisions, queue] = await Promise.all([
+  const [attention, records, decisions, queue, deductionStatus] = await Promise.all([
     loadDisciplinaryAttention(scope),
     loadDisciplinaryRecords(scope),
     loadDisciplinaryDeductionDecisions(scope, canViewAmount),
     loadDisciplinaryQueue(),
+    loadDisciplinaryDeductionApplicationStatus(scope),
   ])
   const canCreate = await hasPermission("create_disciplinary_records")
 
@@ -77,7 +81,10 @@ export default async function DisciplinaryPage() {
       <DisciplinaryAttentionCard attention={attention} />
       <DisciplinaryQueueCard queue={queue} />
       <DisciplinaryRecordsTable records={records} />
-      <DisciplinaryDeductionDecisionsCard decisions={decisions} />
+      <DisciplinaryDeductionDecisionsCard
+        decisions={decisions}
+        applicationStatus={deductionStatus}
+      />
     </div>
   )
 }

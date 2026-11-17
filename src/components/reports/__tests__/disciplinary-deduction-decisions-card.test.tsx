@@ -6,6 +6,7 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 import type { Root } from "react-dom/client"
 
 import {
+  DISC09_NOT_APPLIED_WARNING,
   DisciplinaryDeductionDecisionsCard,
   DisciplinaryDeductionRecordContext,
 } from "../disciplinary-deduction-decisions-card"
@@ -69,6 +70,21 @@ describe("DisciplinaryDeductionDecisionsCard BR-DISC-09", () => {
       "Konteks SP",
       "Ditandatangani Oleh",
     ])
+  })
+
+  it("regresi KM2: penanda 'belum diterapkan otomatis' tampil dengan hitungan keputusan", () => {
+    const { container, root } = renderCard(
+      <DisciplinaryDeductionDecisionsCard
+        decisions={[decision()]}
+        applicationStatus={{ decisions: 3, applied: 1, pending: 2 }}
+      />,
+    )
+    roots.push(root)
+    const warning = container.querySelector('[data-testid="disc09-not-applied-warning"]')
+    expect(warning).not.toBeNull()
+    expect(warning?.textContent).toContain(DISC09_NOT_APPLIED_WARNING)
+    expect(warning?.textContent).toContain("3 keputusan")
+    expect(warning?.textContent).toContain("2 belum dipotong")
   })
 
   it("tanpa izin nominal: status eksplisit tampil, angka nominal tidak ada", () => {
