@@ -4,9 +4,13 @@ FROM node:26-alpine AS builder
 # Set working directory
 WORKDIR /app
 
-# Install dependencies
-COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
+# Install dependencies (pnpm: repo memakai pnpm-lock.yaml. Sebelumnya Dockerfile
+# menyalin package-lock.json yang TIDAK ada di repo -> build image selalu gagal.)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# corepack DIHAPUS dari distribusi Node >=24 (image node:26-alpine tidak
+# menyediakannya), jadi pnpm dipasang lewat npm global, bukan corepack.
+RUN npm install -g --ignore-scripts pnpm@12.21.0 \
+  && pnpm install --frozen-lockfile --ignore-scripts
 
 # Copy the rest of the application code
 # `next-env.d.ts` is gitignored (Next regenerates it during build/dev), so a
@@ -22,15 +26,22 @@ ENV DATABASE_URL="mysql://build:***@localhost:3306/build"
 RUN ./node_modules/.bin/prisma generate
 
 # Fail fast with a clear error when the Tailwind stylesheet entry cannot be
-# read by the build (npm ci is run with --ignore-scripts, so a file-mode or
+# read by the build (pnpm install runs with --ignore-scripts, so a file-mode or
 # umask problem in the layer would surface later as a cryptic EACCES from
 # Turbopack instead of this).
 RUN test -r /app/node_modules/tailwindcss/index.css
 
 # Build the Next.js application
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN NODE_ENV=production npm run build \
-  && npm prune --omit=dev
+RUN NODE_ENV=production pnpm run build
+
+# Prune lewat install ulang --prod, BUKAN `pnpm prune --prod`.
+# pnpm >=12 menolak `prune` selama ada paket yang build script-nya belum
+# diizinkan (ERR_PNPM_IGNORED_BUILDS: core-js@3.50.0 lewat jspdf), dan
+# onlyBuiltDependencies/ignoredBuiltDependencies di pnpm-workspace.yaml tidak
+# meloloskannya (diuji 7 varian). `install --prod --ignore-scripts` menghasilkan
+# pohon dependensi produksi yang sama tanpa gerbang itu.
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 # Use a smaller Node.js image for production
 FROM node:26-alpine AS runner
