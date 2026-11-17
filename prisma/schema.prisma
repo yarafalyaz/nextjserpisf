@@ -937,6 +937,20 @@ model Item {
   inventoryTransferItems InventoryTransferItem[]
   salesInvoiceItems    SalesInvoiceItem[]
   materialIssueItems   MaterialIssueItem[]
+  quotationItems QuotationItem[]
+  salesOrderItems SalesOrderItem[]
+  salesReturnItems SalesReturnItem[]
+  purchaseRequestItems PurchaseRequestItem[]
+  purchaseOrderItems PurchaseOrderItem[]
+  purchaseReturnItems PurchaseReturnItem[]
+  stockAdjustmentItems StockAdjustmentItem[]
+  productMaterials ProductMaterial[]
+  bomRevisionMaterials BomRevisionMaterial[]
+  productionOrderMaterials ProductionOrderMaterial[]
+  productionGenealogyMaterials ProductionGenealogyMaterial[]
+  workOrderItems WorkOrderItem[]
+  projectItems ProjectItem[]
+  jobChangeOrderItems JobChangeOrderItem[]
 
   @@index([brandId], map: "items_brand_id_fkey")
   @@index([categoryId], map: "items_category_id_fkey")
@@ -1820,6 +1834,8 @@ model QuotationItem {
   @@index([itemId])
   @@index([createdAt])
   @@map("quotation_items")
+  item Item? @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
 }
 
 model QuotationHistory {
@@ -1941,6 +1957,8 @@ model SalesOrderItem {
   @@index([salesOrderId], map: "sales_order_items_sales_order_id_fkey")
   @@index([itemId])
   @@map("sales_order_items")
+  item Item? @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
 }
 
 model SalesInvoice {
@@ -2324,6 +2342,8 @@ model SalesReturnItem {
   @@index([salesReturnId], map: "sales_return_items_sales_return_id_fkey")
   @@index([itemId])
   @@map("sales_return_items")
+  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
 }
 
 model PurchaseRequest {
@@ -2368,6 +2388,8 @@ model PurchaseRequestItem {
   @@index([purchaseRequestId], map: "purchase_request_items_purchase_request_id_fkey")
   @@index([itemId])
   @@map("purchase_request_items")
+  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
 }
 
 model PurchaseOrder {
@@ -2431,6 +2453,8 @@ model PurchaseOrderItem {
   @@index([purchaseOrderId], map: "purchase_order_items_purchase_order_id_fkey")
   @@index([itemId])
   @@map("purchase_order_items")
+  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
 }
 
 model GoodsReceipt {
@@ -2565,6 +2589,8 @@ model PurchaseReturnItem {
   @@index([itemId])
   @@index([goodsReceiptItemId])
   @@map("purchase_return_items")
+  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
 }
 
 model VendorBill {
@@ -2891,6 +2917,8 @@ model StockAdjustmentItem {
   @@index([itemId])
   @@index([batchId])
   @@map("stock_adjustment_items")
+  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
 }
 
 // F-2026-10-22-078-S inti (induk F-2026-10-21-014): permintaan barang
@@ -3154,6 +3182,8 @@ model ProductMaterial {
   @@index([productId], map: "product_materials_product_id_fkey")
   @@index([itemId])
   @@map("product_materials")
+  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
 }
 
 /// Immutable, versioned snapshot of a product's BOM (PRD FAB-02 / MOD-04).
@@ -3213,6 +3243,8 @@ model BomRevisionMaterial {
   @@index([bomRevisionId], map: "bom_revision_materials_bom_revision_id_fkey")
   @@index([itemId])
   @@map("bom_revision_materials")
+  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
 }
 
 model ProductionOrder {
@@ -3304,6 +3336,8 @@ model ProductionOrderMaterial {
   @@index([productionOrderId], map: "production_order_materials_production_order_id_fkey")
   @@index([itemId])
   @@map("production_order_materials")
+  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
 }
 
 /// Production genealogy (PRD line 369 / REP-13). When a production order
@@ -3352,6 +3386,8 @@ model ProductionGenealogyMaterial {
   @@index([genealogyId], map: "production_genealogy_materials_genealogy_id_fkey")
   @@index([itemId])
   @@map("production_genealogy_materials")
+  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
 }
 
 /// Master checklist for quality control (PRD FAB-10). Versioned so a released
@@ -3611,6 +3647,8 @@ model WorkOrderItem {
   @@index([workOrderId], map: "work_order_items_work_order_id_fkey")
   @@index([itemId])
   @@map("work_order_items")
+  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
 }
 
 model WorkOrderCostEstimate {
@@ -5687,6 +5725,8 @@ model ProjectItem {
   @@index([projectStageId], map: "project_items_project_stage_id_fkey")
   @@index([itemId])
   @@map("project_items")
+  item Item? @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
 }
 
 model ProjectStage {
@@ -6472,6 +6512,8 @@ model JobChangeOrderItem {
   @@index([workOrderItemId])
   @@index([itemId])
   @@map("job_change_order_items")
+  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
 }
 
 // F-2026-10-22-067-S inti (induk F-2026-10-20-106) + putusan BOT 1
