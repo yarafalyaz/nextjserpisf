@@ -44,7 +44,11 @@ export async function createReservationsForWorkOrderStartTx(
     },
   })
 
-  const stockLines = wo.items.filter((i) => i.itemId > 0 && i.status !== "replaced")
+  // Baris jasa: itemId NULL (dulu sentinel 0) — tak ada stok untuk direservasi.
+  const stockLines = wo.items.filter(
+    (i): i is typeof i & { itemId: number } =>
+      i.itemId != null && i.itemId > 0 && i.status !== "replaced",
+  )
   const itemIds = [...new Set(stockLines.map((i) => i.itemId))].sort((a, b) => a - b)
 
   // Serialisasi antar-WO: klaim start hanya menserialkan WO yang sama, jadi
@@ -145,14 +149,17 @@ export async function createReservationsForWorkOrderStartTx(
     [...warehouses].flatMap((warehouseId) => itemIds.map((itemId) => ({ itemId, warehouseId }))),
   )
 
-  const lines: ReservationNeedLine[] = wo.items.map((i) => ({
-    workOrderItemId: i.id,
-    itemId: i.itemId,
-    requiredQty: Number(i.qty),
-    issuedQty: issuedByLine.get(i.id) ?? 0,
-    status: i.status,
-    defaultWarehouseId: defaultWarehouseByItem.get(i.itemId) ?? null,
-  }))
+  // Baris jasa (itemId NULL, dulu 0) tak masuk rencana reservasi.
+  const lines: ReservationNeedLine[] = wo.items
+    .filter((i): i is typeof i & { itemId: number } => i.itemId != null && i.itemId > 0)
+    .map((i) => ({
+      workOrderItemId: i.id,
+      itemId: i.itemId,
+      requiredQty: Number(i.qty),
+      issuedQty: issuedByLine.get(i.id) ?? 0,
+      status: i.status,
+      defaultWarehouseId: defaultWarehouseByItem.get(i.itemId) ?? null,
+    }))
 
   const plan = planReservationsAtStart({
     lines,

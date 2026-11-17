@@ -2033,7 +2033,12 @@ async function autoCreateDeliveryOrder(workOrderId: number, userId: number, txCl
   // penyelesaian, jadi WO berisi jasa TIDAK PERNAH bisa diselesaikan. Baris
   // tanpa barang katalog juga tak bisa dikirim (createDeliveryOrder menolak
   // baris tanpa itemId), jadi ia memang bukan isi surat jalan.
-  const deliverableItems = wo.items.filter((i) => Number(i.qty) > 0 && i.itemId > 0);
+  // Sejak audit 2026-11-17 baris jasa tersimpan `itemId = NULL` (dulu 0).
+  // Keduanya sama-sama bukan barang katalog, jadi disaring dengan satu predikat.
+  const deliverableItems = wo.items.filter(
+    (i): i is typeof i & { itemId: number } =>
+      Number(i.qty) > 0 && i.itemId != null && i.itemId > 0,
+  );
   if (deliverableItems.length === 0) return;
 
   // Guard: a DeliveryOrder must be attached to a SalesOrder derived from the WO's
@@ -2219,13 +2224,18 @@ export async function createMaterialIssueFromWorkOrder(
       // LENGKAP: baris di luar revisi ikut null.
       const snapshotByItem = await resolveMaterialIssueScrapSnapshots(
         tx,
-        issueableItems.map((i) => ({ itemId: i.itemId, workOrderItemId: i.id })),
+        // Baris jasa (itemId NULL) tak punya allowance scrap untuk dicocokkan.
+        issueableItems
+          .filter((i): i is typeof i & { itemId: number } => i.itemId != null)
+          .map((i) => ({ itemId: i.itemId, workOrderItemId: i.id })),
         workOrderId,
       );
 
       await tx.materialIssueItem.createMany({
         data: issueableItems
-          .filter((i) => Number(i.qty) > 0)
+          // Baris jasa (itemId NULL) tak punya stok untuk dikeluarkan;
+          // MaterialIssueItem.itemId ber-FK RESTRICT.
+          .filter((i): i is typeof i & { itemId: number } => Number(i.qty) > 0 && i.itemId != null)
           .map((i) => ({
             materialIssueId: created.id,
             itemId: i.itemId,
@@ -3242,14 +3252,17 @@ export async function reserveStockForWorkOrder(input: {
         where: { id: input.workOrderItemId, workOrderId: input.workOrderId },
         select: { id: true, itemId: true, qty: true, status: true },
       });
-      if (!line || line.itemId <= 0 || line.status === "replaced") {
+      // `line.itemId == null` = baris jasa (dulu sentinel 0): tak ada stok
+      // untuk direservasi. Narrowing eksplisit supaya sisa blok ini aman.
+      if (!line || line.itemId == null || line.itemId <= 0 || line.status === "replaced") {
         throw new Error("Baris perintah kerja tidak ditemukan atau tidak dapat direservasi.");
       }
+      const reservableItemId: number = line.itemId;
       await expireOverdueReservationsTx(tx, { workOrderId: input.workOrderId });
       const existing = await tx.stockReservation.findFirst({
         where: {
           workOrderId: input.workOrderId,
-          itemId: line.itemId,
+          itemId: reservableItemId,
           warehouseId: input.warehouseId,
           status: "active",
         },
@@ -3274,11 +3287,11 @@ export async function reserveStockForWorkOrder(input: {
       // dibaca ulang sebagai locking read dan on-hand dari lapisan FIFO.
       // Tanpa ini reservasi manual menulis qtyReserved penuh + shortage 0
       // atas stok yang sudah diklaim WO lain (klaim aktif > on-hand).
-      await tx.$queryRaw`SELECT id FROM items WHERE id = ${line.itemId} FOR UPDATE`;
-      await tx.$executeRaw`SELECT id FROM stock_reservations WHERE item_id = ${line.itemId} AND warehouse_id = ${input.warehouseId} AND status = 'active' FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM items WHERE id = ${reservableItemId} FOR UPDATE`;
+      await tx.$executeRaw`SELECT id FROM stock_reservations WHERE item_id = ${reservableItemId} AND warehouse_id = ${input.warehouseId} AND status = 'active' FOR UPDATE`;
       const others = await tx.stockReservation.findMany({
         where: {
-          itemId: line.itemId,
+          itemId: reservableItemId,
           warehouseId: input.warehouseId,
           status: "active",
           workOrderId: { not: input.workOrderId },

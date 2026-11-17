@@ -2342,8 +2342,7 @@ model SalesReturnItem {
   @@index([salesReturnId], map: "sales_return_items_sales_return_id_fkey")
   @@index([itemId])
   @@map("sales_return_items")
-  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
-
+  item Item? @relation(fields: [itemId], references: [id], onDelete: Restrict)
 }
 
 model PurchaseRequest {
@@ -2388,8 +2387,7 @@ model PurchaseRequestItem {
   @@index([purchaseRequestId], map: "purchase_request_items_purchase_request_id_fkey")
   @@index([itemId])
   @@map("purchase_request_items")
-  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
-
+  item Item? @relation(fields: [itemId], references: [id], onDelete: Restrict)
 }
 
 model PurchaseOrder {
@@ -2453,8 +2451,7 @@ model PurchaseOrderItem {
   @@index([purchaseOrderId], map: "purchase_order_items_purchase_order_id_fkey")
   @@index([itemId])
   @@map("purchase_order_items")
-  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
-
+  item Item? @relation(fields: [itemId], references: [id], onDelete: Restrict)
 }
 
 model GoodsReceipt {
@@ -2589,8 +2586,7 @@ model PurchaseReturnItem {
   @@index([itemId])
   @@index([goodsReceiptItemId])
   @@map("purchase_return_items")
-  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
-
+  item Item? @relation(fields: [itemId], references: [id], onDelete: Restrict)
 }
 
 model VendorBill {
@@ -2917,8 +2913,7 @@ model StockAdjustmentItem {
   @@index([itemId])
   @@index([batchId])
   @@map("stock_adjustment_items")
-  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
-
+  item Item? @relation(fields: [itemId], references: [id], onDelete: Restrict)
 }
 
 // F-2026-10-22-078-S inti (induk F-2026-10-21-014): permintaan barang
@@ -3182,8 +3177,7 @@ model ProductMaterial {
   @@index([productId], map: "product_materials_product_id_fkey")
   @@index([itemId])
   @@map("product_materials")
-  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
-
+  item Item? @relation(fields: [itemId], references: [id], onDelete: Restrict)
 }
 
 /// Immutable, versioned snapshot of a product's BOM (PRD FAB-02 / MOD-04).
@@ -3243,8 +3237,7 @@ model BomRevisionMaterial {
   @@index([bomRevisionId], map: "bom_revision_materials_bom_revision_id_fkey")
   @@index([itemId])
   @@map("bom_revision_materials")
-  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
-
+  item Item? @relation(fields: [itemId], references: [id], onDelete: Restrict)
 }
 
 model ProductionOrder {
@@ -3336,8 +3329,7 @@ model ProductionOrderMaterial {
   @@index([productionOrderId], map: "production_order_materials_production_order_id_fkey")
   @@index([itemId])
   @@map("production_order_materials")
-  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
-
+  item Item? @relation(fields: [itemId], references: [id], onDelete: Restrict)
 }
 
 /// Production genealogy (PRD line 369 / REP-13). When a production order
@@ -3386,8 +3378,7 @@ model ProductionGenealogyMaterial {
   @@index([genealogyId], map: "production_genealogy_materials_genealogy_id_fkey")
   @@index([itemId])
   @@map("production_genealogy_materials")
-  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
-
+  item Item? @relation(fields: [itemId], references: [id], onDelete: Restrict)
 }
 
 /// Master checklist for quality control (PRD FAB-10). Versioned so a released
@@ -3629,9 +3620,13 @@ model WorkOrder {
 model WorkOrderItem {
   id          Int       @id @default(autoincrement())
   workOrderId Int       @map("work_order_id")
-  itemId      Int       @map("item_id")
+  // Nullable: baris JASA tidak punya item stok. Dulu ditulis sentinel 0
+  // (`itemId ?? 0`), yang melanggar FK `items(id)` begitu FK dipasang —
+  // migrasi 20261117120000_item_line_fk akan gagal di prod bila ada WO
+  // berisi baris jasa (audit 2026-11-17). NULL = baris jasa, bukan id 0.
+  itemId      Int?      @map("item_id")
   // F-2026-10-22-063-S: snapshot PERINGATAN fitment, pola sama QuotationItem.
-  // Baris jasa itemId=0 dilewati (BR-FIT-04) — kolom tetap null.
+  // Baris jasa (itemId NULL) dilewati (BR-FIT-04) — kolom tetap null.
   fitmentResult      String?   @map("fitment_result")
   fitmentRuleId      Int?      @map("fitment_rule_id")
   fitmentEvaluatedAt DateTime? @map("fitment_evaluated_at")
@@ -3647,8 +3642,7 @@ model WorkOrderItem {
   @@index([workOrderId], map: "work_order_items_work_order_id_fkey")
   @@index([itemId])
   @@map("work_order_items")
-  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
-
+  item Item? @relation(fields: [itemId], references: [id], onDelete: Restrict)
 }
 
 model WorkOrderCostEstimate {
@@ -6512,8 +6506,7 @@ model JobChangeOrderItem {
   @@index([workOrderItemId])
   @@index([itemId])
   @@map("job_change_order_items")
-  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
-
+  item Item? @relation(fields: [itemId], references: [id], onDelete: Restrict)
 }
 
 // F-2026-10-22-067-S inti (induk F-2026-10-20-106) + putusan BOT 1

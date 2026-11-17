@@ -2010,7 +2010,9 @@ export async function reviseWorkOrderItems(input: {
               { workOrderItemId: { in: replacedIds } },
               {
                 workOrderItemId: null,
-                itemId: { in: targets.map((t) => t.itemId) },
+                // Baris jasa kini itemId NULL (bukan 0); NULL tak pernah
+                // cocok dengan `in`, jadi saring lebih dulu.
+                itemId: { in: targets.map((t) => t.itemId).filter((id): id is number => id != null) },
               },
             ],
           },

@@ -621,7 +621,9 @@ async function onDownPaymentConfirmedInner(
           .filter((item) => item.itemId !== null || (item.itemName && item.itemName.trim() !== ""))
           .map((item) => ({
             workOrderId: workOrder!.id,
-            itemId: item.itemId ?? 0,
+            // NULL, bukan 0: baris jasa tak punya item stok. Sentinel 0
+            // melanggar FK items(id) (audit 2026-11-17).
+            itemId: item.itemId ?? null,
             qty: item.qty,
             cost: item.unitPrice,
             description: item.itemName || null,

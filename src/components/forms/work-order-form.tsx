@@ -43,7 +43,8 @@ export function WorkOrderForm({
     endDate?: string | null;
     notes?: string | null;
     items?: Array<{
-      itemId: number;
+      // NULL = baris jasa (dulu sentinel 0 di DB).
+      itemId: number | null;
       qty: number;
       cost: number;
       description: string;

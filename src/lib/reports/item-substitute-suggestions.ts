@@ -41,7 +41,8 @@ export const ITEM_SUBSTITUTE_SUGGESTION_NOTICE =
 
 export interface SubstituteSuggestionLineInput {
   workOrderItemId: number
-  itemId: number
+  /** NULL = baris jasa (dulu sentinel 0); bukan kandidat substitusi. */
+  itemId: number | null
   description: string | null
   qty: number
   /** Status turunan dari buildWorkOrderPartStatus. */
@@ -88,7 +89,8 @@ export interface SubstituteSuggestion {
 
 export interface SubstituteSuggestionRow {
   workOrderItemId: number
-  itemId: number
+  /** NULL = baris jasa (dulu sentinel 0). */
+  itemId: number | null
   description: string | null
   qty: number
   partStatus: WorkOrderPartStatus
@@ -112,12 +114,13 @@ const ELIGIBLE_STATUSES: ReadonlySet<WorkOrderPartStatus> = new Set([
 
 /** Syarat tampil saran per baris (BR-SUB69-03 + AC-SUB69-2). */
 export function isSubstituteSuggestionEligible(line: {
-  itemId: number
+  /** NULL = baris jasa (dulu sentinel 0). */
+  itemId?: number | null
   partStatus: WorkOrderPartStatus
   issuedQty: number
   shortageQty: number
 }): boolean {
-  if (line.itemId <= 0) return false // baris jasa: tak-tertaut, bukan item stok
+  if (line.itemId == null || line.itemId <= 0) return false // baris jasa: tak-tertaut, bukan item stok
   if (line.partStatus === "diganti") return false // sudah replaced — tidak dapat saran ulang
   if (line.issuedQty > 0) return false // ter-issue sebagian/penuh: guard revisi existing menolak
   return ELIGIBLE_STATUSES.has(line.partStatus) || line.shortageQty > 0
@@ -147,7 +150,8 @@ export function buildSubstituteSuggestions(input: {
     }
     if (!isSubstituteSuggestionEligible(line)) return base
     // Hanya relasi LANGSUNG dari item baris ini — tanpa inferensi transitif.
-    const direct = byItem.get(line.itemId) ?? []
+    // Predikat di atas sudah menolak itemId NULL/0, jadi narrowing aman.
+    const direct = byItem.get(line.itemId as number) ?? []
     base.suggestions = direct.map((candidate) => ({
       substituteId: candidate.substituteId,
       substituteItemId: candidate.substituteItemId,

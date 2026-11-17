@@ -456,6 +456,8 @@ export async function stampWorkOrderFitmentSnapshot(
     if (!configuration) return
     const evaluatedAt = new Date()
     for (const line of workOrder.items) {
+      // Baris jasa (itemId NULL, dulu sentinel 0) tak punya fitment.
+      if (line.itemId == null) continue
       const evaluation = await evaluateFitment(db, {
         itemId: line.itemId,
         bomRevisionId: workOrder.bomRevisionId,

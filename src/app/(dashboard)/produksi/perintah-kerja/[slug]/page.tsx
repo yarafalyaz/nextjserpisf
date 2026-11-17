@@ -108,7 +108,8 @@ export default async function WorkOrderDetailPage({
 
   // Fetch item names dynamically. Vendor jasa independen dari baris WO —
   // jalan paralel; `items` (butuh itemIds dari wo) tetap serial sesudah wo.
-  const itemIds = wo.items.map((i) => i.itemId);
+  // Baris jasa kini itemId NULL (dulu sentinel 0); null bukan id item.
+  const itemIds = wo.items.map((i) => i.itemId).filter((id): id is number => id != null);
   const [items, serviceVendors] = await Promise.all([
     prisma.item.findMany({
       where: { id: { in: itemIds } },
@@ -151,7 +152,11 @@ export default async function WorkOrderDetailPage({
     // itu ikut dibawa ke form perintah produksi ("buat dari" jadi satu klik).
     wo.items.length > 0
       ? prisma.product.findMany({
-          where: { inventoryItemId: { in: wo.items.map((i) => i.itemId) } },
+          where: {
+            inventoryItemId: {
+              in: wo.items.map((i) => i.itemId).filter((id): id is number => id != null),
+            },
+          },
           select: { id: true, slug: true },
         })
       : Promise.resolve([] as { id: number; slug: string | null }[]),
@@ -395,9 +400,10 @@ export default async function WorkOrderDetailPage({
               canComplete={canCompleteWorkOrder}
               canCancel={canCancelWorkOrder}
               canCreateInspection={canVerifyPhoto}
+              // Baris jasa (itemId NULL) tak punya item untuk direvisi.
               revisableItems={wo.items
-                .filter((i) => i.status !== "replaced")
-                .map((i) => ({ id: i.id, label: itemNameMap.get(i.itemId) || `Barang #${i.itemId}` }))}
+                .filter((i) => i.status !== "replaced" && i.itemId != null)
+                .map((i) => ({ id: i.id, label: itemNameMap.get(i.itemId!) || `Barang #${i.itemId}` }))}
             />
             <CanCreate permission="create_purchase_orders">
               <CreateServicePoButton
@@ -663,7 +669,9 @@ export default async function WorkOrderDetailPage({
         contractGrandTotal={wo.quotation ? Number(wo.quotation.grandTotal) : null}
         changeOrders={changeOrders}
         workOrderItems={wo.items
-          .filter((i) => i.status !== "replaced")
+          // Change order hanya mengubah baris item stok; baris jasa (itemId
+          // NULL, dulu sentinel 0) tak punya baris penawaran untuk dicocokkan.
+          .filter((i): i is typeof i & { itemId: number } => i.status !== "replaced" && i.itemId != null)
           .map((i) => ({
             workOrderItemId: i.id,
             itemId: i.itemId,
@@ -747,7 +755,11 @@ export default async function WorkOrderDetailPage({
             <WorkOrderItemsTable
               data={wo.items.map((item) => ({
                 id: item.id,
-                itemName: itemNameMap.get(item.itemId) || `Barang #${item.itemId}`,
+                // Baris jasa: itemId NULL (dulu sentinel 0) → label dari deskripsi.
+                itemName:
+                  item.itemId == null
+                    ? (item.description ?? "Baris jasa")
+                    : itemNameMap.get(item.itemId) || `Barang #${item.itemId}`,
                 fitmentResult: item.fitmentResult,
                 fitmentRuleId: item.fitmentRuleId,
                 description: item.description,

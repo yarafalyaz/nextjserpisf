@@ -42,7 +42,8 @@ export type WorkOrderPartStatus =
 
 export interface WorkOrderPartLineInput {
   id: number
-  itemId: number
+  /** NULL = baris jasa (dulu sentinel 0): tak punya status stok. */
+  itemId: number | null
   description: string | null
   qty: number
   /** Status tersimpan existing (mis. pending/replaced). */
@@ -64,7 +65,8 @@ export interface WorkOrderPartOrderInput {
 
 export interface WorkOrderPartStatusRow {
   workOrderItemId: number
-  itemId: number
+  /** NULL = baris jasa (dulu sentinel 0). */
+  itemId: number | null
   description: string | null
   qty: number
   issuedQty: number
@@ -123,18 +125,21 @@ export function buildWorkOrderPartStatus(input: {
   }
 
   const rows = input.lines.map((line) => {
+    // Baris jasa: itemId NULL (dulu sentinel 0) → tak ada stok/legacy untuk
+    // dialokasikan; statusnya "tak-tertaut" di bawah.
+    const itemId = line.itemId != null && line.itemId > 0 ? line.itemId : null
     let issuedQty = issuedByLine.get(line.id) ?? 0
-    const legacy = legacyByItem.get(line.itemId) ?? 0
-    if (legacy > 0 && line.itemId > 0) {
+    const legacy = itemId == null ? 0 : (legacyByItem.get(itemId) ?? 0)
+    if (legacy > 0 && itemId != null) {
       const take = Math.min(legacy, Math.max(line.qty - issuedQty, 0))
       issuedQty = round2(issuedQty + take)
-      legacyByItem.set(line.itemId, round2(legacy - take))
+      legacyByItem.set(itemId, round2(legacy - take))
     }
-    const order = orderByItem.get(line.itemId) ?? { ordered: 0, received: 0 }
+    const order = (itemId == null ? undefined : orderByItem.get(itemId)) ?? { ordered: 0, received: 0 }
 
     let status: WorkOrderPartStatus
     if (line.storedStatus === "replaced") status = "diganti"
-    else if (line.itemId <= 0) status = "tak-tertaut"
+    else if (itemId == null) status = "tak-tertaut"
     else if (issuedQty >= line.qty && line.qty > 0) status = "terpasang"
     else if (issuedQty > 0) status = "terpasang-sebagian"
     else if (order.ordered > 0 && order.received >= order.ordered) status = "datang"

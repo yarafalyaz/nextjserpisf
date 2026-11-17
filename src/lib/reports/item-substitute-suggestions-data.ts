@@ -56,12 +56,16 @@ export async function getWorkOrderSubstituteSuggestions(
     qty: row.qty,
     partStatus: row.status,
     issuedQty: row.issuedQty,
-    shortageQty: shortageByItem.get(row.itemId) ?? 0,
+    // Baris jasa (itemId NULL, dulu 0) tak punya shortage stok.
+    shortageQty: row.itemId == null ? 0 : (shortageByItem.get(row.itemId) ?? 0),
   }))
 
   const eligibleItemIds = [
     ...new Set(
-      lines.filter((line) => isSubstituteSuggestionEligible(line)).map((line) => line.itemId),
+      lines
+        .filter((line) => isSubstituteSuggestionEligible(line))
+        .map((line) => line.itemId)
+        .filter((id): id is number => id != null),
     ),
   ]
   if (eligibleItemIds.length === 0) {
@@ -148,7 +152,8 @@ export async function getWorkOrderSubstituteSuggestions(
     }
     for (const other of otherWorkOrders) {
       for (const line of other.items) {
-        if (line.status === "replaced" || line.itemId <= 0) continue
+        // Baris jasa (itemId NULL, dulu 0) tak punya stok untuk disubstitusi.
+        if (line.status === "replaced" || line.itemId == null || line.itemId <= 0) continue
         const remaining = Math.max(
           0,
           Number(line.qty) - (issuedByWoItem.get(`${other.id}:${line.itemId}`) ?? 0),

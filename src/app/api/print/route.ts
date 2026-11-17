@@ -339,7 +339,10 @@ export async function GET(request: Request) {
       if (blocked) return blocked
 
       // Resolve item names from items table
-      const itemIds = doc.items.map((it) => it.itemId).filter((id) => id > 0)
+      // Baris jasa: itemId NULL (dulu 0). Keduanya bukan item katalog.
+      const itemIds = doc.items
+        .map((it) => it.itemId)
+        .filter((id): id is number => id != null && id > 0)
       const itemsMap = new Map<number, string>()
       if (itemIds.length > 0) {
         const dbItems = await prisma.item.findMany({
@@ -369,7 +372,10 @@ export async function GET(request: Request) {
         },
         items: doc.items.map((it, idx) => ({
           no: idx + 1,
-          description: it.description || itemsMap.get(it.itemId) || `Item #${it.itemId}`,
+          description:
+            it.description ||
+            (it.itemId != null && it.itemId > 0 ? itemsMap.get(it.itemId) : null) ||
+            (it.itemId != null ? `Item #${it.itemId}` : "Baris jasa"),
           qty: Number(it.qty),
           status: it.status || "pending",
         })),

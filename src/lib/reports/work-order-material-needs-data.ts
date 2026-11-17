@@ -60,7 +60,8 @@ export async function getWorkOrderMaterialNeeds(
   if (!wo) return null
 
   const active = wo.items.filter((i) => i.status !== "replaced")
-  const ids = [...new Set(active.map((i) => i.itemId).filter((id) => id > 0))]
+  // Baris jasa: itemId NULL (dulu sentinel 0) → bukan kebutuhan material stok.
+  const ids = [...new Set(active.map((i) => i.itemId).filter((id): id is number => id != null && id > 0))]
 
   const [items, issues, orders, otherWorkOrders] = await Promise.all([
     ids.length
@@ -137,7 +138,8 @@ export async function getWorkOrderMaterialNeeds(
     }
     for (const other of otherWorkOrders) {
       for (const line of other.items) {
-        if (line.status === "replaced" || line.itemId <= 0) continue
+        // Baris jasa (itemId NULL, dulu 0) bukan kebutuhan material stok.
+        if (line.status === "replaced" || line.itemId == null || line.itemId <= 0) continue
         const req = Number(line.qty)
         const iss = issuedByWoItem.get(`${other.id}:${line.itemId}`) ?? 0
         const remaining = Math.max(0, req - iss)
@@ -148,7 +150,8 @@ export async function getWorkOrderMaterialNeeds(
 
   const required = new Map<number, number>()
   for (const line of active) {
-    if (line.itemId <= 0) continue
+    // Baris jasa (itemId NULL, dulu 0) tak menambah kebutuhan material.
+    if (line.itemId == null || line.itemId <= 0) continue
     required.set(line.itemId, (required.get(line.itemId) ?? 0) + Number(line.qty))
   }
 
@@ -201,7 +204,8 @@ export async function getWorkOrderMaterialNeeds(
   }))
   // Baris jasa (itemId=0) dipertahankan sebagai baris terpenuhi supaya
   // jumlah baris kartu cocok dengan baris WO yang terlihat pengguna.
-  if (active.some((i) => i.itemId <= 0)) {
+  // Baris jasa kini NULL (dulu sentinel 0); keduanya diperlakukan sama.
+  if (active.some((i) => i.itemId == null || i.itemId <= 0)) {
     inputs.push({
       itemId: 0,
       name: "Jasa / baris custom",

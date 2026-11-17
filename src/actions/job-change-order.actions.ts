@@ -96,7 +96,8 @@ async function loadWorkOrderForChangeOrder(tx: Tx, workOrderId: number) {
 async function loadLockedLineIds(
   tx: Tx,
   workOrderId: number,
-  woItems: { id: number; itemId: number }[],
+  // Hanya uid=501(yarasoft) gid=20(staff) groups=20(staff),12(everyone),61(localaccounts),79(_appserverusr),80(admin),81(_appserveradm),701(com.apple.sharepoint.group.1),33(_appstore),98(_lpadmin),100(_lpoperator),204(_developer),250(_analyticsusers),395(com.apple.access_ftp),398(com.apple.access_screensharing),399(com.apple.access_ssh),400(com.apple.access_remote_ae),702(com.apple.sharepoint.group.2) yang dipakai;  boleh NULL (baris jasa).
+  woItems: { id: number; itemId?: number | null }[],
 ): Promise<Set<number>> {
   // SEMUA status MaterialIssue (lebih ketat dari guard revisi existing
   // yang hanya completed): baris yang sudah pernah jadi baris issue tak
@@ -106,12 +107,16 @@ async function loadLockedLineIds(
       materialIssue: { workOrderId },
       OR: [
         { workOrderItemId: { in: woItems.map((i) => i.id) } },
-        { workOrderItemId: null, itemId: { in: woItems.map((i) => i.itemId) } },
+        // Baris jasa (itemId NULL) tak punya item untuk dicocokkan.
+        { workOrderItemId: null, itemId: { in: woItems.map((i) => i.itemId).filter((x): x is number => x != null) } },
       ],
     },
     select: { workOrderItemId: true, itemId: true },
   })
-  return computeLockedWorkOrderItemIds({ workOrderItems: woItems, issuedItems: issued })
+  return computeLockedWorkOrderItemIds({
+    workOrderItems: woItems.map((i) => ({ id: i.id, itemId: i.itemId ?? 0 })),
+    issuedItems: issued,
+  })
 }
 
 function normalizeLines(raw: unknown): ChangeOrderLineInput[] {
@@ -180,7 +185,7 @@ interface QuoteLineFlat {
  * jangan diam-diam pakai WorkOrderItem.cost sebagai harga tagih.
  */
 function snapshotLinesFromWorkOrder(
-  woItems: { id: number; itemId: number; description: string | null; qty: unknown; cost: unknown }[],
+  woItems: { id: number; itemId: number | null; description: string | null; qty: unknown; cost: unknown }[],
   requested: ChangeOrderLineInput[],
   quoteLines: QuoteLineFlat[],
 ): ChangeOrderLineInput[] {
@@ -189,6 +194,13 @@ function snapshotLinesFromWorkOrder(
     if (line.action === "tambah") return { ...line, sortOrder: idx } as ChangeOrderLineInput
     const woItem = line.workOrderItemId != null ? byId.get(line.workOrderItemId) : undefined
     if (!woItem) throw new Error(`Baris perintah kerja #${line.workOrderItemId} tidak ditemukan pada Perintah Kerja ini`)
+    // Baris jasa (itemId NULL, dulu sentinel 0) tak punya baris penawaran
+    // untuk dicocokkan — change order hanya mengubah baris item stok.
+    if (woItem.itemId == null) {
+      throw new Error(
+        `Baris perintah kerja #${woItem.id} adalah baris jasa (tanpa item stok) dan tidak bisa diubah lewat change order.`,
+      )
+    }
     const resolved = resolveQuotationItemForChange(quoteLines, {
       itemId: woItem.itemId,
       unitPriceBefore: line.unitPriceBefore ?? Number(woItem.cost),

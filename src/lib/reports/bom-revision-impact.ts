@@ -19,7 +19,8 @@ export interface BomRevisionImpactWorkOrderInput {
   id: number
   documentNo: string
   status: string
-  items: { id: number; itemId: number; qty: number; status: string }[]
+  /** `itemId` NULL = baris jasa (dulu sentinel 0); tak punya material BOM. */
+  items: { id: number; itemId: number | null; qty: number; status: string }[]
   /** Baris issue completed tertaut WO ini (workOrderItemId per baris bila ada). */
   issuedItems: { workOrderItemId: number | null; itemId: number; qty: number }[]
 }
@@ -86,12 +87,15 @@ export function buildBomRevisionImpact(input: {
     let outstandingQty = 0
     let issuedLineCount = 0
     for (const line of wo.items) {
+      // Baris jasa (itemId NULL, dulu 0) tak punya material BOM: tak ada
+      // legacy issue per item untuk dialokasikan.
+      const lineItemId = line.itemId
       let issuedForLine = issuedByLine.get(line.id) ?? 0
-      const legacy = legacyByItem.get(line.itemId) ?? 0
+      const legacy = lineItemId == null ? 0 : (legacyByItem.get(lineItemId) ?? 0)
       if (legacy > 0) {
         const take = Math.min(legacy, Math.max(line.qty - issuedForLine, 0))
         issuedForLine = round2(issuedForLine + take)
-        legacyByItem.set(line.itemId, round2(legacy - take))
+        if (lineItemId != null) legacyByItem.set(lineItemId, round2(legacy - take))
       }
       if (issuedForLine > 0) issuedLineCount += 1
       outstandingQty = round2(outstandingQty + Math.max(line.qty - issuedForLine, 0))

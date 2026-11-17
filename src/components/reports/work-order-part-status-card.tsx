@@ -28,6 +28,8 @@ function rowName(
   nameByItemId: ReadonlyMap<number, string>,
 ): string {
   if (row.description) return row.description
+  // Baris jasa: itemId NULL (dulu 0) — tak ada nama item untuk dicari.
+  if (row.itemId == null || row.itemId <= 0) return "Baris jasa"
   return nameByItemId.get(row.itemId) ?? `Barang #${row.itemId}`
 }
 

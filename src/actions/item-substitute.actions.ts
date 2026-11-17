@@ -378,7 +378,9 @@ export async function applyWorkOrderItemSubstitute(input: {
     if (line.status === "replaced") {
       return { success: false, error: "Baris ini sudah pernah diganti – substitusi ulang ditolak" }
     }
-    if (line.itemId <= 0) {
+    // Baris jasa = itemId NULL (dulu sentinel 0). Keduanya bukan item stok,
+    // jadi sama-sama ditolak.
+    if (line.itemId == null || line.itemId <= 0) {
       return { success: false, error: "Baris jasa tidak punya substitusi – hanya baris item stok" }
     }
     if (line.itemId === substituteItemId) {

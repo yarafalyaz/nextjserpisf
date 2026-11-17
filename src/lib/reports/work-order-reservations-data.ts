@@ -144,7 +144,10 @@ async function loadUnreservedNeeds(
   })
   if (!wo) return []
 
-  const itemIds = [...new Set(wo.items.map((i) => i.itemId).filter((id) => id > 0))]
+  // Baris jasa: itemId NULL (dulu sentinel 0) → bukan item stok.
+  const itemIds = [
+    ...new Set(wo.items.map((i) => i.itemId).filter((id): id is number => id != null && id > 0)),
+  ]
   const [mi, items, issuedItems] = await Promise.all([
     prisma.materialIssue.findFirst({
       where: { workOrderId },
@@ -178,14 +181,17 @@ async function loadUnreservedNeeds(
   }
 
   const plan = planReservationsAtStart({
-    lines: wo.items.map((i) => ({
-      workOrderItemId: i.id,
-      itemId: i.itemId,
-      requiredQty: Number(i.qty),
-      issuedQty: issuedByLine.get(i.id) ?? 0,
-      status: i.status,
-      defaultWarehouseId: metaById.get(i.itemId)?.defaultWarehouseId ?? null,
-    })),
+    // Baris jasa (itemId NULL, dulu 0) tak bisa direservasi: tak ada stok.
+    lines: wo.items
+      .filter((i): i is typeof i & { itemId: number } => i.itemId != null && i.itemId > 0)
+      .map((i) => ({
+        workOrderItemId: i.id,
+        itemId: i.itemId,
+        requiredQty: Number(i.qty),
+        issuedQty: issuedByLine.get(i.id) ?? 0,
+        status: i.status,
+        defaultWarehouseId: metaById.get(i.itemId)?.defaultWarehouseId ?? null,
+      })),
     materialIssueWarehouseId: mi?.warehouseId ?? null,
     // Hanya cabang gudang-null yang dipakai; stok tak memengaruhi unreserved.
     onHandAt: () => 0,
