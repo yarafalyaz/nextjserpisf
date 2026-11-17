@@ -38,7 +38,7 @@ export function CorrectPaidPayrollButton({ payrollId }: { payrollId: number }) {
   return (
     <>
       <PageHeaderButton onPress={() => setIsOpen(true)} className="bg-warning text-warning-foreground hover:bg-warning-600 transition-colors">
-        <FilePenLine size={14} /> Koreksi
+        <FilePenLine aria-hidden="true" size={14} /> Koreksi
       </PageHeaderButton>
 
       <ConfirmDialog

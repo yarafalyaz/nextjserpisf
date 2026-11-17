@@ -117,11 +117,11 @@ export default async function SettingsCompletionPage() {
           <CardAction>
             {pending === 0 ? (
               <Badge variant="outline" className="gap-1 text-emerald-600">
-                <CheckCircle2 className="size-3.5" /> Selesai
+                <CheckCircle2 aria-hidden="true" className="size-3.5" /> Selesai
               </Badge>
             ) : (
               <Badge variant="outline" className="gap-1 text-amber-600">
-                <AlertTriangle className="size-3.5" /> {pending} tertunda
+                <AlertTriangle aria-hidden="true" className="size-3.5" /> {pending} tertunda
               </Badge>
             )}
           </CardAction>
@@ -134,9 +134,9 @@ export default async function SettingsCompletionPage() {
               className="flex items-center gap-3 rounded-lg border bg-card p-4"
             >
               {step.done ? (
-                <CheckCircle2 className="size-5 shrink-0 text-emerald-500" />
+                <CheckCircle2 aria-hidden="true" className="size-5 shrink-0 text-emerald-500" />
               ) : (
-                <AlertTriangle className="size-5 shrink-0 text-amber-500" />
+                <AlertTriangle aria-hidden="true" className="size-5 shrink-0 text-amber-500" />
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-foreground">{step.title}</p>
@@ -145,7 +145,7 @@ export default async function SettingsCompletionPage() {
               </div>
               <Button asChild variant="outline" size="sm">
                 <Link href={step.href}>
-                  Atur <ChevronRight className="size-3.5" />
+                  Atur <ChevronRight aria-hidden="true" className="size-3.5" />
                 </Link>
               </Button>
             </div>

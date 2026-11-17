@@ -29,7 +29,7 @@ export default function DashboardError({
       >
         <div className="mb-4 flex justify-center">
           <div className="flex size-16 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-500/15">
-            <AlertTriangle className="size-8 text-amber-500" />
+            <AlertTriangle aria-hidden="true" className="size-8 text-amber-500" />
           </div>
         </div>
         <h2 className="mb-2 text-xl font-semibold text-foreground">Gagal Memuat Halaman</h2>

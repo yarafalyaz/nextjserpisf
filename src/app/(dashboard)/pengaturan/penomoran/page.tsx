@@ -58,7 +58,7 @@ export default async function NumberingPage() {
           <CardDescription>Awalan dan format kode dokumen yang dihasilkan sistem.</CardDescription>
           <CardAction>
             <Button asChild variant="outline" size="sm">
-              <Link href="/pengaturan/penomoran/ubah"><Pencil className="size-3.5" /> Ubah</Link>
+              <Link href="/pengaturan/penomoran/ubah"><Pencil aria-hidden="true" className="size-3.5" /> Ubah</Link>
             </Button>
           </CardAction>
         </CardHeader>

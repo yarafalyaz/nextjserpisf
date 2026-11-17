@@ -243,7 +243,7 @@ export default async function QuotationDetailPage({
                   href={entityEditHref("/penjualan/penawaran", quotation)}
                   variant="secondary"
                 >
-                  <Pencil size={14} /> Ubah
+                  <Pencil aria-hidden="true" size={14} /> Ubah
                 </Button>
               </CanCreate>
             )}

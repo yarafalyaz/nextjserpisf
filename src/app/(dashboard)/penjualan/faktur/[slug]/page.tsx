@@ -477,7 +477,7 @@ export default async function InvoiceDetailPage({
                   {(invoice.status === "posted" || invoice.status === "partial" || invoice.status === "paid") && (
                     <CanCreate permission="create_sales_returns">
                       <Link href={`/penjualan/retur/tambah/faktur/${invoice.slug ?? invoice.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
-            <Plus className="size-3.5" />
+            <Plus aria-hidden="true" className="size-3.5" />
             <span>Buat Retur</span>
           </Link>
                     </CanCreate>

@@ -75,7 +75,7 @@ export default async function WarehouseDetailPage({
         actions={
           <>
             <CanCreate permission="edit_warehouses">
-              <Button href={entityEditHref("/master/gudang", warehouse)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+              <Button href={entityEditHref("/master/gudang", warehouse)} variant="secondary"><Pencil aria-hidden="true" size={14} /> Ubah</Button>
             </CanCreate>
           </>
         }

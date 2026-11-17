@@ -143,7 +143,7 @@ export default async function ExpenseDetailPage({
                 href={entityEditHref("/keuangan/pengeluaran", expense)}
                 variant="primary"
               >
-                <Pencil size={14} /> Ubah
+                <Pencil aria-hidden="true" size={14} /> Ubah
               </Button>
             </CanCreate>
             <PrintButton documentType="expense" documentId={expense.id} />

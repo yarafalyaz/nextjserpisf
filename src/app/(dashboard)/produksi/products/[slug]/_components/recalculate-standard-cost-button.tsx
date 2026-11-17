@@ -33,7 +33,7 @@ export function RecalculateStandardCostButton({ productId }: { productId: number
         })
       }
     >
-      <Calculator size={14} /> {isPending ? "Menghitung..." : "Hitung Ulang HPP Standar"}
+      <Calculator aria-hidden="true" size={14} /> {isPending ? "Menghitung..." : "Hitung Ulang HPP Standar"}
     </Button>
   )
 }

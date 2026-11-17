@@ -72,7 +72,7 @@ export default function ScanItemPage() {
         <div className="bg-surface rounded-lg border border-default shadow-2xs p-8 w-full max-w-2xl">
           <div className="flex flex-col items-center gap-5 py-6">
             <div className="flex size-20 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <ScanLine className="size-10" />
+              <ScanLine aria-hidden="true" className="size-10" />
             </div>
             <p className="text-base text-muted-foreground text-center max-w-md">
               Pindai barcode barang atau ketik <strong>barcode</strong> / <strong>SKU</strong>, lalu tekan Enter.

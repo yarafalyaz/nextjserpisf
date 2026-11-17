@@ -418,7 +418,7 @@ export default async function DashboardPage() {
             <Card className="min-w-0 gap-0 overflow-x-clip py-0 xl:col-span-2">
               <CardHeader className="py-3.5 md:py-4">
                 <CardTitle className="flex items-center gap-2 text-sm md:text-base">
-                  <Car className="size-4 text-muted-foreground" />
+                  <Car aria-hidden="true" className="size-4 text-muted-foreground" />
                   Mobil di Bengkel
                 </CardTitle>
                 <CardDescription className="hidden md:block">
@@ -427,7 +427,7 @@ export default async function DashboardPage() {
                 <CardAction>
                   <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                     <Link href="/proyek">
-                      Semua <span className="hidden md:inline">Proyek</span> <ArrowUpRight className="size-3.5" />
+                      Semua <span className="hidden md:inline">Proyek</span> <ArrowUpRight aria-hidden="true" className="size-3.5" />
                     </Link>
                   </Button>
                 </CardAction>
@@ -600,14 +600,14 @@ export default async function DashboardPage() {
             <Card className="gap-0 py-0">
               <CardHeader className="py-3.5 md:py-4">
                 <CardTitle className="flex items-center gap-2 text-sm md:text-base">
-                  <AlertTriangle className="size-4 text-amber-500" />
+                  <AlertTriangle aria-hidden="true" className="size-4 text-amber-500" />
                   Stok Menipis
                 </CardTitle>
                 <CardDescription className="hidden md:block">Barang di bawah batas minimum stok</CardDescription>
                 <CardAction>
                   <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                     <Link href="/master/barang/stokmenipis">
-                      Semua <ArrowUpRight className="size-3.5" />
+                      Semua <ArrowUpRight aria-hidden="true" className="size-3.5" />
                     </Link>
                   </Button>
                 </CardAction>
@@ -676,7 +676,7 @@ export default async function DashboardPage() {
                 <CardAction>
                   <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                     <Link href="/penjualan/pembayaran">
-                      Semua <ArrowUpRight className="size-3.5" />
+                      Semua <ArrowUpRight aria-hidden="true" className="size-3.5" />
                     </Link>
                   </Button>
                 </CardAction>

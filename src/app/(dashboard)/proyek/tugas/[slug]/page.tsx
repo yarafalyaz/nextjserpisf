@@ -52,7 +52,7 @@ export default async function TaskDetailPage({
         actions={
           <>
             <CanCreate permission="edit_projects">
-              <Button href={entityEditHref("/proyek/tugas", task)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+              <Button href={entityEditHref("/proyek/tugas", task)} variant="secondary"><Pencil aria-hidden="true" size={14} /> Ubah</Button>
             </CanCreate>
           </>
         }

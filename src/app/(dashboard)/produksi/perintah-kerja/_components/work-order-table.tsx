@@ -45,7 +45,7 @@ const columns = [
     header: "Pelanggan",
     cell: (info) => (
       <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-        <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
+        <User aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
         <span className="truncate max-w-[200px]">{info.getValue()}</span>
       </span>
     ),
@@ -54,7 +54,7 @@ const columns = [
     header: "Tanggal Mulai",
     cell: (info) => (
       <span className="inline-flex items-center gap-1.5 font-mono text-xs tabular-nums text-muted-foreground">
-        <Calendar className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+        <Calendar aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
         <span>{formatDate(info.getValue())}</span>
       </span>
     ),

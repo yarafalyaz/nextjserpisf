@@ -64,7 +64,7 @@ export default async function CustomerVehiclesPage({
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Kendaraan - {customer.name}</h1>
         <div className="flex gap-2">
           <CanCreate permission="create_customers">
-            <Link href={`/master/pelanggan/${customerKey}/kendaraan/tambah`} className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer">
+            <Link href={`/master/pelanggan/${customerKey}/kendaraan/tambah`} className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-offset-2">
               <Plus size={14} aria-hidden="true" />
               <span>Tambah Kendaraan</span>
             </Link>

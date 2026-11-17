@@ -61,7 +61,7 @@ export default async function BrandDetailPage({
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">{brand.name}</h1>
         <div className="flex gap-2">
           <CanCreate permission="edit_brands">
-            <Link href={entityEditHref("/master/merek", brand)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Pencil size={14} className="inline" /> Ubah</Link>
+            <Link href={entityEditHref("/master/merek", brand)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Pencil aria-hidden="true" size={14} className="inline" /> Ubah</Link>
           </CanCreate>
           <Link href="/master/merek" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
         </div>

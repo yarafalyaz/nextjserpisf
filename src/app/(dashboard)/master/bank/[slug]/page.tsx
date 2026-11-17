@@ -49,7 +49,7 @@ export default async function BankDetailPage({
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">{bank.name}</h1>
         <div className="flex gap-2">
           <CanCreate permission="edit_banks">
-            <Link href={entityEditHref("/master/bank", bank)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Pencil size={14} className="inline" /> Ubah</Link>
+            <Link href={entityEditHref("/master/bank", bank)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Pencil aria-hidden="true" size={14} className="inline" /> Ubah</Link>
           </CanCreate>
           <CanCreate permission="delete_banks">
             <DeleteButton id={bank.id} action={deleteBank} />

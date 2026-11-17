@@ -109,7 +109,7 @@ export default async function LeadDetailPage({
             />
           </CanCreate>
           <CanCreate permission="edit_leads">
-            <Button href={entityEditHref("/crm/leads", lead)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+            <Button href={entityEditHref("/crm/leads", lead)} variant="secondary"><Pencil aria-hidden="true" size={14} /> Ubah</Button>
           </CanCreate>
           <CanCreate permission="delete_leads">
             <DeleteButton id={lead.id} action={deleteLead} />

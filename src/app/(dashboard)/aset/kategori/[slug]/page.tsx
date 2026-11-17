@@ -78,7 +78,7 @@ export default async function AssetCategoryDetailPage({
         ]}
         actions={<>
           <CanCreate permission="edit_asset_categories">
-            <Button href={entityEditHref("/aset/kategori", category)} variant="primary" className="min-h-11 sm:min-h-9"><Pencil size={14} /> Ubah</Button>
+            <Button href={entityEditHref("/aset/kategori", category)} variant="primary" className="min-h-11 sm:min-h-9"><Pencil aria-hidden="true" size={14} /> Ubah</Button>
           </CanCreate>
           <CanCreate permission="delete_asset_categories">
             <DeleteButton id={category.id} action={deleteAssetCategory} />

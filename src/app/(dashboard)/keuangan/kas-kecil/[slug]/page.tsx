@@ -117,7 +117,7 @@ export default async function PettyCashDetailPage({
                   href={entityEditHref("/keuangan/kas-kecil", pettyCash)}
                   variant="primary"
                 >
-                  <Pencil size={14} /> Ubah
+                  <Pencil aria-hidden="true" size={14} /> Ubah
                 </Button>
               </CanCreate>
             )}

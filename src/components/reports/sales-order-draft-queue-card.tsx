@@ -129,7 +129,9 @@ export function SalesOrderDraftQueueCard({
               return (
                 <li
                   key={level}
-                  role="presentation"
+                  role="tab"
+                  aria-selected={isSelected}
+                  tabIndex={isSelected ? 0 : -1}
                   onClick={() => setFilterLevel(level)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {

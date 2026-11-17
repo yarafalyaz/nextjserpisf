@@ -102,12 +102,12 @@ export function PeriodClosePanel({
 
       <div className="flex flex-wrap items-center gap-2">
         <Button onClick={handleClose} disabled={disabled || alreadyClosed}>
-          <Lock className="size-4" />
+          <Lock aria-hidden="true" className="size-4" />
           {busy === "close" ? "Mengunci…" : `Kunci sampai ${monthEnd}`}
         </Button>
         {currentLockDate ? (
           <Button variant="outline" onClick={handleReopen} disabled={disabled}>
-            <LockOpen className="size-4" />
+            <LockOpen aria-hidden="true" className="size-4" />
             {busy === "reopen" ? "Membuka…" : "Buka kunci periode"}
           </Button>
         ) : null}

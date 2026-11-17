@@ -53,7 +53,7 @@ export default async function AssetBrandDetailPage({
           <>
             <CanCreate permission="edit_asset_brands">
               <Button href={entityEditHref("/aset/merek", brand)} variant="primary" className="min-h-11 sm:min-h-9">
-                <Pencil size={14} /> Ubah
+                <Pencil aria-hidden="true" size={14} /> Ubah
               </Button>
             </CanCreate>
             <CanCreate permission="delete_asset_brands">

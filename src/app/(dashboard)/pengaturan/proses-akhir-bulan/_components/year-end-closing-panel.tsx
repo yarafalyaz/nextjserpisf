@@ -182,17 +182,17 @@ export function YearEndClosingPanel({
         {!preview.alreadyClosed ? (
           <>
             <Button variant="outline" onClick={() => setConfirming("approval")} disabled={isPending}>
-              <ClipboardCheck className="size-4" />
+              <ClipboardCheck aria-hidden="true" className="size-4" />
               {busy === "approval" ? "Mengajukan…" : "Ajukan persetujuan"}
             </Button>
             <Button onClick={() => setConfirming("post")} disabled={postDisabled}>
-              <BookCheck className="size-4" />
+              <BookCheck aria-hidden="true" className="size-4" />
               {busy === "post" ? "Memposting…" : `Posting penutup ${preview.fiscalYear}`}
             </Button>
           </>
         ) : (
           <Button variant="outline" onClick={() => setConfirming("reverse")} disabled={isPending}>
-            <Undo2 className="size-4" />
+            <Undo2 aria-hidden="true" className="size-4" />
             {busy === "reverse" ? "Membalik…" : `Reversal penutup ${preview.fiscalYear}`}
           </Button>
         )}

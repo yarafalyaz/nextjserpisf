@@ -110,7 +110,7 @@ export function NotificationsWidget() {
       <Card className="gap-0 py-0">
         <CardHeader className="py-4">
           <CardTitle className="flex items-center gap-2">
-            <Bell className="size-4 text-muted-foreground" />
+            <Bell aria-hidden="true" className="size-4 text-muted-foreground" />
             Sinyal & Aktivitas Operasional
           </CardTitle>
           <CardDescription>Memuat sinyal operasional terbaru</CardDescription>
@@ -168,7 +168,7 @@ export function NotificationsWidget() {
     <Card className="gap-0 py-0">
       <CardHeader className="py-4">
         <CardTitle className="flex items-center gap-2">
-          <Bell className="size-4 text-muted-foreground" />
+          <Bell aria-hidden="true" className="size-4 text-muted-foreground" />
           Sinyal & Aktivitas Operasional
         </CardTitle>
         <CardDescription>Peringatan aktif, notifikasi sistem, dan jejak aktivitas</CardDescription>

@@ -75,7 +75,7 @@ export default async function ItemCategoryDetailPage({
         actions={
           <>
             <CanCreate permission="edit_item_categories">
-              <Button href={entityEditHref("/master/kategori-barang", category)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+              <Button href={entityEditHref("/master/kategori-barang", category)} variant="secondary"><Pencil aria-hidden="true" size={14} /> Ubah</Button>
             </CanCreate>
             <CanCreate permission="delete_item_categories">
               <DeleteButton id={category.id} action={deleteItemCategory} />

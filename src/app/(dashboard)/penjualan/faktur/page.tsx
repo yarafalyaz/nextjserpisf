@@ -118,7 +118,7 @@ export async function renderInvoicesPage(
           )}
           <CanCreate permission="create_sales_invoices">
             <Link href="/penjualan/faktur/tambah" className="inline-flex items-center justify-center gap-1.5 min-h-11 sm:min-h-9 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors" id="create-invoice-btn">
-              <Plus className="size-3.5" />
+              <Plus aria-hidden="true" className="size-3.5" />
               <span>Buat Faktur</span>
             </Link>
           </CanCreate>

@@ -25,7 +25,7 @@ export default function GlobalError({
           <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-sm border border-red-100 text-center dark:border-red-900 dark:bg-gray-800">
             <div className="flex justify-center mb-4">
               <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center dark:bg-red-950">
-                <AlertCircle className="w-8 h-8 text-red-500" />
+                <AlertCircle aria-hidden="true" className="w-8 h-8 text-red-500" />
               </div>
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2 dark:text-gray-100">Terjadi Kesalahan Fatal</h2>

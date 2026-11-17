@@ -265,9 +265,9 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                       "bg-surface border-default-hover text-muted-foreground"
                     )}
                   >
-                    {isCompleted && <Check className="size-3.5 stroke-[3]" />}
-                    {isSkipped && <SkipForward className="size-3.5" />}
-                    {isActive && <Play className="size-3 fill-current ml-0.5" />}
+                    {isCompleted && <Check aria-hidden="true" className="size-3.5 stroke-[3]" />}
+                    {isSkipped && <SkipForward aria-hidden="true" className="size-3.5" />}
+                    {isActive && <Play aria-hidden="true" className="size-3 fill-current ml-0.5" />}
                     {!isDone && !isActive && <span className="size-1.5 rounded-full bg-muted-foreground/50" />}
                   </span>
 
@@ -328,19 +328,19 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                         )}
                         {stage.startedAt && (
                           <span className="flex items-center gap-1.5">
-                            <Calendar className="size-3 text-primary/70" />
+                            <Calendar aria-hidden="true" className="size-3 text-primary/70" />
                             Mulai: <strong className="text-foreground">{formatDate(new Date(stage.startedAt))}</strong>
                           </span>
                         )}
                         {stage.completedAt && (
                           <span className="flex items-center gap-1.5">
-                            <Calendar className="size-3 text-success/70" />
+                            <Calendar aria-hidden="true" className="size-3 text-success/70" />
                             Selesai: <strong className="text-foreground">{formatDate(new Date(stage.completedAt))}</strong>
                           </span>
                         )}
                         {stage.startedAt && stage.completedAt && (
                           <span className="flex items-center gap-1.5 ml-auto text-success font-semibold">
-                            <Clock className="size-3" />
+                            <Clock aria-hidden="true" className="size-3" />
                             Durasi: {getDurationString(stage.startedAt, stage.completedAt)}
                           </span>
                         )}
@@ -350,7 +350,7 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                     {/* Notes Box */}
                     {stage.notes && (
                       <div className="mt-3 text-xs bg-surface border border-default p-2.5 rounded-lg text-muted-foreground flex gap-2 items-start shadow-sm">
-                        <MessageSquare className="size-3.5 shrink-0 text-primary/60 mt-0.5" />
+                        <MessageSquare aria-hidden="true" className="size-3.5 shrink-0 text-primary/60 mt-0.5" />
                         <span className="italic">&quot;{stage.notes}&quot;</span>
                       </div>
                     )}
@@ -377,7 +377,7 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                               onClick={() => handleActionClick(stage, "in_progress")}
                               className="w-full sm:w-auto shadow-sm"
                             >
-                              <Play className="size-3 fill-current mr-1.5" /> Mulai Tahap
+                              <Play aria-hidden="true" className="size-3 fill-current mr-1.5" /> Mulai Tahap
                             </Button>
                             <Button
                               variant="outline"
@@ -386,7 +386,7 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                               onClick={() => handleActionClick(stage, "skipped")}
                               className="w-full sm:w-auto"
                             >
-                              <SkipForward className="size-3 mr-1.5" /> Lewati
+                              <SkipForward aria-hidden="true" className="size-3 mr-1.5" /> Lewati
                             </Button>
                           </>
                         )}
@@ -401,7 +401,7 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                               onClick={() => handleActionClick(stage, "completed")}
                               className="w-full sm:w-auto bg-success hover:bg-success/90 border-success text-success-foreground shadow-sm"
                             >
-                              <Check className="size-3 mr-1.5 stroke-[3]" /> Selesaikan
+                              <Check aria-hidden="true" className="size-3 mr-1.5 stroke-[3]" /> Selesaikan
                             </Button>
                             <Button
                               variant="outline"
@@ -410,7 +410,7 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                               onClick={() => handleActionClick(stage, "in_progress", true)}
                               className="w-full sm:w-auto border-primary/40 text-primary hover:bg-primary/5 shadow-sm"
                             >
-                              <Edit3 className="size-3 mr-1.5" /> Perbarui Progres
+                              <Edit3 aria-hidden="true" className="size-3 mr-1.5" /> Perbarui Progres
                             </Button>
                             <Button
                               variant="ghost"
@@ -419,7 +419,7 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                               onClick={() => handleActionClick(stage, "pending")}
                               className="w-full sm:w-auto text-danger hover:bg-danger/10 hover:text-danger sm:ml-auto"
                             >
-                              <RotateCcw className="size-3 mr-1.5" /> Batal Mulai
+                              <RotateCcw aria-hidden="true" className="size-3 mr-1.5" /> Batal Mulai
                             </Button>
                           </>
                         )}
@@ -433,14 +433,14 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                             onClick={() => handleActionClick(stage, "pending")}
                             className="w-full sm:w-auto hover:bg-warning-soft"
                           >
-                            <RotateCcw className="size-3 mr-1.5" /> Kembalikan ke Antrean
+                            <RotateCcw aria-hidden="true" className="size-3 mr-1.5" /> Kembalikan ke Antrean
                           </Button>
                         )}
 
                         {/* Guard notification if previous stage is still pending */}
                         {!eligible && stage.status === "pending" && (
                           <span className="text-xs text-danger/80 flex items-center gap-1 mt-1.5">
-                            <AlertCircle className="size-3 shrink-0" />
+                            <AlertCircle aria-hidden="true" className="size-3 shrink-0" />
                             Selesaikan tahap sebelumnya terlebih dahulu untuk mengaktifkan tahap ini.
                           </span>
                         )}

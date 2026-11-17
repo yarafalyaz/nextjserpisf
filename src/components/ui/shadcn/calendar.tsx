@@ -79,9 +79,9 @@ function Calendar({
       components={{
         Chevron: ({ orientation, ...chevronProps }) =>
           orientation === "left" ? (
-            <ChevronLeft className="size-4" {...chevronProps} />
+            <ChevronLeft aria-hidden="true" className="size-4" {...chevronProps} />
           ) : (
-            <ChevronRight className="size-4" {...chevronProps} />
+            <ChevronRight aria-hidden="true" className="size-4" {...chevronProps} />
           ),
         Dropdown: ({ value, onChange, options, "aria-label": ariaLabel }: DropdownProps) => {
           const selected = options?.find((option) => option.value === value)

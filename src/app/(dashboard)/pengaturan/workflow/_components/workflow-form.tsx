@@ -259,7 +259,7 @@ export function WorkflowForm({
             <p className="text-xs text-muted-foreground mt-1">Urutan langkah dari atas ke bawah menentukan urutan persetujuan.</p>
           </div>
           <Button type="button" variant="outline" size="sm" onPress={addStep}>
-            <Plus className="size-4" /> Tambah Langkah
+            <Plus aria-hidden="true" className="size-4" /> Tambah Langkah
           </Button>
         </div>
 
@@ -271,7 +271,7 @@ export function WorkflowForm({
             >
               <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
                 <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  <GripVertical className="size-4 text-muted-foreground" />
+                  <GripVertical aria-hidden="true" className="size-4 text-muted-foreground" />
                   Langkah {index + 1}
                 </div>
                 <div className="flex items-center gap-1">

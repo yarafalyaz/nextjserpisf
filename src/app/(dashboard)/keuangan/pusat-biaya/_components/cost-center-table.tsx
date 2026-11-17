@@ -41,7 +41,7 @@ const columns = [
       const indentClass = row._depth ? (DEPTH_INDENT[row._depth] ?? "ml-12") : ""
       return (
         <div className={cn("flex items-center gap-1.5", indentClass)}>
-          {hasChildren && <ChevronRight className="size-3 text-muted-foreground shrink-0" />}
+          {hasChildren && <ChevronRight aria-hidden="true" className="size-3 text-muted-foreground shrink-0" />}
           <Link href={entityHref("/keuangan/pusat-biaya", row)} className="text-foreground hover:underline font-medium">
             {info.getValue()}
           </Link>

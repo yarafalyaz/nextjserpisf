@@ -49,7 +49,7 @@ export default async function StorageSettingsPage() {
           <CardDescription>Lokasi penyimpanan file upload dan konfigurasi CDN.</CardDescription>
           <CardAction>
             <Button asChild variant="outline" size="sm">
-              <Link href="/pengaturan/penyimpanan/ubah"><Pencil className="size-3.5" /> Ubah</Link>
+              <Link href="/pengaturan/penyimpanan/ubah"><Pencil aria-hidden="true" className="size-3.5" /> Ubah</Link>
             </Button>
           </CardAction>
         </CardHeader>
@@ -58,7 +58,7 @@ export default async function StorageSettingsPage() {
           <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-card p-4">
             <div className="flex items-center gap-3">
               <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                {isR2 ? <Cloud className="size-5" /> : <HardDrive className="size-5" />}
+                {isR2 ? <Cloud aria-hidden="true" className="size-5" /> : <HardDrive aria-hidden="true" className="size-5" />}
               </span>
               <div>
                 <p className="text-sm font-medium text-foreground">
@@ -72,11 +72,11 @@ export default async function StorageSettingsPage() {
             {isR2 ? (
               r2Complete ? (
                 <Badge variant="outline" className="border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
-                  <CheckCircle2 className="size-3.5" /> Terkonfigurasi
+                  <CheckCircle2 aria-hidden="true" className="size-3.5" /> Terkonfigurasi
                 </Badge>
               ) : (
                 <Badge variant="outline" className="border-transparent bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
-                  <AlertTriangle className="size-3.5" /> Belum lengkap
+                  <AlertTriangle aria-hidden="true" className="size-3.5" /> Belum lengkap
                 </Badge>
               )
             ) : (

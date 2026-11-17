@@ -93,12 +93,12 @@ export function BackupManager({ initialBackups }: { initialBackups: BackupFile[]
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Database className="size-4 text-primary" /> Daftar Backup
+            <Database aria-hidden="true" className="size-4 text-primary" /> Daftar Backup
           </CardTitle>
           <CardDescription>Backup tersimpan di server (folder privat, tidak bisa diakses publik).</CardDescription>
           <CardAction>
             <Button onClick={onCreate} disabled={isCreating}>
-              {isCreating ? <Loader2 className="size-4 animate-spin" /> : <DatabaseBackup className="size-4" />}
+              {isCreating ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : <DatabaseBackup aria-hidden="true" className="size-4" />}
               {isCreating ? "Membuat..." : "Buat Backup"}
             </Button>
           </CardAction>
@@ -131,12 +131,12 @@ export function BackupManager({ initialBackups }: { initialBackups: BackupFile[]
                         <div className="flex flex-wrap gap-1">
                           {b.local && (
                             <Badge variant="outline" className="gap-1">
-                              <HardDrive className="size-3" /> Lokal
+                              <HardDrive aria-hidden="true" className="size-3" /> Lokal
                             </Badge>
                           )}
                           {b.cloud && (
                             <Badge variant="outline" className="gap-1 border-transparent bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400">
-                              <Cloud className="size-3" /> Cloud
+                              <Cloud aria-hidden="true" className="size-3" /> Cloud
                             </Badge>
                           )}
                         </div>
