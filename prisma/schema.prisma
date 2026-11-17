@@ -2051,7 +2051,7 @@ model InvoiceExchange {
   createdAt     DateTime              @default(now()) @map("created_at")
   updatedAt     DateTime              @updatedAt @map("updated_at")
   deletedAt     DateTime?             @map("deleted_at")
-  customer      Customer              @relation(fields: [customerId], references: [id])
+  customer      Customer              @relation(fields: [customerId], references: [id], onDelete: Restrict)
   items         InvoiceExchangeItem[]
 
   @@index([customerId])
@@ -2197,9 +2197,9 @@ model SalesLateFee {
   deletedAt         DateTime?             @map("deleted_at")
   createdAt         DateTime              @default(now()) @map("created_at")
   updatedAt         DateTime              @updatedAt @map("updated_at")
-  salesInvoice      SalesInvoice          @relation(fields: [salesInvoiceId], references: [id])
-  customer          Customer              @relation(fields: [customerId], references: [id])
-  term              CustomerLateFeeTerm   @relation(fields: [termId], references: [id])
+  salesInvoice      SalesInvoice          @relation(fields: [salesInvoiceId], references: [id], onDelete: Restrict)
+  customer          Customer              @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  term              CustomerLateFeeTerm   @relation(fields: [termId], references: [id], onDelete: Restrict)
   reverses          SalesLateFee?         @relation("SalesLateFeeReversal", fields: [reversesId], references: [id])
   reversedBy        SalesLateFee?         @relation("SalesLateFeeReversal")
   payments          SalesLateFeePayment[]
@@ -2304,7 +2304,7 @@ model SalesReturn {
   updatedAt      DateTime          @updatedAt @map("updated_at")
   items          SalesReturnItem[]
   salesInvoice   SalesInvoice?     @relation(fields: [salesInvoiceId], references: [id], onDelete: SetNull)
-  customer       Customer          @relation(fields: [customerId], references: [id])
+  customer       Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
   sourceTaxInvoice TaxInvoice?     @relation(fields: [sourceTaxInvoiceId], references: [id], onDelete: SetNull)
 
   @@index([status])
@@ -2546,7 +2546,7 @@ model PurchaseReturn {
   createdAt       DateTime             @default(now()) @map("created_at")
   updatedAt       DateTime             @updatedAt @map("updated_at")
   items           PurchaseReturnItem[]
-  purchaseOrder   PurchaseOrder        @relation(fields: [purchaseOrderId], references: [id])
+  purchaseOrder   PurchaseOrder        @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
   warrantyClaims  WarrantyClaim[]      @relation("WarrantyClaimPurchaseReturn")
   sourceTaxInvoice TaxInvoice?         @relation(fields: [sourceTaxInvoiceId], references: [id], onDelete: SetNull)
 
@@ -4368,14 +4368,14 @@ model Payroll {
   correctionReason       String?     @map("correction_reason") @db.Text
   createdAt              DateTime    @default(now()) @map("created_at")
   updatedAt              DateTime    @updatedAt @map("updated_at")
-  employee               Employee?   @relation(fields: [employeeId], references: [id])
+  employee               Employee?   @relation(fields: [employeeId], references: [id], onDelete: SetNull)
   /// Tautan koreksi dua arah: slip ini mengoreksi slip asal; koreksi baliknya
   /// dibaca lewat relasi `corrections`. Slip asal tetap `paid`.
   correctsPayroll        Payroll?    @relation("PayrollCorrection", fields: [correctsPayrollId], references: [id], onDelete: SetNull)
   corrections            Payroll[]   @relation("PayrollCorrection")
   componentLines         PayrollComponentLine[]
   disciplinaryDeductionApplications DisciplinaryDeductionApplication[]
-  costCenter             CostCenter? @relation(fields: [costCenterId], references: [id])
+  costCenter             CostCenter? @relation(fields: [costCenterId], references: [id], onDelete: SetNull)
   costCenterId           Int?        @map("cost_center_id")
 
   @@unique([employeeId, startDate, endDate], map: "uq_payroll_employee_range")
@@ -4682,7 +4682,7 @@ model Journal {
   entries         JournalEntry[]
   commissionPayableAccruals CommissionPayable[] @relation("CommissionPayableAccrualJournal")
   disciplinaryDeductionApplication DisciplinaryDeductionApplication?
-  creator         User?          @relation(fields: [createdBy], references: [id])
+  creator         User?          @relation(fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@unique([activeReferenceKey], map: "journals_active_reference_unique")
   @@index([createdBy], map: "journals_created_by_fkey")
@@ -4702,7 +4702,7 @@ model JournalEntry {
   memo           String?
   costCenterId   Int?    @map("cost_center_id")
   profitCenterId Int?    @map("profit_center_id")
-  account        Account @relation(fields: [accountId], references: [id])
+  account        Account @relation(fields: [accountId], references: [id], onDelete: Restrict)
   journal        Journal @relation(fields: [journalId], references: [id], onDelete: Cascade)
 
   @@index([accountId], map: "journal_entries_account_id_fkey")
@@ -4757,9 +4757,9 @@ model Expense {
   createdBy         Int?             @map("created_by")
   createdAt         DateTime         @default(now()) @map("created_at")
   updatedAt         DateTime         @updatedAt @map("updated_at")
-  category          ExpenseCategory? @relation(fields: [categoryId], references: [id])
-  vendor            Vendor?          @relation(fields: [vendorId], references: [id])
-  employee          Employee?        @relation(fields: [employeeId], references: [id])
+  category          ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  vendor            Vendor?          @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  employee          Employee?        @relation(fields: [employeeId], references: [id], onDelete: SetNull)
 
   @@index([accountId], map: "expenses_account_id_idx")
   @@index([projectId], map: "expenses_project_id_idx")
