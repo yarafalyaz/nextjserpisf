@@ -504,7 +504,7 @@ model CustomerCredit {
   createdBy       Int?     @map("created_by")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
-  customer        Customer @relation(fields: [customerId], references: [id])
+  customer        Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
   @@index([customerId, status], map: "idx_customer_credits_cust_status")
   @@index([sourceType, sourceId], map: "idx_customer_credits_source")
@@ -530,7 +530,7 @@ model VendorCredit {
   createdBy       Int?     @map("created_by")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
-  vendor          Vendor   @relation(fields: [vendorId], references: [id])
+  vendor          Vendor   @relation(fields: [vendorId], references: [id], onDelete: Restrict)
 
   @@index([vendorId, status], map: "idx_vendor_credits_vendor_status")
   @@index([sourceType, sourceId], map: "idx_vendor_credits_source")
@@ -1998,9 +1998,9 @@ model SalesInvoice {
   createdAt            DateTime              @default(now()) @map("created_at")
   updatedAt            DateTime              @updatedAt @map("updated_at")
   items                SalesInvoiceItem[]
-  customer             Customer              @relation(fields: [customerId], references: [id])
-  quotation            Quotation?            @relation(fields: [quotationId], references: [id])
-  salesOrder           SalesOrder?           @relation(fields: [salesOrderId], references: [id])
+  customer             Customer              @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  quotation            Quotation?            @relation(fields: [quotationId], references: [id], onDelete: Restrict)
+  salesOrder           SalesOrder?           @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
   salesEmployee        Employee?             @relation("SalesInvoiceSalesEmployee", fields: [salesEmployeeId], references: [id])
   commissionCustomerCategory CustomerCategory? @relation("SalesInvoiceCommissionCategory", fields: [commissionCustomerCategoryId], references: [id], onDelete: SetNull)
   commissionRate       CustomerCommissionRate? @relation("SalesInvoiceCommissionRate", fields: [commissionRateId], references: [id], onDelete: SetNull)
@@ -2071,7 +2071,7 @@ model InvoiceExchangeItem {
    */
   amount         Decimal         @db.Decimal(15, 2)
   exchange       InvoiceExchange @relation(fields: [exchangeId], references: [id], onDelete: Cascade)
-  salesInvoice   SalesInvoice    @relation(fields: [salesInvoiceId], references: [id])
+  salesInvoice   SalesInvoice    @relation(fields: [salesInvoiceId], references: [id], onDelete: Restrict)
 
   @@index([exchangeId])
   @@index([salesInvoiceId])
@@ -2226,7 +2226,7 @@ model SalesLateFeePayment {
   createdBy      Int?         @map("created_by")
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
-  salesLateFee   SalesLateFee @relation(fields: [salesLateFeeId], references: [id])
+  salesLateFee   SalesLateFee @relation(fields: [salesLateFeeId], references: [id], onDelete: Restrict)
 
   @@index([salesLateFeeId])
   @@map("sales_late_fee_payments")
@@ -2265,7 +2265,7 @@ model SalesPayment {
   createdBy                Int?                @map("created_by")
   createdAt                DateTime            @default(now()) @map("created_at")
   updatedAt                DateTime            @updatedAt @map("updated_at")
-  salesInvoice             SalesInvoice        @relation(fields: [salesInvoiceId], references: [id])
+  salesInvoice             SalesInvoice        @relation(fields: [salesInvoiceId], references: [id], onDelete: Restrict)
   withholdingType          WithholdingTaxType? @relation(fields: [withholdingTypeId], references: [id], onDelete: SetNull)
   withholdingCertificates  WithholdingCertificate[]
 
@@ -2623,10 +2623,10 @@ model VendorBill {
   // Jasa maklon per proyek (coating/bending): tagihan vendor ikut HPP proyek.
   projectId           Int?                      @map("project_id")
   items               VendorBillItem[]
-  purchaseOrder       PurchaseOrder?            @relation(fields: [purchaseOrderId], references: [id])
-  project             Project?                  @relation(fields: [projectId], references: [id])
+  purchaseOrder       PurchaseOrder?            @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  project             Project?                  @relation(fields: [projectId], references: [id], onDelete: SetNull)
   goodsReceipt        GoodsReceipt?             @relation(fields: [goodsReceiptId], references: [id], onDelete: SetNull)
-  vendor              Vendor                    @relation(fields: [vendorId], references: [id])
+  vendor              Vendor                    @relation(fields: [vendorId], references: [id], onDelete: Restrict)
   withholdingType     WithholdingTaxType?       @relation(fields: [withholdingTypeId], references: [id], onDelete: SetNull)
   allocations         VendorPaymentAllocation[]
   vendorPayments      VendorPayment[]
@@ -2721,8 +2721,8 @@ model VendorPayment {
   createdAt         DateTime                  @default(now()) @map("created_at")
   updatedAt         DateTime                  @updatedAt @map("updated_at")
   allocations       VendorPaymentAllocation[]
-  vendor            Vendor                    @relation(fields: [vendorId], references: [id])
-  vendorBill        VendorBill?               @relation(fields: [vendorBillId], references: [id])
+  vendor            Vendor                    @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  vendorBill        VendorBill?               @relation(fields: [vendorBillId], references: [id], onDelete: Restrict)
 
   @@index([vendorId], map: "vendor_payments_vendor_id_fkey")
   @@index([status])
