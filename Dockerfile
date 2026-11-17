@@ -9,7 +9,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 # corepack DIHAPUS dari distribusi Node >=24 (image node:26-alpine tidak
 # menyediakannya), jadi pnpm dipasang lewat npm global, bukan corepack.
-RUN npm install -g pnpm@12.21.0 \
+RUN npm install -g --ignore-scripts pnpm@12.21.0 \
   && pnpm install --frozen-lockfile --ignore-scripts
 
 # Copy the rest of the application code
