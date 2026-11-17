@@ -152,9 +152,9 @@ export function BomRevisionDeltaPreviewTable({
                   ) : null}
                 </span>
               </td>
-              <td className="py-1 pr-2 text-right">{line.oldQtyPerUnit}</td>
-              <td className="py-1 pr-2 text-right">{line.newQtyPerUnit}</td>
-              <td className="py-1 pr-2 text-right">{line.newNeededQty}</td>
+              <td className="py-1 pr-2 text-right tabular-nums">{line.oldQtyPerUnit}</td>
+              <td className="py-1 pr-2 text-right tabular-nums">{line.newQtyPerUnit}</td>
+              <td className="py-1 pr-2 text-right tabular-nums">{line.newNeededQty}</td>
               <td className="py-1">
                 <span
                   className={cn(

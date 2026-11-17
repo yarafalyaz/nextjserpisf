@@ -216,6 +216,27 @@ describe("BomRevisionChangePanel F-2026-10-22-068-S", () => {
     expect(html).toContain("Kurang")
     expect(html).toContain("Tercakup")
   })
+
+  it("sel kuantitas rata kanan bertabular (deslop-ui: angka wajib tabular-nums)", () => {
+    const html = renderToStaticMarkup(
+      <BomRevisionDeltaPreviewTable
+        lines={[
+          {
+            itemId: 100,
+            itemName: "Kampas Rem",
+            oldQtyPerUnit: 2,
+            newQtyPerUnit: 3,
+            newNeededQty: 30,
+            issuedQty: 0,
+            coverage: "kurang",
+          },
+        ]}
+      />,
+    )
+    // Tabel ini memakai <table class="w-full"> — bukan .stmt / .report-sheet —
+    // jadi tidak ada warisan tabular-nums: tiap sel angka harus membawanya.
+    expect(html.match(/class="[^"]*text-right[^"]*tabular-nums[^"]*"/g)).toHaveLength(3)
+  })
 })
 
 describe("isBomRevisionSubmitDisabled gerbang pratinjau F-2026-10-22-068-S", () => {

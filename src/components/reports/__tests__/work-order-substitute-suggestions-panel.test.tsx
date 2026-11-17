@@ -105,6 +105,8 @@ describe("WorkOrderSubstituteSuggestionsPanel F-2026-10-22-069-S", () => {
     expect(html).toContain(ITEM_SUBSTITUTE_SUGGESTION_NOTICE)
     expect(html).toContain("Pakai Substitusi")
     expect(html).not.toContain("Baut Roda")
+    // Stok efektif = kuantitas → rata kanan bertabular (tabel polos, tanpa warisan).
+    expect(html).toMatch(/<td class="[^"]*text-right tabular-nums[^"]*">\s*7 pcs/)
   })
 
   it("AC-SUB69-7: incompatible tampil Ditolak + alasan verbatim + tombol nonaktif", () => {

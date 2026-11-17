@@ -124,7 +124,7 @@ export function WorkOrderSubstituteSuggestionsPanel({
                         </span>
                       </td>
                       <td className="py-2 pr-2 font-mono text-xs">{s.substituteSku}</td>
-                      <td className="py-2 pr-2 text-right">
+                      <td className="py-2 pr-2 text-right tabular-nums">
                         {s.effectiveAvailableQty} {s.substituteUnitOfMeasure}
                       </td>
                       <td className="py-2 pr-2">
