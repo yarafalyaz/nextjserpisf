@@ -382,15 +382,6 @@ function buttonFiles(): { relative: string; uses: ButtonUse[] }[] {
 
 /* ── Beku dua arah: kunci identik & angka persis ──────────────────────────── */
 
-function bedaKunci(a: Record<string, unknown>, b: Record<string, unknown>): { hanyaA: string[]; hanyaB: string[] } {
-  const ka = Object.keys(a)
-  const kb = Object.keys(b)
-  return {
-    hanyaA: ka.filter((k) => !(k in b)).sort(),
-    hanyaB: kb.filter((k) => !(k in a)).sort(),
-  }
-}
-
 describe("R-02: em dash dilarang di teks UI", () => {
   it("tidak ada em dash baru di luar beku per berkas", () => {
     const { counts, hits, scanned } = collectEmDash()
