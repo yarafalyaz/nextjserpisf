@@ -470,6 +470,20 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
       "pembayaran seed sudah dikonfirmasi di DB ini",
     )
 
+    // Fixture seed punya BANYAK pembayaran draft nominaal sama untuk vendor yang
+    // sama, tetapi tagihan terbukanya hanya satu. Konfirmasi pertama menghabiskan
+    // utang; konfirmasi berikutnya DITOLAK guard drift GL/subledger ("melebihi
+    // total tagihan terutang") — perilaku benar, bukan bug. Jadi berhenti jujur
+    // bila draft yang tersisa tak punya utang untuk dialokasikan.
+    const sisaUtang = await prisma.vendorBill.aggregate({
+      where: { status: { in: ["posted", "partial"] }, balanceDue: { gt: 0 }, deletedAt: null },
+      _sum: { balanceDue: true },
+    })
+    test.skip(
+      Number(sisaUtang._sum.balanceDue ?? 0) < 180_000,
+      "Tidak ada lagi tagihan vendor terbuka >= Rp 180.000 di DB ini (sudah dikonfirmasi run sebelumnya).",
+    )
+
     await barisBayar.getByRole("button", { name: MENU }).click()
     await page.getByRole("menuitem", { name: "Konfirmasi & Posting" }).click()
     // confirmLabel = processLabel, jadi tombol dialog bernama sama — dibatasi ke dialog.
