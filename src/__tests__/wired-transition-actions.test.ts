@@ -38,6 +38,7 @@ const REQUIRED_CALLERS: Array<{ action: string; definedIn: string; callersIn: st
   { action: "acknowledgeDisciplinaryRecord", definedIn: "src/actions/disciplinary.actions.ts", callersIn: ["components/reports"] },
   { action: "allocateCustomerCredit", definedIn: "src/actions/sales.actions.ts", callersIn: ["penjualan/uang-muka"] },
   { action: "applyContractDecisionRequest", definedIn: "src/actions/probation.actions.ts", callersIn: ["master/karyawan"] },
+  { action: "applyDisciplinaryDeductionAction", definedIn: "src/actions/disciplinary-deduction.actions.ts", callersIn: ["components/reports"] },
   { action: "applyJobChangeOrder", definedIn: "src/actions/job-change-order.actions.ts", callersIn: ["produksi/perintah-kerja"] },
   { action: "applyOverheadToProductionOrder", definedIn: "src/actions/production-cost.actions.ts", callersIn: ["produksi/production-orders"] },
   { action: "applyProjectBudgetRevision", definedIn: "src/actions/project.actions.ts", callersIn: ["proyek"] },

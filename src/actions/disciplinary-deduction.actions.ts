@@ -9,10 +9,11 @@
  * disciplinaryRecordId hanya konteks opsional. Penerapan ke payroll
  * (applyDisciplinaryDeduction) tetap domain payroll, bukan action ini.
  *
- * STATUS (bug KM2): penerapan ke payroll itu BELUM dipasang — nol pemanggil
- * produksi `applyDisciplinaryDeduction`, jadi keputusan yang dicatat di sini
- * tidak memotong slip gaji. UI menampilkan peringatan eksplisit
- * (DISC09_NOT_APPLIED_WARNING); jangan hapus peringatan selama wiring belum ada.
+ * Penerapan ke periode payroll = `applyDisciplinaryDeductionAction` di bawah
+ * (jalur MANUAL dan eksplisit). Keputusan yang baru dicatat tetap belum
+ * memotong apa pun sampai operator menerapkannya ke periode tertentu, jadi
+ * UI tetap menampilkan peringatan (DISC09_NOT_APPLIED_WARNING) sampai
+ * penerapan benar-benar tercatat.
  */
 
 import { revalidatePath } from "next/cache"
@@ -22,7 +23,7 @@ import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope"
 import { prisma } from "@/lib/db/prisma"
 import { isDisciplinaryDeductionKind } from "@/lib/reports/disciplinary-deduction"
 import { logActivity } from "@/lib/services/activity-log.service"
-import { createDisciplinaryDeductionDecision } from "@/lib/services/disciplinary-deduction.service"
+import { applyDisciplinaryDeduction, createDisciplinaryDeductionDecision } from "@/lib/services/disciplinary-deduction.service"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 
@@ -157,5 +158,88 @@ export async function createDisciplinaryDeductionDecisionAction(
     return { success: true }
   } catch (e) {
     return fail(e, "createDisciplinaryDeductionDecisionAction")
+  }
+}
+
+export interface ApplyDisciplinaryDeductionActionInput {
+  decisionId: number
+  /** Periode payroll "YYYY-MM". */
+  period: string
+  /** Upah pembayaran periode ini (dasar plafon 50% BR-DISC-09). */
+  periodPay: number
+  /** Tanggal transaksi jurnal, "YYYY-MM-DD" WIB. */
+  transactionDate: string
+}
+
+/**
+ * Terapkan satu keputusan potongan disiplin ke periode payroll tertentu.
+ *
+ * Inilah pemicu yang sebelumnya tidak ada: `applyDisciplinaryDeduction` sudah
+ * lengkap (plafon 50%, lock karyawan, idempotensi per keputusan+periode,
+ * jurnal Dr Hutang Gaji / Cr Denda atau akun kompensasi, periode fail-closed)
+ * tetapi nol pemanggil produksi, sehingga keputusan tercatat tanpa memotong
+ * apa pun. Action ini adalah jalur manual yang eksplisit: operator memilih
+ * periode dan upah pembayaran, lalu potongan diposting sebagai jurnal
+ * tersendiri (BUKAN lewat `payroll.deductions`, supaya jurnal denda tidak
+ * dobel dengan kredit Hutang Gaji yang sudah dibuat `onPayrollPaid`).
+ *
+ * Idempotensi: service memakai kunci (keputusan, periode, jenis); klik ganda
+ * mengembalikan hasil awal tanpa jurnal baru.
+ */
+export async function applyDisciplinaryDeductionAction(
+  input: ApplyDisciplinaryDeductionActionInput,
+): Promise<ActionResult & { journalId?: number | null; amount?: number; replayed?: boolean }> {
+  try {
+    const user = await requirePermission("process_payroll")
+    assertValidId(input.decisionId, "Keputusan potongan")
+
+    if (!/^\d{4}-\d{2}$/.test(input.period ?? "")) {
+      return { success: false, error: "Periode wajib berformat YYYY-MM." }
+    }
+    const periodPay = Number(input.periodPay)
+    if (!Number.isFinite(periodPay) || periodPay <= 0) {
+      return { success: false, error: "Upah pembayaran periode ini wajib lebih dari 0." }
+    }
+    const transactionDate = parseDecidedAt(input.transactionDate)
+
+    const decision = await prisma.disciplinaryDeductionDecision.findUnique({
+      where: { id: input.decisionId },
+      select: { id: true, employeeId: true, deletedAt: true },
+    })
+    if (!decision || decision.deletedAt) {
+      return { success: false, error: "Dokumen keputusan potongan disiplin tidak ditemukan." }
+    }
+
+    // Cakupan HR: pemegang process_payroll ber-scope department hanya boleh
+    // menerapkan potongan untuk karyawan dalam cakupannya.
+    const scope = await getHrScope(user)
+    await assertHrEmployeeAccess(scope, decision.employeeId)
+
+    const result = await applyDisciplinaryDeduction(prisma, {
+      decisionId: input.decisionId,
+      period: input.period,
+      periodPay,
+      transactionDate,
+      createdBy: Number(user.id) || null,
+    })
+
+    revalidatePath(REVALIDATE)
+    await logActivity(
+      result.replayed ? "view" : "create",
+      "DisciplinaryDeductionApplication",
+      result.applicationId,
+      result.replayed
+        ? `Penerapan potongan disiplin periode ${input.period} sudah ada (tidak ada jurnal baru)`
+        : `Potongan disiplin periode ${input.period} diterapkan Rp${result.amount}`,
+    )
+
+    return {
+      success: true,
+      journalId: result.journalId,
+      amount: result.amount,
+      replayed: result.replayed,
+    }
+  } catch (e: unknown) {
+    return fail(e, "applyDisciplinaryDeductionAction")
   }
 }

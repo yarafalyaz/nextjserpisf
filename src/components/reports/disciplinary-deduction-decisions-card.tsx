@@ -2,6 +2,7 @@ import type {
   DisciplinaryDeductionApplicationStatus,
   DisciplinaryDeductionDecisionRow,
 } from "@/lib/reports/disciplinary-deduction-data"
+import { ApplyDisciplinaryDeductionButton } from "@/components/reports/apply-disciplinary-deduction-button"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import {
   DetailTable,
@@ -22,7 +23,7 @@ export const DISC09_DECISIONS_TITLE = "Keputusan Potongan Disiplin"
  * pembaca: dokumen keputusan tidak sama dengan potongan yang sudah terjadi.
  */
 export const DISC09_NOT_APPLIED_WARNING =
-  "Potongan disiplin belum diterapkan otomatis ke slip gaji: dokumen keputusan ini tidak memotong slip payroll mana pun. Hitung dan potong manual lewat slip koreksi sampai penerapan otomatis dipasang."
+  "Potongan disiplin TIDAK masuk otomatis ke slip gaji. Keputusan yang baru dicatat belum memotong apa pun sampai Anda menekan Terapkan ke Periode pada barisnya. Penerapan memposting jurnal tersendiri (Dr Hutang Gaji, Cr Denda atau akun kompensasi), bukan lewat nominaal slip."
 
 export const DISC09_DECISIONS_NOTICE_TEXT =
   "Nominal, jenis potongan, perlakuan upah skorsing, dan dasar peraturan adalah snapshot dokumen keputusan, ditampilkan apa adanya tanpa hitung ulang. Surat peringatan tidak memicu potongan."
@@ -36,10 +37,14 @@ export const DISC09_DECISIONS_NOTICE_TEXT =
 export function DisciplinaryDeductionDecisionsCard({
   decisions,
   applicationStatus,
+  defaultPeriod,
 }: Readonly<{
   decisions: DisciplinaryDeductionDecisionRow[]
   applicationStatus?: DisciplinaryDeductionApplicationStatus
+  /** Periode payroll awal pada form "Terapkan ke Periode" (YYYY-MM). Default bulan berjalan. */
+  defaultPeriod?: string
 }>) {
+  const periodeAwal = defaultPeriod ?? new Date().toISOString().slice(0, 7)
   return (
     <ReportCardShell
       label={DISC09_DECISIONS_TITLE}
@@ -72,6 +77,7 @@ export function DisciplinaryDeductionDecisionsCard({
           <DetailTableTh>Akun Kompensasi</DetailTableTh>
           <DetailTableTh>Konteks SP</DetailTableTh>
           <DetailTableTh>Ditandatangani Oleh</DetailTableTh>
+          <DetailTableTh>Aksi</DetailTableTh>
         </DetailTableHead>
         <DetailTableBody>
           {decisions.map((row) => (
@@ -93,6 +99,13 @@ export function DisciplinaryDeductionDecisionsCard({
               <DetailTableTd>{row.compensationAccountLabel ?? "—"}</DetailTableTd>
               <DetailTableTd>{row.contextDocumentNo ?? "—"}</DetailTableTd>
               <DetailTableTd>{row.signerName}</DetailTableTd>
+              <DetailTableTd>
+                <ApplyDisciplinaryDeductionButton
+                  decisionId={row.id}
+                  documentNo={row.documentNo}
+                  defaultPeriod={periodeAwal}
+                />
+              </DetailTableTd>
             </DetailTableRow>
           ))}
         </DetailTableBody>

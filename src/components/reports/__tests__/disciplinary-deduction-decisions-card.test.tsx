@@ -1,7 +1,16 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from "vitest"
+import { describe, it, expect, afterEach, vi } from "vitest"
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+
+// Tombol "Terapkan ke Periode" mengimpor Server Action yang menyeret rantai
+// next-auth/next-server. Di jsdom itu dipecahkan secara eksplisit di sini.
+vi.mock("@/actions/disciplinary-deduction.actions", () => ({
+  applyDisciplinaryDeductionAction: vi.fn(async () => ({ success: true, replayed: false, amount: 0 })),
+  createDisciplinaryDeductionDecisionAction: vi.fn(async () => ({ success: true })),
+}))
+vi.mock("@/lib/utils/toast", () => ({ showError: vi.fn(), showSuccess: vi.fn() }))
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 
 import type { Root } from "react-dom/client"
 
@@ -69,6 +78,7 @@ describe("DisciplinaryDeductionDecisionsCard BR-DISC-09", () => {
       "Akun Kompensasi",
       "Konteks SP",
       "Ditandatangani Oleh",
+      "Aksi",
     ])
   })
 
