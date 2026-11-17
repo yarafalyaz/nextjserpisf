@@ -91,7 +91,7 @@ export default async function VendorDetailPage({
         actions={
           <>
             <CanCreate permission="edit_vendors">
-              <Button href={entityEditHref("/master/vendor", vendor)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+              <Button href={entityEditHref("/master/vendor", vendor)} variant="secondary"><Pencil aria-hidden="true" size={14} /> Ubah</Button>
             </CanCreate>
           </>
         }

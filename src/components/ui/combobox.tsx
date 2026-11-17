@@ -150,7 +150,7 @@ export function Combobox({
                     }}
                     className={cn(opt.disabled && "opacity-60 line-through")}
                   >
-                    <Check
+                    <Check aria-hidden="true"
                       className={cn(
                         "mr-2 size-4",
                         opt.value === value ? "opacity-100" : "opacity-0",

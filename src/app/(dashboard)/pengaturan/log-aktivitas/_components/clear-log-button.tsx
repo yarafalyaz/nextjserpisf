@@ -28,7 +28,7 @@ export function ClearLogButton() {
         onClick={() => setOpen(true)}
         className="gap-2 text-destructive hover:text-destructive"
       >
-        <Trash2 className="size-4" />
+        <Trash2 aria-hidden="true" className="size-4" />
         {isPending ? "Menghapus..." : "Kosongkan Log"}
       </Button>
       <ConfirmDialog

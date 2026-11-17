@@ -69,7 +69,7 @@ export default async function DepartmentDetailPage({
         actions={
           <>
             <CanCreate permission="edit_departments">
-              <Button href={entityEditHref("/master/departemen", department)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+              <Button href={entityEditHref("/master/departemen", department)} variant="secondary"><Pencil aria-hidden="true" size={14} /> Ubah</Button>
             </CanCreate>
             <CanCreate permission="delete_departments">
               <DeleteButton id={department.id} action={deleteDepartment} />

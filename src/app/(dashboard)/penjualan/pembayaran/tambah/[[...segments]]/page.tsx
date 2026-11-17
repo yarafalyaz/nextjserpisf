@@ -135,7 +135,7 @@ export default async function CreatePaymentPage({
       </div>
       {requestedUnpayable && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/40" role="alert">
-          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-500" />
+          <AlertTriangle aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-amber-500" />
           <div className="text-sm">
             <p className="font-medium text-foreground">
               Faktur {requestedUnpayable.documentNo} belum bisa dibayar

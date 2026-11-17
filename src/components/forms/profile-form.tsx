@@ -144,7 +144,7 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
         <div className="profile-divider" />
 
         <h3 style={{ margin: "0 0 16px", fontSize: "0.9375rem", display: "flex", alignItems: "center", gap: "8px" }}>
-          <User size={16} /> Informasi Akun
+          <User aria-hidden="true" size={16} /> Informasi Akun
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-1.5">
@@ -170,7 +170,7 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
 
       <form onSubmit={onSubmitPassword} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <h3 style={{ margin: "0 0 16px", fontSize: "0.9375rem", display: "flex", alignItems: "center", gap: "8px" }}>
-          <Lock size={16} /> Ubah Kata Sandi
+          <Lock aria-hidden="true" size={16} /> Ubah Kata Sandi
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-1.5">

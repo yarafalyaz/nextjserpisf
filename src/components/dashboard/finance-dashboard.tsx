@@ -231,14 +231,14 @@ export default async function FinanceDashboard() {
             <Card className="gap-0 py-0">
               <CardHeader className="py-4">
                 <CardTitle className="flex items-center gap-2 text-sm">
-                  <Receipt className="size-4 text-muted-foreground" />
+                  <Receipt aria-hidden="true" className="size-4 text-muted-foreground" />
                   Faktur Terbaru
                 </CardTitle>
                 <CardDescription>6 faktur terakhir</CardDescription>
                 <CardAction>
                   <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                     <Link href="/penjualan/faktur">
-                      Semua <ArrowUpRight className="size-3.5" />
+                      Semua <ArrowUpRight aria-hidden="true" className="size-3.5" />
                     </Link>
                   </Button>
                 </CardAction>
@@ -291,7 +291,7 @@ export default async function FinanceDashboard() {
                       <div className="truncate text-[11px] text-muted-foreground">{link.desc}</div>
                     </div>
                   </div>
-                  <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground/50 transition-colors duration-150 group-hover:translate-x-0.5 group- group-hover:text-foreground" />
+                  <ArrowUpRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground/50 transition-colors duration-150 group-hover:translate-x-0.5 group- group-hover:text-foreground" />
                 </Link>
               ))}
             </div>

@@ -124,3 +124,33 @@ export async function loadDisciplinaryDeductionDecisionsForRecord(
 ): Promise<DisciplinaryDeductionDecisionRow[]> {
   return queryDecisions(scope, canViewAmount, { disciplinaryRecordId })
 }
+
+/**
+ * BR-DISC-09 status penerapan (bug KM2): keputusan potongan TIDAK pernah
+ * masuk ke slip payroll otomatis — `applyDisciplinaryDeduction` belum punya
+ * pemanggil produksi. Fakta ini ditampilkan, bukan disembunyikan: jumlah
+ * keputusan dalam scope vs jumlah baris DisciplinaryDeductionApplication
+ * (jurnal Dr Hutang Gaji yang sudah terbit untuk keputusan itu).
+ */
+export interface DisciplinaryDeductionApplicationStatus {
+  decisions: number
+  applied: number
+  pending: number
+}
+
+export async function loadDisciplinaryDeductionApplicationStatus(
+  scope: HrScope,
+): Promise<DisciplinaryDeductionApplicationStatus> {
+  const decisions = await prisma.disciplinaryDeductionDecision.count({
+    where: { deletedAt: null, ...hrScopeWhere(scope) },
+  })
+  const appliedDecisions = await prisma.disciplinaryDeductionApplication.findMany({
+    where: { decision: { deletedAt: null, ...hrScopeWhere(scope) } },
+    select: { decisionId: true },
+    distinct: ["decisionId"],
+  })
+  // dedupe di sini juga: `distinct` SQL bisa dilipat mock/driver mana pun,
+  // dan hitungannya dipakai sebagai angka jujur ke pengguna.
+  const applied = new Set(appliedDecisions.map((r) => r.decisionId)).size
+  return { decisions, applied, pending: Math.max(0, decisions - applied) }
+}

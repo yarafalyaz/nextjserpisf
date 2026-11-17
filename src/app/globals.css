@@ -23,7 +23,11 @@
   label[for],
   [role="button"],
   [role="tab"],
-  [role="switch"] {
+  [role="switch"],
+  [role="option"],
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  [role="menuitemradio"] {
     cursor: pointer;
     touch-action: manipulation;
   }
@@ -41,6 +45,30 @@
   :disabled,
   [aria-disabled="true"] {
     cursor: not-allowed;
+  }
+
+  /* Focus ring bawaan untuk SEMUA kontrol. Di `@layer base` dan dibungkus
+     `:where()` (spesifisitas 0), jadi setiap `focus-visible:ring-*` / `focus:ring-*`
+     milik komponen tetap menang; aturan ini hanya mencegah kehilangan indikator
+     fokus total pada kontrol yang belum punya cincin (mis. `<button>` bergaya
+     sendiri). Sebelumnya jaminannya hanya `outline: auto` bawaan peramban — 1 px
+     di atas tombol `bg-primary` hampir tak terlihat. */
+  :where(
+    button,
+    a[href],
+    select,
+    summary,
+    [role="button"],
+    [role="tab"],
+    [role="switch"],
+    [role="option"],
+    [role="menuitem"],
+    [role="menuitemcheckbox"],
+    [role="menuitemradio"],
+    [role="combobox"]
+  ):focus-visible {
+    outline: 2px solid var(--ring, currentColor);
+    outline-offset: 2px;
   }
 
   /* Prevent iOS Safari auto-zoom on form fields (<16px) on coarse pointers */

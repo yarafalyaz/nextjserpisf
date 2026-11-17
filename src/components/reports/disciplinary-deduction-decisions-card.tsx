@@ -1,4 +1,7 @@
-import type { DisciplinaryDeductionDecisionRow } from "@/lib/reports/disciplinary-deduction-data"
+import type {
+  DisciplinaryDeductionApplicationStatus,
+  DisciplinaryDeductionDecisionRow,
+} from "@/lib/reports/disciplinary-deduction-data"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import {
   DetailTable,
@@ -12,6 +15,15 @@ import { ReportCardShell } from "./report-card-shell"
 
 export const DISC09_DECISIONS_TITLE = "Keputusan Potongan Disiplin"
 
+/**
+ * Bug KM2: keputusan potongan disiplin BELUM diterapkan otomatis ke slip
+ * payroll (`applyDisciplinaryDeduction` belum punya pemanggil produksi).
+ * Penanda ini wajib tampil selama itu benar supaya layar tidak membohongi
+ * pembaca: dokumen keputusan tidak sama dengan potongan yang sudah terjadi.
+ */
+export const DISC09_NOT_APPLIED_WARNING =
+  "Potongan disiplin belum diterapkan otomatis ke slip gaji: dokumen keputusan ini tidak memotong slip payroll mana pun. Hitung dan potong manual lewat slip koreksi sampai penerapan otomatis dipasang."
+
 export const DISC09_DECISIONS_NOTICE_TEXT =
   "Nominal, jenis potongan, perlakuan upah skorsing, dan dasar peraturan adalah snapshot dokumen keputusan, ditampilkan apa adanya tanpa hitung ulang. Surat peringatan tidak memicu potongan."
 
@@ -23,7 +35,11 @@ export const DISC09_DECISIONS_NOTICE_TEXT =
  */
 export function DisciplinaryDeductionDecisionsCard({
   decisions,
-}: Readonly<{ decisions: DisciplinaryDeductionDecisionRow[] }>) {
+  applicationStatus,
+}: Readonly<{
+  decisions: DisciplinaryDeductionDecisionRow[]
+  applicationStatus?: DisciplinaryDeductionApplicationStatus
+}>) {
   return (
     <ReportCardShell
       label={DISC09_DECISIONS_TITLE}
@@ -33,6 +49,16 @@ export function DisciplinaryDeductionDecisionsCard({
       emptyText="Belum ada dokumen keputusan potongan disiplin dalam cakupan Anda"
       notice={DISC09_DECISIONS_NOTICE_TEXT}
     >
+      {applicationStatus ? (
+        <p
+          role="status"
+          data-testid="disc09-not-applied-warning"
+          className="mb-3 rounded-md border border-warning/50 bg-warning-soft px-3 py-2 text-xs text-foreground"
+        >
+          {DISC09_NOT_APPLIED_WARNING}
+          {` Tercatat: ${applicationStatus.decisions} keputusan, ${applicationStatus.applied} sudah dibukukan lewat jurnal potongan, ${applicationStatus.pending} belum dipotong.`}
+        </p>
+      ) : null}
       <DetailTable aria-label="Daftar keputusan potongan disiplin">
         <DetailTableHead>
           <DetailTableTh>Nomor Dokumen</DetailTableTh>

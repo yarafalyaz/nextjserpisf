@@ -109,7 +109,7 @@ export default async function EmployeeDashboard() {
             <Card className="gap-0 py-0">
               <CardHeader className="py-4">
                 <CardTitle className="flex items-center gap-2 text-sm">
-                  <User className="size-4 text-muted-foreground" />
+                  <User aria-hidden="true" className="size-4 text-muted-foreground" />
                   Profil Karyawan
                 </CardTitle>
                 <CardDescription>Informasi penempatan dan identitas kerja</CardDescription>
@@ -118,7 +118,7 @@ export default async function EmployeeDashboard() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div>
                     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Briefcase className="size-3.5 shrink-0" />
+                      <Briefcase aria-hidden="true" className="size-3.5 shrink-0" />
                       Jabatan
                     </span>
                     <p className="mt-1 text-sm font-medium text-foreground">
@@ -127,7 +127,7 @@ export default async function EmployeeDashboard() {
                   </div>
                   <div>
                     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Building2 className="size-3.5 shrink-0" />
+                      <Building2 aria-hidden="true" className="size-3.5 shrink-0" />
                       Departemen
                     </span>
                     <p className="mt-1 text-sm font-medium text-foreground">
@@ -148,7 +148,7 @@ export default async function EmployeeDashboard() {
             <Card className="gap-0 py-0">
               <CardHeader className="py-4">
                 <CardTitle className="flex items-center gap-2 text-sm">
-                  <Palmtree className="size-4 text-muted-foreground" />
+                  <Palmtree aria-hidden="true" className="size-4 text-muted-foreground" />
                   Ringkasan Cuti
                 </CardTitle>
                 <CardDescription>Status penggunaan dan pengajuan cuti tahun berjalan</CardDescription>
@@ -157,7 +157,7 @@ export default async function EmployeeDashboard() {
                 <div className="space-y-3">
                   {leave.activeLeave && (
                     <div className="flex items-center gap-2 rounded-md border border-blue-200/80 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-blue-300">
-                      <Palmtree className="size-3.5 shrink-0" />
+                      <Palmtree aria-hidden="true" className="size-3.5 shrink-0" />
                       Sedang cuti aktif
                     </div>
                   )}
@@ -181,7 +181,7 @@ export default async function EmployeeDashboard() {
                   </div>
                   <Button asChild variant="outline" size="sm" className="w-full">
                     <Link href="/sdm/cuti">
-                      Ajukan Cuti <ArrowUpRight className="ml-1 size-3.5" />
+                      Ajukan Cuti <ArrowUpRight aria-hidden="true" className="ml-1 size-3.5" />
                     </Link>
                   </Button>
                 </div>
@@ -210,7 +210,7 @@ export default async function EmployeeDashboard() {
                       <div className="truncate text-[11px] text-muted-foreground">{link.desc}</div>
                     </div>
                   </div>
-                  <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground/50 transition-colors duration-150 group-hover:translate-x-0.5 group- group-hover:text-foreground" />
+                  <ArrowUpRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground/50 transition-colors duration-150 group-hover:translate-x-0.5 group- group-hover:text-foreground" />
                 </Link>
               ))}
             </div>

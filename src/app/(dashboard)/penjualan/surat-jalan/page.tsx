@@ -167,7 +167,7 @@ export async function renderDeliveryOrdersPage({
         <CanCreate permission="create_delivery_orders">
           <Link
             href="/penjualan/surat-jalan/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-offset-2"
             id="create-do-btn"
           >
             <Plus className="size-3.5" aria-hidden="true" />

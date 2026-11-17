@@ -264,7 +264,7 @@ export default async function AssetDetailPage({
         badge={<AssetUseStatus status={asset.status} />}
         actions={<>
           <CanCreate permission="edit_assets">
-            <Button href={entityEditHref("/aset", asset)} variant="primary" className="min-h-11 sm:min-h-9"><Pencil size={14} /> Ubah</Button>
+            <Button href={entityEditHref("/aset", asset)} variant="primary" className="min-h-11 sm:min-h-9"><Pencil aria-hidden="true" size={14} /> Ubah</Button>
           </CanCreate>
           {asset.status !== "disposed" && (
             <CanCreate permission="manage_assets">

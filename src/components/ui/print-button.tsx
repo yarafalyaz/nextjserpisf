@@ -92,7 +92,7 @@ export function PrintButton({ title = "Cetak", documentType, documentId, disable
       onPress={handlePrint}
       isDisabled={isPrinting || disabled}
     >
-      {isPrinting ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />}
+      {isPrinting ? <Loader2 aria-hidden="true" size={14} className="animate-spin" /> : <Printer aria-hidden="true" size={14} />}
       {isPrinting ? "Mencetak..." : title}
     </Button>
   )

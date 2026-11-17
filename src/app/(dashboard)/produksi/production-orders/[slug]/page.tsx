@@ -268,7 +268,7 @@ export default async function ProductionOrderDetailPage({
           {/* updateProductionOrder/deleteProductionOrder hanya menerima draft
               atau pending (lihat penjaganya). */}
           {canEditProductionOrder && isEditableStatus && (
-            <Link href={entityEditHref("/produksi/production-orders", order)} className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer">Ubah</Link>
+            <Link href={entityEditHref("/produksi/production-orders", order)} className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-offset-2">Ubah</Link>
           )}
           {canDeleteProductionOrder && isEditableStatus && (
             <DeleteButton id={order.id} action={deleteProductionOrder} />

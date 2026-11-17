@@ -61,7 +61,7 @@ interface FormActionsProps {
  */
 export function FormActions({ children }: FormActionsProps) {
   return (
-    <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] z-30 -mx-4 flex flex-col-reverse flex-wrap gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur-md sm:static sm:z-auto sm:mx-0 sm:flex-row sm:justify-end sm:gap-3 sm:border-default sm:bg-transparent sm:px-0 sm:py-0 sm:pt-5 sm:backdrop-blur-none">
+    <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] z-30 -mx-4 flex flex-col-reverse flex-wrap gap-2 border-t border-border bg-background px-4 py-3 sm:static sm:z-auto sm:mx-0 sm:flex-row sm:justify-end sm:gap-3 sm:border-default sm:bg-transparent sm:px-0 sm:py-0 sm:pt-5">
       {children}
     </div>
   )

@@ -116,7 +116,7 @@ export default async function CrmTicketDetailPage({
           <>
             <CanCreate permission="edit_tickets">
               <Button href={entityEditHref("/crm/tickets", ticket)} variant="primary" className="min-h-11 sm:min-h-9">
-                <Pencil size={14} /> Ubah
+                <Pencil aria-hidden="true" size={14} /> Ubah
               </Button>
             </CanCreate>
             <CanCreate permission="delete_tickets">

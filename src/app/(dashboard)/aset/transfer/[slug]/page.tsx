@@ -54,7 +54,7 @@ export default async function AssetTransferDetailPage({
         ]}
         actions={<>
           <CanCreate permission="edit_asset_transfers">
-            <Button href={entityEditHref("/aset/transfer", transfer)} variant="primary" className="min-h-11 sm:min-h-9"><Pencil size={14} /> Ubah</Button>
+            <Button href={entityEditHref("/aset/transfer", transfer)} variant="primary" className="min-h-11 sm:min-h-9"><Pencil aria-hidden="true" size={14} /> Ubah</Button>
           </CanCreate>
           <CanCreate permission="delete_asset_transfers">
             <DeleteButton id={transfer.id} action={deleteAssetTransfer} />

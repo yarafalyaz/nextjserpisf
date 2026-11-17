@@ -93,7 +93,7 @@ export default async function CustomerVehiclesPage({
         <CanCreate permission="create_customers">
           <Link
             href="/kendaraan/pelanggan/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-offset-2"
             id="create-customer-vehicle-btn"
           >
             <Car size={16} aria-hidden="true" />

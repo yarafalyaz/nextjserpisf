@@ -54,7 +54,7 @@ function makeTx(opts?: {
 }) {
   const state = {
     payable: (opts?.payable ?? null) as Row | null,
-    journals: [] as Array<{ id: number; referenceType: string; referenceId: number; entries: Array<{ accountId: number; debit: unknown; credit: unknown }> }>,
+    journals: [] as Array<{ id: number; referenceType: string; referenceId: number; entries: Array<{ accountId: number; debit: unknown; credit: unknown }>; status?: string }>,
     journalExists: opts?.journalExists ?? false,
     originJournal: (opts?.originJournal ?? null) as { id: number; status: string; transactionDate: Date } | null,
     nextJournal: 100,
@@ -96,8 +96,10 @@ function makeTx(opts?: {
       },
       update: async ({ data }: { data: Record<string, unknown> }) => {
         if (!state.payable) throw new Error("no row")
-        if (data.reversalAmount) state.payable.reversalAmount = data.reversalAmount as Prisma.Decimal
+        if (data.reversalAmount != null) state.payable.reversalAmount = data.reversalAmount as Prisma.Decimal
         if (data.paidAmount) state.payable.paidAmount = data.paidAmount as Prisma.Decimal
+        if (data.accruedAmount != null) state.payable.accruedAmount = data.accruedAmount as Prisma.Decimal
+        if (data.accrualJournalId != null) state.payable.accrualJournalId = data.accrualJournalId as number
         return state.payable
       },
     },
@@ -111,14 +113,20 @@ function makeTx(opts?: {
         if (hit) return hit
         return state.journalExists ? { id: 1 } : null
       },
-      findUnique: async ({ where }: { where: { id: number } }) =>
-        state.originJournal && state.originJournal.id === where.id ? state.originJournal : null,
+      findUnique: async ({ where }: { where: { id: number } }) => {
+        if (state.originJournal && state.originJournal.id === where.id) return state.originJournal
+        const hit = state.journals.find((j) => j.id === where.id)
+        return hit ? { id: hit.id, status: hit.status ?? null, transactionDate: new Date(2026, 9, 15) } : null
+      },
       update: async ({ where, data }: { where: { id: number }; data: Record<string, unknown> }) => {
         if (state.originJournal && state.originJournal.id === where.id) {
           state.originJournal = { ...state.originJournal, status: data.status as string }
           return state.originJournal
         }
-        return { id: where.id }
+        // Jurnal buatan create juga harus bisa di-REVERSED (batal akrual).
+        const seeded = state.journals.find((j) => j.id === where.id)
+        if (seeded) seeded.status = data.status as string
+        return seeded ?? { id: where.id }
       },
       create: async ({ data }: { data: Record<string, unknown> }) => {
         // Entri bersarang (data.entries.create) tercatat bersama jurnalnya —
@@ -535,5 +543,117 @@ describe("commission-payable preflight & validasi akun", () => {
     })
     await expect(accrueTx(gone.tx, 1)).rejects.toThrow(/sudah terhapus/)
     expect(gone.state.journals).toHaveLength(0)
+  })
+})
+
+describe("commission-payable akrual ulang sesudah batal (reverse bayar → bayar ulang)", () => {
+  it("baris batal dihidupkan ulang: jurnal akrual baru, R=0, payable naik dan bisa dibayar", async () => {
+    // Keadaan sesudah reverse pembayaran: akrual lahir, dibayar slip, slip
+    // dikoreksi, status paid hilang → cancelAccrualTx membatalkan penuh
+    // (R = A, saldo 0, jurnal akrual asal #100 REVERSED, baris tetap ada).
+    // Mock mencatat update status jurnal, jadi jalur lahirnya diuji di
+    // "cancelAccrual (un-accrue)" di atas dan disusun di sini.
+    const { tx, state } = makeTx({
+      settings: SETTINGS,
+      accounts: ACCOUNTS,
+      payable: {
+        id: 1, salesInvoiceId: 1, salesEmployeeId: 9,
+        accruedAmount: D(220000), reversalAmount: D(220000), paidAmount: D(0), accrualJournalId: 100,
+      },
+      seedJournals: [
+        { id: 100, referenceType: "CommissionPayableAccrual", referenceId: 1 },
+        { id: 101, referenceType: "CommissionPayableCancellation", referenceId: 1 },
+      ],
+      originJournal: { id: 100, status: "REVERSED", transactionDate: new Date(2026, 9, 15) },
+    })
+    const rowId = state.payable!.id
+
+    const out = await accrueTx(tx, 1)
+    expect(out).toEqual({ accrued: true, amount: 220000, reason: null })
+    // Baris SAMA dihidupkan ulang, bukan baris kedua.
+    expect(state.payable?.id).toBe(rowId)
+    expect(state.payable?.accruedAmount.toNumber()).toBe(220000)
+    expect(state.payable?.reversalAmount.toNumber()).toBe(0)
+    expect(state.payable?.paidAmount.toNumber()).toBe(0)
+    const accruals = state.journals.filter((j) => j.referenceType === "CommissionPayableAccrual")
+    expect(accruals).toHaveLength(2)
+    expect(state.payable?.accrualJournalId).toBe(accruals[1].id)
+
+    // Salesperson bisa dibayar penuh atas faktur yang lunas ulang.
+    await expect(paidByIdTx(tx, rowId, 220000, 1)).resolves.toEqual({ paid: 220000 })
+    expect(state.payable?.paidAmount.toNumber()).toBe(220000)
+  })
+
+  it("snapshot faktur berubah: nominal akrual ulang = snapshot saat ini, bukan nominal lama", async () => {
+    const { tx, state, invoice } = makeTx({
+      settings: SETTINGS,
+      accounts: ACCOUNTS,
+      payable: {
+        id: 1, salesInvoiceId: 1, salesEmployeeId: 9,
+        accruedAmount: D(220000), reversalAmount: D(220000), paidAmount: D(0), accrualJournalId: 7,
+      },
+      // Jurnal akrual lama sudah REVERSED — bukti baris batal.
+      originJournal: { id: 7, status: "REVERSED", transactionDate: new Date(2026, 9, 15) },
+    })
+    invoice.commissionRatePercent = D(3) // DPP 11.000.000 × 3% = 330.000
+    const out = await accrueTx(tx, 1)
+    expect(out).toEqual({ accrued: true, amount: 330000, reason: null })
+    expect(state.payable?.accruedAmount.toNumber()).toBe(330000)
+    expect(state.payable?.reversalAmount.toNumber()).toBe(0)
+  })
+
+  it("baris aktif (saldo > 0) tetap no-op", async () => {
+    const { tx, state } = makeTx({
+      settings: SETTINGS,
+      accounts: ACCOUNTS,
+      payable: {
+        id: 1, salesInvoiceId: 1, salesEmployeeId: 9,
+        accruedAmount: D(220000), reversalAmount: D(20000), paidAmount: D(0), accrualJournalId: 7,
+      },
+    })
+    await expect(accrueTx(tx, 1)).resolves.toEqual({ accrued: true, amount: 220000, reason: null })
+    expect(state.journals).toHaveLength(0)
+    expect(state.payable?.reversalAmount.toNumber()).toBe(20000)
+  })
+
+  it("baris nol-saldo TANPA bukti REVERSED (warisan) tetap no-op", async () => {
+    const { tx, state } = makeTx({
+      settings: SETTINGS,
+      accounts: ACCOUNTS,
+      payable: {
+        id: 1, salesInvoiceId: 1, salesEmployeeId: 9,
+        accruedAmount: D(220000), reversalAmount: D(220000), paidAmount: D(0), accrualJournalId: 7,
+      },
+      originJournal: { id: 7, status: "POSTED", transactionDate: new Date(2026, 9, 15) },
+    })
+    await expect(accrueTx(tx, 1)).resolves.toEqual({ accrued: true, amount: 220000, reason: null })
+    expect(state.journals).toHaveLength(0)
+  })
+
+  it("sudah ada kas keluar walau saldo nol: tak diubah, alasan resolusi manual", async () => {
+    const { tx, state } = makeTx({
+      settings: SETTINGS,
+      accounts: ACCOUNTS,
+      payable: {
+        id: 1, salesInvoiceId: 1, salesEmployeeId: 9,
+        accruedAmount: D(220000), reversalAmount: D(220000), paidAmount: D(220000), accrualJournalId: 7,
+      },
+      originJournal: { id: 7, status: "REVERSED", transactionDate: new Date(2026, 9, 15) },
+    })
+    const out = await accrueTx(tx, 1)
+    expect(out.reason).toMatch(/terbayar-220000-perlu-resolusi-manual/)
+    expect(state.journals).toHaveLength(0)
+    expect(state.payable?.accruedAmount.toNumber()).toBe(220000)
+    expect(state.payable?.paidAmount.toNumber()).toBe(220000)
+  })
+
+  it("jurnal akrual aktif tanpa baris subledger tetap ditolak (bukan jurnal kedua)", async () => {
+    const { tx, state } = makeTx({
+      settings: SETTINGS, accounts: ACCOUNTS, payable: null,
+      seedJournals: [{ id: 55, referenceType: "CommissionPayableAccrual", referenceId: 1 }],
+    })
+    ;(state.journals[0] as { status?: string }).status = "POSTED"
+    await expect(accrueTx(tx, 1)).rejects.toThrow(/resolusi manual/)
+    expect(state.payable).toBeNull()
   })
 })

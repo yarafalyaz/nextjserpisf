@@ -202,7 +202,7 @@ export default async function ProjectDetailPage({
         actions={
           <>
             <CanCreate permission="edit_projects">
-              <Button href={entityEditHref("/proyek", project)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+              <Button href={entityEditHref("/proyek", project)} variant="secondary"><Pencil aria-hidden="true" size={14} /> Ubah</Button>
             </CanCreate>
           </>
         }
@@ -210,7 +210,7 @@ export default async function ProjectDetailPage({
 
       {projectPl && projectPl.profit < 0 && (
         <Alert variant="destructive">
-          <AlertCircle />
+          <AlertCircle aria-hidden="true" />
           <AlertTitle>Proyek rugi menurut L/R proyek</AlertTitle>
           <AlertDescription>
             Laba (rugi) proyek dari builder L/R ({formatCurrencyExact(projectPl.profit)}) negatif: pendapatan invoice diakui {formatCurrencyExact(projectPl.revenue)} di bawah total biaya {formatCurrencyExact(projectPl.totalCost)}. Tinjau kembali harga penawaran atau biaya proyek.
@@ -223,7 +223,7 @@ export default async function ProjectDetailPage({
         {/* Widget 1: Progress Lingkaran / Progres Fisik Mobil */}
         <div className="bg-surface rounded-lg border border-default shadow-2xs p-5 flex flex-col justify-between relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-5">
-            <Activity className="size-28 text-foreground" />
+            <Activity aria-hidden="true" className="size-28 text-foreground" />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <span className="text-sm font-semibold text-muted-foreground">Progres Pengerjaan</span>
@@ -244,7 +244,7 @@ export default async function ProjectDetailPage({
         {/* Widget 2: Kartu Mobil Premium */}
         <div className="bg-surface rounded-lg border border-default shadow-2xs p-5 flex flex-col justify-between relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-5">
-            <Wrench className="size-28 text-foreground" />
+            <Wrench aria-hidden="true" className="size-28 text-foreground" />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <span className="text-sm font-semibold text-muted-foreground">Profil Mobil Target</span>
@@ -271,12 +271,12 @@ export default async function ProjectDetailPage({
             </div>
           ) : (
             <div className="flex items-center gap-2 my-4 text-muted-foreground">
-              <AlertCircle size={16} />
+              <AlertCircle aria-hidden="true" size={16} />
               <span className="text-sm">Tidak ada kendaraan terhubung</span>
             </div>
           )}
           <div className="text-xs text-muted-foreground-secondary border-t border-default/50 pt-2 flex items-center gap-1.5">
-            <Shield size={13} className="text-success" /> Pemilik: {project.customer.name}
+            <Shield aria-hidden="true" size={13} className="text-success" /> Pemilik: {project.customer.name}
           </div>
         </div>
 
@@ -342,7 +342,7 @@ export default async function ProjectDetailPage({
               <>
                 {stagesInitError && (
                   <Alert variant="destructive">
-                    <AlertCircle />
+                    <AlertCircle aria-hidden="true" />
                     <AlertTitle>Tahapan default gagal dibuat otomatis</AlertTitle>
                     <AlertDescription>
                       {stagesInitError} Buka ulang halaman ini atau buat tahapan manual.

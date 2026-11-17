@@ -18,10 +18,17 @@ function createFaComponent(iconDef: IconDefinition): LucideIcon {
       customStyle.width = typeof size === "number" ? `${size}px` : size
       customStyle.height = typeof size === "number" ? `${size}px` : size
     }
+    // Ikon dekoratif secara default: nama yang dibaca SR datang dari teks di
+    // sebelahnya atau `aria-label` tombol induk. Ikon yang BERMAKNA sendiri
+    // (tombol ikon mandiri) wajib memberi `aria-label`/`title`, yang menimpa
+    // default ini lewat spread `props` di bawah.
+    const accessible =
+      props["aria-label"] ?? props["aria-labelledby"] ?? props.role ?? (props as { title?: string }).title
     return (
       <FontAwesomeIcon
         ref={ref as never}
         icon={iconDef}
+        aria-hidden={accessible ? undefined : true}
         className={className}
         style={customStyle}
         {...(props as any)}

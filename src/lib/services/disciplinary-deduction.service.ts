@@ -98,6 +98,14 @@ export interface ApplyDisciplinaryDeductionResult {
  * Terapkan SATU keputusan potongan ke satu periode. Wajib dipanggil di
  * dalam transaksi pemanggil bila pemanggil punya tx; tanpa tx service
  * membuka transaksi sendiri.
+ *
+ * STATUS (bug KM2): BELUM ADA PEMANGGIL PRODUKSI. Pipeline payroll
+ * (buildPayrollWrite / generateBulkPayroll / markPayrollPaid) tidak
+ * memanggil fungsi ini, jadi dokumen keputusan yang dicatat lewat
+ * disciplinary-deduction.actions.ts TIDAK memotong slip mana pun. Fitur
+ * ini TIDAK BOLEH tampil seolah sudah memotong: penanda eksplisit hidup di
+ * `/sdm/disiplin` (DISC09_NOT_APPLIED_WARNING) dan form catat keputusan.
+ * Saat penerapan dipasang, hapus penanda itu DAN komentar ini sekaligus.
  */
 export async function applyDisciplinaryDeduction(
   client: Client,

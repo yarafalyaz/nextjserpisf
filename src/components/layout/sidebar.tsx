@@ -158,7 +158,7 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
               >
                 {item.label}
               </Link>
-              <ChevronRight className="ml-auto size-3.5 text-sidebar-foreground/60 transition-colors duration-150 ease-out group-data-[state=open]/collapsible:rotate-90" />
+              <ChevronRight aria-hidden="true" className="ml-auto size-3.5 text-sidebar-foreground/60 transition-colors duration-150 ease-out group-data-[state=open]/collapsible:rotate-90" />
             </SidebarMenuButton>
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -230,7 +230,7 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
               <SidebarMenuButton size="lg" asChild className="h-10 px-1.5">
                 <Link href="/">
                   <div className="flex aspect-square size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                    <Building2 className="size-3.5" />
+                    <Building2 aria-hidden="true" className="size-3.5" />
                   </div>
                   <div className="grid flex-1 text-left text-xs leading-tight">
                     <span className="truncate font-semibold tracking-tight text-foreground">{companyName || "YaraERP"}</span>

@@ -165,7 +165,7 @@ export default async function GoodsReceiptDetailPage({
                 <CanCreate permission="edit_goods_receipts">
                   <Link
                     href={entityEditHref("/pembelian/penerimaan", receipt)}
-                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-offset-2"
                   >
                     Ubah
                   </Link>
@@ -185,7 +185,7 @@ export default async function GoodsReceiptDetailPage({
               <CanCreate permission="create_vendor_bills">
                 <Link
                   href={`/pembelian/tagihan/tambah/penerimaan/${receipt.slug ?? receipt.id}`}
-                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-9 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-offset-2"
                 >
                   Buat Tagihan
                 </Link>

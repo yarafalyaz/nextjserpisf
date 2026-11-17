@@ -33,7 +33,7 @@ export function ApprovePayrollButton({ payrollId }: { payrollId: number }) {
   return (
     <>
       <PageHeaderButton onPress={() => setIsOpen(true)} className="bg-success text-success-foreground hover:bg-success-600 transition-colors">
-        <CheckCircle size={14} /> Finalisasi
+        <CheckCircle aria-hidden="true" size={14} /> Finalisasi
       </PageHeaderButton>
 
       <ConfirmDialog

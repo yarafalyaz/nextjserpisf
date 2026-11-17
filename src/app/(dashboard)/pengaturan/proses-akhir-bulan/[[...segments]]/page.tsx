@@ -82,11 +82,11 @@ export default async function PeriodClosePage({
           <CardAction>
             {result.warningCount === 0 ? (
               <Badge variant="outline" className="gap-1 text-emerald-600">
-                <CheckCircle2 className="size-3.5" /> Siap
+                <CheckCircle2 aria-hidden="true" className="size-3.5" /> Siap
               </Badge>
             ) : (
               <Badge variant="outline" className="gap-1 text-amber-600">
-                <AlertTriangle className="size-3.5" /> {result.warningCount} perlu diperiksa
+                <AlertTriangle aria-hidden="true" className="size-3.5" /> {result.warningCount} perlu diperiksa
               </Badge>
             )}
           </CardAction>
@@ -96,9 +96,9 @@ export default async function PeriodClosePage({
           {result.checks.map((check) => (
             <div key={check.key} className="flex items-start gap-3 rounded-lg border bg-card p-4">
               {check.status === "ok" ? (
-                <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-500" />
+                <CheckCircle2 aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-emerald-500" />
               ) : (
-                <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-500" />
+                <AlertTriangle aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-amber-500" />
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-foreground">
@@ -134,7 +134,7 @@ export default async function PeriodClosePage({
             fiscalYear={filters.tahun}
           />
           <p className="mt-3 flex items-start gap-1.5 text-xs text-muted-foreground">
-            <Info className="mt-0.5 size-3.5 shrink-0" />
+            <Info aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
             Temuan di atas bersifat informatif, bukan penghalang: menutup periode tetap keputusan Anda.
             Buka kunci juga tersedia sebagai jalan koreksi dan tercatat di log aktivitas.
           </p>
@@ -152,15 +152,15 @@ export default async function PeriodClosePage({
           <CardAction>
             {yearEndPreview.alreadyClosed ? (
               <Badge variant="outline" className="gap-1 text-emerald-600">
-                <CheckCircle2 className="size-3.5" /> Sudah ditutup
+                <CheckCircle2 aria-hidden="true" className="size-3.5" /> Sudah ditutup
               </Badge>
             ) : yearEndPreview.balanced && yearEndPreview.retainedEarningsMapped ? (
               <Badge variant="outline" className="gap-1 text-emerald-600">
-                <CheckCircle2 className="size-3.5" /> Siap posting
+                <CheckCircle2 aria-hidden="true" className="size-3.5" /> Siap posting
               </Badge>
             ) : (
               <Badge variant="outline" className="gap-1 text-amber-600">
-                <AlertTriangle className="size-3.5" /> Belum siap
+                <AlertTriangle aria-hidden="true" className="size-3.5" /> Belum siap
               </Badge>
             )}
           </CardAction>

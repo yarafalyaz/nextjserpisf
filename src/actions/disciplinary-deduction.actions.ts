@@ -8,6 +8,11 @@
  * tidak diduplikasi di layer action. SP bukan pemicu potongan;
  * disciplinaryRecordId hanya konteks opsional. Penerapan ke payroll
  * (applyDisciplinaryDeduction) tetap domain payroll, bukan action ini.
+ *
+ * STATUS (bug KM2): penerapan ke payroll itu BELUM dipasang — nol pemanggil
+ * produksi `applyDisciplinaryDeduction`, jadi keputusan yang dicatat di sini
+ * tidak memotong slip gaji. UI menampilkan peringatan eksplisit
+ * (DISC09_NOT_APPLIED_WARNING); jangan hapus peringatan selama wiring belum ada.
  */
 
 import { revalidatePath } from "next/cache"

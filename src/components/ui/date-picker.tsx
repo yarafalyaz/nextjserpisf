@@ -118,7 +118,7 @@ export function AppDatePicker({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
+          <Calendar aria-hidden="true"
             mode="single"
             selected={selectedDate}
             onSelect={handleSelect}

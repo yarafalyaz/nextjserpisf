@@ -142,7 +142,7 @@ export default async function PayrollDetailPage({
                     href={entityEditHref("/sdm/penggajian", payroll)}
                     variant="secondary"
                   >
-                    <Pencil size={14} /> Ubah
+                    <Pencil aria-hidden="true" size={14} /> Ubah
                   </Button>
                 </CanCreate>
               </>

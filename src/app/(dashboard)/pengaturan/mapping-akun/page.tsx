@@ -96,9 +96,9 @@ export default async function AccountMappingPage() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 {unmappedCount === 0 ? (
-                  <CheckCircle2 className="size-5 text-emerald-500" />
+                  <CheckCircle2 aria-hidden="true" className="size-5 text-emerald-500" />
                 ) : (
-                  <AlertTriangle className="size-5 text-amber-500" />
+                  <AlertTriangle aria-hidden="true" className="size-5 text-amber-500" />
                 )}
                 <div>
                   <p className="text-sm font-medium text-foreground">

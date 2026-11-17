@@ -170,7 +170,7 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
         variant="primary"
         className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-md shadow-2xs transition-colors"
       >
-        <Calculator className="size-3.5" />
+        <Calculator aria-hidden="true" className="size-3.5" />
         <span>Buat Gaji Bulanan</span>
       </Button>
 
@@ -344,7 +344,7 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
             >
               {isPending ? (
                 <>
-                  <Loader2 size={16} className="animate-spin mr-1" />
+                  <Loader2 aria-hidden="true" size={16} className="animate-spin mr-1" />
                   Memproses...
                 </>
               ) : "Mulai Buat"}

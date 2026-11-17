@@ -273,7 +273,7 @@ export function SalesInvoiceForm({
 
         {hasMixedScrapLines && (
           <Alert variant="warning" className="mb-3">
-            <AlertCircle />
+            <AlertCircle aria-hidden="true" />
             <AlertTitle>Faktur campuran besi tua</AlertTitle>
             <AlertDescription>
               Faktur ini mencampur item besi tua dan barang dagang. Pisahkan ke faktur tersendiri, server menolak posting faktur campuran.

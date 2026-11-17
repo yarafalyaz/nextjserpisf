@@ -290,7 +290,7 @@ export default async function ItemDetailPage({
         actions={
           <>
             <CanCreate permission="edit_items">
-              <Button href={entityEditHref("/master/barang", item)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+              <Button href={entityEditHref("/master/barang", item)} variant="secondary"><Pencil aria-hidden="true" size={14} /> Ubah</Button>
             </CanCreate>
             <CanCreate permission="delete_items">
               <DeleteButton id={item.id} action={deleteItem} label={`Hapus barang ${item.name}`} />
@@ -301,7 +301,7 @@ export default async function ItemDetailPage({
 
       {isLowStock && (
         <Alert variant="warning">
-          <AlertTriangle />
+          <AlertTriangle aria-hidden="true" />
           <AlertTitle>Stok menipis</AlertTitle>
           <AlertDescription>
             Stok saat ini {Number(item.qtyOnHand)} {item.unitOfMeasure} sudah di bawah atau sama dengan minimum ({Number(item.minStock)} {item.unitOfMeasure}). Pertimbangkan untuk melakukan pembelian.

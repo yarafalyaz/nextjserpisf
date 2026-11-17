@@ -55,7 +55,7 @@ export default async function CostCenterDetailPage({
         ]}
         actions={<>
           <CanCreate permission="edit_cost_centers">
-            <Button href={entityEditHref("/keuangan/pusat-biaya", costCenter)} variant="primary" className="min-h-11 sm:min-h-9"><Pencil size={14} /> Ubah</Button>
+            <Button href={entityEditHref("/keuangan/pusat-biaya", costCenter)} variant="primary" className="min-h-11 sm:min-h-9"><Pencil aria-hidden="true" size={14} /> Ubah</Button>
           </CanCreate>
           <CanCreate permission="delete_cost_centers">
             <DeleteButton id={costCenter.id} action={deleteCostCenter} />
@@ -86,11 +86,11 @@ export default async function CostCenterDetailPage({
             {costCenter.children.map((child) => (
               <Link key={child.id} href={entityHref("/keuangan/pusat-biaya", child)} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-accent transition-colors">
                 <div className="flex items-center gap-2 min-w-0">
-                  <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
+                  <ChevronRight aria-hidden="true" className="size-3.5 text-muted-foreground shrink-0" />
                   <span className="font-mono text-xs text-muted-foreground">{child.code}</span>
                   <span className="text-sm font-medium truncate">{child.name}</span>
                 </div>
-                <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+                <ChevronRight aria-hidden="true" className="size-4 text-muted-foreground shrink-0" />
               </Link>
             ))}
           </div>

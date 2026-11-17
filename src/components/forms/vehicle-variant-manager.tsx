@@ -105,7 +105,7 @@ export function VehicleVariantManager({ modelId, variants }: VehicleVariantManag
           />
         </div>
         <Button type="submit" disabled={isPending || !name.trim()}>
-          <Plus className="size-4" /> Tambah
+          <Plus aria-hidden="true" className="size-4" /> Tambah
         </Button>
       </form>
 

@@ -102,7 +102,7 @@ export default async function CustomerDetailPage({
         actions={
           <>
             <CanCreate permission="edit_customers">
-              <Button href={entityEditHref("/master/pelanggan", customer)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+              <Button href={entityEditHref("/master/pelanggan", customer)} variant="secondary"><Pencil aria-hidden="true" size={14} /> Ubah</Button>
             </CanCreate>
           </>
         }

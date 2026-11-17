@@ -3630,6 +3630,14 @@ describe("F-2026-10-22-076-S generateBulkPayroll penjaga irisan bertransaksi (au
         salaryAdjustment: prismaMock.salaryAdjustment,
         employee: prismaMock.employee,
         employeeLoan: prismaMock.employeeLoan,
+        // KM2: publish massal kini mengajukan approval per slip di dalam tx
+        // yang sama (requestApprovalIfConfigured) — facade tx minimal ini
+        // butuh delegate approval-nya.
+        approval: prismaMock.approval,
+        approvalWorkflow: {
+          findFirst: vi.fn().mockResolvedValue(null),
+          create: vi.fn().mockResolvedValue({ id: 1 }),
+        },
         // Putaran 76: hitung ulang statutori dalam tx membaca ruleset dan
         // bracket lewat delegate tx juga.
         payrollStatutoryRule: prismaMock.payrollStatutoryRule,

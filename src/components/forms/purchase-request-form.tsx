@@ -272,7 +272,7 @@ export function PurchaseRequestForm({
                 onPress={addItem}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all"
               >
-                <Plus size={14} /> Tambah Item
+                <Plus aria-hidden="true" size={14} /> Tambah Item
               </Button>
             </div>
             <div className="overflow-x-auto">

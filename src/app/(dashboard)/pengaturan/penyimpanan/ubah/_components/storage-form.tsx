@@ -181,7 +181,7 @@ export function StorageForm({ driver, fallbackLocal, assetBaseUrl, r2AccountId, 
 
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={isPending}>
-          {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+          {isPending ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : null}
           {isPending ? "Menyimpan..." : "Simpan Konfigurasi"}
         </Button>
         <Button type="button" variant="outline" onClick={() => router.push("/pengaturan/penyimpanan")}>

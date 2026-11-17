@@ -185,6 +185,14 @@ export function DisciplinaryDeductionDecisionForm({
             Nominal adalah snapshot dokumen keputusan; penerapan ke periode payroll dilakukan proses
             payroll tersendiri, bukan dari form ini.
           </p>
+          {/* Bug KM2: penerapan otomatis belum ada — peringatan wajib, bukan diam. */}
+          <p
+            role="status"
+            className="rounded-md border border-warning/50 bg-warning-soft px-3 py-2 text-xs text-foreground"
+          >
+            Menyimpan keputusan ini TIDAK memotong slip gaji karyawan secara otomatis; potongan belum
+            terpasang di proses payroll. Catat potongannya manual lewat slip koreksi.
+          </p>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="compensationAccountId">Akun Kompensasi</Label>

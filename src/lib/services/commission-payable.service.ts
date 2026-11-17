@@ -11,6 +11,10 @@
  *   sesudah paid = reversal penuh (vonis §6): jurnal lawan penuh senilai
  *   akrual yang belum direversal retur, lalu reversalAmount = accrued agar
  *   saldo A−R−P = 0 dan status turunan REVERSED (§7). Baris TIDAK dihapus.
+ * - Faktur dibayar ULANG sesudah batal: baris batal (R ≥ A−0,005 dan P = 0)
+ *   dihidupkan kembali di baris yang sama — amount snapshoted ulang, jurnal
+ *   akrual BARU (jurnal lama REVERSED → key aktifnya bebas), R dikembalikan
+ *   0. Baris ber-P>0 tidak disentuh: kas sudah keluar, resolusi manual.
  *
  * Jurnal memakai claim ref `CommissionPayableAccrual/<invoiceId>` agar
  * replay pembayaran terakhir idempoten (tak ada baris/jurnal kedua).
@@ -113,8 +117,23 @@ async function lockInvoiceRow(tx: TxClient, salesInvoiceId: number): Promise<voi
 }
 
 /**
- * Akrual utang komisi saat faktur lunas. Idempoten: baris existing =
- * no-op. Wajib dipanggil DALAM tx transisi paid pemanggil.
+ * Baris subledger dianggap BATAL (bukan aktif) bila saldonya nol karena
+ * reversal penuh DAN belum ada kas keluar. `paidAmount > 0` = kas sudah
+ * keluar via slip → bukan batal, walau saldonya nol (resolusi manual).
+ */
+function isVoidRow(row: { accruedAmount: unknown; reversalAmount: unknown; paidAmount: unknown }): boolean {
+  const accrued = Number(row.accruedAmount)
+  const reversal = Number(row.reversalAmount)
+  const paid = Number(row.paidAmount)
+  return paid <= 0.005 && reversal >= accrued - 0.005
+}
+
+/**
+ * Akrual utang komisi saat faktur lunas. Idempoten untuk baris AKTIF
+ * (no-op). Baris yang sudah dibatalkan (R = A, P = 0) diakru ulang di baris
+ * yang sama dengan jurnal baru — tanpa ini faktur yang dibayar ulang setelah
+ * reverse pembayaran tak pernah melahirkan komisi lagi. Wajib dipanggil
+ * DALAM tx transisi paid pemanggil.
  */
 export async function accrueTx(
   tx: TxClient,
@@ -127,7 +146,29 @@ export async function accrueTx(
   await lockInvoiceRow(tx, salesInvoiceId)
 
   const existing = await tx.commissionPayable.findFirst({ where: { salesInvoiceId } })
-  if (existing) return { accrued: true, amount: Number(existing.accruedAmount), reason: null }
+  const shouldRevive = existing != null && isVoidRow(existing)
+  if (existing && !shouldRevive) {
+    const accrued = Number(existing.accruedAmount)
+    const paid = Number(existing.paidAmount)
+    if (paid > 0.005) {
+      return {
+        accrued: true,
+        amount: accrued,
+        reason: `baris-akrual-nol-tapi-terbayar-${paid}-perlu-resolusi-manual`,
+      }
+    }
+    return { accrued: true, amount: accrued, reason: null }
+  }
+  if (shouldRevive && existing) {
+    // Bukti batal: jurnal akrual tertaut berstatus REVERSED. Tanpa bukti itu
+    // baris nol-saldo adalah warisan lama → no-op seperti sebelumnya.
+    const origin = existing.accrualJournalId
+      ? await tx.journal.findUnique({ where: { id: existing.accrualJournalId } })
+      : null
+    if (origin?.status !== "REVERSED") {
+      return { accrued: true, amount: Number(existing.accruedAmount), reason: null }
+    }
+  }
 
   // Pemanggil (recalcCore) sudah membaca invoice — pakai yang diketahui bila
   // ada supaya tanpa query ganda (mock `mockResolvedValueOnce` + hemat 1 round-trip).
@@ -157,9 +198,15 @@ export async function accrueTx(
     select: { id: true },
   })
   if (priorJournal) {
-    throw new Error(
-      `Akrual komisi ditolak: jurnal akrual faktur #${salesInvoiceId} sudah ada (#${priorJournal.id}) tanpa baris subledger, perlu resolusi manual, bukan jurnal kedua.`,
-    )
+    // Baris batal TIDAK punya klaim aktif: jurnal akrual lamanya sudah
+    // REVERSED (key aktifnya NULL), jadi hanya jurnal non-REVERSED yang
+    // dihitung klaim. Jurnal REVERSED = sisa riwayat batal → akrual ulang sah.
+    const priorStatus = await tx.journal.findUnique({ where: { id: priorJournal.id } })
+    if (!existing || priorStatus?.status !== "REVERSED") {
+      throw new Error(
+        `Akrual komisi ditolak: jurnal akrual faktur #${salesInvoiceId} sudah ada (#${priorJournal.id}) tanpa baris subledger, perlu resolusi manual, bukan jurnal kedua.`,
+      )
+    }
   }
   // Tanggal jurnal = tanggal transisi paid (vonis §5), bukan updatedAt faktur
   // (berubah tiap edit) dan bukan tanggal terbit faktur.
@@ -190,6 +237,19 @@ export async function accrueTx(
       },
     },
   })
+  if (existing) {
+    // Hidupkan ulang baris batal: R kembali 0, jurnal akrual baru. paidAmount
+    // sengaja tak disentuh (di sini pasti 0).
+    await tx.commissionPayable.update({
+      where: { id: existing.id },
+      data: {
+        accruedAmount: new Prisma.Decimal(amount.toFixed(2)),
+        reversalAmount: new Prisma.Decimal(0),
+        accrualJournalId: journal.id,
+      },
+    })
+    return { accrued: true, amount, reason: null }
+  }
   await tx.commissionPayable.create({
     data: {
       salesInvoiceId,

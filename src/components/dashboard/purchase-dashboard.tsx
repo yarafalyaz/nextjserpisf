@@ -144,14 +144,14 @@ export default async function PurchaseDashboard() {
             <Card className="gap-0 py-0 xl:col-span-2">
               <CardHeader className="py-4">
                 <CardTitle className="flex items-center gap-2">
-                  <ShoppingBag className="size-4 text-muted-foreground" />
+                  <ShoppingBag aria-hidden="true" className="size-4 text-muted-foreground" />
                   Pesanan Pembelian Terbaru
                 </CardTitle>
                 <CardDescription>8 PO terakhir</CardDescription>
                 <CardAction>
                   <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                     <Link href="/pembelian/pesanan">
-                      Semua <ArrowUpRight className="size-3.5" />
+                      Semua <ArrowUpRight aria-hidden="true" className="size-3.5" />
                     </Link>
                   </Button>
                 </CardAction>
@@ -227,14 +227,14 @@ export default async function PurchaseDashboard() {
             <Card className="gap-0 py-0">
               <CardHeader className="py-4">
                 <CardTitle className="flex items-center gap-2 text-sm">
-                  <FileSpreadsheet className="size-4 text-muted-foreground" />
+                  <FileSpreadsheet aria-hidden="true" className="size-4 text-muted-foreground" />
                   Tagihan Pemasok Terbaru
                 </CardTitle>
                 <CardDescription>Tagihan terbuka & konsep</CardDescription>
                 <CardAction>
                   <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                     <Link href="/pembelian/tagihan">
-                      Semua <ArrowUpRight className="size-3.5" />
+                      Semua <ArrowUpRight aria-hidden="true" className="size-3.5" />
                     </Link>
                   </Button>
                 </CardAction>
@@ -287,7 +287,7 @@ export default async function PurchaseDashboard() {
                       <div className="truncate text-[11px] text-muted-foreground">{link.desc}</div>
                     </div>
                   </div>
-                  <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground/50 transition-colors duration-150 group-hover:translate-x-0.5 group- group-hover:text-foreground" />
+                  <ArrowUpRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground/50 transition-colors duration-150 group-hover:translate-x-0.5 group- group-hover:text-foreground" />
                 </Link>
               ))}
             </div>

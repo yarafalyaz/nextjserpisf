@@ -18,7 +18,7 @@ export default function ModuleError({ error, reset }: { error: Error & { digest?
       >
         <div className="mb-4 flex justify-center">
           <div className="flex size-12 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-500/15">
-            <AlertTriangle className="size-6 text-amber-500" />
+            <AlertTriangle aria-hidden="true" className="size-6 text-amber-500" />
           </div>
         </div>
         <h2 className="text-lg font-bold mb-2 text-foreground">Terjadi Kesalahan</h2>

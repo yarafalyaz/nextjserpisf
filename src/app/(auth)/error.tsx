@@ -22,7 +22,7 @@ export default function AuthError({
       aria-live="assertive"
     >
       <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center">
-        <AlertCircle className="w-8 h-8 text-red-500" />
+        <AlertCircle aria-hidden="true" className="w-8 h-8 text-red-500" />
       </div>
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-bold tracking-tight">Kesalahan Autentikasi</h2>

@@ -133,12 +133,12 @@ export function NotificationDropdown() {
               </div>
             ) : loadFailed ? (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                <Bell size={20} className="mb-2 opacity-40" />
+                <Bell aria-hidden="true" size={20} className="mb-2 opacity-40" />
                 <p className="text-xs">Gagal memuat notifikasi</p>
               </div>
             ) : notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                <Bell size={20} className="mb-2 opacity-40" />
+                <Bell aria-hidden="true" size={20} className="mb-2 opacity-40" />
                 <p className="text-xs">Tidak ada notifikasi</p>
               </div>
             ) : (

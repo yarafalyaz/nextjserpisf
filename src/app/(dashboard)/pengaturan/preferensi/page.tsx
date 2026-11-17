@@ -51,7 +51,7 @@ export default async function PreferencesPage() {
           <CardDescription>Mata uang, periode fiskal, dan preferensi tampilan global.</CardDescription>
           <CardAction>
             <Button asChild variant="outline" size="sm">
-              <Link href="/pengaturan/preferensi/ubah"><Pencil className="size-3.5" /> Ubah</Link>
+              <Link href="/pengaturan/preferensi/ubah"><Pencil aria-hidden="true" className="size-3.5" /> Ubah</Link>
             </Button>
           </CardAction>
         </CardHeader>

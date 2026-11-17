@@ -67,7 +67,7 @@ export default async function PositionDetailPage({
         actions={
           <>
             <CanCreate permission="edit_positions">
-              <Button href={entityEditHref("/master/jabatan", position)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+              <Button href={entityEditHref("/master/jabatan", position)} variant="secondary"><Pencil aria-hidden="true" size={14} /> Ubah</Button>
             </CanCreate>
             <CanCreate permission="delete_positions">
               <DeleteButton id={position.id} action={deletePosition} />

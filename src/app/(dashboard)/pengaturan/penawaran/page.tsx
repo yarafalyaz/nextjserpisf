@@ -37,7 +37,7 @@ export default async function QuotationSettingsPage() {
           <CardDescription>Tanda tangan dan catatan kaki pada dokumen penawaran.</CardDescription>
           <CardAction>
             <Button asChild variant="outline" size="sm">
-              <Link href="/pengaturan/penawaran/ubah"><Pencil className="size-3.5" /> Ubah</Link>
+              <Link href="/pengaturan/penawaran/ubah"><Pencil aria-hidden="true" className="size-3.5" /> Ubah</Link>
             </Button>
           </CardAction>
         </CardHeader>

@@ -327,7 +327,7 @@ export default async function EmployeeDetailPage({
         actions={
           <>
             <CanCreate permission="edit_employees">
-              <Button href={entityEditHref("/master/karyawan", employee)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+              <Button href={entityEditHref("/master/karyawan", employee)} variant="secondary"><Pencil aria-hidden="true" size={14} /> Ubah</Button>
             </CanCreate>
             <CanCreate permission="delete_employees">
               <DeleteButton id={employee.id} action={deleteEmployee} />
