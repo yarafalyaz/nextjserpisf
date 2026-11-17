@@ -85,6 +85,12 @@ export async function allocateCreditToInvoice(
       // selalu kredit-dulu-faktur-kemudian (konsisten dengan refund: hanya
       // kredit) agar tak ada deadlock silang.
       await tx.$queryRaw`SELECT id FROM sales_invoices WHERE id = ${salesInvoiceId} FOR UPDATE`;
+      // AUD-FIN-03 (audit 2026-11-17): cek periode WAJIB sebelum mutasi apa pun.
+      // Dulu dipanggil sesudah salesPayment/kredit ditulis dan hook recalc
+      // berjalan; bila periode terkunci seluruh rangkaian itu dikerjakan lalu
+      // dibuang. Satu tanggal untuk cek dan untuk jurnal alokasi.
+      const allocateDate = new Date();
+      await assertPeriodOpen(allocateDate, tx as never);
       const credit = await tx.customerCredit.findUniqueOrThrow({ where: { id: creditId } });
       const balance = Number(credit.receivedAmount) - Number(credit.allocatedAmount) - Number(credit.refundedAmount);
       if (amount > balance) {
@@ -156,8 +162,6 @@ export async function allocateCreditToInvoice(
       // saat terima DP/kredit — panggil onSalesPaymentCreated generik (Dr Kas /
       // Cr Piutang) = kas double-count. Fail-closed (cek di atas) bila akun
       // 210102/piutang belum mapping.
-      const allocateDate = new Date();
-      await assertPeriodOpen(allocateDate, tx as never);
       const existingAllocateJournal = await tx.journal.findFirst({
         where: { referenceType: "SalesPayment", referenceId: payment.id },
       });

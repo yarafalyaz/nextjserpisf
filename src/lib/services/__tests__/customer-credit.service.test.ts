@@ -178,6 +178,33 @@ async function fingerprint() {
 }
 
 describe("customer-credit.service", () => {
+  it("audit 2026-11-17: periode terkunci ditolak SEBELUM mutasi alokasi", async () => {
+    // Regresi: assertPeriodOpen dulu dipanggil SESUDAH salesPayment/kredit
+    // ditulis dan hook recalc berjalan, jadi seluruh rangkaian dikerjakan lalu
+    // dibuang. Sekarang cek periode jadi pernyataan pertama sesudah lock.
+    seedCredit()
+    seedInvoice()
+    // Kunci periode HARI INI: transaksi bertanggal hari ini ikut diblokir.
+    // (Kunci sampai kemarin TIDAK memblokir transaksi hari ini — itu perilaku
+    // benar, jadi memakai kemarin akan membuat tes ini hijau tanpa menguji apa pun.)
+    const hariIni = new Date()
+    // tx khusus: $queryRaw period-lock mengembalikan tanggal terkunci.
+    const base = buildTx()
+    const lockedTx = {
+      ...base,
+      $queryRaw: vi.fn().mockResolvedValue([{ id: 1, period_lock_date: hariIni }]),
+    }
+    mocks.transaction.mockImplementation(async (fn: any) => fn(lockedTx))
+    const { allocateCreditToInvoice } = await import("../customer-credit.service")
+    const res = await allocateCreditToInvoice(1, 101, 1000, 1, "idem-key-lock-1")
+    expect(res.success).toBe(false)
+    expect(String(res.error ?? "")).toMatch(/periode|dikutup|ditutup|dikunci/i)
+    expect(mocks.paymentCreate).not.toHaveBeenCalled()
+    expect(mocks.creditUpdate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.docNo.mockImplementation((p: string) => Promise.resolve(`${p}-1`))
